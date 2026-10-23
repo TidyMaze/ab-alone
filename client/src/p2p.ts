@@ -1,7 +1,7 @@
 // Transports that touch the outside world. Not unit tested: the e2e test drives the hook transport,
 // and the Trystero one needs real public relays and a second browser (see the PR body).
 import { joinRoom } from 'trystero/nostr';
-import type { MoveRecord } from './moverecord';
+import type { Wire } from './moverecord';
 import type { ConnectionState, Transport } from './transport';
 
 const APP_ID = 'ab-alone';
@@ -24,7 +24,7 @@ export function p2pTransport(room: string): Transport {
     },
     send: (rec) => void move.send(rec as unknown as Parameters<typeof move.send>[0]),
     onRecord: (cb) => {
-      move.onMessage = (data) => cb(data as unknown as MoveRecord); // the session shape checks it
+      move.onMessage = (data) => cb(data as unknown as Wire); // the session shape checks it
     },
     onState: (cb) => {
       onState = cb;
@@ -37,8 +37,8 @@ export function p2pTransport(room: string): Transport {
 }
 
 interface Hook {
-  __netOut?: (rec: MoveRecord) => void;
-  __netIn?: (rec: MoveRecord) => void;
+  __netOut?: (rec: Wire) => void;
+  __netIn?: (rec: Wire) => void;
   __netOpen?: () => void;
 }
 

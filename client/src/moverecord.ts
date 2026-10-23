@@ -28,11 +28,27 @@ const b64 = (bytes: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint
 const unb64 = (s: string): Uint8Array<ArrayBuffer> =>
   Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
+/** Join message: the sender's key and the seat it asks for. The creator's Hello also carries the roster, the keys by seat. */
+export interface Hello {
+  kind: 'hello';
+  game: string;
+  seat: number;
+  roster: string[];
+  pub: string;
+  sig: string;
+}
+
+/** Anything a transport carries. */
+export type Wire = MoveRecord | Hello;
+
 type Unsigned = Omit<MoveRecord, 'sig'>;
 
 // Fixed field order, so both peers hash and verify the same bytes.
 const payload = (r: Unsigned): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify([r.game, r.seq, r.prev, r.move, r.pub]));
+
+const helloPayload = (h: Omit<Hello, 'sig'>): Uint8Array<ArrayBuffer> =>
+  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub]));
 
 async function keysFrom(priv: CryptoKey, publicKey: CryptoKey): Promise<Keys> {
   return { priv, pub: b64(await crypto.subtle.exportKey('raw', publicKey)) };
@@ -51,6 +67,20 @@ export async function signMove(
   const unsigned = { ...fields, pub: keys.pub };
   const sig = await crypto.subtle.sign(ED, keys.priv, payload(unsigned));
   return { ...unsigned, sig: b64(sig) };
+}
+
+export async function signHello(keys: Keys, fields: { game: string; seat: number; roster: string[] }): Promise<Hello> {
+  const unsigned = { kind: 'hello' as const, ...fields, pub: keys.pub };
+  return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, helloPayload(unsigned))) };
+}
+
+export async function verifyHello(h: Hello): Promise<boolean> {
+  try {
+    const key = await crypto.subtle.importKey('raw', unb64(h.pub), ED, false, ['verify']);
+    return await crypto.subtle.verify(ED, key, unb64(h.sig), helloPayload(h));
+  } catch {
+    return false; // malformed base64 or key bytes
+  }
 }
 
 export async function verifyRecord(r: MoveRecord): Promise<boolean> {
@@ -84,4 +114,21 @@ export function parseRecord(x: unknown): MoveRecord | null {
     typeof r.sig === 'string';
   if (!ok) return null;
   return { game: r.game as string, seq: r.seq as number, prev: r.prev as string, move: r.move as number[], pub: r.pub as string, sig: r.sig as string };
+}
+
+/** Shape check for a Hello off the wire. Returns a clean copy or null. */
+export function parseHello(x: unknown): Hello | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const h = x as Record<string, unknown>;
+  const ok =
+    h.kind === 'hello' &&
+    typeof h.game === 'string' &&
+    Number.isInteger(h.seat) &&
+    (h.seat as number) >= 1 &&
+    Array.isArray(h.roster) &&
+    h.roster.every((k) => typeof k === 'string') &&
+    typeof h.pub === 'string' &&
+    typeof h.sig === 'string';
+  if (!ok) return null;
+  return { kind: 'hello', game: h.game as string, seat: h.seat as number, roster: h.roster as string[], pub: h.pub as string, sig: h.sig as string };
 }

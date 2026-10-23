@@ -15,7 +15,7 @@ describe('localPair', () => {
   it('delivers what one side sends to the other, in order', () => {
     const [a, b] = localPair();
     const got: number[] = [];
-    b.onRecord((r) => got.push(r.seq));
+    b.onRecord((r) => got.push((r as MoveRecord).seq));
     a.send(rec(0));
     a.send(rec(1));
     a.send(rec(2));
@@ -26,8 +26,8 @@ describe('localPair', () => {
     const [a, b] = localPair();
     const atA: number[] = [];
     const atB: number[] = [];
-    a.onRecord((r) => atA.push(r.seq));
-    b.onRecord((r) => atB.push(r.seq));
+    a.onRecord((r) => atA.push((r as MoveRecord).seq));
+    b.onRecord((r) => atB.push((r as MoveRecord).seq));
     a.send(rec(0));
     b.send(rec(1));
     expect(atA).toEqual([1]);
@@ -49,7 +49,7 @@ describe('localPair', () => {
     const [a, b] = localPair();
     const got: number[] = [];
     const seen: string[] = [];
-    b.onRecord((r) => got.push(r.seq));
+    b.onRecord((r) => got.push((r as MoveRecord).seq));
     b.onState((s) => seen.push(s));
     a.close();
     a.send(rec(0));
