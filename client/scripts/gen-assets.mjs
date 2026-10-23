@@ -105,7 +105,7 @@ function deck(size, rand) {
     for (let x = 0; x < size; x++) {
       const i = y * size + x;
       const brush = streak[(y * size + (x * 7) % size) % streak.length] - 0.5;
-      const rustMix = Math.max(0, (rust[i] - 0.55) * 3.2);
+      const rustMix = Math.max(0, (rust[i] - 0.68) * 2.2);
       const pit = pits[i] > 0.66 ? 0.6 : 1;
       const shade = (0.8 + grain[i] * 0.45 + brush * 0.12) * pit;
       albedo[i * 3] = clamp((0x4a * (1 - rustMix) + 0x7a * rustMix) * shade);
