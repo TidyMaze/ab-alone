@@ -7,11 +7,11 @@
 //! a free extra move on every fourth boss turn. P3: one army is left, it plays every turn and
 //! cannot push (no sumito).
 
-use crate::board::{Board, Cell};
-use crate::encounter::{BossDef, Encounter};
+use crate::board::{Board, Cell, RADIUS};
+use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
 use crate::game::{Game, GameError};
-use crate::moves::{Move, Player};
-use crate::search::Weights;
+use crate::moves::{apply, Move, Player};
+use crate::search::{search_with, Weights};
 
 type P = (i32, i32);
 
@@ -89,12 +89,24 @@ pub const CYCLE: [Army; 3] = [Army::Alto, Army::Tenor, Army::Bass];
 impl Army {
     /// Where the army starts.
     pub fn start(self) -> [P; ARMY_SIZE] {
-        todo!()
+        match self {
+            Army::Alto => ALTO_START,
+            Army::Tenor => TENOR_START,
+            Army::Bass => BASS_START,
+        }
     }
 
     /// The evaluation weights of the army, its style.
     pub fn weights(self) -> Weights {
-        todo!()
+        match self {
+            Army::Alto => ALTO_WEIGHTS,
+            Army::Tenor => TENOR_WEIGHTS,
+            Army::Bass => BASS_WEIGHTS,
+        }
+    }
+
+    fn index(self) -> usize {
+        CYCLE.iter().position(|&a| a == self).expect("in the cycle")
     }
 }
 
@@ -123,78 +135,191 @@ pub struct Choir {
     free_move: bool,
 }
 
+/// Distance of a cell from the centre, in steps.
+fn centre_distance((q, r): P) -> i32 {
+    q.abs().max(r.abs()).max((q + r).abs())
+}
+
 /// The Choir board with no marble: the standard board with its outer ring void.
 fn arena() -> Board {
-    todo!()
+    let mut board = Board::empty();
+    for q in -RADIUS..=RADIUS {
+        for r in -RADIUS..=RADIUS {
+            if board.get(q, r).is_some() && centre_distance((q, r)) > CHOIR_RADIUS {
+                board.void(q, r);
+            }
+        }
+    }
+    board
+}
+
+/// Cells of the Black marbles on `board`.
+fn black_cells(board: &Board) -> Vec<P> {
+    let mut out = Vec::new();
+    for q in -RADIUS..=RADIUS {
+        for r in -RADIUS..=RADIUS {
+            if board.get(q, r) == Some(Cell::Black) {
+                out.push((q, r));
+            }
+        }
+    }
+    out
 }
 
 /// `true` when `mv` changes the Black marbles: a push or an ejection.
 fn pushes(board: &Board, mv: &Move) -> bool {
-    let _ = (board, mv);
-    todo!()
+    apply(board, Player::White, mv)
+        .is_ok_and(|(after, _)| black_cells(&after) != black_cells(board))
 }
 
 impl Choir {
     /// The start layout: 12 boss marbles in three armies, 10 player marbles.
     pub fn start() -> Self {
-        todo!()
+        let mut board = arena();
+        for (q, r) in PLAYER_START {
+            board.set(q, r, Cell::Black);
+        }
+        let mut members = Vec::new();
+        for army in CYCLE {
+            for cell in army.start() {
+                board.set(cell.0, cell.1, Cell::White);
+                members.push((cell, army));
+            }
+        }
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        Self {
+            enc: Encounter::new(game, choir_boss(), CHOIR_SEED),
+            members,
+            cycle_pos: 0,
+            boss_turns: 0,
+            free_move: false,
+        }
     }
 
     pub fn game(&self) -> &Game {
-        todo!()
+        self.enc.game()
     }
 
     /// `None` while the game runs. A draw is a loss for the player.
-    pub fn result(&self) -> Option<crate::encounter::PveResult> {
-        todo!()
+    pub fn result(&self) -> Option<PveResult> {
+        self.enc.result()
     }
 
     /// The army that owns the boss marble on `cell`.
     pub fn army_at(&self, cell: P) -> Option<Army> {
-        let _ = cell;
-        todo!()
+        self.members.iter().find(|m| m.0 == cell).map(|m| m.1)
     }
 
     /// Marbles `army` has left.
     pub fn army_marbles(&self, army: Army) -> u8 {
-        let _ = army;
-        todo!()
+        self.members.iter().filter(|m| m.1 == army).count() as u8
+    }
+
+    /// The army in turn: the next of the cycle that still has marbles.
+    fn army_in_turn(&self) -> Army {
+        (0..CYCLE.len())
+            .map(|i| CYCLE[(self.cycle_pos + i) % CYCLE.len()])
+            .find(|&a| self.army_marbles(a) > 0)
+            .unwrap_or(CYCLE[self.cycle_pos])
     }
 
     /// The army that moves next, the tell. `None` when the game is over.
     pub fn tell(&self) -> Option<Army> {
-        todo!()
+        self.game().outcome().is_none().then(|| self.army_in_turn())
     }
 
-    /// Current phase, 0 at the start.
+    /// Current phase, 0 at the start: one more for each step of [`PHASE_ARMIES`] reached.
     pub fn phase(&self) -> usize {
-        todo!()
+        let alive = CYCLE.iter().filter(|&&a| self.army_marbles(a) > 0).count();
+        PHASE_ARMIES.iter().filter(|&&n| alive <= n).count()
+    }
+
+    /// Refuses a boss move that uses a marble outside the army in turn, or pushes in P3.
+    fn check(&self, mv: &Move) -> Result<(), ChoirError> {
+        let army = self.army_in_turn();
+        if mv.cells.iter().any(|&c| self.army_at(c) != Some(army)) {
+            return Err(ChoirError::WrongArmy);
+        }
+        if self.phase() == LAST_PHASE && pushes(self.game().board(), mv) {
+            return Err(ChoirError::NoPush);
+        }
+        Ok(())
     }
 
     /// Plays `mv` for the side to move. A boss move must use marbles of the army in turn only.
     pub fn play(&mut self, mv: &Move) -> Result<(), ChoirError> {
-        let _ = mv;
-        todo!()
+        let game = self.game();
+        let boss_turn = game.to_move() == Player::White;
+        if boss_turn && game.outcome().is_none() {
+            self.check(mv)?;
+        }
+        let mover = self.army_in_turn();
+        let cells: Vec<P> = self.members.iter().map(|m| m.0).collect();
+        let carried = carried_marks(self.game().board(), mv, &cells);
+        self.enc.play(mv).map_err(ChoirError::Game)?;
+        let board = self.enc.game().board();
+        self.members = carried
+            .into_iter()
+            .zip(&self.members)
+            .filter(|(c, _)| board.get(c.0, c.1) == Some(Cell::White))
+            .map(|(c, m)| (c, m.1))
+            .collect();
+        if boss_turn {
+            self.end_boss_move(mover);
+        }
+        Ok(())
+    }
+
+    /// After a boss move: grants the free extra move on every [`FREE_MOVE_EVERY`]th boss turn of
+    /// P2 (the same army plays again, the player passes), else ends the boss turn.
+    fn end_boss_move(&mut self, mover: Army) {
+        let free_turn = (self.boss_turns + 1).is_multiple_of(FREE_MOVE_EVERY);
+        if !self.free_move && self.phase() == FREE_MOVE_PHASE && free_turn {
+            self.free_move = true;
+            self.enc.game.pass();
+        } else {
+            self.free_move = false;
+            self.cycle_pos = (mover.index() + 1) % CYCLE.len();
+            self.boss_turns += 1;
+        }
     }
 
     /// The boss move for its turn: the army in turn, its own weights, node-limited. `None` on the
-    /// player's turn or when the game is over.
+    /// player's turn or when the game is over. An army with no legal move has no move: the boss
+    /// is stuck (shortcut: never seen, add a skip if it ever happens).
     pub fn boss_move(&self) -> Option<Move> {
-        todo!()
+        if self.game().to_move() != Player::White {
+            return None;
+        }
+        let allow = |mv: &Move| self.check(mv).is_ok();
+        let weights = self.army_in_turn().weights();
+        search_with(self.game(), CHOIR_NODE_BUDGET, weights, &allow).map(|r| r.mv)
     }
 }
 
 /// The Choir boss definition. Its phases come from the armies left, not from a marble count, so
 /// `phase_marbles` is empty and [`Choir::phase`] is the phase.
 pub fn choir_boss() -> BossDef {
-    todo!()
+    BossDef {
+        name: "The Choir",
+        phase_marbles: Vec::new(),
+        special: no_special,
+        hook: keep_board,
+        node_budget: CHOIR_NODE_BUDGET,
+    }
+}
+
+fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
+    None
+}
+
+fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
+    board.clone()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::RADIUS;
-    use crate::encounter::PveResult;
     use crate::game::Outcome;
     use crate::moves::Direction::{E, SE, SW, W};
     use crate::moves::{legal_moves, Direction, MoveError};

@@ -177,7 +177,9 @@ impl Game {
 
     /// Gives the move back to the side that just played, for a rule that grants a free move.
     pub(crate) fn pass(&mut self) {
-        todo!()
+        self.to_move = other(self.to_move);
+        let board = self.board.clone();
+        self.replace_board(board);
     }
 
     /// Credits `n` ejections to `by` for marbles a boss hook removed (rules.md OPEN-13).

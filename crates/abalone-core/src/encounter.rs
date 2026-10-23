@@ -59,8 +59,8 @@ pub fn marbles(board: &Board, color: Cell) -> u8 {
     n
 }
 
-/// Where the converted marks sit after `mv`: marks on moved or pushed marbles shift one step.
-fn carried_marks(board: &Board, mv: &Move) -> Vec<(i32, i32)> {
+/// Where `marks` sit after `mv`: marks on moved or pushed marbles shift one step, in order.
+pub(crate) fn carried_marks(board: &Board, mv: &Move, marks: &[(i32, i32)]) -> Vec<(i32, i32)> {
     let (dq, dr) = mv.dir.vector();
     let mut moved = mv.cells.clone();
     for &(q, r) in &mv.cells {
@@ -72,8 +72,7 @@ fn carried_marks(board: &Board, mv: &Move) -> Vec<(i32, i32)> {
             }
         }
     }
-    board
-        .converted()
+    marks
         .iter()
         .map(|&(q, r)| {
             if moved.contains(&(q, r)) {
@@ -134,7 +133,7 @@ impl Encounter {
     /// Plays `mv` for the side to move, then fires the hook when the tell announced it.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         let told = self.tell();
-        let carried = carried_marks(self.game.board(), mv);
+        let carried = carried_marks(self.game.board(), mv, self.game.board().converted());
         self.game.play(mv)?;
         self.carry_marks(carried);
         if let (Some(id), None) = (told, self.game.outcome()) {

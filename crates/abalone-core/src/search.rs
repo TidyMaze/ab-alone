@@ -104,18 +104,18 @@ fn shape(board: &Board, cell: Cell) -> (i32, i32, i32) {
 
 /// Score of a position for `player`: marble difference, ejections made, centrality (a lower
 /// distance sum is better) and cohesion.
-fn evaluate(board: &Board, player: Player, ejected: [u8; 2]) -> i32 {
+fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32 {
     let (own_count, own_distance, own_pairs) = shape(board, cell_of(player));
     let (opp_count, opp_distance, opp_pairs) = shape(board, cell_of(other(player)));
     let made = i32::from(ejected[index(player)]) - i32::from(ejected[index(other(player))]);
-    DEFAULT_WEIGHTS.marbles * (own_count - opp_count)
-        + DEFAULT_WEIGHTS.ejected * made
-        + DEFAULT_WEIGHTS.centre * (opp_distance - own_distance)
-        + DEFAULT_WEIGHTS.cohesion * (own_pairs - opp_pairs)
+    w.marbles * (own_count - opp_count)
+        + w.ejected * made
+        + w.centre * (opp_distance - own_distance)
+        + w.cohesion * (own_pairs - opp_pairs)
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
-fn children(node: &Node) -> Vec<Child> {
+fn children(node: &Node, weights: &Weights) -> Vec<Child> {
     let mover = node.to_move;
     let mut kids: Vec<Child> = legal_moves(&node.board, mover)
         .into_iter()
@@ -123,7 +123,7 @@ fn children(node: &Node) -> Vec<Child> {
             let (board, ejects) = apply(&node.board, mover, &mv).expect("legal move");
             let mut ejected = node.ejected;
             ejected[index(mover)] += u8::from(ejects);
-            let score = evaluate(&board, mover, ejected);
+            let score = evaluate(&board, mover, ejected, weights);
             let node = Node {
                 board,
                 to_move: other(mover),
@@ -143,6 +143,7 @@ fn children(node: &Node) -> Vec<Child> {
 }
 
 struct Searcher {
+    weights: Weights,
     budget: u32,
     nodes: u32,
 }
@@ -167,11 +168,11 @@ impl Searcher {
             return Some(ply - WIN);
         }
         if depth == 0 {
-            return Some(evaluate(&node.board, mover, node.ejected));
+            return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }
-        let kids = children(node);
+        let kids = children(node, &self.weights);
         if kids.is_empty() {
-            return Some(evaluate(&node.board, mover, node.ejected));
+            return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }
         let (mut best, mut alpha) = (-INF, alpha);
         for kid in &kids {
@@ -205,6 +206,17 @@ impl Searcher {
 /// the answer is the last iteration that finished, or the best-ordered move when none did. No
 /// clock and no randomness: the same game and budget always give the same result.
 pub fn search(game: &Game, node_budget: u32) -> Option<SearchResult> {
+    search_with(game, node_budget, DEFAULT_WEIGHTS, &|_| true)
+}
+
+/// [`search`] with custom `weights` (used at every ply) and a filter on the moves the root may
+/// choose. Deeper plies see every legal move.
+pub fn search_with(
+    game: &Game,
+    node_budget: u32,
+    weights: Weights,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<SearchResult> {
     if game.outcome().is_some() {
         return None;
     }
@@ -213,11 +225,13 @@ pub fn search(game: &Game, node_budget: u32) -> Option<SearchResult> {
         to_move: game.to_move(),
         ejected: [game.ejected(Player::Black), game.ejected(Player::White)],
     };
-    let mut kids = children(&root);
+    let mut kids = children(&root, &weights);
+    kids.retain(|k| allow(&k.mv));
     if kids.is_empty() {
         return None;
     }
     let mut searcher = Searcher {
+        weights,
         budget: node_budget,
         nodes: 0,
     };
@@ -235,17 +249,6 @@ pub fn search(game: &Game, node_budget: u32) -> Option<SearchResult> {
         depth,
         nodes: searcher.nodes,
     })
-}
-
-/// [`search`] with custom `weights` and a filter on the moves the root may choose.
-pub fn search_with(
-    game: &Game,
-    node_budget: u32,
-    weights: Weights,
-    allow: &dyn Fn(&Move) -> bool,
-) -> Option<SearchResult> {
-    let _ = (game, node_budget, weights, allow);
-    todo!()
 }
 
 /// Same as [`search`], the move only.
