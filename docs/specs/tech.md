@@ -176,8 +176,11 @@ real apply). Rematch with colour swap is a new game on the same channel.
 3. **Reveal:** once all live peers committed (or the deadline passed: missing = `hold`), each
    broadcasts `order || nonce`. Peers verify against the commit. A bad reveal counts as `hold`
    and flags the peer.
-4. **Resolve:** every peer runs `resolve_round(state, orders)` locally. It is pure and
-   order-independent (see #35), so all arrive at the same state, checked by hash.
+4. **Resolve:** every peer runs `resolve_round(state, orders)` locally. It applies the orders
+   one by one in a rotating initiative order (derived from round number and seat list), each
+   validated at its turn, an invalid order becomes a pass (game design #53, option C). Pure, so
+   all peers reach the same state, checked by hash. Bots: orders are a pure function of
+   (round-start state, seed), computed before reveal.
 - **Who arbitrates?** Nobody has authority over the outcome, the pure function does. A
   **coordinator** (the host peer) exists only for liveness: it announces round start, collects
   the timeout decision and drives membership. If the coordinator lies about a deadline, peers
@@ -218,7 +221,9 @@ All AI lives in `abalone-core` or a sibling crate `abalone-ai`, runs as WASM in 
 the CLI and in CI for self-play).
 
 - **Alpha-beta** (negamax, iterative deepening, Zobrist transposition table, killer and history
-  heuristics, move ordering by ejections then pushes). Time-boxed `search(state, budget_ms)`.
+  heuristics, move ordering by ejections then pushes). Casual AI is time-boxed (`search(state, budget_ms)`); **bosses are depth or node limited** so a
+  retry with the same seed plays the same game on every machine. Boss hooks run inside `apply`
+  so the search sees them.
   Eval trait, first impl hand-tuned: ejection difference, centre distance, cohesion, edge danger.
   This is enough for the 2-player Phase 3 bosses.
 - **MCTS** for N-player arenas and royale, where alpha-beta does not apply cleanly. Later.
