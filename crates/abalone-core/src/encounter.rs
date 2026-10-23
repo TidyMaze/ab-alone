@@ -3,6 +3,7 @@
 //! adds phases, a tell and a rule hook on top. Everything is a pure function of the game and the
 //! seed, so the same seed and the same player moves give the same boss moves.
 
+pub mod chaplain;
 pub mod echo;
 pub mod hull;
 
@@ -57,6 +58,32 @@ pub fn marbles(board: &Board, color: Cell) -> u8 {
     n
 }
 
+/// Where the converted marks sit after `mv`: marks on moved or pushed marbles shift one step.
+fn carried_marks(board: &Board, mv: &Move) -> Vec<(i32, i32)> {
+    let (dq, dr) = mv.dir.vector();
+    let mut moved = mv.cells.clone();
+    for &(q, r) in &mv.cells {
+        if !mv.cells.contains(&(q + dq, r + dr)) {
+            let mut cell = (q + dq, r + dr);
+            while matches!(board.get(cell.0, cell.1), Some(Cell::Black | Cell::White)) {
+                moved.push(cell);
+                cell = (cell.0 + dq, cell.1 + dr);
+            }
+        }
+    }
+    board
+        .converted()
+        .iter()
+        .map(|&(q, r)| {
+            if moved.contains(&(q, r)) {
+                (q + dq, r + dr)
+            } else {
+                (q, r)
+            }
+        })
+        .collect()
+}
+
 fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
     None
 }
@@ -106,7 +133,9 @@ impl Encounter {
     /// Plays `mv` for the side to move, then fires the hook when the tell announced it.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         let told = self.tell();
+        let carried = carried_marks(self.game.board(), mv);
         self.game.play(mv)?;
+        self.carry_marks(carried);
         if let (Some(id), None) = (told, self.game.outcome()) {
             let ply = self.game.history().len() as u64;
             let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
@@ -117,16 +146,36 @@ impl Encounter {
         Ok(())
     }
 
-    /// A hook that removed marbles (the total dropped) counts for the opponent of each lost
-    /// marble. A flip keeps the total and credits nothing (rules.md OPEN-13).
+    /// Keeps the converted marks that still sit on a White marble after the move.
+    fn carry_marks(&mut self, carried: Vec<(i32, i32)>) {
+        let board = self.game.board();
+        let kept: Vec<_> = carried
+            .into_iter()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
+            .collect();
+        if kept != board.converted() {
+            let mut next = board.clone();
+            next.set_converted(kept);
+            self.game.replace_board(next);
+        }
+    }
+
+    /// A marble a hook removed (its cell is now empty or gone) counts for the opponent of its
+    /// colour. A flip keeps the marble and credits nothing (rules.md OPEN-13).
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
-        let (b0, w0) = (marbles(before, Cell::Black), marbles(before, Cell::White));
-        let (b1, w1) = (marbles(after, Cell::Black), marbles(after, Cell::White));
-        if b1 + w1 < b0 + w0 {
-            self.game.credit(Player::White, b0.saturating_sub(b1));
-            self.game.credit(Player::Black, w0.saturating_sub(w1));
+        let (mut lost_black, mut lost_white) = (0, 0);
+        for q in -RADIUS..=RADIUS {
+            for r in -RADIUS..=RADIUS {
+                match (before.get(q, r), after.get(q, r)) {
+                    (Some(Cell::Black), Some(Cell::Empty) | None) => lost_black += 1,
+                    (Some(Cell::White), Some(Cell::Empty) | None) => lost_white += 1,
+                    _ => {}
+                }
+            }
         }
+        self.game.credit(Player::White, lost_black);
+        self.game.credit(Player::Black, lost_white);
     }
 
     /// The boss search for its turn: node-limited by the boss budget, `None` on the player's turn
@@ -400,6 +449,23 @@ mod tests {
         step(&mut enc);
         assert_eq!(white_count(&enc), 13);
         assert_eq!(enc.game().ejected(Player::Black), 0);
+        assert_eq!(enc.game().ejected(Player::White), 0);
+    }
+
+    /// Flips the first White marble to Black and removes the second one.
+    fn flip_one_remove_one(board: &Board, _id: u8, _seed: u64) -> Board {
+        let whites = cells_of(board, Cell::White);
+        let mut out = board.clone();
+        out.set(whites[0].0, whites[0].1, Cell::Black);
+        out.set(whites[1].0, whites[1].1, Cell::Empty);
+        out
+    }
+
+    #[test]
+    fn hook_flip_and_removal_credit_only_the_removal() {
+        let mut enc = Encounter::new(Game::new(), boss_with(flip_one_remove_one), 0);
+        step(&mut enc);
+        assert_eq!(enc.game().ejected(Player::Black), 1);
         assert_eq!(enc.game().ejected(Player::White), 0);
     }
 

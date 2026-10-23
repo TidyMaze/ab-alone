@@ -88,6 +88,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.cracks().is_empty() {
         board.cracks().hash(&mut hasher);
     }
+    if !board.converted().is_empty() {
+        board.converted().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -515,6 +518,14 @@ mod tests {
         game.credit(Player::White, 0);
         assert_eq!(game.ejected(Player::White), 0);
         assert_eq!(game.no_ejection_plies(), 1);
+    }
+
+    #[test]
+    fn converted_marks_change_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut marked = Board::empty();
+        marked.set_converted(vec![(1, 0)]);
+        assert_ne!(position_hash(&marked, Player::Black), plain);
     }
 
     #[test]
