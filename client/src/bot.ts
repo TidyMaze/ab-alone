@@ -5,6 +5,13 @@ export interface BotRequest {
   id: number;
   history: number[][];
   nodes: number;
+  /** Set in encounter mode: the worker replays the history into this boss fight. */
+  boss?: BossRef;
+}
+
+export interface BossRef {
+  id: string;
+  seed: number;
 }
 
 export interface BotResponse {
@@ -17,6 +24,11 @@ export interface EngineLike {
   best_move(nodes: number): Int32Array | number[];
 }
 
+export interface EncounterLike {
+  play(mv: Int32Array): void;
+  boss_move(): Int32Array | number[];
+}
+
 export interface WorkerLike {
   onmessage: ((e: MessageEvent<BotResponse>) => void) | null;
   postMessage(req: BotRequest): void;
@@ -26,7 +38,16 @@ export interface WorkerLike {
 export const BOT_NODES = 20000;
 
 /** Worker side: replay the game, return the bot's move. */
-export function answer(req: BotRequest, makeEngine: () => EngineLike): BotResponse {
+export function answer(
+  req: BotRequest,
+  makeEngine: () => EngineLike,
+  makeEncounter: (id: string, seed: number) => EncounterLike,
+): BotResponse {
+  if (req.boss) {
+    const fight = makeEncounter(req.boss.id, req.boss.seed);
+    for (const mv of req.history) fight.play(Int32Array.from(mv));
+    return { id: req.id, move: Array.from(fight.boss_move()) };
+  }
   const engine = makeEngine();
   for (const mv of req.history) engine.play(Int32Array.from(mv));
   return { id: req.id, move: Array.from(engine.best_move(req.nodes)) };
@@ -35,12 +56,17 @@ export function answer(req: BotRequest, makeEngine: () => EngineLike): BotRespon
 let nextId = 0;
 
 /** Page side: post the history, resolve with the move record of the reply with the same id. */
-export function askBot(worker: WorkerLike, history: number[][], nodes = BOT_NODES): Promise<number[]> {
+export function askBot(
+  worker: WorkerLike,
+  history: number[][],
+  nodes = BOT_NODES,
+  boss?: BossRef,
+): Promise<number[]> {
   const id = nextId++;
   return new Promise((resolve) => {
     worker.onmessage = (e) => {
       if (e.data.id === id) resolve(e.data.move);
     };
-    worker.postMessage({ id, history, nodes });
+    worker.postMessage({ id, history, nodes, boss });
   });
 }

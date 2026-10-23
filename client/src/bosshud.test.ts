@@ -11,7 +11,7 @@ describe('bossHtml', () => {
   it('draws one notch per phase, labelled P1 to P3, the current one marked', () => {
     const html = bossHtml({ ...base, phase: 1 });
     for (const label of ['P1', 'P2', 'P3']) expect(html).toContain(label);
-    expect(html.match(/class="notch/g)).toHaveLength(3);
+    expect(html.match(/class="notch( active)?"/g)).toHaveLength(3);
     expect(html.match(/class="notch active"/g)).toHaveLength(1);
     expect(html).toMatch(/class="notch active"[^>]*>P2</);
   });

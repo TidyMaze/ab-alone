@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Engine } from 'abalone-wasm';
+import init, { Encounter, Engine, boss_ids, boss_name } from 'abalone-wasm';
 import {
   CELLS,
   axialTo3D,
@@ -11,7 +11,8 @@ import {
   toggleSelection,
   type Axial,
 } from './board';
-import { askBot } from './bot';
+import { askBot, BOT_NODES } from './bot';
+import { bossHtml } from './bosshud';
 import { isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
@@ -30,7 +31,10 @@ const MARBLE_COLORS: Record<number, number> = { 1: 0x15191c, 2: 0xd8d4c8 };
 const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
 
 await init();
-let engine = new Engine();
+let engine: Engine | Encounter = new Engine();
+// Encounter mode: the boss and seed of the running fight, kept so Retry restarts the same one.
+let fight: { id: string; seed: number } | null = null;
+const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
@@ -177,7 +181,9 @@ let thinking = false;
 async function botTurn(): Promise<void> {
   if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
   thinking = true;
-  const move = await askBot(worker, history);
+  const current = fight;
+  const move = await askBot(worker, history, BOT_NODES, fight ?? undefined);
+  if (fight !== current) return; // Retry or a new fight started while the boss was thinking
   thinking = false;
   playMove(move);
   refresh();
@@ -238,6 +244,12 @@ function hud(extra = ''): void {
     ejected,
     note: `${backend}${onlineNote}${extra}`,
   });
+  if (engine instanceof Encounter) {
+    document.getElementById('hud')!.insertAdjacentHTML(
+      'beforeend',
+      bossHtml({ name: engine.name(), phase: engine.phase(), phases: engine.phases(), result: engine.result() }),
+    );
+  }
 }
 
 function refresh(): void {
@@ -268,7 +280,13 @@ function refresh(): void {
 
 function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   const mv = hover ? moveForClick(moves, selected, hover) : null;
-  const list = ghostMarbles(history, mv && encodeMove(mv), () => new Engine());
+  const record = mv && encodeMove(mv);
+  const list = ghostMarbles(history, record, makeGame);
+  if (record && engine instanceof Encounter) {
+    // The tell: the boss reply announced for the hovered move, drawn on the position after it.
+    const reply = Array.from(engine.tell_move(Int32Array.from(record)));
+    if (reply.length) list.push(...ghostMarbles([...history, record], reply, makeGame));
+  }
   ghosts.clear();
   for (const { cell, side } of list) {
     const p = axialTo3D(cell[0], cell[1]);
@@ -387,6 +405,37 @@ addEventListener('resize', () => {
 // Used by the browser checks to count the plies played, bot replies included.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
 
+// Boss fight: the menu lists the bosses of the bridge, picking one switches the page to encounter
+// mode (human Black, the boss answers in the worker). Retry restarts the same boss and seed.
+const bossButton = document.getElementById('boss-fight')!;
+const bossList = document.getElementById('boss-list')!;
+const retryButton = document.getElementById('boss-retry')!;
+function startBoss(id: string, seed: number): void {
+  fight = { id, seed };
+  engine = new Encounter(id, seed);
+  history.length = 0;
+  selected = [];
+  thinking = false;
+  bossList.hidden = true;
+  bossButton.setAttribute('aria-expanded', 'false');
+  retryButton.hidden = false;
+  document.body.dataset.boss = id;
+  refresh();
+}
+for (const id of boss_ids()) {
+  const entry = document.createElement('button');
+  entry.type = 'button';
+  entry.textContent = boss_name(id)!;
+  entry.addEventListener('click', () => startBoss(id, crypto.getRandomValues(new Uint32Array(1))[0]!));
+  bossList.appendChild(entry);
+}
+bossButton.addEventListener('click', () => {
+  if (online) return;
+  bossList.hidden = !bossList.hidden;
+  bossButton.setAttribute('aria-expanded', String(!bossList.hidden));
+});
+retryButton.addEventListener('click', () => startBoss(fight!.id, fight!.seed));
+
 // Online play: Black creates the room and shares the invite link, the link opener plays White.
 // The engine stays the only judge: every remote move is replayed through it, a bad one is refused.
 // ?net=hook swaps the Trystero transport for the page hook the e2e test wires (no public relays).
@@ -395,6 +444,9 @@ let onlineSide = 0;
 let onlineNote = '';
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
 async function goOnline(room: string, side: number): Promise<void> {
+  fight = null;
+  delete document.body.dataset.boss;
+  retryButton.hidden = true;
   engine = new Engine();
   history.length = 0;
   selected = [];
