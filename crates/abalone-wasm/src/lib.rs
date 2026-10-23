@@ -326,4 +326,130 @@ mod tests {
         assert_eq!(draw_reason_code(Some(DrawReason::Repetition)), 1);
         assert_eq!(draw_reason_code(Some(DrawReason::NoEjectionCap)), 2);
     }
+
+    // Encounter bridge: a game against a boss, the player is Black.
+
+    fn fight() -> Encounter {
+        Encounter::new("echo", 7).unwrap()
+    }
+
+    fn first_move(fight: &Encounter) -> Vec<i32> {
+        fight.legal_moves()[..MOVE_STRIDE].to_vec()
+    }
+
+    #[test]
+    fn boss_list_is_data_driven_and_starts_with_the_echo() {
+        assert_eq!(boss_ids(), vec!["echo".to_string()]);
+        assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
+        assert_eq!(boss_name("nobody"), None);
+    }
+
+    #[test]
+    fn an_unknown_boss_is_refused() {
+        assert_eq!(
+            Encounter::new("nobody", 0).err(),
+            Some("unknown boss nobody".to_string())
+        );
+    }
+
+    #[test]
+    fn a_new_encounter_starts_on_phase_one_with_black_to_move() {
+        let f = fight();
+        assert_eq!(f.name(), "The Echo");
+        assert_eq!(f.to_move(), 1);
+        assert_eq!(f.phase(), 0);
+        assert_eq!(f.phases(), 3);
+        assert_eq!(f.result(), 0);
+        assert_eq!(f.status(), 0);
+        assert_eq!(f.draw_reason(), 0);
+        assert_eq!(f.tell(), -1, "the Echo has no board special");
+        assert_eq!(f.ejected(1), 0);
+        assert_eq!(f.ejected(2), 0);
+        let cells = f.board();
+        assert_eq!(cells.len(), 61);
+        assert_eq!(count(&cells, 1), 14);
+        assert_eq!(count(&cells, 2), 14);
+    }
+
+    #[test]
+    fn encounter_play_switches_side_and_changes_the_board() {
+        let mut f = fight();
+        let before = f.board();
+        let mv = first_move(&f);
+        assert_eq!(f.play(&mv), Ok(()));
+        assert_eq!(f.to_move(), 2);
+        assert_ne!(f.board(), before);
+    }
+
+    #[test]
+    fn encounter_play_refuses_bad_records_and_illegal_moves() {
+        let mut f = fight();
+        assert!(f.play(&[]).is_err());
+        assert_eq!(
+            f.play(&[1, 0, 0, -4, 0, 0, 0, 0]).unwrap_err(),
+            "Move(NotOwnMarble)"
+        );
+        assert_eq!(f.to_move(), 1);
+    }
+
+    #[test]
+    fn boss_move_is_empty_on_the_players_turn() {
+        assert!(fight().boss_move().is_empty());
+    }
+
+    #[test]
+    fn the_echo_mirrors_the_player_move_and_the_tell_announces_it() {
+        let mut f = fight();
+        let mv = first_move(&f);
+        let announced = f.tell_move(&mv);
+        assert_eq!(announced.len(), MOVE_STRIDE);
+        f.play(&mv).unwrap();
+        let reply = f.boss_move();
+        assert_eq!(reply, announced, "the tell is the boss reply");
+        assert_eq!(f.play(&reply), Ok(()));
+        assert_eq!(f.to_move(), 1);
+    }
+
+    #[test]
+    fn tell_move_is_empty_for_a_malformed_record() {
+        assert!(fight().tell_move(&[1, 2]).is_empty());
+    }
+
+    #[test]
+    fn boss_move_is_legal() {
+        let mut f = fight();
+        let mv = first_move(&f);
+        f.play(&mv).unwrap();
+        let reply = f.boss_move();
+        assert!(f
+            .legal_moves()
+            .chunks(MOVE_STRIDE)
+            .any(|m| m == reply.as_slice()));
+    }
+
+    #[test]
+    fn result_codes() {
+        use abalone_core::encounter::PveResult;
+        assert_eq!(result_code(None), 0);
+        assert_eq!(result_code(Some(PveResult::Won)), 1);
+        assert_eq!(result_code(Some(PveResult::Lost)), 2);
+    }
+
+    #[test]
+    fn a_finished_encounter_reports_a_result_and_refuses_moves() {
+        let mut f = fight();
+        while f.result() == 0 {
+            let mv = first_move(&f);
+            f.play(&mv).unwrap();
+            if f.result() == 0 {
+                let reply = f.boss_move();
+                f.play(&reply).unwrap();
+            }
+        }
+        assert!((1..=2).contains(&f.result()));
+        assert_ne!(f.status(), 0);
+        assert!(f.legal_moves().is_empty());
+        assert!(f.boss_move().is_empty());
+        assert!(f.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
+    }
 }
