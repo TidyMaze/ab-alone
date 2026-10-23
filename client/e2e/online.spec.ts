@@ -25,6 +25,15 @@ test('a move played on page A shows up on page B over the signed move log', asyn
   await b.locator('canvas').waitFor();
   await expect(b.locator('#hud')).toContainText('you are White');
 
+  // Before the connection is open a move is blocked, never applied on one side only.
+  await cell(a, 0, 2);
+  await cell(a, 0, 1);
+  await expect(a.locator('#hud')).toContainText('waiting for opponent');
+  await expect(a.locator('#hud')).toContainText('Black to move');
+  expect(await plies(a)).toBe(0);
+
+  await a.evaluate(() => (window as any).__netOpen());
+  await b.evaluate(() => (window as any).__netOpen());
   await cell(a, 0, 2); // a Black marble
   await cell(a, 0, 1); // its NW neighbour
   await expect(a.locator('#hud')).toContainText('White to move');

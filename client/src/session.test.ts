@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { OnlineSession, type Judge } from './session';
 import { GENESIS, generateKeys, signMove, type MoveRecord } from './moverecord';
-import { localPair, type Transport } from './transport';
+import { localPair, type ConnectionState, type Transport } from './transport';
 
 const M1 = [1, 0, 0, 2, 0, 0, 0, 0];
 const M2 = [2, 0, 0, 3, 0, 0, 0, 0];
@@ -114,5 +114,28 @@ describe('OnlineSession', () => {
     const white = await player(y, 2);
     x.close();
     expect(white.states).toEqual(['closed']);
+  });
+
+  it('can play only once the transport is open and it is our turn', async () => {
+    let state: ConnectionState = 'connecting';
+    let notify: (s: ConnectionState) => void = () => {};
+    const transport: Transport = {
+      get state() {
+        return state;
+      },
+      send: () => {},
+      onRecord: () => {},
+      onState: (cb) => {
+        notify = cb;
+      },
+      close: () => {},
+    };
+    const black = await player(transport, 1);
+    expect(black.session.canPlay()).toBe(false); // waiting for the opponent: a move would never arrive
+    state = 'open';
+    notify('open');
+    expect(black.session.canPlay()).toBe(true);
+    black.judge.play(Int32Array.from(M1));
+    expect(black.session.canPlay()).toBe(false); // White to move
   });
 });
