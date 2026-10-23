@@ -12,6 +12,7 @@ import {
   type Axial,
 } from './board';
 import { askBot } from './bot';
+import { isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
@@ -64,8 +65,14 @@ const [deckAlbedo, deckRoughness, marbleNormal, backdrop] = await Promise.all([
 const scene = new THREE.Scene();
 scene.background = backdrop ?? new THREE.Color(COLORS.base);
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
-camera.position.set(0, 11, 8);
-camera.lookAt(0, 0, 0);
+let view = resetView();
+function applyView(): void {
+  const p = viewPosition(view);
+  camera.position.set(p.x, p.y, p.z);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(); // picking and __cellToScreen run before the next frame
+}
+applyView();
 
 // Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
 const store = (() => {
@@ -294,28 +301,73 @@ function click(q: number, r: number): void {
 }
 
 const raycaster = new THREE.Raycaster();
-renderer.domElement.addEventListener('pointerdown', (e) => {
+function cellAt(e: PointerEvent | MouseEvent): Axial | null {
   raycaster.setFromCamera(
     new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1),
     camera,
   );
   const hit = raycaster.intersectObjects(discs)[0];
-  if (hit) {
-    const [q, r] = CELLS[discs.indexOf(hit.object as THREE.Mesh)]!;
-    click(q, r);
-  }
+  return hit ? CELLS[discs.indexOf(hit.object as THREE.Mesh)]! : null;
+}
+
+// One pointer that stays put is a click, one that moves is an orbit, two pointers are a pinch.
+const canvas = renderer.domElement;
+const pointers = new Map<number, { x: number; y: number }>();
+let press: { x: number; y: number; drag: boolean } | null = null;
+const span = (): number => {
+  const [a, b] = [...pointers.values()];
+  return Math.hypot(a!.x - b!.x, a!.y - b!.y);
+};
+
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) press = { x: e.clientX, y: e.clientY, drag: false };
+  else if (press) press.drag = true; // a second finger never selects
 });
 
-renderer.domElement.addEventListener('pointermove', (e) => {
-  raycaster.setFromCamera(
-    new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1),
-    camera,
-  );
-  const hit = raycaster.intersectObjects(discs)[0];
-  const next = hit ? CELLS[discs.indexOf(hit.object as THREE.Mesh)]! : null;
+canvas.addEventListener('pointermove', (e) => {
+  const last = pointers.get(e.pointerId);
+  if (last && press) {
+    const prevSpan = pointers.size === 2 ? span() : 0;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) view = zoom(view, pinchScale(prevSpan, span()));
+    else if (press.drag || isDrag(e.clientX - press.x, e.clientY - press.y)) {
+      press.drag = true;
+      view = orbit(view, e.clientX - last.x, e.clientY - last.y);
+    }
+    applyView();
+    return;
+  }
+  const next = cellAt(e);
   if (next === hover) return;
   hover = next;
   refreshGhosts(parseMoves(engine.legal_moves()));
+});
+
+function release(e: PointerEvent): void {
+  const wasClick = e.type === 'pointerup' && press && !press.drag && pointers.size === 1;
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0) press = null;
+  const cell = wasClick ? cellAt(e) : null;
+  if (cell) click(cell[0], cell[1]);
+}
+canvas.addEventListener('pointerup', release);
+canvas.addEventListener('pointercancel', release);
+
+canvas.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault();
+    view = zoom(view, wheelScale(e.deltaY));
+    applyView();
+  },
+  { passive: false },
+);
+
+document.getElementById('reset-view')!.addEventListener('click', () => {
+  view = resetView();
+  applyView();
 });
 
 addEventListener('resize', () => {
@@ -327,6 +379,7 @@ addEventListener('resize', () => {
 // Used by the browser checks to click a cell by its axial coordinates.
 (window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number) => {
   const p = axialTo3D(q, r);
+  camera.updateMatrixWorld();
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
