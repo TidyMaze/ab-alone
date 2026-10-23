@@ -186,10 +186,10 @@ third player less than 1 time in 5. Compare against option A as a baseline.
 
 ## 7. Boss roster
 
-Five bosses. Numbers (marble counts, timers) are **starting values** to tune in playtest.
+Five bosses, mapped to the lore slots of `world.md` (PR #51). Numbers (marble counts, timers) are **starting values** to tune in playtest.
 Player always starts with 14 marbles on the standard layout unless stated.
 
-### 7.1 The Hull (#43): tutorial boss
+### 7.1 The Hull (#43): first environment boss
 
 - **Concept**: the ship itself, rusted, falling apart under you.
 - **Twist**: every 8 plies, rim cells crack, 2 plies later they vanish. A marble on a vanished
@@ -217,7 +217,7 @@ Player always starts with 14 marbles on the standard layout unless stated.
 - **Calibrate**: knob = player marbles (10), extra move frequency. Fail if nobody ever wipes
   the Bass first (the intended opener).
 
-### 7.3 The Marker (#45): conversion by encirclement
+### 7.3 The Chaplain (#45): conversion by encirclement
 
 - **Concept**: it marks the crew, then keeps them.
 - **Twist**: at the end of the boss turn, a player marble with **3 or more adjacent boss
@@ -258,7 +258,7 @@ Player always starts with 14 marbles on the standard layout unless stated.
   code).
 - **Tell**: each twist keeps its original visual language, so the player recognizes it.
 - **Counter**: those from bosses 1, 3 and 4.
-- **Phases**: P1 at **16**, plain. P2 at **10**: Hull rim crack (interval 8) plus Marker
+- **Phases**: P1 at **16**, plain. P2 at **10**: Hull rim crack (interval 8) plus Chaplain
   (threshold 3). P3 at **5**: adds Echo of your previous move.
 - **Calibrate**: last. It must be harder than any previous boss, with first win between
   attempt 5 and 10, never a wall.
@@ -294,7 +294,7 @@ Player always starts with 14 marbles on the standard layout unless stated.
 For each feature, the acceptance test is a position plus a move list:
 - Hull: position with a cracked cell and a boss marble next to it, push, assert ejection.
 - Choir: army order and halo, assert the skipped turn after a wipe.
-- Marker: position with 3 contacts, end boss turn, assert flip. Position at 2 contacts, none.
+- Chaplain: position with 3 contacts, end boss turn, assert flip. Position at 2 contacts, none.
 - Echo: reflect a move, assert it goes through the validator and equals the center reflection.
 - Ballast: phase changes at 16, 10, 5 boss marbles, assert hooks switch on.
 - BR: bot simulation of 1000 games, assert one winner, no game over 150 rounds, no crash.
