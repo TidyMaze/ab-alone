@@ -2,10 +2,15 @@
 
 Status: draft v0, for issue #18. Spec only, no code. Companion to `SPEC.md`.
 
-Hard constraint: the Abalone rules engine (`abalone-core`) is unchanged. A mode may add a
-**rule layer around it** (board mask, end-of-turn hooks, adjudication, scoring). It may never
-change how a legal move is generated or how sumito resolves. Every idea below must be testable
-on a plain board with a move list.
+Hard constraint: the **move and sumito rules are unchanged** (what a legal move is, how a push
+resolves). A mode may add a **rule layer around them** (board mask, end-of-turn hooks,
+adjudication, scoring). Battle royale also needs an extension of the engine state (N owners,
+217 cells, last-toucher per marble), but not of those rules. All hooks are built-in pure
+functions run inside `apply`, so the AI search sees them. Every idea below must be testable on
+a plain board with a move list.
+
+There is no game server (see #36 and `tech.md`): every peer re-validates every move against a
+signed, hash-chained move log.
 
 Feature issues: #38 (input), #40 (anti-stalling), #41 (online), #42 (encounter framework),
 #43 to #47 (bosses), #48 (calibration), #49 (battle royale), #50 (hub).
@@ -25,8 +30,8 @@ Feature issues: #38 (input), #40 (anti-stalling), #41 (online), #42 (encounter f
 
 ## 2. Controls and move input (#38)
 
-Input is the same in every mode. The client asks the WASM engine for legal moves, the server
-re-validates online (see `SPEC.md` section 3).
+Input is the same in every mode. The client asks the WASM engine for legal moves, and every
+peer re-validates online moves (see `tech.md`).
 
 1. **Select.** Click or tap an own marble. Click an adjacent aligned own marble to extend the
    group, up to 3, contiguous, on one line. Dragging along a line selects the span. Clicking a
@@ -65,10 +70,14 @@ Purpose: prove the input, the engine and the animation. Ships first.
 | Item | Rule |
 |---|---|
 | Players | 2, invite link |
-| Delta | Per-player clock (default 10 min + 10 s per move), timeout = loss |
+| Delta | **No clock in v1.** Later: an advisory clock, a timeout is only a claim (see below) |
 | Rematch | Colors swap |
 | Draw | Only by anti-stalling adjudication, no draw offers (avoids griefing) |
-| Authority | Server decides. Client predicts |
+| Authority | No server. Every peer validates every move from the signed move log |
+
+Clock, later: each peer only measures its own clock and a peer can lie or stall, so a timeout
+cannot be enforced. Form: the opponent sends a signed "timeout" claim, and the game ends if the
+slow side does not move within a 10 s grace. It stays advisory (no rating, no reward at stake).
 
 ### 3.3 Souls-like PvE (Phase 3, #42)
 
@@ -96,10 +105,15 @@ See section 6.
 | Item | Rule |
 |---|---|
 | Space | The ship as a graph of rooms (decks), walked one cell at a time as a single marble |
-| Rooms | Encounter door, PvP table (online 1v1 queue), BR lobby, lore terminal |
+| Rooms | Encounter door, PvP table (invite link, or a public lobby), BR lobby, lore terminal |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
 | Gate | Each defeated boss opens the next deck |
-| Save | Local storage until accounts exist (accounts are out of scope) |
+| Save | Local storage, with a signed export/import file (accounts are out of scope) |
+
+Lobbies without a matchmaker: a PvP table or BR lobby is a public peer-to-peer room (Trystero)
+where waiting players are listed and pick each other, plus invite links. Invite-first. With no
+accounts the public list is unauthenticated and spammable, so it is **best effort** and never
+required to play.
 
 Lore is found, never told: terminals and audio logs only, no cutscenes.
 
@@ -121,7 +135,10 @@ which tell killed you.
 ## 5. Anti-stalling rule (#12, #40)
 
 Lives in the **game-state wrapper** (`#10`), not in the move generator. Position identity =
-board + side to move, hashed (Zobrist).
+board + side to move + **mode state** (crack timers, army cycle position, the Echo's remembered
+move, boss phase), all inside the Zobrist hash. Otherwise repetition fires on positions that
+are not identical. The repetition history and the 100-ply counter are part of the game state
+and are rebuilt from the signed move log on every peer, so all peers agree.
 
 1. **Threefold repetition**: the same position three times is a draw.
 2. **No-ejection cap**: 100 plies in a row without an ejection ends the game. Decided by
@@ -135,17 +152,23 @@ and it does not stop a 3-ply shuffle for 200 plies. Repetition catches the shuff
 the no-ejection cap catches slow dances without ejections.
 
 Tests: scripted shuffle ends on the third repetition; a legal long game with an ejection every
-99 plies never triggers the cap; both rules give the same result in hot-seat and online.
+99 plies never triggers the cap; both rules give the same result in hot-seat and online;
+same board with a different boss timer or phase gives a different hash; history rebuilt from
+a move log equals the live history.
 
 ## 6. Battle royale (#49)
 
 | Item | Value |
 |---|---|
-| Players | 3 to 6 (default 6, bots fill) |
+| Players | 3 to 6 (default 6, bots fill, see below) |
 | Arena | Hex radius 8 (217 cells) |
 | Marbles | 10 per player, placed in 6 wedges at the rim sides, 3 players use alternating wedges |
 | Win | Last player with marbles. If the breach ends the game, most marbles, then most ejections credited |
 | Sumito | Same rule against any opponent, strictly smaller group, free cell or void behind |
+
+**Bots** are a pure function of (round-start state, seed), computed before the reveal. Every
+peer computes the same bot orders, nobody trusts a peer to run them, and a bot cannot peek at
+human orders. N-player bots need MCTS or a cheap heuristic early, not "later".
 
 **Hull breach** (the Dead Space decompression):
 - Rounds 1 to 11: safe. Players close the distance.
@@ -161,14 +184,17 @@ Tests: scripted shuffle ends on the third repetition; a legal long game with an 
 |---|---|---|---|
 | A. Sequential | Clockwise, 20 s clock | Trivial, engine as is | 5 players wait ~100 s between your turns |
 | B. Simultaneous, conflict cancels both | All submit, conflicts cancel | Fast, chaotic | Needs a conflict definition, rewards guessing and copying, cancelled moves help the defender |
-| C. **Simultaneous submit, ordered resolution** | All submit in 15 s, server resolves one by one in a rotating initiative order, each move validated normally at its turn | Fast, no new conflict rule, uses the unchanged validator | A later order can fizzle, needs a clear reveal log |
+| C. **Simultaneous submit, ordered resolution** | All commit a signed hash of their order in 15 s, then reveal. Every peer applies the orders one by one in a rotating initiative order, each validated normally at its turn | Fast, no new conflict rule, uses the unchanged validator | A later order can fizzle, needs a clear reveal log |
 
 Recommendation: **C**. A fizzled order (illegal by the time it resolves) means the player
-loses the tempo, nothing else. Initiative rotates each round, so nobody is always last.
-Resolution order is shown before the reveal and replayed as a short animation.
+loses the tempo, nothing else: it counts as a pass, by the same rule on every peer. Initiative
+is derived from the round number and the seat list, so nobody is always last and every peer
+computes it alone. Peers compare the state hash after each round. Resolution order is shown
+before the reveal and replayed as a short animation.
 
-Fairness detail: if an order is illegal at submission (client bug), the server substitutes
-"pass". A player who misses the timer passes.
+Fairness detail: every peer treats an invalid or missing reveal as a pass and flags the
+sender. The 15 s timer is a local deadline anchored on the coordinator's round-start message,
+so a player on a slow link can lose a round. That is a known design consequence.
 
 **Elimination:** at 0 marbles. Marbles vanish immediately (no zombie marbles blocking the
 board). Eliminated players spectate.
@@ -178,7 +204,8 @@ board). Eliminated players spectate.
    plus 1 per ejection you caused. A doomed player maximizes ejections, not charity.
 2. **Credit rule.** The last player whose move touched a marble gets the ejection.
 3. **No chat, no alliances.** Emotes only (4 fixed ones).
-4. **Hidden orders.** Orders are secret until the reveal, so targeting a leader needs a guess.
+4. **Hidden orders.** Orders are secret until the reveal (commit step, no trusted host), so
+   targeting a leader needs a guess.
 5. **Breach pace.** No hiding on the rim, no turtling in a corner for a draw.
 6. **Fast elimination.** Marbles disappear on death, a loser cannot keep pushing for someone.
 Measure it (acceptance): in 1000 bot games, the final-two leader should lose to a dying
@@ -211,7 +238,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Phases**: P1 above. P2 when the boss has **10** marbles left: timer drops to 6 plies, two
   cells crack at once. P3 at **5**: timer 4, but the board is small and the boss is cornered.
 - **Calibrate**: knob = crack interval and AI depth. Fail if P1 deaths are over 50 percent of
-  all deaths (the tutorial must not kill early).
+  all deaths (the first environment boss must not kill early).
 
 ### 7.2 The Choir (#44): three armies
 
@@ -235,8 +262,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Twist**: at the end of the boss turn, a player marble with **3 or more adjacent boss
   marbles** flips to the boss. The marble count is conserved (conversion is not a loss for 6
   ejections, but it is a loss of material).
-- **Tell**: a player marble that would flip at the end of the next boss turn shows a black
-  halo on your turn (check performed on the current position).
+- **Tell**: a player marble that would flip at the end of the next boss turn shows a steady
+  glyph and outline on your turn (check performed on the current position). Not a black halo:
+  it would vanish against a black shell. A flipped marble shows shell growing over the glass.
 - **Counter**: break contact (move or push), or **surround a flipped marble with 3 of your
   marbles to flip it back**.
 - **Phases**: P1 above. P2 when the boss has **8** left: void cells count as boss neighbours,
@@ -266,10 +294,10 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 
 - **Concept**: the ship's mind, the thing that kept the game running.
 - **Twist**: a radius 5 board with 6 fixed void pillars (symmetric). Boss has 16 marbles, you
-  have 14. P1 is plain Abalone at depth 5. It reuses hooks of earlier bosses (no new engine
-  code).
+  have 14. P1 is plain Abalone at depth 5. It reuses the hooks of earlier bosses (no new
+  rule code).
 - **Tell**: each twist keeps its original visual language, so the player recognizes it.
-- **Counter**: those from bosses 1, 3 and 4.
+- **Counter**: those of the Hull, the Chaplain and the Echo.
 - **Phases**: P1 at **16**, plain. P2 at **10**: Hull rim crack (interval 8) plus Chaplain
   (threshold 3). P3 at **5**: adds Echo of your previous move.
 - **Calibrate**: last. It must be harder than any previous boss, with first win between
@@ -286,14 +314,18 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - An attempt lasts 5 to 12 minutes. Retry takes under 5 seconds.
 
 **Telemetry per attempt:** boss, seed, attempt number, result, phase reached, cause of death
-(tell id or plain loss), marbles left, duration, move list. Local first, upload opt-in.
+(tell id or plain loss), marbles left, duration, move list. Local only. There is no upload
+destination without a server: the player **exports a JSON file** and attaches it to a GitHub
+issue if they want to share it (no prefilled form in v1).
 
 **Method:**
 1. **Bot ladder before humans.** Random, then alpha-beta depth 1 to 5. Each boss must be beaten
    by depth N and not by depth N minus 2. Run nightly in CI. This catches a broken boss
    (always won, never won) before a human ever sees it.
-2. **Fixed seed per boss.** Same boss, same opening, so a retry teaches something. Random
-   only breaks ties between equal moves.
+2. **Fixed seed per boss.** Same boss, same opening, so a retry teaches something. Boss search
+   is **depth or node-count limited, never wall-clock** (time-boxed search differs per machine
+   and would break retries and the CI ladder). The seeded RNG only breaks ties between equal
+   moves. Hooks (crack, flip, echo, army cycle) run inside `apply`, so the search sees them.
 3. **One knob at a time.** Per boss: AI depth, timer, threshold, marble count. Change one,
    replay the bot ladder, then 5 human playtests.
 4. **Playtest of 5 humans per boss** (a mix of Abalone players and non-players), recorded
@@ -326,8 +358,8 @@ on radius 8? Needs a bot simulation.
 Q4. **Relics.** Optional run-level perks, or never? They add fun, they break calibration.
 Recommendation: never in v1.
 
-Q5. **Hub persistence without accounts.** Local storage is fragile. Is a signed save file
-enough until accounts?
+Q5. **Hub persistence without accounts.** Local storage is fragile. Recommendation: a signed
+export/import save file (matches `tech.md`).
 
 Q6. **Fog on bosses.** Hide boss marbles beyond a radius? Cool mood, bad for fairness and for
 online. Recommendation: no.
