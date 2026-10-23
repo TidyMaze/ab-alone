@@ -5,9 +5,10 @@ import {
   axialTo3D,
   cellIndex,
   encodeMove,
-  legalTargets,
+  groupTargets,
+  moveForClick,
   parseMoves,
-  pickMove,
+  toggleSelection,
   type Axial,
 } from './board';
 
@@ -62,7 +63,8 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
 const marbles = new THREE.Group();
 scene.add(marbles);
 
-let selected: Axial | null = null;
+let selected: Axial[] = [];
+const isSelected = (q: number, r: number): boolean => selected.some(([sq, sr]) => sq === q && sr === r);
 
 function hud(extra = ''): void {
   const status = engine.status();
@@ -73,7 +75,7 @@ function hud(extra = ''): void {
 function refresh(): void {
   const board = engine.board();
   const moves = parseMoves(engine.legal_moves());
-  const targets = selected ? legalTargets(moves, selected) : [];
+  const targets = groupTargets(moves, selected);
   marbles.clear();
   discs.forEach((disc, i) => {
     const [q, r] = CELLS[i]!;
@@ -87,7 +89,7 @@ function refresh(): void {
     );
     marble.position.set(p.x, 0.36, p.z);
     marbles.add(marble);
-    if (selected && selected[0] === q && selected[1] === r) {
+    if (isSelected(q, r)) {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.rotation.x = Math.PI / 2;
       ring.position.set(p.x, 0.02, p.z);
@@ -101,11 +103,14 @@ function refresh(): void {
 function click(q: number, r: number): void {
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
-    selected = selected && selected[0] === q && selected[1] === r ? null : [q, r];
-  } else if (selected) {
-    const mv = pickMove(parseMoves(engine.legal_moves()), selected, [q, r]);
-    if (mv) engine.play(Int32Array.from(encodeMove(mv)));
-    selected = null;
+    selected = toggleSelection(selected, [q, r]);
+  } else {
+    // The engine is the only judge: a click that is not a legal move changes nothing.
+    const mv = moveForClick(parseMoves(engine.legal_moves()), selected, [q, r]);
+    if (mv) {
+      engine.play(Int32Array.from(encodeMove(mv)));
+      selected = [];
+    }
   }
   refresh();
 }

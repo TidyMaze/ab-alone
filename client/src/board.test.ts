@@ -10,10 +10,8 @@ import {
   encodeMove,
   groupTargets,
   isGroup,
-  legalTargets,
   moveForClick,
   parseMoves,
-  pickMove,
   toggleSelection,
   type Move,
 } from './board';
@@ -106,38 +104,6 @@ describe('directionBetween', () => {
   });
 });
 
-describe('click to move', () => {
-  const single: Move = { cells: [[0, 4]], dir: 4 };
-  const sideStep: Move = { cells: [[0, 4], [1, 4]], dir: 4 };
-  const push: Move = { cells: [[0, 4], [0, 3]], dir: 4 };
-  const triple: Move = { cells: [[0, 4], [0, 3], [0, 2]], dir: 4 };
-  const other: Move = { cells: [[2, 3]], dir: 1 };
-
-  it('picks the legal move for the selected marble and the clicked neighbour', () => {
-    expect(pickMove([other, single], [0, 4], [0, 3])).toBe(single);
-  });
-
-  it('prefers the smallest group when several legal moves contain the marble', () => {
-    expect(pickMove([push, sideStep, single], [0, 4], [0, 3])).toBe(single);
-    expect(pickMove([triple, push], [0, 4], [0, 3])).toBe(push);
-  });
-
-  it('is null when the target is not a neighbour or no legal move matches', () => {
-    expect(pickMove([single], [0, 4], [0, 2])).toBeNull();
-    expect(pickMove([single], [0, 4], [1, 4])).toBeNull();
-    expect(pickMove([single], [3, 3], [3, 2])).toBeNull();
-  });
-
-  it('lists the neighbour cells the selected marble can move to, without duplicates', () => {
-    expect(legalTargets([single, push, other], [0, 4])).toEqual([[0, 3]]);
-    expect(legalTargets([single, { cells: [[0, 4]], dir: 5 }], [0, 4])).toEqual([
-      [0, 3],
-      [0, 5],
-    ]);
-    expect(legalTargets([other], [0, 4])).toEqual([]);
-  });
-});
-
 describe('isGroup', () => {
   it('accepts 1 marble, and 2 or 3 contiguous marbles on each axis in any click order', () => {
     expect(isGroup([[0, 0]])).toBe(true);
@@ -207,7 +173,7 @@ describe('moveForClick and groupTargets', () => {
   });
 
   it('lists the target cells of the selected group, without duplicates', () => {
-    expect(groupTargets(moves, [[0, 4], [0, 3]])).toEqual([[0, 2], [1, 4], [1, 3]]);
+    expect(groupTargets(moves, [[0, 4], [0, 3]])).toEqual([[1, 4], [1, 3], [0, 2]]);
     expect(groupTargets(moves, [[0, 4]])).toEqual([[0, 3]]);
     expect(groupTargets(moves, [])).toEqual([]);
   });
