@@ -112,6 +112,16 @@ impl Engine {
         self.game.play(&mv).map_err(|e| format!("{e:?}"))
     }
 
+    /// Opponent marbles ejected by a side: `1` Black, `2` White. The game ends at 6.
+    pub fn ejected(&self, side: u8) -> u8 {
+        let player = if side == 1 {
+            Player::Black
+        } else {
+            Player::White
+        };
+        self.game.ejected(player)
+    }
+
     /// The 61 cells, see the module docs for the order.
     pub fn board(&self) -> Vec<u8> {
         let board = self.game.board();

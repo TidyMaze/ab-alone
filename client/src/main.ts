@@ -12,6 +12,7 @@ import {
   type Axial,
 } from './board';
 import { askBot } from './bot';
+import { formatScore } from './score';
 
 // Palette from docs/specs/world.md section 5.
 const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
@@ -132,7 +133,8 @@ const isSelected = (q: number, r: number): boolean => selected.some(([sq, sr]) =
 function hud(extra = ''): void {
   const status = engine.status();
   const text = status === 0 ? `${SIDE_NAMES[engine.to_move()]} to move` : STATUS_TEXT[status];
-  document.getElementById('hud')!.innerHTML = `${text}<br /><small>${backend}${extra}</small>`;
+  const score = formatScore([engine.ejected(1), engine.ejected(2)], status);
+  document.getElementById('hud')!.innerHTML = `${text}<br />${score}<br /><small>${backend}${extra}</small>`;
 }
 
 function refresh(): void {
