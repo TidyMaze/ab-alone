@@ -3,12 +3,10 @@
 //! adds phases, a tell and a rule hook on top. Everything is a pure function of the game and the
 //! seed, so the same seed and the same player moves give the same boss moves.
 
-#![allow(unused_imports, dead_code)]
-
 use crate::board::{Board, Cell, RADIUS};
-use crate::game::{Game, GameError};
-use crate::moves::Move;
-use crate::search::SearchResult;
+use crate::game::{Game, GameError, Outcome};
+use crate::moves::{Move, Player};
+use crate::search::{search, SearchResult};
 
 /// `special(ply, phase)`: the special that fires at the end of ply number `ply` (1 is the first
 /// ply of the game), as a tell id, or `None`.
@@ -46,48 +44,90 @@ pub struct Encounter {
 }
 
 /// Marbles of `color` on `board`.
-pub fn marbles(_board: &Board, _color: Cell) -> u8 {
-    unimplemented!()
+pub fn marbles(board: &Board, color: Cell) -> u8 {
+    let mut n = 0;
+    for q in -RADIUS..=RADIUS {
+        for r in -RADIUS..=RADIUS {
+            n += u8::from(board.get(q, r) == Some(color));
+        }
+    }
+    n
+}
+
+fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
+    None
+}
+
+fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
+    board.clone()
 }
 
 /// Boss with no special rule and one phase change, to prove the framework.
 pub fn trivial_boss() -> BossDef {
-    unimplemented!()
+    BossDef {
+        name: "Trivial",
+        phase_marbles: vec![10],
+        special: no_special,
+        hook: keep_board,
+        node_budget: 200,
+    }
 }
 
 impl Encounter {
-    pub fn new(_game: Game, _boss: BossDef, _seed: u64) -> Self {
-        unimplemented!()
+    pub fn new(game: Game, boss: BossDef, seed: u64) -> Self {
+        Self { game, boss, seed }
     }
 
     pub fn game(&self) -> &Game {
-        unimplemented!()
+        &self.game
     }
 
     /// Current phase, 0 at the start.
     pub fn phase(&self) -> usize {
-        unimplemented!()
+        let left = marbles(self.game.board(), Cell::White);
+        self.boss
+            .phase_marbles
+            .iter()
+            .filter(|&&t| left <= t)
+            .count()
     }
 
     /// The special that fires right after the next ply, visible one ply ahead.
     pub fn tell(&self) -> Option<u8> {
-        unimplemented!()
+        if self.game.outcome().is_some() {
+            return None;
+        }
+        (self.boss.special)(self.game.history().len() as u32 + 1, self.phase())
     }
 
     /// Plays `mv` for the side to move, then fires the hook when the tell announced it.
-    pub fn play(&mut self, _mv: &Move) -> Result<(), GameError> {
-        unimplemented!()
+    pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
+        let told = self.tell();
+        self.game.play(mv)?;
+        if let (Some(id), None) = (told, self.game.outcome()) {
+            let ply = self.game.history().len() as u64;
+            let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let board = (self.boss.hook)(self.game.board(), id, seed);
+            self.game.replace_board(board);
+        }
+        Ok(())
     }
 
     /// The boss search for its turn: node-limited by the boss budget, `None` on the player's turn
     /// or when the game is over.
     pub fn boss_search(&self) -> Option<SearchResult> {
-        unimplemented!()
+        if self.game.to_move() != Player::White {
+            return None;
+        }
+        search(&self.game, self.boss.node_budget)
     }
 
     /// `None` while the game runs. A draw is a loss for the player.
     pub fn result(&self) -> Option<PveResult> {
-        unimplemented!()
+        self.game.outcome().map(|o| match o {
+            Outcome::Win(Player::Black) => PveResult::Won,
+            _ => PveResult::Lost,
+        })
     }
 }
 

@@ -162,10 +162,12 @@ impl Game {
         }
     }
 
-    #[allow(dead_code)]
-    /// Replaces the board after a ply (a boss hook) and re-hashes that ply's position.
-    pub(crate) fn replace_board(&mut self, _board: Board) {
-        unimplemented!()
+    /// Replaces the board after a ply (a boss hook) and re-hashes that ply's position, so
+    /// repetition sees the position the players actually face.
+    pub(crate) fn replace_board(&mut self, board: Board) {
+        self.board = board;
+        let hash = position_hash(&self.board, self.to_move);
+        self.history.last_mut().expect("called after a ply").hash = hash;
     }
 
     /// Plays `mv` for the side to move.
