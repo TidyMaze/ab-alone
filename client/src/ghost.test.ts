@@ -47,8 +47,8 @@ describe('ghostMarbles', () => {
     const hist = [[1, 0, 0, 0, 0, 0, 0, 0]];
     const record = [2, 4, 0, 2, 0, 1, 0, 0];
     expect(ghostMarbles(hist, record, make)).toEqual([
-      { cell: [0, 0], side: 1 },
       { cell: [0, -1], side: 2 },
+      { cell: [0, 0], side: 1 },
     ]);
     expect(played).toEqual([hist[0], record]);
   });
