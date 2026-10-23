@@ -20,6 +20,13 @@ pub enum Outcome {
     Draw,
 }
 
+/// Why a game ended in a draw.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawReason {
+    Repetition,
+    NoEjectionCap,
+}
+
 /// Why `Game::play` refused a move.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameError {
@@ -44,6 +51,7 @@ pub struct Game {
     start_hash: u64,
     history: Vec<Played>,
     outcome: Option<Outcome>,
+    draw_reason: Option<DrawReason>,
 }
 
 fn index(player: Player) -> usize {
@@ -92,6 +100,7 @@ impl Game {
             no_ejection_plies: 0,
             history: Vec::new(),
             outcome: None,
+            draw_reason: None,
         }
     }
 
@@ -110,6 +119,7 @@ impl Game {
             no_ejection_plies: 0,
             history: Vec::new(),
             outcome,
+            draw_reason: None,
         }
     }
 
@@ -137,6 +147,11 @@ impl Game {
 
     pub fn outcome(&self) -> Option<Outcome> {
         self.outcome
+    }
+
+    /// Why the game is a draw, `None` otherwise.
+    pub fn draw_reason(&self) -> Option<DrawReason> {
+        self.draw_reason
     }
 
     /// The winner, or `None` while the game runs or after a draw.
@@ -169,12 +184,19 @@ impl Game {
         });
         let seen = self.history.iter().filter(|p| p.hash == hash).count()
             + usize::from(self.start_hash == hash);
+        let repeated = seen >= REPETITION_LIMIT;
+        let capped = self.no_ejection_plies >= NO_EJECTION_PLY_LIMIT;
         self.outcome = if self.ejected[index(mover)] >= WIN_EJECTIONS {
             Some(Outcome::Win(mover))
-        } else if seen >= REPETITION_LIMIT || self.no_ejection_plies >= NO_EJECTION_PLY_LIMIT {
+        } else if repeated || capped {
             Some(Outcome::Draw)
         } else {
             None
+        };
+        self.draw_reason = match self.outcome {
+            Some(Outcome::Draw) if repeated => Some(DrawReason::Repetition),
+            Some(Outcome::Draw) => Some(DrawReason::NoEjectionCap),
+            _ => None,
         };
         Ok(())
     }
@@ -219,6 +241,7 @@ mod tests {
             no_ejection_plies: 0,
             history: Vec::new(),
             outcome: None,
+            draw_reason: None,
         }
     }
 

@@ -133,7 +133,7 @@ const isSelected = (q: number, r: number): boolean => selected.some(([sq, sr]) =
 function hud(extra = ''): void {
   const status = engine.status();
   const text = status === 0 ? `${SIDE_NAMES[engine.to_move()]} to move` : STATUS_TEXT[status];
-  const score = formatScore([engine.ejected(1), engine.ejected(2)], status);
+  const score = formatScore([engine.ejected(1), engine.ejected(2)], status, engine.draw_reason());
   document.getElementById('hud')!.innerHTML = `${text}<br />${score}<br /><small>${backend}${extra}</small>`;
 }
 
