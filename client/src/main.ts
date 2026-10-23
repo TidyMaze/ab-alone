@@ -12,6 +12,7 @@ import {
   type Axial,
 } from './board';
 import { askBot } from './bot';
+import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
 import { hudHtml } from './hud';
 import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
@@ -167,9 +168,46 @@ async function botTurn(): Promise<void> {
   thinking = true;
   const move = await askBot(worker, history);
   thinking = false;
-  engine.play(Int32Array.from(move));
-  history.push(move);
+  playMove(move);
   refresh();
+}
+
+// Marbles leaving the board: slide and fade, then removed. Reduced motion: removed at once.
+const ejecting: { mesh: THREE.Mesh; track: EjectTrack; start: number }[] = [];
+function playMove(record: number[]): void {
+  const before = Array.from(engine.board());
+  engine.play(Int32Array.from(record));
+  history.push(record);
+  const ejection = findEjection(before, engine.board(), parseMoves(record)[0]!);
+  if (!ejection) return;
+  const body = document.body;
+  body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
+  const track = ejectTrack(
+    ejection.cell,
+    record[1]!,
+    matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  if (track.durationMs === 0) return;
+  const mesh = new THREE.Mesh(marbleGeometry, marbleMaterials[ejection.side]!.clone());
+  (mesh.material as THREE.MeshStandardMaterial).transparent = true;
+  mesh.position.set(track.from.x, 0.36, track.from.z);
+  scene.add(mesh);
+  ejecting.push({ mesh, track, start: performance.now() });
+  body.dataset.ejecting = '1';
+}
+
+function animateEjections(now: number): void {
+  for (const e of ejecting.slice()) {
+    const elapsed = now - e.start;
+    const p = trackAt(e.track, elapsed);
+    e.mesh.position.set(p.x, 0.36, p.z);
+    (e.mesh.material as THREE.MeshStandardMaterial).opacity = p.opacity;
+    if (elapsed < e.track.durationMs) continue;
+    scene.remove(e.mesh);
+    (e.mesh.material as THREE.Material).dispose();
+    ejecting.splice(ejecting.indexOf(e), 1);
+  }
+  if (ejecting.length === 0) delete document.body.dataset.ejecting;
 }
 
 let selected: Axial[] = [];
@@ -235,9 +273,7 @@ function click(q: number, r: number): void {
     // The engine is the only judge: a click that is not a legal move changes nothing.
     const mv = moveForClick(parseMoves(engine.legal_moves()), selected, [q, r]);
     if (mv) {
-      const record = encodeMove(mv);
-      engine.play(Int32Array.from(record));
-      history.push(record);
+      playMove(encodeMove(mv));
       selected = [];
     }
   }
@@ -287,4 +323,7 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
 
 refresh();
-renderer.setAnimationLoop(() => renderer.render(scene, camera));
+renderer.setAnimationLoop((now) => {
+  animateEjections(now);
+  renderer.render(scene, camera);
+});
