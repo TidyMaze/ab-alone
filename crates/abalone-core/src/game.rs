@@ -110,8 +110,7 @@ impl Game {
         }
     }
 
-    /// Game on a hand-made position, for tests of other modules.
-    #[cfg(test)]
+    /// Game on a hand-made position: a boss start layout, or a test position.
     pub(crate) fn from_position(board: Board, to_move: Player, ejected: [u8; 2]) -> Self {
         let outcome = [Player::Black, Player::White]
             .into_iter()
@@ -174,6 +173,13 @@ impl Game {
         self.board = board;
         let hash = position_hash(&self.board, self.to_move);
         self.history.last_mut().expect("called after a ply").hash = hash;
+    }
+
+    /// Gives the move back to the side that just played, for a rule that grants a free move.
+    pub(crate) fn pass(&mut self) {
+        self.to_move = other(self.to_move);
+        let board = self.board.clone();
+        self.replace_board(board);
     }
 
     /// Credits `n` ejections to `by` for marbles a boss hook removed (rules.md OPEN-13).
@@ -534,5 +540,21 @@ mod tests {
         let mut cracked = Board::empty();
         cracked.set_cracks(vec![((4, 0), 2)]);
         assert_ne!(position_hash(&cracked, Player::Black), plain);
+    }
+
+    #[test]
+    fn pass_gives_the_move_back_and_rehashes_the_last_ply() {
+        let mut game = lone();
+        game.play(&mv(&[(0, 0)], E)).unwrap();
+        let before = game.history()[0].hash;
+        game.pass();
+        assert_eq!(game.to_move(), Player::Black);
+        assert_ne!(game.history()[0].hash, before);
+        assert_eq!(
+            game.history()[0].hash,
+            position_hash(game.board(), Player::Black)
+        );
+        game.play(&mv(&[(1, 0)], E)).unwrap();
+        assert_eq!(game.history().len(), 2);
     }
 }
