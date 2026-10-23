@@ -13,6 +13,43 @@ pub enum Cell {
     White,
 }
 
+/// Standard start, Black side: row r=-4 (5 cells), row r=-3 (6), the three centre cells of r=-2.
+/// White is the point reflection `(q, r) -> (-q, -r)`.
+const STANDARD_BLACK: [(i32, i32); 14] = [
+    (0, -4),
+    (1, -4),
+    (2, -4),
+    (3, -4),
+    (4, -4),
+    (-1, -3),
+    (0, -3),
+    (1, -3),
+    (2, -3),
+    (3, -3),
+    (4, -3),
+    (0, -2),
+    (1, -2),
+    (2, -2),
+];
+
+/// Belgian daisy, Black side: two flowers of seven cells (a centre and its six neighbours).
+const BELGIAN_DAISY_BLACK: [(i32, i32); 14] = [
+    (-2, -1),
+    (-1, -1),
+    (-3, -1),
+    (-2, 0),
+    (-2, -2),
+    (-1, -2),
+    (-3, 0),
+    (1, -3),
+    (2, -3),
+    (0, -3),
+    (1, -2),
+    (1, -4),
+    (2, -4),
+    (0, -2),
+];
+
 /// Hexagonal Abalone board.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
@@ -22,27 +59,47 @@ pub struct Board {
 impl Board {
     /// Board with all 61 cells empty.
     pub fn empty() -> Self {
-        todo!()
+        let mut cells = HashMap::new();
+        for q in -RADIUS..=RADIUS {
+            for r in -RADIUS..=RADIUS {
+                if (q + r).abs() <= RADIUS {
+                    cells.insert((q, r), Cell::Empty);
+                }
+            }
+        }
+        Self { cells }
     }
 
     /// Content of `(q, r)`, or `None` when the cell is off the board.
     pub fn get(&self, q: i32, r: i32) -> Option<Cell> {
-        todo!()
+        self.cells.get(&(q, r)).copied()
     }
 
     /// Sets `(q, r)`. Off-board cells are left untouched.
     pub fn set(&mut self, q: i32, r: i32, cell: Cell) {
-        todo!()
+        if let Some(slot) = self.cells.get_mut(&(q, r)) {
+            *slot = cell;
+        }
     }
 
     /// Standard start layout: 14 marbles per side.
     pub fn standard() -> Self {
-        todo!()
+        Self::with_marbles(&STANDARD_BLACK)
     }
 
     /// Belgian daisy start layout: 14 marbles per side.
     pub fn belgian_daisy() -> Self {
-        todo!()
+        Self::with_marbles(&BELGIAN_DAISY_BLACK)
+    }
+
+    /// Black marbles on `black`, White marbles on their point reflections.
+    fn with_marbles(black: &[(i32, i32)]) -> Self {
+        let mut board = Self::empty();
+        for &(q, r) in black {
+            board.set(q, r, Cell::Black);
+            board.set(-q, -r, Cell::White);
+        }
+        board
     }
 }
 
