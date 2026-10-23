@@ -198,6 +198,7 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 | Deck board themes | #28 |
 | Adaptive audio and music | #30 |
 | Accessibility options pack | #32 |
+| Boss tell glyphs and diegetic phase notches | #62 |
 
 ## 11. Open questions
 
