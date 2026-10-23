@@ -1,0 +1,327 @@
+# Game design
+
+Status: draft v0, for issue #18. Spec only, no code. Companion to `SPEC.md`.
+
+Hard constraint: the Abalone rules engine (`abalone-core`) is unchanged. A mode may add a
+**rule layer around it** (board mask, end-of-turn hooks, adjudication, scoring). It may never
+change how a legal move is generated or how sumito resolves. Every idea below must be testable
+on a plain board with a move list.
+
+Feature issues: #38 (input), #40 (anti-stalling), #41 (online), #42 (encounter framework),
+#43 to #47 (bosses), #48 (calibration), #49 (battle royale), #50 (hub).
+
+## 1. Design pillars
+
+1. **Real Abalone first.** If a trick needs a new move type, we drop the trick. Bosses and
+   arenas bend the board, the clock and the scoring, not the movement.
+2. **Readable dread.** Every threat is shown one turn before it hits (tell). Horror comes from
+   the mood and the pressure, never from hidden rules.
+3. **Die, learn, retry.** A loss teaches one thing. Retry in under 5 seconds. No difficulty
+   slider, no stat grind: the player gets better, not the character.
+4. **Every rule is testable.** Each twist has an acceptance test on a board position. If we
+   cannot write the position, the rule is too vague.
+5. **Alone together.** Solo mode is lonely on purpose. Multiplayer modes stay short, with no
+   chat and no alliances, so the mood holds.
+
+## 2. Controls and move input (#38)
+
+Input is the same in every mode. The client asks the WASM engine for legal moves, the server
+re-validates online (see `SPEC.md` section 3).
+
+1. **Select.** Click or tap an own marble. Click an adjacent aligned own marble to extend the
+   group, up to 3, contiguous, on one line. Dragging along a line selects the span. Clicking a
+   selected end marble removes it.
+2. **Direction ring.** Once a group is selected, a ring of up to 6 arrows appears around it.
+   Only legal directions are drawn. Inline arrows show push power (1v1, 2v1, 3v2...).
+3. **Preview.** Hovering (or focusing) an arrow draws ghost marbles at the result and
+   highlights any marble that would be ejected. Sumito pushes show a red arrow chain.
+4. **Confirm.** Second click or Enter plays it. Esc or right click backs out one step.
+   Hot-seat can undo the last move before the next player confirms.
+5. **Keyboard.** Tab cycles legal groups, `Q W E A S D` map to the 6 directions, Enter confirms.
+   Whole game playable without a mouse.
+6. **Touch.** Tap to select, tap arrow, tap again to confirm. No drag required.
+7. **Not now.** Gamepad, voice, haptics.
+
+Accessibility: legal-move highlight can be forced on, colorblind-safe palette, the "clear board"
+toggle from `SPEC.md` section 5, reduced motion setting for ejection animations.
+
+## 3. Modes
+
+Rules delta is everything on top of standard Abalone (14v14, first to eject 6).
+
+### 3.1 Hot-seat (Phase 1)
+
+| Item | Rule |
+|---|---|
+| Players | 2, one screen |
+| Layout | Standard, Belgian daisy as option |
+| Delta | Anti-stalling (section 5), optional undo before confirm |
+| Win | First to eject 6, or adjudication result |
+
+Purpose: prove the input, the engine and the animation. Ships first.
+
+### 3.2 Online 1v1 (Phase 2, #41)
+
+| Item | Rule |
+|---|---|
+| Players | 2, invite link |
+| Delta | Per-player clock (default 10 min + 10 s per move), timeout = loss |
+| Rematch | Colors swap |
+| Draw | Only by anti-stalling adjudication, no draw offers (avoids griefing) |
+| Authority | Server decides. Client predicts |
+
+### 3.3 Souls-like PvE (Phase 3, #42)
+
+| Item | Rule |
+|---|---|
+| Players | You vs a boss AI |
+| Delta | Board mask, boss rule hooks, phases on marble-count triggers |
+| Win / loss | Normal win by 6 ejections, loss if you lose 6. **A draw is a loss** (the ship keeps the tie), so stalling never works against a boss |
+| Retry | Same boss, same seed, instant restart |
+| Difficulty | One tuning per boss, no slider |
+
+Boss structure (all five follow it):
+- **Concept**: the fiction, one line.
+- **Twist**: the added rule, written as a hook (start of turn, end of turn, board mask).
+- **Tell**: shown exactly one ply before the twist fires.
+- **Counter**: a positional answer that exists on the board, not a stat check.
+- **Phases**: triggered by **boss marbles remaining**, always shown on the HUD as notches.
+
+### 3.4 Battle royale (Phase 4, #49)
+
+See section 6.
+
+### 3.5 Open world hub (Phase 5, #50)
+
+| Item | Rule |
+|---|---|
+| Space | The ship as a graph of rooms (decks), walked one cell at a time as a single marble |
+| Rooms | Encounter door, PvP table (online 1v1 queue), BR lobby, lore terminal |
+| Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
+| Gate | Each defeated boss opens the next deck |
+| Save | Local storage until accounts exist (accounts are out of scope) |
+
+Lore is found, never told: terminals and audio logs only, no cutscenes.
+
+## 4. Core loop and progression
+
+**Attempt loop (5 to 12 minutes):** enter encounter, read the board, spot the tell, apply the
+counter, survive the phase change, win or die, retry. Loss screen shows one line: which phase,
+which tell killed you.
+
+**Meta loop:** hub, pick a door, boss, lore log, new deck opens, PvP table or BR as a break.
+
+**Progression is knowledge and access, not power:**
+- Unlocks: decks (new encounters), codex entries (lore, boss notes), marble skins, board skins.
+- No health, no levels, no buffs. A day-one player with skill beats a grinder.
+- Replays: each boss win stores a move list, replayable in the codex.
+- Optional (open question Q4): one **relic** per run, a visible rule perk, only if calibration
+  survives it.
+
+## 5. Anti-stalling rule (#12, #40)
+
+Lives in the **game-state wrapper** (`#10`), not in the move generator. Position identity =
+board + side to move, hashed (Zobrist).
+
+1. **Threefold repetition**: the same position three times is a draw.
+2. **No-ejection cap**: 100 plies in a row without an ejection ends the game. Decided by
+   marbles ejected (equal here, so by marbles left), then by centrality (sum of hex distances
+   to the center, lower wins), then draw. A 10-ply warning shows on the HUD.
+3. **PvE**: draw = loss for the player. **BR**: see section 6, the breach makes stalling
+   impossible.
+
+Why not a plain 200-ply cap (proposal in #12): it ends lively games that are still evolving,
+and it does not stop a 3-ply shuffle for 200 plies. Repetition catches the shuffle early,
+the no-ejection cap catches slow dances without ejections.
+
+Tests: scripted shuffle ends on the third repetition; a legal long game with an ejection every
+99 plies never triggers the cap; both rules give the same result in hot-seat and online.
+
+## 6. Battle royale (#49)
+
+| Item | Value |
+|---|---|
+| Players | 3 to 6 (default 6, bots fill) |
+| Arena | Hex radius 8 (217 cells) |
+| Marbles | 10 per player, placed in 6 wedges at the rim sides, 3 players use alternating wedges |
+| Win | Last player with marbles. If the breach ends the game, most marbles, then most ejections credited |
+| Sumito | Same rule against any opponent, strictly smaller group, free cell or void behind |
+
+**Hull breach** (the Dead Space decompression):
+- Rounds 1 to 11: safe. Players close the distance.
+- Round 12: outer ring (radius 8) cracks. One round later it is void.
+- Then a new ring every 6 rounds, down to radius 3.
+- From radius 3, a ring every 3 rounds until one marble group is left in the core.
+- A marble on a cracked ring cell is **not** safe: it is ejected when the ring vanishes.
+- Cracks glow and show a countdown. Wide warning, no surprise.
+
+**Turn structure, options for #13:**
+
+| Option | How | Pros | Cons |
+|---|---|---|---|
+| A. Sequential | Clockwise, 20 s clock | Trivial, engine as is | 5 players wait ~100 s between your turns |
+| B. Simultaneous, conflict cancels both | All submit, conflicts cancel | Fast, chaotic | Needs a conflict definition, rewards guessing and copying, cancelled moves help the defender |
+| C. **Simultaneous submit, ordered resolution** | All submit in 15 s, server resolves one by one in a rotating initiative order, each move validated normally at its turn | Fast, no new conflict rule, uses the unchanged validator | A later order can fizzle, needs a clear reveal log |
+
+Recommendation: **C**. A fizzled order (illegal by the time it resolves) means the player
+loses the tempo, nothing else. Initiative rotates each round, so nobody is always last.
+Resolution order is shown before the reveal and replayed as a short animation.
+
+Fairness detail: if an order is illegal at submission (client bug), the server substitutes
+"pass". A player who misses the timer passes.
+
+**Elimination:** at 0 marbles. Marbles vanish immediately (no zombie marbles blocking the
+board). Eliminated players spectate.
+
+**Anti-kingmaking:** a dying player must not decide the winner by choosing a target.
+1. **Placement score.** Each game gives points by placement (6 players: 10, 6, 4, 2, 1, 0)
+   plus 1 per ejection you caused. A doomed player maximizes ejections, not charity.
+2. **Credit rule.** The last player whose move touched a marble gets the ejection.
+3. **No chat, no alliances.** Emotes only (4 fixed ones).
+4. **Hidden orders.** Orders are secret until the reveal, so targeting a leader needs a guess.
+5. **Breach pace.** No hiding on the rim, no turtling in a corner for a draw.
+6. **Fast elimination.** Marbles disappear on death, a loser cannot keep pushing for someone.
+Measure it (acceptance): in 1000 bot games, the final-two leader should lose to a dying
+third player less than 1 time in 5. Compare against option A as a baseline.
+
+## 7. Boss roster
+
+Five bosses. Numbers (marble counts, timers) are **starting values** to tune in playtest.
+Player always starts with 14 marbles on the standard layout unless stated.
+
+### 7.1 The Hull (#43): tutorial boss
+
+- **Concept**: the ship itself, rusted, falling apart under you.
+- **Twist**: every 8 plies, rim cells crack, 2 plies later they vanish. A marble on a vanished
+  cell is ejected, either side. Boss plays standard Abalone, depth 3.
+- **Tell**: cracked cells glow orange and tick for 2 plies.
+- **Counter**: keep marbles off the rim, and **push boss marbles onto cracked cells**.
+- **Phases**: P1 above. P2 when the boss has **10** marbles left: timer drops to 6 plies, two
+  cells crack at once. P3 at **5**: timer 4, but the board is small and the boss is cornered.
+- **Calibrate**: knob = crack interval and AI depth. Fail if P1 deaths are over 50 percent of
+  all deaths (the tutorial must not kill early).
+
+### 7.2 The Choir (#44): three armies
+
+- **Concept**: three groups of the crew, still singing in turn.
+- **Twist**: the boss has 3 armies of 4 marbles (Alto, Tenor, Bass) on a radius 3 board. Each
+  boss turn only **one army** may move, in a fixed cycle. Alto is aggressive (push weights),
+  Tenor flanks (edge weights), Bass anchors (cluster weights). You have 10 marbles. Win by
+  ejecting 6, lose at 6 as usual.
+- **Tell**: the army that moves next has a glowing halo, from the end of your previous turn.
+- **Counter**: you know who moves next, so set a trap for that army. Wiping an army removes
+  it from the cycle.
+- **Phases**: P1 three armies. P2 when one army is wiped: the two others alternate and each
+  gets **a free extra move every 4th turn** (they cover for the lost voice). P3 when one
+  army is left (**4** marbles): it plays every turn but cannot push (no sumito).
+- **Calibrate**: knob = player marbles (10), extra move frequency. Fail if nobody ever wipes
+  the Bass first (the intended opener).
+
+### 7.3 The Marker (#45): conversion by encirclement
+
+- **Concept**: it marks the crew, then keeps them.
+- **Twist**: at the end of the boss turn, a player marble with **3 or more adjacent boss
+  marbles** flips to the boss. The marble count is conserved (conversion is not a loss for 6
+  ejections, but it is a loss of material).
+- **Tell**: a player marble that would flip at the end of the next boss turn shows a black
+  halo on your turn (check performed on the current position).
+- **Counter**: break contact (move or push), or **surround a flipped marble with 3 of your
+  marbles to flip it back**.
+- **Phases**: P1 above. P2 when the boss has **8** left: void cells count as boss neighbours,
+  so rim marbles flip at 2 contacts. P3 at **4**: a flip chains once (the flipped marble can
+  flip another in the same turn), but the boss loses 1 marble to the void per flip (it
+  pushes its own shell out).
+- **Calibrate**: knob = threshold (3), flip-back threshold, AI aggression weight. Fail if the
+  median attempt ends with fewer than 3 conversions seen (nobody learns the tell).
+
+### 7.4 The Echo (#46): mirrors your moves
+
+- **Concept**: the last crew member, who copies you out of habit.
+- **Twist**: after each of your moves, the Echo plays the **point-reflected move** (through the
+  board center) if legal. If not legal, its AI picks a move. Mirrored moves go through the
+  normal validator, no new move type.
+- **Tell**: a ghost of the mirrored move is drawn when you hover your arrow (preview shows
+  both sides). Nothing is hidden.
+- **Counter**: play moves whose mirror is bad for the boss (asymmetric pushes, edges), or
+  force illegal mirrors so it uses its weaker free move.
+- **Phases**: P1 above. P2 when the boss has **10** left: it echoes your **previous** move
+  (one move late). P3 at **5**: it echoes with two groups, and the free move happens on
+  every illegal mirror.
+- **Calibrate**: knob = AI depth on free moves, delay. Fail if win rate on attempt 1 to 3
+  exceeds 40 percent (too readable) or the median is over 12 attempts.
+
+### 7.5 The Ballast Mind (#47): final exam
+
+- **Concept**: the ship's mind, the thing that kept the game running.
+- **Twist**: a radius 5 board with 6 fixed void pillars (symmetric). Boss has 16 marbles, you
+  have 14. P1 is plain Abalone at depth 5. It reuses hooks of earlier bosses (no new engine
+  code).
+- **Tell**: each twist keeps its original visual language, so the player recognizes it.
+- **Counter**: those from bosses 1, 3 and 4.
+- **Phases**: P1 at **16**, plain. P2 at **10**: Hull rim crack (interval 8) plus Marker
+  (threshold 3). P3 at **5**: adds Echo of your previous move.
+- **Calibrate**: last. It must be harder than any previous boss, with first win between
+  attempt 5 and 10, never a wall.
+
+## 8. Boss calibration (#48)
+
+**Targets (all per boss):**
+- First win between attempt **3 and 10** (median across playtesters).
+- At most 20 percent of players quit before their first win.
+- No phase takes more than 50 percent of deaths (except the last phase of the final boss).
+- At most 40 percent of deaths come immediately after an unanswered tell (if more, the tell
+  is not readable, fix the tell before the AI).
+- An attempt lasts 5 to 12 minutes. Retry takes under 5 seconds.
+
+**Telemetry per attempt:** boss, seed, attempt number, result, phase reached, cause of death
+(tell id or plain loss), marbles left, duration, move list. Local first, upload opt-in.
+
+**Method:**
+1. **Bot ladder before humans.** Random, then alpha-beta depth 1 to 5. Each boss must be beaten
+   by depth N and not by depth N minus 2. Run nightly in CI. This catches a broken boss
+   (always won, never won) before a human ever sees it.
+2. **Fixed seed per boss.** Same boss, same opening, so a retry teaches something. Random
+   only breaks ties between equal moves.
+3. **One knob at a time.** Per boss: AI depth, timer, threshold, marble count. Change one,
+   replay the bot ladder, then 5 human playtests.
+4. **Playtest of 5 humans per boss** (a mix of Abalone players and non-players), recorded
+   moves, then read the death heatmap.
+5. **Anti-skill-wall check:** a player who knows Abalone but never saw the boss must lose by
+   attempt 1 or 2 and learn the cause from the loss screen.
+
+## 9. Testability checklist
+
+For each feature, the acceptance test is a position plus a move list:
+- Hull: position with a cracked cell and a boss marble next to it, push, assert ejection.
+- Choir: army order and halo, assert the skipped turn after a wipe.
+- Marker: position with 3 contacts, end boss turn, assert flip. Position at 2 contacts, none.
+- Echo: reflect a move, assert it goes through the validator and equals the center reflection.
+- Ballast: phase changes at 16, 10, 5 boss marbles, assert hooks switch on.
+- BR: bot simulation of 1000 games, assert one winner, no game over 150 rounds, no crash.
+- Anti-stalling: scripted shuffle, scripted long game.
+
+## 10. Open questions
+
+Q1. **Boss AI strength curve (#42).** Depth only, or also eval weights? Depth is simple, weights
+give each boss a "personality" (see Choir). Recommendation: both, depth is the global knob.
+
+Q2. **Draw = loss in PvE.** Fair? Alternative: draw = retry without a counted attempt.
+Recommendation: loss, it keeps the pressure.
+
+Q3. **BR marble count.** 10 per player is a guess. Is the first contact too early or too late
+on radius 8? Needs a bot simulation.
+
+Q4. **Relics.** Optional run-level perks, or never? They add fun, they break calibration.
+Recommendation: never in v1.
+
+Q5. **Hub persistence without accounts.** Local storage is fragile. Is a signed save file
+enough until accounts?
+
+Q6. **Fog on bosses.** Hide boss marbles beyond a radius? Cool mood, bad for fairness and for
+online. Recommendation: no.
+
+Q7. **Clock in PvE.** None (souls-like pacing) or a soft clock to avoid 30 minute attempts?
+Recommendation: none, but attempts are paused-free and a quit counts as a loss.
+
+Q8. **Catch-up in BR.** Should the player with the fewest marbles resolve first in the
+initiative order? It helps the weak, but it also helps whoever sandbagged on purpose.
