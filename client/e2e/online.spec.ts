@@ -16,6 +16,7 @@ test('a move played on page A shows up on page B over the signed move log', asyn
 
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await a.locator('#play-online').click();
   const invite = await a.locator('#invite').inputValue();
   expect(invite).toMatch(/#room=[\w-]+$/);
@@ -47,6 +48,9 @@ test('a move played on page A shows up on page B over the signed move log', asyn
   await expect.poll(() => plies(a)).toBe(2);
   await expect(a.locator('#hud')).toContainText('Black to move');
   await expect(a.locator('#hud')).not.toContainText('refused');
+  // Manual contexts stay open after the test: their WebGL pages would slow the next test (#120).
+  await a.context().close();
+  await b.context().close();
 });
 
 test('two tabs of the same browser context play an online game, bug #116', async ({ context }) => {
@@ -55,11 +59,12 @@ test('two tabs of the same browser context play an online game, bug #116', async
   await a.exposeFunction('__netOut', (rec: unknown) => b.evaluate((r) => (window as any).__netIn(r), rec));
   await b.exposeFunction('__netOut', (rec: unknown) => a.evaluate((r) => (window as any).__netIn(r), rec));
 
-  await a.goto('/?bot=off&net=hook');
+  await a.goto('./?bot=off&net=hook'); // './' keeps the /ab-alone/ path of E2E_BASE_URL, '/' is the Pages host root (404)
   await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await a.locator('#play-online').click();
   const invite = await a.locator('#invite').inputValue();
-  await b.goto(`/?net=hook${new URL(invite).hash}`);
+  await b.goto(`./?net=hook${new URL(invite).hash}`);
   await b.locator('canvas').waitFor();
   await a.evaluate(() => (window as any).__netOpen());
   await b.evaluate(() => (window as any).__netOpen());
