@@ -12,11 +12,22 @@ const INF: i32 = 2 * WIN;
 /// Iterative deepening stops here even with budget left (tiny positions).
 const MAX_DEPTH: u32 = 12;
 
-// Hand-tuned evaluation weights, in centi-marbles.
-const W_MARBLES: i32 = 100;
-const W_EJECTED: i32 = 50;
-const W_CENTRE: i32 = 3;
-const W_COHESION: i32 = 2;
+/// Evaluation weights, in centi-marbles. A boss swaps them for its own style.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Weights {
+    pub marbles: i32,
+    pub ejected: i32,
+    pub centre: i32,
+    pub cohesion: i32,
+}
+
+/// Hand-tuned weights of the plain search.
+pub const DEFAULT_WEIGHTS: Weights = Weights {
+    marbles: 100,
+    ejected: 50,
+    centre: 3,
+    cohesion: 2,
+};
 
 /// What a search found.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -97,10 +108,10 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2]) -> i32 {
     let (own_count, own_distance, own_pairs) = shape(board, cell_of(player));
     let (opp_count, opp_distance, opp_pairs) = shape(board, cell_of(other(player)));
     let made = i32::from(ejected[index(player)]) - i32::from(ejected[index(other(player))]);
-    W_MARBLES * (own_count - opp_count)
-        + W_EJECTED * made
-        + W_CENTRE * (opp_distance - own_distance)
-        + W_COHESION * (own_pairs - opp_pairs)
+    DEFAULT_WEIGHTS.marbles * (own_count - opp_count)
+        + DEFAULT_WEIGHTS.ejected * made
+        + DEFAULT_WEIGHTS.centre * (opp_distance - own_distance)
+        + DEFAULT_WEIGHTS.cohesion * (own_pairs - opp_pairs)
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
@@ -224,6 +235,17 @@ pub fn search(game: &Game, node_budget: u32) -> Option<SearchResult> {
         depth,
         nodes: searcher.nodes,
     })
+}
+
+/// [`search`] with custom `weights` and a filter on the moves the root may choose.
+pub fn search_with(
+    game: &Game,
+    node_budget: u32,
+    weights: Weights,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<SearchResult> {
+    let _ = (game, node_budget, weights, allow);
+    todo!()
 }
 
 /// Same as [`search`], the move only.
@@ -386,5 +408,58 @@ mod tests {
             .find(|&(q, r)| board.get(q, r) == Some(Cell::Black))
             .unwrap();
         assert!(dist(q, r) < 3);
+    }
+
+    fn heavy(w: Weights) -> Option<Move> {
+        search_with(&Game::new(), 3000, w, &|_| true).map(|r| r.mv)
+    }
+
+    #[test]
+    fn default_weights_and_no_filter_match_search() {
+        assert_eq!(
+            search_with(&Game::new(), 1500, DEFAULT_WEIGHTS, &|_| true),
+            search(&Game::new(), 1500)
+        );
+    }
+
+    #[test]
+    fn the_filter_limits_the_root_moves() {
+        let game = Game::new();
+        let only_east = |m: &Move| m.dir == Direction::E;
+        let found = search_with(&game, 500, DEFAULT_WEIGHTS, &only_east).expect("a move");
+        assert_eq!(found.mv.dir, Direction::E);
+        assert_legal(&game, &found.mv);
+        assert!(found.nodes <= 500);
+        assert_eq!(search_with(&game, 500, DEFAULT_WEIGHTS, &|_| false), None);
+    }
+
+    #[test]
+    fn the_weights_change_the_choice() {
+        let styles = [
+            DEFAULT_WEIGHTS,
+            Weights {
+                ejected: 400,
+                ..DEFAULT_WEIGHTS
+            },
+            Weights {
+                centre: 40,
+                ..DEFAULT_WEIGHTS
+            },
+            Weights {
+                cohesion: 40,
+                ..DEFAULT_WEIGHTS
+            },
+        ];
+        let picks: Vec<_> = styles.into_iter().map(heavy).collect();
+        assert!(picks.iter().any(|m| *m != picks[0]), "{picks:?}");
+    }
+
+    #[test]
+    fn search_with_is_deterministic() {
+        let w = Weights {
+            cohesion: 40,
+            ..DEFAULT_WEIGHTS
+        };
+        assert_eq!(heavy(w), heavy(w));
     }
 }

@@ -4,6 +4,7 @@
 //! seed, so the same seed and the same player moves give the same boss moves.
 
 pub mod chaplain;
+pub mod choir;
 pub mod echo;
 pub mod hull;
 
