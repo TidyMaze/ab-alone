@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": ["vite/client"],
+    "paths": { "abalone-wasm": ["../crates/abalone-wasm/pkg/abalone_wasm.js"] }
+  },
+  "include": ["src", "vite.config.ts"]
+}
