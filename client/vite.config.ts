@@ -18,7 +18,7 @@ export default defineConfig(({ command }) => ({
       provider: 'v8',
       // Only the pure game-board and bot-protocol logic is unit tested here. The Three.js scene and the DOM wiring
       // in main.ts and scene.ts need a real browser (Playwright e2e, a later task).
-      include: ['src/board.ts', 'src/bot.ts'],
+      include: ['src/board.ts', 'src/bot.ts', 'src/score.ts'],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },

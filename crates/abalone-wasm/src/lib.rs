@@ -6,12 +6,13 @@
 //!   Value `0` empty, `1` Black, `2` White. Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
 //! - Side and winner: `1` Black, `2` White.
 //! - Status: `0` running, `1` Black won, `2` White won, `3` draw.
+//! - Draw reason: `0` none, `1` threefold repetition, `2` 100 plies without ejection.
 //! - Move: 8 integers `[n, dir, q0, r0, q1, r1, q2, r2]`, `n` in 1..=3 marbles, unused
 //!   coordinates are `0`. `dir`: `0` E, `1` W, `2` NE, `3` SW, `4` NW, `5` SE.
 //!   `legal_moves` returns the records back to back.
 
 use abalone_core::board::{Cell, RADIUS};
-use abalone_core::game::{Game, Outcome};
+use abalone_core::game::{DrawReason, Game, Outcome};
 use abalone_core::moves::{legal_moves, Direction, Move, Player};
 use abalone_core::search::best_move;
 use wasm_bindgen::prelude::*;
@@ -42,6 +43,15 @@ pub fn status_code(outcome: Option<Outcome>) -> u8 {
         None => 0,
         Some(Outcome::Win(player)) => side_code(player),
         Some(Outcome::Draw) => 3,
+    }
+}
+
+/// Draw reason code, see the module docs.
+pub fn draw_reason_code(reason: Option<DrawReason>) -> u8 {
+    match reason {
+        None => 0,
+        Some(DrawReason::Repetition) => 1,
+        Some(DrawReason::NoEjectionCap) => 2,
     }
 }
 
@@ -112,6 +122,16 @@ impl Engine {
         self.game.play(&mv).map_err(|e| format!("{e:?}"))
     }
 
+    /// Opponent marbles ejected by a side: `1` Black, `2` White. The game ends at 6.
+    pub fn ejected(&self, side: u8) -> u8 {
+        let player = if side == 1 {
+            Player::Black
+        } else {
+            Player::White
+        };
+        self.game.ejected(player)
+    }
+
     /// The 61 cells, see the module docs for the order.
     pub fn board(&self) -> Vec<u8> {
         let board = self.game.board();
@@ -137,6 +157,11 @@ impl Engine {
     /// Winner or draw state, see the module docs.
     pub fn status(&self) -> u8 {
         status_code(self.game.outcome())
+    }
+
+    /// Draw reason code, `0` when the game is not a draw. See the module docs.
+    pub fn draw_reason(&self) -> u8 {
+        draw_reason_code(self.game.draw_reason())
     }
 }
 
@@ -246,6 +271,7 @@ mod tests {
         let mut engine = Engine::new();
         play_until_over(&mut engine);
         assert_eq!(engine.status(), 3);
+        assert!((1..=2).contains(&engine.draw_reason()));
         assert!(engine.legal_moves().is_empty());
         assert!(engine.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
     }
@@ -279,10 +305,25 @@ mod tests {
     }
 
     #[test]
+    fn ejected_counts_start_at_zero_for_both_sides() {
+        let engine = Engine::new();
+        assert_eq!(engine.ejected(1), 0);
+        assert_eq!(engine.ejected(2), 0);
+    }
+
+    #[test]
     fn status_codes() {
         assert_eq!(status_code(None), 0);
         assert_eq!(status_code(Some(Outcome::Win(Player::Black))), 1);
         assert_eq!(status_code(Some(Outcome::Win(Player::White))), 2);
         assert_eq!(status_code(Some(Outcome::Draw)), 3);
+    }
+
+    #[test]
+    fn draw_reason_codes() {
+        use abalone_core::game::DrawReason;
+        assert_eq!(draw_reason_code(None), 0);
+        assert_eq!(draw_reason_code(Some(DrawReason::Repetition)), 1);
+        assert_eq!(draw_reason_code(Some(DrawReason::NoEjectionCap)), 2);
     }
 }
