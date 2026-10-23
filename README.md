@@ -3,6 +3,7 @@
 Abalone on a derelict spaceship. Rust + WASM rules engine, Three.js rendering, online
 multiplayer, souls-like bosses, battle royale.
 
+- Play it live: https://tidymaze.github.io/ab-alone/
 - What we build: [SPEC.md](SPEC.md)
 - How we work, strictly: [CONTRIBUTING.md](CONTRIBUTING.md) (agents: [AGENTS.md](AGENTS.md))
 
