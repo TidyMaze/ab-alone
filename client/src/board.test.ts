@@ -8,9 +8,11 @@ import {
   cellIndex,
   directionBetween,
   encodeMove,
-  legalTargets,
+  groupTargets,
+  isGroup,
+  moveForClick,
   parseMoves,
-  pickMove,
+  toggleSelection,
   type Move,
 } from './board';
 
@@ -102,34 +104,77 @@ describe('directionBetween', () => {
   });
 });
 
-describe('click to move', () => {
+describe('isGroup', () => {
+  it('accepts 1 marble, and 2 or 3 contiguous marbles on each axis in any click order', () => {
+    expect(isGroup([[0, 0]])).toBe(true);
+    expect(isGroup([[0, 0], [1, 0]])).toBe(true);
+    expect(isGroup([[1, 0], [0, 0]])).toBe(true);
+    expect(isGroup([[0, 0], [1, -1], [2, -2]])).toBe(true);
+    expect(isGroup([[0, 1], [0, -1], [0, 0]])).toBe(true);
+  });
+
+  it('refuses nothing, 4 marbles, a gap, a triangle and a bend', () => {
+    expect(isGroup([])).toBe(false);
+    expect(isGroup([[0, 0], [1, 0], [2, 0], [3, 0]])).toBe(false);
+    expect(isGroup([[0, 0], [2, 0]])).toBe(false);
+    expect(isGroup([[0, 0], [1, 0], [3, 0]])).toBe(false);
+    expect(isGroup([[0, 0], [1, 0], [0, 1]])).toBe(false);
+    expect(isGroup([[0, 0], [1, 0], [1, 1]])).toBe(false);
+  });
+});
+
+describe('toggleSelection', () => {
+  it('selects a first marble and grows the group up to 3', () => {
+    expect(toggleSelection([], [0, 0])).toEqual([[0, 0]]);
+    expect(toggleSelection([[0, 0]], [1, 0])).toEqual([[0, 0], [1, 0]]);
+    expect(toggleSelection([[0, 0], [1, 0]], [2, 0])).toEqual([[0, 0], [1, 0], [2, 0]]);
+  });
+
+  it('ignores a marble that would break the group: not aligned, a gap, or a 4th', () => {
+    expect(toggleSelection([[0, 0]], [2, 0])).toEqual([[0, 0]]);
+    expect(toggleSelection([[0, 0], [1, 0]], [0, 1])).toEqual([[0, 0], [1, 0]]);
+    expect(toggleSelection([[0, 0], [1, 0], [2, 0]], [3, 0])).toEqual([[0, 0], [1, 0], [2, 0]]);
+  });
+
+  it('deselects a selected marble on a second click', () => {
+    expect(toggleSelection([[0, 0]], [0, 0])).toEqual([]);
+    expect(toggleSelection([[0, 0], [1, 0]], [1, 0])).toEqual([[0, 0]]);
+    expect(toggleSelection([[0, 0], [1, 0], [2, 0]], [2, 0])).toEqual([[0, 0], [1, 0]]);
+  });
+
+  it('clears the selection when removing the middle marble would leave a gap', () => {
+    expect(toggleSelection([[0, 0], [1, 0], [2, 0]], [1, 0])).toEqual([]);
+  });
+});
+
+describe('moveForClick and groupTargets', () => {
   const single: Move = { cells: [[0, 4]], dir: 4 };
-  const sideStep: Move = { cells: [[0, 4], [1, 4]], dir: 4 };
-  const push: Move = { cells: [[0, 4], [0, 3]], dir: 4 };
-  const triple: Move = { cells: [[0, 4], [0, 3], [0, 2]], dir: 4 };
-  const other: Move = { cells: [[2, 3]], dir: 1 };
+  const pair: Move = { cells: [[0, 4], [0, 3]], dir: 4 };
+  const pairBroadside: Move = { cells: [[0, 4], [0, 3]], dir: 0 };
+  const trio: Move = { cells: [[0, 4], [0, 3], [0, 2]], dir: 4 };
+  const moves = [single, pair, pairBroadside, trio];
 
-  it('picks the legal move for the selected marble and the clicked neighbour', () => {
-    expect(pickMove([other, single], [0, 4], [0, 3])).toBe(single);
+  it('plays the move whose group is exactly the selection, whatever the click order', () => {
+    expect(moveForClick(moves, [[0, 4]], [0, 3])).toBe(single);
+    expect(moveForClick(moves, [[0, 3], [0, 4]], [0, 2])).toBe(pair);
+    expect(moveForClick(moves, [[0, 4], [0, 3], [0, 2]], [0, 1])).toBe(trio);
   });
 
-  it('prefers the smallest group when several legal moves contain the marble', () => {
-    expect(pickMove([push, sideStep, single], [0, 4], [0, 3])).toBe(single);
-    expect(pickMove([triple, push], [0, 4], [0, 3])).toBe(push);
+  it('accepts either marble neighbour for a broadside move', () => {
+    expect(moveForClick(moves, [[0, 4], [0, 3]], [1, 4])).toBe(pairBroadside);
+    expect(moveForClick(moves, [[0, 4], [0, 3]], [1, 3])).toBe(pairBroadside);
   });
 
-  it('is null when the target is not a neighbour or no legal move matches', () => {
-    expect(pickMove([single], [0, 4], [0, 2])).toBeNull();
-    expect(pickMove([single], [0, 4], [1, 4])).toBeNull();
-    expect(pickMove([single], [3, 3], [3, 2])).toBeNull();
+  it('is null for an empty selection, a cell inside the group, or no legal move', () => {
+    expect(moveForClick(moves, [], [0, 3])).toBeNull();
+    expect(moveForClick(moves, [[0, 4], [0, 3]], [0, 3])).toBeNull();
+    expect(moveForClick(moves, [[0, 4], [0, 3]], [-1, 3])).toBeNull();
+    expect(moveForClick(moves, [[2, 2]], [2, 1])).toBeNull();
   });
 
-  it('lists the neighbour cells the selected marble can move to, without duplicates', () => {
-    expect(legalTargets([single, push, other], [0, 4])).toEqual([[0, 3]]);
-    expect(legalTargets([single, { cells: [[0, 4]], dir: 5 }], [0, 4])).toEqual([
-      [0, 3],
-      [0, 5],
-    ]);
-    expect(legalTargets([other], [0, 4])).toEqual([]);
+  it('lists the target cells of the selected group, without duplicates', () => {
+    expect(groupTargets(moves, [[0, 4], [0, 3]])).toEqual([[1, 4], [1, 3], [0, 2]]);
+    expect(groupTargets(moves, [[0, 4]])).toEqual([[0, 3]]);
+    expect(groupTargets(moves, [])).toEqual([]);
   });
 });

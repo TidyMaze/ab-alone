@@ -77,23 +77,60 @@ export function directionBetween(from: Axial, to: Axial): number {
   return DIRECTIONS.findIndex(([dq, dr]) => from[0] + dq === to[0] && from[1] + dr === to[1]);
 }
 
-/** The legal move for "selected marble, then clicked neighbour". When several groups contain the
- * marble (a single step, a side step, an inline push) the smallest group wins. */
-export function pickMove(moves: Move[], selected: Axial, target: Axial): Move | null {
-  const dir = directionBetween(selected, target);
-  const matching = moves.filter(
-    (mv) => mv.dir === dir && mv.cells.some(([q, r]) => q === selected[0] && r === selected[1]),
-  );
-  return matching.reduce<Move | null>(
-    (best, mv) => (best === null || mv.cells.length < best.cells.length ? mv : best),
-    null,
-  );
+const same = (a: Axial, b: Axial): boolean => a[0] === b[0] && a[1] === b[1];
+
+/** True for 1 to 3 distinct cells that are contiguous on one axis, in any order. Selection UX
+ * only: the engine stays the judge of legality. */
+export function isGroup(cells: readonly Axial[]): boolean {
+  if (cells.length < 1 || cells.length > 3) return false;
+  const has = (q: number, r: number): boolean => cells.some((c) => c[0] === q && c[1] === r);
+  return DIRECTIONS.some(([dq, dr]) => {
+    const starts = cells.filter(([q, r]) => !has(q - dq, r - dr));
+    if (starts.length !== 1) return false;
+    const [q0, r0] = starts[0]!;
+    return cells.every((_, i) => has(q0 + i * dq, r0 + i * dr));
+  });
 }
 
-/** Neighbour cells the selected marble can be moved towards, in direction-code order. */
-export function legalTargets(moves: Move[], selected: Axial): Axial[] {
-  return DIRECTIONS.flatMap(([dq, dr]): Axial[] => {
-    const target: Axial = [selected[0] + dq, selected[1] + dr];
-    return pickMove(moves, selected, target) ? [target] : [];
+/** Click on an own marble: deselect it if selected, else add it when the group stays valid. A
+ * deselect that would leave a gap clears the selection. */
+export function toggleSelection(selection: readonly Axial[], cell: Axial): Axial[] {
+  if (selection.some((c) => same(c, cell))) {
+    const rest = selection.filter((c) => !same(c, cell));
+    return rest.length > 0 && !isGroup(rest) ? [] : rest;
+  }
+  const next = [...selection, cell];
+  return isGroup(next) ? next : [...selection];
+}
+
+/** Legal moves of exactly this group that a click on `target` can play: the target is a neighbour
+ * of one group marble in the move direction and not part of the group. */
+function movesTo(moves: Move[], selection: readonly Axial[], target: Axial): Move[] {
+  if (selection.length === 0 || selection.some((c) => same(c, target))) return [];
+  return moves.filter((mv) => {
+    const [dq, dr] = DIRECTIONS[mv.dir]!;
+    return (
+      mv.cells.length === selection.length &&
+      mv.cells.every((c) => selection.some((s) => same(s, c))) &&
+      selection.some(([q, r]) => same([q + dq, r + dr], target))
+    );
   });
+}
+
+/** The legal move for "selected group, then clicked target cell", or null. */
+export function moveForClick(moves: Move[], selection: readonly Axial[], target: Axial): Move | null {
+  return movesTo(moves, selection, target)[0] ?? null;
+}
+
+/** Cells to highlight for the selected group: every target of a legal move of that group, in
+ * direction-code order. */
+export function groupTargets(moves: Move[], selection: readonly Axial[]): Axial[] {
+  const targets: Axial[] = [];
+  for (const [dq, dr] of DIRECTIONS) {
+    for (const [q, r] of selection) {
+      const t: Axial = [q + dq, r + dr];
+      if (moveForClick(moves, selection, t) && !targets.some((x) => same(x, t))) targets.push(t);
+    }
+  }
+  return targets;
 }
