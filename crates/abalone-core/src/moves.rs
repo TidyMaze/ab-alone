@@ -1,6 +1,6 @@
 //! Move generation and validation: inline, broadside and sumito (docs/specs/rules.md sections 3 to 5).
 
-use crate::board::Board;
+use crate::board::{Board, Cell, RADIUS};
 
 /// The six hex directions, as axial vectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,14 +40,152 @@ pub enum MoveError {
     PushBlocked,
 }
 
+impl Direction {
+    const ALL: [Direction; 6] = [
+        Direction::E,
+        Direction::W,
+        Direction::NE,
+        Direction::SW,
+        Direction::NW,
+        Direction::SE,
+    ];
+
+    fn vector(self) -> (i32, i32) {
+        match self {
+            Direction::E => (1, 0),
+            Direction::W => (-1, 0),
+            Direction::NE => (1, -1),
+            Direction::SW => (-1, 1),
+            Direction::NW => (0, -1),
+            Direction::SE => (0, 1),
+        }
+    }
+}
+
+impl Player {
+    fn cells(self) -> (Cell, Cell) {
+        match self {
+            Player::Black => (Cell::Black, Cell::White),
+            Player::White => (Cell::White, Cell::Black),
+        }
+    }
+}
+
+fn step((q, r): (i32, i32), (dq, dr): (i32, i32), n: i32) -> (i32, i32) {
+    (q + n * dq, r + n * dr)
+}
+
+fn at(board: &Board, (q, r): (i32, i32)) -> Option<Cell> {
+    board.get(q, r)
+}
+
 /// Every legal move of `player` on `board`.
-pub fn legal_moves(_board: &Board, _player: Player) -> Vec<Move> {
-    unimplemented!()
+pub fn legal_moves(board: &Board, player: Player) -> Vec<Move> {
+    let (own, _) = player.cells();
+    let mut moves = Vec::new();
+    for q in -RADIUS..=RADIUS {
+        for r in -RADIUS..=RADIUS {
+            if board.get(q, r) != Some(own) {
+                continue;
+            }
+            // Axis vectors in ascending order: a group built from `(q, r)` is already sorted.
+            for axis in [Direction::E, Direction::NE, Direction::SE] {
+                let v = axis.vector();
+                for size in 1..=3 {
+                    // A single marble is the same group on every axis: generate it once.
+                    if size == 1 && axis != Direction::E {
+                        continue;
+                    }
+                    let cells: Vec<_> = (0..size).map(|i| step((q, r), v, i)).collect();
+                    for dir in Direction::ALL {
+                        let m = Move {
+                            cells: cells.clone(),
+                            dir,
+                        };
+                        if apply(board, player, &m).is_ok() {
+                            moves.push(m);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    moves
 }
 
 /// Plays `mv` for `player`. Returns the new board and whether an opponent marble was ejected.
-pub fn apply(_board: &Board, _player: Player, _mv: &Move) -> Result<(Board, bool), MoveError> {
-    unimplemented!()
+pub fn apply(board: &Board, player: Player, mv: &Move) -> Result<(Board, bool), MoveError> {
+    let (own, opp) = player.cells();
+    let mut group = mv.cells.clone();
+    group.sort();
+    let n = group.len();
+    if n == 0 {
+        return Err(MoveError::EmptySelection);
+    }
+    if n > 3 {
+        return Err(MoveError::TooManyMarbles);
+    }
+    if group.iter().any(|&c| at(board, c) != Some(own)) {
+        return Err(MoveError::NotOwnMarble);
+    }
+    // Sorted ascending, the gap between neighbours is E, NE or SE when the group is a line.
+    let axis = Direction::ALL
+        .into_iter()
+        .find(|d| n == 1 || step(group[0], d.vector(), 1) == group[1]);
+    let Some(axis) = axis else {
+        return Err(MoveError::NotALine);
+    };
+    let v = axis.vector();
+    if (0..n).any(|i| group[i] != step(group[0], v, i as i32)) {
+        return Err(MoveError::NotALine);
+    }
+    let d = mv.dir.vector();
+    let inline = n == 1 || d == v || d == step((0, 0), v, -1);
+    let mut next = board.clone();
+    let mut ejected = false;
+    let mut moved: Vec<((i32, i32), Cell)> = group.iter().map(|&c| (c, own)).collect();
+    if inline {
+        let front = if d == v { group[n - 1] } else { group[0] };
+        let lead = step(front, d, 1);
+        let mut run = 0;
+        while at(board, step(lead, d, run)) == Some(opp) {
+            run += 1;
+        }
+        let behind = at(board, step(lead, d, run));
+        if run == 0 {
+            match behind {
+                Some(Cell::Empty) => {}
+                Some(_) => return Err(MoveError::Blocked),
+                None => return Err(MoveError::OffBoard),
+            }
+        } else {
+            if n as i32 <= run {
+                return Err(MoveError::NotStrongEnough);
+            }
+            match behind {
+                Some(Cell::Empty) => {}
+                Some(_) => return Err(MoveError::PushBlocked),
+                None => ejected = true,
+            }
+            moved.extend((0..run).map(|i| (step(lead, d, i), opp)));
+        }
+    } else {
+        for &c in &group {
+            match at(board, step(c, d, 1)) {
+                Some(Cell::Empty) => {}
+                Some(_) => return Err(MoveError::Blocked),
+                None => return Err(MoveError::OffBoard),
+            }
+        }
+    }
+    for &(c, _) in &moved {
+        next.set(c.0, c.1, Cell::Empty);
+    }
+    for &(c, cell) in &moved {
+        let t = step(c, d, 1);
+        next.set(t.0, t.1, cell);
+    }
+    Ok((next, ejected))
 }
 
 #[cfg(test)]
@@ -422,10 +560,10 @@ mod tests {
 
     #[test]
     fn pair_in_the_centre_has_2_inline_and_4_broadside_moves_plus_singles() {
-        // 2 singles x 6 = 12, pair: 2 inline + 4 broadside = 6 (E-W axis pair)
+        // 2 singles x 5 free directions = 10 (each is blocked by the other), pair: 2 inline + 4 broadside
         let b = board(&[(0, 0), (1, 0)], &[]);
         let moves = legal_moves(&b, Player::Black);
-        assert_eq!(moves.len(), 12 + 6);
+        assert_eq!(moves.len(), 10 + 6);
         assert!(moves.contains(&mv(&[(0, 0), (1, 0)], E)));
         assert!(moves.contains(&mv(&[(0, 0), (1, 0)], W)));
         assert!(moves.contains(&mv(&[(0, 0), (1, 0)], NE)));
