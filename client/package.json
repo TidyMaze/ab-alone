@@ -7,7 +7,8 @@
     "wasm": "wasm-pack build ../crates/abalone-wasm --target web",
     "dev": "npm run wasm && vite",
     "test": "vitest run --coverage",
-    "e2e": "playwright test",
+    "e2e": "playwright test --project=chromium",
+    "e2e:all": "playwright test",
     "build": "npm run wasm && tsc --noEmit && vite build"
   },
   "devDependencies": {
