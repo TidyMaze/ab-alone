@@ -14,6 +14,10 @@ import {
 import { askBot } from './bot';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
+import { inviteUrl, newRoomId, roomFromHash } from './invite';
+import { hookTransport, p2pTransport } from './p2p';
+import { loadKeys } from './moverecord';
+import { OnlineSession } from './session';
 import { hudHtml } from './hud';
 import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
 import { formatScore } from './score';
@@ -25,7 +29,7 @@ const MARBLE_COLORS: Record<number, number> = { 1: 0x15191c, 2: 0xd8d4c8 };
 const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
 
 await init();
-const engine = new Engine();
+let engine = new Engine();
 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
@@ -164,7 +168,7 @@ const history: number[][] = [];
 let thinking = false;
 
 async function botTurn(): Promise<void> {
-  if (!worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
+  if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
   thinking = true;
   const move = await askBot(worker, history);
   thinking = false;
@@ -177,6 +181,10 @@ const ejecting: { mesh: THREE.Mesh; track: EjectTrack; start: number }[] = [];
 function playMove(record: number[]): void {
   const before = Array.from(engine.board());
   engine.play(Int32Array.from(record));
+  afterPlay(before, record);
+}
+
+function afterPlay(before: number[], record: number[]): void {
   history.push(record);
   const ejection = findEjection(before, engine.board(), parseMoves(record)[0]!);
   if (!ejection) return;
@@ -221,7 +229,7 @@ function hud(extra = ''): void {
     status,
     score: formatScore(ejected, status, engine.draw_reason()),
     ejected,
-    note: `${backend}${extra}`,
+    note: `${backend}${onlineNote}${extra}`,
   });
 }
 
@@ -266,6 +274,8 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 
 function click(q: number, r: number): void {
   if (thinking) return;
+  if (online && engine.to_move() !== onlineSide) return; // not our turn
+  if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
     selected = toggleSelection(selected, [q, r]);
@@ -273,8 +283,10 @@ function click(q: number, r: number): void {
     // The engine is the only judge: a click that is not a legal move changes nothing.
     const mv = moveForClick(parseMoves(engine.legal_moves()), selected, [q, r]);
     if (mv) {
-      playMove(encodeMove(mv));
+      const record = encodeMove(mv);
+      playMove(record);
       selected = [];
+      void online?.send(record);
     }
   }
   refresh();
@@ -321,6 +333,54 @@ addEventListener('resize', () => {
 
 // Used by the browser checks to count the plies played, bot replies included.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
+
+// Online play: Black creates the room and shares the invite link, the link opener plays White.
+// The engine stays the only judge: every remote move is replayed through it, a bad one is refused.
+// ?net=hook swaps the Trystero transport for the page hook the e2e test wires (no public relays).
+let online: OnlineSession | null = null;
+let onlineSide = 0;
+let onlineNote = '';
+const inviteBox = document.getElementById('invite') as HTMLInputElement;
+async function goOnline(room: string, side: number): Promise<void> {
+  engine = new Engine();
+  history.length = 0;
+  selected = [];
+  const net = new URLSearchParams(location.search).get('net') === 'hook' ? hookTransport() : p2pTransport(room);
+  onlineSide = side;
+  const sideName = side === 1 ? 'Black' : 'White';
+  onlineNote = ` · online, you are ${sideName}`;
+  online = new OnlineSession({
+    game: room,
+    side,
+    keys: await loadKeys(store),
+    transport: net,
+    judge: {
+      to_move: () => engine.to_move(),
+      play: (mv) => {
+        const before = Array.from(engine.board());
+        engine.play(mv);
+        afterPlay(before, Array.from(mv));
+      },
+    },
+    onMove: () => refresh(),
+    onRefuse: (reason) => hud(` · refused move: ${reason}`),
+    onState: (s) => {
+      onlineNote = ` · online, you are ${sideName}, ${s}`;
+      hud();
+    },
+  });
+  document.body.dataset.online = sideName;
+  refresh();
+}
+document.getElementById('play-online')!.addEventListener('click', () => {
+  const room = newRoomId((b) => crypto.getRandomValues(b));
+  location.hash = `room=${room}`;
+  inviteBox.value = inviteUrl(location.href, room);
+  inviteBox.hidden = false;
+  void goOnline(room, 1);
+});
+const invited = roomFromHash(location.hash);
+if (invited) void goOnline(invited, 2);
 
 refresh();
 renderer.setAnimationLoop((now) => {
