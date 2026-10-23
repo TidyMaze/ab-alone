@@ -10,15 +10,68 @@
 //!   coordinates are `0`. `dir`: `0` E, `1` W, `2` NE, `3` SW, `4` NW, `5` SE.
 //!   `legal_moves` returns the records back to back.
 
+use abalone_core::board::{Cell, RADIUS};
 use abalone_core::game::{Game, Outcome};
+use abalone_core::moves::{legal_moves, Direction, Move, Player};
 use wasm_bindgen::prelude::*;
 
 /// Integers per move record.
 pub const MOVE_STRIDE: usize = 8;
 
+/// Direction codes, the index is the code.
+const DIRECTIONS: [Direction; 6] = [
+    Direction::E,
+    Direction::W,
+    Direction::NE,
+    Direction::SW,
+    Direction::NW,
+    Direction::SE,
+];
+
+fn side_code(player: Player) -> u8 {
+    match player {
+        Player::Black => 1,
+        Player::White => 2,
+    }
+}
+
 /// Status code of a game, see the module docs.
-pub fn status_code(_outcome: Option<Outcome>) -> u8 {
-    unimplemented!()
+pub fn status_code(outcome: Option<Outcome>) -> u8 {
+    match outcome {
+        None => 0,
+        Some(Outcome::Win(player)) => side_code(player),
+        Some(Outcome::Draw) => 3,
+    }
+}
+
+fn encode(mv: &Move) -> [i32; MOVE_STRIDE] {
+    let mut record = [0; MOVE_STRIDE];
+    record[0] = mv.cells.len() as i32;
+    record[1] = DIRECTIONS.iter().position(|&d| d == mv.dir).unwrap_or(0) as i32;
+    for (i, &(q, r)) in mv.cells.iter().enumerate() {
+        record[2 + 2 * i] = q;
+        record[3 + 2 * i] = r;
+    }
+    record
+}
+
+fn decode(record: &[i32]) -> Result<Move, String> {
+    if record.len() != MOVE_STRIDE {
+        return Err(format!("move needs {MOVE_STRIDE} integers"));
+    }
+    let n = usize::try_from(record[0])
+        .ok()
+        .filter(|n| (1..=3).contains(n))
+        .ok_or("marble count must be 1 to 3")?;
+    let dir = usize::try_from(record[1])
+        .ok()
+        .and_then(|i| DIRECTIONS.get(i))
+        .copied()
+        .ok_or("direction must be 0 to 5")?;
+    let cells = (0..n)
+        .map(|i| (record[2 + 2 * i], record[3 + 2 * i]))
+        .collect();
+    Ok(Move { cells, dir })
 }
 
 /// One opaque game instance handed to JavaScript.
@@ -32,33 +85,49 @@ impl Engine {
     /// A new game: standard layout, Black to move.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Engine {
-        unimplemented!()
+        Engine { game: Game::new() }
     }
 
     /// Side to move: `1` Black, `2` White.
     pub fn to_move(&self) -> u8 {
-        unimplemented!()
+        side_code(self.game.to_move())
     }
 
     /// Legal moves of the side to move, flat records of `MOVE_STRIDE` integers. Empty once the
     /// game is over.
     pub fn legal_moves(&self) -> Vec<i32> {
-        unimplemented!()
+        if self.game.outcome().is_some() {
+            return Vec::new();
+        }
+        legal_moves(self.game.board(), self.game.to_move())
+            .iter()
+            .flat_map(encode)
+            .collect()
     }
 
     /// Plays one move record. `Err` carries the reason, the game is left unchanged.
-    pub fn play(&mut self, _mv: &[i32]) -> Result<(), String> {
-        unimplemented!()
+    pub fn play(&mut self, mv: &[i32]) -> Result<(), String> {
+        let mv = decode(mv)?;
+        self.game.play(&mv).map_err(|e| format!("{e:?}"))
     }
 
     /// The 61 cells, see the module docs for the order.
     pub fn board(&self) -> Vec<u8> {
-        unimplemented!()
+        let board = self.game.board();
+        (-RADIUS..=RADIUS)
+            .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
+            .filter_map(|(q, r)| board.get(q, r))
+            .map(|cell| match cell {
+                Cell::Empty => 0,
+                Cell::Black => 1,
+                Cell::White => 2,
+            })
+            .collect()
     }
 
     /// Winner or draw state, see the module docs.
     pub fn status(&self) -> u8 {
-        unimplemented!()
+        status_code(self.game.outcome())
     }
 }
 
