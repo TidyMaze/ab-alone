@@ -12,6 +12,7 @@ import {
   type Axial,
 } from './board';
 import { askBot } from './bot';
+import { ghostMarbles } from './ghost';
 import { formatScore } from './score';
 
 // Palette from docs/specs/world.md section 5.
@@ -107,6 +108,19 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
 });
 const marbles = new THREE.Group();
 scene.add(marbles);
+// Ghost layer: the position a hovered legal move would give, drawn translucent.
+const ghosts = new THREE.Group();
+scene.add(ghosts);
+const ghostMaterials: Record<number, THREE.MeshStandardMaterial> = {};
+for (const side of [1, 2]) {
+  ghostMaterials[side] = new THREE.MeshStandardMaterial({
+    color: MARBLE_COLORS[side],
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+}
+let hover: Axial | null = null;
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
 // (the rules e2e tests drive both sides by hand).
@@ -160,6 +174,20 @@ function refresh(): void {
     }
   });
   hud();
+  refreshGhosts(moves);
+}
+
+function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
+  const mv = hover ? moveForClick(moves, selected, hover) : null;
+  const list = ghostMarbles(history, mv && encodeMove(mv), () => new Engine());
+  ghosts.clear();
+  for (const { cell, side } of list) {
+    const p = axialTo3D(cell[0], cell[1]);
+    const marble = new THREE.Mesh(marbleGeometry, ghostMaterials[side]);
+    marble.position.set(p.x, 0.36, p.z);
+    ghosts.add(marble);
+  }
+  document.body.dataset.ghosts = String(list.length);
 }
 
 function click(q: number, r: number): void {
@@ -192,6 +220,18 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     const [q, r] = CELLS[discs.indexOf(hit.object as THREE.Mesh)]!;
     click(q, r);
   }
+});
+
+renderer.domElement.addEventListener('pointermove', (e) => {
+  raycaster.setFromCamera(
+    new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1),
+    camera,
+  );
+  const hit = raycaster.intersectObjects(discs)[0];
+  const next = hit ? CELLS[discs.indexOf(hit.object as THREE.Mesh)]! : null;
+  if (next === hover) return;
+  hover = next;
+  refreshGhosts(parseMoves(engine.legal_moves()));
 });
 
 addEventListener('resize', () => {
