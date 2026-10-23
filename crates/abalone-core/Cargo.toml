@@ -1,0 +1,6 @@
+[package]
+name = "abalone-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rules and board model for AB-ALONE"
