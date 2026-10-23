@@ -31,7 +31,7 @@ someone needs to discuss or work on it.
 
 ## Who decides
 
-Two humans own the project: **@TidyMaze** and William. They make every decision and merge every PR.
+Two humans own the project: **@TidyMaze** and **@Varadiell**. They make every decision and merge every PR.
 Agents recommend, they never decide.
 
 ## The work loop
