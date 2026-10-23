@@ -442,6 +442,7 @@ document.getElementById('play-online')!.addEventListener('click', () => {
   inviteBox.hidden = false;
   void goOnline(room, 1);
 });
+(document.getElementById('play-online') as HTMLButtonElement).disabled = false; // engine and listener ready (#127)
 const invited = roomFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
 
