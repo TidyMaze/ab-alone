@@ -36,6 +36,8 @@ const STANDARD_BLACK: [(i32, i32); 14] = [
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
     cells: HashMap<(i32, i32), Cell>,
+    /// Cracked cells with the plies left before they vanish, for the Hull boss.
+    cracks: Vec<((i32, i32), u8)>,
 }
 
 impl Board {
@@ -49,7 +51,10 @@ impl Board {
                 }
             }
         }
-        Self { cells }
+        Self {
+            cells,
+            cracks: Vec::new(),
+        }
     }
 
     /// Content of `(q, r)`, or `None` when the cell is off the board.
@@ -62,6 +67,21 @@ impl Board {
         if let Some(slot) = self.cells.get_mut(&(q, r)) {
             *slot = cell;
         }
+    }
+
+    /// Removes `(q, r)` from the board for good, with its marble. Later `get` gives `None` and
+    /// `set` is ignored, so moves onto it are refused and pushes onto it eject.
+    pub fn void(&mut self, q: i32, r: i32) {
+        self.cells.remove(&(q, r));
+    }
+
+    /// Cracked cells and the plies left before each vanishes.
+    pub fn cracks(&self) -> &[((i32, i32), u8)] {
+        &self.cracks
+    }
+
+    pub fn set_cracks(&mut self, cracks: Vec<((i32, i32), u8)>) {
+        self.cracks = cracks;
     }
 
     /// Standard start layout: 14 marbles per side.
@@ -197,5 +217,32 @@ mod tests {
         for (q, r) in all_coords() {
             assert_eq!(board.get(q, r), board.get(-q, -r).map(swap_colour));
         }
+    }
+
+    #[test]
+    fn void_removes_a_cell_and_its_marble() {
+        let mut board = Board::standard();
+        board.void(0, 4);
+        assert_eq!(board.get(0, 4), None);
+        assert_eq!(count(&board, Cell::Black), 13);
+        assert_eq!(
+            all_coords()
+                .filter(|&(q, r)| board.get(q, r).is_some())
+                .count(),
+            60
+        );
+        board.set(0, 4, Cell::Black);
+        assert_eq!(board.get(0, 4), None, "a vanished cell stays off the board");
+    }
+
+    #[test]
+    fn cracks_start_empty_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert!(board.cracks().is_empty());
+        board.set_cracks(vec![((4, 0), 2)]);
+        assert_eq!(board.cracks(), &[((4, 0), 2)]);
+        assert_ne!(board, Board::empty());
+        board.set_cracks(vec![]);
+        assert_eq!(board, Board::empty());
     }
 }

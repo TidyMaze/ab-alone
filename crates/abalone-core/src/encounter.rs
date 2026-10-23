@@ -4,6 +4,7 @@
 //! seed, so the same seed and the same player moves give the same boss moves.
 
 pub mod echo;
+pub mod hull;
 
 use crate::board::{Board, Cell, RADIUS};
 use crate::game::{Game, GameError, Outcome};
@@ -110,9 +111,22 @@ impl Encounter {
             let ply = self.game.history().len() as u64;
             let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
             let board = (self.boss.hook)(self.game.board(), id, seed);
+            self.credit_removals(&board);
             self.game.replace_board(board);
         }
         Ok(())
+    }
+
+    /// A hook that removed marbles (the total dropped) counts for the opponent of each lost
+    /// marble. A flip keeps the total and credits nothing (rules.md OPEN-13).
+    fn credit_removals(&mut self, after: &Board) {
+        let before = self.game.board();
+        let (b0, w0) = (marbles(before, Cell::Black), marbles(before, Cell::White));
+        let (b1, w1) = (marbles(after, Cell::Black), marbles(after, Cell::White));
+        if b1 + w1 < b0 + w0 {
+            self.game.credit(Player::White, b0.saturating_sub(b1));
+            self.game.credit(Player::Black, w0.saturating_sub(w1));
+        }
     }
 
     /// The boss search for its turn: node-limited by the boss budget, `None` on the player's turn
@@ -345,5 +359,55 @@ mod tests {
             assert!(legal.contains(&found.mv));
             assert_eq!(enc.boss_search(), Some(found), "same position, same move");
         }
+    }
+
+    fn clear_black(board: &Board, _id: u8, _seed: u64) -> Board {
+        let mut out = board.clone();
+        let (q, r) = cells_of(board, Cell::Black)[0];
+        out.set(q, r, Cell::Empty);
+        out
+    }
+
+    fn flip_white(board: &Board, _id: u8, _seed: u64) -> Board {
+        let mut out = board.clone();
+        let (q, r) = cells_of(board, Cell::White)[0];
+        out.set(q, r, Cell::Black);
+        out
+    }
+
+    fn boss_with(hook: HookFn) -> BossDef {
+        BossDef {
+            hook,
+            ..boss(every_ply)
+        }
+    }
+
+    #[test]
+    fn hook_removing_a_marble_credits_the_opponent() {
+        let mut enc = Encounter::new(Game::new(), boss_with(clear_white), 0);
+        step(&mut enc);
+        assert_eq!(enc.game().ejected(Player::Black), 1);
+        assert_eq!(enc.game().ejected(Player::White), 0);
+        let mut enc = Encounter::new(Game::new(), boss_with(clear_black), 0);
+        step(&mut enc);
+        assert_eq!(enc.game().ejected(Player::White), 1);
+        assert_eq!(enc.game().ejected(Player::Black), 0);
+    }
+
+    #[test]
+    fn hook_flip_is_not_an_ejection() {
+        let mut enc = Encounter::new(Game::new(), boss_with(flip_white), 0);
+        step(&mut enc);
+        assert_eq!(white_count(&enc), 13);
+        assert_eq!(enc.game().ejected(Player::Black), 0);
+        assert_eq!(enc.game().ejected(Player::White), 0);
+    }
+
+    #[test]
+    fn hook_removal_can_win_the_game() {
+        let game = position(&[(0, 0)], &[(4, -4), (3, -4)], Player::Black, [5, 0]);
+        let mut enc = Encounter::new(game, boss_with(clear_white), 0);
+        enc.play(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(enc.result(), Some(PveResult::Won));
     }
 }

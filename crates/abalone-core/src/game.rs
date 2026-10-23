@@ -85,6 +85,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
         }
     }
     index(to_move).hash(&mut hasher);
+    if !board.cracks().is_empty() {
+        board.cracks().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -168,6 +171,18 @@ impl Game {
         self.board = board;
         let hash = position_hash(&self.board, self.to_move);
         self.history.last_mut().expect("called after a ply").hash = hash;
+    }
+
+    /// Credits `n` ejections to `by` for marbles a boss hook removed (rules.md OPEN-13).
+    pub(crate) fn credit(&mut self, by: Player, n: u8) {
+        if n == 0 {
+            return;
+        }
+        self.ejected[index(by)] += n;
+        self.no_ejection_plies = 0;
+        if self.ejected[index(by)] >= WIN_EJECTIONS {
+            self.outcome.get_or_insert(Outcome::Win(by));
+        }
     }
 
     /// Plays `mv` for the side to move.
@@ -472,5 +487,41 @@ mod tests {
         assert_eq!(game.play(&push), Ok(()));
         assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
         assert_eq!(game.draw_reason(), None);
+    }
+
+    #[test]
+    fn hook_credit_counts_toward_the_win_and_resets_the_ply_counter() {
+        let mut game = lone();
+        game.play(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(game.no_ejection_plies(), 1);
+        game.credit(Player::Black, 2);
+        assert_eq!(game.ejected(Player::Black), 2);
+        assert_eq!(game.no_ejection_plies(), 0);
+        assert_eq!(game.outcome(), None);
+        game.credit(Player::Black, 4);
+        assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
+        game.credit(Player::White, 6);
+        assert_eq!(
+            game.outcome(),
+            Some(Outcome::Win(Player::Black)),
+            "first win stands"
+        );
+    }
+
+    #[test]
+    fn credit_of_zero_changes_nothing() {
+        let mut game = lone();
+        game.play(&mv(&[(0, 0)], E)).unwrap();
+        game.credit(Player::White, 0);
+        assert_eq!(game.ejected(Player::White), 0);
+        assert_eq!(game.no_ejection_plies(), 1);
+    }
+
+    #[test]
+    fn crack_marks_change_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut cracked = Board::empty();
+        cracked.set_cracks(vec![((4, 0), 2)]);
+        assert_ne!(position_hash(&cracked, Player::Black), plain);
     }
 }
