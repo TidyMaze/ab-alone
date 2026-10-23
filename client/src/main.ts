@@ -14,6 +14,7 @@ import {
 import { askBot } from './bot';
 import { ghostMarbles } from './ghost';
 import { hudHtml } from './hud';
+import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
 import { formatScore } from './score';
 import './ui.css';
 
@@ -60,6 +61,36 @@ scene.background = backdrop ?? new THREE.Color(COLORS.base);
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
 camera.position.set(0, 11, 8);
 camera.lookAt(0, 0, 0);
+
+// Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
+const store = (() => {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+})();
+const tier = readTier(store, {
+  width: innerWidth,
+  cores: navigator.hardwareConcurrency,
+  memory: (navigator as { deviceMemory?: number }).deviceMemory,
+  reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+});
+let clear = readClearBoard(store);
+const clearButton = document.getElementById('clear-board')!;
+function applyLook(): void {
+  const fog = fogSettings(tier, clear);
+  scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
+  document.body.dataset.tier = tier;
+  document.body.dataset.clear = clear ? 'on' : 'off';
+  clearButton.setAttribute('aria-pressed', String(clear));
+}
+applyLook();
+clearButton.addEventListener('click', () => {
+  clear = !clear;
+  writeClearBoard(store, clear);
+  applyLook();
+});
 scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 const lamp = new THREE.DirectionalLight(COLORS.sodium, 3);
 lamp.position.set(-4, 10, 5);
