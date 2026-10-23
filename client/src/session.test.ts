@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OnlineSession, type Judge } from './session';
-import { GENESIS, generateKeys, signMove, type MoveRecord } from './moverecord';
+import { GENESIS, generateKeys, loadKeys, signMove, type Keys, type MoveRecord } from './moverecord';
 import { localPair, type ConnectionState, type Transport } from './transport';
 
 const M1 = [1, 0, 0, 2, 0, 0, 0, 0];
@@ -20,7 +20,7 @@ class FakeJudge implements Judge {
 
 const settle = () => new Promise((r) => setTimeout(r, 20));
 
-async function player(transport: Transport, side: number) {
+async function player(transport: Transport, side: number, keys?: Keys) {
   const judge = new FakeJudge();
   const moves: number[][] = [];
   const refused: string[] = [];
@@ -28,7 +28,7 @@ async function player(transport: Transport, side: number) {
   const session = new OnlineSession({
     game: 'g',
     side,
-    keys: await generateKeys(),
+    keys: keys ?? (await generateKeys()),
     transport,
     judge,
     onMove: (m) => moves.push(m),
@@ -39,6 +39,19 @@ async function player(transport: Transport, side: number) {
 }
 
 describe('OnlineSession', () => {
+  it('lets two tabs of one browser (shared localStorage) play, bug #116', async () => {
+    const data = new Map<string, string>();
+    const shared = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+    const [ta, tb] = localPair();
+    const black = await player(ta, 1, await loadKeys(shared));
+    const white = await player(tb, 2, await loadKeys(shared));
+    black.judge.play(Int32Array.from(M1));
+    await black.session.send(M1);
+    await settle();
+    expect(white.refused).toEqual([]);
+    expect(white.moves).toEqual([M1]);
+  });
+
   it('sends a signed move that the other side verifies, replays and reports', async () => {
     const [ta, tb] = localPair();
     const black = await player(ta, 1);
