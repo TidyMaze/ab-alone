@@ -95,6 +95,24 @@ impl Game {
         }
     }
 
+    /// Game on a hand-made position, for tests of other modules.
+    #[cfg(test)]
+    pub(crate) fn from_position(board: Board, to_move: Player, ejected: [u8; 2]) -> Self {
+        let outcome = [Player::Black, Player::White]
+            .into_iter()
+            .find(|&p| ejected[index(p)] >= WIN_EJECTIONS)
+            .map(Outcome::Win);
+        Self {
+            start_hash: position_hash(&board, to_move),
+            board,
+            to_move,
+            ejected,
+            no_ejection_plies: 0,
+            history: Vec::new(),
+            outcome,
+        }
+    }
+
     pub fn board(&self) -> &Board {
         &self.board
     }

@@ -10,13 +10,15 @@ export default defineConfig(({ command }) => ({
   },
   // The wasm package is built outside client/, the dev server must be allowed to serve it.
   server: { fs: { allow: ['..'] } },
+  // The bot worker imports the wasm package with top-level await: it needs ES module output.
+  worker: { format: 'es' },
   test: {
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      // Only the pure game-board logic is unit tested here. The Three.js scene and the DOM wiring
+      // Only the pure game-board and bot-protocol logic is unit tested here. The Three.js scene and the DOM wiring
       // in main.ts and scene.ts need a real browser (Playwright e2e, a later task).
-      include: ['src/board.ts'],
+      include: ['src/board.ts', 'src/bot.ts'],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },

@@ -2,10 +2,13 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Cells are axial (q, r), see docs/specs/rules.md. Black starts at r = 2..4, White at r = -2..-4.
 async function open(page: Page) {
-  await page.goto('/');
+  await page.goto('/?bot=off');
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
   await expect(hud).toContainText('Black to move');
+  // The raycaster needs the camera matrices, which three only updates on a rendered frame:
+  // a click before the first frame misses its cell on a cold dev server.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const click = async (...cells: [number, number][]) => {
     for (const [q, r] of cells) {
       const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);

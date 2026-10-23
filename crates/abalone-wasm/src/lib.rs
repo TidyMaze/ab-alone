@@ -13,6 +13,7 @@
 use abalone_core::board::{Cell, RADIUS};
 use abalone_core::game::{Game, Outcome};
 use abalone_core::moves::{legal_moves, Direction, Move, Player};
+use abalone_core::search::best_move;
 use wasm_bindgen::prelude::*;
 
 /// Integers per move record.
@@ -123,6 +124,14 @@ impl Engine {
                 Cell::White => 2,
             })
             .collect()
+    }
+
+    /// The bot's reply for the side to move, one move record, searching at most `nodes`
+    /// positions. Empty once the game is over.
+    pub fn best_move(&self, nodes: u32) -> Vec<i32> {
+        best_move(&self.game, nodes)
+            .map(|mv| encode(&mv).to_vec())
+            .unwrap_or_default()
     }
 
     /// Winner or draw state, see the module docs.
@@ -239,6 +248,34 @@ mod tests {
         assert_eq!(engine.status(), 3);
         assert!(engine.legal_moves().is_empty());
         assert!(engine.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
+    }
+
+    #[test]
+    fn best_move_is_one_legal_record() {
+        let engine = Engine::new();
+        let record = engine.best_move(300);
+        assert_eq!(record.len(), MOVE_STRIDE);
+        assert!(engine
+            .legal_moves()
+            .chunks(MOVE_STRIDE)
+            .any(|m| m == record.as_slice()));
+    }
+
+    #[test]
+    fn best_move_can_be_played_and_the_bot_answers_for_white() {
+        let mut engine = Engine::new();
+        let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();
+        engine.play(&first).unwrap();
+        let reply = engine.best_move(300);
+        assert_eq!(engine.play(&reply), Ok(()));
+        assert_eq!(engine.to_move(), 1);
+    }
+
+    #[test]
+    fn best_move_is_empty_once_the_game_is_over() {
+        let mut engine = Engine::new();
+        play_until_over(&mut engine);
+        assert!(engine.best_move(300).is_empty());
     }
 
     #[test]
