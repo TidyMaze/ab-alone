@@ -162,6 +162,12 @@ impl Game {
         }
     }
 
+    #[allow(dead_code)]
+    /// Replaces the board after a ply (a boss hook) and re-hashes that ply's position.
+    pub(crate) fn replace_board(&mut self, _board: Board) {
+        unimplemented!()
+    }
+
     /// Plays `mv` for the side to move.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         if self.outcome.is_some() {
