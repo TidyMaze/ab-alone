@@ -35,7 +35,7 @@ Every game mode below is built on this rules engine. Modes add rules, they never
 | Layer | Choice | Why |
 |---|---|---|
 | Rules engine | Rust crate `abalone-core`, `no_std` friendly | One source of truth, fast, testable |
-| Client logic | `abalone-core` compiled to WASM (`wasm-bindgen`, `wasm-pack`) | Same rules in browser and server |
+| Client logic | `abalone-core` compiled to WASM (`wasm-bindgen`, `wasm-pack`) | Same rules on every peer |
 | Rendering | Three.js (TypeScript, Vite) | Asked for. WebGPU renderer when stable enough |
 | Multiplayer | Peer to peer, WebRTC data channels, serverless signaling (Trystero / manual link), every peer runs `abalone-core` WASM and validates every move, signed hash-chained move log | No server to host or pay for, cheating is detectable ([#36](https://github.com/TidyMaze/ab-alone/issues/36), [tech spec](docs/specs/tech.md)) |
 | AI / bosses | Rust, alpha-beta first, MCTS later, in a Web Worker via WASM | Runs offline, in the browser |
@@ -60,7 +60,7 @@ Each phase is a GitHub milestone. A phase starts only when the previous one is p
 - Animations: slide, push, ejection into the void (marble falls and fades).
 
 ### Phase 2: Online 1v1
-- Rust server, rooms by invite link, reconnection, server-side clock (optional).
+- P2P rooms by invite link or room code, reconnection, advisory clock (see #36 and the tech spec).
 - Spectator mode.
 
 ### Phase 3: Souls-like PvE (bosses)
@@ -81,7 +81,7 @@ Each phase is a GitHub milestone. A phase starts only when the previous one is p
 - N players (3 to 6) on a large hex arena (radius 8+), free-for-all.
 - **Hull breach**: the outer ring decompresses every K turns (Dead Space zone). Marbles on it are
   sucked out.
-- Turn structure: simultaneous orders resolved by the server (to define, see issues).
+- Turn structure: simultaneous orders, commit-reveal, resolved identically by every peer (see tech spec).
 - Last player with marbles wins.
 
 ### Phase 5: Open world hub
