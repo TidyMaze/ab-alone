@@ -18,6 +18,12 @@ issue to change this file first.
 5. **Decisions live in `Decision` issues**, never only in a PR thread, a commit or a chat.
 6. **Nothing outside the repo.** If it was said in a chat or a call, write it in the right issue
    or it does not count.
+7. **Finish before you start.** You may not start a new Task while one of yours is not `Done`
+   (`In Progress` or `In Review` both count as not finished). Blocked does not free you: get it
+   unblocked, or ask an owner to move it back to `Ready` and unassign you.
+8. **Strict TDD, 100 % coverage.** No production code without a failing test first. Unit tests
+   plus end-to-end integration tests. See section 11.
+9. **This repo is public.** Never commit a secret. See section 12.
 
 ## 2. Where things live
 
@@ -79,6 +85,9 @@ flowchart LR
 - [ ] Its PR is merged into `main`
 - [ ] Every item of its done checklist is ticked
 - [ ] CI is green (once CI exists)
+- [ ] Code changes: TDD commit order visible in the PR, 100 % line and branch coverage, e2e test
+      added or updated if a player flow changed (section 11)
+- [ ] No secret in the diff (section 12)
 - [ ] Specs or docs touched by the change are updated in the same PR
 
 **Feature is Done when** all its Tasks are Done and an owner ticked every acceptance criterion,
@@ -106,7 +115,7 @@ For each `Inbox` item, an owner does exactly one of:
 1. Pick the **top `Ready` Task** in the project view sorted by `Priority`. You may skip one only
    with a comment saying why.
 2. Assign yourself, comment `taking it`, move it to `In Progress`.
-   **WIP limit: one `In Progress` Task per contributor** (an agent counts as a contributor).
+   **WIP limit: one unfinished Task per contributor** (rule 7; an agent counts as a contributor).
 3. Branch from `main`: `<issue number>-<short-slug>`, for example `23-board-model`.
 4. Blocked: add the `blocked` label, comment what blocks and @mention who can unblock. Keep the
    Status.
@@ -157,6 +166,7 @@ For each `Inbox` item, an owner does exactly one of:
 | `engine`, `client`, `network`, `design`, `spec` | Area |
 | `blocked` | Waiting on someone, see the last comment |
 | `top10` | Won the latest priority vote |
+| `security` | Security incident or hardening (section 12) |
 
 ## 9. AI agents
 
@@ -174,3 +184,49 @@ Agents follow every rule above, plus:
 - Adding something to a PR that is not in its Task.
 - Deciding in a PR thread, a commit message or a chat.
 - Blank issues: always use a form.
+
+## 11. Testing: strict TDD, 100 % coverage
+
+Applies to every line of production code (engine, client, networking, tools).
+
+**The cycle, for every behaviour:**
+1. **Red:** write one failing test that describes the behaviour. Run it, see it fail for the
+   right reason.
+2. **Green:** write the minimum production code that makes it pass. Run the whole suite.
+3. **Refactor:** clean up with all tests green. No new behaviour in this step.
+
+**Proof in the PR:** the test commit comes before the implementation commit (for example
+`test: sumito 3v2 pushes` then `feat: sumito`). The reviewer checks the commit order and may run
+the test commit alone to see it fail. The PR is squash-merged, the order lives in the PR.
+
+**Required test levels:**
+
+| Level | What | Where |
+|---|---|---|
+| Unit | Every function and branch: rules engine, input logic, protocol messages | Next to the code |
+| Property | Engine invariants (marble conservation, every generated move is legal, perft counts) | Engine crate |
+| Integration | Engine through its WASM bridge, two peers exchanging moves in-process | Per crate / package |
+| End-to-end | Real browser: play a full local game, play an online game between two browser tabs, at least one boss encounter once it exists | E2E suite |
+
+**Coverage gate:** 100 % of lines and branches, measured in CI (`cargo llvm-cov` for Rust, the
+JS test runner's coverage for the client). Below 100 % fails the build. An exclusion needs a
+one-line comment saying why, and the reviewer must accept it (generated code, `unreachable!()`).
+
+**Bugs:** a bug fix starts with a test that reproduces the bug and fails.
+
+Specs and docs PRs have no code, so this section does not apply to them.
+
+## 12. Public repo: no secrets, ever
+
+This repository is **public**. Everything pushed is readable by anyone, forever (git history and
+forks keep it even after a revert).
+
+- Never commit keys, tokens, passwords, private URLs, `.env` files, certificates or personal data.
+- Configuration that needs a secret reads it from an environment variable or a GitHub Actions
+  secret. Commit a `.env.example` with fake values only.
+- GitHub secret scanning and push protection are on. If push protection blocks you, remove the
+  secret from your commits. Never bypass the block.
+- **A secret was pushed anyway:** revoke or rotate it at its provider first (removing it from git
+  is not enough), then tell an owner in a `Decision` issue labelled `security` without pasting the
+  secret.
+- Agents: never print a secret in an issue, PR, log or test fixture.
