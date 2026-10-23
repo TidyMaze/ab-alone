@@ -8,8 +8,8 @@ issue to change this file first.
 
 ## 1. The golden rules
 
-1. **No work without a `Ready` Task.** Every PR closes exactly one Task issue whose Status was
-   `Ready` when work started.
+1. **No work without a `Ready` Task or Bug.** Every PR closes exactly one `task` or `bug` issue
+   whose Status was `Ready` when work started.
 2. **No Task without a parent.** Every Task is a sub-issue of a Feature, or of an Epic for
    non-player-facing work (tooling, CI, specs).
 3. **No direct push to `main`.** Everything goes through a PR approved by the other owner.
@@ -24,6 +24,12 @@ issue to change this file first.
 8. **Strict TDD, 100 % coverage.** No production code without a failing test first. Unit tests
    plus end-to-end integration tests. See section 11.
 9. **This repo is public.** Never commit a secret. See section 12.
+10. **Every bug goes through an issue first.** No fix, not even a one-liner, without a `bug` issue
+    created from the form. See section 6.7.
+11. **Bugs before features.** A `Ready` bug is always picked before any `Ready` task of the same
+    or lower priority, and an open bug is never below `P1`.
+12. **Test in a real browser regularly.** Playwright on every PR, a scheduled run against the live
+    site, and a manual Chrome check before merging a player-facing change. See section 11.
 
 ## 2. Where things live
 
@@ -41,6 +47,7 @@ issue to change this file first.
 | `epic` | One phase of SPEC.md (Phase 0 to 5, one per milestone), plus the `Project setup` epic for specs, workflow and tooling | Weeks | none | All its children are done |
 | `feature` | Something a player can see or do | Several Tasks | Epic | Owner verified every acceptance criterion |
 | `task` | One PR worth of work | 1 PR, ideally under a day | Feature or Epic | Its PR is merged |
+| `bug` | Something that works differently from its spec or acceptance criteria | 1 PR | The broken Feature, if known | Its PR is merged (with the reproducing test) |
 | `decision` | A choice between options | n/a | optional | An owner writes the chosen option and closes it |
 
 Parent links use GitHub **sub-issues** (issue page, "Create sub-issue" or "Add existing issue").
@@ -112,8 +119,9 @@ For each `Inbox` item, an owner does exactly one of:
 
 ### 6.3 Doing a Task
 
-1. Pick the **top `Ready` Task** in the project view sorted by `Priority`. You may skip one only
-   with a comment saying why.
+1. Pick the next item in this order: **`Ready` bugs first** (highest `Priority` first), then
+   `Ready` tasks by `Priority`. You may skip one only with a comment saying why. Bugs follow the
+   same steps below, with "Task" meaning "Task or Bug".
 2. Assign yourself, comment `taking it`, move it to `In Progress`.
    **WIP limit: one unfinished Task per contributor** (rule 7; an agent counts as a contributor).
 3. Branch from `main`: `<issue number>-<short-slug>`, for example `23-board-model`.
@@ -156,6 +164,18 @@ For each `Inbox` item, an owner does exactly one of:
    (`P0` now, `P1` next, `P2` later, `P3` someday), labels the top ten `top10`, and closes the
    discussion.
 
+### 6.7 Bug
+
+1. Whoever finds a bug (human, agent, CI, a scheduled browser run) opens a **Bug** issue from the
+   form **before touching any code**: steps to reproduce, expected, actual, browser and commit.
+   A bug found during another task is filed too, never fixed inside that task's PR.
+2. It lands in `Inbox`. An owner triages it within the next triage: confirm, set `Priority`
+   (**`P0` if it breaks a game or loses data, never lower than `P1`**), link the broken Feature,
+   move it to `Ready`. A bug that is not reproducible is closed with a comment.
+3. The fix follows 6.3 and 6.4. The first commit is a test that reproduces the bug and fails
+   (unit test, plus an e2e test if a player saw it). Then the fix. The PR says `Closes #<bug>`.
+4. Bugs are picked before tasks (rule 11).
+
 ## 7. Project fields
 
 | Field | Values | Set by |
@@ -171,7 +191,7 @@ The project holds **issues only**: no draft items, no project-only tasks. Every 
 
 | Label | Meaning |
 |---|---|
-| `epic`, `feature`, `task`, `decision` | Item type (section 3), set by the issue form. Exactly one per issue. In the project, filter with `label:task` etc. |
+| `epic`, `feature`, `task`, `bug`, `decision` | Item type (section 3), set by the issue form. Exactly one per issue. In the project, filter with `label:bug` etc. |
 | `engine`, `client`, `network`, `design`, `spec` | Area |
 | `blocked` | Waiting on someone, see the last comment |
 | `top10` | Won the latest priority vote |
@@ -193,6 +213,8 @@ Agents follow every rule above, plus:
 - Adding something to a PR that is not in its Task.
 - Deciding in a PR thread, a commit message or a chat.
 - Blank issues: always use a form.
+- Fixing a bug without a `bug` issue, or inside another task's PR.
+- Starting a task while a `Ready` bug of the same or higher priority is waiting.
 
 ## 11. Testing: strict TDD, 100 % coverage
 
@@ -221,7 +243,16 @@ the test commit alone to see it fail. The PR is squash-merged, the order lives i
 JS test runner's coverage for the client). Below 100 % fails the build. An exclusion needs a
 one-line comment saying why, and the reviewer must accept it (generated code, `unreachable!()`).
 
-**Bugs:** a bug fix starts with a test that reproduces the bug and fails.
+**Bugs:** a bug fix starts with a test that reproduces the bug and fails (section 6.7).
+
+**Browser testing, regularly (Chrome + Playwright):**
+
+| When | What | Who |
+|---|---|---|
+| Every PR | Playwright e2e suite on Chromium in CI, required to merge | CI |
+| Every night | Playwright suite against the live GitHub Pages site (scheduled workflow). A failure opens a `bug` issue automatically | CI |
+| Before merging a player-facing PR | Open the PR build in a real Chrome, play the changed flow, note the result in the review | Reviewer (an agent can do it with the Playwright or Chrome tools) |
+| Once per milestone | Full manual playthrough in Chrome of everything shipped so far, findings filed as `bug` issues | An owner |
 
 Specs and docs PRs have no code, so this section does not apply to them.
 
