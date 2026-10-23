@@ -1,6 +1,7 @@
 pub mod board;
 pub mod game;
 pub mod moves;
+pub mod search;
 
 pub fn version() -> &'static str {
     "0.1.0"
