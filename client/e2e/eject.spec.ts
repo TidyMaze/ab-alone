@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 // A 3v2 push on the q = -2 column that pushes a White marble off the board, 5 plies, the White
 // plies are cooperative (?bot=off). Found by a search over the engine, replay it with the HUD.
 async function open(page: Page) {
-  await page.goto('/?bot=off');
+  await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('Black to move');
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));

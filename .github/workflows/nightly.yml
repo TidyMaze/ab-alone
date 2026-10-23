@@ -1,0 +1,58 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+        working-directory: client
+      - run: npx playwright install --with-deps chromium
+        working-directory: client
+      # One worker: with parallel WebGL pages, requestAnimationFrame stalls and clear-board/eject time out.
+      # The textures spec counts every /assets/ response; the production build also serves its JS, CSS and wasm there, so it cannot pass live.
+      - run: npx playwright test --project=chromium --workers=1 --grep-invert "textures are requested"
+        working-directory: client
+        env:
+          E2E_BASE_URL: https://tidymaze.github.io/ab-alone/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: client/playwright-report/
+          retention-days: 14
+      - name: Open a bug issue unless one is already open
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Nightly e2e failed against the live site
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[] | select(.title == env.TITLE) | .title')
+          if [ -n "$existing" ]; then
+            echo "An open issue with this title exists, not creating another."
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label bug \
+            --body "The nightly Playwright run against https://tidymaze.github.io/ab-alone/ failed. Run: $RUN_URL (report in the run artifacts)."

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('the human plays Black, the bot answers for White and the turn comes back', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
   await expect(hud).toContainText('Black to move');

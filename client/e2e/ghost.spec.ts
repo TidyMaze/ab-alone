@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('hovering a legal target of the selected marble shows a ghost, an illegal one shows none', async ({
   page,
 }) => {
-  await page.goto('/?bot=off');
+  await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('Black to move');
 

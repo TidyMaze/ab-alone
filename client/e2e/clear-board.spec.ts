@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('clear-board toggles, survives a reload, and the board still plays', async ({ page }) => {
-  await page.goto('/?bot=off');
+  await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
   const toggle = page.locator('#clear-board');

@@ -14,14 +14,14 @@ test('a move played on page A shows up on page B over the signed move log', asyn
   await a.exposeFunction('__netOut', (rec: unknown) => b.evaluate((r) => (window as any).__netIn(r), rec));
   await b.exposeFunction('__netOut', (rec: unknown) => a.evaluate((r) => (window as any).__netIn(r), rec));
 
-  await a.goto('/?bot=off&net=hook');
+  await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await a.locator('#play-online').click();
   const invite = await a.locator('#invite').inputValue();
   expect(invite).toMatch(/#room=[\w-]+$/);
   await expect(a.locator('#hud')).toContainText('you are Black');
 
-  await b.goto(`/?net=hook${new URL(invite).hash}`);
+  await b.goto(`./?net=hook${new URL(invite).hash}`);
   await b.locator('canvas').waitFor();
   await expect(b.locator('#hud')).toContainText('you are White');
 
