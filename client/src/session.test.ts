@@ -39,6 +39,17 @@ async function player(transport: Transport, side: number) {
 }
 
 describe('OnlineSession', () => {
+  it('lets two tabs of one browser play: each game start makes its own key, bug #116', async () => {
+    const [ta, tb] = localPair();
+    const black = await player(ta, 1);
+    const white = await player(tb, 2);
+    black.judge.play(Int32Array.from(M1));
+    await black.session.send(M1);
+    await settle();
+    expect(white.refused).toEqual([]);
+    expect(white.moves).toEqual([M1]);
+  });
+
   it('sends a signed move that the other side verifies, replays and reports', async () => {
     const [ta, tb] = localPair();
     const black = await player(ta, 1);
