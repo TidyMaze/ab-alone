@@ -1,4 +1,5 @@
 pub mod board;
+pub mod encounter;
 pub mod game;
 pub mod moves;
 pub mod search;
