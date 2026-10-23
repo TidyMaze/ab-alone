@@ -7,11 +7,14 @@
 //! - Side and winner: `1` Black, `2` White.
 //! - Status: `0` running, `1` Black won, `2` White won, `3` draw.
 //! - Draw reason: `0` none, `1` threefold repetition, `2` 100 plies without ejection.
+//! - Result of an encounter: `0` playing, `1` won, `2` lost (a draw is a loss).
 //! - Move: 8 integers `[n, dir, q0, r0, q1, r1, q2, r2]`, `n` in 1..=3 marbles, unused
 //!   coordinates are `0`. `dir`: `0` E, `1` W, `2` NE, `3` SW, `4` NW, `5` SE.
 //!   `legal_moves` returns the records back to back.
 
-use abalone_core::board::{Cell, RADIUS};
+use abalone_core::board::{Board, Cell, RADIUS};
+use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
+use abalone_core::encounter::{BossDef, Encounter as CoreEncounter, PveResult};
 use abalone_core::game::{DrawReason, Game, Outcome};
 use abalone_core::moves::{legal_moves, Direction, Move, Player};
 use abalone_core::search::best_move;
@@ -134,16 +137,7 @@ impl Engine {
 
     /// The 61 cells, see the module docs for the order.
     pub fn board(&self) -> Vec<u8> {
-        let board = self.game.board();
-        (-RADIUS..=RADIUS)
-            .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
-            .filter_map(|(q, r)| board.get(q, r))
-            .map(|cell| match cell {
-                Cell::Empty => 0,
-                Cell::Black => 1,
-                Cell::White => 2,
-            })
-            .collect()
+        board_bytes(self.game.board())
     }
 
     /// The bot's reply for the side to move, one move record, searching at most `nodes`
@@ -162,6 +156,171 @@ impl Engine {
     /// Draw reason code, `0` when the game is not a draw. See the module docs.
     pub fn draw_reason(&self) -> u8 {
         draw_reason_code(self.game.draw_reason())
+    }
+}
+
+fn board_bytes(board: &Board) -> Vec<u8> {
+    (-RADIUS..=RADIUS)
+        .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
+        .filter_map(|(q, r)| board.get(q, r))
+        .map(|cell| match cell {
+            Cell::Empty => 0,
+            Cell::Black => 1,
+            Cell::White => 2,
+        })
+        .collect()
+}
+
+/// Result code of an encounter, see the module docs.
+pub fn result_code(result: Option<PveResult>) -> u8 {
+    match result {
+        None => 0,
+        Some(PveResult::Won) => 1,
+        Some(PveResult::Lost) => 2,
+    }
+}
+
+/// One boss of the roster. Adding a boss is one line in [`BOSSES`].
+struct BossEntry {
+    id: &'static str,
+    def: fn() -> BossDef,
+    /// The boss move for the current position, `None` on the player's turn or when over.
+    reply: fn(&CoreEncounter) -> Option<Move>,
+    /// The reply the boss announces for a player move, drawn by the client as a ghost.
+    announce: fn(&Move) -> Option<Move>,
+}
+
+fn echo_announce(mv: &Move) -> Option<Move> {
+    Some(mirror_move(mv))
+}
+
+const BOSSES: [BossEntry; 1] = [BossEntry {
+    id: "echo",
+    def: echo_boss,
+    reply: echo_move,
+    announce: echo_announce,
+}];
+
+fn boss_entry(id: &str) -> Option<&'static BossEntry> {
+    BOSSES.iter().find(|b| b.id == id)
+}
+
+/// Ids of the bosses the client can start, in play order.
+#[wasm_bindgen]
+pub fn boss_ids() -> Vec<String> {
+    BOSSES.iter().map(|b| b.id.to_string()).collect()
+}
+
+/// Display name of a boss id, `None` when unknown.
+#[wasm_bindgen]
+pub fn boss_name(id: &str) -> Option<String> {
+    boss_entry(id).map(|b| (b.def)().name.to_string())
+}
+
+/// A game against a boss: the player is Black, the boss is White. Same encodings as [`Engine`].
+#[wasm_bindgen]
+pub struct Encounter {
+    inner: CoreEncounter,
+    entry: &'static BossEntry,
+}
+
+#[wasm_bindgen]
+impl Encounter {
+    /// A new encounter against boss `boss_id`. The same id and seed always give the same fight.
+    #[wasm_bindgen(constructor)]
+    pub fn new(boss_id: &str, seed: u32) -> Result<Encounter, String> {
+        let entry = boss_entry(boss_id).ok_or_else(|| format!("unknown boss {boss_id}"))?;
+        let inner = CoreEncounter::new(Game::new(), (entry.def)(), u64::from(seed));
+        Ok(Encounter { inner, entry })
+    }
+
+    pub fn name(&self) -> String {
+        (self.entry.def)().name.to_string()
+    }
+
+    /// Side to move: `1` Black, `2` White.
+    pub fn to_move(&self) -> u8 {
+        side_code(self.inner.game().to_move())
+    }
+
+    /// Current phase, `0` for P1.
+    pub fn phase(&self) -> u8 {
+        self.inner.phase() as u8
+    }
+
+    /// Number of phases, for the HUD notches.
+    pub fn phases(&self) -> u8 {
+        (self.entry.def)().phase_marbles.len() as u8 + 1
+    }
+
+    /// Id of the board special that fires after the next ply, `-1` when none.
+    pub fn tell(&self) -> i32 {
+        self.inner.tell().map_or(-1, i32::from)
+    }
+
+    /// The reply the boss announces for the player move `mv`, one move record, empty when the
+    /// record is malformed or the boss announces nothing.
+    pub fn tell_move(&self, mv: &[i32]) -> Vec<i32> {
+        decode(mv)
+            .ok()
+            .and_then(|m| (self.entry.announce)(&m))
+            .map(|m| encode(&m).to_vec())
+            .unwrap_or_default()
+    }
+
+    /// Legal moves of the side to move, flat records. Empty once the fight is over.
+    pub fn legal_moves(&self) -> Vec<i32> {
+        if self.inner.game().outcome().is_some() {
+            return Vec::new();
+        }
+        legal_moves(self.inner.game().board(), self.inner.game().to_move())
+            .iter()
+            .flat_map(encode)
+            .collect()
+    }
+
+    /// Plays one move record for the side to move. `Err` carries the reason.
+    pub fn play(&mut self, mv: &[i32]) -> Result<(), String> {
+        let mv = decode(mv)?;
+        self.inner.play(&mv).map_err(|e| format!("{e:?}"))
+    }
+
+    /// The boss move, one record, using the boss node budget. Empty on the player's turn or when
+    /// the fight is over. It is not played.
+    pub fn boss_move(&self) -> Vec<i32> {
+        (self.entry.reply)(&self.inner)
+            .map(|m| encode(&m).to_vec())
+            .unwrap_or_default()
+    }
+
+    /// The 61 cells, board specials included.
+    pub fn board(&self) -> Vec<u8> {
+        board_bytes(self.inner.game().board())
+    }
+
+    /// Marbles ejected by a side: `1` Black, `2` White.
+    pub fn ejected(&self, side: u8) -> u8 {
+        let player = if side == 1 {
+            Player::Black
+        } else {
+            Player::White
+        };
+        self.inner.game().ejected(player)
+    }
+
+    /// Game status, see the module docs.
+    pub fn status(&self) -> u8 {
+        status_code(self.inner.game().outcome())
+    }
+
+    /// Draw reason code, `0` when not a draw.
+    pub fn draw_reason(&self) -> u8 {
+        draw_reason_code(self.inner.game().draw_reason())
+    }
+
+    /// `0` playing, `1` won, `2` lost. A draw is a loss.
+    pub fn result(&self) -> u8 {
+        result_code(self.inner.result())
     }
 }
 
@@ -325,5 +484,131 @@ mod tests {
         assert_eq!(draw_reason_code(None), 0);
         assert_eq!(draw_reason_code(Some(DrawReason::Repetition)), 1);
         assert_eq!(draw_reason_code(Some(DrawReason::NoEjectionCap)), 2);
+    }
+
+    // Encounter bridge: a game against a boss, the player is Black.
+
+    fn fight() -> Encounter {
+        Encounter::new("echo", 7).unwrap()
+    }
+
+    fn first_move(fight: &Encounter) -> Vec<i32> {
+        fight.legal_moves()[..MOVE_STRIDE].to_vec()
+    }
+
+    #[test]
+    fn boss_list_is_data_driven_and_starts_with_the_echo() {
+        assert_eq!(boss_ids(), vec!["echo".to_string()]);
+        assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
+        assert_eq!(boss_name("nobody"), None);
+    }
+
+    #[test]
+    fn an_unknown_boss_is_refused() {
+        assert_eq!(
+            Encounter::new("nobody", 0).err(),
+            Some("unknown boss nobody".to_string())
+        );
+    }
+
+    #[test]
+    fn a_new_encounter_starts_on_phase_one_with_black_to_move() {
+        let f = fight();
+        assert_eq!(f.name(), "The Echo");
+        assert_eq!(f.to_move(), 1);
+        assert_eq!(f.phase(), 0);
+        assert_eq!(f.phases(), 3);
+        assert_eq!(f.result(), 0);
+        assert_eq!(f.status(), 0);
+        assert_eq!(f.draw_reason(), 0);
+        assert_eq!(f.tell(), -1, "the Echo has no board special");
+        assert_eq!(f.ejected(1), 0);
+        assert_eq!(f.ejected(2), 0);
+        let cells = f.board();
+        assert_eq!(cells.len(), 61);
+        assert_eq!(count(&cells, 1), 14);
+        assert_eq!(count(&cells, 2), 14);
+    }
+
+    #[test]
+    fn encounter_play_switches_side_and_changes_the_board() {
+        let mut f = fight();
+        let before = f.board();
+        let mv = first_move(&f);
+        assert_eq!(f.play(&mv), Ok(()));
+        assert_eq!(f.to_move(), 2);
+        assert_ne!(f.board(), before);
+    }
+
+    #[test]
+    fn encounter_play_refuses_bad_records_and_illegal_moves() {
+        let mut f = fight();
+        assert!(f.play(&[]).is_err());
+        assert_eq!(
+            f.play(&[1, 0, 0, -4, 0, 0, 0, 0]).unwrap_err(),
+            "Move(NotOwnMarble)"
+        );
+        assert_eq!(f.to_move(), 1);
+    }
+
+    #[test]
+    fn boss_move_is_empty_on_the_players_turn() {
+        assert!(fight().boss_move().is_empty());
+    }
+
+    #[test]
+    fn the_echo_mirrors_the_player_move_and_the_tell_announces_it() {
+        let mut f = fight();
+        let mv = first_move(&f);
+        let announced = f.tell_move(&mv);
+        assert_eq!(announced.len(), MOVE_STRIDE);
+        f.play(&mv).unwrap();
+        let reply = f.boss_move();
+        assert_eq!(reply, announced, "the tell is the boss reply");
+        assert_eq!(f.play(&reply), Ok(()));
+        assert_eq!(f.to_move(), 1);
+    }
+
+    #[test]
+    fn tell_move_is_empty_for_a_malformed_record() {
+        assert!(fight().tell_move(&[1, 2]).is_empty());
+    }
+
+    #[test]
+    fn boss_move_is_legal() {
+        let mut f = fight();
+        let mv = first_move(&f);
+        f.play(&mv).unwrap();
+        let reply = f.boss_move();
+        assert!(f
+            .legal_moves()
+            .chunks(MOVE_STRIDE)
+            .any(|m| m == reply.as_slice()));
+    }
+
+    #[test]
+    fn result_codes() {
+        use abalone_core::encounter::PveResult;
+        assert_eq!(result_code(None), 0);
+        assert_eq!(result_code(Some(PveResult::Won)), 1);
+        assert_eq!(result_code(Some(PveResult::Lost)), 2);
+    }
+
+    #[test]
+    fn a_finished_encounter_reports_a_result_and_refuses_moves() {
+        let mut f = fight();
+        while f.result() == 0 {
+            let mv = if f.to_move() == 1 {
+                first_move(&f)
+            } else {
+                f.boss_move()
+            };
+            f.play(&mv).unwrap();
+        }
+        assert!((1..=2).contains(&f.result()));
+        assert_ne!(f.status(), 0);
+        assert!(f.legal_moves().is_empty());
+        assert!(f.boss_move().is_empty());
+        assert!(f.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
     }
 }

@@ -1,0 +1,34 @@
+import { expect, test } from '@playwright/test';
+
+test('start The Echo, play a move, the boss replies, Retry resets the board', async ({ page }) => {
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  const hud = page.locator('#hud');
+  const plies = () => page.evaluate(() => (window as any).__plies());
+  const click = async (q: number, r: number) => {
+    const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
+    await page.mouse.click(p.x, p.y);
+  };
+
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
+  await expect(hud).toContainText('The Echo');
+  await expect(hud).toContainText('P1');
+  await expect(hud).toContainText('Black to move');
+  await expect(page.locator('#hud .notch.active')).toHaveText('P1');
+
+  await click(0, 2); // a Black marble
+  await click(0, 1); // its NW neighbour, empty at the start
+
+  // The boss answers in the worker: two plies, the HUD is back on the human side.
+  await expect.poll(plies, { timeout: 30_000 }).toBe(2);
+  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('The Echo');
+  await page.screenshot({ path: 'test-results/boss-hud.png', clip: { x: 0, y: 0, width: 420, height: 260 } });
+
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect.poll(plies).toBe(0);
+  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('The Echo');
+  await expect(hud).toContainText('Black ejected 0/6');
+});
