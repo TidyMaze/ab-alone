@@ -1,0 +1,494 @@
+# AB-ALONE rules spec
+
+Status: draft v1, for issue #59. Spec only, no code. Companion to `SPEC.md` section 2, `game-design.md` and `tech.md`.
+
+How to read this file:
+- **FINAL**: decided. Changing it needs a Decision issue.
+- **TUNE**: starting value, to be tuned by playtest.
+- **OPEN**: conflicts between docs, or no source at all. Listed in section 13. Nothing marked OPEN may be tested as final.
+- **PROPOSAL**: a rule written here to make the spec complete. It is not in a source. Owners confirm or replace it.
+
+Section 12 holds the numbered examples. Each one is a block of precondition, action and expected result, with coordinates, so it can become a unit test.
+
+## 1. Board
+
+**FINAL.** Axial coordinates `(q, r)`. A cell exists if and only if `max(|q|, |r|, |q+r|) <= 4`. The board has 61 cells.
+
+Six directions (pointy-top axial convention):
+
+| Name | Vector | Name | Vector |
+|---|---|---|---|
+| E | (+1, 0) | W | (-1, 0) |
+| NE | (+1, -1) | SW | (-1, +1) |
+| NW | (0, -1) | SE | (0, +1) |
+
+The three lines (axes) are: E-W (r constant), NE-SW (q+r constant), NW-SE (q constant).
+
+Cells per row (r is the row, q the column range):
+
+| r | q range | cells |
+|---|---|---|
+| -4 | 0 to 4 | 5 |
+| -3 | -1 to 4 | 6 |
+| -2 | -2 to 4 | 7 |
+| -1 | -3 to 4 | 8 |
+| 0 | -4 to 4 | 9 |
+| 1 | -4 to 3 | 8 |
+| 2 | -4 to 2 | 7 |
+| 3 | -4 to 1 | 6 |
+| 4 | -4 to 0 | 5 |
+
+- Black sits at r > 0 (the bottom of a diagram), White at r < 0 (the top). The orientation is for reading only, the rules do not depend on it.
+- **Cell name**: `(q,r)` with no space, for example `(-3,2)`. The same string is used in code, logs and tests.
+- **Rim**: cells with `max(|q|, |r|, |q+r|) = 4`.
+- **Point reflection** `(q,r) -> (-q,-r)` maps Black's side onto White's side. Used for mirrored layouts and for the Echo boss (section 10.3).
+- **Move notation**: the selected cells, then `>` and the direction, for example `(-1,2)(0,2)>E`. A single marble is `(0,0)>SE`. Used in logs, tests and examples. **PROPOSAL** (tech.md section 3 asks for a human format without defining it).
+
+## 2. Start layouts
+
+### 2.1 Standard layout (FINAL)
+
+Black, 14 cells at the bottom: rows of 5, 6, and the middle 3 of the third row.
+
+- r=4: (-4,4) (-3,4) (-2,4) (-1,4) (0,4)
+- r=3: (-4,3) (-3,3) (-2,3) (-1,3) (0,3) (1,3)
+- r=2: (-2,2) (-1,2) (0,2)
+
+White, 14 cells at the top, point reflection of Black:
+
+- r=-4: (0,-4) (1,-4) (2,-4) (3,-4) (4,-4)
+- r=-3: (-1,-3) (0,-3) (1,-3) (2,-3) (3,-3) (4,-3)
+- r=-2: (0,-2) (1,-2) (2,-2)
+
+### 2.2 Belgian daisy layout (OPEN, candidate)
+
+**OPEN-4.** This list is a candidate. It is not checked against an official diagram, so no test may rely on it until an owner confirms it. Each side has two flowers of 7 cells: a centre cell and its six neighbours.
+
+Black:
+- Flower A, centre (-3,3): (-3,3) (-2,3) (-4,3) (-3,4) (-3,2) (-2,2) (-4,4)
+- Flower B, centre (0,3): (0,3) (1,3) (-1,3) (0,4) (0,2) (1,2) (-1,4)
+
+White: point reflection of Black. Both flowers are 14 cells in total with no overlap.
+
+### 2.3 Who moves first (OPEN-3)
+
+Black moves first. **PROPOSAL.** No source sets it.
+
+## 3. Groups
+
+- **FINAL.** A group is 1 to 3 own marbles.
+- **FINAL.** The marbles of a group lie on one axis and are contiguous, with no gap.
+- A pair is any two adjacent own marbles. A triangle or a bend is not a group.
+- Selecting a fourth marble, a marble with a gap, or a marble off the axis is refused. Nothing is played, the selection is undone.
+- Only own marbles can be selected.
+
+## 4. Moves
+
+**FINAL.** One move per turn: one group, one direction.
+
+### 4.1 Inline move
+
+The direction is along the group's axis, either way. For a single marble, every move is a plain move in any of the six directions.
+
+- The leading cell is the cell next to the front marble, in the move direction.
+- Leading cell empty and on board: legal. Every marble moves one step, the trailing marble enters the vacated cell.
+- Leading cell holds an opponent: sumito, see section 5.
+- Leading cell is own marble, or off board with no opponent to push: illegal.
+
+### 4.2 Broadside move
+
+The direction is not parallel to the axis of a 2 or 3 group. Every marble moves one step in that direction.
+
+- Legal if and only if every target cell is on the board and empty.
+- A broadside never pushes and never ejects. Target cells held by an own marble or an opponent make the move illegal.
+
+## 5. Sumito
+
+Inline move, direction `d`, group of `n` own marbles. Let the opponent run be the maximal contiguous run of opponent marbles starting at the leading cell and going in `d`. Let `m` be its length.
+
+**FINAL.** The push is legal if and only if:
+1. `n > m`. So 2v1, 3v1 and 3v2 are legal. 1v1, 2v2 and 3v3 are illegal.
+2. The cell just after the run, in direction `d`, is empty or off the board. An own marble there blocks the push.
+
+**FINAL.** On a legal push, the group and the run each shift one step in `d`. If the cell after the run is off the board, the last marble of the run leaves the board: it is ejected for the mover. At most one marble can be ejected by one move.
+
+## 6. Ejection and win
+
+- **FINAL.** An ejected marble is removed for good.
+- **FINAL.** A player's ejected count is the number of opponent marbles that player has ejected (plus the boss rules in section 10.3).
+- **FINAL.** The first player whose ejected count reaches 6 wins. The ply that makes the sixth ejection ends the game at once.
+- Removals by something other than a move (breach, boss hooks) are in sections 10.3 and 10.4.
+
+## 7. Turn order
+
+- Black moves first (**OPEN-3**, see 2.3).
+- **FINAL.** Strict alternation. A move from the side not to move is refused.
+- A side with no legal move is not expected in practice. If it happens, the side passes. **PROPOSAL.**
+
+## 8. Edge cases
+
+Each case points to its example in section 12.
+
+| Case | Expected result | Example |
+|---|---|---|
+| Push where the cell behind the run is an own marble | Illegal | 19 |
+| Push where the cell behind the run is off the board | Legal, last run marble ejected | 17, 18 |
+| Push where the cell behind the run is empty | Legal, run shifts, no ejection | 15, 16, 20 |
+| Far own marble behind a non-adjacent gap | Does not block the push | 21 |
+| Move into an empty cell next to an opponent | Plain move, no push | 22 |
+| Broadside onto an own marble | Illegal | 6 |
+| Broadside onto an opponent | Illegal, broadside never pushes | 7 |
+| Broadside off the board | Illegal | 8 |
+| Inline move off the board with no opponent | Illegal | 12 |
+| Select 4 marbles in a line | Refused | 9 |
+| Select a triangle | Refused | 10 |
+| Select 2 or 3 marbles with a gap | Refused | 11 |
+| Push 1v1 | Illegal | 13 |
+| Push 2v2 | Illegal | 14 |
+| Single marble, any of 6 directions, empty cell | Legal | 1, 2 |
+| Selecting an opponent marble | Refused | (section 3) |
+| Move by the side not to move | Refused | 24 |
+| Two ejections in one move | Cannot happen (section 5) | (section 5) |
+| Sixth ejection | Win at once | 23 |
+| Position occurs for the 3rd time | Draw | 26 |
+| Position occurs for the 2nd time | Game goes on | 27 |
+| 100th ply with no ejection | Draw | 28 |
+| 99th ply with no ejection | Game goes on | 29 |
+| Ejection | No-ejection counter resets to 0 | 30 |
+
+## 9. End of game
+
+- **FINAL.** Win: 6 ejections (section 6).
+- **FINAL.** Threefold repetition: the same position (board, side to move, mode state) occurs for the third time. The game is a draw. Mode state is part of the position identity (game-design section 5).
+- **FINAL (decided for this spec).** 100 plies in a row with no ejection: the game is a draw. The counter counts plies since the last ejection by either side and resets on each ejection. **OPEN-1**: game-design.md section 5.2 says the 100-ply end is decided by ejections, then centrality, then draw. See section 13.
+- **TUNE.** HUD warning 10 plies before the 100-ply draw.
+- **FINAL.** Draw offers do not exist.
+- **FINAL.** Repetition and the 100-ply rule apply in hot-seat, online 1v1 and PvE. In battle royale they do not apply (game-design section 5.3: the breach ends stalling).
+- **FINAL.** PvE: a draw counts as a loss for the player.
+- **OPEN-12.** Resign is not defined in any source. Not in v1 unless an owner decides.
+
+## 10. Mode deltas
+
+Every mode uses the engine of sections 1 to 9. A mode adds rules, it never changes a move or a push.
+
+### 10.1 Hot-seat
+
+- Two players, one screen.
+- Layout: standard (FINAL), Belgian daisy (OPEN-4).
+- Undo of the last move before confirm: a UI rule, not a game rule. **FINAL.**
+- Win and draw: sections 6 and 9.
+
+### 10.2 Online 1v1
+
+- Same rules as hot-seat.
+- **FINAL.** No clock in v1. A timeout claim is planned for later: the slow side loses if it does not move within a 10 s grace after the other side's claim. **TUNE** for 10 s.
+- **FINAL.** Rematch swaps colours.
+- **FINAL.** No draw offers. Draws come only from sections 9 rules.
+- **FINAL.** Every peer validates every move. A peer that sends an illegal move is dropped from the game (tech.md section 6).
+- **FINAL.** A state hash mismatch after a move pauses the game and shows the divergence.
+- Disconnect: the seat and keypair are kept for a grace period of 60 s to reconnect to the same room (**TUNE**, tech.md section 6). After the grace period, the result is **OPEN-11**.
+
+### 10.3 Souls-like PvE
+
+Player (Black, 14 marbles on the standard layout unless the boss says otherwise) against one boss. Win: 6 boss marbles ejected. Loss: 6 player marbles ejected, or a draw (**FINAL**).
+
+Boss rule hooks run inside `apply`, so the AI search sees them. A hook removing a marble counts toward the ejected count of the side that loses the marble's opponent. For example, a player marble removed by a hook raises the boss's ejected count. **PROPOSAL, OPEN-13.**
+
+Phases trigger when the boss's marble count reaches a threshold, shown on the HUD as notches. **TUNE** for every threshold below.
+
+Hooks, from game-design section 7 (starting values):
+
+- **Hull** (#43): rim cells crack every 8 plies. A cracked cell vanishes 2 plies later, and a marble on it is removed. Boss search depth 3. Phase at 10 boss marbles: interval 6, two cells crack at once. Phase at 5: interval 4.
+- **Choir** (#44): the board has radius 3, not 4. The boss has 3 armies of 4 marbles (Alto, Tenor, Bass). Each boss turn only one army moves, in a fixed cycle. The player has 10 marbles. Phase: when one army is wiped, the other two alternate and each gets an extra move every 4th turn. Phase: when one army of 4 is left, it moves every turn and cannot push.
+- **Chaplain** (#45): at the end of the boss turn, a player marble with 3 or more adjacent boss marbles flips to the boss. The flip is not an ejection. A flipped marble flips back when 3 of the player's marbles surround it. Phase at 8 boss marbles: void cells count as boss neighbours. Phase at 4: a flip can chain once, and the boss loses one marble to the void per flip.
+- **Echo** (#46): after each player move, the boss plays the point reflection of that move if it is legal, otherwise its AI picks a move. Mirrored moves go through the normal validator. Phase at 10: the boss echoes the player's previous move. Phase at 5: the boss echoes with two groups, and the free move happens on every illegal mirror.
+- **Ballast Mind** (#47): radius 5 board, 6 symmetric void pillars. Boss 16 marbles, player 14. Boss search depth 5. Phase at 16: plain Abalone. Phase at 10: Hull rim crack (interval 8) and Chaplain (threshold 3). Phase at 5: adds Echo.
+
+### 10.4 Battle royale
+
+- **FINAL.** 3 to 6 players. **TUNE** for the default of 6, with bots filling empty seats.
+- **FINAL.** Arena: hex radius 8, 217 cells.
+- **TUNE.** 10 marbles per player (game-design open question Q3).
+- **OPEN-5.** Starting coordinates for the 6 wedges are not defined in any source. Needed before a test.
+
+**Round structure (FINAL, game-design option C):** all players commit at once, then reveal, then the round resolves.
+
+1. **Commit**: each peer broadcasts a signed hash of its order and nonce.
+2. **Reveal**: each peer broadcasts order and nonce. A missing or bad reveal counts as a hold, and the sender is flagged.
+3. **Resolve**: orders are applied one by one in the initiative order. Each order is validated at its turn, against the state produced by the orders before it.
+4. An order that is illegal at its turn **fizzles**: it counts as a pass. The player loses tempo only. **FINAL.**
+5. **Round timer**: 15 s (**TUNE**). **OPEN-2**: tech.md section 6 says 30 s after the previous round. See section 13.
+
+**Initiative order.** Seats in list order `s0 ... s(N-1)`. Round `k` (starting at 1) starts at seat `s((k-1) mod N)` and goes round the list. Every player leads once every N rounds. **PROPOSAL.** game-design says only "derived from round number and seat list" (**OPEN-10**).
+
+**Same-cell conflict.** Two orders target one cell. The one resolved first takes it. The second is validated at its turn, so if it is now illegal, it fizzles. **PROPOSAL** (follows from option C; not written in game-design, **OPEN-9**).
+
+**Hull breach (TUNE for every number):**
+
+| Ring (radius) | Cracks at round | Void at round |
+|---|---|---|
+| 8 | 12 | 13 |
+| 7 | 18 | 19 |
+| 6 | 24 | 25 |
+| 5 | 30 | 31 |
+| 4 | 36 | 37 |
+| 3 | 42 | 43 |
+
+- Rounds 1 to 11: safe.
+- A marble on a cracked cell is not safe. It is removed when the ring goes void.
+- Cracks glow and show a countdown.
+- Rings smaller than radius 3: the schedule is not defined (**OPEN-6**, game-design says "a ring every 3 rounds until one group is left in the core").
+
+**Elimination.** **FINAL.** At 0 marbles a player is out. Its marbles vanish at once. Eliminated players spectate.
+
+**Win.** **FINAL.** The last player with marbles wins. If the breach ends the game, the most marbles wins, then the most ejections. A tie still standing is **OPEN-7**.
+
+**Placement points (TUNE):** 6 players: 10, 6, 4, 2, 1, 0 for places 1 to 6, plus 1 point per ejection caused. Tables for 3 to 5 players are **OPEN-7**.
+
+**Credit rule (FINAL).** The last player whose move touched a marble gets the ejection. Whether a breach removal earns credit is **OPEN-8** (proposal: credit the last toucher if there is one, otherwise nobody).
+
+**Sumito (FINAL).** Section 5 applies against any opponent.
+
+**Bots (FINAL).** A bot's order is a pure function of the round-start state and the seed, computed before the reveal. A bot cannot see human orders.
+
+**Anti-kingmaking check (TUNE).** In 1000 bot games, the final-two leader loses to a dying third player in under 1 game in 5, measured against option A as a baseline.
+
+## 11. Numbers index
+
+Every number in this spec is tagged FINAL or TUNE where it appears. The FINAL numbers are: board radius 4 (61 cells), 6 directions, group size 1 to 3, 6 ejections to win, 3 repetitions for a draw, 100 plies for a draw (decided), BR 3 to 6 players, BR radius 8 (217 cells). The TUNE numbers are: BR round timer, BR marbles per player, the breach schedule, hook intervals and thresholds, boss depths, the 10 s clock grace, the 60 s disconnect grace, the HUD warning at 10 plies, and placement points.
+
+## 12. Examples
+
+Each example below is a numbered block with a precondition, an action and an expected result. "Only the marbles listed exist" unless the example says otherwise. Ejected counts are given where they matter.
+
+**Example 1 (single marble, SE).**
+**Given** Black `(0,0)`, White `(4,-4)`. Black to move.
+**When** Black moves `(0,0)>SE`.
+**Then** the move is legal. Black is at `(0,1)`. Turn passes to White.
+
+**Example 2 (single marble, NE).**
+**Given** Black `(0,0)`, White `(4,-4)`. Black to move.
+**When** Black moves `(0,0)>NE`.
+**Then** the move is legal. Black is at `(1,-1)`.
+
+**Example 3 (inline pair, E, empty cells).**
+**Given** Black `(-1,2)(0,2)`, White `(4,-4)`.
+**When** Black moves `(-1,2)(0,2)>E`.
+**Then** the move is legal. Black is at `(0,2)(1,2)`.
+
+**Example 4 (inline trio, E).**
+**Given** Black `(-2,2)(-1,2)(0,2)`, White `(4,-4)`.
+**When** Black moves `(-2,2)(-1,2)(0,2)>E`.
+**Then** the move is legal. Black is at `(-1,2)(0,2)(1,2)`.
+
+**Example 5 (broadside pair, SE, empty targets).**
+**Given** Black `(-1,2)(0,2)`, White `(4,-4)`. Cells `(-1,3)` and `(0,3)` are empty.
+**When** Black moves `(-1,2)(0,2)>SE`.
+**Then** the move is legal. Black is at `(-1,3)(0,3)`. The move is broadside, since SE is not on the E-W axis.
+
+**Example 6 (broadside onto own marble).**
+**Given** Black `(-1,2)(0,2)(0,3)`, White `(4,-4)`.
+**When** Black moves `(-1,2)(0,2)>SE`.
+**Then** the move is illegal, because `(0,3)` holds an own marble. Position unchanged.
+
+**Example 7 (broadside onto opponent).**
+**Given** Black `(-1,2)(0,2)`, White `(0,3)`.
+**When** Black moves `(-1,2)(0,2)>SE`.
+**Then** the move is illegal, because a broadside never pushes. Position unchanged.
+
+**Example 8 (broadside off the board).**
+**Given** Black `(0,-4)(1,-4)`, White `(4,-4)`.
+**When** Black moves `(0,-4)(1,-4)>NW`.
+**Then** the move is illegal: the targets `(0,-5)` and `(1,-5)` are off the board.
+
+**Example 9 (select 4 in a line).**
+**Given** Black `(-4,1)(-3,1)(-2,1)(-1,1)`, White `(4,-4)`.
+**When** Black selects all four marbles on the E-W axis.
+**Then** the selection is refused. A group is at most 3 marbles.
+
+**Example 10 (select a triangle).**
+**Given** Black `(0,0)(1,0)(0,1)`, White `(4,-4)`.
+**When** Black selects all three marbles.
+**Then** the selection is refused. The three marbles are not on one axis.
+
+**Example 11 (select with a gap).**
+**Given** Black `(-1,2)(1,2)`, White `(4,-4)`. Cell `(0,2)` is empty.
+**When** Black selects `(-1,2)` and `(1,2)`.
+**Then** the selection is refused. The marbles are not contiguous.
+
+**Example 12 (inline move off the board, no opponent).**
+**Given** Black `(4,0)`, White `(-4,4)`.
+**When** Black moves `(4,0)>E`.
+**Then** the move is illegal. The target `(5,0)` is off the board and there is no opponent to push.
+
+**Example 13 (push 1v1 is illegal).**
+**Given** Black `(0,0)`, White `(1,0)`. Cell `(2,0)` is empty.
+**When** Black moves `(0,0)>E`.
+**Then** the move is illegal. One marble cannot push one marble.
+
+**Example 14 (push 2v2 is illegal).**
+**Given** Black `(0,0)(1,0)`, White `(2,0)(3,0)`. Cell `(4,0)` is empty.
+**When** Black moves `(0,0)(1,0)>E`.
+**Then** the move is illegal. The group is not strictly larger than the run.
+
+**Example 15 (push 2v1 into an empty cell).**
+**Given** Black `(0,0)(1,0)`, White `(2,0)`. Cell `(3,0)` is empty.
+**When** Black moves `(0,0)(1,0)>E`.
+**Then** the move is legal. Black is at `(1,0)(2,0)`, White is at `(3,0)`. No ejection.
+
+**Example 16 (push 3v2 into an empty cell).**
+**Given** Black `(-1,0)(0,0)(1,0)`, White `(2,0)(3,0)`. Cell `(4,0)` is empty.
+**When** Black moves `(-1,0)(0,0)(1,0)>E`.
+**Then** the move is legal. Black is at `(0,0)(1,0)(2,0)`, White is at `(3,0)(4,0)`. No ejection.
+
+**Example 17 (push 3v2 ejects one marble at the rim).**
+**Given** Black `(0,0)(1,0)(2,0)`, White `(3,0)(4,0)`.
+**When** Black moves `(0,0)(1,0)(2,0)>E`.
+**Then** the move is legal. The White marble at `(4,0)` is pushed to `(5,0)` and ejected. Black's ejected count rises by 1. Black is at `(1,0)(2,0)(3,0)`, White is at `(4,0)`.
+
+**Example 18 (push 2v1 ejects at the rim).**
+**Given** Black `(2,0)(3,0)`, White `(4,0)`.
+**When** Black moves `(2,0)(3,0)>E`.
+**Then** the move is legal. White's only marble is ejected. Black is at `(3,0)(4,0)`. Black's ejected count rises by 1.
+
+**Example 19 (push blocked by own marble behind).**
+**Given** Black `(0,0)(1,0)(3,0)`, White `(2,0)`.
+**When** Black moves `(0,0)(1,0)>E`.
+**Then** the move is illegal. The cell behind the run, `(3,0)`, holds an own marble.
+
+**Example 20 (push along NE into an empty cell).**
+**Given** Black `(0,0)(1,-1)`, White `(2,-2)`. Cell `(3,-3)` is empty.
+**When** Black moves `(0,0)(1,-1)>NE`.
+**Then** the move is legal. Black is at `(1,-1)(2,-2)`, White is at `(3,-3)`.
+
+**Example 21 (a far own marble does not block a push).**
+**Given** Black `(-1,0)(0,0)(1,0)(4,0)`, White `(2,0)`. Cell `(3,0)` is empty.
+**When** Black moves `(-1,0)(0,0)(1,0)>E`.
+**Then** the move is legal. Black is at `(0,0)(1,0)(2,0)(4,0)`, White is at `(3,0)`. The own marble at `(4,0)` is not part of the push.
+
+**Example 22 (a plain move next to an opponent is not a push).**
+**Given** Black `(0,0)(1,0)`, White `(3,0)`. Cell `(2,0)` is empty.
+**When** Black moves `(0,0)(1,0)>E`.
+**Then** the move is legal. Black is at `(1,0)(2,0)`. White is unchanged. No push happens because the leading cell was empty.
+
+**Example 23 (sixth ejection wins).**
+**Given** Black `(2,0)(3,0)`, White `(4,0)`. Black's ejected count is 5.
+**When** Black moves `(2,0)(3,0)>E`.
+**Then** the ejection makes Black's count 6. Black wins at once. The game is over.
+
+**Example 24 (move out of turn).**
+**Given** the standard start layout (section 2.1), Black to move.
+**When** White moves `(4,-4)>W`.
+**Then** the move is refused, because it is not White's turn. Black still to move.
+
+**Example 25 (turn passes after a move).**
+**Given** Black `(0,0)`, White `(4,-4)`. Black to move.
+**When** Black moves `(0,0)>SE`, then White moves `(4,-4)>W`.
+**Then** Black is at `(0,1)`, White is at `(3,-4)`. Black is to move.
+
+**Example 26 (threefold repetition is a draw).**
+**Given** Black `(0,0)`, White `(4,-4)`. Black to move. This is position P0, occurrence 1.
+**When** the plies are: Black `(0,0)>SE`, White `(4,-4)>W`, Black `(0,1)>NW`, White `(3,-4)>E`, and the same four plies again.
+**Then** P0 occurs for the second time after 4 plies (the game goes on, see example 27) and for the third time after 8 plies. The game is a draw immediately after the 8th ply.
+
+**Example 27 (second occurrence does not end the game).**
+**Given** the position of example 26 after 4 plies, P0 at occurrence 2.
+**When** Black plays `(0,0)>SE`.
+**Then** the move is legal. The game continues. No draw.
+
+**Example 28 (100th ply with no ejection is a draw).**
+**Given** Black `(0,0)`, White `(4,-4)`. Black to move. The no-ejection counter is 99.
+**When** Black moves `(0,0)>SE`.
+**Then** the counter reaches 100. The game is a draw.
+
+**Example 29 (99th ply does not end the game).**
+**Given** Black `(0,0)`, White `(4,-4)`. Black to move. The no-ejection counter is 98.
+**When** Black moves `(0,0)>SE`.
+**Then** the counter is 99. The game continues.
+
+**Example 30 (an ejection resets the counter).**
+**Given** Black `(2,0)(3,0)`, White `(4,0)`. Black's ejected count is 0. The no-ejection counter is 99.
+**When** Black moves `(2,0)(3,0)>E`.
+**Then** White's marble is ejected. The counter resets to 0. Black's ejected count is 1. The game continues.
+
+**Example 31 (standard start has 14 and 14 marbles, all cells valid).**
+**Given** the standard layout of section 2.1.
+**When** the cells are counted and checked against section 1.
+**Then** Black has 14 cells, White has 14 cells, all 28 cells are on the board, and no cell is in both lists.
+
+**Example 32 (Belgian daisy candidate, check only).**
+**Given** the candidate layout of section 2.2.
+**When** the cells are counted.
+**Then** Black has 14 cells, White has 14 cells, no overlap. Status: OPEN-4, not verified against an official diagram.
+
+**Example 33 (Hull: a marble on a vanishing cell is removed).**
+**Given** PvE, Hull boss, phase 1. Black `(4,-3)`, White boss marbles elsewhere. The cell `(4,-3)` vanishes at the end of this ply.
+**When** the ply ends.
+**Then** the Black marble is removed. The boss's ejected count rises by 1. (PROPOSAL, OPEN-13.)
+
+**Example 34 (Chaplain: 3 boss neighbours flip a marble).**
+**Given** PvE, Chaplain boss. Black `(0,0)`. White boss marbles `(1,0)(1,-1)(0,-1)`. These are the three neighbours of `(0,0)` held by the boss.
+**When** the boss turn ends.
+**Then** the marble at `(0,0)` becomes a boss marble. Black's on-board count drops by 1, White's rises by 1. No ejection.
+
+**Example 35 (Chaplain: 2 boss neighbours do not flip).**
+**Given** PvE, Chaplain boss. Black `(0,0)`. White boss marbles `(1,0)(1,-1)`.
+**When** the boss turn ends.
+**Then** nothing flips. The marble at `(0,0)` stays Black.
+
+**Example 36 (Echo: point reflection of a move).**
+**Given** PvE, Echo boss, phase 1. Black `(0,2)`, White `(0,-2)`. Cells `(0,3)` and `(0,-3)` are empty.
+**When** Black moves `(0,2)>SE`.
+**Then** the move is legal and Black is at `(0,3)`. The Echo plays the mirror, `(0,-2)>NW`, which is legal because `(0,-3)` is empty. White is at `(0,-3)`.
+
+**Example 37 (battle royale: a fizzled order).**
+**Given** battle royale, 3 players in seat order P1, P2, P3. Round 1. P1 `(0,0)`, P2 `(2,0)`, P3 `(-5,0)`.
+**When** P1 orders `(0,0)>E`, P2 orders `(2,0)>W`, P3 holds. Round 1 initiative: P1, P2, P3.
+**Then** P1's move is legal: P1 is at `(1,0)`. P2's order targets `(1,0)`, now a single own marble of P1, so the push is 1v1 and illegal. P2's order fizzles and counts as a pass. P2 stays at `(2,0)`.
+
+**Example 38 (battle royale: initiative rotates).**
+**Given** battle royale, seats P1, P2, P3.
+**When** the initiative order is computed for rounds 2 and 4.
+**Then** round 2 is P2, P3, P1. Round 4 is P1, P2, P3.
+
+**Example 39 (battle royale: a marble on the outer ring is removed).**
+**Given** battle royale. The radius 8 ring cracked at round 12. P1 has a marble at `(8,0)`.
+**When** round 13 resolves.
+**Then** the ring is void. The marble at `(8,0)` is removed. Whether this earns credit is OPEN-8. TUNE for the round numbers.
+
+**Example 40 (battle royale: credit goes to the last toucher).**
+**Given** battle royale, P1 `(0,0)(1,0)(2,0)`, P2 `(3,0)(4,0)`, P3 elsewhere. Round 1, P1 orders `(0,0)(1,0)(2,0)>E`, P2 holds.
+**When** round 1 resolves.
+**Then** the push is legal (3v2 at the rim). P2's marble at `(4,0)` is ejected. P1, the last player whose move touched it, gets the ejection credit (FINAL credit rule, game-design section 6).
+
+## 13. Open conflicts
+
+These are raised in the PR body. Owners decide. Nothing here was picked silently.
+
+- **OPEN-1. Draw at 100 plies.** The task decision says draw. game-design.md section 5.2 says the 100-ply end is decided by ejections, then centrality, then draw. Pick one, then update the other doc.
+- **OPEN-2. Battle royale round timer.** game-design.md section 6 says 15 s. tech.md section 6 says 30 s. This spec uses 15 s (TUNE).
+- **OPEN-3. Who moves first.** No source. PROPOSAL: Black.
+- **OPEN-4. Belgian daisy coordinates.** Candidate only, no official diagram checked.
+- **OPEN-5. Battle royale wedge coordinates.** Not defined.
+- **OPEN-6. Battle royale rings below radius 3.** game-design.md is ambiguous.
+- **OPEN-7. Battle royale ties and placement tables.** Points are defined for 6 players only. The tie at breach end is not defined.
+- **OPEN-8. Credit for breach ejections.** PROPOSAL: last toucher if any, else nobody.
+- **OPEN-9. Same-cell conflict in battle royale.** PROPOSAL: first in initiative wins, the second fizzles. Not written in game-design.md.
+- **OPEN-10. Initiative formula.** game-design.md says "derived from round number and seat list". PROPOSAL: rotate by round.
+- **OPEN-11. Online 1v1 after the 60 s grace.** Forfeit or wait? Not defined.
+- **OPEN-12. Resign.** Not defined.
+- **OPEN-13. Credit for boss-hook removals in PvE.** PROPOSAL: a player marble removed by a hook raises the boss's ejected count, and the reverse.
+
+Also to check: SPEC.md section 2 still says "Draw / anti-stalling rule: open question". It should point to this file once an owner accepts it.
+
+## 14. Done checklist (issue #59)
+
+- Board, cell naming, notation, both start layouts as coordinate lists: section 1 and 2 (Belgian daisy OPEN-4).
+- Core rules: sections 3 to 7.
+- Edge cases with expected results: section 8, examples in section 12.
+- End of game: section 9 (draw decision applied, conflict OPEN-1).
+- Mode deltas: section 10.
+- At least 30 numbered examples: section 12 has 40.
+- Every number marked FINAL or TUNE: sections 9, 10 and 11.
+- Consistency with game-design.md and tech.md: conflicts in section 13.
+- No code: this is a spec only.
