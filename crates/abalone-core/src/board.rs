@@ -32,24 +32,6 @@ const STANDARD_BLACK: [(i32, i32); 14] = [
     (2, -2),
 ];
 
-/// Belgian daisy, Black side: two flowers of seven cells (a centre and its six neighbours).
-const BELGIAN_DAISY_BLACK: [(i32, i32); 14] = [
-    (-2, -1),
-    (-1, -1),
-    (-3, -1),
-    (-2, 0),
-    (-2, -2),
-    (-1, -2),
-    (-3, 0),
-    (1, -3),
-    (2, -3),
-    (0, -3),
-    (1, -2),
-    (1, -4),
-    (2, -4),
-    (0, -2),
-];
-
 /// Hexagonal Abalone board.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
@@ -85,11 +67,6 @@ impl Board {
     /// Standard start layout: 14 marbles per side.
     pub fn standard() -> Self {
         Self::with_marbles(&STANDARD_BLACK)
-    }
-
-    /// Belgian daisy start layout: 14 marbles per side.
-    pub fn belgian_daisy() -> Self {
-        Self::with_marbles(&BELGIAN_DAISY_BLACK)
     }
 
     /// Black marbles on `black`, White marbles on their point reflections.
