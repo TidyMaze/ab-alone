@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // The production build is served by GitHub Pages under /ab-alone/. Dev and e2e stay at /.
+  base: command === 'build' ? '/ab-alone/' : '/',
   resolve: {
     alias: {
       'abalone-wasm': new URL('../crates/abalone-wasm/pkg/abalone_wasm.js', import.meta.url).pathname,
@@ -18,4 +20,4 @@ export default defineConfig({
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },
-});
+}));
