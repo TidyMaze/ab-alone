@@ -135,3 +135,17 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect.poll(() => plies(c)).toBe(2);
   await expect(a.locator('#hud')).not.toContainText('refused');
 });
+
+// Bug #127: main.ts awaits the wasm engine and the textures before it attaches the click listener.
+// A click right after domcontentloaded must either hit a disabled button or create the invite.
+test('Play online is disabled or works when clicked right after load, bug #127', async ({ page }) => {
+  await page.goto('./?bot=off&net=hook', { waitUntil: 'domcontentloaded' });
+  const disabledAtClick = await page.evaluate(() => {
+    const button = document.getElementById('play-online') as HTMLButtonElement;
+    const wasDisabled = button.disabled;
+    button.click();
+    return wasDisabled;
+  });
+  const invite = await page.locator('#invite').inputValue();
+  expect(disabledAtClick || /#room=[\w-]+$/.test(invite)).toBe(true);
+});
