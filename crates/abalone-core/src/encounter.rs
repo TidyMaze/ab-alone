@@ -3,6 +3,7 @@
 //! adds phases, a tell and a rule hook on top. Everything is a pure function of the game and the
 //! seed, so the same seed and the same player moves give the same boss moves.
 
+pub mod chaplain;
 pub mod echo;
 pub mod hull;
 
@@ -400,6 +401,23 @@ mod tests {
         step(&mut enc);
         assert_eq!(white_count(&enc), 13);
         assert_eq!(enc.game().ejected(Player::Black), 0);
+        assert_eq!(enc.game().ejected(Player::White), 0);
+    }
+
+    /// Flips the first White marble to Black and removes the second one.
+    fn flip_one_remove_one(board: &Board, _id: u8, _seed: u64) -> Board {
+        let whites = cells_of(board, Cell::White);
+        let mut out = board.clone();
+        out.set(whites[0].0, whites[0].1, Cell::Black);
+        out.set(whites[1].0, whites[1].1, Cell::Empty);
+        out
+    }
+
+    #[test]
+    fn hook_flip_and_removal_credit_only_the_removal() {
+        let mut enc = Encounter::new(Game::new(), boss_with(flip_one_remove_one), 0);
+        step(&mut enc);
+        assert_eq!(enc.game().ejected(Player::Black), 1);
         assert_eq!(enc.game().ejected(Player::White), 0);
     }
 
