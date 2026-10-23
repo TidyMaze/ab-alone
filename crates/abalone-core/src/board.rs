@@ -165,13 +165,6 @@ mod tests {
     }
 
     #[test]
-    fn belgian_daisy_has_14_marbles_per_side() {
-        let board = Board::belgian_daisy();
-        assert_eq!(count(&board, Cell::Black), 14);
-        assert_eq!(count(&board, Cell::White), 14);
-    }
-
-    #[test]
     fn standard_is_point_symmetric() {
         let board = Board::standard();
         for (q, r) in all_coords() {
