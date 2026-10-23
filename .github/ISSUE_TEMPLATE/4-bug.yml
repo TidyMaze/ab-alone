@@ -1,0 +1,38 @@
+name: Bug
+description: Something works differently from its spec. File it before touching any code.
+title: "Bug: "
+labels: [bug]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: "1. "
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What the spec or acceptance criteria say should happen. Link it.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What happens. Screenshot, console log or failing test output. No secrets.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Browser, OS and commit
+      placeholder: "Chrome 141, macOS, a1b2c3d (or the live site)"
+    validations:
+      required: true
+  - type: input
+    id: feature
+    attributes:
+      label: Broken feature
+      description: "#<feature>, if known"

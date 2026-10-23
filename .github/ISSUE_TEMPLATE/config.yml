@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Raw idea
+    url: https://github.com/TidyMaze/ab-alone/discussions/new?category=ideas
+    about: Ideas start in Discussions. An owner turns them into a Feature.
