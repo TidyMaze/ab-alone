@@ -279,6 +279,13 @@ mod tests {
     }
 
     #[test]
+    fn ejected_counts_start_at_zero_for_both_sides() {
+        let engine = Engine::new();
+        assert_eq!(engine.ejected(1), 0);
+        assert_eq!(engine.ejected(2), 0);
+    }
+
+    #[test]
     fn status_codes() {
         assert_eq!(status_code(None), 0);
         assert_eq!(status_code(Some(Outcome::Win(Player::Black))), 1);
