@@ -58,6 +58,32 @@ pub fn marbles(board: &Board, color: Cell) -> u8 {
     n
 }
 
+/// Where the converted marks sit after `mv`: marks on moved or pushed marbles shift one step.
+fn carried_marks(board: &Board, mv: &Move) -> Vec<(i32, i32)> {
+    let (dq, dr) = mv.dir.vector();
+    let mut moved = mv.cells.clone();
+    for &(q, r) in &mv.cells {
+        if !mv.cells.contains(&(q + dq, r + dr)) {
+            let mut cell = (q + dq, r + dr);
+            while matches!(board.get(cell.0, cell.1), Some(Cell::Black | Cell::White)) {
+                moved.push(cell);
+                cell = (cell.0 + dq, cell.1 + dr);
+            }
+        }
+    }
+    board
+        .converted()
+        .iter()
+        .map(|&(q, r)| {
+            if moved.contains(&(q, r)) {
+                (q + dq, r + dr)
+            } else {
+                (q, r)
+            }
+        })
+        .collect()
+}
+
 fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
     None
 }
@@ -107,7 +133,9 @@ impl Encounter {
     /// Plays `mv` for the side to move, then fires the hook when the tell announced it.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         let told = self.tell();
+        let carried = carried_marks(self.game.board(), mv);
         self.game.play(mv)?;
+        self.carry_marks(carried);
         if let (Some(id), None) = (told, self.game.outcome()) {
             let ply = self.game.history().len() as u64;
             let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
@@ -116,6 +144,20 @@ impl Encounter {
             self.game.replace_board(board);
         }
         Ok(())
+    }
+
+    /// Keeps the converted marks that still sit on a White marble after the move.
+    fn carry_marks(&mut self, carried: Vec<(i32, i32)>) {
+        let board = self.game.board();
+        let kept: Vec<_> = carried
+            .into_iter()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
+            .collect();
+        if kept != board.converted() {
+            let mut next = board.clone();
+            next.set_converted(kept);
+            self.game.replace_board(next);
+        }
     }
 
     /// A marble a hook removed (its cell is now empty or gone) counts for the opponent of its

@@ -37,7 +37,7 @@ fn special(ply: u32, phase: usize) -> Option<u8> {
 }
 
 /// Cells of `victim` marbles with at least `threshold` `attacker` neighbours. Off-board and
-/// vanished neighbours count as attackers when `void_counts`.
+/// vanished neighbours add one attacker in total, however many there are, when `void_counts`.
 fn marked(
     board: &Board,
     victim: Cell,
@@ -51,13 +51,9 @@ fn marked(
             if board.get(q, r) != Some(victim) {
                 continue;
             }
-            let near = NEIGHBOURS
-                .iter()
-                .filter(|&&(dq, dr)| match board.get(q + dq, r + dr) {
-                    Some(c) => c == attacker,
-                    None => void_counts,
-                })
-                .count();
+            let around = NEIGHBOURS.map(|(dq, dr)| board.get(q + dq, r + dr));
+            let near = around.iter().filter(|&&c| c == Some(attacker)).count()
+                + usize::from(void_counts && around.contains(&None));
             if near >= threshold {
                 out.push((q, r));
             }
@@ -85,6 +81,8 @@ fn convert(board: &Board, phase: usize) -> (Vec<P>, Board) {
         }
         flipped.extend(wave);
     }
+    let marks = [board.converted(), &flipped].concat();
+    out.set_converted(marks);
     (flipped, out)
 }
 
@@ -101,22 +99,35 @@ fn boss_turn_end(board: &Board, phase: usize, seed: u64) -> Board {
             out.set(q, r, Cell::Empty);
         }
     }
-    out
+    keep_white_marks(out)
+}
+
+/// Drops the converted marks that no longer sit on a White marble.
+fn keep_white_marks(mut board: Board) -> Board {
+    let kept = board
+        .converted()
+        .iter()
+        .copied()
+        .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
+        .collect();
+    board.set_converted(kept);
+    board
 }
 
 fn hook(board: &Board, id: u8, seed: u64) -> Board {
     if id == CHAPLAIN_PLAYER_END {
         let mut out = board.clone();
-        for (q, r) in marked(
+        let back = marked(
             board,
             Cell::White,
             Cell::Black,
             CHAPLAIN_RESTORE_THRESHOLD,
             false,
-        ) {
+        );
+        for &(q, r) in back.iter().filter(|c| board.converted().contains(c)) {
             out.set(q, r, Cell::Black);
         }
-        out
+        keep_white_marks(out)
     } else {
         boss_turn_end(
             board,
@@ -297,8 +308,8 @@ mod tests {
     }
 
     /// Like `enc`, with `converted` marked as converted boss marbles.
-    fn with_converted(black: &[P], white: &[P], converted: &[P]) -> Encounter {
-        let e = enc(black, white, 8);
+    fn with_converted(black: &[P], white: &[P], converted: &[P], fillers: usize) -> Encounter {
+        let e = enc(black, white, fillers);
         let mut board = e.game().board().clone();
         board.set_converted(converted.to_vec());
         Encounter::new(
@@ -317,7 +328,7 @@ mod tests {
 
     #[test]
     fn three_player_neighbours_flip_a_converted_marble_back_at_the_end_of_the_player_turn() {
-        let mut e = with_converted(&[(1, 0), (1, -1), (0, -1)], &[(0, 0)], &[(0, 0)]);
+        let mut e = with_converted(&[(1, 0), (1, -1), (0, -1)], &[(0, 0)], &[(0, 0)], 8);
         let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
         step(&mut e);
         assert_eq!(at(&e, (0, 0)), Some(Cell::Black));
@@ -333,7 +344,7 @@ mod tests {
 
     #[test]
     fn two_player_neighbours_do_not_flip_a_converted_marble_back() {
-        let mut e = with_converted(&[(1, 0), (1, -1)], &[(0, 0)], &[(0, 0)]);
+        let mut e = with_converted(&[(1, 0), (1, -1)], &[(0, 0)], &[(0, 0)], 8);
         step(&mut e);
         assert_eq!(at(&e, (0, 0)), Some(Cell::White));
     }
@@ -356,15 +367,7 @@ mod tests {
     #[test]
     fn a_converted_marble_keeps_its_mark_when_it_moves() {
         let blacks = [(-2, 0), (-2, 1), (-1, 1)];
-        let mut e = enc(&blacks, &[(1, 0), (1, -1), (0, -1)], 8);
-        e.play(&Move {
-            cells: vec![(0, 3)],
-            dir: W,
-        })
-        .unwrap();
-        // Black has no marble on (0, 0) in this layout: convert one by hand instead.
-        assert_eq!(e.game().board().converted(), &[] as &[P]);
-        let mut e = with_converted(&blacks, &[(0, 0), (1, 0), (1, -1), (0, -1)], &[(0, 0)]);
+        let mut e = with_converted(&blacks, &[(0, 0), (1, 0), (1, -1), (0, -1)], &[(0, 0)], 4);
         step(&mut e);
         e.play(&Move {
             cells: vec![(0, 0)],
@@ -382,7 +385,12 @@ mod tests {
 
     #[test]
     fn a_converted_marble_pushed_by_a_sumito_keeps_its_mark() {
-        let mut e = with_converted(&[(-2, 0), (-1, 0), (2, -1), (1, 1)], &[(0, 0)], &[(0, 0)]);
+        let mut e = with_converted(
+            &[(-2, 0), (-1, 0), (2, -1), (1, 1)],
+            &[(0, 0)],
+            &[(0, 0)],
+            8,
+        );
         e.play(&Move {
             cells: vec![(-2, 0), (-1, 0)],
             dir: E,
@@ -398,7 +406,7 @@ mod tests {
 
     #[test]
     fn a_converted_marble_pushed_off_the_board_loses_its_mark() {
-        let mut e = with_converted(&[(2, 0), (3, 0)], &[(4, 0)], &[(4, 0)]);
+        let mut e = with_converted(&[(2, 0), (3, 0)], &[(4, 0)], &[(4, 0)], 8);
         e.play(&Move {
             cells: vec![(2, 0), (3, 0)],
             dir: E,

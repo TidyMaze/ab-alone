@@ -88,6 +88,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.cracks().is_empty() {
         board.cracks().hash(&mut hasher);
     }
+    if !board.converted().is_empty() {
+        board.converted().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
