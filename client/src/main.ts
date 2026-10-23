@@ -11,11 +11,13 @@ import {
   toggleSelection,
   type Axial,
 } from './board';
+import { askBot } from './bot';
 
 // Palette from docs/specs/world.md section 5.
 const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
 const MARBLE_COLORS: Record<number, number> = { 1: 0x15191c, 2: 0xd8d4c8 };
 const SIDE_NAMES: Record<number, string> = { 1: 'Black', 2: 'White' };
+const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
 const STATUS_TEXT = ['', 'Black wins', 'White wins', 'Draw'];
 
 await init();
@@ -105,6 +107,25 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
 const marbles = new THREE.Group();
 scene.add(marbles);
 
+// The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
+// (the rules e2e tests drive both sides by hand).
+const worker =
+  new URLSearchParams(location.search).get('bot') === 'off'
+    ? null
+    : new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' });
+const history: number[][] = [];
+let thinking = false;
+
+async function botTurn(): Promise<void> {
+  if (!worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
+  thinking = true;
+  const move = await askBot(worker, history);
+  thinking = false;
+  engine.play(Int32Array.from(move));
+  history.push(move);
+  refresh();
+}
+
 let selected: Axial[] = [];
 const isSelected = (q: number, r: number): boolean => selected.some(([sq, sr]) => sq === q && sr === r);
 
@@ -140,6 +161,7 @@ function refresh(): void {
 }
 
 function click(q: number, r: number): void {
+  if (thinking) return;
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
     selected = toggleSelection(selected, [q, r]);
@@ -147,11 +169,14 @@ function click(q: number, r: number): void {
     // The engine is the only judge: a click that is not a legal move changes nothing.
     const mv = moveForClick(parseMoves(engine.legal_moves()), selected, [q, r]);
     if (mv) {
-      engine.play(Int32Array.from(encodeMove(mv)));
+      const record = encodeMove(mv);
+      engine.play(Int32Array.from(record));
+      history.push(record);
       selected = [];
     }
   }
   refresh();
+  void botTurn();
 }
 
 const raycaster = new THREE.Raycaster();
@@ -179,6 +204,9 @@ addEventListener('resize', () => {
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
+
+// Used by the browser checks to count the plies played, bot replies included.
+(window as unknown as Record<string, unknown>).__plies = () => history.length;
 
 refresh();
 renderer.setAnimationLoop(() => renderer.render(scene, camera));

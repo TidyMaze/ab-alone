@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Cells are axial (q, r), see docs/specs/rules.md. Black starts at r = 2..4, White at r = -2..-4.
 async function open(page: Page) {
-  await page.goto('/');
+  await page.goto('/?bot=off');
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
   await expect(hud).toContainText('Black to move');

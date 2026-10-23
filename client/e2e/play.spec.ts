@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('click a marble, click a direction, the board changes and the turn passes', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/?bot=off');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('Black to move');
 
