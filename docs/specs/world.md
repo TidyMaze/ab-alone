@@ -49,21 +49,22 @@ Written as facts the player can piece together, not as a story told in order.
 
 ## 3. Boss lore slots
 
-Five slots, one per deck, named by role so the design spec (#18, no PR yet when this was written)
-can map its bosses onto them. If #18 or #15 names differ, the design names win and this table
-is updated.
+Five slots, one per deck. Names and mapping agreed with the design spec (#53, section 7, #15).
 
-| Slot | Deck | Role | Lore hook | Fits SPEC example |
+| Slot | Deck | Boss | Role | Lore hook |
 |---|---|---|---|---|
-| B1 Gatekeeper | 1 Mess | Teaching boss | Quartermaster who still counts rations. Plays safe, always by the book. Teaches tells. | none |
-| B2 Hull | 2 Cargo | Environment boss | The loadmaster fused to the ship's frame. The board itself crumbles as the hull he guards fails. | The Hull |
-| B3 Choir | 3-4 | Multi-army boss | The shift crew that sang the end of each watch. Three sub-armies take turns, like voices. | The Choir |
-| B4 Converter | 4 Chapel | Conversion boss | The ship's chaplain, who believed the shell was grace. Turns your marbles to shell if you let them be surrounded. | The Marker (renamed, see below) |
-| B5 Mind | 5 Bridge | Final boss | Tally itself, playing through a shell army it assembled from the crew's last orders. | none |
+| B1 Gatekeeper | 1 Mess | The Echo (#46) | Teaching boss | The last card-player of the mess, who answers every move with its mirror. Its tell shows in the move preview, so it teaches the tell habit. |
+| B2 Hull | 2 Cargo | The Hull (#43) | Environment boss | The loadmaster fused to the ship's frame. The board crumbles as the hull he guards fails. |
+| B3 Choir | 3 Furnace | The Choir (#44) | Multi-army boss | The shift crew that sang the end of each watch in the heat. Three sub-armies take turns, like voices. |
+| B4 Converter | 4 Chapel | The Chaplain (#45) | Conversion boss | The ship's chaplain, who believed the shell was grace. Three adjacent shells flip one of your marbles. |
+| B5 Mind | 5 Bridge | The Ballast Mind (#47) | Final boss | Tally itself, playing through a shell army built from the crew's last orders. Reuses Hull, Chaplain and Echo hooks. |
 
-Naming flag: SPEC.md uses **The Marker** for the conversion boss. "Marker" is too close to a
-central object of a well-known horror franchise. Proposed neutral replacement: **The Chaplain**.
-Raised on #19.
+Naming: SPEC.md's "The Marker" was too close to a well-known horror franchise. Renamed **The
+Chaplain** (decided in #19, applied in #45, #15 and #53). SPEC.md still needs the one-word
+change, done in the PR that touches it.
+
+Tells: every boss tell is a steady shape or glyph plus a sound twin, never flash, flicker or
+color alone (section 8).
 
 ## 4. How lore is delivered
 
@@ -103,6 +104,7 @@ Clear-board mode removes it.
 | Player | Smoked glass, cyan inner light that dims with each lost marble | Smooth, glowing core |
 | Shelled (enemy) | Matte black organic shell, ridged like a scarab, faint heat pulse | Ridged, no core |
 | Boss variants | Same shell with one accent (rust crown, candle wax, wire wrap) | Added silhouette |
+| Flipped (by The Chaplain) | Player glass slowly shelling over: black ridges creep from the base up, the cyan core dims but stays visible until the flip completes | Half glass, half ridged |
 | Battle royale slots | Shell tint per player plus an engraved glyph, never color alone | Unique glyph each |
 
 **Board look per deck.**
@@ -115,6 +117,11 @@ Clear-board mode removes it.
 | Chapel | Wood and wire, wax drips | Candle smoke | Candles, hanging cloth |
 | Bridge | Polished white-grey panel, thin cell lines | Almost none | Clean, wrong, too tidy |
 
+**Tell marks.** Boss tells use engraved glyphs and steady ring outlines on the cell or marble
+(pale bone-white, 3:1 against the surface), never a halo or glow alone: a black halo is lost on
+a matte black shell. The Chaplain's tell is a ring outline on the marbles about to flip plus a
+glyph on the three boss marbles in contact.
+
 Rules never change with the look: cell size, contrast and edge clarity stay constant
 (contrast 3:1 minimum between cell edge and surface).
 
@@ -122,12 +129,19 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 
 1. No flat overlay for game-critical info while a match runs.
 2. Turn owner: the board rim lights in the player's color.
-3. Ejected count: tally marks scratched on the board frame (6 slots per side).
-4. Selection and legal directions: ghost marbles and arrow glyphs on the board surface.
-5. Menus and settings: a terminal screen in the scene, not a floating panel.
-6. Tally speaks for system notices, short text on a panel for the same notice.
-7. Always provide a **flat HUD fallback** in accessibility options (section 8).
-8. Anything diegetic must also be readable at 720p and at 200% UI scale.
+3. Ejected count: tally marks scratched on the board frame, one slot per marble to lose. 1v1
+   and bosses: 6 slots per side. Battle royale (10 marbles, out at 0, #49) and the Choir fight
+   (10 marbles): the frame shows **marbles left** instead, as a row of notches per player that
+   go dark, so it scales to 6 players (a compact arc per seat on the arena rim).
+4. Boss phase notches and tell countdown: notches scratched on the arena frame, one per boss
+   marble left until the next phase (lit while remaining, extinguished as they go), a steady
+   glyph marks the next-phase threshold. The tell countdown is a count of engraved ticks next
+   to the telegraphed move. Flat fallback exists but is never the only copy of this info.
+5. Selection and legal directions: ghost marbles and arrow glyphs on the board surface.
+6. Menus and settings: a terminal screen in the scene, not a floating panel.
+7. Tally speaks for system notices, short text on a panel for the same notice.
+8. Always provide a **flat HUD fallback** in accessibility options (section 8).
+9. Anything diegetic must also be readable at 720p and at 200% UI scale.
 
 ## 7. Audio direction
 
@@ -149,9 +163,13 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 - **Colorblind.** Three palettes (protan, deutan, tritan) plus a high-contrast one. Factions
   differ by silhouette and glyph, never by color alone.
 - **Clear-board mode.** Disables fog, bloom, grain, vignette, flicker, props over the board.
+  It never removes a boss tell, a preview ghost or a phase notch.
+- **Boss tells survive every mode.** Each tell is a steady shape or glyph plus a sound twin, not
+  a flash, flicker or color alone. Photosensitivity safe mode, colorblind palettes, the horror
+  slider and clear-board mode never remove one (#42).
 - **Photosensitivity safe mode.** No flashes above 3 per second, no strobing, no full-screen
   white, lower flicker amplitude. Default on until the player picks otherwise.
-- **Horror intensity slider** (0 to 3). 0: no jump scares, no shell close-ups, calm audio.
+- **Horror intensity slider** (0 to 3), per player and local, never changes gameplay information. 0: no jump scares, no shell close-ups, calm audio.
   3: full dread. Applies to visuals, audio stingers and lore text tone.
 - **Reduced motion.** Cuts camera sway and ejection tumble.
 - **UI scale** 100% to 200%, subtitles for all audio logs, remappable inputs.
@@ -183,11 +201,16 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 
 ## 11. Open questions
 
-1. Rename The Marker to The Chaplain, or another name? (SPEC.md and #15 are affected.)
-2. Final slot names: wait for #18/#15, or lock the slot table here first?
-3. Is voice acting in scope, or text and ambient audio only (cheaper, scarier)?
-4. Is the player's silent protagonist OK for multiplayer, or do online players need a cosmetic
-   identity (glyph, token)?
-5. Does the horror intensity slider affect online matches, and is it per player?
-6. Audio assets: original recordings, licensed, or procedurally generated (budget)?
-7. Photosensitivity safe mode on by default: confirm.
+Resolved by the design review on #51 (answers recorded here):
+
+- The Marker is renamed The Chaplain, slot table locked with the design mapping (section 3).
+- Voice acting: out, text and ambient audio only.
+- Online players get a cosmetic glyph (6 distinct ones for battle royale), no chat.
+- The horror slider is per player and local, never changes gameplay information.
+- Lore tie-in: in boss fights a draw counts as a loss for you, Tally "keeps the books".
+
+Still open:
+
+1. Audio assets: original recordings, licensed, or procedurally generated (budget)?
+2. Photosensitivity safe mode on by default: confirm.
+3. Tech review (#54) asks for an audio and asset pipeline section: who owns it?
