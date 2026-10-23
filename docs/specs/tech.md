@@ -87,7 +87,7 @@ zero wasm dependencies.
 - Bridge contract: JSON or a compact binary encoding, versioned, with generated TS types
   (`tsify` or `ts-rs`). Moves in, `{state, effects}` out. No object handles cross the boundary
   except one opaque engine instance per worker.
-- Size budget: core + AI under 500 KB gzipped, `wasm-opt -O3`, reported in CI.
+- Size budget: core + AI under 500 KB gzipped, `wasm-opt -O3`, reported in CI. Other assets: see the budget in section 9.
 - Threads in wasm (SharedArrayBuffer) are **not** used at first: needs COOP/COEP headers, which
   GitHub Pages does not let us set. See section 9.
 
@@ -114,6 +114,72 @@ Scene notes: instanced meshes for marbles (61, up to 217), baked lighting plus a
 lights, fog and flicker as the Dead Space mood, post-processing chain with a single "clear
 board" toggle that disables it (accessibility, SPEC section 5). Animations are driven by the
 engine's `Effects` list, as timelines, so replays are free.
+
+### 5.1 Post chain and quality tiers
+
+Post chain, in order, built with three's node/TSL post-processing so one definition compiles to
+both backends (to confirm per effect in a spike, see #31): scene fog (height and edge weighted:
+denser toward the board rim, never over the playable cells, a mask pass keeps cells clear),
+bloom, film grain, vignette, light flicker (driven by a seeded VFX clock, not the engine). Each
+deck has a lighting preset (data, not code).
+
+| Tier | Backend | Contents |
+|---|---|---|
+| Full | WebGPU | Whole chain, optional compute extras (particles) |
+| Reduced | WebGL2 fallback, or user choice | Fog, bloom at half resolution, no grain, no compute, fewer dynamic lights |
+| Clear board | any | No fog, no post chain, flat lighting (SPEC section 5 toggle, also the accessibility mode) |
+
+Tier is picked at start from a one-frame benchmark and `prefers-reduced-motion`, always
+overridable in settings. Degradation is a table, not an accident: a feature not in the tier is
+off, never half-broken.
+
+**Photosensitivity.** A flash limiter sits in the post chain and the flicker driver: luminance
+changes are clamped to at most 3 flashes per second and a bounded area (WCAG 2.3.1). The
+renderer reads `prefers-reduced-motion` as the default (reduced tier, no screen shake, no
+flicker, shorter ejection animation) and the ejection VFX (#24) must ship a reduced variant. A
+safe-mode switch in the first-screen options forces both.
+
+### 5.2 Effects timeline: boundaries
+
+`Effects` (section 3) drives all animation. Rules: VFX, audio and camera **never feed back into
+the engine**; visual randomness (particles, flicker, shake) uses a separate seeded RNG owned by
+the client, never the engine RNG, so replays and the P2P state hash are unaffected; effect
+timelines are data with a duration and can be fast-forwarded (skip, replay, reconnect catch-up
+applies the log without playing every animation).
+
+### 5.3 Diegetic HUD text and accessibility
+
+In-scene screens need readable text at 720p and at 200% UI scale. Options: render-to-texture
+from a hidden DOM, CSS3D, SDF/MSDF text. **Recommendation:** MSDF text in-scene (crisp at any
+scale, no DOM texture cost, works in both backends), with a **hidden accessible DOM mirror**
+(turn, score, selected group, legal moves, last event) updated from engine state and marked
+`aria-live`, which also feeds the flat HUD fallback (clear-board tier). Keyboard play (design
+spec #38) uses the DOM mirror for focus. Contrast and size are checked on the flat HUD first.
+
+### 5.4 Audio
+
+Web Audio API directly (no Howler or Tone at first: a bus graph and a few players are small, and
+a lib adds weight and hides the autoplay rules). Bus graph: `music`, `ambience`, `fx`, `voice`
+into a master with a limiter, one gain slider per bus (world.md section 7 sliders) and a duck
+node that lowers music and ambience under audio logs. Adaptive music: 2 to 3 stem layers
+crossfaded by a tension value derived from engine state (marbles left, boss phase, breach
+countdown). Hub positional sound: `PannerNode` (HRTF) per source. Cue selection is a pure map
+from `Effects` (push size, ejection, faction) to a cue id plus variant. Procedural audio (synth
+drones, filtered noise for decompression) is welcome for ambience since it costs no download.
+**Autoplay:** browsers block audio before a user gesture, so the first screen is a "start"
+click, which also hosts the accessibility options. Audio is a presentation layer only (5.2).
+Tracked in #60.
+
+### 5.5 Performance budget
+
+Targets: 60 fps at 1080p on an integrated GPU in the full tier, 30 fps floor in the reduced
+tier on a WebGL2-only low-end laptop (this answers the "WebGL2-only" question: playable, reduced
+tier). Per frame: under 8 ms CPU main thread (engine and AI are in workers), under 10 ms GPU,
+under 150 draw calls (instancing), memory under 500 MB. Measured by a Playwright perf test with
+a fixed camera (reported, soft gate until Phase 1). Browsers throttle timers in background tabs:
+P2P heartbeats, round deadlines and audio scheduling must not rely on main-thread `setTimeout`.
+Run net timers in a worker and use `visibilitychange` to tell peers "away" instead of looking
+dropped. WebGPU-only compute extras stay off the fog and bloom path.
 
 ## 6. Peer-to-peer multiplayer (decision #36; comments on #13)
 
@@ -256,6 +322,14 @@ No database server. Everything is client-side.
   wasm threads (not needed). Soft limits of about 1 GB site size and 100 GB per month bandwidth
   (from memory, **unverified**, check GitHub docs): keep wasm and assets small, use compressed
   textures and audio. Cloudflare Pages is an escape hatch if a header ever matters.
+- **Asset pipeline (#61).** Models: glTF with meshopt compression. Textures: KTX2/Basis
+  (GPU-compressed, small download). Audio: Opus in WebM or Ogg, with an AAC fallback only if
+  Safari needs it. Lazy loading per deck, the hub loads a first deck only. Budget (starting
+  values, soft until Phase 1): initial load under 5 MB gzipped (wasm + JS + first scene), each
+  deck under 15 MB, whole site under 250 MB, well below the Pages soft limits. CI reports and
+  fails on regressions. Source files (blend, wav) stay out of the Pages artifact. Who makes
+  assets is a design question (world spec open questions), and procedural or generated assets
+  are preferred for the first decks.
 - Versioning: the wire protocol and the engine carry a version number in `Hello`. Peers on
   different engine versions refuse to play (a desync otherwise). Old tabs are told to reload.
 - Only third-party runtime dependencies: public STUN, signaling relays. Both degrade to the
@@ -313,6 +387,11 @@ table. No third-party SDK, no data leaves the browser unless the player exports 
 | Learned eval / AlphaZero style net | Later | Only if hand-tuned eval plateaus; ship as plain Rust MLP, no ML runtime |
 | Gaussian splats | Reject | Static captured scenes, we have a stylised synthetic ship. Heavy for no gain |
 | WebXR | Reject | Not now. Cheap to revisit later since three.js supports it, but input and comfort design is a whole project |
+| Web Audio API (direct) | Adopt | Bus graph, adaptive layers and HRTF panning need no lib. Howler/Tone: Later if the graph gets complex |
+| Spatial audio (PannerNode HRTF) | Adopt | Hub rooms need positional sound, built into Web Audio |
+| Procedural audio | Adopt | Ambience and decompression synthesized, zero download |
+| MSDF text for in-scene HUD | Adopt | Readable at any scale, plus a DOM mirror for screen readers |
+| KTX2 + meshopt | Adopt | Small downloads under the Pages bandwidth budget |
 | Web Workers for AI | Adopt | Keeps the render loop smooth, no headers needed |
 | WASM threads (SharedArrayBuffer) | Reject | Needs COOP/COEP, not possible on GitHub Pages, not needed at our search depth |
 | IndexedDB + JSON export | Adopt | Only persistence available client-side, move log is tiny |
@@ -334,6 +413,8 @@ Issues #33, #34, #35, #39 were rewritten for P2P after #36.
 | #34 Reconnection, host migration, spectators, replay | client |
 | #35 Battle royale: commit-reveal simultaneous rounds | engine |
 | #37 CI: GitHub Actions, Pages deploy | engine |
+| #60 Audio engine: Web Audio bus graph, adaptive layers, spatial hub sound | client |
+| #61 Asset pipeline: glTF, KTX2, Opus, lazy loading, size budget | client |
 | #39 Local persistence (IndexedDB) and client observability | client |
 
 Suggested order: #23, #25, #37 (Phase 0), then #27, #31 (Phase 1), then #33, #34, #39 (Phase 2),
@@ -350,5 +431,5 @@ Suggested order: #23, #25, #37 (Phase 0), then #27, #31 (Phase 1), then #33, #34
 4. Royale order timer and the exact conflict rules (#13, #49): game design input needed.
 5. Time controls are advisory in v1. Is that enough for 1v1 (#41)?
 6. Draw / anti-stalling rule (#12, #40) affects `outcome`, the AI and the signed log.
-7. Minimum browsers: do we promise WebGL2-only machines a playable game? WebRTC needs none of
-   the above, so this is renderer only.
+7. Perf targets in 5.5 are starting values: who owns the low-end reference machine?
+8. Who produces the art and audio assets (world spec open question)? Drives the budget in 9.
