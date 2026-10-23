@@ -39,18 +39,29 @@ export function p2pTransport(room: string): Transport {
 interface Hook {
   __netOut?: (rec: MoveRecord) => void;
   __netIn?: (rec: MoveRecord) => void;
+  __netOpen?: () => void;
 }
 
-/** Test transport: the page hands records to `window.__netOut` and receives them on `window.__netIn`. */
+/** Test transport: the page hands records to `window.__netOut` and receives them on `window.__netIn`. It stays `connecting` until the test calls `window.__netOpen()`. */
 export function hookTransport(): Transport {
   const w = window as unknown as Hook;
+  let state: ConnectionState = 'connecting';
+  let onState: (s: ConnectionState) => void = () => {};
+  w.__netOpen = () => {
+    state = 'open';
+    onState(state);
+  };
   return {
-    state: 'open',
+    get state() {
+      return state;
+    },
     send: (rec) => w.__netOut?.(rec),
     onRecord: (cb) => {
       w.__netIn = cb;
     },
-    onState: () => {},
+    onState: (cb) => {
+      onState = cb;
+    },
     close: () => {},
   };
 }

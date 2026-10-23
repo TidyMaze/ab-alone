@@ -275,6 +275,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 function click(q: number, r: number): void {
   if (thinking) return;
   if (online && engine.to_move() !== onlineSide) return; // not our turn
+  if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
     selected = toggleSelection(selected, [q, r]);

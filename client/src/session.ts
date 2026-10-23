@@ -33,6 +33,11 @@ export class OnlineSession {
     o.transport.onState((s) => o.onState?.(s));
   }
 
+  /** Our turn and the opponent is connected: a move now would reach them. */
+  canPlay(): boolean {
+    return this.o.transport.state === 'open' && this.o.judge.to_move() === this.o.side;
+  }
+
   /** The caller already applied `move` to its own engine. */
   async send(move: number[]): Promise<void> {
     this.o.transport.send(await this.log.sign(this.o.keys, move));
