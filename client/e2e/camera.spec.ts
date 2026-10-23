@@ -1,0 +1,55 @@
+import { expect, test, type Page } from '@playwright/test';
+
+const cellToScreen = (page: Page, q: number, r: number) =>
+  page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }, [q, r]);
+
+const click = async (page: Page, q: number, r: number) => {
+  const p = await cellToScreen(page, q, r);
+  await page.mouse.click(p.x, p.y);
+};
+
+// The distance of a cell from the screen centre grows when the camera comes closer.
+const fromCentre = async (page: Page, q: number, r: number) => {
+  const p = await cellToScreen(page, q, r);
+  const size = page.viewportSize()!;
+  return Math.hypot(p.x - size.width / 2, p.y - size.height / 2);
+};
+
+test('rotate and zoom, play a move at that angle, reset the view and play again', async ({ page }, testInfo) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await expect(page.locator('#hud')).toContainText('Black to move');
+  const start = await cellToScreen(page, 4, 0);
+  const startSpan = await fromCentre(page, 4, 0);
+
+  // Drag to rotate: the cell moves on screen.
+  await page.mouse.move(300, 200);
+  await page.mouse.down();
+  await page.mouse.move(360, 200, { steps: 5 });
+  await page.mouse.move(400, 230, { steps: 5 });
+  await page.mouse.up();
+  const rotated = await cellToScreen(page, 4, 0);
+  expect(Math.hypot(rotated.x - start.x, rotated.y - start.y)).toBeGreaterThan(50);
+  await expect(page.locator('#hud')).toContainText('Black to move'); // a drag never selects or plays
+
+  // Wheel up to zoom in.
+  await page.mouse.wheel(0, -300);
+  await expect.poll(() => fromCentre(page, 4, 0)).toBeGreaterThan(startSpan);
+
+  await page.screenshot({ path: testInfo.outputPath('rotated-view.jpg'), type: 'jpeg', quality: 70 });
+
+  // Select a marble and play a move in the rotated view.
+  await click(page, 0, 2);
+  await click(page, 0, 1);
+  await expect(page.locator('#hud')).toContainText('White to move');
+
+  // Reset the view: the default camera is back, so is the cell position.
+  await page.getByRole('button', { name: 'Reset view' }).click();
+  const reset = await cellToScreen(page, 4, 0);
+  expect(reset.x).toBeCloseTo(start.x, 1);
+  expect(reset.y).toBeCloseTo(start.y, 1);
+
+  await click(page, 0, -2); // a White marble
+  await click(page, 0, -1);
+  await expect(page.locator('#hud')).toContainText('Black to move');
+});
