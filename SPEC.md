@@ -37,12 +37,12 @@ Every game mode below is built on this rules engine. Modes add rules, they never
 | Rules engine | Rust crate `abalone-core`, `no_std` friendly | One source of truth, fast, testable |
 | Client logic | `abalone-core` compiled to WASM (`wasm-bindgen`, `wasm-pack`) | Same rules in browser and server |
 | Rendering | Three.js (TypeScript, Vite) | Asked for. WebGPU renderer when stable enough |
-| Server | Rust (`axum` + WebSocket), authoritative, same crate | No rules drift, anti-cheat for free |
-| AI / bosses | Rust, alpha-beta first, MCTS later, in a Web Worker via WASM | Runs offline and server-side |
-| Hosting | Static client on GitHub Pages, server on a small VM / Fly.io | Cheap |
+| Multiplayer | Peer to peer, WebRTC data channels, serverless signaling (Trystero / manual link), every peer runs `abalone-core` WASM and validates every move, signed hash-chained move log | No server to host or pay for, cheating is detectable ([#36](https://github.com/TidyMaze/ab-alone/issues/36), [tech spec](docs/specs/tech.md)) |
+| AI / bosses | Rust, alpha-beta first, MCTS later, in a Web Worker via WASM | Runs offline, in the browser |
+| Hosting | Everything static on GitHub Pages, no game server, no VM, no paid host | Free, decided in [#36](https://github.com/TidyMaze/ab-alone/issues/36) |
 | CI | GitHub Actions: `cargo test`, `clippy`, `wasm-pack build`, client build | Green main |
 
-Rule: the client never decides the outcome of an online move. It predicts, the server validates.
+Rule: no peer is trusted. Every peer re-validates every move with the same deterministic engine; a mismatch pauses the game.
 
 ## 4. Game modes, by phase
 
