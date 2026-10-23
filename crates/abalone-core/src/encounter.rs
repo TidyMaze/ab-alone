@@ -3,6 +3,8 @@
 //! adds phases, a tell and a rule hook on top. Everything is a pure function of the game and the
 //! seed, so the same seed and the same player moves give the same boss moves.
 
+pub mod echo;
+
 use crate::board::{Board, Cell, RADIUS};
 use crate::game::{Game, GameError, Outcome};
 use crate::moves::{Move, Player};
