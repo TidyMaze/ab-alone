@@ -20,7 +20,6 @@ export interface Keys {
 export const GENESIS = '0'.repeat(64);
 
 const ED = { name: 'Ed25519' } as const;
-const KEY_NAME = 'ab-alone.keys';
 
 const b64 = (bytes: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint8Array(bytes)))
   .replace(/\+/g, '-')
@@ -39,6 +38,7 @@ async function keysFrom(priv: CryptoKey, publicKey: CryptoKey): Promise<Keys> {
   return { priv, pub: b64(await crypto.subtle.exportKey('raw', publicKey)) };
 }
 
+/** A fresh key pair per game and per tab: two tabs of one browser must never share an identity. */
 export async function generateKeys(): Promise<Keys> {
   const pair = (await crypto.subtle.generateKey(ED, true, ['sign', 'verify'])) as CryptoKeyPair;
   return keysFrom(pair.privateKey, pair.publicKey);
@@ -84,24 +84,4 @@ export function parseRecord(x: unknown): MoveRecord | null {
     typeof r.sig === 'string';
   if (!ok) return null;
   return { game: r.game as string, seq: r.seq as number, prev: r.prev as string, move: r.move as number[], pub: r.pub as string, sig: r.sig as string };
-}
-
-export interface KeyStore {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-}
-
-/** The session key pair lives in the browser (localStorage), made once on first use. */
-export async function loadKeys(store: KeyStore | null): Promise<Keys> {
-  try {
-    const saved = JSON.parse(store!.getItem(KEY_NAME)!) as { priv: JsonWebKey; pub: string };
-    const priv = await crypto.subtle.importKey('jwk', saved.priv, ED, true, ['sign']);
-    return { priv, pub: saved.pub };
-  } catch {
-    const pair = (await crypto.subtle.generateKey(ED, true, ['sign', 'verify'])) as CryptoKeyPair;
-    const keys = await keysFrom(pair.privateKey, pair.publicKey);
-    const priv = await crypto.subtle.exportKey('jwk', pair.privateKey);
-    store?.setItem(KEY_NAME, JSON.stringify({ priv, pub: keys.pub }));
-    return keys;
-  }
 }

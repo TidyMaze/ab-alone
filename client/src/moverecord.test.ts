@@ -3,7 +3,6 @@ import {
   GENESIS,
   generateKeys,
   hashRecord,
-  loadKeys,
   parseRecord,
   signMove,
   verifyRecord,
@@ -83,37 +82,5 @@ describe('parseRecord', () => {
 
   it('drops unknown fields', () => {
     expect(parseRecord({ ...good, extra: 1 })).toEqual(good);
-  });
-});
-
-describe('loadKeys', () => {
-  const memory = () => {
-    const data = new Map<string, string>();
-    return {
-      data,
-      getItem: (k: string) => data.get(k) ?? null,
-      setItem: (k: string, v: string) => void data.set(k, v),
-    };
-  };
-
-  it('creates keys once, then reloads the same ones', async () => {
-    const store = memory();
-    const first = await loadKeys(store);
-    const second = await loadKeys(store);
-    expect(second.pub).toBe(first.pub);
-    const rec = await signMove(second, { game: 'g', seq: 0, prev: GENESIS, move: MOVE });
-    expect(await verifyRecord(rec)).toBe(true);
-  });
-
-  it('makes fresh keys when the stored value is garbage', async () => {
-    const store = memory();
-    store.setItem('ab-alone.keys', 'not json');
-    const keys = await loadKeys(store);
-    expect(keys.pub).toMatch(/^[\w-]+$/);
-    expect(JSON.parse(store.getItem('ab-alone.keys')!).pub).toBe(keys.pub);
-  });
-
-  it('works with no storage at all', async () => {
-    expect((await loadKeys(null)).pub).toMatch(/^[\w-]+$/);
   });
 });

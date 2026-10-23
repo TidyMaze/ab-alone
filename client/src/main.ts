@@ -16,7 +16,7 @@ import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
-import { loadKeys } from './moverecord';
+import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { hudHtml } from './hud';
 import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
@@ -352,7 +352,7 @@ async function goOnline(room: string, side: number): Promise<void> {
   online = new OnlineSession({
     game: room,
     side,
-    keys: await loadKeys(store),
+    keys: await generateKeys(),
     transport: net,
     judge: {
       to_move: () => engine.to_move(),
