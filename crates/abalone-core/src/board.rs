@@ -142,6 +142,56 @@ mod tests {
     }
 
     #[test]
+    fn standard_layout_matches_spec() {
+        // docs/specs/rules.md section 2.1: Black at the bottom (r > 0), White at the top.
+        let board = Board::standard();
+        let mut black: Vec<(i32, i32)> = all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::Black))
+            .collect();
+        let mut white: Vec<(i32, i32)> = all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
+            .collect();
+        black.sort();
+        white.sort();
+        let mut expected_black = vec![
+            (-4, 4),
+            (-3, 4),
+            (-2, 4),
+            (-1, 4),
+            (0, 4),
+            (-4, 3),
+            (-3, 3),
+            (-2, 3),
+            (-1, 3),
+            (0, 3),
+            (1, 3),
+            (-2, 2),
+            (-1, 2),
+            (0, 2),
+        ];
+        let mut expected_white = vec![
+            (0, -4),
+            (1, -4),
+            (2, -4),
+            (3, -4),
+            (4, -4),
+            (-1, -3),
+            (0, -3),
+            (1, -3),
+            (2, -3),
+            (3, -3),
+            (4, -3),
+            (0, -2),
+            (1, -2),
+            (2, -2),
+        ];
+        expected_black.sort();
+        expected_white.sort();
+        assert_eq!(black, expected_black);
+        assert_eq!(white, expected_white);
+    }
+
+    #[test]
     fn standard_is_point_symmetric() {
         let board = Board::standard();
         for (q, r) in all_coords() {
