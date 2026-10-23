@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["crates/abalone-core", "crates/abalone-cli"]
