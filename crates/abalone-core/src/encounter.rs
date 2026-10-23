@@ -4,6 +4,7 @@
 //! seed, so the same seed and the same player moves give the same boss moves.
 
 pub mod echo;
+pub mod hull;
 
 use crate::board::{Board, Cell, RADIUS};
 use crate::game::{Game, GameError, Outcome};
@@ -345,5 +346,55 @@ mod tests {
             assert!(legal.contains(&found.mv));
             assert_eq!(enc.boss_search(), Some(found), "same position, same move");
         }
+    }
+
+    fn clear_black(board: &Board, _id: u8, _seed: u64) -> Board {
+        let mut out = board.clone();
+        let (q, r) = cells_of(board, Cell::Black)[0];
+        out.set(q, r, Cell::Empty);
+        out
+    }
+
+    fn flip_white(board: &Board, _id: u8, _seed: u64) -> Board {
+        let mut out = board.clone();
+        let (q, r) = cells_of(board, Cell::White)[0];
+        out.set(q, r, Cell::Black);
+        out
+    }
+
+    fn boss_with(hook: HookFn) -> BossDef {
+        BossDef {
+            hook,
+            ..boss(every_ply)
+        }
+    }
+
+    #[test]
+    fn hook_removing_a_marble_credits_the_opponent() {
+        let mut enc = Encounter::new(Game::new(), boss_with(clear_white), 0);
+        step(&mut enc);
+        assert_eq!(enc.game().ejected(Player::Black), 1);
+        assert_eq!(enc.game().ejected(Player::White), 0);
+        let mut enc = Encounter::new(Game::new(), boss_with(clear_black), 0);
+        step(&mut enc);
+        assert_eq!(enc.game().ejected(Player::White), 1);
+        assert_eq!(enc.game().ejected(Player::Black), 0);
+    }
+
+    #[test]
+    fn hook_flip_is_not_an_ejection() {
+        let mut enc = Encounter::new(Game::new(), boss_with(flip_white), 0);
+        step(&mut enc);
+        assert_eq!(white_count(&enc), 13);
+        assert_eq!(enc.game().ejected(Player::Black), 0);
+        assert_eq!(enc.game().ejected(Player::White), 0);
+    }
+
+    #[test]
+    fn hook_removal_can_win_the_game() {
+        let game = position(&[(0, 0)], &[(4, -4), (3, -4)], Player::Black, [5, 0]);
+        let mut enc = Encounter::new(game, boss_with(clear_white), 0);
+        enc.play(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(enc.result(), Some(PveResult::Won));
     }
 }

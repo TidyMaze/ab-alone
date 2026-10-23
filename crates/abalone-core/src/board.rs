@@ -198,4 +198,31 @@ mod tests {
             assert_eq!(board.get(q, r), board.get(-q, -r).map(swap_colour));
         }
     }
+
+    #[test]
+    fn void_removes_a_cell_and_its_marble() {
+        let mut board = Board::standard();
+        board.void(0, 4);
+        assert_eq!(board.get(0, 4), None);
+        assert_eq!(count(&board, Cell::Black), 13);
+        assert_eq!(
+            all_coords()
+                .filter(|&(q, r)| board.get(q, r).is_some())
+                .count(),
+            60
+        );
+        board.set(0, 4, Cell::Black);
+        assert_eq!(board.get(0, 4), None, "a vanished cell stays off the board");
+    }
+
+    #[test]
+    fn cracks_start_empty_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert!(board.cracks().is_empty());
+        board.set_cracks(vec![((4, 0), 2)]);
+        assert_eq!(board.cracks(), &[((4, 0), 2)]);
+        assert_ne!(board, Board::empty());
+        board.set_cracks(vec![]);
+        assert_eq!(board, Board::empty());
+    }
 }
