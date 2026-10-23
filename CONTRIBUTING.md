@@ -92,7 +92,7 @@ flowchart LR
 - [ ] Its PR is merged into `main`
 - [ ] Every item of its done checklist is ticked
 - [ ] CI is green (once CI exists)
-- [ ] Code changes: TDD commit order visible in the PR, 100 % line and branch coverage, e2e test
+- [ ] Code changes: TDD commit order visible in the PR, 100 % line and region coverage, e2e test
       added or updated if a player flow changed (section 11)
 - [ ] No secret in the diff (section 12)
 - [ ] Specs or docs touched by the change are updated in the same PR
@@ -239,9 +239,11 @@ the test commit alone to see it fail. The PR is squash-merged, the order lives i
 | Integration | Engine through its WASM bridge, two peers exchanging moves in-process | Per crate / package |
 | End-to-end | Real browser: play a full local game, play an online game between two browser tabs, at least one boss encounter once it exists | E2E suite |
 
-**Coverage gate:** 100 % of lines and branches, measured in CI (`cargo llvm-cov` for Rust, the
-JS test runner's coverage for the client). Below 100 % fails the build. An exclusion needs a
-one-line comment saying why, and the reviewer must accept it (generated code, `unreachable!()`).
+**Coverage gate:** 100 % of lines and regions for Rust (not branches, owner decision), enforced by
+`scripts/verify.sh` locally and by the CI coverage job on main after merge. Below 100 % fails the
+build. Commands: section 13. The client JS coverage (`npm test`, vitest) is not in CI. An exclusion
+needs a one-line comment saying why, and the reviewer must accept it (generated code,
+`unreachable!()`).
 
 **Bugs:** a bug fix starts with a test that reproduces the bug and fails (section 6.7).
 
@@ -249,7 +251,7 @@ one-line comment saying why, and the reviewer must accept it (generated code, `u
 
 | When | What | Who |
 |---|---|---|
-| Every PR | Playwright e2e suite on Chromium in CI, required to merge | CI |
+| Every PR | Playwright e2e suite on Chromium, run locally with `npm run e2e` (section 13). CI runs it on main after merge, not on PRs | Author |
 | Every night | Playwright suite against the live GitHub Pages site (scheduled workflow). A failure opens a `bug` issue automatically | CI |
 | Before merging a player-facing PR | Open the PR build in a real Chrome, play the changed flow, note the result in the review | Reviewer (an agent can do it with the Playwright or Chrome tools) |
 | Once per milestone | Full manual playthrough in Chrome of everything shipped so far, findings filed as `bug` issues | An owner |
@@ -270,3 +272,48 @@ forks keep it even after a revert).
   is not enough), then tell an owner in a `Decision` issue labelled `security` without pasting the
   secret.
 - Agents: never print a secret in an issue, PR, log or test fixture.
+
+## 13. Local setup and checks
+
+**Before every push:** run `scripts/verify.sh` from the repo root. It runs the CI checks locally:
+
+- `cargo fmt --all --check`
+- `cargo clippy --all-targets --locked -- -D warnings`
+- `cargo llvm-cov --workspace --locked --fail-under-lines 100 --fail-under-regions 100`
+
+**What CI runs** (`.github/workflows/ci.yml`):
+
+- On every PR: fmt, clippy and `cargo test --all --locked`.
+- On push to main (after merge): the same Rust job, the coverage gate and the e2e job.
+
+**WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
+After pulling main, rebuild it from the repo root:
+
+```
+wasm-pack build crates/abalone-wasm --target web
+```
+
+`npm run dev` runs the same build first (`npm run wasm`, in `client/`). Run it yourself when you
+start vite directly, or when the pkg looks stale.
+
+**Homebrew Rust without rustup:** set these before the WASM build or the checks. `wasm-ld` must be
+on PATH (Homebrew llvm is keg-only, so add `$(brew --prefix llvm)/bin` to PATH).
+
+```
+export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_LINKER=wasm-ld
+export LLVM_COV="$(brew --prefix llvm)/bin/llvm-cov"
+export LLVM_PROFDATA="$(brew --prefix llvm)/bin/llvm-profdata"
+```
+
+**e2e:** from `client/`, run `npm run e2e` (Chromium project). Playwright starts the dev server
+itself.
+
+- The port comes from `E2E_PORT` (default 5173). Pick a random free port and never use 5173:
+
+  ```
+  E2E_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])') npm run e2e
+  ```
+
+- An existing server on that port is reused. Kill only the server you started: save its PID
+  (`echo $! > pid`) and `kill` that PID. Never `pkill -f`.
+- Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
