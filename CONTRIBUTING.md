@@ -34,14 +34,14 @@ issue to change this file first.
 | **Project** ([AB-ALONE](https://github.com/users/TidyMaze/projects/1)) | Status, priority and order of every issue: **the backlog** | Content (it stays in the issue) |
 | **Pull requests** | The change for one Task, and its review | New scope, decisions |
 
-## 3. Work item types (`Kind` field)
+## 3. Work item types (label)
 
-| Kind | What it is | Size | Parent | Closed when |
+| Type label | What it is | Size | Parent | Closed when |
 |---|---|---|---|---|
-| **Epic** | One phase of SPEC.md (Phase 0 to 5, one per milestone), plus the `Project setup` epic for specs, workflow and tooling | Weeks | none | All its children are done |
-| **Feature** | Something a player can see or do | Several Tasks | Epic | Owner verified every acceptance criterion |
-| **Task** | One PR worth of work | 1 PR, ideally under a day | Feature or Epic | Its PR is merged |
-| **Decision** | A choice between options | n/a | optional | An owner writes the chosen option and closes it |
+| `epic` | One phase of SPEC.md (Phase 0 to 5, one per milestone), plus the `Project setup` epic for specs, workflow and tooling | Weeks | none | All its children are done |
+| `feature` | Something a player can see or do | Several Tasks | Epic | Owner verified every acceptance criterion |
+| `task` | One PR worth of work | 1 PR, ideally under a day | Feature or Epic | Its PR is merged |
+| `decision` | A choice between options | n/a | optional | An owner writes the chosen option and closes it |
 
 Parent links use GitHub **sub-issues** (issue page, "Create sub-issue" or "Add existing issue").
 
@@ -131,7 +131,15 @@ For each `Inbox` item, an owner does exactly one of:
 4. The author answers every comment in its thread, pushes fixes to the same branch, and
    re-requests review.
 5. A reviewer comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
-6. The reviewer **approves and squash-merges**. GitHub closes the Task, the project sets `Done`.
+6. **Merge gate.** A PR is merged into `main` only when all of these hold:
+   - [ ] Tested: CI green (once CI exists), and the reviewer ran or read the tests
+   - [ ] Reviewed: approved by the other owner
+   - [ ] Fixed: every review comment answered and every conversation resolved (enforced by branch
+     protection)
+   - [ ] Up to date: rebased on `main`, no conflict
+7. As soon as the gate passes, the reviewer **squash-merges into `main`**. An approved PR is never
+   left open: the Task is not `Done` until it is merged. GitHub closes the Task, the project sets
+   `Done`, the branch is deleted.
 
 ### 6.5 Decision
 
@@ -153,16 +161,17 @@ For each `Inbox` item, an owner does exactly one of:
 | Field | Values | Set by |
 |---|---|---|
 | `Status` | `Inbox`, `Ready`, `In Progress`, `In Review`, `Done` | Section 4 |
-| `Kind` | `Epic`, `Feature`, `Task`, `Decision` | Issue creator |
 | `Priority` | `P0` to `P3` | Owners only |
 | `Votes` | Number of 👍 in the last vote | Owners only |
 | Milestone | `Phase 0` to `Phase 5` | Issue creator, checked at triage |
+
+The project holds **issues only**: no draft items, no project-only tasks. Every issue is added to the project when created, so there is one item per piece of work and no duplicate to keep in sync.
 
 ## 8. Labels
 
 | Label | Meaning |
 |---|---|
-| `epic`, `feature`, `task`, `decision` | Same as `Kind` (labels show in issue lists, `Kind` in the project) |
+| `epic`, `feature`, `task`, `decision` | Item type (section 3), set by the issue form. Exactly one per issue. In the project, filter with `label:task` etc. |
 | `engine`, `client`, `network`, `design`, `spec` | Area |
 | `blocked` | Waiting on someone, see the last comment |
 | `top10` | Won the latest priority vote |
