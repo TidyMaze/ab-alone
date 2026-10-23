@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn move_of_the_side_not_to_move_is_refused() {
         let mut game = Game::new();
-        let white_marble = mv(&[(-4, 4)], E);
+        let white_marble = mv(&[(4, -4)], E);
         assert_eq!(
             game.play(&white_marble),
             Err(GameError::Move(MoveError::NotOwnMarble))

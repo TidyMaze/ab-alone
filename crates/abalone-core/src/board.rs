@@ -13,23 +13,23 @@ pub enum Cell {
     White,
 }
 
-/// Standard start, Black side: row r=-4 (5 cells), row r=-3 (6), the three centre cells of r=-2.
+/// Standard start, Black side (bottom, r > 0): row r=4 (5 cells), row r=3 (6), the three centre cells of r=2.
 /// White is the point reflection `(q, r) -> (-q, -r)`.
 const STANDARD_BLACK: [(i32, i32); 14] = [
-    (0, -4),
-    (1, -4),
-    (2, -4),
-    (3, -4),
-    (4, -4),
-    (-1, -3),
-    (0, -3),
-    (1, -3),
-    (2, -3),
-    (3, -3),
-    (4, -3),
-    (0, -2),
-    (1, -2),
-    (2, -2),
+    (-4, 4),
+    (-3, 4),
+    (-2, 4),
+    (-1, 4),
+    (0, 4),
+    (-4, 3),
+    (-3, 3),
+    (-2, 3),
+    (-1, 3),
+    (0, 3),
+    (1, 3),
+    (-2, 2),
+    (-1, 2),
+    (0, 2),
 ];
 
 /// Hexagonal Abalone board.
@@ -139,6 +139,56 @@ mod tests {
         let board = Board::standard();
         assert_eq!(count(&board, Cell::Black), 14);
         assert_eq!(count(&board, Cell::White), 14);
+    }
+
+    #[test]
+    fn standard_layout_matches_spec() {
+        // docs/specs/rules.md section 2.1: Black at the bottom (r > 0), White at the top.
+        let board = Board::standard();
+        let mut black: Vec<(i32, i32)> = all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::Black))
+            .collect();
+        let mut white: Vec<(i32, i32)> = all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
+            .collect();
+        black.sort();
+        white.sort();
+        let mut expected_black = vec![
+            (-4, 4),
+            (-3, 4),
+            (-2, 4),
+            (-1, 4),
+            (0, 4),
+            (-4, 3),
+            (-3, 3),
+            (-2, 3),
+            (-1, 3),
+            (0, 3),
+            (1, 3),
+            (-2, 2),
+            (-1, 2),
+            (0, 2),
+        ];
+        let mut expected_white = vec![
+            (0, -4),
+            (1, -4),
+            (2, -4),
+            (3, -4),
+            (4, -4),
+            (-1, -3),
+            (0, -3),
+            (1, -3),
+            (2, -3),
+            (3, -3),
+            (4, -3),
+            (0, -2),
+            (1, -2),
+            (2, -2),
+        ];
+        expected_black.sort();
+        expected_white.sort();
+        assert_eq!(black, expected_black);
+        assert_eq!(white, expected_white);
     }
 
     #[test]
