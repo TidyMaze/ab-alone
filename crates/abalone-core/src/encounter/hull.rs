@@ -18,7 +18,7 @@ pub const HULL_NODE_BUDGET: u32 = 3000;
 /// Special id on a ply with no new crack: the hook still counts the timers down.
 pub const HULL_TICK: u8 = 0;
 
-const NEIGHBOURS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
+pub(crate) const NEIGHBOURS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
 
 /// Special id: the number of cells to crack at the end of this ply, `HULL_TICK` when none.
 fn special(ply: u32, phase: usize) -> Option<u8> {
@@ -46,7 +46,7 @@ fn rim(board: &Board, cracked: &[((i32, i32), u8)]) -> Vec<(i32, i32)> {
 }
 
 /// One splitmix64 step: deterministic, no state outside the seed.
-fn mix(seed: u64) -> u64 {
+pub(crate) fn mix(seed: u64) -> u64 {
     let z = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     let z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);

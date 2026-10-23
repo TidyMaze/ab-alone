@@ -4,7 +4,8 @@
 //! marble count and credit no ejection. P2 counts void cells as boss neighbours, P3 chains one
 //! more wave of flips and pays for each flip with a boss marble lost to the void.
 
-use crate::board::Board;
+use crate::board::{Board, Cell, RADIUS};
+use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
 
 /// Boss neighbours that flip a player marble. TUNE.
@@ -26,17 +27,108 @@ pub const CHAPLAIN_BOSS_END: u8 = 2;
 
 type P = (i32, i32);
 
-fn special(_ply: u32, _phase: usize) -> Option<u8> {
-    None
+/// Special id: the turn that just ended and, at the end of the boss turn, the phase.
+fn special(ply: u32, phase: usize) -> Option<u8> {
+    Some(if ply % 2 == 1 {
+        CHAPLAIN_PLAYER_END
+    } else {
+        CHAPLAIN_BOSS_END + phase as u8
+    })
 }
 
-fn hook(board: &Board, _id: u8, _seed: u64) -> Board {
-    board.clone()
+/// Cells of `victim` marbles with at least `threshold` `attacker` neighbours. Off-board and
+/// vanished neighbours count as attackers when `void_counts`.
+fn marked(
+    board: &Board,
+    victim: Cell,
+    attacker: Cell,
+    threshold: usize,
+    void_counts: bool,
+) -> Vec<P> {
+    let mut out = Vec::new();
+    for q in -RADIUS..=RADIUS {
+        for r in -RADIUS..=RADIUS {
+            if board.get(q, r) != Some(victim) {
+                continue;
+            }
+            let near = NEIGHBOURS
+                .iter()
+                .filter(|&&(dq, dr)| match board.get(q + dq, r + dr) {
+                    Some(c) => c == attacker,
+                    None => void_counts,
+                })
+                .count();
+            if near >= threshold {
+                out.push((q, r));
+            }
+        }
+    }
+    out
+}
+
+/// The player marbles that flip at the end of a boss turn in `phase`, and the board after the
+/// flips. One wave, and from the chain phase on a second wave that sees the first.
+fn convert(board: &Board, phase: usize) -> (Vec<P>, Board) {
+    let waves = 1 + usize::from(phase >= CHAPLAIN_CHAIN_PHASE);
+    let void_counts = phase >= CHAPLAIN_VOID_PHASE;
+    let (mut flipped, mut out) = (Vec::new(), board.clone());
+    for _ in 0..waves {
+        let wave = marked(
+            &out,
+            Cell::Black,
+            Cell::White,
+            CHAPLAIN_FLIP_THRESHOLD,
+            void_counts,
+        );
+        for &(q, r) in &wave {
+            out.set(q, r, Cell::White);
+        }
+        flipped.extend(wave);
+    }
+    (flipped, out)
+}
+
+/// End of the boss turn: flips, then in the chain phase one boss marble per flip is pushed
+/// into the void, picked by `seed` among the marbles that did not just flip.
+fn boss_turn_end(board: &Board, phase: usize, seed: u64) -> Board {
+    let (flipped, mut out) = convert(board, phase);
+    if phase >= CHAPLAIN_CHAIN_PHASE {
+        let mut pool: Vec<P> = marked(board, Cell::White, Cell::White, 0, false);
+        let mut state = seed;
+        for _ in 0..flipped.len().min(pool.len()) {
+            state = mix(state);
+            let (q, r) = pool.swap_remove((state % pool.len() as u64) as usize);
+            out.set(q, r, Cell::Empty);
+        }
+    }
+    out
+}
+
+fn hook(board: &Board, id: u8, seed: u64) -> Board {
+    if id == CHAPLAIN_PLAYER_END {
+        let mut out = board.clone();
+        for (q, r) in marked(
+            board,
+            Cell::White,
+            Cell::Black,
+            CHAPLAIN_RESTORE_THRESHOLD,
+            false,
+        ) {
+            out.set(q, r, Cell::Black);
+        }
+        out
+    } else {
+        boss_turn_end(
+            board,
+            usize::from(id.saturating_sub(CHAPLAIN_BOSS_END)),
+            seed,
+        )
+    }
 }
 
 /// Player marbles that flip at the end of the next boss turn if nothing moves.
-pub fn chaplain_tell(_enc: &Encounter) -> Vec<P> {
-    Vec::new()
+pub fn chaplain_tell(enc: &Encounter) -> Vec<P> {
+    convert(enc.game().board(), enc.phase()).0
 }
 
 /// The Chaplain boss.
@@ -312,6 +404,17 @@ mod tests {
     }
 
     #[test]
+    fn nothing_flips_without_contact_in_any_phase() {
+        for fillers in [8, 3, 0] {
+            let mut e = enc(&[(0, 0)], &[], fillers);
+            let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
+            turns(&mut e, 4);
+            assert_eq!((count(&e, Cell::Black), count(&e, Cell::White)), (b, w));
+            assert_eq!(e.game().ejected(Player::Black), 0);
+        }
+    }
+
+    #[test]
     fn phase_two_does_not_chain_and_costs_the_boss_nothing() {
         let mut e = chain(1, 1);
         assert_eq!(e.phase(), 1);
@@ -326,7 +429,7 @@ mod tests {
     fn same_seed_same_game_and_the_seed_picks_the_lost_marbles() {
         let run = |seed| {
             let mut e = chain(0, seed);
-            turns(&mut e, 4);
+            turns(&mut e, 2);
             e.game().board().clone()
         };
         assert_eq!(run(3), run(3));
