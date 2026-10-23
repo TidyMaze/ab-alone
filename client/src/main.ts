@@ -1,0 +1,140 @@
+import * as THREE from 'three/webgpu';
+import init, { Engine } from 'abalone-wasm';
+import {
+  CELLS,
+  axialTo3D,
+  cellIndex,
+  encodeMove,
+  legalTargets,
+  parseMoves,
+  pickMove,
+  type Axial,
+} from './board';
+
+// Palette from docs/specs/world.md section 5.
+const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
+const MARBLE_COLORS: Record<number, number> = { 1: 0x15191c, 2: 0xd8d4c8 };
+const SIDE_NAMES: Record<number, string> = { 1: 'Black', 2: 'White' };
+const STATUS_TEXT = ['', 'Black wins', 'White wins', 'Draw'];
+
+await init();
+const engine = new Engine();
+
+// ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
+const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
+const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL });
+await renderer.init();
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend
+  ? 'WebGPU'
+  : 'WebGL2';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(COLORS.base);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 11, 8);
+camera.lookAt(0, 0, 0);
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+const lamp = new THREE.DirectionalLight(COLORS.sodium, 3);
+lamp.position.set(-4, 10, 5);
+scene.add(lamp);
+
+const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, 32);
+const marbleGeometry = new THREE.SphereGeometry(0.36, 32, 16);
+const ringGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32);
+const steel = new THREE.MeshStandardMaterial({ color: COLORS.steel, roughness: 0.8 });
+const targetMaterial = new THREE.MeshStandardMaterial({
+  color: COLORS.cyan,
+  emissive: COLORS.cyan,
+  emissiveIntensity: 0.5,
+});
+const ringMaterial = new THREE.MeshBasicMaterial({ color: COLORS.cyan });
+
+const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
+  const disc = new THREE.Mesh(discGeometry, steel);
+  const p = axialTo3D(q, r);
+  disc.position.set(p.x, -0.05, p.z);
+  scene.add(disc);
+  return disc;
+});
+const marbles = new THREE.Group();
+scene.add(marbles);
+
+let selected: Axial | null = null;
+
+function hud(extra = ''): void {
+  const status = engine.status();
+  const text = status === 0 ? `${SIDE_NAMES[engine.to_move()]} to move` : STATUS_TEXT[status];
+  document.getElementById('hud')!.innerHTML = `${text}<br /><small>${backend}${extra}</small>`;
+}
+
+function refresh(): void {
+  const board = engine.board();
+  const moves = parseMoves(engine.legal_moves());
+  const targets = selected ? legalTargets(moves, selected) : [];
+  marbles.clear();
+  discs.forEach((disc, i) => {
+    const [q, r] = CELLS[i]!;
+    disc.material = targets.some(([tq, tr]) => tq === q && tr === r) ? targetMaterial : steel;
+    const side = board[i]!;
+    if (side === 0) return;
+    const p = axialTo3D(q, r);
+    const marble = new THREE.Mesh(
+      marbleGeometry,
+      new THREE.MeshStandardMaterial({ color: MARBLE_COLORS[side], roughness: 0.3, metalness: 0.2 }),
+    );
+    marble.position.set(p.x, 0.36, p.z);
+    marbles.add(marble);
+    if (selected && selected[0] === q && selected[1] === r) {
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(p.x, 0.02, p.z);
+      marbles.add(ring);
+      marble.position.y = 0.5;
+    }
+  });
+  hud();
+}
+
+function click(q: number, r: number): void {
+  const side = engine.board()[cellIndex(q, r)];
+  if (side === engine.to_move()) {
+    selected = selected && selected[0] === q && selected[1] === r ? null : [q, r];
+  } else if (selected) {
+    const mv = pickMove(parseMoves(engine.legal_moves()), selected, [q, r]);
+    if (mv) engine.play(Int32Array.from(encodeMove(mv)));
+    selected = null;
+  }
+  refresh();
+}
+
+const raycaster = new THREE.Raycaster();
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  raycaster.setFromCamera(
+    new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1),
+    camera,
+  );
+  const hit = raycaster.intersectObjects(discs)[0];
+  if (hit) {
+    const [q, r] = CELLS[discs.indexOf(hit.object as THREE.Mesh)]!;
+    click(q, r);
+  }
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// Used by the browser checks to click a cell by its axial coordinates.
+(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number) => {
+  const p = axialTo3D(q, r);
+  const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
+  return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
+};
+
+refresh();
+renderer.setAnimationLoop(() => renderer.render(scene, camera));

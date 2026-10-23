@@ -1,14 +1,13 @@
 import { defineConfig } from 'vitest/config';
-import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   resolve: {
     alias: {
-      'abalone-wasm': fileURLToPath(
-        new URL('../crates/abalone-wasm/pkg/abalone_wasm.js', import.meta.url),
-      ),
+      'abalone-wasm': new URL('../crates/abalone-wasm/pkg/abalone_wasm.js', import.meta.url).pathname,
     },
   },
+  // The wasm package is built outside client/, the dev server must be allowed to serve it.
+  server: { fs: { allow: ['..'] } },
   test: {
     coverage: {
       provider: 'v8',

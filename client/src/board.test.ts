@@ -106,6 +106,7 @@ describe('click to move', () => {
   const single: Move = { cells: [[0, 4]], dir: 4 };
   const sideStep: Move = { cells: [[0, 4], [1, 4]], dir: 4 };
   const push: Move = { cells: [[0, 4], [0, 3]], dir: 4 };
+  const triple: Move = { cells: [[0, 4], [0, 3], [0, 2]], dir: 4 };
   const other: Move = { cells: [[2, 3]], dir: 1 };
 
   it('picks the legal move for the selected marble and the clicked neighbour', () => {
@@ -114,7 +115,7 @@ describe('click to move', () => {
 
   it('prefers the smallest group when several legal moves contain the marble', () => {
     expect(pickMove([push, sideStep, single], [0, 4], [0, 3])).toBe(single);
-    expect(pickMove([push, sideStep], [0, 4], [0, 3])).toBe(sideStep);
+    expect(pickMove([triple, push], [0, 4], [0, 3])).toBe(push);
   });
 
   it('is null when the target is not a neighbour or no legal move matches', () => {

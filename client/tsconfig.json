@@ -7,7 +7,7 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "types": ["vite/client"],
-    "paths": { "abalone-wasm": ["../crates/abalone-wasm/pkg/abalone_wasm.js"] }
+    "paths": { "abalone-wasm": ["../crates/abalone-wasm/pkg/abalone_wasm"] }
   },
   "include": ["src", "vite.config.ts"]
 }
