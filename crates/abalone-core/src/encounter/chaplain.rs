@@ -296,9 +296,28 @@ mod tests {
         assert_eq!(at(&e, (0, 0)), Some(Cell::Black));
     }
 
+    /// Like `enc`, with `converted` marked as converted boss marbles.
+    fn with_converted(black: &[P], white: &[P], converted: &[P]) -> Encounter {
+        let e = enc(black, white, 8);
+        let mut board = e.game().board().clone();
+        board.set_converted(converted.to_vec());
+        Encounter::new(
+            Game::from_position(board, Player::Black, [0, 0]),
+            chaplain_boss(),
+            0,
+        )
+    }
+
     #[test]
-    fn three_player_neighbours_flip_a_boss_marble_back_at_the_end_of_the_player_turn() {
+    fn a_native_boss_marble_never_flips_back() {
         let mut e = enc(&[(1, 0), (1, -1), (0, -1)], &[(0, 0)], 8);
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+    }
+
+    #[test]
+    fn three_player_neighbours_flip_a_converted_marble_back_at_the_end_of_the_player_turn() {
+        let mut e = with_converted(&[(1, 0), (1, -1), (0, -1)], &[(0, 0)], &[(0, 0)]);
         let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
         step(&mut e);
         assert_eq!(at(&e, (0, 0)), Some(Cell::Black));
@@ -306,13 +325,93 @@ mod tests {
         assert_eq!(count(&e, Cell::White), w - 1);
         assert_eq!(e.game().ejected(Player::Black), 0);
         assert_eq!(e.game().ejected(Player::White), 0);
+        assert!(
+            e.game().board().converted().is_empty(),
+            "no longer converted"
+        );
     }
 
     #[test]
-    fn two_player_neighbours_do_not_flip_a_boss_marble_back() {
-        let mut e = enc(&[(1, 0), (1, -1)], &[(0, 0)], 8);
+    fn two_player_neighbours_do_not_flip_a_converted_marble_back() {
+        let mut e = with_converted(&[(1, 0), (1, -1)], &[(0, 0)], &[(0, 0)]);
         step(&mut e);
         assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+    }
+
+    #[test]
+    fn a_flipped_marble_is_remembered_and_flips_back_when_surrounded() {
+        let mut e = enc(
+            &[(0, 0), (-1, 0), (-1, 1), (0, 1)],
+            &[(1, 0), (1, -1), (0, -1)],
+            8,
+        );
+        turns(&mut e, 2);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+        assert_eq!(e.game().board().converted(), &[(0, 0)]);
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::Black), "three Black neighbours");
+        assert!(e.game().board().converted().is_empty());
+    }
+
+    #[test]
+    fn a_converted_marble_keeps_its_mark_when_it_moves() {
+        let blacks = [(-2, 0), (-2, 1), (-1, 1)];
+        let mut e = enc(&blacks, &[(1, 0), (1, -1), (0, -1)], 8);
+        e.play(&Move {
+            cells: vec![(0, 3)],
+            dir: W,
+        })
+        .unwrap();
+        // Black has no marble on (0, 0) in this layout: convert one by hand instead.
+        assert_eq!(e.game().board().converted(), &[] as &[P]);
+        let mut e = with_converted(&blacks, &[(0, 0), (1, 0), (1, -1), (0, -1)], &[(0, 0)]);
+        step(&mut e);
+        e.play(&Move {
+            cells: vec![(0, 0)],
+            dir: W,
+        })
+        .unwrap();
+        assert_eq!(e.game().board().converted(), &[(-1, 0)]);
+        step(&mut e);
+        assert_eq!(
+            at(&e, (-1, 0)),
+            Some(Cell::Black),
+            "surrounded after it moved"
+        );
+    }
+
+    #[test]
+    fn a_converted_marble_pushed_by_a_sumito_keeps_its_mark() {
+        let mut e = with_converted(&[(-2, 0), (-1, 0), (2, -1), (1, 1)], &[(0, 0)], &[(0, 0)]);
+        e.play(&Move {
+            cells: vec![(-2, 0), (-1, 0)],
+            dir: E,
+        })
+        .unwrap();
+        assert_eq!(
+            at(&e, (1, 0)),
+            Some(Cell::Black),
+            "pushed to (1, 0), then flipped back"
+        );
+        assert!(e.game().board().converted().is_empty());
+    }
+
+    #[test]
+    fn a_converted_marble_pushed_off_the_board_loses_its_mark() {
+        let mut e = with_converted(&[(2, 0), (3, 0)], &[(4, 0)], &[(4, 0)]);
+        e.play(&Move {
+            cells: vec![(2, 0), (3, 0)],
+            dir: E,
+        })
+        .unwrap();
+        assert!(e.game().board().converted().is_empty());
+    }
+
+    #[test]
+    fn the_player_is_black_and_moves_first() {
+        let e = Encounter::new(Game::new(), chaplain_boss(), 0);
+        assert_eq!(e.game().to_move(), Player::Black);
+        assert_eq!(e.tell(), Some(CHAPLAIN_PLAYER_END), "ply 1 is the player's");
     }
 
     #[test]
@@ -347,21 +446,29 @@ mod tests {
     }
 
     #[test]
-    fn off_board_cells_count_as_boss_neighbours_in_phase_two() {
-        // (4, -2) has two off-board neighbours: one boss contact is enough.
-        let p2 = enc(&[(4, -2)], &[(3, -2)], 3);
-        assert_eq!(chaplain_tell(&p2), vec![(4, -2)]);
-        let p1 = enc(&[(4, -2)], &[(3, -2)], 8);
-        assert!(chaplain_tell(&p1).is_empty());
+    fn off_board_cells_add_one_boss_contact_however_many_there_are() {
+        // (4, -2) has two off-board neighbours, (4, -4) has three: both add 1, so 1 contact
+        // is not enough and 2 are.
+        for (rim, contacts) in [((4, -2), [(3, -2), (4, -3)]), ((4, -4), [(3, -3), (4, -3)])] {
+            let one = enc(&[rim], &contacts[..1], 3);
+            assert_eq!(one.phase(), 1);
+            assert!(chaplain_tell(&one).is_empty(), "{rim:?} with 1 contact");
+            let two = enc(&[rim], &contacts, 3);
+            assert_eq!(chaplain_tell(&two), vec![rim], "{rim:?} with 2 contacts");
+        }
+        let none = enc(&[(4, -4)], &[], 3);
+        assert!(chaplain_tell(&none).is_empty());
     }
 
     #[test]
     fn vanished_cells_count_as_boss_neighbours_in_phase_two() {
         let voids = [(1, 0), (1, -1)];
-        let p2 = build(&[(0, 0)], &[(0, -1)], 3, &voids, 0);
+        let p2 = build(&[(0, 0)], &[(0, -1), (0, 1)], 3, &voids, 0);
         assert_eq!(p2.phase(), 1);
         assert_eq!(assert_tell_is_what_flips(p2), vec![(0, 0)]);
-        let p1 = build(&[(0, 0)], &[(0, -1)], 8, &voids, 0);
+        let one = build(&[(0, 0)], &[(0, -1)], 3, &voids, 0);
+        assert!(chaplain_tell(&one).is_empty(), "two voids still add 1");
+        let p1 = build(&[(0, 0)], &[(0, -1), (0, 1)], 8, &voids, 0);
         assert!(chaplain_tell(&p1).is_empty());
     }
 

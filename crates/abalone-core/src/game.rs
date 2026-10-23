@@ -518,6 +518,14 @@ mod tests {
     }
 
     #[test]
+    fn converted_marks_change_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut marked = Board::empty();
+        marked.set_converted(vec![(1, 0)]);
+        assert_ne!(position_hash(&marked, Player::Black), plain);
+    }
+
+    #[test]
     fn crack_marks_change_the_position_hash() {
         let plain = position_hash(&Board::empty(), Player::Black);
         let mut cracked = Board::empty();

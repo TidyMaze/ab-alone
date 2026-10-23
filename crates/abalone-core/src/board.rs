@@ -38,6 +38,8 @@ pub struct Board {
     cells: HashMap<(i32, i32), Cell>,
     /// Cracked cells with the plies left before they vanish, for the Hull boss.
     cracks: Vec<((i32, i32), u8)>,
+    /// Boss marbles that were player marbles, for the Chaplain: only these flip back.
+    converted: Vec<(i32, i32)>,
 }
 
 impl Board {
@@ -54,6 +56,7 @@ impl Board {
         Self {
             cells,
             cracks: Vec::new(),
+            converted: Vec::new(),
         }
     }
 
@@ -82,6 +85,15 @@ impl Board {
 
     pub fn set_cracks(&mut self, cracks: Vec<((i32, i32), u8)>) {
         self.cracks = cracks;
+    }
+
+    /// Cells holding a marble the boss converted.
+    pub fn converted(&self) -> &[(i32, i32)] {
+        &self.converted
+    }
+
+    pub fn set_converted(&mut self, converted: Vec<(i32, i32)>) {
+        self.converted = converted;
     }
 
     /// Standard start layout: 14 marbles per side.
@@ -243,6 +255,17 @@ mod tests {
         assert_eq!(board.cracks(), &[((4, 0), 2)]);
         assert_ne!(board, Board::empty());
         board.set_cracks(vec![]);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn converted_cells_start_empty_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert!(board.converted().is_empty());
+        board.set_converted(vec![(1, 0)]);
+        assert_eq!(board.converted(), &[(1, 0)]);
+        assert_ne!(board, Board::empty());
+        board.set_converted(vec![]);
         assert_eq!(board, Board::empty());
     }
 }
