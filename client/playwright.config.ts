@@ -9,7 +9,10 @@ const reporter = process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'lis
 export default defineConfig({
   testDir: 'e2e',
   reporter,
-  use: { baseURL: `http://localhost:${port}`, trace: 'retain-on-failure' },
+  // Full traces on every run slowed the 30 s timeout tests (eject, clear-board) past their limit on CI.
+  // One retry on CI records a trace for the retried run only.
+  retries: process.env.CI ? 1 : 0,
+  use: { baseURL: `http://localhost:${port}`, trace: 'on-first-retry' },
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
     { name: 'firefox', use: { browserName: 'firefox' } },
