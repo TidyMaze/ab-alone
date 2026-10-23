@@ -3,8 +3,11 @@ import {
   GENESIS,
   generateKeys,
   hashRecord,
+  parseHello,
   parseRecord,
+  signHello,
   signMove,
+  verifyHello,
   verifyRecord,
 } from './moverecord';
 
@@ -82,5 +85,51 @@ describe('parseRecord', () => {
 
   it('drops unknown fields', () => {
     expect(parseRecord({ ...good, extra: 1 })).toEqual(good);
+  });
+});
+
+describe('Hello', () => {
+  it('signs a seat request and verifies it', async () => {
+    const keys = await generateKeys();
+    const h = await signHello(keys, { game: 'g', seat: 2, roster: [] });
+    expect(h).toMatchObject({ kind: 'hello', game: 'g', seat: 2, roster: [], pub: keys.pub });
+    expect(await verifyHello(h)).toBe(true);
+  });
+
+  it('refuses a tampered seat, roster, game or key, and garbage bytes', async () => {
+    const a = await generateKeys();
+    const b = await generateKeys();
+    const h = await signHello(a, { game: 'g', seat: 2, roster: [] });
+    expect(await verifyHello({ ...h, seat: 1 })).toBe(false);
+    expect(await verifyHello({ ...h, roster: [b.pub] })).toBe(false);
+    expect(await verifyHello({ ...h, game: 'other' })).toBe(false);
+    expect(await verifyHello({ ...h, pub: b.pub })).toBe(false);
+    expect(await verifyHello({ ...h, pub: 'AAAA' })).toBe(false);
+  });
+
+  it('is not a move record: its signature does not verify as one', async () => {
+    const keys = await generateKeys();
+    const h = await signHello(keys, { game: 'g', seat: 1, roster: [] });
+    expect(parseRecord(h)).toBeNull();
+  });
+
+  it('parses a clean copy and rejects every wrong shape', async () => {
+    const keys = await generateKeys();
+    const h = await signHello(keys, { game: 'g', seat: 2, roster: [keys.pub, ''] });
+    expect(parseHello({ ...h, extra: 1 })).toEqual(h);
+    for (const bad of [
+      null,
+      'x',
+      { ...h, kind: 'move' },
+      { ...h, game: 1 },
+      { ...h, seat: 0 },
+      { ...h, seat: 1.5 },
+      { ...h, roster: 'a' },
+      { ...h, roster: [1] },
+      { ...h, pub: 1 },
+      { ...h, sig: 1 },
+    ]) {
+      expect(parseHello(bad)).toBeNull();
+    }
   });
 });

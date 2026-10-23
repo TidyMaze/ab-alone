@@ -78,3 +78,49 @@ test('two tabs of the same browser context play an online game, bug #116', async
   await expect(a.locator('#hud')).not.toContainText('refused');
   await expect(b.locator('#hud')).not.toContainText('refused');
 });
+
+test('a third peer opening the link is not a player: room is full, its move changes nothing, bug #117', async ({ browser }) => {
+  const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
+  // Every page broadcasts to the two others, like a Trystero room.
+  const all = [a, b, c];
+  for (const page of all) {
+    await page.exposeFunction('__netOut', (rec: unknown) =>
+      Promise.all(all.filter((p) => p !== page).map((p) => p.evaluate((r) => (window as any).__netIn(r), rec))),
+    );
+  }
+
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await a.locator('#play-online').click();
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  for (const page of [b, c]) {
+    await page.goto(`./?net=hook${hash}`);
+    await page.locator('canvas').waitFor();
+  }
+  for (const page of all) await page.evaluate(() => (window as any).__netOpen());
+
+  await expect(b.locator('#hud')).toContainText('you are White');
+  await expect(c.locator('#hud')).toContainText('room is full, watching');
+  await expect(c.locator('#hud')).not.toContainText('you are White');
+
+  await cell(a, 0, 2);
+  await cell(a, 0, 1);
+  await expect.poll(() => plies(b)).toBe(1);
+  await expect.poll(() => plies(c)).toBe(1); // a spectator still follows the game
+
+  // It is White's turn: C tries to play it.
+  await cell(c, 0, -2);
+  await cell(c, 0, -1);
+  await expect(c.locator('#hud')).toContainText('room is full, watching');
+  expect(await plies(c)).toBe(1);
+  expect(await plies(a)).toBe(1);
+  expect(await plies(b)).toBe(1);
+  await expect(b.locator('#hud')).toContainText('White to move');
+
+  // The real White still plays, everyone follows.
+  await cell(b, 0, -2);
+  await cell(b, 0, -1);
+  await expect.poll(() => plies(a)).toBe(2);
+  await expect.poll(() => plies(c)).toBe(2);
+  await expect(a.locator('#hud')).not.toContainText('refused');
+});
