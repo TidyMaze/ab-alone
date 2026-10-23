@@ -1,0 +1,32 @@
+name: Feature
+description: Something a player can see or do (owners create these at triage)
+title: "Feature: "
+labels: [feature]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Player-facing outcome
+      description: What the player can see or do once this is done.
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      description: A checklist an owner can verify by hand.
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: input
+    id: spec
+    attributes:
+      label: Spec link
+      description: Section of SPEC.md or docs/specs/ that defines it.
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source discussion
+      description: Link to the Ideas discussion, if any.

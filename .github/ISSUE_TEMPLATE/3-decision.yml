@@ -1,0 +1,27 @@
+name: Decision
+description: A choice between options, closed by an owner
+title: "Decision: "
+labels: [decision]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What needs deciding and why now.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      value: |
+        A.
+        B.
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+    validations:
+      required: true
