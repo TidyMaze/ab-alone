@@ -181,6 +181,19 @@ P2P heartbeats, round deadlines and audio scheduling must not rely on main-threa
 Run net timers in a worker and use `visibilitychange` to tell peers "away" instead of looking
 dropped. WebGPU-only compute extras stay off the fog and bloom path.
 
+### 5.x Renderer support per browser (#85)
+
+`npm run e2e:all` runs the 13 e2e specs on Chromium, Firefox and WebKit (Playwright 1.63.0, base
+commit 565cab7). The HUD states which backend three picked. Chromium here is headless Playwright,
+which has no WebGPU adapter, so it falls back to WebGL2. A headed desktop Chrome with a GPU may
+report WebGPU instead.
+
+| Browser | HUD renderer | Specs passed |
+|---|---|---|
+| Chromium (headless) | WebGL2 | 13 of 13 |
+| Firefox | WebGL2 | 13 of 13 |
+| WebKit (Safari engine) | WebGPU | 13 of 13 |
+
 ## 6. Peer-to-peer multiplayer (decision #36; comments on #13)
 
 **Trust model.** No trusted party. Every peer replays every move with the same deterministic
