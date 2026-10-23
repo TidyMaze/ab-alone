@@ -57,4 +57,11 @@ describe('localPair', () => {
     expect(got).toEqual([]);
     expect(seen).toEqual(['closed']);
   });
+
+  it('drops a record nobody listens to and closes without state listeners', () => {
+    const [a, b] = localPair();
+    a.send(rec(0));
+    b.close();
+    expect(a.state).toBe('closed');
+  });
 });

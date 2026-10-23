@@ -51,6 +51,16 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 }
 #clear-board[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #clear-board:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#online { position: fixed; top: 64px; right: 16px; z-index: 1; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
+#play-online {
+  padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
+  border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
+}
+#play-online:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#invite {
+  box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); padding: 0.5rem 0.75rem; color: var(--text);
+  background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
+}
 
 #hud {
   position: fixed; top: 16px; left: 16px; z-index: 1; box-sizing: border-box; max-width: 22rem;

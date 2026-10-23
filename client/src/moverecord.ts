@@ -1,0 +1,107 @@
+// A move record is one signed link of the game log: {game, seq, prev, move, pub, sig}. `prev` is the
+// SHA-256 of the previous record, so the log is tamper evident (docs/specs/tech.md section 6).
+// Signatures are Ed25519 from Web Crypto. Keys and signatures travel as base64url strings.
+
+export interface MoveRecord {
+  game: string;
+  seq: number;
+  prev: string;
+  move: number[];
+  pub: string;
+  sig: string;
+}
+
+export interface Keys {
+  priv: CryptoKey;
+  pub: string;
+}
+
+/** `prev` of the first record of a game. */
+export const GENESIS = '0'.repeat(64);
+
+const ED = { name: 'Ed25519' } as const;
+const KEY_NAME = 'ab-alone.keys';
+
+const b64 = (bytes: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint8Array(bytes)))
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_')
+  .replace(/=+$/, '');
+const unb64 = (s: string): Uint8Array<ArrayBuffer> =>
+  Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+
+type Unsigned = Omit<MoveRecord, 'sig'>;
+
+// Fixed field order, so both peers hash and verify the same bytes.
+const payload = (r: Unsigned): Uint8Array<ArrayBuffer> =>
+  new TextEncoder().encode(JSON.stringify([r.game, r.seq, r.prev, r.move, r.pub]));
+
+async function keysFrom(priv: CryptoKey, publicKey: CryptoKey): Promise<Keys> {
+  return { priv, pub: b64(await crypto.subtle.exportKey('raw', publicKey)) };
+}
+
+export async function generateKeys(): Promise<Keys> {
+  const pair = (await crypto.subtle.generateKey(ED, true, ['sign', 'verify'])) as CryptoKeyPair;
+  return keysFrom(pair.privateKey, pair.publicKey);
+}
+
+export async function signMove(
+  keys: Keys,
+  fields: { game: string; seq: number; prev: string; move: number[] },
+): Promise<MoveRecord> {
+  const unsigned = { ...fields, pub: keys.pub };
+  const sig = await crypto.subtle.sign(ED, keys.priv, payload(unsigned));
+  return { ...unsigned, sig: b64(sig) };
+}
+
+export async function verifyRecord(r: MoveRecord): Promise<boolean> {
+  try {
+    const key = await crypto.subtle.importKey('raw', unb64(r.pub), ED, false, ['verify']);
+    return await crypto.subtle.verify(ED, key, unb64(r.sig), payload(r));
+  } catch {
+    return false; // malformed base64 or key bytes
+  }
+}
+
+/** Hash of the whole record, signature included: the next record's `prev`. */
+export async function hashRecord(r: MoveRecord): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify([r.game, r.seq, r.prev, r.move, r.pub, r.sig]));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Shape check for anything that came off the wire. Returns a clean copy or null. */
+export function parseRecord(x: unknown): MoveRecord | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const r = x as Record<string, unknown>;
+  const ok =
+    typeof r.game === 'string' &&
+    Number.isInteger(r.seq) &&
+    (r.seq as number) >= 0 &&
+    typeof r.prev === 'string' &&
+    Array.isArray(r.move) &&
+    r.move.every((n) => typeof n === 'number') &&
+    typeof r.pub === 'string' &&
+    typeof r.sig === 'string';
+  if (!ok) return null;
+  return { game: r.game as string, seq: r.seq as number, prev: r.prev as string, move: r.move as number[], pub: r.pub as string, sig: r.sig as string };
+}
+
+export interface KeyStore {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+/** The session key pair lives in the browser (localStorage), made once on first use. */
+export async function loadKeys(store: KeyStore | null): Promise<Keys> {
+  try {
+    const saved = JSON.parse(store!.getItem(KEY_NAME)!) as { priv: JsonWebKey; pub: string };
+    const priv = await crypto.subtle.importKey('jwk', saved.priv, ED, true, ['sign']);
+    return { priv, pub: saved.pub };
+  } catch {
+    const pair = (await crypto.subtle.generateKey(ED, true, ['sign', 'verify'])) as CryptoKeyPair;
+    const keys = await keysFrom(pair.privateKey, pair.publicKey);
+    const priv = await crypto.subtle.exportKey('jwk', pair.privateKey);
+    store?.setItem(KEY_NAME, JSON.stringify({ priv, pub: keys.pub }));
+    return keys;
+  }
+}
