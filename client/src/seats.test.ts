@@ -8,6 +8,7 @@ describe('Seats', () => {
     expect(s.keyOf(1)).toBe('a');
     expect(s.seatOf('a')).toBe(1);
     expect(s.keyOf(2)).toBe('');
+    expect(s.keyOf(9)).toBe('');
     expect(s.seatOf('b')).toBe(0);
     expect(s.roster()).toEqual(['a', '']);
     expect(s.full).toBe(false);

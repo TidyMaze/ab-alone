@@ -3,10 +3,16 @@ import { expect, test, type Page } from '@playwright/test';
 // Two isolated browser contexts. The transport is the ?net=hook test hook: the test relays records
 // from one page to the other, so no public Nostr relay is involved.
 const cell = async (page: Page, q: number, r: number) => {
+  // The raycaster needs the camera matrices, which three only updates on a rendered frame, and a
+  // background tab renders none: bring the page to the front first.
+  await page.bringToFront();
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
   return page.mouse.click(p.x, p.y);
 };
 const plies = (page: Page) => page.evaluate(() => (window as any).__plies());
+// Seating is a Hello round trip after the connection opens: wait for it before the first move.
+const seat = (page: Page, role: 'player' | 'spectator') => expect(page.locator('body')).toHaveAttribute('data-seat', role);
 
 test('a move played on page A shows up on page B over the signed move log', async ({ browser }) => {
   const a = await (await browser.newContext()).newPage();
@@ -35,6 +41,7 @@ test('a move played on page A shows up on page B over the signed move log', asyn
 
   await a.evaluate(() => (window as any).__netOpen());
   await b.evaluate(() => (window as any).__netOpen());
+  await seat(b, 'player');
   await cell(a, 0, 2); // a Black marble
   await cell(a, 0, 1); // its NW neighbour
   await expect(a.locator('#hud')).toContainText('White to move');
@@ -68,6 +75,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
   await b.locator('canvas').waitFor();
   await a.evaluate(() => (window as any).__netOpen());
   await b.evaluate(() => (window as any).__netOpen());
+  await seat(b, 'player');
 
   await cell(a, 0, 2);
   await cell(a, 0, 1);
@@ -91,6 +99,7 @@ test('a third peer opening the link is not a player: room is full, its move chan
 
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   for (const page of [b, c]) {
@@ -99,6 +108,8 @@ test('a third peer opening the link is not a player: room is full, its move chan
   }
   for (const page of all) await page.evaluate(() => (window as any).__netOpen());
 
+  await seat(b, 'player');
+  await seat(c, 'spectator');
   await expect(b.locator('#hud')).toContainText('you are White');
   await expect(c.locator('#hud')).toContainText('room is full, watching');
   await expect(c.locator('#hud')).not.toContainText('you are White');

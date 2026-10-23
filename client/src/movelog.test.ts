@@ -66,15 +66,13 @@ describe('MoveLog', () => {
     expect(await b.verify(rec)).toEqual({ ok: false, reason: 'wrong-game' });
   });
 
-  it('pins the first remote key: a later record signed by a third key is refused', async () => {
+  it('does not pin a remote key: the seat table of the session decides who may move', async () => {
     const { alice, a, b } = await pair();
-    const mallory = await generateKeys();
+    const carol = await generateKeys();
     const r0 = await a.sign(alice, M1);
     await b.append(r0);
-    const r1 = await b.sign(await generateKeys(), M2); // own record, ignored for pinning
-    const forged = await signMove(mallory, { game: 'g', seq: 2, prev: b.head, move: M3 });
-    expect(await b.verify(forged)).toEqual({ ok: false, reason: 'wrong-key' });
-    void r1;
+    const next = await signMove(carol, { game: 'g', seq: 1, prev: b.head, move: M2 });
+    expect(await b.verify(next)).toEqual({ ok: true });
   });
 
   it('refuses an echo of its own record', async () => {

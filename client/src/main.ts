@@ -280,7 +280,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 }
 
 function click(q: number, r: number): void {
-  if (thinking) return;
+  if (thinking || online?.role === 'spectator') return;
   if (online && engine.to_move() !== onlineSide) return; // not our turn
   if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
   const side = engine.board()[cellIndex(q, r)];
@@ -401,6 +401,15 @@ async function goOnline(room: string, side: number): Promise<void> {
   const net = new URLSearchParams(location.search).get('net') === 'hook' ? hookTransport() : p2pTransport(room);
   onlineSide = side;
   const sideName = side === 1 ? 'Black' : 'White';
+  let netState = '';
+  // An extra peer is a spectator: it follows the game and never sends (the spectator view is #34).
+  const note = (): void => {
+    const watching = online?.role === 'spectator';
+    document.body.dataset.online = watching ? 'Spectator' : sideName;
+    document.body.dataset.seat = online?.role ?? 'pending'; // read by the e2e tests
+    onlineNote = watching ? ' · room is full, watching' : ` · online, you are ${sideName}${netState}`;
+    hud();
+  };
   onlineNote = ` · online, you are ${sideName}`;
   online = new OnlineSession({
     game: room,
@@ -418,9 +427,10 @@ async function goOnline(room: string, side: number): Promise<void> {
     onMove: () => refresh(),
     onRefuse: (reason) => hud(` · refused move: ${reason}`),
     onState: (s) => {
-      onlineNote = ` · online, you are ${sideName}, ${s}`;
-      hud();
+      netState = `, ${s}`;
+      note();
     },
+    onRole: note,
   });
   document.body.dataset.online = sideName;
   refresh();

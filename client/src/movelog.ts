@@ -7,7 +7,6 @@ export type Verdict =
 /** The hash-chained, signed list of moves of one game, seen from one side. */
 export class MoveLog {
   private records: MoveRecord[] = [];
-  private peer: string | null = null;
   head = GENESIS;
 
   constructor(
@@ -33,13 +32,12 @@ export class MoveLog {
     if (r.seq < this.length) return refuse('replayed');
     if (r.seq > this.length) return refuse('out-of-order');
     if (r.prev !== this.head) return refuse('bad-chain');
-    // The first remote key is pinned, later records must come from the same one.
-    if (r.pub === this.ownPub || (this.peer !== null && r.pub !== this.peer)) return refuse('wrong-key');
+    // Who may move is the session's seat table, this only keeps our own records from echoing back.
+    if (r.pub === this.ownPub) return refuse('wrong-key');
     return (await verifyRecord(r)) ? { ok: true } : refuse('bad-signature');
   }
 
   async append(r: MoveRecord): Promise<void> {
-    if (r.pub !== this.ownPub) this.peer ??= r.pub;
     this.records.push(r);
     this.head = await hashRecord(r);
   }

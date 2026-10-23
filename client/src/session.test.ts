@@ -238,4 +238,61 @@ describe('OnlineSession', () => {
     }
     expect(host.refused).toEqual(['seat-refused']); // seats 2 and 3 bound, seat 4 does not exist
   });
+
+  it('refuses a Hello that is forged, for another game or not a Hello', async () => {
+    const [x, y] = localPair();
+    const black = await player(y, 1);
+    const peer = await generateKeys();
+    const good = await hello(peer, 2);
+    x.send({ ...good, seat: 1 });
+    x.send({ ...good, game: 'other' });
+    x.send({ kind: 'hello', game: 'g' } as unknown as MoveRecord);
+    await settle();
+    expect(black.refused).toEqual(['bad-hello', 'bad-hello', 'bad-hello']);
+    expect(black.session.seats.roster()).toEqual([black.keys.pub, '']);
+  });
+
+  it('keeps the same key on its seat when it says Hello again', async () => {
+    const [x, y] = localPair();
+    const black = await player(y, 1);
+    const peer = await generateKeys();
+    x.send(await hello(peer, 2));
+    x.send(await hello(peer, 2));
+    await settle();
+    expect(black.refused).toEqual([]);
+    expect(black.session.seats.keyOf(2)).toBe(peer.pub);
+  });
+
+  it('as a joiner ignores Hellos that are not from the creator, a rival creator and a bad roster', async () => {
+    const [x, y] = localPair();
+    const joiner = await player(y, 2);
+    const creator = await generateKeys();
+    const other = await generateKeys();
+    x.send(await hello(other, 3)); // another joiner: the creator decides, not us
+    x.send(await hello(creator, 1, ['someone else', ''])); // the sender must be first in its own roster
+    x.send(await hello(creator, 1, [creator.pub])); // wrong size
+    await settle();
+    expect(joiner.session.seats.roster()).toEqual(['', '']);
+    x.send(await hello(creator, 1, [creator.pub, '']));
+    x.send(await hello(other, 1, [other.pub, joiner.keys.pub])); // a later seat 1 Hello does not replace the creator
+    await settle();
+    expect(joiner.session.seats.roster()).toEqual([creator.pub, '']);
+    expect(joiner.session.role).toBe('pending');
+    x.send(await hello(creator, 1, [creator.pub, joiner.keys.pub]));
+    await settle();
+    expect(joiner.session.role).toBe('player');
+    expect(joiner.refused).toEqual([]);
+  });
+
+  it('works without the optional callbacks', async () => {
+    const [x, y] = localPair();
+    const judge = new FakeJudge();
+    const keys = await generateKeys();
+    const session = new OnlineSession({ game: 'g', side: 2, keys, transport: y, judge, onMove: () => {}, onRefuse: () => {} });
+    const creator = await generateKeys();
+    x.send(await hello(creator, 1, [creator.pub, 'x']));
+    x.close();
+    await settle();
+    expect(session.role).toBe('spectator');
+  });
 });

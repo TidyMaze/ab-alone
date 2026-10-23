@@ -1,12 +1,12 @@
-import type { MoveRecord } from './moverecord';
+import type { Wire } from './moverecord';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
 
-/** One ordered channel for signed move records. Local play, P2P and later a server all fit it. */
+/** One ordered channel for signed move records and Hello messages. Local play, P2P and later a server all fit it. */
 export interface Transport {
   readonly state: ConnectionState;
-  send(record: MoveRecord): void;
-  onRecord(cb: (record: MoveRecord) => void): void;
+  send(message: Wire): void;
+  onRecord(cb: (message: Wire) => void): void;
   onState(cb: (state: ConnectionState) => void): void;
   close(): void;
 }
@@ -15,13 +15,13 @@ export interface Transport {
 class LocalTransport implements Transport {
   state: ConnectionState = 'open';
   peer!: LocalTransport;
-  private record: (r: MoveRecord) => void = () => {};
+  private record: (r: Wire) => void = () => {};
   private change: (s: ConnectionState) => void = () => {};
 
-  send(r: MoveRecord): void {
+  send(r: Wire): void {
     if (this.state === 'open') this.peer.record(r);
   }
-  onRecord(cb: (record: MoveRecord) => void): void {
+  onRecord(cb: (message: Wire) => void): void {
     this.record = cb;
   }
   onState(cb: (state: ConnectionState) => void): void {
