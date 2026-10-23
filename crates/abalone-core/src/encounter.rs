@@ -111,9 +111,22 @@ impl Encounter {
             let ply = self.game.history().len() as u64;
             let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
             let board = (self.boss.hook)(self.game.board(), id, seed);
+            self.credit_removals(&board);
             self.game.replace_board(board);
         }
         Ok(())
+    }
+
+    /// A hook that removed marbles (the total dropped) counts for the opponent of each lost
+    /// marble. A flip keeps the total and credits nothing (rules.md OPEN-13).
+    fn credit_removals(&mut self, after: &Board) {
+        let before = self.game.board();
+        let (b0, w0) = (marbles(before, Cell::Black), marbles(before, Cell::White));
+        let (b1, w1) = (marbles(after, Cell::Black), marbles(after, Cell::White));
+        if b1 + w1 < b0 + w0 {
+            self.game.credit(Player::White, b0.saturating_sub(b1));
+            self.game.credit(Player::Black, w0.saturating_sub(w1));
+        }
     }
 
     /// The boss search for its turn: node-limited by the boss budget, `None` on the player's turn

@@ -1,3 +1,97 @@
+//! The Hull (#43, docs/specs/game-design.md section 7.1): rim cells crack on a timer, vanish two
+//! plies later, and a marble on a vanished cell is removed, either side. The crack timers live on
+//! the board (`Board::cracks`), so the tell is `board.cracks()`: the cells that vanish soon.
+
+use crate::board::{Board, RADIUS};
+use crate::encounter::BossDef;
+
+/// Plies between a crack appearing and the cell vanishing.
+pub const HULL_CRACK_LEAD: u8 = 2;
+/// Plies between crack waves, per phase (phase 1, 2 and 3). TUNE.
+pub const HULL_INTERVALS: [u32; 3] = [8, 6, 4];
+/// Cells cracked per wave, per phase. TUNE.
+pub const HULL_CELLS_PER_WAVE: [u8; 3] = [1, 2, 2];
+/// Phase 2 and phase 3 start at this many boss marbles left. TUNE.
+pub const HULL_PHASE_MARBLES: [u8; 2] = [10, 5];
+/// Positions the boss search may visit per move (about depth 3). TUNE.
+pub const HULL_NODE_BUDGET: u32 = 3000;
+/// Special id on a ply with no new crack: the hook still counts the timers down.
+pub const HULL_TICK: u8 = 0;
+
+const NEIGHBOURS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
+
+/// Special id: the number of cells to crack at the end of this ply, `HULL_TICK` when none.
+fn special(ply: u32, phase: usize) -> Option<u8> {
+    Some(if ply.is_multiple_of(HULL_INTERVALS[phase]) {
+        HULL_CELLS_PER_WAVE[phase]
+    } else {
+        HULL_TICK
+    })
+}
+
+/// On-board cells with a missing neighbour (off the board or vanished), not already cracked.
+fn rim(board: &Board, cracked: &[((i32, i32), u8)]) -> Vec<(i32, i32)> {
+    let mut out = Vec::new();
+    for q in -RADIUS..=RADIUS {
+        for r in -RADIUS..=RADIUS {
+            let open = NEIGHBOURS
+                .iter()
+                .any(|&(dq, dr)| board.get(q + dq, r + dr).is_none());
+            if board.get(q, r).is_some() && open && !cracked.iter().any(|&(c, _)| c == (q, r)) {
+                out.push((q, r));
+            }
+        }
+    }
+    out
+}
+
+/// One splitmix64 step: deterministic, no state outside the seed.
+fn mix(seed: u64) -> u64 {
+    let z = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    let z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+/// Counts the timers down and removes the cells that reach zero (with their marbles), then
+/// cracks `cells` new rim cells chosen by `seed`.
+fn hull_hook(board: &Board, cells: u8, seed: u64) -> Board {
+    let mut out = board.clone();
+    let mut cracked = Vec::new();
+    for &(c, left) in board.cracks() {
+        if left <= 1 {
+            out.void(c.0, c.1);
+        } else {
+            cracked.push((c, left - 1));
+        }
+    }
+    let mut state = seed;
+    for _ in 0..cells {
+        let candidates = rim(&out, &cracked);
+        if candidates.is_empty() {
+            break;
+        }
+        state = mix(state);
+        cracked.push((
+            candidates[(state % candidates.len() as u64) as usize],
+            HULL_CRACK_LEAD,
+        ));
+    }
+    out.set_cracks(cracked);
+    out
+}
+
+/// The Hull boss: standard Abalone search, a crumbling rim.
+pub fn hull_boss() -> BossDef {
+    BossDef {
+        name: "The Hull",
+        phase_marbles: HULL_PHASE_MARBLES.to_vec(),
+        special,
+        hook: hull_hook,
+        node_budget: HULL_NODE_BUDGET,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,7 +175,7 @@ mod tests {
     fn step(enc: &mut Encounter) {
         let ply = enc.game().history().len();
         let k = ply / 2;
-        let (from, to) = if ply % 2 == 0 {
+        let (from, to) = if ply.is_multiple_of(2) {
             (TRI[k % 3], TRI[(k + 1) % 3])
         } else {
             (SEG[k % 2], SEG[(k + 1) % 2])

@@ -85,6 +85,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
         }
     }
     index(to_move).hash(&mut hasher);
+    if !board.cracks().is_empty() {
+        board.cracks().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -168,6 +171,18 @@ impl Game {
         self.board = board;
         let hash = position_hash(&self.board, self.to_move);
         self.history.last_mut().expect("called after a ply").hash = hash;
+    }
+
+    /// Credits `n` ejections to `by` for marbles a boss hook removed (rules.md OPEN-13).
+    pub(crate) fn credit(&mut self, by: Player, n: u8) {
+        if n == 0 {
+            return;
+        }
+        self.ejected[index(by)] += n;
+        self.no_ejection_plies = 0;
+        if self.ejected[index(by)] >= WIN_EJECTIONS {
+            self.outcome.get_or_insert(Outcome::Win(by));
+        }
     }
 
     /// Plays `mv` for the side to move.

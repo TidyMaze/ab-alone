@@ -36,6 +36,8 @@ const STANDARD_BLACK: [(i32, i32); 14] = [
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
     cells: HashMap<(i32, i32), Cell>,
+    /// Cracked cells with the plies left before they vanish, for the Hull boss.
+    cracks: Vec<((i32, i32), u8)>,
 }
 
 impl Board {
@@ -49,7 +51,10 @@ impl Board {
                 }
             }
         }
-        Self { cells }
+        Self {
+            cells,
+            cracks: Vec::new(),
+        }
     }
 
     /// Content of `(q, r)`, or `None` when the cell is off the board.
@@ -62,6 +67,21 @@ impl Board {
         if let Some(slot) = self.cells.get_mut(&(q, r)) {
             *slot = cell;
         }
+    }
+
+    /// Removes `(q, r)` from the board for good, with its marble. Later `get` gives `None` and
+    /// `set` is ignored, so moves onto it are refused and pushes onto it eject.
+    pub fn void(&mut self, q: i32, r: i32) {
+        self.cells.remove(&(q, r));
+    }
+
+    /// Cracked cells and the plies left before each vanishes.
+    pub fn cracks(&self) -> &[((i32, i32), u8)] {
+        &self.cracks
+    }
+
+    pub fn set_cracks(&mut self, cracks: Vec<((i32, i32), u8)>) {
+        self.cracks = cracks;
     }
 
     /// Standard start layout: 14 marbles per side.
