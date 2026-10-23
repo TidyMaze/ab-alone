@@ -78,7 +78,7 @@ One plate, top-left, 16 px from the edges, max width 22rem, never over the board
 ## 5. Board framing
 
 The canvas fills the window. The chrome adds a rim only: a fixed, non-interactive radial gradient
-from transparent at 60 % to `--bg` at 100 % (fog at the rim, never over the cells). No border or
+from transparent at 65 % to near-black (`#0b0d0f` at 75 % opacity) at 100 %, the same in both themes because the 3D deck is dark either way (fog at the rim, never over the cells). No border or
 frame is drawn around the canvas, the 3D deck is the frame. The rim is removed with clear-board
 mode once that toggle exists (#32), and it has no motion.
 

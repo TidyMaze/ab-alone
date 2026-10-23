@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { hudHtml } from './hud';
+import css from './ui.css?raw';
 
-const css = readFileSync(new URL('./ui.css', import.meta.url), 'utf8');
 const TOKENS = ['bg', 'panel', 'edge', 'text', 'muted', 'accent', 'hazard', 'danger'];
 
 // The dark theme is :root, the light one is the media query and the data-theme override.

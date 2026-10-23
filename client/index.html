@@ -5,18 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:," />
     <title>AB-ALONE</title>
-    <style>
-      html, body { margin: 0; height: 100%; background: #0b0d0f; overflow: hidden; }
-      canvas { display: block; }
-      #hud {
-        position: fixed; top: 12px; left: 16px; color: #d8d4c8;
-        font: 16px/1.4 system-ui, sans-serif; pointer-events: none;
-      }
-      #hud small { color: #7fd6e8; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=IBM+Plex+Sans:wght@400;500&display=swap"
+    />
   </head>
   <body>
-    <div id="hud"></div>
+    <div id="hud" role="status" aria-live="polite"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -13,14 +13,14 @@ import {
 } from './board';
 import { askBot } from './bot';
 import { ghostMarbles } from './ghost';
+import { hudHtml } from './hud';
 import { formatScore } from './score';
+import './ui.css';
 
 // Palette from docs/specs/world.md section 5.
 const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
 const MARBLE_COLORS: Record<number, number> = { 1: 0x15191c, 2: 0xd8d4c8 };
-const SIDE_NAMES: Record<number, string> = { 1: 'Black', 2: 'White' };
 const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
-const STATUS_TEXT = ['', 'Black wins', 'White wins', 'Draw'];
 
 await init();
 const engine = new Engine();
@@ -146,9 +146,14 @@ const isSelected = (q: number, r: number): boolean => selected.some(([sq, sr]) =
 
 function hud(extra = ''): void {
   const status = engine.status();
-  const text = status === 0 ? `${SIDE_NAMES[engine.to_move()]} to move` : STATUS_TEXT[status];
-  const score = formatScore([engine.ejected(1), engine.ejected(2)], status, engine.draw_reason());
-  document.getElementById('hud')!.innerHTML = `${text}<br />${score}<br /><small>${backend}${extra}</small>`;
+  const ejected = [engine.ejected(1), engine.ejected(2)] as const;
+  document.getElementById('hud')!.innerHTML = hudHtml({
+    side: engine.to_move(),
+    status,
+    score: formatScore(ejected, status, engine.draw_reason()),
+    ejected,
+    note: `${backend}${extra}`,
+  });
 }
 
 function refresh(): void {
