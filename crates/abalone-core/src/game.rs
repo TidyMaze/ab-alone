@@ -387,6 +387,7 @@ mod tests {
         }
         assert_eq!(game.outcome(), Some(Outcome::Draw));
         assert_eq!(game.winner(), None);
+        assert_eq!(game.draw_reason(), Some(DrawReason::Repetition));
         assert_eq!(game.play(&cycle[0]), Err(GameError::GameOver));
     }
 
@@ -409,6 +410,7 @@ mod tests {
         assert_eq!(game.play(&mv(&[(0, 0)], SE)), Ok(()));
         assert_eq!(game.no_ejection_plies(), 100);
         assert_eq!(game.outcome(), Some(Outcome::Draw));
+        assert_eq!(game.draw_reason(), Some(DrawReason::NoEjectionCap));
         assert_eq!(game.play(&mv(&[(4, -4)], W)), Err(GameError::GameOver));
     }
 
@@ -438,5 +440,6 @@ mod tests {
         game.no_ejection_plies = 99;
         assert_eq!(game.play(&push), Ok(()));
         assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
+        assert_eq!(game.draw_reason(), None);
     }
 }

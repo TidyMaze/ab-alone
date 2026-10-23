@@ -256,6 +256,7 @@ mod tests {
         let mut engine = Engine::new();
         play_until_over(&mut engine);
         assert_eq!(engine.status(), 3);
+        assert!((1..=2).contains(&engine.draw_reason()));
         assert!(engine.legal_moves().is_empty());
         assert!(engine.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
     }
@@ -301,5 +302,13 @@ mod tests {
         assert_eq!(status_code(Some(Outcome::Win(Player::Black))), 1);
         assert_eq!(status_code(Some(Outcome::Win(Player::White))), 2);
         assert_eq!(status_code(Some(Outcome::Draw)), 3);
+    }
+
+    #[test]
+    fn draw_reason_codes() {
+        use abalone_core::game::DrawReason;
+        assert_eq!(draw_reason_code(None), 0);
+        assert_eq!(draw_reason_code(Some(DrawReason::Repetition)), 1);
+        assert_eq!(draw_reason_code(Some(DrawReason::NoEjectionCap)), 2);
     }
 }
