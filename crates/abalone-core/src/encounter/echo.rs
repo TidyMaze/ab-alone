@@ -1,27 +1,75 @@
 //! Boss 4, The Echo (docs/specs/game-design.md section 7.4): after each player move it plays the
 //! point-reflected move through the board center when that is legal, else its search picks.
 
+use crate::board::Board;
 use crate::encounter::{BossDef, Encounter};
-use crate::moves::Move;
+use crate::moves::{apply, Direction, Move, Player};
 
 /// P2 starts at 10 boss marbles, P3 at 5.
 pub const ECHO_PHASE_MARBLES: [u8; 2] = [10, 5];
 /// Positions the free-move search may visit. Starting value, to tune (calibration knob).
 pub const ECHO_NODE_BUDGET: u32 = 400;
 
+fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
+    None
+}
+
+fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
+    board.clone()
+}
+
+/// The Echo: no board special, its twist is the reply rule in [`echo_move`].
 pub fn echo_boss() -> BossDef {
-    unimplemented!()
+    BossDef {
+        name: "The Echo",
+        phase_marbles: ECHO_PHASE_MARBLES.to_vec(),
+        special: no_special,
+        hook: keep_board,
+        node_budget: ECHO_NODE_BUDGET,
+    }
+}
+
+fn opposite(dir: Direction) -> Direction {
+    match dir {
+        Direction::E => Direction::W,
+        Direction::W => Direction::E,
+        Direction::NE => Direction::SW,
+        Direction::SW => Direction::NE,
+        Direction::NW => Direction::SE,
+        Direction::SE => Direction::NW,
+    }
 }
 
 /// The point reflection of `mv` through the board center. Also the tell: the client can draw it
 /// for any move the player hovers.
-pub fn mirror_move(_mv: &Move) -> Move {
-    unimplemented!()
+pub fn mirror_move(mv: &Move) -> Move {
+    Move {
+        cells: mv.cells.iter().map(|&(q, r)| (-q, -r)).collect(),
+        dir: opposite(mv.dir),
+    }
 }
 
 /// The boss reply for the current position, `None` on the player's turn or when the game is over.
-pub fn echo_move(_enc: &Encounter) -> Option<Move> {
-    unimplemented!()
+/// P1 mirrors the last player move, P2 the one before it, P3 tries the last then the previous.
+/// The first mirror the normal validator accepts is played, else the boss search picks.
+pub fn echo_move(enc: &Encounter) -> Option<Move> {
+    let game = enc.game();
+    if game.outcome().is_some() || game.to_move() != Player::White {
+        return None;
+    }
+    let history = game.history();
+    let last = history.last().map(|p| &p.mv);
+    let previous = history.len().checked_sub(3).map(|i| &history[i].mv);
+    let echoed: Vec<&Move> = match enc.phase() {
+        0 => last.into_iter().collect(),
+        1 => previous.into_iter().collect(),
+        _ => last.into_iter().chain(previous).collect(),
+    };
+    echoed
+        .into_iter()
+        .map(mirror_move)
+        .find(|m| apply(game.board(), Player::White, m).is_ok())
+        .or_else(|| enc.boss_search().map(|r| r.mv))
 }
 
 #[cfg(test)]
