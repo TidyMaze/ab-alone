@@ -1,0 +1,13 @@
+[package]
+name = "abalone-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Thin wasm-bindgen bridge over abalone-core"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+abalone-core = { path = "../abalone-core" }
+wasm-bindgen = "=0.2.129"
