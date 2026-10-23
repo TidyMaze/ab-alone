@@ -1,3 +1,5 @@
+pub mod board;
+
 pub fn version() -> &'static str {
     "0.1.0"
 }

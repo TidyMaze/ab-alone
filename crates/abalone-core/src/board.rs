@@ -1,0 +1,151 @@
+//! Board model: the 61 cells of the radius-4 hexagon, in axial coordinates `(q, r)`.
+
+use std::collections::HashMap;
+
+/// Board radius. A cell `(q, r)` is on the board when `|q|`, `|r|` and `|q + r|` are all `<= RADIUS`.
+pub const RADIUS: i32 = 4;
+
+/// Content of one cell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cell {
+    Empty,
+    Black,
+    White,
+}
+
+/// Standard start, Black side: row r=-4 (5 cells), row r=-3 (6), the three centre cells of r=-2.
+/// White is the point reflection `(q, r) -> (-q, -r)`.
+const STANDARD_BLACK: [(i32, i32); 14] = [
+    (0, -4),
+    (1, -4),
+    (2, -4),
+    (3, -4),
+    (4, -4),
+    (-1, -3),
+    (0, -3),
+    (1, -3),
+    (2, -3),
+    (3, -3),
+    (4, -3),
+    (0, -2),
+    (1, -2),
+    (2, -2),
+];
+
+/// Hexagonal Abalone board.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Board {
+    cells: HashMap<(i32, i32), Cell>,
+}
+
+impl Board {
+    /// Board with all 61 cells empty.
+    pub fn empty() -> Self {
+        let mut cells = HashMap::new();
+        for q in -RADIUS..=RADIUS {
+            for r in -RADIUS..=RADIUS {
+                if (q + r).abs() <= RADIUS {
+                    cells.insert((q, r), Cell::Empty);
+                }
+            }
+        }
+        Self { cells }
+    }
+
+    /// Content of `(q, r)`, or `None` when the cell is off the board.
+    pub fn get(&self, q: i32, r: i32) -> Option<Cell> {
+        self.cells.get(&(q, r)).copied()
+    }
+
+    /// Sets `(q, r)`. Off-board cells are left untouched.
+    pub fn set(&mut self, q: i32, r: i32, cell: Cell) {
+        if let Some(slot) = self.cells.get_mut(&(q, r)) {
+            *slot = cell;
+        }
+    }
+
+    /// Standard start layout: 14 marbles per side.
+    pub fn standard() -> Self {
+        Self::with_marbles(&STANDARD_BLACK)
+    }
+
+    /// Black marbles on `black`, White marbles on their point reflections.
+    fn with_marbles(black: &[(i32, i32)]) -> Self {
+        let mut board = Self::empty();
+        for &(q, r) in black {
+            board.set(q, r, Cell::Black);
+            board.set(-q, -r, Cell::White);
+        }
+        board
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn all_coords() -> impl Iterator<Item = (i32, i32)> {
+        (-RADIUS..=RADIUS).flat_map(|q| (-RADIUS..=RADIUS).map(move |r| (q, r)))
+    }
+
+    fn count(board: &Board, cell: Cell) -> usize {
+        all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(cell))
+            .count()
+    }
+
+    fn swap_colour(cell: Cell) -> Cell {
+        match cell {
+            Cell::Black => Cell::White,
+            Cell::White => Cell::Black,
+            Cell::Empty => Cell::Empty,
+        }
+    }
+
+    #[test]
+    fn board_has_61_cells() {
+        let board = Board::empty();
+        let on_board = all_coords()
+            .filter(|&(q, r)| board.get(q, r).is_some())
+            .count();
+        assert_eq!(on_board, 61);
+    }
+
+    #[test]
+    fn off_board_get_is_none() {
+        let board = Board::standard();
+        assert_eq!(board.get(5, 0), None);
+        assert_eq!(board.get(0, -5), None);
+        assert_eq!(board.get(3, 2), None);
+    }
+
+    #[test]
+    fn set_then_get_on_board() {
+        let mut board = Board::empty();
+        board.set(1, -2, Cell::White);
+        assert_eq!(board.get(1, -2), Some(Cell::White));
+    }
+
+    #[test]
+    fn set_off_board_is_ignored() {
+        let mut board = Board::empty();
+        board.set(5, 0, Cell::Black);
+        assert_eq!(board.get(5, 0), None);
+        assert_eq!(count(&board, Cell::Black), 0);
+    }
+
+    #[test]
+    fn standard_has_14_marbles_per_side() {
+        let board = Board::standard();
+        assert_eq!(count(&board, Cell::Black), 14);
+        assert_eq!(count(&board, Cell::White), 14);
+    }
+
+    #[test]
+    fn standard_is_point_symmetric() {
+        let board = Board::standard();
+        for (q, r) in all_coords() {
+            assert_eq!(board.get(q, r), board.get(-q, -r).map(swap_colour));
+        }
+    }
+}
