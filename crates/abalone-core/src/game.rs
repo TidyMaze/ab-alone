@@ -1,7 +1,10 @@
 //! Game state: turn order, ejected counts, win and draw rules (docs/specs/rules.md sections 6, 7 and 9).
 
-use crate::board::Board;
-use crate::moves::{Move, MoveError, Player};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+use crate::board::{Board, Cell, RADIUS};
+use crate::moves::{apply, Move, MoveError, Player};
 
 /// Ejections needed to win.
 pub const WIN_EJECTIONS: u8 = 6;
@@ -43,15 +46,53 @@ pub struct Game {
     outcome: Option<Outcome>,
 }
 
+fn index(player: Player) -> usize {
+    match player {
+        Player::Black => 0,
+        Player::White => 1,
+    }
+}
+
+fn other(player: Player) -> Player {
+    match player {
+        Player::Black => Player::White,
+        Player::White => Player::Black,
+    }
+}
+
+fn code(cell: Cell) -> u8 {
+    match cell {
+        Cell::Empty => 0,
+        Cell::Black => 1,
+        Cell::White => 2,
+    }
+}
+
 /// Hash of a position: board and side to move.
-fn position_hash(_board: &Board, _to_move: Player) -> u64 {
-    unimplemented!()
+fn position_hash(board: &Board, to_move: Player) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    for q in -RADIUS..=RADIUS {
+        for r in -RADIUS..=RADIUS {
+            board.get(q, r).map(code).hash(&mut hasher);
+        }
+    }
+    index(to_move).hash(&mut hasher);
+    hasher.finish()
 }
 
 impl Game {
     /// Standard layout, Black to move.
     pub fn new() -> Self {
-        unimplemented!()
+        let board = Board::standard();
+        Self {
+            start_hash: position_hash(&board, Player::Black),
+            board,
+            to_move: Player::Black,
+            ejected: [0, 0],
+            no_ejection_plies: 0,
+            history: Vec::new(),
+            outcome: None,
+        }
     }
 
     pub fn board(&self) -> &Board {
@@ -63,8 +104,8 @@ impl Game {
     }
 
     /// Opponent marbles `player` has ejected.
-    pub fn ejected(&self, _player: Player) -> u8 {
-        unimplemented!()
+    pub fn ejected(&self, player: Player) -> u8 {
+        self.ejected[index(player)]
     }
 
     pub fn history(&self) -> &[Played] {
@@ -82,12 +123,42 @@ impl Game {
 
     /// The winner, or `None` while the game runs or after a draw.
     pub fn winner(&self) -> Option<Player> {
-        unimplemented!()
+        match self.outcome {
+            Some(Outcome::Win(player)) => Some(player),
+            _ => None,
+        }
     }
 
     /// Plays `mv` for the side to move.
-    pub fn play(&mut self, _mv: &Move) -> Result<(), GameError> {
-        unimplemented!()
+    pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
+        if self.outcome.is_some() {
+            return Err(GameError::GameOver);
+        }
+        let mover = self.to_move;
+        let (board, ejected) = apply(&self.board, mover, mv).map_err(GameError::Move)?;
+        self.board = board;
+        self.to_move = other(mover);
+        if ejected {
+            self.ejected[index(mover)] += 1;
+            self.no_ejection_plies = 0;
+        } else {
+            self.no_ejection_plies += 1;
+        }
+        let hash = position_hash(&self.board, self.to_move);
+        self.history.push(Played {
+            mv: mv.clone(),
+            hash,
+        });
+        let seen = self.history.iter().filter(|p| p.hash == hash).count()
+            + usize::from(self.start_hash == hash);
+        self.outcome = if self.ejected[index(mover)] >= WIN_EJECTIONS {
+            Some(Outcome::Win(mover))
+        } else if seen >= REPETITION_LIMIT || self.no_ejection_plies >= NO_EJECTION_PLY_LIMIT {
+            Some(Outcome::Draw)
+        } else {
+            None
+        };
+        Ok(())
     }
 }
 
@@ -189,7 +260,7 @@ mod tests {
     #[test]
     fn move_of_the_side_not_to_move_is_refused() {
         let mut game = Game::new();
-        let white_marble = mv(&[(4, -4)], W);
+        let white_marble = mv(&[(-4, 4)], E);
         assert_eq!(
             game.play(&white_marble),
             Err(GameError::Move(MoveError::NotOwnMarble))
