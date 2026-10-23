@@ -189,6 +189,18 @@ third player less than 1 time in 5. Compare against option A as a baseline.
 Five bosses, mapped to the lore slots of `world.md` (PR #51). Numbers (marble counts, timers) are **starting values** to tune in playtest.
 Player always starts with 14 marbles on the standard layout unless stated.
 
+| Lore slot (`world.md`) | Deck | Our boss | Issue | Play order |
+|---|---|---|---|---|
+| B1 Gatekeeper | 1 Mess | The Echo (the quartermaster repeats your count) | #46 | 1st, teaches tells |
+| B2 Hull | 2 Cargo | The Hull | #43 | 2nd |
+| B3 Choir | 3 Furnace | The Choir | #44 | 3rd |
+| B4 Converter | 4 Chapel | The Chaplain (was The Marker, renamed, see #19) | #45 | 4th |
+| B5 Mind | 5 Bridge | The Ballast Mind | #47 | 5th |
+
+Issue numbers keep their original order, play order is the last column. The Echo opens the
+game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
+the tell" habit. Calibration target for the Echo: first win between attempt 3 and 6.
+
 ### 7.1 The Hull (#43): first environment boss
 
 - **Concept**: the ship itself, rusted, falling apart under you.
