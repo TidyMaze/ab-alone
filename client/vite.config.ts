@@ -11,7 +11,7 @@ export default defineConfig(({ command }) => ({
   // The wasm package is built outside client/, the dev server must be allowed to serve it.
   server: { fs: { allow: ['..'] } },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       // Only the pure game-board logic is unit tested here. The Three.js scene and the DOM wiring
