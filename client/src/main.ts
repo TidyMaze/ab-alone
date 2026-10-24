@@ -287,8 +287,10 @@ function playMove(record: number[]): void {
   if (!online && !fight) void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
 }
 
-function afterPlay(before: number[], record: number[]): void {
+// `live` false: a move replayed by a catch-up shows at once, without its ejection effect and sound (#232).
+function afterPlay(before: number[], record: number[], live = true): void {
   history.push(record);
+  if (!live) return;
   const ejection = findEjection(before, engine.board(), parseMoves(record)[0]!);
   if (!ejection) return;
   const body = document.body;
@@ -713,10 +715,10 @@ async function goOnline(room: string, side: number): Promise<void> {
     transport: net,
     judge: {
       to_move: () => engine.to_move(),
-      play: (mv) => {
+      play: (mv, live) => {
         const before = Array.from(engine.board());
         engine.play(mv);
-        afterPlay(before, Array.from(mv));
+        afterPlay(before, Array.from(mv), live);
       },
       status: () => engine.status(),
       restart: () => {

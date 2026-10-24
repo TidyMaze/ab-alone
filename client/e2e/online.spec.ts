@@ -412,6 +412,65 @@ test('a player back after a drop shows the same ply and side to move as the othe
   await b.context().close();
 });
 
+// Issue #232: the moves a peer catches up on show at once, without their ejection effect. Black pushes a
+// White marble off in the 3v2 push of eject.spec.ts, then a spectator joins: it shows the score of that
+// ply, and no effect ever started on it (recorded in the page, so a slow runner cannot miss one).
+test('a spectator joining after an ejection shows the score at once, with no ejection effect, #232', async ({ browser }) => {
+  test.setTimeout(240_000); // five plies on two WebGL pages, each click brings its page to the front, then a third page
+  const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
+  const lost = new Set(['c']); // the spectator is not there yet
+  await room({ a, b, c }, lost);
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await a.locator('#play-online').click();
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  await b.goto(`./?net=hook${hash}`);
+  await b.locator('canvas').waitFor();
+  await open(a);
+  await open(b);
+  await seat(b, 'player');
+  await expect(status(a)).toHaveText('You are Black. White is here.');
+  const plays: [Page, ...[number, number][]][] = [
+    [a, [-2, 2], [-2, 3], [-2, 4], [-2, 1]], // Black trio NW
+    [b, [0, -3], [0, -2], [-1, -2]], // White pair SW
+    [a, [-2, 1], [-2, 2], [-2, 3], [-2, 0]], // Black trio NW
+    [b, [-1, -2], [-1, -1], [-2, -2]], // White pair W, into the Black column
+    [a, [-2, 0], [-2, 1], [-2, 2], [-2, -1]], // 3v2 push, the last White marble leaves
+  ];
+  for (const [ply, [page, ...cells]] of plays.entries()) {
+    for (const [q, r] of cells) await cell(page, q, r);
+    await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
+  }
+  const score = 'Black ejected 1/6 · White ejected 0/6';
+  for (const page of [a, b]) {
+    await expect(page.locator('#hud .score')).toHaveText(score);
+    await expect(page.locator('body')).toHaveAttribute('data-ejections', '1'); // a live move plays its effect
+  }
+
+  await c.goto(`./?net=hook${hash}`);
+  await c.locator('canvas').waitFor();
+  await c.evaluate(() => {
+    const w = window as any;
+    w.__effects = [];
+    new MutationObserver((changes) => w.__effects.push(...changes.map((ch) => ch.attributeName))).observe(document.body, {
+      attributeFilter: ['data-ejecting', 'data-ejections', 'data-sound'],
+    });
+  });
+  lost.delete('c');
+  await open(c);
+  // A Hello round trip, then a Sync answered by both players, each record verified: slow with three WebGL pages.
+  await expect(c.locator('body')).toHaveAttribute('data-seat', 'spectator', { timeout: 30_000 });
+  await expect.poll(() => plies(c), { timeout: 30_000 }).toBe(5);
+  await expect(c.locator('#hud .score')).toHaveText(score);
+  await expect(c.locator('#hud .turn')).toHaveText('White to move');
+  await expect(c.locator('#hud .pip.out')).toHaveCount(1); // the ejected marble shows
+  expect(await c.evaluate(() => (window as any).__effects)).toEqual([]);
+  expect(await c.evaluate(() => document.body.dataset.ejecting)).toBeUndefined();
+  await expect(c.locator('#hud')).not.toContainText('refused');
+  for (const page of [a, b, c]) await page.context().close();
+});
+
 // Issue #194: offline, Play online is disabled with a notice. Back online, it works again without a reload.
 test('Play online is disabled with a notice while offline and works again back online, #194', async ({ page, context }) => {
   await page.goto('./?bot=off&net=hook');

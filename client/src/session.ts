@@ -22,10 +22,11 @@ import { colourOf, nextGameId, seatFor } from './rematch';
 import { Seats } from './seats';
 import type { ConnectionState, Transport } from './transport';
 
-/** The rules engine, the only judge of legality. `play` throws on an illegal move. */
+/** The rules engine, the only judge of legality. `play` throws on an illegal move. Its `live` is false for a
+ * move we missed, replayed from a catch-up answer: the caller shows it without its effects (#232). */
 export interface Judge {
   to_move(): number;
-  play(mv: Int32Array): void;
+  play(mv: Int32Array, live: boolean): void;
   status(): number; // 0 while the game runs
   restart(): void; // a new game from the start position: the rematch
 }
@@ -225,7 +226,7 @@ export class OnlineSession {
     if (seat === 0) return this.o.onRefuse('wrong-key');
     if (colourOf(seat, this.games.length - 1, this.seats.count) !== this.o.judge.to_move()) return this.o.onRefuse('not-their-turn');
     try {
-      this.o.judge.play(Int32Array.from(r.move));
+      this.o.judge.play(Int32Array.from(r.move), live);
     } catch {
       return this.o.onRefuse('illegal');
     }
