@@ -59,16 +59,16 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #clear-board[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #clear-board:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #online { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
-#update, #sound, #reset-view, #new-game, #play-online, #rematch, #boss-fight, #daily, #boss-retry, #boss-list button, #copy-diagnostics {
+#update, #sound, #reset-view, #new-game, #play-online, #rematch, #boss-fight, #daily, #boss-retry, #export-game, #import-game, #boss-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#update:focus-visible, #sound:focus-visible, #reset-view:focus-visible, #new-game:focus-visible, #play-online:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #boss-retry:focus-visible, #boss-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#update:focus-visible, #sound:focus-visible, #reset-view:focus-visible, #new-game:focus-visible, #play-online:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #boss-retry:focus-visible, #export-game:focus-visible, #import-game:focus-visible, #boss-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* The sound toggle: lit while on, struck through while off, so the state never rests on colour alone. */
 #sound[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #sound[aria-pressed='false'] { text-decoration: line-through; }
 #boss-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
-#boss-list[hidden], #boss-retry[hidden], #rematch[hidden], #update[hidden], #new-game[hidden] { display: none; }
+#boss-list[hidden], #boss-retry[hidden], #rematch[hidden], #update[hidden], #new-game[hidden], #export-game[hidden], #import-game[hidden] { display: none; }
 /* New game asking for its confirmation: the words carry it, the hazard colour repeats it. */
 #new-game.confirm { border-color: var(--hazard); color: var(--hazard); }
 /* Rematch is the next step of a finished online game, greyed once we asked. New version: a reload runs the update. */
