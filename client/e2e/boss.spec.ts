@@ -150,3 +150,49 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, a convert
   expect(previewed).toBe(true);
   expect(converted).toBe(true);
 });
+
+// The Choir (#183): a radius 3 board, a glyph per army on the boss marbles, only the army in turn
+// moves and the next one wears a ring.
+test('start The Choir: the boss moves the army in turn, the next army is marked, #183', async ({ page }, testInfo) => {
+  test.slow(); // a boss search in the worker
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  const body = page.locator('body');
+  const hud = page.locator('#hud');
+  const plies = () => page.evaluate(() => (window as any).__plies());
+  type Member = { cell: [number, number]; army: number };
+  const armies = () => page.evaluate(() => (window as any).__armies()) as Promise<Member[]>;
+  const cellsOf = (list: Member[], army: number) =>
+    list.filter((m) => m.army === army).map((m) => m.cell.join(',')).sort();
+  const click = async (q: number, r: number) => {
+    const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
+    await page.mouse.click(p.x, p.y);
+  };
+
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
+  await expect(hud).toContainText('The Choir');
+  await expect(hud).toContainText('Black ejected 0/10 · White ejected 0/6');
+  await expect(hud).toContainText('Next army: Alto');
+  await expect(page.locator('#hud .notch')).toHaveCount(3);
+  await expect(body).toHaveAttribute('data-vanished', '24'); // the outer ring is a hole
+  await expect(body).toHaveAttribute('data-armies', '12');
+  await expect(body).toHaveAttribute('data-next-army', 'Alto');
+  await page.screenshot({ path: testInfo.outputPath('choir-start.png') });
+
+  const before = await armies();
+  const mv = await page.evaluate(() =>
+    (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
+  );
+  const [q, r] = mv.cells[0];
+  await click(q, r);
+  await click(mv.dir === 4 ? q : q + 1, r - 1);
+  await expect.poll(plies, { timeout: 30_000 }).toBe(2); // the boss replied
+  const after = await armies();
+  expect(cellsOf(after, 0)).not.toEqual(cellsOf(before, 0)); // Alto, the army in turn, moved
+  expect(cellsOf(after, 1)).toEqual(cellsOf(before, 1));
+  expect(cellsOf(after, 2)).toEqual(cellsOf(before, 2));
+  await expect(hud).toContainText('Next army: Tenor');
+  await expect(body).toHaveAttribute('data-next-army', 'Tenor');
+  await page.screenshot({ path: testInfo.outputPath('choir-tenor-next.png') });
+});
