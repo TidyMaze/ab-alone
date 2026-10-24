@@ -247,10 +247,10 @@ describe('bisectHint', () => {
 
 const DOWNLOAD = [
   `gh run download 123 --repo TidyMaze/ab-alone --name playwright-report --dir /tmp/nightly-123`,
-  'npx playwright show-report /tmp/nightly-123/playwright-report',
+  'bunx playwright show-report /tmp/nightly-123/playwright-report',
 ].join('\n');
-const LIVE = 'E2E_BASE_URL=https://tidymaze.github.io/ab-alone/ npx playwright test --project=chromium --workers=1';
-const CHECKOUT = `git fetch origin && git checkout ${SHA}\ncd client && npm ci && npx playwright install chromium`;
+const LIVE = 'E2E_BASE_URL=https://tidymaze.github.io/ab-alone/ bunx playwright test --project=chromium --workers=1';
+const CHECKOUT = `git fetch origin && git checkout ${SHA}\ncd client && bun install --frozen-lockfile && bunx playwright install chromium`;
 
 describe('issueFor', () => {
   const sections = (body: string) => body.match(/^### .+$/gm);
@@ -277,7 +277,7 @@ describe('issueFor', () => {
         '  ```\n  Test timeout of 30000ms exceeded.\n  ```\n' +
         "  ```\n  Error: locator.click: Test timeout of 30000ms exceeded.\n  Call log:\n    - waiting for locator('#boss-list')\n" +
         "  > 14 |   await page.locator('#boss-list').click();\n  at e2e/boss.spec.ts:14:78\n  ```\n" +
-        '  Trace: `npx playwright show-trace /tmp/nightly-123/test-results/boss-echo-retry1/trace.zip`',
+        '  Trace: `bunx playwright show-trace /tmp/nightly-123/test-results/boss-echo-retry1/trace.zip`',
     );
     expect(body).toContain('Flaky, failed then passed on the retry:\n\n- `e2e/boss.spec.ts:20` click a marble');
     expect(body).toContain(`Report and traces: artifact \`playwright-report\` on the [run page](${RUN}#artifacts). To open them, from \`client/\`:`);
@@ -327,7 +327,7 @@ describe('issueFor', () => {
     expect(sections(body)).toEqual(['### Flaky specs', '### Reproduce', '### Browser, OS and commit']);
     expect(body).toContain(
       '- `e2e/boss.spec.ts:20` click a marble\n  ```\n  Error: expect(locator).toContainText(expected) failed\n  ```\n' +
-        '  Trace: `npx playwright show-trace /tmp/nightly-123/test-results/boss-marble-retry1/trace.zip`',
+        '  Trace: `bunx playwright show-trace /tmp/nightly-123/test-results/boss-marble-retry1/trace.zip`',
     );
     expect(body).toContain(`\`\`\`sh\n${CHECKOUT}\n${LIVE} --repeat-each=10 e2e/boss.spec.ts:20\n\`\`\``);
     expect(body).toContain(DOWNLOAD);
