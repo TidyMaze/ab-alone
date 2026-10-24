@@ -688,6 +688,7 @@ newGameButton.addEventListener('click', () => {
   thinking = false; // the bot's reply to the old game is dropped (botTurn)
   void saves.clear();
   refresh();
+  analyse(); // the bar follows the new game, an answer for the old one is dropped
 });
 newGameButton.disabled = false; // listener ready (#146)
 
