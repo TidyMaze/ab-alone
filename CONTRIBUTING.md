@@ -185,8 +185,12 @@ the triager does exactly one of:
 
 ### 6.4 Pull request
 
-1. Open the PR from the template. The body contains exactly one `Closes #<task>`.
-2. Move the Task to `In Review`.
+1. Open the PR from the template as a **draft** (`gh pr create --draft`). The body contains
+   exactly one `Closes #<task>`.
+2. Move the Task to `In Review`. A PR is **ready for review only when it is ready to merge**: the
+   merge gate below passes. While it is red, unfinished, in conflict or out of date, it stays a
+   draft. The author marks it ready (`gh pr ready`) when the gate passes; the lead agent does it
+   for a sub-agent's PR after checking.
 3. Review is **optional**. Anyone may comment; the author answers every comment in its thread and
    pushes fixes to the same branch.
 4. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
@@ -194,7 +198,10 @@ the triager does exactly one of:
    - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, one full e2e run green
    - [ ] CI: the required check `rust` is green (enforced by branch protection, 0 approvals needed)
    - [ ] Every conversation resolved (enforced by branch protection)
-   - [ ] Up to date: rebased on `main`, no conflict
+   - [ ] Up to date: rebased on the latest `main`, no conflict (enforced by branch protection:
+     "require branches to be up to date", decision #161). Every merge makes the other open PRs out
+     of date: their authors rebase and rerun the checks. Never rebase a PR assigned to someone
+     else (rule 14), tell them in a comment instead.
 6. As soon as the gate passes, **an owner or the lead agent squash-merges into `main`**. Sub-agents
    never merge. A green PR is never left open: the Task is not `Done` until it is merged. GitHub
    closes the Task, the project sets `Done`, the branch is deleted.
@@ -276,6 +283,7 @@ Every agent follows the rules above, plus:
 - Working on an issue or PR without being assigned to it.
 - Touching an issue or PR assigned to someone else without their written consent.
 - A branch based on another unmerged branch, or a PR targeting anything but `main`.
+- Marking a PR ready while it is red, unfinished, in conflict or out of date. Keep it a draft.
 - Fixing a bug without a `bug` issue, or inside another task's PR.
 - Starting a task while a `Ready` bug of the same or higher priority is waiting.
 
