@@ -96,6 +96,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #hud .notch.active { border-color: var(--accent); color: var(--accent); }
 #hud .result { margin-top: 0.25rem; font-weight: 500; color: var(--accent); }
 #hud .boss .tell { margin-top: 0.25rem; font-size: 0.875rem; color: var(--hazard); }
+#hud .boss .goal { margin-top: 0.25rem; font-size: 0.875rem; }
 #hud .boss .daily { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
 /* Daily result card (#196), under Retry at the end of a daily fight: the text as it is copied, then Copy. */
 #daily-card { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
@@ -192,7 +193,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #hud { line-height: 1.3; }
   #hud .pips { margin: 0.25rem 0; }
   #hud .boss { margin-top: 0.25rem; }
-  #hud .boss .daily { font-size: 0.75rem; }
+  #hud .boss .goal, #hud .boss .daily { font-size: 0.75rem; }
 }
 /* A short landscape window (a phone held sideways) has no room above the board's top-left edge: the plate
    keeps to the band left of the board, like the column, with a smaller turn line (#234). */

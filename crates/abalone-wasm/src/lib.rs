@@ -241,6 +241,8 @@ impl Fight {
 /// One boss of the roster. Adding a boss is one line in [`BOSSES`].
 struct BossEntry {
     id: &'static str,
+    /// The goal the player reads before the first move: the rule that differs, and how it is won or lost.
+    goal: &'static str,
     def: fn() -> BossDef,
     /// The fight for this boss definition and seed.
     start: fn(BossDef, u64) -> Fight,
@@ -283,6 +285,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
 const BOSSES: [BossEntry; 4] = [
     BossEntry {
         id: "echo",
+        goal: "After each of your moves it plays the mirror of that move when legal. Eject 6 of its marbles to win; losing 6 of yours or a draw is a defeat.",
         def: echo_boss,
         start: plain_fight,
         reply: echo_move,
@@ -291,6 +294,7 @@ const BOSSES: [BossEntry; 4] = [
     },
     BossEntry {
         id: "hull",
+        goal: "Rim cells crack every 8 plies, and a marble on a cracked cell is ejected. Eject 6 of its marbles to win; losing 6 of yours or a draw is a defeat.",
         def: hull_boss,
         start: plain_fight,
         reply: search_reply,
@@ -299,6 +303,7 @@ const BOSSES: [BossEntry; 4] = [
     },
     BossEntry {
         id: "choir",
+        goal: "Only one of its three armies moves each turn, on a smaller board. Eject 10 of its marbles to win; losing 6 of yours or a draw is a defeat.",
         def: choir_boss,
         start: choir_fight,
         reply: search_reply,
@@ -307,6 +312,7 @@ const BOSSES: [BossEntry; 4] = [
     },
     BossEntry {
         id: "chaplain",
+        goal: "Your marbles with 3 or more of its marbles around them flip to its side at the end of its turn. Eject 6 of its marbles to win; losing 6 of yours or a draw is a defeat.",
         def: chaplain_boss,
         start: plain_fight,
         reply: search_reply,
@@ -335,6 +341,12 @@ pub fn boss_name(id: &str) -> Option<String> {
     boss_entry(id).map(|b| (b.def)().name.to_string())
 }
 
+/// The goal of a boss id, the text the client shows before the first move. `None` when unknown.
+#[wasm_bindgen]
+pub fn boss_goal(id: &str) -> Option<String> {
+    boss_entry(id).map(|b| b.goal.to_string())
+}
+
 /// A game against a boss: the player is Black, the boss is White. Same encodings as [`Engine`].
 #[wasm_bindgen]
 pub struct Encounter {
@@ -354,6 +366,10 @@ impl Encounter {
 
     pub fn name(&self) -> String {
         (self.entry.def)().name.to_string()
+    }
+
+    pub fn goal(&self) -> String {
+        self.entry.goal.to_string()
     }
 
     /// Side to move: `1` Black, `2` White.
@@ -726,6 +742,14 @@ mod tests {
         assert_eq!(boss_name("choir"), Some("The Choir".to_string()));
         assert_eq!(boss_name("chaplain"), Some("The Chaplain".to_string()));
         assert_eq!(boss_name("nobody"), None);
+    }
+
+    #[test]
+    fn every_boss_in_the_daily_rotation_has_a_goal() {
+        for id in boss_ids() {
+            assert!(boss_goal(&id).is_some_and(|g| !g.is_empty()), "{id} has no goal");
+        }
+        assert_eq!(boss_goal("nobody"), None);
     }
 
     #[test]

@@ -63,6 +63,7 @@ export const SITE = 'https://tidymaze.github.io/ab-alone/';
 export interface DailyResult {
   day: string; // UTC date, YYYY-MM-DD
   boss: string; // the boss name
+  goal: string; // the boss goal, one line of the card
   result: number; // Encounter.result(): 0 playing, 1 won, 2 lost (a draw is a loss)
   plies: number; // plies played, the boss replies included
   attempt: number; // the attempt of the day this fight was
@@ -70,10 +71,10 @@ export interface DailyResult {
 
 const OUTCOME = ['', 'Victory in', 'Defeat in'];
 
-/** The text of the result card, to copy and share: the day, the boss, the result, the plies and the
- * attempt, then the link. Empty while the fight is on, so the card shows only at the end. */
-export function dailyCard({ day, boss, result, plies, attempt }: DailyResult): string {
+/** The text of the result card, to copy and share: the day, the boss, its goal, the result, the plies
+ * and the attempt, then the link. Empty while the fight is on, so the card shows only at the end. */
+export function dailyCard({ day, boss, goal, result, plies, attempt }: DailyResult): string {
   if (result === 0) return '';
   const count = `${plies} ${plies === 1 ? 'ply' : 'plies'}`;
-  return `AB-ALONE daily ${day}: ${boss}\n${OUTCOME[result]} ${count} on attempt ${attempt}\n${SITE}`;
+  return `AB-ALONE daily ${day}: ${boss}\nGoal: ${goal}\n${OUTCOME[result]} ${count} on attempt ${attempt}\n${SITE}`;
 }

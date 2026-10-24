@@ -564,6 +564,7 @@ function hud(extra = ''): void {
         phase: engine.phase(),
         phases: engine.phases(),
         result: end ? 0 : engine.result(), // the end banner already says Victory or Defeat, one line less in the plate
+        goal: engine.goal(),
         tell: [
           crackText(parseCracks(engine.cracks())),
           chaplainText(exposed, engine.converted().length / 2),
@@ -928,6 +929,7 @@ function showResultCard(): void {
       ? dailyCard({
           day: fight.daily.day,
           boss: engine.name(),
+          goal: engine.goal(),
           result: engine.result(),
           plies: history.length,
           attempt: fight.daily.attempt,
