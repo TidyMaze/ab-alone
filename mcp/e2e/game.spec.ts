@@ -73,3 +73,26 @@ test('a scripted client plays a full game against the bot over stdio', async () 
   expect(fresh.game_id).not.toBe(state.game_id);
   expect((await call('resign')).value).toMatchObject({ status: 'white_won', resigned: true });
 });
+
+test('a scripted client fights a boss to the end over stdio', async () => {
+  await start();
+  let state = (await call('new_game', { boss: 'hull', seed: 253 })).value;
+  expect(state).toMatchObject({ mode: 'boss', you: 'black', status: 'running', boss: { id: 'hull', result: 'playing' } });
+
+  const pick = picker(253);
+  let cracks = 0;
+  while (state.status === 'running') {
+    const legal = (await call('legal_moves')).value;
+    expect(legal.announces).toEqual({});
+    const answer = await call('play_move', { move: legal.moves[pick(legal.count)] });
+    expect(answer.isError).toBe(false);
+    state = answer.value.state;
+    cracks += state.boss.marks.filter((mark: { kind: string }) => mark.kind === 'crack').length;
+  }
+
+  // The Hull cracks cells on its schedule, and a fight always ends won or lost, a draw is a loss.
+  expect(cracks).toBeGreaterThan(0);
+  expect(['won', 'lost']).toContain(state.boss.result);
+  expect(state.boss.result).toBe(state.status === 'black_won' ? 'won' : 'lost');
+  expect((await call('get_state')).value).toEqual(state);
+});

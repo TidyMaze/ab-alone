@@ -1,23 +1,35 @@
-// The tools of a local game against the bot (docs/specs/mcp.md sections 4 to 6): `new_game`, `get_state`,
+// The tools of a local game against the bot or a boss (docs/specs/mcp.md sections 4 to 6): `new_game`, `get_state`,
 // `legal_moves`, `play_move`, `resign`. One game at a time. The engine is the only judge: this holds no rule, it asks
 // the engine and turns its codes into words. Resign is the one thing the engine does not model (rules.md OPEN-12).
 import { randomUUID } from 'node:crypto';
 import { ascii, boardText } from './board';
+import { bossState, type BossLike, type BossState } from './boss';
 import { formatMove, fromRecord, fromRecords, parseMove, toRecord } from './notation';
 
-/** What the session uses of `Engine` in abalone-wasm. */
-export interface EngineLike {
+/** What the session uses of both `Engine` and `Encounter` in abalone-wasm. */
+interface Playable {
   to_move(): number;
   legal_moves(): Int32Array;
   /** Throws the engine's reason when the move is illegal, the game is then unchanged. */
   play(mv: Int32Array): void;
-  best_move(nodes: number): Int32Array;
   ejected(side: number): number;
   win_ejections(side: number): number;
   board(): Uint8Array;
   status(): number;
   draw_reason(): number;
   free(): void;
+}
+
+/** What the session uses of `Engine`: a game against the bot. */
+export interface EngineLike extends Playable {
+  best_move(nodes: number): Int32Array;
+}
+
+/** What the session uses of `Encounter`: a fight against a boss. */
+export interface EncounterLike extends Playable, BossLike {
+  boss_move(): Int32Array;
+  /** The reply the boss announces for a move, empty when it announces nothing. */
+  tell_move(mv: Int32Array): Int32Array;
 }
 
 /** Search budget of the bot in positions per move, `BOT_NODES` of client/src/bot.ts. */
@@ -47,7 +59,7 @@ export function drawReasonName(code: number): DrawReason {
   return DRAW_REASONS[code] as DrawReason;
 }
 
-export type ErrorCode = 'no_game' | 'game_over' | 'bad_move' | 'illegal_move';
+export type ErrorCode = 'no_game' | 'unknown_boss' | 'game_over' | 'bad_move' | 'illegal_move';
 
 export interface ToolError {
   code: ErrorCode;
@@ -58,7 +70,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: ToolError }
 
 export interface State {
   game_id: string;
-  mode: 'bot';
+  mode: 'bot' | 'boss';
   you: Side;
   to_move: Side;
   status: Status;
@@ -69,25 +81,27 @@ export interface State {
   ascii: string;
   board: string;
   last_moves: string[];
-  boss: null;
+  boss: BossState | null;
 }
 
 export interface LegalMoves {
   to_move: Side;
   moves: string[];
-  /** Replies a boss announces per move: always empty against the bot. */
+  /** The reply a boss announces per move, empty against the bot and the bosses that announce nothing. */
   announces: Record<string, string>;
   count: number;
 }
 
 export interface Played {
   played: string;
-  /** The bot reply, `null` when the game ended on the agent's move. */
+  /** The bot or boss reply, `null` when the game ended on the agent's move. */
   reply: string | null;
   state: State;
 }
 
 export interface NewGameInput {
+  boss?: string;
+  seed?: number;
   bot_nodes?: number;
 }
 
@@ -97,8 +111,10 @@ export interface PlayMoveInput {
 
 interface Game {
   id: string;
-  engine: EngineLike;
-  botNodes: number;
+  engine: Playable;
+  /** The bot or boss move for the current position. */
+  reply: () => Int32Array;
+  boss: { id: string; encounter: EncounterLike } | null;
   resigned: boolean;
   /** Every ply in notation, oldest first, bot moves included. */
   plies: string[];
@@ -114,13 +130,33 @@ const fail = (code: ErrorCode, message: string): Result<never> => ({ ok: false, 
 export class Session {
   private game: Game | null = null;
 
-  constructor(private readonly newEngine: () => EngineLike) {}
+  constructor(
+    private readonly newEngine: () => EngineLike,
+    private readonly newEncounter: (boss: string, seed: number) => EncounterLike,
+  ) {}
 
-  /** Drops any game in progress and starts one against the bot. The agent is Black and moves first. */
-  newGame({ bot_nodes = BOT_NODES }: NewGameInput): Result<State> {
+  /**
+   * Drops any game in progress and starts one against the bot, or against `boss` with `seed`. The agent is Black and
+   * moves first. An unknown boss keeps the game in progress.
+   */
+  newGame({ boss, seed = 0, bot_nodes = BOT_NODES }: NewGameInput): Result<State> {
+    const game = { id: randomUUID(), resigned: false, plies: [] };
+    let next: Game;
+    if (boss === undefined) {
+      const engine = this.newEngine();
+      next = { ...game, engine, reply: () => engine.best_move(bot_nodes), boss: null };
+    } else {
+      let encounter: EncounterLike;
+      try {
+        encounter = this.newEncounter(boss, seed);
+      } catch (reason) {
+        return fail('unknown_boss', String(reason));
+      }
+      next = { ...game, engine: encounter, reply: () => encounter.boss_move(), boss: { id: boss, encounter } };
+    }
     this.game?.engine.free();
-    this.game = { id: randomUUID(), engine: this.newEngine(), botNodes: bot_nodes, resigned: false, plies: [] };
-    return ok(state(this.game));
+    this.game = next;
+    return ok(state(next));
   }
 
   getState(): Result<State> {
@@ -130,12 +166,20 @@ export class Session {
   legalMoves(): Result<LegalMoves> {
     return this.withGame((game) => {
       // The engine lists no move once the game is over. A resign is not in the engine, so it is checked here.
-      const moves = game.resigned ? [] : fromRecords(game.engine.legal_moves()).map(formatMove);
-      return ok({ to_move: sideName(game.engine.to_move()), moves, announces: {}, count: moves.length });
+      const legal = game.resigned ? [] : fromRecords(game.engine.legal_moves());
+      const announces: Record<string, string> = {};
+      if (game.boss) {
+        for (const move of legal) {
+          const reply = game.boss.encounter.tell_move(toRecord(move));
+          if (reply.length > 0) announces[formatMove(move)] = formatMove(fromRecord(reply));
+        }
+      }
+      const moves = legal.map(formatMove);
+      return ok({ to_move: sideName(game.engine.to_move()), moves, announces, count: moves.length });
     });
   }
 
-  /** Plays the agent's move, then the bot's reply in the same call, so the agent is to move again. */
+  /** Plays the agent's move, then the bot's or boss's reply in the same call, so the agent is to move again. */
   playMove({ move }: PlayMoveInput): Result<Played> {
     return this.withGame((game) => {
       if (over(game)) return gameOver();
@@ -150,7 +194,7 @@ export class Session {
       game.plies.push(played);
       let reply: string | null = null;
       if (!over(game)) {
-        const record = game.engine.best_move(game.botNodes);
+        const record = game.reply();
         game.engine.play(record);
         reply = formatMove(fromRecord(record));
         game.plies.push(reply);
@@ -159,7 +203,7 @@ export class Session {
     });
   }
 
-  /** The bot wins. The engine is not asked, it has no resign. */
+  /** The bot or boss wins. The engine is not asked, it has no resign. */
   resign(): Result<State> {
     return this.withGame((game) => {
       if (over(game)) return gameOver();
@@ -184,12 +228,14 @@ function gameOver(): Result<never> {
 function state(game: Game): State {
   const { engine } = game;
   const board = engine.board();
+  const boss = game.boss && bossState(game.boss.id, game.boss.encounter);
+  if (boss && game.resigned) boss.result = 'lost';
   return {
     game_id: game.id,
-    mode: 'bot',
+    mode: boss ? 'boss' : 'bot',
     you: 'black',
     to_move: sideName(engine.to_move()),
-    // The agent is Black against the bot (section 4.1), so a resign is a White win.
+    // The agent is Black against the bot or a boss (section 4.1), so a resign is a White win.
     status: game.resigned ? 'white_won' : statusName(engine.status()),
     draw_reason: drawReasonName(engine.draw_reason()),
     resigned: game.resigned,
@@ -198,6 +244,6 @@ function state(game: Game): State {
     ascii: ascii(board),
     board: boardText(board),
     last_moves: game.plies.slice(-LAST_MOVES),
-    boss: null,
+    boss,
   };
 }

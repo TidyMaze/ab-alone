@@ -2,6 +2,7 @@
 // a failure sets `isError` with the error object of section 6.
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
+import { bossIds } from './engine';
 import type { Result, Session } from './game';
 
 const NOTATION =
@@ -21,15 +22,20 @@ export function createServer(session: Session): McpServer {
     'new_game',
     {
       description:
-        'Start a local game of Abalone against the bot and drop any game in progress. You are Black and move ' +
-        'first. Returns the game state (see get_state).',
+        'Start a local game of Abalone against the bot, or a boss fight, and drop any game in progress. You are ' +
+        'Black and move first. Returns the game state (see get_state).',
       inputSchema: z.strictObject({
+        boss: z
+          .string()
+          .optional()
+          .describe(`Fight this boss instead of the bot: ${bossIds().join(', ')}. Same boss and seed, same fight.`),
+        seed: z.int().min(0).max(4294967295).optional().describe('Seed of the boss fight, default 0.'),
         bot_nodes: z
           .int()
           .min(1)
           .max(200000)
           .optional()
-          .describe('Positions the bot searches per move, default 20000. Fewer is weaker and faster.'),
+          .describe('Positions the bot searches per move, default 20000. Fewer is weaker and faster. Not for a boss.'),
       }),
     },
     (input) => toolResult(session.newGame(input)),
@@ -40,14 +46,19 @@ export function createServer(session: Session): McpServer {
     {
       description:
         'The game state: side to move, status (running, black_won, white_won, draw), marbles ejected by each side ' +
-        'and the number needed to win, the board as ASCII and as 61 characters, and the last 6 plies.',
+        'and the number needed to win, the board as ASCII and as 61 characters, the last 6 plies, and in a boss fight ' +
+        'the boss: phase, tell (what it does after the next ply), marks on the board, result.',
     },
     () => toolResult(session.getState()),
   );
 
   server.registerTool(
     'legal_moves',
-    { description: `Every legal move of the side to move, from the engine. Empty once the game is over. ${NOTATION}` },
+    {
+      description:
+        'Every legal move of the side to move, from the engine. Empty once the game is over. announces maps a move to ' +
+        `the reply a boss announces for it, empty when it announces nothing. ${NOTATION}`,
+    },
     () => toolResult(session.legalMoves()),
   );
 
@@ -55,8 +66,8 @@ export function createServer(session: Session): McpServer {
     'play_move',
     {
       description:
-        'Play your move. The engine refuses an illegal one and nothing changes. The bot replies in the same call, ' +
-        `so you are to move again unless the game is over. ${NOTATION}`,
+        'Play your move. The engine refuses an illegal one and nothing changes. The bot or boss replies in the ' +
+        `same call, so you are to move again unless the game is over. ${NOTATION}`,
       inputSchema: z.strictObject({ move: z.string().describe('Your move, for example "(1,3)>NE".') }),
     },
     (input) => toolResult(session.playMove(input)),
@@ -64,7 +75,7 @@ export function createServer(session: Session): McpServer {
 
   server.registerTool(
     'resign',
-    { description: 'Give up the game: the bot wins.' },
+    { description: 'Give up the game: the bot or boss wins.' },
     () => toolResult(session.resign()),
   );
 

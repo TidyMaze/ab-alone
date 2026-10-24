@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { afterEach, describe, expect, test } from 'vitest';
-import { newEngine } from './engine';
+import { newEncounter, newEngine } from './engine';
 import { Session } from './game';
 import { createServer, toolResult } from './server';
 
@@ -15,7 +15,7 @@ afterEach(async () => {
 /** A client connected in memory to a fresh server, as an MCP host would be over stdio. */
 async function connect(): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await createServer(new Session(newEngine)).connect(serverSide);
+  await createServer(new Session(newEngine, newEncounter)).connect(serverSide);
   client = new Client({ name: 'test', version: '0.0.0' });
   await client.connect(clientSide);
   return client;
@@ -55,8 +55,16 @@ describe('the MCP server', () => {
     const schema = (name: string) => tools.find((tool) => tool.name === name)!.inputSchema;
     expect(schema('new_game')).toMatchObject({
       type: 'object',
-      properties: { bot_nodes: { type: 'integer', minimum: 1, maximum: 200000 } },
+      properties: {
+        boss: { type: 'string' },
+        seed: { type: 'integer', minimum: 0, maximum: 4294967295 },
+        bot_nodes: { type: 'integer', minimum: 1, maximum: 200000 },
+      },
       additionalProperties: false,
+    });
+    // The boss ids come from the engine (boss_ids()), so a host sees them without a call.
+    expect(tools.find((tool) => tool.name === 'new_game')!.inputSchema.properties!.boss).toMatchObject({
+      description: expect.stringContaining('echo, hull, choir, chaplain'),
     });
     expect(schema('new_game').required ?? []).toEqual([]);
     expect(schema('play_move')).toMatchObject({
@@ -103,6 +111,18 @@ describe('the MCP server', () => {
     expect(JSON.parse((await call('play_move', { move: '(1,3)>NE' })).text).code).toBe('game_over');
   });
 
+  test('fights a boss: the boss object in the state, its reply in play_move, unknown_boss for a bad id', async () => {
+    await connect();
+    const started = JSON.parse((await call('new_game', { boss: 'echo', seed: 1 })).text);
+    expect(started).toMatchObject({ mode: 'boss', boss: { id: 'echo', name: 'The Echo', tell: null, result: 'playing' } });
+    expect(JSON.parse((await call('legal_moves')).text).announces['(1,3)>NE']).toBe('(-1,-3)>SW');
+    const played = JSON.parse((await call('play_move', { move: '(1,3)>NE' })).text);
+    expect(played).toMatchObject({ played: '(1,3)>NE', reply: '(-1,-3)>SW', state: { mode: 'boss' } });
+    const unknown = await call('new_game', { boss: 'nope' });
+    expect(unknown.isError).toBe(true);
+    expect(JSON.parse(unknown.text)).toEqual({ code: 'unknown_boss', message: 'unknown boss nope' });
+  });
+
   test('new_game with no argument plays against the default bot', async () => {
     await connect();
     const result = await call('new_game');
@@ -117,8 +137,11 @@ describe('the MCP server', () => {
       expect(result.isError).toBe(true);
       expect(result.text).toContain('bot_nodes');
     }
-    // Bosses come with #253: until then a boss field is an error, never a silent game against the bot.
-    expect((await call('new_game', { boss: 'echo' })).isError).toBe(true);
+    for (const seed of [-1, 4294967296, 0.5]) {
+      const result = await call('new_game', { boss: 'echo', seed });
+      expect(result.isError).toBe(true);
+      expect(result.text).toContain('seed');
+    }
     expect((await call('play_move', {})).isError).toBe(true);
     expect((await call('get_state')).isError).toBe(true);
   });

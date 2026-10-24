@@ -62,7 +62,7 @@ crates/abalone-core   Rust rules engine: moves, sumito, draws, bot search, boss 
 crates/abalone-wasm   the same engine compiled to WebAssembly for the browser
 crates/abalone-cli    play in a terminal (debug tool)
 client/               TypeScript + Three.js (WebGPU, WebGL2 fallback), Vite
-mcp/                  MCP server: an AI agent plays the bot over stdio
+mcp/                  MCP server: an AI agent plays the bot or a boss over stdio
 ```
 
 - **One engine, every peer.** Both browsers run the same WASM rules and replay each other's
@@ -95,7 +95,7 @@ Homebrew Rust without rustup needs a couple of environment variables, see
 ## Let an AI agent play
 
 `mcp/` is an [MCP](https://modelcontextprotocol.io) server: an AI agent plays a game against the
-bot through tools, and the engine judges every move. It runs on your machine over stdio, nothing is
+bot or a boss through tools, and the engine judges every move. It runs on your machine over stdio, nothing is
 hosted. Build it once, and again after pulling `main`:
 
 ```bash
@@ -122,7 +122,9 @@ client does not find `bun`, give its full path (`which bun`).
 The agent is Black and moves first: `new_game`, then `legal_moves` and `play_move` (the bot
 replies in the same call) until the game is over, or `resign`. `get_state` shows the board. Moves
 use the notation of `abalone-cli`, for example `(1,3)>NE`. Tools, fields and error codes:
-[docs/specs/mcp.md](docs/specs/mcp.md). Bosses and online rooms come later (#253, #254).
+[docs/specs/mcp.md](docs/specs/mcp.md). `new_game` with `boss` (one of the ids in its input schema) and
+an optional `seed` starts a boss fight: `get_state` then shows the boss phase, tell and marks.
+Online rooms come later (#254).
 
 ## Crew manifest
 
