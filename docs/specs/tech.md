@@ -167,7 +167,8 @@ countdown). Hub positional sound: `PannerNode` (HRTF) per source. Cue selection 
 from `Effects` (push size, ejection, faction) to a cue id plus variant. Procedural audio (synth
 drones, filtered noise for decompression) is welcome for ambience since it costs no download.
 **Autoplay:** browsers block audio before a user gesture, so the first screen is a "start"
-click, which also hosts the accessibility options. Audio is a presentation layer only (5.2).
+click, which also hosts the accessibility options. Until that screen exists, the audio context
+is made on the first click, touch or key. Audio is a presentation layer only (5.2).
 Tracked in #60.
 
 ### 5.5 Performance budget

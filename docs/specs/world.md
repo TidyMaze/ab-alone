@@ -156,13 +156,16 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   Silence is a tool: dead air before a boss phase change.
 - **Push sounds.** Weight first: dull glass-on-steel knock for a plain move, a grinding scrape
   for a sumito push, pitch dropping with push size (1, 2, 3 marbles).
-- **Ejection.** A sharp inhale (air leaving), a muffled thud, then vacuum silence for about
-  600 ms. A distinct low "toll" for the player's loss, a dry "clack" for the enemy's.
+- **Ejection.** A sharp inhale (air leaving) on the 200 ms push over the rim, a muffled thud as
+  the void takes the marble, then vacuum silence while it falls, for the 600 ms of the void
+  (section 5). Once it is gone, a distinct low "toll" for the player's loss (glass), a dry
+  "clack" for the enemy's (shell). Synthesized in code (filtered noise and sines), no audio file.
 - **Music.** No melodic loops. Drone and texture layers, 2 to 3 tension layers driven by game
   state (marbles in danger, boss phase). Boss themes are a slow pulse that speeds up per phase.
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
 - **Mix.** Four sliders: music, ambience, effects, voice. The game is fully playable on mute:
-  every audio cue has a visual twin.
+  every audio cue has a visual twin. Until the sliders exist (#60), one Sound toggle, on by
+  default and saved locally; the ejection animation is the twin of the ejection sound.
 - **Spatial.** Positional audio in the hub, stereo is enough on the board.
 
 ## 8. Accessibility

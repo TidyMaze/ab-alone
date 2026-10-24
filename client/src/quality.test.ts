@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { axialTo3D, CELLS } from './board';
 import { DIST_MAX, DIST_MIN, resetView, viewPosition, type View } from './camera';
-import { drawDue, fogSettings, readClearBoard, readTier, tierFromHints, writeClearBoard, writeTier } from './quality';
+import {
+  drawDue,
+  fogSettings,
+  readClearBoard,
+  readSound,
+  readTier,
+  tierFromHints,
+  writeClearBoard,
+  writeSound,
+  writeTier,
+} from './quality';
 
 const big = { width: 1920, cores: 8, memory: 8, reducedMotion: false };
 
@@ -96,6 +106,32 @@ describe('clear-board storage', () => {
   it('does not throw when writing to a broken or missing storage', () => {
     expect(() => writeClearBoard(throwing, true)).not.toThrow();
     expect(() => writeClearBoard(null, true)).not.toThrow();
+  });
+});
+
+describe('sound storage, the on/off toggle until the mix sliders of #60', () => {
+  it('defaults to on', () => {
+    expect(readSound(memoryStorage())).toBe(true);
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writeSound(s, false);
+    expect(s.data.get('ab-alone.sound')).toBe('off');
+    expect(readSound(s)).toBe(false);
+    writeSound(s, true);
+    expect(s.data.get('ab-alone.sound')).toBe('on');
+    expect(readSound(s)).toBe(true);
+  });
+  it('ignores a garbage stored value: on', () => {
+    expect(readSound(memoryStorage({ 'ab-alone.sound': 'loud' }))).toBe(true);
+  });
+  it('falls back to on when storage throws or is missing', () => {
+    expect(readSound(throwing)).toBe(true);
+    expect(readSound(null)).toBe(true);
+  });
+  it('does not throw when writing to a broken or missing storage', () => {
+    expect(() => writeSound(throwing, false)).not.toThrow();
+    expect(() => writeSound(null, false)).not.toThrow();
   });
 });
 

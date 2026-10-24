@@ -1,4 +1,5 @@
-// Quality tiers, fog and the clear-board setting, see docs/specs/tech.md section 5.1.
+// Quality tiers, fog and the clear-board setting, see docs/specs/tech.md section 5.1, and the sound
+// toggle (docs/specs/world.md section 7).
 // Pure functions only: main.ts feeds them the browser values.
 
 import { RADIUS } from './board';
@@ -14,6 +15,7 @@ export type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 
 const TIER_KEY = 'ab-alone.quality';
 const CLEAR_KEY = 'ab-alone.clear-board';
+const SOUND_KEY = 'ab-alone.sound';
 
 export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): Tier {
   const weak = width < 768 || reducedMotion || (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
@@ -47,6 +49,9 @@ function write(store: Store, key: string, value: string): void {
 
 export const readClearBoard = (store: Store): boolean => read(store, CLEAR_KEY) === 'on';
 export const writeClearBoard = (store: Store, on: boolean): void => write(store, CLEAR_KEY, on ? 'on' : 'off');
+// The one sound on/off toggle until the mix sliders of #60: on unless the player turned it off.
+export const readSound = (store: Store): boolean => read(store, SOUND_KEY) !== 'off';
+export const writeSound = (store: Store, on: boolean): void => write(store, SOUND_KEY, on ? 'on' : 'off');
 
 export function readTier(store: Store, hints: Hints): Tier {
   const stored = read(store, TIER_KEY);
