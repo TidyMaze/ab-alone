@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OnlineSession, type Judge } from './session';
-import { GENESIS, generateKeys, hashRecord, signHello, signMove, signRematch, type Keys, type MoveRecord, type Wire } from './moverecord';
+import {
+  GENESIS,
+  generateKeys,
+  hashRecord,
+  signHello,
+  signMove,
+  signRematch,
+  type Keys,
+  type Missed,
+  type MoveRecord,
+  type Rematch,
+  type Sync,
+  type Wire,
+} from './moverecord';
 import { nextGameId } from './rematch';
 import { localPair, type ConnectionState, type Transport } from './transport';
 
@@ -77,6 +90,14 @@ async function player(transport: Transport, side: number, seatCount = 2) {
   });
   return { judge, moves, refused, states, roles, seen, asks, rematches, keys, session };
 }
+type Player = Awaited<ReturnType<typeof player>>;
+
+// `p` plays `move` on its own engine and sends it, then everyone handles what follows.
+async function play(p: Player, move: number[]): Promise<void> {
+  p.judge.play(Int32Array.from(move));
+  await p.session.send(move);
+  await settle();
+}
 
 // Black creates the room, White joins: both Hello messages cross before anyone plays.
 async function seated() {
@@ -93,11 +114,15 @@ function room() {
   let leave: (peer: string) => void = () => {};
   let state: ConnectionState = 'open';
   const sent: Wire[] = [];
+  const to: (string | undefined)[] = []; // the one peer each sent message was for, undefined for every peer
   const transport: Transport = {
     get state() {
       return state;
     },
-    send: (m) => sent.push(m),
+    send: (m, peer) => {
+      sent.push(m);
+      to.push(peer);
+    },
     onRecord: (cb) => {
       record = cb;
     },
@@ -110,6 +135,7 @@ function room() {
   return {
     transport,
     sent,
+    to,
     from: (peer: string, m: Wire) => record(m, peer),
     leave: (peer: string) => leave(peer),
     drop: () => {
@@ -120,6 +146,14 @@ function room() {
 
 // A raw peer on the other end of a pair, for hand made messages.
 const hello = (keys: Keys, seat: number, roster: string[] = []) => signHello(keys, { game: 'g', seat, roster });
+const sync = (seq: number, game = 'g', asked: string[] = []): Sync => ({ kind: 'sync', game, seq, asked });
+const missed = (of: MoveRecord | Rematch): Missed => ({ kind: 'missed', of });
+const kindOf = (m: Wire) => (m as { kind?: string }).kind;
+// What a session in a room sent from the `at`th message on in answer to a Sync: each signed message it
+// missed, and the one peer it went to.
+const answers = (r: ReturnType<typeof room>, at = 0) =>
+  r.sent.flatMap((m, i) => (i >= at && kindOf(m) === 'missed' ? [{ of: (m as Missed).of, to: r.to[i] }] : []));
+const syncsIn = (sent: Wire[]) => sent.filter((m) => kindOf(m) === 'sync');
 
 describe('OnlineSession', () => {
   it('lets two tabs of one browser play: each game start makes its own key, bug #116', async () => {
@@ -502,7 +536,7 @@ async function hostWithWhite() {
 }
 
 // Black's local move ends the game, as a sixth ejection or a draw would.
-async function blackWins(black: Awaited<ReturnType<typeof player>>) {
+async function blackWins(black: Player) {
   black.judge.play(Int32Array.from(WIN));
   await black.session.send(WIN);
 }
@@ -674,7 +708,8 @@ describe('OnlineSession rematch, #186', { timeout: 30_000 }, () => {
 
 // Two ends whose link the test controls (#198). `lose` loses what an end sends from now on, as a
 // message in flight when the connection drops. `reconnect` drops the link and opens it again, as
-// Trystero does: each end hears its peer leave, then the transport opens and each session says Hello.
+// Trystero does: each end hears its peer leave, then the transport opens and each session says Hello
+// and Sync (#226).
 function flakyPair() {
   type Handlers = { record: (m: Wire, peer: string) => void; state: (s: ConnectionState) => void; leave: (peer: string) => void };
   const names = ['a', 'b'];
@@ -732,7 +767,7 @@ describe('OnlineSession rematch ask lost in a connection drop, #198', () => {
   }
 
   // Both peers in the same new game with the colours swapped, and it plays: the former White opens it.
-  async function sameNewGame(black: Awaited<ReturnType<typeof player>>, white: Awaited<ReturnType<typeof player>>) {
+  async function sameNewGame(black: Player, white: Player) {
     const next = await nextGameId('g');
     expect(black.session.game).toBe(next);
     expect(white.session.game).toBe(next);
@@ -778,8 +813,7 @@ describe('OnlineSession rematch ask lost in a connection drop, #198', () => {
     expect(white.rematches).toEqual([1]);
     await sameNewGame(black, white);
     expect(white.refused).toEqual([]);
-    // White's ask again, for the game Black left, on each of Black's two Hellos (on open, then in reply).
-    expect(black.refused).toEqual(['stale-rematch', 'stale-rematch']);
+    expect(black.refused).toEqual([]); // White's Sync brought it Black's ask, White sent nothing stale (#226)
   });
 
   it('the opponent ask lost after ours arrived: the opponent started the new game and hands us its ask on reconnect', async () => {
@@ -797,24 +831,32 @@ describe('OnlineSession rematch ask lost in a connection drop, #198', () => {
     expect(black.rematches).toEqual([2]);
     await sameNewGame(black, white);
     expect(black.refused).toEqual([]);
-    expect(white.refused).toEqual(['stale-rematch']); // Black's ask again, for the game White left
+    expect(white.refused).toEqual([]); // Black's Sync brought it White's ask, Black sent nothing stale (#226)
   });
 
-  it('sends its ask again only on the Hello of a seated key', async () => {
+  it('sends no ask on a Hello alone: the Sync after it gets our ask, to whoever lacks it, a spectator too', async () => {
     const { r, black, white } = await hostWithWhite();
     await blackWins(black);
     await black.session.rematch();
-    r.from('c', await hello(await generateKeys(), 2)); // a spectator: no seat for its key
-    await settle();
-    expect(sentAsks(r.sent)).toHaveLength(1);
+    const [ours] = sentAsks(r.sent);
+    const at = r.sent.length;
     r.leave('b');
     r.from('b', await hello(white, 2)); // White back after a drop
+    r.from('c', await hello(await generateKeys(), 2)); // a spectator: the seat is White's
     await settle();
-    expect(sentAsks(r.sent)).toHaveLength(2);
-    expect(r.sent.at(-1)).toMatchObject({ kind: 'rematch', game: 'g', pub: black.keys.pub });
+    expect(answers(r, at)).toEqual([]);
+    r.from('b', sync(1)); // White lacks our ask
+    r.from('c', sync(1)); // so does the spectator, which needs it to follow the rematch
+    r.from('b', sync(1, 'g', [black.keys.pub])); // has it: nothing
+    await settle();
+    expect(answers(r, at)).toEqual([
+      { of: ours, to: 'b' },
+      { of: ours, to: 'c' },
+    ]);
+    expect(sentAsks(r.sent)).toEqual([ours]);
   });
 
-  it('gives its ask of the finished game once per Hello of a seated key, and a stale ask still restarts nothing', async () => {
+  it('answers nothing to a stale ask: the Sync of a peer stuck in the finished game gets our ask of it, once per Sync', async () => {
     const { r, black, white } = await hostWithWhite();
     await blackWins(black);
     r.from('b', await signRematch(white, { game: 'g' }));
@@ -822,25 +864,339 @@ describe('OnlineSession rematch ask lost in a connection drop, #198', () => {
     await settle();
     const next = await nextGameId('g');
     expect(black.session.game).toBe(next);
-    const ours = sentAsks(r.sent);
-    expect(ours).toHaveLength(1);
+    const [ours] = sentAsks(r.sent);
+    const at = r.sent.length;
 
     const old = await signRematch(white, { game: 'g' }); // White still in the finished game, asking again
     r.from('b', old);
-    r.from('b', old); // once per Hello: no ping-pong between two peers that both left the game
     r.from('b', { ...old, sig: (await signRematch(white, { game: next })).sig }); // forged
     r.from('c', await signRematch(await generateKeys(), { game: 'g' })); // a key without a seat
     await settle();
-    expect(sentAsks(r.sent)).toEqual([ours[0], ours[0]]);
-    expect(black.refused).toEqual(['stale-rematch', 'stale-rematch', 'bad-rematch', 'stale-rematch']);
+    expect(r.sent.length).toBe(at);
+    expect(black.refused).toEqual(['stale-rematch', 'bad-rematch', 'stale-rematch']);
 
-    r.from('b', await hello(white, 2)); // White says Hello again: it may get our ask once more
-    r.from('b', old);
+    r.from('b', sync(1, 'g', [white.pub])); // White's Sync from the finished game: it lacks our ask
+    r.from('b', sync(1, 'g', [white.pub])); // a second Sync, a second answer, never more
     await settle();
-    expect(sentAsks(r.sent)).toEqual([ours[0], ours[0], ours[0]]);
+    expect(answers(r, at)).toEqual([
+      { of: ours, to: 'b' },
+      { of: ours, to: 'b' },
+    ]);
     expect(black.session.game).toBe(next);
     expect(black.session.askedRematch(1)).toBe(false);
     expect(black.session.askedRematch(2)).toBe(false);
     expect(black.judge.played).toEqual([]);
+  });
+});
+
+// The ends of one room, a full mesh as in Trystero (#226): a message goes to every other end, or only to
+// the end `to` names. `drop` loses what goes to and from an end from now on, as a connection that broke
+// before anyone noticed, and `mend` delivers again. `back` reconnects it: every end hears it leave and it
+// hears them leave, then every transport opens again, so each session says Hello and Sync.
+function mesh() {
+  type Handlers = { record: (m: Wire, peer: string) => void; state: (s: ConnectionState) => void; leave: (peer: string) => void };
+  const on = new Map<string, Handlers>();
+  const dropped = new Set<string>();
+  const sent: { from: string; to: string | undefined; m: Wire }[] = [];
+  return {
+    sent,
+    end(name: string): Transport {
+      const h: Handlers = { record: () => {}, state: () => {}, leave: () => {} };
+      on.set(name, h);
+      return {
+        state: 'open',
+        send: (m, to) => {
+          sent.push({ from: name, to, m });
+          for (const [peer, p] of on) {
+            if (peer !== name && (to === undefined || to === peer) && !dropped.has(name) && !dropped.has(peer)) p.record(m, name);
+          }
+        },
+        onRecord: (cb) => {
+          h.record = cb;
+        },
+        onState: (cb) => {
+          h.state = cb;
+        },
+        onLeave: (cb) => {
+          h.leave = cb;
+        },
+        close: () => {},
+      };
+    },
+    drop: (name: string) => dropped.add(name),
+    mend: (name: string) => dropped.delete(name),
+    back(name: string) {
+      for (const [peer, p] of on) {
+        if (peer === name) continue;
+        p.leave(name);
+        on.get(name)!.leave(peer);
+      }
+      dropped.delete(name);
+      for (const p of on.values()) p.state('open');
+    },
+  };
+}
+
+const missedIn = (sent: ReturnType<typeof mesh>['sent']) => sent.filter((s) => kindOf(s.m) === 'missed');
+
+describe('OnlineSession catch-up of what a peer missed, #226', () => {
+  // Black creates the room, White joins over a mesh, and they play `moves` in turn, Black first.
+  async function playing(...moves: number[][]) {
+    const m = mesh();
+    const black = await player(m.end('a'), 1);
+    const white = await player(m.end('b'), 2);
+    await settle();
+    for (const [i, mv] of moves.entries()) await play(i % 2 === 0 ? black : white, mv);
+    return { m, black, white };
+  }
+
+  // Both seated players ask for a rematch: the next game starts on both.
+  async function rematchBoth(black: Player, white: Player) {
+    await black.session.rematch();
+    await white.session.rematch();
+    await settle();
+  }
+
+  it('a player back after a drop gets the move lost on the way from the peer that has it, and plays on', async () => {
+    const { m, black, white } = await playing(M1, M2);
+    m.drop('b'); // White's connection breaks before anyone notices: Black still plays, its move is lost
+    await play(black, M3);
+    expect(white.judge.played).toEqual([M1, M2]);
+    m.back('b');
+    await settle();
+    expect(white.judge.played).toEqual([M1, M2, M3]);
+    expect(white.moves).toEqual([M1, M3]);
+    expect(missedIn(m.sent)).toEqual([
+      { from: 'a', to: 'b', m: { kind: 'missed', of: expect.objectContaining({ seq: 2, move: M3, pub: black.keys.pub }) } },
+    ]);
+    expect(white.session.canPlay()).toBe(true);
+
+    // The other way round: Black's connection breaks, White's move is lost, Black gets it back.
+    m.drop('a');
+    await play(white, M2);
+    m.back('a');
+    await settle();
+    expect(black.judge.played).toEqual([M1, M2, M3, M2]);
+    expect(missedIn(m.sent).map((s) => [s.from, s.to])).toEqual([
+      ['a', 'b'],
+      ['b', 'a'],
+    ]);
+    await play(black, M1);
+    expect(white.judge.played).toEqual([M1, M2, M3, M2, M1]);
+    expect(black.refused).toEqual([]);
+    expect(white.refused).toEqual([]);
+  });
+
+  it('a spectator joining after 4 plies gets them from the players once it has the roster, and follows the game', async () => {
+    const { m, black, white } = await playing(M1, M2, M3, M2);
+    const watcher = await player(m.end('c'), 2);
+    await settle();
+    expect(watcher.session.role).toBe('spectator');
+    expect(watcher.judge.played).toEqual([M1, M2, M3, M2]);
+    expect(watcher.moves).toEqual([M1, M2, M3, M2]);
+    // Both players answered, to the spectator alone: the second answer brought nothing new, and is no refusal.
+    expect(watcher.refused).toEqual([]);
+    expect(missedIn(m.sent).map((s) => `${s.from}>${s.to}`).sort()).toEqual([...Array(4).fill('a>c'), ...Array(4).fill('b>c')]);
+
+    await play(black, M1);
+    expect(watcher.moves).toEqual([M1, M2, M3, M2, M1]);
+    expect(watcher.refused).toEqual([]);
+    expect(white.refused).toEqual([]);
+    expect(black.refused).toEqual(['seat-refused']); // the spectator asked for White's seat
+  });
+
+  it('a spectator back after a drop gets every move it missed', async () => {
+    const { m, black, white } = await playing();
+    const watcher = await player(m.end('c'), 2);
+    await settle(); // seated as a spectator: a move before the roster would be refused for want of a seat
+    await play(black, M1);
+    m.drop('c');
+    await play(white, M2);
+    await play(black, M3);
+    await play(white, M2);
+    expect(watcher.judge.played).toEqual([M1]);
+    m.back('c');
+    await settle();
+    expect(watcher.judge.played).toEqual([M1, M2, M3, M2]);
+    expect(watcher.refused).toEqual([]);
+  });
+
+  it('a peer two games behind after two rematches replays both games and their asks, and ends in the same game at the same ply', async () => {
+    const { m, black, white } = await playing(WIN); // Black wins the first game
+    await rematchBoth(black, white);
+    await play(white, WIN); // the former White plays Black in the second game, opens it and wins it
+    await rematchBoth(black, white);
+    await play(black, M1); // Black plays Black again in the third game
+    const third = await nextGameId(await nextGameId('g'));
+    expect(black.session.game).toBe(third);
+
+    const watcher = await player(m.end('c'), 2);
+    await settle();
+    expect(watcher.session.game).toBe(third);
+    expect(watcher.rematches).toHaveLength(2);
+    expect(watcher.moves).toEqual([WIN, WIN, M1]);
+    expect(watcher.judge.played).toEqual([M1]);
+    expect(watcher.refused).toEqual([]);
+    await play(white, M2);
+    expect(watcher.judge.played).toEqual([M1, M2]);
+    expect(watcher.refused).toEqual([]);
+  });
+
+  it('checks every record and ask of an answer as a live one: nothing it cannot verify is applied, and it never asks again', async () => {
+    const r = room();
+    const watcher = await player(r.transport, 2);
+    const creator = await generateKeys();
+    const rival = await generateKeys();
+    await settle();
+    expect(syncsIn(r.sent)).toEqual([]); // no roster yet: the answer could not be checked against the seats
+    r.from('a', await hello(creator, 1, [creator.pub, rival.pub]));
+    await settle();
+    expect(watcher.session.role).toBe('spectator');
+    expect(syncsIn(r.sent)).toEqual([sync(0)]);
+
+    const r0 = await signMove(creator, { game: 'g', seq: 0, prev: GENESIS, move: M1 });
+    const prev = await hashRecord(r0);
+    const r1 = await signMove(rival, { game: 'g', seq: 1, prev, move: M2 });
+    r.from('a', missed({ ...r0, move: M3 })); // forged
+    r.from('a', missed(r1)); // out of order: r0 is not there yet
+    r.from('a', missed(r0));
+    r.from('a', missed(r0)); // already there, as from a second answer: skipped, no refusal
+    r.from('a', missed(await signMove(await generateKeys(), { game: 'g', seq: 1, prev, move: M2 }))); // a key without a seat
+    r.from('a', missed(await signMove(creator, { game: 'g', seq: 1, prev, move: M2 }))); // not Black's turn
+    r.from('a', missed(await signMove(rival, { game: 'later', seq: 0, prev: GENESIS, move: M2 }))); // a game it never had
+    r.from('a', missed(await signRematch(await generateKeys(), { game: 'g' }))); // an ask from a key without a seat
+    r.from('a', missed({ ...(await signRematch(rival, { game: 'g' })), game: 'later' })); // a forged ask
+    r.from('a', missed(r1));
+    r.from('a', { kind: 'missed', of: await hello(creator, 1, []) } as unknown as Wire); // not a record nor an ask
+    await settle();
+    expect(watcher.refused).toEqual(['bad-signature', 'out-of-order', 'wrong-key', 'not-their-turn', 'wrong-game', 'wrong-key', 'bad-rematch', 'malformed']);
+    expect(watcher.judge.played).toEqual([M1, M2]);
+    expect(watcher.moves).toEqual([M1, M2]);
+    expect(watcher.session.askedRematch(1)).toBe(false);
+    expect(syncsIn(r.sent)).toHaveLength(1); // a bad answer never makes it ask again, so it cannot loop
+  });
+
+  it('answers a Sync with the records from its seq, to that peer alone, once per Sync, and nothing to a peer not behind', async () => {
+    const { r, black } = await hostWithWhite();
+    await blackWins(black);
+    const win = r.sent.at(-1) as MoveRecord;
+    let at = r.sent.length;
+    r.from('c', sync(0)); // a spectator that has nothing
+    await settle();
+    expect(answers(r, at)).toEqual([{ of: win, to: 'c' }]);
+
+    at = r.sent.length;
+    for (const s of [sync(1), sync(3), sync(0, 'later')]) r.from('b', s); // same ply, ahead, a game we never had
+    r.from('c', { kind: 'sync', game: 'g' } as unknown as Wire);
+    await settle();
+    expect(r.sent.length).toBe(at);
+    expect(black.refused).toEqual(['malformed']);
+
+    r.from('c', sync(0));
+    r.from('c', sync(0));
+    await settle();
+    expect(answers(r, at)).toEqual([
+      { of: win, to: 'c' },
+      { of: win, to: 'c' },
+    ]);
+  });
+
+  it('answers with the asks the peer lacks of its game, then every record and ask of each game after it', async () => {
+    const { r, black, white } = await hostWithWhite();
+    await blackWins(black);
+    const win = r.sent.at(-1) as MoveRecord;
+    const theirs = await signRematch(white, { game: 'g' });
+    r.from('b', theirs);
+    await settle();
+    let at = r.sent.length;
+    r.from('c', sync(1)); // at the last ply, without White's ask
+    r.from('b', sync(1, 'g', [white.pub])); // White has its own ask: nothing
+    await settle();
+    expect(answers(r, at)).toEqual([{ of: theirs, to: 'c' }]);
+
+    await black.session.rematch(); // both asked: the second game, the former White opens it
+    const ours = r.sent.at(-1) as Rematch;
+    const next = black.session.game;
+    const n0 = await signMove(white, { game: next, seq: 0, prev: GENESIS, move: M1 });
+    r.from('b', n0);
+    await settle();
+    expect(black.moves).toEqual([M1]);
+    at = r.sent.length;
+    r.from('c', sync(0)); // a spectator that saw nothing
+    r.from('d', sync(1, 'g', [white.pub])); // a spectator stuck at the end of the first game, with White's ask
+    r.from('b', sync(1, next)); // White, up to date
+    await settle();
+    expect(answers(r, at)).toEqual([
+      { of: win, to: 'c' },
+      { of: theirs, to: 'c' },
+      { of: ours, to: 'c' },
+      { of: n0, to: 'c' },
+      { of: ours, to: 'd' },
+      { of: n0, to: 'd' },
+    ]);
+  });
+
+  it('asks again on a live move or ask for a game it never had, never on one for a game it left', async () => {
+    const { r, black, white } = await hostWithWhite();
+    await blackWins(black);
+    r.from('b', await signRematch(white, { game: 'g' }));
+    await black.session.rematch(); // the second game
+    const next = black.session.game;
+    const at = r.sent.length;
+    r.from('b', await signMove(white, { game: 'g', seq: 1, prev: GENESIS, move: M1 })); // the game we left
+    r.from('b', await signRematch(white, { game: 'g' }));
+    await settle();
+    expect(r.sent.length).toBe(at);
+    r.from('b', await signMove(white, { game: 'later', seq: 0, prev: GENESIS, move: M1 }));
+    r.from('b', await signRematch(white, { game: 'later' }));
+    await settle();
+    expect(r.sent.slice(at)).toEqual([sync(0, next), sync(0, next)]);
+    expect(black.refused).toEqual(['wrong-game', 'stale-rematch', 'wrong-game', 'stale-rematch']);
+  });
+
+  it('a live move ahead of its log makes a peer ask again: a move that overtook the answer is not lost', async () => {
+    const { m, black, white } = await playing();
+    const watcher = await player(m.end('c'), 2);
+    await settle(); // seated as a spectator: a move before the roster would be refused for want of a seat
+    await play(black, M1);
+    m.drop('c');
+    await play(white, M2); // lost on the way to the spectator
+    m.mend('c'); // no reconnect: nobody noticed
+    await play(black, M3); // the spectator sees a gap, asks, and both players answer
+    expect(watcher.judge.played).toEqual([M1, M2, M3]);
+    expect(watcher.refused).toEqual(['out-of-order']);
+    expect(syncsIn(m.sent.filter((s) => s.from === 'c').map((s) => s.m))).toHaveLength(2); // on Hello, on the gap
+  });
+
+  it('heals the stuck room of #198 without a reconnect: the first move of the new game shows the gap', async () => {
+    const { m, black, white } = await playing(WIN);
+    await black.session.rematch(); // reaches White
+    m.drop('b');
+    await white.session.rematch(); // lost: White starts the new game, Black waits in the finished one
+    await settle();
+    m.mend('b');
+    expect(black.session.game).toBe('g');
+    await play(white, M1); // the former White opens the new game
+    expect(black.session.game).toBe(await nextGameId('g'));
+    expect(black.judge.played).toEqual([M1]);
+    expect(black.refused).toEqual(['wrong-game']);
+    expect(white.refused).toEqual([]);
+  });
+
+  it('two up-to-date peers answer each other nothing, however often they reconnect', async () => {
+    const { m, black, white } = await playing(M1, WIN);
+    await black.session.rematch();
+    await settle();
+    const syncs = () => syncsIn(m.sent.map((s) => s.m)).length;
+    const before = syncs();
+    for (let i = 0; i < 3; i++) {
+      m.back('b');
+      await settle(); // ends, so no message keeps answering another
+    }
+    expect(syncs()).toBe(before + 6); // one Sync per peer and reconnect
+    expect(missedIn(m.sent)).toEqual([]);
+    expect(black.refused).toEqual([]);
+    expect(white.refused).toEqual([]);
+    expect(white.session.askedRematch(1)).toBe(true);
   });
 });

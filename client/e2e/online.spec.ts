@@ -13,14 +13,16 @@ const cell = async (page: Page, q: number, r: number) => {
 const plies = (page: Page) => page.evaluate(() => (window as any).__plies());
 // Seating is a Hello round trip after the connection opens: wait for it before the first move.
 const seat = (page: Page, role: 'player' | 'spectator') => expect(page.locator('body')).toHaveAttribute('data-seat', role);
-// Every page relays its records to the others with its own name as the sender, like a Trystero room.
-const room = async (pages: Record<string, Page>) => {
+// Every page relays its records to the others with its own name as the sender, like a Trystero room,
+// or to the one page `to` names (a catch-up answer, #226). Whatever goes to or from a page named in
+// `lost` is lost, as on a connection that broke before anyone noticed.
+const room = async (pages: Record<string, Page>, lost = new Set<string>()) => {
   for (const [name, page] of Object.entries(pages)) {
-    await page.exposeFunction('__netOut', (rec: unknown) =>
+    await page.exposeFunction('__netOut', (rec: unknown, to?: string) =>
       Promise.all(
-        Object.values(pages)
-          .filter((p) => p !== page && !p.isClosed())
-          .map((p) => p.evaluate(([r, from]) => (window as any).__netIn(r, from), [rec, name] as const)),
+        Object.entries(pages)
+          .filter(([n, p]) => p !== page && !p.isClosed() && (!to || to === n) && !lost.has(n) && !lost.has(name))
+          .map(([, p]) => p.evaluate(([r, from]) => (window as any).__netIn(r, from), [rec, name] as const)),
       ),
     );
   }
@@ -332,6 +334,63 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   await expect.poll(() => plies(b)).toBe(2);
   await expect(a.locator('#hud')).not.toContainText('refused');
   await expect(b.locator('#hud')).not.toContainText('refused');
+  await a.context().close();
+  await b.context().close();
+});
+
+// Issue #226: a player back after a drop catches up on the move it missed. Page B's connection breaks
+// before page A notices (Trystero sees a peer leave only after a timeout), so A still plays and its move
+// is lost on the way. B comes back on the same key: A sends it the signed move it missed.
+test('a player back after a drop shows the same ply and side to move as the other page, #226', async ({ browser }) => {
+  test.setTimeout(120_000); // four plies on two WebGL pages, each click brings its page to the front
+  const a = await (await browser.newContext()).newPage();
+  const b = await (await browser.newContext()).newPage();
+  const lost = new Set<string>();
+  await room({ a, b }, lost);
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await a.locator('#play-online').click();
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  await b.goto(`./?net=hook${hash}`);
+  await b.locator('canvas').waitFor();
+  await open(a);
+  await open(b);
+  await seat(b, 'player');
+  await expect(status(a)).toHaveText('You are Black. White is here.');
+  await cell(a, 0, 2);
+  await cell(a, 0, 1);
+  await expect.poll(() => plies(b)).toBe(1);
+  await cell(b, 0, -2);
+  await cell(b, 0, -1);
+  await expect.poll(() => plies(a)).toBe(2);
+
+  // B's connection breaks: B sees Black leave, A does not notice yet and plays.
+  lost.add('b');
+  await leave(b, 'a');
+  await expect(status(b)).toHaveText('You are White. Black is disconnected.');
+  await cell(a, 0, 1);
+  await cell(a, 0, 2);
+  await expect(a.locator('#hud .turn')).toHaveText('White to move');
+  expect(await plies(a)).toBe(3);
+  expect(await plies(b)).toBe(2);
+  await expect(b.locator('#hud .turn')).toHaveText('Black to move');
+
+  // A notices, then both come back on the same keys: B catches up on the move it missed.
+  await leave(a, 'b');
+  lost.delete('b');
+  await open(a);
+  await open(b);
+  await expect.poll(() => plies(b)).toBe(3);
+  for (const page of [a, b]) await expect(page.locator('#hud .turn')).toHaveText('White to move');
+  await expect(status(b)).toHaveText('You are White. Black is here.');
+  await expect(status(a)).toHaveText('You are Black. White is here.');
+
+  // And the game goes on from there.
+  await cell(b, 0, -1);
+  await cell(b, 0, -2);
+  await expect.poll(() => plies(a)).toBe(4);
+  for (const page of [a, b]) await expect(page.locator('#hud')).not.toContainText('refused');
   await a.context().close();
   await b.context().close();
 });
