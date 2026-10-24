@@ -11,8 +11,11 @@ the same numbers on every machine.
   someone who knows the PvE rules: it never repeats a position it has already seen (a draw is a
   loss), and it never plays a move that leaves one of its marbles to flip when the Chaplain tell
   shows it (the tell is read on hover, Decision #154). When no move is left under those two
-  constraints it plays the plain search move. The search itself does not see the boss hooks (rim
-  cracks, flips), only the standard rules.
+  constraints it plays the plain search move. Against the Chaplain the search sees the boss hooks
+  inside the tree (#207): each ply goes through the same flip rule as `Encounter::play`, the
+  converted marks follow the moves, and the phase is read from the board. It still ignores the seed
+  of the P3 void pushes and the ejections the hook credits (P3 is never reached). The other bosses
+  are searched with the standard rules only.
 - **Winnable**: a recorded winning game replays through the `Encounter` API (fixtures, section 4)
   **and** the pro-level player wins at least 7 of 10 seeds. The target after tuning is 7 to 9 of
   10, never 10 of 10.
@@ -104,6 +107,40 @@ What would settle it: a player search that sees the hooks (flip and crack) insid
 re-run this table. The most promising knob from the data is the aggression weight with the flip
 threshold at 4 (3 of 10).
 
+#### Hook-aware player (#207)
+
+The player search now simulates the Chaplain flips (`chaplain_step` in `ladder.rs`, proved equal
+to the encounter on a played game). Same ladder, 10x (20000 nodes), 10 seeds, `LADDER_X=10 cargo
+run --release --example ladder -- chaplain`. Every row is the hook-aware player, one change at a
+time on the boss:
+
+| Boss change | Wins /10 | Median plies | Deaths |
+|---|---|---|---|
+| none, hook-blind player (section 2) | 0 | 148 | conversion 5, draw 5 |
+| none, hook-aware player | 0 | 82 | push 3, conversion 5, draw 2 |
+| flip threshold 4 | 0 | 142 | push 8, draw 2 |
+| flip-back threshold 2 | 0 | 142 | push 1, conversion 2, draw 7 |
+| boss budget 300 (player 3000) | 0 | 143 | push 1, draw 9 |
+| boss search centre weight 20 | 0 | 125 | push 1, conversion 7, draw 2 |
+| boss search centre weight 20 and flip threshold 4 | 1 | 191 | draw 9 |
+
+Result: making the search hook-aware did not make the Chaplain beatable. The conversion deaths
+stay (5 of 10), because the damage is not the one flip the search can see: the player shuffles
+for about 35 plies to avoid repeating a position (a draw is a loss), then the boss search, which
+is aggressive in contact, corners it and pushes or encircles it. Only the last row
+got a player to the second phase of the fight (the printed max phase is 0 based: 0 everywhere
+else), and it won once. The boss weights
+knob needs a `BossDef` field, so it is not kept: the numbers do not justify it.
+
+Nothing is changed on the boss, and no Chaplain fixture is recorded (no win to record at the
+default or at any knob above 1 of 10). Still under target: 0 of 10 against the 7 to 9 asked.
+
+What is left to try, each a separate decision or task: a player that attacks instead of avoiding
+contact (its weights, not only its filters), a lower boss budget together with the centre weight
+(the budget alone gives draws, 9 of 10), a Chaplain whose flips only start after contact (so the
+player is not cornered by a pure search), or measuring the Chaplain against a human, since "draw is
+a loss" plus "never repeat" may be a harsher player model than a person plays.
+
 ### The Ballast Mind: NOT measured at pro level, 0 of 10 at 1x
 
 The ladder now plays it (`LadderBoss::Ballast`). Pro level is 10x the boss budget, 1.5 million
@@ -134,7 +171,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | hull | 0 | 30000 | 90 |
 | choir | 0 | 15000 | 50 |
 
-No fixture for the Chaplain and the Ballast Mind: no winning game was found (section 3).
+No fixture for the Chaplain and the Ballast Mind: no winning game was found (section 3, #207).
 
 To record again after a rule change:
 `LADDER_X=10 LADDER_FIXTURES=<dir> cargo run --release --example ladder -- echo hull choir`
@@ -157,7 +194,7 @@ This is out of scope here (rule 4 of CONTRIBUTING.md): it needs a decision per b
 ## 6. Follow-ups
 
 - Decision: the unreachable phases of section 5 (win threshold per boss, or thresholds moved).
-- A hook-aware player search (flips and cracks inside the tree), then the Chaplain and Ballast
-  tables again. Until then the Chaplain is unproven.
+- The Chaplain is still unproven after the hook-aware player of #207 (0 of 10, section 3). The
+  Hull cracks and the Ballast Mind hooks are not in the player tree yet.
 - The Hull (7 of 10 at 10x, 9 with the plain search) and the Choir (10 of 10) may be too easy for
   a strong human: tuning them is out of scope of #170.
