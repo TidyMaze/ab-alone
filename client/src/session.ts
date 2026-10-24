@@ -73,9 +73,16 @@ export class OnlineSession {
     return this.presence.of(this.seats.keyOf(seat));
   }
 
-  /** We are a seated player, our turn and the transport is open: a move now would reach the others. */
+  /** We are a seated player, our turn, the transport is open and the key of every other seat is
+   * connected: a move now would reach the opponents, not just any peer such as a spectator (#143). */
   canPlay(): boolean {
-    return this.current === 'player' && this.o.transport.state === 'open' && this.o.judge.to_move() === this.o.side;
+    const others = Array.from({ length: this.seats.count }, (_, i) => i + 1).filter((s) => s !== this.o.side);
+    return (
+      this.current === 'player' &&
+      this.o.transport.state === 'open' &&
+      this.o.judge.to_move() === this.o.side &&
+      others.every((seat) => this.presenceOf(seat) === 'here')
+    );
   }
 
   /** The caller already applied `move` to its own engine. A spectator sends nothing. */
