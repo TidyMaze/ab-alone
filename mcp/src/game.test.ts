@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { newEngine } from './engine';
-import { BOT_NODES, drawReasonName, Session, sideName, statusName, type EngineLike, type Result, type ToolError } from './game';
-import { parseMove, toRecord } from './notation';
+import { bossIds, newEncounter, newEngine } from './engine';
+import { BOT_NODES, drawReasonName, Session, sideName, statusName, type EngineLike, type Result, type State, type ToolError } from './game';
+import { formatMove, fromRecord, parseMove, toRecord } from './notation';
 
 function value<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(`expected a value, got ${JSON.stringify(result.error)}`);
@@ -54,7 +54,7 @@ function engines(replies: string[] = []) {
 }
 
 function session(replies: string[] = []): Session {
-  return new Session(engines(replies).factory);
+  return new Session(engines(replies).factory, newEncounter);
 }
 
 /** Plays the agent moves one by one and returns the last answer. */
@@ -121,7 +121,7 @@ describe('new_game', () => {
 
   test('drops the game in progress: a new id, a fresh board, the old engine freed', () => {
     const { factory, spy } = engines();
-    const game = new Session(factory);
+    const game = new Session(factory, newEncounter);
     const first = value(game.newGame({ bot_nodes: CHEAP }));
     value(game.playMove({ move: '(1,3)>NE' }));
     const second = value(game.newGame({}));
@@ -133,7 +133,7 @@ describe('new_game', () => {
 
   test('the bot searches 20000 positions per move by default (BOT_NODES of the client)', () => {
     const { factory, spy } = engines();
-    const game = new Session(factory);
+    const game = new Session(factory, newEncounter);
     value(game.newGame({}));
     value(game.playMove({ move: '(1,3)>NE' }));
     expect(BOT_NODES).toBe(20000);
@@ -142,7 +142,7 @@ describe('new_game', () => {
 
   test('bot_nodes sets the bot search budget', () => {
     const { factory, spy } = engines();
-    const game = new Session(factory);
+    const game = new Session(factory, newEncounter);
     value(game.newGame({ bot_nodes: 7 }));
     value(game.playMove({ move: '(1,3)>NE' }));
     expect(spy.nodes).toEqual([7]);
@@ -278,7 +278,7 @@ describe('play_move', () => {
   test('a game that ends on the agent move gets no reply', () => {
     // One more Black move first, so the position that comes back three times is one after a Black move.
     const { factory, spy } = engines([...BOT_LOOP]);
-    const game = new Session(factory);
+    const game = new Session(factory, newEncounter);
     value(game.newGame({}));
     const last = playAll(game, ['(-2,2)>NW', ...AGENT_LOOP]);
     expect(last.played).toBe('(2,2)>SW');
@@ -322,5 +322,71 @@ describe('resign', () => {
     playAll(game, AGENT_LOOP);
     expect(failure(game.resign()).code).toBe('game_over');
     expect(value(game.getState()).resigned).toBe(false);
+  });
+});
+
+/** The state without its random game id, to compare two games. */
+function position({ game_id: _, ...rest }: State) {
+  return rest;
+}
+
+describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
+  test('new_game with a boss: mode boss, the generic boss object, the board and threshold of the engine', () => {
+    const state = value(session().newGame({ boss: 'choir', seed: 3 }));
+    expect(state).toMatchObject({ mode: 'boss', you: 'black', to_move: 'black', status: 'running', last_moves: [] });
+    expect(state.boss).toMatchObject({ id: 'choir', name: 'The Choir', phase: 0, phases: 3, result: 'playing' });
+    // The Choir plays on a radius 3 board, the outer ring shows as x, and the player needs 10 ejections (#131).
+    expect(state.board.split('').filter((cell) => cell === 'x')).toHaveLength(24);
+    expect(state.win_ejections).toEqual({ black: 10, white: 6 });
+  });
+
+  test('unknown_boss carries the engine reason, the game in progress is kept', () => {
+    const game = session();
+    const before = value(game.newGame({}));
+    expect(failure(game.newGame({ boss: 'nope' }))).toEqual({ code: 'unknown_boss', message: 'unknown boss nope' });
+    expect(value(game.getState())).toEqual(before);
+  });
+
+  test('play_move plays the boss reply (Encounter.boss_move) after the agent move, bot_nodes is ignored', () => {
+    const { factory, spy } = engines();
+    const game = new Session(factory, newEncounter);
+    value(game.newGame({ boss: 'hull', seed: 5, bot_nodes: 7 }));
+    const answer = value(game.playMove({ move: '(1,3)>NE' }));
+    const reference = newEncounter('hull', 5);
+    reference.play(record('(1,3)>NE'));
+    expect(answer.reply).toBe(formatMove(fromRecord(reference.boss_move())));
+    expect(answer.state.last_moves).toEqual(['(1,3)>NE', answer.reply]);
+    expect(answer.state.to_move).toBe('black');
+    expect(spy.nodes).toEqual([]);
+  });
+
+  test.each(bossIds())('the same boss id and seed always give the same fight: %s', (boss) => {
+    const games = [session(), session()];
+    const starts = games.map((game) => value(game.newGame({ boss, seed: 11 })));
+    expect(position(starts[1]!)).toEqual(position(starts[0]!));
+    for (let round = 0; round < 4; round++) {
+      const move = value(games[0]!.legalMoves()).moves[round]!;
+      const [first, second] = games.map((game) => value(game.playMove({ move })));
+      expect(second!.reply).toBe(first!.reply);
+      expect(position(second!.state)).toEqual(position(first!.state));
+    }
+  });
+
+  test('legal_moves: the Echo announces its reply for every move, the other bosses announce nothing', () => {
+    const echo = session();
+    value(echo.newGame({ boss: 'echo' }));
+    const legal = value(echo.legalMoves());
+    expect(Object.keys(legal.announces)).toEqual(legal.moves);
+    // The point reflection through the centre (Encounter.tell_move).
+    expect(legal.announces['(1,3)>NE']).toBe('(-1,-3)>SW');
+    const hull = session();
+    value(hull.newGame({ boss: 'hull' }));
+    expect(value(hull.legalMoves()).announces).toEqual({});
+  });
+
+  test('resign against a boss: the fight is lost', () => {
+    const game = session();
+    value(game.newGame({ boss: 'echo' }));
+    expect(value(game.resign())).toMatchObject({ status: 'white_won', resigned: true, boss: { result: 'lost' } });
   });
 });
