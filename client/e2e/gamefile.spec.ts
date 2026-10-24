@@ -129,6 +129,8 @@ test('a game exported to a file comes back on a new game, replayed and saved', a
   await importGame(page, file.path);
   await expect.poll(() => plies(page)).toBe(2);
   expect(await snapshot(page)).toEqual(before);
+  // The evaluation bar (#191) follows the imported position.
+  await expect(page.locator('#eval')).toHaveAttribute('data-ply', '2', { timeout: 30_000 });
   await expect(hud).toContainText('Black to move');
   await expect.poll(() => savedPlies(page)).toBe(2);
 
