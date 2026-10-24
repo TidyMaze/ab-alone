@@ -117,6 +117,16 @@ covers no cell either. It closes on Escape, on a press outside and on the cog ag
   browser refuses the clipboard, the text appears in a box above the button, selected from its
   start, with the accent border, and the note says "diagnostics selected: copy them by hand". The
   box goes away once it loses focus. Both strings are kept verbatim for the e2e tests (#220).
+- **Daily result card.** When a daily fight is over, under Retry: a read-only box with the text to
+  share (game-design.md section 7.6), as wide as its text, with the accent border, then a Copy
+  result button. Held upright, the rows of buttons leave no room above the board, so the card sits
+  in the bottom-left corner, under the board, with Copy result beside Copy diagnostics. Wider than
+  tall, the column stops above the Copy diagnostics corner, so neither the card nor a button
+  scrolls under it. Like the buttons, the card never covers the plate or a cell. Copy puts the
+  text in the clipboard and the note line says "result copied". When the browser refuses the
+  clipboard, the text in the box is selected from its start for the player to copy by hand, and
+  the note says "result selected: copy it by hand". Both strings are kept verbatim for the e2e
+  tests. The card shows only at the end of a daily fight, never in a plain boss fight (#196).
 - **Export game, Import game.** Two buttons at the end of the button column, under Daily
   challenge, for local games only: hidden during online, boss and daily games (#219, file format
   in tech.md section 8). Export game downloads the game, Import game opens the browser's file

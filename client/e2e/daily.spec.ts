@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { loseByRepetition, startDaily } from './fight-end';
 
 // Daily challenge (#195): the UTC date gives the boss and the seed, the same for every load of the
 // day, and each start counts one attempt of the day in localStorage. The clock is fixed by page.clock.
@@ -78,4 +79,62 @@ test('a plain boss fight shows no daily line and does not count a daily attempt,
   await page.getByRole('button', { name: 'Retry' }).click();
   await page.locator('#daily').click();
   await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 1');
+});
+
+// The result card (#196).
+const card = (name: string) =>
+  `AB-ALONE daily 2026-10-25: ${name}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
+
+test('a finished daily fight shows the result card, and Copy puts its text in the clipboard, #196', async ({
+  page,
+  context,
+}, testInfo) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const name = await startDaily(page);
+  await expect(page.locator('#daily-card')).toBeHidden(); // not while the fight is on
+  await loseByRepetition(page);
+  await expect(page.locator('#daily-card')).toBeVisible();
+  await expect(page.locator('#daily-result')).toHaveValue(card(name));
+  await page.screenshot({ path: testInfo.outputPath('daily-card.png') });
+
+  // Nothing leaves the browser: Copy only writes the clipboard.
+  const requests: string[] = [];
+  page.on('request', (r) => requests.push(r.url()));
+  await page.getByRole('button', { name: 'Copy result' }).click();
+  await expect(page.locator('#hud')).toContainText('result copied');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(card(name));
+  expect(requests).toEqual([]);
+
+  // Retry starts the next attempt: the card goes away until that fight is over.
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 2');
+  await expect(page.locator('#daily-card')).toBeHidden();
+});
+
+test('when the clipboard is refused, the result text is selected to copy by hand, #196', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new DOMException('denied', 'NotAllowedError')) },
+    });
+  });
+  const name = await startDaily(page);
+  await loseByRepetition(page);
+  await page.getByRole('button', { name: 'Copy result' }).click();
+  await expect(page.locator('#hud')).toContainText('result selected: copy it by hand');
+  const box = page.locator('#daily-result');
+  await expect(box).toHaveValue(card(name));
+  const selected = await box.evaluate(
+    (el: HTMLTextAreaElement) =>
+      document.activeElement === el && el.selectionStart === 0 && el.selectionEnd === el.value.length,
+  );
+  expect(selected).toBe(true);
+});
+
+test('a plain boss fight shows no result card at its end, #196', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
+  await expect(page.locator('#hud')).toContainText('The Echo');
+  await loseByRepetition(page);
+  await expect(page.locator('#daily-card')).toBeHidden();
 });

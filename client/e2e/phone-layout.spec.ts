@@ -1,4 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { loseByRepetition, startDaily } from './fight-end';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -71,6 +72,19 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden();
 };
 
+// The parts of the daily result card (#196) that meet the Copy diagnostics button (#220), each scrolled into view
+// first, as a scrolling column shows it.
+const cardOverCorner = (page: Page) =>
+  page.evaluate(() => {
+    const corner = document.getElementById('copy-diagnostics')!.getBoundingClientRect();
+    return ['daily-result', 'daily-copy'].filter((id) => {
+      const el = document.getElementById(id)!;
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const b = el.getBoundingClientRect();
+      return b.left < corner.right && corner.left < b.right && b.top < corner.bottom && corner.top < b.bottom;
+    });
+  });
+
 const sizes = [
   { name: 'a phone held upright', viewport: { width: 375, height: 812 }, mobile: true },
   { name: 'a phone held sideways', viewport: { width: 812, height: 375 }, mobile: true },
@@ -111,6 +125,18 @@ for (const { name, viewport, mobile } of sizes) {
       // Turning the device around keeps the layout right.
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'turned around');
+    });
+
+    test('the daily result card covers neither the HUD nor the board, #196', async ({ page }, testInfo) => {
+      test.slow(); // eight plies played by hand, then two checks
+      await startDaily(page);
+      await loseByRepetition(page);
+      await expect(page.locator('#daily-card')).toBeVisible();
+      await check(page, testInfo, 'with the daily result card');
+      expect(await cardOverCorner(page), 'the card is clear of Copy diagnostics').toEqual([]);
+      await page.setViewportSize({ width: viewport.height, height: viewport.width });
+      await check(page, testInfo, 'with the daily result card turned around');
+      expect(await cardOverCorner(page), 'turned around, the card is clear of Copy diagnostics').toEqual([]);
     });
   });
 }

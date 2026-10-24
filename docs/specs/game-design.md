@@ -332,7 +332,13 @@ Each UTC day, everyone gets the same boss with the same seed, with no server (#1
   Blocked storage counts every start as attempt 1. The HUD boss block shows the day and the attempt.
 - **Retry** on a daily starts the daily of the current day: after 00:00 UTC it is the new day's
   boss and seed, attempt 1.
-- The result card to copy and share is #196.
+- **Result card** (#196): when a daily fight ends, won or lost, a card shows a short text to
+  share, three lines: `AB-ALONE daily YYYY-MM-DD: <boss name>`, then `Victory in N plies on
+  attempt A` or `Defeat in N plies on attempt A` (N counts both sides' plies, A is the attempt of
+  the day of that fight), then the site link `https://tidymaze.github.io/ab-alone/`. A plain text
+  and a link, no signed record in v1 (a signed record can come with #39). Built in the browser
+  (`dailyCard` in `client/src/daily.ts`), it leaves the browser only when the player copies it. A
+  plain boss fight from the boss menu shows no card, and Retry hides it until the next end.
 
 ## 8. Boss calibration (#48)
 
