@@ -1,0 +1,329 @@
+# MCP server spec (#251, from #163)
+
+Status: spec, no code. Lets an AI agent play AB-ALONE through the Model Context Protocol (MCP): a game against the bot, a boss fight, or an online room.
+
+## 1. Decisions (from the last comment of #163)
+
+1. The server is a **local stdio process**. Free. No hosted server before open beta (#74).
+2. Online rooms: **embed the P2P client in Node** (Trystero with a WebRTC polyfill). No browser driving. Owner's choice.
+3. The agent has **its own Ed25519 key and a seat** like any peer (#117).
+4. Agent players are flagged with an **`agent` field in the signed `Hello`** and shown as such in the room.
+
+## 2. The engine is the only judge
+
+- The server holds no rules. Every legal move, every result and every bot or boss reply comes from `abalone-wasm` (`Engine` and `Encounter`), which wraps `abalone-core`.
+- The agent never sends a state. It sends a move. The server asks the engine to play it. If the engine says no, the state does not change and the tool returns the engine's reason.
+- `legal_moves` is the list the engine returns. A move that is not in it is illegal, whatever the agent believes.
+- Online, the server also checks every move it receives with the engine (rules.md section 10.2, tech.md section 6). A peer that sends an illegal move is dropped.
+- Resign is the one thing the engine does not model (rules.md OPEN-12). See `resign` in section 5.
+
+## 3. Notation
+
+### 3.1 Cells and moves
+
+Same notation as `abalone-cli` (`parse_move` in `crates/abalone-cli/src/lib.rs`) and rules.md section 1.
+
+- A cell is `(q,r)`, no space, for example `(-3,2)`. The board has 61 cells with `max(|q|,|r|,|q+r|) <= 4`.
+- A move is the selected cells, then `>`, then the direction: `(-1,2)(0,2)>E`. One marble: `(0,0)>SE`.
+- Directions: `E`, `W`, `NE`, `SW`, `NW`, `SE`. Upper case only.
+- Cell order inside a move is kept as written.
+- Parse errors reuse the `ParseError` messages of `abalone-cli`: `empty input`, `missing '>' before the direction`, `no cell before '>'`, `cell must look like (q,r), for example (0,0)`, `direction must be E, W, NE, SW, NW or SE`.
+
+### 3.2 Bridge to the engine
+
+`abalone-wasm` takes a move as 8 integers `[n, dir, q0, r0, q1, r1, q2, r2]` (`MOVE_STRIDE`). `n` is 1 to 3 marbles, unused coordinates are `0`. `dir` is the index in `E, W, NE, SW, NW, SE` (0 to 5). The MCP server converts between the string and this record at the edge. Nothing else converts.
+
+### 3.3 Other codes
+
+Use the codes of the `abalone-wasm` module doc, mapped to words in the tool output:
+
+| Field | `abalone-wasm` code | MCP value |
+|---|---|---|
+| side (`to_move`) | `1`, `2` | `"black"`, `"white"` |
+| status | `0` running, `1` Black won, `2` White won, `3` draw | `"running"`, `"black_won"`, `"white_won"`, `"draw"` |
+| draw reason | `0` none, `1` repetition, `2` no ejection cap | `null`, `"repetition"`, `"no_ejection_cap"` |
+| boss result (`result`) | `0` playing, `1` won, `2` lost | `"playing"`, `"won"`, `"lost"` |
+
+A draw against a boss is a loss (rules.md section 10.3).
+
+## 4. State
+
+### 4.1 Who plays what
+
+- Against the bot or a boss, the agent is Black and moves first. The bot or boss is White (same as `Encounter`).
+- Online, the seat comes from the room (section 7).
+- `play_move` plays the agent's move, then the bot or boss reply in the same call, so `get_state` always shows a position where the agent is to move, or a finished game.
+
+### 4.2 `get_state` output
+
+```json
+{
+  "game_id": "string",
+  "mode": "bot | boss | online",
+  "you": "black | white",
+  "to_move": "black | white",
+  "status": "running | black_won | white_won | draw",
+  "draw_reason": "null | repetition | no_ejection_cap",
+  "resigned": false,
+  "ejected": { "black": 0, "white": 0 },
+  "win_ejections": { "black": 6, "white": 6 },
+  "ascii": "string",
+  "board": "string",
+  "last_moves": ["(0,0)>SE"],
+  "boss": null
+}
+```
+
+- `ejected` is `Engine.ejected(side)`: marbles that side has pushed out. `win_ejections` is `Engine.win_ejections(side)`.
+- `ascii` is the board as printed by `render` in `abalone-cli`: header `  1 2 3 4 5 6 7 8 9`, rows `a` to `i`, `B`, `W`, `.`.
+- `board` is the 61 cells in `Engine.board()` order, one character per cell: row by row from `r = -4` to `r = 4`, `q` ascending inside a row. `.` empty, `B` Black, `W` White, `x` vanished (`3` in the engine).
+- `last_moves` is the last 6 plies in the notation of section 3.1, oldest first, boss and bot moves included.
+- `resigned` is `true` after `resign`. It is the only field the engine does not own.
+
+### 4.3 Boss state (phase and tell)
+
+`boss` is `null` unless `mode` is `boss`. Otherwise it is an object built from `Encounter`:
+
+```json
+{
+  "id": "echo | hull | choir | chaplain",
+  "name": "string",
+  "phase": 0,
+  "phases": 4,
+  "tell": null,
+  "next_army": null,
+  "cracks": [{ "cell": "(q,r)", "plies_left": 2 }],
+  "flips": ["(q,r)"],
+  "converted": ["(q,r)"],
+  "armies": [{ "cell": "(q,r)", "army": "alto | tenor | bass" }],
+  "result": "playing | won | lost"
+}
+```
+
+| Field | Engine call | Meaning |
+|---|---|---|
+| `id`, `name` | `boss_ids()`, `Encounter.name()` | `id` is one of `boss_ids()` (today `echo`, `hull`, `choir`, `chaplain`) |
+| `phase` | `Encounter.phase()` | `0` is P1. It rises when the boss marble count drops under a threshold (rules.md section 10.3) |
+| `phases` | `Encounter.phases()` | Number of phases |
+| `tell` | `Encounter.tell()` | Id of the board special that fires right after the next ply, `null` when none (`-1` in the engine). This is the tell: the threat is shown one ply before it hits |
+| `next_army` | `Encounter.next_army()` | The Choir's tell: the army that moves next. `null` for the other bosses |
+| `cracks` | `Encounter.cracks()` | The Hull: cracked rim cells and plies left before they vanish. Empty for the others |
+| `flips` | `Encounter.flips()` | The Chaplain: your marbles that flip to the boss at the end of the next boss turn if nothing moves. Empty for the others |
+| `converted` | `Encounter.converted()` | The Chaplain: boss marbles that were yours |
+| `armies` | `Encounter.armies()` | The Choir: boss marbles and their army (`0` Alto, `1` Tenor, `2` Bass). Empty for the others |
+| `result` | `Encounter.result()` | Fight result. A draw is a loss |
+
+Notes:
+
+- On the Choir the board has radius 3. The outer ring shows as `x` in `board`. The player wins at 10 ejections there: read `win_ejections`, do not hard-code 6 (Decision #131).
+- The meaning of a `tell` id is the boss's own. The server returns the id as the engine gives it and does not name it.
+- An agent that ignores `tell` still plays legally. The tell is information, not a rule.
+
+## 5. Tools
+
+All tools return JSON as MCP text content. A failure sets `isError: true` with an error object (section 6). The server keeps one game at a time.
+
+### `new_game`
+
+Starts a local game and drops any game in progress.
+
+Input:
+
+```json
+{
+  "boss": "string, optional, one of boss_ids()",
+  "seed": "integer 0 to 4294967295, optional, default 0",
+  "bot_nodes": "integer 1 to 200000, optional, default 20000"
+}
+```
+
+- No `boss`: a game against the bot, mode `bot`. The bot searches at most `bot_nodes` positions per move (`Engine.best_move(nodes)`). 20000 is `BOT_NODES` in `client/src/bot.ts`.
+- With `boss`: mode `boss`, `Encounter.new(boss, seed)`. The same id and seed always give the same fight. `bot_nodes` is ignored, the boss uses its own budget.
+
+Output: the `get_state` object.
+
+Errors: `unknown_boss`.
+
+### `get_state`
+
+Input: none. Output: the object of section 4.2. Errors: `no_game`.
+
+### `legal_moves`
+
+Input: none.
+
+Output:
+
+```json
+{ "to_move": "black | white", "moves": ["(0,0)>SE", "..."], "count": 0 }
+```
+
+- `moves` is `Engine.legal_moves()` (or `Encounter.legal_moves()`) in notation. Empty once the game is over.
+- On the Choir's turn the engine only lists the moves of the army in turn.
+- Against the Echo, every entry is `{ "move": "...", "tell_reply": "..." }` instead of a string. `tell_reply` is `Encounter.tell_move(mv)`: the reply the boss announces for that move. Only the Echo announces one, so other bosses and the bot get plain strings.
+
+Errors: `no_game`.
+
+### `play_move`
+
+Input:
+
+```json
+{ "move": "(-1,2)(0,2)>E" }
+```
+
+Behaviour:
+
+1. Parse the string (section 3.1). On failure: `bad_move`.
+2. Convert to a record and call `play`. The engine rejects an illegal move: `illegal_move`, state unchanged.
+3. If the game is still running and it is the bot's or boss's turn, play its reply (`Engine.best_move(bot_nodes)` or `Encounter.boss_move()`) and apply it with `play`.
+
+Output:
+
+```json
+{
+  "played": "(-1,2)(0,2)>E",
+  "reply": "(1,-2)>SW",
+  "state": { "...": "the get_state object" }
+}
+```
+
+`reply` is `null` when the game ended on the agent's move. Online, `reply` is always `null`: use `wait_for_opponent_move` (section 7).
+
+Errors: `no_game`, `game_over`, `not_your_turn`, `bad_move`, `illegal_move`.
+
+### `create_room`
+
+Online. Opens a room and takes a seat. See section 7.
+
+Input:
+
+```json
+{ "name": "string, optional, display name, default \"agent\"" }
+```
+
+Output:
+
+```json
+{
+  "room": "string, random 8+ characters (tech.md section 6)",
+  "invite": "string, link a human opens in the client",
+  "you": "black",
+  "pub": "string, base64url Ed25519 public key of the agent"
+}
+```
+
+The game starts when a second peer joins and both `Hello` are verified. Errors: `already_in_room`, `transport_failed`.
+
+### `join_room`
+
+Online. Joins a room made by a human or by another agent.
+
+Input:
+
+```json
+{ "room": "string, a room code or an invite link", "name": "string, optional" }
+```
+
+Output: same shape as `create_room`, with `you` set to the seat the room gave (`white` if Black is taken). Errors: `already_in_room`, `room_full` (both seats taken, the agent would be a spectator and the server does not support spectating), `room_not_found` (no peer answered within the connect timeout), `transport_failed`.
+
+### `wait_for_opponent_move`
+
+Online. Blocks until something happens. It never hangs: it returns at `timeout_s`.
+
+Input:
+
+```json
+{ "timeout_s": "integer 1 to 120, optional, default 30" }
+```
+
+Output:
+
+```json
+{
+  "event": "opponent_moved | game_over | opponent_left | desync | timeout",
+  "move": "(1,-2)>SW",
+  "state": { "...": "the get_state object" }
+}
+```
+
+- `move` is set only for `opponent_moved`.
+- `opponent_left`: the data channel closed. Seats are kept for 60 s (rules.md section 10.2). The agent may call the tool again.
+- `desync`: the state hash of a peer does not match. The game is paused (rules.md section 10.2). `get_state` still works.
+- If it is already the agent's turn, the call returns at once with `event: "opponent_moved"` and the last move.
+
+Errors: `no_room`.
+
+### `resign`
+
+Input: none.
+
+- **Local game or boss:** marks the game as resigned. `status` becomes the opponent's win (`white_won`), a boss `result` becomes `lost`, `resigned` is `true`. The engine is not asked, since it has no resign.
+- **Online:** returns `not_supported`. Resign is rules.md OPEN-12 and an online resign needs a new signed message, so it waits for an owner decision. No tool path fakes it.
+
+Output: the `get_state` object. Errors: `no_game`, `game_over`, `not_supported`.
+
+## 6. Errors
+
+An error is `{ "code": "...", "message": "..." }`. `message` is the engine's reason or the `ParseError` text when there is one.
+
+| Code | When |
+|---|---|
+| `no_game` | No game started (`new_game` or a room first) |
+| `unknown_boss` | `boss` is not in `boss_ids()` |
+| `bad_move` | The string does not parse. `message` is the `ParseError` text |
+| `illegal_move` | The engine refused the move. `message` is the engine error (`Game::play` error, Debug format) |
+| `game_over` | The game has ended |
+| `not_your_turn` | Online, it is the opponent's turn |
+| `no_room`, `already_in_room`, `room_full`, `room_not_found` | Room state |
+| `transport_failed` | The P2P layer could not start |
+| `not_supported` | Online resign |
+
+## 7. Online rooms
+
+- The server runs the same P2P stack as the browser client, in Node: Trystero with a WebRTC polyfill, behind the `Transport` interface of `client/src/transport.ts`. Signaling carries only SDP and ICE. Game data goes over the data channel (tech.md section 6).
+- The agent signs every move as a `MoveRecord` `{game, seq, prev, move, pub, sig}` (`client/src/moverecord.ts`). `move` is the 8-integer record of section 3.2. The hash chain is the same as for humans.
+- Seats come from `Hello` `{kind, game, seat, roster, pub, sig}`. The agent's key is created per process and kept in memory. The creator's `Hello` carries the roster.
+- The agent checks every move it receives with `Engine.play`. An illegal move or a bad signature makes it drop that peer.
+- Rooms have two seats. A third peer is refused as a player (bug #117).
+- Rematch (tech.md section 6) is not exposed in v1. The agent starts a new room.
+- No TURN in v1 (multiplayer.md section 4). A pair behind a symmetric NAT cannot connect, and `join_room` returns `room_not_found` or `transport_failed`.
+
+## 8. Agent flag in `Hello`
+
+Add one field to `Hello`:
+
+```ts
+interface Hello {
+  kind: 'hello';
+  game: string;
+  seat: number;
+  roster: string[];
+  agent?: true;   // present only for an agent
+  pub: string;
+  sig: string;
+}
+```
+
+- The field is part of what is signed (`helloPayload` in `client/src/moverecord.ts`), so nobody can add or remove it in transit.
+- A `Hello` without `agent` means a human. Old clients keep working.
+- The room shows an "agent" mark next to the seat. The mark does not change the rules.
+- The MCP server always sets it. A human client never does.
+- The flag is a label, not proof. A human can run a client that lies. That is accepted: the point is that honest agents are visible.
+
+## 9. Follow-up tasks (parent #163)
+
+Order: local game against the bot and bosses first, online rooms second, agent flag third.
+
+1. [#252](https://github.com/TidyMaze/ab-alone/issues/252) Task: MCP server, local game against the bot (`new_game`, `get_state`, `legal_moves`, `play_move`, `resign`)
+2. [#253](https://github.com/TidyMaze/ab-alone/issues/253) Task: MCP bosses in `new_game`, with phase and tell in `get_state`
+3. [#254](https://github.com/TidyMaze/ab-alone/issues/254) Task: MCP online rooms (`create_room`, `join_room`, `wait_for_opponent_move`)
+4. [#255](https://github.com/TidyMaze/ab-alone/issues/255) Task: agent flag in the signed `Hello`, shown in the room
+
+#254 must not ship before #255, or an agent seat shows as a human.
+
+## 10. Open items for the owners
+
+- Online resign needs a decision (rules.md OPEN-12) and a signed message. Not decided here.
+- The server code lives in a new `mcp/` package. The Task #252 makes that call, nothing else depends on it.
+- Spectating is not part of v1.
