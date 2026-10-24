@@ -80,6 +80,14 @@ run.
 15. **No stacked branches.** Every branch starts from an up-to-date `main` and targets `main`.
     Never base a branch on another unmerged branch. If your work needs another PR, wait until it is
     merged, then branch from `main`.
+16. **Finish PRs properly, do not pile them up.** Prefer getting one PR ready, green and merged over
+    working on many PRs at the same time and merging none. Every open PR goes out of date each
+    time another one merges, and each rebase means a conflict to resolve, checks to rerun and a CI
+    wait: many open PRs mean rebase loops and wasted time. In practice: merge a ready PR before
+    you open another one; do not start a new Task while a PR of yours waits on a rebase, a red
+    check or a missing screenshot; PRs that touch the same files go one after the other, never in
+    parallel (the second branches from `main` after the first merges); the lead agent does not
+    launch a new sub-agent task while it can finish or merge an open PR instead.
 
 ## 2. Where things live
 
