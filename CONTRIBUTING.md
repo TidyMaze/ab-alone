@@ -52,6 +52,14 @@ run.
     or lower priority, and an open bug is never below `P1`.
 12. **Test in a real browser regularly.** Playwright on every PR, a scheduled run against the live
     site, and a manual Chrome check before merging a player-facing change. See section 11.
+13. **Always assign yourself.** Before working on an issue or a PR, assign it to yourself (an agent
+    assigns its driving owner and says so in a comment). Unassigned work does not exist.
+14. **Hands off what others hold.** Never work on, push to, rebase or take over an issue or PR
+    assigned to someone else without their explicit consent, written in the issue or PR. Let them
+    finish until it is `Ready` or merged. If it blocks you, ask in a comment and wait.
+15. **No stacked branches.** Every branch starts from an up-to-date `main` and targets `main`.
+    Never base a branch on another unmerged branch. If your work needs another PR, wait until it is
+    merged, then branch from `main`.
 
 ## 2. Where things live
 
@@ -245,6 +253,9 @@ Every agent follows the rules above, plus:
 - Adding something to a PR that is not in its Task.
 - Deciding in a PR thread, a commit message or a chat.
 - Blank issues: always use a form.
+- Working on an issue or PR without being assigned to it.
+- Touching an issue or PR assigned to someone else without their written consent.
+- A branch based on another unmerged branch, or a PR targeting anything but `main`.
 - Fixing a bug without a `bug` issue, or inside another task's PR.
 - Starting a task while a `Ready` bug of the same or higher priority is waiting.
 
