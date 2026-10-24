@@ -107,6 +107,17 @@ describe('askBot', () => {
     expect(EVAL_NODES * 4).toBeLessThanOrEqual(BOT_NODES);
   });
 
+  it('keeps several requests in flight on one worker, each resolved by its own reply, #192', async () => {
+    // The evaluation bar and the hint share the analysis worker: a hint asked while an evaluation runs must not
+    // leave the evaluation waiting forever, nor the other way round.
+    const worker = fakeWorker();
+    const got: unknown[] = [];
+    void askEval(worker, [], 10).then((score) => got.push(score));
+    void askBot(worker, [[1, 0, 0, 2, 0, 0, 0, 0]], 30).then((move) => got.push(move));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(got).toEqual([20, [1, 0, 30, 0, 0, 0, 0, 0]]);
+  });
+
   it('carries the boss in the request', () => {
     const sent: BotRequest[] = [];
     const worker = { onmessage: null, postMessage: (r: BotRequest) => void sent.push(r) };
