@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bossHtml } from './bosshud';
+import { bossHtml, goalShown } from './bosshud';
 
 const base = { name: 'The Echo', phase: 0, phases: 3, result: 0 };
 
@@ -43,7 +43,29 @@ describe('bossHtml', () => {
     expect(bossHtml({ ...base, daily: '<i>' })).not.toContain('<i>');
   });
 
+  it('shows the goal line of the boss, nothing when there is none', () => {
+    expect(bossHtml({ ...base, goal: 'Eject 6 of its marbles to win.' })).toContain(
+      '<div class="goal">Goal: Eject 6 of its marbles to win.</div>',
+    );
+    expect(bossHtml(base)).not.toContain('class="goal"');
+    expect(bossHtml({ ...base, goal: '<i>' })).not.toContain('<i>');
+  });
+
   it('escapes the boss name', () => {
     expect(bossHtml({ ...base, name: '<b>x</b>' })).not.toContain('<b>');
+  });
+});
+
+describe('goalShown', () => {
+  it('shows the goal before the first move, whatever the control says', () => {
+    expect(goalShown(0, false)).toBe(true);
+    expect(goalShown(0, true)).toBe(true);
+  });
+
+  it('hides it from the first move on, until the control asks for it', () => {
+    expect(goalShown(1, false)).toBe(false);
+    expect(goalShown(8, false)).toBe(false);
+    expect(goalShown(1, true)).toBe(true);
+    expect(goalShown(8, true)).toBe(true);
   });
 });

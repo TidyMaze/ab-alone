@@ -81,6 +81,46 @@ test('a plain boss fight shows no daily line and does not count a daily attempt,
   await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 1');
 });
 
+// The goal (#248): the HUD states it before the first move, folds away at the first move so the plate keeps its
+// usual size, and the Goal control shows it again on demand.
+test('the daily goal shows before the first move, folds away after it, and the Goal control brings it back, #248', async ({
+  page,
+}, testInfo) => {
+  await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
+  await page.goto('./?bot=off');
+  await expect(page.locator('#daily')).toBeEnabled();
+  await page.locator('#daily').click();
+  const goal = page.locator('#hud .goal');
+  const control = page.getByRole('button', { name: 'Goal' });
+  await expect(goal).toHaveText(/^Goal: .+/);
+  await expect(control).toHaveAttribute('aria-expanded', 'true');
+  expect(await page.evaluate(() => (window as any).__history())).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath('daily-goal-desktop.png') });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: testInfo.outputPath('daily-goal-phone.png') });
+  expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  const click = async (q: number, r: number) => {
+    const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
+    await page.mouse.click(p.x, p.y);
+  };
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))); // the camera follows the resize
+  await click(0, 2);
+  await click(0, 1);
+  await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(1);
+  await expect(goal).toHaveCount(0);
+  await expect(control).toHaveAttribute('aria-expanded', 'false');
+  await page.screenshot({ path: testInfo.outputPath('daily-goal-folded.png') });
+
+  await control.focus();
+  await page.keyboard.press('Enter'); // reachable from the keyboard
+  await expect(goal).toHaveText(/^Goal: .+/);
+  await expect(control).toHaveAttribute('aria-expanded', 'true');
+  await control.click();
+  await expect(goal).toHaveCount(0);
+});
+
 // The result card (#196).
 const card = (name: string) =>
   `AB-ALONE daily 2026-10-25: ${name}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
