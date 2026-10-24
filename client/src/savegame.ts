@@ -94,6 +94,7 @@ export async function askPersist(storage: PersistApi | undefined): Promise<boole
  * A storage error loses the save, never the game: it just does not survive the next reload. */
 export class LocalSaves {
   private asked = false;
+  private mine = false; // the save holds the game of this page: resumed or saved here
 
   constructor(
     private readonly store: KeyStore,
@@ -109,6 +110,7 @@ export class LocalSaves {
       const game = decodeGame(raw);
       if (game && game.bot !== bot) return null;
       const engine = game && replay(game.moves, make);
+      this.mine = engine !== null;
       if (engine) return { engine, moves: game.moves };
       await this.store.delete(LOCAL_GAME);
     } catch {
@@ -121,6 +123,7 @@ export class LocalSaves {
    * for once, at the first save; a refusal changes nothing. */
   async save(game: LocalGame, over: boolean): Promise<void> {
     const value = encodeGame(game); // copied now: the caller's move list goes on growing
+    this.mine = true;
     if (!this.asked) {
       this.asked = true;
       void askPersist(this.storage);
@@ -129,6 +132,17 @@ export class LocalSaves {
       await (over ? this.store.delete(LOCAL_GAME) : this.store.put(LOCAL_GAME, value));
     } catch {
       // Storage blocked or full: this game does not survive a reload.
+    }
+  }
+
+  /** Deletes the save of this page's game, for New game (#230): the next load starts a new game. A save this
+   * page neither resumed nor wrote, the game of the other mode, is left alone. */
+  async clear(): Promise<void> {
+    if (!this.mine) return;
+    try {
+      await this.store.delete(LOCAL_GAME);
+    } catch {
+      // Storage blocked: nothing more can be done.
     }
   }
 }
