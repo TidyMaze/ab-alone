@@ -115,7 +115,7 @@ export class OnlineSession {
 
   /** The signed log of the game being played, both sides, oldest first: public keys and signatures only. */
   get signedLog(): MoveRecord[] {
-    return this.now.log.list();
+    return this.now.log.from(0);
   }
 
   /** The colour we play in this game, 1 Black or 2 White. */

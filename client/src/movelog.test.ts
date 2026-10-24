@@ -86,17 +86,6 @@ describe('MoveLog', () => {
     expect(await b.verify(next)).toEqual({ ok: true });
   });
 
-  it('lists its records oldest first, as a copy: the signed log of the game for the diagnostics', async () => {
-    const { alice, bob, a } = await pair();
-    expect(a.list()).toEqual([]);
-    const r0 = await a.sign(alice, M1);
-    const r1 = await signMove(bob, { game: 'g', seq: 1, prev: a.head, move: M2 });
-    await a.append(r1);
-    const list = a.list();
-    list.pop();
-    expect(a.list()).toEqual([r0, r1]);
-  });
-
   it('refuses an echo of its own record', async () => {
     const { alice, a } = await pair();
     const r0 = await a.sign(alice, M1);

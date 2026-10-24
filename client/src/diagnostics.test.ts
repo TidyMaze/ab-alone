@@ -96,9 +96,9 @@ describe('gameInfo', () => {
     const keys = await generateKeys();
     const log = new MoveLog('room', keys.pub);
     await log.sign(keys, M1);
-    const info = gameInfo({ ...base, bot: true, online: { game: 'room', side: 1, role: 'player', signed: log.list() } });
+    const info = gameInfo({ ...base, bot: true, online: { game: 'room', side: 1, role: 'player', signed: log.from(0) } });
     expect(info).toMatchObject({ mode: 'online', online: { game: 'room', side: 1, role: 'player' } });
-    expect(info.signed).toEqual(log.list());
+    expect(info.signed).toEqual(log.from(0));
   });
 });
 
@@ -145,7 +145,7 @@ describe('Diagnostics text', () => {
       build: 'b',
       exported: 'e',
       environment: { keys },
-      game: gameInfo({ bot: false, fight: null, online: { game: 'room', side: 1, role: 'player', signed: log.list() }, toMove: 2, status: 0, moves: [M1] }),
+      game: gameInfo({ bot: false, fight: null, online: { game: 'room', side: 1, role: 'player', signed: log.from(0) }, toMove: 2, status: 0, moves: [M1] }),
     });
     const pkcs8 = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.exportKey('pkcs8', keys.priv))));
     const jwk = await crypto.subtle.exportKey('jwk', keys.priv);
