@@ -4,7 +4,7 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-npm run e2e
+bun run e2e
 echo "e2e exit status: $?"
 
 changes=$(git status --porcelain -- e2e)

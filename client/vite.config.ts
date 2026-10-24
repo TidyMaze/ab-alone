@@ -15,7 +15,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
     // The wasm package is built outside client/, the dev server must be allowed to serve it.
     fs: { allow: ['..'] },
     // The e2e dev server (--mode e2e, playwright.config.ts) does not watch files, so it never reloads a page under
-    // test. Every `npm run dev` rebuilds the wasm package: a watching server reloaded the pages of a run in progress
+    // test. Every `bun run dev` rebuilds the wasm package: a watching server reloaded the pages of a run in progress
     // when a second run, a dev server or a wasm build started in the same checkout (bug #185).
     watch: mode === 'e2e' ? null : undefined,
   },

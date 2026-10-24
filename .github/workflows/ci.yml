@@ -62,11 +62,13 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
+      # bun installs and runs the scripts (decision #243), node still runs vite and Playwright.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: client/package.json
       - id: wasm-cache
         uses: actions/cache@v4
         with:
@@ -75,10 +77,10 @@ jobs:
       - if: steps.wasm-cache.outputs.cache-hit != 'true'
         run: wasm-pack build ../crates/abalone-wasm --target web
         working-directory: client
-      - run: npm ci
+      - run: bun install --frozen-lockfile
         working-directory: client
       - id: playwright-version
-        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('./node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
         working-directory: client
       - id: playwright-cache
         uses: actions/cache@v4
@@ -86,9 +88,9 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
         working-directory: client
-      - run: npm run e2e
+      - run: bun run e2e
         working-directory: client
       - uses: actions/upload-artifact@v4
         if: failure()

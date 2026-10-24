@@ -99,4 +99,4 @@ The nightly only runs on `main` by schedule, so a change to it is checked by han
 3. Drop the temporary commit from the branch and close each test issue with a comment pointing at
    the task. The issues are real (same titles as the nightly's), so never leave one open.
 
-The script's unit tests: `cd client && npx vitest run scripts/nightly-report.test.ts`.
+The script's unit tests: `cd client && bunx vitest run scripts/nightly-report.test.ts`.

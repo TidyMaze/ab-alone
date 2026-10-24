@@ -131,7 +131,7 @@ const downloadDir = (ctx) => `/tmp/nightly-${ctx.runId}`;
 function specItem(spec, ctx) {
   const lines = [`- \`${spec.location}\` ${spec.title}`];
   for (const error of spec.errors) lines.push(...['```', ...error, '```'].map((l) => `  ${l}`));
-  if (spec.trace) lines.push(`  Trace: \`npx playwright show-trace ${downloadDir(ctx)}/${spec.trace}\``);
+  if (spec.trace) lines.push(`  Trace: \`bunx playwright show-trace ${downloadDir(ctx)}/${spec.trace}\``);
   return lines.join('\n');
 }
 
@@ -145,15 +145,16 @@ const locations = (specs) => specs.map((s) => s.location).join(' ');
 const fullSuite = (ctx) => (ctx.grepInvert ? `--grep-invert "${ctx.grepInvert}"` : '');
 
 function repro(ctx, args) {
-  return ['```sh', `git fetch origin && git checkout ${ctx.sha}`, `cd client && npm ci && npx playwright install ${PROJECT}`,
-    `E2E_BASE_URL=${ctx.baseUrl} npx playwright test --project=${PROJECT} --workers=1 ${args}`.trimEnd(), '```'].join('\n');
+  return ['```sh', `git fetch origin && git checkout ${ctx.sha}`,
+    `cd client && bun install --frozen-lockfile && bunx playwright install ${PROJECT}`,
+    `E2E_BASE_URL=${ctx.baseUrl} bunx playwright test --project=${PROJECT} --workers=1 ${args}`.trimEnd(), '```'].join('\n');
 }
 
 function artifacts(ctx) {
   const dir = downloadDir(ctx);
   return [`Report and traces: artifact \`playwright-report\` on the [run page](${ctx.runUrl}#artifacts). To open them, from \`client/\`:`,
     '', '```sh', `gh run download ${ctx.runId} --repo ${ctx.repo} --name playwright-report --dir ${dir}`,
-    `npx playwright show-report ${dir}/playwright-report`, '```'].join('\n');
+    `bunx playwright show-report ${dir}/playwright-report`, '```'].join('\n');
 }
 
 const environment = (ctx, version) =>
