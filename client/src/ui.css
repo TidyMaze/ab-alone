@@ -51,13 +51,17 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   justify-content: space-between; align-items: flex-start; pointer-events: none;
 }
 #chrome :is(button, input, label, textarea, select) { pointer-events: auto; }
-#clear-board {
+/* The settings cog and its menu: a list of toggles in the column under the cog, so it covers no cell (#277). */
+#settings, #settings-menu button {
   padding: 0.5rem 0.75rem; cursor: pointer;
   color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
   font: 0.875rem/1.2 var(--ui);
 }
-#clear-board[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
-#clear-board:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#settings { display: flex; padding: 0.5rem; }
+#settings[aria-expanded='true'], #settings-menu button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
+#settings:focus-visible, #settings-menu button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#settings-menu { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
+#settings-menu[hidden] { display: none; }
 #online { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
 #update, #sound, #reset-view, #new-game, #play-online, #rematch, #boss-fight, #daily, #boss-retry, #export-game, #import-game, #boss-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);

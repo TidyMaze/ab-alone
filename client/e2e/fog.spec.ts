@@ -39,7 +39,15 @@ test('the fog shows at the far rim of the board and not at the near rim, bug #17
   await page.locator('canvas').waitFor();
   await page.addStyleTag({ content: 'body::after { display: none !important; }' });
   await expect(page.locator('#hud')).toContainText('Black to move');
-  const toggle = page.locator('#clear-board');
+  const cog = page.getByRole('button', { name: 'Settings' });
+  const toggle = page.getByRole('button', { name: 'Clear board' });
+  // The menu is closed for the shots, so it is in none of them: flip the setting through the cog.
+  const flip = async () => {
+    await cog.click();
+    await toggle.click();
+    await cog.click();
+    await page.mouse.move(2, 2);
+  };
   await page.mouse.move(2, 2); // no hover ghost
   await settle(page);
 
@@ -49,10 +57,10 @@ test('the fog shows at the far rim of the board and not at the near rim, bug #17
   };
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
   const fogOn = await shot('fog-on.png');
-  await toggle.click();
+  await flip();
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'on');
   const fogOff = await shot('fog-off.png');
-  await toggle.click();
+  await flip();
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
   const fogOnAgain = await shot('fog-on-again.png');
 

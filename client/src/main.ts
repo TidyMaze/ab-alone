@@ -32,6 +32,7 @@ import { onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { hudHtml } from './hud';
+import { menuOpen, settingsList, type MenuEvent } from './settings';
 import { drawDue, fogSettings, readClearBoard, readSound, readTier, writeClearBoard, writeSound } from './quality';
 import { Sfx } from './sound';
 import { formatScore } from './score';
@@ -137,21 +138,50 @@ const tier = readTier(store, {
 });
 diag.log.log('info', 'start', { backend, tier });
 let clear = readClearBoard(store);
-const clearButton = document.getElementById('clear-board')!;
 function applyLook(): void {
   const fog = fogSettings(tier, clear, view.distance);
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
-  clearButton.setAttribute('aria-pressed', String(clear));
+  for (const { id, on } of settingsList(clear)) document.getElementById(`setting-${id}`)!.setAttribute('aria-pressed', String(on));
 }
-applyView(); // camera and fog
-clearButton.addEventListener('click', () => {
-  clear = !clear;
-  writeClearBoard(store, clear);
-  applyLook();
+// The settings menu: one button per setting, opened by the cog only. Escape, a press outside and the cog close it.
+const cog = document.getElementById('settings') as HTMLButtonElement;
+const menu = document.getElementById('settings-menu')!;
+const toggles: Record<string, () => void> = {
+  'clear-board': () => {
+    clear = !clear;
+    writeClearBoard(store, clear);
+  },
+};
+for (const { id, label } of settingsList(clear)) {
+  const row = document.createElement('button');
+  row.id = `setting-${id}`;
+  row.type = 'button';
+  row.textContent = label;
+  row.addEventListener('click', () => {
+    toggles[id]!();
+    applyLook();
+  });
+  menu.append(row);
+}
+applyView(); // camera, fog and the settings buttons
+let menuIsOpen = false;
+const moveMenu = (event: MenuEvent): void => {
+  menuIsOpen = menuOpen(menuIsOpen, event);
+  menu.hidden = !menuIsOpen;
+  cog.setAttribute('aria-expanded', String(menuIsOpen));
+};
+cog.addEventListener('click', () => moveMenu('cog'));
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !menuIsOpen) return;
+  moveMenu('escape');
+  cog.focus();
 });
-(clearButton as HTMLButtonElement).disabled = false; // listener ready (#146)
+addEventListener('pointerdown', (e) => {
+  if (menuIsOpen && !menu.contains(e.target as Node) && !cog.contains(e.target as Node)) moveMenu('outside');
+});
+cog.disabled = false; // listener ready (#146)
 
 // The ejection sound (docs/specs/world.md section 7) and its on/off toggle, on by default, until the mix
 // sliders of #60. The audio context waits for a user gesture: browsers block audio before one. A mouse
