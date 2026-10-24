@@ -188,6 +188,17 @@ impl Game {
         }
     }
 
+    /// Times the position after the side to move plays `mv` has been seen in this game, that
+    /// occurrence included; 0 when `mv` is illegal. [`REPETITION_LIMIT`] ends the game in a draw.
+    pub fn seen_after(&self, mv: &Move) -> usize {
+        let Ok((board, _)) = apply(&self.board, self.to_move, mv) else {
+            return 0;
+        };
+        let hash = position_hash(&board, other(self.to_move));
+        1 + self.history.iter().filter(|p| p.hash == hash).count()
+            + usize::from(self.start_hash == hash)
+    }
+
     /// Replaces the board after a ply (a boss hook) and re-hashes that ply's position, so
     /// repetition sees the position the players actually face.
     pub(crate) fn replace_board(&mut self, board: Board) {
@@ -490,6 +501,26 @@ mod tests {
         assert_eq!(game.winner(), None);
         assert_eq!(game.draw_reason(), Some(DrawReason::Repetition));
         assert_eq!(game.play(&cycle[0]), Err(GameError::GameOver));
+    }
+
+    #[test]
+    fn seen_after_counts_the_position_a_move_would_make() {
+        let mut game = lone();
+        let cycle = [
+            mv(&[(0, 0)], SE),
+            mv(&[(4, -4)], W),
+            mv(&[(0, 1)], NW),
+            mv(&[(3, -4)], E),
+        ];
+        assert_eq!(game.seen_after(&cycle[0]), 1, "a new position");
+        assert_eq!(game.seen_after(&mv(&[(1, 1)], E)), 0, "an illegal move");
+        for m in &cycle[..3] {
+            game.play(m).unwrap();
+        }
+        assert_eq!(game.seen_after(&cycle[3]), 2, "the start position again");
+        game.play(&cycle[3]).unwrap();
+        assert_eq!(game.seen_after(&cycle[0]), 2, "the position after ply 1");
+        assert_eq!(game.outcome(), None);
     }
 
     #[test]

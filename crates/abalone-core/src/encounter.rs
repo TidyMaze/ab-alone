@@ -7,6 +7,7 @@ pub mod ballast;
 pub mod chaplain;
 pub mod choir;
 pub mod echo;
+pub mod fixture;
 pub mod hull;
 pub mod ladder;
 pub mod telemetry;
