@@ -1,4 +1,4 @@
-import { DIRECTIONS, axialTo3D, cellIndex, type Axial, type Move } from './board';
+import { DIRECTIONS, axialTo3D, cellIndex, isMarble, type Axial, type Move } from './board';
 
 /** Length of the slide of a moved marble to its new cell, ease out. */
 export const SLIDE_MS = 200;
@@ -12,8 +12,9 @@ export interface SlideTrack {
 }
 
 /** One track per marble the move slides: the moved group, then the opponent marbles its head
- * pushes. A marble pushed off the board is left to the ejection animation, and a marble the board
- * after the move does not show at its new cell (a boss special flipped it) just appears. */
+ * pushes. A marble pushed off the board or into a vanished cell is left to the ejection animation,
+ * and a marble the board after the move does not show at its new cell (a boss special flipped it)
+ * just appears. */
 export function slideTracks(
   before: ArrayLike<number>,
   after: ArrayLike<number>,
@@ -25,9 +26,10 @@ export function slideTracks(
   const moved: Axial[] = [...mv.cells];
   for (const [q, r] of mv.cells) {
     if (inGroup(q + dq, r + dr)) continue;
-    // The head of the group: every marble in line ahead of it is pushed.
+    // The head of the group: every marble in line ahead of it is pushed, up to an empty cell, the
+    // rim or a vanished cell (The Hull).
     let [pq, pr] = [q + dq, r + dr];
-    while (cellIndex(pq, pr) !== -1 && before[cellIndex(pq, pr)] !== 0) {
+    while (isMarble(before[cellIndex(pq, pr)])) {
       moved.push([pq, pr]);
       [pq, pr] = [pq + dq, pr + dr];
     }
