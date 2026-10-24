@@ -90,6 +90,8 @@ test('two tabs of the same browser context play an online game, bug #116', async
   test.slow();
   const a = await context.newPage();
   const b = await context.newPage(); // same context: shared localStorage
+  const errors: string[] = [];
+  for (const page of [a, b]) page.on('pageerror', (e) => errors.push(e.message));
   await room({ a, b });
   // Bug #238: page b shows its canvas before main.ts loads the textures and the saved game, and its
   // hook transport only comes after both. Its textures are held until open(b) has run in the page, so
@@ -122,6 +124,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
   await expect.poll(() => plies(a)).toBe(2);
   await expect(a.locator('#hud')).not.toContainText('refused');
   await expect(b.locator('#hud')).not.toContainText('refused');
+  expect(errors).toEqual([]); // a record relayed to a page with no session yet was an unhandled rejection (#249)
 });
 
 test('a third peer opening the link is not a player: room is full, its move changes nothing, bug #117', async ({ browser }) => {
