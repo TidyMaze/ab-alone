@@ -57,6 +57,8 @@ request keeps a readable page (no layout jump beyond font metrics).
 One plate, top-left, 16 px from the edges, max width 22rem, never over the board centre at 720p.
 In a short landscape window (500 px tall or less, a phone held sideways) the plate keeps to the band
 left of the board, like the column, with a smaller turn line, so it covers no cell (#234).
+In a taller landscape window up to 1100 px wide the plate is smaller (max width 15rem) for the
+same reason (#246).
 The buttons (Clear board, Reset view, Play online, Boss fight and the rest) share one column
 top-right, beside the plate and never over it (#227). Wider than tall, the column keeps to the band
 right of the board. Held upright, the column becomes rows of buttons under the plate. No button or

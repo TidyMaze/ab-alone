@@ -56,6 +56,10 @@ const sizes = [
   { name: 'a phone held upright', viewport: { width: 375, height: 812 }, mobile: true },
   { name: 'a phone held sideways', viewport: { width: 812, height: 375 }, mobile: true },
   { name: 'a desktop window', viewport: { width: 1280, height: 720 }, mobile: false },
+  // Bug #246: the plate reached over the board's top-left edge in these medium windows.
+  { name: 'a tablet held sideways', viewport: { width: 1024, height: 768 }, mobile: false },
+  { name: 'a window 1000 by 720', viewport: { width: 1000, height: 720 }, mobile: false },
+  { name: 'a window 1024 by 600', viewport: { width: 1024, height: 600 }, mobile: false },
 ];
 
 for (const { name, viewport, mobile } of sizes) {
