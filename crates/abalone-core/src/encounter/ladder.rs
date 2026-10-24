@@ -163,19 +163,23 @@ fn play_out(
     let echo = arena.kind() == LadderBoss::Echo;
     let mut losses = Losses::default();
     let mut max_phase = arena.phase();
-    let (mut plies, mut player_moves, mut stuck) = (0, 0, false);
+    let (mut plies, mut player_moves, mut stuck) = (0, 0, None);
     while arena.game().outcome().is_none() && plies < ply_cap {
         let game = arena.game();
         let player_turn = game.to_move() == Player::Black;
         let mv = if player_turn {
             player_moves += 1;
             let Some(mv) = player_move(game, seed, player_moves - 1, opening, player_budget) else {
-                stuck = true;
+                stuck = Some(DeathCause::Conversion);
                 break;
             };
             mv
         } else {
-            arena.boss_move().expect("the boss has a move")
+            let Some(mv) = arena.boss_move() else {
+                stuck = Some(DeathCause::BossStuck);
+                break;
+            };
+            mv
         };
         let boss_push = !player_turn & apply(game.board(), Player::White, &mv).is_ok_and(|a| a.1);
         let mirror = echo
@@ -216,13 +220,7 @@ fn play_out(
         },
         plies,
         max_phase,
-        death: (!won).then(|| {
-            if stuck {
-                DeathCause::Conversion
-            } else {
-                classify_death(draw, capped, &losses)
-            }
-        }),
+        death: (!won).then(|| stuck.unwrap_or_else(|| classify_death(draw, capped, &losses))),
         player_marbles: marbles(game.board(), Cell::Black),
         boss_marbles: marbles(game.board(), Cell::White),
         conversions: losses.converted,

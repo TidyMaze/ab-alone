@@ -33,6 +33,8 @@ pub enum DeathCause {
     Draw,
     /// The ladder hit its ply cap before anyone won.
     PlyCap,
+    /// The boss had no legal move on its turn (an engine gap the ladder reports, not a rule).
+    BossStuck,
 }
 
 impl DeathCause {
@@ -45,6 +47,7 @@ impl DeathCause {
             DeathCause::Mirror => "mirror",
             DeathCause::Draw => "draw",
             DeathCause::PlyCap => "ply_cap",
+            DeathCause::BossStuck => "boss_stuck",
         }
     }
 }
@@ -176,6 +179,7 @@ pub fn death_counts(records: &[AttemptRecord]) -> Vec<(&'static str, u32)> {
         DeathCause::Mirror,
         DeathCause::Draw,
         DeathCause::PlyCap,
+        DeathCause::BossStuck,
     ]
     .into_iter()
     .map(|c| {
