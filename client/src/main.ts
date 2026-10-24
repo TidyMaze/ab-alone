@@ -183,7 +183,12 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
 });
 const marbles = new THREE.Group();
 scene.add(marbles);
-const marbleAt = new Map<number, THREE.Mesh>(); // cell index to its marble, for the slide
+// Cell index to the marble on it and what is drawn on that marble (cap, glyph, tell ring): the
+// slide moves them together.
+const marbleAt = new Map<number, THREE.Object3D[]>();
+const onMarble = (i: number, obj: THREE.Object3D): void => {
+  marbleAt.set(i, [...(marbleAt.get(i) ?? []), obj]);
+};
 // Ghost layer: the position a hovered legal move would give, drawn translucent.
 const ghosts = new THREE.Group();
 scene.add(ghosts);
@@ -234,8 +239,10 @@ function animateSlides(now: number): void {
   const elapsed = now - slide.start;
   for (const track of stale ? [] : slide.tracks) {
     const p = slideAt(track, elapsed);
-    const mesh = marbleAt.get(cellIndex(track.cell[0], track.cell[1]));
-    mesh?.position.set(p.x, mesh.position.y, p.z);
+    for (const obj of marbleAt.get(cellIndex(track.cell[0], track.cell[1])) ?? []) {
+      obj.position.x = p.x;
+      obj.position.z = p.z;
+    }
   }
   if (!stale && elapsed < SLIDE_MS) return;
   slide = null;
@@ -354,7 +361,7 @@ function refresh(): void {
     const marble = new THREE.Mesh(marbleGeometry, marbleMaterials[side]);
     marble.position.set(p.x, 0.36, p.z);
     marbles.add(marble);
-    marbleAt.set(i, marble);
+    onMarble(i, marble);
     if (isSelected(q, r)) {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.rotation.x = Math.PI / 2;
@@ -368,6 +375,7 @@ function refresh(): void {
     const cap = new THREE.Mesh(shellCapGeometry, marbleMaterials[1]);
     cap.position.set(p.x, 0.36, p.z);
     marbles.add(cap);
+    onMarble(cellIndex(q, r), cap);
   }
   for (const { cell, army } of armies) {
     const p = axialTo3D(cell[0], cell[1]);
@@ -375,11 +383,13 @@ function refresh(): void {
     glyph.position.set(p.x, 0.76, p.z);
     if (army === 1) glyph.rotation.x = Math.PI / 2; // the ring lies flat, read from above
     marbles.add(glyph);
+    onMarble(cellIndex(cell[0], cell[1]), glyph);
     if (army !== next) continue;
     const ring = new THREE.Mesh(outlineGeometry, paleMaterial);
     ring.rotation.x = Math.PI / 2;
     ring.position.set(p.x, 0.36, p.z);
     marbles.add(ring);
+    onMarble(cellIndex(cell[0], cell[1]), ring);
   }
   document.body.dataset.armies = String(armies.length); // read by the e2e tests
   document.body.dataset.nextArmy = ARMY_NAMES[next] ?? '';
