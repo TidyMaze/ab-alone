@@ -220,6 +220,7 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
   const disc = new THREE.Mesh(discGeometry, steel);
   const p = axialTo3D(q, r);
   disc.position.set(p.x, -0.05, p.z);
+  disc.updateMatrixWorld(); // picking can run before the first render computes it (#237)
   scene.add(disc);
   return disc;
 });
