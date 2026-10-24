@@ -32,3 +32,17 @@ test('start The Echo, play a move, the boss replies, Retry resets the board', as
   await expect(hud).toContainText('The Echo');
   await expect(hud).toContainText('Black ejected 0/6');
 });
+
+// Bug #144: main.ts awaits the wasm engine, the renderer and the textures before it attaches the
+// Boss fight listener. A click right after domcontentloaded must either hit a disabled button or open the list.
+test('Boss fight is disabled or works when clicked right after load, bug #144', async ({ page }) => {
+  await page.goto('./', { waitUntil: 'domcontentloaded' });
+  const atClick = await page.evaluate(() => {
+    const button = document.getElementById('boss-fight') as HTMLButtonElement;
+    const disabled = button.disabled;
+    button.click();
+    return { disabled, open: !document.getElementById('boss-list')!.hidden };
+  });
+  expect(atClick.disabled || atClick.open).toBe(true);
+  await expect(page.locator('#boss-fight')).toBeEnabled(); // and it works once the page is ready
+});
