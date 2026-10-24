@@ -261,6 +261,7 @@ The project holds **issues only**: no draft items, no project-only tasks. Every 
 | `blocked` | Waiting on someone, see the last comment |
 | `top10` | Won the latest priority vote |
 | `security` | Security incident or hardening (section 12) |
+| `flaky` | Opened by the nightly when a spec failed, then passed on its retry. Stands in for the type label: not a `bug`, so no `P1`. Triage turns it into a `task` to make the spec stable, or closes it ([docs/specs/ci-repair.md](docs/specs/ci-repair.md)) |
 
 ## 9. AI agents
 
@@ -329,7 +330,7 @@ needs a one-line comment saying why, and the reviewer must accept it (generated 
 | When | What | Who |
 |---|---|---|
 | Every PR | Playwright e2e suite on Chromium, run locally once with `npm run e2e` (section 13). CI runs it on main after merge, not on PRs | Author |
-| Every night | Playwright suite against the live GitHub Pages site (scheduled workflow). A failure opens a `bug` issue automatically | CI |
+| Every night | Playwright suite against the live GitHub Pages site (scheduled workflow). A failed spec is re-run once: failing again opens a `bug` issue ready to work on, passing opens a `flaky` issue. No LLM in CI: an owner starts an agent on the bug by hand ([docs/specs/ci-repair.md](docs/specs/ci-repair.md)) | CI |
 | Before merging a player-facing PR | Open the PR build in a real browser, play the changed flow, note the result in the PR | The lead agent (Playwright) or an owner |
 | Once per milestone | Full manual playthrough in Chrome of everything shipped so far, findings filed as `bug` issues | An owner |
 
