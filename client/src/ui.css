@@ -216,6 +216,15 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #eval .label { flex: none; min-width: 6.5rem; }
 }
 
+/* The plates are bolted on the frame (ui.md 1): a rivet in each corner, 4 px inside the border, drawn over the
+   plate's own colour, so it takes no room and changes no size. */
+#hud, #eval {
+  --rivet: radial-gradient(circle, var(--edge) 2px, transparent 2.5px);
+  background-image: var(--rivet), var(--rivet), var(--rivet), var(--rivet);
+  background-position: left 4px top 4px, right 4px top 4px, left 4px bottom 4px, right 4px bottom 4px;
+  background-size: 6px 6px; background-repeat: no-repeat;
+}
+
 @keyframes hud-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
