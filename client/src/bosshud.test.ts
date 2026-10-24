@@ -34,6 +34,15 @@ describe('bossHtml', () => {
     expect(bossHtml({ ...base, tell: '<i>' })).not.toContain('<i>');
   });
 
+  it('shows the daily challenge line of a daily fight, nothing otherwise', () => {
+    expect(bossHtml({ ...base, daily: 'Daily challenge 2026-10-24 · attempt 2' })).toContain(
+      '<div class="daily">Daily challenge 2026-10-24 · attempt 2</div>',
+    );
+    expect(bossHtml(base)).not.toContain('class="daily"');
+    expect(bossHtml({ ...base, daily: '' })).not.toContain('class="daily"');
+    expect(bossHtml({ ...base, daily: '<i>' })).not.toContain('<i>');
+  });
+
   it('escapes the boss name', () => {
     expect(bossHtml({ ...base, name: '<b>x</b>' })).not.toContain('<b>');
   });
