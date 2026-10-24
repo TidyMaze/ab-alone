@@ -1,0 +1,106 @@
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
+
+// Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
+// upright the board was wider than the screen. In every state below no control covers the HUD plate or a
+// cell, every control is on screen or can be scrolled into view, and a tap on any of the 61 cells reaches
+// the board.
+
+// What is wrong on the page right now, as readable lines: an empty list is a good layout.
+const problems = (page: Page) =>
+  page.evaluate(() => {
+    type Box = { left: number; top: number; right: number; bottom: number };
+    const meets = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const onScreen = (b: Box) => b.left >= 0 && b.top >= 0 && b.right <= innerWidth && b.bottom <= innerHeight;
+    const toScreen = (q: number, r: number) => (window as any).__cellToScreen(q, r) as { x: number; y: number };
+    const cells: { name: string; centre: { x: number; y: number }; disc: Box }[] = [];
+    for (let r = -4; r <= 4; r++) {
+      for (let q = Math.max(-4, -4 - r); q <= Math.min(4, 4 - r); q++) {
+        const p = toScreen(q, r);
+        const east = toScreen(q + 1, r);
+        const radius = 0.46 * Math.hypot(east.x - p.x, east.y - p.y); // the disc radius is 0.46, cells are 1 apart
+        const disc = { left: p.x - radius, top: p.y - radius, right: p.x + radius, bottom: p.y + radius };
+        cells.push({ name: `cell ${q},${r}`, centre: p, disc });
+      }
+    }
+    const hud = document.getElementById('hud')!.getBoundingClientRect();
+    const found: string[] = [];
+    for (const el of document.querySelectorAll('button, input, label, textarea, select')) {
+      if (el.getClientRects().length === 0) continue; // hidden
+      const name = el.textContent || el.getAttribute('aria-label')!;
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // a scrolling column brings it into view
+      const box = el.getBoundingClientRect();
+      if (meets(box, hud)) found.push(`${name} covers the HUD`);
+      if (!onScreen(box)) found.push(`${name} is off screen`);
+      for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
+    }
+    for (const c of cells) {
+      if (!onScreen(c.disc)) found.push(`${c.name} is off screen`);
+      else if (document.elementFromPoint(c.centre.x, c.centre.y)?.tagName !== 'CANVAS') found.push(`a tap on ${c.name} misses the board`);
+    }
+    return found;
+  });
+
+// The camera matrices are updated on a rendered frame.
+const frame = (page: Page) =>
+  page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+
+const check = async (page: Page, testInfo: TestInfo, state: string) => {
+  await frame(page);
+  await page.screenshot({ path: testInfo.outputPath(`${state.replaceAll(' ', '-')}.jpg`), type: 'jpeg', quality: 70 });
+  expect(await problems(page), state).toEqual([]);
+};
+
+const sizes = [
+  { name: 'a phone held upright', viewport: { width: 375, height: 812 }, mobile: true },
+  { name: 'a phone held sideways', viewport: { width: 812, height: 375 }, mobile: true },
+  { name: 'a desktop window', viewport: { width: 1280, height: 720 }, mobile: false },
+];
+
+for (const { name, viewport, mobile } of sizes) {
+  test.describe(name, () => {
+    test.skip(({ browserName }) => mobile && browserName === 'firefox', 'Firefox has no mobile emulation');
+    test.use({ viewport, isMobile: mobile, hasTouch: mobile });
+
+    test('the buttons cover neither the HUD nor the board, which stays on screen, bug #227', async ({ page }, testInfo) => {
+      test.slow(); // two page loads and five checks, each with a screenshot of the WebGL page
+      const hud = page.locator('#hud');
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await expect(hud).toContainText('Black to move');
+      // The plate stays top-left, 16 px from the edges (docs/specs/ui.md section 4).
+      expect(await hud.boundingBox()).toMatchObject({ x: 16, y: 16 });
+      await check(page, testInfo, 'at the start');
+
+      await page.getByRole('button', { name: 'Boss fight' }).click();
+      await check(page, testInfo, 'with the boss list open');
+      await page.locator('#boss-list button').first().click();
+      await expect(hud).toContainText('P1');
+      await check(page, testInfo, 'in a boss fight');
+
+      await page.goto('./?bot=off&net=hook');
+      await page.getByRole('button', { name: 'Play online' }).click();
+      await expect(hud).toContainText('Waiting for an opponent');
+      await expect(page.locator('#invite')).toBeVisible();
+      await check(page, testInfo, 'waiting for an opponent');
+
+      // Turning the device around keeps the layout right.
+      await page.setViewportSize({ width: viewport.height, height: viewport.width });
+      await check(page, testInfo, 'turned around');
+    });
+  });
+}
+
+// On a desktop the column stays where it was: top right, one button under the other.
+test('on a desktop the buttons stay in a column at the top right, bug #227', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await expect(page.locator('#hud')).toContainText('Black to move');
+  const width = page.viewportSize()!.width;
+  const boxes = await Promise.all(
+    ['Clear board', 'Reset view', 'Play online', 'Boss fight'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
+  );
+  expect(boxes[0]!.y).toBe(16);
+  for (const [i, box] of boxes.entries()) {
+    expect(box!.x + box!.width).toBeCloseTo(width - 16, 0);
+    if (i > 0) expect(box!.y).toBeGreaterThan(boxes[i - 1]!.y + boxes[i - 1]!.height);
+  }
+});
