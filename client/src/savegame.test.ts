@@ -7,6 +7,7 @@ import {
   LocalSaves,
   memoryStore,
   replay,
+  replayMoves,
   SAVE_VERSION,
   type KeyStore,
   type ReplayEngine,
@@ -137,6 +138,20 @@ describe('replay', () => {
 
   it('gives nothing for a game that is over', () => {
     for (const status of [1, 2, 3]) expect(replay([A, B], fake({ status }).make)).toBeNull();
+  });
+});
+
+describe('replayMoves', () => {
+  it('plays every move on a new engine and returns it, also when the game is over (an imported file)', () => {
+    for (const status of [0, 1, 2, 3]) {
+      const { make, engines } = fake({ status });
+      expect(replayMoves([A, B, C], make)).toBe(engines[0]);
+      expect(engines[0]!.played).toEqual([A, B, C]);
+    }
+  });
+
+  it('gives nothing when the engine refuses a move', () => {
+    expect(replayMoves([A, B, C], fake({ failOn: 2 }).make)).toBeNull();
   });
 });
 
