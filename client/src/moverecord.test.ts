@@ -5,10 +5,13 @@ import {
   hashRecord,
   parseHello,
   parseRecord,
+  parseRematch,
   signHello,
   signMove,
+  signRematch,
   verifyHello,
   verifyRecord,
+  verifyRematch,
 } from './moverecord';
 
 const MOVE = [1, 0, 0, 2, 0, 0, 0, 0];
@@ -131,5 +134,37 @@ describe('Hello', () => {
     ]) {
       expect(parseHello(bad)).toBeNull();
     }
+  });
+});
+
+describe('Rematch', () => {
+  it('signs a rematch ask bound to the finished game and verifies it', async () => {
+    const keys = await generateKeys();
+    const r = await signRematch(keys, { game: 'g' });
+    expect(r).toMatchObject({ kind: 'rematch', game: 'g', pub: keys.pub });
+    expect(await verifyRematch(r)).toBe(true);
+  });
+
+  it('refuses a tampered game or key, garbage bytes, and a Hello signature', async () => {
+    const a = await generateKeys();
+    const b = await generateKeys();
+    const r = await signRematch(a, { game: 'g' });
+    expect(await verifyRematch({ ...r, game: 'other' })).toBe(false);
+    expect(await verifyRematch({ ...r, pub: b.pub })).toBe(false);
+    expect(await verifyRematch({ ...r, pub: 'AAAA' })).toBe(false);
+    expect(await verifyRematch({ ...r, sig: '!!!' })).toBe(false);
+    const h = await signHello(a, { game: 'g', seat: 1, roster: [] });
+    expect(await verifyRematch({ ...r, sig: h.sig })).toBe(false);
+  });
+
+  it('parses a clean copy and rejects every wrong shape', async () => {
+    const keys = await generateKeys();
+    const r = await signRematch(keys, { game: 'g' });
+    expect(parseRematch({ ...r, extra: 1 })).toEqual(r);
+    for (const bad of [null, 'x', { ...r, kind: 'hello' }, { ...r, game: 1 }, { ...r, pub: 1 }, { ...r, sig: 1 }]) {
+      expect(parseRematch(bad)).toBeNull();
+    }
+    expect(parseRecord(r)).toBeNull();
+    expect(parseHello(r)).toBeNull();
   });
 });

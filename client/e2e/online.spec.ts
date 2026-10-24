@@ -260,3 +260,78 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
   await b.context().close();
   await c.context().close();
 });
+
+// Issue #186: after a finished game both players ask for a rematch, a new game on the same channel
+// with the colours swapped. The cheapest real way to finish a game: one marble each, there and
+// back twice, brings the start position back a third time, a draw by threefold repetition.
+test('a finished online game ends in a rematch: colours swapped, the new Black moves first, #186', async ({ browser }) => {
+  // Ten plies on two WebGL pages, each click brings its page to the front: far more than the
+  // four plies of the tests above, so more than test.slow() on a loaded machine.
+  test.setTimeout(240_000);
+  const a = await (await browser.newContext()).newPage();
+  const b = await (await browser.newContext()).newPage();
+  await room({ a, b });
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await a.locator('#play-online').click();
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  await b.goto(`./?net=hook${hash}`);
+  await b.locator('canvas').waitFor();
+  await open(a);
+  await open(b);
+  await seat(b, 'player');
+  await expect(status(a)).toHaveText('You are Black. White is here.');
+  await expect(a.locator('#rematch')).toBeHidden(); // the game runs
+
+  const cycle: [Page, number, number, number, number][] = [
+    [a, 0, 2, 0, 1],
+    [b, 0, -2, 0, -1],
+    [a, 0, 1, 0, 2],
+    [b, 0, -1, 0, -2],
+  ];
+  for (let ply = 0; ply < 8; ply++) {
+    const [page, fq, fr, tq, tr] = cycle[ply % 4]!;
+    await cell(page, fq, fr);
+    await cell(page, tq, tr);
+    await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
+  }
+  for (const page of [a, b]) await expect(page.locator('#hud .turn')).toHaveText('Draw');
+
+  // Each seated player sees the Rematch button. Black asks first, White sees it.
+  await expect(a.locator('#rematch')).toBeVisible();
+  await expect(b.locator('#rematch')).toBeVisible();
+  await a.locator('#rematch').click();
+  await expect(a.locator('#hud .rematch')).toHaveText('You asked for a rematch. Waiting for White...');
+  await expect(a.locator('#rematch')).toBeDisabled();
+  await expect(b.locator('#hud .rematch')).toHaveText('Black asks for a rematch.');
+  await expect(status(a)).toHaveText('You are Black. White is here.'); // nothing starts on one ask
+
+  // White asks too: a new game, colours swapped, nothing played yet.
+  await b.locator('#rematch').click();
+  await expect(status(a)).toHaveText('You are White. Black is here.');
+  await expect(status(b)).toHaveText('You are Black. White is here.');
+  for (const page of [a, b]) {
+    await expect(page.locator('#hud .turn')).toHaveText('Black to move');
+    await expect.poll(() => plies(page)).toBe(0);
+    await expect(page.locator('#rematch')).toBeHidden();
+    await expect(page.locator('#hud .rematch')).toHaveCount(0);
+  }
+
+  // The former Black cannot open the new game, the new Black (page B) does and page A sees it.
+  await cell(a, 0, -2);
+  await cell(a, 0, -1);
+  expect(await plies(a)).toBe(0);
+  await cell(b, 0, 2);
+  await cell(b, 0, 1);
+  await expect.poll(() => plies(a)).toBe(1);
+  await expect(a.locator('#hud .turn')).toHaveText('White to move');
+  await expect(b.locator('#hud .turn')).toHaveText('White to move');
+  await cell(a, 0, -2); // and the new White answers
+  await cell(a, 0, -1);
+  await expect.poll(() => plies(b)).toBe(2);
+  await expect(a.locator('#hud')).not.toContainText('refused');
+  await expect(b.locator('#hud')).not.toContainText('refused');
+  await a.context().close();
+  await b.context().close();
+});

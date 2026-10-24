@@ -1,21 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { OnlineSession, type Judge } from './session';
-import { GENESIS, generateKeys, hashRecord, signHello, signMove, type Keys, type MoveRecord, type Wire } from './moverecord';
+import { GENESIS, generateKeys, hashRecord, signHello, signMove, signRematch, type Keys, type MoveRecord, type Wire } from './moverecord';
+import { nextGameId } from './rematch';
 import { localPair, type ConnectionState, type Transport } from './transport';
 
 const M1 = [1, 0, 0, 2, 0, 0, 0, 0];
 const M2 = [2, 0, 0, 3, 0, 0, 0, 0];
 const M3 = [1, 0, 1, 2, 0, 0, 0, 0];
+const WIN = [7, 0, 0, 0, 0, 0, 0, 0]; // the FakeJudge ends the game: the mover wins
 
-// Stands in for the wasm engine: alternates Black then White, refuses any move starting with 9.
+// Stands in for the wasm engine: alternates Black then White, refuses any move starting with 9 and
+// any move once the game is over.
 class FakeJudge implements Judge {
   played: number[][] = [];
+  winner = 0;
   to_move(): number {
     return (this.played.length % 2) + 1;
   }
   play(mv: Int32Array): void {
-    if (mv[0] === 9) throw new Error('IllegalMove');
+    if (mv[0] === 9 || this.winner !== 0) throw new Error('IllegalMove');
+    if (mv[0] === 7) this.winner = this.to_move();
     this.played.push(Array.from(mv));
+  }
+  status(): number {
+    return this.winner;
+  }
+  restart(): void {
+    this.played = [];
+    this.winner = 0;
   }
 }
 
@@ -28,6 +40,8 @@ async function player(transport: Transport, side: number, seatCount = 2) {
   const states: string[] = [];
   const roles: string[] = [];
   const seen: string[] = []; // presence of the other seat, at each change
+  const asks: number[] = []; // calls of onRematchAsk
+  const rematches: number[] = []; // our side at each new game
   const keys = await generateKeys();
   const session: OnlineSession = new OnlineSession({
     game: 'g',
@@ -41,8 +55,10 @@ async function player(transport: Transport, side: number, seatCount = 2) {
     onState: (s) => states.push(s),
     onRole: (r) => roles.push(r),
     onPresence: () => seen.push(session.presenceOf(3 - side)),
+    onRematchAsk: () => asks.push(asks.length + 1),
+    onRematch: () => rematches.push(session.side),
   });
-  return { judge, moves, refused, states, roles, seen, keys, session };
+  return { judge, moves, refused, states, roles, seen, asks, rematches, keys, session };
 }
 
 // Black creates the room, White joins: both Hello messages cross before anyone plays.
@@ -58,9 +74,13 @@ async function seated() {
 function room() {
   let record: (m: Wire, peer: string) => void = () => {};
   let leave: (peer: string) => void = () => {};
+  let state: ConnectionState = 'open';
+  const sent: Wire[] = [];
   const transport: Transport = {
-    state: 'open',
-    send: () => {},
+    get state() {
+      return state;
+    },
+    send: (m) => sent.push(m),
     onRecord: (cb) => {
       record = cb;
     },
@@ -70,7 +90,15 @@ function room() {
     },
     close: () => {},
   };
-  return { transport, from: (peer: string, m: Wire) => record(m, peer), leave: (peer: string) => leave(peer) };
+  return {
+    transport,
+    sent,
+    from: (peer: string, m: Wire) => record(m, peer),
+    leave: (peer: string) => leave(peer),
+    drop: () => {
+      state = 'closed';
+    },
+  };
 }
 
 // A raw peer on the other end of a pair, for hand made messages.
@@ -402,5 +430,205 @@ describe('OnlineSession', () => {
     x.close();
     await settle();
     expect(session.role).toBe('spectator');
+  });
+});
+
+// No fixed sleeps here: WebCrypto can be slow on a loaded machine (#190). Each test waits for a
+// condition, or for a malformed sentinel to be refused: messages are handled in arrival order, so
+// once the sentinel is refused, everything sent before it was handled.
+const until = (check: () => void) => vi.waitFor(check, { timeout: 15_000, interval: 5 });
+const SENTINEL = { nope: 1 } as unknown as Wire;
+
+// Black creates the room, White joins, and each sees the other's key here.
+async function ready() {
+  const [ta, tb] = localPair();
+  const black = await player(ta, 1);
+  const white = await player(tb, 2);
+  await until(() => {
+    expect(white.session.role).toBe('player');
+    expect(black.session.presenceOf(2)).toBe('here');
+    expect(white.session.presenceOf(1)).toBe('here');
+  });
+  return { black, white };
+}
+
+// A creator session in a room the test plays by hand, with White's key seated and here.
+async function hostWithWhite() {
+  const r = room();
+  const black = await player(r.transport, 1);
+  const white = await generateKeys();
+  r.from('b', await hello(white, 2));
+  await until(() => expect(black.session.presenceOf(2)).toBe('here'));
+  return { r, black, white };
+}
+
+// Black's local move ends the game, as a sixth ejection or a draw would.
+async function blackWins(black: Awaited<ReturnType<typeof player>>) {
+  black.judge.play(Int32Array.from(WIN));
+  await black.session.send(WIN);
+}
+
+describe('OnlineSession rematch, #186', { timeout: 30_000 }, () => {
+  it('starts the rematch once both seated players asked: new game id, fresh log, the former White plays Black and moves first', async () => {
+    const { black, white } = await ready();
+    await blackWins(black);
+    await until(() => expect(white.judge.status()).toBe(1));
+    expect(black.session.canRematch()).toBe(true);
+    expect(white.session.canRematch()).toBe(true);
+
+    await black.session.rematch();
+    expect(black.session.askedRematch(1)).toBe(true);
+    expect(black.session.askedRematch(2)).toBe(false);
+    expect(black.session.canRematch()).toBe(false); // asked once
+    await until(() => expect(white.session.askedRematch(1)).toBe(true));
+    expect(white.session.askedRematch(2)).toBe(false);
+    expect(white.asks.length).toBeGreaterThan(0);
+    expect(black.rematches).toEqual([]);
+    expect(white.rematches).toEqual([]);
+
+    await white.session.rematch();
+    expect(white.rematches).toEqual([1]);
+    await until(() => expect(black.rematches).toEqual([2]));
+    const next = await nextGameId('g');
+    for (const p of [black, white]) {
+      expect(p.session.game).toBe(next);
+      expect(p.judge.played).toEqual([]);
+      expect(p.judge.status()).toBe(0);
+      expect(p.session.askedRematch(1)).toBe(false);
+      expect(p.session.askedRematch(2)).toBe(false);
+      expect(p.session.role).toBe('player');
+    }
+    expect(black.session.side).toBe(2);
+    expect(white.session.side).toBe(1);
+    expect(black.session.presenceOf(1)).toBe('here');
+    expect(white.session.presenceOf(2)).toBe('here');
+    expect(black.session.canPlay()).toBe(false);
+    expect(white.session.canPlay()).toBe(true);
+
+    // The new Black (the former White) opens the new game, the new White answers.
+    white.judge.play(Int32Array.from(M1));
+    await white.session.send(M1);
+    await until(() => expect(black.moves).toEqual([M1]));
+    black.judge.play(Int32Array.from(M2));
+    await black.session.send(M2);
+    await until(() => expect(white.moves).toEqual([WIN, M2])); // WIN ended the first game
+    expect(black.refused).toEqual([]);
+    expect(white.refused).toEqual([]);
+  });
+
+  it('refuses a move signed for the old game id and an ask replayed from the old game, and takes the new game moves', async () => {
+    const { r, black, white } = await hostWithWhite();
+    await blackWins(black);
+    r.from('b', await signRematch(white, { game: 'g' }));
+    await black.session.rematch();
+    expect(black.rematches).toEqual([2]);
+    expect(r.sent.at(-1)).toMatchObject({ kind: 'rematch', game: 'g', pub: black.keys.pub });
+    const next = black.session.game;
+
+    r.from('b', await signMove(white, { game: 'g', seq: 0, prev: GENESIS, move: M1 }));
+    r.from('b', await signRematch(white, { game: 'g' }));
+    await until(() => expect(black.refused).toEqual(['wrong-game', 'stale-rematch']));
+    expect(black.judge.played).toEqual([]);
+    expect(black.session.askedRematch(1)).toBe(false);
+
+    r.from('b', await signMove(white, { game: next, seq: 0, prev: GENESIS, move: M1 }));
+    await until(() => expect(black.moves).toEqual([M1]));
+    expect(black.refused).toEqual(['wrong-game', 'stale-rematch']);
+  });
+
+  it('refuses a forged ask, an ask for another game, one from a key without a seat, and a malformed one', async () => {
+    const { r, black, white } = await hostWithWhite();
+    await blackWins(black);
+    const good = await signRematch(white, { game: 'g' });
+    r.from('b', { ...good, sig: (await signRematch(white, { game: 'other' })).sig });
+    r.from('b', await signRematch(white, { game: 'other' }));
+    r.from('c', await signRematch(await generateKeys(), { game: 'g' }));
+    r.from('b', { kind: 'rematch', game: 1 } as unknown as Wire);
+    await until(() => expect(black.refused).toEqual(['bad-rematch', 'stale-rematch', 'wrong-key', 'bad-rematch']));
+    expect(black.session.askedRematch(2)).toBe(false);
+    await black.session.rematch(); // only our own ask: no new game
+    expect(black.rematches).toEqual([]);
+    expect(black.session.game).toBe('g');
+  });
+
+  it('cannot ask while the game runs, nor once the opponent is gone', async () => {
+    const { r, black } = await hostWithWhite();
+    expect(black.session.canRematch()).toBe(false); // the game runs
+    await black.session.rematch();
+    expect(r.sent.some((m) => (m as { kind?: string }).kind === 'rematch')).toBe(false);
+
+    await blackWins(black);
+    expect(black.session.canRematch()).toBe(true);
+    r.leave('b');
+    await until(() => expect(black.session.presenceOf(2)).toBe('gone'));
+    expect(black.session.canRematch()).toBe(false); // the ask would reach nobody, as a move would not (#143)
+    await black.session.rematch();
+    expect(r.sent.some((m) => (m as { kind?: string }).kind === 'rematch')).toBe(false);
+  });
+
+  it('cannot ask on a closed transport, nor ask twice', async () => {
+    const { r, black } = await hostWithWhite();
+    await blackWins(black);
+    r.drop();
+    expect(black.session.canRematch()).toBe(false);
+    await black.session.rematch();
+    expect(r.sent.some((m) => (m as { kind?: string }).kind === 'rematch')).toBe(false);
+    const second = await hostWithWhite();
+    await blackWins(second.black);
+    await second.black.session.rematch();
+    await second.black.session.rematch();
+    expect(second.r.sent.filter((m) => (m as { kind?: string }).kind === 'rematch')).toHaveLength(1);
+  });
+
+  it('keeps a spectator a spectator: no Rematch for it, it follows the new game, even with the asks before the last move', async () => {
+    const r = room();
+    const watcher = await player(r.transport, 2);
+    const creator = await generateKeys();
+    const rival = await generateKeys();
+    r.from('a', await hello(creator, 1, [creator.pub, rival.pub]));
+    r.from('c', await hello(rival, 2));
+    await until(() => expect(watcher.session.role).toBe('spectator'));
+
+    // The asks can overtake the last move on another channel: they wait for the game to be over here.
+    r.from('a', await signRematch(creator, { game: 'g' }));
+    r.from('c', await signRematch(rival, { game: 'g' }));
+    r.from('a', SENTINEL);
+    await until(() => expect(watcher.refused).toEqual(['malformed']));
+    expect(watcher.rematches).toEqual([]);
+    expect(watcher.session.askedRematch(1)).toBe(true);
+    expect(watcher.session.askedRematch(2)).toBe(true);
+
+    r.from('a', await signMove(creator, { game: 'g', seq: 0, prev: GENESIS, move: WIN }));
+    await until(() => expect(watcher.rematches.length).toBe(1));
+    expect(watcher.session.role).toBe('spectator');
+    expect(watcher.session.canRematch()).toBe(false);
+    await watcher.session.rematch();
+    expect(r.sent.some((m) => (m as { kind?: string }).kind === 'rematch')).toBe(false);
+    const next = await nextGameId('g');
+    expect(watcher.session.game).toBe(next);
+
+    // The former White moves first in the new game, the former Black may not.
+    r.from('a', await signMove(creator, { game: next, seq: 0, prev: GENESIS, move: M1 }));
+    const r0 = await signMove(rival, { game: next, seq: 0, prev: GENESIS, move: M1 });
+    r.from('c', r0);
+    r.from('a', await signMove(creator, { game: next, seq: 1, prev: await hashRecord(r0), move: M2 }));
+    await until(() => expect(watcher.moves).toEqual([WIN, M1, M2]));
+    expect(watcher.refused).toEqual(['malformed', 'not-their-turn']);
+  });
+
+  it('rematches without the optional callbacks', async () => {
+    const r = room();
+    const judge = new FakeJudge();
+    const keys = await generateKeys();
+    const session = new OnlineSession({ game: 'g', side: 1, keys, transport: r.transport, judge, onMove: () => {}, onRefuse: () => {} });
+    const white = await generateKeys();
+    r.from('b', await hello(white, 2));
+    await until(() => expect(session.presenceOf(2)).toBe('here'));
+    judge.play(Int32Array.from(WIN));
+    r.from('b', await signRematch(white, { game: 'g' }));
+    await until(() => expect(session.askedRematch(2)).toBe(true));
+    await session.rematch();
+    expect(session.side).toBe(2);
+    expect(judge.played).toEqual([]);
   });
 });
