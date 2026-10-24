@@ -16,6 +16,10 @@ describe('cueFor, world.md section 7', () => {
   it('clacks for a lost enemy shell (side 1, Black)', () => {
     expect(cueFor(1)).toBe('clack');
   });
+  it('tolls for the glass side when the human is Black (side 1)', () => {
+    expect(cueFor(1, 1)).toBe('toll');
+    expect(cueFor(2, 1)).toBe('clack');
+  });
 });
 
 describe('ejectionVoices', () => {
