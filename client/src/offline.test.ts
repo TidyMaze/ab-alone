@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { CACHE_PREFIX, cacheName, olderCaches, precacheFiles, precacheUrl, route, staleCaches } from './offline';
+import page from '../index.html?raw';
+import {
+  CACHE_PREFIX,
+  cacheName,
+  fontFiles,
+  fontStylesheets,
+  olderCaches,
+  precacheFiles,
+  precacheUrl,
+  route,
+  staleCaches,
+} from './offline';
 
 const BUILD = [
   'index.html',
@@ -120,9 +131,86 @@ describe('route', () => {
 
   it('leaves alone what is not a GET of the app: other methods, other sites, other paths of the host', () => {
     expect(route({ method: 'POST', url: `${scope}assets/deck-albedo.png`, mode: 'cors' }, scope, precache)).toBeNull();
-    expect(get('https://fonts.googleapis.com/css2?family=Chakra+Petch')).toBeNull();
+    expect(get('https://relay.example.org/announce')).toBeNull();
     expect(get('https://tidymaze.github.io/other-game/')).toBeNull();
     expect(get('https://tidymaze.github.io/ab-alone-next/assets/deck-albedo.png')).toBeNull();
+  });
+
+  const sheet = 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=IBM+Plex+Sans:wght@400;500&display=swap';
+  const file = 'https://fonts.gstatic.com/s/chakrapetch/v13/cIflMapbsEk7TDLdtEz1BwkeQI51U5_F_gUk0wzH.woff2';
+
+  it('answers the UI fonts from the caches of the app: the Google Fonts stylesheet and the font files', () => {
+    expect(get(sheet, 'no-cors')).toEqual({ key: sheet, font: true });
+    expect(get(file)).toEqual({ key: file, font: true });
+    expect(get(`${file}#x`)).toEqual({ key: file, font: true });
+  });
+
+  it('caches nothing else of another site: only a GET over https to the two font hosts', () => {
+    expect(route({ method: 'POST', url: file, mode: 'cors' }, scope, precache)).toBeNull();
+    for (const url of [
+      'http://fonts.gstatic.com/s/chakrapetch/v13/x.woff2',
+      'https://fonts.gstatic.com:8443/s/chakrapetch/v13/x.woff2',
+      'https://cdn.fonts.gstatic.com/s/chakrapetch/v13/x.woff2',
+      'https://fonts.gstatic.com.example.org/s/chakrapetch/v13/x.woff2',
+      'https://fonts.google.com/specimen/Chakra+Petch',
+      'https://example.org/fonts.googleapis.com/css2?family=Chakra+Petch',
+    ]) {
+      expect(get(url)).toBeNull();
+    }
+  });
+});
+
+describe('fontStylesheets', () => {
+  it('finds the Google Fonts stylesheet the page links to', () => {
+    expect(fontStylesheets(page)).toEqual([
+      'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=IBM+Plex+Sans:wght@400;500&display=swap',
+    ]);
+  });
+
+  it('reads only the stylesheet links to Google Fonts, in page order, with &amp; read as &', () => {
+    const html = `
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch&amp;display=swap" />
+      <link rel="stylesheet" href="/ab-alone/assets/index-ClyGjfYk.css">
+      <link rel="stylesheet" href="https://example.org/fonts.css">
+      <link rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans" rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=Inter">`;
+    expect(fontStylesheets(html)).toEqual([
+      'https://fonts.googleapis.com/css2?family=Chakra+Petch&display=swap',
+      'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans',
+    ]);
+  });
+});
+
+describe('fontFiles', () => {
+  it('lists the font files a Google Fonts stylesheet points to, each once, only those of fonts.gstatic.com', () => {
+    const css = `
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-weight: 400;
+  src: url(https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDNF5zAA.woff2) format('woff2');
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-weight: 500;
+  src: url(https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDNF5zAA.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: local('Chakra Petch'), url("https://fonts.gstatic.com/s/chakrapetch/v13/latin.woff2") format('woff2'),
+    url( 'https://example.org/chakra.woff2' ), url(/ab-alone/assets/chakra.woff2);
+}`;
+    expect(fontFiles(css)).toEqual([
+      'https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDNF5zAA.woff2',
+      'https://fonts.gstatic.com/s/chakrapetch/v13/latin.woff2',
+    ]);
+  });
+
+  it('finds none in an empty or failed stylesheet', () => {
+    expect(fontFiles('')).toEqual([]);
   });
 });
 
