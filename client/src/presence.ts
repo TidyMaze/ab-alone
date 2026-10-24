@@ -36,9 +36,9 @@ export interface OnlineStatus {
 }
 
 /** The HUD status line of an online game, see docs/specs/ui.md section 4. The e2e tests read these strings. */
-export function onlineStatus(side: number, role: Role, opponent: Seen): OnlineStatus {
+export function onlineStatus(side: number, role: Role, opponent: Seen, agent = false): OnlineStatus {
   const me = SIDE_NAMES[side];
-  const them = SIDE_NAMES[3 - side];
+  const them = SIDE_NAMES[3 - side] + (agent ? ' (agent)' : ''); // the opponent's Hello carried the agent flag
   if (role === 'spectator') return { text: 'Room is full, watching', tone: 'watching' };
   if (role === 'pending') return { text: `Joining as ${me}...`, tone: 'waiting' };
   if (opponent === 'here') return { text: `You are ${me}. ${them} is here.`, tone: 'here' };
