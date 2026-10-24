@@ -186,7 +186,13 @@ the triager does exactly one of:
 ### 6.4 Pull request
 
 1. Open the PR from the template as a **draft** (`gh pr create --draft`). The body contains
-   exactly one `Closes #<task>`.
+   exactly one `Closes #<task>`. **A PR that changes the UI MUST include a screenshot in its
+   description** (before and after when it changes an existing screen), in the "Screenshot"
+   section of the template. A PR without one is not marked ready and not merged. Take it with
+   Playwright (`page.screenshot`) or in Chrome. To put it in the body, push the image to the
+   `pr-screenshots` branch (`pr-screenshots/<pr>-<name>.png`) and link it:
+   `![after](https://raw.githubusercontent.com/TidyMaze/ab-alone/pr-screenshots/<pr>-<name>.png)`.
+   A human can also drag the image into the description. No UI change: write "no UI change".
 2. Move the Task to `In Review`. A PR is **ready only when it is ready to merge**. While it is
    unfinished, in conflict, out of date or its local checks are red, it stays a draft. **CI does
    not run on drafts.** The order is: local checks green (`scripts/verify.sh`, unit tests, one
@@ -208,6 +214,7 @@ the triager does exactly one of:
      so the merger must confirm that the run on the head commit really concluded `success`, not
      `skipped` (`gh run list --branch <branch>`). After a rebase, keep the PR a draft until the
      push is done, wait a few seconds, then mark it ready (bug #179).
+   - [ ] A PR that changes the UI has its screenshot in the description (lead agent checks)
    - [ ] Every conversation resolved (enforced by branch protection)
    - [ ] Not required: the PR does not have to be up to date with `main` (decision #240, replaces
      #161: a merge queue needs an organization). Two green PRs can break `main` together, so a red
