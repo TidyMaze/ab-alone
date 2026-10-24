@@ -256,6 +256,75 @@ mod tests {
     }
 
     #[test]
+    fn belgian_daisy_has_14_marbles_per_side() {
+        let board = Board::belgian_daisy();
+        assert_eq!(count(&board, Cell::Black), 14);
+        assert_eq!(count(&board, Cell::White), 14);
+    }
+
+    #[test]
+    fn belgian_daisy_layout_matches_spec() {
+        // docs/specs/rules.md section 2.2: each side has a flower near the bottom and one near
+        // the top, Black at bottom left and top right.
+        let board = Board::belgian_daisy();
+        let mut black: Vec<(i32, i32)> = all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::Black))
+            .collect();
+        let mut white: Vec<(i32, i32)> = all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
+            .collect();
+        black.sort();
+        white.sort();
+        let mut expected_black = vec![
+            (-4, 4),
+            (-3, 4),
+            (-4, 3),
+            (-3, 3),
+            (-2, 3),
+            (-3, 2),
+            (-2, 2),
+            (2, -2),
+            (3, -2),
+            (2, -3),
+            (3, -3),
+            (4, -3),
+            (3, -4),
+            (4, -4),
+        ];
+        let mut expected_white = vec![
+            (-1, 4),
+            (0, 4),
+            (-1, 3),
+            (0, 3),
+            (1, 3),
+            (0, 2),
+            (1, 2),
+            (-1, -2),
+            (0, -2),
+            (-1, -3),
+            (0, -3),
+            (1, -3),
+            (0, -4),
+            (1, -4),
+        ];
+        expected_black.sort();
+        expected_white.sort();
+        assert_eq!(black, expected_black);
+        assert_eq!(white, expected_white);
+    }
+
+    #[test]
+    fn belgian_daisy_white_mirrors_black_left_right() {
+        // The mirror (q, r) -> (-q - r, r) keeps the row and swaps colours. The point reflection
+        // keeps colours: it maps each side's bottom flower onto its own top flower.
+        let board = Board::belgian_daisy();
+        for (q, r) in all_coords() {
+            assert_eq!(board.get(q, r), board.get(-q - r, r).map(swap_colour));
+            assert_eq!(board.get(q, r), board.get(-q, -r));
+        }
+    }
+
+    #[test]
     fn void_removes_a_cell_and_its_marble() {
         let mut board = Board::standard();
         board.void(0, 4);
