@@ -11,6 +11,10 @@ const cell = async (page: Page, q: number, r: number) => {
   return page.mouse.click(p.x, p.y);
 };
 const plies = (page: Page) => page.evaluate(() => (window as any).__plies());
+// The test hook (main.ts __playMove): a move from two cell clicks without the pointer, sent like a click's
+// signed record. The draw tests use it for every ply but the last, which stays a real click (cell).
+const play = (page: Page, [fq, fr, tq, tr]: [number, number, number, number]) =>
+  page.evaluate(([a, b, c, d]) => (window as any).__playMove(a, b, c, d), [fq, fr, tq, tr]);
 // Seating is a Hello round trip after the connection opens: wait for it before the first move.
 const seat = (page: Page, role: 'player' | 'spectator') => expect(page.locator('body')).toHaveAttribute('data-seat', role);
 // Every page relays its records to the others with its own name as the sender, like a Trystero room,
@@ -316,8 +320,11 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   ];
   for (let ply = 0; ply < 8; ply++) {
     const [page, fq, fr, tq, tr] = cycle[ply % 4]!;
-    await cell(page, fq, fr);
-    await cell(page, tq, tr);
+    if (ply < 7) await play(page, [fq, fr, tq, tr]);
+    else {
+      await cell(page, fq, fr);
+      await cell(page, tq, tr);
+    }
     await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
   }
   for (const page of [a, b]) await expect(page.locator('#hud .turn')).toHaveText('Draw');
@@ -548,8 +555,11 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   for (let ply = 0; ply < 8; ply++) {
     const [fq, fr, tq, tr] = plays[ply % 4]!;
     const [mover, other] = ply % 2 === 0 ? [a, b] : [b, a];
-    await cell(mover, fq, fr);
-    await cell(mover, tq, tr);
+    if (ply < 7) await play(mover, [fq, fr, tq, tr]);
+    else {
+      await cell(mover, fq, fr);
+      await cell(mover, tq, tr);
+    }
     await expect.poll(() => plies(other)).toBe(ply + 1); // the other page replayed it
     for (const page of [a, b]) {
       await expect(page.locator('#hud .turn')).toHaveText(hotSeat[ply]![0]!);
