@@ -95,13 +95,8 @@ export async function signHello(keys: Keys, fields: { game: string; seat: number
   return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, helloPayload(unsigned))) };
 }
 
-export async function verifyHello(h: Hello): Promise<boolean> {
-  try {
-    const key = await crypto.subtle.importKey('raw', unb64(h.pub), ED, false, ['verify']);
-    return await crypto.subtle.verify(ED, key, unb64(h.sig), helloPayload(h));
-  } catch {
-    return false; // malformed base64 or key bytes
-  }
+export function verifyHello(h: Hello): Promise<boolean> {
+  return signedBy(h.pub, h.sig, helloPayload(h));
 }
 
 export async function signRematch(keys: Keys, fields: { game: string }): Promise<Rematch> {
@@ -113,13 +108,8 @@ export function verifyRematch(r: Rematch): Promise<boolean> {
   return signedBy(r.pub, r.sig, rematchPayload(r));
 }
 
-export async function verifyRecord(r: MoveRecord): Promise<boolean> {
-  try {
-    const key = await crypto.subtle.importKey('raw', unb64(r.pub), ED, false, ['verify']);
-    return await crypto.subtle.verify(ED, key, unb64(r.sig), payload(r));
-  } catch {
-    return false; // malformed base64 or key bytes
-  }
+export function verifyRecord(r: MoveRecord): Promise<boolean> {
+  return signedBy(r.pub, r.sig, payload(r));
 }
 
 /** Hash of the whole record, signature included: the next record's `prev`. */
