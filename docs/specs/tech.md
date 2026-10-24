@@ -417,18 +417,28 @@ visit. No dependency: a hand-written service worker and a build step that lists 
 - **Build:** after `vite build`, the plugin `client/scripts/offline-app.mjs` lists every built file
   (hashed JS, CSS, wasm and bot worker, the textures, icons, manifest and page; not `sw.js` nor
   source maps), hashes their content, and bundles `client/src/sw.ts` into `dist/sw.js` with that
-  list and the cache name `ab-alone-<16 hex of the hash>`. Any changed file gives a new cache name,
-  so a new `sw.js`. The pure parts (precache list, cache name, routing, old caches) are in
+  list, the cache name `ab-alone-<16 hex of the hash>` and the Google Fonts stylesheets the built
+  page links to. Any changed file gives a new cache name, so a new `sw.js`. The pure parts
+  (precache list, cache name, routing, old caches, font stylesheets and font files) are in
   `client/src/offline.ts`, unit tested.
 - **Install:** fetches the whole list into the build's cache, revalidated with the server
-  (`cache: 'no-cache'`, never a stale HTTP cache entry), then takes over at once (`skipWaiting`).
-  A failed fetch fails the install and the previous build stays in charge. **Activate:** deletes
-  the app's caches older than the previous one, keeps the previous one, controls the open pages.
-  Only caches named `ab-alone-*` are touched: the Pages origin is shared with other sites.
+  (`cache: 'no-cache'`, never a stale HTTP cache entry), then the UI fonts (below), then takes
+  over at once (`skipWaiting`). A failed fetch of the list fails the install and the previous
+  build stays in charge. **Activate:** deletes the app's caches older than the previous one, keeps
+  the previous one, controls the open pages. Only caches named `ab-alone-*` are touched: the Pages
+  origin is shared with other sites.
+- **UI fonts (#221):** Chakra Petch and IBM Plex Sans come from Google Fonts, cached by the
+  worker at runtime, not committed. At install it fetches the stylesheet the page links to
+  (`fonts.googleapis.com`) and every font file it points to (`fonts.gstatic.com`), with CORS (both
+  hosts allow it), into the build's cache: the first visit fetched them before the worker
+  controlled the page, so one online visit is enough. Best effort: a font that fails leaves the
+  system font, never a failed install. The fonts live and are deleted with the build's cache, and
+  the stylesheet Google serves depends on the browser, so each install fetches its own.
 - **Fetch, cache first:** opening the app (the scope or its `index.html`, any query or hash) gets
   the cached page; a file of the build comes from its cache; any other URL of the scope is looked
-  up in the older caches, then the network. Other sites (fonts, signaling, STUN) are not touched,
-  so offline the UI falls back to the system fonts.
+  up in the older caches, then the network. A GET over https to the two font hosts is looked up in
+  every cache of the app, newest first, then the network, and a good answer is kept in the current
+  cache. No other site is touched (signaling, STUN, any other host).
 - **Update:** each load calls `registration.update()` (Chrome does not check by itself on a
   reload). After a deploy, the next load still runs the cached build, whole; the new worker
   installs and takes over, and the page shows **New version: reload**. The following load (that
@@ -440,7 +450,9 @@ visit. No dependency: a hand-written service worker and a build step that lists 
   (`import.meta.env.PROD`). The e2e suite blocks service workers (`serviceWorkers: 'block'`),
   except `client/e2e/offline.spec.ts`: it runs on `vite build` + `vite preview` (random port,
   under `/ab-alone/`, started and stopped by `playwright.config.ts`), or on the live site in the
-  nightly run. It loads once, goes offline, reloads and plays a bot move.
+  nightly run. It loads once, checks the fonts are cached, empties the browser's HTTP cache (it
+  keeps the stylesheet a day at most), goes offline, reloads, checks the UI fonts are loaded and
+  plays a bot move.
 
 ## 10. CI, testing, observability
 
