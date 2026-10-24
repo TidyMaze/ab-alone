@@ -122,6 +122,13 @@ Clear-board mode removes it.
 a matte black shell. The Chaplain's tell is a ring outline on the marbles about to flip plus a
 glyph on the three boss marbles in contact.
 
+**Ejection.** A marble pushed off the board rolls one cell out over the rim with the line that
+pushes it, in 200 ms (the sharp inhale of section 7). Then the void takes it (the thud): it falls,
+tumbles, stretches along the pull and fades out in 600 ms (the vacuum silence), 800 ms in all,
+never more than 1.5 s. It only ever fades, never brightens, so it cannot flash (section 8). A click
+or a key ends it at once, and it never holds the next move. Reduced motion: a plain 400 ms fade one
+cell out, where the push left it.
+
 Rules never change with the look: cell size, contrast and edge clarity stay constant
 (contrast 3:1 minimum between cell edge and surface).
 
@@ -171,7 +178,8 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   white, lower flicker amplitude. Default on until the player picks otherwise.
 - **Horror intensity slider** (0 to 3), per player and local, never changes gameplay information. 0: no jump scares, no shell close-ups, calm audio.
   3: full dread. Applies to visuals, audio stingers and lore text tone.
-- **Reduced motion.** Cuts camera sway and ejection tumble.
+- **Reduced motion.** Cuts camera sway and the ejection tumble and stretch: a plain fade instead
+  (section 5).
 - **UI scale** 100% to 200%, subtitles for all audio logs, remappable inputs.
 - All options reachable from the first screen, before any horror content, and saved locally.
 

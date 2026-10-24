@@ -216,8 +216,17 @@ async function botTurn(): Promise<void> {
   refresh();
 }
 
-// Marbles leaving the board: slide and fade, then removed. Reduced motion: removed at once.
-const ejecting: { mesh: THREE.Mesh; track: EjectTrack; start: number }[] = [];
+// Marbles leaving the board: pushed one cell out over the rim, they fall, tumble, stretch and fade
+// into the void, then are removed. Reduced motion: a plain fade. A click or a key ends the effect at
+// once, and the effect never holds the next move.
+interface Ejecting {
+  holder: THREE.Group; // its x axis is the pull, so its scale stretches the marble along the pull
+  mesh: THREE.Mesh;
+  track: EjectTrack;
+  start: number;
+  skipped: boolean;
+}
+const ejecting: Ejecting[] = [];
 function playMove(record: number[]): void {
   const before = Array.from(engine.board());
   engine.play(Int32Array.from(record));
@@ -235,28 +244,46 @@ function afterPlay(before: number[], record: number[]): void {
     record[1]!,
     matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
-  if (track.durationMs === 0) return;
-  const mesh = new THREE.Mesh(marbleGeometry, marbleMaterials[ejection.side]!.clone());
-  (mesh.material as THREE.MeshStandardMaterial).transparent = true;
-  mesh.position.set(track.from.x, 0.36, track.from.z);
-  scene.add(mesh);
-  ejecting.push({ mesh, track, start: performance.now() });
-  body.dataset.ejecting = '1';
+  const material = marbleMaterials[ejection.side]!.clone();
+  material.transparent = true;
+  const mesh = new THREE.Mesh(marbleGeometry, material);
+  const holder = new THREE.Group();
+  holder.add(mesh);
+  scene.add(holder);
+  const e: Ejecting = { holder, mesh, track, start: performance.now(), skipped: false };
+  drawEjection(e, 0);
+  ejecting.push(e);
+  body.dataset.ejecting = track.kind; // read by the e2e tests: tumble, or fade with reduced motion
+}
+
+/** Draws an ejected marble `elapsedMs` into its effect, true once the effect is over. */
+function drawEjection(e: Ejecting, elapsedMs: number): boolean {
+  const p = trackAt(e.track, elapsedMs, e.skipped);
+  e.holder.position.set(p.x, 0.36 - p.drop, p.z);
+  e.holder.rotation.y = p.yaw;
+  e.holder.scale.set(p.along, p.across, p.across);
+  e.mesh.rotation.set(p.twist, 0, -p.roll); // rolling forward, the top turns toward the pull: negative z
+  (e.mesh.material as THREE.MeshStandardMaterial).opacity = p.opacity;
+  return p.done;
 }
 
 function animateEjections(now: number): void {
   for (const e of ejecting.slice()) {
-    const elapsed = now - e.start;
-    const p = trackAt(e.track, elapsed);
-    e.mesh.position.set(p.x, 0.36, p.z);
-    (e.mesh.material as THREE.MeshStandardMaterial).opacity = p.opacity;
-    if (elapsed < e.track.durationMs) continue;
-    scene.remove(e.mesh);
+    if (!drawEjection(e, now - e.start)) continue;
+    scene.remove(e.holder);
     (e.mesh.material as THREE.Material).dispose();
     ejecting.splice(ejecting.indexOf(e), 1);
   }
   if (ejecting.length === 0) delete document.body.dataset.ejecting;
 }
+
+// Skip: a click or a key jumps the effect to its end, then goes on to do its usual job.
+function skipEjections(): void {
+  for (const e of ejecting) e.skipped = true;
+  animateEjections(performance.now());
+}
+addEventListener('pointerdown', skipEjections, { capture: true });
+addEventListener('keydown', skipEjections, { capture: true });
 
 let selected: Axial[] = [];
 const isSelected = (q: number, r: number): boolean => selected.some(([sq, sr]) => sq === q && sr === r);
@@ -496,6 +523,21 @@ addEventListener('resize', () => {
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
+
+// Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
+// frame draws them at the real time again).
+(window as unknown as Record<string, unknown>).__ejectAt = (ms: number) =>
+  ejecting.map((e) => {
+    drawEjection(e, ms);
+    return {
+      along: e.holder.scale.x,
+      across: e.holder.scale.y,
+      roll: -e.mesh.rotation.z,
+      twist: e.mesh.rotation.x,
+      drop: 0.36 - e.holder.position.y,
+      opacity: (e.mesh.material as THREE.MeshStandardMaterial).opacity,
+    };
+  });
 
 // Used by the browser checks to count the plies played, bot replies included.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
