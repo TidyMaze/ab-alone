@@ -2,6 +2,8 @@
 // drawn as a ghost on the board, never played. A hint belongs to the position it was asked for, its game and its
 // ply: once the game moves on it is off, and an answer for an older position is never shown.
 
+import { parseMoves, type Axial } from './board';
+
 /** A position: the game it belongs to (the page's engine object) and the plies played in it. */
 export interface Spot {
   game: object;
@@ -54,5 +56,11 @@ export class Hint {
   /** The move to draw as a ghost on `spot`, null unless its hint is shown. */
   shown(spot: Spot): number[] | null {
     return same(this.on, spot) ? this.move : null;
+  }
+
+  /** The marbles the move shown on `spot` takes (#301), none unless its hint is shown. */
+  marked(spot: Spot): Axial[] {
+    const move = this.shown(spot);
+    return move ? parseMoves(move)[0]!.cells : [];
   }
 }
