@@ -10,7 +10,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 backdrop.png',
     '200 deck-albedo.png',
     '200 deck-roughness.png',
-    '200 marble-normal.png',
+    '200 shell-normal.png',
   ]);
 });
 
