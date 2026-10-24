@@ -39,6 +39,7 @@ import { menuOpen, settingsList, type MenuEvent } from './settings';
 import { icon } from './icons';
 import { drawDue, fogSettings, readClearBoard, readSound, readTier, writeClearBoard, writeSound } from './quality';
 import { Sfx } from './sound';
+import { glassSide } from './glass';
 import { formatScore } from './score';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
@@ -221,7 +222,7 @@ const steel = new THREE.MeshStandardMaterial(
     ? { map: deckAlbedo, roughnessMap: deckRoughness }
     : { color: COLORS.steel, roughness: 0.8 },
 );
-// Side 1 is the enemy black shell (matte, faint sheen), side 2 the player glass (clear coat).
+// Key 1 is the enemy black shell (matte, faint sheen), key 2 the player glass (clear coat). marbleMaterial picks by side.
 const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
   1: new THREE.MeshPhysicalMaterial({
     color: MARBLE_COLORS[1],
@@ -240,6 +241,9 @@ const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
     ...(marbleNormal ? { normalMap: marbleNormal, normalScale: new THREE.Vector2(0.15, 0.15) } : {}),
   }),
 };
+// Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time.
+const glassOf = (): number => glassSide({ online: online !== null, bot: worker !== null, fight: fight !== null });
+const marbleMaterial = (side: number): THREE.MeshStandardMaterial => marbleMaterials[side === glassOf() ? 2 : 1]!;
 const targetMaterial = new THREE.MeshStandardMaterial({
   color: COLORS.cyan,
   emissive: COLORS.cyan,
@@ -447,9 +451,9 @@ function afterPlay(before: number[], record: number[], live = true): void {
   if (!ejection) return;
   const body = document.body;
   body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
-  body.dataset.sound = sfx.ejection(ejection.side) ?? 'none'; // read by the e2e tests: toll, clack or none
+  body.dataset.sound = sfx.ejection(ejection.side, glassOf()) ?? 'none'; // read by the e2e tests: toll, clack or none
   const track = ejectTrack(ejection.cell, record[1]!, reducedMotion);
-  const material = marbleMaterials[ejection.side]!.clone();
+  const material = marbleMaterial(ejection.side).clone();
   material.transparent = true;
   const mesh = new THREE.Mesh(marbleGeometry, material);
   const holder = new THREE.Group();
@@ -575,7 +579,7 @@ function refresh(): void {
       marbles.add(tick);
     }
     if (side === 0) return;
-    const marble = new THREE.Mesh(marbleGeometry, marbleMaterials[side]);
+    const marble = new THREE.Mesh(marbleGeometry, marbleMaterial(side));
     marble.position.set(p.x, 0.36, p.z);
     marbles.add(marble);
     onMarble(i, marble);
@@ -629,7 +633,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   ghosts.clear();
   for (const { cell, side } of list) {
     const p = axialTo3D(cell[0], cell[1]);
-    const marble = new THREE.Mesh(marbleGeometry, ghostMaterials[side]);
+    const marble = new THREE.Mesh(marbleGeometry, ghostMaterials[side === glassOf() ? 2 : 1]);
     marble.position.set(p.x, 0.36, p.z);
     ghosts.add(marble);
   }

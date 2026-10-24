@@ -10,8 +10,8 @@ import { EJECT_MS, PUSH_MS } from './eject';
 /** The last note of an ejection: who lost a marble. */
 export type Cue = 'toll' | 'clack';
 
-/** Side 2 is the player glass (a low toll), every other side an enemy shell (a dry clack). */
-export const cueFor = (side: number): Cue => (side === 2 ? 'toll' : 'clack');
+/** The glass side (the player's) gives a low toll, every other side an enemy shell a dry clack. */
+export const cueFor = (side: number, glass = 2): Cue => (side === glass ? 'toll' : 'clack');
 
 /** Gain points [seconds after the ejection, gain], ramped in turn, silent at both ends. */
 export type Envelope = readonly (readonly [number, number])[];
@@ -131,9 +131,9 @@ export class Sfx {
 
   /** Plays the ejection of a marble of `side` from now. Its cue, or null when silent (sound off, or
    * no gesture yet). */
-  ejection(side: number): Cue | null {
+  ejection(side: number, glass = 2): Cue | null {
     if (!this.on || !this.graph) return null;
-    const cue = cueFor(side);
+    const cue = cueFor(side, glass);
     const now = this.graph.ctx.currentTime;
     for (const voice of ejectionVoices(cue)) this.play(this.graph, voice, now);
     return cue;
