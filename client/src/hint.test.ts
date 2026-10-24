@@ -38,6 +38,25 @@ describe('Hint', () => {
     expect(changes()).toBe(2);
   });
 
+  it('marks the marbles its move takes while it is shown, none while asked, off or on another position, #301', async () => {
+    const { calls, hint } = setup();
+    const INLINE = [3, 2, -4, 4, -3, 3, -2, 2]; // three Black marbles, (-4, 4) (-3, 3) (-2, 2), one step NE
+    expect(hint.marked(at(game, 0))).toEqual([]);
+    hint.press(game, moves(0));
+    expect(hint.marked(at(game, 0))).toEqual([]); // nothing to mark before the engine answers
+    calls[0]!.answer(INLINE);
+    await flush();
+    expect(hint.marked(at(game, 0))).toEqual([
+      [-4, 4],
+      [-3, 3],
+      [-2, 2],
+    ]);
+    expect(hint.marked(at(game, 1))).toEqual([]); // the next move
+    expect(hint.marked(at(other, 0))).toEqual([]);
+    hint.clear();
+    expect(hint.marked(at(game, 0))).toEqual([]);
+  });
+
   it('asks with a copy of the history: a move played after the press never reaches the request', () => {
     const { calls, hint } = setup();
     const history = moves(1);
