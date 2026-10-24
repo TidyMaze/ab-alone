@@ -124,9 +124,10 @@ test('a third peer opening the link is not a player: room is full, its move chan
 
   await seat(b, 'player');
   await seat(c, 'spectator');
-  await expect(b.locator('#hud')).toContainText('You are White');
-  await expect(c.locator('#hud')).toContainText('Room is full, watching');
+  await expect(status(c)).toHaveText('Room is full, watching');
   await expect(c.locator('#hud')).not.toContainText('You are White');
+  await expect(status(b)).toHaveText('You are White. Black is here.');
+  await expect(status(a)).toHaveText('You are Black. White is here.');
 
   await cell(a, 0, 2);
   await cell(a, 0, 1);
@@ -148,6 +149,15 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect.poll(() => plies(a)).toBe(2);
   await expect.poll(() => plies(c)).toBe(2);
   await expect(a.locator('#hud')).not.toContainText('refused');
+
+  // Presence follows the key bound to the seat: the spectator leaving is not White leaving (#121).
+  await c.context().close();
+  await leave(a, 'c');
+  await leave(b, 'c');
+  await expect(status(a)).toHaveText('You are Black. White is here.');
+  await expect(status(b)).toHaveText('You are White. Black is here.');
+  await a.context().close();
+  await b.context().close();
 });
 
 // Bug #127: main.ts awaits the wasm engine and the textures before it attaches the click listener.
@@ -204,32 +214,4 @@ test('online status: creator waits with the invite, joiner joins, both see each 
   await leave(a, 'b');
   await expect(status(a)).toHaveText('You are Black. White is disconnected.');
   await a.context().close();
-});
-
-test('online status: a third page sees Room is full, watching, and its leaving keeps both players here, #121', async ({ browser }) => {
-  const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
-  await room({ a, b, c });
-  await a.goto('./?bot=off&net=hook');
-  await a.locator('canvas').waitFor();
-  await expect(a.locator('#hud')).not.toBeEmpty();
-  await a.locator('#play-online').click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  for (const page of [b, c]) {
-    await page.goto(`./?net=hook${hash}`);
-    await page.locator('canvas').waitFor();
-  }
-  for (const page of [a, b, c]) await open(page);
-
-  await expect(status(c)).toHaveText('Room is full, watching');
-  await expect(status(b)).toHaveText('You are White. Black is here.');
-  await expect(status(a)).toHaveText('You are Black. White is here.');
-
-  // Presence follows the key bound to the seat: the spectator leaving is not White leaving.
-  await c.context().close();
-  await leave(a, 'c');
-  await leave(b, 'c');
-  await expect(status(a)).toHaveText('You are Black. White is here.');
-  await expect(status(b)).toHaveText('You are White. Black is here.');
-  await a.context().close();
-  await b.context().close();
 });
