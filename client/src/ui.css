@@ -52,11 +52,11 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #clear-board[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #clear-board:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #online { position: fixed; top: 64px; right: 16px; z-index: 1; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
-#sound, #reset-view, #play-online, #rematch, #boss-fight, #boss-retry, #boss-list button {
+#sound, #reset-view, #play-online, #rematch, #boss-fight, #daily, #boss-retry, #boss-list button {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#sound:focus-visible, #reset-view:focus-visible, #play-online:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #boss-retry:focus-visible, #boss-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#sound:focus-visible, #reset-view:focus-visible, #play-online:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #boss-retry:focus-visible, #boss-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* The sound toggle: lit while on, struck through while off, so the state never rests on colour alone. */
 #sound[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #sound[aria-pressed='false'] { text-decoration: line-through; }
@@ -71,6 +71,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #hud .notch.active { border-color: var(--accent); color: var(--accent); }
 #hud .result { margin-top: 0.25rem; font-weight: 500; color: var(--accent); }
 #hud .boss .tell { margin-top: 0.25rem; font-size: 0.875rem; color: var(--hazard); }
+#hud .boss .daily { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
 #invite {
   box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); padding: 0.5rem 0.75rem; color: var(--text);
   background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);

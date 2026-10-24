@@ -919,6 +919,30 @@ mod tests {
         );
     }
 
+    /// The boss replies to four forward player moves, then the board and the cracks after them (the
+    /// Hull cracks a seeded rim cell at ply 8).
+    fn replies(id: &str, seed: u32) -> (Vec<Vec<i32>>, Vec<u8>, Vec<i32>) {
+        let mut f = Encounter::new(id, seed).unwrap();
+        let mut boss = Vec::new();
+        for _ in 0..4 {
+            f.play(&forward(&f)).unwrap();
+            let reply = f.boss_move();
+            f.play(&reply).unwrap();
+            boss.push(reply);
+        }
+        (boss, f.board(), f.cracks())
+    }
+
+    #[test]
+    fn the_same_seed_and_moves_give_the_same_boss_replies_for_every_boss() {
+        // The daily challenge (#195) gives everyone one seed a day: the fight must replay the same.
+        for id in boss_ids() {
+            let first = replies(&id, 2_374_354_862);
+            assert_eq!(first.0.len(), 4);
+            assert_eq!(replies(&id, 2_374_354_862), first, "{id} replays the same");
+        }
+    }
+
     // The Choir (#183): its own wrapper, a radius 3 board and three armies.
 
     fn choir() -> Encounter {

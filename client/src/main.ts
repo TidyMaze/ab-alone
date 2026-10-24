@@ -20,6 +20,7 @@ import { ghostMarbles } from './ghost';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
+import { countAttempt, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
@@ -40,8 +41,9 @@ const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
 
 await init();
 let engine: Engine | Encounter = new Engine();
-// Encounter mode: the boss and seed of the running fight, kept so Retry restarts the same one.
-let fight: { id: string; seed: number } | null = null;
+// Encounter mode: the boss and seed of the running fight, kept so Retry restarts the same one. A daily
+// fight also keeps its UTC day and its attempt of that day (#195).
+let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
@@ -341,6 +343,7 @@ function hud(extra = ''): void {
         ]
           .filter((t) => t !== '')
           .join(' · '),
+        daily: fight?.daily ? dailyLine(fight.daily.day, fight.daily.attempt) : '',
       }),
     );
   }
@@ -567,8 +570,11 @@ addEventListener('resize', () => {
 // Used by the browser checks to see whether the audio context exists ('none') and runs.
 (window as unknown as Record<string, unknown>).__audio = () => sfx.state;
 
-// Used by the browser checks to count the plies played, bot replies included.
+// Used by the browser checks to count the plies played, bot replies included, and to compare them.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
+(window as unknown as Record<string, unknown>).__history = () => history;
+// Used by the browser checks to read the boss, seed and daily attempt of the running fight.
+(window as unknown as Record<string, unknown>).__fight = () => fight;
 
 // Used by the browser checks to pick a legal move (the boss tests play forward), and to find one that
 // exposes a marble to The Chaplain.
@@ -584,8 +590,8 @@ addEventListener('resize', () => {
 const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
-function startBoss(id: string, seed: number): void {
-  fight = { id, seed };
+function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }): void {
+  fight = { id, seed, daily };
   engine = new Encounter(id, seed);
   history.length = 0;
   selected = [];
@@ -609,7 +615,26 @@ bossButton.addEventListener('click', () => {
   bossButton.setAttribute('aria-expanded', String(!bossList.hidden));
 });
 (bossButton as HTMLButtonElement).disabled = false; // engine, boss list and listener ready (#144)
-retryButton.addEventListener('click', () => startBoss(fight!.id, fight!.seed));
+
+// Daily challenge (#195): the UTC date gives the boss and the seed, the same for everyone that day.
+// Each start counts one attempt of the day in localStorage, Retry included. Retry on a daily starts
+// the daily of the current day, so after 00:00 UTC it is the new day's fight.
+const dailyButton = document.getElementById('daily') as HTMLButtonElement;
+function today(): Daily {
+  const daily = dailyFor(utcDay(Date.now()), boss_ids());
+  dailyButton.textContent = dailyTitle(daily.day, boss_name(daily.id)!);
+  return daily;
+}
+function startDaily(): void {
+  if (online) return;
+  const { day, id, seed } = today();
+  startBoss(id, seed, { day, attempt: countAttempt(store, day) });
+}
+today();
+setInterval(today, 60_000); // an open page follows the day change at 00:00 UTC
+dailyButton.addEventListener('click', startDaily);
+dailyButton.disabled = false; // label and listener ready (#144)
+retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
 
 // Online play: Black creates the room and shares the invite link, the link opener plays White.
 // The engine stays the only judge: every remote move is replayed through it, a bad one is refused.

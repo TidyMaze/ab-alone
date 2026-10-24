@@ -307,6 +307,29 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Calibrate**: last. It must be harder than any previous boss, with first win between
   attempt 5 and 10, never a wall.
 
+### 7.6 Daily challenge (#166)
+
+Each UTC day, everyone gets the same boss with the same seed, with no server (#195).
+
+- **Day**: the UTC date of the device clock as `YYYY-MM-DD`. It changes at 00:00 UTC, in every
+  time zone.
+- **Seed**: the 32-bit FNV-1a hash of the text `ab-alone daily YYYY-MM-DD`, then the murmur3
+  finaliser, as an unsigned 32-bit integer. Integer maths only, so every browser gets the same
+  value (`client/src/daily.ts`, pinned by its unit tests).
+- **Boss**: `boss_ids()[seed mod count]`, from the bosses the WASM bridge lists, never a list in
+  the client. The same build gives the same pick to everyone; adding a boss to the bridge changes
+  the pick of the days after it ships. Encounters are deterministic, so the same seed and the same
+  player moves give the same boss replies.
+- **Entry**: a Daily challenge button under the boss menu, labelled with the date and the boss
+  name. It does nothing during an online game, like the boss menu.
+- **Attempts**: every start of the daily counts one attempt of the day, Retry and a start after a
+  reload included. The count lives in `localStorage` (key `ab-alone.daily`, value
+  `YYYY-MM-DD n`) and only the current day is kept, so a new UTC day starts again at attempt 1.
+  Blocked storage counts every start as attempt 1. The HUD boss block shows the day and the attempt.
+- **Retry** on a daily starts the daily of the current day: after 00:00 UTC it is the new day's
+  boss and seed, attempt 1.
+- The result card to copy and share is #196.
+
 ## 8. Boss calibration (#48)
 
 **Targets (all per boss):**
