@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => ({
   // The production build is served by GitHub Pages under /ab-alone/. Dev and e2e stay at /.
   base: command === 'build' ? '/ab-alone/' : '/',
   resolve: {
@@ -8,8 +8,14 @@ export default defineConfig(({ command }) => ({
       'abalone-wasm': new URL('../crates/abalone-wasm/pkg/abalone_wasm.js', import.meta.url).pathname,
     },
   },
-  // The wasm package is built outside client/, the dev server must be allowed to serve it.
-  server: { fs: { allow: ['..'] } },
+  server: {
+    // The wasm package is built outside client/, the dev server must be allowed to serve it.
+    fs: { allow: ['..'] },
+    // The e2e dev server (--mode e2e, playwright.config.ts) does not watch files, so it never reloads a page under
+    // test. Every `npm run dev` rebuilds the wasm package: a watching server reloaded the pages of a run in progress
+    // when a second run, a dev server or a wasm build started in the same checkout (bug #185).
+    watch: mode === 'e2e' ? null : undefined,
+  },
   // The bot worker imports the wasm package with top-level await: it needs ES module output.
   worker: { format: 'es' },
   test: {
