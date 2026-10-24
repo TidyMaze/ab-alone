@@ -43,7 +43,8 @@ sodium and cyan. Light is a daylight fallback for people who force it, not a sec
 ## 3. Type
 
 Both faces come from Google Fonts, loaded with `display=swap`, with system fallbacks so a blocked
-request keeps a readable page (no layout jump beyond font metrics).
+request keeps a readable page (no layout jump beyond font metrics). The offline app caches them
+after one online visit (tech.md section 9.1).
 
 - **Display: Chakra Petch** 600. Turn line and winner line only. Squared, stencil-like, reads
   as ship signage. Uppercase with 0.06em tracking.
