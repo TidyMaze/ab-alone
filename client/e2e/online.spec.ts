@@ -29,7 +29,13 @@ const room = async (pages: Record<string, Page>, lost = new Set<string>()) => {
 };
 // What Trystero's onPeerLeave does on `page` when the peer `name` closed its page or lost its connection.
 const leave = (page: Page, name: string) => page.evaluate((n) => (window as any).__netLeave(n), name);
-const open = (page: Page) => page.evaluate(() => (window as any).__netOpen());
+// The hook transport only exists once main.ts reaches goOnline, after the textures and the saved game
+// loaded: the canvas shows well before (bug #238). data-seat is set once the session is wired to it,
+// and like the canvas it is waited for as long as the test runs, a page load on a loaded machine.
+const open = async (page: Page) => {
+  await page.locator('body[data-seat]').waitFor({ state: 'attached' });
+  await page.evaluate(() => (window as any).__netOpen());
+};
 const status = (page: Page) => page.locator('#hud .presence');
 
 // Tests with two or three WebGL pages call test.slow() (90 s instead of 30 s): on the CI runners, against
@@ -85,16 +91,27 @@ test('two tabs of the same browser context play an online game, bug #116', async
   const a = await context.newPage();
   const b = await context.newPage(); // same context: shared localStorage
   await room({ a, b });
+  // Bug #238: page b shows its canvas before main.ts loads the textures and the saved game, and its
+  // hook transport only comes after both. Its textures are held until open(b) has run in the page, so
+  // the test opens a page that is still loading on every run, not only on a loaded machine.
+  let release!: () => void;
+  const held = new Promise<void>((done) => (release = () => done()));
+  await b.route('**/assets/*.png', async (route) => {
+    await held;
+    await route.continue();
+  });
 
   await a.goto('./?bot=off&net=hook'); // './' keeps the /ab-alone/ path of E2E_BASE_URL, '/' is the Pages host root (404)
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await a.locator('#play-online').click();
   const invite = await a.locator('#invite').inputValue();
-  await b.goto(`./?net=hook${new URL(invite).hash}`);
+  await b.goto(`./?net=hook${new URL(invite).hash}`, { waitUntil: 'commit' }); // held textures can hold the load event
   await b.locator('canvas').waitFor();
   await open(a);
-  await open(b);
+  // Calls on a page run in order: the textures go only once a later call on page b came back, so open(b)
+  // reaches page b while it still loads.
+  await Promise.all([open(b), b.evaluate(() => {}).then(release)]);
   await seat(b, 'player');
 
   await cell(a, 0, 2);
