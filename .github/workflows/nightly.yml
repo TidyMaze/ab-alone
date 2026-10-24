@@ -34,15 +34,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: client/package-lock.json
-      - run: npm ci
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: client/package.json
+      - run: bun install --frozen-lockfile
         working-directory: client
-      - run: npx playwright install --with-deps chromium
+      - run: bunx playwright install --with-deps chromium
         working-directory: client
       # One worker: with parallel WebGL pages, requestAnimationFrame stalls and clear-board/eject time out.
       # --retries=1 is the automatic re-run: a failed spec runs once more, with a trace. Passing then makes it flaky, not a failure.
-      - run: npx playwright test --project=chromium --workers=1 --retries=1 --grep-invert "$E2E_GREP_INVERT" --reporter=list,html,json
+      - run: bunx playwright test --project=chromium --workers=1 --retries=1 --grep-invert "$E2E_GREP_INVERT" --reporter=list,html,json
         working-directory: client
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/nightly.json

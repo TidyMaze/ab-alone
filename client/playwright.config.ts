@@ -37,13 +37,13 @@ export default defineConfig({
     : [
         {
           // --mode e2e: the server does not watch files, so nothing written to the checkout reloads a page under test (#185).
-          command: `npm run dev -- --port ${port} --strictPort --mode e2e`,
+          command: `bun run dev --port ${port} --strictPort --mode e2e`,
           url: `http://localhost:${port}`,
           reuseExistingServer: true,
           timeout: 120_000,
         },
         {
-          command: `npx vite build --logLevel warn && npx vite preview --port ${previewPort} --strictPort`,
+          command: `bunx vite build --logLevel warn && bunx vite preview --port ${previewPort} --strictPort`,
           url: process.env.E2E_PREVIEW_URL,
           reuseExistingServer: false,
           timeout: 120_000,

@@ -3,13 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "bun@1.3.11",
   "scripts": {
     "wasm": "wasm-pack build ../crates/abalone-wasm --target web",
-    "dev": "npm run wasm && vite",
+    "dev": "bun run wasm && vite",
     "test": "vitest run --coverage",
     "e2e": "playwright test --project=chromium",
     "e2e:all": "playwright test",
-    "build": "npm run wasm && tsc --noEmit && vite build"
+    "build": "bun run wasm && tsc --noEmit && vite build"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

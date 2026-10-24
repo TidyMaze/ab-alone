@@ -1,7 +1,7 @@
 import { utimes } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
-// Bug #185: every e2e run starts its dev server with `npm run dev`, which rebuilds the wasm package first and so
+// Bug #185: every e2e run starts its dev server with `bun run dev`, which rebuilds the wasm package first and so
 // rewrites its files even when nothing changed. A dev server that watches them reloads every page it serves: a
 // second run, a dev server or a wasm build in the same checkout reloaded the pages of a run in progress, and a
 // click on a page being reloaded failed with "Execution context was destroyed".

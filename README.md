@@ -79,7 +79,7 @@ cd crates/abalone-wasm && wasm-pack build --target web
 ```
 
 ```bash
-cd client && npm ci && npm run dev
+cd client && bun install && bun run dev
 ```
 
 Rebuild the WASM package after pulling `main`. Full gate before a push:

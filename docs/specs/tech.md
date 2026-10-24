@@ -184,7 +184,7 @@ dropped. WebGPU-only compute extras stay off the fog and bloom path.
 
 ### 5.x Renderer support per browser (#85)
 
-`npm run e2e:all` runs the 13 e2e specs on Chromium, Firefox and WebKit (Playwright 1.63.0, base
+`bun run e2e:all` runs the 13 e2e specs on Chromium, Firefox and WebKit (Playwright 1.63.0, base
 commit 565cab7). The HUD states which backend three picked. Chromium here is headless Playwright,
 which has no WebGPU adapter, so it falls back to WebGL2. A headed desktop Chrome with a GPU may
 report WebGPU instead.

@@ -319,7 +319,7 @@ the test commit alone to see it fail. The PR is squash-merged, the order lives i
 
 **Coverage gate:** 100 % of lines and regions for Rust (not branches, owner decision), enforced by
 `scripts/verify.sh` locally and by the CI coverage job on main after merge. Below 100 % fails the
-build. Commands: section 13. The client JS coverage (`npm test`, vitest) is not in CI. An exclusion
+build. Commands: section 13. The client JS coverage (`bun run test`, vitest) is not in CI. An exclusion
 needs a one-line comment saying why, and the reviewer must accept it (generated code,
 `unreachable!()`).
 
@@ -329,7 +329,7 @@ needs a one-line comment saying why, and the reviewer must accept it (generated 
 
 | When | What | Who |
 |---|---|---|
-| Every PR | Playwright e2e suite on Chromium, run locally once with `npm run e2e` (section 13). CI runs it on main after merge, not on PRs | Author |
+| Every PR | Playwright e2e suite on Chromium, run locally once with `bun run e2e` (section 13). CI runs it on main after merge, not on PRs | Author |
 | Every night | Playwright suite against the live GitHub Pages site (scheduled workflow). A failed spec is re-run once: failing again opens a `bug` issue ready to work on, passing opens a `flaky` issue. No LLM in CI: an owner starts an agent on the bug by hand ([docs/specs/ci-repair.md](docs/specs/ci-repair.md)) | CI |
 | Before merging a player-facing PR | Open the PR build in a real browser, play the changed flow, note the result in the PR | The lead agent (Playwright) or an owner |
 | Once per milestone | Full manual playthrough in Chrome of everything shipped so far, findings filed as `bug` issues | An owner |
@@ -372,8 +372,15 @@ After pulling main, rebuild it from the repo root:
 wasm-pack build crates/abalone-wasm --target web
 ```
 
-`npm run dev` runs the same build first (`npm run wasm`, in `client/`). Run it yourself when you
+`bun run dev` runs the same build first (`bun run wasm`, in `client/`). Run it yourself when you
 start vite directly, or when the pkg looks stale.
+
+**Client tooling: bun** (decision #243). Install [bun](https://bun.sh), then run `bun install` in
+`client/`. Scripts run with `bun run <script>`, one-off tools with `bunx`. Unit tests are
+`bun run test` (vitest), never `bun test`, which is bun's own test runner. Node 22 must be
+installed too: vite, vitest and Playwright still run on it. The bun version is pinned in
+`client/package.json` (`packageManager`). Add a dependency with `bun add <pkg>@<exact version>`
+(`-d` for a dev dependency), never with npm: `client/bun.lock` is the only lockfile.
 
 **Homebrew Rust without rustup:** set these before the WASM build or the checks. `wasm-ld` must be
 on PATH (Homebrew llvm is keg-only, so add `$(brew --prefix llvm)/bin` to PATH).
@@ -384,14 +391,14 @@ export LLVM_COV="$(brew --prefix llvm)/bin/llvm-cov"
 export LLVM_PROFDATA="$(brew --prefix llvm)/bin/llvm-profdata"
 ```
 
-**e2e:** from `client/`, run `npm run e2e` (Chromium project). Playwright starts the dev server
+**e2e:** from `client/`, run `bun run e2e` (Chromium project). Playwright starts the dev server
 itself, with `--mode e2e`: that server does not watch files, so a wasm rebuild or an edit during a
 run never reloads a page under test (bug #185). Start a new run to test a change.
 
 - The port comes from `E2E_PORT` (default 5173). Pick a random free port and never use 5173:
 
   ```
-  E2E_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])') npm run e2e
+  E2E_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])') bun run e2e
   ```
 
 - An existing server on that port is reused. Kill only the server you started: save its PID
