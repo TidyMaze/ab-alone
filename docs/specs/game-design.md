@@ -246,7 +246,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Twist**: the boss has 3 armies of 4 marbles (Alto, Tenor, Bass) on a radius 3 board. Each
   boss turn only **one army** may move, in a fixed cycle. Alto is aggressive (push weights),
   Tenor flanks (edge weights), Bass anchors (cluster weights). You have 10 marbles. Win by
-  ejecting 6, lose at 6 as usual.
+  ejecting **10** (Decision #131: P3 starts at 8, so the last army is fought for two more), lose
+  at 6 as usual.
 - **Tell**: the army that moves next has a glowing halo, from the end of your previous turn.
 - **Counter**: you know who moves next, so set a trap for that army. Wiping an army removes
   it from the cycle.

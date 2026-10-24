@@ -3,7 +3,7 @@
 use std::cmp::Reverse;
 
 use crate::board::{Board, Cell, MAX_RADIUS};
-use crate::game::{Game, WIN_EJECTIONS};
+use crate::game::Game;
 use crate::moves::{apply, legal_moves, Move, Player};
 
 /// Score of a won game, minus the ply it is won at, so a quicker win scores higher.
@@ -146,6 +146,8 @@ struct Searcher {
     weights: Weights,
     budget: u32,
     nodes: u32,
+    /// Ejections each side needs to win, from the game: Black then White.
+    win: [u8; 2],
 }
 
 impl Searcher {
@@ -164,7 +166,7 @@ impl Searcher {
             return None;
         }
         let mover = node.to_move;
-        if node.ejected[index(other(mover))] >= WIN_EJECTIONS {
+        if node.ejected[index(other(mover))] >= self.win[index(other(mover))] {
             return Some(ply - WIN);
         }
         if depth == 0 {
@@ -234,6 +236,10 @@ pub fn search_with(
         weights,
         budget: node_budget,
         nodes: 0,
+        win: [
+            game.win_ejections(Player::Black),
+            game.win_ejections(Player::White),
+        ],
     };
     let mut depth = 0;
     for d in 1..=MAX_DEPTH {
@@ -260,7 +266,7 @@ pub fn best_move(game: &Game, node_budget: u32) -> Option<Move> {
 mod tests {
     use super::*;
     use crate::board::{Board, Cell};
-    use crate::game::Outcome;
+    use crate::game::{Outcome, WIN_EJECTIONS};
     use crate::moves::{apply, legal_moves, Direction, Player};
 
     type P = (i32, i32);

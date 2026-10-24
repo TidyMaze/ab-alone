@@ -9,7 +9,7 @@
 
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
-use crate::game::{Game, GameError};
+use crate::game::{Game, GameError, WIN_EJECTIONS};
 use crate::moves::{apply, legal_moves, Move, Player};
 use crate::search::{search_with, Weights};
 
@@ -21,6 +21,9 @@ pub const CHOIR_RADIUS: i32 = 3;
 pub const ARMY_SIZE: usize = 4;
 /// Player marbles at the start.
 pub const PLAYER_MARBLES: usize = 10;
+/// Boss marbles the player must eject to win (Decision #131): P3 starts at 8, when two armies are
+/// wiped, so the last army is fought for two more. The boss still wins at 6.
+pub const CHOIR_WIN_EJECTIONS: u8 = 10;
 /// Alto start, the back row. Boss side is the top of the board (r < 0).
 pub const ALTO_START: [P; ARMY_SIZE] = [(0, -3), (1, -3), (2, -3), (3, -3)];
 /// Tenor start, the middle row.
@@ -186,7 +189,8 @@ impl Choir {
                 members.push((cell, army));
             }
         }
-        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let game = Game::from_position(board, Player::Black, [0, 0])
+            .with_win([CHOIR_WIN_EJECTIONS, WIN_EJECTIONS]);
         Self {
             enc: Encounter::new(game, choir_boss(), CHOIR_SEED),
             members,
