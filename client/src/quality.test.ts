@@ -6,10 +6,12 @@ import {
   fogSettings,
   readClearBoard,
   readSound,
+  readTheme,
   readTier,
   tierFromHints,
   writeClearBoard,
   writeSound,
+  writeTheme,
   writeTier,
 } from './quality';
 
@@ -85,6 +87,29 @@ describe('fogSettings', () => {
   it('is off in clear-board mode, in every tier', () => {
     expect(fogSettings('low', true, resetView().distance)).toBeNull();
     expect(fogSettings('high', true, resetView().distance)).toBeNull();
+  });
+});
+
+describe('theme storage: System unless the player picked Dark or Light', () => {
+  it('defaults to system', () => {
+    expect(readTheme(memoryStorage())).toBe('system');
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writeTheme(s, 'light');
+    expect(s.data.get('ab-alone.theme')).toBe('light');
+    expect(readTheme(s)).toBe('light');
+    writeTheme(s, 'system');
+    expect(readTheme(s)).toBe('system');
+  });
+  it('ignores a garbage stored value: system', () => {
+    expect(readTheme(memoryStorage({ 'ab-alone.theme': 'blue' }))).toBe('system');
+  });
+  it('falls back to system when storage throws or is missing, and does not throw writing', () => {
+    expect(readTheme(throwing)).toBe('system');
+    expect(readTheme(null)).toBe('system');
+    expect(() => writeTheme(throwing, 'dark')).not.toThrow();
+    expect(() => writeTheme(null, 'dark')).not.toThrow();
   });
 });
 
