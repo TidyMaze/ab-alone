@@ -19,6 +19,7 @@ import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
+import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
@@ -333,9 +334,36 @@ function stopAnalysis(): void {
   analyst.stop();
 }
 
+// Hint (#192): a press shows the engine's best move for the side to move as a ghost, it never plays it. Asked from
+// the analysis worker with the bot's own budget, so the bot's reply never waits behind it. A hint belongs to the
+// position it was asked for (hint.ts): the next move, New game or an import leave it behind, and a late answer is
+// never drawn on a newer position. A new selection and a second press clear it. Local games only, like the bar.
+const hintButton = document.getElementById('hint') as HTMLButtonElement;
+const here = (): Spot => ({ game: engine, ply: history.length });
+const hint = new Hint(
+  (moves) => askBot(analysisWorker, moves), // the bot's own budget: the move the bot would play there
+  () => {
+    syncHint();
+    refreshGhosts(parseMoves(engine.legal_moves()));
+  },
+);
+function syncHint(): void {
+  const state = hint.state(here());
+  hintButton.hidden = !analysing; // online and boss games turn it off for good, with the bar (fair play, #164)
+  hintButton.disabled = thinking || engine.status() !== 0;
+  hintButton.setAttribute('aria-pressed', String(state !== 'off'));
+  document.body.dataset.hint = state; // read by the e2e tests
+}
+hintButton.addEventListener('click', () => {
+  selected = []; // the ghost shows the hint alone
+  hint.press(engine, history);
+  refresh();
+});
+
 async function botTurn(): Promise<void> {
   if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
   thinking = true;
+  syncHint(); // no hint while the bot thinks
   const current = fight;
   const game = engine;
   const started = performance.now();
@@ -487,6 +515,7 @@ function hud(extra = ''): void {
   rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   exportButton.hidden = importButton.hidden = online !== null || fight !== null; // local games only (#219)
+  syncHint();
   if (engine instanceof Encounter) {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
@@ -579,7 +608,7 @@ function refresh(): void {
 
 function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   const mv = hover ? moveForClick(moves, selected, hover) : null;
-  const record = mv && encodeMove(mv);
+  const record = mv ? encodeMove(mv) : hint.shown(here()); // the hovered move, else the hint (#192)
   const list = ghostMarbles(history, record, makeGame);
   if (record && engine instanceof Encounter) {
     // The tell: the boss reply announced for the hovered move, drawn on the position after it.
@@ -620,6 +649,7 @@ function click(q: number, r: number): void {
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
     selected = toggleSelection(selected, [q, r]);
+    hint.clear(); // a new selection
   } else {
     // The engine is the only judge: a click that is not a legal move changes nothing.
     const mv = moveForClick(parseMoves(engine.legal_moves()), selected, [q, r]);

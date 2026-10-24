@@ -1,6 +1,6 @@
 // Message protocol between the page and the bot worker. The worker owns its own wasm Engine, so
 // the page sends the move history and the worker replays it, then asks `best_move`, or `evaluate`
-// for the evaluation bar (#191).
+// for the evaluation bar (#191). The hint (#192) is a `best_move` request too.
 
 export interface BotRequest {
   id: number;
@@ -70,15 +70,24 @@ export function answer(
 }
 
 let nextId = 0;
+/** The replies each worker still owes, by request id: several requests can be in flight on one worker (the
+ * evaluation bar and the hint share the analysis worker, #192). A reply with an unknown id is ignored. */
+const owed = new WeakMap<WorkerLike, Map<number, (reply: BotResponse) => void>>();
 
-/** Posts one request, resolves with the reply that has its id. One request in flight per worker:
- * each call takes over the worker's handler. */
+/** Posts one request, resolves with the reply that has its id. */
 function ask<T extends BotResponse>(worker: WorkerLike, req: Omit<BotRequest, 'id'>): Promise<T> {
   const id = nextId++;
-  return new Promise((resolve) => {
+  let replies = owed.get(worker);
+  if (!replies) {
+    const waiting = new Map<number, (reply: BotResponse) => void>();
     worker.onmessage = (e) => {
-      if (e.data.id === id) resolve(e.data as T);
+      waiting.get(e.data.id)?.(e.data);
+      waiting.delete(e.data.id);
     };
+    owed.set(worker, (replies = waiting));
+  }
+  return new Promise((resolve) => {
+    replies.set(id, resolve as (reply: BotResponse) => void);
     worker.postMessage({ id, ...req });
   });
 }
