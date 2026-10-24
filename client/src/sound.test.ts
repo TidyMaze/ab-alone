@@ -1,6 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EJECT_MS, PUSH_MS, VOID_MS } from './eject';
-import { CUE_AT, FX_LEVEL, HUM, SILENT, Sfx, cueFor, ejectionVoices, type Cue, type Voice } from './sound';
+import {
+  CUE_AT,
+  FX_LEVEL,
+  HUM,
+  SILENT,
+  Sfx,
+  cueFor,
+  ejectionVoices,
+  knockPitch,
+  knockVoices,
+  type Cue,
+  type Voice,
+} from './sound';
 
 const PUSH = PUSH_MS / 1000;
 const start = (v: Voice): number => v.env[0]![0];
@@ -109,6 +121,64 @@ describe('ejectionVoices', () => {
     expect(shared('toll')).toEqual(shared('clack'));
     const last = (cue: Cue): Voice[] => ejectionVoices(cue).filter((v) => start(v) === CUE_AT);
     expect(last('toll')).not.toEqual(last('clack'));
+  });
+});
+
+describe('knockPitch, the knock of a move (#289)', () => {
+  it('one, two or three marbles give three pitches, lower for more marbles', () => {
+    const pitches = ([1, 2, 3] as const).map(knockPitch);
+    expect(new Set(pitches).size).toBe(3);
+    expect(pitches[0]).toBeGreaterThan(pitches[1]!);
+    expect(pitches[1]).toBeGreaterThan(pitches[2]!);
+  });
+
+  it('a dull low knock: every pitch between 100 and 500 Hz', () => {
+    for (const n of [1, 2, 3] as const) {
+      expect(knockPitch(n)).toBeGreaterThan(100);
+      expect(knockPitch(n)).toBeLessThan(500);
+    }
+  });
+});
+
+describe('knockVoices', () => {
+  for (const n of [1, 2, 3] as const) {
+    it(`${n} marble(s): one hit at the move, silent at both ends, short, never above 1`, () => {
+      const voices = knockVoices(knockPitch(n));
+      expect(voices.length).toBeGreaterThan(1);
+      for (const v of voices) {
+        expect(start(v)).toBe(0);
+        expect(v.env[0]![1]).toBe(0);
+        expect(v.env.at(-1)![1]).toBe(0);
+        expect(end(v)).toBeLessThanOrEqual(0.2);
+        expect(peak(v)).toBeLessThanOrEqual(1);
+        for (const f of freqs(v)) expect(f).toBeGreaterThan(0);
+      }
+    });
+  }
+});
+
+describe('Sfx.knock, the move sound', () => {
+  it('stays silent before a gesture: no context, no knock', () => {
+    const { make, sfx } = setup();
+    expect(sfx.knock(1)).toBeNull();
+    expect(make).not.toHaveBeenCalled();
+  });
+
+  it('plays the knock of its pitch once the sound is on, and reports that pitch', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    const before = ctx.sources.length;
+    expect(sfx.knock(3)).toBe(knockPitch(3));
+    expect(ctx.sources.length).toBeGreaterThan(before);
+  });
+
+  it('is silent with the sound off: no source, no report', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    sfx.setEnabled(false);
+    const before = ctx.sources.length;
+    expect(sfx.knock(2)).toBeNull();
+    expect(ctx.sources.length).toBe(before);
   });
 });
 
