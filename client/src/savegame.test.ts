@@ -220,6 +220,33 @@ describe('LocalSaves', () => {
     expect(await saves.load(false, fake().make)).toBeNull();
   });
 
+  it('clears the game it saved (New game, #230), so the next load starts a new game', async () => {
+    const store = memoryStore();
+    const saves = new LocalSaves(store);
+    await saves.save({ bot: true, moves: [A, B] }, false);
+    await saves.clear();
+    expect(store.data.size).toBe(0);
+    expect(await saves.load(true, fake().make)).toBeNull();
+  });
+
+  it('clears the game it resumed', async () => {
+    const store = memoryStore();
+    await new LocalSaves(store).save({ bot: false, moves: [A] }, false);
+    const saves = new LocalSaves(store);
+    await saves.load(false, fake().make);
+    await saves.clear();
+    expect(store.data.size).toBe(0);
+  });
+
+  it('clears nothing it did not save or resume: a save of the other mode stays', async () => {
+    const store = memoryStore();
+    await new LocalSaves(store).save({ bot: true, moves: [A, B] }, false);
+    const saves = new LocalSaves(store);
+    await saves.load(false, fake().make); // the bot game is left alone
+    await saves.clear();
+    expect(store.data.get(LOCAL_GAME)).toEqual(encodeGame({ bot: true, moves: [A, B] }));
+  });
+
   it('loads the saved game of the same mode, replayed through the engine', async () => {
     const store = memoryStore();
     await new LocalSaves(store).save({ bot: false, moves: [A, B, C] }, false);
@@ -269,6 +296,7 @@ describe('LocalSaves', () => {
     const saves = new LocalSaves(failing());
     await expect(saves.save({ bot: false, moves: [A] }, false)).resolves.toBeUndefined();
     await expect(saves.save({ bot: false, moves: [A] }, true)).resolves.toBeUndefined();
+    await expect(saves.clear()).resolves.toBeUndefined();
     await expect(saves.load(false, fake().make)).resolves.toBeNull();
     const broken = { ...memoryStore(), delete: failing().delete };
     await broken.put(LOCAL_GAME, 'not a save');

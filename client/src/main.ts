@@ -36,6 +36,7 @@ import { Sfx } from './sound';
 import { formatScore } from './score';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
+import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import './ui.css';
 
 // Palette from docs/specs/world.md section 5.
@@ -269,10 +270,11 @@ async function botTurn(): Promise<void> {
   if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
   thinking = true;
   const current = fight;
+  const game = engine;
   const started = performance.now();
   const move = await askBot(worker, history, BOT_NODES, fight ?? undefined);
   diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: BOT_NODES });
-  if (fight !== current) return; // Retry or a new fight started while the boss was thinking
+  if (engine !== game) return; // Retry, a new fight or New game started while the bot was thinking
   thinking = false;
   playMove(move);
   refresh();
@@ -630,6 +632,32 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__armies = () =>
   engine instanceof Encounter ? parseArmies(engine.armies()) : [];
 
+// New game (#230): leaves the local game for the start position, bot on or off as it was, and deletes its
+// save. Once a move is played, the first press asks for a confirmation for a few seconds (newgame.ts).
+// Boss, daily and online games hide it for good (startBoss, goOnline).
+const newGameButton = document.getElementById('new-game') as HTMLButtonElement;
+let confirmNew: Confirm = null;
+let lapse = 0; // ends the confirmation
+function askNewGame(confirm: Confirm): void {
+  confirmNew = confirm;
+  newGameButton.textContent = newGameLabel(confirm);
+  newGameButton.classList.toggle('confirm', confirm !== null);
+  clearTimeout(lapse);
+  if (confirm !== null) lapse = setTimeout(askNewGame, CONFIRM_MS, null);
+}
+newGameButton.addEventListener('click', () => {
+  const press = pressNewGame(confirmNew, performance.now(), history.length);
+  askNewGame(press.confirm);
+  if (!press.start) return;
+  engine = new Engine();
+  history.length = 0;
+  selected = [];
+  thinking = false; // the bot's reply to the old game is dropped (botTurn)
+  void saves.clear();
+  refresh();
+});
+newGameButton.disabled = false; // listener ready (#146)
+
 // Boss fight: the menu lists the bosses of the bridge, picking one switches the page to encounter
 // mode (human Black, the boss answers in the worker). Retry restarts the same boss and seed.
 const bossButton = document.getElementById('boss-fight')!;
@@ -644,6 +672,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   bossList.hidden = true;
   bossButton.setAttribute('aria-expanded', 'false');
   retryButton.hidden = false;
+  newGameButton.hidden = true;
   document.body.dataset.boss = id;
   refresh();
 }
@@ -698,6 +727,7 @@ async function goOnline(room: string, side: number): Promise<void> {
   fight = null;
   delete document.body.dataset.boss;
   retryButton.hidden = true;
+  newGameButton.hidden = true;
   engine = new Engine();
   history.length = 0;
   selected = [];

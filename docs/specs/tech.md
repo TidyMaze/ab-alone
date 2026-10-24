@@ -363,7 +363,8 @@ No database server. Everything is client-side.
   against the bot, is saved after every move in the database `ab-alone`, object store `game`, key
   `local`. On the next load the engine replays it and the page shows it at the same ply, side to
   move and score (the bot answers if it was its turn). A finished game deletes the save, so the
-  next load starts a new game. There is one saved local game: a save of the other mode (bot on or
+  next load starts a new game. The New game button (#230, ui.md section 4) deletes it too, only
+  the save of the game it leaves. There is one saved local game: a save of the other mode (bot on or
   off) is left alone, and the first move in this mode replaces it. Online and boss games are not
   saved (online needs the log catch-up of #34). A save that does not decode (unknown `version`,
   `mode` or `layout`, a bad record) or does not replay (a move the engine refuses, a finished game)
