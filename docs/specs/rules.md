@@ -60,15 +60,24 @@ White, 14 cells at the top, point reflection of Black:
 - r=-3: (-1,-3) (0,-3) (1,-3) (2,-3) (3,-3) (4,-3)
 - r=-2: (0,-2) (1,-2) (2,-2)
 
-### 2.2 Belgian daisy layout (OPEN, candidate)
+### 2.2 Belgian daisy layout (FINAL)
 
-**OPEN-4.** This list is a candidate. It is not checked against an official diagram, so no test may rely on it until an owner confirms it. Each side has two flowers of 7 cells: a centre cell and its six neighbours.
+**FINAL**, checked in #69 against three diagrams that agree cell for cell:
+- Wikipedia, "Abalone (board game)", file `Abalone_belgian.svg`.
+- abalonegames.com (Abalone S.A.), Rules > Rule variations > Belgian Daisy, author: Belgian Federation of Abalone.
+- playstrategy.org/variant/abalone, Belgian daisy diagram.
+
+Each side has two flowers of 7 cells: a centre cell and its six neighbours. One flower is near the bottom, one near the top. Black is at bottom left and top right, White at bottom right and top left.
 
 Black:
-- Flower A, centre (-3,3): (-3,3) (-2,3) (-4,3) (-3,4) (-3,2) (-2,2) (-4,4)
-- Flower B, centre (0,3): (0,3) (1,3) (-1,3) (0,4) (0,2) (1,2) (-1,4)
+- Flower A, centre (-3,3): (-4,4) (-3,4) (-4,3) (-3,3) (-2,3) (-3,2) (-2,2)
+- Flower B, centre (3,-3): (2,-2) (3,-2) (2,-3) (3,-3) (4,-3) (3,-4) (4,-4)
 
-White: point reflection of Black. Both flowers are 14 cells in total with no overlap.
+White, the left-right mirror of Black, `(q,r) -> (-q-r,r)`:
+- Flower C, centre (0,3): (-1,4) (0,4) (-1,3) (0,3) (1,3) (0,2) (1,2)
+- Flower D, centre (0,-3): (-1,-2) (0,-2) (-1,-3) (0,-3) (1,-3) (0,-4) (1,-4)
+
+Unlike the standard layout, the point reflection `(q,r) -> (-q,-r)` keeps colours here: it maps flower A onto B and C onto D.
 
 ### 2.3 Who moves first (OPEN-3)
 
@@ -174,7 +183,7 @@ Every mode uses the engine of sections 1 to 9. A mode adds rules, it never chang
 ### 10.1 Hot-seat
 
 - Two players, one screen.
-- Layout: standard (FINAL), Belgian daisy (OPEN-4).
+- Layout: standard (FINAL), Belgian daisy (FINAL).
 - Undo of the last move before confirm: a UI rule, not a game rule. **FINAL.**
 - Win and draw: sections 6 and 9.
 
@@ -416,10 +425,10 @@ Each example below is a numbered block with a precondition, an action and an exp
 **When** the cells are counted and checked against section 1.
 **Then** Black has 14 cells, White has 14 cells, all 28 cells are on the board, and no cell is in both lists.
 
-**Example 32 (Belgian daisy candidate, check only).**
-**Given** the candidate layout of section 2.2.
-**When** the cells are counted.
-**Then** Black has 14 cells, White has 14 cells, no overlap. Status: OPEN-4, not verified against an official diagram.
+**Example 32 (Belgian daisy start has 14 and 14 marbles).**
+**Given** the Belgian daisy layout of section 2.2.
+**When** the cells are counted and checked against section 1.
+**Then** Black has 14 cells, White has 14 cells, all 28 cells are on the board, and no cell is in both lists.
 
 **Example 33 (Hull: a marble on a vanishing cell is removed).**
 **Given** PvE, Hull boss, phase 1. Black `(4,-3)`, White boss marbles elsewhere. The cell `(4,-3)` vanishes at the end of this ply.
@@ -468,7 +477,7 @@ These are raised in the PR body. Owners decide. Nothing here was picked silently
 - **OPEN-1. Draw at 100 plies.** The task decision says draw. game-design.md section 5.2 says the 100-ply end is decided by ejections, then centrality, then draw. Pick one, then update the other doc.
 - **OPEN-2. Battle royale round timer.** game-design.md section 6 says 15 s. tech.md section 6 says 30 s. This spec uses 15 s (TUNE).
 - **OPEN-3. Who moves first.** No source. PROPOSAL: Black.
-- **OPEN-4. Belgian daisy coordinates.** Candidate only, no official diagram checked.
+- **OPEN-4. Belgian daisy coordinates.** Resolved in #69: checked against three diagrams, section 2.2 is FINAL.
 - **OPEN-5. Battle royale wedge coordinates.** Not defined.
 - **OPEN-6. Battle royale rings below radius 3.** game-design.md is ambiguous.
 - **OPEN-7. Battle royale ties and placement tables.** Points are defined for 6 players only. The tie at breach end is not defined.
@@ -483,7 +492,7 @@ Also to check: SPEC.md section 2 still says "Draw / anti-stalling rule: open que
 
 ## 14. Done checklist (issue #59)
 
-- Board, cell naming, notation, both start layouts as coordinate lists: section 1 and 2 (Belgian daisy OPEN-4).
+- Board, cell naming, notation, both start layouts as coordinate lists: section 1 and 2.
 - Core rules: sections 3 to 7.
 - Edge cases with expected results: section 8, examples in section 12.
 - End of game: section 9 (draw decision applied, conflict OPEN-1).
