@@ -24,18 +24,18 @@ function decode(png: Buffer): { w: number; h: number; at: (x: number, y: number)
 }
 
 const BASE = [0x0b, 0x0d, 0x0f]; // world.md section 5: near-black base
+const ICONS: Map<string, Buffer> = generateIcons(); // drawn once, about a second
 
 describe('gen-icons', () => {
   it('is deterministic: two runs give the same hash', () => {
-    expect(hashAll(generateIcons())).toBe(hashAll(generateIcons()));
+    expect(hashAll(generateIcons())).toBe(hashAll(ICONS));
   });
 
   it('draws one square PNG per size, 192 and 512 as installability needs', () => {
     expect(ICON_SIZES).toEqual([192, 512]);
-    const icons: Map<string, Buffer> = generateIcons();
-    expect([...icons.keys()]).toEqual(['icon-192.png', 'icon-512.png']);
+    expect([...ICONS.keys()]).toEqual(['icon-192.png', 'icon-512.png']);
     for (const n of ICON_SIZES) {
-      const png = icons.get(`icon-${n}.png`)!;
+      const png = ICONS.get(`icon-${n}.png`)!;
       expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
       const { w, h } = decode(png);
       expect([w, h]).toEqual([n, n]);
@@ -43,26 +43,29 @@ describe('gen-icons', () => {
   });
 
   it('fills the whole square with the base colour and keeps the drawing in the maskable safe zone', () => {
-    for (const png of generateIcons().values()) {
+    for (const png of ICONS.values()) {
       const { w, at } = decode(png);
       // The safe zone of a maskable icon is the centred circle of radius 40 % of the size.
+      const outside: string[] = [];
       for (let y = 0; y < w; y++) {
         for (let x = 0; x < w; x++) {
-          if (Math.hypot(x + 0.5 - w / 2, y + 0.5 - w / 2) > 0.4 * w) expect(at(x, y)).toEqual(BASE);
+          const far = Math.hypot(x + 0.5 - w / 2, y + 0.5 - w / 2) > 0.4 * w;
+          if (far && at(x, y).join() !== BASE.join()) outside.push(`${x},${y}`);
         }
       }
+      expect(outside).toEqual([]);
     }
   });
 
   it('has the cold cyan player marble in the centre', () => {
-    const { w, at } = decode(generateIcons().get('icon-512.png')!);
+    const { w, at } = decode(ICONS.get('icon-512.png')!);
     const [r, g, b] = at(w / 2, w / 2);
     expect(b).toBeGreaterThan(r! + 60);
     expect(g).toBeGreaterThan(r! + 40);
   });
 
   it('keeps the committed files identical to the generator output', () => {
-    for (const [name, buf] of generateIcons()) {
+    for (const [name, buf] of ICONS) {
       expect(readFileSync(new URL(`../public/icons/${name}`, import.meta.url))).toEqual(buf);
     }
   });
