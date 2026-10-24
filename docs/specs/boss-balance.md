@@ -124,6 +124,35 @@ time on the boss:
 | boss search centre weight 20 | 0 | 125 | push 1, conversion 7, draw 2 |
 | boss search centre weight 20 and flip threshold 4 | 1 | 191 | draw 9 |
 
+Second round (owner decision on #207: weaken the Chaplain until it is beatable), same command with
+the player fixed at 20000 nodes (`LADDER_NODES=20000`) while the boss budget moves. The knobs were
+temporary env switches, not kept in the code. Output lines (`boss | player budget | wins | median
+plies | max phase | deaths`):
+
+| Boss change | Output line |
+|---|---|
+| none (re-run) | `chaplain \| 20000 \| 0/10 \| 82 \| 0 \| push 3, conversion 5, draw 2` |
+| boss budget 100, centre weight 20 | `chaplain \| 20000 \| 0/10 \| 58 \| 0 \| push 1, conversion 8, draw 1` |
+| at most 1 flip per boss turn | `chaplain \| 20000 \| 0/10 \| 86 \| 0 \| conversion 6, draw 4` |
+| flip threshold 4, centre 20, boss budget 150 | `chaplain \| 20000 \| 1/10 \| 209 \| 1 \| push 1, draw 8` |
+| same, player allowed one repetition | `chaplain \| 20000 \| 1/10 \| 196.5 \| 1 \| push 1, draw 8` |
+| flip threshold 4, centre 20, boss budget 60 | `chaplain \| 20000 \| 1/10 \| 197.5 \| 1 \| draw 9` |
+
+Reading: two regimes and nothing between them. With the flip threshold at 3 the boss corners the
+player and converts it (5 to 8 conversion deaths) whatever its budget or weights. With the
+threshold at 4 the boss stops converting but also stops engaging, so 8 or 9 games hit the 300 ply
+cap as draws, and a draw is a loss. The best state is 1 of 10, far from 7. The alternative player
+that may repeat a position once does not change it (1 of 10 as well), so "never repeat" is not what
+blocks the win. "Flip only after contact" is already how the rule works (a flip needs 3 boss
+neighbours), so there is no separate knob. Not measured in the 60 minute time box (a run costs 2 to
+9 minutes): budget 600, centre 40, threshold 3 with one flip per turn and a low budget, a lower
+ejection weight for the boss.
+
+Nothing is changed on the boss and no Chaplain fixture is recorded: no setting gets above 1 of 10,
+and a boss that only draws is not beatable. #207 stays open (`Refs`). The next lever is probably a
+rule change, not a number: a flip that costs the boss something, or a boss that must engage, so the
+player is forced into the exchanges the Echo and the Hull give it.
+
 Result: making the search hook-aware did not make the Chaplain beatable. The conversion deaths
 stay (5 of 10), because the damage is not the one flip the search can see: the player shuffles
 for about 35 plies to avoid repeating a position (a draw is a loss), then the boss search, which
