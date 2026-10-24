@@ -402,6 +402,7 @@ impl Default for Engine {
 mod tests {
     use super::*;
     use abalone_core::board::Board;
+    use abalone_core::encounter::choir::{ALTO_START, BASS_START, TENOR_START};
     use abalone_core::moves::{legal_moves, Player};
 
     fn count(cells: &[u8], value: u8) -> usize {
@@ -532,6 +533,12 @@ mod tests {
     }
 
     #[test]
+    fn a_game_is_won_at_6_ejections_for_both_sides() {
+        let engine = Engine::new();
+        assert_eq!((engine.win_ejections(1), engine.win_ejections(2)), (6, 6));
+    }
+
+    #[test]
     fn ejected_counts_start_at_zero_for_both_sides() {
         let engine = Engine::new();
         assert_eq!(engine.ejected(1), 0);
@@ -571,11 +578,13 @@ mod tests {
             vec![
                 "echo".to_string(),
                 "hull".to_string(),
+                "choir".to_string(),
                 "chaplain".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
         assert_eq!(boss_name("hull"), Some("The Hull".to_string()));
+        assert_eq!(boss_name("choir"), Some("The Choir".to_string()));
         assert_eq!(boss_name("chaplain"), Some("The Chaplain".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
@@ -602,6 +611,9 @@ mod tests {
         assert!(f.cracks().is_empty(), "the Echo cracks nothing");
         assert!(f.flips().is_empty(), "the Echo flips nothing");
         assert!(f.converted().is_empty());
+        assert!(f.armies().is_empty(), "the Echo has no armies");
+        assert_eq!(f.next_army(), -1);
+        assert_eq!((f.win_ejections(1), f.win_ejections(2)), (6, 6));
         assert_eq!(f.ejected(1), 0);
         assert_eq!(f.ejected(2), 0);
         let cells = f.board();
@@ -798,6 +810,86 @@ mod tests {
             f.tell_move(&forward(&f)).is_empty(),
             "the Chaplain announces no reply"
         );
+    }
+
+    // The Choir (#183): its own wrapper, a radius 3 board and three armies.
+
+    fn choir() -> Encounter {
+        Encounter::new("choir", 7).unwrap()
+    }
+
+    /// Cells of `army` in the `[q, r, army]` records of `armies()`.
+    fn army_cells(f: &Encounter, army: i32) -> Vec<(i32, i32)> {
+        f.armies()
+            .chunks(3)
+            .filter(|m| m[2] == army)
+            .map(|m| (m[0], m[1]))
+            .collect()
+    }
+
+    #[test]
+    fn the_choir_starts_on_a_radius_3_board_with_three_armies_of_four() {
+        let f = choir();
+        assert_eq!(f.name(), "The Choir");
+        assert_eq!(
+            (f.to_move(), f.phase(), f.phases(), f.result()),
+            (1, 0, 3, 0)
+        );
+        let cells = f.board();
+        assert_eq!(cells.len(), 61, "the board keeps its 61 slots");
+        assert_eq!(count(&cells, 3), 24, "the outer ring is a hole");
+        assert_eq!((count(&cells, 1), count(&cells, 2)), (10, 12));
+        assert_eq!(f.armies().len(), 12 * 3);
+        assert_eq!(army_cells(&f, 0), ALTO_START.to_vec());
+        assert_eq!(army_cells(&f, 1), TENOR_START.to_vec());
+        assert_eq!(army_cells(&f, 2), BASS_START.to_vec());
+        assert_eq!(f.next_army(), 0, "Alto moves first");
+        assert_eq!(
+            (f.win_ejections(1), f.win_ejections(2)),
+            (10, 6),
+            "Decision #131"
+        );
+        assert_eq!(f.tell(), -1, "no board special");
+        assert!(f.cracks().is_empty() && f.flips().is_empty() && f.converted().is_empty());
+        assert!(
+            f.tell_move(&first_move(&f)).is_empty(),
+            "the Choir announces no reply"
+        );
+    }
+
+    #[test]
+    fn the_choir_boss_moves_the_army_in_turn_and_the_tell_moves_on() {
+        let mut f = choir();
+        f.play(&forward(&f)).unwrap();
+        assert_eq!((f.to_move(), f.next_army()), (2, 0));
+        let alto = army_cells(&f, 0);
+        let legal = f.legal_moves();
+        for m in legal.chunks(MOVE_STRIDE) {
+            let cells = (0..m[0] as usize).map(|i| (m[2 + 2 * i], m[3 + 2 * i]));
+            assert!(cells.into_iter().all(|c| alto.contains(&c)), "Alto only");
+        }
+        let reply = f.boss_move();
+        assert!(legal.chunks(MOVE_STRIDE).any(|m| m == reply.as_slice()));
+        f.play(&reply).unwrap();
+        assert_eq!(f.to_move(), 1);
+        assert_eq!(f.next_army(), 1, "Tenor next");
+        assert!(f.boss_move().is_empty(), "the player's turn");
+    }
+
+    #[test]
+    fn the_choir_refuses_an_army_out_of_turn_and_illegal_moves() {
+        let mut f = choir();
+        assert_eq!(
+            f.play(&[1, 0, 0, -3, 0, 0, 0, 0]).unwrap_err(),
+            "Move(NotOwnMarble)"
+        );
+        f.play(&forward(&f)).unwrap();
+        // A Bass marble, (-2, -1), to SW: legal on the board, but Alto is in turn.
+        assert_eq!(
+            f.play(&[1, 3, -2, -1, 0, 0, 0, 0]).unwrap_err(),
+            "WrongArmy"
+        );
+        assert_eq!(f.to_move(), 2);
     }
 
     #[test]

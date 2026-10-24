@@ -753,6 +753,30 @@ mod tests {
     }
 
     #[test]
+    fn legal_moves_are_all_the_players_and_only_the_army_in_turn_for_the_boss() {
+        let mut c = Choir::start();
+        assert_eq!(
+            c.legal_moves(),
+            legal_moves(c.game().board(), Player::Black)
+        );
+        black_move(&mut c);
+        let boss = c.legal_moves();
+        assert!(!boss.is_empty());
+        assert!(boss.len() < legal_moves(c.game().board(), Player::White).len());
+        for m in &boss {
+            assert!(m.cells.iter().all(|&cell| c.army_at(cell) == Some(Alto)));
+        }
+        assert!(boss.contains(&c.boss_move().unwrap()));
+        let p3 = p3_push_position([0, 0]);
+        assert!(!p3.legal_moves().is_empty());
+        for m in &p3.legal_moves() {
+            assert!(!pushes(p3.game().board(), m), "no push in P3: {m:?}");
+        }
+        let over = choir_from(&[(0, 0)], &[(Alto, &[(3, -3)])], Player::White, [10, 0], 0);
+        assert!(over.legal_moves().is_empty());
+    }
+
+    #[test]
     fn the_same_play_gives_the_same_game() {
         let run = || {
             let mut c = Choir::start();
