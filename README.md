@@ -62,6 +62,7 @@ crates/abalone-core   Rust rules engine: moves, sumito, draws, bot search, boss 
 crates/abalone-wasm   the same engine compiled to WebAssembly for the browser
 crates/abalone-cli    play in a terminal (debug tool)
 client/               TypeScript + Three.js (WebGPU, WebGL2 fallback), Vite
+mcp/                  MCP server: an AI agent plays the bot over stdio
 ```
 
 - **One engine, every peer.** Both browsers run the same WASM rules and replay each other's
@@ -90,6 +91,38 @@ scripts/verify.sh
 
 Homebrew Rust without rustup needs a couple of environment variables, see
 [CONTRIBUTING.md](CONTRIBUTING.md) section 13.
+
+## Let an AI agent play
+
+`mcp/` is an [MCP](https://modelcontextprotocol.io) server: an AI agent plays a game against the
+bot through tools, and the engine judges every move. It runs on your machine over stdio, nothing is
+hosted. Build it once, and again after pulling `main`:
+
+```bash
+cd mcp && bun install && bun run wasm
+```
+
+Then add it to your MCP client, with the absolute path of your checkout. Claude Code:
+
+```bash
+claude mcp add ab-alone -- bun /path/to/ab-alone/mcp/src/main.ts
+```
+
+Other clients (Claude Desktop, Cursor, ...) take the same command in their JSON config. If the
+client does not find `bun`, give its full path (`which bun`).
+
+```json
+{
+  "mcpServers": {
+    "ab-alone": { "command": "bun", "args": ["/path/to/ab-alone/mcp/src/main.ts"] }
+  }
+}
+```
+
+The agent is Black and moves first: `new_game`, then `legal_moves` and `play_move` (the bot
+replies in the same call) until the game is over, or `resign`. `get_state` shows the board. Moves
+use the notation of `abalone-cli`, for example `(1,3)>NE`. Tools, fields and error codes:
+[docs/specs/mcp.md](docs/specs/mcp.md). Bosses and online rooms come later (#253, #254).
 
 ## Crew manifest
 

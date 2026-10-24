@@ -409,7 +409,17 @@ start vite directly, or when the pkg looks stale.
 `bun run test` (vitest), never `bun test`, which is bun's own test runner. Node 22 must be
 installed too: vite, vitest and Playwright still run on it. The bun version is pinned in
 `client/package.json` (`packageManager`). Add a dependency with `bun add <pkg>@<exact version>`
-(`-d` for a dev dependency), never with npm: `client/bun.lock` is the only lockfile.
+(`-d` for a dev dependency), never with npm: each package has one lockfile, its `bun.lock`
+(`client/`, `mcp/`).
+
+**MCP server (`mcp/`, #252):** its own bun package, run when you touch `mcp/` or the engine API it
+uses. Not in CI. From `mcp/`, after `bun install`:
+
+- `bun run test`: builds the Node target of the engine into `mcp/engine/` (git-ignored), then
+  vitest with coverage thresholds of 100 % (lines, branches, functions, statements) on `mcp/src/`.
+  Only `src/main.ts`, the stdio entry point, is left to the e2e.
+- `bunx tsc --noEmit`.
+- `bun run e2e`: a scripted MCP client starts the server over stdio and plays a full game.
 
 **Homebrew Rust without rustup:** set these before the WASM build or the checks. `wasm-ld` must be
 on PATH (Homebrew llvm is keg-only, so add `$(brew --prefix llvm)/bin` to PATH).
