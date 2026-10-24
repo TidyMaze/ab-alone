@@ -747,7 +747,10 @@ mod tests {
     #[test]
     fn every_boss_in_the_daily_rotation_has_a_goal() {
         for id in boss_ids() {
-            assert!(boss_goal(&id).is_some_and(|g| !g.is_empty()), "{id} has no goal");
+            assert!(
+                boss_goal(&id).is_some_and(|g| !g.is_empty()),
+                "{id} has no goal"
+            );
         }
         assert_eq!(boss_goal("nobody"), None);
     }
