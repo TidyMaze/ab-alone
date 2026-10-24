@@ -1,0 +1,4 @@
+node_modules
+coverage
+# The Node build of abalone-wasm (bun run wasm).
+engine

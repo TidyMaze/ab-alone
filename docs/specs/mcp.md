@@ -327,5 +327,5 @@ Order: local game against the bot and bosses first, online rooms second, agent f
 ## 10. Open items for the owners
 
 - Online resign needs a decision (rules.md OPEN-12) and a signed message. Not decided here.
-- The server code lives in a new `mcp/` package. The Task #252 makes that call, nothing else depends on it.
+- The server code lives in the `mcp/` package (#252): bun, the official TypeScript MCP SDK, the Node build of `abalone-wasm`. How to run it: README, "Let an AI agent play".
 - Spectating is not part of v1.
