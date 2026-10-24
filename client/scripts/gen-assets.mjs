@@ -74,7 +74,7 @@ const chunk = (type, data) => {
 };
 
 // channels: 1 = grey, 3 = RGB. pixels: Uint8 array of w*h*channels.
-function png(w, h, channels, pixels) {
+export function png(w, h, channels, pixels) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(w, 0);
   ihdr.writeUInt32BE(h, 4);

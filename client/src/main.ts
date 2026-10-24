@@ -41,6 +41,20 @@ const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6
 const MARBLE_COLORS: Record<number, number> = { 1: 0x15191c, 2: 0xd8d4c8 };
 const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
 
+// Offline app (#193): the production build registers the service worker that scripts/offline-app.mjs writes (at the
+// end of this file), the dev server none. A new build that takes over this page leaves it the files of its own build
+// (offline.ts keeps the previous cache), and New version offers the reload that runs the new build whole. Listened
+// to before the first await: the new build can take over while this page is still loading.
+const serviceWorker = import.meta.env.PROD && 'serviceWorker' in navigator ? navigator.serviceWorker : null;
+const updateButton = document.getElementById('update') as HTMLButtonElement;
+updateButton.addEventListener('click', () => location.reload());
+if (serviceWorker) {
+  const updating = serviceWorker.controller !== null; // a first install takes control, it is no update
+  serviceWorker.addEventListener('controllerchange', () => {
+    if (updating) updateButton.hidden = false;
+  });
+}
+
 await init();
 let engine: Engine | Encounter = new Engine();
 // Encounter mode: the boss and seed of the running fight, kept so Retry restarts the same one. A daily
@@ -748,6 +762,16 @@ playReady = true; // engine and listener ready (#127)
 syncConnectivity();
 const invited = roomFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
+
+// Offline app (#193): registered at the end of the start, then checked for a new build at each load
+// (Chrome does not check by itself on a reload), so the refresh after a deploy installs it. Blocked (the e2e runs),
+// refused or offline, the game simply goes on.
+if (serviceWorker) {
+  serviceWorker
+    .register(`${import.meta.env.BASE_URL}sw.js`)
+    .then((registration) => (serviceWorker.controller ? registration.update() : undefined))
+    .catch(() => undefined);
+}
 
 refresh();
 void botTurn(); // a resumed game saved while the bot was thinking
