@@ -8,6 +8,8 @@ pub mod chaplain;
 pub mod choir;
 pub mod echo;
 pub mod hull;
+pub mod ladder;
+pub mod telemetry;
 
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::game::{Game, GameError, Outcome};
