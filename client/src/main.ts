@@ -28,7 +28,8 @@ import { onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { hudHtml } from './hud';
-import { drawDue, fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
+import { drawDue, fogSettings, readClearBoard, readSound, readTier, writeClearBoard, writeSound } from './quality';
+import { Sfx } from './sound';
 import { formatScore } from './score';
 import './ui.css';
 
@@ -115,6 +116,20 @@ clearButton.addEventListener('click', () => {
   applyLook();
 });
 (clearButton as HTMLButtonElement).disabled = false; // listener ready (#146)
+
+// The ejection sound (docs/specs/world.md section 7) and its on/off toggle, on by default, until the mix
+// sliders of #60. The audio context waits for a user gesture: browsers block audio before one. A mouse
+// press or a key is a gesture on the way down, a touch on the way up.
+const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readSound(store));
+const soundButton = document.getElementById('sound')!;
+soundButton.setAttribute('aria-pressed', String(sfx.enabled));
+soundButton.addEventListener('click', () => {
+  sfx.setEnabled(!sfx.enabled);
+  writeSound(store, sfx.enabled);
+  soundButton.setAttribute('aria-pressed', String(sfx.enabled));
+});
+(soundButton as HTMLButtonElement).disabled = false; // listener ready (#146)
+for (const type of ['pointerdown', 'pointerup', 'keydown']) addEventListener(type, () => sfx.unlock(), { capture: true });
 scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 const lamp = new THREE.DirectionalLight(COLORS.sodium, 3);
 lamp.position.set(-4, 10, 5);
@@ -241,6 +256,7 @@ function afterPlay(before: number[], record: number[]): void {
   if (!ejection) return;
   const body = document.body;
   body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
+  body.dataset.sound = sfx.ejection(ejection.side) ?? 'none'; // read by the e2e tests: toll, clack or none
   const track = ejectTrack(
     ejection.cell,
     record[1]!,
@@ -547,6 +563,9 @@ addEventListener('resize', () => {
       opacity: (e.mesh.material as THREE.MeshStandardMaterial).opacity,
     };
   });
+
+// Used by the browser checks to see whether the audio context exists ('none') and runs.
+(window as unknown as Record<string, unknown>).__audio = () => sfx.state;
 
 // Used by the browser checks to count the plies played, bot replies included.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
