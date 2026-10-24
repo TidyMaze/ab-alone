@@ -4,7 +4,7 @@
 //! every machine. The ladder is slow: it runs from `cargo run --release --example ladder`, never
 //! from the unit tests beyond a tiny run.
 
-use crate::board::Cell;
+use crate::board::{Board, Cell};
 use crate::encounter::ballast::{ballast_move, ballast_start, ballast_tell, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use crate::encounter::choir::Choir;
@@ -13,10 +13,10 @@ use crate::encounter::hull::hull_boss;
 use crate::encounter::telemetry::{
     classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
-use crate::encounter::{marbles, Encounter, PveResult};
+use crate::encounter::{carried_marks, marbles, BossDef, Encounter, PveResult};
 use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
-use crate::search::{search, search_with, DEFAULT_WEIGHTS};
+use crate::search::{search_hooked, search_with, DEFAULT_WEIGHTS};
 
 /// A game longer than this many plies is stopped and counted as a loss.
 pub const PLY_CAP: u32 = 300;
@@ -159,6 +159,29 @@ impl Arena {
     }
 }
 
+/// What the Chaplain does to the board after `mover` played `mv`, for the player search: the marks
+/// of converted marbles follow the move, then the hook the encounter would fire, in the phase of
+/// the board. Mirrors `Encounter::play`, minus the seed (it only picks which boss marble pays for
+/// a flip in P3) and the ejections the hook credits.
+fn chaplain_step(
+    def: &BossDef,
+    before: &Board,
+    mover: Player,
+    mv: &Move,
+    mut after: Board,
+) -> (Board, [u8; 2]) {
+    let kept = carried_marks(before, mv, before.converted())
+        .into_iter()
+        .filter(|&(q, r)| after.get(q, r) == Some(Cell::White))
+        .collect();
+    after.set_converted(kept);
+    let left = marbles(&after, Cell::White);
+    let phase = def.phase_marbles.iter().filter(|&&t| left <= t).count();
+    let ply = if mover == Player::Black { 1 } else { 2 };
+    let id = (def.special)(ply, phase).expect("the Chaplain fires after every ply");
+    ((def.hook)(&after, id, 0), [0, 0])
+}
+
 /// splitmix64: a cheap seeded hash, enough to pick an opening move.
 fn mix(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
@@ -170,7 +193,8 @@ fn mix(mut x: u64) -> u64 {
 /// The player bot move: a seeded random legal move for its first `opening` moves, then the
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
 /// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
-/// and plays the plain search when no move is left. `None` when the player has no move
+/// and plays the plain search when no move is left. Against the Chaplain the search sees the
+/// hooks. `None` when the player has no move
 /// (every marble was converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     let game = arena.game();
@@ -180,9 +204,16 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         moves.get(pick as usize).cloned()
     } else {
         let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.flip_free(mv);
-        search_with(game, budget, DEFAULT_WEIGHTS, &strict)
-            .or_else(|| search(game, budget))
-            .map(|r| r.mv)
+        let def = chaplain_boss();
+        let step = |b: &Board, p: Player, m: &Move, a: Board| chaplain_step(&def, b, p, m, a);
+        let pick = |allow: &dyn Fn(&Move) -> bool| {
+            if arena.kind() == LadderBoss::Chaplain {
+                search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &step)
+            } else {
+                search_with(game, budget, DEFAULT_WEIGHTS, allow)
+            }
+        };
+        pick(&strict).or_else(|| pick(&|_| true)).map(|r| r.mv)
     }
 }
 
@@ -371,6 +402,29 @@ mod tests {
         let mvs = legal_moves(a.game().board(), Player::Black);
         assert_eq!(mvs.len(), 1);
         assert!(!a.flip_free(&mvs[0]));
+    }
+
+    #[test]
+    fn the_chaplain_step_is_what_the_encounter_does_to_the_board() {
+        let mut enc = Encounter::new(Game::new(), chaplain_boss(), 0);
+        let mut flips = 0;
+        for ply in 0..80_u64 {
+            let mover = enc.game().to_move();
+            let moves = legal_moves(enc.game().board(), mover);
+            let mv = moves[(mix(ply) % moves.len() as u64) as usize].clone();
+            let before = enc.game().board().clone();
+            let (after, _) = apply(&before, mover, &mv).unwrap();
+            let (stepped, credits) = chaplain_step(&chaplain_boss(), &before, mover, &mv, after);
+            enc.play(&mv).unwrap();
+            assert_eq!(&stepped, enc.game().board(), "ply {ply}");
+            assert_eq!(credits, [0, 0]);
+            flips += before.converted().len() + enc.game().board().converted().len();
+            assert!(
+                enc.game().outcome().is_none() && enc.phase() == 0,
+                "ply {ply}"
+            );
+        }
+        assert!(flips > 0, "the game must reach a flip to prove anything");
     }
 
     #[test]
