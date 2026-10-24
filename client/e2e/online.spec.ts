@@ -22,7 +22,9 @@ const room = async (pages: Record<string, Page>, lost = new Set<string>()) => {
       Promise.all(
         Object.entries(pages)
           .filter(([n, p]) => p !== page && !p.isClosed() && (!to || to === n) && !lost.has(n) && !lost.has(name))
-          .map(([, p]) => p.evaluate(([r, from]) => (window as any).__netIn(r, from), [rec, name] as const)),
+          // A page whose session does not exist yet has no __netIn: like a Trystero room, drop the record for it
+          // instead of throwing inside the sender's __netOut (an unhandled rejection, #249).
+          .map(([, p]) => p.evaluate(([r, from]) => (window as any).__netIn?.(r, from), [rec, name] as const)),
       ),
     );
   }
