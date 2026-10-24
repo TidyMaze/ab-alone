@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import init, { Encounter, Engine, boss_ids, boss_name } from 'abalone-wasm';
 import {
   CELLS,
+  VANISHED,
   axialTo3D,
   cellIndex,
   encodeMove,
@@ -16,6 +17,7 @@ import { bossHtml } from './bosshud';
 import { isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
+import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
@@ -147,6 +149,13 @@ const targetMaterial = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.5,
 });
 const ringMaterial = new THREE.MeshBasicMaterial({ color: COLORS.cyan });
+// The Hull tell: a cracked cell glows orange, brighter on its last ply, with one pale tick per ply left.
+const crackMaterials: Record<number, THREE.MeshStandardMaterial> = {
+  1: new THREE.MeshStandardMaterial({ color: COLORS.sodium, emissive: COLORS.sodium, emissiveIntensity: 0.8 }),
+  2: new THREE.MeshStandardMaterial({ color: COLORS.sodium, emissive: COLORS.sodium, emissiveIntensity: 0.3 }),
+};
+const tickGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.1);
+const tickMaterial = new THREE.MeshBasicMaterial({ color: MARBLE_COLORS[2] });
 
 const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
   const disc = new THREE.Mesh(discGeometry, steel);
@@ -250,7 +259,13 @@ function hud(extra = ''): void {
   if (engine instanceof Encounter) {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
-      bossHtml({ name: engine.name(), phase: engine.phase(), phases: engine.phases(), result: engine.result() }),
+      bossHtml({
+        name: engine.name(),
+        phase: engine.phase(),
+        phases: engine.phases(),
+        result: engine.result(),
+        tell: crackText(parseCracks(engine.cracks())),
+      }),
     );
   }
 }
@@ -259,13 +274,24 @@ function refresh(): void {
   const board = engine.board();
   const moves = parseMoves(engine.legal_moves());
   const targets = groupTargets(moves, selected);
+  const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
+  const left = crackLeft(cracks);
   marbles.clear();
   discs.forEach((disc, i) => {
     const [q, r] = CELLS[i]!;
-    disc.material = targets.some(([tq, tr]) => tq === q && tr === r) ? targetMaterial : steel;
     const side = board[i]!;
-    if (side === 0) return;
+    disc.visible = side !== VANISHED; // a vanished cell is a hole: no disc, no marble
+    if (side === VANISHED) return;
     const p = axialTo3D(q, r);
+    const plies = left.get(i) ?? 0;
+    const target = targets.some(([tq, tr]) => tq === q && tr === r);
+    disc.material = target ? targetMaterial : plies > 0 ? crackMaterials[Math.min(plies, 2)]! : steel;
+    for (const dx of tickOffsets(plies)) {
+      const tick = new THREE.Mesh(tickGeometry, tickMaterial); // on the front edge, clear of the marble
+      tick.position.set(p.x + dx, 0.01, p.z + 0.39);
+      marbles.add(tick);
+    }
+    if (side === 0) return;
     const marble = new THREE.Mesh(marbleGeometry, marbleMaterials[side]);
     marble.position.set(p.x, 0.36, p.z);
     marbles.add(marble);
@@ -277,6 +303,8 @@ function refresh(): void {
       marble.position.y = 0.5;
     }
   });
+  document.body.dataset.cracks = String(cracks.length); // read by the e2e tests
+  document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
   hud();
   refreshGhosts(moves);
 }
@@ -408,6 +436,9 @@ addEventListener('resize', () => {
 
 // Used by the browser checks to count the plies played, bot replies included.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
+
+// Used by the browser checks to pick a legal move (the Hull test plays forward to its first crack).
+(window as unknown as Record<string, unknown>).__legal = () => parseMoves(engine.legal_moves());
 
 // Boss fight: the menu lists the bosses of the bridge, picking one switches the page to encounter
 // mode (human Black, the boss answers in the worker). Retry restarts the same boss and seed.

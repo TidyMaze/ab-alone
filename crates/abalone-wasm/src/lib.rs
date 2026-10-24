@@ -3,7 +3,9 @@
 //!
 //! Encodings, all stable and documented:
 //! - Board: 61 bytes, row by row from `r = -4` to `r = 4`, inside a row by `q` ascending.
-//!   Value `0` empty, `1` Black, `2` White. Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
+//!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull).
+//!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
+//! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
 //! - Side and winner: `1` Black, `2` White.
 //! - Status: `0` running, `1` Black won, `2` White won, `3` draw.
 //! - Draw reason: `0` none, `1` threefold repetition, `2` 100 plies without ejection.
@@ -14,6 +16,7 @@
 
 use abalone_core::board::{Board, Cell, RADIUS};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
+use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::{BossDef, Encounter as CoreEncounter, PveResult};
 use abalone_core::game::{DrawReason, Game, Outcome};
 use abalone_core::moves::{legal_moves, Direction, Move, Player};
@@ -159,14 +162,19 @@ impl Engine {
     }
 }
 
+/// Board value of a cell a boss removed.
+const VANISHED: u8 = 3;
+
+/// The 61 cells of the hexagon, vanished ones included, so the indices never shift.
 fn board_bytes(board: &Board) -> Vec<u8> {
     (-RADIUS..=RADIUS)
         .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
-        .filter_map(|(q, r)| board.get(q, r))
-        .map(|cell| match cell {
-            Cell::Empty => 0,
-            Cell::Black => 1,
-            Cell::White => 2,
+        .filter(|&(q, r)| (q + r).abs() <= RADIUS)
+        .map(|(q, r)| match board.get(q, r) {
+            Some(Cell::Empty) => 0,
+            Some(Cell::Black) => 1,
+            Some(Cell::White) => 2,
+            None => VANISHED,
         })
         .collect()
 }
@@ -194,12 +202,29 @@ fn echo_announce(mv: &Move) -> Option<Move> {
     Some(mirror_move(mv))
 }
 
-const BOSSES: [BossEntry; 1] = [BossEntry {
-    id: "echo",
-    def: echo_boss,
-    reply: echo_move,
-    announce: echo_announce,
-}];
+/// Reply of a boss that plays standard Abalone: its node-limited search.
+fn search_reply(enc: &CoreEncounter) -> Option<Move> {
+    enc.boss_search().map(|r| r.mv)
+}
+
+fn no_announce(_mv: &Move) -> Option<Move> {
+    None
+}
+
+const BOSSES: [BossEntry; 2] = [
+    BossEntry {
+        id: "echo",
+        def: echo_boss,
+        reply: echo_move,
+        announce: echo_announce,
+    },
+    BossEntry {
+        id: "hull",
+        def: hull_boss,
+        reply: search_reply,
+        announce: no_announce,
+    },
+];
 
 fn boss_entry(id: &str) -> Option<&'static BossEntry> {
     BOSSES.iter().find(|b| b.id == id)
@@ -296,6 +321,17 @@ impl Encounter {
     /// The 61 cells, board specials included.
     pub fn board(&self) -> Vec<u8> {
         board_bytes(self.inner.game().board())
+    }
+
+    /// Cracked cells (The Hull) as `[q, r, plies_left]` records, empty for the other bosses.
+    pub fn cracks(&self) -> Vec<i32> {
+        self.inner
+            .game()
+            .board()
+            .cracks()
+            .iter()
+            .flat_map(|&((q, r), left)| [q, r, i32::from(left)])
+            .collect()
     }
 
     /// Marbles ejected by a side: `1` Black, `2` White.
@@ -498,8 +534,9 @@ mod tests {
 
     #[test]
     fn boss_list_is_data_driven_and_starts_with_the_echo() {
-        assert_eq!(boss_ids(), vec!["echo".to_string()]);
+        assert_eq!(boss_ids(), vec!["echo".to_string(), "hull".to_string()]);
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
+        assert_eq!(boss_name("hull"), Some("The Hull".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -522,6 +559,7 @@ mod tests {
         assert_eq!(f.status(), 0);
         assert_eq!(f.draw_reason(), 0);
         assert_eq!(f.tell(), -1, "the Echo has no board special");
+        assert!(f.cracks().is_empty(), "the Echo cracks nothing");
         assert_eq!(f.ejected(1), 0);
         assert_eq!(f.ejected(2), 0);
         let cells = f.board();
@@ -584,6 +622,55 @@ mod tests {
             .legal_moves()
             .chunks(MOVE_STRIDE)
             .any(|m| m == reply.as_slice()));
+    }
+
+    /// Index of `(q, r)` in the board bytes: rows from `r = -4`, `q` ascending.
+    fn index(q: i32, r: i32) -> usize {
+        (-RADIUS..=RADIUS)
+            .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
+            .filter(|&(q, r)| (q + r).abs() <= RADIUS)
+            .position(|c| c == (q, r))
+            .unwrap()
+    }
+
+    /// One ply: the player's first legal move, or the boss move on its turn.
+    fn ply(f: &mut Encounter) {
+        let mv = if f.to_move() == 1 {
+            first_move(f)
+        } else {
+            f.boss_move()
+        };
+        f.play(&mv).unwrap();
+    }
+
+    #[test]
+    fn the_hull_cracks_a_rim_cell_at_ply_8_and_it_vanishes_two_plies_later() {
+        let mut f = Encounter::new("hull", 7).unwrap();
+        assert_eq!(f.name(), "The Hull");
+        for _ in 0..7 {
+            ply(&mut f);
+        }
+        assert!(f.cracks().is_empty(), "no wave before ply 8");
+        ply(&mut f);
+        let cracks = f.cracks();
+        assert_eq!(cracks.len(), 3, "one cell in P1, as [q, r, plies left]");
+        let (q, r) = (cracks[0], cracks[1]);
+        assert_eq!(cracks[2], 2);
+        assert_ne!(f.board()[index(q, r)], 3, "cracked, not gone yet");
+        ply(&mut f);
+        assert_eq!(f.cracks(), vec![q, r, 1]);
+        ply(&mut f);
+        assert!(f.cracks().is_empty());
+        let cells = f.board();
+        assert_eq!(cells.len(), 61, "a vanished cell keeps its slot");
+        assert_eq!(count(&cells, 3), 1);
+        assert_eq!(cells[index(q, r)], 3);
+    }
+
+    #[test]
+    fn the_hull_announces_no_reply() {
+        let f = Encounter::new("hull", 7).unwrap();
+        assert!(f.tell_move(&first_move(&f)).is_empty());
     }
 
     #[test]

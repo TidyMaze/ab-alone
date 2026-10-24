@@ -73,4 +73,17 @@ describe('findEjection', () => {
   it('is null when no marble was lost', () => {
     expect(findEjection(before, before, move)).toBeNull();
   });
+
+  it('counts marbles only: a vanished cell and the marble it took are no push ejection, The Hull', () => {
+    const step = { cells: [[0, 2]] as [number, number][], dir: 4 };
+    expect(findEjection(put([[0, 2, 1]]), put([[0, 1, 1], [4, -1, 3]]), step)).toBeNull();
+    expect(findEjection(put([[0, 2, 1], [4, -1, 2]]), put([[0, 1, 1], [4, -1, 3]]), step)).toBeNull();
+  });
+
+  it('ejects at the edge of a hole: a push onto a vanished cell, The Hull', () => {
+    const push = { cells: [[-1, 0], [0, 0]] as [number, number][], dir: 0 }; // E, (2,0) is gone
+    const b = put([[-1, 0, 1], [0, 0, 1], [1, 0, 2], [2, 0, 3]]);
+    const a = put([[0, 0, 1], [1, 0, 1], [2, 0, 3]]);
+    expect(findEjection(b, a, push)).toEqual({ cell: [1, 0], side: 2 });
+  });
 });
