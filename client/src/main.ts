@@ -20,6 +20,7 @@ import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
+import { onlineStatus, type OnlineStatus } from './presence';
 import { hudHtml } from './hud';
 import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
 import { formatScore } from './score';
@@ -244,6 +245,7 @@ function hud(extra = ''): void {
     score: formatScore(ejected, status, engine.draw_reason()),
     ejected,
     note: `${backend}${onlineNote}${extra}`,
+    online: onlineLine,
   });
   if (engine instanceof Encounter) {
     document.getElementById('hud')!.insertAdjacentHTML(
@@ -445,7 +447,9 @@ retryButton.addEventListener('click', () => startBoss(fight!.id, fight!.seed));
 let online: OnlineSession | null = null;
 let onlineSide = 0;
 let onlineNote = '';
+let onlineLine: OnlineStatus | undefined;
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
+const inviteLabel = document.getElementById('invite-label')!;
 async function goOnline(room: string, side: number): Promise<void> {
   fight = null;
   delete document.body.dataset.boss;
@@ -458,14 +462,17 @@ async function goOnline(room: string, side: number): Promise<void> {
   const sideName = side === 1 ? 'Black' : 'White';
   let netState = '';
   // An extra peer is a spectator: it follows the game and never sends (the spectator view is #34).
+  // The status line shows our color and whether the key bound to the other seat is connected (#121).
   const note = (): void => {
-    const watching = online?.role === 'spectator';
-    document.body.dataset.online = watching ? 'Spectator' : sideName;
-    document.body.dataset.seat = online?.role ?? 'pending'; // read by the e2e tests
-    onlineNote = watching ? ' · room is full, watching' : ` · online, you are ${sideName}${netState}`;
+    const role = online?.role ?? 'pending';
+    const opponent = online?.presenceOf(3 - side) ?? 'waiting';
+    document.body.dataset.online = role === 'spectator' ? 'Spectator' : sideName;
+    document.body.dataset.seat = role; // read by the e2e tests
+    document.body.dataset.opponent = opponent;
+    onlineLine = onlineStatus(side, role, opponent);
+    onlineNote = netState;
     hud();
   };
-  onlineNote = ` · online, you are ${sideName}`;
   online = new OnlineSession({
     game: room,
     side,
@@ -482,12 +489,13 @@ async function goOnline(room: string, side: number): Promise<void> {
     onMove: () => refresh(),
     onRefuse: (reason) => hud(` · refused move: ${reason}`),
     onState: (s) => {
-      netState = `, ${s}`;
+      netState = ` · ${s}`;
       note();
     },
     onRole: note,
+    onPresence: note,
   });
-  document.body.dataset.online = sideName;
+  note();
   refresh();
 }
 document.getElementById('play-online')!.addEventListener('click', () => {
@@ -495,6 +503,7 @@ document.getElementById('play-online')!.addEventListener('click', () => {
   location.hash = `room=${room}`;
   inviteBox.value = inviteUrl(location.href, room);
   inviteBox.hidden = false;
+  inviteLabel.hidden = false;
   void goOnline(room, 1);
 });
 (document.getElementById('play-online') as HTMLButtonElement).disabled = false; // engine and listener ready (#127)

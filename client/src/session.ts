@@ -1,5 +1,6 @@
 import { MoveLog } from './movelog';
 import { parseHello, parseRecord, signHello, verifyHello, type Hello, type Keys, type Wire } from './moverecord';
+import { Presence, type Seen } from './presence';
 import { Seats } from './seats';
 import type { ConnectionState, Transport } from './transport';
 
@@ -25,16 +26,19 @@ export interface SessionOptions {
   onRefuse(reason: string): void; // a move was refused: shown in the HUD
   onState?(state: ConnectionState): void;
   onRole?(role: Role): void;
+  onPresence?(): void; // a key said Hello or its peer left: read presenceOf again
 }
 
 /**
  * Sends our moves signed and chained, replays the other side's moves through the engine.
  * Each seat is bound to one key by signed Hello messages: the creator binds the first valid Hello
  * for a free seat and publishes the roster, a move counts only from the key of the side to move.
+ * A seat is present while a peer that proved its key is connected.
  */
 export class OnlineSession {
   readonly seats: Seats;
   private readonly log: MoveLog;
+  private readonly presence = new Presence();
   private queue: Promise<void> = Promise.resolve();
   private current: Role;
 
@@ -43,9 +47,15 @@ export class OnlineSession {
     this.seats = new Seats(o.seatCount ?? 2);
     this.current = o.side === CREATOR ? 'player' : 'pending';
     if (o.side === CREATOR) this.seats.claim(CREATOR, o.keys.pub);
-    o.transport.onRecord((m) => {
+    o.transport.onRecord((m, peer) => {
       // Verification is async: a queue keeps messages handled in arrival order.
-      this.queue = this.queue.then(() => this.receive(m));
+      this.queue = this.queue.then(() => this.receive(m, peer));
+    });
+    // In the same queue: a peer that leaves right after its Hello is gone once both are handled.
+    o.transport.onLeave((peer) => {
+      this.queue = this.queue.then(() => {
+        if (this.presence.leave(peer)) o.onPresence?.();
+      });
     });
     o.transport.onState((s) => {
       o.onState?.(s);
@@ -56,6 +66,11 @@ export class OnlineSession {
 
   get role(): Role {
     return this.current;
+  }
+
+  /** Whether the key bound to `seat` is connected. A free seat is `waiting`. */
+  presenceOf(seat: number): Seen {
+    return this.presence.of(this.seats.keyOf(seat));
   }
 
   /** We are a seated player, our turn and the transport is open: a move now would reach the others. */
@@ -74,8 +89,8 @@ export class OnlineSession {
     this.o.transport.send(await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster }));
   }
 
-  private async receive(raw: Wire): Promise<void> {
-    if ((raw as { kind?: unknown } | null)?.kind === 'hello') return this.receiveHello(parseHello(raw));
+  private async receive(raw: Wire, peer: string): Promise<void> {
+    if ((raw as { kind?: unknown } | null)?.kind === 'hello') return this.receiveHello(parseHello(raw), peer);
     const r = parseRecord(raw);
     if (!r) return this.o.onRefuse('malformed');
     const verdict = await this.log.verify(r);
@@ -92,8 +107,14 @@ export class OnlineSession {
     this.o.onMove(r.move);
   }
 
-  private async receiveHello(h: Hello | null): Promise<void> {
+  private async receiveHello(h: Hello | null, peer: string): Promise<void> {
     if (!h || h.game !== this.o.game || !(await verifyHello(h))) return this.o.onRefuse('bad-hello');
+    this.presence.hello(peer, h.pub);
+    await this.seat(h);
+    this.o.onPresence?.();
+  }
+
+  private async seat(h: Hello): Promise<void> {
     if (this.o.side === CREATOR) {
       // First valid Hello for a free seat wins. Everyone, the refused included, gets the new roster.
       if (!this.seats.claim(h.seat, h.pub)) this.o.onRefuse('seat-refused');

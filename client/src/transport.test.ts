@@ -58,6 +58,26 @@ describe('localPair', () => {
     expect(seen).toEqual(['closed']);
   });
 
+  it('names the sender of each record', () => {
+    const [a, b] = localPair();
+    const from: string[] = [];
+    a.onRecord((_, peer) => from.push(peer));
+    b.onRecord((_, peer) => from.push(peer));
+    a.send(rec(0));
+    b.send(rec(1));
+    expect(from).toEqual(['a', 'b']);
+  });
+
+  it('tells each end that the other one left when the pair closes, once', () => {
+    const [a, b] = localPair();
+    const left: string[] = [];
+    a.onLeave((peer) => left.push(`a saw ${peer} leave`));
+    b.onLeave((peer) => left.push(`b saw ${peer} leave`));
+    b.close();
+    b.close();
+    expect(left).toEqual(['b saw a leave', 'a saw b leave']);
+  });
+
   it('drops a record nobody listens to and closes without state listeners', () => {
     const [a, b] = localPair();
     a.send(rec(0));

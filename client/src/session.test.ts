@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OnlineSession, type Judge } from './session';
-import { GENESIS, generateKeys, hashRecord, signHello, signMove, type Keys, type MoveRecord } from './moverecord';
+import { GENESIS, generateKeys, hashRecord, signHello, signMove, type Keys, type MoveRecord, type Wire } from './moverecord';
 import { localPair, type ConnectionState, type Transport } from './transport';
 
 const M1 = [1, 0, 0, 2, 0, 0, 0, 0];
@@ -27,8 +27,9 @@ async function player(transport: Transport, side: number, seatCount = 2) {
   const refused: string[] = [];
   const states: string[] = [];
   const roles: string[] = [];
+  const seen: string[] = []; // presence of the other seat, at each change
   const keys = await generateKeys();
-  const session = new OnlineSession({
+  const session: OnlineSession = new OnlineSession({
     game: 'g',
     side,
     seatCount,
@@ -39,8 +40,9 @@ async function player(transport: Transport, side: number, seatCount = 2) {
     onRefuse: (r) => refused.push(r),
     onState: (s) => states.push(s),
     onRole: (r) => roles.push(r),
+    onPresence: () => seen.push(session.presenceOf(3 - side)),
   });
-  return { judge, moves, refused, states, roles, keys, session };
+  return { judge, moves, refused, states, roles, seen, keys, session };
 }
 
 // Black creates the room, White joins: both Hello messages cross before anyone plays.
@@ -50,6 +52,25 @@ async function seated() {
   const white = await player(tb, 2);
   await settle();
   return { black, white };
+}
+
+// The test plays the room: it names the peer each message comes from and says which peer left.
+function room() {
+  let record: (m: Wire, peer: string) => void = () => {};
+  let leave: (peer: string) => void = () => {};
+  const transport: Transport = {
+    state: 'open',
+    send: () => {},
+    onRecord: (cb) => {
+      record = cb;
+    },
+    onState: () => {},
+    onLeave: (cb) => {
+      leave = cb;
+    },
+    close: () => {},
+  };
+  return { transport, from: (peer: string, m: Wire) => record(m, peer), leave: (peer: string) => leave(peer) };
 }
 
 // A raw peer on the other end of a pair, for hand made messages.
@@ -156,6 +177,7 @@ describe('OnlineSession', () => {
       onState: (cb) => {
         notify = cb;
       },
+      onLeave: () => {},
       close: () => {},
     };
     const black = await player(transport, 1);
@@ -282,6 +304,69 @@ describe('OnlineSession', () => {
     await settle();
     expect(joiner.session.role).toBe('player');
     expect(joiner.refused).toEqual([]);
+  });
+
+  it('shows the White seat waiting, here once its key said Hello, gone when its peer leaves, here again on reconnect', async () => {
+    const r = room();
+    const black = await player(r.transport, 1);
+    const white = await generateKeys();
+    expect(black.session.presenceOf(2)).toBe('waiting');
+    r.from('b', await hello(white, 2));
+    await settle();
+    expect(black.session.presenceOf(2)).toBe('here');
+    r.leave('b');
+    await settle();
+    expect(black.session.presenceOf(2)).toBe('gone');
+    r.from('b', await hello(white, 2)); // the same player back, same key
+    await settle();
+    expect(black.session.presenceOf(2)).toBe('here');
+    expect(black.seen).toEqual(['here', 'gone', 'here']);
+    expect(black.refused).toEqual([]);
+  });
+
+  it('as a joiner sees Black here once seated, and disconnected when the creator peer leaves', async () => {
+    const r = room();
+    const joiner = await player(r.transport, 2);
+    const creator = await generateKeys();
+    expect(joiner.session.presenceOf(1)).toBe('waiting');
+    r.from('a', await hello(creator, 1, [creator.pub, joiner.keys.pub]));
+    await settle();
+    expect(joiner.session.role).toBe('player');
+    expect(joiner.session.presenceOf(1)).toBe('here');
+    r.leave('a');
+    await settle();
+    expect(joiner.session.presenceOf(1)).toBe('gone');
+    expect(joiner.seen).toEqual(['here', 'gone']);
+  });
+
+  it('ties presence to the bound key: a spectator leaving, an unknown peer and a forged Hello change nothing, bug #117', async () => {
+    const r = room();
+    const black = await player(r.transport, 1);
+    const white = await generateKeys();
+    const third = await generateKeys();
+    const whiteHello = await hello(white, 2);
+    r.from('b', whiteHello);
+    r.from('c', await hello(third, 2)); // refused: the seat is White's
+    r.leave('c');
+    r.leave('nobody');
+    await settle();
+    expect(black.session.presenceOf(2)).toBe('here');
+    expect(black.seen).not.toContain('gone');
+    r.leave('b');
+    r.from('c', { ...whiteHello, seat: 1 }); // White's key with a broken signature
+    await settle();
+    expect(black.session.presenceOf(2)).toBe('gone');
+    expect(black.refused).toEqual(['seat-refused', 'bad-hello']);
+  });
+
+  it('handles a leave after the Hello that came before it, even while that Hello is still being verified', async () => {
+    const r = room();
+    const black = await player(r.transport, 1);
+    const white = await generateKeys();
+    r.from('b', await hello(white, 2));
+    r.leave('b'); // at once: the signature check above is still running
+    await settle();
+    expect(black.session.presenceOf(2)).toBe('gone');
   });
 
   it('works without the optional callbacks', async () => {

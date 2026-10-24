@@ -13,6 +13,7 @@ export function p2pTransport(room: string): Transport {
   const move = r.makeAction('move');
   let state: ConnectionState = 'connecting';
   let onState: (s: ConnectionState) => void = () => {};
+  let onLeave: (peer: string) => void = () => {};
   const set = (s: ConnectionState): void => {
     state = s;
     onState(s);
@@ -25,6 +26,7 @@ export function p2pTransport(room: string): Transport {
   };
   r.onPeerLeave = (peer) => {
     peers.delete(peer);
+    onLeave(peer);
     if (peers.size === 0) set('closed');
   };
   return {
@@ -33,10 +35,13 @@ export function p2pTransport(room: string): Transport {
     },
     send: (rec) => void move.send(rec as unknown as Parameters<typeof move.send>[0]),
     onRecord: (cb) => {
-      move.onMessage = (data) => cb(data as unknown as Wire); // the session shape checks it
+      move.onMessage = (data, { peerId }) => cb(data as unknown as Wire, peerId); // the session shape checks it
     },
     onState: (cb) => {
       onState = cb;
+    },
+    onLeave: (cb) => {
+      onLeave = cb;
     },
     close: () => {
       void r.leave();
@@ -47,11 +52,16 @@ export function p2pTransport(room: string): Transport {
 
 interface Hook {
   __netOut?: (rec: Wire) => void;
-  __netIn?: (rec: Wire) => void;
+  __netIn?: (rec: Wire, peer: string) => void;
   __netOpen?: () => void;
+  __netLeave?: (peer: string) => void;
 }
 
-/** Test transport: the page hands records to `window.__netOut` and receives them on `window.__netIn`. It stays `connecting` until the test calls `window.__netOpen()`. */
+/**
+ * Test transport: the page hands records to `window.__netOut` and receives them on `window.__netIn`
+ * with the sender's name. It stays `connecting` until the test calls `window.__netOpen()`, and
+ * `window.__netLeave(peer)` stands in for Trystero's peer leave.
+ */
 export function hookTransport(): Transport {
   const w = window as unknown as Hook;
   let state: ConnectionState = 'connecting';
@@ -70,6 +80,9 @@ export function hookTransport(): Transport {
     },
     onState: (cb) => {
       onState = cb;
+    },
+    onLeave: (cb) => {
+      w.__netLeave = cb;
     },
     close: () => {},
   };
