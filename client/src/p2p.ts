@@ -1,5 +1,6 @@
-// Transports that touch the outside world. Not unit tested: the e2e test drives the hook transport,
-// and the Trystero one needs real public relays and a second browser (see the PR body).
+// Transports that touch the outside world. Out of the coverage gate: the e2e test drives the hook transport,
+// and the Trystero one needs real public relays and a second browser (see the PR body). Its peer
+// bookkeeping is unit tested on a mocked room (p2p.test.ts).
 import { joinRoom } from 'trystero/nostr';
 import type { Wire } from './moverecord';
 import type { ConnectionState, Transport } from './transport';
@@ -16,8 +17,16 @@ export function p2pTransport(room: string): Transport {
     state = s;
     onState(s);
   };
-  r.onPeerJoin = () => set('open');
-  r.onPeerLeave = () => set('closed');
+  // Open while at least one peer is connected: a spectator leaving does not close the room for the players (#140).
+  const peers = new Set<string>();
+  r.onPeerJoin = (peer) => {
+    peers.add(peer);
+    set('open');
+  };
+  r.onPeerLeave = (peer) => {
+    peers.delete(peer);
+    if (peers.size === 0) set('closed');
+  };
   return {
     get state() {
       return state;
