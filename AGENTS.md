@@ -9,7 +9,9 @@ first, share decisions that affect others in an issue, and leave others' work al
 The short version:
 
 1. Work only on a Task in `Ready` status, assigned to you. One unfinished Task at a time.
-2. One Task, one branch `<issue>-<slug>`, one PR with `Closes #<task>`. Nothing out of scope.
+2. One branch `<issue>-<slug>` and one PR with a `Closes #<task>` line per issue. Linked issues
+   (same feature or files) may share one PR to go faster; unrelated work never does. Nothing out
+   of scope.
 3. Strict TDD: failing test first, then code. 100 % line and region coverage. Unit and e2e tests.
    Check player-facing changes in Chrome with Playwright. A PR that changes the UI MUST include a
    screenshot in its description (CONTRIBUTING 6.4).
