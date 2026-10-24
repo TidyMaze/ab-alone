@@ -84,18 +84,20 @@ async function exportGame(page: Page, dir: string) {
   return { name, path, content: JSON.parse(await readFile(path, 'utf8')) };
 }
 
-/** Clicks Import game and picks `file` in the file chooser: a saved path, or the text of a file. */
-async function importGame(page: Page, file: string | { text: string }): Promise<void> {
+/** Clicks Import game and picks the file at `path` in the file chooser. */
+async function importGame(page: Page, path: string): Promise<void> {
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser'),
     page.getByRole('button', { name: 'Import game' }).click(),
   ]);
-  await chooser.setFiles(
-    typeof file === 'string'
-      ? file
-      : { name: 'game.json', mimeType: 'application/json', buffer: Buffer.from(file.text) },
-  );
+  await chooser.setFiles(path);
 }
+
+/** Picks a file holding `text` straight in the file input behind Import game (lighter on a loaded machine). */
+const importText = (page: Page, text: string) =>
+  page
+    .locator('#import-file')
+    .setInputFiles({ name: 'game.json', mimeType: 'application/json', buffer: Buffer.from(text) });
 
 const A = [1, 4, 0, 2, 0, 0, 0, 0]; // Black (0, 2) to (0, 1)
 const B = [1, 5, 0, -2, 0, 0, 0, 0]; // White (0, -2) to (0, -1)
@@ -157,7 +159,7 @@ test('a file that is not a game, of an unknown version or with an illegal move i
     [JSON.stringify({ ...save(false, [A]), mode: 'online' }), 'import refused: not a game file'],
     [JSON.stringify(save(false, [A, A])), 'import refused: illegal move in the file'], // Black twice
   ]) {
-    await importGame(page, { text });
+    await importText(page, text);
     await expect(hud).toContainText(message);
     expect(await snapshot(page)).toEqual(before);
     expect(await savedPlies(page)).toBe(1);
@@ -170,13 +172,14 @@ test('a file that is not a game, of an unknown version or with an illegal move i
 });
 
 test('an imported game replaces a game against the bot in progress, and the bot plays on', async ({ page }, testInfo) => {
+  test.slow(); // two bot searches in the worker
   await page.goto('./');
   await ready(page);
   await move(page, [0, 2], [0, 1]);
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2); // the bot replied
 
   // A hot-seat file with White to move: the page plays on in its own mode, the bot answers.
-  await importGame(page, { text: JSON.stringify(save(false, [A, B, C])) });
+  await importText(page, JSON.stringify(save(false, [A, B, C])));
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(4);
   expect((await history(page)).slice(0, 3)).toEqual([A, B, C]);
   await expect(page.locator('#hud')).toContainText('Black to move');
@@ -193,7 +196,7 @@ test('an imported finished game shows its result, and a reload starts a new game
   await expect.poll(() => savedPlies(page)).toBe(1);
 
   // The position after the first move comes back a third time: a draw.
-  await importGame(page, { text: JSON.stringify(save(false, [A, B, C, D, E, B, C, D, E])) });
+  await importText(page, JSON.stringify(save(false, [A, B, C, D, E, B, C, D, E])));
   await expect(page.locator('#hud')).toContainText('Draw by threefold repetition');
   expect(await plies(page)).toBe(9);
   await expect.poll(() => savedPlies(page)).toBe(0); // a finished game is not saved
