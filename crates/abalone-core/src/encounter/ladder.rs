@@ -16,7 +16,7 @@ use crate::encounter::telemetry::{
 use crate::encounter::{carried_marks, marbles, BossDef, Encounter, PveResult};
 use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
-use crate::search::{search, search_hooked, search_with, DEFAULT_WEIGHTS};
+use crate::search::{search_hooked, search_with, DEFAULT_WEIGHTS};
 
 /// A game longer than this many plies is stopped and counted as a loss.
 pub const PLY_CAP: u32 = 300;
@@ -192,8 +192,9 @@ fn mix(mut x: u64) -> u64 {
 
 /// The player bot move: a seeded random legal move for its first `opening` moves, then the
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
-/// the tells (against the Chaplain its search also sees the hooks): it avoids a position it has already seen and a move that leaves a marble to flip,
-/// and plays the plain search when no move is left. `None` when the player has no move
+/// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
+/// and plays the plain search when no move is left. Against the Chaplain the search sees the
+/// hooks. `None` when the player has no move
 /// (every marble was converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     let game = arena.game();
@@ -203,17 +204,16 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         moves.get(pick as usize).cloned()
     } else {
         let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.flip_free(mv);
-        if arena.kind() == LadderBoss::Chaplain {
-            let def = chaplain_boss();
-            let step = |b: &Board, p: Player, m: &Move, a: Board| chaplain_step(&def, b, p, m, a);
-            let hooked = |allow: &dyn Fn(&Move) -> bool| {
+        let def = chaplain_boss();
+        let step = |b: &Board, p: Player, m: &Move, a: Board| chaplain_step(&def, b, p, m, a);
+        let pick = |allow: &dyn Fn(&Move) -> bool| {
+            if arena.kind() == LadderBoss::Chaplain {
                 search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &step)
-            };
-            return hooked(&strict).or_else(|| hooked(&|_| true)).map(|r| r.mv);
-        }
-        search_with(game, budget, DEFAULT_WEIGHTS, &strict)
-            .or_else(|| search(game, budget))
-            .map(|r| r.mv)
+            } else {
+                search_with(game, budget, DEFAULT_WEIGHTS, allow)
+            }
+        };
+        pick(&strict).or_else(|| pick(&|_| true)).map(|r| r.mv)
     }
 }
 
@@ -419,9 +419,10 @@ mod tests {
             assert_eq!(&stepped, enc.game().board(), "ply {ply}");
             assert_eq!(credits, [0, 0]);
             flips += before.converted().len() + enc.game().board().converted().len();
-            if enc.game().outcome().is_some() || enc.phase() > 0 {
-                break;
-            }
+            assert!(
+                enc.game().outcome().is_none() && enc.phase() == 0,
+                "ply {ply}"
+            );
         }
         assert!(flips > 0, "the game must reach a flip to prove anything");
     }
