@@ -31,7 +31,8 @@ export function fogSettings(tier: Tier, clear: boolean, distance: number): { nea
   return clear ? null : { near: distance, far: distance + FOG_SPAN[tier] };
 }
 
-function read(store: Store, key: string): string | null {
+/** One stored setting, `null` when missing or when storage is blocked. */
+export function read(store: Store, key: string): string | null {
   try {
     return store?.getItem(key) ?? null;
   } catch {
@@ -39,7 +40,8 @@ function read(store: Store, key: string): string | null {
   }
 }
 
-function write(store: Store, key: string, value: string): void {
+/** Stores one setting, silently dropped when storage is blocked. */
+export function write(store: Store, key: string, value: string): void {
   try {
     store?.setItem(key, value);
   } catch {
