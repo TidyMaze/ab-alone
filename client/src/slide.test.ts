@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { axialTo3D, cellIndex, type Axial, type Move } from './board';
+import { VANISHED, axialTo3D, cellIndex, type Axial, type Move } from './board';
 import { SLIDE_MS, slideAt, slideTracks } from './slide';
 
 const empty = (): number[] => new Array<number>(61).fill(0);
@@ -53,6 +53,15 @@ describe('slideTracks', () => {
     );
     expect(tracks).toHaveLength(4);
     expect(tracks).toContainEqual({ cell: [-2, -2], from: xz(-2, -1), to: xz(-2, -2), durationMs: SLIDE_MS });
+  });
+
+  it('ends the push line at a vanished cell: the marbles beyond the hole stay put', () => {
+    // The Hull: (0,-2) is a hole. The Black pair pushes the White marble into it (an ejection),
+    // the White pair beyond the hole does not move.
+    const before = put([[0, 1, 1], [0, 0, 1], [0, -1, 2], [0, -2, VANISHED], [0, -3, 2], [0, -4, 2]]);
+    const after = put([[0, 0, 1], [0, -1, 1], [0, -2, VANISHED], [0, -3, 2], [0, -4, 2]]);
+    const tracks = slideTracks(before, after, move(4, [0, 0], [0, 1]), false);
+    expect(tracks.map((t) => t.cell)).toEqual([[0, -1], [0, 0]]);
   });
 
   it('skips a marble the board after the move does not show at its new cell', () => {
