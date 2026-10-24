@@ -57,6 +57,8 @@ after one online visit (tech.md section 9.1).
 ## 4. HUD layout
 
 One plate, top-left, 16 px from the edges, max width 22rem, never over the board centre at 720p.
+The plate, like the evaluation plate below, is bolted on: a rivet in each corner, 4 px inside the
+border, in `--edge`, drawn in CSS over the plate colour, so it adds no size (#303).
 In a short landscape window (500 px tall or less, a phone held sideways) the plate keeps to the band
 left of the board, like the column, with a smaller turn line, so it covers no cell (#234).
 In a taller landscape window up to 1100 px wide the plate is smaller (max width 15rem) for the
