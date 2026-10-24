@@ -248,7 +248,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   Tenor flanks (edge weights), Bass anchors (cluster weights). You have 10 marbles. Win by
   ejecting **10** (Decision #131: P3 starts at 8, so the last army is fought for two more), lose
   at 6 as usual.
-- **Tell**: the army that moves next has a glowing halo, from the end of your previous turn.
+- **Tell**: the army that moves next wears a steady pale ring, from the end of your previous turn,
+  and each army has its own glyph on its marbles (world.md section 5: never a halo or colour alone).
 - **Counter**: you know who moves next, so set a trap for that army. Wiping an army removes
   it from the cycle.
 - **Phases**: P1 three armies. P2 when one army is wiped: the two others alternate and each

@@ -19,6 +19,7 @@ import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
+import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
@@ -164,6 +165,13 @@ const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
 const shellCapGeometry = new THREE.SphereGeometry(0.37, 32, 8, 0, Math.PI * 2, 0, Math.PI * 0.35);
 let exposed = 0; // marbles the hovered move would expose, for the HUD
+// The Choir: each army wears its own glyph in the dark shell on top of its marbles, Alto a spike,
+// Tenor a ring, Bass a block, never colour alone. The army that moves next gets the pale ring.
+const armyGlyphs = [
+  new THREE.ConeGeometry(0.08, 0.18, 4),
+  new THREE.TorusGeometry(0.07, 0.025, 8, 16),
+  new THREE.BoxGeometry(0.13, 0.13, 0.13),
+];
 
 const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
   const disc = new THREE.Mesh(discGeometry, steel);
@@ -256,11 +264,13 @@ const isSelected = (q: number, r: number): boolean => selected.some(([sq, sr]) =
 function hud(extra = ''): void {
   const status = engine.status();
   const ejected = [engine.ejected(1), engine.ejected(2)] as const;
+  const win = [engine.win_ejections(1), engine.win_ejections(2)] as const;
   document.getElementById('hud')!.innerHTML = hudHtml({
     side: engine.to_move(),
     status,
-    score: formatScore(ejected, status, engine.draw_reason()),
+    score: formatScore(ejected, win, status, engine.draw_reason()),
     ejected,
+    win,
     note: `${backend}${onlineNote}${extra}`,
     online: onlineLine,
   });
@@ -272,7 +282,11 @@ function hud(extra = ''): void {
         phase: engine.phase(),
         phases: engine.phases(),
         result: engine.result(),
-        tell: [crackText(parseCracks(engine.cracks())), chaplainText(exposed, engine.converted().length / 2)]
+        tell: [
+          crackText(parseCracks(engine.cracks())),
+          chaplainText(exposed, engine.converted().length / 2),
+          choirText(engine.next_army()),
+        ]
           .filter((t) => t !== '')
           .join(' · '),
       }),
@@ -287,6 +301,8 @@ function refresh(): void {
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
   const converted = engine instanceof Encounter ? parseCells(engine.converted()) : [];
+  const armies = engine instanceof Encounter ? parseArmies(engine.armies()) : [];
+  const next = engine instanceof Encounter ? engine.next_army() : -1;
   marbles.clear();
   discs.forEach((disc, i) => {
     const [q, r] = CELLS[i]!;
@@ -320,6 +336,20 @@ function refresh(): void {
     cap.position.set(p.x, 0.36, p.z);
     marbles.add(cap);
   }
+  for (const { cell, army } of armies) {
+    const p = axialTo3D(cell[0], cell[1]);
+    const glyph = new THREE.Mesh(armyGlyphs[army], marbleMaterials[1]);
+    glyph.position.set(p.x, 0.76, p.z);
+    if (army === 1) glyph.rotation.x = Math.PI / 2; // the ring lies flat, read from above
+    marbles.add(glyph);
+    if (army !== next) continue;
+    const ring = new THREE.Mesh(outlineGeometry, paleMaterial);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    marbles.add(ring);
+  }
+  document.body.dataset.armies = String(armies.length); // read by the e2e tests
+  document.body.dataset.nextArmy = ARMY_NAMES[next] ?? '';
   document.body.dataset.converted = String(converted.length); // read by the e2e tests
   document.body.dataset.cracks = String(cracks.length);
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
@@ -475,6 +505,9 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__legal = () => parseMoves(engine.legal_moves());
 (window as unknown as Record<string, unknown>).__preview = (mv: Parameters<typeof encodeMove>[0]) =>
   engine instanceof Encounter ? previewFlips(history, encodeMove(mv), makeGame as () => Encounter) : [];
+// Used by the browser checks to see which Choir army moved.
+(window as unknown as Record<string, unknown>).__armies = () =>
+  engine instanceof Encounter ? parseArmies(engine.armies()) : [];
 
 // Boss fight: the menu lists the bosses of the bridge, picking one switches the page to encounter
 // mode (human Black, the boss answers in the worker). Retry restarts the same boss and seed.
