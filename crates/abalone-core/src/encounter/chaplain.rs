@@ -16,6 +16,8 @@ pub const CHAPLAIN_RESTORE_THRESHOLD: usize = 3;
 pub const CHAPLAIN_PHASE_MARBLES: [u8; 2] = [8, 4];
 /// Positions the boss search may visit per move. TUNE.
 pub const CHAPLAIN_NODE_BUDGET: u32 = 2000;
+/// A flip is free on 1 boss turn in this many (the roll is seeded). TUNE.
+pub const CHAPLAIN_FREE_FLIP_ODDS: u64 = 4;
 /// First phase (0 based) where void cells count as boss neighbours.
 pub const CHAPLAIN_VOID_PHASE: usize = 1;
 /// First phase (0 based) where a flip chains once more.
@@ -86,11 +88,17 @@ fn convert(board: &Board, phase: usize) -> (Vec<P>, Board) {
     (flipped, out)
 }
 
-/// End of the boss turn: flips, then in the chain phase one boss marble per flip is pushed
-/// into the void, picked by `seed` among the marbles that did not just flip.
+/// The boss pays for its flips with one chance in `CHAPLAIN_FREE_FLIP_ODDS` of not paying, rolled
+/// from the seed (#207). From the chain phase on the cost is certain.
+fn flips_cost(phase: usize, seed: u64) -> bool {
+    phase >= CHAPLAIN_CHAIN_PHASE || !mix(seed).is_multiple_of(CHAPLAIN_FREE_FLIP_ODDS)
+}
+
+/// End of the boss turn: flips, then, when they cost (`flips_cost`), one boss marble per flip is
+/// pushed into the void, picked by `seed` among the marbles that did not just flip.
 fn boss_turn_end(board: &Board, phase: usize, seed: u64) -> Board {
     let (flipped, mut out) = convert(board, phase);
-    if phase >= CHAPLAIN_CHAIN_PHASE {
+    if flips_cost(phase, seed) {
         let mut pool: Vec<P> = marked(board, Cell::White, Cell::White, 0, false);
         let mut state = seed;
         for _ in 0..flipped.len().min(pool.len()) {
@@ -283,7 +291,8 @@ mod tests {
 
     #[test]
     fn three_boss_neighbours_flip_a_marble_at_the_end_of_the_boss_turn() {
-        let mut e = enc(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8);
+        let seed = free_seed();
+        let mut e = build(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8, &[], seed);
         assert_eq!(e.phase(), 0);
         let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
         step(&mut e);
@@ -480,6 +489,30 @@ mod tests {
         assert!(chaplain_tell(&p1).is_empty());
     }
 
+    /// One flip in phase one with this encounter seed, two plies played: the boss marble count
+    /// afterwards and the player's ejected count.
+    fn one_flip(seed: u64) -> (u8, u8) {
+        let mut e = build(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8, &[], seed);
+        turns(&mut e, 2);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+        (count(&e, Cell::White), e.game().ejected(Player::Black))
+    }
+
+    /// A seed whose flip is free (the boss keeps the marble it gained).
+    fn free_seed() -> u64 {
+        (0..64).find(|&s| one_flip(s).1 == 0).unwrap()
+    }
+
+    #[test]
+    fn a_flip_costs_the_boss_a_marble_three_times_in_four() {
+        let paid = (0..64).filter(|&s| one_flip(s).1 == 1).count();
+        assert!((40..=56).contains(&paid), "paid {paid} of 64");
+        let w = 13;
+        assert_eq!(one_flip(free_seed()), (w, 0), "free: the flip is a gain");
+        let seed = (0..64).find(|&s| one_flip(s).1 == 1).unwrap();
+        assert_eq!(one_flip(seed), (w - 1, 1), "paid: one lost, credited");
+    }
+
     /// (0, 0) flips from its three white neighbours, then (1, -1) from two whites plus the
     /// freshly flipped (0, 0).
     fn chain(fillers: usize, seed: u64) -> Encounter {
@@ -530,8 +563,8 @@ mod tests {
     }
 
     #[test]
-    fn phase_two_does_not_chain_and_costs_the_boss_nothing() {
-        let mut e = chain(1, 1);
+    fn phase_two_does_not_chain_and_a_free_flip_costs_nothing() {
+        let mut e = chain(1, free_seed());
         assert_eq!(e.phase(), 1);
         turns(&mut e, 2);
         assert_eq!(at(&e, (0, 0)), Some(Cell::White));

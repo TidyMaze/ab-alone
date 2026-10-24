@@ -11,8 +11,11 @@ the same numbers on every machine.
   someone who knows the PvE rules: it never repeats a position it has already seen (a draw is a
   loss), and it never plays a move that leaves one of its marbles to flip when the Chaplain tell
   shows it (the tell is read on hover, Decision #154). When no move is left under those two
-  constraints it plays the plain search move. The search itself does not see the boss hooks (rim
-  cracks, flips), only the standard rules.
+  constraints it plays the plain search move. Against the Chaplain the search sees the boss hooks
+  inside the tree (#207): each ply goes through the same flip rule as `Encounter::play`, the
+  converted marks follow the moves, and the phase is read from the board. It still ignores the seed
+  of the P3 void pushes and the ejections the hook credits (P3 is never reached). The other bosses
+  are searched with the standard rules only.
 - **Winnable**: a recorded winning game replays through the `Encounter` API (fixtures, section 4)
   **and** the pro-level player wins at least 7 of 10 seeds. The target after tuning is 7 to 9 of
   10, never 10 of 10.
@@ -30,7 +33,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Chaplain | 2000 | 20000 (10x) | **0** | 148 | P1 | conversion 5, draw 5 |
 | The Ballast Mind | 150000 | 150000 (1x only) | **0** | 100 | P1 | draw 10 |
 
-No boss knob changed in this PR: the table is the "before" and the "after" at once. The reasons
+Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
 are per boss, section 3.
 
 For comparison, the same ladder with the plain search as the player (no repetition rule, no tell):
@@ -74,7 +77,7 @@ at the very moment P3 starts, so P3 would never be played) and a later lead-agen
 says 8. The code, rules.md and game-design.md follow the owner decision, and so does this PR.
 If the owners want 8, they change it in #131 first.
 
-### The Chaplain: NOT winnable by the pro-level bot (0 of 10)
+### The Chaplain: 0 of 10 before #207, 7 of 10 after the rule change (last subsection)
 
 Plain Abalone against a 2000-node search is a stall: draws, not losses. On top of that the search
 does not see flips, so the bot loses marbles to conversions even when it reads the tell on the
@@ -103,6 +106,83 @@ in the first runs, in one step in the final code), so read them as indicative.
 What would settle it: a player search that sees the hooks (flip and crack) inside the tree, then
 re-run this table. The most promising knob from the data is the aggression weight with the flip
 threshold at 4 (3 of 10).
+
+#### Hook-aware player (#207)
+
+The player search now simulates the Chaplain flips (`chaplain_step` in `ladder.rs`, proved equal
+to the encounter on a played game). Same ladder, 10x (20000 nodes), 10 seeds, `LADDER_X=10 cargo
+run --release --example ladder -- chaplain`. Every row is the hook-aware player, one change at a
+time on the boss:
+
+| Boss change | Wins /10 | Median plies | Deaths |
+|---|---|---|---|
+| none, hook-blind player (section 2) | 0 | 148 | conversion 5, draw 5 |
+| none, hook-aware player | 0 | 82 | push 3, conversion 5, draw 2 |
+| flip threshold 4 | 0 | 142 | push 8, draw 2 |
+| flip-back threshold 2 | 0 | 142 | push 1, conversion 2, draw 7 |
+| boss budget 300 (player 3000) | 0 | 143 | push 1, draw 9 |
+| boss search centre weight 20 | 0 | 125 | push 1, conversion 7, draw 2 |
+| boss search centre weight 20 and flip threshold 4 | 1 | 191 | draw 9 |
+
+Second round (owner decision on #207: weaken the Chaplain until it is beatable), same command with
+the player fixed at 20000 nodes (`LADDER_NODES=20000`) while the boss budget moves. The knobs were
+temporary env switches, not kept in the code. Output lines (`boss | player budget | wins | median
+plies | max phase | deaths`):
+
+| Boss change | Output line |
+|---|---|
+| none (re-run) | `chaplain \| 20000 \| 0/10 \| 82 \| 0 \| push 3, conversion 5, draw 2` |
+| boss budget 100, centre weight 20 | `chaplain \| 20000 \| 0/10 \| 58 \| 0 \| push 1, conversion 8, draw 1` |
+| at most 1 flip per boss turn | `chaplain \| 20000 \| 0/10 \| 86 \| 0 \| conversion 6, draw 4` |
+| flip threshold 4, centre 20, boss budget 150 | `chaplain \| 20000 \| 1/10 \| 209 \| 1 \| push 1, draw 8` |
+| same, player allowed one repetition | `chaplain \| 20000 \| 1/10 \| 196.5 \| 1 \| push 1, draw 8` |
+| flip threshold 4, centre 20, boss budget 60 | `chaplain \| 20000 \| 1/10 \| 197.5 \| 1 \| draw 9` |
+
+Reading: two regimes and nothing between them. With the flip threshold at 3 the boss corners the
+player and converts it (5 to 8 conversion deaths) whatever its budget or weights. With the
+threshold at 4 the boss stops converting but also stops engaging, so 8 or 9 games hit the 300 ply
+cap as draws, and a draw is a loss. The best state is 1 of 10, far from 7. The alternative player
+that may repeat a position once does not change it (1 of 10 as well), so "never repeat" is not what
+blocks the win. "Flip only after contact" is already how the rule works (a flip needs 3 boss
+neighbours), so there is no separate knob. Not measured in the 60 minute time box (a run costs 2 to
+9 minutes): budget 600, centre 40, threshold 3 with one flip per turn and a low budget, a lower
+ejection weight for the boss.
+
+#### Rule change: a flip costs the boss (#207, owner decision)
+
+No number got past 1 of 10, so the rule changed (rules.md 10.3, game-design.md 7.3). Variant B:
+after a boss turn that flips marbles, the boss loses one marble per flip (removed, credited to the
+player as an ejection, the same rule the chain phase already had). Variant A (a skipped boss turn)
+and C (a two-turn tell) were not built: B reached the target. Each row is a run of
+`LADDER_NODES=20000` (the 10x of the unchanged boss budget 2000, so the player is the same in every
+row), `... -- chaplain`, hook-aware pro player, 10 seeds. Output lines:
+
+| Variant of B | Output line |
+|---|---|
+| every flip costs, boss budget 2000 | `chaplain \| 20000 \| 10/10 \| 46 \| 0 \|` |
+| every flip costs, threshold 3, centre 20, budget 150 | `chaplain \| 20000 \| 10/10 \| 37 \| 0 \|` |
+| every flip costs, threshold 4, centre 20, budget 150 | `chaplain \| 20000 \| 10/10 \| 87 \| 1 \|` |
+| cost paid but not credited as an ejection | `chaplain \| 20000 \| 0/10 \| 189.5 \| 2 \| conversion 1, draw 6, boss_stuck 3` |
+| same, centre 20, budget 150 | `chaplain \| 20000 \| 0/10 \| 151 \| 2 \| draw 4, boss_stuck 6` |
+| cost only when a turn flips 2 or more | `chaplain \| 20000 \| 0/10 \| 75 \| 0 \| push 3, conversion 6, draw 1` |
+| same, centre 20, budget 150 | `chaplain \| 20000 \| 1/10 \| 152 \| 0 \| conversion 4, draw 5` |
+| cost 1 turn in 2 | `chaplain \| 20000 \| 5/10 \| 84 \| 0 \| conversion 3, draw 2` |
+| cost 1 turn in 2, centre 20, budget 150 | `chaplain \| 20000 \| 5/10 \| 51 \| 0 \| conversion 4, draw 1` |
+| cost 3 turns in 4, centre 20, budget 150 | `chaplain \| 20000 \| 10/10 \| 41.5 \| 0 \|` |
+| **cost 3 turns in 4, boss unchanged (kept)** | `chaplain \| 20000 \| 7/10 \| 57.5 \| 1 \| conversion 2, draw 1` |
+
+Kept: the cost is rolled per boss turn from the encounter seed (`CHAPLAIN_FREE_FLIP_ODDS = 4`, so
+1 turn in 4 is free), credited as an ejection, and certain from P3 on. The last row is also the
+command of the section, `LADDER_X=10 cargo run --release --example ladder -- chaplain`, run on
+the final code. A sure cost swings to 10 of 10 (the boss pays for contact it cannot see: its search
+does not see its own hooks), a cost that is not credited or only on double flips stays at 0 or 1
+of 10, and the 3 in 4 roll sits at 7 of 10. The boss budget, weights and thresholds are unchanged.
+The tell still shows the flip one ply ahead; the cost is not in the tell. The player search does
+not know the roll (it passes seed 0), so it plays as if the boss always or never pays: the pro
+player is slightly blind to this rule, a human sees the outcome. One seed list of 10 is small:
+7 of 10 is a point estimate, not a rate.
+
+Recorded win: `tests/fixtures/chaplain.txt` (seed 0, 92 moves).
 
 ### The Ballast Mind: NOT measured at pro level, 0 of 10 at 1x
 
@@ -133,8 +213,9 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | echo | 0 | 4000 | 126 |
 | hull | 0 | 30000 | 90 |
 | choir | 0 | 15000 | 50 |
+| chaplain | 0 | 20000 | 92 |
 
-No fixture for the Chaplain and the Ballast Mind: no winning game was found (section 3).
+No fixture for the Ballast Mind: no winning game was found (section 3).
 
 To record again after a rule change:
 `LADDER_X=10 LADDER_FIXTURES=<dir> cargo run --release --example ladder -- echo hull choir`
@@ -157,7 +238,7 @@ This is out of scope here (rule 4 of CONTRIBUTING.md): it needs a decision per b
 ## 6. Follow-ups
 
 - Decision: the unreachable phases of section 5 (win threshold per boss, or thresholds moved).
-- A hook-aware player search (flips and cracks inside the tree), then the Chaplain and Ballast
-  tables again. Until then the Chaplain is unproven.
+- The Chaplain wins 7 of 10 after the flip cost of #207 (section 3). The
+  Hull cracks and the Ballast Mind hooks are not in the player tree yet.
 - The Hull (7 of 10 at 10x, 9 with the plain search) and the Choir (10 of 10) may be too easy for
   a strong human: tuning them is out of scope of #170.

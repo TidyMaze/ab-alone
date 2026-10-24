@@ -38,3 +38,8 @@ fn the_hull_win_replays() {
 fn the_choir_win_replays() {
     assert_win("choir");
 }
+
+#[test]
+fn the_chaplain_win_replays() {
+    assert_win("chaplain");
+}
