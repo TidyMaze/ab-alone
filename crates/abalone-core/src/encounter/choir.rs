@@ -10,7 +10,7 @@
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
 use crate::game::{Game, GameError};
-use crate::moves::{apply, Move, Player};
+use crate::moves::{apply, legal_moves, Move, Player};
 use crate::search::{search_with, Weights};
 
 type P = (i32, i32);
@@ -215,11 +215,34 @@ impl Choir {
         self.members.iter().filter(|m| m.1 == army).count() as u8
     }
 
-    /// The army in turn: the next of the cycle that still has marbles.
+    /// `true` when `mv` is allowed for `army`: its marbles only, and no push in P3.
+    fn allows(&self, army: Army, mv: &Move) -> bool {
+        mv.cells.iter().all(|&c| self.army_at(c) == Some(army))
+            && !(self.phase() == LAST_PHASE && pushes(self.game().board(), mv))
+    }
+
+    /// `true` when `army` has at least one move it is allowed to play.
+    fn can_move(&self, army: Army) -> bool {
+        legal_moves(self.game().board(), Player::White)
+            .iter()
+            .any(|mv| self.allows(army, mv))
+    }
+
+    /// The army in turn: the next of the cycle that has marbles and a move it may play (#172).
+    /// An army boxed in, or left with pushes only in P3, is skipped like a wiped one. When no
+    /// army can move, the next one with marbles: the boss then passes (see [`Choir::play`]).
+    /// On the player's turn this reads the board as it is, so the tell can change with the
+    /// player's move.
     fn army_in_turn(&self) -> Army {
+        let from = |i: usize| CYCLE[(self.cycle_pos + i) % CYCLE.len()];
         (0..CYCLE.len())
-            .map(|i| CYCLE[(self.cycle_pos + i) % CYCLE.len()])
-            .find(|&a| self.army_marbles(a) > 0)
+            .map(from)
+            .find(|&a| self.army_marbles(a) > 0 && self.can_move(a))
+            .or_else(|| {
+                (0..CYCLE.len())
+                    .map(from)
+                    .find(|&a| self.army_marbles(a) > 0)
+            })
             .unwrap_or(CYCLE[self.cycle_pos])
     }
 
@@ -240,7 +263,7 @@ impl Choir {
         if mv.cells.iter().any(|&c| self.army_at(c) != Some(army)) {
             return Err(ChoirError::WrongArmy);
         }
-        if self.phase() == LAST_PHASE && pushes(self.game().board(), mv) {
+        if !self.allows(army, mv) {
             return Err(ChoirError::NoPush);
         }
         Ok(())
@@ -266,6 +289,9 @@ impl Choir {
             .collect();
         if boss_turn {
             self.end_boss_move(mover);
+        } else if self.enc.game.outcome().is_none() && !self.can_move(self.army_in_turn()) {
+            // No army can move: the boss passes (rules.md section 7) and the player goes again.
+            self.enc.game.pass();
         }
         Ok(())
     }
@@ -276,6 +302,7 @@ impl Choir {
         let free_turn = (self.boss_turns + 1).is_multiple_of(FREE_MOVE_EVERY);
         if !self.free_move && self.phase() == FREE_MOVE_PHASE && free_turn {
             self.free_move = true;
+            self.cycle_pos = mover.index();
             self.enc.game.pass();
         } else {
             self.free_move = false;
@@ -285,8 +312,8 @@ impl Choir {
     }
 
     /// The boss move for its turn: the army in turn, its own weights, node-limited. `None` on the
-    /// player's turn or when the game is over. An army with no legal move has no move: the boss
-    /// is stuck (shortcut: never seen, add a skip if it ever happens).
+    /// player's turn or when the game is over. The army in turn always has a move: an army with none
+    /// is skipped, and a boss with none passes.
     pub fn boss_move(&self) -> Option<Move> {
         if self.game().to_move() != Player::White {
             return None;
@@ -525,6 +552,80 @@ mod tests {
             told.push(boss_turn(&mut c)[0]);
         }
         assert_eq!(told, [Bass, Alto, Bass]);
+    }
+
+    /// The position of ladder seed 9 at player budget 1500 (#172), Alto to move in the cycle:
+    /// Alto has two marbles left, boxed in by Tenor, a Black marble and Bass.
+    fn boxed_in_alto() -> Choir {
+        choir_from(
+            &[
+                (-3, 2),
+                (-3, 3),
+                (-2, 2),
+                (-1, 2),
+                (0, 0),
+                (0, 1),
+                (0, 2),
+                (1, 0),
+                (2, -3),
+                (2, -2),
+            ],
+            &[
+                (Alto, &[(0, -3), (1, -3)]),
+                (Tenor, &[(-1, -2), (0, -2), (1, -2), (2, 0)]),
+                (Bass, &[(-1, -1), (0, -1), (1, -1), (3, -3)]),
+            ],
+            Player::White,
+            [0, 0],
+            0,
+        )
+    }
+
+    #[test]
+    fn an_army_with_no_legal_move_is_skipped_for_the_next_army_that_has_one() {
+        let mut c = boxed_in_alto();
+        assert_eq!(c.phase(), 0);
+        assert_eq!(c.tell(), Some(Tenor), "Alto is boxed in, the tell skips it");
+        let m = c.boss_move().expect("the boss is never stuck (#172)");
+        assert!(m.cells.iter().all(|&cell| c.army_at(cell) == Some(Tenor)));
+        c.play(&m).unwrap();
+        assert_eq!(
+            c.tell(),
+            Some(Bass),
+            "the cycle goes on after the army that moved"
+        );
+    }
+
+    #[test]
+    fn a_free_extra_move_stays_with_the_army_that_just_moved_even_after_a_skip() {
+        // P2 with Alto boxed in: Tenor plays on turn 4 and plays again, never Alto.
+        let mut c = boxed_in_alto();
+        c.members.retain(|m| m.1 != Bass);
+        c.members.push(((3, -3), Army::Tenor));
+        c.boss_turns = FREE_MOVE_EVERY - 1;
+        assert_eq!(c.phase(), 1);
+        let first = c.boss_move().unwrap();
+        c.play(&first).unwrap();
+        assert_eq!(c.game().to_move(), Player::White, "free extra move");
+        assert_eq!(c.tell(), Some(Tenor));
+    }
+
+    #[test]
+    fn a_boss_with_no_legal_move_at_all_passes_and_the_player_moves_again() {
+        // Alto is one marble in the corner, walled in by three Black marbles it cannot push.
+        let mut c = choir_from(
+            &[(2, -3), (3, -2), (2, -2), (-3, 3)],
+            &[(Alto, &[(3, -3)])],
+            Player::Black,
+            [0, 0],
+            0,
+        );
+        c.play(&mv(&[(-3, 3)], E)).unwrap();
+        assert_eq!(c.game().to_move(), Player::Black, "the boss passed");
+        assert_eq!(c.result(), None);
+        assert_eq!(c.boss_move(), None, "player's turn");
+        c.play(&mv(&[(-2, 3)], E)).unwrap();
+        assert_eq!(c.game().to_move(), Player::Black);
     }
 
     #[test]
