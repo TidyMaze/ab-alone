@@ -131,23 +131,22 @@ describe('attempts of the day', () => {
 });
 
 describe('result card', () => {
-  const goal = 'Eject 6 of its marbles to win.';
-  const fight = { day: '2026-10-25', boss: 'The Echo', goal, plies: 41, attempt: 3 };
+  const fight = { day: '2026-10-25', boss: 'The Echo', plies: 41, attempt: 3 };
   it('links to the site', () => {
     expect(SITE).toBe('https://tidymaze.github.io/ab-alone/');
   });
-  it('gives the date, the boss, the goal, the win, the plies and the attempt, then the link', () => {
+  it('gives the date, the boss, the win, the plies and the attempt, then the link', () => {
     expect(dailyCard({ ...fight, result: 1 })).toBe(
-      `AB-ALONE daily 2026-10-25: The Echo\nGoal: ${goal}\nVictory in 41 plies on attempt 3\nhttps://tidymaze.github.io/ab-alone/`,
+      'AB-ALONE daily 2026-10-25: The Echo\nVictory in 41 plies on attempt 3\nhttps://tidymaze.github.io/ab-alone/',
     );
   });
   it('gives a loss as a defeat (a draw is a loss)', () => {
     expect(dailyCard({ ...fight, result: 2, plies: 8, attempt: 1 })).toBe(
-      `AB-ALONE daily 2026-10-25: The Echo\nGoal: ${goal}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`,
+      'AB-ALONE daily 2026-10-25: The Echo\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
     );
   });
   it('says one ply, not one plies', () => {
-    expect(dailyCard({ ...fight, result: 2, plies: 1 }).split('\n')[2]).toBe('Defeat in 1 ply on attempt 3');
+    expect(dailyCard({ ...fight, result: 2, plies: 1 }).split('\n')[1]).toBe('Defeat in 1 ply on attempt 3');
   });
   it('is empty while the fight is on: no card before the end', () => {
     expect(dailyCard({ ...fight, result: 0 })).toBe('');

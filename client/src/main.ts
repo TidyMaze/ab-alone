@@ -13,7 +13,7 @@ import {
   type Axial,
 } from './board';
 import { askBot, askEval, BOT_NODES } from './bot';
-import { bossHtml } from './bosshud';
+import { bossHtml, goalShown } from './bosshud';
 import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -85,6 +85,9 @@ await init();
 let engine: Engine | Encounter = new Engine();
 // Encounter mode: the boss and seed of the running fight, kept so Retry restarts the same one. A daily
 // fight also keeps its UTC day and its attempt of that day (#195).
+// The Goal control (#248): the HUD shows the boss goal before the first move, then only while it is open.
+const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
+let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 
@@ -556,6 +559,10 @@ function hud(extra = ''): void {
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   exportButton.hidden = importButton.hidden = online !== null || fight !== null; // local games only (#219)
   syncHint();
+  const showGoal = goalShown(history.length, goalOpen);
+  goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
+  goalButton.disabled = history.length === 0; // the goal is on the plate until the first move
+  goalButton.setAttribute('aria-expanded', String(showGoal));
   if (engine instanceof Encounter) {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
@@ -564,7 +571,7 @@ function hud(extra = ''): void {
         phase: engine.phase(),
         phases: engine.phases(),
         result: end ? 0 : engine.result(), // the end banner already says Victory or Defeat, one line less in the plate
-        goal: engine.goal(),
+        goal: showGoal ? engine.goal() : '',
         tell: [
           crackText(parseCracks(engine.cracks())),
           chaplainText(exposed, engine.converted().length / 2),
@@ -872,6 +879,7 @@ const retryButton = document.getElementById('boss-retry')!;
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }): void {
   stopAnalysis();
   fight = { id, seed, daily };
+  goalOpen = false;
   engine = new Encounter(id, seed);
   history.length = 0;
   selected = [];
@@ -915,6 +923,10 @@ today();
 setInterval(today, 60_000); // an open page follows the day change at 00:00 UTC
 dailyButton.addEventListener('click', startDaily);
 dailyButton.disabled = false; // label and listener ready (#144)
+goalButton.addEventListener('click', () => {
+  goalOpen = !goalOpen;
+  hud();
+});
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
 
 // Daily result card (#196): once a daily fight is over, the text to share, and Copy. The text is
@@ -929,7 +941,6 @@ function showResultCard(): void {
       ? dailyCard({
           day: fight.daily.day,
           boss: engine.name(),
-          goal: engine.goal(),
           result: engine.result(),
           plies: history.length,
           attempt: fight.daily.attempt,

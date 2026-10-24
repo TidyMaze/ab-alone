@@ -285,7 +285,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
 const BOSSES: [BossEntry; 4] = [
     BossEntry {
         id: "echo",
-        goal: "After each of your moves it plays the mirror of that move when legal. Eject 6 of its marbles to win; losing 6 of yours or a draw is a defeat.",
+        goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
         def: echo_boss,
         start: plain_fight,
         reply: echo_move,
@@ -294,7 +294,7 @@ const BOSSES: [BossEntry; 4] = [
     },
     BossEntry {
         id: "hull",
-        goal: "Rim cells crack every 8 plies, and a marble on a cracked cell is ejected. Eject 6 of its marbles to win; losing 6 of yours or a draw is a defeat.",
+        goal: "Rim cells crack and eject marbles. Eject 6 to win; lose 6 or draw to lose.",
         def: hull_boss,
         start: plain_fight,
         reply: search_reply,
@@ -303,7 +303,7 @@ const BOSSES: [BossEntry; 4] = [
     },
     BossEntry {
         id: "choir",
-        goal: "Only one of its three armies moves each turn, on a smaller board. Eject 10 of its marbles to win; losing 6 of yours or a draw is a defeat.",
+        goal: "One army moves per turn. Eject 10 to win; lose 6 or draw to lose.",
         def: choir_boss,
         start: choir_fight,
         reply: search_reply,
@@ -312,7 +312,7 @@ const BOSSES: [BossEntry; 4] = [
     },
     BossEntry {
         id: "chaplain",
-        goal: "Your marbles with 3 or more of its marbles around them flip to its side at the end of its turn. Eject 6 of its marbles to win; losing 6 of yours or a draw is a defeat.",
+        goal: "Marbles beside 3 of its flip to it. Eject 6 to win; lose 6 or draw to lose.",
         def: chaplain_boss,
         start: plain_fight,
         reply: search_reply,

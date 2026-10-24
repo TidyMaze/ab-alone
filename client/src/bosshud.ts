@@ -6,10 +6,13 @@ export interface BossHud {
   phase: number; // 0 is P1
   phases: number;
   result: number; // 0 playing, 1 won, 2 lost (a draw is a loss)
-  goal?: string; // the boss goal, shown from the first move on, '' when there is none
+  goal?: string; // the boss goal, '' when there is none or when it is folded away
   tell?: string; // flat fallback of the boss tell on the board, '' when there is none
   daily?: string; // the daily challenge line of a daily fight, '' otherwise
 }
+
+/** The goal line shows before the first move, then only while the Goal control has it open. */
+export const goalShown = (plies: number, open: boolean): boolean => plies === 0 || open;
 
 const RESULT_TEXT = ['', 'Victory', 'Defeat'];
 

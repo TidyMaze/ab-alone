@@ -105,6 +105,7 @@ test('the daily goal shows before the first move, folds away after it, and the G
     const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
     await page.mouse.click(p.x, p.y);
   };
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))); // the camera follows the resize
   await click(0, 2);
   await click(0, 1);
   await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(1);
@@ -120,11 +121,9 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await expect(goal).toHaveCount(0);
 });
 
-// The result card (#196), and its goal line (#248).
-const card = (name: string, goal: string) =>
-  `AB-ALONE daily 2026-10-25: ${name}\nGoal: ${goal}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
-const goalText = async (page: import('@playwright/test').Page) =>
-  (await page.locator('#hud .goal').textContent())!.replace('Goal: ', '');
+// The result card (#196).
+const card = (name: string) =>
+  `AB-ALONE daily 2026-10-25: ${name}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
 
 test('a finished daily fight shows the result card, and Copy puts its text in the clipboard, #196', async ({
   page,
@@ -132,11 +131,10 @@ test('a finished daily fight shows the result card, and Copy puts its text in th
 }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const name = await startDaily(page);
-  const goal = await goalText(page);
   await expect(page.locator('#daily-card')).toBeHidden(); // not while the fight is on
   await loseByRepetition(page);
   await expect(page.locator('#daily-card')).toBeVisible();
-  await expect(page.locator('#daily-result')).toHaveValue(card(name, goal));
+  await expect(page.locator('#daily-result')).toHaveValue(card(name));
   await page.screenshot({ path: testInfo.outputPath('daily-card.png') });
 
   // Nothing leaves the browser: Copy only writes the clipboard.
@@ -144,7 +142,7 @@ test('a finished daily fight shows the result card, and Copy puts its text in th
   page.on('request', (r) => requests.push(r.url()));
   await page.getByRole('button', { name: 'Copy result' }).click();
   await expect(page.locator('#hud')).toContainText('result copied');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(card(name, goal));
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(card(name));
   expect(requests).toEqual([]);
 
   // Retry starts the next attempt: the card goes away until that fight is over.
@@ -160,12 +158,11 @@ test('when the clipboard is refused, the result text is selected to copy by hand
     });
   });
   const name = await startDaily(page);
-  const goal = await goalText(page);
   await loseByRepetition(page);
   await page.getByRole('button', { name: 'Copy result' }).click();
   await expect(page.locator('#hud')).toContainText('result selected: copy it by hand');
   const box = page.locator('#daily-result');
-  await expect(box).toHaveValue(card(name, goal));
+  await expect(box).toHaveValue(card(name));
   const selected = await box.evaluate(
     (el: HTMLTextAreaElement) =>
       document.activeElement === el && el.selectionStart === 0 && el.selectionEnd === el.value.length,
