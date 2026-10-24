@@ -72,6 +72,7 @@ interface Game {
 export class OnlineSession {
   readonly seats: Seats;
   private readonly presence = new Presence();
+  private readonly agents = new Set<string>(); // keys whose verified Hello carried the agent flag
   private queue: Promise<void> = Promise.resolve();
   private current: Role;
   private readonly games: Game[] = []; // every game of the room so far, the one being played last
@@ -127,6 +128,11 @@ export class OnlineSession {
   /** Whether the key that plays `side` in this game is connected. A free seat is `waiting`. */
   presenceOf(side: number): Seen {
     return this.presence.of(this.keyOf(side));
+  }
+
+  /** Whether the key that plays `side` in this game signed its Hello as an agent. */
+  isAgent(side: number): boolean {
+    return this.agents.has(this.keyOf(side));
   }
 
   /** Whether the key that plays `side` in this game asked for a rematch. */
@@ -297,6 +303,7 @@ export class OnlineSession {
   private async receiveHello(h: Hello | null, peer: string): Promise<void> {
     if (!h || h.game !== this.o.game || !(await verifyHello(h))) return this.o.onRefuse('bad-hello');
     this.presence.hello(peer, h.pub);
+    if (h.agent) this.agents.add(h.pub);
     await this.seat(h);
     this.o.onPresence?.();
   }

@@ -34,6 +34,7 @@ export interface Hello {
   game: string;
   seat: number;
   roster: string[];
+  agent?: true; // an agent player (docs/specs/mcp.md section 8): signed, absent means a human
   pub: string;
   sig: string;
 }
@@ -71,8 +72,9 @@ type Unsigned = Omit<MoveRecord, 'sig'>;
 const payload = (r: Unsigned): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify([r.game, r.seq, r.prev, r.move, r.pub]));
 
+// The agent entry is added only when set, so a human Hello keeps the bytes older peers verify.
 const helloPayload = (h: Omit<Hello, 'sig'>): Uint8Array<ArrayBuffer> =>
-  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub]));
+  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub, ...(h.agent ? ['agent'] : [])]));
 
 const rematchPayload = (r: Omit<Rematch, 'sig'>): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify(['rematch', r.game, r.pub]));
@@ -106,7 +108,7 @@ export async function signMove(
   return { ...unsigned, sig: b64(sig) };
 }
 
-export async function signHello(keys: Keys, fields: { game: string; seat: number; roster: string[] }): Promise<Hello> {
+export async function signHello(keys: Keys, fields: { game: string; seat: number; roster: string[]; agent?: true }): Promise<Hello> {
   const unsigned = { kind: 'hello' as const, ...fields, pub: keys.pub };
   return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, helloPayload(unsigned))) };
 }
@@ -163,10 +165,19 @@ export function parseHello(x: unknown): Hello | null {
     (h.seat as number) >= 1 &&
     Array.isArray(h.roster) &&
     h.roster.every((k) => typeof k === 'string') &&
+    (h.agent === undefined || h.agent === true) &&
     typeof h.pub === 'string' &&
     typeof h.sig === 'string';
   if (!ok) return null;
-  return { kind: 'hello', game: h.game as string, seat: h.seat as number, roster: h.roster as string[], pub: h.pub as string, sig: h.sig as string };
+  return {
+    kind: 'hello',
+    game: h.game as string,
+    seat: h.seat as number,
+    roster: h.roster as string[],
+    ...(h.agent ? { agent: true as const } : {}),
+    pub: h.pub as string,
+    sig: h.sig as string,
+  };
 }
 
 /** Shape check for a Rematch off the wire. Returns a clean copy or null. */

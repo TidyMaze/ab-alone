@@ -42,6 +42,12 @@ describe('onlineStatus', () => {
     expect(onlineStatus(1, 'player', 'waiting')).toEqual({ text: 'You are Black. Waiting for an opponent...', tone: 'waiting' });
   });
 
+  it('marks an agent opponent in the line, here or disconnected, and a human one stays unmarked', () => {
+    expect(onlineStatus(1, 'player', 'here', true)).toEqual({ text: 'You are Black. White (agent) is here.', tone: 'here' });
+    expect(onlineStatus(2, 'player', 'gone', true)).toEqual({ text: 'You are White. Black (agent) is disconnected.', tone: 'gone' });
+    expect(onlineStatus(1, 'player', 'here', false)).toEqual({ text: 'You are Black. White is here.', tone: 'here' });
+  });
+
   it('joiner: joining until seated, then the creator is here', () => {
     expect(onlineStatus(2, 'pending', 'here')).toEqual({ text: 'Joining as White...', tone: 'waiting' });
     expect(onlineStatus(2, 'player', 'here')).toEqual({ text: 'You are White. Black is here.', tone: 'here' });

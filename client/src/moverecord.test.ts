@@ -112,6 +112,32 @@ describe('Hello', () => {
     expect(await verifyHello({ ...h, pub: 'AAAA' })).toBe(false);
   });
 
+  it('signs the agent flag and verifies it, and a Hello without it stays a human one', async () => {
+    const keys = await generateKeys();
+    const agent = await signHello(keys, { game: 'g', seat: 2, roster: [], agent: true });
+    expect(agent).toMatchObject({ agent: true });
+    expect(await verifyHello(agent)).toBe(true);
+    const human = await signHello(keys, { game: 'g', seat: 2, roster: [] });
+    expect(human.agent).toBeUndefined();
+    expect(await verifyHello(human)).toBe(true);
+  });
+
+  it('refuses a tampered agent flag: added to a human Hello, or removed from an agent one', async () => {
+    const keys = await generateKeys();
+    const human = await signHello(keys, { game: 'g', seat: 2, roster: [] });
+    const agent = await signHello(keys, { game: 'g', seat: 2, roster: [], agent: true });
+    expect(await verifyHello({ ...human, agent: true })).toBe(false);
+    expect(await verifyHello({ ...agent, agent: undefined })).toBe(false);
+  });
+
+  it('parses the agent flag only as true, and refuses any other value', async () => {
+    const keys = await generateKeys();
+    const agent = await signHello(keys, { game: 'g', seat: 2, roster: [], agent: true });
+    expect(parseHello(agent)).toEqual(agent);
+    expect(parseHello({ ...agent, agent: false })).toBeNull();
+    expect(parseHello({ ...agent, agent: 'yes' })).toBeNull();
+  });
+
   it('is not a move record: its signature does not verify as one', async () => {
     const keys = await generateKeys();
     const h = await signHello(keys, { game: 'g', seat: 1, roster: [] });

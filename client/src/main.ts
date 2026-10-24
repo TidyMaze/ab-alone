@@ -964,7 +964,7 @@ async function goOnline(room: string, side: number): Promise<void> {
     document.body.dataset.online = role === 'spectator' ? 'Spectator' : mine === 1 ? 'Black' : 'White';
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
-    onlineLine = onlineStatus(mine, role, opponent);
+    onlineLine = onlineStatus(mine, role, opponent, online?.isAgent(3 - mine) ?? false);
     onlineNote = netState;
     hud();
   };
