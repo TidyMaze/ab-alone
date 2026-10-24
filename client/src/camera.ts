@@ -9,7 +9,7 @@ export interface View {
 export const POLAR_MIN = 0.15;
 export const POLAR_MAX = 1.4; // under pi/2: the camera never goes below the board plane
 export const DIST_MIN = 6;
-export const DIST_MAX = 18; // the fog starts at 16.5, farther and the far rim fades out
+export const DIST_MAX = 18; // the fog follows the zoom (quality.ts), so the limit is only the view size
 export const DRAG_THRESHOLD_PX = 5;
 const RAD_PER_PX = 0.006;
 const WHEEL_RATE = 0.001;

@@ -1,6 +1,8 @@
 // Quality tiers, fog and the clear-board setting, see docs/specs/tech.md section 5.1.
 // Pure functions only: main.ts feeds them the browser values.
 
+import { RADIUS } from './board';
+
 export type Tier = 'low' | 'high';
 export interface Hints {
   width: number;
@@ -18,11 +20,13 @@ export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): T
   return weak ? 'low' : 'high';
 }
 
-// Linear fog that starts behind the far rim of the board (cells are at most ~16.5 from the camera).
-const FOG = { low: { near: 17, far: 40 }, high: { near: 16.5, far: 30 } };
+// Linear fog measured from the camera: it starts at the board centre and is thick at the far rim,
+// so it follows every zoom level (bug #171: absolute distances started behind the whole board).
+// The span is in board radii, a shorter span is a thicker fog.
+const FOG_SPAN = { low: RADIUS, high: 0.75 * RADIUS };
 
-export function fogSettings(tier: Tier, clear: boolean): { near: number; far: number } | null {
-  return clear ? null : FOG[tier];
+export function fogSettings(tier: Tier, clear: boolean, distance: number): { near: number; far: number } | null {
+  return clear ? null : { near: distance, far: distance + FOG_SPAN[tier] };
 }
 
 function read(store: Store, key: string): string | null {
