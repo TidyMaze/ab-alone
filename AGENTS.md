@@ -23,7 +23,7 @@ The short version:
    someone else without their written consent: let them finish until Ready or merged.
 9. Branch from an up-to-date `main`, target `main`. Never base a branch on an unmerged branch.
 10. Open every PR as a draft, after your local checks are green. CI does not run on drafts: the
-    lead agent marks the PR ready, CI runs, and it merges when green, up to date, conversations
+    lead agent marks the PR ready, CI runs, and it merges when green, conversations
     resolved. The lead agent marks it ready and merges. Rebase your own PR when main
     moves, never someone else's.
 
