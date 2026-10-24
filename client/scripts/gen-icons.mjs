@@ -92,8 +92,8 @@ function icon(size) {
   return png(size, size, 3, px);
 }
 
-export function generateIcons() {
-  return new Map(ICON_SIZES.map((n) => [`icon-${n}.png`, icon(n)]));
+export function generateIcons(sizes = ICON_SIZES) {
+  return new Map(sizes.map((n) => [`icon-${n}.png`, icon(n)]));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
