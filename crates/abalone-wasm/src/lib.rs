@@ -3,7 +3,9 @@
 //!
 //! Encodings, all stable and documented:
 //! - Board: 61 bytes, row by row from `r = -4` to `r = 4`, inside a row by `q` ascending.
-//!   Value `0` empty, `1` Black, `2` White. Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
+//!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull).
+//!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
+//! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
 //! - Side and winner: `1` Black, `2` White.
 //! - Status: `0` running, `1` Black won, `2` White won, `3` draw.
 //! - Draw reason: `0` none, `1` threefold repetition, `2` 100 plies without ejection.
@@ -14,6 +16,7 @@
 
 use abalone_core::board::{Board, Cell, RADIUS};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
+use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::{BossDef, Encounter as CoreEncounter, PveResult};
 use abalone_core::game::{DrawReason, Game, Outcome};
 use abalone_core::moves::{legal_moves, Direction, Move, Player};
@@ -159,14 +162,19 @@ impl Engine {
     }
 }
 
+/// Board value of a cell a boss removed.
+const VANISHED: u8 = 3;
+
+/// The 61 cells of the hexagon, vanished ones included, so the indices never shift.
 fn board_bytes(board: &Board) -> Vec<u8> {
     (-RADIUS..=RADIUS)
         .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
-        .filter_map(|(q, r)| board.get(q, r))
-        .map(|cell| match cell {
-            Cell::Empty => 0,
-            Cell::Black => 1,
-            Cell::White => 2,
+        .filter(|&(q, r)| (q + r).abs() <= RADIUS)
+        .map(|(q, r)| match board.get(q, r) {
+            Some(Cell::Empty) => 0,
+            Some(Cell::Black) => 1,
+            Some(Cell::White) => 2,
+            None => VANISHED,
         })
         .collect()
 }
@@ -194,12 +202,29 @@ fn echo_announce(mv: &Move) -> Option<Move> {
     Some(mirror_move(mv))
 }
 
-const BOSSES: [BossEntry; 1] = [BossEntry {
-    id: "echo",
-    def: echo_boss,
-    reply: echo_move,
-    announce: echo_announce,
-}];
+/// Reply of a boss that plays standard Abalone: its node-limited search.
+fn search_reply(enc: &CoreEncounter) -> Option<Move> {
+    enc.boss_search().map(|r| r.mv)
+}
+
+fn no_announce(_mv: &Move) -> Option<Move> {
+    None
+}
+
+const BOSSES: [BossEntry; 2] = [
+    BossEntry {
+        id: "echo",
+        def: echo_boss,
+        reply: echo_move,
+        announce: echo_announce,
+    },
+    BossEntry {
+        id: "hull",
+        def: hull_boss,
+        reply: search_reply,
+        announce: no_announce,
+    },
+];
 
 fn boss_entry(id: &str) -> Option<&'static BossEntry> {
     BOSSES.iter().find(|b| b.id == id)
@@ -296,6 +321,17 @@ impl Encounter {
     /// The 61 cells, board specials included.
     pub fn board(&self) -> Vec<u8> {
         board_bytes(self.inner.game().board())
+    }
+
+    /// Cracked cells (The Hull) as `[q, r, plies_left]` records, empty for the other bosses.
+    pub fn cracks(&self) -> Vec<i32> {
+        self.inner
+            .game()
+            .board()
+            .cracks()
+            .iter()
+            .flat_map(|&((q, r), left)| [q, r, i32::from(left)])
+            .collect()
     }
 
     /// Marbles ejected by a side: `1` Black, `2` White.

@@ -1,4 +1,4 @@
-import { DIRECTIONS, axialTo3D, cellIndex, type Axial, type Move } from './board';
+import { DIRECTIONS, VANISHED, axialTo3D, cellIndex, isMarble, type Axial, type Move } from './board';
 
 /** Length of the slide-and-fade of an ejected marble, from docs/specs/world.md section 7. */
 export const EJECT_MS = 600;
@@ -17,18 +17,21 @@ export interface EjectTrack {
   fade: boolean;
 }
 
-/** The marble a move pushed off the board: the last cell of the push line, walking from the first
- * moved marble along the move direction. Null when the marble count did not change. */
+/** The marble a move pushed off the board: the last cell of the push line before the rim or a
+ * vanished cell, walking from the first moved marble along the move direction. Null when no marble
+ * was lost, or when the only ones lost sat on cells that vanished (The Hull). */
 export function findEjection(
   before: ArrayLike<number>,
   after: ArrayLike<number>,
   mv: Move,
 ): Ejection | null {
-  const count = (b: ArrayLike<number>): number => Array.from(b).filter((v) => v !== 0).length;
-  if (count(before) === count(after)) return null;
+  const count = (b: ArrayLike<number>): number => Array.from(b).filter(isMarble).length;
+  const voided = Array.from(before).filter((v, i) => isMarble(v) && after[i] === VANISHED).length;
+  if (count(before) - count(after) <= voided) return null;
   const [dq, dr] = DIRECTIONS[mv.dir]!;
   let [q, r] = mv.cells[0]!;
-  while (cellIndex(q + dq, r + dr) !== -1) [q, r] = [q + dq, r + dr];
+  const open = (i: number): boolean => i !== -1 && before[i] !== VANISHED;
+  while (open(cellIndex(q + dq, r + dr))) [q, r] = [q + dq, r + dr];
   return { cell: [q, r], side: before[cellIndex(q, r)]! };
 }
 

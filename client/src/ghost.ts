@@ -1,4 +1,4 @@
-import { CELLS, type Axial } from './board';
+import { CELLS, isMarble, type Axial } from './board';
 
 export interface GhostEngine {
   play(mv: Int32Array): void;
@@ -11,8 +11,8 @@ export interface Ghost {
 }
 
 /** Ghost marbles of `record` played on the position reached by `history`: every cell that holds a
- * marble after the move and held something else before (the moved marbles and a pushed one). The
- * engine is the only judge: a move it rejects gives no ghost. */
+ * marble after the move and held something else before (the moved marbles and a pushed one). A cell
+ * that vanishes in that ply is no ghost. The engine is the only judge: a move it rejects gives none. */
 export function ghostMarbles(
   history: number[][],
   record: number[] | null,
@@ -29,6 +29,6 @@ export function ghostMarbles(
   }
   const after = engine.board();
   return CELLS.flatMap((cell, i) =>
-    after[i] !== 0 && after[i] !== before[i] ? [{ cell, side: after[i]! }] : [],
+    isMarble(after[i]) && after[i] !== before[i] ? [{ cell, side: after[i]! }] : [],
   );
 }

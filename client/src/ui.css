@@ -64,6 +64,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #hud .notch { padding: 0 0.5rem; border: 1px solid var(--edge); font-size: 0.8125rem; color: var(--muted); }
 #hud .notch.active { border-color: var(--accent); color: var(--accent); }
 #hud .result { margin-top: 0.25rem; font-weight: 500; color: var(--accent); }
+#hud .boss .tell { margin-top: 0.25rem; font-size: 0.875rem; color: var(--hazard); }
 #invite {
   box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); padding: 0.5rem 0.75rem; color: var(--text);
   background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);

@@ -11,6 +11,11 @@ export interface Move {
 
 export const RADIUS = 4;
 export const MOVE_STRIDE = 8;
+/** Board value of a cell a boss removed (The Hull): no disc, no marble, never a target. */
+export const VANISHED = 3;
+
+/** `1` Black or `2` White: a marble, not an empty or vanished cell. */
+export const isMarble = (value: number | undefined): boolean => value === 1 || value === 2;
 
 /** Neighbour deltas, the index is the bridge direction code: E, W, NE, SW, NW, SE. */
 export const DIRECTIONS: readonly Axial[] = [
