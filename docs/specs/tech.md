@@ -258,12 +258,10 @@ engine at the start position; the colours swapped, so the former White plays Bla
 (rules.md section 10.2). The seats stay bound to the same keys and `Hello` stays bound to the
 room id (the id of its first game), so a reconnect works in any game of the room. A move or an ask
 signed for the old game id is refused. Spectators stay spectators and follow the new game.
-An ask in flight when the connection drops is lost, so asks are sent again on reconnect (#198).
-When a seated key says `Hello` again, a player that asked for a rematch of the current game sends
-its signed ask again. A player that already started the new game keeps its own signed ask of the
-finished game: when a seated key asks again for that finished game, it still refuses that ask
-(stale) but sends its kept ask back, once per `Hello` of that key so two peers never echo each
-other. The late peer then has every ask and starts the same new game.
+An ask in flight when the connection drops is lost (#198). Every peer keeps the signed asks of
+every game of the room, and the catch-up (Reconnection, below) gives a late peer the asks it lacks,
+of its own game and of every game it skipped, so it starts the same new games. A stale ask gets no
+answer: only a `Sync` does.
 
 **Battle royale (recommendation for #13: simultaneous, commit-reveal lockstep).**
 1. Round opens at a deadline all peers compute from the round-start message (no trusted clock,
@@ -299,11 +297,30 @@ reload resumes from IndexedDB. If everyone leaves, the game is lost unless a pee
 each peer persists the log locally and a finished or abandoned game can be exported or resumed
 by the same pair.
 
+**Catch-up (#226).** After its `Hello`, a peer sends `Sync {game_id, seq, asked}`: the game of the
+room it is in, how many moves of it it has (the `seq` of the first one it lacks), and the keys
+whose rematch ask of that game it holds. A joiner sends it once it has the creator's roster, since
+what answers it is checked against the seats. `Sync` is not signed: it changes nothing, and all
+that answers it is signed. A peer that has more answers that peer alone, once per `Sync`, with one
+`Missed {of}` per signed move record or rematch ask it missed, in order: the records of its game
+from its `seq` and the asks of that game it lacks, then every record and every ask of each later
+game. A peer that is not behind gets nothing, nor one in a game the answering peer never had (it
+is ahead), and nothing answers a `Missed`, so two up-to-date peers never loop. The late peer checks
+each record and ask exactly as a live one (signature, hash chain, seat, turn, engine, and an ask
+starts the new game only once the game is over on its own engine), so it derives the same game ids
+and ends in the same game at the same ply. Nothing it cannot verify is applied. A `Missed` it
+already has (another peer answered too, or the live message came first) is skipped, not refused.
+A live record or ask ahead of its log (a `seq` past its head, or a game id it never had) is
+refused and also makes it send its `Sync` again, so a move that overtakes the answer is not lost.
+A refused `Missed` never does, so a bad answer cannot make it loop. Messages stay small: no state,
+only the signed log and the asks, one per message.
+
 **Spectators.** Join the room as read-only peers (no seat, no signing rights). To avoid a mesh
 of N spectators, each connects to one or two seated peers that forward the signed log (relay
 tree, peers cap their spectators, default 4). Spectators verify signatures and replay locally,
-so they trust nobody. Beyond the cap the room shows "full". Replays: the signed log is the
-replay file.
+so they trust nobody. A spectator joining mid-game catches up like a peer back after a drop
+(Catch-up, above): every move and ask of the room so far, checked one by one. Beyond the cap the
+room shows "full". Replays: the signed log is the replay file.
 
 **Clock.** No server time. Chess-clock style: each peer measures its own opponent's thinking
 time and both exchange timestamps; the lower claim of elapsed time for the mover is not

@@ -25,6 +25,11 @@ export class MoveLog {
     return rec;
   }
 
+  /** The records from `seq` on, for a peer that has only the ones before it. */
+  from(seq: number): MoveRecord[] {
+    return this.records.slice(seq);
+  }
+
   /** Checks a record from the other side. Does not append: the caller replays it first. */
   async verify(r: MoveRecord): Promise<Verdict> {
     const refuse = (reason: Extract<Verdict, { ok: false }>['reason']): Verdict => ({ ok: false, reason });

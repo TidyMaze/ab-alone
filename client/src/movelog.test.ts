@@ -24,6 +24,17 @@ describe('MoveLog', () => {
     expect(a.head).toBe(await hashRecord(r1));
   });
 
+  it('gives the records from a seq on, for a peer that has only the ones before it, #226', async () => {
+    const { alice, a } = await pair();
+    const r0 = await a.sign(alice, M1);
+    const r1 = await a.sign(alice, M2);
+    const r2 = await a.sign(alice, M3);
+    expect(a.from(0)).toEqual([r0, r1, r2]);
+    expect(a.from(1)).toEqual([r1, r2]);
+    expect(a.from(3)).toEqual([]);
+    expect(a.from(5)).toEqual([]);
+  });
+
   it('accepts a good record from the other side and appends it', async () => {
     const { alice, a, b } = await pair();
     const r0 = await a.sign(alice, M1);

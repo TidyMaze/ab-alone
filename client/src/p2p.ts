@@ -33,7 +33,7 @@ export function p2pTransport(room: string): Transport {
     get state() {
       return state;
     },
-    send: (rec) => void move.send(rec as unknown as Parameters<typeof move.send>[0]),
+    send: (rec, to) => void move.send(rec as unknown as Parameters<typeof move.send>[0], { target: to }), // no target: every peer
     onRecord: (cb) => {
       move.onMessage = (data, { peerId }) => cb(data as unknown as Wire, peerId); // the session shape checks it
     },
@@ -51,16 +51,16 @@ export function p2pTransport(room: string): Transport {
 }
 
 interface Hook {
-  __netOut?: (rec: Wire) => void;
+  __netOut?: (rec: Wire, to?: string) => void;
   __netIn?: (rec: Wire, peer: string) => void;
   __netOpen?: () => void;
   __netLeave?: (peer: string) => void;
 }
 
 /**
- * Test transport: the page hands records to `window.__netOut` and receives them on `window.__netIn`
- * with the sender's name. It stays `connecting` until the test calls `window.__netOpen()`, and
- * `window.__netLeave(peer)` stands in for Trystero's peer leave.
+ * Test transport: the page hands records to `window.__netOut`, with the name of the one peer they are
+ * for if any, and receives them on `window.__netIn` with the sender's name. It stays `connecting` until
+ * the test calls `window.__netOpen()`, and `window.__netLeave(peer)` stands in for Trystero's peer leave.
  */
 export function hookTransport(): Transport {
   const w = window as unknown as Hook;
@@ -74,7 +74,7 @@ export function hookTransport(): Transport {
     get state() {
       return state;
     },
-    send: (rec) => w.__netOut?.(rec),
+    send: (rec, to) => w.__netOut?.(rec, to),
     onRecord: (cb) => {
       w.__netIn = cb;
     },

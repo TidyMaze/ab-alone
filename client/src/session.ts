@@ -1,15 +1,20 @@
 import { MoveLog } from './movelog';
 import {
   parseHello,
+  parseMissed,
   parseRecord,
   parseRematch,
+  parseSync,
   signHello,
   signRematch,
   verifyHello,
   verifyRematch,
   type Hello,
   type Keys,
+  type Missed,
+  type MoveRecord,
   type Rematch,
+  type Sync,
   type Wire,
 } from './moverecord';
 import { Presence, type Seen } from './presence';
@@ -46,6 +51,13 @@ export interface SessionOptions {
   onRematch?(): void; // every seat asked: the judge restarted for the new game, read side again
 }
 
+/** One game of the room: its signed log and the signed rematch asks of it, by key. */
+interface Game {
+  id: string;
+  log: MoveLog;
+  asks: Map<string, Rematch>;
+}
+
 /**
  * Sends our moves signed and chained, replays the other side's moves through the engine.
  * Each seat is bound to one key by signed Hello messages: the creator binds the first valid Hello
@@ -53,24 +65,19 @@ export interface SessionOptions {
  * A seat is present while a peer that proved its key is connected.
  * Once a game is over, every seated key may ask for a rematch: a new game on the same channel, with
  * a new id, a fresh log and the colours swapped. The seats stay bound to the same keys.
- * An ask lost in a connection drop is sent again when the seated keys say Hello again (#198).
+ * After its Hello a peer sends a Sync, and a peer ahead of it answers with the signed records and asks
+ * it missed: a peer back after a drop or joining late catches up, an ask lost in a drop included (#198, #226).
  */
 export class OnlineSession {
   readonly seats: Seats;
-  private log: MoveLog;
   private readonly presence = new Presence();
   private queue: Promise<void> = Promise.resolve();
   private current: Role;
-  private gameId: string;
-  private games = 0; // games of the room before this one: the colours swap at each rematch
-  private readonly asks = new Set<string>(); // keys that asked for a rematch of this game
-  private ourAsk: Rematch | null = null; // our signed ask for this game, sent again on a seated Hello (#198)
-  private lastAsk: Rematch | null = null; // our signed ask for the game before this one, for a peer that missed it
-  private readonly owed = new Set<string>(); // seated keys that said Hello since we last gave them lastAsk
+  private readonly games: Game[] = []; // every game of the room so far, the one being played last
+  private syncDue = false; // our Sync waits for the creator's roster: what answers it is checked against the seats
 
   constructor(private readonly o: SessionOptions) {
-    this.gameId = o.game;
-    this.log = new MoveLog(o.game, o.keys.pub);
+    this.games.push(this.newGame(o.game));
     this.seats = new Seats(o.seatCount ?? 2);
     this.current = o.side === CREATOR ? 'player' : 'pending';
     if (o.side === CREATOR) this.seats.claim(CREATOR, o.keys.pub);
@@ -86,12 +93,12 @@ export class OnlineSession {
     });
     o.transport.onState((s) => {
       o.onState?.(s);
-      if (s === 'open') this.queue = this.queue.then(() => this.hello());
+      if (s === 'open') this.queue = this.queue.then(() => this.greet());
     });
-    if (o.transport.state === 'open') this.queue = this.queue.then(() => this.hello());
+    if (o.transport.state === 'open') this.queue = this.queue.then(() => this.greet());
   }
 
-  /** Settles once everything queued so far is handled: messages, leaves, our Hello, our rematch ask.
+  /** Settles once everything queued so far is handled: messages, leaves, our Hello and Sync, our rematch ask.
    * Something queued meanwhile makes a new promise. Tests wait on it instead of on a time (bug #190). */
   get settled(): Promise<void> {
     return this.queue;
@@ -103,12 +110,12 @@ export class OnlineSession {
 
   /** The id of the game being played: the room id, then a new one at each rematch. */
   get game(): string {
-    return this.gameId;
+    return this.now.id;
   }
 
   /** The colour we play in this game, 1 Black or 2 White. */
   get side(): number {
-    return colourOf(this.o.side, this.games, this.seats.count);
+    return colourOf(this.o.side, this.games.length - 1, this.seats.count);
   }
 
   /** Whether the key that plays `side` in this game is connected. A free seat is `waiting`. */
@@ -118,7 +125,7 @@ export class OnlineSession {
 
   /** Whether the key that plays `side` in this game asked for a rematch. */
   askedRematch(side: number): boolean {
-    return this.asks.has(this.keyOf(side));
+    return this.now.asks.has(this.keyOf(side));
   }
 
   /** We are a seated player, our turn, the transport is open and the key of every other seat is
@@ -129,7 +136,7 @@ export class OnlineSession {
 
   /** Same as canPlay, for a rematch ask: the game is over and we did not ask yet. */
   canRematch(): boolean {
-    return this.reachesOpponents() && this.o.judge.status() !== 0 && !this.asks.has(this.o.keys.pub);
+    return this.reachesOpponents() && this.o.judge.status() !== 0 && !this.now.asks.has(this.o.keys.pub);
   }
 
   /** Asks for a rematch of the finished game. In the message queue, so a new game that starts now
@@ -137,9 +144,9 @@ export class OnlineSession {
   rematch(): Promise<void> {
     this.queue = this.queue.then(async () => {
       if (!this.canRematch()) return;
-      this.ourAsk = await signRematch(this.o.keys, { game: this.gameId });
-      this.o.transport.send(this.ourAsk);
-      await this.asked(this.o.keys.pub);
+      const ask = await signRematch(this.o.keys, { game: this.now.id });
+      this.o.transport.send(ask);
+      await this.asked(ask);
     });
     return this.queue;
   }
@@ -147,11 +154,23 @@ export class OnlineSession {
   /** The caller already applied `move` to its own engine. A spectator sends nothing. */
   async send(move: number[]): Promise<void> {
     if (this.current !== 'player') return;
-    this.o.transport.send(await this.log.sign(this.o.keys, move));
+    this.o.transport.send(await this.now.log.sign(this.o.keys, move));
+  }
+
+  private get now(): Game {
+    return this.games[this.games.length - 1]!;
+  }
+
+  private newGame(id: string): Game {
+    return { id, log: new MoveLog(id, this.o.keys.pub), asks: new Map() };
+  }
+
+  private known(game: string): boolean {
+    return this.games.some((g) => g.id === game);
   }
 
   private keyOf(side: number): string {
-    return this.seats.keyOf(seatFor(side, this.games, this.seats.count));
+    return this.seats.keyOf(seatFor(side, this.games.length - 1, this.seats.count));
   }
 
   private reachesOpponents(): boolean {
@@ -168,53 +187,103 @@ export class OnlineSession {
     this.o.transport.send(await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster }));
   }
 
+  /** On open: our Hello, then our Sync, so that a peer ahead of us sends what we missed (#226). */
+  private async greet(): Promise<void> {
+    await this.hello();
+    this.sync();
+  }
+
+  /** Says which game we are in, how many of its moves we have and whose asks of it. A joiner waits for the
+   * creator's roster first: without it, the records that answer would be refused for want of a seat. */
+  private sync(): void {
+    this.syncDue = this.seats.keyOf(CREATOR) === '';
+    if (this.syncDue) return;
+    const { id, log, asks } = this.now;
+    this.o.transport.send({ kind: 'sync', game: id, seq: log.length, asked: [...asks.keys()] });
+  }
+
   private async receive(raw: Wire, peer: string): Promise<void> {
     const kind = (raw as { kind?: unknown } | null)?.kind;
     if (kind === 'hello') return this.receiveHello(parseHello(raw), peer);
-    if (kind === 'rematch') return this.receiveRematch(parseRematch(raw));
-    const r = parseRecord(raw);
+    if (kind === 'sync') return this.answer(parseSync(raw), peer);
+    if (kind === 'missed') return this.receiveMissed(parseMissed(raw));
+    if (kind === 'rematch') return this.receiveRematch(parseRematch(raw), true);
+    return this.receiveRecord(parseRecord(raw), true);
+  }
+
+  // `live`: sent as it happened, not in answer to our Sync. A live message ahead of what we have shows a
+  // gap, so we ask again. An answer never does, so a bad answer cannot make two peers loop (#226).
+  private async receiveRecord(r: MoveRecord | null, live: boolean): Promise<void> {
     if (!r) return this.o.onRefuse('malformed');
-    const verdict = await this.log.verify(r);
-    if (!verdict.ok) return this.o.onRefuse(verdict.reason);
+    const verdict = await this.now.log.verify(r);
+    if (!verdict.ok) {
+      const ahead = verdict.reason === 'out-of-order' || (verdict.reason === 'wrong-game' && !this.known(r.game));
+      if (live && ahead) this.sync();
+      return this.o.onRefuse(verdict.reason);
+    }
     const seat = this.seats.seatOf(r.pub);
     if (seat === 0) return this.o.onRefuse('wrong-key');
-    if (colourOf(seat, this.games, this.seats.count) !== this.o.judge.to_move()) return this.o.onRefuse('not-their-turn');
+    if (colourOf(seat, this.games.length - 1, this.seats.count) !== this.o.judge.to_move()) return this.o.onRefuse('not-their-turn');
     try {
       this.o.judge.play(Int32Array.from(r.move));
     } catch {
       return this.o.onRefuse('illegal');
     }
-    await this.log.append(r);
+    await this.now.log.append(r);
     this.o.onMove(r.move);
     await this.restartIfAgreed(); // the asks may have come before the last move
   }
 
-  private async receiveRematch(r: Rematch | null): Promise<void> {
+  private async receiveRematch(r: Rematch | null, live: boolean): Promise<void> {
     if (!r || !(await verifyRematch(r))) return this.o.onRefuse('bad-rematch');
-    // A seated key asking again for the game we already left missed our ask, so it is stuck there:
-    // give it our ask, once per Hello so that two peers never echo each other (#198).
-    if (r.game === this.lastAsk?.game && this.owed.delete(r.pub)) this.o.transport.send(this.lastAsk);
-    if (r.game !== this.gameId) return this.o.onRefuse('stale-rematch');
+    if (r.game !== this.now.id) {
+      if (live && !this.known(r.game)) this.sync(); // an ask for a game we never had: we missed a rematch
+      return this.o.onRefuse('stale-rematch');
+    }
     if (this.seats.seatOf(r.pub) === 0) return this.o.onRefuse('wrong-key');
-    await this.asked(r.pub);
+    await this.asked(r);
+  }
+
+  /** A record or an ask we missed: checked exactly as a live one. One we already have came from another
+   * peer's answer or live first: skipped without a refusal. */
+  private async receiveMissed(m: Missed | null): Promise<void> {
+    if (!m) return this.o.onRefuse('malformed');
+    if (this.has(m.of)) return;
+    return 'kind' in m.of ? this.receiveRematch(m.of, false) : this.receiveRecord(m.of, false);
+  }
+
+  private has(x: MoveRecord | Rematch): boolean {
+    const game = this.games.find((g) => g.id === x.game);
+    if (!game) return false;
+    if (game !== this.now) return true; // we left that game: it was over and every seat had asked
+    return 'kind' in x ? game.asks.has(x.pub) : x.seq < game.log.length;
+  }
+
+  /** Sends a peer behind what it missed, to it alone and once per Sync: the records of its game from its
+   * seq and the asks of it it lacks, then every record and ask of each later game. A peer that is not
+   * behind gets nothing, nor one in a game we never had (it is ahead of us). */
+  private answer(s: Sync | null, peer: string): void {
+    if (!s) return this.o.onRefuse('malformed');
+    const from = this.games.findIndex((g) => g.id === s.game);
+    if (from < 0) return;
+    const missed = this.games.slice(from).flatMap((g, i) => [
+      ...g.log.from(i === 0 ? s.seq : 0),
+      ...[...g.asks.values()].filter((a) => i > 0 || !s.asked.includes(a.pub)),
+    ]);
+    for (const of of missed) this.o.transport.send({ kind: 'missed', of }, peer);
   }
 
   // An ask counts even before the game is over here: on another channel it can overtake the last
   // move. The new game starts only once the game is over here too.
-  private async asked(pub: string): Promise<void> {
-    this.asks.add(pub);
+  private async asked(r: Rematch): Promise<void> {
+    this.now.asks.set(r.pub, r);
     this.o.onRematchAsk?.();
     await this.restartIfAgreed();
   }
 
   private async restartIfAgreed(): Promise<void> {
-    if (this.o.judge.status() === 0 || !this.seats.roster().every((pub) => this.asks.has(pub))) return;
-    this.gameId = await nextGameId(this.gameId);
-    this.games += 1;
-    this.log = new MoveLog(this.gameId, this.o.keys.pub);
-    this.asks.clear();
-    this.lastAsk = this.ourAsk;
-    this.ourAsk = null;
+    if (this.o.judge.status() === 0 || !this.seats.roster().every((pub) => this.now.asks.has(pub))) return;
+    this.games.push(this.newGame(await nextGameId(this.now.id)));
     this.o.judge.restart();
     this.o.onRematch?.();
   }
@@ -224,10 +293,6 @@ export class OnlineSession {
     this.presence.hello(peer, h.pub);
     await this.seat(h);
     this.o.onPresence?.();
-    // A seated key back after a drop may have missed our ask, as it was in flight: send it again (#198).
-    if (this.seats.seatOf(h.pub) === 0) return;
-    this.owed.add(h.pub);
-    if (this.ourAsk) this.o.transport.send(this.ourAsk);
   }
 
   private async seat(h: Hello): Promise<void> {
@@ -241,6 +306,7 @@ export class OnlineSession {
     if (h.roster[0] !== h.pub || !this.seats.adopt(h.roster)) return;
     const mine = this.seats.seatOf(this.o.keys.pub);
     this.setRole(mine === this.o.side ? 'player' : this.seats.full ? 'spectator' : 'pending');
+    if (this.syncDue) this.sync();
   }
 
   private setRole(role: Role): void {

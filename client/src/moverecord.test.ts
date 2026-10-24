@@ -4,8 +4,10 @@ import {
   generateKeys,
   hashRecord,
   parseHello,
+  parseMissed,
   parseRecord,
   parseRematch,
+  parseSync,
   signHello,
   signMove,
   signRematch,
@@ -166,5 +168,48 @@ describe('Rematch', () => {
     }
     expect(parseRecord(r)).toBeNull();
     expect(parseHello(r)).toBeNull();
+  });
+});
+
+describe('Sync and Missed, #226', () => {
+  it('parses a clean Sync and rejects every wrong shape', () => {
+    const s = { kind: 'sync', game: 'g', seq: 3, asked: ['k'] } as const;
+    expect(parseSync({ ...s, extra: 1 })).toEqual(s);
+    expect(parseSync({ ...s, seq: 0, asked: [] })).toEqual({ ...s, seq: 0, asked: [] });
+    for (const bad of [
+      null,
+      'x',
+      { ...s, kind: 'hello' },
+      { ...s, game: 1 },
+      { ...s, seq: -1 },
+      { ...s, seq: 1.5 },
+      { ...s, asked: 'k' },
+      { ...s, asked: [1] },
+    ]) {
+      expect(parseSync(bad)).toBeNull();
+    }
+    expect(parseRecord(s)).toBeNull();
+    expect(parseRematch(s)).toBeNull();
+  });
+
+  it('parses a Missed record or ask as a clean copy, and nothing else inside it', async () => {
+    const keys = await generateKeys();
+    const rec = await signMove(keys, { game: 'g', seq: 0, prev: GENESIS, move: MOVE });
+    const ask = await signRematch(keys, { game: 'g' });
+    const hello = await signHello(keys, { game: 'g', seat: 1, roster: [] });
+    expect(parseMissed({ kind: 'missed', of: { ...rec, extra: 1 }, extra: 1 })).toEqual({ kind: 'missed', of: rec });
+    expect(parseMissed({ kind: 'missed', of: ask })).toEqual({ kind: 'missed', of: ask });
+    for (const bad of [
+      null,
+      'x',
+      { kind: 'sync', of: rec },
+      { kind: 'missed' },
+      { kind: 'missed', of: hello },
+      { kind: 'missed', of: { kind: 'sync', game: 'g', seq: 0, asked: [] } },
+      { kind: 'missed', of: { kind: 'missed', of: rec } },
+      { kind: 'missed', of: { ...rec, seq: -1 } },
+    ]) {
+      expect(parseMissed(bad)).toBeNull();
+    }
   });
 });
