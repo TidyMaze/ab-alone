@@ -23,6 +23,18 @@ describe('palette tokens', () => {
   });
 });
 
+describe('end of game styles, #282', () => {
+  it('has one animation per outcome on the rim light, keeps the middle clear, and drops the light under reduced motion', () => {
+    for (const anim of ['win', 'loss', 'draw']) {
+      expect(css).toMatch(new RegExp(`body\\[data-over='${anim}'\\]::before \\{[^}]*animation: end-${anim} [^}]*forwards`));
+      expect(css).toContain(`@keyframes end-${anim}`);
+    }
+    expect(css).toMatch(/body\[data-over\]::before \{[^}]*pointer-events: none[^}]*mask-image: radial-gradient\(ellipse at center, transparent 62%/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\) \{ body\[data-over\]::before \{ display: none; \} \}/);
+    expect(css).toMatch(/body\[data-over\] canvas \{ filter: brightness/);
+  });
+});
+
 describe('hudHtml', () => {
   const base = { side: 1, status: 0, score: 'Black ejected 0/6 · White ejected 0/6', ejected: [0, 0] as const, win: [6, 6] as const, note: 'WebGL2' };
 
@@ -55,6 +67,16 @@ describe('hudHtml', () => {
     expect(html).toContain('<div class="rematch">White asks for a rematch.</div>');
     expect(hudHtml({ ...base, status: 3, online, rematch: '' })).not.toContain('rematch');
     expect(hudHtml({ ...base, status: 3, online })).not.toContain('rematch');
+  });
+
+  it('shows the end banner in place of the turn line: title, reason, next action, animation id, #282', () => {
+    const end = { title: 'You win', line: '6 out. The books balance.', next: 'New game to play again.', anim: 'win' as const };
+    const html = hudHtml({ ...base, status: 1, end });
+    expect(html).toContain('<span>You win</span>');
+    expect(html).toContain('<div class="end" data-anim="win"><div>6 out. The books balance.</div><div>New game to play again.</div></div>');
+    expect(html).not.toContain('Black wins');
+    expect(hudHtml({ ...base, status: 1, end: { ...end, next: '' } })).toContain('<div class="end" data-anim="win"><div>6 out. The books balance.</div></div>');
+    expect(hudHtml(base)).not.toContain('class="end"');
   });
 
   it('names a draw', () => {

@@ -321,6 +321,11 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
     await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
   }
   for (const page of [a, b]) await expect(page.locator('#hud .turn')).toHaveText('Draw');
+  for (const page of [a, b]) {
+    // Each side sees its own result (a draw is the same for both) and the one action it can take (#282).
+    await expect(page.locator('body')).toHaveAttribute('data-over', 'draw');
+    await expect(page.locator('#hud .end')).toContainText('Rematch to play again.');
+  }
 
   // Each seated player sees the Rematch button. Black asks first, White sees it.
   await expect(a.locator('#rematch')).toBeVisible();
