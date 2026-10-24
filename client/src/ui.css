@@ -131,6 +131,12 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .presence.gone::before { background: var(--danger); }
 #hud .presence.watching::before { background: var(--muted); }
 #hud .rematch { margin-bottom: 0.25rem; color: var(--accent); }
+/* A medium landscape window has little room above the board's top-left edge, which runs at about 45 degrees:
+   a smaller plate keeps clear of it (#246). Shorter windows have the rule below. */
+@media (orientation: landscape) and (max-width: 1100px) and (min-height: 501px) {
+  #hud { max-width: 15rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+  #hud .turn { font-size: 1.25rem; }
+}
 /* A short landscape window (a phone held sideways) has no room above the board's top-left edge: the plate
    keeps to the band left of the board, like the column, with a smaller turn line (#234). */
 @media (orientation: landscape) and (max-height: 500px) {
