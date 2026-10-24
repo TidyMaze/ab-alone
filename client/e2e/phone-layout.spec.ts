@@ -1,4 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { loseByRepetition, startDaily } from './fight-end';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -46,10 +47,11 @@ const problems = (page: Page) =>
 const frame = (page: Page) =>
   page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 
-const check = async (page: Page, testInfo: TestInfo, state: string) => {
+// `only` keeps the problems a test is about.
+const check = async (page: Page, testInfo: TestInfo, state: string, only = (_problem: string) => true) => {
   await frame(page);
   await page.screenshot({ path: testInfo.outputPath(`${state.replaceAll(' ', '-')}.jpg`), type: 'jpeg', quality: 70 });
-  expect(await problems(page), state).toEqual([]);
+  expect((await problems(page)).filter(only), state).toEqual([]);
 };
 
 const sizes = [
@@ -92,6 +94,19 @@ for (const { name, viewport, mobile } of sizes) {
       // Turning the device around keeps the layout right.
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'turned around');
+    });
+
+    test('the daily result card covers neither the HUD nor the board, #196', async ({ page }, testInfo) => {
+      test.slow(); // eight plies played by hand, then two checks
+      await startDaily(page);
+      await loseByRepetition(page);
+      await expect(page.locator('#daily-card')).toBeVisible();
+      // The card's own box and button. At the end of a fight the taller plate, and the buttons under it
+      // when held upright, may cover a cell in some windows: that is bug #271, not the card.
+      const card = (problem: string) => /^(Daily challenge result|Copy result) /.test(problem);
+      await check(page, testInfo, 'with the daily result card', card);
+      await page.setViewportSize({ width: viewport.height, height: viewport.width });
+      await check(page, testInfo, 'with the daily result card turned around', card);
     });
   });
 }

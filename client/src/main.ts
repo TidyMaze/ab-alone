@@ -20,7 +20,7 @@ import { ghostMarbles } from './ghost';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
-import { countAttempt, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
+import { copyText, countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
@@ -382,6 +382,7 @@ function hud(extra = ''): void {
       }),
     );
   }
+  showResultCard();
 }
 
 function refresh(): void {
@@ -669,6 +670,33 @@ setInterval(today, 60_000); // an open page follows the day change at 00:00 UTC
 dailyButton.addEventListener('click', startDaily);
 dailyButton.disabled = false; // label and listener ready (#144)
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
+
+// Daily result card (#196): once a daily fight is over, the text to share under Retry, and Copy. The
+// text is built here and goes nowhere but the clipboard, and only when the player copies it. When
+// the browser refuses the clipboard, the text is selected in its box to copy by hand (as Copy
+// diagnostics, #220). It is only set when it changes, so a HUD update keeps the selection.
+const resultCard = document.getElementById('daily-card')!;
+const resultText = document.getElementById('daily-result') as HTMLTextAreaElement;
+function showResultCard(): void {
+  const text =
+    fight?.daily && engine instanceof Encounter
+      ? dailyCard({
+          day: fight.daily.day,
+          boss: engine.name(),
+          result: engine.result(),
+          plies: history.length,
+          attempt: fight.daily.attempt,
+        })
+      : '';
+  resultCard.hidden = text === '';
+  if (resultText.value !== text) resultText.value = text;
+}
+document.getElementById('daily-copy')!.addEventListener('click', async () => {
+  if (await copyText(resultText.value, navigator.clipboard)) return hud(' · result copied');
+  resultText.focus();
+  resultText.select();
+  hud(' · result selected: copy it by hand');
+});
 
 // Online play: Black creates the room and shares the invite link, the link opener plays White.
 // The engine stays the only judge: every remote move is replayed through it, a bad one is refused.

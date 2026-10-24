@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest';
-import { countAttempt, dailyFor, dailyLine, dailyTitle, hash32, readAttempts, utcDay } from './daily';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  SITE,
+  copyText,
+  countAttempt,
+  dailyCard,
+  dailyFor,
+  dailyLine,
+  dailyTitle,
+  hash32,
+  readAttempts,
+  utcDay,
+} from './daily';
 
 // The boss list of the bridge (boss_ids()) at the time of writing. The client never hard-codes it,
 // the tests only need one to pin the picks.
@@ -117,5 +128,40 @@ describe('attempts of the day', () => {
     expect(readAttempts(null, '2026-10-24')).toBe(0);
     expect(countAttempt(throwing, '2026-10-24')).toBe(1);
     expect(countAttempt(null, '2026-10-24')).toBe(1);
+  });
+});
+
+describe('result card', () => {
+  const fight = { day: '2026-10-25', boss: 'The Echo', plies: 41, attempt: 3 };
+  it('links to the site', () => {
+    expect(SITE).toBe('https://tidymaze.github.io/ab-alone/');
+  });
+  it('gives the date, the boss, the win, the plies and the attempt, then the link', () => {
+    expect(dailyCard({ ...fight, result: 1 })).toBe(
+      'AB-ALONE daily 2026-10-25: The Echo\nVictory in 41 plies on attempt 3\nhttps://tidymaze.github.io/ab-alone/',
+    );
+  });
+  it('gives a loss as a defeat (a draw is a loss)', () => {
+    expect(dailyCard({ ...fight, result: 2, plies: 8, attempt: 1 })).toBe(
+      'AB-ALONE daily 2026-10-25: The Echo\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
+    );
+  });
+  it('says one ply, not one plies', () => {
+    expect(dailyCard({ ...fight, result: 2, plies: 1 }).split('\n')[1]).toBe('Defeat in 1 ply on attempt 3');
+  });
+  it('is empty while the fight is on: no card before the end', () => {
+    expect(dailyCard({ ...fight, result: 0 })).toBe('');
+  });
+});
+
+describe('copyText', () => {
+  it('writes the text to the clipboard', async () => {
+    const writeText = vi.fn(async () => undefined);
+    expect(await copyText('hello', { writeText })).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('hello');
+  });
+  it('says so when the clipboard refuses, or is missing outside a secure page', async () => {
+    expect(await copyText('hello', { writeText: async () => Promise.reject(new Error('NotAllowedError')) })).toBe(false);
+    expect(await copyText('hello', undefined)).toBe(false);
   });
 });

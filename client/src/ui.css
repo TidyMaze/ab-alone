@@ -79,6 +79,23 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #hud .result { margin-top: 0.25rem; font-weight: 500; color: var(--accent); }
 #hud .boss .tell { margin-top: 0.25rem; font-size: 0.875rem; color: var(--hazard); }
 #hud .boss .daily { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
+/* Daily result card (#196), under Retry at the end of a daily fight: the text as it is copied, then Copy. */
+#daily-card { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
+#daily-card[hidden] { display: none; }
+#daily-result {
+  box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); padding: 0.5rem 0.75rem; resize: none; color: var(--text);
+  background: var(--panel); border: 1px solid var(--accent); border-radius: 2px; font: 0.875rem/1.4 var(--ui);
+}
+#daily-copy {
+  padding: 0.5rem 0.75rem; cursor: pointer; color: var(--accent); background: var(--panel);
+  border: 1px solid var(--accent); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
+}
+#daily-result:focus-visible, #daily-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* As wide as its text where the browser can, to stay off the board's edge cells. */
+@supports (field-sizing: content) { #daily-result { field-sizing: content; width: auto; max-width: calc(100vw - 32px); } }
+/* Held upright, the rows of buttons under the plate reach the board's top row: the card goes to the bottom
+   of the screen, under the board (#227). */
+@media (orientation: portrait) { #daily-card { position: fixed; right: 16px; bottom: 16px; } }
 #invite {
   box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); padding: 0.5rem 0.75rem; color: var(--text);
   background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
