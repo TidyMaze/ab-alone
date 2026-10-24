@@ -1,4 +1,6 @@
 import { defineConfig } from 'vitest/config';
+// @ts-expect-error plain Node script, no type declarations (the client has no Node types)
+import { offlineApp } from './scripts/offline-app.mjs';
 
 export default defineConfig(({ command, mode, isPreview }) => ({
   // The production build is served by GitHub Pages under /ab-alone/, and so is its preview (the offline e2e test).
@@ -19,6 +21,8 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   },
   // The bot worker imports the wasm package with top-level await: it needs ES module output.
   worker: { format: 'es' },
+  // The production build also writes sw.js, the service worker of the offline app (#193).
+  plugins: [offlineApp()],
   test: {
     css: true, // hud.test reads ui.css as raw text, vitest empties css files by default
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
@@ -30,7 +34,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
       include: ['src/board.ts', 'src/bot.ts', 'src/ghost.ts', 'src/score.ts', 'src/hud.ts', 'src/quality.ts', 'src/eject.ts',
         'src/moverecord.ts', 'src/movelog.ts', 'src/transport.ts', 'src/invite.ts', 'src/session.ts', 'src/camera.ts', 'src/seats.ts', 'src/bosshud.ts',
         'src/presence.ts', 'src/hull.ts', 'src/chaplain.ts', 'src/choir.ts', 'src/rematch.ts', 'scripts/nightly-report.mjs', 'src/connectivity.ts',
-        'src/sound.ts', 'src/daily.ts', 'src/savegame.ts'],
+        'src/sound.ts', 'src/daily.ts', 'src/savegame.ts', 'src/offline.ts'],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },
