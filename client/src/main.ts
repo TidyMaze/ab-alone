@@ -35,10 +35,20 @@ import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { hudHtml } from './hud';
-import { menuOpen, settingsList, type MenuEvent } from './settings';
+import { menuOpen, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { LIGHT } from './light';
-import { drawDue, fogSettings, readClearBoard, readSound, readTier, writeClearBoard, writeSound } from './quality';
+import {
+  drawDue,
+  fogSettings,
+  readClearBoard,
+  readSound,
+  readTheme,
+  readTier,
+  writeClearBoard,
+  writeSound,
+  writeTheme,
+} from './quality';
 import { Sfx } from './sound';
 import { glassSide } from './glass';
 import { formatScore } from './score';
@@ -146,6 +156,13 @@ const tier = readTier(store, {
 });
 diag.log.log('info', 'start', { backend, tier });
 let clear = readClearBoard(store);
+// The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
+let theme: Theme = readTheme(store);
+function applyTheme(): void {
+  const value = themeAttribute(theme);
+  if (value) document.documentElement.dataset.theme = value;
+  else delete document.documentElement.dataset.theme;
+}
 // The ejection sound (docs/specs/world.md section 7), on by default, a setting of the menu (#284). The audio
 // context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
 // way down, a touch on the way up, and toggling Sound on starts it too (setEnabled).
@@ -169,15 +186,20 @@ const toggles: Record<string, () => void> = {
     sfx.setEnabled(!sfx.enabled);
     writeSound(store, sfx.enabled);
   },
+  theme: () => {
+    theme = nextTheme(theme);
+    writeTheme(store, theme);
+    applyTheme();
+  },
 };
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, sfx.enabled)) {
+for (const { id } of settingsList(clear, sfx.enabled, theme)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -809,12 +831,20 @@ addEventListener('resize', () => {
 // New game (#230): leaves the local game for the start position, bot on or off as it was, and deletes its
 // save. Once a move is played, the first press asks for a confirmation for a few seconds (newgame.ts).
 // Boss, daily and online games hide it for good (startBoss, goOnline).
+// A HUD button with an icon (#297): `content` is the icon or the words, `label` the accessible name and tooltip.
+const setButton = (button: HTMLElement, label: string, content: string): void => {
+  button.innerHTML = content;
+  button.setAttribute('aria-label', label);
+  button.title = label;
+};
 const newGameButton = document.getElementById('new-game') as HTMLButtonElement;
+setButton(newGameButton, 'New game', icon('newgame'));
 let confirmNew: Confirm = null;
 let lapse = 0; // ends the confirmation
 function askNewGame(confirm: Confirm): void {
   confirmNew = confirm;
-  newGameButton.textContent = newGameLabel(confirm);
+  const label = newGameLabel(confirm);
+  setButton(newGameButton, label, confirm === null ? icon('newgame') : label); // the words while it waits for the confirmation
   newGameButton.classList.toggle('confirm', confirm !== null);
   clearTimeout(lapse);
   if (confirm !== null) lapse = setTimeout(askNewGame, CONFIRM_MS, null);
@@ -1040,6 +1070,7 @@ document.getElementById('play-online')!.addEventListener('click', () => {
   void goOnline(room, 1);
 });
 const playOnlineButton = document.getElementById('play-online') as HTMLButtonElement;
+setButton(playOnlineButton, 'Play online', icon('online'));
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
   playOnlineButton.disabled = state.disabled;
@@ -1057,6 +1088,7 @@ else analyse(); // the start position
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
 // text box to copy by hand when the browser refuses (#220). Nothing is sent anywhere.
 const copyButton = document.getElementById('copy-diagnostics') as HTMLButtonElement;
+setButton(copyButton, 'Copy diagnostics', icon('diagnostics'));
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 copyButton.addEventListener('click', async () => {
   const text = diag.text({
