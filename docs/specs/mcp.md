@@ -82,42 +82,44 @@ A draw against a boss is a loss (rules.md section 10.3).
 
 ### 4.3 Boss state (phase and tell)
 
-`boss` is `null` unless `mode` is `boss`. Otherwise it is an object built from `Encounter`:
+`boss` is `null` unless `mode` is `boss`. Otherwise it is one generic object, the same shape for every boss. No tool and no field is named after a boss: what a boss does shows up as data in `tell` and `marks`, so a new boss needs no change to the tool list or the schema.
 
 ```json
 {
-  "id": "echo | hull | choir | chaplain",
+  "id": "string, one of boss_ids()",
   "name": "string",
   "phase": 0,
   "phases": 4,
-  "tell": null,
-  "next_army": null,
-  "cracks": [{ "cell": "(q,r)", "plies_left": 2 }],
-  "flips": ["(q,r)"],
-  "converted": ["(q,r)"],
-  "armies": [{ "cell": "(q,r)", "army": "alto | tenor | bass" }],
+  "tell": { "kind": "string", "cells": ["(q,r)"], "text": "string" },
+  "marks": [{ "kind": "string", "cell": "(q,r)", "value": 2 }],
   "result": "playing | won | lost"
 }
 ```
 
-| Field | Engine call | Meaning |
+| Field | Engine source | Meaning |
 |---|---|---|
-| `id`, `name` | `boss_ids()`, `Encounter.name()` | `id` is one of `boss_ids()` (today `echo`, `hull`, `choir`, `chaplain`) |
-| `phase` | `Encounter.phase()` | `0` is P1. It rises when the boss marble count drops under a threshold (rules.md section 10.3) |
-| `phases` | `Encounter.phases()` | Number of phases |
-| `tell` | `Encounter.tell()` | Id of the board special that fires right after the next ply, `null` when none (`-1` in the engine). This is the tell: the threat is shown one ply before it hits |
-| `next_army` | `Encounter.next_army()` | The Choir's tell: the army that moves next. `null` for the other bosses |
-| `cracks` | `Encounter.cracks()` | The Hull: cracked rim cells and plies left before they vanish. Empty for the others |
-| `flips` | `Encounter.flips()` | The Chaplain: your marbles that flip to the boss at the end of the next boss turn if nothing moves. Empty for the others |
-| `converted` | `Encounter.converted()` | The Chaplain: boss marbles that were yours |
-| `armies` | `Encounter.armies()` | The Choir: boss marbles and their army (`0` Alto, `1` Tenor, `2` Bass). Empty for the others |
+| `id`, `name` | `boss_ids()`, `Encounter.name()` | `id` is one of `boss_ids()` |
+| `phase`, `phases` | `Encounter.phase()`, `Encounter.phases()` | `0` is P1. It rises when the boss marble count drops under a threshold (rules.md section 10.3) |
+| `tell` | `Encounter.tell()` and the boss's own getters | What the boss will do right after the next ply, shown one ply early. `null` when there is none. `kind` is a short stable id, `cells` the cells it touches, `text` a one-line description for the agent |
+| `marks` | the boss's own getters | Cells the boss marked on the board, each with a `kind` and an optional number `value` |
 | `result` | `Encounter.result()` | Fight result. A draw is a loss |
 
-Notes:
+How the engine's per-boss getters map into the generic shape (the server does this, an agent never sees the getter names):
 
-- On the Choir the board has radius 3. The outer ring shows as `x` in `board`. The player wins at 10 ejections there: read `win_ejections`, do not hard-code 6 (Decision #131).
-- The meaning of a `tell` id is the boss's own. The server returns the id as the engine gives it and does not name it.
-- An agent that ignores `tell` still plays legally. The tell is information, not a rule.
+| Boss data in the engine | Shows up as |
+|---|---|
+| `Encounter.next_army()` | `tell` with `kind: "next_army"` and the army in `text` |
+| `Encounter.flips()` | `tell` with `kind: "flip"` and the cells that flip if nothing moves |
+| `Encounter.cracks()` | `marks` with `kind: "crack"` and `value` = plies left |
+| `Encounter.converted()` | `marks` with `kind: "converted"` |
+| `Encounter.armies()` | `marks` with `kind: "army"` and `value` = `0` Alto, `1` Tenor, `2` Bass |
+| `Encounter.tell()` id | `tell.kind` = `"special"` when no more specific kind applies, the id in `text` |
+
+Rules for the generic shape:
+
+- An unknown `kind` is not an error: an agent that does not know it ignores it and still plays legally. The tell is information, not a rule.
+- `kind` values are stable once published. A new boss may add kinds, never rename one.
+- The Choir's board has radius 3 and the outer ring shows as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded (Decision #131).
 
 ## 5. Tools
 
@@ -155,12 +157,12 @@ Input: none.
 Output:
 
 ```json
-{ "to_move": "black | white", "moves": ["(0,0)>SE", "..."], "count": 0 }
+{ "to_move": "black | white", "moves": ["(0,0)>SE", "..."], "announces": {}, "count": 0 }
 ```
 
 - `moves` is `Engine.legal_moves()` (or `Encounter.legal_moves()`) in notation. Empty once the game is over.
-- On the Choir's turn the engine only lists the moves of the army in turn.
-- Against the Echo, every entry is `{ "move": "...", "tell_reply": "..." }` instead of a string. `tell_reply` is `Encounter.tell_move(mv)`: the reply the boss announces for that move. Only the Echo announces one, so other bosses and the bot get plain strings.
+- On a boss turn that restricts the moves (for example the army in turn), the list only holds the allowed moves. Nothing else changes.
+- `announces` is an object from a move to the reply the boss announces for it (`Encounter.tell_move(mv)`). It is empty unless the boss announces replies. Same shape for every boss, no per-boss output type.
 
 Errors: `no_game`.
 
