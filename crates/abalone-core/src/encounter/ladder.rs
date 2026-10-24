@@ -161,14 +161,16 @@ impl Arena {
 
 /// What the Chaplain does to the board after `mover` played `mv`, for the player search: the marks
 /// of converted marbles follow the move, then the hook the encounter would fire, in the phase of
-/// the board. Mirrors `Encounter::play`, minus the seed (it only picks which boss marble pays for
-/// a flip in P3) and the ejections the hook credits.
+/// the board. Mirrors `Encounter::play`, with the `seed` of the encounter (it rolls whether the flips cost
+/// and picks the boss marbles that pay; the player search passes 0, the roll is unknown to it)
+/// and minus the ejections the hook credits.
 fn chaplain_step(
     def: &BossDef,
     before: &Board,
     mover: Player,
     mv: &Move,
     mut after: Board,
+    seed: u64,
 ) -> (Board, [u8; 2]) {
     let kept = carried_marks(before, mv, before.converted())
         .into_iter()
@@ -179,7 +181,7 @@ fn chaplain_step(
     let phase = def.phase_marbles.iter().filter(|&&t| left <= t).count();
     let ply = if mover == Player::Black { 1 } else { 2 };
     let id = (def.special)(ply, phase).expect("the Chaplain fires after every ply");
-    ((def.hook)(&after, id, 0), [0, 0])
+    ((def.hook)(&after, id, seed), [0, 0])
 }
 
 /// splitmix64: a cheap seeded hash, enough to pick an opening move.
@@ -205,7 +207,7 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
     } else {
         let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.flip_free(mv);
         let def = chaplain_boss();
-        let step = |b: &Board, p: Player, m: &Move, a: Board| chaplain_step(&def, b, p, m, a);
+        let step = |b: &Board, p: Player, m: &Move, a: Board| chaplain_step(&def, b, p, m, a, 0);
         let pick = |allow: &dyn Fn(&Move) -> bool| {
             if arena.kind() == LadderBoss::Chaplain {
                 search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &step)
@@ -414,7 +416,9 @@ mod tests {
             let mv = moves[(mix(ply) % moves.len() as u64) as usize].clone();
             let before = enc.game().board().clone();
             let (after, _) = apply(&before, mover, &mv).unwrap();
-            let (stepped, credits) = chaplain_step(&chaplain_boss(), &before, mover, &mv, after);
+            let seed = (enc.game().history().len() as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let (stepped, credits) =
+                chaplain_step(&chaplain_boss(), &before, mover, &mv, after, seed);
             enc.play(&mv).unwrap();
             assert_eq!(&stepped, enc.game().board(), "ply {ply}");
             assert_eq!(credits, [0, 0]);
