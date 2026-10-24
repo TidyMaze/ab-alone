@@ -10,7 +10,7 @@
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
 use crate::game::{Game, GameError};
-use crate::moves::{apply, Move, Player};
+use crate::moves::{apply, legal_moves, Move, Player};
 use crate::search::{search_with, Weights};
 
 type P = (i32, i32);
@@ -215,11 +215,34 @@ impl Choir {
         self.members.iter().filter(|m| m.1 == army).count() as u8
     }
 
-    /// The army in turn: the next of the cycle that still has marbles.
+    /// `true` when `mv` is allowed for `army`: its marbles only, and no push in P3.
+    fn allows(&self, army: Army, mv: &Move) -> bool {
+        mv.cells.iter().all(|&c| self.army_at(c) == Some(army))
+            && !(self.phase() == LAST_PHASE && pushes(self.game().board(), mv))
+    }
+
+    /// `true` when `army` has at least one move it is allowed to play.
+    fn can_move(&self, army: Army) -> bool {
+        legal_moves(self.game().board(), Player::White)
+            .iter()
+            .any(|mv| self.allows(army, mv))
+    }
+
+    /// The army in turn: the next of the cycle that has marbles and a move it may play (#172).
+    /// An army boxed in, or left with pushes only in P3, is skipped like a wiped one. When no
+    /// army can move, the next one with marbles: the boss then passes (see [`Choir::play`]).
+    /// On the player's turn this reads the board as it is, so the tell can change with the
+    /// player's move.
     fn army_in_turn(&self) -> Army {
+        let from = |i: usize| CYCLE[(self.cycle_pos + i) % CYCLE.len()];
         (0..CYCLE.len())
-            .map(|i| CYCLE[(self.cycle_pos + i) % CYCLE.len()])
-            .find(|&a| self.army_marbles(a) > 0)
+            .map(from)
+            .find(|&a| self.army_marbles(a) > 0 && self.can_move(a))
+            .or_else(|| {
+                (0..CYCLE.len())
+                    .map(from)
+                    .find(|&a| self.army_marbles(a) > 0)
+            })
             .unwrap_or(CYCLE[self.cycle_pos])
     }
 
@@ -240,7 +263,7 @@ impl Choir {
         if mv.cells.iter().any(|&c| self.army_at(c) != Some(army)) {
             return Err(ChoirError::WrongArmy);
         }
-        if self.phase() == LAST_PHASE && pushes(self.game().board(), mv) {
+        if !self.allows(army, mv) {
             return Err(ChoirError::NoPush);
         }
         Ok(())
@@ -266,6 +289,9 @@ impl Choir {
             .collect();
         if boss_turn {
             self.end_boss_move(mover);
+        } else if self.enc.game.outcome().is_none() && !self.can_move(self.army_in_turn()) {
+            // No army can move: the boss passes (rules.md section 7) and the player goes again.
+            self.enc.game.pass();
         }
         Ok(())
     }
@@ -276,6 +302,7 @@ impl Choir {
         let free_turn = (self.boss_turns + 1).is_multiple_of(FREE_MOVE_EVERY);
         if !self.free_move && self.phase() == FREE_MOVE_PHASE && free_turn {
             self.free_move = true;
+            self.cycle_pos = mover.index();
             self.enc.game.pass();
         } else {
             self.free_move = false;
@@ -285,8 +312,8 @@ impl Choir {
     }
 
     /// The boss move for its turn: the army in turn, its own weights, node-limited. `None` on the
-    /// player's turn or when the game is over. An army with no legal move has no move: the boss
-    /// is stuck (shortcut: never seen, add a skip if it ever happens).
+    /// player's turn or when the game is over. The army in turn always has a move: an army with none
+    /// is skipped, and a boss with none passes.
     pub fn boss_move(&self) -> Option<Move> {
         if self.game().to_move() != Player::White {
             return None;
