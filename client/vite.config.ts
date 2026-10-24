@@ -1,8 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
-export default defineConfig(({ command, mode }) => ({
-  // The production build is served by GitHub Pages under /ab-alone/. Dev and e2e stay at /.
-  base: command === 'build' ? '/ab-alone/' : '/',
+export default defineConfig(({ command, mode, isPreview }) => ({
+  // The production build is served by GitHub Pages under /ab-alone/, and so is its preview (the offline e2e test).
+  // Dev and e2e stay at /.
+  base: command === 'build' || isPreview ? '/ab-alone/' : '/',
   resolve: {
     alias: {
       'abalone-wasm': new URL('../crates/abalone-wasm/pkg/abalone_wasm.js', import.meta.url).pathname,
