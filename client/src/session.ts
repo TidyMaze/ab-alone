@@ -87,6 +87,12 @@ export class OnlineSession {
     if (o.transport.state === 'open') this.queue = this.queue.then(() => this.hello());
   }
 
+  /** Settles once everything queued so far is handled: messages, leaves, our Hello, our rematch ask.
+   * Something queued meanwhile makes a new promise. Tests wait on it instead of on a time (bug #190). */
+  get settled(): Promise<void> {
+    return this.queue;
+  }
+
   get role(): Role {
     return this.current;
   }

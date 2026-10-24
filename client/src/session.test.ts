@@ -31,7 +31,24 @@ class FakeJudge implements Judge {
   }
 }
 
-const settle = () => new Promise((r) => setTimeout(r, 20));
+// Every session the tests make, for settle. Those of earlier tests are idle: waiting on them is free.
+const live: OnlineSession[] = [];
+class WatchedSession extends OnlineSession {
+  constructor(...args: ConstructorParameters<typeof OnlineSession>) {
+    super(...args);
+    live.push(this);
+  }
+}
+
+// Waits for the work, not for a time, however slow WebCrypto is (bug #190). A session hands messages
+// to another while it works: go round until a whole pass finds no queue that grew.
+async function settle(): Promise<void> {
+  for (;;) {
+    const queues = live.map((s) => s.settled);
+    await Promise.all(queues);
+    if (live.every((s, i) => s.settled === queues[i])) return;
+  }
+}
 
 async function player(transport: Transport, side: number, seatCount = 2) {
   const judge = new FakeJudge();
@@ -43,7 +60,7 @@ async function player(transport: Transport, side: number, seatCount = 2) {
   const asks: number[] = []; // calls of onRematchAsk
   const rematches: number[] = []; // our side at each new game
   const keys = await generateKeys();
-  const session: OnlineSession = new OnlineSession({
+  const session: OnlineSession = new WatchedSession({
     game: 'g',
     side,
     seatCount,
@@ -446,7 +463,7 @@ describe('OnlineSession', () => {
     const [x, y] = localPair();
     const judge = new FakeJudge();
     const keys = await generateKeys();
-    const session = new OnlineSession({ game: 'g', side: 2, keys, transport: y, judge, onMove: () => {}, onRefuse: () => {} });
+    const session = new WatchedSession({ game: 'g', side: 2, keys, transport: y, judge, onMove: () => {}, onRefuse: () => {} });
     const creator = await generateKeys();
     x.send(await hello(creator, 1, [creator.pub, 'x']));
     x.close();
