@@ -36,6 +36,16 @@ const problems = (page: Page) =>
       if (!onScreen(box)) found.push(`${name} is off screen`);
       for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
     }
+    // The evaluation plate lets taps through, so it must not lie over a control either, or it hides it.
+    const plate = document.getElementById('eval')!;
+    if (plate.getClientRects().length > 0) {
+      for (const el of document.querySelectorAll('button, input, label, textarea, select')) {
+        if (el.getClientRects().length === 0) continue; // hidden
+        if (meets(plate.getBoundingClientRect(), el.getBoundingClientRect())) {
+          found.push(`the evaluation plate covers ${el.textContent || el.getAttribute('aria-label')}`);
+        }
+      }
+    }
     for (const c of cells) {
       if (!onScreen(c.disc)) found.push(`${c.name} is off screen`);
       else if (document.elementFromPoint(c.centre.x, c.centre.y)?.tagName !== 'CANVAS') found.push(`a tap on ${c.name} misses the board`);
