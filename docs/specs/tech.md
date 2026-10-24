@@ -387,6 +387,44 @@ No database server. Everything is client-side.
 - Only third-party runtime dependencies: public STUN, signaling relays. Both degrade to the
   manual flow, single-player never needs them.
 
+### 9.1 Offline app (#165, #193)
+
+The production build installs as an app and plays offline (hot-seat, bot, bosses) after one online
+visit. No dependency: a hand-written service worker and a build step that lists the hashed files.
+
+- **Manifest:** `client/public/manifest.webmanifest`. Name, `display: standalone`, theme and
+  background colour `#0b0d0f` (world spec section 5), every path relative to the manifest so it
+  works under the Pages base path `/ab-alone/`. Icons 192 and 512 px (the 512 one also maskable)
+  are drawn by `client/scripts/gen-icons.mjs` and committed; a test keeps them equal to the
+  generator output.
+- **Build:** after `vite build`, the plugin `client/scripts/offline-app.mjs` lists every built file
+  (hashed JS, CSS, wasm and bot worker, the textures, icons, manifest and page; not `sw.js` nor
+  source maps), hashes their content, and bundles `client/src/sw.ts` into `dist/sw.js` with that
+  list and the cache name `ab-alone-<16 hex of the hash>`. Any changed file gives a new cache name,
+  so a new `sw.js`. The pure parts (precache list, cache name, routing, old caches) are in
+  `client/src/offline.ts`, unit tested.
+- **Install:** fetches the whole list into the build's cache, revalidated with the server
+  (`cache: 'no-cache'`, never a stale HTTP cache entry), then takes over at once (`skipWaiting`).
+  A failed fetch fails the install and the previous build stays in charge. **Activate:** deletes
+  the app's caches older than the previous one, keeps the previous one, controls the open pages.
+  Only caches named `ab-alone-*` are touched: the Pages origin is shared with other sites.
+- **Fetch, cache first:** opening the app (the scope or its `index.html`, any query or hash) gets
+  the cached page; a file of the build comes from its cache; any other URL of the scope is looked
+  up in the older caches, then the network. Other sites (fonts, signaling, STUN) are not touched,
+  so offline the UI falls back to the system fonts.
+- **Update:** each load calls `registration.update()` (Chrome does not check by itself on a
+  reload). After a deploy, the next load still runs the cached build, whole; the new worker
+  installs and takes over, and the page shows **New version: reload**. The following load (that
+  button or any refresh) runs the new build, whole. Each cache holds one build and every JS, CSS
+  and wasm name carries its content hash, so a page never runs old JS with new wasm or the
+  reverse. A page that loaded just before the update still finds its own files in the kept
+  previous cache.
+- **Not in dev or tests:** only the production build registers the worker
+  (`import.meta.env.PROD`). The e2e suite blocks service workers (`serviceWorkers: 'block'`),
+  except `client/e2e/offline.spec.ts`: it runs on `vite build` + `vite preview` (random port,
+  under `/ab-alone/`, started and stopped by `playwright.config.ts`), or on the live site in the
+  nightly run. It loads once, goes offline, reloads and plays a bot move.
+
 ## 10. CI, testing, observability
 
 **CI (GitHub Actions):** `cargo fmt --check`, `clippy -D warnings`, `cargo test` (native),

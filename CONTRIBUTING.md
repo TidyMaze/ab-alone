@@ -396,4 +396,7 @@ run never reloads a page under test (bug #185). Start a new run to test a change
 
 - An existing server on that port is reused. Kill only the server you started: save its PID
   (`echo $! > pid`) and `kill` that PID. Never `pkill -f`.
+- The offline test (`e2e/offline.spec.ts`) needs the production build: Playwright also runs
+  `vite build` then `vite preview` on a random port (`E2E_PREVIEW_PORT`, never reused) and stops it
+  at the end. Every other spec runs with service workers blocked (docs/specs/tech.md section 9.1).
 - Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
