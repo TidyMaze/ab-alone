@@ -1,5 +1,7 @@
 Closes #
 
+<!-- Open as a draft. Mark ready only when it can merge: CI green, up to date with main, conversations resolved. -->
+
 ## What changed
 
 ## How to check
