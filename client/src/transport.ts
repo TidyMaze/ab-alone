@@ -6,8 +6,11 @@ export type ConnectionState = 'connecting' | 'open' | 'closed';
 export interface Transport {
   readonly state: ConnectionState;
   send(message: Wire): void;
-  onRecord(cb: (message: Wire) => void): void;
+  /** `peer` names the sender as the transport knows it, not by key: only a Hello proves a key. */
+  onRecord(cb: (message: Wire, peer: string) => void): void;
   onState(cb: (state: ConnectionState) => void): void;
+  /** The transport lost a peer. */
+  onLeave(cb: (peer: string) => void): void;
   close(): void;
 }
 
@@ -15,17 +18,23 @@ export interface Transport {
 class LocalTransport implements Transport {
   state: ConnectionState = 'open';
   peer!: LocalTransport;
-  private record: (r: Wire) => void = () => {};
+  private record: (r: Wire, peer: string) => void = () => {};
   private change: (s: ConnectionState) => void = () => {};
+  private left: (peer: string) => void = () => {};
+
+  constructor(private readonly name: string) {}
 
   send(r: Wire): void {
-    if (this.state === 'open') this.peer.record(r);
+    if (this.state === 'open') this.peer.record(r, this.name);
   }
-  onRecord(cb: (message: Wire) => void): void {
+  onRecord(cb: (message: Wire, peer: string) => void): void {
     this.record = cb;
   }
   onState(cb: (state: ConnectionState) => void): void {
     this.change = cb;
+  }
+  onLeave(cb: (peer: string) => void): void {
+    this.left = cb;
   }
   close(): void {
     if (this.state === 'closed') return;
@@ -33,13 +42,14 @@ class LocalTransport implements Transport {
       end.state = 'closed';
       end.change('closed');
     }
+    for (const end of [this, this.peer]) end.left(end.peer.name);
   }
 }
 
 /** Two connected ends: two players on one screen, as local play has always been. */
 export function localPair(): [Transport, Transport] {
-  const a = new LocalTransport();
-  const b = new LocalTransport();
+  const a = new LocalTransport('a');
+  const b = new LocalTransport('b');
   a.peer = b;
   b.peer = a;
   return [a, b];

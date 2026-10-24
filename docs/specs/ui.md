@@ -59,6 +59,7 @@ One plate, top-left, 16 px from the edges, max width 22rem, never over the board
 ```
 +---------------------------------+
 | (o) BLACK TO MOVE               |   display face, marker + text
+| * You are Black. White is here. |   online only: status line, UI face
 | Black ejected 0/6 . White 0/6   |   UI face, the score line, text kept verbatim
 | ||||||  ||||||                  |   tally pips, decorative, aria-hidden
 | WebGPU                          |   note, muted
@@ -72,6 +73,14 @@ One plate, top-left, 16 px from the edges, max width 22rem, never over the board
 - **Winner line.** When the game is over the turn line is replaced by the result ("Black wins",
   "White wins", "Draw") in the display face, with the accent border. The score line still
   carries the reason ("by 6 ejections", "by threefold repetition").
+- **Online status.** Online games add one line under the turn: the player's own color and
+  whether the opponent is connected, updated live (#121). Strings, kept verbatim for the e2e
+  tests: "You are Black. Waiting for an opponent..." (room creator alone), "Joining as White..."
+  (not seated yet), "You are White. Black is here.", "You are Black. White is disconnected.",
+  "Room is full, watching" (spectator). Presence means the key bound to the seat is connected,
+  not any peer. A dot before the text repeats the state (accent here, hazard waiting, danger
+  disconnected, muted watching); the words alone carry it. While the creator waits, the invite
+  link below the buttons has a caption and the accent border.
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 
