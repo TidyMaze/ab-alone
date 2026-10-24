@@ -68,11 +68,16 @@ top-right, beside the plate and never over it (#227). Wider than tall, the colum
 right of the board. Held upright, the column becomes rows of buttons under the plate. No button or
 field covers a cell, and the space between them lets every tap through to the board.
 
-Settings (#277): a cog button, first in the column, opens a menu listing the settings, one toggle
-button each: Clear board, then Sound (#284, the ejection sound, no longer a button of the column; opening the
-menu and toggling Sound count as the first gesture that starts audio). The menu opens in the column under the cog, so it
-covers no cell either. It closes on Escape, on a press outside and on the cog again. The cog is labelled
-"Settings" (`aria-expanded`, `aria-controls`), each setting is a button with `aria-pressed`.
+Settings (#277): a cog button, first in the column, opens a menu, one button per item: the toggles Clear board,
+then Sound (#284, the ejection sound, no longer a button of the column; opening the menu and toggling Sound count as
+the first gesture that starts audio), then Export game and Import game (#287, no longer buttons of the column). Each
+item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG line icons, thin `currentColor`
+strokes, one size) then its label: a fog for Clear board, a speaker for Sound (crossed out while off), an arrow out
+of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
+or closing it moves no button: under the cog in the column, beside the cog over the first row when the buttons are
+rows. It covers no cell either. On a touch screen each item is at least 44 px tall. It closes on Escape, on a press
+outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
+button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
 ```
 +---------------------------------+
@@ -148,12 +153,11 @@ covers no cell either. It closes on Escape, on a press outside and on the cog ag
   clipboard, the text in the box is selected from its start for the player to copy by hand, and
   the note says "result selected: copy it by hand". Both strings are kept verbatim for the e2e
   tests. The card shows only at the end of a daily fight, never in a plain boss fight (#196).
-- **Export game, Import game.** Two buttons at the end of the button column, under Daily
-  challenge and Hint (section 4.2), for local games only: hidden during online, boss and daily
-  games (#219, file format in tech.md section 8). Export game downloads the game, Import game opens
-  the browser's file picker. A refused file adds a short note to the HUD, kept verbatim for the e2e
-  tests: "import refused: not a game file", "import refused: unknown file version", "import
-  refused: illegal move in the file".
+- **Export game, Import game.** Two items of the settings menu, after Sound (#287), for local
+  games only: hidden during online, boss and daily games (#219, file format in tech.md section 8).
+  Export game downloads the game, Import game opens the browser's file picker. A refused file adds a
+  short note to the HUD, kept verbatim for the e2e tests: "import refused: not a game file", "import
+  refused: unknown file version", "import refused: illegal move in the file".
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 

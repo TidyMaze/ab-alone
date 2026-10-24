@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { ICONS } from '../src/icons';
 
 // The ejection sound (world.md section 7): the page says which sound an ejection played in
 // data-sound, and window.__audio() gives the state of the audio context ('none' before one exists).
@@ -96,9 +97,11 @@ test('Sound is no loose HUD button: it is in the settings menu, reachable by key
   await page.getByRole('button', { name: 'Settings' }).focus();
   await page.keyboard.press('Enter');
   await expect(toggle).toBeVisible();
+  await expect(toggle.locator('path')).toHaveAttribute('d', ICONS.sound); // a speaker, crossed out while off (#287)
   await toggle.focus();
   await page.keyboard.press('Enter'); // a key press is a gesture too
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(toggle.locator('path')).toHaveAttribute('d', ICONS.muted);
 });
 
 // Bug #146 pattern: a click right after load hits a disabled button or toggles.

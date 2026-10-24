@@ -36,6 +36,7 @@ import { rematchText } from './rematch';
 import { SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { hudHtml } from './hud';
 import { menuOpen, settingsList, type MenuEvent } from './settings';
+import { icon } from './icons';
 import { drawDue, fogSettings, readClearBoard, readSound, readTier, writeClearBoard, writeSound } from './quality';
 import { Sfx } from './sound';
 import { formatScore } from './score';
@@ -150,9 +151,9 @@ function applyLook(): void {
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
-  for (const { id, on } of settingsList(clear, sfx.enabled)) document.getElementById(`setting-${id}`)!.setAttribute('aria-pressed', String(on));
 }
-// The settings menu: one button per setting, opened by the cog only. Escape, a press outside and the cog close it.
+// The settings menu: one button per item, its icon then its label, opened by the cog only. Escape, a press outside
+// and the cog close it. A toggle shows its state in aria-pressed, Sound a muted speaker while off (#287).
 const cog = document.getElementById('settings') as HTMLButtonElement;
 const menu = document.getElementById('settings-menu')!;
 const toggles: Record<string, () => void> = {
@@ -165,18 +166,30 @@ const toggles: Record<string, () => void> = {
     writeSound(store, sfx.enabled);
   },
 };
-for (const { id, label } of settingsList(clear, sfx.enabled)) {
-  const row = document.createElement('button');
+const paintMenu = (): void => {
+  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled)) {
+    const row = document.getElementById(`setting-${id}`)!;
+    row.innerHTML = `${icon(name)}<span>${label}</span>`;
+    if (on !== undefined) row.setAttribute('aria-pressed', String(on));
+  }
+};
+for (const { id } of settingsList(clear, sfx.enabled)) {
+  const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
-  row.textContent = label;
+  const toggle = toggles[id];
+  if (!toggle) {
+    row.disabled = true; // Export game and Import game: enabled once their listeners are in, below (#146)
+    continue;
+  }
   row.addEventListener('click', () => {
-    toggles[id]!();
+    toggle();
     applyLook();
+    paintMenu();
   });
-  menu.append(row);
 }
-applyView(); // camera, fog and the settings buttons
+paintMenu();
+applyView(); // camera and fog
 let menuIsOpen = false;
 const moveMenu = (event: MenuEvent): void => {
   menuIsOpen = menuOpen(menuIsOpen, event);
@@ -893,8 +906,8 @@ document.getElementById('daily-copy')!.addEventListener('click', async () => {
 // Export and import (#219): the local game as a JSON file in the save format, docs/specs/tech.md section 8. An
 // imported game is replayed through the engine, replaces the local game and is saved like one, in this page's mode
 // (against the bot, or hot-seat with ?bot=off). A bad file changes nothing but the HUD note.
-const exportButton = document.getElementById('export-game') as HTMLButtonElement;
-const importButton = document.getElementById('import-game') as HTMLButtonElement;
+const exportButton = document.getElementById('setting-export-game') as HTMLButtonElement; // in the settings menu (#287)
+const importButton = document.getElementById('setting-import-game') as HTMLButtonElement;
 const importFile = document.getElementById('import-file') as HTMLInputElement;
 exportButton.addEventListener('click', () => {
   const link = document.createElement('a');
