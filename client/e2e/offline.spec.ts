@@ -36,6 +36,8 @@ test('after one visit the game loads offline and the bot answers', async ({ page
   await page.reload();
   await page.locator('canvas').waitFor();
   await expect(hud).toContainText('Black to move');
+  // The cached page loads so fast that a click can come before the first frame, and such a click is lost (bug #237).
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await click(page, 0, 2); // a Black marble
   await click(page, 0, 1); // its NW neighbour, empty at the start
   // The bot worker and its wasm come from the cache too: it answers and the turn comes back.
