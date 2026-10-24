@@ -776,6 +776,7 @@ importFile.addEventListener('change', async () => {
   thinking = false;
   void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
   refresh();
+  analyse(); // the bar follows the imported position (#191)
   void botTurn();
 });
 exportButton.disabled = importButton.disabled = false; // listeners ready (#146)

@@ -152,11 +152,11 @@ never show it (fair play, #164): starting one hides it for good.
   is these words.
 - **Source.** The search score of the position for the side to move (`Engine.evaluate`), turned
   into White's share from 0 (Black wins) to 1 (White wins) by `client/src/evalbar.ts`. It is
-  computed after every move and after New game (#230) in a second copy of the bot worker, so a
-  bot reply never waits behind it, with a fixed node budget (`EVAL_NODES`, a quarter of the
-  bot's), never a clock. One request is in flight at a time and only for the newest position: an
-  answer for an older position is dropped, so a late answer never overwrites the bar of a newer
-  position.
+  computed after every move, after New game (#230) and after an import (#219) in a second copy of
+  the bot worker, so a bot reply never waits behind it, with a fixed node budget (`EVAL_NODES`, a
+  quarter of the bot's), never a clock. One request is in flight at a time and only for the newest
+  position: an answer for an older position is dropped, so a late answer never overwrites the bar
+  of a newer position.
 - **Motion.** The bar jumps to its new share, it does not slide (section 6).
 
 ## 5. Board framing
