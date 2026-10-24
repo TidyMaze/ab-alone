@@ -10,7 +10,7 @@ use crate::encounter::choir::Choir;
 use crate::encounter::echo::{echo_boss, echo_move, mirror_move};
 use crate::encounter::hull::hull_boss;
 use crate::encounter::telemetry::{
-    classify_death, summarize, AttemptRecord, AttemptResult, Losses, Summary,
+    classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
 use crate::encounter::{marbles, Encounter, PveResult};
 use crate::game::{Game, Outcome};
@@ -137,18 +137,20 @@ fn mix(mut x: u64) -> u64 {
 }
 
 /// The player bot move: a seeded random legal move for its first `opening` moves, then the plain
-/// alpha-beta search with `budget` nodes.
-fn player_move(game: &Game, seed: u64, index: u32, opening: u32, budget: u32) -> Move {
+/// alpha-beta search with `budget` nodes. `None` when the player has no move (every marble was
+/// converted).
+fn player_move(game: &Game, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     if index < opening {
         let moves = legal_moves(game.board(), Player::Black);
-        let pick = mix(seed ^ mix(u64::from(index))) % moves.len() as u64;
-        moves[pick as usize].clone()
+        let pick = mix(seed ^ mix(u64::from(index))) % moves.len().max(1) as u64;
+        moves.get(pick as usize).cloned()
     } else {
-        search(game, budget).expect("the game is running").mv
+        search(game, budget).map(|r| r.mv)
     }
 }
 
-/// Plays `arena` to its end or to `ply_cap` plies and records it. `opening` is the number of
+/// Plays `arena` to its end or to `ply_cap` plies and records it. A player with no move left lost
+/// every marble to conversion, the only way to lose them all. `opening` is the number of
 /// random first player moves.
 fn play_out(
     mut arena: Arena,
@@ -161,13 +163,17 @@ fn play_out(
     let echo = arena.kind() == LadderBoss::Echo;
     let mut losses = Losses::default();
     let mut max_phase = arena.phase();
-    let (mut plies, mut player_moves) = (0, 0);
+    let (mut plies, mut player_moves, mut stuck) = (0, 0, false);
     while arena.game().outcome().is_none() && plies < ply_cap {
         let game = arena.game();
         let player_turn = game.to_move() == Player::Black;
         let mv = if player_turn {
             player_moves += 1;
-            player_move(game, seed, player_moves - 1, opening, player_budget)
+            let Some(mv) = player_move(game, seed, player_moves - 1, opening, player_budget) else {
+                stuck = true;
+                break;
+            };
+            mv
         } else {
             arena.boss_move().expect("the boss has a move")
         };
@@ -210,7 +216,13 @@ fn play_out(
         },
         plies,
         max_phase,
-        death: (!won).then(|| classify_death(draw, capped, &losses)),
+        death: (!won).then(|| {
+            if stuck {
+                DeathCause::Conversion
+            } else {
+                classify_death(draw, capped, &losses)
+            }
+        }),
         player_marbles: marbles(game.board(), Cell::Black),
         boss_marbles: marbles(game.board(), Cell::White),
         conversions: losses.converted,

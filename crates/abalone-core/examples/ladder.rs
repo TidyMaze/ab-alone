@@ -1,5 +1,6 @@
 //! The bot ladder: `cargo run --release --example ladder`. Four bosses, three player budgets
 //! (4x, 1x, 0.5x of the boss budget), 10 seeds each, 300 plies at most. Prints a markdown table.
+//! Arguments filter the bosses by id (`echo hull chaplain choir`), none runs all four.
 //! Set `LADDER_JSONL=<file>` to also write every attempt as a JSON line.
 
 use abalone_core::encounter::ladder::{player_budgets, run_ladder, LadderBoss, PLY_CAP};
@@ -11,7 +12,11 @@ fn main() {
     let mut jsonl = String::new();
     println!("| boss | player budget | wins | median plies | max phase | deaths |");
     println!("|---|---|---|---|---|---|");
+    let only: Vec<String> = std::env::args().skip(1).collect();
     for boss in LadderBoss::ALL {
+        if !only.is_empty() && !only.iter().any(|id| id == boss.id()) {
+            continue;
+        }
         for budget in player_budgets(boss) {
             let report = run_ladder(boss, budget, SEEDS, PLY_CAP);
             let s = &report.summary;
