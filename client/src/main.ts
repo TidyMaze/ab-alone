@@ -51,6 +51,7 @@ import {
 } from './quality';
 import { Sfx } from './sound';
 import { glassSide } from './glass';
+import { CORE, GLASS, SHELL } from './marbles';
 import { formatScore } from './score';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
@@ -60,7 +61,7 @@ import './ui.css';
 
 // Palette from docs/specs/world.md section 5.
 const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
-const MARBLE_COLORS: Record<number, number> = { 1: 0x15191c, 2: 0xd8d4c8 };
+const BONE = 0xd8d4c8; // the pale tells
 const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
 declare const __BUILD__: string; // the commit, set by vite.config.ts
 
@@ -116,10 +117,10 @@ async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise
     return null;
   }
 }
-const [deckAlbedo, deckRoughness, marbleNormal, backdrop] = await Promise.all([
+const [deckAlbedo, deckRoughness, shellNormal, backdrop] = await Promise.all([
   loadTexture('deck-albedo.png', true, true),
   loadTexture('deck-roughness.png', false, true),
-  loadTexture('marble-normal.png', false, true),
+  loadTexture('shell-normal.png', false, true),
   loadTexture('backdrop.png', true, false),
 ]);
 
@@ -250,28 +251,26 @@ const steel = new THREE.MeshStandardMaterial(
     ? { map: deckAlbedo, roughnessMap: deckRoughness }
     : { color: COLORS.steel, roughness: 0.8 },
 );
-// Key 1 is the enemy black shell (matte, faint sheen), key 2 the player glass (clear coat). marbleMaterial picks by side.
+// Key 1 is the enemy shell (matte, ridged), key 2 the player's smoked glass (marbles.ts).
+const { ridges, ...shell } = SHELL;
 const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
-  1: new THREE.MeshPhysicalMaterial({
-    color: MARBLE_COLORS[1],
-    roughness: 0.55,
-    metalness: 0.2,
-    sheen: 0.6,
-    sheenColor: new THREE.Color(COLORS.steel),
-    ...(marbleNormal ? { normalMap: marbleNormal, normalScale: new THREE.Vector2(0.6, 0.6) } : {}),
+  1: new THREE.MeshStandardMaterial({
+    ...shell,
+    ...(shellNormal ? { normalMap: shellNormal, normalScale: new THREE.Vector2(ridges, ridges) } : {}),
   }),
-  2: new THREE.MeshPhysicalMaterial({
-    color: MARBLE_COLORS[2],
-    roughness: 0.15,
-    metalness: 0.2,
-    clearcoat: 1,
-    clearcoatRoughness: 0.05,
-    ...(marbleNormal ? { normalMap: marbleNormal, normalScale: new THREE.Vector2(0.15, 0.15) } : {}),
-  }),
+  2: new THREE.MeshPhysicalMaterial(GLASS),
 };
-// Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time.
+const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
+const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the glass
+// Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. The glass holds
+// its cyan core as a child: the selection lift, the slide and the ejection carry it.
 const glassOf = (): number => glassSide({ online: online !== null, bot: worker !== null, fight: fight !== null });
-const marbleMaterial = (side: number): THREE.MeshStandardMaterial => marbleMaterials[side === glassOf() ? 2 : 1]!;
+function marbleMesh(side: number, looks = marbleMaterials, core = coreMaterial): THREE.Mesh {
+  const glass = side === glassOf();
+  const mesh = new THREE.Mesh(marbleGeometry, looks[glass ? 2 : 1]);
+  if (glass) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
+  return mesh;
+}
 const targetMaterial = new THREE.MeshStandardMaterial({
   color: COLORS.cyan,
   emissive: COLORS.cyan,
@@ -284,10 +283,10 @@ const crackMaterials: Record<number, THREE.MeshStandardMaterial> = {
   2: new THREE.MeshStandardMaterial({ color: COLORS.sodium, emissive: COLORS.sodium, emissiveIntensity: 0.3 }),
 };
 const tickGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.1);
-const tickMaterial = new THREE.MeshBasicMaterial({ color: MARBLE_COLORS[2] });
+const tickMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // The Chaplain tell: a steady pale ring and a glyph on each marble a hovered move would expose to a
 // flip, never a halo or colour alone. A converted marble wears a cap of the dark shell over the glass.
-const paleMaterial = new THREE.MeshBasicMaterial({ color: MARBLE_COLORS[2] });
+const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
 const shellCapGeometry = new THREE.SphereGeometry(0.37, 32, 8, 0, Math.PI * 2, 0, Math.PI * 0.35);
@@ -320,14 +319,10 @@ const onMarble = (i: number, obj: THREE.Object3D): void => {
 const ghosts = new THREE.Group();
 scene.add(ghosts);
 const ghostMaterials: Record<number, THREE.MeshStandardMaterial> = {};
-for (const side of [1, 2]) {
-  ghostMaterials[side] = new THREE.MeshStandardMaterial({
-    color: MARBLE_COLORS[side],
-    transparent: true,
-    opacity: 0.45,
-    depthWrite: false,
-  });
+for (const [key, color] of [[1, SHELL.color], [2, GLASS.color]] as const) {
+  ghostMaterials[key] = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false });
 }
+const ghostCore = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true, opacity: 0.45, depthWrite: false });
 let hover: Axial | null = null;
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
@@ -482,9 +477,14 @@ function afterPlay(before: number[], record: number[], live = true): void {
   body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
   body.dataset.sound = sfx.ejection(ejection.side, glassOf()) ?? 'none'; // read by the e2e tests: toll, clack or none
   const track = ejectTrack(ejection.cell, record[1]!, reducedMotion);
-  const material = marbleMaterial(ejection.side).clone();
-  material.transparent = true;
-  const mesh = new THREE.Mesh(marbleGeometry, material);
+  const mesh = marbleMesh(ejection.side);
+  mesh.traverse((o) => {
+    const material = ((o as THREE.Mesh).material as THREE.Material).clone(); // its own, to fade
+    material.transparent = true;
+    material.depthWrite = false; // the core stays seen through the fading glass
+    material.userData.opacity = material.opacity; // the glass is see-through before it fades
+    (o as THREE.Mesh).material = material;
+  });
   const holder = new THREE.Group();
   holder.add(mesh);
   scene.add(holder);
@@ -501,7 +501,10 @@ function drawEjection(e: Ejecting, elapsedMs: number): boolean {
   e.holder.rotation.y = p.yaw;
   e.holder.scale.set(p.along, p.across, p.across);
   e.mesh.rotation.set(p.twist, 0, -p.roll); // rolling forward, the top turns toward the pull: negative z
-  (e.mesh.material as THREE.MeshStandardMaterial).opacity = p.opacity;
+  e.mesh.traverse((o) => {
+    const material = (o as THREE.Mesh).material as THREE.Material;
+    material.opacity = material.userData.opacity * p.opacity;
+  });
   return p.done;
 }
 
@@ -509,7 +512,7 @@ function animateEjections(now: number): void {
   for (const e of ejecting.slice()) {
     if (!drawEjection(e, now - e.start)) continue;
     scene.remove(e.holder);
-    (e.mesh.material as THREE.Material).dispose();
+    e.mesh.traverse((o) => ((o as THREE.Mesh).material as THREE.Material).dispose());
     ejecting.splice(ejecting.indexOf(e), 1);
   }
   if (ejecting.length === 0) delete document.body.dataset.ejecting;
@@ -613,7 +616,7 @@ function refresh(): void {
       marbles.add(tick);
     }
     if (side === 0) return;
-    const marble = new THREE.Mesh(marbleGeometry, marbleMaterial(side));
+    const marble = marbleMesh(side);
     marble.position.set(p.x, 0.36, p.z);
     marbles.add(marble);
     onMarble(i, marble);
@@ -667,7 +670,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   ghosts.clear();
   for (const { cell, side } of list) {
     const p = axialTo3D(cell[0], cell[1]);
-    const marble = new THREE.Mesh(marbleGeometry, ghostMaterials[side === glassOf() ? 2 : 1]);
+    const marble = marbleMesh(side, ghostMaterials, ghostCore);
     marble.position.set(p.x, 0.36, p.z);
     ghosts.add(marble);
   }
@@ -802,13 +805,14 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__ejectAt = (ms: number) =>
   ejecting.map((e) => {
     drawEjection(e, ms);
+    const material = e.mesh.material as THREE.Material;
     return {
       along: e.holder.scale.x,
       across: e.holder.scale.y,
       roll: -e.mesh.rotation.z,
       twist: e.mesh.rotation.x,
       drop: 0.36 - e.holder.position.y,
-      opacity: (e.mesh.material as THREE.MeshStandardMaterial).opacity,
+      opacity: material.opacity / material.userData.opacity, // the fade, the glass's own see-through aside
     };
   });
 
