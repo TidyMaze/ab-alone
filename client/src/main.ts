@@ -25,6 +25,7 @@ import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { onlineStatus, type OnlineStatus } from './presence';
+import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { hudHtml } from './hud';
 import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
@@ -299,7 +300,7 @@ function hud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason()),
     ejected,
     win,
-    note: `${backend}${onlineNote}${extra}`,
+    note: `${backend}${onlineNote}${online ? '' : offlineNotice}${extra}`,
     online: onlineLine,
     // Who asked for a rematch, for the seated players of a finished online game (#186).
     rematch:
@@ -597,6 +598,8 @@ retryButton.addEventListener('click', () => startBoss(fight!.id, fight!.seed));
 // Once the game is over, Rematch starts a new game in the same room with the colours swapped (#186).
 let online: OnlineSession | null = null;
 let onlineNote = '';
+let offlineNotice = ''; // no connection: Play online is disabled, a game in progress keeps its own status (#194)
+let playReady = false;
 let onlineLine: OnlineStatus | undefined;
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
 const inviteLabel = document.getElementById('invite-label')!;
@@ -669,7 +672,17 @@ document.getElementById('play-online')!.addEventListener('click', () => {
   inviteLabel.hidden = false;
   void goOnline(room, 1);
 });
-(document.getElementById('play-online') as HTMLButtonElement).disabled = false; // engine and listener ready (#127)
+const playOnlineButton = document.getElementById('play-online') as HTMLButtonElement;
+function syncConnectivity(): void {
+  const state = playOnlineState(navigator.onLine, playReady);
+  playOnlineButton.disabled = state.disabled;
+  offlineNotice = state.notice;
+  hud();
+}
+addEventListener('online', syncConnectivity);
+addEventListener('offline', syncConnectivity);
+playReady = true; // engine and listener ready (#127)
+syncConnectivity();
 const invited = roomFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
 

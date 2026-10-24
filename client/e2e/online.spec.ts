@@ -335,3 +335,21 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   await a.context().close();
   await b.context().close();
 });
+
+// Issue #194: offline, Play online is disabled with a notice. Back online, it works again without a reload.
+test('Play online is disabled with a notice while offline and works again back online, #194', async ({ page, context }) => {
+  await page.goto('./?bot=off&net=hook');
+  await page.locator('canvas').waitFor();
+  const button = page.locator('#play-online');
+  await expect(button).toBeEnabled();
+
+  await context.setOffline(true);
+  await expect(button).toBeDisabled();
+  await expect(page.locator('#hud')).toContainText('online play needs a connection');
+
+  await context.setOffline(false);
+  await expect(button).toBeEnabled();
+  await expect(page.locator('#hud')).not.toContainText('online play needs a connection');
+  await button.click();
+  await expect(page.locator('#hud')).toContainText('You are Black');
+});
