@@ -186,6 +186,30 @@ Recorded win: `tests/fixtures/chaplain.txt` (seed 0, 92 moves).
 
 ### The Ballast Mind: NOT measured at pro level, 0 of 10 at 1x
 
+#### Attempt to measure it cheaply (#208): no result, the machine was too loaded
+
+New option `LADDER_SEEDS=<n>` plays n seeds per cell instead of 10 (one thread per seed, so it
+also caps the cores). Method: `nice -n 19`, at most 2 threads, a kill at 25 minutes (12 for the
+calibration run), the Ballast Mind only. A cell prints its line only when all its seeds end, so a
+killed run leaves no partial line. The machine was shared with other agents (load average 55 to
+77 on 10 cores), and a nice 19 process gets almost nothing of it.
+
+| multiplier | seeds | wins | median plies | max phase | deaths | time per game |
+|---|---|---|---|---|---|---|
+| 3x (450000 nodes) | 2 | not measured | - | - | - | over 25 min, killed, no line |
+| 1x (150000 nodes, calibration) | 1 | not measured | - | - | - | over 12 min, killed, no line (2.4 s per move unloaded, so about 8 min expected) |
+
+Commands: `LADDER_X=3 LADDER_SEEDS=2 nice -n 19 target/release/examples/ladder ballast` and
+`LADDER_X=1 LADDER_SEEDS=1 nice -n 19 target/release/examples/ladder ballast`.
+
+Estimate to plan the next run, not a measurement: at 1x every game is a draw at the 100-ply cap
+(50 player moves), so a 10x game is about 50 moves x 24 s = 20 minutes plus the boss moves,
+not an hour (the hour assumed the 300-ply cap). Two seeds at 10x then take about 25 minutes on
+2 free cores. Next step: run `LADDER_X=10 LADDER_SEEDS=2` on an idle machine, then 3x and 5x for the
+trend. The boss is not changed here (rule 17); if it is unbeatable at 10x, tuning is a separate task.
+
+Earlier measurement, 1x:
+
 The ladder now plays it (`LadderBoss::Ballast`). Pro level is 10x the boss budget, 1.5 million
 nodes per player move: about 24 s per move natively (the budget comment in `ballast.rs` measures
 150000 nodes at 2.4 s), so one 300-ply game is about an hour and ten seeds do not fit the 45

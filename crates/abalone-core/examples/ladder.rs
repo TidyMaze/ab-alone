@@ -6,6 +6,8 @@
 //! change of its own budget.
 //! Set `LADDER_X=10` to play one budget, that many times the boss budget (pro level is 10).
 //! Set `LADDER_FIXTURES=<dir>` to write the first won game of each cell as `<dir>/<boss>.txt`.
+//! Set `LADDER_SEEDS=2` to play that many seeds per cell instead of 10 (one thread per seed, so
+//! it also caps the cores used).
 //! The seeds of a cell run in parallel, one thread each.
 
 use abalone_core::encounter::fixture::Fixture;
@@ -14,6 +16,13 @@ use abalone_core::encounter::telemetry::{death_counts, summarize, AttemptRecord,
 use abalone_core::moves::Move;
 
 const SEEDS: u32 = 10;
+
+fn seeds() -> u32 {
+    std::env::var("LADDER_SEEDS")
+        .ok()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(SEEDS)
+}
 
 fn budgets(boss: LadderBoss) -> Vec<u32> {
     if let Some(nodes) = std::env::var("LADDER_NODES")
@@ -33,7 +42,7 @@ fn budgets(boss: LadderBoss) -> Vec<u32> {
 
 fn run_cell(boss: LadderBoss, budget: u32) -> Vec<(AttemptRecord, Vec<Move>)> {
     std::thread::scope(|s| {
-        let threads: Vec<_> = (0..SEEDS)
+        let threads: Vec<_> = (0..seeds())
             .map(|i| {
                 s.spawn(move || play_attempt_moves(boss, u64::from(i), i + 1, budget, PLY_CAP))
             })
