@@ -49,26 +49,57 @@ jobs:
           tool: cargo-llvm-cov
       - run: cargo llvm-cov --workspace --locked --fail-under-lines 100 --fail-under-regions 100
 
-  e2e:
+  # The WASM package is built once here and shared with the e2e shards as an artifact (#258).
+  wasm:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    # A runner takes one worker only (#216), so the suite is split across runners instead (#257). fullyParallel on CI
-    # (playwright.config.ts) splits it by test, not by file: online.spec.ts alone takes over 2 min.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - id: wasm-cache
+        uses: actions/cache@v4
+        with:
+          path: crates/abalone-wasm/pkg
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: wasm-pack build crates/abalone-wasm --target web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: crates/abalone-wasm/pkg
+          retention-days: 1
+
+  # Software WebGL on a 4-vCPU runner starves two workers (#216), so each shard runs one worker and the shards run in
+  # parallel on their own runners: the wall clock is the slowest shard.
+  e2e:
+    needs: wasm
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-    name: e2e (${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    name: e2e (${{ matrix.shard }}/${{ strategy.job-total }})
+    env:
+      # The wasm package comes from the wasm job: the dev server must not rebuild it.
+      E2E_SKIP_WASM_BUILD: '1'
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
         with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-pack
+          name: wasm-pkg
+          path: crates/abalone-wasm/pkg
       # bun installs and runs the scripts (decision #243), node still runs vite and Playwright.
       - uses: actions/setup-node@v4
         with:
@@ -76,14 +107,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: client/package.json
-      - id: wasm-cache
-        uses: actions/cache@v4
-        with:
-          path: crates/abalone-wasm/pkg
-          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
-      - if: steps.wasm-cache.outputs.cache-hit != 'true'
-        run: wasm-pack build ../crates/abalone-wasm --target web
-        working-directory: client
       - run: bun install --frozen-lockfile
         working-directory: client
       - id: playwright-version
@@ -97,7 +120,7 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: bunx playwright install --with-deps chromium
         working-directory: client
-      - run: bun run e2e --shard=${{ matrix.shard }}/4
+      - run: bun run e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         working-directory: client
       - uses: actions/upload-artifact@v4
         if: failure()

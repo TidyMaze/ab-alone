@@ -39,7 +39,8 @@ export default defineConfig({
     : [
         {
           // --mode e2e: the server does not watch files, so nothing written to the checkout reloads a page under test (#185).
-          command: `bun run dev --port ${port} --strictPort --mode e2e`,
+          // E2E_SKIP_WASM_BUILD (CI shards): the package is already there, `bun run dev` would rebuild it with wasm-pack.
+          command: `${process.env.E2E_SKIP_WASM_BUILD ? 'bunx vite' : 'bun run dev'} --port ${port} --strictPort --mode e2e`,
           url: `http://localhost:${port}`,
           reuseExistingServer: true,
           timeout: 120_000,
