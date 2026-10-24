@@ -51,6 +51,13 @@ jobs:
 
   e2e:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # A runner takes one worker only (#216), so the suite is split across runners instead (#257). fullyParallel on CI
+    # (playwright.config.ts) splits it by test, not by file: online.spec.ts alone takes over 2 min.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    name: e2e (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -90,12 +97,12 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: bunx playwright install --with-deps chromium
         working-directory: client
-      - run: bun run e2e
+      - run: bun run e2e --shard=${{ matrix.shard }}/4
         working-directory: client
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             client/playwright-report/
             client/test-results/

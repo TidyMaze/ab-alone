@@ -363,7 +363,9 @@ forks keep it even after a revert).
 
 - On every **ready** PR (not on drafts), on open, push and `ready_for_review`: fmt, clippy and
   `cargo test --all --locked`. A draft PR shows the `rust` check as skipped.
-- On push to main (after merge): the same Rust job, the coverage gate and the e2e job.
+- On push to main (after merge): the same Rust job, the coverage gate and the e2e job. The e2e job
+  runs in 4 shards, one runner and one worker each (#257): a failed shard uploads its own
+  `playwright-report-<n>` artifact.
 
 **WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
 After pulling main, rebuild it from the repo root:
