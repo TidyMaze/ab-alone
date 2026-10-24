@@ -99,7 +99,7 @@ bot or a boss through tools, and the engine judges every move. It runs on your m
 hosted. Build it once, and again after pulling `main`:
 
 ```bash
-cd mcp && bun install && bun run wasm
+(cd client && bun install) && cd mcp && bun install && bun run wasm
 ```
 
 Then add it to your MCP client, with the absolute path of your checkout. Claude Code:
@@ -124,7 +124,11 @@ replies in the same call) until the game is over, or `resign`. `get_state` shows
 use the notation of `abalone-cli`, for example `(1,3)>NE`. Tools, fields and error codes:
 [docs/specs/mcp.md](docs/specs/mcp.md). `new_game` with `boss` (one of the ids in its input schema) and
 an optional `seed` starts a boss fight: `get_state` then shows the boss phase, tell and marks.
-Online rooms come later (#254).
+
+Online, the agent plays a human or another agent over the same P2P rooms as the browser:
+`create_room` gives an invite link a human opens, `join_room` takes a link or a room code. Then
+`wait_for_opponent_move` and `play_move` in turn. The server imports the client's online code, so
+run `bun install` in `client/` too.
 
 ## Crew manifest
 

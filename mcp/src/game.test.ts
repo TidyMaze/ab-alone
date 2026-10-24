@@ -19,6 +19,11 @@ function record(move: string): Int32Array {
   return toRecord(parsed.move);
 }
 
+/** A local game never opens a transport: online play is online.test.ts. */
+function noNetwork(): never {
+  throw new Error('no network in a local game');
+}
+
 /** Search budget of the bot in these tests when no reply is scripted, small so the suite stays fast. */
 const CHEAP = 30;
 
@@ -54,7 +59,7 @@ function engines(replies: string[] = []) {
 }
 
 function session(replies: string[] = []): Session {
-  return new Session(engines(replies).factory, newEncounter);
+  return new Session(engines(replies).factory, newEncounter, noNetwork);
 }
 
 /** Plays the agent moves one by one and returns the last answer. */
@@ -121,7 +126,7 @@ describe('new_game', () => {
 
   test('drops the game in progress: a new id, a fresh board, the old engine freed', () => {
     const { factory, spy } = engines();
-    const game = new Session(factory, newEncounter);
+    const game = new Session(factory, newEncounter, noNetwork);
     const first = value(game.newGame({ bot_nodes: CHEAP }));
     value(game.playMove({ move: '(1,3)>NE' }));
     const second = value(game.newGame({}));
@@ -133,7 +138,7 @@ describe('new_game', () => {
 
   test('the bot searches 20000 positions per move by default (BOT_NODES of the client)', () => {
     const { factory, spy } = engines();
-    const game = new Session(factory, newEncounter);
+    const game = new Session(factory, newEncounter, noNetwork);
     value(game.newGame({}));
     value(game.playMove({ move: '(1,3)>NE' }));
     expect(BOT_NODES).toBe(20000);
@@ -142,7 +147,7 @@ describe('new_game', () => {
 
   test('bot_nodes sets the bot search budget', () => {
     const { factory, spy } = engines();
-    const game = new Session(factory, newEncounter);
+    const game = new Session(factory, newEncounter, noNetwork);
     value(game.newGame({ bot_nodes: 7 }));
     value(game.playMove({ move: '(1,3)>NE' }));
     expect(spy.nodes).toEqual([7]);
@@ -278,7 +283,7 @@ describe('play_move', () => {
   test('a game that ends on the agent move gets no reply', () => {
     // One more Black move first, so the position that comes back three times is one after a Black move.
     const { factory, spy } = engines([...BOT_LOOP]);
-    const game = new Session(factory, newEncounter);
+    const game = new Session(factory, newEncounter, noNetwork);
     value(game.newGame({}));
     const last = playAll(game, ['(-2,2)>NW', ...AGENT_LOOP]);
     expect(last.played).toBe('(2,2)>SW');
@@ -349,7 +354,7 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
 
   test('play_move plays the boss reply (Encounter.boss_move) after the agent move, bot_nodes is ignored', () => {
     const { factory, spy } = engines();
-    const game = new Session(factory, newEncounter);
+    const game = new Session(factory, newEncounter, noNetwork);
     value(game.newGame({ boss: 'hull', seed: 5, bot_nodes: 7 }));
     const answer = value(game.playMove({ move: '(1,3)>NE' }));
     const reference = newEncounter('hull', 5);

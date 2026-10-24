@@ -1,10 +1,18 @@
-// The tools of a local game against the bot or a boss (docs/specs/mcp.md sections 4 to 6): `new_game`, `get_state`,
-// `legal_moves`, `play_move`, `resign`. One game at a time. The engine is the only judge: this holds no rule, it asks
-// the engine and turns its codes into words. Resign is the one thing the engine does not model (rules.md OPEN-12).
+// The tools of docs/specs/mcp.md sections 4 to 7: a local game against the bot or a boss (`new_game`, `get_state`,
+// `legal_moves`, `play_move`, `resign`) and an online room (`create_room`, `join_room`, `wait_for_opponent_move`).
+// One game at a time. The engine is the only judge: this holds no rule, it asks the engine and turns its codes into
+// words. Resign is the one thing the engine does not model (rules.md OPEN-12).
 import { randomUUID } from 'node:crypto';
+import { SITE } from '../../client/src/daily';
+import { inviteUrl, newRoomId, roomFromHash } from '../../client/src/invite';
+import { generateKeys, type Keys } from '../../client/src/moverecord';
+import { SIGNALING_TIMEOUT_MS } from '../../client/src/netcounters';
+import type { Judge } from '../../client/src/session';
+import type { Transport } from '../../client/src/transport';
 import { ascii, boardText } from './board';
 import { bossState, type BossLike, type BossState } from './boss';
 import { formatMove, fromRecord, fromRecords, parseMove, toRecord } from './notation';
+import { Room, type RoomEvent } from './online';
 
 /** What the session uses of both `Engine` and `Encounter` in abalone-wasm. */
 interface Playable {
@@ -59,7 +67,19 @@ export function drawReasonName(code: number): DrawReason {
   return DRAW_REASONS[code] as DrawReason;
 }
 
-export type ErrorCode = 'no_game' | 'unknown_boss' | 'game_over' | 'bad_move' | 'illegal_move';
+export type ErrorCode =
+  | 'no_game'
+  | 'unknown_boss'
+  | 'game_over'
+  | 'not_your_turn'
+  | 'bad_move'
+  | 'illegal_move'
+  | 'no_room'
+  | 'already_in_room'
+  | 'room_full'
+  | 'room_not_found'
+  | 'transport_failed'
+  | 'not_supported';
 
 export interface ToolError {
   code: ErrorCode;
@@ -70,7 +90,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: ToolError }
 
 export interface State {
   game_id: string;
-  mode: 'bot' | 'boss';
+  mode: 'bot' | 'boss' | 'online';
   you: Side;
   to_move: Side;
   status: Status;
@@ -94,7 +114,7 @@ export interface LegalMoves {
 
 export interface Played {
   played: string;
-  /** The bot or boss reply, `null` when the game ended on the agent's move. */
+  /** The bot or boss reply, `null` when the game ended on the agent's move, and always online. */
   reply: string | null;
   state: State;
 }
@@ -109,12 +129,38 @@ export interface PlayMoveInput {
   move: string;
 }
 
+export interface RoomInfo {
+  room: string;
+  /** The link a human opens in the client. */
+  invite: string;
+  you: Side;
+  /** The agent's Ed25519 public key, base64url. */
+  pub: string;
+}
+
+export interface JoinRoomInput {
+  /** A room code or an invite link. */
+  room: string;
+}
+
+export interface WaitInput {
+  timeout_s?: number;
+}
+
+export interface Waited {
+  event: RoomEvent;
+  /** Only for `opponent_moved`: the last move, `null` when the opponent took its seat and nobody moved yet. */
+  move?: string | null;
+  state: State;
+}
+
 interface Game {
   id: string;
   engine: Playable;
-  /** The bot or boss move for the current position. */
-  reply: () => Int32Array;
+  /** The bot or boss move for the current position, `null` online. */
+  reply: (() => Int32Array) | null;
   boss: { id: string; encounter: EncounterLike } | null;
+  room: Room | null;
   resigned: boolean;
   /** Every ply in notation, oldest first, bot moves included. */
   plies: string[];
@@ -123,16 +169,26 @@ interface Game {
 /** Plies shown in `last_moves`. */
 const LAST_MOVES = 6;
 
+/** The room creator holds seat 1 (Black), a joiner asks for seat 2 (White), as in the client. */
+const CREATOR = 1;
+const JOINER = 2;
+
+/** Seconds `wait_for_opponent_move` waits by default. */
+const WAIT_S = 30;
+
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
 const fail = (code: ErrorCode, message: string): Result<never> => ({ ok: false, error: { code, message } });
 
-/** The one local game of the server. */
+/** The one game of the server: local, or in an online room. */
 export class Session {
   private game: Game | null = null;
+  /** The agent's key, made once per process and kept in memory (docs/specs/mcp.md section 7). */
+  private keys: Keys | null = null;
 
   constructor(
     private readonly newEngine: () => EngineLike,
     private readonly newEncounter: (boss: string, seed: number) => EncounterLike,
+    private readonly newTransport: (room: string) => Transport,
   ) {}
 
   /**
@@ -140,7 +196,7 @@ export class Session {
    * moves first. An unknown boss keeps the game in progress.
    */
   newGame({ boss, seed = 0, bot_nodes = BOT_NODES }: NewGameInput): Result<State> {
-    const game = { id: randomUUID(), resigned: false, plies: [] };
+    const game = { id: randomUUID(), resigned: false, plies: [], room: null };
     let next: Game;
     if (boss === undefined) {
       const engine = this.newEngine();
@@ -154,9 +210,30 @@ export class Session {
       }
       next = { ...game, engine: encounter, reply: () => encounter.boss_move(), boss: { id: boss, encounter } };
     }
-    this.game?.engine.free();
-    this.game = next;
+    this.replace(next);
     return ok(state(next));
+  }
+
+  /** Opens a room as Black. The game starts once a second peer has taken the other seat. */
+  createRoom(): Promise<Result<RoomInfo>> {
+    return this.openRoom(newRoomId((bytes) => crypto.getRandomValues(bytes)), CREATOR);
+  }
+
+  /** Joins a room made by a human or by another agent, once its creator gave the agent a seat. */
+  joinRoom({ room }: JoinRoomInput): Promise<Result<RoomInfo>> {
+    const id = room.includes('#') ? roomFromHash(room.slice(room.indexOf('#'))) : room;
+    if (!id) return Promise.resolve(fail('room_not_found', `not a room code or an invite link: ${room}`));
+    return this.openRoom(id, JOINER);
+  }
+
+  /** Waits until the opponent moved, the game ended, the opponent left or a desync, or `timeout_s` passed. */
+  async waitForOpponentMove({ timeout_s = WAIT_S }: WaitInput): Promise<Result<Waited>> {
+    const game = this.game;
+    if (!game?.room) return fail('no_room', 'not in a room: call create_room or join_room first');
+    const room = game.room;
+    const event = (await room.until(() => room.event(over(game)), timeout_s * 1000)) ?? 'timeout';
+    const move = event === 'opponent_moved' ? { move: game.plies.at(-1) ?? null } : {};
+    return ok({ event, ...move, state: state(game) });
   }
 
   getState(): Result<State> {
@@ -179,22 +256,30 @@ export class Session {
     });
   }
 
-  /** Plays the agent's move, then the bot's or boss's reply in the same call, so the agent is to move again. */
+  /**
+   * Plays the agent's move, then the bot's or boss's reply in the same call, so the agent is to move again. Online, the
+   * move is signed and sent: the reply comes through `wait_for_opponent_move`.
+   */
   playMove({ move }: PlayMoveInput): Result<Played> {
     return this.withGame((game) => {
       if (over(game)) return gameOver();
       const parsed = parseMove(move);
       if (!parsed.ok) return fail('bad_move', parsed.message);
+      if (game.room && !game.room.session.canPlay()) {
+        return fail('not_your_turn', 'the opponent is to move, or not seated: call wait_for_opponent_move');
+      }
+      const mine = toRecord(parsed.move);
       try {
-        game.engine.play(toRecord(parsed.move));
+        game.engine.play(mine);
       } catch (reason) {
         return fail('illegal_move', String(reason));
       }
       const played = formatMove(parsed.move);
       game.plies.push(played);
       let reply: string | null = null;
-      if (!over(game)) {
-        const record = game.reply();
+      if (game.room) void game.room.session.send(Array.from(mine));
+      else if (!over(game)) {
+        const record = game.reply!();
         game.engine.play(record);
         reply = formatMove(fromRecord(record));
         game.plies.push(reply);
@@ -203,9 +288,10 @@ export class Session {
     });
   }
 
-  /** The bot or boss wins. The engine is not asked, it has no resign. */
+  /** The bot or boss wins. The engine is not asked, it has no resign. Online it waits for rules.md OPEN-12. */
   resign(): Result<State> {
     return this.withGame((game) => {
+      if (game.room) return fail('not_supported', 'resign online waits for an owner decision (rules.md OPEN-12)');
       if (over(game)) return gameOver();
       game.resigned = true;
       return ok(state(game));
@@ -215,6 +301,56 @@ export class Session {
   private withGame<T>(run: (game: Game) => Result<T>): Result<T> {
     return this.game ? run(this.game) : fail('no_game', 'no game started: call new_game first');
   }
+
+  /** Drops the game in progress, and leaves its room. */
+  private replace(next: Game): void {
+    this.game?.engine.free();
+    this.game?.room?.close();
+    this.game = next;
+  }
+
+  /** A joiner waits for the creator to seat it. Until the room is open, the game in progress stays. */
+  private async openRoom(id: string, side: number): Promise<Result<RoomInfo>> {
+    if (this.game?.room) return fail('already_in_room', 'already in a room: call new_game to leave it');
+    this.keys ??= await generateKeys();
+    let transport: Transport;
+    try {
+      transport = this.newTransport(id);
+    } catch (reason) {
+      return fail('transport_failed', String(reason));
+    }
+    const engine = this.newEngine();
+    const game: Game = { id, engine, reply: null, boss: null, room: null, resigned: false, plies: [] };
+    const room = (game.room = new Room(id, side, this.keys, transport, judge(game)));
+    if (side === JOINER) {
+      const seated = () => (room.session.role === 'pending' ? undefined : room.session.role);
+      const role = await room.until(seated, SIGNALING_TIMEOUT_MS);
+      if (role !== 'player') {
+        room.close();
+        game.engine.free();
+        return role
+          ? fail('room_full', 'both seats of the room are taken')
+          : fail('room_not_found', `no peer answered within ${SIGNALING_TIMEOUT_MS / 1000} s`);
+      }
+    }
+    this.replace(game);
+    return ok({ room: id, invite: inviteUrl(SITE, id), you: sideName(room.session.side), pub: this.keys.pub });
+  }
+}
+
+/** The engine as the judge of the room: a move from the opponent is played on it, or refused. */
+function judge(game: Game): Judge {
+  return {
+    to_move: () => game.engine.to_move(),
+    play: (mv) => {
+      game.engine.play(mv);
+      game.plies.push(formatMove(fromRecord(mv)));
+    },
+    status: () => game.engine.status(),
+    // Rematch is not exposed (docs/specs/mcp.md section 7): the agent never asks, so a new game never starts.
+    /* v8 ignore next */
+    restart: () => {},
+  };
 }
 
 function over(game: Game): boolean {
@@ -232,10 +368,10 @@ function state(game: Game): State {
   if (boss && game.resigned) boss.result = 'lost';
   return {
     game_id: game.id,
-    mode: boss ? 'boss' : 'bot',
-    you: 'black',
+    mode: game.room ? 'online' : boss ? 'boss' : 'bot',
+    you: game.room ? sideName(game.room.session.side) : 'black',
     to_move: sideName(engine.to_move()),
-    // The agent is Black against the bot or a boss (section 4.1), so a resign is a White win.
+    // The agent is Black against the bot or a boss (section 4.1), so a resign is a White win. No resign online.
     status: game.resigned ? 'white_won' : statusName(engine.status()),
     draw_reason: drawReasonName(engine.draw_reason()),
     resigned: game.resigned,

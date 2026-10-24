@@ -41,7 +41,16 @@ function picker(seed: number) {
 test('a scripted client plays a full game against the bot over stdio', async () => {
   await start();
   const { tools } = await client!.listTools();
-  expect(tools.map((tool) => tool.name).sort()).toEqual(['get_state', 'legal_moves', 'new_game', 'play_move', 'resign']);
+  expect(tools.map((tool) => tool.name).sort()).toEqual([
+    'create_room',
+    'get_state',
+    'join_room',
+    'legal_moves',
+    'new_game',
+    'play_move',
+    'resign',
+    'wait_for_opponent_move',
+  ]);
 
   // A small bot budget keeps the run short. The default budget is the client's (unit tests).
   let state = (await call('new_game', { bot_nodes: 300 })).value;

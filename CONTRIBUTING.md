@@ -421,14 +421,17 @@ installed too: vite, vitest and Playwright still run on it. The bun version is p
 (`-d` for a dev dependency), never with npm: each package has one lockfile, its `bun.lock`
 (`client/`, `mcp/`).
 
-**MCP server (`mcp/`, #252):** its own bun package, run when you touch `mcp/` or the engine API it
-uses. Not in CI. From `mcp/`, after `bun install`:
+**MCP server (`mcp/`, #252):** its own bun package, run when you touch `mcp/`, the engine API it
+uses, or the client modules its online rooms import (`client/src/session.ts`, `moverecord.ts`, `p2p.ts` and
+what they import, #254). Not in CI. It resolves Trystero from `client/node_modules`, so run `bun install` in
+`client/` first. From `mcp/`, after `bun install`:
 
 - `bun run test`: builds the Node target of the engine into `mcp/engine/` (git-ignored), then
   vitest with coverage thresholds of 100 % (lines, branches, functions, statements) on `mcp/src/`.
   Only `src/main.ts`, the stdio entry point, is left to the e2e.
 - `bunx tsc --noEmit`.
-- `bun run e2e`: a scripted MCP client starts the server over stdio and plays a full game.
+- `bun run e2e`: a scripted MCP client starts the server over stdio and plays a full game, then two
+  servers play each other over real WebRTC: it needs the public Nostr relays (internet).
 
 **Homebrew Rust without rustup:** set these before the WASM build or the checks. `wasm-ld` must be
 on PATH (Homebrew llvm is keg-only, so add `$(brew --prefix llvm)/bin` to PATH).
