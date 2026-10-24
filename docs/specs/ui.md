@@ -112,6 +112,12 @@ field covers a cell, and the space between them lets every tap through to the bo
   browser refuses the clipboard, the text appears in a box above the button, selected from its
   start, with the accent border, and the note says "diagnostics selected: copy them by hand". The
   box goes away once it loses focus. Both strings are kept verbatim for the e2e tests (#220).
+- **Export game, Import game.** Two buttons at the end of the button column, under Daily
+  challenge, for local games only: hidden during online, boss and daily games (#219, file format
+  in tech.md section 8). Export game downloads the game, Import game opens the browser's file
+  picker. A refused file adds a short note to the HUD, kept verbatim for the e2e tests: "import
+  refused: not a game file", "import refused: unknown file version", "import refused: illegal
+  move in the file".
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 

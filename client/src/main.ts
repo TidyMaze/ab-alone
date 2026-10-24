@@ -38,6 +38,7 @@ import { formatScore } from './score';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
+import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import './ui.css';
 
 // Palette from docs/specs/world.md section 5.
@@ -306,7 +307,7 @@ async function botTurn(): Promise<void> {
   const started = performance.now();
   const move = await askBot(worker, history, BOT_NODES, fight ?? undefined);
   diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: BOT_NODES });
-  if (engine !== game) return; // Retry, a new fight or New game started while the bot was thinking
+  if (engine !== game) return; // Retry, a new fight, New game or an import replaced the game while the bot was thinking
   thinking = false;
   playMove(move);
   refresh();
@@ -409,6 +410,7 @@ function hud(extra = ''): void {
   });
   rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
+  exportButton.hidden = importButton.hidden = online !== null || fight !== null; // local games only (#219)
   if (engine instanceof Encounter) {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
@@ -744,6 +746,39 @@ setInterval(today, 60_000); // an open page follows the day change at 00:00 UTC
 dailyButton.addEventListener('click', startDaily);
 dailyButton.disabled = false; // label and listener ready (#144)
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
+
+// Export and import (#219): the local game as a JSON file in the save format, docs/specs/tech.md section 8. An
+// imported game is replayed through the engine, replaces the local game and is saved like one, in this page's mode
+// (against the bot, or hot-seat with ?bot=off). A bad file changes nothing but the HUD note.
+const exportButton = document.getElementById('export-game') as HTMLButtonElement;
+const importButton = document.getElementById('import-game') as HTMLButtonElement;
+const importFile = document.getElementById('import-file') as HTMLInputElement;
+exportButton.addEventListener('click', () => {
+  const link = document.createElement('a');
+  const text = gameFileText({ bot: worker !== null, moves: history });
+  link.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  link.download = gameFileName(new Date());
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 60_000); // the download may still be reading it
+});
+importButton.addEventListener('click', () => importFile.click());
+importFile.addEventListener('change', async () => {
+  const file = importFile.files?.[0];
+  importFile.value = ''; // so picking the same file again is a change too
+  if (!file) return;
+  const read = await readGameFile(file, () => new Engine());
+  if (online || fight) return; // the player left for another game while the file was read
+  if ('refused' in read) return hud(` · ${read.refused}`);
+  engine = read.engine;
+  history.length = 0;
+  history.push(...read.moves);
+  selected = [];
+  thinking = false;
+  void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
+  refresh();
+  void botTurn();
+});
+exportButton.disabled = importButton.disabled = false; // listeners ready (#146)
 
 // Online play: Black creates the room and shares the invite link, the link opener plays White.
 // The engine stays the only judge: every remote move is replayed through it, a bad one is refused.

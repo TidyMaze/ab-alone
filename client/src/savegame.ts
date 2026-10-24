@@ -45,15 +45,21 @@ export interface ReplayEngine {
   status(): number; // 0 while the game runs
 }
 
-/** A new engine after `moves`, or null when the engine refuses one of them or the game is over. */
-export function replay<E extends ReplayEngine>(moves: number[][], make: () => E): E | null {
+/** A new engine after `moves`, or null when the engine refuses one of them. The game may be over. */
+export function replayMoves<E extends ReplayEngine>(moves: number[][], make: () => E): E | null {
   const engine = make();
   try {
     for (const mv of moves) engine.play(Int32Array.from(mv));
   } catch {
     return null;
   }
-  return engine.status() === 0 ? engine : null;
+  return engine;
+}
+
+/** A new engine after `moves`, or null when the engine refuses one of them or the game is over. */
+export function replay<E extends ReplayEngine>(moves: number[][], make: () => E): E | null {
+  const engine = replayMoves(moves, make);
+  return engine?.status() === 0 ? engine : null;
 }
 
 /** A small async key-value store: IndexedDB in the browser (idb.ts), memory in the unit tests. */
