@@ -20,6 +20,8 @@ export default defineConfig({
   // CI runners have no GPU: every page draws with software WebGL on all cores. Two workers starved each other, a frame took
   // 1.5 s and clicks timed out (#216); one worker passes all specs (run 40103771311). Its slowest specs take 23 s, hence 60 s.
   workers: process.env.CI ? 1 : undefined,
+  // CI splits the suite across runners with --shard (#257): by test, so one long spec file does not hold one shard back.
+  fullyParallel: !!process.env.CI,
   timeout: process.env.CI ? 60_000 : 30_000,
   // One retry on CI records a trace for the retried run only.
   retries: process.env.CI ? 1 : 0,
