@@ -14,7 +14,10 @@ const plies = (page: Page) => page.evaluate(() => (window as any).__plies());
 // Seating is a Hello round trip after the connection opens: wait for it before the first move.
 const seat = (page: Page, role: 'player' | 'spectator') => expect(page.locator('body')).toHaveAttribute('data-seat', role);
 
+// Tests with two or three WebGL pages call test.slow() (90 s instead of 30 s): on the CI runners, against
+// the live site, a two-page test takes about 25 s and the three-page one more than 30 s (#138).
 test('a move played on page A shows up on page B over the signed move log', async ({ browser }) => {
+  test.slow();
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await a.exposeFunction('__netOut', (rec: unknown) => b.evaluate((r) => (window as any).__netIn(r), rec));
@@ -61,6 +64,7 @@ test('a move played on page A shows up on page B over the signed move log', asyn
 });
 
 test('two tabs of the same browser context play an online game, bug #116', async ({ context }) => {
+  test.slow();
   const a = await context.newPage();
   const b = await context.newPage(); // same context: shared localStorage
   await a.exposeFunction('__netOut', (rec: unknown) => b.evaluate((r) => (window as any).__netIn(r), rec));
@@ -88,6 +92,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
 });
 
 test('a third peer opening the link is not a player: room is full, its move changes nothing, bug #117', async ({ browser }) => {
+  test.slow();
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   // Every page broadcasts to the two others, like a Trystero room.
   const all = [a, b, c];
