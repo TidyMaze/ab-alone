@@ -763,6 +763,13 @@ addEventListener('resize', () => {
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
 
+// Used by the online e2e tests to play a move without the pointer: the two cell clicks of click(), so the
+// signed record goes out through the online session like a real move. The tests keep one real click per run.
+(window as unknown as Record<string, unknown>).__playMove = (fq: number, fr: number, tq: number, tr: number) => {
+  click(fq, fr);
+  click(tq, tr);
+};
+
 // Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
 // frame draws them at the real time again).
 (window as unknown as Record<string, unknown>).__ejectAt = (ms: number) =>
