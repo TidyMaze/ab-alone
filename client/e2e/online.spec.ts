@@ -324,7 +324,7 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   for (const page of [a, b]) {
     // Each side sees its own result (a draw is the same for both) and the one action it can take (#282).
     await expect(page.locator('body')).toHaveAttribute('data-over', 'draw');
-    await expect(page.locator('#hud .end')).toContainText('Rematch to play again.');
+    await expect(page.locator('#hud .end')).toContainText('Tally closes the page.');
   }
 
   // Each seated player sees the Rematch button. Black asks first, White sees it.

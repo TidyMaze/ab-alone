@@ -86,15 +86,17 @@ covers no cell either. It closes on Escape, on a press outside and on the cog ag
 - **Score.** The existing score text from #93 stays the source of truth and the readable copy.
   Six pips per side are scratched out as marbles are ejected, a visual twin of the text.
 - **End banner (#282).** When the game is over the turn line is replaced by the result in the
-  display face, with the accent border, and under it come the reason and the one action offered,
-  all inside the plate, so nothing covers a cell. The result is read from the viewer's side:
-  "You win" / "You lose" against the bot and online, "Black wins" / "White wins" in hot-seat and for a
-  spectator, "Draw", and "Victory" / "Defeat" in a boss or daily fight, where a draw is a "Defeat"
-  (rules.md section 10.3). The reason line is short, in TALLY's tone, built by `client/src/endbanner.ts`:
-  "6 out. The books balance.", "6 out. Tally strikes your name.", "6 out. The seat is empty." (10 against
-  the Choir), "6 out. The seat holds.", "Same position three times. Tally closes the page.", "100 plies,
-  nothing ejected. Tally calls it even." (against a boss: "... A draw is a defeat here."). The action line
-  is "New game to play again.", "Retry to fight again." or "Rematch to play again." (none for a spectator).
+  display face, with the accent border, and under it comes the reason, one short line, all inside the
+  plate, so nothing covers a cell (the plate may not grow over the board: the phone-layout e2e checks
+  it in a boss fight too, where the banner replaces the boss block's own Victory or Defeat line). The
+  result is read from the viewer's side: "You win" / "You lose" against the bot and online, "Black
+  wins" / "White wins" in hot-seat and for a spectator, "Draw", and "Victory" / "Defeat" in a boss or
+  daily fight, where a draw is a "Defeat" (rules.md section 10.3). The reason line is in TALLY's tone,
+  built by `client/src/endbanner.ts`: "6 out. The books balance.", "6 out. Tally strikes your name.",
+  "6 out. The seat is empty." (10 against the Choir), "6 out. The seat holds.", "Same position three
+  times. Tally closes the page.", "100 plies, nothing ejected. Tally calls it even.", and against a boss
+  "Repeated 3 times: a defeat." or "100 plies idle: a defeat.". The one action offered is the button
+  already in the column: New game (local, bot), Retry (boss, daily), Rematch (online players).
   `body[data-over]` is `win`, `loss` or `draw` while the game is over (a draw against a boss is `loss`):
   the board dims (filter on the canvas) and one light plays on the rim only, the middle stays clear of
   cells, marbles and targets. Win: a warm sodium rim light rises and pulses once (1.6 s) and stays as a

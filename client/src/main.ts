@@ -494,7 +494,7 @@ function hud(extra = ''): void {
         name: engine.name(),
         phase: engine.phase(),
         phases: engine.phases(),
-        result: engine.result(),
+        result: end ? 0 : engine.result(), // the end banner already says Victory or Defeat, one line less in the plate
         tell: [
           crackText(parseCracks(engine.cracks())),
           chaplainText(exposed, engine.converted().length / 2),

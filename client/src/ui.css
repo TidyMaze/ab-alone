@@ -223,8 +223,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
    target), draws one short light: a warm rising pulse for a win, a cold fade for a loss, a still hold for a
    draw. CSS only, a second and a half at most, nothing runs once it ends. Under reduced motion the light is
    gone and the board is just dimmed. */
-#hud .end { margin: 0.25rem 0 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--accent); }
-#hud .end div + div { color: var(--muted); font-size: 0.875rem; }
+/* width 0 + min-width 100%: the banner lines wrap inside the plate and never widen it (a wider plate reaches over the board). */
+#hud .end { width: 0; min-width: 100%; margin: 0.25rem 0; padding-top: 0.25rem; border-top: 1px solid var(--accent); font-size: 0.875rem; line-height: 1.3; }
 body[data-over] canvas { filter: brightness(0.8) saturate(0.85); }
 body[data-over='win'] canvas { filter: brightness(0.9) sepia(0.2); }
 body[data-over='loss'] canvas { filter: brightness(0.7) saturate(0.65); animation: end-dim 1.4s ease-in forwards; }

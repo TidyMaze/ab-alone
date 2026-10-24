@@ -16,34 +16,25 @@ export interface EndInput {
 export interface EndBanner {
   title: string;
   line: string; // the reason
-  next: string; // the one action offered, '' when there is none
   anim: EndAnim;
 }
 
-const NEXT: Record<EndMode, string> = {
-  local: 'New game to play again.',
-  bot: 'New game to play again.',
-  boss: 'Retry to fight again.',
-  online: 'Rematch to play again.',
-};
-
 export function endBanner({ status, reason, win, mode, side }: EndInput): EndBanner | null {
   if (status === 0) return null;
-  const next = mode === 'online' && side === 0 ? '' : NEXT[mode];
   const boss = mode === 'boss';
   if (status === 3) {
-    const what = reason === 2 ? '100 plies, nothing ejected' : 'Same position three times';
-    if (boss) return { title: 'Defeat', line: `${what}. A draw is a defeat here.`, next, anim: 'loss' };
-    const tail = reason === 2 ? 'Tally calls it even.' : 'Tally closes the page.';
-    return { title: 'Draw', line: `${what}. ${tail}`, next, anim: 'draw' };
+    // The plate may not grow over the board (phone-layout e2e): the boss line fits one line of the plate.
+    if (boss) return { title: 'Defeat', line: reason === 2 ? '100 plies idle: a defeat.' : 'Repeated 3 times: a defeat.', anim: 'loss' };
+    const what = reason === 2 ? '100 plies, nothing ejected. Tally calls it even.' : 'Same position three times. Tally closes the page.';
+    return { title: 'Draw', line: what, anim: 'draw' };
   }
-  if (side === 0) return { title: `${status === 1 ? 'Black' : 'White'} wins`, line: `${win} out. The books balance.`, next, anim: 'win' };
+  if (side === 0) return { title: `${status === 1 ? 'Black' : 'White'} wins`, line: `${win} out. The books balance.`, anim: 'win' };
   if (status === side) {
     return boss
-      ? { title: 'Victory', line: `${win} out. The seat is empty.`, next, anim: 'win' }
-      : { title: 'You win', line: `${win} out. The books balance.`, next, anim: 'win' };
+      ? { title: 'Victory', line: `${win} out. The seat is empty.`, anim: 'win' }
+      : { title: 'You win', line: `${win} out. The books balance.`, anim: 'win' };
   }
   return boss
-    ? { title: 'Defeat', line: `${win} out. The seat holds.`, next, anim: 'loss' }
-    : { title: 'You lose', line: `${win} out. Tally strikes your name.`, next, anim: 'loss' };
+    ? { title: 'Defeat', line: `${win} out. The seat holds.`, anim: 'loss' }
+    : { title: 'You lose', line: `${win} out. Tally strikes your name.`, anim: 'loss' };
 }

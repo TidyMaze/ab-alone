@@ -49,15 +49,7 @@ describe('endBanner', () => {
     expect(endBanner(input('local', 0, 2, 0, 6))!.line).toBe('6 out. The books balance.');
     expect(endBanner(input('bot', 1, 3, REPEAT))!.line).toBe('Same position three times. Tally closes the page.');
     expect(endBanner(input('bot', 1, 3, STALL))!.line).toBe('100 plies, nothing ejected. Tally calls it even.');
-    expect(endBanner(input('boss', 1, 3, REPEAT))!.line).toBe('Same position three times. A draw is a defeat here.');
-    expect(endBanner(input('boss', 1, 3, STALL))!.line).toBe('100 plies, nothing ejected. A draw is a defeat here.');
-  });
-
-  it('names the one action offered: Retry, New game, or Rematch for an online player', () => {
-    expect(endBanner(input('boss', 1, 2))!.next).toBe('Retry to fight again.');
-    expect(endBanner(input('local', 0, 1))!.next).toBe('New game to play again.');
-    expect(endBanner(input('bot', 1, 1))!.next).toBe('New game to play again.');
-    expect(endBanner(input('online', 1, 1))!.next).toBe('Rematch to play again.');
-    expect(endBanner(input('online', 0, 1))!.next).toBe('');
+    expect(endBanner(input('boss', 1, 3, REPEAT))!.line).toBe('Repeated 3 times: a defeat.');
+    expect(endBanner(input('boss', 1, 3, STALL))!.line).toBe('100 plies idle: a defeat.');
   });
 });

@@ -28,7 +28,7 @@ export function hudHtml({ side, status, score, ejected, win, note, online, remat
   return (
     `<div class="turn">${marker}<span>${turn}</span></div>` +
     (end
-      ? `<div class="end" data-anim="${end.anim}"><div>${end.line}</div>${end.next ? `<div>${end.next}</div>` : ''}</div>`
+      ? `<div class="end" data-anim="${end.anim}">${end.line}</div>`
       : '') +
     (online ? `<div class="presence ${online.tone}">${online.text}</div>` : '') +
     (rematch ? `<div class="rematch">${rematch}</div>` : '') +

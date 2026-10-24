@@ -45,19 +45,18 @@ const settled = (page: Page) =>
   expect.poll(() => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').length)).toBe(0);
 
 /** The banner as the player reads it, and the marker the CSS animation hangs on. */
-async function expectOver(page: Page, anim: string, title: string, line: RegExp | string, next: string) {
+async function expectOver(page: Page, anim: string, title: string, line: RegExp | string) {
   await expect(page.locator('body')).toHaveAttribute('data-over', anim);
   await expect(page.locator('#hud .turn')).toHaveText(title);
   await expect(page.locator('#hud .end')).toHaveAttribute('data-anim', anim);
   await expect(page.locator('#hud .end')).toContainText(line);
-  await expect(page.locator('#hud .end')).toContainText(next);
 }
 
 test('a win against the bot: banner, warm animation id, locked board', async ({ page }) => {
   await open(page, '');
   await expect(page.locator('body')).not.toHaveAttribute('data-over', /.*/); // nothing while the game runs
   await load(page, true, BLACK_WINS);
-  await expectOver(page, 'win', 'You win', '6 out. The books balance.', 'New game to play again.');
+  await expectOver(page, 'win', 'You win', '6 out. The books balance.');
   const before = await plies(page);
   await tryToMove(page);
   expect(await plies(page)).toBe(before);
@@ -73,7 +72,7 @@ test('a win against the bot: banner, warm animation id, locked board', async ({ 
 test('a loss against the bot: banner, cold animation id, locked board', async ({ page }) => {
   await open(page, '');
   await load(page, true, WHITE_WINS);
-  await expectOver(page, 'loss', 'You lose', '6 out. Tally strikes your name.', 'New game to play again.');
+  await expectOver(page, 'loss', 'You lose', '6 out. Tally strikes your name.');
   const before = await plies(page);
   await tryToMove(page);
   expect(await plies(page)).toBe(before);
@@ -84,7 +83,7 @@ test('a loss against the bot: banner, cold animation id, locked board', async ({
 test('a draw at the table: banner, still animation id, locked board', async ({ page }) => {
   await open(page, '?bot=off');
   await load(page, false, DRAW);
-  await expectOver(page, 'draw', 'Draw', 'Same position three times. Tally closes the page.', 'New game to play again.');
+  await expectOver(page, 'draw', 'Draw', 'Same position three times. Tally closes the page.');
   await tryToMove(page);
   expect(await plies(page)).toBe(9);
   await settled(page);
@@ -94,14 +93,14 @@ test('a draw at the table: banner, still animation id, locked board', async ({ p
 test('hot-seat: the colour that won is named', async ({ page }) => {
   await open(page, '?bot=off');
   await load(page, false, WHITE_WINS);
-  await expectOver(page, 'win', 'White wins', '6 out. The books balance.', 'New game to play again.');
+  await expectOver(page, 'win', 'White wins', '6 out. The books balance.');
 });
 
 test('a draw against a boss is a defeat, and the daily result card stays reachable', async ({ page }) => {
   test.slow(); // eight plies played by hand against the boss search
   await startDaily(page);
   await loseByRepetition(page);
-  await expectOver(page, 'loss', 'Defeat', 'A draw is a defeat here.', 'Retry to fight again.');
+  await expectOver(page, 'loss', 'Defeat', 'Repeated 3 times: a defeat.');
   await expect(page.locator('#daily-card')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
   await expect(page.locator('#hud')).toContainText('Defeat');
@@ -115,7 +114,7 @@ test('reduced motion: the banner stays and the board is dimmed, nothing animates
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await open(page, '');
   await load(page, true, BLACK_WINS);
-  await expectOver(page, 'win', 'You win', '6 out. The books balance.', 'New game to play again.');
+  await expectOver(page, 'win', 'You win', '6 out. The books balance.');
   const style = await page.evaluate(() => {
     const canvas = getComputedStyle(document.querySelector('canvas')!);
     const veil = getComputedStyle(document.body, '::before');
@@ -154,7 +153,7 @@ test.describe('a phone held upright', () => {
   test('the banner reads on a phone', async ({ page }) => {
     await open(page, '');
     await load(page, true, BLACK_WINS);
-    await expectOver(page, 'win', 'You win', '6 out. The books balance.', 'New game to play again.');
+    await expectOver(page, 'win', 'You win', '6 out. The books balance.');
     await settled(page);
     await page.screenshot({ path: 'test-results/end-phone-win.png' });
   });

@@ -69,13 +69,12 @@ describe('hudHtml', () => {
     expect(hudHtml({ ...base, status: 3, online })).not.toContain('rematch');
   });
 
-  it('shows the end banner in place of the turn line: title, reason, next action, animation id, #282', () => {
-    const end = { title: 'You win', line: '6 out. The books balance.', next: 'New game to play again.', anim: 'win' as const };
+  it('shows the end banner in place of the turn line: title, reason, animation id, #282', () => {
+    const end = { title: 'You win', line: '6 out. The books balance.', anim: 'win' as const };
     const html = hudHtml({ ...base, status: 1, end });
     expect(html).toContain('<span>You win</span>');
-    expect(html).toContain('<div class="end" data-anim="win"><div>6 out. The books balance.</div><div>New game to play again.</div></div>');
+    expect(html).toContain('<div class="end" data-anim="win">6 out. The books balance.</div>');
     expect(html).not.toContain('Black wins');
-    expect(hudHtml({ ...base, status: 1, end: { ...end, next: '' } })).toContain('<div class="end" data-anim="win"><div>6 out. The books balance.</div></div>');
     expect(hudHtml(base)).not.toContain('class="end"');
   });
 
