@@ -262,6 +262,7 @@ mod tests {
             (DeathCause::Mirror, "mirror"),
             (DeathCause::Draw, "draw"),
             (DeathCause::PlyCap, "ply_cap"),
+            (DeathCause::BossStuck, "boss_stuck"),
         ];
         for (cause, name) in all {
             assert_eq!(cause.as_str(), name);

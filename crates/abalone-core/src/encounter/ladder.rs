@@ -336,6 +336,15 @@ mod tests {
     }
 
     #[test]
+    fn a_boss_with_no_move_ends_the_attempt_as_boss_stuck() {
+        let a = arena(&[(0, 0)], &[], Player::White, [0, 0]);
+        let r = play_out(a, 0, 1, 50, 2, 300);
+        assert_eq!(r.result, AttemptResult::Lost);
+        assert_eq!(r.death, Some(DeathCause::BossStuck));
+        assert_eq!((r.plies, r.boss_marbles), (0, 0));
+    }
+
+    #[test]
     fn a_game_that_hits_the_ply_cap_is_a_capped_loss() {
         let r = play_attempt(LadderBoss::Echo, 0, 1, 50, 4);
         assert_eq!(r.plies, 4);
