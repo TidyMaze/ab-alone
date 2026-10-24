@@ -7,6 +7,26 @@ issue to change this file first.
 **Owners:** @TidyMaze and @Varadiell. Owners decide. They can delegate triage and merging to the
 **lead agent** (the AI agent an owner drives), see section 9.
 
+## A collaboration project
+
+AB-ALONE is built by several people, each with their own AI agents, working at the same time on
+the same repo. Nobody here is the only developer. Every action is decided and done with the other
+contributors in mind:
+
+- **Look before you act.** Check open issues, open PRs and the project board first. Someone may
+  already be on it, or about to change the code you touch.
+- **Decisions that affect others are shared.** A change to a rule, a spec, the CI, the branch
+  protection or a shared API goes through an issue the other owner can see and answer before it
+  lands. Delegation to an agent covers your own work, not the other owner's.
+- **Respect others' work.** Their assigned issues and open PRs are theirs (rules 13 and 14). Their
+  decisions stand until changed in a `Decision` issue.
+- **Merge with care.** Before merging, check that your PR does not break or silently conflict with
+  someone else's open PR. If it will force them to rebase, say so in their PR.
+- **Leave the shared space clean.** Do not leave servers, branches or half-done work that others
+  stumble on. Close what you open.
+- **Say what you do.** Comment on the issue when you start, block, change course or stop, so the
+  others never have to guess.
+
 ## 0. The flow at a glance
 
 ```mermaid
