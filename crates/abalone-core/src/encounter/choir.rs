@@ -273,6 +273,23 @@ impl Choir {
         Ok(())
     }
 
+    /// Moves the side to move may play: every legal move for the player, for the boss the moves of
+    /// the army in turn that [`Choir::play`] accepts (no push in P3). Empty once the game is over.
+    pub fn legal_moves(&self) -> Vec<Move> {
+        let game = self.game();
+        if game.outcome().is_some() {
+            return Vec::new();
+        }
+        let moves = legal_moves(game.board(), game.to_move());
+        if game.to_move() == Player::Black {
+            return moves;
+        }
+        moves
+            .into_iter()
+            .filter(|m| self.check(m).is_ok())
+            .collect()
+    }
+
     /// Plays `mv` for the side to move. A boss move must use marbles of the army in turn only.
     pub fn play(&mut self, mv: &Move) -> Result<(), ChoirError> {
         let game = self.game();
