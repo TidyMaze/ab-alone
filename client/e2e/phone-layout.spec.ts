@@ -61,6 +61,14 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
   await frame(page);
   await page.screenshot({ path: testInfo.outputPath(`${state.replaceAll(' ', '-')}.jpg`), type: 'jpeg', quality: 70 });
   expect(await problems(page), state).toEqual([]);
+  // The same check with the settings menu open (#277): the cog and the menu cover no cell, marble or target.
+  const cog = page.getByRole('button', { name: 'Settings' });
+  await cog.click();
+  await expect(page.getByRole('button', { name: 'Clear board' })).toBeVisible();
+  await frame(page);
+  expect(await problems(page), `${state}, settings menu open`).toEqual([]);
+  await cog.click();
+  await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden();
 };
 
 const sizes = [
@@ -113,7 +121,7 @@ test('on a desktop the buttons stay in a column at the top right, bug #227', asy
   await expect(page.locator('#hud')).toContainText('Black to move');
   const width = page.viewportSize()!.width;
   const boxes = await Promise.all(
-    ['Clear board', 'Reset view', 'Play online', 'Boss fight'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
+    ['Settings', 'Reset view', 'Play online', 'Boss fight'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
   );
   expect(boxes[0]!.y).toBe(16);
   for (const [i, box] of boxes.entries()) {

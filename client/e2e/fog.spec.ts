@@ -39,7 +39,9 @@ test('the fog shows at the far rim of the board and not at the near rim, bug #17
   await page.locator('canvas').waitFor();
   await page.addStyleTag({ content: 'body::after { display: none !important; }' });
   await expect(page.locator('#hud')).toContainText('Black to move');
-  const toggle = page.locator('#clear-board');
+  const cog = page.getByRole('button', { name: 'Settings' });
+  const toggle = page.getByRole('button', { name: 'Clear board' });
+  await cog.click(); // the menu stays open for the three shots, so it is in all of them
   await page.mouse.move(2, 2); // no hover ghost
   await settle(page);
 

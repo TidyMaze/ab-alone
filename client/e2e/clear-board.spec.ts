@@ -4,8 +4,14 @@ test('clear-board toggles, survives a reload, and the board still plays', async 
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
-  const toggle = page.locator('#clear-board');
+  const cog = page.getByRole('button', { name: 'Settings' });
+  const toggle = page.getByRole('button', { name: 'Clear board' });
 
+  // Clear board lives in the settings menu: no loose button, the menu is closed until the cog opens it.
+  await expect(toggle).toBeHidden();
+  await expect(cog).toHaveAttribute('aria-expanded', 'false');
+  await cog.click();
+  await expect(cog).toHaveAttribute('aria-expanded', 'true');
   await expect(body).toHaveAttribute('data-clear', 'off');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
@@ -17,6 +23,8 @@ test('clear-board toggles, survives a reload, and the board still plays', async 
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('Black to move');
   await expect(body).toHaveAttribute('data-clear', 'on');
+  await expect(toggle).toBeHidden(); // the menu is closed again after a reload
+  await cog.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
   // Clicks hit nothing before the first rendered frame (the raycaster needs the updated matrices).
@@ -29,20 +37,51 @@ test('clear-board toggles, survives a reload, and the board still plays', async 
   await click(0, 1);
   await expect(page.locator('#hud')).toContainText('White to move');
 
+  await expect(toggle).toBeHidden(); // the first press on the board closed the menu
+  await cog.click();
+  await cog.click(); // the cog closes the menu
+  await expect(toggle).toBeHidden();
+  await cog.click();
   await toggle.click();
   await expect(body).toHaveAttribute('data-clear', 'off');
 });
 
+test('the settings menu closes on Escape and on a click outside, and is reachable by keyboard', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const cog = page.getByRole('button', { name: 'Settings' });
+  const toggle = page.getByRole('button', { name: 'Clear board' });
+  await expect(cog).toBeEnabled();
+
+  await cog.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(page.locator('body')).toHaveAttribute('data-clear', 'on');
+
+  await page.keyboard.press('Escape');
+  await expect(toggle).toBeHidden();
+  await expect(cog).toBeFocused();
+  await expect(cog).toHaveAttribute('aria-expanded', 'false');
+
+  await cog.click();
+  await expect(toggle).toBeVisible();
+  await page.mouse.click(10, 400); // on the board, outside the menu
+  await expect(toggle).toBeHidden();
+});
+
 // Bug #146: main.ts awaits the wasm engine, the renderer and the textures before it attaches the
-// Clear board listener. A click right after domcontentloaded must either hit a disabled button or toggle.
-test('Clear board is disabled or works when clicked right after load, bug #146', async ({ page }) => {
+// settings listener. A click right after domcontentloaded must either hit a disabled cog or open the menu.
+test('the settings cog is disabled or works when clicked right after load, bug #146', async ({ page }) => {
   await page.goto('./?bot=off', { waitUntil: 'domcontentloaded' });
   const atClick = await page.evaluate(() => {
-    const button = document.getElementById('clear-board') as HTMLButtonElement;
+    const button = document.getElementById('settings') as HTMLButtonElement;
     const disabled = button.disabled;
     button.click();
-    return { disabled, pressed: button.getAttribute('aria-pressed') };
+    return { disabled, expanded: button.getAttribute('aria-expanded') };
   });
-  expect(atClick.disabled || atClick.pressed === 'true').toBe(true);
-  await expect(page.locator('#clear-board')).toBeEnabled(); // and it works once the page is ready
+  expect(atClick.disabled || atClick.expanded === 'true').toBe(true);
+  await expect(page.locator('#settings')).toBeEnabled(); // and it works once the page is ready
 });
