@@ -78,8 +78,8 @@ function applyView(): void {
   camera.position.set(p.x, p.y, p.z);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(); // picking and __cellToScreen run before the next frame
+  applyLook(); // the fog follows the zoom
 }
-applyView();
 
 // Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
 const store = (() => {
@@ -98,13 +98,13 @@ const tier = readTier(store, {
 let clear = readClearBoard(store);
 const clearButton = document.getElementById('clear-board')!;
 function applyLook(): void {
-  const fog = fogSettings(tier, clear);
+  const fog = fogSettings(tier, clear, view.distance);
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
   clearButton.setAttribute('aria-pressed', String(clear));
 }
-applyLook();
+applyView(); // camera and fog
 clearButton.addEventListener('click', () => {
   clear = !clear;
   writeClearBoard(store, clear);
