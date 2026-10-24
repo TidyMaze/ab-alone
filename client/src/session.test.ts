@@ -511,6 +511,17 @@ describe('OnlineSession', () => {
     expect(black.session.canPlay()).toBe(true);
   });
 
+  it('knows a seat is an agent once its signed Hello says so, and the creator seat is not', async () => {
+    const r = room();
+    const black = await player(r.transport, 1);
+    const agent = await generateKeys();
+    expect(black.session.isAgent(2)).toBe(false);
+    r.from('b', await signHello(agent, { game: 'g', seat: 2, roster: [], agent: true }));
+    await settle();
+    expect(black.session.isAgent(2)).toBe(true);
+    expect(black.session.isAgent(1)).toBe(false);
+  });
+
   it('works without the optional callbacks', async () => {
     const [x, y] = localPair();
     const judge = new FakeJudge();
