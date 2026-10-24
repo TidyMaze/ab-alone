@@ -59,7 +59,7 @@ source kept out of the Pages artifact). All under the repo's MIT licence; the fo
 
 | Assets | Format and budget | Made | Today, issues |
 |---|---|---|---|
-| Marbles: glass and core, ridged shell, boss accents, flipped look | Materials, geometry; a ridge normal map, 256 px, 64 KB | Procedural, generated | Opaque glass, smooth shell: #291, #293, #26 |
+| Marbles: glass and core, ridged shell, boss accents, flipped look | Materials, geometry; a ridge normal map, 256 px, 64 KB | Procedural, generated | Smoked glass with a cyan core (#291), ridged shell `shell-normal.png` 256 px, 10 KB (#293); boss accents and the dimming core: #26 |
 | Board: light and textures per deck, frame, rim, backdrop | Data, geometry; textures 512 px, 300 KB a deck; backdrop 30 KB | Procedural, generated | One flat light, one steel set, no frame: #290, #292, #300, #28 |
 | Props, one lore object per boss arena | glTF, 150 KB each, 1 MB a deck | Procedural, then hand-made | None: #28, #20 |
 | Tells, phase notches, tally marks | Geometry; a crack decal, 128 px, 16 KB | Procedural, generated | Chaplain and Choir done, Hull crack a flat disc: #62, #22 |

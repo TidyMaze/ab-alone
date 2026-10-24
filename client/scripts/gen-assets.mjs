@@ -8,7 +8,7 @@ export const SEED = 89;
 export const ASSET_NAMES = [
   'deck-albedo.png',
   'deck-roughness.png',
-  'marble-normal.png',
+  'shell-normal.png',
   'backdrop.png',
 ];
 
@@ -117,11 +117,20 @@ function deck(size, rand) {
   return [png(size, size, 3, albedo), png(size, size, 1, rough)];
 }
 
-// Tangent-space normal map from a height field: micro pitting for the shell, soft for the glass.
-function marbleNormal(size, rand) {
-  const h = fbm(size, rand, [8, 16, 32]);
+// Tangent-space normal map of the enemy shell, ridged like a scarab (world.md section 5): rounded ridges with sharp
+// grooves, RIDGES across the width (the sphere's u: they run from pole to pole), wavering a little down the height.
+const RIDGES = 16;
+function shellNormal(size, rand) {
+  const waver = noise(size, 4, rand);
+  const h = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const t = (x / size) * RIDGES + (waver[y * size] - 0.5) * 0.6;
+      h[y * size + x] = Math.sqrt(Math.abs(Math.sin(Math.PI * t)));
+    }
+  }
   const px = new Uint8Array(size * size * 3);
-  const k = 3;
+  const k = 6;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const l = h[y * size + ((x + size - 1) % size)], r = h[y * size + ((x + 1) % size)];
@@ -160,7 +169,7 @@ export function generateAssets(seed) {
   return new Map([
     ['deck-albedo.png', albedo],
     ['deck-roughness.png', rough],
-    ['marble-normal.png', marbleNormal(128, rand)],
+    ['shell-normal.png', shellNormal(256, rand)],
     ['backdrop.png', backdrop(256, 256, rand)],
   ]);
 }

@@ -26,7 +26,7 @@ test('after one visit the game loads offline and the bot answers', async ({ page
     return { names, paths: requests.map((r) => new URL(r.url).pathname), hosts: requests.map((r) => new URL(r.url).host) };
   });
   expect(cached.names).toHaveLength(1);
-  const assets = ['backdrop.png', 'deck-albedo.png', 'deck-roughness.png', 'marble-normal.png'].map((t) => `${root}assets/${t}`);
+  const assets = ['backdrop.png', 'deck-albedo.png', 'deck-roughness.png', 'shell-normal.png'].map((t) => `${root}assets/${t}`);
   expect(cached.paths).toEqual(expect.arrayContaining([root, `${root}manifest.webmanifest`, ...assets]));
   for (const built of [/assets\/index-[\w-]+\.js$/, /assets\/bot\.worker-[\w-]+\.js$/, /assets\/abalone_wasm_bg-[\w-]+\.wasm$/]) {
     expect(cached.paths.some((p) => built.test(p))).toBe(true);
