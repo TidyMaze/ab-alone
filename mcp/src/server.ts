@@ -1,5 +1,5 @@
-// The MCP server: the tools of docs/specs/mcp.md section 5 over one Session. Every tool returns JSON as text content,
-// a failure sets `isError` with the error object of section 6.
+// The MCP server: the tools of docs/specs/mcp.md section 5 over one Session, a local game or an online room. Every
+// tool returns JSON as text content, a failure sets `isError` with the error object of section 6.
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
 import { bossIds } from './engine';
@@ -45,9 +45,10 @@ export function createServer(session: Session): McpServer {
     'get_state',
     {
       description:
-        'The game state: side to move, status (running, black_won, white_won, draw), marbles ejected by each side ' +
-        'and the number needed to win, the board as ASCII and as 61 characters, the last 6 plies, and in a boss fight ' +
-        'the boss: phase, tell (what it does after the next ply), marks on the board, result.',
+        'The game state: mode (bot, boss, online), your side, side to move, status (running, black_won, white_won, ' +
+        'draw), marbles ejected by each side and the number needed to win, the board as ASCII and as 61 characters, ' +
+        'the last 6 plies, and in a boss fight the boss: phase, tell (what it does after the next ply), marks on the ' +
+        'board, result.',
     },
     () => toolResult(session.getState()),
   );
@@ -67,7 +68,8 @@ export function createServer(session: Session): McpServer {
     {
       description:
         'Play your move. The engine refuses an illegal one and nothing changes. The bot or boss replies in the ' +
-        `same call, so you are to move again unless the game is over. ${NOTATION}`,
+        'same call, so you are to move again unless the game is over. Online, the move is sent to your opponent: ' +
+        `call wait_for_opponent_move for the reply. ${NOTATION}`,
       inputSchema: z.strictObject({ move: z.string().describe('Your move, for example "(1,3)>NE".') }),
     },
     (input) => toolResult(session.playMove(input)),
@@ -75,8 +77,44 @@ export function createServer(session: Session): McpServer {
 
   server.registerTool(
     'resign',
-    { description: 'Give up the game: the bot or boss wins.' },
+    { description: 'Give up the game: the bot or boss wins. Not supported online yet.' },
     () => toolResult(session.resign()),
+  );
+
+  server.registerTool(
+    'create_room',
+    {
+      description:
+        'Open an online room and take its first seat: you are Black. Send the invite link to a human, who opens ' +
+        'it in a browser, or the room code to another agent (join_room). Then call wait_for_opponent_move: it ' +
+        'returns once the opponent is seated and it is your turn. Drops any game in progress.',
+    },
+    async () => toolResult(await session.createRoom()),
+  );
+
+  server.registerTool(
+    'join_room',
+    {
+      description:
+        'Join an online room a human or another agent opened, from its invite link or its room code. You are ' +
+        'White: call wait_for_opponent_move for Black\'s first move. Drops any game in progress.',
+      inputSchema: z.strictObject({ room: z.string().describe('The invite link or the room code.') }),
+    },
+    async (input) => toolResult(await session.joinRoom(input)),
+  );
+
+  server.registerTool(
+    'wait_for_opponent_move',
+    {
+      description:
+        'Online: wait until it is your turn, then return the opponent move (event opponent_moved, move null ' +
+        'before the first move), or game_over, opponent_left (it may come back), desync (the opponent sent a ' +
+        'move that was refused, the game waits), or timeout. Never waits longer than timeout_s.',
+      inputSchema: z.strictObject({
+        timeout_s: z.int().min(1).max(120).optional().describe('Seconds to wait at most, default 30.'),
+      }),
+    },
+    async (input) => toolResult(await session.waitForOpponentMove(input)),
   );
 
   return server;

@@ -40,6 +40,7 @@ export interface SessionOptions {
   game: string; // the room: Hello messages are bound to it, and it is the id of its first game
   side: number; // the seat we are or ask for: 1 Black, 2 White in the first game
   seatCount?: number; // seats of the mode, 2 for 1v1
+  agent?: true; // we are an agent player: our Hello carries the signed flag (docs/specs/mcp.md section 8)
   keys: Keys;
   transport: Transport;
   judge: Judge;
@@ -196,7 +197,7 @@ export class OnlineSession {
 
   private async hello(): Promise<void> {
     const roster = this.o.side === CREATOR ? this.seats.roster() : [];
-    this.o.transport.send(await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster }));
+    this.o.transport.send(await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster, agent: this.o.agent }));
   }
 
   /** On open: our Hello, then our Sync, so that a peer ahead of us sends what we missed (#226). */

@@ -197,13 +197,9 @@ Errors: `no_game`, `game_over`, `not_your_turn`, `bad_move`, `illegal_move`.
 
 ### `create_room`
 
-Online. Opens a room and takes a seat. See section 7.
+Online. Opens a room and takes a seat. Drops any game in progress. See section 7.
 
-Input:
-
-```json
-{ "name": "string, optional, display name, default \"agent\"" }
-```
+Input: none. The `Hello` has no name field, so a room shows no display name: the seat shows as an agent (section 8).
 
 Output:
 
@@ -216,7 +212,7 @@ Output:
 }
 ```
 
-The game starts when a second peer joins and both `Hello` are verified. Errors: `already_in_room`, `transport_failed`.
+The game starts when a second peer joins and both `Hello` are verified. `room` is `newRoomId` and `invite` is `inviteUrl` of `client/src/invite.ts`, on the live site. Errors: `already_in_room`, `transport_failed`.
 
 ### `join_room`
 
@@ -225,10 +221,10 @@ Online. Joins a room made by a human or by another agent.
 Input:
 
 ```json
-{ "room": "string, a room code or an invite link", "name": "string, optional" }
+{ "room": "string, a room code or an invite link" }
 ```
 
-Output: same shape as `create_room`, with `you` set to the seat the room gave (`white` if Black is taken). Errors: `already_in_room`, `room_full` (both seats taken, the agent would be a spectator and the server does not support spectating), `room_not_found` (no peer answered within the connect timeout), `transport_failed`.
+Output: same shape as `create_room`, with `you` set to the seat the room gave (`white` if Black is taken). The call returns once the creator's `Hello` gave the agent its seat. A failed join keeps the game in progress. Errors: `already_in_room`, `room_full` (both seats taken, the agent would be a spectator and the server does not support spectating), `room_not_found` (no peer answered within the connect timeout, `SIGNALING_TIMEOUT_MS` of `client/src/netcounters.ts`, 30 s, or the input holds no room code), `transport_failed`.
 
 ### `wait_for_opponent_move`
 
@@ -250,10 +246,12 @@ Output:
 }
 ```
 
-- `move` is set only for `opponent_moved`.
-- `opponent_left`: the data channel closed. Seats are kept for 60 s (rules.md section 10.2). The agent may call the tool again.
-- `desync`: the state hash of a peer does not match. The game is paused (rules.md section 10.2). `get_state` still works.
+- `move` is set only for `opponent_moved`. It is `null` when nobody moved yet: the room creator's first call returns once the opponent has taken its seat.
+- `opponent_moved` means it is the agent's turn and its opponent is connected: `play_move` can go.
+- `opponent_left`: the data channel closed. Seats are kept for 60 s (rules.md section 10.2). The agent may call the tool again. Reported once per leave.
+- `desync`: the opponent sent a move the agent refused, one that shows its log or position is not ours (`bad-chain`, `out-of-order`, `illegal` or `not-their-turn`, the desync reports of tech.md section 10, until moves carry a state hash). The move is not played, so the opponent stays to move: the game is paused (rules.md section 10.2). `get_state` still works. Reported once per refused move.
 - If it is already the agent's turn, the call returns at once with `event: "opponent_moved"` and the last move.
+- When several apply, the first of `desync`, `game_over`, `opponent_left`, `opponent_moved` wins.
 
 Errors: `no_room`.
 
@@ -287,7 +285,8 @@ An error is `{ "code": "...", "message": "..." }`. `message` is the engine's rea
 - The server runs the same P2P stack as the browser client, in Node: Trystero with a WebRTC polyfill, behind the `Transport` interface of `client/src/transport.ts`. Signaling carries only SDP and ICE. Game data goes over the data channel (tech.md section 6).
 - The agent signs every move as a `MoveRecord` `{game, seq, prev, move, pub, sig}` (`client/src/moverecord.ts`). `move` is the 8-integer record of section 3.2. The hash chain is the same as for humans.
 - Seats come from `Hello` `{kind, game, seat, roster, pub, sig}`. The agent's key is created per process and kept in memory. The creator's `Hello` carries the roster.
-- The agent checks every move it receives with `Engine.play`. An illegal move or a bad signature makes it drop that peer.
+- The session is `OnlineSession` of `client/src/session.ts`, the browser client's own, with `agent: true`. The transport is `p2pTransport` of `client/src/p2p.ts`, so the app id and the rooms are the client's: a human joins with the invite link. In Node, [werift](https://github.com/shinyoshiaki/werift-webrtc) (pure TypeScript, the polyfill the Trystero README names) is the global `RTCPeerConnection`.
+- The agent checks every move it receives with `Engine.play`, and every signature. A move it refuses is not played, as in the browser client.
 - Rooms have two seats. A third peer is refused as a player (bug #117).
 - Rematch (tech.md section 6) is not exposed in v1. The agent starts a new room.
 - No TURN in v1 (multiplayer.md section 4). A pair behind a symmetric NAT cannot connect, and `join_room` returns `room_not_found` or `transport_failed`.
