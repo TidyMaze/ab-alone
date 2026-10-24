@@ -33,9 +33,43 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --all --locked
 
+  # On push to main, finds what changed since the last successful CI run on main (not just this push: a cancelled run
+  # never tested its commits). A manual dispatch always runs everything. Only coverage and e2e are conditional, `rust`
+  # always runs, so a skipped job never stands in for a check that mattered (#258, CONTRIBUTING 6.4).
+  changes:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      rust: ${{ steps.diff.outputs.rust }}
+      e2e: ${{ steps.diff.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rust=true; e2e=true
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            base=$(gh run list --workflow ci.yml --branch main --event push --status success --limit 1 --json headSha --jq '.[0].headSha')
+            if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+              files=$(git diff --name-only "$base" "$GITHUB_SHA")
+              echo "changed since $base:"; echo "$files"
+              printf '%s\n' "$files" | grep -qE '^(crates/|Cargo\.|\.github/workflows/ci\.yml)' || rust=false
+              printf '%s\n' "$files" | grep -qE '^(client/|crates/abalone-(core|wasm)/|Cargo\.|\.github/workflows/ci\.yml)' || e2e=false
+            fi
+          fi
+          echo "rust=$rust" >> "$GITHUB_OUTPUT"
+          echo "e2e=$e2e" >> "$GITHUB_OUTPUT"
+
   coverage:
-    if: github.event_name == 'push'
-    needs: rust
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.rust == 'true'
+    needs: [rust, changes]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -51,7 +85,8 @@ jobs:
 
   # The WASM package is built once here and shared with the e2e shards as an artifact (#258).
   wasm:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -83,7 +118,6 @@ jobs:
   # parallel on their own runners: the wall clock is the slowest shard.
   e2e:
     needs: wasm
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
