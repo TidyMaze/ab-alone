@@ -308,8 +308,10 @@ game. A peer that is not behind gets nothing, nor one in a game the answering pe
 is ahead), and nothing answers a `Missed`, so two up-to-date peers never loop. The late peer checks
 each record and ask exactly as a live one (signature, hash chain, seat, turn, engine, and an ask
 starts the new game only once the game is over on its own engine), so it derives the same game ids
-and ends in the same game at the same ply. Nothing it cannot verify is applied. A `Missed` it
-already has (another peer answered too, or the live message came first) is skipped, not refused.
+and ends in the same game at the same ply. Nothing it cannot verify is applied. The moves of an
+answer show at once, without their ejection effect and sound (#232, section 5.2): the board, the
+ejected marbles and the score are those of the caught-up ply. A `Missed` it already has (another
+peer answered too, or the live message came first) is skipped, not refused.
 A live record or ask ahead of its log (a `seq` past its head, or a game id it never had) is
 refused and also makes it send its `Sync` again, so a move that overtakes the answer is not lost.
 A refused `Missed` never does, so a bad answer cannot make it loop. Messages stay small: no state,
