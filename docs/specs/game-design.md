@@ -263,7 +263,11 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Concept**: it marks the crew, then keeps them.
 - **Twist**: at the end of the boss turn, a player marble with **3 or more adjacent boss
   marbles** flips to the boss. The marble count is conserved (conversion is not a loss for 6
-  ejections, but it is a loss of material).
+  ejections, but it is a loss of material). **A flip costs the boss (#207):** on a boss turn
+  that flips marbles, with a 3 in 4 chance (seeded per ply), the boss loses one marble to the
+  void per flip, picked among its marbles that did not flip, and each one counts as an ejection
+  for the player. Why: with free flips a 10x search never beat the boss (0 of 10), and with a
+  sure cost it always did (10 of 10); encirclement is now a risk for the boss too.
 - **Tell**: when you hover a move, each of your marbles that would flip at the end of the boss
   turn after it shows a steady glyph and outline (the check runs on the position after the
   hovered move, Decision #154: on the current position nothing is left to flip, the boss turn
@@ -274,7 +278,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Phases**: P1 above. P2 when the boss has **8** left: void cells count as boss neighbours,
   so rim marbles flip at 2 contacts. P3 at **4**: a flip chains once (the flipped marble can
   flip another in the same turn), but the boss loses 1 marble to the void per flip (it
-  pushes its own shell out).
+  pushes its own shell out), and from P3 that cost is certain, not 3 in 4.
 - **Calibrate**: knob = threshold (3), flip-back threshold, AI aggression weight. Fail if the
   median attempt ends with fewer than 3 conversions seen (nobody learns the tell).
 

@@ -283,7 +283,8 @@ mod tests {
 
     #[test]
     fn three_boss_neighbours_flip_a_marble_at_the_end_of_the_boss_turn() {
-        let mut e = enc(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8);
+        let seed = free_seed();
+        let mut e = build(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8, &[], seed);
         assert_eq!(e.phase(), 0);
         let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
         step(&mut e);
@@ -480,6 +481,30 @@ mod tests {
         assert!(chaplain_tell(&p1).is_empty());
     }
 
+    /// One flip in phase one with this encounter seed, two plies played: the boss marble count
+    /// afterwards and the player's ejected count.
+    fn one_flip(seed: u64) -> (u8, u8) {
+        let mut e = build(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8, &[], seed);
+        turns(&mut e, 2);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+        (count(&e, Cell::White), e.game().ejected(Player::Black))
+    }
+
+    /// A seed whose flip is free (the boss keeps the marble it gained).
+    fn free_seed() -> u64 {
+        (0..64).find(|&s| one_flip(s).1 == 0).unwrap()
+    }
+
+    #[test]
+    fn a_flip_costs_the_boss_a_marble_three_times_in_four() {
+        let paid = (0..64).filter(|&s| one_flip(s).1 == 1).count();
+        assert!((40..=56).contains(&paid), "paid {paid} of 64");
+        let (free, w) = (free_seed(), 9);
+        assert_eq!(one_flip(free), (w, 0), "free: the flip is a gain of one");
+        let seed = (0..64).find(|&s| one_flip(s).1 == 1).unwrap();
+        assert_eq!(one_flip(seed), (w - 1, 1), "paid: one lost, credited");
+    }
+
     /// (0, 0) flips from its three white neighbours, then (1, -1) from two whites plus the
     /// freshly flipped (0, 0).
     fn chain(fillers: usize, seed: u64) -> Encounter {
@@ -530,8 +555,8 @@ mod tests {
     }
 
     #[test]
-    fn phase_two_does_not_chain_and_costs_the_boss_nothing() {
-        let mut e = chain(1, 1);
+    fn phase_two_does_not_chain_and_a_free_flip_costs_nothing() {
+        let mut e = chain(1, free_seed());
         assert_eq!(e.phase(), 1);
         turns(&mut e, 2);
         assert_eq!(at(&e, (0, 0)), Some(Cell::White));
