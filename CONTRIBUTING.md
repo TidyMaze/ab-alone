@@ -48,8 +48,9 @@ run.
 
 ## 1. The golden rules
 
-1. **No work without a `Ready` Task or Bug.** Every PR closes exactly one `task` or `bug` issue
-   whose Status was `Ready` when work started.
+1. **No work without a `Ready` Task or Bug.** Every PR closes at least one `task` or `bug` issue
+   whose Status was `Ready` when work started. It may close several when they are linked (same
+   feature or same files, rule 17), one `Closes #n` line each.
 2. **No Task without a parent.** Every Task is a sub-issue of a Feature, or of an Epic for
    non-player-facing work (tooling, CI, specs).
 3. **No direct push to `main`.** Everything goes through a PR. It merges once the CI check `rust`
@@ -90,10 +91,11 @@ run.
     launch a new sub-agent task while it can finish or merge an open PR instead.
 17. **Minimal, KISS.** Each issue, task and PR is minimal: **one thing, done well**, the simplest
     way that works. No extra feature, no refactor on the side, no option nobody asked for, no
-    abstraction for later. If a request holds several things, split it into several issues and
-    do them one after the other (rule 16). A PR that does two things is split before it is marked
-    ready; anything found on the way becomes a new issue, never a bigger PR. When two solutions
-    work, take the smaller one.
+    abstraction for later. If a request holds several things, split it into several issues.
+    **Linked issues may share one PR** to go faster and avoid rebase loops: same feature, same
+    files, or one needs the other (for example two settings in the same menu). Unrelated work
+    never shares a PR. Anything found on the way becomes a new issue, never a bigger PR. When two
+    solutions work, take the smaller one.
 
 ## 2. Where things live
 
@@ -200,7 +202,8 @@ the triager does exactly one of:
 ### 6.4 Pull request
 
 1. Open the PR from the template as a **draft** (`gh pr create --draft`). The body contains
-   exactly one `Closes #<task>`. **A PR that changes the UI MUST include a screenshot in its
+   one `Closes #<task>` line per issue it closes (one issue, or several linked ones, rule 17).
+   **A PR that changes the UI MUST include a screenshot in its
    description** (before and after when it changes an existing screen), in the "Screenshot"
    section of the template. A PR without one is not marked ready and not merged. Take it with
    Playwright (`page.screenshot`) or in Chrome. To put it in the body, push the image to the
