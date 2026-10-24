@@ -24,7 +24,7 @@ describe('palette tokens', () => {
 });
 
 describe('hudHtml', () => {
-  const base = { side: 1, status: 0, score: 'Black ejected 0/6 · White ejected 0/6', ejected: [0, 0] as const, note: 'WebGL2' };
+  const base = { side: 1, status: 0, score: 'Black ejected 0/6 · White ejected 0/6', ejected: [0, 0] as const, win: [6, 6] as const, note: 'WebGL2' };
 
   it('says whose turn it is', () => {
     expect(hudHtml(base)).toContain('Black to move');
@@ -57,5 +57,13 @@ describe('hudHtml', () => {
     const html = hudHtml({ ...base, ejected: [2, 6] });
     expect(html.match(/class="pip"/g)).toHaveLength(12 - 8);
     expect(html.match(/class="pip out"/g)).toHaveLength(8);
+  });
+
+  it('draws one pip per ejection a side needs: 10 for Black against the Choir, Decision #131', () => {
+    const html = hudHtml({ ...base, win: [10, 6], ejected: [3, 1] });
+    const [black, white] = html.match(/<span>(<span class="pip[^"]*"><\/span>)+<\/span>/g)!;
+    expect(black!.match(/class="pip/g)).toHaveLength(10);
+    expect(white!.match(/class="pip/g)).toHaveLength(6);
+    expect(html.match(/class="pip out"/g)).toHaveLength(4);
   });
 });

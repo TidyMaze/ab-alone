@@ -7,6 +7,9 @@
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
 //! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
+//! - Armies (The Choir): records of 3 integers `[q, r, army]`, back to back. Army `0` Alto,
+//!   `1` Tenor, `2` Bass, the order of the cycle. On the Choir's radius 3 board the outer ring
+//!   is `3`, like a vanished cell.
 //! - Side and winner: `1` Black, `2` White.
 //! - Status: `0` running, `1` Black won, `2` White won, `3` draw.
 //! - Draw reason: `0` none, `1` threefold repetition, `2` 100 plies without ejection.
@@ -17,6 +20,7 @@
 
 use abalone_core::board::{Board, Cell, RADIUS};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
+use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_ARMIES};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::{BossDef, Encounter as CoreEncounter, PveResult};
@@ -37,6 +41,15 @@ const DIRECTIONS: [Direction; 6] = [
     Direction::NW,
     Direction::SE,
 ];
+
+/// The player of a side code: `1` Black, anything else White.
+fn player(side: u8) -> Player {
+    if side == 1 {
+        Player::Black
+    } else {
+        Player::White
+    }
+}
 
 fn side_code(player: Player) -> u8 {
     match player {
@@ -132,12 +145,12 @@ impl Engine {
 
     /// Opponent marbles ejected by a side: `1` Black, `2` White. The game ends at 6.
     pub fn ejected(&self, side: u8) -> u8 {
-        let player = if side == 1 {
-            Player::Black
-        } else {
-            Player::White
-        };
-        self.game.ejected(player)
+        self.game.ejected(player(side))
+    }
+
+    /// Ejections a side needs to win: `1` Black, `2` White.
+    pub fn win_ejections(&self, side: u8) -> u8 {
+        self.game.win_ejections(player(side))
     }
 
     /// The 61 cells, see the module docs for the order.
@@ -167,11 +180,16 @@ impl Engine {
 /// Board value of a cell a boss removed.
 const VANISHED: u8 = 3;
 
-/// The 61 cells of the hexagon, vanished ones included, so the indices never shift.
-fn board_bytes(board: &Board) -> Vec<u8> {
+/// The 61 cells of the hexagon in board order, see the module docs.
+fn cells() -> impl Iterator<Item = (i32, i32)> {
     (-RADIUS..=RADIUS)
         .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
         .filter(|&(q, r)| (q + r).abs() <= RADIUS)
+}
+
+/// The 61 cells of the hexagon, vanished ones included, so the indices never shift.
+fn board_bytes(board: &Board) -> Vec<u8> {
+    cells()
         .map(|(q, r)| match board.get(q, r) {
             Some(Cell::Empty) => 0,
             Some(Cell::Black) => 1,
@@ -190,16 +208,50 @@ pub fn result_code(result: Option<PveResult>) -> u8 {
     }
 }
 
+/// Army code of the Choir, see the module docs: its place in the cycle.
+fn army_code(army: Army) -> i32 {
+    CYCLE.iter().position(|&a| a == army).expect("in the cycle") as i32
+}
+
+/// What an [`Encounter`] runs: a boss on the standard board with its hooks, or the Choir, which
+/// has its own board, armies and move rules.
+enum Fight {
+    Plain(CoreEncounter),
+    Choir(Choir),
+}
+
+impl Fight {
+    fn game(&self) -> &Game {
+        match self {
+            Fight::Plain(e) => e.game(),
+            Fight::Choir(c) => c.game(),
+        }
+    }
+}
+
 /// One boss of the roster. Adding a boss is one line in [`BOSSES`].
 struct BossEntry {
     id: &'static str,
     def: fn() -> BossDef,
-    /// The boss move for the current position, `None` on the player's turn or when over.
+    /// The fight for this boss definition and seed.
+    start: fn(BossDef, u64) -> Fight,
+    /// The boss move for the current position of a plain fight, `None` on the player's turn or
+    /// when over.
     reply: fn(&CoreEncounter) -> Option<Move>,
     /// The reply the boss announces for a player move, drawn by the client as a ghost.
     announce: fn(&Move) -> Option<Move>,
-    /// Player marbles that flip at the end of the next boss turn, on the current position.
+    /// Player marbles of a plain fight that flip at the end of the next boss turn.
     flips: fn(&CoreEncounter) -> Vec<(i32, i32)>,
+}
+
+/// A boss on the standard board, Black to move.
+fn plain_fight(def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(CoreEncounter::new(Game::new(), def, seed))
+}
+
+/// The Choir sets up its own board, and its play does not depend on a seed.
+fn choir_fight(_def: BossDef, _seed: u64) -> Fight {
+    Fight::Choir(Choir::start())
 }
 
 fn echo_announce(mv: &Move) -> Option<Move> {
@@ -219,10 +271,11 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 3] = [
+const BOSSES: [BossEntry; 4] = [
     BossEntry {
         id: "echo",
         def: echo_boss,
+        start: plain_fight,
         reply: echo_move,
         announce: echo_announce,
         flips: no_flips,
@@ -230,6 +283,15 @@ const BOSSES: [BossEntry; 3] = [
     BossEntry {
         id: "hull",
         def: hull_boss,
+        start: plain_fight,
+        reply: search_reply,
+        announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "choir",
+        def: choir_boss,
+        start: choir_fight,
         reply: search_reply,
         announce: no_announce,
         flips: no_flips,
@@ -237,6 +299,7 @@ const BOSSES: [BossEntry; 3] = [
     BossEntry {
         id: "chaplain",
         def: chaplain_boss,
+        start: plain_fight,
         reply: search_reply,
         announce: no_announce,
         flips: chaplain_tell,
@@ -266,7 +329,7 @@ pub fn boss_name(id: &str) -> Option<String> {
 /// A game against a boss: the player is Black, the boss is White. Same encodings as [`Engine`].
 #[wasm_bindgen]
 pub struct Encounter {
-    inner: CoreEncounter,
+    fight: Fight,
     entry: &'static BossEntry,
 }
 
@@ -276,8 +339,8 @@ impl Encounter {
     #[wasm_bindgen(constructor)]
     pub fn new(boss_id: &str, seed: u32) -> Result<Encounter, String> {
         let entry = boss_entry(boss_id).ok_or_else(|| format!("unknown boss {boss_id}"))?;
-        let inner = CoreEncounter::new(Game::new(), (entry.def)(), u64::from(seed));
-        Ok(Encounter { inner, entry })
+        let fight = (entry.start)((entry.def)(), u64::from(seed));
+        Ok(Encounter { fight, entry })
     }
 
     pub fn name(&self) -> String {
@@ -286,22 +349,32 @@ impl Encounter {
 
     /// Side to move: `1` Black, `2` White.
     pub fn to_move(&self) -> u8 {
-        side_code(self.inner.game().to_move())
+        side_code(self.fight.game().to_move())
     }
 
     /// Current phase, `0` for P1.
     pub fn phase(&self) -> u8 {
-        self.inner.phase() as u8
+        match &self.fight {
+            Fight::Plain(e) => e.phase() as u8,
+            Fight::Choir(c) => c.phase() as u8,
+        }
     }
 
     /// Number of phases, for the HUD notches.
     pub fn phases(&self) -> u8 {
-        (self.entry.def)().phase_marbles.len() as u8 + 1
+        let steps = match &self.fight {
+            Fight::Plain(_) => (self.entry.def)().phase_marbles.len(),
+            Fight::Choir(_) => PHASE_ARMIES.len(),
+        };
+        steps as u8 + 1
     }
 
     /// Id of the board special that fires after the next ply, `-1` when none.
     pub fn tell(&self) -> i32 {
-        self.inner.tell().map_or(-1, i32::from)
+        match &self.fight {
+            Fight::Plain(e) => e.tell().map_or(-1, i32::from),
+            Fight::Choir(_) => -1,
+        }
     }
 
     /// The reply the boss announces for the player move `mv`, one move record, empty when the
@@ -314,39 +387,49 @@ impl Encounter {
             .unwrap_or_default()
     }
 
-    /// Legal moves of the side to move, flat records. Empty once the fight is over.
+    /// Legal moves of the side to move, flat records. Empty once the fight is over. On the Choir's
+    /// turn, only the moves of the army in turn.
     pub fn legal_moves(&self) -> Vec<i32> {
-        if self.inner.game().outcome().is_some() {
-            return Vec::new();
-        }
-        legal_moves(self.inner.game().board(), self.inner.game().to_move())
-            .iter()
-            .flat_map(encode)
-            .collect()
+        let moves = match &self.fight {
+            Fight::Plain(e) if e.game().outcome().is_none() => {
+                legal_moves(e.game().board(), e.game().to_move())
+            }
+            Fight::Plain(_) => Vec::new(),
+            Fight::Choir(c) => c.legal_moves(),
+        };
+        moves.iter().flat_map(encode).collect()
     }
 
     /// Plays one move record for the side to move. `Err` carries the reason.
     pub fn play(&mut self, mv: &[i32]) -> Result<(), String> {
         let mv = decode(mv)?;
-        self.inner.play(&mv).map_err(|e| format!("{e:?}"))
+        match &mut self.fight {
+            Fight::Plain(e) => e.play(&mv).map_err(|e| format!("{e:?}")),
+            Fight::Choir(c) => c.play(&mv).map_err(|e| match e {
+                ChoirError::Game(e) => format!("{e:?}"),
+                other => format!("{other:?}"),
+            }),
+        }
     }
 
     /// The boss move, one record, using the boss node budget. Empty on the player's turn or when
     /// the fight is over. It is not played.
     pub fn boss_move(&self) -> Vec<i32> {
-        (self.entry.reply)(&self.inner)
-            .map(|m| encode(&m).to_vec())
-            .unwrap_or_default()
+        let mv = match &self.fight {
+            Fight::Plain(e) => (self.entry.reply)(e),
+            Fight::Choir(c) => c.boss_move(),
+        };
+        mv.map(|m| encode(&m).to_vec()).unwrap_or_default()
     }
 
-    /// The 61 cells, board specials included.
+    /// The 61 cells, board specials included. On the Choir's radius 3 board the outer ring is `3`.
     pub fn board(&self) -> Vec<u8> {
-        board_bytes(self.inner.game().board())
+        board_bytes(self.fight.game().board())
     }
 
     /// Cracked cells (The Hull) as `[q, r, plies_left]` records, empty for the other bosses.
     pub fn cracks(&self) -> Vec<i32> {
-        self.inner
+        self.fight
             .game()
             .board()
             .cracks()
@@ -358,37 +441,65 @@ impl Encounter {
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
     /// a cell list. Empty for the other bosses.
     pub fn flips(&self) -> Vec<i32> {
-        cell_list(&(self.entry.flips)(&self.inner))
+        match &self.fight {
+            Fight::Plain(e) => cell_list(&(self.entry.flips)(e)),
+            Fight::Choir(_) => Vec::new(),
+        }
     }
 
     /// Boss marbles that were player marbles (The Chaplain), a cell list.
     pub fn converted(&self) -> Vec<i32> {
-        cell_list(self.inner.game().board().converted())
+        cell_list(self.fight.game().board().converted())
+    }
+
+    /// Boss marbles of the Choir and their army as `[q, r, army]` records, in board order. Empty
+    /// for the other bosses.
+    pub fn armies(&self) -> Vec<i32> {
+        let Fight::Choir(c) = &self.fight else {
+            return Vec::new();
+        };
+        cells()
+            .filter_map(|cell| c.army_at(cell).map(|a| [cell.0, cell.1, army_code(a)]))
+            .flatten()
+            .collect()
+    }
+
+    /// The Choir army that moves next (the tell), `-1` for the other bosses and once over.
+    pub fn next_army(&self) -> i32 {
+        match &self.fight {
+            Fight::Choir(c) => c.tell().map_or(-1, army_code),
+            Fight::Plain(_) => -1,
+        }
     }
 
     /// Marbles ejected by a side: `1` Black, `2` White.
     pub fn ejected(&self, side: u8) -> u8 {
-        let player = if side == 1 {
-            Player::Black
-        } else {
-            Player::White
-        };
-        self.inner.game().ejected(player)
+        self.fight.game().ejected(player(side))
+    }
+
+    /// Ejections a side needs to win: `1` Black, `2` White. 6, but 10 for the player against the
+    /// Choir (Decision #131).
+    pub fn win_ejections(&self, side: u8) -> u8 {
+        self.fight.game().win_ejections(player(side))
     }
 
     /// Game status, see the module docs.
     pub fn status(&self) -> u8 {
-        status_code(self.inner.game().outcome())
+        status_code(self.fight.game().outcome())
     }
 
     /// Draw reason code, `0` when not a draw.
     pub fn draw_reason(&self) -> u8 {
-        draw_reason_code(self.inner.game().draw_reason())
+        draw_reason_code(self.fight.game().draw_reason())
     }
 
     /// `0` playing, `1` won, `2` lost. A draw is a loss.
     pub fn result(&self) -> u8 {
-        result_code(self.inner.result())
+        let result = match &self.fight {
+            Fight::Plain(e) => e.result(),
+            Fight::Choir(c) => c.result(),
+        };
+        result_code(result)
     }
 }
 
@@ -402,6 +513,7 @@ impl Default for Engine {
 mod tests {
     use super::*;
     use abalone_core::board::Board;
+    use abalone_core::encounter::choir::{ALTO_START, BASS_START, TENOR_START};
     use abalone_core::moves::{legal_moves, Player};
 
     fn count(cells: &[u8], value: u8) -> usize {
@@ -532,6 +644,12 @@ mod tests {
     }
 
     #[test]
+    fn a_game_is_won_at_6_ejections_for_both_sides() {
+        let engine = Engine::new();
+        assert_eq!((engine.win_ejections(1), engine.win_ejections(2)), (6, 6));
+    }
+
+    #[test]
     fn ejected_counts_start_at_zero_for_both_sides() {
         let engine = Engine::new();
         assert_eq!(engine.ejected(1), 0);
@@ -571,11 +689,13 @@ mod tests {
             vec![
                 "echo".to_string(),
                 "hull".to_string(),
+                "choir".to_string(),
                 "chaplain".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
         assert_eq!(boss_name("hull"), Some("The Hull".to_string()));
+        assert_eq!(boss_name("choir"), Some("The Choir".to_string()));
         assert_eq!(boss_name("chaplain"), Some("The Chaplain".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
@@ -602,6 +722,9 @@ mod tests {
         assert!(f.cracks().is_empty(), "the Echo cracks nothing");
         assert!(f.flips().is_empty(), "the Echo flips nothing");
         assert!(f.converted().is_empty());
+        assert!(f.armies().is_empty(), "the Echo has no armies");
+        assert_eq!(f.next_army(), -1);
+        assert_eq!((f.win_ejections(1), f.win_ejections(2)), (6, 6));
         assert_eq!(f.ejected(1), 0);
         assert_eq!(f.ejected(2), 0);
         let cells = f.board();
@@ -668,11 +791,7 @@ mod tests {
 
     /// Index of `(q, r)` in the board bytes: rows from `r = -4`, `q` ascending.
     fn index(q: i32, r: i32) -> usize {
-        (-RADIUS..=RADIUS)
-            .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
-            .filter(|&(q, r)| (q + r).abs() <= RADIUS)
-            .position(|c| c == (q, r))
-            .unwrap()
+        cells().position(|c| c == (q, r)).unwrap()
     }
 
     /// One ply: the player's first legal move, or the boss move on its turn.
@@ -798,6 +917,86 @@ mod tests {
             f.tell_move(&forward(&f)).is_empty(),
             "the Chaplain announces no reply"
         );
+    }
+
+    // The Choir (#183): its own wrapper, a radius 3 board and three armies.
+
+    fn choir() -> Encounter {
+        Encounter::new("choir", 7).unwrap()
+    }
+
+    /// Cells of `army` in the `[q, r, army]` records of `armies()`.
+    fn army_cells(f: &Encounter, army: i32) -> Vec<(i32, i32)> {
+        f.armies()
+            .chunks(3)
+            .filter(|m| m[2] == army)
+            .map(|m| (m[0], m[1]))
+            .collect()
+    }
+
+    #[test]
+    fn the_choir_starts_on_a_radius_3_board_with_three_armies_of_four() {
+        let f = choir();
+        assert_eq!(f.name(), "The Choir");
+        assert_eq!(
+            (f.to_move(), f.phase(), f.phases(), f.result()),
+            (1, 0, 3, 0)
+        );
+        let cells = f.board();
+        assert_eq!(cells.len(), 61, "the board keeps its 61 slots");
+        assert_eq!(count(&cells, 3), 24, "the outer ring is a hole");
+        assert_eq!((count(&cells, 1), count(&cells, 2)), (10, 12));
+        assert_eq!(f.armies().len(), 12 * 3);
+        assert_eq!(army_cells(&f, 0), ALTO_START.to_vec());
+        assert_eq!(army_cells(&f, 1), TENOR_START.to_vec());
+        assert_eq!(army_cells(&f, 2), BASS_START.to_vec());
+        assert_eq!(f.next_army(), 0, "Alto moves first");
+        assert_eq!(
+            (f.win_ejections(1), f.win_ejections(2)),
+            (10, 6),
+            "Decision #131"
+        );
+        assert_eq!(f.tell(), -1, "no board special");
+        assert!(f.cracks().is_empty() && f.flips().is_empty() && f.converted().is_empty());
+        assert!(
+            f.tell_move(&first_move(&f)).is_empty(),
+            "the Choir announces no reply"
+        );
+    }
+
+    #[test]
+    fn the_choir_boss_moves_the_army_in_turn_and_the_tell_moves_on() {
+        let mut f = choir();
+        f.play(&forward(&f)).unwrap();
+        assert_eq!((f.to_move(), f.next_army()), (2, 0));
+        let alto = army_cells(&f, 0);
+        let legal = f.legal_moves();
+        for m in legal.chunks(MOVE_STRIDE) {
+            let cells = (0..m[0] as usize).map(|i| (m[2 + 2 * i], m[3 + 2 * i]));
+            assert!(cells.into_iter().all(|c| alto.contains(&c)), "Alto only");
+        }
+        let reply = f.boss_move();
+        assert!(legal.chunks(MOVE_STRIDE).any(|m| m == reply.as_slice()));
+        f.play(&reply).unwrap();
+        assert_eq!(f.to_move(), 1);
+        assert_eq!(f.next_army(), 1, "Tenor next");
+        assert!(f.boss_move().is_empty(), "the player's turn");
+    }
+
+    #[test]
+    fn the_choir_refuses_an_army_out_of_turn_and_illegal_moves() {
+        let mut f = choir();
+        assert_eq!(
+            f.play(&[1, 0, 0, -3, 0, 0, 0, 0]).unwrap_err(),
+            "Move(NotOwnMarble)"
+        );
+        f.play(&forward(&f)).unwrap();
+        // A Bass marble, (-2, -1), to SW: legal on the board, but Alto is in turn.
+        assert_eq!(
+            f.play(&[1, 3, -2, -1, 0, 0, 0, 0]).unwrap_err(),
+            "WrongArmy"
+        );
+        assert_eq!(f.to_move(), 2);
     }
 
     #[test]
