@@ -90,6 +90,13 @@ field covers a cell, and the space between them lets every tap through to the bo
   disconnected. One more line under the status line says who asked, kept verbatim for the e2e
   tests: "You asked for a rematch. Waiting for White..." and "Black asks for a rematch." When both
   asked, the new game starts with the colours swapped and the line and the button go away (#186).
+- **New game.** A button above Play online, in local games only (hot-seat or against the bot):
+  boss, daily and online games do not show it. It leaves the game in progress for the start
+  position, the bot on or off as it was, and deletes the saved game (tech.md section 8). With no
+  move played it starts over at once. Once a move is played, the first press turns it into
+  "Confirm new game" with the hazard colour for 4 seconds, and only a second press in that time
+  starts over; no dialog. Strings kept verbatim for the e2e tests: "New game", "Confirm new game"
+  (#230).
 - **Daily challenge.** A button under Boss fight, labelled "Daily challenge 2026-10-24: The Choir"
   (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
