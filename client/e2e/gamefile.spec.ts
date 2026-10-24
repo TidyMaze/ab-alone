@@ -220,6 +220,7 @@ test('export and import are not shown during a boss fight, a daily fight or an o
     await expect(page.locator('#online > #export-game, #online > #import-game')).toHaveCount(0); // no loose HUD buttons
     await expect(await menuItem(page, 'Export game')).toBeVisible();
     await expect(await menuItem(page, 'Import game')).toBeVisible();
+    await page.keyboard.press('Escape'); // the open menu floats over the buttons clicked next
   };
   const hidden = async () => {
     await expect(await menuItem(page, 'Clear board')).toBeVisible();
