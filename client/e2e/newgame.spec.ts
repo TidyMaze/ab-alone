@@ -6,15 +6,22 @@ import { expect, test, type Page } from '@playwright/test';
 // The confirmation runs on the page clock: the tests pause it while they press, so a slow machine, where a
 // click waits seconds for a frame, never lets it lapse between two presses (page.clock, installed by `load`).
 
-/** Opens `url` with the page clock installed, flowing in real time until `pause`. */
+// The page clock starts at START and flows in real time until `pause` stops it at START + 10 minutes, a time
+// no test reaches before, however loaded the machine. A target read from the page clock can already be past
+// by the time pauseAt runs ("Cannot fast-forward to the past").
+const START = Date.parse('2026-01-05T12:00:00Z');
+const PAUSED = START + 10 * 60_000;
+
+/** Opens `url` with the page clock installed at START, flowing in real time until `pause`. */
 async function load(page: Page, url: string): Promise<void> {
-  await page.clock.install();
+  await page.clock.install({ time: START });
   await page.goto(url);
   await ready(page);
 }
 
-/** Moves the page clock 1 s on and stops it: no timer fires and nothing is drawn until `runFor` or `resume`. */
-const pause = async (page: Page) => page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+/** Moves the page clock on to PAUSED and stops it: no timer fires and nothing is drawn until `fastForward` or
+ * `resume`. */
+const pause = (page: Page) => page.clock.pauseAt(PAUSED);
 
 /** Waits for a loaded page to show its game and be ready for clicks. */
 async function ready(page: Page): Promise<void> {
@@ -68,6 +75,7 @@ const position = async (page: Page) => ({
 test('New game asks for a confirmation, then starts over from the start position and deletes the save', async ({
   page,
 }) => {
+  test.slow(); // two page loads
   await load(page, './?bot=off');
   const button = page.locator('#new-game');
   const start = await position(page);
@@ -110,9 +118,11 @@ test('New game without a move starts over at once; the confirmation lapses after
   await pause(page);
   await button.click();
   await expect(button).toHaveText('Confirm new game');
-  await page.clock.runFor(3_900);
+  // fastForward jumps and fires each due timer once; runFor would also run every frame in between, about 40
+  // draws of the board, which took 17 s under load.
+  await page.clock.fastForward(3_900);
   await expect(button).toHaveText('Confirm new game');
-  await page.clock.runFor(100);
+  await page.clock.fastForward(100);
   await expect(button).toHaveText('New game'); // lapsed, the game goes on
   expect(await plies(page)).toBe(1);
   await button.click(); // a press after it lapsed asks again
@@ -123,6 +133,7 @@ test('New game without a move starts over at once; the confirmation lapses after
 test('New game while the bot thinks: its reply to the old game is dropped, the bot plays the new one', async ({
   page,
 }) => {
+  test.slow(); // two bot searches in the worker
   // The bot worker is held: its requests wait until __releaseBot, so the bot is still thinking when New game starts.
   await page.addInitScript(() => {
     const held: (() => void)[] = [];
