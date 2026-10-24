@@ -3,6 +3,7 @@
 Status: v0, for issue #88. Covers the page chrome and the flat HUD only. Board and marble
 materials are #89 (done), the move preview ghost is #82, the diegetic HUD is #22. This file
 refines what [world.md](world.md) sections 5, 6 and 8 already decide, it adds no new lore.
+The one-page art direction and the asset list are in [art.md](art.md).
 
 ## 1. Mood
 
