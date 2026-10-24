@@ -94,6 +94,12 @@ field covers a cell, and the space between them lets every tap through to the bo
   (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
   tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
+- **Export game, Import game.** Two buttons at the end of the button column, under Daily
+  challenge, for local games only: hidden during online, boss and daily games (#219, file format
+  in tech.md section 8). Export game downloads the game, Import game opens the browser's file
+  picker. A refused file adds a short note to the HUD, kept verbatim for the e2e tests: "import
+  refused: not a game file", "import refused: unknown file version", "import refused: illegal
+  move in the file".
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 

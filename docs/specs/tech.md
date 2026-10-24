@@ -362,6 +362,18 @@ No database server. Everything is client-side.
 - **Export/import:** a game or the whole save as a JSON file (also the bug report format and the
   backup, because browsers can clear storage). `navigator.storage.persist()` is requested once per
   page view, at the first saved move; a refusal changes nothing.
+- **Game file** (#219, client/src/gamefile.ts): Export game downloads the current local game, in
+  progress or finished, as `ab-alone-2026-10-24.json` (the player's local date), in the save
+  format above on one line. Import game opens the browser's file picker. The file (1 MiB at most)
+  is decoded and replayed through the engine, the only judge. A good file replaces the local game,
+  shows it at its last ply and is saved like a game played here: a finished game shows its result
+  and is not saved. It goes on in the page's own mode, against the bot or hot-seat with
+  `?bot=off`, whatever its `bot` value says. A bad file is refused with a short HUD note and the
+  game stays as it was: "import refused: not a game file" (not JSON, too big, no `version`,
+  another `mode` or `layout`, a bad record), "import refused: unknown file version" and "import
+  refused: illegal move in the file" (a move the engine refuses, a move after the end included).
+  The note never quotes the file. Both buttons are hidden during online, boss and daily games.
+  Online signed logs and boss attempts join the file later, with #34 and the attempt table.
 - **Cross-device progress** is out of scope (no accounts, SPEC section 6). Export file is the
   workaround.
 - Telemetry (boss win rate per attempt) stays local by default. An opt-in "send my attempts" can
