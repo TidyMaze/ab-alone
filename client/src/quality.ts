@@ -56,3 +56,11 @@ export function readTier(store: Store, hints: Hints): Tier {
   return tier;
 }
 export const writeTier = (store: Store, tier: Tier): void => write(store, TIER_KEY, tier);
+
+// Under automation (navigator.webdriver) the page draws only while the last draw took under a fifth of the time since it
+// began, and at most every 100 ms. CI runners have no GPU: software WebGL takes every core for each draw, and input,
+// evaluate and click wait seconds for a frame (bug #216). A player draws every frame.
+const AUTOMATED_MIN_GAP_MS = 100;
+const AUTOMATED_DUTY = 4;
+export const drawDue = (now: number, lastStart: number, lastCost: number, automated: boolean): boolean =>
+  !automated || now - lastStart >= Math.max(AUTOMATED_MIN_GAP_MS, AUTOMATED_DUTY * lastCost);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { axialTo3D, CELLS } from './board';
 import { DIST_MAX, DIST_MIN, resetView, viewPosition, type View } from './camera';
-import { fogSettings, readClearBoard, readTier, tierFromHints, writeClearBoard, writeTier } from './quality';
+import { drawDue, fogSettings, readClearBoard, readTier, tierFromHints, writeClearBoard, writeTier } from './quality';
 
 const big = { width: 1920, cores: 8, memory: 8, reducedMotion: false };
 
@@ -122,5 +122,19 @@ describe('tier storage', () => {
     expect(s.data.get('ab-alone.quality')).toBe('high');
     expect(() => writeTier(throwing, 'low')).not.toThrow();
     expect(() => writeTier(null, 'low')).not.toThrow();
+  });
+});
+
+describe('drawDue', () => {
+  it('draws every frame for a player, whatever the draw cost', () => {
+    expect(drawDue(1000, 999, 500, false)).toBe(true);
+  });
+  it('draws at most 10 times a second under automation', () => {
+    expect(drawDue(1099, 1000, 5, true)).toBe(false);
+    expect(drawDue(1100, 1000, 5, true)).toBe(true);
+  });
+  it('waits four times a slow draw under automation, so software WebGL leaves the CPU to the input', () => {
+    expect(drawDue(1799, 1000, 200, true)).toBe(false);
+    expect(drawDue(1800, 1000, 200, true)).toBe(true);
   });
 });

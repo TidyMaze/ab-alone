@@ -28,7 +28,7 @@ import { onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { hudHtml } from './hud';
-import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
+import { drawDue, fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
 import { formatScore } from './score';
 import './ui.css';
 
@@ -687,7 +687,10 @@ const invited = roomFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
 
 refresh();
+let lastDraw = { start: -Infinity, cost: 0 };
 renderer.setAnimationLoop((now) => {
   animateEjections(now);
+  if (!drawDue(now, lastDraw.start, lastDraw.cost, navigator.webdriver)) return;
   renderer.render(scene, camera);
+  lastDraw = { start: now, cost: performance.now() - now };
 });
