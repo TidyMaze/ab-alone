@@ -763,7 +763,7 @@ syncConnectivity();
 const invited = roomFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
 
-// Offline app (#193): registered once the page has loaded its own files, then checked for a new build at each load
+// Offline app (#193): registered at the end of the start, then checked for a new build at each load
 // (Chrome does not check by itself on a reload), so the refresh after a deploy installs it. Blocked (the e2e runs),
 // refused or offline, the game simply goes on.
 if (serviceWorker) {
