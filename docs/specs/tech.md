@@ -246,6 +246,18 @@ a different network. Measure the failure rate with local telemetry (section 10) 
 host needed, no arbitration, the two engines must agree. Prediction is free (local apply is the
 real apply). Rematch with colour swap is a new game on the same channel.
 
+**Rematch (#186).** Once the game is over, each seated player may send a signed
+`Rematch {game_id, pub, sig}` bound to the finished game id. It is sent only while the key of
+every other seat is connected, like a move (#143). A peer refuses an ask with a bad signature, for
+another game id (stale), or from a key without a seat. An ask can come before the last move on
+another channel, so a peer keeps it and starts the new game only once every seated key asked and
+the game is over on its own engine. The new game: id `hex(SHA-256(["rematch", old_id]))`, the same
+on every peer and never an earlier id of the room; a fresh move log from the genesis hash; the
+engine at the start position; the colours swapped, so the former White plays Black and moves first
+(rules.md section 10.2). The seats stay bound to the same keys and `Hello` stays bound to the
+room id (the id of its first game), so a reconnect works in any game of the room. A move or an ask
+signed for the old game id is refused. Spectators stay spectators and follow the new game.
+
 **Battle royale (recommendation for #13: simultaneous, commit-reveal lockstep).**
 1. Round opens at a deadline all peers compute from the round-start message (no trusted clock,
    deadlines are relative: "30 s after the previous round resolved on my screen", with the
