@@ -534,9 +534,17 @@ mod tests {
 
     #[test]
     fn boss_list_is_data_driven_and_starts_with_the_echo() {
-        assert_eq!(boss_ids(), vec!["echo".to_string(), "hull".to_string()]);
+        assert_eq!(
+            boss_ids(),
+            vec![
+                "echo".to_string(),
+                "hull".to_string(),
+                "chaplain".to_string()
+            ]
+        );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
         assert_eq!(boss_name("hull"), Some("The Hull".to_string()));
+        assert_eq!(boss_name("chaplain"), Some("The Chaplain".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -560,6 +568,8 @@ mod tests {
         assert_eq!(f.draw_reason(), 0);
         assert_eq!(f.tell(), -1, "the Echo has no board special");
         assert!(f.cracks().is_empty(), "the Echo cracks nothing");
+        assert!(f.flips().is_empty(), "the Echo flips nothing");
+        assert!(f.converted().is_empty());
         assert_eq!(f.ejected(1), 0);
         assert_eq!(f.ejected(2), 0);
         let cells = f.board();
@@ -671,6 +681,93 @@ mod tests {
     fn the_hull_announces_no_reply() {
         let f = Encounter::new("hull", 7).unwrap();
         assert!(f.tell_move(&first_move(&f)).is_empty());
+    }
+
+    /// Value of `(q, r)` in the board bytes.
+    fn at(cells: &[u8], q: i32, r: i32) -> u8 {
+        let i = (-RADIUS..=RADIUS)
+            .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
+            .filter(|&(q, r)| (q + r).abs() <= RADIUS)
+            .position(|c| c == (q, r))
+            .unwrap();
+        cells[i]
+    }
+
+    /// The Chaplain replayed from `history`, the way the client previews a hovered move.
+    fn chaplain(history: &[Vec<i32>]) -> Encounter {
+        let mut f = Encounter::new("chaplain", 7).unwrap();
+        for mv in history {
+            f.play(mv).unwrap();
+        }
+        f
+    }
+
+    /// The player's first forward one-marble move (NE or NW), as the e2e test plays it.
+    fn forward(f: &Encounter) -> Vec<i32> {
+        f.legal_moves()
+            .chunks(MOVE_STRIDE)
+            .find(|m| m[0] == 1 && (m[1] == 2 || m[1] == 4))
+            .unwrap()
+            .to_vec()
+    }
+
+    /// Pairs of a flat `[q, r]` list.
+    fn pairs(flat: &[i32]) -> Vec<(i32, i32)> {
+        flat.chunks(2).map(|c| (c[0], c[1])).collect()
+    }
+
+    #[test]
+    fn the_chaplain_flips_lists_the_player_marbles_a_move_exposes() {
+        let mut history: Vec<Vec<i32>> = Vec::new();
+        let mut f = chaplain(&history);
+        assert!(f.flips().is_empty(), "nothing to flip at the start");
+        for _ in 0..12 {
+            let exposing = f.legal_moves().chunks(MOVE_STRIDE).find_map(|m| {
+                let after = chaplain(&[history.clone(), vec![m.to_vec()]].concat());
+                (!after.flips().is_empty()).then_some(after)
+            });
+            if let Some(after) = exposing {
+                assert_eq!(
+                    after.to_move(),
+                    2,
+                    "the preview is the position after the move"
+                );
+                let cells = after.board();
+                for (q, r) in pairs(&after.flips()) {
+                    assert_eq!(at(&cells, q, r), 1, "only player marbles flip");
+                }
+                return;
+            }
+            let mv = forward(&f);
+            f.play(&mv).unwrap();
+            history.push(mv);
+            let reply = f.boss_move();
+            f.play(&reply).unwrap();
+            history.push(reply);
+        }
+        panic!("no move exposed a marble in 12 player turns");
+    }
+
+    #[test]
+    fn the_chaplain_lists_its_converted_marbles() {
+        let mut f = chaplain(&[]);
+        while f.converted().is_empty() {
+            assert_eq!(f.result(), 0, "the fight ended before any conversion");
+            let mv = if f.to_move() == 1 {
+                forward(&f)
+            } else {
+                f.boss_move()
+            };
+            f.play(&mv).unwrap();
+        }
+        let cells = f.board();
+        for (q, r) in pairs(&f.converted()) {
+            assert_eq!(at(&cells, q, r), 2, "a converted marble is a boss marble");
+        }
+        assert!(
+            f.tell_move(&forward(&f)).is_empty(),
+            "the Chaplain announces no reply"
+        );
     }
 
     #[test]
