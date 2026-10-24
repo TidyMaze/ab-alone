@@ -37,6 +37,29 @@ const STANDARD_BLACK: [(i32, i32); 14] = [
     (0, 2),
 ];
 
+/// Belgian daisy start, Black side: two flowers (a cell and its six neighbours) centred on
+/// (-3,3) at bottom left and (3,-3) at top right. White is the left-right mirror
+/// `(q, r) -> (-q - r, r)`, flowers centred on (0,3) and (0,-3).
+/// Sources, which agree cell for cell: Wikipedia "Abalone (board game)" (file
+/// Abalone_belgian.svg); abalonegames.com (Abalone S.A.), Rules > Rule variations > Belgian
+/// Daisy, author Belgian Federation of Abalone; playstrategy.org/variant/abalone.
+const BELGIAN_DAISY_BLACK: [(i32, i32); 14] = [
+    (-4, 4),
+    (-3, 4),
+    (-4, 3),
+    (-3, 3),
+    (-2, 3),
+    (-3, 2),
+    (-2, 2),
+    (2, -2),
+    (3, -2),
+    (2, -3),
+    (3, -3),
+    (4, -3),
+    (3, -4),
+    (4, -4),
+];
+
 /// Hexagonal Abalone board.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
@@ -108,15 +131,21 @@ impl Board {
 
     /// Standard start layout: 14 marbles per side.
     pub fn standard() -> Self {
-        Self::with_marbles(&STANDARD_BLACK)
+        Self::with_marbles(&STANDARD_BLACK, |q, r| (-q, -r))
     }
 
-    /// Black marbles on `black`, White marbles on their point reflections.
-    fn with_marbles(black: &[(i32, i32)]) -> Self {
+    /// Belgian daisy start layout: 14 marbles per side, two flowers each.
+    pub fn belgian_daisy() -> Self {
+        Self::with_marbles(&BELGIAN_DAISY_BLACK, |q, r| (-q - r, r))
+    }
+
+    /// Black marbles on `black`, White marbles on their images by `white_of`.
+    fn with_marbles(black: &[(i32, i32)], white_of: impl Fn(i32, i32) -> (i32, i32)) -> Self {
         let mut board = Self::empty();
         for &(q, r) in black {
+            let (wq, wr) = white_of(q, r);
             board.set(q, r, Cell::Black);
-            board.set(-q, -r, Cell::White);
+            board.set(wq, wr, Cell::White);
         }
         board
     }
@@ -252,6 +281,75 @@ mod tests {
         let board = Board::standard();
         for (q, r) in all_coords() {
             assert_eq!(board.get(q, r), board.get(-q, -r).map(swap_colour));
+        }
+    }
+
+    #[test]
+    fn belgian_daisy_has_14_marbles_per_side() {
+        let board = Board::belgian_daisy();
+        assert_eq!(count(&board, Cell::Black), 14);
+        assert_eq!(count(&board, Cell::White), 14);
+    }
+
+    #[test]
+    fn belgian_daisy_layout_matches_spec() {
+        // docs/specs/rules.md section 2.2: each side has a flower near the bottom and one near
+        // the top, Black at bottom left and top right.
+        let board = Board::belgian_daisy();
+        let mut black: Vec<(i32, i32)> = all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::Black))
+            .collect();
+        let mut white: Vec<(i32, i32)> = all_coords()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
+            .collect();
+        black.sort();
+        white.sort();
+        let mut expected_black = vec![
+            (-4, 4),
+            (-3, 4),
+            (-4, 3),
+            (-3, 3),
+            (-2, 3),
+            (-3, 2),
+            (-2, 2),
+            (2, -2),
+            (3, -2),
+            (2, -3),
+            (3, -3),
+            (4, -3),
+            (3, -4),
+            (4, -4),
+        ];
+        let mut expected_white = vec![
+            (-1, 4),
+            (0, 4),
+            (-1, 3),
+            (0, 3),
+            (1, 3),
+            (0, 2),
+            (1, 2),
+            (-1, -2),
+            (0, -2),
+            (-1, -3),
+            (0, -3),
+            (1, -3),
+            (0, -4),
+            (1, -4),
+        ];
+        expected_black.sort();
+        expected_white.sort();
+        assert_eq!(black, expected_black);
+        assert_eq!(white, expected_white);
+    }
+
+    #[test]
+    fn belgian_daisy_white_mirrors_black_left_right() {
+        // The mirror (q, r) -> (-q - r, r) keeps the row and swaps colours. The point reflection
+        // keeps colours: it maps each side's bottom flower onto its own top flower.
+        let board = Board::belgian_daisy();
+        for (q, r) in all_coords() {
+            assert_eq!(board.get(q, r), board.get(-q - r, r).map(swap_colour));
+            assert_eq!(board.get(q, r), board.get(-q, -r));
         }
     }
 
