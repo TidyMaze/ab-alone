@@ -32,6 +32,8 @@ import { hudHtml } from './hud';
 import { drawDue, fogSettings, readClearBoard, readSound, readTier, writeClearBoard, writeSound } from './quality';
 import { Sfx } from './sound';
 import { formatScore } from './score';
+import { indexedDbStore } from './idb';
+import { LocalSaves } from './savegame';
 import './ui.css';
 
 // Palette from docs/specs/world.md section 5.
@@ -224,6 +226,15 @@ const worker =
 const history: number[][] = [];
 let thinking = false;
 
+// A local game survives a reload: saved in IndexedDB after every move, replayed through the engine on
+// load (docs/specs/tech.md section 8). Loaded before the board listeners exist, so no click races it.
+const saves = new LocalSaves(indexedDbStore(), navigator.storage);
+const resumed = await saves.load(worker !== null, () => new Engine());
+if (resumed) {
+  engine = resumed.engine;
+  history.push(...resumed.moves);
+}
+
 async function botTurn(): Promise<void> {
   if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
   thinking = true;
@@ -250,6 +261,7 @@ function playMove(record: number[]): void {
   const before = Array.from(engine.board());
   engine.play(Int32Array.from(record));
   afterPlay(before, record);
+  if (!online && !fight) void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
 }
 
 function afterPlay(before: number[], record: number[]): void {
@@ -731,6 +743,7 @@ const invited = roomFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
 
 refresh();
+void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw = { start: -Infinity, cost: 0 };
 renderer.setAnimationLoop((now) => {
   animateEjections(now);
