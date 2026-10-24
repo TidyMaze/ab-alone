@@ -340,8 +340,28 @@ No database server. Everything is client-side.
 - **IndexedDB** (via a small wrapper): signed move logs (`game`, `move_log`), boss `attempt`
   records for the souls-like tuning (boss id, outcome, move count), settings, the session
   keypair. A game is its ruleset + seed + signed log.
+- **Saved local game** (#218, client/src/savegame.ts): a local game, hot-seat (`?bot=off`) or
+  against the bot, is saved after every move in the database `ab-alone`, object store `game`, key
+  `local`. On the next load the engine replays it and the page shows it at the same ply, side to
+  move and score (the bot answers if it was its turn). A finished game deletes the save, so the
+  next load starts a new game. There is one saved local game: a save of the other mode (bot on or
+  off) is left alone, and the first move in this mode replaces it. Online and boss games are not
+  saved (online needs the log catch-up of #34). A save that does not decode (unknown `version`,
+  `mode` or `layout`, a bad record) or does not replay (a move the engine refuses, a finished game)
+  is deleted, never shown half-done. A storage error loses the save, never the game. The format is
+  versioned and minimal, it is also the export file of #219:
+
+  ```json
+  { "version": 1, "mode": "local", "layout": "standard", "bot": true, "moves": [[1, 4, 0, 2, 0, 0, 0, 0]] }
+  ```
+
+  `moves` holds the move records of the WASM bridge in play order, Black first: 8 integers
+  `[n, dir, q0, r0, q1, r1, q2, r2]` (encodings in the header of crates/abalone-wasm/src/lib.rs).
+  A new layout (Belgian daisy, #69) or mode gets its own `layout` or `mode` value, a change of
+  meaning a new `version`.
 - **Export/import:** a game or the whole save as a JSON file (also the bug report format and the
-  backup, because browsers can clear storage). `navigator.storage.persist()` requested.
+  backup, because browsers can clear storage). `navigator.storage.persist()` is requested once per
+  page view, at the first saved move; a refusal changes nothing.
 - **Cross-device progress** is out of scope (no accounts, SPEC section 6). Export file is the
   workaround.
 - Telemetry (boss win rate per attempt) stays local by default. An opt-in "send my attempts" can

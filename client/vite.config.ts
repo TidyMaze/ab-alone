@@ -24,7 +24,8 @@ export default defineConfig(({ command, mode }) => ({
     coverage: {
       provider: 'v8',
       // Only the pure game-board and bot-protocol logic is unit tested here. The Three.js scene and the DOM wiring
-      // in main.ts and scene.ts need a real browser (Playwright e2e, a later task).
+      // in main.ts and scene.ts need a real browser (Playwright e2e, a later task), like the IndexedDB adapter
+      // idb.ts (e2e/resume.spec.ts; savegame.ts holds its logic, tested with an in-memory store).
       include: ['src/board.ts', 'src/bot.ts', 'src/ghost.ts', 'src/score.ts', 'src/hud.ts', 'src/quality.ts', 'src/eject.ts',
         'src/moverecord.ts', 'src/movelog.ts', 'src/transport.ts', 'src/invite.ts', 'src/session.ts', 'src/camera.ts', 'src/seats.ts', 'src/bosshud.ts',
         'src/presence.ts', 'src/hull.ts', 'src/chaplain.ts', 'src/choir.ts', 'src/rematch.ts', 'scripts/nightly-report.mjs', 'src/connectivity.ts',
