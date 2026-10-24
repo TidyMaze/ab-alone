@@ -15,15 +15,29 @@ async function open(page: Page) {
   };
 }
 
-async function pushOffBoard(page: Page) {
+// What the page saw the moment the effect started, before any frame could draw it: the kind of
+// effect, the marble drawn 200 ms and 700 ms in, and, with `skip`, the effect right after a key or a
+// click. Recorded in the page, so a slow runner can never miss the effect (#107).
+type Drawn = { along: number; across: number; roll: number; twist: number; drop: number; opacity: number };
+type Seen = { kind: string; at200: Drawn[]; at700: Drawn[]; afterSkip?: { ejecting?: string; marbles: number } };
+
+async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
   const click = await open(page);
-  // The 600 ms animation can end before a slow runner polls the attribute: record it instead.
-  await page.evaluate(() => {
-    (window as any).__sawEjecting = false;
-    new MutationObserver(() => {
-      if (document.body.dataset.ejecting) (window as any).__sawEjecting = true;
-    }).observe(document.body, { attributes: true });
-  });
+  await page.evaluate((skip) => {
+    const w = window as any;
+    w.__seen = null;
+    const observer = new MutationObserver(() => {
+      const kind = document.body.dataset.ejecting;
+      if (!kind || w.__seen) return;
+      const seen: Seen = { kind, at200: w.__ejectAt(200), at700: w.__ejectAt(700) };
+      if (skip === 'key') document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+      if (skip === 'click') document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      if (skip) seen.afterSkip = { ejecting: document.body.dataset.ejecting, marbles: w.__ejectAt(0).length };
+      w.__seen = seen;
+      observer.disconnect();
+    });
+    observer.observe(document.body, { attributes: true });
+  }, skip);
   const hud = page.locator('#hud');
   await click([-2, 2], [-2, 3], [-2, 4], [-2, 1]); // 1. Black trio NW
   await expect(hud).toContainText('White to move');
@@ -34,21 +48,45 @@ async function pushOffBoard(page: Page) {
   await expect(page.locator('body')).not.toHaveAttribute('data-ejections', /.*/);
   await click([-2, 0], [-2, 1], [-2, 2], [-2, -1]); // 5. 3v2 push, the last White marble leaves
   await expect(hud).toContainText('White to move');
+  await expect(page.locator('body')).toHaveAttribute('data-ejections', '1');
+  await expect.poll(() => page.evaluate(() => (window as any).__seen)).not.toBeNull();
+  return { click, seen: (await page.evaluate(() => (window as any).__seen)) as Seen };
 }
 
-test('an ejected marble animates off the board, then the animation ends', async ({ page }) => {
-  await pushOffBoard(page);
-  const body = page.locator('body');
-  await expect(body).toHaveAttribute('data-ejections', '1');
-  await expect.poll(() => page.evaluate(() => (window as any).__sawEjecting)).toBe(true);
-  await expect(body).not.toHaveAttribute('data-ejecting', /.*/, { timeout: 3000 });
+test('an ejected marble tumbles, stretches and fades into the void, then the effect ends', async ({ page }) => {
+  const { seen } = await pushOffBoard(page);
+  expect(seen.kind).toBe('tumble');
+  expect(seen.at200).toHaveLength(1);
+  expect(seen.at200[0]!.opacity).toBe(1); // pushed over the rim, not fading yet
+  const [past] = seen.at700;
+  expect(past!.along).toBeGreaterThan(1); // stretched along the pull
+  expect(past!.across).toBeLessThan(1);
+  expect(Math.abs(past!.twist)).toBeGreaterThan(0); // tumbling
+  expect(past!.drop).toBeGreaterThan(0); // falling into the void
+  expect(past!.opacity).toBeGreaterThan(0);
+  expect(past!.opacity).toBeLessThan(1);
+  await expect(page.locator('body')).not.toHaveAttribute('data-ejecting', /.*/, { timeout: 3000 });
 });
 
-test('reduced motion: the marble disappears with no animation', async ({ page }) => {
+test('reduced motion: a plain fade, no tumble, no stretch, the same outcome', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await pushOffBoard(page);
-  const body = page.locator('body');
-  await expect(body).toHaveAttribute('data-ejections', '1');
-  await page.waitForTimeout(800); // longer than the 600 ms animation
-  expect(await page.evaluate(() => (window as any).__sawEjecting)).toBe(false);
+  const { seen } = await pushOffBoard(page);
+  expect(seen.kind).toBe('fade');
+  const [mid] = seen.at200;
+  expect(mid).toEqual({ along: 1, across: 1, roll: 0, twist: 0, drop: 0, opacity: mid!.opacity });
+  expect(mid!.opacity).toBeGreaterThan(0);
+  expect(mid!.opacity).toBeLessThan(1);
+  await expect(page.locator('body')).not.toHaveAttribute('data-ejecting', /.*/, { timeout: 3000 });
+  await expect(page.locator('#hud')).toContainText('White to move');
 });
+
+for (const input of ['key', 'click'] as const) {
+  test(`a ${input} during the effect ends it at once and never holds the next move`, async ({ page }) => {
+    const { click, seen } = await pushOffBoard(page, input);
+    expect(seen.kind).toBe('tumble');
+    expect(seen.afterSkip).toEqual({ marbles: 0 }); // no data-ejecting left, no marble in the void
+    await click([1, -2], [1, -1]); // White plays at once: one marble SE
+    await expect(page.locator('#hud')).toContainText('Black to move');
+    await expect(page.locator('body')).toHaveAttribute('data-ejections', '1');
+  });
+}
