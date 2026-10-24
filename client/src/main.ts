@@ -447,6 +447,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
     slide = { game: engine, tracks, start: performance.now() };
     document.body.dataset.sliding = '1';
   }
+  document.body.dataset.knock = String(sfx.knock(mv.cells.length) ?? 'none'); // the knock's pitch in Hz, read by the e2e tests (#289)
   const ejection = findEjection(before, engine.board(), mv);
   if (!ejection) return;
   const body = document.body;

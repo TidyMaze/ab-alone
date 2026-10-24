@@ -76,6 +76,19 @@ export function ejectionVoices(cue: Cue): Voice[] {
   return [INHALE, ...THUD, ...(cue === 'toll' ? TOLL : CLACK)];
 }
 
+// The knock of a move (#289): pitch in Hz for 1, 2, 3 marbles pushed in line, lower for more.
+const KNOCK_HZ = [330, 247, 196] as const;
+/** The pitch of the knock of a move that pushes `marbles` marbles (1 to 3). */
+export const knockPitch = (marbles: number): number => KNOCK_HZ[marbles - 1]!;
+
+/** The knock of a move: a short glass-on-steel hit, a bright click over a dull body, no tail. */
+export function knockVoices(pitch: number): Voice[] {
+  return [
+    { source: 'triangle', freq: [pitch, pitch * 0.9], env: strike(0, 0.6, 0.12) },
+    { source: 'noise', filter: { type: 'bandpass', freq: [pitch * 6, pitch * 4], q: 3 }, env: strike(0, 0.3, 0.02) },
+  ];
+}
+
 /** The gain of the effects node while the sound is on. */
 export const FX_LEVEL = 0.8;
 /** Where the envelopes start and end: an exponential ramp cannot reach 0. */
@@ -154,6 +167,16 @@ export class Sfx {
     const now = this.graph.ctx.currentTime;
     for (const voice of ejectionVoices(cue)) this.play(this.graph, voice, now);
     return cue;
+  }
+
+  /** Plays the knock of a move that pushes `marbles` from now. Its pitch, or null when silent (sound off, or
+   * no gesture yet). */
+  knock(marbles: number): number | null {
+    if (!this.on || !this.graph) return null;
+    const pitch = knockPitch(marbles);
+    const now = this.graph.ctx.currentTime;
+    for (const voice of knockVoices(pitch)) this.play(this.graph, voice, now);
+    return pitch;
   }
 
   private play({ ctx, fx, noise }: Graph, voice: Voice, now: number): void {

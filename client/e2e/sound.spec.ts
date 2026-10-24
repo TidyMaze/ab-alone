@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ICONS } from '../src/icons';
+import { knockPitch } from '../src/sound';
 
 // The ejection sound (world.md section 7): the page says which sound an ejection played in
 // data-sound, and window.__audio() gives the state of the audio context ('none' before one exists).
@@ -54,6 +55,14 @@ test('no audio before a gesture, then a lost glass marble tolls', async ({ page 
   expect(await audio(page)).toBe('running');
 });
 
+// #289: a move plays a knock; body[data-knock] gives its pitch (none when silent). Three marbles in
+// line is the lowest knock.
+test('a move plays the knock of its marbles, lower for three', async ({ page }) => {
+  const click = await open(page);
+  await click([-2, 2], [-2, 3], [-2, 4], [-2, 1]);
+  await expect(page.locator('body')).toHaveAttribute('data-knock', String(knockPitch(3)));
+});
+
 test('a lost enemy shell clacks', async ({ page }) => {
   const click = await open(page);
   await loseShell(click);
@@ -69,6 +78,7 @@ test('the sound toggle mutes the ejection, and the game plays on', async ({ page
   await loseGlass(click);
   await expect(page.locator('#hud')).toContainText('Black ejected 1/6');
   await expect(page.locator('body')).toHaveAttribute('data-sound', 'none');
+  await expect(page.locator('body')).toHaveAttribute('data-knock', 'none'); // the knock of the last move is silent too
   await (await sound(page)).click(); // the presses on the board closed the menu
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 });
