@@ -18,6 +18,7 @@ import { isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } 
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
+import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
@@ -156,6 +157,13 @@ const crackMaterials: Record<number, THREE.MeshStandardMaterial> = {
 };
 const tickGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.1);
 const tickMaterial = new THREE.MeshBasicMaterial({ color: MARBLE_COLORS[2] });
+// The Chaplain tell: a steady pale ring and a glyph on each marble a hovered move would expose to a
+// flip, never a halo or colour alone. A converted marble wears a cap of the dark shell over the glass.
+const paleMaterial = new THREE.MeshBasicMaterial({ color: MARBLE_COLORS[2] });
+const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
+const glyphGeometry = new THREE.OctahedronGeometry(0.09);
+const shellCapGeometry = new THREE.SphereGeometry(0.37, 32, 8, 0, Math.PI * 2, 0, Math.PI * 0.35);
+let exposed = 0; // marbles the hovered move would expose, for the HUD
 
 const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
   const disc = new THREE.Mesh(discGeometry, steel);
@@ -264,7 +272,9 @@ function hud(extra = ''): void {
         phase: engine.phase(),
         phases: engine.phases(),
         result: engine.result(),
-        tell: crackText(parseCracks(engine.cracks())),
+        tell: [crackText(parseCracks(engine.cracks())), chaplainText(exposed, engine.converted().length / 2)]
+          .filter((t) => t !== '')
+          .join(' · '),
       }),
     );
   }
@@ -276,6 +286,7 @@ function refresh(): void {
   const targets = groupTargets(moves, selected);
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
+  const converted = engine instanceof Encounter ? parseCells(engine.converted()) : [];
   marbles.clear();
   discs.forEach((disc, i) => {
     const [q, r] = CELLS[i]!;
@@ -303,7 +314,14 @@ function refresh(): void {
       marble.position.y = 0.5;
     }
   });
-  document.body.dataset.cracks = String(cracks.length); // read by the e2e tests
+  for (const [q, r] of converted) {
+    const p = axialTo3D(q, r);
+    const cap = new THREE.Mesh(shellCapGeometry, marbleMaterials[1]);
+    cap.position.set(p.x, 0.36, p.z);
+    marbles.add(cap);
+  }
+  document.body.dataset.converted = String(converted.length); // read by the e2e tests
+  document.body.dataset.cracks = String(cracks.length);
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
   hud();
   refreshGhosts(moves);
@@ -326,6 +344,21 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
     ghosts.add(marble);
   }
   document.body.dataset.ghosts = String(list.length);
+  const flips = engine instanceof Encounter ? previewFlips(history, record, makeGame as () => Encounter) : [];
+  for (const [q, r] of flips) {
+    const p = axialTo3D(q, r);
+    const ring = new THREE.Mesh(outlineGeometry, paleMaterial);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    const glyph = new THREE.Mesh(glyphGeometry, paleMaterial);
+    glyph.position.set(p.x, 0.85, p.z);
+    ghosts.add(ring, glyph);
+  }
+  document.body.dataset.flips = String(flips.length); // read by the e2e tests
+  if (flips.length !== exposed) {
+    exposed = flips.length;
+    hud();
+  }
 }
 
 function click(q: number, r: number): void {
@@ -437,8 +470,11 @@ addEventListener('resize', () => {
 // Used by the browser checks to count the plies played, bot replies included.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
 
-// Used by the browser checks to pick a legal move (the Hull test plays forward to its first crack).
+// Used by the browser checks to pick a legal move (the boss tests play forward), and to find one that
+// exposes a marble to The Chaplain.
 (window as unknown as Record<string, unknown>).__legal = () => parseMoves(engine.legal_moves());
+(window as unknown as Record<string, unknown>).__preview = (mv: Parameters<typeof encodeMove>[0]) =>
+  engine instanceof Encounter ? previewFlips(history, encodeMove(mv), makeGame as () => Encounter) : [];
 
 // Boss fight: the menu lists the bosses of the bridge, picking one switches the page to encounter
 // mode (human Black, the boss answers in the worker). Retry restarts the same boss and seed.

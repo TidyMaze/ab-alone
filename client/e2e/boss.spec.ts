@@ -88,3 +88,65 @@ test('start The Hull, play to the first wave: a cracked cell ticks down, then va
   await expect(hud).not.toContainText('Rim cracks');
   await page.screenshot({ path: testInfo.outputPath('hull-vanished.png') });
 });
+
+// The Chaplain (#150, Decision #154): a hovered move shows the marbles it would expose to a flip at
+// the end of the boss turn, and a converted marble keeps its own look.
+test('start The Chaplain: a hovered move shows the marbles it exposes, a converted marble keeps its look, #150', async ({
+  page,
+}, testInfo) => {
+  test.slow(); // up to 20 boss searches in the worker
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  const body = page.locator('body');
+  const hud = page.locator('#hud');
+  const plies = () => page.evaluate(() => (window as any).__plies());
+  const screen = (q: number, r: number) =>
+    page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]) as Promise<{ x: number; y: number }>;
+  const click = async (q: number, r: number) => {
+    const p = await screen(q, r);
+    await page.mouse.click(p.x, p.y);
+  };
+  const DIRS = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
+  const legal = (pick: 'forward' | 'exposing') =>
+    page.evaluate((how) => {
+      const w = window as any;
+      return w.__legal().find((m: any) =>
+        m.cells.length === 1 && (how === 'forward' ? m.dir === 4 || m.dir === 2 : w.__preview(m).length > 0),
+      ) ?? null;
+    }, pick);
+
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Chaplain' }).click();
+  await expect(hud).toContainText('The Chaplain');
+  await expect(body).toHaveAttribute('data-converted', '0');
+
+  let previewed = false;
+  let converted = false;
+  for (let n = 1; n <= 20 && !(previewed && converted); n++) {
+    const exposing = previewed ? null : await legal('exposing');
+    if (exposing) {
+      const [q, r] = exposing.cells[0];
+      const [dq, dr] = DIRS[exposing.dir]!;
+      await click(q, r); // select the marble
+      const t = await screen(q + dq!, r + dr!);
+      await page.mouse.move(t.x, t.y); // hover the move: ghost and flip preview
+      await expect(body).not.toHaveAttribute('data-flips', '0');
+      await expect(hud).toContainText('Flips next boss turn');
+      await page.screenshot({ path: testInfo.outputPath('chaplain-preview.png') });
+      await click(q, r); // deselect
+      previewed = true;
+    }
+    const mv = await legal('forward');
+    const [q, r] = mv.cells[0];
+    await click(q, r);
+    await click(mv.dir === 4 ? q : q + 1, r - 1);
+    await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
+    if (!converted && (await body.getAttribute('data-converted')) !== '0') {
+      await expect(hud).toContainText('Converted:');
+      await page.screenshot({ path: testInfo.outputPath('chaplain-converted.png') });
+      converted = true;
+    }
+  }
+  expect(previewed).toBe(true);
+  expect(converted).toBe(true);
+});
