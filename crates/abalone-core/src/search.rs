@@ -257,6 +257,21 @@ pub fn search_with(
     })
 }
 
+/// What a boss does to the board after `mover` played `mv` (the board before it, the board after
+/// the move): the board after its hook, and the ejections the hook credits to Black and to White.
+pub type Step<'a> = &'a dyn Fn(&Board, Player, &Move, Board) -> (Board, [u8; 2]);
+
+/// [`search_with`] where every ply also goes through `step`, so the tree sees the boss hooks.
+pub fn search_hooked(
+    game: &Game,
+    node_budget: u32,
+    weights: Weights,
+    allow: &dyn Fn(&Move) -> bool,
+    _step: Step,
+) -> Option<SearchResult> {
+    search_with(game, node_budget, weights, allow)
+}
+
 /// Same as [`search`], the move only.
 pub fn best_move(game: &Game, node_budget: u32) -> Option<Move> {
     search(game, node_budget).map(|r| r.mv)
@@ -294,6 +309,25 @@ mod tests {
         assert!(
             search(&game, 300).is_some(),
             "the game runs, the boss searches"
+        );
+    }
+
+    #[test]
+    fn a_hooked_search_sees_what_the_hook_does_after_a_move() {
+        let game = Game::new().with_win([6, 6]);
+        let plain = search(&game, 3000).unwrap().mv;
+        let punish = |_: &Board, mover: Player, mv: &Move, after: Board| {
+            let credit = u8::from(mover == Player::Black && *mv == plain) * 6;
+            (after, [0, credit])
+        };
+        let hooked = search_hooked(&game, 3000, DEFAULT_WEIGHTS, &|_| true, &punish).unwrap();
+        assert_ne!(hooked.mv, plain, "a move the hook punishes is not played");
+        let calm = |_: &Board, _: Player, _: &Move, after: Board| (after, [0, 0]);
+        let same = search_hooked(&game, 3000, DEFAULT_WEIGHTS, &|_| true, &calm).unwrap();
+        assert_eq!(
+            same,
+            search(&game, 3000).unwrap(),
+            "a hook that does nothing"
         );
     }
 

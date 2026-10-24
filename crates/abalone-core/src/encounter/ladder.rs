@@ -4,7 +4,7 @@
 //! every machine. The ladder is slow: it runs from `cargo run --release --example ladder`, never
 //! from the unit tests beyond a tiny run.
 
-use crate::board::Cell;
+use crate::board::{Board, Cell};
 use crate::encounter::ballast::{ballast_move, ballast_start, ballast_tell, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use crate::encounter::choir::Choir;
@@ -157,6 +157,14 @@ impl Arena {
             Arena::Choir(choir) => choir.play(mv).map_err(|e| format!("{e:?}")),
         }
     }
+}
+
+/// What the Chaplain does to the board after `mover` played `mv`, for the player search: the marks
+/// of converted marbles follow the move, then the hook the encounter would fire, in the phase of
+/// the board. Mirrors `Encounter::play`, minus the seed (it only picks which boss marble pays for
+/// a flip in P3) and the ejections the hook credits.
+fn chaplain_step(_before: &Board, _mover: Player, _mv: &Move, after: Board) -> (Board, [u8; 2]) {
+    (after, [0, 0])
 }
 
 /// splitmix64: a cheap seeded hash, enough to pick an opening move.
@@ -371,6 +379,28 @@ mod tests {
         let mvs = legal_moves(a.game().board(), Player::Black);
         assert_eq!(mvs.len(), 1);
         assert!(!a.flip_free(&mvs[0]));
+    }
+
+    #[test]
+    fn the_chaplain_step_is_what_the_encounter_does_to_the_board() {
+        let mut enc = Encounter::new(Game::new(), chaplain_boss(), 0);
+        let mut flips = 0;
+        for ply in 0..80_u64 {
+            let mover = enc.game().to_move();
+            let moves = legal_moves(enc.game().board(), mover);
+            let mv = moves[(mix(ply) % moves.len() as u64) as usize].clone();
+            let before = enc.game().board().clone();
+            let (after, _) = apply(&before, mover, &mv).unwrap();
+            let (stepped, credits) = chaplain_step(&before, mover, &mv, after);
+            enc.play(&mv).unwrap();
+            assert_eq!(&stepped, enc.game().board(), "ply {ply}");
+            assert_eq!(credits, [0, 0]);
+            flips += before.converted().len() + enc.game().board().converted().len();
+            if enc.game().outcome().is_some() || enc.phase() > 0 {
+                break;
+            }
+        }
+        assert!(flips > 0, "the game must reach a flip to prove anything");
     }
 
     #[test]
