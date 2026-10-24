@@ -11,12 +11,22 @@ export const POLAR_MAX = 1.4; // under pi/2: the camera never goes below the boa
 export const DIST_MIN = 6;
 export const DIST_MAX = 18; // the fog follows the zoom (quality.ts), so the limit is only the view size
 export const DRAG_THRESHOLD_PX = 5;
+export const FOV = 40; // vertical field of view in degrees, for a window at least as wide as tall
 const RAD_PER_PX = 0.006;
 const WHEEL_RATE = 0.001;
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 export const clampPolar = (a: number): number => clamp(a, POLAR_MIN, POLAR_MAX);
 export const clampDistance = (d: number): number => clamp(d, DIST_MIN, DIST_MAX);
+
+// The vertical field of view in degrees and how far down the picture is moved, in pixels, for a window.
+// A window taller than wide keeps the horizontal view of a square one, so the whole board fits the width
+// of a phone held upright, and the board sits lower to leave the top to the HUD and the buttons (#227).
+export function framing(width: number, height: number): { fov: number; shift: number } {
+  if (width >= height) return { fov: FOV, shift: 0 };
+  const half = Math.tan((FOV * Math.PI) / 360) * (height / width);
+  return { fov: (360 / Math.PI) * Math.atan(half), shift: (height - width) / 4 };
+}
 
 // A pointer that moved farther than the threshold since it went down is dragging, not clicking.
 export const isDrag = (dx: number, dy: number): boolean => Math.hypot(dx, dy) > DRAG_THRESHOLD_PX;

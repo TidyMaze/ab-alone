@@ -14,7 +14,7 @@ import {
 } from './board';
 import { askBot, BOT_NODES } from './bot';
 import { bossHtml } from './bosshud';
-import { isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
+import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
@@ -80,7 +80,15 @@ const [deckAlbedo, deckRoughness, marbleNormal, backdrop] = await Promise.all([
 
 const scene = new THREE.Scene();
 scene.background = backdrop ?? new THREE.Color(COLORS.base);
-const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 100);
+// The whole board fits the window, held upright too, below the HUD and the buttons (#227).
+function frameCamera(): void {
+  const { fov, shift } = framing(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = fov;
+  camera.setViewOffset(innerWidth, innerHeight, 0, -shift, innerWidth, innerHeight); // updates the projection
+}
+frameCamera();
 let view = resetView();
 function applyView(): void {
   const p = viewPosition(view);
@@ -551,8 +559,7 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
 
 addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
+  frameCamera();
   renderer.setSize(innerWidth, innerHeight);
 });
 
