@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test('the human plays Black, the bot answers for White and the turn comes back', async ({ page }) => {
+test('the human plays White (the pale glass), the bot answers for Black and the turn comes back', async ({ page }) => {
   await page.goto('./');
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
 
   const click = async (q: number, r: number) => {
     const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
@@ -18,6 +18,6 @@ test('the human plays Black, the bot answers for White and the turn comes back',
 
   // The bot replies in its worker: two plies are played and the HUD is back on the human side.
   await expect.poll(plies, { timeout: 30_000 }).toBe(2);
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
   expect((await page.screenshot()).equals(before)).toBe(false);
 });

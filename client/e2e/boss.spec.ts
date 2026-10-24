@@ -14,7 +14,7 @@ test('start The Echo, play a move, the boss replies, Retry resets the board', as
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(hud).toContainText('The Echo');
   await expect(hud).toContainText('P1');
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
   await expect(page.locator('#hud .notch.active')).toHaveText('P1');
 
   await click(0, 2); // a Black marble
@@ -22,15 +22,15 @@ test('start The Echo, play a move, the boss replies, Retry resets the board', as
 
   // The boss answers in the worker: two plies, the HUD is back on the human side.
   await expect.poll(plies, { timeout: 30_000 }).toBe(2);
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
   await expect(hud).toContainText('The Echo');
   await page.screenshot({ path: 'test-results/boss-hud.png', clip: { x: 0, y: 0, width: 420, height: 260 } });
 
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect.poll(plies).toBe(0);
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
   await expect(hud).toContainText('The Echo');
-  await expect(hud).toContainText('Black ejected 0/6');
+  await expect(hud).toContainText('White ejected 0/6');
 });
 
 // Bug #144: main.ts awaits the wasm engine, the renderer and the textures before it attaches the
@@ -184,7 +184,7 @@ test('The Chaplain: a boss marble lost for a flip counts for the player and the 
     await click(mv.dir === 4 ? q : q + 1, r - 1);
     await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
   }
-  await expect(hud).toContainText('Black ejected 1/6'); // the lost boss marble, drawn without a click
+  await expect(hud).toContainText('White ejected 1/6'); // the lost boss marble, drawn without a click
   expect(errors).toEqual([]);
 });
 
@@ -209,7 +209,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
   await expect(hud).toContainText('The Choir');
-  await expect(hud).toContainText('Black ejected 0/10 · White ejected 0/6');
+  await expect(hud).toContainText('White ejected 0/10 · Black ejected 0/6');
   await expect(hud).toContainText('Next army: Alto');
   await expect(page.locator('#hud .notch')).toHaveCount(3);
   await expect(body).toHaveAttribute('data-vanished', '24'); // the outer ring is a hole

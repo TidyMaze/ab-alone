@@ -1,7 +1,6 @@
 // Rematch: a new game on the same channel once every seated key asked, docs/specs/tech.md section 6.
 // The seats stay bound to the same keys, the colours swap (rules.md section 10.2).
-
-const SIDE_NAMES: Record<number, string> = { 1: 'Black', 2: 'White' };
+import { sideName } from './glass';
 
 /** The id of the game that follows `game` in its room. Every peer derives the same id, and it is
  * never one of the room's earlier ids, so a move or an ask signed for an old game is refused. */
@@ -22,8 +21,8 @@ export function seatFor(colour: number, n: number, count: number): number {
 }
 
 /** The HUD rematch line of a finished game, see docs/specs/ui.md section 4. The e2e tests read it. */
-export function rematchText(side: number, we: boolean, they: boolean): string {
-  const them = SIDE_NAMES[3 - side];
+export function rematchText(side: number, we: boolean, they: boolean, glass: number): string {
+  const them = sideName(3 - side, glass);
   if (we) return `You asked for a rematch. Waiting for ${them}...`;
   return they ? `${them} asks for a rematch.` : '';
 }

@@ -6,7 +6,7 @@ test('the HUD shows 0/6 for each side at the start, and still after a plain move
   await page.goto('./');
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
-  await expect(hud).toContainText('Black ejected 0/6 · White ejected 0/6');
+  await expect(hud).toContainText('White ejected 0/6 · Black ejected 0/6');
   // __cellToScreen reads the camera, which is only set after the first rendered frame.
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
 
@@ -20,6 +20,8 @@ test('the HUD shows 0/6 for each side at the start, and still after a plain move
   await click(0, 2); // a Black marble
   await click(0, 1); // its NW neighbour, empty at the start
 
+  // The bot answers in its worker: wait for its reply, then the HUD is back on the human side.
+  await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(2);
   await expect(hud).toContainText('White to move');
-  await expect(hud).toContainText('Black ejected 0/6 · White ejected 0/6');
+  await expect(hud).toContainText('White ejected 0/6 · Black ejected 0/6');
 });

@@ -1,14 +1,13 @@
 // HUD plate markup, see docs/specs/ui.md section 4. The turn and score strings are read by the
 // e2e tests: keep them verbatim.
 import type { EndBanner } from './endbanner';
+import { sideName } from './glass';
 import type { OnlineStatus } from './presence';
-
-const SIDE_NAMES: Record<number, string> = { 1: 'Black', 2: 'White' };
-const STATUS_TEXT = ['', 'Black wins', 'White wins', 'Draw'];
 
 export interface HudState {
   side: number; // the side to move
-  status: number; // 0 running, 1 Black wins, 2 White wins, 3 draw
+  status: number; // 0 running, 1 side 1 wins, 2 side 2 wins, 3 draw
+  glass: number; // the side wearing the pale glass, named White (sideName)
   score: string; // formatScore output
   ejected: readonly [number, number];
   win: readonly [number, number]; // ejections each side needs: one pip each
@@ -21,9 +20,9 @@ export interface HudState {
 const pips = (out: number, slots: number): string =>
   Array.from({ length: slots }, (_, i) => `<span class="pip${i < out ? ' out' : ''}"></span>`).join('');
 
-export function hudHtml({ side, status, score, ejected, win, note, online, rematch, end }: HudState): string {
+export function hudHtml({ side, status, glass, score, ejected, win, note, online, rematch, end }: HudState): string {
   const over = status !== 0;
-  const turn = end ? end.title : over ? STATUS_TEXT[status] : `${SIDE_NAMES[side]} to move`;
+  const turn = end ? end.title : over ? (status === 3 ? 'Draw' : `${sideName(status, glass)} wins`) : `${sideName(side, glass)} to move`;
   const marker = `<span class="marker ${over ? 'over' : side === 1 ? 'black' : 'white'}" aria-hidden="true"></span>`;
   return (
     `<div class="turn">${marker}<span>${turn}</span></div>` +

@@ -233,7 +233,7 @@ test('against the bot, Hint is disabled while the bot thinks, then shows the hin
 
   await page.evaluate(() => (window as any).__releaseBot());
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2);
-  await expect(page.locator('#hud')).toContainText('Black to move');
+  await expect(page.locator('#hud')).toContainText('White to move');
   await expect(hint).toBeEnabled();
   const reply = await position(page);
   await hint.click();

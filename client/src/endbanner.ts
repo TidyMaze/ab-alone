@@ -1,6 +1,7 @@
 // End-of-game banner (#282): from the result, the draw reason, the mode and the viewer's side to the
 // banner texts and the animation id the page puts in `body[data-over]`. Pure, so every combination is
 // unit tested. Texts are short, in TALLY's accounting tone (world.md section 2).
+import { sideName } from './glass';
 
 export type EndMode = 'local' | 'bot' | 'boss' | 'online';
 export type EndAnim = 'win' | 'loss' | 'draw';
@@ -11,6 +12,7 @@ export interface EndInput {
   win: number; // ejections the winner needed (6, 10 for the player against the Choir)
   mode: EndMode;
   side: number; // the viewer's side: 1 Black, 2 White, 0 both or none (hot-seat, spectator)
+  glass: number; // the side wearing the pale glass, named White (sideName)
 }
 
 export interface EndBanner {
@@ -19,7 +21,7 @@ export interface EndBanner {
   anim: EndAnim;
 }
 
-export function endBanner({ status, reason, win, mode, side }: EndInput): EndBanner | null {
+export function endBanner({ status, reason, win, mode, side, glass }: EndInput): EndBanner | null {
   if (status === 0) return null;
   const boss = mode === 'boss';
   if (status === 3) {
@@ -28,7 +30,7 @@ export function endBanner({ status, reason, win, mode, side }: EndInput): EndBan
     const what = reason === 2 ? '100 plies, nothing ejected. Tally calls it even.' : 'Same position three times. Tally closes the page.';
     return { title: 'Draw', line: what, anim: 'draw' };
   }
-  if (side === 0) return { title: `${status === 1 ? 'Black' : 'White'} wins`, line: `${win} out. The books balance.`, anim: 'win' };
+  if (side === 0) return { title: `${sideName(status, glass)} wins`, line: `${win} out. The books balance.`, anim: 'win' };
   if (status === side) {
     return boss
       ? { title: 'Victory', line: `${win} out. The seat is empty.`, anim: 'win' }

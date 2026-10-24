@@ -1,6 +1,7 @@
 // Evaluation bar (#191, docs/specs/ui.md section 4): the engine's search score of the position,
 // turned into the bar fill and its words. Scores come from the bridge (`Engine.evaluate`), in
 // centi-marbles for the side to move.
+import { sideName } from './glass';
 
 /** A won game scores this, minus the plies to the win (`abalone_core::search::WIN`). */
 export const WIN_SCORE = 1_000_000;
@@ -22,9 +23,9 @@ export function evalFill(score: number, side: number): number {
 }
 
 /** The bar in words: "Even", "White +1.5" (marbles), "Black winning", "Black wins" once over. */
-export function evalText(score: number, side: number): string {
+export function evalText(score: number, side: number, glass: number): string {
   const white = forWhite(score, side);
-  const leader = white > 0 ? 'White' : 'Black';
+  const leader = sideName(white > 0 ? 2 : 1, glass);
   const size = Math.abs(white);
   if (size > DECIDED) return size === WIN_SCORE ? `${leader} wins` : `${leader} winning`;
   const marbles = (size / 100).toFixed(1);
