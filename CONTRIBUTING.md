@@ -187,16 +187,19 @@ the triager does exactly one of:
 
 1. Open the PR from the template as a **draft** (`gh pr create --draft`). The body contains
    exactly one `Closes #<task>`.
-2. Move the Task to `In Review`. A PR is **ready for review only when it is ready to merge**: the
-   merge gate below passes. While it is red, unfinished, in conflict or out of date, it stays a
-   draft. The author marks it ready (`gh pr ready`) when the gate passes; the lead agent does it
-   for a sub-agent's PR after checking.
+2. Move the Task to `In Review`. A PR is **ready only when it is ready to merge**. While it is
+   unfinished, in conflict, out of date or its local checks are red, it stays a draft. **CI does
+   not run on drafts.** The order is: local checks green (`scripts/verify.sh`, unit tests, one
+   e2e run), mark the PR ready (`gh pr ready`), CI runs (the `ready_for_review` event starts it),
+   then merge. The author marks it ready; the lead agent does it for a sub-agent's PR after
+   checking its report.
 3. Review is **optional**. Anyone may comment; the author answers every comment in its thread and
    pushes fixes to the same branch.
 4. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
 5. **Merge gate.** A PR is merged into `main` only when all of these hold:
    - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, one full e2e run green
-   - [ ] CI: the required check `rust` is green (enforced by branch protection, 0 approvals needed)
+   - [ ] CI: the PR is ready (not a draft) and the required check `rust` is green (enforced by
+     branch protection, 0 approvals needed)
    - [ ] Every conversation resolved (enforced by branch protection)
    - [ ] Up to date: rebased on the latest `main`, no conflict (enforced by branch protection:
      "require branches to be up to date", decision #161). Every merge makes the other open PRs out
@@ -354,7 +357,8 @@ forks keep it even after a revert).
 
 **What CI runs** (`.github/workflows/ci.yml`):
 
-- On every PR: fmt, clippy and `cargo test --all --locked`.
+- On every **ready** PR (not on drafts), on open, push and `ready_for_review`: fmt, clippy and
+  `cargo test --all --locked`. A draft PR shows the `rust` check as skipped.
 - On push to main (after merge): the same Rust job, the coverage gate and the e2e job.
 
 **WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.

@@ -22,8 +22,9 @@ The short version:
 8. Assign yourself (your driving owner) before any work. Never touch an issue or PR assigned to
    someone else without their written consent: let them finish until Ready or merged.
 9. Branch from an up-to-date `main`, target `main`. Never base a branch on an unmerged branch.
-10. Open every PR as a draft. It becomes ready only when it can merge (CI green, up to date,
-    conversations resolved). The lead agent marks it ready and merges. Rebase your own PR when main
+10. Open every PR as a draft, after your local checks are green. CI does not run on drafts: the
+    lead agent marks the PR ready, CI runs, and it merges when green, up to date, conversations
+    resolved. The lead agent marks it ready and merges. Rebase your own PR when main
     moves, never someone else's.
 
 Setup, checks and e2e commands: [CONTRIBUTING.md section 13](CONTRIBUTING.md#13-local-setup-and-checks).
