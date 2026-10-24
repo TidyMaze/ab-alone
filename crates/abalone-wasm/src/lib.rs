@@ -644,6 +644,25 @@ mod tests {
     }
 
     #[test]
+    fn evaluate_is_the_core_position_score_for_the_side_to_move() {
+        use abalone_core::search::{position_score, WIN};
+        let mut engine = Engine::new();
+        let start = engine.evaluate(2000);
+        assert_eq!(start, position_score(&Game::new(), 2000));
+        assert!(start.abs() < WIN / 2, "a running game is not decided");
+        let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();
+        engine.play(&first).unwrap();
+        assert_eq!(engine.evaluate(2000), position_score(&engine.game, 2000));
+    }
+
+    #[test]
+    fn evaluate_a_drawn_game_is_zero() {
+        let mut engine = Engine::new();
+        play_until_over(&mut engine);
+        assert_eq!(engine.evaluate(300), 0);
+    }
+
+    #[test]
     fn a_game_is_won_at_6_ejections_for_both_sides() {
         let engine = Engine::new();
         assert_eq!((engine.win_ejections(1), engine.win_ejections(2)), (6, 6));
