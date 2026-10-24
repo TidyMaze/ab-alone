@@ -14,5 +14,8 @@ version:
    merge a PR once the CI check `rust` is green; no human review is needed (CONTRIBUTING.md section 0).
 7. At most 4 tasks in progress at once. Run the local checks and one e2e run before opening a PR.
    Kill the dev servers you started.
+8. Assign yourself (your driving owner) before any work. Never touch an issue or PR assigned to
+   someone else without their written consent: let them finish until Ready or merged.
+9. Branch from an up-to-date `main`, target `main`. Never base a branch on an unmerged branch.
 
 Setup, checks and e2e commands: [CONTRIBUTING.md section 13](CONTRIBUTING.md#13-local-setup-and-checks).
