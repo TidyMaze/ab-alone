@@ -81,9 +81,25 @@ test('a plain boss fight shows no daily line and does not count a daily attempt,
   await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 1');
 });
 
-// The result card (#196).
-const card = (name: string) =>
-  `AB-ALONE daily 2026-10-25: ${name}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
+// The goal (#248): the HUD states it before the first move, and it stays on the HUD during the fight.
+test('the daily challenge states its goal before the first move, #248', async ({ page }, testInfo) => {
+  await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
+  await page.goto('./');
+  await expect(page.locator('#daily')).toBeEnabled();
+  await page.locator('#daily').click();
+  await expect(page.locator('#hud .goal')).toHaveText(/^Goal: .+/);
+  expect(await page.evaluate(() => (window as any).__history())).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath('daily-goal-desktop.png') });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.locator('#hud .goal')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('daily-goal-phone.png') });
+});
+
+// The result card (#196), and its goal line (#248).
+const card = (name: string, goal: string) =>
+  `AB-ALONE daily 2026-10-25: ${name}\nGoal: ${goal}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
+const goalText = async (page: import('@playwright/test').Page) =>
+  (await page.locator('#hud .goal').textContent())!.replace('Goal: ', '');
 
 test('a finished daily fight shows the result card, and Copy puts its text in the clipboard, #196', async ({
   page,
@@ -91,10 +107,11 @@ test('a finished daily fight shows the result card, and Copy puts its text in th
 }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const name = await startDaily(page);
+  const goal = await goalText(page);
   await expect(page.locator('#daily-card')).toBeHidden(); // not while the fight is on
   await loseByRepetition(page);
   await expect(page.locator('#daily-card')).toBeVisible();
-  await expect(page.locator('#daily-result')).toHaveValue(card(name));
+  await expect(page.locator('#daily-result')).toHaveValue(card(name, goal));
   await page.screenshot({ path: testInfo.outputPath('daily-card.png') });
 
   // Nothing leaves the browser: Copy only writes the clipboard.
@@ -102,7 +119,7 @@ test('a finished daily fight shows the result card, and Copy puts its text in th
   page.on('request', (r) => requests.push(r.url()));
   await page.getByRole('button', { name: 'Copy result' }).click();
   await expect(page.locator('#hud')).toContainText('result copied');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(card(name));
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(card(name, goal));
   expect(requests).toEqual([]);
 
   // Retry starts the next attempt: the card goes away until that fight is over.
@@ -118,11 +135,12 @@ test('when the clipboard is refused, the result text is selected to copy by hand
     });
   });
   const name = await startDaily(page);
+  const goal = await goalText(page);
   await loseByRepetition(page);
   await page.getByRole('button', { name: 'Copy result' }).click();
   await expect(page.locator('#hud')).toContainText('result selected: copy it by hand');
   const box = page.locator('#daily-result');
-  await expect(box).toHaveValue(card(name));
+  await expect(box).toHaveValue(card(name, goal));
   const selected = await box.evaluate(
     (el: HTMLTextAreaElement) =>
       document.activeElement === el && el.selectionStart === 0 && el.selectionEnd === el.value.length,

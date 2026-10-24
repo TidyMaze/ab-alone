@@ -43,6 +43,14 @@ describe('bossHtml', () => {
     expect(bossHtml({ ...base, daily: '<i>' })).not.toContain('<i>');
   });
 
+  it('shows the goal line of the boss, nothing when there is none', () => {
+    expect(bossHtml({ ...base, goal: 'Eject 6 of its marbles to win.' })).toContain(
+      '<div class="goal">Goal: Eject 6 of its marbles to win.</div>',
+    );
+    expect(bossHtml(base)).not.toContain('class="goal"');
+    expect(bossHtml({ ...base, goal: '<i>' })).not.toContain('<i>');
+  });
+
   it('escapes the boss name', () => {
     expect(bossHtml({ ...base, name: '<b>x</b>' })).not.toContain('<b>');
   });
