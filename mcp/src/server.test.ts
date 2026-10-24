@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { afterEach, describe, expect, test } from 'vitest';
+import { localPair } from '../../client/src/transport';
 import { newEncounter, newEngine } from './engine';
 import { Session } from './game';
 import { createServer, toolResult } from './server';
@@ -12,10 +13,10 @@ afterEach(async () => {
   client = undefined;
 });
 
-/** A client connected in memory to a fresh server, as an MCP host would be over stdio. */
+/** A client connected in memory to a fresh server, as an MCP host would be over stdio. Its rooms are local pairs. */
 async function connect(): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await createServer(new Session(newEngine, newEncounter)).connect(serverSide);
+  await createServer(new Session(newEngine, newEncounter, () => localPair()[0])).connect(serverSide);
   client = new Client({ name: 'test', version: '0.0.0' });
   await client.connect(clientSide);
   return client;
@@ -48,9 +49,18 @@ describe('toolResult', () => {
 });
 
 describe('the MCP server', () => {
-  test('lists the five tools of a local game, with their input schemas', async () => {
+  test('lists the tools of a local game and of an online room, with their input schemas', async () => {
     const { tools } = await (await connect()).listTools();
-    expect(tools.map((tool) => tool.name)).toEqual(['new_game', 'get_state', 'legal_moves', 'play_move', 'resign']);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'new_game',
+      'get_state',
+      'legal_moves',
+      'play_move',
+      'resign',
+      'create_room',
+      'join_room',
+      'wait_for_opponent_move',
+    ]);
     for (const tool of tools) expect(tool.description).toBeTruthy();
     const schema = (name: string) => tools.find((tool) => tool.name === name)!.inputSchema;
     expect(schema('new_game')).toMatchObject({
@@ -73,9 +83,21 @@ describe('the MCP server', () => {
       required: ['move'],
       additionalProperties: false,
     });
-    for (const name of ['get_state', 'legal_moves', 'resign']) {
+    for (const name of ['get_state', 'legal_moves', 'resign', 'create_room']) {
       expect(schema(name)).toMatchObject({ type: 'object', properties: {} });
     }
+    expect(schema('join_room')).toMatchObject({
+      type: 'object',
+      properties: { room: { type: 'string' } },
+      required: ['room'],
+      additionalProperties: false,
+    });
+    expect(schema('wait_for_opponent_move')).toMatchObject({
+      type: 'object',
+      properties: { timeout_s: { type: 'integer', minimum: 1, maximum: 120 } },
+      additionalProperties: false,
+    });
+    expect(schema('wait_for_opponent_move').required ?? []).toEqual([]);
   });
 
   test('a tool error is the error object of the spec, as JSON', async () => {
@@ -121,6 +143,25 @@ describe('the MCP server', () => {
     const unknown = await call('new_game', { boss: 'nope' });
     expect(unknown.isError).toBe(true);
     expect(JSON.parse(unknown.text)).toEqual({ code: 'unknown_boss', message: 'unknown boss nope' });
+  });
+
+  test('opens a room and waits in it through the online tools', async () => {
+    await connect();
+    expect(JSON.parse((await call('wait_for_opponent_move')).text).code).toBe('no_room');
+    const room = JSON.parse((await call('create_room')).text);
+    expect(room).toMatchObject({ you: 'black', invite: expect.stringContaining(`#room=${room.room}`) });
+    expect(JSON.parse((await call('get_state')).text)).toMatchObject({ mode: 'online', game_id: room.room });
+    const again = await call('join_room', { room: room.invite });
+    expect(again.isError).toBe(true);
+    expect(JSON.parse(again.text).code).toBe('already_in_room');
+    expect(JSON.parse((await call('resign')).text).code).toBe('not_supported');
+    const waited = JSON.parse((await call('wait_for_opponent_move', { timeout_s: 1 })).text);
+    expect(waited).toMatchObject({ event: 'timeout', state: { mode: 'online' } });
+    for (const timeout_s of [0, 121, 1.5]) {
+      const result = await call('wait_for_opponent_move', { timeout_s });
+      expect(result.isError).toBe(true);
+      expect(result.text).toContain('timeout_s');
+    }
   });
 
   test('new_game with no argument plays against the default bot', async () => {

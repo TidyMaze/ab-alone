@@ -522,6 +522,16 @@ describe('OnlineSession', () => {
     expect(black.session.isAgent(1)).toBe(false);
   });
 
+  it('signs the agent flag into the Hello of an agent session, so the other side shows it (mcp.md section 8)', async () => {
+    const [ta, tb] = localPair();
+    const black = await player(ta, 1);
+    const judge = new FakeJudge();
+    new WatchedSession({ game: 'g', side: 2, agent: true, keys: await generateKeys(), transport: tb, judge, onMove: () => {}, onRefuse: () => {} });
+    await settle();
+    expect(black.session.isAgent(2)).toBe(true);
+    expect(black.refused).toEqual([]);
+  });
+
   it('works without the optional callbacks', async () => {
     const [x, y] = localPair();
     const judge = new FakeJudge();
