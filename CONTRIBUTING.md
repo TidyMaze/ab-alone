@@ -385,7 +385,8 @@ export LLVM_PROFDATA="$(brew --prefix llvm)/bin/llvm-profdata"
 ```
 
 **e2e:** from `client/`, run `npm run e2e` (Chromium project). Playwright starts the dev server
-itself.
+itself, with `--mode e2e`: that server does not watch files, so a wasm rebuild or an edit during a
+run never reloads a page under test (bug #185). Start a new run to test a change.
 
 - The port comes from `E2E_PORT` (default 5173). Pick a random free port and never use 5173:
 
