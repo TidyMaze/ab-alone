@@ -53,6 +53,7 @@ export interface SessionOptions {
  * A seat is present while a peer that proved its key is connected.
  * Once a game is over, every seated key may ask for a rematch: a new game on the same channel, with
  * a new id, a fresh log and the colours swapped. The seats stay bound to the same keys.
+ * An ask lost in a connection drop is sent again when the seated keys say Hello again (#198).
  */
 export class OnlineSession {
   readonly seats: Seats;
@@ -63,6 +64,9 @@ export class OnlineSession {
   private gameId: string;
   private games = 0; // games of the room before this one: the colours swap at each rematch
   private readonly asks = new Set<string>(); // keys that asked for a rematch of this game
+  private ourAsk: Rematch | null = null; // our signed ask for this game, sent again on a seated Hello (#198)
+  private lastAsk: Rematch | null = null; // our signed ask for the game before this one, for a peer that missed it
+  private readonly owed = new Set<string>(); // seated keys that said Hello since we last gave them lastAsk
 
   constructor(private readonly o: SessionOptions) {
     this.gameId = o.game;
@@ -133,7 +137,8 @@ export class OnlineSession {
   rematch(): Promise<void> {
     this.queue = this.queue.then(async () => {
       if (!this.canRematch()) return;
-      this.o.transport.send(await signRematch(this.o.keys, { game: this.gameId }));
+      this.ourAsk = await signRematch(this.o.keys, { game: this.gameId });
+      this.o.transport.send(this.ourAsk);
       await this.asked(this.o.keys.pub);
     });
     return this.queue;
@@ -186,6 +191,9 @@ export class OnlineSession {
 
   private async receiveRematch(r: Rematch | null): Promise<void> {
     if (!r || !(await verifyRematch(r))) return this.o.onRefuse('bad-rematch');
+    // A seated key asking again for the game we already left missed our ask, so it is stuck there:
+    // give it our ask, once per Hello so that two peers never echo each other (#198).
+    if (r.game === this.lastAsk?.game && this.owed.delete(r.pub)) this.o.transport.send(this.lastAsk);
     if (r.game !== this.gameId) return this.o.onRefuse('stale-rematch');
     if (this.seats.seatOf(r.pub) === 0) return this.o.onRefuse('wrong-key');
     await this.asked(r.pub);
@@ -205,6 +213,8 @@ export class OnlineSession {
     this.games += 1;
     this.log = new MoveLog(this.gameId, this.o.keys.pub);
     this.asks.clear();
+    this.lastAsk = this.ourAsk;
+    this.ourAsk = null;
     this.o.judge.restart();
     this.o.onRematch?.();
   }
@@ -214,6 +224,10 @@ export class OnlineSession {
     this.presence.hello(peer, h.pub);
     await this.seat(h);
     this.o.onPresence?.();
+    // A seated key back after a drop may have missed our ask, as it was in flight: send it again (#198).
+    if (this.seats.seatOf(h.pub) === 0) return;
+    this.owed.add(h.pub);
+    if (this.ourAsk) this.o.transport.send(this.ourAsk);
   }
 
   private async seat(h: Hello): Promise<void> {
