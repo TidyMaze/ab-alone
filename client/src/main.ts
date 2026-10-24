@@ -434,6 +434,7 @@ bossButton.addEventListener('click', () => {
   bossList.hidden = !bossList.hidden;
   bossButton.setAttribute('aria-expanded', String(!bossList.hidden));
 });
+(bossButton as HTMLButtonElement).disabled = false; // engine, boss list and listener ready (#144)
 retryButton.addEventListener('click', () => startBoss(fight!.id, fight!.seed));
 
 // Online play: Black creates the room and shares the invite link, the link opener plays White.
