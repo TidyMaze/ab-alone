@@ -72,12 +72,17 @@ const snapshot = async (page: Page) => ({
   score: await page.locator('#hud .score').textContent(),
 });
 
+/** An item of the settings menu, where Export game and Import game live (#287), the menu opened if it is closed. */
+async function menuItem(page: Page, name: string) {
+  const cog = page.getByRole('button', { name: 'Settings' });
+  if ((await cog.getAttribute('aria-expanded')) !== 'true') await cog.click();
+  return page.locator('#settings-menu').getByRole('button', { name });
+}
+
 /** Clicks Export game and saves the download, returns its file name, path and parsed content. */
 async function exportGame(page: Page, dir: string) {
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Export game' }).click(),
-  ]);
+  const button = await menuItem(page, 'Export game');
+  const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
   const name = download.suggestedFilename();
   const path = `${dir}/${name}`;
   await download.saveAs(path);
@@ -86,10 +91,8 @@ async function exportGame(page: Page, dir: string) {
 
 /** Clicks Import game and picks the file at `path` in the file chooser. */
 async function importGame(page: Page, path: string): Promise<void> {
-  const [chooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Import game' }).click(),
-  ]);
+  const button = await menuItem(page, 'Import game');
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), button.click()]);
   await chooser.setFiles(path);
 }
 
@@ -211,16 +214,17 @@ test('an imported finished game shows its result, and a reload starts a new game
 });
 
 test('export and import are not shown during a boss fight, a daily fight or an online game', async ({ page }) => {
-  const exportButton = page.getByRole('button', { name: 'Export game' });
-  const importButton = page.getByRole('button', { name: 'Import game' });
+  // In the open settings menu, beside Clear board: shown in a local game, hidden in the others (#287).
   const local = async () => {
     await ready(page);
-    await expect(exportButton).toBeVisible();
-    await expect(importButton).toBeVisible();
+    await expect(page.locator('#online > #export-game, #online > #import-game')).toHaveCount(0); // no loose HUD buttons
+    await expect(await menuItem(page, 'Export game')).toBeVisible();
+    await expect(await menuItem(page, 'Import game')).toBeVisible();
   };
   const hidden = async () => {
-    await expect(exportButton).toBeHidden();
-    await expect(importButton).toBeHidden();
+    await expect(await menuItem(page, 'Clear board')).toBeVisible();
+    await expect(await menuItem(page, 'Export game')).toBeHidden();
+    await expect(await menuItem(page, 'Import game')).toBeHidden();
   };
   await page.goto('./?net=hook');
   await local();
