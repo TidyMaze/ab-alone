@@ -115,6 +115,36 @@ field covers a cell, and the space between them lets every tap through to the bo
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 
+### 4.1 Evaluation bar
+
+Local hot-seat and bot games show who is ahead, from our own engine (#191). Online and boss games
+never show it (fair play, #164): starting one hides it for good.
+
+```
++---------------------------------------------+
+| [#########|.........]   Black +0.4          |   bottom centre, 16 px from the edge
++---------------------------------------------+
+```
+
+- **Place.** A second plate, bottom centre, 16 px from the bottom edge, as wide as the HUD at most
+  (22rem, the window width minus 32 px on a phone), one row high so it stays clear of the board.
+  It is not part of `#hud`, so it never re-announces the turn plate.
+- **Bar.** Black's share on the left in the dark shell colour, White's on the right in the pale
+  glass colour, the marble colours in both themes like the marbles (11.9:1 against each other),
+  with an accent mark at the even middle. A lead of 4 ejections and their bonus (600 centi-marbles)
+  or more is clamped at 5 % of the ends: the ends are kept for a decided game.
+- **Words.** Next to the bar, the same state in words, so it never depends on colour or length:
+  "Even", "Black +0.4" (the lead in marbles), "White winning" (the search found a forced win),
+  "Black wins" (the game is over). The bar is a `role="meter"` named "Evaluation" whose value text
+  is these words.
+- **Source.** The search score of the position for the side to move (`Engine.evaluate`), turned
+  into White's share from 0 (Black wins) to 1 (White wins) by `client/src/evalbar.ts`. It is
+  computed after every move in a second copy of the bot worker, so a bot reply never waits behind
+  it, with a fixed node budget (`EVAL_NODES`, a quarter of the bot's), never a clock. One request
+  is in flight at a time and only for the newest position: an answer for an older position is
+  dropped, so a late answer never overwrites the bar of a newer position.
+- **Motion.** The bar jumps to its new share, it does not slide (section 6).
+
 ## 5. Board framing
 
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one
