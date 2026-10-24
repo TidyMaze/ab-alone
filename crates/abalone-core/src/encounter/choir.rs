@@ -527,6 +527,80 @@ mod tests {
         assert_eq!(told, [Bass, Alto, Bass]);
     }
 
+    /// The position of ladder seed 9 at player budget 1500 (#172), Alto to move in the cycle:
+    /// Alto has two marbles left, boxed in by Tenor, a Black marble and Bass.
+    fn boxed_in_alto() -> Choir {
+        choir_from(
+            &[
+                (-3, 2),
+                (-3, 3),
+                (-2, 2),
+                (-1, 2),
+                (0, 0),
+                (0, 1),
+                (0, 2),
+                (1, 0),
+                (2, -3),
+                (2, -2),
+            ],
+            &[
+                (Alto, &[(0, -3), (1, -3)]),
+                (Tenor, &[(-1, -2), (0, -2), (1, -2), (2, 0)]),
+                (Bass, &[(-1, -1), (0, -1), (1, -1), (3, -3)]),
+            ],
+            Player::White,
+            [0, 0],
+            0,
+        )
+    }
+
+    #[test]
+    fn an_army_with_no_legal_move_is_skipped_for_the_next_army_that_has_one() {
+        let mut c = boxed_in_alto();
+        assert_eq!(c.phase(), 0);
+        assert_eq!(c.tell(), Some(Tenor), "Alto is boxed in, the tell skips it");
+        let m = c.boss_move().expect("the boss is never stuck (#172)");
+        assert!(m.cells.iter().all(|&cell| c.army_at(cell) == Some(Tenor)));
+        c.play(&m).unwrap();
+        assert_eq!(
+            c.tell(),
+            Some(Bass),
+            "the cycle goes on after the army that moved"
+        );
+    }
+
+    #[test]
+    fn a_free_extra_move_stays_with_the_army_that_just_moved_even_after_a_skip() {
+        // P2 with Alto boxed in: Tenor plays on turn 4 and plays again, never Alto.
+        let mut c = boxed_in_alto();
+        c.members.retain(|m| m.1 != Bass);
+        c.members.push(((3, -3), Army::Tenor));
+        c.boss_turns = FREE_MOVE_EVERY - 1;
+        assert_eq!(c.phase(), 1);
+        let first = c.boss_move().unwrap();
+        c.play(&first).unwrap();
+        assert_eq!(c.game().to_move(), Player::White, "free extra move");
+        assert_eq!(c.tell(), Some(Tenor));
+    }
+
+    #[test]
+    fn a_boss_with_no_legal_move_at_all_passes_and_the_player_moves_again() {
+        // Alto is one marble in the corner, walled in by three Black marbles it cannot push.
+        let mut c = choir_from(
+            &[(2, -3), (3, -2), (2, -2), (-3, 3)],
+            &[(Alto, &[(3, -3)])],
+            Player::Black,
+            [0, 0],
+            0,
+        );
+        c.play(&mv(&[(-3, 3)], E)).unwrap();
+        assert_eq!(c.game().to_move(), Player::Black, "the boss passed");
+        assert_eq!(c.result(), None);
+        assert_eq!(c.boss_move(), None, "player's turn");
+        c.play(&mv(&[(-2, 3)], E)).unwrap();
+        assert_eq!(c.game().to_move(), Player::Black);
+    }
+
     #[test]
     fn membership_follows_boss_moves_and_player_pushes() {
         let mut c = Choir::start();
