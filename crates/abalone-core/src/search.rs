@@ -265,6 +265,32 @@ mod tests {
 
     type P = (i32, i32);
 
+    #[test]
+    fn a_win_comes_from_the_game_threshold_not_a_constant() {
+        // Black has ejected 6: a standard game is lost for White, one won at 10 is not (the Choir).
+        let node = Node {
+            board: Board::standard(),
+            to_move: Player::White,
+            ejected: [6, 0],
+        };
+        let searcher = |win| Searcher {
+            weights: DEFAULT_WEIGHTS,
+            budget: 100,
+            nodes: 0,
+            win,
+        };
+        assert_eq!(
+            searcher([WIN_EJECTIONS; 2]).negamax(&node, 0, 0, -INF, INF),
+            Some(-WIN)
+        );
+        assert!(searcher([10, 6]).negamax(&node, 0, 0, -INF, INF).unwrap() > -WIN / 2);
+        let game = Game::from_position(Board::standard(), Player::White, [6, 0]).with_win([10, 6]);
+        assert!(
+            search(&game, 300).is_some(),
+            "the game runs, the boss searches"
+        );
+    }
+
     fn game_from(black: &[P], white: &[P], to_move: Player, ejected: [u8; 2]) -> Game {
         let mut board = Board::empty();
         for &(q, r) in black {

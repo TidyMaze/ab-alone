@@ -393,6 +393,30 @@ mod tests {
     }
 
     #[test]
+    fn the_win_threshold_is_six_by_default_and_can_differ_per_side() {
+        let game = Game::new();
+        assert_eq!(game.win_ejections(Player::Black), WIN_EJECTIONS);
+        assert_eq!(game.win_ejections(Player::White), WIN_EJECTIONS);
+        let (game, push) = rim_push();
+        let mut game = game.with_win([10, 6]);
+        game.ejected[0] = 8;
+        assert_eq!(game.play(&push), Ok(()));
+        assert_eq!(game.ejected(Player::Black), 9);
+        assert_eq!(game.outcome(), None, "9 of 10 is not a win");
+        game.credit(Player::Black, 1);
+        assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
+        let lost = Game::from_position(Board::standard(), Player::Black, [0, 6]).with_win([10, 6]);
+        assert_eq!(
+            lost.outcome(),
+            Some(Outcome::Win(Player::White)),
+            "the other side still wins at 6"
+        );
+        let running =
+            Game::from_position(Board::standard(), Player::Black, [6, 0]).with_win([10, 6]);
+        assert_eq!(running.outcome(), None);
+    }
+
+    #[test]
     fn fifth_ejection_does_not_win() {
         let (mut game, push) = rim_push();
         game.ejected[0] = 4;
