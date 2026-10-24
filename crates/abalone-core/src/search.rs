@@ -115,7 +115,7 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
-fn children(node: &Node, weights: &Weights) -> Vec<Child> {
+fn children(node: &Node, weights: &Weights, step: Option<Step>) -> Vec<Child> {
     let mover = node.to_move;
     let mut kids: Vec<Child> = legal_moves(&node.board, mover)
         .into_iter()
@@ -123,6 +123,15 @@ fn children(node: &Node, weights: &Weights) -> Vec<Child> {
             let (board, ejects) = apply(&node.board, mover, &mv).expect("legal move");
             let mut ejected = node.ejected;
             ejected[index(mover)] += u8::from(ejects);
+            let board = match step {
+                Some(step) => {
+                    let (board, credits) = step(&node.board, mover, &mv, board);
+                    ejected[0] += credits[0];
+                    ejected[1] += credits[1];
+                    board
+                }
+                None => board,
+            };
             let score = evaluate(&board, mover, ejected, weights);
             let node = Node {
                 board,
@@ -142,15 +151,16 @@ fn children(node: &Node, weights: &Weights) -> Vec<Child> {
     kids
 }
 
-struct Searcher {
+struct Searcher<'a> {
     weights: Weights,
+    step: Option<Step<'a>>,
     budget: u32,
     nodes: u32,
     /// Ejections each side needs to win, from the game: Black then White.
     win: [u8; 2],
 }
 
-impl Searcher {
+impl Searcher<'_> {
     /// Counts one visited position. `false` once the budget is spent.
     fn visit(&mut self) -> bool {
         if self.nodes >= self.budget {
@@ -172,7 +182,7 @@ impl Searcher {
         if depth == 0 {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }
-        let kids = children(node, &self.weights);
+        let kids = children(node, &self.weights, self.step);
         if kids.is_empty() {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }
@@ -219,6 +229,16 @@ pub fn search_with(
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
 ) -> Option<SearchResult> {
+    run(game, node_budget, weights, allow, None)
+}
+
+fn run(
+    game: &Game,
+    node_budget: u32,
+    weights: Weights,
+    allow: &dyn Fn(&Move) -> bool,
+    step: Option<Step>,
+) -> Option<SearchResult> {
     if game.outcome().is_some() {
         return None;
     }
@@ -227,13 +247,14 @@ pub fn search_with(
         to_move: game.to_move(),
         ejected: [game.ejected(Player::Black), game.ejected(Player::White)],
     };
-    let mut kids = children(&root, &weights);
+    let mut kids = children(&root, &weights, step);
     kids.retain(|k| allow(&k.mv));
     if kids.is_empty() {
         return None;
     }
     let mut searcher = Searcher {
         weights,
+        step,
         budget: node_budget,
         nodes: 0,
         win: [
@@ -267,9 +288,9 @@ pub fn search_hooked(
     node_budget: u32,
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
-    _step: Step,
+    step: Step,
 ) -> Option<SearchResult> {
-    search_with(game, node_budget, weights, allow)
+    run(game, node_budget, weights, allow, Some(step))
 }
 
 /// Same as [`search`], the move only.
@@ -296,6 +317,7 @@ mod tests {
         };
         let searcher = |win| Searcher {
             weights: DEFAULT_WEIGHTS,
+            step: None,
             budget: 100,
             nodes: 0,
             win,
