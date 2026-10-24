@@ -123,7 +123,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     name: e2e (${{ matrix.shard }}/${{ strategy.job-total }})
     env:
       # The wasm package comes from the wasm job: the dev server must not rebuild it.
