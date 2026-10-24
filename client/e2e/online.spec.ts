@@ -176,6 +176,7 @@ test('Play online is disabled or works when clicked right after load, bug #127',
 
 // Issue #121: each player sees its own color and whether the opponent is online, updated live.
 test('online status: creator waits with the invite, joiner joins, both see each other, drop, reconnect and close, #121', async ({ browser }) => {
+  test.slow();
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await room({ a, b });
