@@ -315,6 +315,15 @@ mod tests {
     }
 
     #[test]
+    fn a_player_with_no_marble_left_has_no_move_and_loses_to_conversion() {
+        let a = arena(&[], &[(0, 0)], Player::Black, [0, 0]);
+        let r = play_out(a, 0, 1, 50, 2, 300);
+        assert_eq!(r.result, AttemptResult::Lost);
+        assert_eq!(r.death, Some(DeathCause::Conversion));
+        assert_eq!((r.plies, r.player_marbles), (0, 0));
+    }
+
+    #[test]
     fn a_game_that_hits_the_ply_cap_is_a_capped_loss() {
         let r = play_attempt(LadderBoss::Echo, 0, 1, 50, 4);
         assert_eq!(r.plies, 4);
