@@ -11,6 +11,10 @@ describe('icon', () => {
     }
   });
 
+  it('has the icons of the HUD buttons (New game, Play online, Copy diagnostics) and of the theme setting', () => {
+    expect(Object.keys(ICONS)).toEqual(expect.arrayContaining(['newgame', 'online', 'diagnostics', 'theme']));
+  });
+
   it('gives every icon its own drawing', () => {
     const drawings = Object.values(ICONS);
     expect(new Set(drawings).size).toBe(drawings.length);

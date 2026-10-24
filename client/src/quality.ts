@@ -3,6 +3,7 @@
 // Pure functions only: main.ts feeds them the browser values.
 
 import { RADIUS } from './board';
+import type { Theme } from './settings';
 
 export type Tier = 'low' | 'high';
 export interface Hints {
@@ -16,6 +17,7 @@ export type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 const TIER_KEY = 'ab-alone.quality';
 const CLEAR_KEY = 'ab-alone.clear-board';
 const SOUND_KEY = 'ab-alone.sound';
+const THEME_KEY = 'ab-alone.theme';
 
 export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): Tier {
   const weak = width < 768 || reducedMotion || (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
@@ -54,6 +56,12 @@ export const writeClearBoard = (store: Store, on: boolean): void => write(store,
 // The one sound on/off toggle until the mix sliders of #60: on unless the player turned it off.
 export const readSound = (store: Store): boolean => read(store, SOUND_KEY) !== 'off';
 export const writeSound = (store: Store, on: boolean): void => write(store, SOUND_KEY, on ? 'on' : 'off');
+// The theme (#317): System unless the player picked Dark or Light. index.html reads the same key before the first paint.
+export const readTheme = (store: Store): Theme => {
+  const stored = read(store, THEME_KEY);
+  return stored === 'dark' || stored === 'light' ? stored : 'system';
+};
+export const writeTheme = (store: Store, theme: Theme): void => write(store, THEME_KEY, theme);
 
 export function readTier(store: Store, hints: Hints): Tier {
   const stored = read(store, TIER_KEY);

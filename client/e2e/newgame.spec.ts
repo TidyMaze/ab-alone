@@ -80,7 +80,7 @@ test('New game asks for a confirmation, then starts over from the start position
   const button = page.locator('#new-game');
   const start = await position(page);
   expect(start.plies).toBe(0);
-  await expect(button).toHaveText('New game');
+  await expect(button).toHaveAttribute('aria-label', 'New game');
 
   await move(page, [0, 2], [0, 1]); // Black
   await move(page, [0, -2], [0, -1]); // White
@@ -92,7 +92,7 @@ test('New game asks for a confirmation, then starts over from the start position
   await expect(button).toHaveText('Confirm new game');
   expect(await plies(page)).toBe(2); // nothing changed yet
   await button.click();
-  await expect(button).toHaveText('New game');
+  await expect(button).toHaveAttribute('aria-label', 'New game');
   expect(await position(page)).toEqual(start);
   await expect.poll(() => savedPlies(page)).toBe(0);
 
@@ -111,7 +111,7 @@ test('New game without a move starts over at once; the confirmation lapses after
   await load(page, './?bot=off');
   const button = page.locator('#new-game');
   await button.click(); // no move yet: nothing to lose, no confirmation
-  await expect(button).toHaveText('New game');
+  await expect(button).toHaveAttribute('aria-label', 'New game');
   expect(await plies(page)).toBe(0);
 
   await move(page, [0, 2], [0, 1]);
@@ -123,7 +123,7 @@ test('New game without a move starts over at once; the confirmation lapses after
   await page.clock.fastForward(3_900);
   await expect(button).toHaveText('Confirm new game');
   await page.clock.fastForward(100);
-  await expect(button).toHaveText('New game'); // lapsed, the game goes on
+  await expect(button).toHaveAttribute('aria-label', 'New game'); // lapsed, the game goes on
   expect(await plies(page)).toBe(1);
   await button.click(); // a press after it lapsed asks again
   await expect(button).toHaveText('Confirm new game');

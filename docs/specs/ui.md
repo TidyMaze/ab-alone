@@ -25,7 +25,7 @@ Reference notes (all from world.md):
 
 Tokens live in `client/src/ui.css` on `:root`. Dark is the default (the deck). Light is picked by
 `prefers-color-scheme: light` and can be forced with `data-theme="light"` or `data-theme="dark"`
-on `<html>`. Both themes define exactly the same token names.
+on `<html>`. Both themes define exactly the same token names. The Theme item of the cog menu (#317) sets it: System (the default) removes the attribute and follows the system, Dark and Light set it. The choice is stored under `ab-alone.theme`, and `index.html` applies it before the first paint.
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
@@ -70,7 +70,7 @@ field covers a cell, and the space between them lets every tap through to the bo
 
 Settings (#277): a cog button, first in the column, opens a menu, one button per item: the toggles Clear board,
 then Sound (#284, the ejection sound, no longer a button of the column; opening the menu and toggling Sound count as
-the first gesture that starts audio), then Export game and Import game (#287, no longer buttons of the column). Each
+the first gesture that starts audio), then Theme (#317, System, Dark or Light: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column). Each
 item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG line icons, thin `currentColor`
 strokes, one size) then its label: a fog for Clear board, a speaker for Sound (crossed out while off), an arrow out
 of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
@@ -126,7 +126,7 @@ button with `aria-pressed`, each item has the visible focus ring of the buttons.
   disconnected. One more line under the status line says who asked, kept verbatim for the e2e
   tests: "You asked for a rematch. Waiting for White..." and "Black asks for a rematch." When both
   asked, the new game starts with the colours swapped and the line and the button go away (#186).
-- **New game.** A button above Play online, in local games only (hot-seat or against the bot):
+- **New game.** A button above Play online, icon only (#297, the name is the tooltip and the accessible name, and the words show while it asks for the confirmation), in local games only (hot-seat or against the bot):
   boss, daily and online games do not show it. It leaves the game in progress for the start
   position, the bot on or off as it was, and deletes the saved game (tech.md section 8). With no
   move played it starts over at once. Once a move is played, the first press turns it into
@@ -137,7 +137,7 @@ button with `aria-pressed`, each item has the visible focus ring of the buttons.
   (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
   tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
-- **Copy diagnostics.** A button in the bottom-right corner, in every mode, styled like the
+- **Copy diagnostics.** A button in the bottom-right corner, in every mode, icon only (#297: its name is the tooltip and the accessible name, at least 44 px on a phone), styled like the
   others but kept apart from the play buttons and off the board, even at phone width. It copies
   the diagnostics text (tech.md section 10) and the note line says "diagnostics copied". When the
   browser refuses the clipboard, the text appears in a box above the button, selected from its

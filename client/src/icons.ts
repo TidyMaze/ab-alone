@@ -6,6 +6,10 @@ export const ICONS = {
   muted: 'M4 9h4l5-4v14l-5-4H4zM17 9.5l5 5M22 9.5l-5 5',
   export: 'M12 15V4M7.5 8.5 12 4l4.5 4.5M5 14v5h14v-5',
   import: 'M12 4v11M7.5 10.5 12 15l4.5-4.5M5 14v5h14v-5',
+  newgame: 'M5 12a7 7 0 1 0 2.05-4.95M5 4v4h4',
+  online: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18',
+  diagnostics: 'M9 4h6v3H9zM8 5H5v15h14V5h-3M9 12h6M9 16h6',
+  theme: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 3v18',
 } as const;
 
 export type IconName = keyof typeof ICONS;

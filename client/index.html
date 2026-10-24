@@ -8,6 +8,13 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>AB-ALONE</title>
+    <script>
+      // The theme (#317) before the first paint: Dark or Light when the player picked one, else the system setting.
+      try {
+        const theme = localStorage.getItem('ab-alone.theme');
+        if (theme === 'dark' || theme === 'light') document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
