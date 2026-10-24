@@ -6,15 +6,13 @@ async function open(page: Page) {
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('Black to move');
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-  // The 200 ms slide can end before a slow runner polls the attribute: count the slides instead.
+  // The 200 ms slide can end before a slow runner polls the attribute: count the slides instead. A queued
+  // move starts its slide in the same task that ends the previous one, so count each time the attribute is added.
   await page.evaluate(() => {
     (window as any).__slides = 0;
-    let sliding = false;
-    new MutationObserver(() => {
-      const now = Boolean(document.body.dataset.sliding);
-      if (now && !sliding) (window as any).__slides += 1;
-      sliding = now;
-    }).observe(document.body, { attributes: true });
+    new MutationObserver((records) => {
+      for (const r of records) if (r.oldValue === null) (window as any).__slides += 1;
+    }).observe(document.body, { attributes: true, attributeFilter: ['data-sliding'], attributeOldValue: true });
   });
   const click = async (...cells: [number, number][]) => {
     for (const [q, r] of cells) {

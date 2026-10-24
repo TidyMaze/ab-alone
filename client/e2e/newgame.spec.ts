@@ -103,8 +103,8 @@ test('New game asks for a confirmation, then starts over from the start position
 
   // Still hot-seat: Black then White play by hand.
   await move(page, [0, 2], [0, 1]);
-  await move(page, [0, -2], [0, -1]);
-  expect(await plies(page)).toBe(2);
+  await move(page, [0, -2], [0, -1]); // clicked during the slide of the first move: it waits, it is not lost
+  await expect.poll(() => plies(page)).toBe(2);
 });
 
 test('New game without a move starts over at once; the confirmation lapses after 4 seconds', async ({ page }) => {
