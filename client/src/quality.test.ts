@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { axialTo3D, CELLS } from './board';
+import { DIST_MAX, DIST_MIN, resetView, viewPosition, type View } from './camera';
 import { fogSettings, readClearBoard, readTier, tierFromHints, writeClearBoard, writeTier } from './quality';
 
 const big = { width: 1920, cores: 8, memory: 8, reducedMotion: false };
@@ -40,18 +42,39 @@ describe('tierFromHints', () => {
 });
 
 describe('fogSettings', () => {
-  it('is lighter on low than on high, and starts further away', () => {
-    const low = fogSettings('low', false)!;
-    const high = fogSettings('high', false)!;
-    expect(low.far).toBeGreaterThan(high.far);
-    expect(low.near).toBeGreaterThanOrEqual(high.near);
-  });
-  it('keeps the fog behind the playable cells', () => {
-    expect(fogSettings('high', false)!.near).toBeGreaterThanOrEqual(16);
+  const view = (distance: number): View => ({ ...resetView(), distance });
+  // Fog is linear on the depth along the view axis, like THREE.Fog.
+  const factor = (f: { near: number; far: number }, depth: number): number =>
+    Math.min(1, Math.max(0, (depth - f.near) / (f.far - f.near)));
+  // Depth of every cell centre for a camera that looks at the board centre.
+  const depths = (v: View): number[] => {
+    const c = viewPosition(v);
+    const len = Math.hypot(c.x, c.y, c.z);
+    return CELLS.map(([q, r]) => {
+      const p = axialTo3D(q, r);
+      return ((p.x - c.x) * -c.x + (p.y - c.y) * -c.y + (p.z - c.z) * -c.z) / len;
+    });
+  };
+  const zooms = [DIST_MIN, resetView().distance, DIST_MAX];
+
+  for (const tier of ['low', 'high'] as const) {
+    for (const distance of zooms) {
+      it(`${tier}: fogs the far rim and spares the near cells at distance ${distance.toFixed(1)}`, () => {
+        const fog = fogSettings(tier, false, distance)!;
+        const d = depths(view(distance));
+        expect(factor(fog, Math.max(...d))).toBeGreaterThanOrEqual(0.25);
+        expect(factor(fog, Math.min(...d))).toBeLessThanOrEqual(0.05);
+      });
+    }
+  }
+  it('is lighter on low than on high', () => {
+    const low = fogSettings('low', false, resetView().distance)!;
+    const high = fogSettings('high', false, resetView().distance)!;
+    expect(low.far).toBeGreaterThanOrEqual(high.far);
   });
   it('is off in clear-board mode, in every tier', () => {
-    expect(fogSettings('low', true)).toBeNull();
-    expect(fogSettings('high', true)).toBeNull();
+    expect(fogSettings('low', true, resetView().distance)).toBeNull();
+    expect(fogSettings('high', true, resetView().distance)).toBeNull();
   });
 });
 
