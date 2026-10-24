@@ -5,7 +5,8 @@ export type ConnectionState = 'connecting' | 'open' | 'closed';
 /** One ordered channel for signed move records and Hello messages. Local play, P2P and later a server all fit it. */
 export interface Transport {
   readonly state: ConnectionState;
-  send(message: Wire): void;
+  /** To every peer, or to the one peer `to` names as onRecord named it: a catch-up answer goes to the peer behind alone. */
+  send(message: Wire, to?: string): void;
   /** `peer` names the sender as the transport knows it, not by key: only a Hello proves a key. */
   onRecord(cb: (message: Wire, peer: string) => void): void;
   onState(cb: (state: ConnectionState) => void): void;
@@ -14,7 +15,8 @@ export interface Transport {
   close(): void;
 }
 
-/** In-memory end of a local pair: delivery is synchronous and in order, nothing touches the network. */
+/** In-memory end of a local pair: delivery is synchronous and in order, nothing touches the network.
+ * Its one peer is every peer, so a send to one peer goes to it too. */
 class LocalTransport implements Transport {
   state: ConnectionState = 'open';
   peer!: LocalTransport;

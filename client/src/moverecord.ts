@@ -46,8 +46,24 @@ export interface Rematch {
   sig: string;
 }
 
+/** Catch-up request, sent after Hello (docs/specs/tech.md section 6, Reconnection, #226): the game of the room
+ * the sender is in, how many of its moves it has, and the keys whose rematch ask of it it holds. Not signed:
+ * it changes nothing, and everything that answers it is signed. */
+export interface Sync {
+  kind: 'sync';
+  game: string;
+  seq: number;
+  asked: string[];
+}
+
+/** One signed move record or rematch ask that a peer behind missed, sent to it alone in answer to its Sync. */
+export interface Missed {
+  kind: 'missed';
+  of: MoveRecord | Rematch;
+}
+
 /** Anything a transport carries. */
-export type Wire = MoveRecord | Hello | Rematch;
+export type Wire = MoveRecord | Hello | Rematch | Sync | Missed;
 
 type Unsigned = Omit<MoveRecord, 'sig'>;
 
@@ -159,4 +175,25 @@ export function parseRematch(x: unknown): Rematch | null {
   const r = x as Record<string, unknown>;
   const ok = r.kind === 'rematch' && typeof r.game === 'string' && typeof r.pub === 'string' && typeof r.sig === 'string';
   return ok ? { kind: 'rematch', game: r.game as string, pub: r.pub as string, sig: r.sig as string } : null;
+}
+
+/** Shape check for a Sync off the wire. Returns a clean copy or null. */
+export function parseSync(x: unknown): Sync | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const s = x as Record<string, unknown>;
+  const ok =
+    s.kind === 'sync' &&
+    typeof s.game === 'string' &&
+    Number.isInteger(s.seq) &&
+    (s.seq as number) >= 0 &&
+    Array.isArray(s.asked) &&
+    s.asked.every((k) => typeof k === 'string');
+  return ok ? { kind: 'sync', game: s.game as string, seq: s.seq as number, asked: [...(s.asked as string[])] } : null;
+}
+
+/** Shape check for a Missed off the wire: what it carries must be a record or an ask, never another message. */
+export function parseMissed(x: unknown): Missed | null {
+  if ((x as { kind?: unknown } | null)?.kind !== 'missed') return null;
+  const of = parseRematch((x as Missed).of) ?? parseRecord((x as Missed).of);
+  return of ? { kind: 'missed', of } : null;
 }
