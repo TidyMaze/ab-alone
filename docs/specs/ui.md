@@ -55,6 +55,10 @@ request keeps a readable page (no layout jump beyond font metrics).
 ## 4. HUD layout
 
 One plate, top-left, 16 px from the edges, max width 22rem, never over the board centre at 720p.
+The buttons (Clear board, Reset view, Play online, Boss fight and the rest) share one column
+top-right, beside the plate and never over it (#227). Wider than tall, the column keeps to the band
+right of the board. Held upright, the column becomes rows of buttons under the plate. No button or
+field covers a cell, and the space between them lets every tap through to the board.
 
 ```
 +---------------------------------+
@@ -95,7 +99,10 @@ One plate, top-left, 16 px from the edges, max width 22rem, never over the board
 
 ## 5. Board framing
 
-The canvas fills the window. The chrome adds a rim only: a fixed, non-interactive radial gradient
+The canvas fills the window. A window taller than wide keeps the horizontal view of a square one
+(the vertical field of view grows past 40 degrees), so the whole board fits the width of a phone held
+upright, and the picture moves down by a quarter of the spare height, which leaves the top to the
+plate and the buttons (#227). The chrome adds a rim only: a fixed, non-interactive radial gradient
 from transparent at 65 % to near-black (`#0b0d0f` at 75 % opacity) at 100 %, the same in both themes because the 3D deck is dark either way (fog at the rim, never over the cells). No border or
 frame is drawn around the canvas, the 3D deck is the frame. The rim is removed with clear-board
 mode once that toggle exists (#32), and it has no motion.
