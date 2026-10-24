@@ -83,6 +83,17 @@ export const SILENT = 0.0001;
 /** The toggle fades the effects node over about 20 ms: a cut would click. */
 const TOGGLE_TAU = 0.007;
 
+/** A steady tone of the hum: pitch in Hz, level before the effects node. */
+export interface HumTone {
+  freq: number;
+  gain: number;
+}
+/** The hum under every game (world.md section 7): two low sines a fifth apart, no melody, quiet. */
+export const HUM: readonly HumTone[] = [
+  { freq: 55, gain: 0.03 },
+  { freq: 82.4, gain: 0.02 },
+];
+
 interface Graph {
   ctx: AudioContext;
   fx: GainNode;
@@ -108,6 +119,11 @@ export class Sfx {
     return this.graph?.ctx.state ?? 'none';
   }
 
+  /** The effects level: 0 until a context exists or while the sound is off. */
+  get level(): number {
+    return this.graph?.fx.gain.value ?? 0;
+  }
+
   /** Called on every user gesture: makes the context the first time, resumes it while suspended. */
   unlock(): void {
     if (!this.on) return;
@@ -118,6 +134,7 @@ export class Sfx {
       fx.gain.value = FX_LEVEL;
       fx.connect(ctx.destination);
       this.graph = { ctx, fx, noise: whiteNoise(ctx) };
+      startHum(ctx, fx);
     }
     if (this.graph.ctx.state === 'suspended') this.graph.ctx.resume().catch(() => undefined);
   }
@@ -175,6 +192,19 @@ export class Sfx {
 function glide(param: AudioParam, [a, b]: readonly [number, number], from: number, to: number): void {
   param.setValueAtTime(a, from);
   param.exponentialRampToValueAtTime(b, to);
+}
+
+/** The hum: steady sines, started once with the context. Sound off silences them through the effects node. */
+function startHum(ctx: AudioContext, fx: GainNode): void {
+  for (const { freq, gain } of HUM) {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const level = ctx.createGain();
+    level.gain.value = gain;
+    osc.connect(level).connect(fx);
+    osc.start(ctx.currentTime);
+  }
 }
 
 /** One second of white noise, looped by every noise voice. */

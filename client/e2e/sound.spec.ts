@@ -22,6 +22,7 @@ const sound = async (page: Page) => {
   return toggle;
 };
 const audio = (page: Page) => page.evaluate(() => (window as any).__audio());
+const level = (page: Page) => page.evaluate(() => (window as any).__level());
 
 // The 3v2 push of eject.spec.ts: Black pushes the last White marble of the q = -2 column off.
 async function loseGlass(click: Awaited<ReturnType<typeof open>>) {
@@ -102,6 +103,17 @@ test('Sound is no loose HUD button: it is in the settings menu, reachable by key
   await page.keyboard.press('Enter'); // a key press is a gesture too
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await expect(toggle.locator('path')).toHaveAttribute('d', ICONS.muted);
+});
+
+// The hum (world.md section 7) runs under every game once a gesture has made the audio context, and
+// the Sound toggle fades its level out: window.__level() is the effects level, 0 when silent.
+test('the hum runs after a gesture, and fades out when Sound is off', async ({ page }) => {
+  const click = await open(page);
+  expect(await level(page)).toBe(0); // no audio context before a gesture, so no hum
+  await click([0, 2]); // a gesture on the board starts the audio, and with it the hum
+  await expect.poll(() => level(page)).toBeGreaterThan(0.5);
+  await (await sound(page)).click();
+  await expect.poll(() => level(page)).toBeLessThan(0.01);
 });
 
 // Bug #146 pattern: a click right after load hits a disabled button or toggles.

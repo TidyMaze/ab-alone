@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EJECT_MS, PUSH_MS, VOID_MS } from './eject';
-import { CUE_AT, FX_LEVEL, SILENT, Sfx, cueFor, ejectionVoices, type Cue, type Voice } from './sound';
+import { CUE_AT, FX_LEVEL, HUM, SILENT, Sfx, cueFor, ejectionVoices, type Cue, type Voice } from './sound';
 
 const PUSH = PUSH_MS / 1000;
 const start = (v: Voice): number => v.env[0]![0];
@@ -19,6 +19,21 @@ describe('cueFor, world.md section 7', () => {
   it('tolls for the glass side when the human is Black (side 1)', () => {
     expect(cueFor(1, 1)).toBe('toll');
     expect(cueFor(2, 1)).toBe('clack');
+  });
+});
+
+describe('HUM, world.md section 7 ambience', () => {
+  it('low steady sines, no melody: every tone one pitch under 90 Hz', () => {
+    expect(HUM.length).toBeGreaterThanOrEqual(2);
+    for (const tone of HUM) {
+      expect(tone.freq).toBeGreaterThanOrEqual(30);
+      expect(tone.freq).toBeLessThan(90);
+    }
+  });
+
+  it('quiet under the effects: the tones together stay at a tenth of the full level or less', () => {
+    for (const tone of HUM) expect(tone.gain).toBeGreaterThan(0);
+    expect(HUM.reduce((sum, tone) => sum + tone.gain, 0)).toBeLessThanOrEqual(0.1);
   });
 });
 
@@ -233,10 +248,32 @@ describe('Sfx.unlock, on a user gesture', () => {
     sfx.unlock();
     expect(make).toHaveBeenCalledTimes(1);
     expect(sfx.state).toBe('running');
-    expect(ctx.gains).toHaveLength(1);
+    expect(ctx.gains).toHaveLength(1 + HUM.length); // the effects node, then one level per hum tone
     const [fx] = ctx.gains;
     expect(fx!.gain.value).toBe(FX_LEVEL);
     expect(next(fx!)).toBe(ctx.destination);
+  });
+
+  it('starts the hum with the context: one steady sine per tone, never stopped, under the effects node', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    expect(ctx.sources).toHaveLength(HUM.length);
+    HUM.forEach((tone, i) => {
+      const osc = ctx.sources[i] as FakeOscillator;
+      expect(osc.type).toBe('sine');
+      expect(osc.frequency.value).toBe(tone.freq);
+      expect(osc.times).toEqual([5]); // started now, no stop
+      const level = next(osc) as FakeGain;
+      expect(level.gain.value).toBe(tone.gain);
+      expect(next(level)).toBe(ctx.gains[0]);
+    });
+  });
+
+  it('reads the level: 0 before a context, the effects level once it runs', () => {
+    const { sfx } = setup();
+    expect(sfx.level).toBe(0);
+    sfx.unlock();
+    expect(sfx.level).toBe(FX_LEVEL);
   });
 
   it('resumes a context the browser started suspended, and only then', async () => {
@@ -283,10 +320,10 @@ describe('Sfx.ejection', () => {
       sfx.unlock();
       expect(sfx.ejection(side)).toBe(cue);
       const voices = ejectionVoices(cue);
-      expect(ctx.sources).toHaveLength(voices.length);
+      expect(ctx.sources).toHaveLength(HUM.length + voices.length);
       const fx = ctx.gains[0]!;
       voices.forEach((voice, i) => {
-        const source = ctx.sources[i]!;
+        const source = ctx.sources[HUM.length + i]!;
         expect(source.times).toEqual([5 + start(voice), 5 + end(voice)]);
         let node = next(source);
         if (voice.source === 'noise') {

@@ -780,6 +780,8 @@ addEventListener('resize', () => {
 
 // Used by the browser checks to see whether the audio context exists ('none') and runs.
 (window as unknown as Record<string, unknown>).__audio = () => sfx.state;
+// The effects level: the hum and the ejections fade to 0 with the Sound toggle.
+(window as unknown as Record<string, unknown>).__level = () => sfx.level;
 
 // Used by the browser checks to count the plies played, bot replies included, and to compare them.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
