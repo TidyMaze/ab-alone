@@ -91,6 +91,39 @@ test('Hint shows the best move as a ghost and plays nothing; a second press or a
   expect(await position(page)).toEqual(after);
 });
 
+test('on the start position the marbles the hint takes wear the selection ring, until the hint goes, #301', async ({
+  page,
+}) => {
+  test.slow(); // two hint searches in the worker
+  await page.goto('./?bot=off');
+  await ready(page);
+  const body = page.locator('body');
+  const hint = page.getByRole('button', { name: 'Hint' });
+  const rings = () => page.evaluate(() => (window as any).__rings() as number[][]);
+  expect(await rings()).toEqual([]);
+
+  await hint.click();
+  await expect(body).toHaveAttribute('data-hint', 'shown', { timeout: 30_000 });
+  const move = await page.evaluate(() => (window as any).__hint() as number[]);
+  const takes = Array.from({ length: move[0]! }, (_, i) => [move[2 + 2 * i], move[3 + 2 * i]]);
+  expect(takes.length).toBeGreaterThan(0);
+  expect(await rings()).toEqual(takes);
+  await page.screenshot({ path: 'test-results/hint-rings.png' });
+
+  await hint.click(); // a second press
+  await expect(body).toHaveAttribute('data-hint', 'off');
+  expect(await rings()).toEqual([]);
+
+  await hint.click();
+  await expect(body).toHaveAttribute('data-hint', 'shown', { timeout: 30_000 });
+  await click(page, 0, 2); // a new selection: the ring is the selection's alone
+  await expect(body).toHaveAttribute('data-hint', 'off');
+  expect(await rings()).toEqual([[0, 2]]);
+  await click(page, 0, 1); // the next move
+  await expect.poll(() => plies(page)).toBe(1);
+  expect(await rings()).toEqual([]);
+});
+
 test('a hint asked for an older position is never drawn on the new one, #192', async ({ page }) => {
   test.slow(); // three hint searches in the worker
   // The hint requests are held until __releaseHints. With ?bot=off the analysis worker is the only one: its requests

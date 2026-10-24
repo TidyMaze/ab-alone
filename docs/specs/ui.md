@@ -206,8 +206,9 @@ move as a ghost on the board, and never plays it (#192). Online, boss and daily 
   like every control (#227).
 - **Press.** A press drops the selection and asks for the best move of the position on the board.
   The move is drawn with the move preview ghost (#82): translucent marbles on the cells it would
-  fill. The board, the side to move and the score do not change. While the hint is asked or shown
-  the button is lit: `aria-pressed="true"`, accent border and text.
+  fill, and the marbles it takes wear the selection ring, raised like a selection (#301). The
+  board, the side to move and the score do not change. While the hint is asked or shown the button
+  is lit: `aria-pressed="true"`, accent border and text.
 - **Clear.** A second press, a new selection (a click on a marble of the side to move) or the next
   move clears it. A hint belongs to the position it was asked for: after the next move, New game
   or an import it is off, and an answer that arrives for an older position is never drawn.

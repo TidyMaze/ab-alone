@@ -342,10 +342,7 @@ const hintButton = document.getElementById('hint') as HTMLButtonElement;
 const here = (): Spot => ({ game: engine, ply: history.length });
 const hint = new Hint(
   (moves) => askBot(analysisWorker, moves), // the bot's own budget: the move the bot would play there
-  () => {
-    syncHint();
-    refreshGhosts(parseMoves(engine.legal_moves()));
-  },
+  () => refresh(), // the ghost and the rings on the marbles the move takes (#301)
 );
 function syncHint(): void {
   const state = hint.state(here());
@@ -481,7 +478,7 @@ addEventListener('pointerdown', skipEjections, { capture: true });
 addEventListener('keydown', skipEjections, { capture: true });
 
 let selected: Axial[] = [];
-const isSelected = (q: number, r: number): boolean => selected.some(([sq, sr]) => sq === q && sr === r);
+let ringed: Axial[] = []; // the marbles drawn with the selection ring, read by the e2e tests
 
 function hud(extra = ''): void {
   const status = engine.status();
@@ -542,6 +539,7 @@ function refresh(): void {
   const board = engine.board();
   const moves = parseMoves(engine.legal_moves());
   const targets = groupTargets(moves, selected);
+  ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
   const converted = engine instanceof Encounter ? parseCells(engine.converted()) : [];
@@ -568,7 +566,7 @@ function refresh(): void {
     marble.position.set(p.x, 0.36, p.z);
     marbles.add(marble);
     onMarble(i, marble);
-    if (isSelected(q, r)) {
+    if (ringed.some(([sq, sr]) => sq === q && sr === r)) {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.rotation.x = Math.PI / 2;
       ring.position.set(p.x, 0.02, p.z);
@@ -771,6 +769,10 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__history = () => history;
 // Used by the browser checks to read the boss, seed and daily attempt of the running fight.
 (window as unknown as Record<string, unknown>).__fight = () => fight;
+
+// Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
+(window as unknown as Record<string, unknown>).__hint = () => hint.shown(here());
+(window as unknown as Record<string, unknown>).__rings = () => ringed;
 
 // Used by the browser checks to pick a legal move (the boss tests play forward), and to find one that
 // exposes a marble to The Chaplain.
