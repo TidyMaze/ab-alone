@@ -25,6 +25,7 @@ import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { onlineStatus, type OnlineStatus } from './presence';
+import { SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { hudHtml } from './hud';
 import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
 import { formatScore } from './score';
@@ -182,6 +183,12 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
 });
 const marbles = new THREE.Group();
 scene.add(marbles);
+// Cell index to the marble on it and what is drawn on that marble (cap, glyph, tell ring): the
+// slide moves them together.
+const marbleAt = new Map<number, THREE.Object3D[]>();
+const onMarble = (i: number, obj: THREE.Object3D): void => {
+  marbleAt.set(i, [...(marbleAt.get(i) ?? []), obj]);
+};
 // Ghost layer: the position a hovered legal move would give, drawn translucent.
 const ghosts = new THREE.Group();
 scene.add(ghosts);
@@ -212,8 +219,36 @@ async function botTurn(): Promise<void> {
   const move = await askBot(worker, history, BOT_NODES, fight ?? undefined);
   if (fight !== current) return; // Retry or a new fight started while the boss was thinking
   thinking = false;
-  playMove(move);
-  refresh();
+  whenSettled(() => {
+    playMove(move);
+    refresh();
+  });
+}
+
+// Moved marbles slide to their new cell. A click or a bot reply during a slide waits for its end.
+let slide: { game: Engine | Encounter; tracks: SlideTrack[]; start: number } | null = null;
+const afterSlide: (() => void)[] = [];
+function whenSettled(fn: () => void): void {
+  if (slide) afterSlide.push(fn);
+  else fn();
+}
+
+function animateSlides(now: number): void {
+  if (!slide) return;
+  const stale = slide.game !== engine; // Retry, a new fight or going online ends the slide
+  const elapsed = now - slide.start;
+  for (const track of stale ? [] : slide.tracks) {
+    const p = slideAt(track, elapsed);
+    for (const obj of marbleAt.get(cellIndex(track.cell[0], track.cell[1])) ?? []) {
+      obj.position.x = p.x;
+      obj.position.z = p.z;
+    }
+  }
+  if (!stale && elapsed < SLIDE_MS) return;
+  slide = null;
+  delete document.body.dataset.sliding;
+  if (stale) afterSlide.length = 0; // what waited belongs to the old game
+  for (const fn of afterSlide.splice(0)) whenSettled(fn);
 }
 
 // Marbles leaving the board: slide and fade, then removed. Reduced motion: removed at once.
@@ -226,15 +261,18 @@ function playMove(record: number[]): void {
 
 function afterPlay(before: number[], record: number[]): void {
   history.push(record);
-  const ejection = findEjection(before, engine.board(), parseMoves(record)[0]!);
+  const mv = parseMoves(record)[0]!;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tracks = slideTracks(before, engine.board(), mv, reducedMotion);
+  if (tracks.some((t) => t.durationMs > 0)) {
+    slide = { game: engine, tracks, start: performance.now() };
+    document.body.dataset.sliding = '1';
+  }
+  const ejection = findEjection(before, engine.board(), mv);
   if (!ejection) return;
   const body = document.body;
   body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
-  const track = ejectTrack(
-    ejection.cell,
-    record[1]!,
-    matchMedia('(prefers-reduced-motion: reduce)').matches,
-  );
+  const track = ejectTrack(ejection.cell, record[1]!, reducedMotion);
   if (track.durationMs === 0) return;
   const mesh = new THREE.Mesh(marbleGeometry, marbleMaterials[ejection.side]!.clone());
   (mesh.material as THREE.MeshStandardMaterial).transparent = true;
@@ -304,6 +342,7 @@ function refresh(): void {
   const armies = engine instanceof Encounter ? parseArmies(engine.armies()) : [];
   const next = engine instanceof Encounter ? engine.next_army() : -1;
   marbles.clear();
+  marbleAt.clear();
   discs.forEach((disc, i) => {
     const [q, r] = CELLS[i]!;
     const side = board[i]!;
@@ -322,6 +361,7 @@ function refresh(): void {
     const marble = new THREE.Mesh(marbleGeometry, marbleMaterials[side]);
     marble.position.set(p.x, 0.36, p.z);
     marbles.add(marble);
+    onMarble(i, marble);
     if (isSelected(q, r)) {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.rotation.x = Math.PI / 2;
@@ -335,6 +375,7 @@ function refresh(): void {
     const cap = new THREE.Mesh(shellCapGeometry, marbleMaterials[1]);
     cap.position.set(p.x, 0.36, p.z);
     marbles.add(cap);
+    onMarble(cellIndex(q, r), cap);
   }
   for (const { cell, army } of armies) {
     const p = axialTo3D(cell[0], cell[1]);
@@ -342,11 +383,13 @@ function refresh(): void {
     glyph.position.set(p.x, 0.76, p.z);
     if (army === 1) glyph.rotation.x = Math.PI / 2; // the ring lies flat, read from above
     marbles.add(glyph);
+    onMarble(cellIndex(cell[0], cell[1]), glyph);
     if (army !== next) continue;
     const ring = new THREE.Mesh(outlineGeometry, paleMaterial);
     ring.rotation.x = Math.PI / 2;
     ring.position.set(p.x, 0.36, p.z);
     marbles.add(ring);
+    onMarble(cellIndex(cell[0], cell[1]), ring);
   }
   document.body.dataset.armies = String(armies.length); // read by the e2e tests
   document.body.dataset.nextArmy = ARMY_NAMES[next] ?? '';
@@ -393,6 +436,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 
 function click(q: number, r: number): void {
   if (thinking || online?.role === 'spectator') return;
+  if (slide) return whenSettled(() => click(q, r)); // the next move waits for the slide
   if (online && engine.to_move() !== onlineSide) return; // not our turn
   if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
   const side = engine.board()[cellIndex(q, r)];
@@ -612,6 +656,7 @@ if (invited) void goOnline(invited, 2);
 
 refresh();
 renderer.setAnimationLoop((now) => {
+  animateSlides(now);
   animateEjections(now);
   renderer.render(scene, camera);
 });
