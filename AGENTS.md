@@ -1,7 +1,12 @@
 # Rules for AI agents
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before doing anything and follow it strictly. The short
-version:
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before doing anything and follow it strictly.
+
+**This is a collaboration project.** Several owners and their agents work on the repo at the same
+time. Act as one contributor among others, never as the only developer: check open issues and PRs
+first, share decisions that affect others in an issue, and leave others' work alone.
+
+The short version:
 
 1. Work only on a Task in `Ready` status, assigned to you. One unfinished Task at a time.
 2. One Task, one branch `<issue>-<slug>`, one PR with `Closes #<task>`. Nothing out of scope.
