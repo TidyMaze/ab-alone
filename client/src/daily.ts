@@ -56,3 +56,35 @@ export function countAttempt(store: Store, day: string): number {
   write(store, KEY, `${day} ${attempt}`);
   return attempt;
 }
+
+/** The site the result card links to: the daily challenge button is on its page. */
+export const SITE = 'https://tidymaze.github.io/ab-alone/';
+
+export interface DailyResult {
+  day: string; // UTC date, YYYY-MM-DD
+  boss: string; // the boss name
+  result: number; // Encounter.result(): 0 playing, 1 won, 2 lost (a draw is a loss)
+  plies: number; // plies played, the boss replies included
+  attempt: number; // the attempt of the day this fight was
+}
+
+const OUTCOME = ['', 'Victory in', 'Defeat in'];
+
+/** The text of the result card, to copy and share: the day, the boss, the result, the plies and the
+ * attempt, then the link. Empty while the fight is on, so the card shows only at the end. */
+export function dailyCard({ day, boss, result, plies, attempt }: DailyResult): string {
+  if (result === 0) return '';
+  const count = `${plies} ${plies === 1 ? 'ply' : 'plies'}`;
+  return `AB-ALONE daily ${day}: ${boss}\n${OUTCOME[result]} ${count} on attempt ${attempt}\n${SITE}`;
+}
+
+/** Writes `text` to the clipboard. False when the browser refuses, or has no Clipboard API (not a
+ * secure page): the caller then selects the text for the player to copy by hand. */
+export async function copyText(text: string, clipboard: Pick<Clipboard, 'writeText'> | undefined): Promise<boolean> {
+  try {
+    await clipboard!.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -94,6 +94,15 @@ field covers a cell, and the space between them lets every tap through to the bo
   (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
   tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
+- **Daily result card.** When a daily fight is over, under Retry: a read-only box with the text
+  to share (game-design.md section 7.6), as wide as its text, with the accent border, then a Copy
+  result button. Held upright, the rows of buttons leave no room above the board, so the card sits
+  in the bottom-right corner, under the board; like the buttons, it never covers the plate or a
+  cell. Copy puts the text in the clipboard and the note line says "result copied". When
+  the browser refuses the clipboard, the text in the box is selected from its start for the player
+  to copy by hand, and the note says "result selected: copy it by hand". Both strings are kept
+  verbatim for the e2e tests. The card shows only at the end of a daily fight, never in a plain
+  boss fight (#196).
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 
