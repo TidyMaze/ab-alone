@@ -6,6 +6,7 @@
 //!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull).
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
+//! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
 //! - Side and winner: `1` Black, `2` White.
 //! - Status: `0` running, `1` Black won, `2` White won, `3` draw.
 //! - Draw reason: `0` none, `1` threefold repetition, `2` 100 plies without ejection.
@@ -15,6 +16,7 @@
 //!   `legal_moves` returns the records back to back.
 
 use abalone_core::board::{Board, Cell, RADIUS};
+use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::{BossDef, Encounter as CoreEncounter, PveResult};
@@ -196,6 +198,8 @@ struct BossEntry {
     reply: fn(&CoreEncounter) -> Option<Move>,
     /// The reply the boss announces for a player move, drawn by the client as a ghost.
     announce: fn(&Move) -> Option<Move>,
+    /// Player marbles that flip at the end of the next boss turn, on the current position.
+    flips: fn(&CoreEncounter) -> Vec<(i32, i32)>,
 }
 
 fn echo_announce(mv: &Move) -> Option<Move> {
@@ -211,20 +215,37 @@ fn no_announce(_mv: &Move) -> Option<Move> {
     None
 }
 
-const BOSSES: [BossEntry; 2] = [
+fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
+    Vec::new()
+}
+
+const BOSSES: [BossEntry; 3] = [
     BossEntry {
         id: "echo",
         def: echo_boss,
         reply: echo_move,
         announce: echo_announce,
+        flips: no_flips,
     },
     BossEntry {
         id: "hull",
         def: hull_boss,
         reply: search_reply,
         announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "chaplain",
+        def: chaplain_boss,
+        reply: search_reply,
+        announce: no_announce,
+        flips: chaplain_tell,
     },
 ];
+
+fn cell_list(cells: &[(i32, i32)]) -> Vec<i32> {
+    cells.iter().flat_map(|&(q, r)| [q, r]).collect()
+}
 
 fn boss_entry(id: &str) -> Option<&'static BossEntry> {
     BOSSES.iter().find(|b| b.id == id)
@@ -332,6 +353,17 @@ impl Encounter {
             .iter()
             .flat_map(|&((q, r), left)| [q, r, i32::from(left)])
             .collect()
+    }
+
+    /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
+    /// a cell list. Empty for the other bosses.
+    pub fn flips(&self) -> Vec<i32> {
+        cell_list(&(self.entry.flips)(&self.inner))
+    }
+
+    /// Boss marbles that were player marbles (The Chaplain), a cell list.
+    pub fn converted(&self) -> Vec<i32> {
+        cell_list(self.inner.game().board().converted())
     }
 
     /// Marbles ejected by a side: `1` Black, `2` White.
@@ -685,12 +717,7 @@ mod tests {
 
     /// Value of `(q, r)` in the board bytes.
     fn at(cells: &[u8], q: i32, r: i32) -> u8 {
-        let i = (-RADIUS..=RADIUS)
-            .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
-            .filter(|&(q, r)| (q + r).abs() <= RADIUS)
-            .position(|c| c == (q, r))
-            .unwrap();
-        cells[i]
+        cells[index(q, r)]
     }
 
     /// The Chaplain replayed from `history`, the way the client previews a hovered move.
@@ -721,22 +748,17 @@ mod tests {
         let mut history: Vec<Vec<i32>> = Vec::new();
         let mut f = chaplain(&history);
         assert!(f.flips().is_empty(), "nothing to flip at the start");
-        for _ in 0..12 {
+        let after = loop {
+            assert!(
+                history.len() < 24,
+                "no move exposed a marble in 12 player turns"
+            );
             let exposing = f.legal_moves().chunks(MOVE_STRIDE).find_map(|m| {
                 let after = chaplain(&[history.clone(), vec![m.to_vec()]].concat());
                 (!after.flips().is_empty()).then_some(after)
             });
             if let Some(after) = exposing {
-                assert_eq!(
-                    after.to_move(),
-                    2,
-                    "the preview is the position after the move"
-                );
-                let cells = after.board();
-                for (q, r) in pairs(&after.flips()) {
-                    assert_eq!(at(&cells, q, r), 1, "only player marbles flip");
-                }
-                return;
+                break after;
             }
             let mv = forward(&f);
             f.play(&mv).unwrap();
@@ -744,8 +766,16 @@ mod tests {
             let reply = f.boss_move();
             f.play(&reply).unwrap();
             history.push(reply);
+        };
+        assert_eq!(
+            after.to_move(),
+            2,
+            "the preview is the position after the move"
+        );
+        let cells = after.board();
+        for (q, r) in pairs(&after.flips()) {
+            assert_eq!(at(&cells, q, r), 1, "only player marbles flip");
         }
-        panic!("no move exposed a marble in 12 player turns");
     }
 
     #[test]

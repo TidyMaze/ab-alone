@@ -262,9 +262,11 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Twist**: at the end of the boss turn, a player marble with **3 or more adjacent boss
   marbles** flips to the boss. The marble count is conserved (conversion is not a loss for 6
   ejections, but it is a loss of material).
-- **Tell**: a player marble that would flip at the end of the next boss turn shows a steady
-  glyph and outline on your turn (check performed on the current position). Not a black halo:
-  it would vanish against a black shell. A flipped marble shows shell growing over the glass.
+- **Tell**: when you hover a move, each of your marbles that would flip at the end of the boss
+  turn after it shows a steady glyph and outline (the check runs on the position after the
+  hovered move, Decision #154: on the current position nothing is left to flip, the boss turn
+  already flipped it). Not a black halo: it would vanish against a black shell. A flipped
+  marble shows shell growing over the glass.
 - **Counter**: break contact (move or push), or **surround a flipped marble with 3 of your
   marbles to flip it back**.
 - **Phases**: P1 above. P2 when the boss has **8** left: void cells count as boss neighbours,
