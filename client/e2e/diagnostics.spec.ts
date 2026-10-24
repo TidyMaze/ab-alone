@@ -62,6 +62,10 @@ test('when the clipboard is refused, the diagnostics are selected in a text box 
       document.activeElement === el && el.selectionStart === 0 && el.selectionEnd === el.value.length,
   );
   expect(selected).toBe(true);
+  // It shows the start of the text, and goes away once the player is done with it: it never stays over the board.
+  expect(await box.evaluate((el) => el.scrollTop)).toBe(0);
+  await box.blur();
+  await expect(box).toBeHidden();
 });
 
 test('an online game exports its connection counters, its refused moves and its signed log, no private key', async ({
