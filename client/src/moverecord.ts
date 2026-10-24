@@ -38,8 +38,16 @@ export interface Hello {
   sig: string;
 }
 
+/** Ask for a rematch of the finished game `game`, signed by a seated key (docs/specs/tech.md section 6). */
+export interface Rematch {
+  kind: 'rematch';
+  game: string;
+  pub: string;
+  sig: string;
+}
+
 /** Anything a transport carries. */
-export type Wire = MoveRecord | Hello;
+export type Wire = MoveRecord | Hello | Rematch;
 
 type Unsigned = Omit<MoveRecord, 'sig'>;
 
@@ -49,6 +57,19 @@ const payload = (r: Unsigned): Uint8Array<ArrayBuffer> =>
 
 const helloPayload = (h: Omit<Hello, 'sig'>): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub]));
+
+const rematchPayload = (r: Omit<Rematch, 'sig'>): Uint8Array<ArrayBuffer> =>
+  new TextEncoder().encode(JSON.stringify(['rematch', r.game, r.pub]));
+
+/** Whether `sig` is `pub`'s signature of `bytes`. Malformed base64 or key bytes are a refusal, never a throw. */
+async function signedBy(pub: string, sig: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean> {
+  try {
+    const key = await crypto.subtle.importKey('raw', unb64(pub), ED, false, ['verify']);
+    return await crypto.subtle.verify(ED, key, unb64(sig), bytes);
+  } catch {
+    return false;
+  }
+}
 
 async function keysFrom(priv: CryptoKey, publicKey: CryptoKey): Promise<Keys> {
   return { priv, pub: b64(await crypto.subtle.exportKey('raw', publicKey)) };
@@ -74,22 +95,21 @@ export async function signHello(keys: Keys, fields: { game: string; seat: number
   return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, helloPayload(unsigned))) };
 }
 
-export async function verifyHello(h: Hello): Promise<boolean> {
-  try {
-    const key = await crypto.subtle.importKey('raw', unb64(h.pub), ED, false, ['verify']);
-    return await crypto.subtle.verify(ED, key, unb64(h.sig), helloPayload(h));
-  } catch {
-    return false; // malformed base64 or key bytes
-  }
+export function verifyHello(h: Hello): Promise<boolean> {
+  return signedBy(h.pub, h.sig, helloPayload(h));
 }
 
-export async function verifyRecord(r: MoveRecord): Promise<boolean> {
-  try {
-    const key = await crypto.subtle.importKey('raw', unb64(r.pub), ED, false, ['verify']);
-    return await crypto.subtle.verify(ED, key, unb64(r.sig), payload(r));
-  } catch {
-    return false; // malformed base64 or key bytes
-  }
+export async function signRematch(keys: Keys, fields: { game: string }): Promise<Rematch> {
+  const unsigned = { kind: 'rematch' as const, ...fields, pub: keys.pub };
+  return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, rematchPayload(unsigned))) };
+}
+
+export function verifyRematch(r: Rematch): Promise<boolean> {
+  return signedBy(r.pub, r.sig, rematchPayload(r));
+}
+
+export function verifyRecord(r: MoveRecord): Promise<boolean> {
+  return signedBy(r.pub, r.sig, payload(r));
 }
 
 /** Hash of the whole record, signature included: the next record's `prev`. */
@@ -131,4 +151,12 @@ export function parseHello(x: unknown): Hello | null {
     typeof h.sig === 'string';
   if (!ok) return null;
   return { kind: 'hello', game: h.game as string, seat: h.seat as number, roster: h.roster as string[], pub: h.pub as string, sig: h.sig as string };
+}
+
+/** Shape check for a Rematch off the wire. Returns a clean copy or null. */
+export function parseRematch(x: unknown): Rematch | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const r = x as Record<string, unknown>;
+  const ok = r.kind === 'rematch' && typeof r.game === 'string' && typeof r.pub === 'string' && typeof r.sig === 'string';
+  return ok ? { kind: 'rematch', game: r.game as string, pub: r.pub as string, sig: r.sig as string } : null;
 }

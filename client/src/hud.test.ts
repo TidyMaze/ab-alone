@@ -49,6 +49,14 @@ describe('hudHtml', () => {
     expect(hudHtml(base)).not.toContain('presence');
   });
 
+  it('shows the rematch line once someone asked, and none otherwise, #186', () => {
+    const online = { text: 'You are Black. White is here.', tone: 'here' as const };
+    const html = hudHtml({ ...base, status: 3, online, rematch: 'White asks for a rematch.' });
+    expect(html).toContain('<div class="rematch">White asks for a rematch.</div>');
+    expect(hudHtml({ ...base, status: 3, online, rematch: '' })).not.toContain('rematch');
+    expect(hudHtml({ ...base, status: 3, online })).not.toContain('rematch');
+  });
+
   it('names a draw', () => {
     expect(hudHtml({ ...base, status: 3 })).toContain('Draw');
   });

@@ -81,6 +81,11 @@ One plate, top-left, 16 px from the edges, max width 22rem, never over the board
   not any peer. A dot before the text repeats the state (accent here, hazard waiting, danger
   disconnected, muted watching); the words alone carry it. While the creator waits, the invite
   link below the buttons has a caption and the accent border.
+- **Rematch.** When an online game is over, each seated player sees a Rematch button under
+  Play online, spectators do not. It is greyed once pressed, or while the opponent is
+  disconnected. One more line under the status line says who asked, kept verbatim for the e2e
+  tests: "You asked for a rematch. Waiting for White..." and "Black asks for a rematch." When both
+  asked, the new game starts with the colours swapped and the line and the button go away (#186).
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 
