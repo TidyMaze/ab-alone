@@ -204,10 +204,10 @@ the triager does exactly one of:
      `skipped` (`gh run list --branch <branch>`). After a rebase, keep the PR a draft until the
      push is done, wait a few seconds, then mark it ready (bug #179).
    - [ ] Every conversation resolved (enforced by branch protection)
-   - [ ] Up to date: rebased on the latest `main`, no conflict (enforced by branch protection:
-     "require branches to be up to date", decision #161). Every merge makes the other open PRs out
-     of date: their authors rebase and rerun the checks. Never rebase a PR assigned to someone
-     else (rule 14), tell them in a comment instead.
+   - [ ] Not required: the PR does not have to be up to date with `main` (decision #240, replaces
+     #161: a merge queue needs an organization). Two green PRs can break `main` together, so a red
+     `main` is the first bug to fix. Rebase your own PR when it conflicts, never someone else's
+     (rule 14).
 6. As soon as the gate passes, **an owner or the lead agent squash-merges into `main`**. Sub-agents
    never merge. A green PR is never left open: the Task is not `Done` until it is merged. GitHub
    closes the Task, the project sets `Done`, the branch is deleted.
