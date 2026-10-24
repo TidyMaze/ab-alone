@@ -151,6 +151,43 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, a convert
   expect(converted).toBe(true);
 });
 
+// Bug #299: a boss turn whose flip costs the boss a marble lost to the void (#207), while its move pushes nothing
+// off, threw in afterPlay and skipped the board refresh. Seed 1 and the forward moves reach it on the 18th boss turn.
+test('The Chaplain: a boss marble lost for a flip counts for the player and the board is drawn after it, bug #299', async ({
+  page,
+}) => {
+  test.slow(); // 18 boss searches in the worker
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => {
+    crypto.getRandomValues = ((a: Uint32Array) => a.fill(1)) as typeof crypto.getRandomValues; // the fight seed
+  });
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  const hud = page.locator('#hud');
+  const plies = () => page.evaluate(() => (window as any).__plies());
+  const click = async (q: number, r: number) => {
+    const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
+    await page.mouse.click(p.x, p.y);
+  };
+
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Chaplain' }).click();
+  await expect(hud).toContainText('The Chaplain');
+  expect(await page.evaluate(() => (window as any).__fight().seed)).toBe(1);
+  for (let n = 1; n <= 18; n++) {
+    const mv = await page.evaluate(() =>
+      (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
+    );
+    const [q, r] = mv.cells[0];
+    await click(q, r);
+    await click(mv.dir === 4 ? q : q + 1, r - 1);
+    await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
+  }
+  await expect(hud).toContainText('Black ejected 1/6'); // the lost boss marble, drawn without a click
+  expect(errors).toEqual([]);
+});
+
 // The Choir (#183): a radius 3 board, a glyph per army on the boss marbles, only the army in turn
 // moves and the next one wears a ring.
 test('start The Choir: the boss moves the army in turn, the next army is marked, #183', async ({ page }, testInfo) => {

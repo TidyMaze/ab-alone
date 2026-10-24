@@ -53,7 +53,9 @@ export interface EjectPose {
 
 /** The marble a move pushed off the board: the last cell of the push line before the rim or a
  * vanished cell, walking from the first moved marble along the move direction. Null when no marble
- * was lost, or when the only ones lost sat on cells that vanished (The Hull). */
+ * was lost, when the only ones lost sat on cells that vanished (The Hull), or when the line stops at
+ * an empty cell before the rim: the move pushed none off, a lost marble was a boss marble paid to
+ * the void for a flip (The Chaplain). */
 export function findEjection(
   before: ArrayLike<number>,
   after: ArrayLike<number>,
@@ -65,7 +67,10 @@ export function findEjection(
   const [dq, dr] = DIRECTIONS[mv.dir]!;
   let [q, r] = mv.cells[0]!;
   const open = (i: number): boolean => i !== -1 && before[i] !== VANISHED;
-  while (open(cellIndex(q + dq, r + dr))) [q, r] = [q + dq, r + dr];
+  while (open(cellIndex(q + dq, r + dr))) {
+    [q, r] = [q + dq, r + dr];
+    if (!isMarble(before[cellIndex(q, r)])) return null;
+  }
   return { cell: [q, r], side: before[cellIndex(q, r)]! };
 }
 
