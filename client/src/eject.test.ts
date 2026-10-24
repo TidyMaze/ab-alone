@@ -167,6 +167,17 @@ describe('findEjection', () => {
     expect(findEjection(put([[0, 2, 1], [4, -1, 2]]), put([[0, 1, 1], [4, -1, 3]]), step)).toBeNull();
   });
 
+  it('is null when a marble was lost but the move pushed none off: a flip paid with a boss marble, The Chaplain, #299', () => {
+    // A White trio steps NE into an empty cell, and a White marble far from it is lost to the void.
+    const step = { cells: [[-2, 3], [-1, 2], [0, 1]] as [number, number][], dir: 2 };
+    const b = put([[-2, 3, 2], [-1, 2, 2], [0, 1, 2], [-3, 0, 2]]);
+    const a = put([[-1, 2, 2], [0, 1, 2], [1, 0, 2]]);
+    expect(findEjection(b, a, step)).toBeNull(); // the rim cell of the line, (4,-3), is empty
+    const rim = put([[-2, 3, 2], [-1, 2, 2], [0, 1, 2], [-3, 0, 2], [4, -3, 1]]);
+    const kept = put([[-1, 2, 2], [0, 1, 2], [1, 0, 2], [4, -3, 1]]);
+    expect(findEjection(rim, kept, step)).toBeNull(); // the Black marble on the rim stays
+  });
+
   it('ejects at the edge of a hole: a push onto a vanished cell, The Hull', () => {
     const push = { cells: [[-1, 0], [0, 0]] as [number, number][], dir: 0 }; // E, (2,0) is gone
     const b = put([[-1, 0, 1], [0, 0, 1], [1, 0, 2], [2, 0, 3]]);
