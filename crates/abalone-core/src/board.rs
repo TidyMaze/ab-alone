@@ -50,10 +50,15 @@ pub struct Board {
 impl Board {
     /// Board with all 61 cells empty.
     pub fn empty() -> Self {
+        Self::with_radius(STANDARD_RADIUS)
+    }
+
+    /// Board of the given radius (at most [`RADIUS`]) with every cell empty.
+    pub fn with_radius(radius: i32) -> Self {
         let mut cells = HashMap::new();
-        for q in -STANDARD_RADIUS..=STANDARD_RADIUS {
-            for r in -STANDARD_RADIUS..=STANDARD_RADIUS {
-                if (q + r).abs() <= STANDARD_RADIUS {
+        for q in -radius..=radius {
+            for r in -radius..=radius {
+                if (q + r).abs() <= radius {
                     cells.insert((q, r), Cell::Empty);
                 }
             }
@@ -63,11 +68,6 @@ impl Board {
             cracks: Vec::new(),
             converted: Vec::new(),
         }
-    }
-
-    /// Board of the given radius (at most [`RADIUS`]) with every cell empty.
-    pub fn with_radius(_radius: i32) -> Self {
-        Self::empty()
     }
 
     /// Content of `(q, r)`, or `None` when the cell is off the board.

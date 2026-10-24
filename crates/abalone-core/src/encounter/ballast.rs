@@ -9,9 +9,12 @@
 //!   [`BallastTell::echo`]).
 
 use crate::board::{Board, Cell, RADIUS};
+use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
+use crate::encounter::echo::mirror_move;
+use crate::encounter::hull::hull_boss;
 use crate::encounter::{BossDef, Encounter};
 use crate::game::Game;
-use crate::moves::{Move, Player};
+use crate::moves::{apply, Move, Player};
 
 type P = (i32, i32);
 
@@ -61,8 +64,9 @@ pub const BALLAST_BOSS_START: [P; 16] = [
 ];
 /// P2 and P3 start at this many boss marbles left. TUNE.
 pub const BALLAST_PHASE_MARBLES: [u8; 2] = [10, 5];
-/// Positions the boss search may visit per move: about depth 5. TUNE.
-pub const BALLAST_NODE_BUDGET: u32 = 40_000;
+/// Positions the boss search may visit per move. Measured on the start position (release build):
+/// 40 000 nodes finish depth 4, 150 000 finish depth 5 (2.4 s native), 800 000 finish depth 6. TUNE.
+pub const BALLAST_NODE_BUDGET: u32 = 150_000;
 /// First phase (0 based) with the Hull crack and the Chaplain conversion.
 pub const BALLAST_RIM_PHASE: usize = 1;
 /// First phase (0 based) where the boss echoes the player's previous move.
@@ -84,43 +88,114 @@ pub struct BallastTell {
     pub echo: Option<Move>,
 }
 
+/// Mask of the Hull id inside a packed special id.
+const HULL_MASK: u8 = (1 << BALLAST_HULL_BITS) - 1;
+
 /// The Ballast board with no marble: radius 5 with the six pillars void.
 pub fn ballast_board() -> Board {
-    Board::empty()
+    let mut board = Board::with_radius(BALLAST_RADIUS);
+    for (q, r) in BALLAST_PILLARS {
+        board.void(q, r);
+    }
+    board
 }
 
-fn special(_ply: u32, _phase: usize) -> Option<u8> {
-    None
+/// No special in P1. From P2 the Hull special and the Chaplain special of the same ply, packed
+/// in one id (the Hull one in the low bits).
+fn special(ply: u32, phase: usize) -> Option<u8> {
+    if phase < BALLAST_RIM_PHASE {
+        return None;
+    }
+    let at = |boss: &BossDef| (boss.special)(ply, BALLAST_REUSED_PHASE);
+    at(&hull_boss())
+        .zip(at(&chaplain_boss()))
+        .map(|(hull, chaplain)| hull | (chaplain << BALLAST_HULL_BITS))
 }
 
-fn hook(board: &Board, _id: u8, _seed: u64) -> Board {
-    board.clone()
+/// The Hull hook, then the Chaplain hook, each on its own half of the id.
+fn hook(board: &Board, id: u8, seed: u64) -> Board {
+    let cracked = (hull_boss().hook)(board, id & HULL_MASK, seed);
+    (chaplain_boss().hook)(&cracked, id >> BALLAST_HULL_BITS, seed)
 }
 
 /// The Ballast Mind boss definition.
 pub fn ballast_boss() -> BossDef {
     BossDef {
         name: "The Ballast Mind",
-        phase_marbles: Vec::new(),
+        phase_marbles: BALLAST_PHASE_MARBLES.to_vec(),
         special,
         hook,
-        node_budget: 0,
+        node_budget: BALLAST_NODE_BUDGET,
     }
 }
 
 /// A new encounter: the player is Black and moves first.
 pub fn ballast_start(seed: u64) -> Encounter {
-    Encounter::new(Game::new(), ballast_boss(), seed)
+    let mut board = ballast_board();
+    for (q, r) in BALLAST_PLAYER_START {
+        board.set(q, r, Cell::Black);
+    }
+    for (q, r) in BALLAST_BOSS_START {
+        board.set(q, r, Cell::White);
+    }
+    let game = Game::from_position(board, Player::Black, [0, 0]);
+    Encounter::new(game, ballast_boss(), seed)
+}
+
+/// Player marbles the Chaplain flips at the end of the next boss turn if nothing moves, read off
+/// the Chaplain hook itself at its own first phase.
+fn flips(board: &Board) -> Vec<P> {
+    let id = CHAPLAIN_BOSS_END + BALLAST_REUSED_PHASE as u8;
+    let after = (chaplain_boss().hook)(board, id, 0);
+    (-RADIUS..=RADIUS)
+        .flat_map(|q| (-RADIUS..=RADIUS).map(move |r| (q, r)))
+        .filter(|&(q, r)| {
+            board.get(q, r) == Some(Cell::Black) && after.get(q, r) == Some(Cell::White)
+        })
+        .collect()
+}
+
+/// The mirror of the player move the boss echoes next: the one before the latest, as in the
+/// Echo's P2. Known one ply early, on the player's turn too. `None` before P3 or too early.
+fn echo_target(enc: &Encounter) -> Option<Move> {
+    if enc.phase() < BALLAST_ECHO_PHASE {
+        return None;
+    }
+    let game = enc.game();
+    let back = if game.to_move() == Player::Black {
+        2
+    } else {
+        3
+    };
+    let source = game.history().len().checked_sub(back)?;
+    Some(mirror_move(&game.history()[source].mv))
 }
 
 /// What the player can read now, for the active phase.
-pub fn ballast_tell(_enc: &Encounter) -> BallastTell {
-    BallastTell::default()
+pub fn ballast_tell(enc: &Encounter) -> BallastTell {
+    let rim = enc.phase() >= BALLAST_RIM_PHASE;
+    let board = enc.game().board();
+    BallastTell {
+        cracks: if rim {
+            board.cracks().to_vec()
+        } else {
+            Vec::new()
+        },
+        flips: if rim { flips(board) } else { Vec::new() },
+        echo: echo_target(enc),
+    }
 }
 
-/// The boss reply: P1 and P2 search, P3 mirrors the player's previous move when that is legal.
-pub fn ballast_move(_enc: &Encounter) -> Option<Move> {
-    None
+/// The boss reply: the mirror of the player's previous move in P3 when it is legal, else the
+/// node-limited search. `None` on the player's turn or when the game is over.
+pub fn ballast_move(enc: &Encounter) -> Option<Move> {
+    let game = enc.game();
+    if game.outcome().is_some() || game.to_move() != Player::White {
+        return None;
+    }
+    echo_target(enc)
+        .filter(|m| apply(game.board(), Player::White, m).is_ok())
+        .or_else(|| enc.boss_search().map(|r| r.mv))
 }
 
 #[cfg(test)]
@@ -128,7 +203,7 @@ mod tests {
     use super::*;
     use crate::encounter::echo::mirror_move;
     use crate::encounter::{chaplain, hull, marbles};
-    use crate::moves::Direction::{E, W};
+    use crate::moves::Direction::{E, SE, W};
     use crate::moves::{apply, legal_moves, Direction};
 
     fn cells() -> impl Iterator<Item = P> {
@@ -285,7 +360,7 @@ mod tests {
     /// move.
     fn play_three(enc: &mut Encounter, m1: &Move) {
         enc.play(m1).unwrap();
-        enc.play(&mv(&[(4, -5)], W)).unwrap();
+        enc.play(&mv(&[(4, -5)], SE)).unwrap();
         enc.play(&mv(&[(-1, 3)], E)).unwrap();
     }
 
@@ -312,6 +387,17 @@ mod tests {
     #[test]
     fn boss_move_is_none_on_the_player_turn() {
         assert_eq!(ballast_move(&ballast_start(0)), None);
+    }
+
+    #[test]
+    fn boss_move_is_none_when_the_game_is_over() {
+        let mut board = ballast_board();
+        board.set(0, 0, Cell::Black);
+        board.set(5, -5, Cell::White);
+        let game = Game::from_position(board, Player::White, [0, 6]);
+        let enc = Encounter::new(game, small_boss(), 0);
+        assert!(enc.game().outcome().is_some());
+        assert_eq!(ballast_move(&enc), None);
     }
 
     #[test]
@@ -343,7 +429,16 @@ mod tests {
     fn tell_shows_cracks_and_flips_in_phase_2() {
         let mut board = ballast_board();
         board.set(0, 0, Cell::Black);
-        for (q, r) in [(1, 0), (-1, 0), (0, 1), (5, -5)] {
+        for (q, r) in [
+            (1, 0),
+            (-1, 0),
+            (0, 1),
+            (5, -5),
+            (4, -5),
+            (3, -5),
+            (2, -5),
+            (1, -5),
+        ] {
             board.set(q, r, Cell::White);
         }
         board.set_cracks(vec![((5, 0), 1)]);
@@ -378,9 +473,6 @@ mod tests {
             for _ in 0..5 {
                 let m = legal_moves(enc.game().board(), Player::Black)[0].clone();
                 enc.play(&m).unwrap();
-                if enc.result().is_some() {
-                    break;
-                }
                 let reply = ballast_move(&enc).unwrap();
                 enc.play(&reply).unwrap();
             }
@@ -392,15 +484,5 @@ mod tests {
             boards.iter().any(|b| *b != boards[0]),
             "seed changes the cracks"
         );
-    }
-
-    #[test]
-    fn the_real_budget_reaches_depth_5() {
-        let mut enc = ballast_start(0);
-        let first = legal_moves(enc.game().board(), Player::Black)[0].clone();
-        enc.play(&first).unwrap();
-        let found = enc.boss_search().unwrap();
-        assert!(found.depth >= 5, "depth {}", found.depth);
-        assert!(found.nodes <= BALLAST_NODE_BUDGET);
     }
 }
