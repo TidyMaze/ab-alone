@@ -33,9 +33,43 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --all --locked
 
+  # On push to main, finds what changed since the last successful CI run on main (not just this push: a cancelled run
+  # never tested its commits). A manual dispatch always runs everything. Only coverage and e2e are conditional, `rust`
+  # always runs, so a skipped job never stands in for a check that mattered (#258, CONTRIBUTING 6.4).
+  changes:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      rust: ${{ steps.diff.outputs.rust }}
+      e2e: ${{ steps.diff.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rust=true; e2e=true
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            base=$(gh run list --workflow ci.yml --branch main --event push --status success --limit 1 --json headSha --jq '.[0].headSha')
+            if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+              files=$(git diff --name-only "$base" "$GITHUB_SHA")
+              echo "changed since $base:"; echo "$files"
+              printf '%s\n' "$files" | grep -qE '^(crates/|Cargo\.|\.github/workflows/ci\.yml)' || rust=false
+              printf '%s\n' "$files" | grep -qE '^(client/|crates/abalone-(core|wasm)/|Cargo\.|\.github/workflows/ci\.yml)' || e2e=false
+            fi
+          fi
+          echo "rust=$rust" >> "$GITHUB_OUTPUT"
+          echo "e2e=$e2e" >> "$GITHUB_OUTPUT"
+
   coverage:
-    if: github.event_name == 'push'
-    needs: rust
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.rust == 'true'
+    needs: [rust, changes]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -49,26 +83,57 @@ jobs:
           tool: cargo-llvm-cov
       - run: cargo llvm-cov --workspace --locked --fail-under-lines 100 --fail-under-regions 100
 
+  # The WASM package is built once here and shared with the e2e shards as an artifact (#258).
+  wasm:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - id: wasm-cache
+        uses: actions/cache@v4
+        with:
+          path: crates/abalone-wasm/pkg
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: wasm-pack build crates/abalone-wasm --target web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: crates/abalone-wasm/pkg
+          retention-days: 1
+
+  # Software WebGL on a 4-vCPU runner starves two workers (#216), so each shard runs one worker and the shards run in
+  # parallel on their own runners: the wall clock is the slowest shard.
   e2e:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    # A runner takes one worker only (#216), so the suite is split across runners instead (#257). fullyParallel on CI
-    # (playwright.config.ts) splits it by test, not by file: online.spec.ts alone takes over 2 min.
+    needs: wasm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    name: e2e (${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: e2e (${{ matrix.shard }}/${{ strategy.job-total }})
+    env:
+      # The wasm package comes from the wasm job: the dev server must not rebuild it.
+      E2E_SKIP_WASM_BUILD: '1'
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
         with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-pack
+          name: wasm-pkg
+          path: crates/abalone-wasm/pkg
       # bun installs and runs the scripts (decision #243), node still runs vite and Playwright.
       - uses: actions/setup-node@v4
         with:
@@ -76,14 +141,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: client/package.json
-      - id: wasm-cache
-        uses: actions/cache@v4
-        with:
-          path: crates/abalone-wasm/pkg
-          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
-      - if: steps.wasm-cache.outputs.cache-hit != 'true'
-        run: wasm-pack build ../crates/abalone-wasm --target web
-        working-directory: client
       - run: bun install --frozen-lockfile
         working-directory: client
       - id: playwright-version
@@ -97,7 +154,7 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: bunx playwright install --with-deps chromium
         working-directory: client
-      - run: bun run e2e --shard=${{ matrix.shard }}/4
+      - run: bun run e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         working-directory: client
       - uses: actions/upload-artifact@v4
         if: failure()

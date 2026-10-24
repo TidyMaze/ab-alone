@@ -26,7 +26,14 @@ export default defineConfig({
   // One retry on CI records a trace for the retried run only.
   retries: process.env.CI ? 1 : 0,
   // No service worker outside the offline spec: a cache left by one test must never serve another (#193).
-  use: { baseURL: baseURL ?? `http://localhost:${port}`, trace: 'on-first-retry', serviceWorkers: 'block' },
+  // On CI the page draws with software WebGL, a frame costs by its pixels and every click waits for one (#216): a 960x540
+  // window draws 44 % fewer pixels than the 1280x720 default, and stays above the 768 px width of the low quality tier (#258).
+  use: {
+    baseURL: baseURL ?? `http://localhost:${port}`,
+    trace: 'on-first-retry',
+    serviceWorkers: 'block',
+    ...(process.env.CI ? { viewport: { width: 960, height: 540 } } : {}),
+  },
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
     { name: 'firefox', use: { browserName: 'firefox' } },
@@ -39,7 +46,8 @@ export default defineConfig({
     : [
         {
           // --mode e2e: the server does not watch files, so nothing written to the checkout reloads a page under test (#185).
-          command: `bun run dev --port ${port} --strictPort --mode e2e`,
+          // E2E_SKIP_WASM_BUILD (CI shards): the package is already there, `bun run dev` would rebuild it with wasm-pack.
+          command: `${process.env.E2E_SKIP_WASM_BUILD ? 'bunx vite' : 'bun run dev'} --port ${port} --strictPort --mode e2e`,
           url: `http://localhost:${port}`,
           reuseExistingServer: true,
           timeout: 120_000,

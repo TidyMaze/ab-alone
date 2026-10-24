@@ -376,9 +376,15 @@ rebases on `main` without conflict (section 6.4, merge gate). It runs the CI che
 
 - On every **ready** PR (not on drafts), on open, push and `ready_for_review`: fmt, clippy and
   `cargo test --all --locked`. A draft PR shows the `rust` check as skipped.
-- On push to main (after merge): the same Rust job, the coverage gate and the e2e job. The e2e job
-  runs in 4 shards, one runner and one worker each (#257): a failed shard uploads its own
-  `playwright-report-<n>` artifact.
+- On push to main (after merge): the Rust job always runs. The coverage gate runs only when
+  `crates/`, `Cargo.*` or `ci.yml` changed, the e2e jobs only when `client/`, `crates/abalone-core/`,
+  `crates/abalone-wasm/`, `Cargo.*` or `ci.yml` changed (job `changes`: it diffs against the last
+  successful CI run on `main`, so a cancelled run never hides its commits; a manual dispatch runs
+  everything). The WASM package is built once (job `wasm`, cached) and shared as an artifact, then
+  the e2e suite runs in 4 shards, one runner and one worker each (#257, #258): a failed shard
+  uploads its own `playwright-report-<n>` artifact. On CI the browser window is 960x540, not
+  1280x720: software WebGL cost follows the pixels. A new push to `main` still cancels the run
+  in progress.
 
 **WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
 After pulling main, rebuild it from the repo root:
@@ -421,4 +427,5 @@ run never reloads a page under test (bug #185). Start a new run to test a change
 - The offline test (`e2e/offline.spec.ts`) needs the production build: Playwright also runs
   `vite build` then `vite preview` on a random port (`E2E_PREVIEW_PORT`, never reused) and stops it
   at the end. Every other spec runs with service workers blocked (docs/specs/tech.md section 9.1).
+- CI sets `E2E_SKIP_WASM_BUILD=1` so the dev server skips the wasm rebuild (the `wasm` job built it). Locally, leave it unset.
 - Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
