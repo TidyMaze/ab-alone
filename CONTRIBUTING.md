@@ -198,11 +198,11 @@ the triager does exactly one of:
 4. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
 5. **Merge gate.** A PR is merged into `main` only when all of these hold:
    - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, one full e2e run green.
-     **After a rebase on `main` without conflict**, rerun only `npm test` and `npx tsc --noEmit`
-     in `client/` (rebuild the WASM first if `crates/` changed on main, section 13), not
-     `scripts/verify.sh` nor the e2e run: CI runs `rust` again on the rebased code, and main runs
-     coverage and e2e after the merge (decision #239). A rebase with a conflict reruns every local
-     check.
+     **After a rebase on `main` without conflict**, rerun only `bun run test` and
+     `bunx tsc --noEmit` in `client/` (rebuild the WASM first if `crates/` changed on main, section
+     13), not `scripts/verify.sh` nor the e2e run: CI runs `rust` again on the rebased code, and
+     main runs coverage and e2e after the merge (decision #239). A rebase with a conflict reruns
+     every local check.
    - [ ] CI: the PR is ready (not a draft) and the required check `rust` is green (enforced by
      branch protection, 0 approvals needed). GitHub counts a **skipped** required check as passing,
      so the merger must confirm that the run on the head commit really concluded `success`, not
