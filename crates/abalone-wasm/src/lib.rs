@@ -751,6 +751,10 @@ mod tests {
                 boss_goal(&id).is_some_and(|g| !g.is_empty()),
                 "{id} has no goal"
             );
+            assert_eq!(
+                Encounter::new(&id, 1).unwrap().goal(),
+                boss_goal(&id).unwrap()
+            );
         }
         assert_eq!(boss_goal("nobody"), None);
     }
