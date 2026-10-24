@@ -107,6 +107,7 @@ clearButton.addEventListener('click', () => {
   writeClearBoard(store, clear);
   applyLook();
 });
+(clearButton as HTMLButtonElement).disabled = false; // listener ready (#146)
 scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 const lamp = new THREE.DirectionalLight(COLORS.sodium, 3);
 lamp.position.set(-4, 10, 5);
@@ -387,6 +388,7 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
   view = resetView();
   applyView();
 });
+(document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;

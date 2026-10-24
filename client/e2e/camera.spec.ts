@@ -53,3 +53,15 @@ test('rotate and zoom, play a move at that angle, reset the view and play again'
   await click(page, 0, -1);
   await expect(page.locator('#hud')).toContainText('Black to move');
 });
+
+// Bug #146: the Reset view listener comes after the top-level awaits of main.ts. Before refresh() fills
+// the HUD (it runs after every listener is wired) a click would be lost, so the button must be disabled.
+test('Reset view is disabled until its listener is attached, bug #146', async ({ page }) => {
+  await page.goto('./?bot=off', { waitUntil: 'domcontentloaded' });
+  const atLoad = await page.evaluate(() => ({
+    disabled: (document.getElementById('reset-view') as HTMLButtonElement).disabled,
+    ready: document.getElementById('hud')!.innerHTML !== '',
+  }));
+  expect(atLoad.disabled || atLoad.ready).toBe(true);
+  await expect(page.locator('#reset-view')).toBeEnabled();
+});
