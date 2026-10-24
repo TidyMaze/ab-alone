@@ -31,6 +31,7 @@ import { OnlineSession } from './session';
 import { onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
+import { SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { hudHtml } from './hud';
 import { menuOpen, settingsList, type MenuEvent } from './settings';
 import { drawDue, fogSettings, readClearBoard, readSound, readTier, writeClearBoard, writeSound } from './quality';
@@ -266,6 +267,7 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
 });
 const marbles = new THREE.Group();
 scene.add(marbles);
+const marbleAt = new Map<number, THREE.Mesh>(); // cell index to its marble, for the slide
 // Ghost layer: the position a hovered legal move would give, drawn translucent.
 const ghosts = new THREE.Group();
 scene.add(ghosts);
@@ -339,8 +341,34 @@ async function botTurn(): Promise<void> {
   diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: BOT_NODES });
   if (engine !== game) return; // Retry, a new fight, New game or an import replaced the game while the bot was thinking
   thinking = false;
-  playMove(move);
-  refresh();
+  whenSettled(() => {
+    playMove(move);
+    refresh();
+  });
+}
+
+// Moved marbles slide to their new cell. A click or a bot reply during a slide waits for its end.
+let slide: { game: Engine | Encounter; tracks: SlideTrack[]; start: number } | null = null;
+const afterSlide: (() => void)[] = [];
+function whenSettled(fn: () => void): void {
+  if (slide) afterSlide.push(fn);
+  else fn();
+}
+
+function animateSlides(now: number): void {
+  if (!slide) return;
+  const stale = slide.game !== engine; // Retry, a new fight or going online ends the slide
+  const elapsed = now - slide.start;
+  for (const track of stale ? [] : slide.tracks) {
+    const p = slideAt(track, elapsed);
+    const mesh = marbleAt.get(cellIndex(track.cell[0], track.cell[1]));
+    mesh?.position.set(p.x, mesh.position.y, p.z);
+  }
+  if (!stale && elapsed < SLIDE_MS) return;
+  slide = null;
+  delete document.body.dataset.sliding;
+  if (stale) afterSlide.length = 0; // what waited belongs to the old game
+  for (const fn of afterSlide.splice(0)) whenSettled(fn);
 }
 
 // Marbles leaving the board: pushed one cell out over the rim, they fall, tumble, stretch and fade
@@ -366,16 +394,19 @@ function playMove(record: number[]): void {
 function afterPlay(before: number[], record: number[], live = true): void {
   history.push(record);
   if (!live) return;
-  const ejection = findEjection(before, engine.board(), parseMoves(record)[0]!);
+  const mv = parseMoves(record)[0]!;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tracks = slideTracks(before, engine.board(), mv, reducedMotion);
+  if (tracks.some((t) => t.durationMs > 0)) {
+    slide = { game: engine, tracks, start: performance.now() };
+    document.body.dataset.sliding = '1';
+  }
+  const ejection = findEjection(before, engine.board(), mv);
   if (!ejection) return;
   const body = document.body;
   body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
   body.dataset.sound = sfx.ejection(ejection.side) ?? 'none'; // read by the e2e tests: toll, clack or none
-  const track = ejectTrack(
-    ejection.cell,
-    record[1]!,
-    matchMedia('(prefers-reduced-motion: reduce)').matches,
-  );
+  const track = ejectTrack(ejection.cell, record[1]!, reducedMotion);
   const material = marbleMaterials[ejection.side]!.clone();
   material.transparent = true;
   const mesh = new THREE.Mesh(marbleGeometry, material);
@@ -472,6 +503,7 @@ function refresh(): void {
   const armies = engine instanceof Encounter ? parseArmies(engine.armies()) : [];
   const next = engine instanceof Encounter ? engine.next_army() : -1;
   marbles.clear();
+  marbleAt.clear();
   discs.forEach((disc, i) => {
     const [q, r] = CELLS[i]!;
     const side = board[i]!;
@@ -490,6 +522,7 @@ function refresh(): void {
     const marble = new THREE.Mesh(marbleGeometry, marbleMaterials[side]);
     marble.position.set(p.x, 0.36, p.z);
     marbles.add(marble);
+    marbleAt.set(i, marble);
     if (isSelected(q, r)) {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.rotation.x = Math.PI / 2;
@@ -561,6 +594,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 
 function click(q: number, r: number): void {
   if (thinking || online?.role === 'spectator') return;
+  if (slide) return whenSettled(() => click(q, r)); // the next move waits for the slide
   if (online && engine.to_move() !== online.side) return; // not our turn
   if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
   const side = engine.board()[cellIndex(q, r)];
@@ -962,6 +996,7 @@ refresh();
 void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw = { start: -Infinity, cost: 0 };
 renderer.setAnimationLoop((now) => {
+  animateSlides(now);
   animateEjections(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, navigator.webdriver)) return;
   renderer.render(scene, camera);
