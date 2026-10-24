@@ -86,6 +86,10 @@ One plate, top-left, 16 px from the edges, max width 22rem, never over the board
   disconnected. One more line under the status line says who asked, kept verbatim for the e2e
   tests: "You asked for a rematch. Waiting for White..." and "Black asks for a rematch." When both
   asked, the new game starts with the colours swapped and the line and the button go away (#186).
+- **Daily challenge.** A button under Boss fight, labelled "Daily challenge 2026-10-24: The Choir"
+  (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
+  it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
+  tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 
