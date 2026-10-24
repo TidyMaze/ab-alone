@@ -3,11 +3,12 @@
 use std::cmp::Reverse;
 
 use crate::board::{Board, Cell, MAX_RADIUS};
-use crate::game::Game;
+use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
 
-/// Score of a won game, minus the ply it is won at, so a quicker win scores higher.
-const WIN: i32 = 1_000_000;
+/// Score of a won game, minus the ply it is won at, so a quicker win scores higher. A lost game
+/// scores the opposite: any score beyond `WIN / 2` either way is a decided game.
+pub const WIN: i32 = 1_000_000;
 const INF: i32 = 2 * WIN;
 /// Iterative deepening stops here even with budget left (tiny positions).
 const MAX_DEPTH: u32 = 12;
@@ -37,6 +38,10 @@ pub struct SearchResult {
     pub depth: u32,
     /// Positions visited, never above the budget.
     pub nodes: u32,
+    /// Score of `mv` for the side to move, in centi-marbles, from the deepest iteration that
+    /// finished: `WIN` minus the plies to a forced win, the opposite for a forced loss. The static
+    /// score of the position after `mv` when no iteration finished.
+    pub score: i32,
 }
 
 /// A position inside the search: only what `legal_moves` and `apply` need, plus the score.
@@ -198,8 +203,8 @@ impl Searcher<'_> {
         Some(best)
     }
 
-    /// Index of the best child at `depth`, `None` when the budget ran out inside.
-    fn root(&mut self, kids: &[Child], depth: u32) -> Option<usize> {
+    /// Index and score of the best child at `depth`, `None` when the budget ran out inside.
+    fn root(&mut self, kids: &[Child], depth: u32) -> Option<(usize, i32)> {
         if !self.visit() {
             return None;
         }
@@ -210,7 +215,7 @@ impl Searcher<'_> {
                 (best, alpha) = (i, score);
             }
         }
-        Some(best)
+        Some((best, alpha))
     }
 }
 
@@ -262,19 +267,20 @@ fn run(
             game.win_ejections(Player::White),
         ],
     };
-    let mut depth = 0;
+    let (mut depth, mut score) = (0, kids[0].score);
     for d in 1..=MAX_DEPTH {
-        let Some(best) = searcher.root(&kids, d) else {
+        let Some((best, value)) = searcher.root(&kids, d) else {
             break;
         };
         // Search the previous best first next time: the strongest ordering there is.
         kids[..=best].rotate_right(1);
-        depth = d;
+        (depth, score) = (d, value);
     }
     Some(SearchResult {
         mv: kids.swap_remove(0).mv,
         depth,
         nodes: searcher.nodes,
+        score,
     })
 }
 
@@ -293,6 +299,25 @@ pub fn search_hooked(
     run(game, node_budget, weights, allow, Some(step))
 }
 
+/// Score of the position for the side to move, visiting at most `node_budget` positions (the
+/// evaluation bar, #191). A finished game scores `WIN` for the winner, `-WIN` for the loser and `0`
+/// for a draw. A side with no legal move gets its static score.
+pub fn position_score(game: &Game, node_budget: u32) -> i32 {
+    let to_move = game.to_move();
+    match game.outcome() {
+        Some(Outcome::Win(winner)) if winner == to_move => WIN,
+        Some(Outcome::Win(_)) => -WIN,
+        Some(Outcome::Draw) => 0,
+        None => search(game, node_budget).map_or_else(
+            || {
+                let ejected = [game.ejected(Player::Black), game.ejected(Player::White)];
+                evaluate(game.board(), to_move, ejected, &DEFAULT_WEIGHTS)
+            },
+            |r| r.score,
+        ),
+    }
+}
+
 /// Same as [`search`], the move only.
 pub fn best_move(game: &Game, node_budget: u32) -> Option<Move> {
     search(game, node_budget).map(|r| r.mv)
@@ -302,7 +327,7 @@ pub fn best_move(game: &Game, node_budget: u32) -> Option<Move> {
 mod tests {
     use super::*;
     use crate::board::{Board, Cell};
-    use crate::game::{Outcome, WIN_EJECTIONS};
+    use crate::game::WIN_EJECTIONS;
     use crate::moves::{apply, legal_moves, Direction, Player};
 
     type P = (i32, i32);
@@ -552,5 +577,93 @@ mod tests {
             ..DEFAULT_WEIGHTS
         };
         assert_eq!(heavy(w), heavy(w));
+    }
+
+    // Search score, for the evaluation bar (#191).
+
+    #[test]
+    fn a_win_in_one_scores_win_minus_one_ply() {
+        assert_eq!(search(&winning_push(), 500).expect("a move").score, WIN - 1);
+        let white = game_from(&[(-4, 0)], &[(-2, 0), (-3, 0)], Player::White, [0, 5]);
+        assert_eq!(search(&white, 500).expect("a move").score, WIN - 1);
+    }
+
+    fn root_of(game: &Game) -> Node {
+        Node {
+            board: game.board().clone(),
+            to_move: game.to_move(),
+            ejected: [game.ejected(Player::Black), game.ejected(Player::White)],
+        }
+    }
+
+    #[test]
+    fn the_score_is_the_full_window_value_of_the_deepest_iteration() {
+        let mut game = Game::new();
+        game.play(&legal_moves(game.board(), Player::Black)[3])
+            .unwrap();
+        for g in [Game::new(), game] {
+            let found = search(&g, 3000).expect("a move");
+            assert!(found.depth >= 2, "depth {}", found.depth);
+            let mut exact = Searcher {
+                weights: DEFAULT_WEIGHTS,
+                step: None,
+                budget: u32::MAX,
+                nodes: 0,
+                win: [WIN_EJECTIONS; 2],
+            };
+            let value = exact.negamax(&root_of(&g), found.depth, 0, -INF, INF);
+            assert_eq!(Some(found.score), value);
+        }
+    }
+
+    #[test]
+    fn with_no_finished_iteration_the_score_is_the_static_one_of_the_move() {
+        let game = Game::new();
+        let found = search(&game, 0).expect("a move");
+        let (board, _) = apply(game.board(), Player::Black, &found.mv).unwrap();
+        assert_eq!(
+            found.score,
+            evaluate(&board, Player::Black, [0, 0], &DEFAULT_WEIGHTS)
+        );
+    }
+
+    #[test]
+    fn position_score_is_the_search_score_while_the_game_runs() {
+        let game = Game::new();
+        assert_eq!(
+            position_score(&game, 2000),
+            search(&game, 2000).unwrap().score
+        );
+        assert!(position_score(&game, 2000).abs() < WIN / 2);
+    }
+
+    #[test]
+    fn position_score_of_a_won_game_is_win_for_the_winner_and_minus_win_for_the_loser() {
+        let board = || Board::standard();
+        let lost = Game::from_position(board(), Player::White, [6, 0]);
+        assert_eq!(position_score(&lost, 500), -WIN);
+        let won = Game::from_position(board(), Player::Black, [6, 0]);
+        assert_eq!(position_score(&won, 500), WIN);
+    }
+
+    #[test]
+    fn position_score_of_a_drawn_game_is_zero() {
+        let mut game = Game::new();
+        while game.outcome().is_none() {
+            let first = legal_moves(game.board(), game.to_move())[0].clone();
+            game.play(&first).unwrap();
+        }
+        assert_eq!(game.outcome(), Some(Outcome::Draw));
+        assert_eq!(position_score(&game, 500), 0);
+    }
+
+    #[test]
+    fn position_score_with_no_legal_move_is_the_static_score() {
+        let game = game_from(&[], &[(0, 0)], Player::Black, [0, 0]);
+        assert_eq!(
+            position_score(&game, 500),
+            evaluate(game.board(), Player::Black, [0, 0], &DEFAULT_WEIGHTS)
+        );
+        assert_eq!(position_score(&game, 500), -DEFAULT_WEIGHTS.marbles);
     }
 }

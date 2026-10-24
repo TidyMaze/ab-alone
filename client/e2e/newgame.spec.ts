@@ -135,6 +135,8 @@ test('New game while the bot thinks: its reply to the old game is dropped, the b
 }) => {
   test.slow(); // two bot searches in the worker
   // The bot worker is held: its requests wait until __releaseBot, so the bot is still thinking when New game starts.
+  // Only the bot's move requests are held and counted: the evaluation bar's requests (`evaluate`, #191) go to a
+  // second copy of the worker and pass.
   await page.addInitScript(() => {
     const held: (() => void)[] = [];
     let holding = true;
@@ -150,11 +152,14 @@ test('New game while the bot thinks: its reply to the old game is dropped, the b
     w.Worker = class extends Real {
       constructor(url: string | URL, options?: WorkerOptions) {
         super(url, options);
-        this.addEventListener('message', () => replies++); // the page handles the reply in the same task
+        // The page handles the reply in the same task. An evaluation answer carries a score, not a move.
+        this.addEventListener('message', (e) => {
+          if (!('score' in e.data)) replies++;
+        });
       }
       postMessage(msg: unknown): void {
         const sent = structuredClone(msg); // what the worker gets is copied now, as postMessage does
-        if (holding) held.push(() => super.postMessage(sent));
+        if (holding && !(msg as { evaluate?: boolean }).evaluate) held.push(() => super.postMessage(sent));
         else super.postMessage(sent);
       }
     };

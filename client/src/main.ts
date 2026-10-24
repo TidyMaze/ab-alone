@@ -12,11 +12,12 @@ import {
   toggleSelection,
   type Axial,
 } from './board';
-import { askBot, BOT_NODES } from './bot';
+import { askBot, askEval, BOT_NODES } from './bot';
 import { bossHtml } from './bosshud';
 import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
+import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
@@ -266,6 +267,37 @@ if (resumed) {
   history.push(...resumed.moves);
 }
 
+// Evaluation bar (#191): the search score of every position of a local or bot game, from a second
+// copy of the bot worker, so a bot reply never waits behind it. Online and boss games turn it off for
+// good (fair play, #164).
+const evalBar = document.getElementById('eval')!;
+const evalMeter = evalBar.querySelector('.track')!;
+const evalLabel = evalBar.querySelector('.label')!;
+const analysisWorker = new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' });
+const analyst = new Analyst(
+  (moves) => askEval(analysisWorker, moves),
+  (score, { history: moves, side }) => {
+    const fill = evalFill(score, side);
+    const words = evalText(score, side);
+    evalBar.style.setProperty('--fill', String(fill));
+    evalMeter.setAttribute('aria-valuenow', String(Math.round(fill * 100)));
+    evalMeter.setAttribute('aria-valuetext', words);
+    evalLabel.textContent = words;
+    evalBar.dataset.ply = String(moves.length); // read by the e2e tests
+  },
+);
+let analysing = true;
+function analyse(): void {
+  if (!analysing) return;
+  evalBar.hidden = false;
+  analyst.request({ history: history.slice(), side: engine.to_move() });
+}
+function stopAnalysis(): void {
+  analysing = false;
+  evalBar.hidden = true;
+  analyst.stop();
+}
+
 async function botTurn(): Promise<void> {
   if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
   thinking = true;
@@ -296,6 +328,7 @@ function playMove(record: number[]): void {
   engine.play(Int32Array.from(record));
   afterPlay(before, record);
   if (!online && !fight) void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
+  analyse();
 }
 
 // `live` false: a move replayed by a catch-up shows at once, without its ejection effect and sound (#232).
@@ -655,6 +688,7 @@ newGameButton.addEventListener('click', () => {
   thinking = false; // the bot's reply to the old game is dropped (botTurn)
   void saves.clear();
   refresh();
+  analyse(); // the bar follows the new game, an answer for the old one is dropped
 });
 newGameButton.disabled = false; // listener ready (#146)
 
@@ -664,6 +698,7 @@ const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }): void {
+  stopAnalysis();
   fight = { id, seed, daily };
   engine = new Encounter(id, seed);
   history.length = 0;
@@ -724,6 +759,7 @@ const inviteLabel = document.getElementById('invite-label')!;
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
 rematchButton.addEventListener('click', () => void online?.rematch());
 async function goOnline(room: string, side: number): Promise<void> {
+  stopAnalysis();
   fight = null;
   delete document.body.dataset.boss;
   retryButton.hidden = true;
@@ -814,6 +850,7 @@ playReady = true; // engine and listener ready (#127)
 syncConnectivity();
 const invited = roomFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
+else analyse(); // the start position
 
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
 // text box to copy by hand when the browser refuses (#220). Nothing is sent anywhere.
