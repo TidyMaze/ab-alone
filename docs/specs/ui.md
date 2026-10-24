@@ -60,10 +60,15 @@ In a short landscape window (500 px tall or less, a phone held sideways) the pla
 left of the board, like the column, with a smaller turn line, so it covers no cell (#234).
 In a taller landscape window up to 1100 px wide the plate is smaller (max width 15rem) for the
 same reason (#246).
-The buttons (Clear board, Reset view, Play online, Boss fight and the rest) share one column
+The buttons (the settings cog, Reset view, Play online, Boss fight and the rest) share one column
 top-right, beside the plate and never over it (#227). Wider than tall, the column keeps to the band
 right of the board. Held upright, the column becomes rows of buttons under the plate. No button or
 field covers a cell, and the space between them lets every tap through to the board.
+
+Settings (#277): a cog button, first in the column, opens a menu listing the settings, one toggle
+button each (Clear board is the only one so far). The menu opens in the column under the cog, so it
+covers no cell either. It closes on Escape, on a press outside and on the cog again. The cog is labelled
+"Settings" (`aria-expanded`, `aria-controls`), each setting is a button with `aria-pressed`.
 
 ```
 +---------------------------------+

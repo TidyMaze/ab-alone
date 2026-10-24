@@ -53,7 +53,7 @@ Die, read the tell, retry with the same seed.
 Rusted deck plates, cold light, fog at the rim of the board. Your marbles are glass with a warm
 core. Theirs are black shell. When one goes over the edge it slides off and the air goes with it.
 
-The camera orbits and zooms. A **Clear board** toggle drops the fog for pure readability.
+The camera orbits and zooms. A **Clear board** setting (in the settings menu, behind the cog) drops the fog for pure readability.
 
 ## Under the hull
 
