@@ -1,5 +1,6 @@
 // Message protocol between the page and the bot worker. The worker owns its own wasm Engine, so
-// the page sends the move history and the worker replays it, then asks `best_move`.
+// the page sends the move history and the worker replays it, then asks `best_move`, or `evaluate`
+// for the evaluation bar (#191).
 
 export interface BotRequest {
   id: number;
@@ -7,6 +8,8 @@ export interface BotRequest {
   nodes: number;
   /** Set in encounter mode: the worker replays the history into this boss fight. */
   boss?: BossRef;
+  /** Set to ask for the search score of the position instead of a move (never with a boss). */
+  evaluate?: boolean;
 }
 
 export interface BossRef {
@@ -14,14 +17,23 @@ export interface BossRef {
   seed: number;
 }
 
-export interface BotResponse {
+export interface MoveAnswer {
   id: number;
   move: number[];
 }
 
+/** Answer to an `evaluate` request: the search score for the side to move, see the bridge docs. */
+export interface ScoreAnswer {
+  id: number;
+  score: number;
+}
+
+export type BotResponse = MoveAnswer | ScoreAnswer;
+
 export interface EngineLike {
   play(mv: Int32Array): void;
   best_move(nodes: number): Int32Array | number[];
+  evaluate(nodes: number): number;
 }
 
 export interface EncounterLike {
@@ -37,7 +49,10 @@ export interface WorkerLike {
 /** Search budget in positions: fixed, so the bot plays the same on every machine. */
 export const BOT_NODES = 20000;
 
-/** Worker side: replay the game, return the bot's move. */
+/** Evaluation bar budget in positions: a quarter of the bot's, never a clock (#191). */
+export const EVAL_NODES = 5000;
+
+/** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,
   makeEngine: () => EngineLike,
@@ -50,23 +65,35 @@ export function answer(
   }
   const engine = makeEngine();
   for (const mv of req.history) engine.play(Int32Array.from(mv));
+  if (req.evaluate) return { id: req.id, score: engine.evaluate(req.nodes) };
   return { id: req.id, move: Array.from(engine.best_move(req.nodes)) };
 }
 
 let nextId = 0;
 
+/** Posts one request, resolves with the reply that has its id. One request in flight per worker:
+ * each call takes over the worker's handler. */
+function ask<T extends BotResponse>(worker: WorkerLike, req: Omit<BotRequest, 'id'>): Promise<T> {
+  const id = nextId++;
+  return new Promise((resolve) => {
+    worker.onmessage = (e) => {
+      if (e.data.id === id) resolve(e.data as T);
+    };
+    worker.postMessage({ id, ...req });
+  });
+}
+
 /** Page side: post the history, resolve with the move record of the reply with the same id. */
-export function askBot(
+export async function askBot(
   worker: WorkerLike,
   history: number[][],
   nodes = BOT_NODES,
   boss?: BossRef,
 ): Promise<number[]> {
-  const id = nextId++;
-  return new Promise((resolve) => {
-    worker.onmessage = (e) => {
-      if (e.data.id === id) resolve(e.data.move);
-    };
-    worker.postMessage({ id, history, nodes, boss });
-  });
+  return (await ask<MoveAnswer>(worker, { history, nodes, boss })).move;
+}
+
+/** Page side: the search score of the position after `history`, for the side to move. */
+export async function askEval(worker: WorkerLike, history: number[][], nodes = EVAL_NODES): Promise<number> {
+  return (await ask<ScoreAnswer>(worker, { history, nodes, evaluate: true })).score;
 }

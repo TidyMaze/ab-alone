@@ -4,7 +4,8 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
 // cell, every control is on screen or can be scrolled into view, and a tap on any of the 61 cells reaches
 // the board. Bug #234: held sideways the plate hid the board's top-left marbles, so the plate covers no
-// cell either.
+// cell either. The evaluation plate (#191) is checked like a control: it lets taps through, so it would
+// hide a cell without missing a tap.
 
 // What is wrong on the page right now, as readable lines: an empty list is a good layout.
 const problems = (page: Page) =>
@@ -26,9 +27,9 @@ const problems = (page: Page) =>
     const hud = document.getElementById('hud')!.getBoundingClientRect();
     const found: string[] = [];
     for (const c of cells) if (meets(hud, c.disc)) found.push(`the HUD covers ${c.name}`);
-    for (const el of document.querySelectorAll('button, input, label, textarea, select')) {
+    for (const el of document.querySelectorAll('button, input, label, textarea, select, #eval')) {
       if (el.getClientRects().length === 0) continue; // hidden
-      const name = el.textContent || el.getAttribute('aria-label')!;
+      const name = el.id === 'eval' ? 'the evaluation plate' : el.textContent || el.getAttribute('aria-label')!;
       el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // a scrolling column brings it into view
       const box = el.getBoundingClientRect();
       if (meets(box, hud)) found.push(`${name} covers the HUD`);

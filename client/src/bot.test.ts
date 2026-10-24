@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { answer, askBot, type BotRequest, type BotResponse, type EncounterLike, type EngineLike } from './bot';
+import {
+  answer,
+  askBot,
+  askEval,
+  BOT_NODES,
+  EVAL_NODES,
+  type BotRequest,
+  type BotResponse,
+  type EncounterLike,
+  type EngineLike,
+} from './bot';
 
 class FakeEngine implements EngineLike {
   played: number[][] = [];
@@ -8,6 +18,10 @@ class FakeEngine implements EngineLike {
   }
   best_move(nodes: number): Int32Array {
     return Int32Array.from([1, 0, nodes, 0, 0, 0, 0, 0]);
+  }
+  /** A score that shows both the budget and the replayed history. */
+  evaluate(nodes: number): number {
+    return 2 * nodes + this.played.length;
   }
 }
 
@@ -45,6 +59,14 @@ describe('answer', () => {
     expect(engine.played).toEqual([[1, 0, 0, 2, 0, 0, 0, 0]]);
     expect(reply).toEqual({ id: 7, move: [1, 0, 123, 0, 0, 0, 0, 0] });
   });
+
+  it('answers an evaluate request with the score of the replayed position, #191', () => {
+    const engine = new FakeEngine();
+    const req = { id: 8, history: [[1, 0, 0, 2, 0, 0, 0, 0]], nodes: 10, evaluate: true };
+    const reply = answer(req, () => engine, noEncounter);
+    expect(engine.played).toEqual([[1, 0, 0, 2, 0, 0, 0, 0]]);
+    expect(reply).toEqual({ id: 8, score: 21 });
+  });
 });
 
 describe('askBot', () => {
@@ -69,6 +91,20 @@ describe('askBot', () => {
     ]);
     // Ids are fresh per request: a second round trip works the same.
     await expect(askBot(worker, [], 60)).resolves.toEqual([1, 0, 60, 0, 0, 0, 0, 0]);
+  });
+
+  it('round-trips an evaluate request and resolves with the score of the matching reply, #191', async () => {
+    const worker = fakeWorker();
+    await expect(askEval(worker, [[1, 0, 0, 2, 0, 0, 0, 0]], 50)).resolves.toBe(101);
+    await expect(askEval(worker, [])).resolves.toBe(2 * EVAL_NODES);
+  });
+
+  it('asks the evaluation with a node budget well below the bot one, so the bar never holds the game', () => {
+    const sent: BotRequest[] = [];
+    const worker = { onmessage: null, postMessage: (r: BotRequest) => void sent.push(r) };
+    void askEval(worker, []);
+    expect(sent[0]).toMatchObject({ history: [], nodes: EVAL_NODES, evaluate: true });
+    expect(EVAL_NODES * 4).toBeLessThanOrEqual(BOT_NODES);
   });
 
   it('carries the boss in the request', () => {

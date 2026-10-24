@@ -17,6 +17,9 @@
 //! - Move: 8 integers `[n, dir, q0, r0, q1, r1, q2, r2]`, `n` in 1..=3 marbles, unused
 //!   coordinates are `0`. `dir`: `0` E, `1` W, `2` NE, `3` SW, `4` NW, `5` SE.
 //!   `legal_moves` returns the records back to back.
+//! - Score (the evaluation bar): the search score for the side to move, in centi-marbles (one
+//!   marble is 100). A won game scores 1 000 000 minus the plies to the win, a lost one the
+//!   opposite, a draw 0: beyond +/-500 000 the game is decided.
 
 use abalone_core::board::{Board, Cell, RADIUS};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
@@ -26,7 +29,7 @@ use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::{BossDef, Encounter as CoreEncounter, PveResult};
 use abalone_core::game::{DrawReason, Game, Outcome};
 use abalone_core::moves::{legal_moves, Direction, Move, Player};
-use abalone_core::search::best_move;
+use abalone_core::search::{best_move, position_score};
 use wasm_bindgen::prelude::*;
 
 /// Integers per move record.
@@ -164,6 +167,12 @@ impl Engine {
         best_move(&self.game, nodes)
             .map(|mv| encode(&mv).to_vec())
             .unwrap_or_default()
+    }
+
+    /// Score of the position for the side to move, searching at most `nodes` positions. See the
+    /// module docs.
+    pub fn evaluate(&self, nodes: u32) -> i32 {
+        position_score(&self.game, nodes)
     }
 
     /// Winner or draw state, see the module docs.
@@ -641,6 +650,25 @@ mod tests {
         let mut engine = Engine::new();
         play_until_over(&mut engine);
         assert!(engine.best_move(300).is_empty());
+    }
+
+    #[test]
+    fn evaluate_is_the_core_position_score_for_the_side_to_move() {
+        use abalone_core::search::{position_score, WIN};
+        let mut engine = Engine::new();
+        let start = engine.evaluate(2000);
+        assert_eq!(start, position_score(&Game::new(), 2000));
+        assert!(start.abs() < WIN / 2, "a running game is not decided");
+        let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();
+        engine.play(&first).unwrap();
+        assert_eq!(engine.evaluate(2000), position_score(&engine.game, 2000));
+    }
+
+    #[test]
+    fn evaluate_a_drawn_game_is_zero() {
+        let mut engine = Engine::new();
+        play_until_over(&mut engine);
+        assert_eq!(engine.evaluate(300), 0);
     }
 
     #[test]
