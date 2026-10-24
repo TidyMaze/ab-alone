@@ -29,21 +29,27 @@ describe('evalFill', () => {
 
 describe('evalText', () => {
   it('says Even below a twentieth of a marble', () => {
-    expect(evalText(0, 1)).toBe('Even');
-    expect(evalText(-4, 2)).toBe('Even');
+    expect(evalText(0, 1, 2)).toBe('Even');
+    expect(evalText(-4, 2, 2)).toBe('Even');
   });
 
   it('names the side ahead and its lead in marbles', () => {
-    expect(evalText(150, 1)).toBe('Black +1.5');
-    expect(evalText(150, 2)).toBe('White +1.5');
-    expect(evalText(-38, 1)).toBe('White +0.4');
+    expect(evalText(150, 1, 2)).toBe('Black +1.5');
+    expect(evalText(150, 2, 2)).toBe('White +1.5');
+    expect(evalText(-38, 1, 2)).toBe('White +0.4');
   });
 
   it('names the winner of a decided game, and says wins once the game is over', () => {
-    expect(evalText(WIN_SCORE - 3, 2)).toBe('White winning');
-    expect(evalText(-(WIN_SCORE - 2), 2)).toBe('Black winning');
-    expect(evalText(-WIN_SCORE, 2)).toBe('Black wins');
-    expect(evalText(WIN_SCORE, 1)).toBe('Black wins');
+    expect(evalText(WIN_SCORE - 3, 2, 2)).toBe('White winning');
+    expect(evalText(-(WIN_SCORE - 2), 2, 2)).toBe('Black winning');
+    expect(evalText(-WIN_SCORE, 2, 2)).toBe('Black wins');
+    expect(evalText(WIN_SCORE, 1, 2)).toBe('Black wins');
+  });
+
+  it('names the side wearing the pale glass White: against the bot side 1 is White', () => {
+    expect(evalText(150, 1, 1)).toBe('White +1.5');
+    expect(evalText(-150, 1, 1)).toBe('Black +1.5');
+    expect(evalText(-WIN_SCORE, 1, 1)).toBe('Black wins'); // side 1 to move has lost: side 2 is the shell, Black
   });
 });
 

@@ -36,11 +36,17 @@ describe('end of game styles, #282', () => {
 });
 
 describe('hudHtml', () => {
-  const base = { side: 1, status: 0, score: 'Black ejected 0/6 · White ejected 0/6', ejected: [0, 0] as const, win: [6, 6] as const, note: 'WebGL2' };
+  const base = { side: 1, status: 0, score: 'Black ejected 0/6 · White ejected 0/6', ejected: [0, 0] as const, win: [6, 6] as const, note: 'WebGL2', glass: 2 };
 
   it('says whose turn it is', () => {
     expect(hudHtml(base)).toContain('Black to move');
     expect(hudHtml({ ...base, side: 2 })).toContain('White to move');
+  });
+
+  it('names the sides after the glass: against the bot the pale side 1 is White to move, and wins', () => {
+    expect(hudHtml({ ...base, glass: 1 })).toContain('White to move');
+    expect(hudHtml({ ...base, glass: 1, side: 2 })).toContain('Black to move');
+    expect(hudHtml({ ...base, glass: 1, status: 2 })).toContain('Black wins');
   });
 
   it('keeps the score text verbatim and the note', () => {
