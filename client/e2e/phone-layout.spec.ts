@@ -3,7 +3,8 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
 // cell, every control is on screen or can be scrolled into view, and a tap on any of the 61 cells reaches
-// the board.
+// the board. Bug #234: held sideways the plate hid the board's top-left marbles, so the plate covers no
+// cell either.
 
 // What is wrong on the page right now, as readable lines: an empty list is a good layout.
 const problems = (page: Page) =>
@@ -24,6 +25,7 @@ const problems = (page: Page) =>
     }
     const hud = document.getElementById('hud')!.getBoundingClientRect();
     const found: string[] = [];
+    for (const c of cells) if (meets(hud, c.disc)) found.push(`the HUD covers ${c.name}`);
     for (const el of document.querySelectorAll('button, input, label, textarea, select')) {
       if (el.getClientRects().length === 0) continue; // hidden
       const name = el.textContent || el.getAttribute('aria-label')!;
@@ -61,7 +63,7 @@ for (const { name, viewport, mobile } of sizes) {
     test.skip(({ browserName }) => mobile && browserName === 'firefox', 'Firefox has no mobile emulation');
     test.use({ viewport, isMobile: mobile, hasTouch: mobile });
 
-    test('the buttons cover neither the HUD nor the board, which stays on screen, bug #227', async ({ page }, testInfo) => {
+    test('nothing covers the board or the HUD, the board stays on screen, bugs #227 #234', async ({ page }, testInfo) => {
       test.slow(); // two page loads and five checks, each with a screenshot of the WebGL page
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
