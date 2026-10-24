@@ -27,7 +27,7 @@ export default defineConfig(({ command, mode }) => ({
       // in main.ts and scene.ts need a real browser (Playwright e2e, a later task).
       include: ['src/board.ts', 'src/bot.ts', 'src/ghost.ts', 'src/score.ts', 'src/hud.ts', 'src/quality.ts', 'src/eject.ts',
         'src/moverecord.ts', 'src/movelog.ts', 'src/transport.ts', 'src/invite.ts', 'src/session.ts', 'src/camera.ts', 'src/seats.ts', 'src/bosshud.ts',
-        'src/presence.ts', 'src/hull.ts', 'src/chaplain.ts', 'src/choir.ts', 'src/rematch.ts', 'scripts/nightly-report.mjs'],
+        'src/presence.ts', 'src/hull.ts', 'src/chaplain.ts', 'src/choir.ts', 'src/rematch.ts', 'scripts/nightly-report.mjs', 'src/connectivity.ts'],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },
