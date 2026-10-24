@@ -175,6 +175,22 @@ describe('OnlineSession', () => {
     expect(white.refused).toEqual([]);
   });
 
+  it('hands out the signed log of the game, the same on both sides', async () => {
+    const { black, white } = await seated();
+    black.judge.play(Int32Array.from(M1));
+    await black.session.send(M1);
+    await settle();
+    white.judge.play(Int32Array.from(M2));
+    await white.session.send(M2);
+    await settle();
+    const log = black.session.signedLog;
+    expect(log.map((r) => [r.seq, r.move, r.pub])).toEqual([
+      [0, M1, black.keys.pub],
+      [1, M2, white.keys.pub],
+    ]);
+    expect(white.session.signedLog).toEqual(log);
+  });
+
   it('plays a two move exchange in order', async () => {
     const { black, white } = await seated();
     black.judge.play(Int32Array.from(M1));

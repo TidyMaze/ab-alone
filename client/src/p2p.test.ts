@@ -12,7 +12,14 @@ const room = vi.hoisted(() => {
     leave: async () => {},
   };
 });
-vi.mock('trystero/nostr', () => ({ joinRoom: () => room }));
+// The callbacks p2pTransport gave the last joinRoom call.
+const joined = vi.hoisted(() => ({ callbacks: undefined as { onJoinError?: (e: { error: string }) => void } | undefined }));
+vi.mock('trystero/nostr', () => ({
+  joinRoom: (_config: unknown, _room: string, callbacks?: typeof joined.callbacks) => {
+    joined.callbacks = callbacks;
+    return room;
+  },
+}));
 
 const { p2pTransport } = await import('./p2p');
 
@@ -29,6 +36,15 @@ describe('p2pTransport', () => {
     room.onPeerLeave!('white');
     expect(t.state).toBe('closed');
     expect(states).toEqual(['open', 'open', 'closed']);
+  });
+
+  it('hands a Trystero join error to the diagnostics, ICE failures included', () => {
+    const errors: string[] = [];
+    p2pTransport('r', (message) => errors.push(message));
+    joined.callbacks!.onJoinError!({ error: 'could not connect to peer p after exchanging SDP' });
+    expect(errors).toEqual(['could not connect to peer p after exchanging SDP']);
+    p2pTransport('r'); // no listener: the error is dropped
+    expect(() => joined.callbacks!.onJoinError!({ error: 'x' })).not.toThrow();
   });
 
   it('opens again when a peer comes back', () => {

@@ -59,11 +59,11 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #clear-board[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #clear-board:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #online { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
-#update, #sound, #reset-view, #play-online, #rematch, #boss-fight, #daily, #boss-retry, #boss-list button {
+#update, #sound, #reset-view, #play-online, #rematch, #boss-fight, #daily, #boss-retry, #boss-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#update:focus-visible, #sound:focus-visible, #reset-view:focus-visible, #play-online:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #boss-retry:focus-visible, #boss-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#update:focus-visible, #sound:focus-visible, #reset-view:focus-visible, #play-online:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #boss-retry:focus-visible, #boss-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* The sound toggle: lit while on, struck through while off, so the state never rests on colour alone. */
 #sound[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #sound[aria-pressed='false'] { text-decoration: line-through; }
@@ -83,6 +83,14 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); padding: 0.5rem 0.75rem; color: var(--text);
   background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
+/* Copy diagnostics, bottom right: a support tool, kept away from the play buttons and the board. Above it, the text
+   selected in a box when the clipboard is refused. */
+#support { position: fixed; bottom: 16px; right: 16px; z-index: 1; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
+#diagnostics {
+  box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); height: 8rem; padding: 0.5rem 0.75rem; resize: vertical;
+  color: var(--text); background: var(--panel); border: 1px solid var(--accent); border-radius: 2px; font: 0.8125rem/1.3 var(--ui);
+}
+#diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #invite-label { padding: 0.25rem 0.5rem; color: var(--text); background: var(--panel); border-radius: 2px; font: 500 0.875rem/1.2 var(--ui); }
 /* The room creator alone: the link is what the player needs next. */
 body[data-opponent='waiting'] #invite { border-color: var(--accent); }

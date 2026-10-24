@@ -466,12 +466,34 @@ target under 10 min.
   with tolerance. Visual changes reviewed in the PR.
 - **AI:** self-play gauntlet in CI nightly, Elo vs fixed baselines, fail on regression.
 
-**Observability (client-side only):** structured console logger with levels, a local ring buffer
-of the last 1000 events (net, desync, search time), and a "copy diagnostics" button that exports
-it with the game log, since the signed log reproduces any bug. Local counters: connection
-success and failure by cause (ICE failed, signaling timeout), time to connect, desync reports.
-Those counters drive the TURN decision (section 6). Boss analytics come from the local `attempt`
-table. No third-party SDK, no data leaves the browser unless the player exports it.
+**Observability (client-side only, #220):** a structured logger with levels (`debug`, `info`,
+`warn`, `error`, `client/src/logger.ts`) prints each event on the console and keeps the last 1000
+in a ring buffer, in memory only. An event is `{t, level, event, data}`, `t` in ms since the page
+started. Events: `start` (renderer backend, quality tier), `net` (each connection state change,
+and each connection failure with its cause), `refused` (a message the session refused, with its
+reason), `desync` and `bot-search` (the time the bot or the boss took, with its node budget or
+boss id).
+
+Local counters (`client/src/netcounters.ts`): connections opened; failures by cause: `lost` (an
+open connection closed), `signaling-timeout` (a joiner found no peer within 30 s; the room
+creator waits for its opponent as long as it takes), `ice-failed` (Trystero reports that the
+peers swapped their SDP but never connected) and `join-error` (any other Trystero join error);
+the time to connect of each connection, from the start or from the loss of the previous one;
+refused messages by reason; desync reports. Until moves carry a post-state hash (section 6), a
+desync is a refused move that shows the other side's log or position is not ours: `bad-chain`,
+`out-of-order`, `illegal` or `not-their-turn`. Those counters drive the TURN decision
+(section 6).
+
+The **Copy diagnostics** button (`client/src/diagnostics.ts`) puts one JSON text in the clipboard:
+the app build (the commit), the environment (build mode, renderer backend, quality tier, user
+agent), the current game (mode, layout, boss id and seed, online game id, side and role, side to
+move, status, every move record played, and online the signed log, since the signed log
+reproduces any bug), the counters and the events, one move or one event per line. When the
+Clipboard API refuses, the text is shown in a box, selected, to copy by hand. The export holds
+public data only (public keys, signatures, the room id): private keys are dropped from every
+event and from the export, so it may be pasted into a public issue. Boss analytics come from the
+local `attempt` table. No third-party SDK, no data leaves the browser unless the player exports
+it.
 
 ## 11. Trending tech considered
 
