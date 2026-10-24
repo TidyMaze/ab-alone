@@ -98,6 +98,11 @@ field covers a cell, and the space between them lets every tap through to the bo
   (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
   tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
+- **Copy diagnostics.** A button under the others, in every mode, styled like them. It copies the
+  diagnostics text (tech.md section 10) and the note line says "diagnostics copied". When the
+  browser refuses the clipboard, the text appears in a box under the buttons, selected, with the
+  accent border, and the note says "diagnostics selected: copy them by hand". Both strings are
+  kept verbatim for the e2e tests (#220).
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 
