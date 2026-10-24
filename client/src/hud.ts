@@ -1,5 +1,6 @@
 // HUD plate markup, see docs/specs/ui.md section 4. The turn and score strings are read by the
 // e2e tests: keep them verbatim.
+import type { EndBanner } from './endbanner';
 import type { OnlineStatus } from './presence';
 
 const SIDE_NAMES: Record<number, string> = { 1: 'Black', 2: 'White' };
@@ -13,18 +14,22 @@ export interface HudState {
   win: readonly [number, number]; // ejections each side needs: one pip each
   note: string;
   online?: OnlineStatus; // online games only: own color and the opponent's presence
+  end?: EndBanner; // once over: the end banner (#282), replaces the turn line text
   rematch?: string; // online games only, once over: who asked for a rematch (rematchText)
 }
 
 const pips = (out: number, slots: number): string =>
   Array.from({ length: slots }, (_, i) => `<span class="pip${i < out ? ' out' : ''}"></span>`).join('');
 
-export function hudHtml({ side, status, score, ejected, win, note, online, rematch }: HudState): string {
+export function hudHtml({ side, status, score, ejected, win, note, online, rematch, end }: HudState): string {
   const over = status !== 0;
-  const turn = over ? STATUS_TEXT[status] : `${SIDE_NAMES[side]} to move`;
+  const turn = end ? end.title : over ? STATUS_TEXT[status] : `${SIDE_NAMES[side]} to move`;
   const marker = `<span class="marker ${over ? 'over' : side === 1 ? 'black' : 'white'}" aria-hidden="true"></span>`;
   return (
     `<div class="turn">${marker}<span>${turn}</span></div>` +
+    (end
+      ? `<div class="end" data-anim="${end.anim}"><div>${end.line}</div>${end.next ? `<div>${end.next}</div>` : ''}</div>`
+      : '') +
     (online ? `<div class="presence ${online.tone}">${online.text}</div>` : '') +
     (rematch ? `<div class="rematch">${rematch}</div>` : '') +
     `<div class="score">${score}</div>` +
