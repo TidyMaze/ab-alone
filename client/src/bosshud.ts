@@ -5,7 +5,7 @@ export interface BossHud {
   phase: number; // 0 is P1
   phases: number;
   result: number; // 0 playing, 1 won, 2 lost (a draw is a loss)
-  tell?: string; // flat fallback of the board tell, '' when there is none (The Hull's cracks)
+  tell?: string; // flat fallback of the boss tell on the board, '' when there is none
 }
 
 const RESULT_TEXT = ['', 'Victory', 'Defeat'];
