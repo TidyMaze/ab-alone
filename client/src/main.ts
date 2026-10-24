@@ -37,6 +37,7 @@ import { SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { hudHtml } from './hud';
 import { menuOpen, settingsList, type MenuEvent } from './settings';
 import { icon } from './icons';
+import { LIGHT } from './light';
 import { drawDue, fogSettings, readClearBoard, readSound, readTier, writeClearBoard, writeSound } from './quality';
 import { Sfx } from './sound';
 import { glassSide } from './glass';
@@ -83,6 +84,8 @@ const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL });
 await renderer.init();
 renderer.setPixelRatio(devicePixelRatio);
 renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; // rolls the lamp's highlights off instead of clipping them
+renderer.toneMappingExposure = LIGHT.exposure;
 document.body.appendChild(renderer.domElement);
 const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend
   ? 'WebGPU'
@@ -209,9 +212,9 @@ addEventListener('pointerdown', (e) => {
 cog.disabled = false; // listener ready (#146)
 
 for (const type of ['pointerdown', 'pointerup', 'keydown']) addEventListener(type, () => sfx.unlock(), { capture: true });
-scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-const lamp = new THREE.DirectionalLight(COLORS.sodium, 3);
-lamp.position.set(-4, 10, 5);
+scene.add(new THREE.AmbientLight(LIGHT.ambient.color, LIGHT.ambient.intensity));
+const lamp = new THREE.DirectionalLight(LIGHT.key.color, LIGHT.key.intensity);
+lamp.position.set(...LIGHT.key.position);
 scene.add(lamp);
 
 const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, 32);
