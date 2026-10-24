@@ -353,3 +353,66 @@ test('Play online is disabled with a notice while offline and works again back o
   await button.click();
   await expect(page.locator('#hud')).toContainText('You are Black');
 });
+
+// Issue #187: online games end by anti-stalling exactly like hot-seat (rules.md sections 9 and 10.2).
+// The move list of the rematch test above, one marble each there and back twice, is played first in
+// hot-seat on one page, then online between two pages: after every ply both online pages show the
+// turn and score lines the hot-seat page showed, the draw by threefold repetition at ply 8 included.
+// The no-ejection cap needs 100 plies: src/antistalling.test.ts checks it on two real sessions.
+test('threefold repetition ends an online game as a draw on both pages, as in hot-seat, #187', async ({ browser }) => {
+  // Eight plies on one page, then eight on two WebGL pages: as long as the rematch test.
+  test.setTimeout(240_000);
+  const plays: [number, number, number, number][] = [
+    [0, 2, 0, 1],
+    [0, -2, 0, -1],
+    [0, 1, 0, 2],
+    [0, -1, 0, -2],
+  ];
+  const shown = (page: Page) => Promise.all(['.turn', '.score'].map((c) => page.locator(`#hud ${c}`).textContent()));
+
+  const hot = await (await browser.newContext()).newPage();
+  await hot.goto('./?bot=off');
+  await hot.locator('canvas').waitFor();
+  await expect(hot.locator('#hud')).toContainText('Black to move');
+  const hotSeat: (string | null)[][] = [];
+  for (let ply = 0; ply < 8; ply++) {
+    const [fq, fr, tq, tr] = plays[ply % 4]!;
+    await cell(hot, fq, fr);
+    await cell(hot, tq, tr);
+    await expect.poll(() => plies(hot)).toBe(ply + 1);
+    hotSeat.push(await shown(hot));
+  }
+  expect(hotSeat[3]).toEqual(['Black to move', 'Black ejected 0/6 · White ejected 0/6']); // the start position twice: the game goes on
+  expect(hotSeat[7]).toEqual(['Draw', 'Draw by threefold repetition · Black ejected 0/6 · White ejected 0/6']);
+  await hot.context().close();
+
+  const a = await (await browser.newContext()).newPage();
+  const b = await (await browser.newContext()).newPage();
+  await room({ a, b });
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await a.locator('#play-online').click();
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  await b.goto(`./?net=hook${hash}`);
+  await b.locator('canvas').waitFor();
+  await open(a);
+  await open(b);
+  await seat(b, 'player');
+  await expect(status(a)).toHaveText('You are Black. White is here.');
+  for (let ply = 0; ply < 8; ply++) {
+    const [fq, fr, tq, tr] = plays[ply % 4]!;
+    const [mover, other] = ply % 2 === 0 ? [a, b] : [b, a];
+    await cell(mover, fq, fr);
+    await cell(mover, tq, tr);
+    await expect.poll(() => plies(other)).toBe(ply + 1); // the other page replayed it
+    for (const page of [a, b]) {
+      await expect(page.locator('#hud .turn')).toHaveText(hotSeat[ply]![0]!);
+      await expect(page.locator('#hud .score')).toHaveText(hotSeat[ply]![1]!);
+    }
+  }
+  await expect(a.locator('#hud')).not.toContainText('refused');
+  await expect(b.locator('#hud')).not.toContainText('refused');
+  await a.context().close();
+  await b.context().close();
+});
