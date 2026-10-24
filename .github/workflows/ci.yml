@@ -13,7 +13,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A skipped draft run must not cancel a real run (bug #179): only real runs cancel older ones.
+  cancel-in-progress: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
 
 jobs:
   rust:
