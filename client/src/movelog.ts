@@ -18,6 +18,11 @@ export class MoveLog {
     return this.records.length;
   }
 
+  /** The records so far, oldest first, as a copy: the signed log of the game. */
+  list(): MoveRecord[] {
+    return [...this.records];
+  }
+
   /** Signs our next move and appends it. */
   async sign(keys: Keys, move: number[]): Promise<MoveRecord> {
     const rec = await signMove(keys, { game: this.game, seq: this.length, prev: this.head, move });

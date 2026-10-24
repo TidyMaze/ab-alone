@@ -15,6 +15,7 @@ import {
 import { askBot, BOT_NODES } from './bot';
 import { bossHtml } from './bosshud';
 import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
+import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { ghostMarbles } from './ghost';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
@@ -24,6 +25,7 @@ import { countAttempt, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } fro
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
+import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { OnlineSession } from './session';
 import { onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
@@ -40,6 +42,10 @@ import './ui.css';
 const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
 const MARBLE_COLORS: Record<number, number> = { 1: 0x15191c, 2: 0xd8d4c8 };
 const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
+declare const __BUILD__: string; // the commit, set by vite.config.ts
+
+// Net state changes, refused moves, desyncs and bot search times, kept in memory for Copy diagnostics (#220).
+const diag = new Diagnostics(() => performance.now(), console);
 
 // Offline app (#193): the production build registers the service worker that scripts/offline-app.mjs writes (at the
 // end of this file), the dev server none. A new build that takes over this page leaves it the files of its own build
@@ -126,6 +132,7 @@ const tier = readTier(store, {
   memory: (navigator as { deviceMemory?: number }).deviceMemory,
   reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
 });
+diag.log.log('info', 'start', { backend, tier });
 let clear = readClearBoard(store);
 const clearButton = document.getElementById('clear-board')!;
 function applyLook(): void {
@@ -262,7 +269,9 @@ async function botTurn(): Promise<void> {
   if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
   thinking = true;
   const current = fight;
+  const started = performance.now();
   const move = await askBot(worker, history, BOT_NODES, fight ?? undefined);
+  diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: BOT_NODES });
   if (fight !== current) return; // Retry or a new fight started while the boss was thinking
   thinking = false;
   playMove(move);
@@ -690,7 +699,13 @@ async function goOnline(room: string, side: number): Promise<void> {
   engine = new Engine();
   history.length = 0;
   selected = [];
-  const net = new URLSearchParams(location.search).get('net') === 'hook' ? hookTransport() : p2pTransport(room);
+  diag.connecting();
+  const net =
+    new URLSearchParams(location.search).get('net') === 'hook'
+      ? hookTransport()
+      : p2pTransport(room, (message) => diag.joinError(message));
+  // The creator waits for an opponent as long as it takes, a joiner should find the creator's room at once.
+  if (side !== 1) setTimeout(() => diag.timeout(), SIGNALING_TIMEOUT_MS);
   let netState = '';
   // An extra peer is a spectator: it follows the game and never sends (the spectator view is #34).
   // The status line shows our color and whether the key bound to the other seat is connected (#121).
@@ -725,8 +740,12 @@ async function goOnline(room: string, side: number): Promise<void> {
       },
     },
     onMove: () => refresh(),
-    onRefuse: (reason) => hud(` · refused move: ${reason}`),
+    onRefuse: (reason) => {
+      diag.refused(reason);
+      hud(` · refused move: ${reason}`);
+    },
     onState: (s) => {
+      diag.netState(s);
       netState = ` · ${s}`;
       note();
     },
@@ -763,6 +782,34 @@ playReady = true; // engine and listener ready (#127)
 syncConnectivity();
 const invited = roomFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
+
+// Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
+// text box to copy by hand when the browser refuses (#220). Nothing is sent anywhere.
+const copyButton = document.getElementById('copy-diagnostics') as HTMLButtonElement;
+const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
+copyButton.addEventListener('click', async () => {
+  const text = diag.text({
+    build: __BUILD__,
+    exported: new Date().toISOString(),
+    environment: { mode: import.meta.env.MODE, backend, tier, userAgent: navigator.userAgent },
+    game: gameInfo({
+      bot: worker !== null,
+      fight,
+      online: online && { game: online.game, side: online.side, role: online.role, signed: online.signedLog },
+      toMove: engine.to_move(),
+      status: engine.status(),
+      moves: history,
+    }),
+  });
+  const copied = await copyText(text, navigator.clipboard);
+  diagnosticsBox.hidden = copied;
+  if (copied) return hud(' · diagnostics copied');
+  diagnosticsBox.value = text;
+  diagnosticsBox.focus();
+  diagnosticsBox.select();
+  hud(' · diagnostics selected: copy them by hand');
+});
+copyButton.disabled = false; // listener ready (#146)
 
 // Offline app (#193): registered at the end of the start, then checked for a new build at each load
 // (Chrome does not check by itself on a reload), so the refresh after a deploy installs it. Blocked (the e2e runs),

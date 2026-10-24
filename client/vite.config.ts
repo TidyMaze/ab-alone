@@ -1,3 +1,4 @@
+import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 // @ts-expect-error plain Node script, no type declarations (the client has no Node types)
 import { offlineApp } from './scripts/offline-app.mjs';
@@ -6,6 +7,8 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   // The production build is served by GitHub Pages under /ab-alone/, and so is its preview (the offline e2e test).
   // Dev and e2e stay at /.
   base: command === 'build' || isPreview ? '/ab-alone/' : '/',
+  // The commit the page was built from, for the Copy diagnostics export (#220). GitHub Actions sets GITHUB_SHA.
+  define: { __BUILD__: JSON.stringify((loadEnv(mode, '.', '').GITHUB_SHA ?? 'dev').slice(0, 12)) },
   resolve: {
     alias: {
       'abalone-wasm': new URL('../crates/abalone-wasm/pkg/abalone_wasm.js', import.meta.url).pathname,
@@ -34,7 +37,8 @@ export default defineConfig(({ command, mode, isPreview }) => ({
       include: ['src/board.ts', 'src/bot.ts', 'src/ghost.ts', 'src/score.ts', 'src/hud.ts', 'src/quality.ts', 'src/eject.ts',
         'src/moverecord.ts', 'src/movelog.ts', 'src/transport.ts', 'src/invite.ts', 'src/session.ts', 'src/camera.ts', 'src/seats.ts', 'src/bosshud.ts',
         'src/presence.ts', 'src/hull.ts', 'src/chaplain.ts', 'src/choir.ts', 'src/rematch.ts', 'scripts/nightly-report.mjs', 'src/connectivity.ts',
-        'src/sound.ts', 'src/daily.ts', 'src/savegame.ts', 'src/offline.ts'],
+        'src/sound.ts', 'src/daily.ts', 'src/savegame.ts', 'src/offline.ts',
+        'src/logger.ts', 'src/netcounters.ts', 'src/diagnostics.ts'],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },

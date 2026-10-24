@@ -113,6 +113,11 @@ export class OnlineSession {
     return this.now.id;
   }
 
+  /** The signed log of the game being played, both sides, oldest first: public keys and signatures only. */
+  get signedLog(): MoveRecord[] {
+    return this.now.log.list();
+  }
+
   /** The colour we play in this game, 1 Black or 2 White. */
   get side(): number {
     return colourOf(this.o.side, this.games.length - 1, this.seats.count);

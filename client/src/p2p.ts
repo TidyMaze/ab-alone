@@ -7,9 +7,12 @@ import type { ConnectionState, Transport } from './transport';
 
 const APP_ID = 'ab-alone';
 
-/** Serverless P2P: Trystero finds the peer through public Nostr relays, moves go over WebRTC. */
-export function p2pTransport(room: string): Transport {
-  const r = joinRoom({ appId: APP_ID }, room);
+/**
+ * Serverless P2P: Trystero finds the peer through public Nostr relays, moves go over WebRTC.
+ * `onJoinError` gets Trystero's join errors, an ICE failure among them, for the diagnostics (#220).
+ */
+export function p2pTransport(room: string, onJoinError?: (message: string) => void): Transport {
+  const r = joinRoom({ appId: APP_ID }, room, { onJoinError: (e) => onJoinError?.(e.error) });
   const move = r.makeAction('move');
   let state: ConnectionState = 'connecting';
   let onState: (s: ConnectionState) => void = () => {};
