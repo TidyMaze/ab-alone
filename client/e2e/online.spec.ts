@@ -27,7 +27,13 @@ const room = async (pages: Record<string, Page>) => {
 };
 // What Trystero's onPeerLeave does on `page` when the peer `name` closed its page or lost its connection.
 const leave = (page: Page, name: string) => page.evaluate((n) => (window as any).__netLeave(n), name);
-const open = (page: Page) => page.evaluate(() => (window as any).__netOpen());
+// The hook transport only exists once main.ts reaches goOnline, after the textures and the saved game
+// loaded: the canvas shows well before (bug #238). data-seat is set once the session is wired to it,
+// and like the canvas it is waited for as long as the test runs, a page load on a loaded machine.
+const open = async (page: Page) => {
+  await page.locator('body[data-seat]').waitFor({ state: 'attached' });
+  await page.evaluate(() => (window as any).__netOpen());
+};
 const status = (page: Page) => page.locator('#hud .presence');
 
 // Tests with two or three WebGL pages call test.slow() (90 s instead of 30 s): on the CI runners, against
