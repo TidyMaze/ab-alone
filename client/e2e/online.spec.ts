@@ -216,3 +216,47 @@ test('online status: creator waits with the invite, joiner joins, both see each 
   await expect(status(a)).toHaveText('You are Black. White is disconnected.');
   await a.context().close();
 });
+
+// Issue #143: a move is sent only while the key bound to the opponent's seat is connected, not
+// while just any peer (here a spectator) is.
+test('a player cannot move while the opponent is gone, even with a spectator still there, #143', async ({ browser }) => {
+  test.slow();
+  const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
+  await room({ a, b, c });
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await a.locator('#play-online').click();
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  for (const page of [b, c]) {
+    await page.goto(`./?net=hook${hash}`);
+    await page.locator('canvas').waitFor();
+  }
+  for (const page of [a, b, c]) await open(page);
+  await seat(b, 'player');
+  await seat(c, 'spectator');
+  await expect(status(a)).toHaveText('You are Black. White is here.');
+
+  // White's connection drops, the spectator stays: Black's move must not be sent.
+  await leave(a, 'b');
+  await leave(c, 'b');
+  await leave(b, 'a');
+  await leave(b, 'c');
+  await expect(status(a)).toHaveText('You are Black. White is disconnected.');
+  await cell(a, 0, 2);
+  await cell(a, 0, 1);
+  await expect(a.locator('#hud')).toContainText('waiting for opponent');
+  for (const page of [a, b, c]) expect(await plies(page)).toBe(0);
+
+  // White comes back on the same key: the move goes through to everyone.
+  await open(b);
+  await open(a);
+  await expect(status(a)).toHaveText('You are Black. White is here.');
+  await cell(a, 0, 2);
+  await cell(a, 0, 1);
+  await expect.poll(() => plies(b)).toBe(1);
+  await expect.poll(() => plies(c)).toBe(1);
+  await a.context().close();
+  await b.context().close();
+  await c.context().close();
+});

@@ -165,15 +165,18 @@ describe('OnlineSession', () => {
     expect(white.states).toEqual(['closed']);
   });
 
-  it('can play only once the transport is open and it is our turn', async () => {
+  it('can play only once the transport is open, the opponent is here and it is our turn', async () => {
     let state: ConnectionState = 'connecting';
     let notify: (s: ConnectionState) => void = () => {};
+    let record: (m: Wire, peer: string) => void = () => {};
     const transport: Transport = {
       get state() {
         return state;
       },
       send: () => {},
-      onRecord: () => {},
+      onRecord: (cb) => {
+        record = cb;
+      },
       onState: (cb) => {
         notify = cb;
       },
@@ -184,6 +187,10 @@ describe('OnlineSession', () => {
     expect(black.session.canPlay()).toBe(false); // waiting for the opponent: a move would never arrive
     state = 'open';
     notify('open');
+    await settle();
+    expect(black.session.canPlay()).toBe(false); // open, but White never said Hello
+    record(await hello(await generateKeys(), 2), 'b');
+    await settle();
     expect(black.session.canPlay()).toBe(true);
     black.judge.play(Int32Array.from(M1));
     expect(black.session.canPlay()).toBe(false); // White to move
@@ -367,6 +374,22 @@ describe('OnlineSession', () => {
     r.leave('b'); // at once: the signature check above is still running
     await settle();
     expect(black.session.presenceOf(2)).toBe('gone');
+  });
+
+  it('can play only while the opponent seat is present: a spectator still connected is not enough, #143', async () => {
+    const r = room();
+    const black = await player(r.transport, 1);
+    const white = await generateKeys();
+    r.from('b', await hello(white, 2));
+    r.from('c', await hello(await generateKeys(), 2)); // a spectator: the seat is White's
+    await settle();
+    expect(black.session.canPlay()).toBe(true);
+    r.leave('b');
+    await settle();
+    expect(black.session.canPlay()).toBe(false); // the spectator is still connected, White is not
+    r.from('b', await hello(white, 2)); // White back on its key
+    await settle();
+    expect(black.session.canPlay()).toBe(true);
   });
 
   it('works without the optional callbacks', async () => {
