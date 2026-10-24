@@ -137,6 +137,28 @@ describe('OnlineSession', () => {
     expect(black.refused).toEqual([]);
   });
 
+  it('plays the exchange even when each signature check is slow, as on a loaded machine, bug #190', async () => {
+    const verify = crypto.subtle.verify.bind(crypto.subtle);
+    const slow = vi.spyOn(crypto.subtle, 'verify').mockImplementation(async (...args) => {
+      await new Promise((r) => setTimeout(r, 50)); // the tests must wait for the checks, not for a time
+      return verify(...args);
+    });
+    try {
+      const { black, white } = await seated();
+      black.judge.play(Int32Array.from(M1));
+      await black.session.send(M1);
+      await settle();
+      white.judge.play(Int32Array.from(M2));
+      await white.session.send(M2);
+      await settle();
+      expect(black.moves).toEqual([M2]);
+      expect(black.judge.played).toEqual([M1, M2]);
+      expect(slow).toHaveBeenCalled();
+    } finally {
+      slow.mockRestore();
+    }
+  });
+
   it('refuses a move the engine calls illegal and does not apply it', async () => {
     const [x, y] = localPair();
     const white = await player(y, 2);
