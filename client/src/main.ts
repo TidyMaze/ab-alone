@@ -25,6 +25,7 @@ import { hookTransport, p2pTransport } from './p2p';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { onlineStatus, type OnlineStatus } from './presence';
+import { rematchText } from './rematch';
 import { hudHtml } from './hud';
 import { fogSettings, readClearBoard, readTier, writeClearBoard } from './quality';
 import { formatScore } from './score';
@@ -300,7 +301,14 @@ function hud(extra = ''): void {
     win,
     note: `${backend}${onlineNote}${extra}`,
     online: onlineLine,
+    // Who asked for a rematch, for the seated players of a finished online game (#186).
+    rematch:
+      online?.role === 'player' && status !== 0
+        ? rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side))
+        : '',
   });
+  rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
+  rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   if (engine instanceof Encounter) {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
@@ -420,7 +428,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 
 function click(q: number, r: number): void {
   if (thinking || online?.role === 'spectator') return;
-  if (online && engine.to_move() !== onlineSide) return; // not our turn
+  if (online && engine.to_move() !== online.side) return; // not our turn
   if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
@@ -586,12 +594,14 @@ retryButton.addEventListener('click', () => startBoss(fight!.id, fight!.seed));
 // Online play: Black creates the room and shares the invite link, the link opener plays White.
 // The engine stays the only judge: every remote move is replayed through it, a bad one is refused.
 // ?net=hook swaps the Trystero transport for the page hook the e2e test wires (no public relays).
+// Once the game is over, Rematch starts a new game in the same room with the colours swapped (#186).
 let online: OnlineSession | null = null;
-let onlineSide = 0;
 let onlineNote = '';
 let onlineLine: OnlineStatus | undefined;
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
 const inviteLabel = document.getElementById('invite-label')!;
+const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
+rematchButton.addEventListener('click', () => void online?.rematch());
 async function goOnline(room: string, side: number): Promise<void> {
   fight = null;
   delete document.body.dataset.boss;
@@ -600,18 +610,18 @@ async function goOnline(room: string, side: number): Promise<void> {
   history.length = 0;
   selected = [];
   const net = new URLSearchParams(location.search).get('net') === 'hook' ? hookTransport() : p2pTransport(room);
-  onlineSide = side;
-  const sideName = side === 1 ? 'Black' : 'White';
   let netState = '';
   // An extra peer is a spectator: it follows the game and never sends (the spectator view is #34).
   // The status line shows our color and whether the key bound to the other seat is connected (#121).
+  // Our color is the session's: it swaps at each rematch.
   const note = (): void => {
     const role = online?.role ?? 'pending';
-    const opponent = online?.presenceOf(3 - side) ?? 'waiting';
-    document.body.dataset.online = role === 'spectator' ? 'Spectator' : sideName;
+    const mine = online?.side ?? side;
+    const opponent = online?.presenceOf(3 - mine) ?? 'waiting';
+    document.body.dataset.online = role === 'spectator' ? 'Spectator' : mine === 1 ? 'Black' : 'White';
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
-    onlineLine = onlineStatus(side, role, opponent);
+    onlineLine = onlineStatus(mine, role, opponent);
     onlineNote = netState;
     hud();
   };
@@ -627,6 +637,11 @@ async function goOnline(room: string, side: number): Promise<void> {
         engine.play(mv);
         afterPlay(before, Array.from(mv));
       },
+      status: () => engine.status(),
+      restart: () => {
+        engine = new Engine();
+        history.length = 0;
+      },
     },
     onMove: () => refresh(),
     onRefuse: (reason) => hud(` · refused move: ${reason}`),
@@ -636,6 +651,12 @@ async function goOnline(room: string, side: number): Promise<void> {
     },
     onRole: note,
     onPresence: note,
+    onRematchAsk: note,
+    onRematch: () => {
+      selected = [];
+      note();
+      refresh();
+    },
   });
   note();
   refresh();
