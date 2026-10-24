@@ -147,11 +147,11 @@ covers no cell either. It closes on Escape, on a press outside and on the cog ag
   the note says "result selected: copy it by hand". Both strings are kept verbatim for the e2e
   tests. The card shows only at the end of a daily fight, never in a plain boss fight (#196).
 - **Export game, Import game.** Two buttons at the end of the button column, under Daily
-  challenge, for local games only: hidden during online, boss and daily games (#219, file format
-  in tech.md section 8). Export game downloads the game, Import game opens the browser's file
-  picker. A refused file adds a short note to the HUD, kept verbatim for the e2e tests: "import
-  refused: not a game file", "import refused: unknown file version", "import refused: illegal
-  move in the file".
+  challenge and Hint (section 4.2), for local games only: hidden during online, boss and daily
+  games (#219, file format in tech.md section 8). Export game downloads the game, Import game opens
+  the browser's file picker. A refused file adds a short note to the HUD, kept verbatim for the e2e
+  tests: "import refused: not a game file", "import refused: unknown file version", "import
+  refused: illegal move in the file".
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 
@@ -190,8 +190,33 @@ never show it (fair play, #164): starting one hides it for good.
   the bot worker, so a bot reply never waits behind it, with a fixed node budget (`EVAL_NODES`, a
   quarter of the bot's), never a clock. One request is in flight at a time and only for the newest
   position: an answer for an older position is dropped, so a late answer never overwrites the bar
-  of a newer position.
+  of a newer position. The hint (section 4.2) uses the same worker: each reply goes to its request
+  by id, so an evaluation and a hint can be in flight together.
 - **Motion.** The bar jumps to its new share, it does not slide (section 6).
+
+### 4.2 Hint
+
+Local hot-seat and bot games have a Hint button: it shows the engine's best move for the side to
+move as a ghost on the board, and never plays it (#192). Online, boss and daily games never show it
+(fair play, #164): starting one hides it for good, like the evaluation bar.
+
+- **Place.** In the button column, under Daily challenge and above Export game and Import game,
+  the other tools of a local game, styled like the other buttons. Held upright it shares a row with
+  one of them, so it adds no row of buttons over the board. The phone layout e2e test checks it
+  like every control (#227).
+- **Press.** A press drops the selection and asks for the best move of the position on the board.
+  The move is drawn with the move preview ghost (#82): translucent marbles on the cells it would
+  fill. The board, the side to move and the score do not change. While the hint is asked or shown
+  the button is lit: `aria-pressed="true"`, accent border and text.
+- **Clear.** A second press, a new selection (a click on a marble of the side to move) or the next
+  move clears it. A hint belongs to the position it was asked for: after the next move, New game
+  or an import it is off, and an answer that arrives for an older position is never drawn.
+- **Disabled.** While the bot is thinking and once the game is over, the button is greyed.
+- **Source.** `Engine.best_move` with the bot's own node budget (`BOT_NODES`), never a clock: the
+  hint is the move the bot would play there. It runs in the evaluation bar's copy of the bot worker
+  (section 4.1), so the bot's own reply never waits behind it; the next evaluation of the bar may.
+  The hint state of a position lives in `client/src/hint.ts`.
+- The label "Hint" is kept verbatim for the e2e tests.
 
 ## 5. Board framing
 
