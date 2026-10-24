@@ -3,12 +3,13 @@
 //! adds phases, a tell and a rule hook on top. Everything is a pure function of the game and the
 //! seed, so the same seed and the same player moves give the same boss moves.
 
+pub mod ballast;
 pub mod chaplain;
 pub mod choir;
 pub mod echo;
 pub mod hull;
 
-use crate::board::{Board, Cell, RADIUS};
+use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::game::{Game, GameError, Outcome};
 use crate::moves::{Move, Player};
 use crate::search::{search, SearchResult};
@@ -51,8 +52,8 @@ pub struct Encounter {
 /// Marbles of `color` on `board`.
 pub fn marbles(board: &Board, color: Cell) -> u8 {
     let mut n = 0;
-    for q in -RADIUS..=RADIUS {
-        for r in -RADIUS..=RADIUS {
+    for q in -MAX_RADIUS..=MAX_RADIUS {
+        for r in -MAX_RADIUS..=MAX_RADIUS {
             n += u8::from(board.get(q, r) == Some(color));
         }
     }
@@ -165,8 +166,8 @@ impl Encounter {
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
         let (mut lost_black, mut lost_white) = (0, 0);
-        for q in -RADIUS..=RADIUS {
-            for r in -RADIUS..=RADIUS {
+        for q in -MAX_RADIUS..=MAX_RADIUS {
+            for r in -MAX_RADIUS..=MAX_RADIUS {
                 match (before.get(q, r), after.get(q, r)) {
                     (Some(Cell::Black), Some(Cell::Empty) | None) => lost_black += 1,
                     (Some(Cell::White), Some(Cell::Empty) | None) => lost_white += 1,
@@ -206,8 +207,8 @@ mod tests {
 
     fn cells_of(board: &Board, color: Cell) -> Vec<P> {
         let mut out = Vec::new();
-        for q in -RADIUS..=RADIUS {
-            for r in -RADIUS..=RADIUS {
+        for q in -MAX_RADIUS..=MAX_RADIUS {
+            for r in -MAX_RADIUS..=MAX_RADIUS {
                 if board.get(q, r) == Some(color) {
                     out.push((q, r));
                 }

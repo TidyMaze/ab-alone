@@ -2,7 +2,7 @@
 //! plies later, and a marble on a vanished cell is removed, either side. The crack timers live on
 //! the board (`Board::cracks`), so the tell is `board.cracks()`: the cells that vanish soon.
 
-use crate::board::{Board, RADIUS};
+use crate::board::{Board, MAX_RADIUS};
 use crate::encounter::BossDef;
 
 /// Plies between a crack appearing and the cell vanishing.
@@ -32,8 +32,8 @@ fn special(ply: u32, phase: usize) -> Option<u8> {
 /// On-board cells with a missing neighbour (off the board or vanished), not already cracked.
 fn rim(board: &Board, cracked: &[((i32, i32), u8)]) -> Vec<(i32, i32)> {
     let mut out = Vec::new();
-    for q in -RADIUS..=RADIUS {
-        for r in -RADIUS..=RADIUS {
+    for q in -MAX_RADIUS..=MAX_RADIUS {
+        for r in -MAX_RADIUS..=MAX_RADIUS {
             let open = NEIGHBOURS
                 .iter()
                 .any(|&(dq, dr)| board.get(q + dq, r + dr).is_none());
@@ -95,7 +95,7 @@ pub fn hull_boss() -> BossDef {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::{Board, Cell, RADIUS};
+    use crate::board::{Board, Cell, MAX_RADIUS};
     use crate::encounter::{marbles, Encounter};
     use crate::game::Game;
     use crate::moves::Direction::{E, NE, NW, SE, SW, W};
@@ -114,9 +114,9 @@ mod tests {
 
     fn cells_at(radius_wanted: i32) -> Vec<P> {
         let mut out = Vec::new();
-        for q in -RADIUS..=RADIUS {
-            for r in -RADIUS..=RADIUS {
-                if radius((q, r)) == radius_wanted && radius((q, r)) <= RADIUS {
+        for q in -MAX_RADIUS..=MAX_RADIUS {
+            for r in -MAX_RADIUS..=MAX_RADIUS {
+                if radius((q, r)) == radius_wanted && radius((q, r)) <= MAX_RADIUS {
                     out.push((q, r));
                 }
             }
@@ -360,8 +360,8 @@ mod tests {
     #[test]
     fn hook_cracks_nothing_when_no_cell_is_left() {
         let mut board = Board::empty();
-        for q in -RADIUS..=RADIUS {
-            for r in -RADIUS..=RADIUS {
+        for q in -MAX_RADIUS..=MAX_RADIUS {
+            for r in -MAX_RADIUS..=MAX_RADIUS {
                 board.void(q, r);
             }
         }

@@ -4,7 +4,7 @@
 //! marble count and credit no ejection. P2 counts void cells as boss neighbours, P3 chains one
 //! more wave of flips and pays for each flip with a boss marble lost to the void.
 
-use crate::board::{Board, Cell, RADIUS};
+use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
 
@@ -46,8 +46,8 @@ fn marked(
     void_counts: bool,
 ) -> Vec<P> {
     let mut out = Vec::new();
-    for q in -RADIUS..=RADIUS {
-        for r in -RADIUS..=RADIUS {
+    for q in -MAX_RADIUS..=MAX_RADIUS {
+        for r in -MAX_RADIUS..=MAX_RADIUS {
             if board.get(q, r) != Some(victim) {
                 continue;
             }
@@ -156,7 +156,7 @@ pub fn chaplain_boss() -> BossDef {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::{Board, Cell, RADIUS};
+    use crate::board::{Board, Cell, MAX_RADIUS};
     use crate::encounter::{marbles, Encounter};
     use crate::game::Game;
     use crate::moves::Direction::{E, W};
@@ -238,8 +238,8 @@ mod tests {
 
     fn cells_of(board: &Board, color: Cell) -> Vec<P> {
         let mut out = Vec::new();
-        for q in -RADIUS..=RADIUS {
-            for r in -RADIUS..=RADIUS {
+        for q in -MAX_RADIUS..=MAX_RADIUS {
+            for r in -MAX_RADIUS..=MAX_RADIUS {
                 if board.get(q, r) == Some(color) {
                     out.push((q, r));
                 }

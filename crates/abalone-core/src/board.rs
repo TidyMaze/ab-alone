@@ -2,8 +2,13 @@
 
 use std::collections::HashMap;
 
-/// Board radius. A cell `(q, r)` is on the board when `|q|`, `|r|` and `|q + r|` are all `<= RADIUS`.
+/// Radius of the standard board: 61 cells. A cell `(q, r)` is on a board of radius `n` when
+/// `|q|`, `|r|` and `|q + r|` are all `<= n`.
 pub const RADIUS: i32 = 4;
+
+/// Largest board radius the engine supports (The Ballast Mind plays on radius 5). Every scan over
+/// the board runs `-MAX_RADIUS..=MAX_RADIUS` and relies on `get` giving `None` off the board.
+pub const MAX_RADIUS: i32 = 5;
 
 /// Content of one cell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,10 +50,15 @@ pub struct Board {
 impl Board {
     /// Board with all 61 cells empty.
     pub fn empty() -> Self {
+        Self::with_radius(RADIUS)
+    }
+
+    /// Board of the given radius (at most [`MAX_RADIUS`]) with every cell empty.
+    pub fn with_radius(radius: i32) -> Self {
         let mut cells = HashMap::new();
-        for q in -RADIUS..=RADIUS {
-            for r in -RADIUS..=RADIUS {
-                if (q + r).abs() <= RADIUS {
+        for q in -radius..=radius {
+            for r in -radius..=radius {
+                if (q + r).abs() <= radius {
                     cells.insert((q, r), Cell::Empty);
                 }
             }
@@ -117,7 +127,7 @@ mod tests {
     use super::*;
 
     fn all_coords() -> impl Iterator<Item = (i32, i32)> {
-        (-RADIUS..=RADIUS).flat_map(|q| (-RADIUS..=RADIUS).map(move |r| (q, r)))
+        (-MAX_RADIUS..=MAX_RADIUS).flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
     }
 
     fn count(board: &Board, cell: Cell) -> usize {
@@ -141,6 +151,20 @@ mod tests {
             .filter(|&(q, r)| board.get(q, r).is_some())
             .count();
         assert_eq!(on_board, 61);
+    }
+
+    #[test]
+    fn with_radius_sizes_the_board() {
+        for (radius, cells) in [(0, 1), (4, 61), (5, 91)] {
+            let board = Board::with_radius(radius);
+            let on_board = all_coords()
+                .filter(|&(q, r)| board.get(q, r).is_some())
+                .count();
+            assert_eq!(on_board, cells, "radius {radius}");
+        }
+        assert_eq!(Board::with_radius(RADIUS), Board::empty());
+        assert_eq!(Board::with_radius(5).get(5, -5), Some(Cell::Empty));
+        assert_eq!(Board::with_radius(5).get(6, 0), None);
     }
 
     #[test]

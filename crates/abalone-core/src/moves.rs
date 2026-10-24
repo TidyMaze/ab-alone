@@ -1,6 +1,6 @@
 //! Move generation and validation: inline, broadside and sumito (docs/specs/rules.md sections 3 to 5).
 
-use crate::board::{Board, Cell, RADIUS};
+use crate::board::{Board, Cell, MAX_RADIUS};
 
 /// The six hex directions, as axial vectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,8 +83,8 @@ fn at(board: &Board, (q, r): (i32, i32)) -> Option<Cell> {
 pub fn legal_moves(board: &Board, player: Player) -> Vec<Move> {
     let (own, _) = player.cells();
     let mut moves = Vec::new();
-    for q in -RADIUS..=RADIUS {
-        for r in -RADIUS..=RADIUS {
+    for q in -MAX_RADIUS..=MAX_RADIUS {
+        for r in -MAX_RADIUS..=MAX_RADIUS {
             if board.get(q, r) != Some(own) {
                 continue;
             }
@@ -192,7 +192,7 @@ pub fn apply(board: &Board, player: Player, mv: &Move) -> Result<(Board, bool), 
 mod tests {
     use super::Direction::*;
     use super::*;
-    use crate::board::{Cell, RADIUS};
+    use crate::board::{Cell, MAX_RADIUS};
 
     type P = (i32, i32);
 
@@ -216,8 +216,8 @@ mod tests {
 
     fn cells_of(b: &Board, cell: Cell) -> Vec<P> {
         let mut v = Vec::new();
-        for q in -RADIUS..=RADIUS {
-            for r in -RADIUS..=RADIUS {
+        for q in -MAX_RADIUS..=MAX_RADIUS {
+            for r in -MAX_RADIUS..=MAX_RADIUS {
                 if b.get(q, r) == Some(cell) {
                     v.push((q, r));
                 }
