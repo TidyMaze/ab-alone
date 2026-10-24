@@ -3,11 +3,12 @@
 use std::cmp::Reverse;
 
 use crate::board::{Board, Cell, MAX_RADIUS};
-use crate::game::Game;
+use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
 
-/// Score of a won game, minus the ply it is won at, so a quicker win scores higher.
-const WIN: i32 = 1_000_000;
+/// Score of a won game, minus the ply it is won at, so a quicker win scores higher. A lost game
+/// scores the opposite: any score beyond `WIN / 2` either way is a decided game.
+pub const WIN: i32 = 1_000_000;
 const INF: i32 = 2 * WIN;
 /// Iterative deepening stops here even with budget left (tiny positions).
 const MAX_DEPTH: u32 = 12;
@@ -37,6 +38,10 @@ pub struct SearchResult {
     pub depth: u32,
     /// Positions visited, never above the budget.
     pub nodes: u32,
+    /// Score of `mv` for the side to move, in centi-marbles, from the deepest iteration that
+    /// finished: `WIN` minus the plies to a forced win, the opposite for a forced loss. The static
+    /// score of the position after `mv` when no iteration finished.
+    pub score: i32,
 }
 
 /// A position inside the search: only what `legal_moves` and `apply` need, plus the score.
@@ -188,8 +193,8 @@ impl Searcher {
         Some(best)
     }
 
-    /// Index of the best child at `depth`, `None` when the budget ran out inside.
-    fn root(&mut self, kids: &[Child], depth: u32) -> Option<usize> {
+    /// Index and score of the best child at `depth`, `None` when the budget ran out inside.
+    fn root(&mut self, kids: &[Child], depth: u32) -> Option<(usize, i32)> {
         if !self.visit() {
             return None;
         }
@@ -200,7 +205,7 @@ impl Searcher {
                 (best, alpha) = (i, score);
             }
         }
-        Some(best)
+        Some((best, alpha))
     }
 }
 
@@ -241,20 +246,40 @@ pub fn search_with(
             game.win_ejections(Player::White),
         ],
     };
-    let mut depth = 0;
+    let (mut depth, mut score) = (0, kids[0].score);
     for d in 1..=MAX_DEPTH {
-        let Some(best) = searcher.root(&kids, d) else {
+        let Some((best, value)) = searcher.root(&kids, d) else {
             break;
         };
         // Search the previous best first next time: the strongest ordering there is.
         kids[..=best].rotate_right(1);
-        depth = d;
+        (depth, score) = (d, value);
     }
     Some(SearchResult {
         mv: kids.swap_remove(0).mv,
         depth,
         nodes: searcher.nodes,
+        score,
     })
+}
+
+/// Score of the position for the side to move, visiting at most `node_budget` positions (the
+/// evaluation bar, #191). A finished game scores `WIN` for the winner, `-WIN` for the loser and `0`
+/// for a draw. A side with no legal move gets its static score.
+pub fn position_score(game: &Game, node_budget: u32) -> i32 {
+    let to_move = game.to_move();
+    match game.outcome() {
+        Some(Outcome::Win(winner)) if winner == to_move => WIN,
+        Some(Outcome::Win(_)) => -WIN,
+        Some(Outcome::Draw) => 0,
+        None => search(game, node_budget).map_or_else(
+            || {
+                let ejected = [game.ejected(Player::Black), game.ejected(Player::White)];
+                evaluate(game.board(), to_move, ejected, &DEFAULT_WEIGHTS)
+            },
+            |r| r.score,
+        ),
+    }
 }
 
 /// Same as [`search`], the move only.
@@ -266,7 +291,7 @@ pub fn best_move(game: &Game, node_budget: u32) -> Option<Move> {
 mod tests {
     use super::*;
     use crate::board::{Board, Cell};
-    use crate::game::{Outcome, WIN_EJECTIONS};
+    use crate::game::WIN_EJECTIONS;
     use crate::moves::{apply, legal_moves, Direction, Player};
 
     type P = (i32, i32);
