@@ -152,18 +152,19 @@ test('a file that is not a game, of an unknown version or with an illegal move i
   await expect.poll(() => savedPlies(page)).toBe(1);
   const before = await snapshot(page);
 
-  // Each refusal says something else than the one before, so every message is the new file's.
+  // Each refusal says something else than the one before, so every message is the new file's. The other
+  // causes of "not a game file" are unit tests (gamefile.test.ts).
   for (const [text, message] of [
     ['not a game', 'import refused: not a game file'],
     [JSON.stringify(save(false, [A], 2)), 'import refused: unknown file version'],
-    [JSON.stringify({ ...save(false, [A]), mode: 'online' }), 'import refused: not a game file'],
     [JSON.stringify(save(false, [A, A])), 'import refused: illegal move in the file'], // Black twice
   ]) {
     await importText(page, text);
     await expect(hud).toContainText(message);
-    expect(await snapshot(page)).toEqual(before);
+    expect(await history(page)).toEqual([A]);
     expect(await savedPlies(page)).toBe(1);
   }
+  expect(await snapshot(page)).toEqual(before);
 
   // The game goes on as it was.
   await move(page, [0, -2], [0, -1]); // White
