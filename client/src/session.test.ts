@@ -26,14 +26,16 @@ const WIN = [7, 0, 0, 0, 0, 0, 0, 0]; // the FakeJudge ends the game: the mover 
 // any move once the game is over.
 class FakeJudge implements Judge {
   played: number[][] = [];
+  caughtUp: number[][] = []; // the moves played from a catch-up answer, not live (#232)
   winner = 0;
   to_move(): number {
     return (this.played.length % 2) + 1;
   }
-  play(mv: Int32Array): void {
+  play(mv: Int32Array, live = true): void {
     if (mv[0] === 9 || this.winner !== 0) throw new Error('IllegalMove');
     if (mv[0] === 7) this.winner = this.to_move();
     this.played.push(Array.from(mv));
+    if (!live) this.caughtUp.push(Array.from(mv));
   }
   status(): number {
     return this.winner;
@@ -1034,6 +1036,27 @@ describe('OnlineSession catch-up of what a peer missed, #226', () => {
     m.back('c');
     await settle();
     expect(watcher.judge.played).toEqual([M1, M2, M3, M2]);
+    expect(watcher.refused).toEqual([]);
+  });
+
+  it('tells the judge which moves came from an answer, not live, so their effects can be skipped, #232', async () => {
+    // A player back after a drop: the moves it got live are live, the one an answer brought is not.
+    const { m, black, white } = await playing(M1, M2);
+    m.drop('b');
+    await play(black, M3);
+    m.back('b');
+    await settle();
+    expect(white.judge.played).toEqual([M1, M2, M3]);
+    expect(white.judge.caughtUp).toEqual([M3]);
+
+    // A spectator joining late: every move so far comes from the answers, the next one is live.
+    const watcher = await player(m.end('c'), 2);
+    await settle();
+    expect(watcher.judge.caughtUp).toEqual([M1, M2, M3]);
+    await play(white, M2);
+    expect(watcher.judge.played).toEqual([M1, M2, M3, M2]);
+    expect(watcher.judge.caughtUp).toEqual([M1, M2, M3]);
+    expect(black.judge.caughtUp).toEqual([]);
     expect(watcher.refused).toEqual([]);
   });
 
