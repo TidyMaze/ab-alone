@@ -1,4 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { BLACK_WINS } from './end-games';
 import { loseByRepetition, startDaily } from './fight-end';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
@@ -126,6 +127,22 @@ for (const { name, viewport, mobile } of sizes) {
       // Turning the device around keeps the layout right.
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'turned around');
+    });
+
+    test('the end banner covers neither a cell nor a button, #282', async ({ page }, testInfo) => {
+      test.slow(); // a 71 ply game replayed, then two checks
+      await page.goto('./?net=hook');
+      await page.locator('canvas').waitFor();
+      await page.locator('#import-file').setInputFiles({
+        name: 'game.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: true, moves: BLACK_WINS })),
+      });
+      await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
+      await expect(page.locator('#hud .end')).toContainText('The books balance');
+      await check(page, testInfo, 'with the end banner');
+      await page.setViewportSize({ width: viewport.height, height: viewport.width });
+      await check(page, testInfo, 'with the end banner turned around');
     });
 
     test('the daily result card covers neither the HUD nor the board, #196', async ({ page }, testInfo) => {

@@ -25,6 +25,7 @@ import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
+import { endBanner } from './endbanner';
 import { generateKeys } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { OnlineSession } from './session';
@@ -458,7 +459,18 @@ function hud(extra = ''): void {
   const status = engine.status();
   const ejected = [engine.ejected(1), engine.ejected(2)] as const;
   const win = [engine.win_ejections(1), engine.win_ejections(2)] as const;
+  // End banner (#282): body[data-over] carries the animation id for the CSS and the e2e tests.
+  const end = endBanner({
+    status,
+    reason: engine.draw_reason(),
+    win: status === 1 || status === 2 ? win[status - 1]! : 0,
+    mode: online ? 'online' : fight ? 'boss' : worker ? 'bot' : 'local',
+    side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
+  });
+  if (end) document.body.dataset.over = end.anim;
+  else delete document.body.dataset.over;
   document.getElementById('hud')!.innerHTML = hudHtml({
+    end: end ?? undefined,
     side: engine.to_move(),
     status,
     score: formatScore(ejected, win, status, engine.draw_reason()),
@@ -482,7 +494,7 @@ function hud(extra = ''): void {
         name: engine.name(),
         phase: engine.phase(),
         phases: engine.phases(),
-        result: engine.result(),
+        result: end ? 0 : engine.result(), // the end banner already says Victory or Defeat, one line less in the plate
         tell: [
           crackText(parseCracks(engine.cracks())),
           chaplainText(exposed, engine.converted().length / 2),
@@ -600,6 +612,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 }
 
 function click(q: number, r: number): void {
+  if (engine.status() !== 0) return; // over: no move, no selection (#282)
   if (thinking || online?.role === 'spectator') return;
   if (slide) return whenSettled(() => click(q, r)); // the next move waits for the slide
   if (online && engine.to_move() !== online.side) return; // not our turn

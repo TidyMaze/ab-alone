@@ -39,7 +39,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
         'src/presence.ts', 'src/hull.ts', 'src/chaplain.ts', 'src/choir.ts', 'src/rematch.ts', 'scripts/nightly-report.mjs', 'src/connectivity.ts',
         'src/sound.ts', 'src/daily.ts', 'src/savegame.ts', 'src/offline.ts',
         'src/logger.ts', 'src/netcounters.ts', 'src/diagnostics.ts', 'src/newgame.ts',
-        'src/evalbar.ts', 'src/gamefile.ts', 'src/settings.ts', 'src/slide.ts'],
+        'src/evalbar.ts', 'src/endbanner.ts', 'src/gamefile.ts', 'src/settings.ts', 'src/slide.ts'],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },
