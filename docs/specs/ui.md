@@ -121,14 +121,19 @@ Local hot-seat and bot games show who is ahead, from our own engine (#191). Onli
 never show it (fair play, #164): starting one hides it for good.
 
 ```
-+---------------------------------------------+
-| [#########|.........]   Black +0.4          |   bottom centre, 16 px from the edge
-+---------------------------------------------+
++------------------------+        +---------------------------------------------+
+| [#########|.........]  |        | [#########|.........]   Black +0.4          |
+| Black +0.4             |        +---------------------------------------------+
++------------------------+         held upright: bottom centre, one row
+ wider than tall: bottom-left
 ```
 
-- **Place.** A second plate, bottom centre, 16 px from the bottom edge, as wide as the HUD at most
-  (22rem, the window width minus 32 px on a phone), one row high so it stays clear of the board.
-  It is not part of `#hud`, so it never re-announces the turn plate.
+- **Place.** A second plate, 16 px from the bottom edge, and it covers no cell (the phone layout
+  e2e test checks it like a control, #227). Wider than tall, it keeps to the band left of the board,
+  bottom-left, as wide as the button column's band on the right (`50vw - 45vh - 1.5rem`, 8rem to
+  22rem), with the words under the bar. Held upright, it sits bottom centre under the board, one
+  row high, the window width minus 32 px at most 22rem, with the words beside the bar. It is not
+  part of `#hud`, so it never re-announces the turn plate.
 - **Bar.** Black's share on the left in the dark shell colour, White's on the right in the pale
   glass colour, the marble colours in both themes like the marbles (11.9:1 against each other),
   with an accent mark at the even middle. A lead of 4 ejections and their bonus (600 centi-marbles)
