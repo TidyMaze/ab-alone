@@ -188,7 +188,7 @@ test('an imported game replaces a game against the bot in progress, and the bot 
   await importText(page, JSON.stringify(save(false, [A, B, C])));
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(4);
   expect((await history(page)).slice(0, 3)).toEqual([A, B, C]);
-  await expect(page.locator('#hud')).toContainText('Black to move');
+  await expect(page.locator('#hud')).toContainText('White to move');
   await expect.poll(() => savedPlies(page)).toBe(4);
 
   const file = await exportGame(page, testInfo.outputDir);

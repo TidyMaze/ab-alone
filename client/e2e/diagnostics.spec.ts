@@ -19,7 +19,7 @@ test('Copy diagnostics puts the move, the bot search and the build in the clipbo
   await context.grantPermissions(PERMISSIONS);
   await page.goto('./');
   await page.locator('canvas').waitFor();
-  await expect(page.locator('#hud')).toContainText('Black to move');
+  await expect(page.locator('#hud')).toContainText('White to move');
   await cell(page, 0, 2);
   await cell(page, 0, 1);
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2); // the bot answered

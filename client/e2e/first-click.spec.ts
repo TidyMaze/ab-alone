@@ -8,7 +8,7 @@ test('a click before the first frame is played', async ({ page }) => {
   });
   await page.goto('./');
   await page.locator('canvas').waitFor();
-  await expect(page.locator('#hud')).toContainText('Black to move');
+  await expect(page.locator('#hud')).toContainText('White to move');
 
   const click = async (q: number, r: number) => {
     const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);

@@ -186,7 +186,7 @@ test('New game while the bot thinks: its reply to the old game is dropped, the b
   // The new game is still against the bot, and the player is not locked out by the old search.
   await move(page, [0, 2], [0, 1]);
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2);
-  await expect(page.locator('#hud')).toContainText('Black to move');
+  await expect(page.locator('#hud')).toContainText('White to move');
   await expect.poll(() => savedPlies(page)).toBe(2);
   expect(errors).toEqual([]);
 });

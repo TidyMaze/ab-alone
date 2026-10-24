@@ -96,11 +96,11 @@ test('a game against the bot survives a reload, with the bot still playing White
   await page.reload();
   await ready(page);
   expect(await snapshot(page)).toEqual(before);
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
 
   await move(page, [0, 1], [0, 0]);
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(4);
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
 });
 
 test('a boss fight is not saved: a reload shows a new local game', async ({ page }) => {
@@ -116,7 +116,7 @@ test('a boss fight is not saved: a reload shows a new local game', async ({ page
   await page.reload();
   await ready(page);
   await expect(hud).not.toContainText('The Echo');
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
   expect(await plies(page)).toBe(0);
   expect(await savedPlies(page)).toBe(0);
 });
@@ -153,7 +153,7 @@ test('a game saved while the bot was thinking resumes with the bot reply', async
   await page.reload();
   await ready(page);
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2);
-  await expect(page.locator('#hud')).toContainText('Black to move');
+  await expect(page.locator('#hud')).toContainText('White to move');
   await expect.poll(() => savedPlies(page)).toBe(2);
 });
 

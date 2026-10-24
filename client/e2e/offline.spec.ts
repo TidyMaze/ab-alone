@@ -15,7 +15,7 @@ test('after one visit the game loads offline and the bot answers', async ({ page
   await page.goto(process.env.E2E_PREVIEW_URL!);
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
 
   // The service worker precaches the build at install, then takes control of the page.
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
@@ -40,7 +40,7 @@ test('after one visit the game loads offline and the bot answers', async ({ page
   await context.setOffline(true);
   await page.reload();
   await page.locator('canvas').waitFor();
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
   // The HUD and the buttons keep their fonts. check() alone is also true for a font the page has no face of (the
   // stylesheet failed): each family needs a loaded face too.
   const fonts = () =>
@@ -56,7 +56,7 @@ test('after one visit the game loads offline and the bot answers', async ({ page
   await click(page, 0, 1); // its NW neighbour, empty at the start
   // The bot worker and its wasm come from the cache too: it answers and the turn comes back.
   await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(2);
-  await expect(hud).toContainText('Black to move');
+  await expect(hud).toContainText('White to move');
   await context.setOffline(false);
 });
 
