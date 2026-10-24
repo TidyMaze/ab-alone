@@ -66,6 +66,7 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
   const cog = page.getByRole('button', { name: 'Settings' });
   await cog.click();
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sound' })).toBeVisible();
   await frame(page);
   expect(await problems(page), `${state}, settings menu open`).toEqual([]);
   await cog.click();

@@ -139,12 +139,16 @@ const tier = readTier(store, {
 });
 diag.log.log('info', 'start', { backend, tier });
 let clear = readClearBoard(store);
+// The ejection sound (docs/specs/world.md section 7), on by default, a setting of the menu (#284). The audio
+// context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
+// way down, a touch on the way up, and toggling Sound on starts it too (setEnabled).
+const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readSound(store));
 function applyLook(): void {
   const fog = fogSettings(tier, clear, view.distance);
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
-  for (const { id, on } of settingsList(clear)) document.getElementById(`setting-${id}`)!.setAttribute('aria-pressed', String(on));
+  for (const { id, on } of settingsList(clear, sfx.enabled)) document.getElementById(`setting-${id}`)!.setAttribute('aria-pressed', String(on));
 }
 // The settings menu: one button per setting, opened by the cog only. Escape, a press outside and the cog close it.
 const cog = document.getElementById('settings') as HTMLButtonElement;
@@ -154,8 +158,12 @@ const toggles: Record<string, () => void> = {
     clear = !clear;
     writeClearBoard(store, clear);
   },
+  sound: () => {
+    sfx.setEnabled(!sfx.enabled);
+    writeSound(store, sfx.enabled);
+  },
 };
-for (const { id, label } of settingsList(clear)) {
+for (const { id, label } of settingsList(clear, sfx.enabled)) {
   const row = document.createElement('button');
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -184,18 +192,6 @@ addEventListener('pointerdown', (e) => {
 });
 cog.disabled = false; // listener ready (#146)
 
-// The ejection sound (docs/specs/world.md section 7) and its on/off toggle, on by default, until the mix
-// sliders of #60. The audio context waits for a user gesture: browsers block audio before one. A mouse
-// press or a key is a gesture on the way down, a touch on the way up.
-const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readSound(store));
-const soundButton = document.getElementById('sound')!;
-soundButton.setAttribute('aria-pressed', String(sfx.enabled));
-soundButton.addEventListener('click', () => {
-  sfx.setEnabled(!sfx.enabled);
-  writeSound(store, sfx.enabled);
-  soundButton.setAttribute('aria-pressed', String(sfx.enabled));
-});
-(soundButton as HTMLButtonElement).disabled = false; // listener ready (#146)
 for (const type of ['pointerdown', 'pointerup', 'keydown']) addEventListener(type, () => sfx.unlock(), { capture: true });
 scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 const lamp = new THREE.DirectionalLight(COLORS.sodium, 3);
