@@ -8,7 +8,7 @@
 //! - P3 (5 or fewer): P2 plus the Echo of the player's previous move (`mirror_move`, tell
 //!   [`BallastTell::echo`]).
 
-use crate::board::{Board, Cell, RADIUS};
+use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
 use crate::encounter::echo::mirror_move;
 use crate::encounter::hull::hull_boss;
@@ -20,7 +20,7 @@ type P = (i32, i32);
 
 /// Radius of the Ballast board: 91 cells before the pillars.
 pub const BALLAST_RADIUS: i32 = 5;
-const _: () = assert!(BALLAST_RADIUS <= RADIUS);
+const _: () = assert!(BALLAST_RADIUS <= MAX_RADIUS);
 /// The six void pillars: one cell on each of the six sides of the centre ring (radius 2), the
 /// orbit of `(1, 1)` under the 60 degree rotation `(q, r) -> (-r, q + r)`. Symmetric under the
 /// point reflection of the Echo and the rotation.
@@ -147,8 +147,8 @@ pub fn ballast_start(seed: u64) -> Encounter {
 fn flips(board: &Board) -> Vec<P> {
     let id = CHAPLAIN_BOSS_END + BALLAST_REUSED_PHASE as u8;
     let after = (chaplain_boss().hook)(board, id, 0);
-    (-RADIUS..=RADIUS)
-        .flat_map(|q| (-RADIUS..=RADIUS).map(move |r| (q, r)))
+    (-MAX_RADIUS..=MAX_RADIUS)
+        .flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
         .filter(|&(q, r)| {
             board.get(q, r) == Some(Cell::Black) && after.get(q, r) == Some(Cell::White)
         })
@@ -207,7 +207,7 @@ mod tests {
     use crate::moves::{apply, legal_moves, Direction};
 
     fn cells() -> impl Iterator<Item = P> {
-        (-RADIUS..=RADIUS).flat_map(|q| (-RADIUS..=RADIUS).map(move |r| (q, r)))
+        (-MAX_RADIUS..=MAX_RADIUS).flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
     }
 
     fn count(board: &Board, color: Cell) -> usize {

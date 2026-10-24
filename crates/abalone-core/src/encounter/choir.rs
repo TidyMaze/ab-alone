@@ -7,7 +7,7 @@
 //! a free extra move on every fourth boss turn. P3: one army is left, it plays every turn and
 //! cannot push (no sumito).
 
-use crate::board::{Board, Cell, RADIUS};
+use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
 use crate::game::{Game, GameError};
 use crate::moves::{apply, Move, Player};
@@ -143,8 +143,8 @@ fn centre_distance((q, r): P) -> i32 {
 /// The Choir board with no marble: the standard board with its outer ring void.
 fn arena() -> Board {
     let mut board = Board::empty();
-    for q in -RADIUS..=RADIUS {
-        for r in -RADIUS..=RADIUS {
+    for q in -MAX_RADIUS..=MAX_RADIUS {
+        for r in -MAX_RADIUS..=MAX_RADIUS {
             if board.get(q, r).is_some() && centre_distance((q, r)) > CHOIR_RADIUS {
                 board.void(q, r);
             }
@@ -156,8 +156,8 @@ fn arena() -> Board {
 /// Cells of the Black marbles on `board`.
 fn black_cells(board: &Board) -> Vec<P> {
     let mut out = Vec::new();
-    for q in -RADIUS..=RADIUS {
-        for r in -RADIUS..=RADIUS {
+    for q in -MAX_RADIUS..=MAX_RADIUS {
+        for r in -MAX_RADIUS..=MAX_RADIUS {
             if board.get(q, r) == Some(Cell::Black) {
                 out.push((q, r));
             }
@@ -395,15 +395,15 @@ mod tests {
     }
 
     fn count(board: &Board, cell: Cell) -> usize {
-        (-RADIUS..=RADIUS)
-            .flat_map(|q| (-RADIUS..=RADIUS).map(move |r| (q, r)))
+        (-MAX_RADIUS..=MAX_RADIUS)
+            .flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
             .filter(|&(q, r)| board.get(q, r) == Some(cell))
             .count()
     }
 
     fn on_board(board: &Board) -> usize {
-        (-RADIUS..=RADIUS)
-            .flat_map(|q| (-RADIUS..=RADIUS).map(move |r| (q, r)))
+        (-MAX_RADIUS..=MAX_RADIUS)
+            .flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
             .filter(|&(q, r)| board.get(q, r).is_some())
             .count()
     }

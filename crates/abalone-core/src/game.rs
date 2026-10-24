@@ -3,7 +3,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::board::{Board, Cell, RADIUS};
+use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::moves::{apply, Move, MoveError, Player};
 
 /// Ejections needed to win.
@@ -79,8 +79,8 @@ fn code(cell: Cell) -> u8 {
 /// Hash of a position: board and side to move.
 fn position_hash(board: &Board, to_move: Player) -> u64 {
     let mut hasher = DefaultHasher::new();
-    for q in -RADIUS..=RADIUS {
-        for r in -RADIUS..=RADIUS {
+    for q in -MAX_RADIUS..=MAX_RADIUS {
+        for r in -MAX_RADIUS..=MAX_RADIUS {
             board.get(q, r).map(code).hash(&mut hasher);
         }
     }
