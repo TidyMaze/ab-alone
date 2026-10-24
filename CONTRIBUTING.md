@@ -4,7 +4,27 @@ This is the only way work happens on AB-ALONE. It applies to humans and AI agent
 If a step is not written here, it does not happen. If something does not fit, open a `Decision`
 issue to change this file first.
 
-**Owners:** @TidyMaze and @Varadiell. Only owners triage, decide and merge.
+**Owners:** @TidyMaze and @Varadiell. Owners decide. They can delegate triage and merging to the
+**lead agent** (the AI agent an owner drives), see section 9.
+
+## 0. The flow at a glance
+
+```mermaid
+flowchart TD
+  A[Owner request, idea, or nightly failure] --> B[Issue from a form, Inbox]
+  B -->|owner, or lead agent on delegation| C[Ready, with Priority]
+  C -->|bugs first, max 4 in progress| D[Sub-agent: own clone, branch, TDD]
+  D --> E[Local checks: verify.sh, unit tests, 1 e2e run]
+  E --> F[PR with Closes #issue]
+  F -->|CI rust green, conversations resolved| G[Squash-merge by owner or lead agent]
+  G --> H[main: coverage + e2e jobs, Pages deploy]
+  H --> I[Nightly e2e on the live site]
+  I -->|failure opens a bug| B
+```
+
+No human review is required: a PR merges as soon as the required CI check `rust` is green and every
+conversation is resolved. Quality comes from strict TDD, 100 % coverage, e2e tests and the nightly
+run.
 
 ## 1. The golden rules
 
@@ -12,7 +32,8 @@ issue to change this file first.
    whose Status was `Ready` when work started.
 2. **No Task without a parent.** Every Task is a sub-issue of a Feature, or of an Epic for
    non-player-facing work (tooling, CI, specs).
-3. **No direct push to `main`.** Everything goes through a PR approved by the other owner.
+3. **No direct push to `main`.** Everything goes through a PR. It merges once the CI check `rust`
+   is green and conversations are resolved, with no review required (section 6.4).
 4. **Out of scope = new issue.** Anything found during a task that is not in its acceptance
    criteria becomes a new issue in `Inbox`. It never goes into the current PR.
 5. **Decisions live in `Decision` issues**, never only in a PR thread, a commit or a chat.
@@ -20,7 +41,8 @@ issue to change this file first.
    or it does not count.
 7. **Finish before you start.** You may not start a new Task while one of yours is not `Done`
    (`In Progress` or `In Review` both count as not finished). Blocked does not free you: get it
-   unblocked, or ask an owner to move it back to `Ready` and unassign you.
+   unblocked, or ask an owner to move it back to `Ready` and unassign you. At most **4 tasks** are
+   `In Progress` at the same time across all agents, one per agent.
 8. **Strict TDD, 100 % coverage.** No production code without a failing test first. Unit tests
    plus end-to-end integration tests. See section 11.
 9. **This repo is public.** Never commit a secret. See section 12.
@@ -67,7 +89,7 @@ flowchart LR
 | Status | Meaning | Who moves it here | Gate to enter |
 |---|---|---|---|
 | `Inbox` | New, not triaged yet | Whoever creates the issue | Issue created from a form |
-| `Ready` | Can be picked up | **Owners only** | Definition of Ready (section 5) |
+| `Ready` | Can be picked up | **Owners**, or the lead agent when an owner delegates | Definition of Ready (section 5) |
 | `In Progress` | Someone is on it | The assignee | Assigned, "taking it" comment |
 | `In Review` | PR open | The assignee | PR open with `Closes #<task>` |
 | `Done` | Finished | GitHub (PR merged / issue closed) | Definition of Done (section 5) |
@@ -109,9 +131,11 @@ then closed it.
    discussion, and the discussion gets a comment with the issue link.
 3. The Feature lands in `Inbox`.
 
-### 6.2 Triage (owners, at least once a week)
+### 6.2 Triage (owners, or the lead agent on delegation)
 
-For each `Inbox` item, an owner does exactly one of:
+An owner triages, or tells the lead agent to (for example "take the decisions"). Every decision
+the lead agent takes on delegation is written as a comment in the issue. For each `Inbox` item,
+the triager does exactly one of:
 - **Accept:** complete it to the Definition of Ready, create its Task sub-issues, set `Priority`,
   move it to `Ready`.
 - **Ask:** comment what is missing, keep it in `Inbox`.
@@ -123,7 +147,8 @@ For each `Inbox` item, an owner does exactly one of:
    `Ready` tasks by `Priority`. You may skip one only with a comment saying why. Bugs follow the
    same steps below, with "Task" meaning "Task or Bug".
 2. Assign yourself, comment `taking it`, move it to `In Progress`.
-   **WIP limit: one unfinished Task per contributor** (rule 7; an agent counts as a contributor).
+   **WIP limit: one unfinished Task per contributor, at most 4 in progress overall** (rule 7; an
+   agent counts as a contributor).
 3. Branch from `main`: `<issue number>-<short-slug>`, for example `23-board-model`.
 4. Blocked: add the `blocked` label, comment what blocks and @mention who can unblock. Keep the
    Status.
@@ -134,20 +159,19 @@ For each `Inbox` item, an owner does exactly one of:
 
 1. Open the PR from the template. The body contains exactly one `Closes #<task>`.
 2. Move the Task to `In Review`.
-3. The **other owner** reviews (an agent's PR is reviewed by an owner who did not drive that
-   agent). Review comments stay in the PR.
-4. The author answers every comment in its thread, pushes fixes to the same branch, and
-   re-requests review.
-5. A reviewer comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
-6. **Merge gate.** A PR is merged into `main` only when all of these hold:
-   - [ ] Tested: CI green (once CI exists), and the reviewer ran or read the tests
-   - [ ] Reviewed: approved by the other owner
-   - [ ] Fixed: every review comment answered and every conversation resolved (enforced by branch
-     protection)
+3. Review is **optional**. Anyone may comment; the author answers every comment in its thread and
+   pushes fixes to the same branch.
+4. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
+5. **Merge gate.** A PR is merged into `main` only when all of these hold:
+   - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, one full e2e run green
+   - [ ] CI: the required check `rust` is green (enforced by branch protection, 0 approvals needed)
+   - [ ] Every conversation resolved (enforced by branch protection)
    - [ ] Up to date: rebased on `main`, no conflict
-7. As soon as the gate passes, the reviewer **squash-merges into `main`**. An approved PR is never
-   left open: the Task is not `Done` until it is merged. GitHub closes the Task, the project sets
-   `Done`, the branch is deleted.
+6. As soon as the gate passes, **an owner or the lead agent squash-merges into `main`**. Sub-agents
+   never merge. A green PR is never left open: the Task is not `Done` until it is merged. GitHub
+   closes the Task, the project sets `Done`, the branch is deleted.
+7. Docs-only PRs (`**.md`, `docs/**`) skip CI, so the `rust` check never reports on them. An owner
+   or the lead agent merges them with the admin bypass after reading the diff.
 
 ### 6.5 Decision
 
@@ -181,7 +205,7 @@ For each `Inbox` item, an owner does exactly one of:
 | Field | Values | Set by |
 |---|---|---|
 | `Status` | `Inbox`, `Ready`, `In Progress`, `In Review`, `Done` | Section 4 |
-| `Priority` | `P0` to `P3` | Owners only |
+| `Priority` | `P0` to `P3` | Owners, or the lead agent on delegation |
 | `Votes` | Number of 👍 in the last vote | Owners only |
 | Milestone | `Phase 0` to `Phase 5` | Issue creator, checked at triage |
 
@@ -199,10 +223,18 @@ The project holds **issues only**: no draft items, no project-only tasks. Every 
 
 ## 9. AI agents
 
-Agents follow every rule above, plus:
+Two roles:
+
+| Role | Does | Never does |
+|---|---|---|
+| **Lead agent** (driven by an owner) | Writes issues, triages and sets `Priority` when an owner delegates, starts up to 4 sub-agents in parallel, checks their reports (CI, tests, a real browser run for player-facing changes), merges green PRs | Closes a `Decision` without an owner, starts a 5th task, merges a red PR |
+| **Sub-agent** | One Task: own clone, own branch, TDD, local checks, opens the PR, rebases when asked | Merges, triages, sets `Priority`, works outside its Task |
+
+Every agent follows the rules above, plus:
 - One agent, one clone, one branch, one `In Progress` Task.
 - Agents talk to each other only through issue comments and PR reviews.
-- An agent never triages, never sets `Priority`, never merges, never closes a `Decision`.
+- An agent kills the dev servers it started when it finishes (stray servers loaded the machine and
+  made e2e runs flaky).
 - The PR body says which agent wrote it and which owner drives it.
 
 ## 10. Forbidden
@@ -251,9 +283,9 @@ needs a one-line comment saying why, and the reviewer must accept it (generated 
 
 | When | What | Who |
 |---|---|---|
-| Every PR | Playwright e2e suite on Chromium, run locally with `npm run e2e` (section 13). CI runs it on main after merge, not on PRs | Author |
+| Every PR | Playwright e2e suite on Chromium, run locally once with `npm run e2e` (section 13). CI runs it on main after merge, not on PRs | Author |
 | Every night | Playwright suite against the live GitHub Pages site (scheduled workflow). A failure opens a `bug` issue automatically | CI |
-| Before merging a player-facing PR | Open the PR build in a real Chrome, play the changed flow, note the result in the review | Reviewer (an agent can do it with the Playwright or Chrome tools) |
+| Before merging a player-facing PR | Open the PR build in a real browser, play the changed flow, note the result in the PR | The lead agent (Playwright) or an owner |
 | Once per milestone | Full manual playthrough in Chrome of everything shipped so far, findings filed as `bug` issues | An owner |
 
 Specs and docs PRs have no code, so this section does not apply to them.

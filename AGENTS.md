@@ -9,7 +9,10 @@ version:
    Check player-facing changes in Chrome with Playwright.
 4. Every bug gets a `bug` issue before any fix. Bugs are picked before tasks.
 5. This repo is public: never commit or print a secret.
-6. Talk only through issue comments and PR reviews. Never merge, never triage, never close a
-   `Decision`.
+6. Talk only through issue comments and PR reviews. Sub-agents never merge, never triage, never
+   close a `Decision`. The lead agent (driven by an owner) may triage when an owner delegates and
+   merge a PR once the CI check `rust` is green; no human review is needed (CONTRIBUTING.md section 0).
+7. At most 4 tasks in progress at once. Run the local checks and one e2e run before opening a PR.
+   Kill the dev servers you started.
 
 Setup, checks and e2e commands: [CONTRIBUTING.md section 13](CONTRIBUTING.md#13-local-setup-and-checks).
