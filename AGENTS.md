@@ -21,7 +21,8 @@ The short version:
 7. At most 4 tasks in progress at once. Run the local checks and one e2e run before opening a PR.
    After a rebase on `main` without conflict, rerun only `bun run test` and `tsc` (CONTRIBUTING 6.4).
    Kill the dev servers you started. Finish and merge your open PR before opening another: many
-   open PRs mean rebase loops (CONTRIBUTING rule 16).
+   open PRs mean rebase loops (CONTRIBUTING rule 16). Keep every task and PR minimal: one thing,
+   done well, the simplest way (KISS, CONTRIBUTING rule 17).
 8. Assign yourself (your driving owner) before any work. Never touch an issue or PR assigned to
    someone else without their written consent: let them finish until Ready or merged.
 9. Branch from an up-to-date `main`, target `main`. Never base a branch on an unmerged branch.
