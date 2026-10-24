@@ -110,3 +110,39 @@ test('on a desktop the buttons stay in a column at the top right, bug #227', asy
     if (i > 0) expect(box!.y).toBeGreaterThan(boxes[i - 1]!.y + boxes[i - 1]!.height);
   }
 });
+
+// Bug #271: at the end of a daily fight the plate gains the daily, result and score lines, and grew over the board
+// or pushed the button rows onto it. Same check as above, played to the end: a draw by threefold repetition.
+for (const { name, viewport } of [
+  { name: 'a window 1000 by 720', viewport: { width: 1000, height: 720 } },
+  { name: 'a window 1024 by 600', viewport: { width: 1024, height: 600 } },
+  { name: 'a tablet held upright', viewport: { width: 768, height: 1024 } },
+]) {
+  test.describe(`${name}, end of a daily fight`, () => {
+    test.use({ viewport });
+
+    test('the plate and the buttons cover no cell after a defeat, bug #271', async ({ page }, testInfo) => {
+      test.slow(); // boss search, eight clicks pairs and a screenshot of the WebGL page
+      const hud = page.locator('#hud');
+      await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('#daily').click();
+      await expect(hud).toContainText('Daily challenge 2026-10-25 · attempt 1');
+      const move = async (from: [number, number], to: [number, number]) => {
+        for (const [q, r] of [from, to]) {
+          const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
+          await page.mouse.click(p.x, p.y);
+        }
+      };
+      // Black (0,2) to (0,1), White (0,-2) to (0,-1), and both back, twice: the start position comes back a third time.
+      for (let i = 0; i < 2; i++) {
+        await move([0, 2], [0, 1]);
+        await move([0, -2], [0, -1]);
+        await move([0, 1], [0, 2]);
+        await move([0, -1], [0, -2]);
+      }
+      await expect(hud).toContainText('Defeat');
+      await check(page, testInfo, 'after a daily defeat');
+    });
+  });
+}
