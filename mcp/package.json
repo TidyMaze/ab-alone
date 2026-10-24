@@ -1,0 +1,24 @@
+{
+  "name": "abalone-mcp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "bun@1.3.11",
+  "scripts": {
+    "wasm": "wasm-pack build ../crates/abalone-wasm --target nodejs --out-dir ../../mcp/engine",
+    "start": "bun src/main.ts",
+    "test": "bun run wasm && vitest run --coverage",
+    "e2e": "bun run wasm && vitest run --config vitest.e2e.config.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.0.3",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}
