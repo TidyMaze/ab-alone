@@ -167,7 +167,7 @@ Each case points to its example in section 12.
 
 ## 9. End of game
 
-- **FINAL.** Win: 6 ejections (section 6).
+- **FINAL.** Win: 6 ejections (section 6). One exception: against the Choir the player needs 10 (section 10.3, Decision #131).
 - **FINAL.** Threefold repetition: the same position (board, side to move, mode state) occurs for the third time. The game is a draw. Mode state is part of the position identity (game-design section 5).
 - **FINAL (decided for this spec).** 100 plies in a row with no ejection: the game is a draw. The counter counts plies since the last ejection by either side and resets on each ejection. **OPEN-1**: game-design.md section 5.2 says the 100-ply end is decided by ejections, then centrality, then draw. See section 13.
 - **TUNE.** HUD warning 10 plies before the 100-ply draw.
@@ -208,7 +208,7 @@ Phases trigger when the boss's marble count reaches a threshold, shown on the HU
 Hooks, from game-design section 7 (starting values):
 
 - **Hull** (#43): rim cells crack every 8 plies. A cracked cell vanishes 2 plies later, and a marble on it is removed. Boss search depth 3. Phase at 10 boss marbles: interval 6, two cells crack at once. Phase at 5: interval 4.
-- **Choir** (#44): the board has radius 3, not 4. The boss has 3 armies of 4 marbles (Alto, Tenor, Bass). Each boss turn only one army moves, in a fixed cycle. The player has 10 marbles. Phase: when one army is wiped, the other two alternate and each gets an extra move every 4th turn. Phase: when one army of 4 is left, it moves every turn and cannot push.
+- **Choir** (#44): the board has radius 3, not 4. The boss has 3 armies of 4 marbles (Alto, Tenor, Bass). Each boss turn only one army moves, in a fixed cycle. The player has 10 marbles. Phase: when one army is wiped, the other two alternate and each gets an extra move every 4th turn. Phase: when one army of 4 is left, it moves every turn and cannot push. The player wins by ejecting 10 boss marbles, not 6, so this last phase is played (Decision #131). The boss still wins at 6.
 - **Chaplain** (#45): at the end of the boss turn, a player marble with 3 or more adjacent boss marbles flips to the boss. The flip is not an ejection. A flipped marble flips back when 3 of the player's marbles surround it. Phase at 8 boss marbles: void cells count as boss neighbours. Phase at 4: a flip can chain once, and the boss loses one marble to the void per flip.
 - **Echo** (#46): after each player move, the boss plays the point reflection of that move if it is legal, otherwise its AI picks a move. Mirrored moves go through the normal validator. Phase at 10: the boss echoes the player's previous move. Phase at 5: the boss echoes with two groups, and the free move happens on every illegal mirror.
 - **Ballast Mind** (#47): radius 5 board, 6 symmetric void pillars. Boss 16 marbles, player 14. Boss search depth 5. Phase at 16: plain Abalone. Phase at 10: Hull rim crack (interval 8) and Chaplain (threshold 3). Phase at 5: adds Echo.
@@ -264,7 +264,7 @@ Hooks, from game-design section 7 (starting values):
 
 ## 11. Numbers index
 
-Every number in this spec is tagged FINAL or TUNE where it appears. The FINAL numbers are: board radius 4 (61 cells), 6 directions, group size 1 to 3, 6 ejections to win, 3 repetitions for a draw, 100 plies for a draw (decided), BR 3 to 6 players, BR radius 8 (217 cells). The TUNE numbers are: BR round timer, BR marbles per player, the breach schedule, hook intervals and thresholds, boss depths, the 10 s clock grace, the 60 s disconnect grace, the HUD warning at 10 plies, and placement points.
+Every number in this spec is tagged FINAL or TUNE where it appears. The FINAL numbers are: board radius 4 (61 cells), 6 directions, group size 1 to 3, 6 ejections to win (10 for the player against the Choir), 3 repetitions for a draw, 100 plies for a draw (decided), BR 3 to 6 players, BR radius 8 (217 cells). The TUNE numbers are: BR round timer, BR marbles per player, the breach schedule, hook intervals and thresholds, boss depths, the 10 s clock grace, the 60 s disconnect grace, the HUD warning at 10 plies, and placement points.
 
 ## 12. Examples
 

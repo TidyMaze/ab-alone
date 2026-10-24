@@ -9,7 +9,7 @@
 
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
-use crate::game::{Game, GameError};
+use crate::game::{Game, GameError, WIN_EJECTIONS};
 use crate::moves::{apply, legal_moves, Move, Player};
 use crate::search::{search_with, Weights};
 
@@ -21,6 +21,9 @@ pub const CHOIR_RADIUS: i32 = 3;
 pub const ARMY_SIZE: usize = 4;
 /// Player marbles at the start.
 pub const PLAYER_MARBLES: usize = 10;
+/// Boss marbles the player must eject to win (Decision #131): P3 starts at 8, when two armies are
+/// wiped, so the last army is fought for two more. The boss still wins at 6.
+pub const CHOIR_WIN_EJECTIONS: u8 = 10;
 /// Alto start, the back row. Boss side is the top of the board (r < 0).
 pub const ALTO_START: [P; ARMY_SIZE] = [(0, -3), (1, -3), (2, -3), (3, -3)];
 /// Tenor start, the middle row.
@@ -186,7 +189,8 @@ impl Choir {
                 members.push((cell, army));
             }
         }
-        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let game = Game::from_position(board, Player::Black, [0, 0])
+            .with_win([CHOIR_WIN_EJECTIONS, WIN_EJECTIONS]);
         Self {
             enc: Encounter::new(game, choir_boss(), CHOIR_SEED),
             members,
@@ -380,7 +384,8 @@ mod tests {
         }
         Choir {
             enc: Encounter::new(
-                Game::from_position(board, to_move, ejected),
+                Game::from_position(board, to_move, ejected)
+                    .with_win([CHOIR_WIN_EJECTIONS, WIN_EJECTIONS]),
                 choir_boss(),
                 CHOIR_SEED,
             ),
@@ -766,8 +771,35 @@ mod tests {
     }
 
     #[test]
+    fn the_choir_is_won_at_10_ejections_so_p3_is_played() {
+        assert_eq!(CHOIR_WIN_EJECTIONS, 10);
+        let start = Choir::start();
+        assert_eq!(
+            start.game().win_ejections(Player::Black),
+            CHOIR_WIN_EJECTIONS
+        );
+        assert_eq!(start.game().win_ejections(Player::White), WIN_EJECTIONS);
+        // Two armies wiped, 8 boss marbles ejected: the fight goes on, in P3 (Decision #131).
+        let p3 = p3_push_position([8, 0]);
+        assert_eq!(p3.result(), None);
+        assert_eq!(p3.phase(), 2);
+        let alto: &[P] = &[(3, 0), (-3, 0), (0, -3), (3, -3)];
+        let mut c = choir_from(
+            &[(1, 0), (2, 0), (-3, 3)],
+            &[(Alto, alto)],
+            Player::Black,
+            [9, 0],
+            0,
+        );
+        assert_eq!(c.result(), None);
+        c.play(&mv(&[(1, 0), (2, 0)], E)).unwrap(); // pushes the Alto marble on (3, 0) off the board
+        assert_eq!(c.game().ejected(Player::Black), 10);
+        assert_eq!(c.result(), Some(PveResult::Won));
+    }
+
+    #[test]
     fn a_finished_game_has_no_tell_and_refuses_moves() {
-        let mut c = choir_from(&[(0, 0)], &[(Alto, &[(3, -3)])], Player::White, [6, 0], 0);
+        let mut c = choir_from(&[(0, 0)], &[(Alto, &[(3, -3)])], Player::White, [10, 0], 0);
         assert_eq!(c.result(), Some(PveResult::Won));
         assert_eq!(c.game().outcome(), Some(Outcome::Win(Player::Black)));
         assert_eq!(c.tell(), None);

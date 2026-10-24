@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::moves::{apply, Move, MoveError, Player};
 
-/// Ejections needed to win.
+/// Ejections needed to win, for both sides unless a boss changes it (the Choir, Decision #131).
 pub const WIN_EJECTIONS: u8 = 6;
 /// Plies in a row with no ejection that make a draw.
 pub const NO_EJECTION_PLY_LIMIT: u32 = 100;
@@ -52,6 +52,8 @@ pub struct Game {
     history: Vec<Played>,
     outcome: Option<Outcome>,
     draw_reason: Option<DrawReason>,
+    /// Ejections each side needs to win, Black then White.
+    win: [u8; 2],
 }
 
 fn index(player: Player) -> usize {
@@ -94,6 +96,14 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     hasher.finish()
 }
 
+/// The side whose ejected count reached its threshold, if any.
+fn won(ejected: [u8; 2], win: [u8; 2]) -> Option<Outcome> {
+    [Player::Black, Player::White]
+        .into_iter()
+        .find(|&p| ejected[index(p)] >= win[index(p)])
+        .map(Outcome::Win)
+}
+
 impl Game {
     /// Standard layout, Black to move.
     pub fn new() -> Self {
@@ -107,15 +117,13 @@ impl Game {
             history: Vec::new(),
             outcome: None,
             draw_reason: None,
+            win: [WIN_EJECTIONS; 2],
         }
     }
 
     /// Game on a hand-made position: a boss start layout, or a test position.
     pub(crate) fn from_position(board: Board, to_move: Player, ejected: [u8; 2]) -> Self {
-        let outcome = [Player::Black, Player::White]
-            .into_iter()
-            .find(|&p| ejected[index(p)] >= WIN_EJECTIONS)
-            .map(Outcome::Win);
+        let win = [WIN_EJECTIONS; 2];
         Self {
             start_hash: position_hash(&board, to_move),
             board,
@@ -123,9 +131,22 @@ impl Game {
             ejected,
             no_ejection_plies: 0,
             history: Vec::new(),
-            outcome,
+            outcome: won(ejected, win),
             draw_reason: None,
+            win,
         }
+    }
+
+    /// The same game won at `win` ejections, Black then White: a boss fight with its own rule.
+    pub(crate) fn with_win(mut self, win: [u8; 2]) -> Self {
+        self.win = win;
+        self.outcome = won(self.ejected, win);
+        self
+    }
+
+    /// Ejections `player` needs to win.
+    pub fn win_ejections(&self, player: Player) -> u8 {
+        self.win[index(player)]
     }
 
     pub fn board(&self) -> &Board {
@@ -189,7 +210,7 @@ impl Game {
         }
         self.ejected[index(by)] += n;
         self.no_ejection_plies = 0;
-        if self.ejected[index(by)] >= WIN_EJECTIONS {
+        if self.ejected[index(by)] >= self.win[index(by)] {
             self.outcome.get_or_insert(Outcome::Win(by));
         }
     }
@@ -218,7 +239,7 @@ impl Game {
             + usize::from(self.start_hash == hash);
         let repeated = seen >= REPETITION_LIMIT;
         let capped = self.no_ejection_plies >= NO_EJECTION_PLY_LIMIT;
-        self.outcome = if self.ejected[index(mover)] >= WIN_EJECTIONS {
+        self.outcome = if self.ejected[index(mover)] >= self.win[index(mover)] {
             Some(Outcome::Win(mover))
         } else if repeated || capped {
             Some(Outcome::Draw)
@@ -274,6 +295,7 @@ mod tests {
             history: Vec::new(),
             outcome: None,
             draw_reason: None,
+            win: [WIN_EJECTIONS; 2],
         }
     }
 
@@ -390,6 +412,30 @@ mod tests {
         game.ejected[1] = 5;
         assert_eq!(game.play(&mv(&[(-3, 0), (-2, 0)], W)), Ok(()));
         assert_eq!(game.winner(), Some(Player::White));
+    }
+
+    #[test]
+    fn the_win_threshold_is_six_by_default_and_can_differ_per_side() {
+        let game = Game::new();
+        assert_eq!(game.win_ejections(Player::Black), WIN_EJECTIONS);
+        assert_eq!(game.win_ejections(Player::White), WIN_EJECTIONS);
+        let (game, push) = rim_push();
+        let mut game = game.with_win([10, 6]);
+        game.ejected[0] = 8;
+        assert_eq!(game.play(&push), Ok(()));
+        assert_eq!(game.ejected(Player::Black), 9);
+        assert_eq!(game.outcome(), None, "9 of 10 is not a win");
+        game.credit(Player::Black, 1);
+        assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
+        let lost = Game::from_position(Board::standard(), Player::Black, [0, 6]).with_win([10, 6]);
+        assert_eq!(
+            lost.outcome(),
+            Some(Outcome::Win(Player::White)),
+            "the other side still wins at 6"
+        );
+        let running =
+            Game::from_position(Board::standard(), Player::Black, [6, 0]).with_win([10, 6]);
+        assert_eq!(running.outcome(), None);
     }
 
     #[test]
