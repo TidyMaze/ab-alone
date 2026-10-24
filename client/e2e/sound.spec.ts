@@ -14,6 +14,12 @@ async function open(page: Page) {
     }
   };
 }
+// Sound lives in the settings menu (#284): the cog opens it, the toggle is a button named Sound.
+const sound = async (page: Page) => {
+  const toggle = page.getByRole('button', { name: 'Sound' });
+  if (!(await toggle.isVisible())) await page.getByRole('button', { name: 'Settings' }).click();
+  return toggle;
+};
 const audio = (page: Page) => page.evaluate(() => (window as any).__audio());
 
 // The 3v2 push of eject.spec.ts: Black pushes the last White marble of the q = -2 column off.
@@ -39,7 +45,7 @@ async function loseShell(click: Awaited<ReturnType<typeof open>>) {
 test('no audio before a gesture, then a lost glass marble tolls', async ({ page }) => {
   const click = await open(page);
   expect(await audio(page)).toBe('none'); // browsers block audio before a gesture
-  await expect(page.locator('#sound')).toHaveAttribute('aria-pressed', 'true'); // on by default
+  await expect(await sound(page)).toHaveAttribute('aria-pressed', 'true'); // on by default
   await loseGlass(click);
   await expect(page.locator('body')).toHaveAttribute('data-ejections', '1');
   await expect(page.locator('body')).toHaveAttribute('data-sound', 'toll');
@@ -55,42 +61,55 @@ test('a lost enemy shell clacks', async ({ page }) => {
 
 test('the sound toggle mutes the ejection, and the game plays on', async ({ page }) => {
   const click = await open(page);
-  const toggle = page.locator('#sound');
+  const toggle = await sound(page);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await loseGlass(click);
   await expect(page.locator('#hud')).toContainText('Black ejected 1/6');
   await expect(page.locator('body')).toHaveAttribute('data-sound', 'none');
-  await toggle.click();
+  await (await sound(page)).click(); // the presses on the board closed the menu
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('the sound toggle survives a reload, and a muted page makes no audio context', async ({ page }) => {
   await open(page);
-  const toggle = page.locator('#sound');
+  const toggle = await sound(page);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
   await page.reload();
   const click = await open(page);
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(await sound(page)).toHaveAttribute('aria-pressed', 'false');
   await click([0, 2]); // a gesture on the board: still no audio context while muted
   expect(await audio(page)).toBe('none');
 
-  await toggle.click(); // back on, the click is the gesture that starts the audio
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await (await sound(page)).click(); // back on, the click is the gesture that starts the audio
+  await expect(await sound(page)).toHaveAttribute('aria-pressed', 'true');
   expect(await audio(page)).toBe('running');
 });
 
+test('Sound is no loose HUD button: it is in the settings menu, reachable by keyboard', async ({ page }) => {
+  await open(page);
+  await expect(page.locator('#online > #sound')).toHaveCount(0);
+  const toggle = page.getByRole('button', { name: 'Sound' });
+  await expect(toggle).toBeHidden(); // closed until the cog opens it
+  await page.getByRole('button', { name: 'Settings' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toBeVisible();
+  await toggle.focus();
+  await page.keyboard.press('Enter'); // a key press is a gesture too
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+});
+
 // Bug #146 pattern: a click right after load hits a disabled button or toggles.
-test('the sound toggle is disabled or works when clicked right after load', async ({ page }) => {
+test('the sound toggle is not clickable before it works, and works right after load', async ({ page }) => {
   await page.goto('./?bot=off', { waitUntil: 'domcontentloaded' });
   const atClick = await page.evaluate(() => {
-    const button = document.getElementById('sound') as HTMLButtonElement;
-    const disabled = button.disabled;
-    button.click();
-    return { disabled, pressed: button.getAttribute('aria-pressed') };
+    const cog = document.getElementById('settings') as HTMLButtonElement;
+    const disabled = cog.disabled;
+    cog.click();
+    return { disabled, hidden: (document.getElementById('settings-menu') as HTMLElement).hidden };
   });
-  expect(atClick.disabled || atClick.pressed === 'false').toBe(true);
-  await expect(page.locator('#sound')).toBeEnabled();
+  expect(atClick.disabled || !atClick.hidden).toBe(true);
+  await expect(page.getByRole('button', { name: 'Settings' })).toBeEnabled();
 });

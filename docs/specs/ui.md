@@ -66,7 +66,8 @@ right of the board. Held upright, the column becomes rows of buttons under the p
 field covers a cell, and the space between them lets every tap through to the board.
 
 Settings (#277): a cog button, first in the column, opens a menu listing the settings, one toggle
-button each (Clear board is the only one so far). The menu opens in the column under the cog, so it
+button each: Clear board, then Sound (#284, the ejection sound, no longer a button of the column; opening the
+menu and toggling Sound count as the first gesture that starts audio). The menu opens in the column under the cog, so it
 covers no cell either. It closes on Escape, on a press outside and on the cog again. The cog is labelled
 "Settings" (`aria-expanded`, `aria-controls`), each setting is a button with `aria-pressed`.
 
