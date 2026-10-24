@@ -35,6 +35,25 @@ test('the evaluation bar follows a local hot-seat game, #191', async ({ page }) 
   await page.screenshot({ path: 'test-results/eval-bar.png' });
 });
 
+test('New game puts the bar back on the start position, #191 #230', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const bar = page.locator('#eval');
+  await expect(bar).toHaveAttribute('data-ply', '0', { timeout: 30_000 });
+  const start = await page.getByRole('meter', { name: 'Evaluation' }).getAttribute('aria-valuetext');
+  await click(page, 0, 2);
+  await click(page, 0, 1);
+  await expect(bar).toHaveAttribute('data-ply', '1', { timeout: 30_000 });
+
+  const button = page.locator('#new-game');
+  await button.click();
+  await expect(button).toHaveText('Confirm new game');
+  await button.click();
+  await expect(page.locator('#hud')).toContainText('Black to move');
+  await expect(bar).toHaveAttribute('data-ply', '0', { timeout: 30_000 });
+  await expect(page.getByRole('meter', { name: 'Evaluation' })).toHaveAttribute('aria-valuetext', start!);
+});
+
 test('the bar follows a bot game, and is absent in a boss fight, #191', async ({ page }) => {
   test.slow(); // a bot search and a boss search in the worker
   await page.goto('./');
