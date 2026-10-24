@@ -257,6 +257,12 @@ engine at the start position; the colours swapped, so the former White plays Bla
 (rules.md section 10.2). The seats stay bound to the same keys and `Hello` stays bound to the
 room id (the id of its first game), so a reconnect works in any game of the room. A move or an ask
 signed for the old game id is refused. Spectators stay spectators and follow the new game.
+An ask in flight when the connection drops is lost, so asks are sent again on reconnect (#198).
+When a seated key says `Hello` again, a player that asked for a rematch of the current game sends
+its signed ask again. A player that already started the new game keeps its own signed ask of the
+finished game: when a seated key asks again for that finished game, it still refuses that ask
+(stale) but sends its kept ask back, once per `Hello` of that key so two peers never echo each
+other. The late peer then has every ask and starts the same new game.
 
 **Battle royale (recommendation for #13: simultaneous, commit-reveal lockstep).**
 1. Round opens at a deadline all peers compute from the round-start message (no trusted clock,
