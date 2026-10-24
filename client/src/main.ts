@@ -807,8 +807,10 @@ copyButton.addEventListener('click', async () => {
   diagnosticsBox.value = text;
   diagnosticsBox.focus();
   diagnosticsBox.select();
+  diagnosticsBox.scrollTop = 0; // select() scrolls to the end
   hud(' · diagnostics selected: copy them by hand');
 });
+diagnosticsBox.addEventListener('blur', () => (diagnosticsBox.hidden = true)); // never left over the board
 copyButton.disabled = false; // listener ready (#146)
 
 // Offline app (#193): registered at the end of the start, then checked for a new build at each load

@@ -83,7 +83,9 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); padding: 0.5rem 0.75rem; color: var(--text);
   background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-/* Copy diagnostics fallback: the text, selected, when the clipboard is refused. */
+/* Copy diagnostics, bottom right: a support tool, kept away from the play buttons and the board. Above it, the text
+   selected in a box when the clipboard is refused. */
+#support { position: fixed; bottom: 16px; right: 16px; z-index: 1; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
 #diagnostics {
   box-sizing: border-box; width: min(22rem, calc(100vw - 32px)); height: 8rem; padding: 0.5rem 0.75rem; resize: vertical;
   color: var(--text); background: var(--panel); border: 1px solid var(--accent); border-radius: 2px; font: 0.8125rem/1.3 var(--ui);
