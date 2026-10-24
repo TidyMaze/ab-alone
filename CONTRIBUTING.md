@@ -88,6 +88,12 @@ run.
     check or a missing screenshot; PRs that touch the same files go one after the other, never in
     parallel (the second branches from `main` after the first merges); the lead agent does not
     launch a new sub-agent task while it can finish or merge an open PR instead.
+17. **Minimal, KISS.** Each issue, task and PR is minimal: **one thing, done well**, the simplest
+    way that works. No extra feature, no refactor on the side, no option nobody asked for, no
+    abstraction for later. If a request holds several things, split it into several issues and
+    do them one after the other (rule 16). A PR that does two things is split before it is marked
+    ready; anything found on the way becomes a new issue, never a bigger PR. When two solutions
+    work, take the smaller one.
 
 ## 2. Where things live
 
