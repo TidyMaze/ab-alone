@@ -25,6 +25,15 @@ describe('bossHtml', () => {
     expect(bossHtml({ ...base, result: 2 })).toContain('Defeat');
   });
 
+  it('shows the boss tell line when there is one, nothing otherwise', () => {
+    expect(bossHtml({ ...base, tell: 'Rim cracks: 1 cell in 2 plies' })).toContain(
+      '<div class="tell">Rim cracks: 1 cell in 2 plies</div>',
+    );
+    expect(bossHtml(base)).not.toContain('class="tell"');
+    expect(bossHtml({ ...base, tell: '' })).not.toContain('class="tell"');
+    expect(bossHtml({ ...base, tell: '<i>' })).not.toContain('<i>');
+  });
+
   it('escapes the boss name', () => {
     expect(bossHtml({ ...base, name: '<b>x</b>' })).not.toContain('<b>');
   });

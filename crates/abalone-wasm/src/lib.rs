@@ -498,8 +498,9 @@ mod tests {
 
     #[test]
     fn boss_list_is_data_driven_and_starts_with_the_echo() {
-        assert_eq!(boss_ids(), vec!["echo".to_string()]);
+        assert_eq!(boss_ids(), vec!["echo".to_string(), "hull".to_string()]);
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
+        assert_eq!(boss_name("hull"), Some("The Hull".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -522,6 +523,7 @@ mod tests {
         assert_eq!(f.status(), 0);
         assert_eq!(f.draw_reason(), 0);
         assert_eq!(f.tell(), -1, "the Echo has no board special");
+        assert!(f.cracks().is_empty(), "the Echo cracks nothing");
         assert_eq!(f.ejected(1), 0);
         assert_eq!(f.ejected(2), 0);
         let cells = f.board();
@@ -584,6 +586,55 @@ mod tests {
             .legal_moves()
             .chunks(MOVE_STRIDE)
             .any(|m| m == reply.as_slice()));
+    }
+
+    /// Index of `(q, r)` in the board bytes: rows from `r = -4`, `q` ascending.
+    fn index(q: i32, r: i32) -> usize {
+        (-RADIUS..=RADIUS)
+            .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
+            .filter(|&(q, r)| (q + r).abs() <= RADIUS)
+            .position(|c| c == (q, r))
+            .unwrap()
+    }
+
+    /// One ply: the player's first legal move, or the boss move on its turn.
+    fn ply(f: &mut Encounter) {
+        let mv = if f.to_move() == 1 {
+            first_move(f)
+        } else {
+            f.boss_move()
+        };
+        f.play(&mv).unwrap();
+    }
+
+    #[test]
+    fn the_hull_cracks_a_rim_cell_at_ply_8_and_it_vanishes_two_plies_later() {
+        let mut f = Encounter::new("hull", 7).unwrap();
+        assert_eq!(f.name(), "The Hull");
+        for _ in 0..7 {
+            ply(&mut f);
+        }
+        assert!(f.cracks().is_empty(), "no wave before ply 8");
+        ply(&mut f);
+        let cracks = f.cracks();
+        assert_eq!(cracks.len(), 3, "one cell in P1, as [q, r, plies left]");
+        let (q, r) = (cracks[0], cracks[1]);
+        assert_eq!(cracks[2], 2);
+        assert_ne!(f.board()[index(q, r)], 3, "cracked, not gone yet");
+        ply(&mut f);
+        assert_eq!(f.cracks(), vec![q, r, 1]);
+        ply(&mut f);
+        assert!(f.cracks().is_empty());
+        let cells = f.board();
+        assert_eq!(cells.len(), 61, "a vanished cell keeps its slot");
+        assert_eq!(count(&cells, 3), 1);
+        assert_eq!(cells[index(q, r)], 3);
+    }
+
+    #[test]
+    fn the_hull_announces_no_reply() {
+        let f = Encounter::new("hull", 7).unwrap();
+        assert!(f.tell_move(&first_move(&f)).is_empty());
     }
 
     #[test]
