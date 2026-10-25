@@ -3,14 +3,17 @@ import {
   GENESIS,
   generateKeys,
   hashRecord,
+  parseCoordinator,
   parseHello,
   parseMissed,
   parseRecord,
   parseRematch,
   parseSync,
+  signCoordinator,
   signHello,
   signMove,
   signRematch,
+  verifyCoordinator,
   verifyHello,
   verifyRecord,
   verifyRematch,
@@ -236,6 +239,47 @@ describe('Sync and Missed, #226', () => {
       { kind: 'missed', of: { ...rec, seq: -1 } },
     ]) {
       expect(parseMissed(bad)).toBeNull();
+    }
+  });
+});
+
+describe('Hello order and Coordinator, #359', () => {
+  it('signs the join order of a Hello, parses it back, and refuses a changed order', async () => {
+    const keys = await generateKeys();
+    const h = await signHello(keys, { game: 'g', seat: 1, roster: [keys.pub, ''], order: [keys.pub, 'kb', 'kc'] });
+    expect(await verifyHello(h)).toBe(true);
+    expect(await verifyHello({ ...h, order: ['kb', keys.pub, 'kc'] })).toBe(false);
+    expect(parseHello(h)).toEqual(h);
+    expect(parseHello({ ...h, order: [1] })).toBeNull();
+    expect(parseHello({ ...h, order: 'x' })).toBeNull();
+  });
+
+  it('a Hello without an order keeps its old bytes', async () => {
+    const keys = await generateKeys();
+    const h = await signHello(keys, { game: 'g', seat: 2, roster: [] });
+    expect('order' in h).toBe(false);
+    expect(await verifyHello(h)).toBe(true);
+    expect(parseHello(h)).toEqual(h);
+  });
+
+  it('signs an announcement or an acknowledgement of a coordinator, bound to the game and the coordinator', async () => {
+    const keys = await generateKeys();
+    const c = await signCoordinator(keys, { game: 'g', coordinator: 'kb' });
+    expect(c).toMatchObject({ kind: 'coordinator', game: 'g', coordinator: 'kb', pub: keys.pub });
+    expect(await verifyCoordinator(c)).toBe(true);
+    expect(await verifyCoordinator({ ...c, coordinator: 'kc' })).toBe(false);
+    expect(await verifyCoordinator({ ...c, game: 'h' })).toBe(false);
+    expect(await verifyCoordinator({ ...c, sig: '!!' })).toBe(false);
+  });
+
+  it('parses a clean Coordinator and rejects every wrong shape', async () => {
+    const keys = await generateKeys();
+    const c = await signCoordinator(keys, { game: 'g', coordinator: 'kb' });
+    expect(parseCoordinator({ ...c, extra: 1 })).toEqual(c);
+    expect(parseCoordinator(null)).toBeNull();
+    expect(parseCoordinator('x')).toBeNull();
+    for (const bad of [{ kind: 'sync' }, { game: 1 }, { coordinator: 1 }, { pub: 1 }, { sig: 1 }]) {
+      expect(parseCoordinator({ ...c, ...bad })).toBeNull();
     }
   });
 });
