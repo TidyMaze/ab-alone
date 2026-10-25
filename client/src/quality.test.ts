@@ -8,6 +8,7 @@ import {
   renderPixelRatio,
   readSound,
   readSkin,
+  reflectionsAndAccents,
   readTheme,
   readTier,
   tierFromHints,
@@ -230,5 +231,14 @@ describe('drawDue', () => {
   it('waits four times a slow draw under automation, so software WebGL leaves the CPU to the input', () => {
     expect(drawDue(1799, 1000, 200, true)).toBe(false);
     expect(drawDue(1800, 1000, 200, true)).toBe(true);
+  });
+});
+
+describe('reflectionsAndAccents', () => {
+  it('gives a player the marble reflections and the accent lights', () => {
+    expect(reflectionsAndAccents(false)).toBe(true);
+  });
+  it('skips them under automation, so software WebGL draws each frame in time, #416', () => {
+    expect(reflectionsAndAccents(true)).toBe(false);
   });
 });
