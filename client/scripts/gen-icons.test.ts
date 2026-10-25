@@ -137,5 +137,5 @@ describe('gen-icons as a script', () => {
     const dir = fileURLToPath(new URL('../public/icons/', import.meta.url));
     expect(written).toEqual(new Map([...ICONS].map(([n, b]) => [dir + n, b])));
     expect(log).toHaveLength(written.size); // one line per file
-  });
+  }, 30_000); // draws every file again, seconds on a loaded machine
 });

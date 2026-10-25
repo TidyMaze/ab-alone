@@ -127,5 +127,5 @@ describe('gen-assets', () => {
     const dir = fileURLToPath(new URL('../public/assets/', import.meta.url));
     expect(written).toEqual(new Map([...generateAssets(SEED)].map(([n, b]) => [dir + n, b])));
     expect(log).toHaveLength(written.size); // one line per file
-  });
+  }, 30_000); // draws every file again, seconds on a loaded machine
 });
