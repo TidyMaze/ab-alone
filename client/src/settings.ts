@@ -40,7 +40,7 @@ export const nextDisplay = (
 export const settingsList = (clear: boolean, sound: boolean, theme: Theme, skin: string, scale: UiScale, safe: boolean): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'sound', label: 'Sound', icon: sound ? 'sound' : 'muted', on: sound },
-  { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}, ${scale} %`, icon: 'theme', on: safe },
+  { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme', on: safe },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'import-game', label: 'Import game', icon: 'import' },

@@ -8,7 +8,7 @@ describe('settingsList', () => {
     expect(settingsList(false, true, 'system', 'scarab', 100, true)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },
       { id: 'sound', label: 'Sound', icon: 'sound', on: true },
-      { id: 'theme', label: 'Theme: System, 100 %', icon: 'theme', on: true },
+      { id: 'theme', label: 'Theme: System', icon: 'theme', on: true },
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
@@ -16,7 +16,7 @@ describe('settingsList', () => {
     expect(settingsList(true, false, 'light', 'scarab', 200, false)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'sound', label: 'Sound', icon: 'muted', on: false },
-      { id: 'theme', label: 'Theme: Light, 200 %', icon: 'theme', on: false },
+      { id: 'theme', label: 'Theme: Light', icon: 'theme', on: false },
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
