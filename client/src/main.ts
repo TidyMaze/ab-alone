@@ -1931,8 +1931,14 @@ refresh();
 void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw = { start: -Infinity, cost: 0 };
 let draws = 0;
+let drawAsked = false;
 // Used by the browser checks to wait for a draw: under automation the loop skips frames (#216), so a frame is not a draw (#365).
 (window as unknown as Record<string, unknown>).__draws = () => draws;
+// Used by the browser checks to ask for the next draw, which the throttle does not hold (#435): returns the draws so far.
+(window as unknown as Record<string, unknown>).__drawNext = () => {
+  drawAsked = true;
+  return draws;
+};
 renderer.setAnimationLoop((now) => {
   if (fpsOn) {
     fpsStamps = keepWindow(fpsStamps, now);
@@ -1941,8 +1947,9 @@ renderer.setAnimationLoop((now) => {
   }
   animateSlides(now);
   animateEjections(now);
-  if (!drawDue(now, lastDraw.start, lastDraw.cost, navigator.webdriver)) return;
+  if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   renderer.render(scene, camera);
   draws++;
+  drawAsked = false;
   lastDraw = { start: now, cost: performance.now() - now };
 });
