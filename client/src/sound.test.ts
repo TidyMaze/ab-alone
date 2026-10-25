@@ -6,11 +6,14 @@ import {
   HUM,
   SILENT,
   Sfx,
+  TellWatch,
   cueFor,
   ejectionVoices,
   knockPitch,
   knockVoices,
+  tellVoices,
   type Cue,
+  type Tell,
   type Voice,
 } from './sound';
 
@@ -178,6 +181,118 @@ describe('Sfx.knock, the move sound', () => {
     sfx.setEnabled(false);
     const before = ctx.sources.length;
     expect(sfx.knock(2)).toBeNull();
+    expect(ctx.sources.length).toBe(before);
+  });
+});
+
+// #358: every boss tell has a sound twin (world.md sections 3 and 8), short, played at once, one per tell.
+const tells: Tell[] = ['crack', 'flip', 'choir'];
+
+describe('tellVoices, the sound twins of the boss tells', () => {
+  for (const tell of tells) {
+    it(`${tell}: plays at once, silent at both ends, short, never above 1`, () => {
+      const voices = tellVoices(tell);
+      expect(voices.length).toBeGreaterThan(0);
+      for (const v of voices) {
+        expect(start(v)).toBe(0);
+        expect(v.env[0]![1]).toBe(0);
+        expect(v.env.at(-1)![1]).toBe(0);
+        v.env.slice(1).forEach(([t], i) => expect(t).toBeGreaterThan(v.env[i]![0]));
+        expect(end(v)).toBeLessThanOrEqual(1);
+        expect(peak(v)).toBeLessThanOrEqual(1);
+        for (const f of freqs(v)) expect(f).toBeGreaterThan(0);
+      }
+    });
+  }
+
+  it('each tell has its own sound, none the same as another', () => {
+    const sounds = tells.map((t) => JSON.stringify(tellVoices(t)));
+    expect(new Set(sounds).size).toBe(tells.length);
+  });
+
+  it("The Hull's crack: a low groan of the frame with a splinter of noise", () => {
+    const voices = tellVoices('crack');
+    expect(Math.min(...voices.flatMap(freqs))).toBeLessThan(150);
+    expect(voices.some((v) => v.source === 'noise')).toBe(true);
+  });
+
+  it("The Chaplain's flip: a small high bell, pure sines only", () => {
+    const voices = tellVoices('flip');
+    for (const v of voices) expect(v.source).toBe('sine');
+    expect(Math.min(...voices.flatMap(freqs))).toBeGreaterThan(1000);
+  });
+
+  it("The Choir's next army: hummed voices that swell, not a hit", () => {
+    const voices = tellVoices('choir');
+    expect(voices.length).toBeGreaterThan(1); // several voices
+    for (const v of voices) {
+      expect(v.source).toBe('sine');
+      expect(v.env.find(([, g]) => g === peak(v))![0]).toBeGreaterThanOrEqual(0.05);
+    }
+  });
+});
+
+describe('TellWatch, a tell sounds only when it appears or changes', () => {
+  it('sounds a tell that appears, not again while it stays the same', () => {
+    const watch = new TellWatch();
+    expect(watch.changed('crack', [{ cell: [3, 0], left: 2 }])).toBe(true);
+    expect(watch.changed('crack', [{ cell: [3, 0], left: 2 }])).toBe(false);
+  });
+
+  it('sounds a tell that changes: a crack ticks down, another army is next', () => {
+    const watch = new TellWatch();
+    watch.changed('crack', [{ cell: [3, 0], left: 2 }]);
+    expect(watch.changed('crack', [{ cell: [3, 0], left: 1 }])).toBe(true);
+    watch.changed('choir', [0]);
+    expect(watch.changed('choir', [1])).toBe(true);
+  });
+
+  it('is silent when no tell shows, or when one goes away, and sounds it again when it comes back', () => {
+    const watch = new TellWatch();
+    expect(watch.changed('flip', [])).toBe(false);
+    watch.changed('flip', [[1, 1]]);
+    expect(watch.changed('flip', [])).toBe(false);
+    expect(watch.changed('flip', [[1, 1]])).toBe(true);
+  });
+
+  it('keeps each tell apart', () => {
+    const watch = new TellWatch();
+    watch.changed('choir', [0]);
+    expect(watch.changed('flip', [0])).toBe(true);
+    expect(watch.changed('choir', [0])).toBe(false);
+  });
+});
+
+describe('Sfx.tell, the sound twin of a boss tell', () => {
+  it('stays silent before a gesture: no context, no cue', () => {
+    const { make, sfx } = setup();
+    expect(sfx.tell('crack')).toBeNull();
+    expect(make).not.toHaveBeenCalled();
+  });
+
+  for (const tell of tells) {
+    it(`${tell}: plays every voice from now through the effects node, and says so`, () => {
+      const { ctx, sfx } = setup();
+      sfx.unlock();
+      expect(sfx.tell(tell)).toBe(tell);
+      const voices = tellVoices(tell);
+      expect(ctx.sources).toHaveLength(HUM.length + voices.length);
+      voices.forEach((voice, i) => {
+        const source = ctx.sources[HUM.length + i]!;
+        expect(source.times).toEqual([5, 5 + end(voice)]);
+        let node = next(source);
+        if (voice.source === 'noise') node = next(node); // through its filter
+        expect(next(node)).toBe(ctx.gains[0]); // its envelope, then the one effects node
+      });
+    });
+  }
+
+  it('is silent with the sound off: no source, no cue', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    sfx.setEnabled(false);
+    const before = ctx.sources.length;
+    expect(sfx.tell('choir')).toBeNull();
     expect(ctx.sources.length).toBe(before);
   });
 });
