@@ -62,7 +62,7 @@ describe('tallyRow (#389)', () => {
     const half = (apothem(choir) + FRAME.rim / 2) / Math.sqrt(3); // half the side, at the middle of the rim
     for (const side of [1, 2] as const) {
       const row = tallyRow(choir, side, Array(12).fill(true));
-      const ends = [row[0]!, row[11]!];
+      const ends = [row[0]!, row[11]!] as const;
       const mid = { x: (ends[0].x + ends[1].x) / 2, z: (ends[0].z + ends[1].z) / 2 };
       for (const m of ends) expect(Math.hypot(m.x - mid.x, m.z - mid.z) + MARK.step / 2).toBeLessThan(half);
     }

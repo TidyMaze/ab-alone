@@ -71,6 +71,7 @@ import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
 import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
+import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
@@ -510,6 +511,26 @@ function drawNotches(): void {
   add(thresholdGeometry, grooveMaterial, row.glyph, 0.005);
   add(thresholdMarkGeometry, scratchMaterial, row.glyph, 0.01);
 }
+// The ejected count scratched on the rim as tally marks (#389, tallymarks.ts), drawn as the phase notches: a groove per
+// slot, a bone-white mark in it for each marble lost (lit while left, in The Choir). The HUD pips stay as the fallback.
+const tallies = [new THREE.Group(), new THREE.Group()] as const;
+scene.add(...tallies);
+function drawTally(board: ArrayLike<number>): void {
+  const onBoard = (s: number): number => Array.from(board).filter((v) => v === s).length;
+  const lost = [engine.ejected(2), engine.ejected(1)] as const; // a side loses what the other ejects
+  const slots = tallySlots(lost, [onBoard(1), onBoard(2)], fight?.id === 'choir' ? 'left' : 'lost');
+  tallies.forEach((group, s) => {
+    group.clear();
+    for (const m of tallyRow(frame!, s === 0 ? 1 : 2, slots[s]!)) {
+      for (const geometry of m.marked ? [grooveGeometry, scratchGeometry] : [grooveGeometry]) {
+        const mesh = new THREE.Mesh(geometry, geometry === grooveGeometry ? grooveMaterial : scratchMaterial);
+        mesh.position.set(m.x, 0, m.z);
+        mesh.rotation.y = m.angle;
+        group.add(mesh);
+      }
+    }
+  });
+}
 const marbles = new THREE.Group();
 scene.add(marbles);
 // Cell index to the marble on it, first, and what is drawn on that marble (cap, glyph, tell ring): the
@@ -883,6 +904,7 @@ function refresh(): void {
   drawFrame(board);
   lightRim();
   drawNotches();
+  drawTally(board);
   const moves = parseMoves(engine.legal_moves());
   const targets = groupTargets(moves, selected);
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
@@ -1115,6 +1137,12 @@ addEventListener('resize', () => {
   const lit = drawn.filter((g) => g === scratchGeometry).length;
   return { lit, dark: drawn.filter((g) => g === grooveGeometry).length - lit, glyph: drawn.includes(thresholdMarkGeometry) };
 };
+// Used by the browser checks to count the tally marks drawn on the frame, per side, side 1 first (#389).
+(window as unknown as Record<string, unknown>).__tally = () =>
+  tallies.map((group) => {
+    const drawn = group.parent === scene ? group.children.map((m) => (m as THREE.Mesh).geometry) : [];
+    return { marked: drawn.filter((g) => g === scratchGeometry).length, slots: drawn.filter((g) => g === grooveGeometry).length };
+  });
 // Used by the browser checks to read the frame's size and holes, and that it is drawn (#292).
 (window as unknown as Record<string, unknown>).__frame = () => ({
   radius: frame?.radius,
