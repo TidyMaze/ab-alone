@@ -18,6 +18,11 @@ export class Presence {
     this.met.add(pub);
   }
 
+  /** The key `peer` proved, '' when it never did. */
+  keyOf(peer: string): string {
+    return this.peers.get(peer) ?? '';
+  }
+
   /** The transport lost `peer`. False when it never proved a key. */
   leave(peer: string): boolean {
     return this.peers.delete(peer);

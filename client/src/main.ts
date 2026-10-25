@@ -31,6 +31,7 @@ import { endBanner } from './endbanner';
 import { tallyLine } from './tally';
 import { generateKeys } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
+import { beatPeriod } from './coordinator';
 import { OnlineSession } from './session';
 import { onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
@@ -1287,6 +1288,8 @@ async function goOnline(room: string, side: number): Promise<void> {
     document.body.dataset.online = role === 'spectator' ? 'Spectator' : sideName(mine, glassOf());
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
+    document.body.dataset.coordinator = String(online?.coordinatorSeq ?? 0); // join_seq of the coordinator, read by the e2e tests (#359)
+    document.body.dataset.handover = online?.handover ?? 'none';
     onlineLine = onlineStatus(mine, role, opponent, online?.isAgent(3 - mine) ?? false, glassOf());
     onlineNote = netState;
     hud();
@@ -1321,6 +1324,8 @@ async function goOnline(room: string, side: number): Promise<void> {
     },
     onRole: note,
     onPresence: note,
+    onCoordinator: note,
+    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: (fn, ms) => void setInterval(fn, ms) },
     onRematchAsk: note,
     onRematch: () => {
       selected = [];

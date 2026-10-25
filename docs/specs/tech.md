@@ -288,6 +288,16 @@ answer: only a `Sync` does.
 When the coordinator's channel drops (heartbeat 5 s, three misses), the live peer with the
 lowest `join_seq` becomes coordinator, announces it, and every peer acknowledges. Same
 deterministic rule on every peer, so no election round is needed. In 1v1 there is no host.
+Built in #359, for the peers a room has today (two seats plus spectators): every peer sends a
+`beat` every 5 s. The creator is coordinator and publishes the join order in its signed `Hello`
+(`order`, `join_seq` is the place in it, the creator is 1). Three beats missed, or a dropped
+channel, remove a peer from the live set; a coordinator out of it is replaced by the live key
+with the lowest `join_seq`, in at most 16 s after its last beat. The new one sends a signed
+`coordinator` message naming itself, every other peer answers with the same message naming the
+coordinator it follows. A peer that drops meanwhile is not waited for, and a new coordinator that
+drops hands over again to the next `join_seq`. A room of two peers never migrates. Not done yet:
+the new coordinator does not bind seats for later joiners (the creator's roster stays), and a
+late joiner only learns the order from the creator's `Hello`.
 
 **Reconnection.** A peer that drops keeps its keypair and seat for a grace period (default 60 s
 in 1v1, 2 rounds in royale, tunable; timer is local to each peer, so disagreement possible, in

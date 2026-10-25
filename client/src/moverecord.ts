@@ -35,6 +35,7 @@ export interface Hello {
   seat: number;
   roster: string[];
   agent?: true; // an agent player (docs/specs/mcp.md section 8): signed, absent means a human
+  order?: string[]; // the creator's: every key in the order its Hello was first seen, so join_seq is the same everywhere (#359)
   pub: string;
   sig: string;
 }
@@ -63,8 +64,23 @@ export interface Missed {
   of: MoveRecord | Rematch;
 }
 
+/** Heartbeat (docs/specs/tech.md section 6, #359): proves the sender is alive. Not signed, it changes nothing but a timer. */
+export interface Beat {
+  kind: 'beat';
+}
+
+/** A key says `coordinator` coordinates the room now. The coordinator itself sending it is the announcement, any other
+ * key is its acknowledgement. Signed, so a peer cannot speak for another. */
+export interface Coordinator {
+  kind: 'coordinator';
+  game: string;
+  coordinator: string;
+  pub: string;
+  sig: string;
+}
+
 /** Anything a transport carries. */
-export type Wire = MoveRecord | Hello | Rematch | Sync | Missed;
+export type Wire = MoveRecord | Hello | Rematch | Sync | Missed | Beat | Coordinator;
 
 type Unsigned = Omit<MoveRecord, 'sig'>;
 
@@ -74,7 +90,9 @@ const payload = (r: Unsigned): Uint8Array<ArrayBuffer> =>
 
 // The agent entry is added only when set, so a human Hello keeps the bytes older peers verify.
 const helloPayload = (h: Omit<Hello, 'sig'>): Uint8Array<ArrayBuffer> =>
-  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub, ...(h.agent ? ['agent'] : [])]));
+  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub, ...(h.agent ? ['agent'] : []), ...(h.order ? ['order', h.order] : [])]));
+const coordinatorPayload = (c: Omit<Coordinator, 'sig'>): Uint8Array<ArrayBuffer> =>
+  new TextEncoder().encode(JSON.stringify(['coordinator', c.game, c.coordinator, c.pub]));
 
 const rematchPayload = (r: Omit<Rematch, 'sig'>): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify(['rematch', r.game, r.pub]));
@@ -108,9 +126,18 @@ export async function signMove(
   return { ...unsigned, sig: b64(sig) };
 }
 
-export async function signHello(keys: Keys, fields: { game: string; seat: number; roster: string[]; agent?: true }): Promise<Hello> {
+export async function signHello(keys: Keys, fields: { game: string; seat: number; roster: string[]; agent?: true; order?: string[] }): Promise<Hello> {
   const unsigned = { kind: 'hello' as const, ...fields, pub: keys.pub };
   return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, helloPayload(unsigned))) };
+}
+
+export async function signCoordinator(keys: Keys, fields: { game: string; coordinator: string }): Promise<Coordinator> {
+  const unsigned = { kind: 'coordinator' as const, ...fields, pub: keys.pub };
+  return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, coordinatorPayload(unsigned))) };
+}
+
+export function verifyCoordinator(c: Coordinator): Promise<boolean> {
+  return signedBy(c.pub, c.sig, coordinatorPayload(c));
 }
 
 export function verifyHello(h: Hello): Promise<boolean> {
@@ -166,6 +193,7 @@ export function parseHello(x: unknown): Hello | null {
     Array.isArray(h.roster) &&
     h.roster.every((k) => typeof k === 'string') &&
     (h.agent === undefined || h.agent === true) &&
+    (h.order === undefined || (Array.isArray(h.order) && h.order.every((k) => typeof k === 'string'))) &&
     typeof h.pub === 'string' &&
     typeof h.sig === 'string';
   if (!ok) return null;
@@ -175,6 +203,7 @@ export function parseHello(x: unknown): Hello | null {
     seat: h.seat as number,
     roster: h.roster as string[],
     ...(h.agent ? { agent: true as const } : {}),
+    ...(h.order ? { order: h.order as string[] } : {}),
     pub: h.pub as string,
     sig: h.sig as string,
   };
@@ -207,4 +236,13 @@ export function parseMissed(x: unknown): Missed | null {
   if ((x as { kind?: unknown } | null)?.kind !== 'missed') return null;
   const of = parseRematch((x as Missed).of) ?? parseRecord((x as Missed).of);
   return of ? { kind: 'missed', of } : null;
+}
+
+/** Shape check for a Coordinator off the wire. Returns a clean copy or null. */
+export function parseCoordinator(x: unknown): Coordinator | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const c = x as Record<string, unknown>;
+  const ok =
+    c.kind === 'coordinator' && typeof c.game === 'string' && typeof c.coordinator === 'string' && typeof c.pub === 'string' && typeof c.sig === 'string';
+  return ok ? { kind: 'coordinator', game: c.game as string, coordinator: c.coordinator as string, pub: c.pub as string, sig: c.sig as string } : null;
 }
