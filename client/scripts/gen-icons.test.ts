@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain Node script, no type declarations
 import { ICON_SIZES, generateIcons } from './gen-icons.mjs';
 
@@ -110,5 +111,31 @@ describe('web app manifest', () => {
     expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" />');
     expect(html).toContain('<link rel="icon" type="image/png" href="/icons/icon-192.png" />');
     expect(html).toContain('<link rel="apple-touch-icon" href="/icons/icon-192.png" />');
+  });
+});
+
+describe('gen-icons as a script', () => {
+  it('writes every icon file to public/icons/', async () => {
+    const written = new Map<string, Buffer>();
+    vi.doMock('node:fs', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('node:fs')>()),
+      mkdirSync: vi.fn(),
+      writeFileSync: (url: URL, buf: Buffer) => written.set(fileURLToPath(url), buf),
+    }));
+    const log: unknown[][] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((...line) => void log.push(line));
+    const argv = process.argv[1];
+    process.argv[1] = fileURLToPath(new URL('./gen-icons.mjs', import.meta.url)); // as `node scripts/gen-icons.mjs`
+    vi.resetModules();
+    try {
+      await import('./gen-icons.mjs');
+    } finally {
+      process.argv[1] = argv;
+      vi.doUnmock('node:fs');
+      spy.mockRestore();
+    }
+    const dir = fileURLToPath(new URL('../public/icons/', import.meta.url));
+    expect(written).toEqual(new Map([...ICONS].map(([n, b]) => [dir + n, b])));
+    expect(log).toHaveLength(written.size); // one line per file
   });
 });
