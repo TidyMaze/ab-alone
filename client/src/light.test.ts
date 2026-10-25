@@ -1,20 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import { relativeLuminance } from './contrast';
-import { DECOR, LIGHT } from './light';
+import { DECK_NAMES } from './deck';
+import { DECKS, DECOR, LIGHT } from './light';
 
-// Low-key lighting (docs/specs/world.md section 5): one hard warm lamp, a low fill, never a flat white.
-describe('scene light (world.md section 5)', () => {
-  it('one hard key dominates a low ambient fill, no flat white', () => {
-    expect(LIGHT.ambient.intensity).toBeLessThanOrEqual(0.3);
-    expect(LIGHT.key.intensity / LIGHT.ambient.intensity).toBeGreaterThanOrEqual(4);
+// Low-key lighting (docs/specs/world.md section 5): one hard source per deck, a low fill, never a flat white.
+describe('deck light presets (world.md section 5, #400)', () => {
+  const rgb = (c: number): [number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+
+  it('one preset per deck', () => {
+    expect(Object.keys(DECKS)).toEqual([...DECK_NAMES]);
   });
 
-  it('the key is the Mess lamp: sodium warm, from overhead and to one side', () => {
-    expect(LIGHT.key.color).toBe(0xd9822b);
-    expect(LIGHT.key.position[1]).toBeGreaterThan(0);
+  for (const deck of DECK_NAMES) {
+    const light = DECKS[deck];
+    it(`${deck}: one hard key dominates a low ambient fill, no flat white`, () => {
+      expect(light.ambient.intensity).toBeLessThanOrEqual(0.3);
+      expect(light.key.intensity / light.ambient.intensity).toBeGreaterThanOrEqual(4);
+    });
+
+    it(`${deck}: the key comes from overhead`, () => {
+      expect(light.key.position[1]).toBeGreaterThan(0);
+    });
+
+    it(`${deck}: exposure keeps the white marble below clipping`, () => {
+      expect(light.exposure).toBeGreaterThan(0);
+      expect(light.exposure).toBeLessThanOrEqual(1);
+    });
+
+    it(`${deck}: some fog`, () => {
+      expect(light.fog).toBeGreaterThan(0);
+    });
+  }
+
+  it('the Mess keeps the sodium lamp and the haze of #290', () => {
+    expect(DECKS.mess.key.color).toBe(0xd9822b);
+    expect(DECKS.mess.fog).toBe(1);
   });
 
-  it('the key shadow settings cover the whole board with soft contact shadows (#459)', () => {
+  it('the key shadow, the same on every deck, covers the whole board with soft contact shadows (#459)', () => {
     expect(LIGHT.key.shadow.mapSize).toBeGreaterThanOrEqual(1024);
     expect(LIGHT.key.shadow.camera.bounds).toBeGreaterThanOrEqual(6); // board radius ~4.3
     expect(LIGHT.key.shadow.camera.near).toBeGreaterThan(0);
@@ -23,9 +46,26 @@ describe('scene light (world.md section 5)', () => {
     expect(LIGHT.key.shadow.normalBias).toBeGreaterThan(0);
   });
 
-  it('exposure keeps the white marble below clipping', () => {
-    expect(LIGHT.exposure).toBeGreaterThan(0);
-    expect(LIGHT.exposure).toBeLessThanOrEqual(1);
+  it('each deck has its own key colour', () => {
+    expect(new Set(DECK_NAMES.map((deck) => DECKS[deck].key.color)).size).toBe(DECK_NAMES.length);
+  });
+
+  it('Mess, Furnace and Chapel are lit warm, Cargo and the Bridge cold', () => {
+    for (const deck of ['mess', 'furnace', 'chapel'] as const) {
+      const [r, , b] = rgb(DECKS[deck].key.color);
+      expect(r, deck).toBeGreaterThan(b);
+    }
+    for (const deck of ['cargo', 'bridge'] as const) {
+      const [r, , b] = rgb(DECKS[deck].key.color);
+      expect(b, deck).toBeGreaterThan(r);
+    }
+  });
+
+  it('the Furnace steam is the thickest fog, the Bridge has almost none', () => {
+    const fogs = DECK_NAMES.map((deck) => DECKS[deck].fog);
+    expect(DECKS.furnace.fog).toBe(Math.max(...fogs));
+    expect(DECKS.bridge.fog).toBe(Math.min(...fogs));
+    expect(DECKS.bridge.fog).toBeLessThan(DECKS.mess.fog / 2);
   });
 });
 
@@ -46,9 +86,11 @@ describe('reflections and accent lights (#376)', () => {
     expect(LIGHT.accents.warm.color).toBe(0xd9822b);
   });
 
-  it('each accent is weaker than the key, so the key is still the one hard source', () => {
-    expect(LIGHT.accents.rim.intensity).toBeLessThan(LIGHT.key.intensity);
-    expect(LIGHT.accents.warm.intensity).toBeLessThan(LIGHT.key.intensity);
+  it('each accent is weaker than every deck key, so the key is still the one hard source', () => {
+    for (const deck of DECK_NAMES) {
+      expect(LIGHT.accents.rim.intensity).toBeLessThan(DECKS[deck].key.intensity);
+      expect(LIGHT.accents.warm.intensity).toBeLessThan(DECKS[deck].key.intensity);
+    }
   });
 });
 

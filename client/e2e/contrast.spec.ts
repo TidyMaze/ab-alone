@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
+import { DECK_NAMES } from '../src/deck';
 
 // Bug #339: a cell's edge must stay 3:1 against the surface next to it (docs/specs/world.md section 5, art.md section 1).
 // The start position, 1280x720. Around each listed cell, 8 points on its bevel ring (radius 0.44, 45 degrees apart),
@@ -39,51 +40,60 @@ const pixels = (page: Page, png: Buffer, points: [number, number][]) =>
     [png.toString('base64'), points] as const,
   );
 
-test('each cell edge is 3:1 against the surface next to it on at least 6 of 8 ring points, bug #339', async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.addInitScript(() => {
-    localStorage.setItem('ab-alone.quality', 'high');
-    localStorage.setItem('ab-alone.clear-board', 'off');
-  });
-  await page.goto('./?bot=off');
-  await page.locator('canvas').waitFor();
-  await expect(page.locator('body')).toHaveAttribute('data-tier', 'high');
-  await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
-  await page.mouse.move(2, 2); // no hover ghost
-  // Under automation the page skips draws (#216): wait for a draw that began after the mouse moved (#365).
-  const drawn = await page.evaluate(() => (window as any).__draws() as number);
-  await page.waitForFunction((n) => (window as any).__draws() > n, drawn);
+// Task #400: every deck's light holds the same 3:1, on the same start position. window.__deck lights the board in play as
+// that deck (the Bridge has no mode yet), then the shot waits for a draw that began after it: under automation the page
+// skips draws (#216, #365).
+const deckShot = async (page: Page, deck: string, path: string) => {
+  await page.evaluate((d) => (window as any).__deck(d), deck);
+  const draws = await page.evaluate(() => (window as any).__draws() as number);
+  await page.waitForFunction((n) => (window as any).__draws() > n, draws);
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-  const png = await page.screenshot({ path: testInfo.outputPath('cells.png'), type: 'png' });
-  // Per cell and ring point, the edge then the surface: two axial cells, mapped to the screen in one call.
-  const axial: [number, number][] = [];
-  for (const [q, r] of CELLS) {
-    for (let k = 0; k < 8; k++) {
-      const angle = (k * Math.PI) / 4;
-      const edgeOff = axialOffset(EDGE * Math.cos(angle), EDGE * Math.sin(angle));
-      const surfOff = axialOffset(SURFACE * Math.cos(angle), SURFACE * Math.sin(angle));
-      axial.push([q + edgeOff.dq, r + edgeOff.dr], [q + surfOff.dq, r + surfOff.dr]);
+  return page.screenshot({ path, type: 'png' });
+};
+
+for (const deck of DECK_NAMES) {
+  test(`${deck}: each cell edge is 3:1 against the surface next to it on at least 6 of 8 ring points, bugs #339 and #400`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript(() => {
+      localStorage.setItem('ab-alone.quality', 'high');
+      localStorage.setItem('ab-alone.clear-board', 'off');
+    });
+    await page.goto('./?bot=off');
+    await page.locator('canvas').waitFor();
+    await expect(page.locator('body')).toHaveAttribute('data-tier', 'high');
+    await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
+    await page.mouse.move(2, 2); // no hover ghost
+    const png = await deckShot(page, deck, testInfo.outputPath(`cells-${deck}.png`));
+    // Per cell and ring point, the edge then the surface: two axial cells, mapped to the screen in one call.
+    const axial: [number, number][] = [];
+    for (const [q, r] of CELLS) {
+      for (let k = 0; k < 8; k++) {
+        const angle = (k * Math.PI) / 4;
+        const edgeOff = axialOffset(EDGE * Math.cos(angle), EDGE * Math.sin(angle));
+        const surfOff = axialOffset(SURFACE * Math.cos(angle), SURFACE * Math.sin(angle));
+        axial.push([q + edgeOff.dq, r + edgeOff.dr], [q + surfOff.dq, r + surfOff.dr]);
+      }
     }
-  }
-  const screen = await page.evaluate(
-    (list) => list.map(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }),
-    axial,
-  );
-  const colors = await pixels(page, png, screen.map(({ x, y }) => [x, y]));
-  const failures: string[] = [];
-  CELLS.forEach(([q, r], cell) => {
-    const ratios: number[] = [];
-    for (let k = 0; k < 8; k++) {
-      const i = (cell * 8 + k) * 2;
-      ratios.push(contrastRatio(colors[i]!, colors[i + 1]!));
-    }
-    const passing = ratios.filter((ratio) => ratio >= 3).length;
-    const line = `ring (${q},${r}): ${passing}/8 pass, ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
-    console.log(line);
-    if (passing < MIN_PASSING) failures.push(line);
+    const screen = await page.evaluate(
+      (list) => list.map(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }),
+      axial,
+    );
+    const colors = await pixels(page, png, screen.map(({ x, y }) => [x, y]));
+    const failures: string[] = [];
+    CELLS.forEach(([q, r], cell) => {
+      const ratios: number[] = [];
+      for (let k = 0; k < 8; k++) {
+        const i = (cell * 8 + k) * 2;
+        ratios.push(contrastRatio(colors[i]!, colors[i + 1]!));
+      }
+      const passing = ratios.filter((ratio) => ratio >= 3).length;
+      const line = `${deck} ring (${q},${r}): ${passing}/8 pass, ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
+      console.log(line);
+      if (passing < MIN_PASSING) failures.push(line);
+    });
+    expect(failures, 'cells below 6 of 8 ring points at 3:1').toEqual([]);
   });
-  expect(failures, 'cells below 6 of 8 ring points at 3:1').toEqual([]);
-});
+}
 
 // Task #344: both marbles stand out from the deck at 3:1 (world.md section 5, art.md section 1). The start position,
 // hot-seat: the shell plays the near rows, the glass the far ones. A marble is the mean colour of a small box where its
@@ -117,25 +127,26 @@ const boxMeans = (page: Page, png: Buffer, cells: [number, number][]) =>
     [png.toString('base64'), cells] as const,
   );
 
-for (const [name, width, height] of [['desktop', 1280, 720], ['phone', 375, 812]] as const) {
-  test(`each marble reads 3:1 against the deck on ${name}, task #344`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width, height });
-    await page.goto('./?bot=off');
-    await page.locator('canvas').waitFor();
-    await page.mouse.move(2, 2); // no hover ghost
-    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-    const png = await page.screenshot({ path: testInfo.outputPath(`marbles-${name}.png`), type: 'png' });
-    const deck = await boxMeans(page, png, DECK_CELLS);
-    const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
-    const failures: string[] = [];
-    for (const [side, cells] of [['shell', SHELL_CELLS], ['glass', GLASS_CELLS]] as const) {
-      const ratios = (await boxMeans(page, png, cells)).map((rgb) => contrastRatio(rgb, mean));
-      const line = `${side} on ${name}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
-      console.log(line);
-      if (ratios.some((ratio) => ratio < 3)) failures.push(line);
-    }
-    expect(failures, 'marbles below 3:1 against the deck').toEqual([]);
-  });
+for (const deckName of DECK_NAMES) {
+  for (const [name, width, height] of [['desktop', 1280, 720], ['phone', 375, 812]] as const) {
+    test(`${deckName}: each marble reads 3:1 against the deck on ${name}, tasks #344 and #400`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height });
+      await page.goto('./?bot=off');
+      await page.locator('canvas').waitFor();
+      await page.mouse.move(2, 2); // no hover ghost
+      const png = await deckShot(page, deckName, testInfo.outputPath(`marbles-${name}-${deckName}.png`));
+      const deck = await boxMeans(page, png, DECK_CELLS);
+      const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
+      const failures: string[] = [];
+      for (const [side, cells] of [['shell', SHELL_CELLS], ['glass', GLASS_CELLS]] as const) {
+        const ratios = (await boxMeans(page, png, cells)).map((rgb) => contrastRatio(rgb, mean));
+        const line = `${deckName} ${side} on ${name}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
+        console.log(line);
+        if (ratios.some((ratio) => ratio < 3)) failures.push(line);
+      }
+      expect(failures, 'marbles below 3:1 against the deck').toEqual([]);
+    });
+  }
 }
 
 // Task #377: every dark shell skin reads 3:1 against the deck (asserted) and its ratio against the void is logged: the void
