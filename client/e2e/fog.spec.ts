@@ -1,18 +1,21 @@
 import { expect, test, type Page } from '@playwright/test';
+import { RADIUS } from '../src/board';
+import { FRAME } from '../src/frame';
 
 // Bug #171: the fog was invisible. Two screenshots of the same still board, Clear board on and off,
 // must differ at the far rim and match at the near rim. The CSS vignette (body::after) is hidden so
-// only the scene fog is measured.
+// only the scene fog is measured. Bug #399: the far rim is the steel rim beyond the cells, the far rim
+// cells must match too: the fog thickens toward the rim, never over a cell.
 const cellToScreen = (page: Page, q: number, r: number) =>
   page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }, [q, r]);
 
 const settle = (page: Page) =>
   page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 
-// Mean absolute RGB difference (0 to 255) of two PNGs inside a box.
-const meanDiff = (page: Page, a: Buffer, b: Buffer, box: { x: number; y: number; w: number; h: number }) =>
+// Mean absolute RGB difference (0 to 255) of two PNGs inside each box, both decoded once.
+const meanDiffs = (page: Page, a: Buffer, b: Buffer, boxes: { x: number; y: number; w: number; h: number }[]) =>
   page.evaluate(
-    async ([ra, rb, bx]) => {
+    async ([ra, rb, list]) => {
       const load = async (b64: string) => {
         const img = new Image();
         img.src = `data:image/png;base64,${b64}`;
@@ -22,16 +25,20 @@ const meanDiff = (page: Page, a: Buffer, b: Buffer, box: { x: number; y: number;
         c.height = img.height;
         const g = c.getContext('2d')!;
         g.drawImage(img, 0, 0);
-        return g.getImageData(bx.x, bx.y, bx.w, bx.h).data;
+        return g;
       };
-      const [pa, pb] = await Promise.all([load(ra as string), load(rb as string)]);
-      let sum = 0;
-      for (let i = 0; i < pa.length; i += 4) {
-        sum += Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]);
-      }
-      return sum / (pa.length / 4) / 3;
+      const [ga, gb] = await Promise.all([load(ra as string), load(rb as string)]);
+      return list.map((bx) => {
+        const pa = ga.getImageData(bx.x, bx.y, bx.w, bx.h).data;
+        const pb = gb.getImageData(bx.x, bx.y, bx.w, bx.h).data;
+        let sum = 0;
+        for (let i = 0; i < pa.length; i += 4) {
+          sum += Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]);
+        }
+        return sum / (pa.length / 4) / 3;
+      });
     },
-    [a.toString('base64'), b.toString('base64'), box] as const,
+    [a.toString('base64'), b.toString('base64'), boxes] as const,
   );
 
 type Box = { x: number; y: number; w: number; h: number };
@@ -89,7 +96,7 @@ const diffOf = (page: Page, a: Buffer, b: Buffer, box: Box) =>
     [a.toString('base64'), b.toString('base64'), box] as const,
   );
 
-test('the fog shows at the far rim of the board and not at the near rim, bug #171', async ({ page }, testInfo) => {
+test('the fog shows at the far rim of the board, not on its cells nor at the near rim, bugs #171 and #399', async ({ page }, testInfo) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   // The evaluation bar's label (#191) is set when the analysis worker answers, which can be after the first shot.
@@ -134,6 +141,21 @@ test('the fog shows at the far rim of the board and not at the near rim, bug #17
     return { x, y, w, h: 50 };
   };
 
+  // The far half of the steel rim, between the plate's edge and the rim's outer edge (frame.ts), from x = -2 to 2.
+  const SQRT3_2 = Math.sqrt(3) / 2;
+  const onPlane = (x: number, z: number) => cellToScreen(page, x - z / SQRT3_2 / 2, z / SQRT3_2);
+  const edge = RADIUS * SQRT3_2 + FRAME.margin;
+  const [left, right, inner, outer] = await Promise.all([
+    onPlane(-2, -edge),
+    onPlane(2, -edge),
+    onPlane(0, -edge),
+    onPlane(0, -edge - FRAME.rim),
+  ]);
+  const farRim = { x: Math.round(left.x), y: Math.round(outer.y), w: Math.round(right.x - left.x), h: Math.round(inner.y - outer.y) };
+  // A box on each far rim cell's disc, half the cell spacing wide.
+  const half = Math.round((far[1]!.x - far[0]!.x) / 4);
+  const disc = (c: { x: number; y: number }) => ({ x: Math.round(c.x) - half, y: Math.round(c.y) - half, w: 2 * half, h: 2 * half });
+
   const still = await diffOf(page, fogOn, fogOnAgain, { x: 0, y: 0, w: size.width, h: size.height });
   if (still.mean >= 0.01) {
     await testInfo.attach('still-diff.png', { body: Buffer.from(still.png, 'base64'), contentType: 'image/png' });
@@ -141,6 +163,8 @@ test('the fog shows at the far rim of the board and not at the near rim, bug #17
     await testInfo.attach('fog-on-again.png', { body: fogOnAgain, contentType: 'image/png' });
   }
   expect(still.mean, `changed pixels ${JSON.stringify(still.changed)}`).toBeLessThan(0.01); // still scene
-  expect(await meanDiff(page, fogOn, fogOff, band(far))).toBeGreaterThan(4);
-  expect(await meanDiff(page, fogOn, fogOff, band(near))).toBeLessThan(1);
+  const [rimDiff, nearDiff, ...cellDiffs] = await meanDiffs(page, fogOn, fogOff, [farRim, band(near), ...far.map(disc)]);
+  expect(rimDiff, 'fog on the far rim').toBeGreaterThan(4);
+  cellDiffs.forEach((d, q) => expect(d, `fog on the far rim cell (${q},-4)`).toBeLessThan(1));
+  expect(nearDiff).toBeLessThan(1);
 });

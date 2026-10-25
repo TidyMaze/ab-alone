@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import init, { Encounter, Engine, boss_ids, boss_name } from 'abalone-wasm';
 import {
   CELLS,
+  RADIUS,
   VANISHED,
   axialTo3D,
   cellIndex,
@@ -230,8 +231,10 @@ function tellSound(tell: Tell, marks: readonly unknown[]): void {
   const cue = sfx.tell(tell);
   if (cue) tellCues.push(cue);
 }
+// The frame's radius, for the fog that starts at its edge (#399): drawFrame sets it, The Choir plays on radius 3.
+let fogRadius = RADIUS;
 function applyLook(): void {
-  const fog = fogSettings(tier, clear, view.distance);
+  const fog = fogSettings(tier, clear, view, fogRadius);
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
@@ -462,6 +465,8 @@ function drawFrame(board: ArrayLike<number>): void {
   const next = frameShape(board);
   if (JSON.stringify(next) === JSON.stringify(frame)) return;
   frame = next;
+  fogRadius = next.radius;
+  applyLook();
   const plateShape = new THREE.Shape(flat(next.inner));
   for (const h of next.holes) plateShape.holes.push(new THREE.Path().absarc(h.x, -h.z, FRAME.hole, 0, 2 * Math.PI, true));
   plate.geometry.dispose();
