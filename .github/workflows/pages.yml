@@ -3,13 +3,14 @@ name: Pages
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
 
 permissions:
   contents: read
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -17,14 +18,23 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - id: wasm-cache
+        uses: actions/cache@v4
+        with:
+          path: crates/abalone-wasm/pkg
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
-      - run: wasm-pack build crates/abalone-wasm --target web
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: wasm-pack build crates/abalone-wasm --target web
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -33,7 +43,7 @@ jobs:
           bun-version-file: client/package.json
       - run: bun install --frozen-lockfile
         working-directory: client
-      - run: bun run build
+      - run: bunx tsc --noEmit && bunx vite build
         working-directory: client
       - uses: actions/upload-pages-artifact@v3
         with:
