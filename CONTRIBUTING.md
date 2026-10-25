@@ -96,6 +96,12 @@ run.
     files, or one needs the other (for example two settings in the same menu). Unrelated work
     never shares a PR. Anything found on the way becomes a new issue, never a bigger PR. When two
     solutions work, take the smaller one.
+18. **Reviewable size.** A reader must be able to review any issue, Decision or spec PR in one
+    sitting. A Decision asks **one question**, gives 2 or 3 options and a recommendation, and its
+    body reads in about 5 minutes (roughly 500 words at most). A spec PR covers **one topic** (one
+    file or one section) and stays around 300 changed lines at most. Detail that is not decided
+    yet stays out, or goes in a later issue, instead of one large plan up front. Too long: split
+    it before asking for a review (#361, after #313).
 
 ## 2. Where things live
 
