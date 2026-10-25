@@ -92,7 +92,8 @@ const diffOf = (page: Page, a: Buffer, b: Buffer, box: Box) =>
 test('the fog shows at the far rim of the board and not at the near rim, bug #171', async ({ page }, testInfo) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
-  await page.addStyleTag({ content: 'body::after { display: none !important; }' });
+  // The evaluation bar's label (#191) is set when the analysis worker answers, which can be after the first shot.
+  await page.addStyleTag({ content: 'body::after, #eval { display: none !important; }' });
   await expect(page.locator('#hud')).toContainText('Black to move');
   const cog = page.getByRole('button', { name: 'Settings' });
   const toggle = page.getByRole('button', { name: 'Clear board' });
