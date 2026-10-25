@@ -164,7 +164,7 @@ test('New game while the bot thinks: its reply to the old game is dropped, the b
   });
   const errors: Error[] = [];
   page.on('pageerror', (e) => errors.push(e));
-  await load(page, './');
+  await load(page, './?nodes=200'); // the bot's search at the test budget (bot.ts)
   const start = await position(page);
   const button = page.locator('#new-game');
 
