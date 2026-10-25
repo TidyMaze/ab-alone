@@ -69,10 +69,12 @@ right of the board. Held upright, the column becomes rows of buttons under the p
 field covers a cell, and the space between them lets every tap through to the board.
 
 Settings (#277): a cog button, first in the column, opens a menu, one button per item: the toggles Clear board,
-then Sound (#284, the ejection sound, no longer a button of the column; opening the menu and toggling Sound count as
+then Reduced motion (#379, see section 6: it follows `prefers-reduced-motion` until pressed, then keeps the player's
+choice; second, so that held upright the items still fit in two rows beside the cog), then Sound (#284, the ejection
+sound, no longer a button of the column; opening the menu and toggling Sound count as
 the first gesture that starts audio), then Theme (#317, System, Dark or Light: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column). Each
 item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG line icons, thin `currentColor`
-strokes, one size) then its label: a fog for Clear board, a speaker for Sound (crossed out while off), an arrow out
+strokes, one size) then its label: a fog for Clear board, a ball with speed lines for Reduced motion, a speaker for Sound (crossed out while off), an arrow out
 of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
 or closing it moves no button: under the cog in the column, beside the cog over the first row when the buttons are
 rows. It covers no cell either. On a touch screen each item is at least 44 px tall. It closes on Escape, on a press
@@ -120,7 +122,7 @@ in the column, outside the menu.
   cells, marbles and targets. Win: a warm sodium rim light rises and pulses once (1.6 s) and stays as a
   glow. Loss: a cold blue-black fade closes in while the board dims (1.4 s). Draw: a still hold of 0.6 s,
   then a neutral steel rim fades in (1.2 s). CSS only, each ends by itself, nothing runs when idle.
-  Under `prefers-reduced-motion` there is no light and no animation: the banner and the dimmed board
+  Under Reduced motion (section 6) there is no light and no animation: the banner and the dimmed board
   only. No move is accepted and no marble can be selected once over. The score line still carries the
   reason in the HUD's own words ("by 6 ejections", "by threefold repetition").
 - **Online status.** Online games add one line under the turn: the player's own color and
@@ -249,7 +251,10 @@ mode once that toggle exists (#32), and it has no motion.
 
 - HUD changes fade in over 160 ms (opacity only, ease-out). Nothing moves, nothing slides.
 - No looping CSS animation on the page. Camera drift belongs to the renderer, not to this file. The end of a game plays one short animation that ends by itself (section 4, End banner).
-- `@media (prefers-reduced-motion: reduce)` sets every transition and animation duration to 0.
+- Reduced motion, a toggle of the settings menu (#379), sets every transition and animation duration to 0
+  (`:root[data-motion='reduced']`), and the renderer swaps the ejection tumble for a plain fade, drops the
+  spatter and the slide. Until the player presses it, it follows `prefers-reduced-motion`; the choice is saved
+  locally like Sound and Theme. One pure function, `motionReduced` in `client/src/settings.ts`, decides it.
 - No flash above 3 per second, no full-screen white, ever (photosensitivity, world.md section 8).
 
 ## 7. Contrast targets (WCAG 2.1 AA)

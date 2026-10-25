@@ -14,6 +14,7 @@ export const ICONS = {
   skin: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M8 8.5a5 5 0 0 1 3-2',
   safe: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z',
   scale: 'M10 4.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11M14.5 14.5 20 20M10 7.5v5M7.5 10h5',
+  motion: 'M17 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M3 9h7M2 12h8M3 15h7',
 } as const;
 
 export type IconName = keyof typeof ICONS;

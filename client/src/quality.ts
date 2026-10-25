@@ -25,6 +25,7 @@ const THEME_KEY = 'ab-alone.theme';
 const SKIN_KEY = 'ab-alone.shell-skin';
 const SAFE_KEY = 'ab-alone.safe-mode';
 const SCALE_KEY = 'ab-alone.ui-scale';
+const MOTION_KEY = 'ab-alone.reduced-motion';
 
 export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): Tier {
   const weak = width < 768 || reducedMotion || (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
@@ -88,6 +89,12 @@ export const readTheme = (store: Store): Theme => {
   return stored === 'dark' || stored === 'light' ? stored : 'system';
 };
 export const writeTheme = (store: Store, theme: Theme): void => write(store, THEME_KEY, theme);
+// Reduced motion (#379): null until the player presses the toggle, so the system setting decides (motionReduced).
+export const readReducedMotion = (store: Store): boolean | null => {
+  const stored = read(store, MOTION_KEY);
+  return stored === 'on' ? true : stored === 'off' ? false : null;
+};
+export const writeReducedMotion = (store: Store, on: boolean): void => write(store, MOTION_KEY, on ? 'on' : 'off');
 
 // The dark shell skin (#377): Scarab ridges unless the player picked another one of skins.ts.
 export const readSkin = (store: Store): string => skinById(read(store, SKIN_KEY)).id;

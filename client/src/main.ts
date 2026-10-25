@@ -43,7 +43,7 @@ import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from '.
 import { hudHtml } from './hud';
 import { drawSkin } from './skinart';
 import { nextSkin, skinById } from './skins';
-import { menuOpen, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
+import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
 import { DECOR, LIGHT } from './light';
@@ -53,6 +53,7 @@ import {
   fogSettings,
   readClearBoard,
   readFps,
+  readReducedMotion,
   readSafeMode,
   readSkin,
   readSound,
@@ -62,6 +63,7 @@ import {
   renderPixelRatio,
   writeClearBoard,
   writeFps,
+  writeReducedMotion,
   writeSafeMode,
   writeSkin,
   writeSound,
@@ -192,11 +194,15 @@ const store = (() => {
     return null;
   }
 })();
+// Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
+const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let savedMotion = readReducedMotion(store);
+const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
 const tier = readTier(store, {
   width: innerWidth,
   cores: navigator.hardwareConcurrency,
   memory: (navigator as { deviceMemory?: number }).deviceMemory,
-  reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+  reducedMotion: reducedMotion(),
 });
 diag.log.log('info', 'start', { backend, tier });
 let clear = readClearBoard(store);
@@ -247,6 +253,8 @@ function applyLook(): void {
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
+  if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
+  else delete document.documentElement.dataset.motion;
 }
 // The settings menu: one button per item, its icon then its label, opened by the cog only. Escape, a press outside
 // and the cog close it. A toggle shows its state in aria-pressed, Sound a muted speaker while off (#287).
@@ -279,15 +287,19 @@ const toggles: Record<string, () => void> = {
     marbleMaterials[1] = shellMaterial(skin);
     refresh();
   },
+  'reduced-motion': () => {
+    savedMotion = !reducedMotion();
+    writeReducedMotion(store, savedMotion);
+  },
 };
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion())) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe)) {
+for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion())) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -322,6 +334,10 @@ fpsButton.addEventListener('click', () => {
   fpsBox.hidden = !fpsOn;
   fpsStamps = [];
   fpsButton.setAttribute('aria-pressed', String(fpsOn));
+});
+motionQuery.addEventListener('change', () => {
+  applyLook(); // a system change still counts until the player presses Reduced motion
+  paintMenu();
 });
 applyView(); // camera and fog
 let menuIsOpen = false;
@@ -758,8 +774,8 @@ function playMove(record: number[]): void {
 function afterPlay(before: number[], record: number[], live = true): void {
   history.push(record);
   const mv = parseMoves(record)[0]!;
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const tracks = slideTracks(before, engine.board(), mv, reducedMotion);
+  const reduced = reducedMotion();
+  const tracks = slideTracks(before, engine.board(), mv, reduced);
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
   if (!live) return;
@@ -773,7 +789,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const body = document.body;
   body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
   body.dataset.sound = sfx.ejection(ejection.side, glassOf()) ?? 'none'; // read by the e2e tests: toll, clack or none
-  const track = ejectTrack(ejection.cell, record[1]!, reducedMotion);
+  const track = ejectTrack(ejection.cell, record[1]!, reduced);
   const mesh = marbleMesh(ejection.side);
   mesh.traverse((o) => {
     const material = ((o as THREE.Mesh).material as THREE.Material).clone(); // its own, to fade
@@ -791,7 +807,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const e: Ejecting = { holder, tumble, mesh, track, start: performance.now(), skipped: false };
   drawEjection(e, 0);
   ejecting.push(e);
-  if (!reducedMotion) startBlood(track);
+  if (!reduced) startBlood(track);
   body.dataset.ejecting = track.kind; // read by the e2e tests: tumble, or fade with reduced motion
 }
 
