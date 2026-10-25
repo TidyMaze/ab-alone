@@ -27,6 +27,8 @@ The short version:
    Kill the dev servers you started. Finish and merge your open PR before opening another: many
    open PRs mean rebase loops (CONTRIBUTING rule 16). Keep every task and PR minimal: one thing,
    done well, the simplest way (KISS, CONTRIBUTING rule 17).
+   Keep every Decision and spec PR short enough to review in one sitting: one question per Decision,
+   one topic per spec PR (CONTRIBUTING rule 18).
 8. Assign yourself (your driving owner) before any work. Never touch an issue or PR assigned to
    someone else without their written consent: let them finish until Ready or merged.
 9. Branch from an up-to-date `main`, target `main`. Never base a branch on an unmerged branch.
