@@ -47,9 +47,10 @@ import { glassSkinById, nextGlassSkin } from './glassskins';
 import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
-import { DECOR, LIGHT } from './light';
+import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
+import { deckOf, type Deck } from './deck';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
@@ -143,7 +144,6 @@ await renderer.init();
 renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; // rolls the lamp's highlights off instead of clipping them
-renderer.toneMappingExposure = LIGHT.exposure;
 document.body.appendChild(renderer.domElement);
 const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend
   ? 'WebGPU'
@@ -215,7 +215,7 @@ frameCamera();
 let view = resetView();
 const fogObj = new THREE.Fog(COLORS.base, 10, 20);
 function updateFog(): void {
-  const fog = fogSettings(tier, clear, view, fogRadius);
+  const fog = fogSettings(tier, clear, view, fogRadius, DECKS[deck].fog);
   if (!fog) {
     scene.fog = null;
   } else {
@@ -236,6 +236,8 @@ let clear = readClearBoard(store);
 const forceShadows =
   new URLSearchParams(location.search).get('shadows') === 'on' ||
   new URLSearchParams(location.search).get('shadows') === '1';
+// The deck in play (#400): its light and fog. A page opens on a local game, hot-seat or against the bot, at the Mess.
+let deck: Deck = deckOf('local');
 // The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
 let theme: Theme = readTheme(store);
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts
@@ -461,9 +463,9 @@ addEventListener('pointerdown', (e) => {
 modeButton.disabled = false; // listener ready (#146)
 
 for (const type of ['pointerdown', 'pointerup', 'keydown']) addEventListener(type, () => sfx.unlock(), { capture: true });
-scene.add(new THREE.AmbientLight(LIGHT.ambient.color, LIGHT.ambient.intensity));
-const lamp = new THREE.DirectionalLight(LIGHT.key.color, LIGHT.key.intensity);
-lamp.position.set(...LIGHT.key.position);
+// The deck's light (#400): a low ambient and one hard key, set again with the fog when a mode starts on another deck.
+const ambient = new THREE.AmbientLight();
+const lamp = new THREE.DirectionalLight();
 lamp.castShadow = true;
 lamp.shadow.mapSize.set(LIGHT.key.shadow.mapSize, LIGHT.key.shadow.mapSize);
 lamp.shadow.camera.near = LIGHT.key.shadow.camera.near;
@@ -475,7 +477,22 @@ lamp.shadow.camera.top = shadowBound;
 lamp.shadow.camera.bottom = -shadowBound;
 lamp.shadow.bias = LIGHT.key.shadow.bias;
 lamp.shadow.normalBias = LIGHT.key.shadow.normalBias;
-scene.add(lamp);
+scene.add(ambient, lamp);
+function applyDeck(next: Deck): void {
+  deck = next;
+  const light = DECKS[deck];
+  ambient.color.set(light.ambient.color);
+  ambient.intensity = light.ambient.intensity;
+  lamp.color.set(light.key.color);
+  lamp.intensity = light.key.intensity;
+  lamp.position.set(...light.key.position);
+  renderer.toneMappingExposure = light.exposure;
+  document.body.dataset.deck = deck; // read by the e2e tests
+  applyLook();
+}
+applyDeck(deck);
+// Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
+(window as unknown as Record<string, unknown>).__deck = applyDeck;
 // Accents (#376): a cold rim from behind, a small warm point at the lamp's side. Weaker than the key.
 const coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
 coldRim.position.set(...LIGHT.accents.rim.position);
@@ -1672,6 +1689,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   retryButton.hidden = false;
   newGameButton.hidden = true;
   document.body.dataset.boss = id;
+  applyDeck(deckOf('boss', id));
   refresh();
 }
 for (const id of boss_ids()) {
@@ -1790,6 +1808,7 @@ async function goOnline(room: string, side: number): Promise<void> {
   stopAnalysis();
   fight = null;
   delete document.body.dataset.boss;
+  applyDeck(deckOf('online'));
   retryButton.hidden = true;
   newGameButton.hidden = true;
   engine = new Engine();
