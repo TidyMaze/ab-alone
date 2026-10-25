@@ -195,6 +195,22 @@ test('an imported game replaces a game against the bot in progress, and the bot 
   expect(file.content).toEqual(save(true, await history(page)));
 });
 
+test('a click right after an import during the slide of the last move selects in the imported game, #371', async ({ page }) => {
+  // The page clock paused: no frame runs, so the slide of the move played before the import never ends by itself.
+  const start = Date.parse('2026-01-05T12:00:00Z');
+  await page.clock.install({ time: start });
+  await page.goto('./?bot=off');
+  await ready(page);
+  await page.clock.pauseAt(start + 10 * 60_000); // a time no load reaches before, as in newgame.spec.ts
+  await move(page, [0, 2], [0, 1]); // Black: its marble slides
+  await expect(page.locator('body')).toHaveAttribute('data-sliding', '1');
+
+  await importText(page, JSON.stringify(save(false, [A, B, C])));
+  await expect.poll(() => plies(page)).toBe(3); // White to move, as before the import
+  await click(page, 0, -1); // a White marble of the imported game: selected at once, not queued behind the old slide
+  expect(await page.evaluate(() => (window as any).__rings())).toEqual([[0, -1]]);
+});
+
 test('an imported finished game shows its result, and a reload starts a new game', async ({ page }) => {
   await page.goto('./?bot=off');
   await ready(page);

@@ -485,8 +485,11 @@ async function botTurn(): Promise<void> {
 // Moved marbles slide to their new cell. A click or a bot reply during a slide waits for its end.
 let slide: { game: Engine | Encounter; tracks: SlideTrack[]; start: number } | null = null;
 const afterSlide: (() => void)[] = [];
+// The slide of a replaced game (an import, New game, Retry, a new fight, going online) holds nothing back: what
+// would wait for it would be dropped with it at the next frame (#371).
+const sliding = (): boolean => slide?.game === engine;
 function whenSettled(fn: () => void): void {
-  if (slide) afterSlide.push(fn);
+  if (sliding()) afterSlide.push(fn);
   else fn();
 }
 
@@ -837,7 +840,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 function click(q: number, r: number): void {
   if (engine.status() !== 0) return; // over: no move, no selection (#282)
   if (thinking || online?.role === 'spectator') return;
-  if (slide) return whenSettled(() => click(q, r)); // the next move waits for the slide
+  if (sliding()) return whenSettled(() => click(q, r)); // the next move waits for the slide
   if (online && engine.to_move() !== online.side) return; // not our turn
   if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
   const side = engine.board()[cellIndex(q, r)];
