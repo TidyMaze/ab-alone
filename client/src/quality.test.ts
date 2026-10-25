@@ -9,6 +9,7 @@ import {
   readFps,
   writeFps,
   renderPixelRatio,
+  readFlatHud,
   readReducedMotion,
   readSafeMode,
   readSound,
@@ -20,6 +21,7 @@ import {
   writeClearBoard,
   writeSafeMode,
   writeSound,
+  writeFlatHud,
   writeReducedMotion,
   writeSkin,
   writeTheme,
@@ -164,6 +166,27 @@ describe('FPS readout storage (#426)', () => {
     writeFps(s, false);
     expect(readFps(s)).toBe(false);
     expect(() => writeFps(throwing, true)).not.toThrow();
+  });
+});
+
+describe('flat HUD storage (#391): off unless the player turned it on', () => {
+  it('defaults to off', () => {
+    expect(readFlatHud(memoryStorage())).toBe(false);
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writeFlatHud(s, true);
+    expect(s.data.get('ab-alone.flat-hud')).toBe('on');
+    expect(readFlatHud(s)).toBe(true);
+    writeFlatHud(s, false);
+    expect(s.data.get('ab-alone.flat-hud')).toBe('off');
+    expect(readFlatHud(s)).toBe(false);
+  });
+  it('falls back to off when storage throws or is missing, and does not throw writing', () => {
+    expect(readFlatHud(throwing)).toBe(false);
+    expect(readFlatHud(null)).toBe(false);
+    expect(() => writeFlatHud(throwing, true)).not.toThrow();
+    expect(() => writeFlatHud(null, true)).not.toThrow();
   });
 });
 

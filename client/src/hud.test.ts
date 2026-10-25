@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hudHtml } from './hud';
+import { flatHudHtml, hudHtml } from './hud';
 import css from './ui.css?raw';
 
 const TOKENS = ['bg', 'panel', 'edge', 'text', 'muted', 'accent', 'hazard', 'danger'];
@@ -131,5 +131,25 @@ describe('the Tally line, #294', () => {
 
   it('shows no tally element when there is no line', () => {
     expect(hudHtml(base)).not.toContain('class="tally"');
+  });
+});
+
+describe('flatHudHtml, the flat HUD fallback (#391)', () => {
+  const game = { side: 1, status: 0, glass: 2, ejected: [1, 4] as const, win: [6, 6] as const };
+
+  it('gives the turn owner and the ejected count as text', () => {
+    expect(flatHudHtml(game)).toBe('<div class="flat"><div>Turn: Black</div><div>Ejected: Black 1/6, White 4/6</div></div>');
+    expect(flatHudHtml({ ...game, side: 2, glass: 1 })).toContain('<div>Turn: Black</div><div>Ejected: White 1/6, Black 4/6</div>');
+  });
+
+  it('says the game is over instead of a turn owner', () => {
+    expect(flatHudHtml({ ...game, status: 3 })).toContain('<div>Turn: game over</div>');
+  });
+
+  it('adds the boss phase and the tell countdown in a boss fight', () => {
+    expect(flatHudHtml({ ...game, boss: { phase: 1, phases: 3, tell: '2 cells in 3 plies' } })).toContain(
+      '<div>Boss phase: 2 of 3</div><div>Tell: 2 cells in 3 plies</div>',
+    );
+    expect(flatHudHtml({ ...game, boss: { phase: 0, phases: 2, tell: '' } })).toContain('<div>Boss phase: 1 of 2</div><div>Tell: none</div>');
   });
 });
