@@ -1807,15 +1807,16 @@ async function goOnline(room: string, side: number): Promise<void> {
   // The status line shows our color and whether the key bound to the other seat is connected (#121).
   // Our color is the session's: it swaps at each rematch.
   const note = (): void => {
-    const role = online?.role ?? 'pending';
-    const mine = online?.side ?? side;
-    const opponent = online?.presenceOf(3 - mine) ?? 'waiting';
+    const session = online!; // set before the session calls back, and below before the first note
+    const role = session.role;
+    const mine = session.side;
+    const opponent = session.presenceOf(3 - mine);
     document.body.dataset.online = role === 'spectator' ? 'Spectator' : sideName(mine, glassOf());
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
-    document.body.dataset.coordinator = String(online?.coordinatorSeq ?? 0); // join_seq of the coordinator, read by the e2e tests (#359)
-    document.body.dataset.handover = online?.handover ?? 'none';
-    onlineLine = onlineStatus(mine, role, opponent, online?.isAgent(3 - mine) ?? false, glassOf());
+    document.body.dataset.coordinator = String(session.coordinatorSeq); // join_seq of the coordinator, read by the e2e tests (#359)
+    document.body.dataset.handover = session.handover;
+    onlineLine = onlineStatus(mine, role, opponent, session.isAgent(3 - mine), glassOf());
     onlineNote = netState;
     hud();
   };
