@@ -79,7 +79,7 @@ test('once a hot-seat game is over, a reload starts a new game', async ({ page }
     [[0, -2], [0, -1]], [[0, 1], [0, 0]], [[0, -1], [0, -2]], [[0, 0], [0, 1]], // the position after ply 1 a third time
   ];
   for (const [from, to] of seq) await move(page, from, to);
-  await expect(hud).toContainText('Draw by threefold repetition');
+  await expect(hud).toContainText('Same position three times'); // the draw reason, on the HUD since #425
   await expect.poll(() => savedPlies(page)).toBe(0);
 
   await page.reload();

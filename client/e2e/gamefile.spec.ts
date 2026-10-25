@@ -219,7 +219,7 @@ test('an imported finished game shows its result, and a reload starts a new game
 
   // The position after the first move comes back a third time: a draw.
   await importText(page, JSON.stringify(save(false, [A, B, C, D, E, B, C, D, E])));
-  await expect(page.locator('#hud')).toContainText('Draw by threefold repetition');
+  await expect(page.locator('#hud')).toContainText('Same position three times'); // the draw reason, on the HUD since #425
   expect(await plies(page)).toBe(9);
   await expect.poll(() => savedPlies(page)).toBe(0); // a finished game is not saved
 

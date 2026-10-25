@@ -251,7 +251,7 @@ test('Hint is disabled once the game is over, #192', async ({ page }) => {
   await ready(page);
   // The position after the first move comes back a third time: a draw.
   await importText(page, save([A, B, C, D, E, B, C, D, E]));
-  await expect(page.locator('#hud')).toContainText('Draw by threefold repetition');
+  await expect(page.locator('#hud')).toContainText('Same position three times'); // the draw reason, on the HUD since #425
   await expect(page.getByRole('button', { name: 'Hint' })).toBeDisabled();
 });
 

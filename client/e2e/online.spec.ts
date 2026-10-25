@@ -541,7 +541,9 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
     hotSeat.push(await shown(hot));
   }
   expect(hotSeat[3]).toEqual(['Black to move', 'Black ejected 0/6 · White ejected 0/6']); // the start position twice: the game goes on
-  expect(hotSeat[7]).toEqual(['Draw', 'Draw by threefold repetition · Black ejected 0/6 · White ejected 0/6']);
+  // Since #425 the score line no longer repeats the outcome: the reason is Tally's line.
+  expect(hotSeat[7]).toEqual(['Draw', 'Black ejected 0/6 · White ejected 0/6']);
+  await expect(hot.locator('#hud')).toContainText('Same position three times');
   await hot.context().close();
 
   const a = await (await browser.newContext()).newPage();
@@ -572,6 +574,7 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
       await expect(page.locator('#hud .score')).toHaveText(hotSeat[ply]![1]!);
     }
   }
+  for (const page of [a, b]) await expect(page.locator('#hud')).toContainText('Same position three times'); // a draw by repetition
   await expect(a.locator('#hud')).not.toContainText('refused');
   await expect(b.locator('#hud')).not.toContainText('refused');
   await a.context().close();
