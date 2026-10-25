@@ -81,7 +81,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 .setting-volume input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (pointer: coarse) { .setting-volume { min-height: 2.75rem; } }
 /* The two skin buttons share the item's width, half each, a name cut with an ellipsis: the menu keeps its width (#377). */
-.skin-pair > button { flex: 1 1 0; width: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skin-pair > button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A touch target of 44 px on a touch screen (#287): the halves grow to it, the menu keeps the width of its widest row (#377). */
 @media (pointer: coarse) { .skin-pair > button { min-width: 44px; min-height: 2.75rem; } }
 /* The FPS readout (#426): off by default, a corner that ignores the pointer. */
@@ -201,12 +201,13 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
     max-width: max(8rem, 50vw - 45vh - 1.5rem); max-height: calc(100dvh - 32px - 3.25rem); overflow-y: auto;
     margin: -4px; padding: 4px;
   }
-  #chrome #online * { max-width: 100%; }
+  #chrome #online *:not(#settings-menu, #settings-menu *) { max-width: 100%; }
   #settings-box { align-self: stretch; } /* as wide as the column: the menu under the cog fits in it */
-  /* Bug #427: the column scrolls, so a menu inside it is clipped at its bottom edge once the UI scale grows it. Fixed to the
-     viewport and hung from the cog, it leaves that clip. */
+  /* Bug #427, #458: the column scrolls, so a menu inside it is clipped at its bottom edge or left edge once the UI scale grows it or when it is wider than the column. Fixed to the
+     viewport and hung from the cog, it leaves that clip on every browser. */
+  #settings-menu { position: fixed; top: calc(16px + 2.75rem + 0.25rem); right: 16px; width: max-content; max-width: calc(100vw - 32px); }
   @supports (anchor-name: --cog) {
-    #settings-menu { position: fixed; position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
+    #settings-menu { position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
   }
 }
 @media (orientation: portrait) {
