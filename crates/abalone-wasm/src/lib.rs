@@ -23,10 +23,12 @@
 
 use abalone_core::board::{Board, Cell, RADIUS};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
-use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_ARMIES};
+use abalone_core::encounter::choir::{
+    choir_boss, Army, Choir, ChoirError, ARMY_SIZE, CYCLE, PHASE_ARMIES,
+};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
-use abalone_core::encounter::{BossDef, Encounter as CoreEncounter, PveResult};
+use abalone_core::encounter::{marbles, BossDef, Encounter as CoreEncounter, PveResult};
 use abalone_core::game::{DrawReason, Game, Outcome};
 use abalone_core::moves::{legal_moves, Direction, Move, Player};
 use abalone_core::search::{best_move, position_score};
@@ -321,6 +323,12 @@ const BOSSES: [BossEntry; 4] = [
     },
 ];
 
+/// `[lit, dark]` notches for `left` boss marbles in a phase that began at `from` and ends at `to`,
+/// none when there is no next phase. A converted marble (The Chaplain) adds a lit notch.
+fn notches(left: u8, from: u8, to: Option<u8>) -> Vec<u8> {
+    to.map_or_else(Vec::new, |to| vec![left - to, from.saturating_sub(left)])
+}
+
 fn cell_list(cells: &[(i32, i32)]) -> Vec<i32> {
     cells.iter().flat_map(|&(q, r)| [q, r]).collect()
 }
@@ -392,6 +400,29 @@ impl Encounter {
             Fight::Choir(_) => PHASE_ARMIES.len(),
         };
         steps as u8 + 1
+    }
+
+    /// The phase notches on the arena frame (#356, docs/specs/world.md section 6 rule 4):
+    /// `[lit, dark]`, one lit notch per boss marble left until the next phase, one dark notch per
+    /// boss marble lost since this phase began. Empty in the last phase. The Choir's next phase
+    /// comes when its smallest army is wiped.
+    pub fn phase_notches(&self) -> Vec<u8> {
+        let phase = self.phase() as usize;
+        match &self.fight {
+            Fight::Plain(e) => {
+                let start = (self.entry.start)((self.entry.def)(), 0);
+                let steps: Vec<u8> = std::iter::once(marbles(start.game().board(), Cell::White))
+                    .chain((self.entry.def)().phase_marbles)
+                    .collect();
+                let left = marbles(e.game().board(), Cell::White);
+                notches(left, steps[phase], steps.get(phase + 1).copied())
+            }
+            Fight::Choir(c) => {
+                let army = CYCLE.iter().map(|&a| c.army_marbles(a)).filter(|&n| n > 0);
+                let next = (phase < PHASE_ARMIES.len()).then_some(0);
+                notches(army.min().unwrap_or(0), ARMY_SIZE as u8, next)
+            }
+        }
     }
 
     /// Id of the board special that fires after the next ply, `-1` when none.
@@ -1106,5 +1137,53 @@ mod tests {
         assert!(f.legal_moves().is_empty());
         assert!(f.boss_move().is_empty());
         assert!(f.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
+    }
+
+    // Phase notches on the arena frame (#356): one lit notch per boss marble left until the next
+    // phase, one dark notch per boss marble lost since this phase began.
+
+    #[test]
+    fn notches_count_the_marbles_left_until_the_next_phase() {
+        assert_eq!(notches(14, 14, Some(10)), vec![4, 0]);
+        assert_eq!(notches(12, 14, Some(10)), vec![2, 2]);
+        assert_eq!(
+            notches(16, 14, Some(8)),
+            vec![8, 0],
+            "a converted marble adds a lit notch"
+        );
+        assert_eq!(
+            notches(3, 5, None),
+            Vec::<u8>::new(),
+            "the last phase has no next one"
+        );
+    }
+
+    #[test]
+    fn every_boss_starts_with_its_first_phase_notches_lit() {
+        let lit = |id: &str| Encounter::new(id, 1).unwrap().phase_notches();
+        assert_eq!(lit("echo"), vec![4, 0], "14 boss marbles, P2 at 10");
+        assert_eq!(lit("hull"), vec![4, 0], "14 boss marbles, P2 at 10");
+        assert_eq!(lit("chaplain"), vec![6, 0], "14 boss marbles, P2 at 8");
+        assert_eq!(lit("choir"), vec![4, 0], "P2 once an army of four is wiped");
+    }
+
+    #[test]
+    fn an_ejected_boss_marble_puts_a_notch_out() {
+        let mut f = fight();
+        for mv in [
+            [1, 4, 1, 3, 0, 0, 0, 0],  // Black (1, 3) to (1, 2)
+            [1, 5, 2, -2, 0, 0, 0, 0], // White walks (2, -2) down to the rim at (2, 2)
+            [1, 4, -2, 2, 0, 0, 0, 0], // Black waits
+            [1, 5, 2, -1, 0, 0, 0, 0],
+            [1, 5, -2, 1, 0, 0, 0, 0],
+            [1, 5, 2, 0, 0, 0, 0, 0],
+            [1, 4, -2, 2, 0, 0, 0, 0],
+            [1, 5, 2, 1, 0, 0, 0, 0],
+            [2, 0, 0, 2, 1, 2, 0, 0], // Black pushes it off, 2 against 1
+        ] {
+            f.play(&mv).unwrap();
+        }
+        assert_eq!(f.ejected(1), 1);
+        assert_eq!(f.phase_notches(), vec![3, 1]);
     }
 }

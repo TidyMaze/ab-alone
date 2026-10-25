@@ -59,6 +59,7 @@ import { Sfx, TellWatch, type Tell } from './sound';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
 import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
+import { notchRow } from './notches';
 import { formatScore } from './score';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
@@ -401,6 +402,33 @@ function lightRim(): void {
   const light = rimLight(engine.status(), engine.to_move(), glassOf());
   for (const end of ['near', 'far'] as const) rim[end].material.emissive.set(light?.end === end ? light.color : 0);
   document.body.dataset.rim = light?.end ?? 'off';
+}
+// The boss phase notches on the rim (#356, notches.ts): a near-black groove per notch, filled bone-white while lit, and
+// a bone-white triangle at the next-phase threshold, so they read on any rim light by shape, not colour alone. No fog
+// on them: clear board and the low tier draw them the same (world.md section 8). The HUD P1 P2 P3 stay as the fallback.
+const notches = new THREE.Group();
+scene.add(notches);
+const grooveGeometry = new THREE.BoxGeometry(0.14, 0.02, 0.21);
+const scratchGeometry = new THREE.BoxGeometry(0.08, 0.03, 0.15);
+const thresholdGeometry = new THREE.CircleGeometry(0.13, 3).rotateZ(Math.PI).rotateX(-Math.PI / 2); // points at the row
+const thresholdMarkGeometry = new THREE.CircleGeometry(0.08, 3).rotateZ(Math.PI).rotateX(-Math.PI / 2);
+const grooveMaterial = new THREE.MeshBasicMaterial({ color: COLORS.base, fog: false });
+const scratchMaterial = new THREE.MeshBasicMaterial({ color: BONE, fog: false });
+function drawNotches(): void {
+  notches.clear();
+  const row = engine instanceof Encounter && frame ? notchRow(frame, engine.phase_notches()) : null;
+  if (!row) return;
+  const add = (geometry: THREE.BufferGeometry, material: THREE.Material, p: Point, y: number): void => {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(p.x, y, p.z);
+    notches.add(mesh);
+  };
+  for (const n of row.notches) {
+    add(grooveGeometry, grooveMaterial, n, 0);
+    if (n.lit) add(scratchGeometry, scratchMaterial, n, 0);
+  }
+  add(thresholdGeometry, grooveMaterial, row.glyph, 0.005);
+  add(thresholdMarkGeometry, scratchMaterial, row.glyph, 0.01);
 }
 const marbles = new THREE.Group();
 scene.add(marbles);
@@ -774,6 +802,7 @@ function refresh(): void {
   const board = engine.board();
   drawFrame(board);
   lightRim();
+  drawNotches();
   const moves = parseMoves(engine.legal_moves());
   const targets = groupTargets(moves, selected);
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
@@ -993,6 +1022,12 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__marbleTurn = (q: number, r: number) =>
   marbleAt.get(cellIndex(q, r))?.[0]?.quaternion.toArray() ?? null;
 
+// Used by the browser checks to count the phase notches drawn on the frame and see the threshold glyph (#356).
+(window as unknown as Record<string, unknown>).__notches = () => {
+  const drawn = notches.parent === scene ? notches.children.map((m) => (m as THREE.Mesh).geometry) : [];
+  const lit = drawn.filter((g) => g === scratchGeometry).length;
+  return { lit, dark: drawn.filter((g) => g === grooveGeometry).length - lit, glyph: drawn.includes(thresholdMarkGeometry) };
+};
 // Used by the browser checks to read the frame's size and holes, and that it is drawn (#292).
 (window as unknown as Record<string, unknown>).__frame = () => ({
   radius: frame?.radius,
