@@ -178,10 +178,17 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   voices a fifth apart for The Choir's next army.
 - **Music.** No melodic loops. Drone and texture layers, 2 to 3 tension layers driven by game
   state (marbles in danger, boss phase). Boss themes are a slow pulse that speeds up per phase.
+  Today two drone layers of steady low sines under the hum (#439), through the music bus: the
+  tension level is one step per player marble on the rim that one push could eject and per boss
+  phase after the first, at most 2; level 1 brings in the first layer, level 2 both, each
+  crossfading over about a second.
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
-- **Mix.** Four sliders: music, ambience, effects, voice. The game is fully playable on mute:
-  every audio cue has a visual twin. Until the sliders exist (#60), one Sound toggle, on by
-  default and saved locally; the ejection animation is the twin of the ejection sound.
+- **Mix.** Four sliders: music, ambience, effects, voice (#438), each the gain of its bus into one
+  master gain, 0 to 100 %, at 100 % by default and saved locally. The hum is ambience, the
+  tension drones music, the knock, the ejection and the tells effects; nothing uses voice yet.
+  A Sound off saved by the old toggle sets every slider to 0. With every slider at 0 no audio
+  context is made. The game is fully playable on mute: every audio cue has a visual twin (the
+  ejection animation for the ejection sound, the tells on the board for their sounds).
 - **Spatial.** Positional audio in the hub, stereo is enough on the board.
 
 ## 8. Accessibility

@@ -16,14 +16,17 @@ async function open(page: Page) {
     }
   };
 }
-// Sound lives in the settings menu (#284): the cog opens it, the toggle is a button named Sound.
-const sound = async (page: Page) => {
-  const toggle = page.getByRole('button', { name: 'Sound' });
-  if (!(await toggle.isVisible())) await page.getByRole('button', { name: 'Settings' }).click();
-  return toggle;
+// The volume sliders (#438) live in the settings menu: the cog opens it, its Sound item shows the four sliders.
+const slider = async (page: Page, name: 'Music' | 'Ambience' | 'Effects' | 'Voice') => {
+  const range = page.getByRole('slider', { name });
+  if (await range.isVisible()) return range;
+  if (!(await page.getByRole('button', { name: 'Sound' }).isVisible())) await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Sound' }).click();
+  return range;
 };
 const audio = (page: Page) => page.evaluate(() => (window as any).__audio());
-const level = (page: Page) => page.evaluate(() => (window as any).__level());
+const gain = (page: Page, bus: string) => page.evaluate((b) => (window as any).__gain(b), bus);
+const tension = (page: Page) => page.evaluate(() => (window as any).__tension());
 
 // The 3v2 push of eject.spec.ts: Black pushes the last White marble of the q = -2 column off.
 async function loseGlass(click: Awaited<ReturnType<typeof open>>) {
@@ -48,7 +51,6 @@ async function loseShell(click: Awaited<ReturnType<typeof open>>) {
 test('no audio before a gesture, then a lost glass marble tolls', async ({ page }) => {
   const click = await open(page);
   expect(await audio(page)).toBe('none'); // browsers block audio before a gesture
-  await expect(await sound(page)).toHaveAttribute('aria-pressed', 'true'); // on by default
   await loseGlass(click);
   await expect(page.locator('body')).toHaveAttribute('data-ejections', '1');
   await expect(page.locator('body')).toHaveAttribute('data-sound', 'toll');
@@ -70,64 +72,114 @@ test('a lost enemy shell clacks', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-sound', 'clack');
 });
 
-test('the sound toggle mutes the ejection, and the game plays on', async ({ page }) => {
+// #438: four sliders, one per bus, all at 100 % by default. window.__gain(bus) is the gain of a bus, 0 before a gesture.
+test('Sound opens four sliders at 100 %, each moves its own bus, and the menu closes back on its items', async ({ page }) => {
+  await open(page);
+  for (const name of ['Music', 'Ambience', 'Effects', 'Voice'] as const) await expect(await slider(page, name)).toHaveValue('100');
+  await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden(); // the sliders in place of the items
+  const music = await slider(page, 'Music');
+  await music.focus();
+  await page.keyboard.press('Home'); // a key is a gesture: it starts the audio
+  await expect(music).toHaveValue('0');
+  await expect.poll(() => gain(page, 'music')).toBeLessThan(0.01);
+  await page.keyboard.press('ArrowRight');
+  await expect(music).toHaveValue('5');
+  await expect.poll(() => gain(page, 'music')).toBeCloseTo(0.05, 2);
+  for (const bus of ['ambience', 'effects', 'voice']) expect(await gain(page, bus)).toBe(1);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('button', { name: 'Clear board' })).toBeVisible();
+  await expect(page.getByRole('slider', { name: 'Music' })).toBeHidden();
+});
+
+test('the effects slider at 0 mutes the ejection and the knock, and the game plays on', async ({ page }) => {
   const click = await open(page);
-  const toggle = await sound(page);
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  const effects = await slider(page, 'Effects');
+  await effects.focus();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Escape');
   await loseGlass(click);
   await expect(page.locator('#hud')).toContainText('Black ejected 1/6');
   await expect(page.locator('body')).toHaveAttribute('data-sound', 'none');
   await expect(page.locator('body')).toHaveAttribute('data-knock', 'none'); // the knock of the last move is silent too
-  await (await sound(page)).click(); // the presses on the board closed the menu
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('the sound toggle survives a reload, and a muted page makes no audio context', async ({ page }) => {
+test('the sliders survive a reload, and every slider at 0 makes no audio context', async ({ page }) => {
   await open(page);
-  const toggle = await sound(page);
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  for (const name of ['Music', 'Ambience', 'Effects', 'Voice'] as const) {
+    const range = await slider(page, name);
+    await range.focus();
+    await page.keyboard.press('Home');
+  }
+  await page.keyboard.press('Escape');
 
   await page.reload();
   const click = await open(page);
-  await expect(await sound(page)).toHaveAttribute('aria-pressed', 'false');
-  await click([0, 2]); // a gesture on the board: still no audio context while muted
+  await expect(await slider(page, 'Voice')).toHaveValue('0');
+  await page.keyboard.press('Escape');
+  await click([0, 2]); // a gesture on the board: still no audio context while every slider is at 0
   expect(await audio(page)).toBe('none');
 
-  await (await sound(page)).click(); // back on, the click is the gesture that starts the audio
-  await expect(await sound(page)).toHaveAttribute('aria-pressed', 'true');
+  const effects = await slider(page, 'Effects');
+  await effects.focus();
+  await page.keyboard.press('End'); // back up, the key is the gesture that starts the audio
+  await expect(effects).toHaveValue('100');
   expect(await audio(page)).toBe('running');
+  await expect.poll(() => gain(page, 'effects')).toBeGreaterThan(0.9);
 });
 
-test('Sound is no loose HUD button: it is in the settings menu, reachable by keyboard', async ({ page }) => {
+test('an old saved Sound off sets every slider at 0', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('ab-alone.sound', 'off'));
+  await open(page);
+  for (const name of ['Music', 'Ambience', 'Effects', 'Voice'] as const) await expect(await slider(page, name)).toHaveValue('0');
+});
+
+test('Sound is no loose HUD button: it is in the settings menu, its sliders reachable by keyboard', async ({ page }) => {
   await open(page);
   await expect(page.locator('#online > #sound')).toHaveCount(0);
-  const toggle = page.getByRole('button', { name: 'Sound' });
-  await expect(toggle).toBeHidden(); // closed until the cog opens it
+  const sound = page.getByRole('button', { name: 'Sound' });
+  await expect(sound).toBeHidden(); // closed until the cog opens it
   await page.getByRole('button', { name: 'Settings' }).focus();
   await page.keyboard.press('Enter');
-  await expect(toggle).toBeVisible();
-  await expect(toggle.locator('path')).toHaveAttribute('d', ICONS.sound); // a speaker, crossed out while off (#287)
-  await toggle.focus();
-  await page.keyboard.press('Enter'); // a key press is a gesture too
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(toggle.locator('path')).toHaveAttribute('d', ICONS.muted);
+  await expect(sound).toBeVisible();
+  await expect(sound.locator('path')).toHaveAttribute('d', ICONS.sound); // a speaker
+  await sound.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('slider', { name: 'Music' })).toBeFocused(); // the first slider takes the focus
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('slider', { name: 'Music' })).toHaveValue('95');
 });
 
-// The hum (world.md section 7) runs under every game once a gesture has made the audio context, and
-// the Sound toggle fades its level out: window.__level() is the effects level, 0 when silent.
-test('the hum runs after a gesture, and fades out when Sound is off', async ({ page }) => {
+// The hum (world.md section 7) runs under every game once a gesture has made the audio context, through the
+// ambience bus, and the Ambience slider fades it out.
+test('the hum runs after a gesture, and fades out with the Ambience slider', async ({ page }) => {
   const click = await open(page);
-  expect(await level(page)).toBe(0); // no audio context before a gesture, so no hum
+  expect(await gain(page, 'ambience')).toBe(0); // no audio context before a gesture, so no hum
   await click([0, 2]); // a gesture on the board starts the audio, and with it the hum
-  await expect.poll(() => level(page)).toBeGreaterThan(0.5);
-  await (await sound(page)).click();
-  await expect.poll(() => level(page)).toBeLessThan(0.01);
+  await expect.poll(() => gain(page, 'ambience')).toBeGreaterThan(0.9);
+  const ambience = await slider(page, 'Ambience');
+  await ambience.focus();
+  await page.keyboard.press('Home');
+  await expect.poll(() => gain(page, 'ambience')).toBeLessThan(0.01);
+});
+
+// #439: the drone layers follow the tension level, which rises once a push could eject a player marble.
+test('the tension level rises when a marble is pushed to the rim, and the drones crossfade in', async ({ page }) => {
+  const click = await open(page);
+  expect(await tension(page)).toEqual({ level: 0, layers: [0, 0] });
+  // The first four moves of loseGlass: White steps two marbles into the q = -2 column, the top one on the rim, three
+  // Black marbles in line behind them.
+  await click([-2, 2], [-2, 3], [-2, 4], [-2, 1]);
+  await click([0, -3], [0, -2], [-1, -2]);
+  expect((await tension(page)).level).toBe(0);
+  await click([-2, 1], [-2, 2], [-2, 3], [-2, 0]);
+  await click([-1, -2], [-1, -1], [-2, -2]);
+  await expect.poll(async () => (await tension(page)).level).toBeGreaterThan(0);
+  await expect.poll(async () => (await tension(page)).layers[0]).toBeGreaterThan(0.9); // crossfaded in within about a second
 });
 
 // Bug #146 pattern: a click right after load hits a disabled button or toggles.
-test('the sound toggle is not clickable before it works, and works right after load', async ({ page }) => {
+test('the settings cog is not clickable before it works, and works right after load', async ({ page }) => {
   await page.goto('./?bot=off', { waitUntil: 'domcontentloaded' });
   const atClick = await page.evaluate(() => {
     const cog = document.getElementById('settings') as HTMLButtonElement;

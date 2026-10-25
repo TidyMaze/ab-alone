@@ -1,11 +1,13 @@
-// The ejection sound, docs/specs/world.md section 7, synthesized with Web Audio: no audio file,
-// nothing fetched. The design is data (the cue per side, the voices and their envelopes), played by a
-// thin wrapper through one effects gain node. Its times follow the ejection effect of eject.ts: a
+// The sounds of the game, docs/specs/world.md section 7, synthesized with Web Audio: no audio file,
+// nothing fetched. The design is data (the cue per side, the voices and their envelopes, the steady tones of
+// the hum and the tension drones), played by a thin wrapper through four bus gains, music, ambience, effects
+// and voice, into one master gain (#438). The ejection follows the ejection effect of eject.ts: a
 // sharp inhale on the push over the rim, a muffled thud as the void takes the marble, vacuum silence
 // while it falls, then, once it is gone, a low toll for a lost player marble or a dry clack for an
 // enemy one. The boss tells have their sound twins too (#358).
 
 import { EJECT_MS, PUSH_MS } from './eject';
+import type { Tension } from './tension';
 
 /** The last note of an ejection: who lost a marble. */
 export type Cue = 'toll' | 'clack';
@@ -142,14 +144,32 @@ export class TellWatch {
   }
 }
 
-/** The gain of the effects node while the sound is on. */
-export const FX_LEVEL = 0.8;
+/** The four buses of the mix (world.md section 7, Mix; tech.md section 5.4), one slider each. */
+export type Bus = 'music' | 'ambience' | 'effects' | 'voice';
+export const BUSES: readonly Bus[] = ['music', 'ambience', 'effects', 'voice'];
+/** The volume of each bus, 0 to 100 %, as its slider shows it. */
+export type Mix = Record<Bus, number>;
+/** The bus each sound goes through: the hum is ambience, the tension drones music, the knock, the ejection and the
+ * tells effects. Nothing uses the voice bus yet (the tally and the crew logs). */
+export const ROUTE = {
+  hum: 'ambience',
+  tension: 'music',
+  knock: 'effects',
+  ejection: 'effects',
+  tell: 'effects',
+} as const satisfies Record<string, Bus>;
+/** The gain of a bus at `percent` of its slider. */
+export const busGain = (percent: number): number => percent / 100;
+/** The gain of the master node, every bus into it. */
+export const MASTER_LEVEL = 0.8;
 /** Where the envelopes start and end: an exponential ramp cannot reach 0. */
 export const SILENT = 0.0001;
-/** The toggle fades the effects node over about 20 ms: a cut would click. */
-const TOGGLE_TAU = 0.007;
+/** A slider fades its bus over about 20 ms: a cut would click. */
+const SLIDER_TAU = 0.007;
+/** The tension layers crossfade over about a second (three time constants). */
+export const CROSSFADE_TAU = 0.3;
 
-/** A steady tone of the hum: pitch in Hz, level before the effects node. */
+/** A steady tone of the hum or a tension drone: pitch in Hz, level before its bus. */
 export interface HumTone {
   freq: number;
   gain: number;
@@ -159,25 +179,43 @@ export const HUM: readonly HumTone[] = [
   { freq: 55, gain: 0.03 },
   { freq: 82.4, gain: 0.02 },
 ];
+/** The two drone tension layers under the hum (world.md section 7, Music; #439): steady tones, no melody. */
+export const TENSION: readonly (readonly HumTone[])[] = [
+  // Unease: a minor second over the hum's root, two sines a hair apart that beat slowly.
+  [
+    { freq: 58.3, gain: 0.02 },
+    { freq: 58.8, gain: 0.02 },
+  ],
+  // Dread: the tritone over the root and its octave, thin and cold.
+  [
+    { freq: 77.8, gain: 0.015 },
+    { freq: 155.6, gain: 0.008 },
+  ],
+];
+/** The gain of each tension layer at `level`: level n plays the first n layers. */
+export const layerGains = (level: Tension): number[] => TENSION.map((_, i) => (i < level ? 1 : 0));
 
 interface Graph {
   ctx: AudioContext;
-  fx: GainNode;
+  buses: Record<Bus, GainNode>;
+  layers: GainNode[];
   noise: AudioBuffer;
 }
 
-/** The effects player. The audio context is made on the first user gesture (browsers block audio
- * before one), only while the sound is on. */
+/** The sound player. The audio context is made on the first user gesture (browsers block audio before one), only
+ * while a slider is above 0. */
 export class Sfx {
   private graph: Graph | null = null;
+  private level: Tension = 0;
 
   constructor(
     private readonly create: () => AudioContext | null,
-    private on: boolean,
+    private readonly mix: Mix,
   ) {}
 
-  get enabled(): boolean {
-    return this.on;
+  /** The volume of `bus`, 0 to 100 %. */
+  volume(bus: Bus): number {
+    return this.mix[bus];
   }
 
   /** 'none' until a context exists, then its state. */
@@ -185,62 +223,93 @@ export class Sfx {
     return this.graph?.ctx.state ?? 'none';
   }
 
-  /** The effects level: 0 until a context exists or while the sound is off. */
-  get level(): number {
-    return this.graph?.fx.gain.value ?? 0;
+  /** The gain of `bus`: 0 until a context exists. */
+  gain(bus: Bus): number {
+    return this.graph?.buses[bus].gain.value ?? 0;
+  }
+
+  /** The tension level the drones play. */
+  get tension(): Tension {
+    return this.level;
+  }
+
+  /** The gain of each tension layer: 0 until a context exists. */
+  get layers(): number[] {
+    return this.graph?.layers.map((layer) => layer.gain.value) ?? TENSION.map(() => 0);
   }
 
   /** Called on every user gesture: makes the context the first time, resumes it while suspended. */
   unlock(): void {
-    if (!this.on) return;
+    if (BUSES.every((bus) => this.mix[bus] === 0)) return;
     if (!this.graph) {
       const ctx = this.create();
       if (!ctx) return;
-      const fx = ctx.createGain();
-      fx.gain.value = FX_LEVEL;
-      fx.connect(ctx.destination);
-      this.graph = { ctx, fx, noise: whiteNoise(ctx) };
-      startHum(ctx, fx);
+      const master = ctx.createGain();
+      master.gain.value = MASTER_LEVEL;
+      master.connect(ctx.destination);
+      const buses = {} as Record<Bus, GainNode>;
+      for (const bus of BUSES) {
+        buses[bus] = ctx.createGain();
+        buses[bus].gain.value = busGain(this.mix[bus]);
+        buses[bus].connect(master);
+      }
+      startTones(ctx, HUM, buses[ROUTE.hum]);
+      const layers = TENSION.map((tones, i) => {
+        const layer = ctx.createGain();
+        layer.gain.value = layerGains(this.level)[i]!;
+        layer.connect(buses[ROUTE.tension]);
+        startTones(ctx, tones, layer);
+        return layer;
+      });
+      this.graph = { ctx, buses, layers, noise: whiteNoise(ctx) };
     }
     if (this.graph.ctx.state === 'suspended') this.graph.ctx.resume().catch(() => undefined);
   }
 
-  /** The sound toggle, itself a user gesture. Off fades out what is still ringing. */
-  setEnabled(on: boolean): void {
-    this.on = on;
-    this.graph?.fx.gain.setTargetAtTime(on ? FX_LEVEL : 0, this.graph.ctx.currentTime, TOGGLE_TAU);
+  /** A slider, itself a user gesture: fades `bus` to `percent`, 0 silences what still rings through it. */
+  setVolume(bus: Bus, percent: number): void {
+    this.mix[bus] = percent;
+    this.graph?.buses[bus].gain.setTargetAtTime(busGain(percent), this.graph.ctx.currentTime, SLIDER_TAU);
     this.unlock();
   }
 
-  /** Plays the ejection of a marble of `side` from now. Its cue, or null when silent (sound off, or
-   * no gesture yet). */
+  /** Crossfades the tension layers to `level` over about a second. */
+  setTension(level: Tension): void {
+    this.level = level;
+    const graph = this.graph;
+    if (!graph) return;
+    const gains = layerGains(level);
+    graph.layers.forEach((layer, i) => layer.gain.setTargetAtTime(gains[i]!, graph.ctx.currentTime, CROSSFADE_TAU));
+  }
+
+  /** Plays the ejection of a marble of `side` from now. Its cue, or null when silent (effects at 0, or no gesture
+   * yet). */
   ejection(side: number, glass = 2): Cue | null {
-    if (!this.on || !this.graph) return null;
     const cue = cueFor(side, glass);
-    const now = this.graph.ctx.currentTime;
-    for (const voice of ejectionVoices(cue)) this.play(this.graph, voice, now);
-    return cue;
+    return this.playAll(ROUTE.ejection, ejectionVoices(cue)) ? cue : null;
   }
 
-  /** Plays the knock of a move that pushes `marbles` from now. Its pitch, or null when silent (sound off, or
-   * no gesture yet). */
+  /** Plays the knock of a move that pushes `marbles` from now. Its pitch, or null when silent (effects at 0, or no
+   * gesture yet). */
   knock(marbles: number): number | null {
-    if (!this.on || !this.graph) return null;
     const pitch = knockPitch(marbles);
-    const now = this.graph.ctx.currentTime;
-    for (const voice of knockVoices(pitch)) this.play(this.graph, voice, now);
-    return pitch;
+    return this.playAll(ROUTE.knock, knockVoices(pitch)) ? pitch : null;
   }
 
-  /** Plays the sound twin of `tell` from now. The tell, or null when silent (sound off, or no gesture yet). */
+  /** Plays the sound twin of `tell` from now. The tell, or null when silent (effects at 0, or no gesture yet). */
   tell(tell: Tell): Tell | null {
-    if (!this.on || !this.graph) return null;
-    const now = this.graph.ctx.currentTime;
-    for (const voice of tellVoices(tell)) this.play(this.graph, voice, now);
-    return tell;
+    return this.playAll(ROUTE.tell, tellVoices(tell)) ? tell : null;
   }
 
-  private play({ ctx, fx, noise }: Graph, voice: Voice, now: number): void {
+  /** Plays `voices` from now through `bus`. False when silent: the bus at 0, or no gesture yet. */
+  private playAll(bus: Bus, voices: Voice[]): boolean {
+    if (this.mix[bus] === 0 || !this.graph) return false;
+    const now = this.graph.ctx.currentTime;
+    for (const voice of voices) this.play(this.graph, this.graph.buses[bus], voice, now);
+    return true;
+  }
+
+  private play({ ctx, noise }: Graph, bus: GainNode, voice: Voice, now: number): void {
     const from = now + voice.env[0]![0];
     const to = now + voice.env.at(-1)![0];
     let source: AudioScheduledSourceNode;
@@ -267,7 +336,7 @@ export class Sfx {
       if (i === 0) gain.gain.setValueAtTime(value, now + t);
       else gain.gain.exponentialRampToValueAtTime(value, now + t);
     });
-    out.connect(gain).connect(fx);
+    out.connect(gain).connect(bus);
     source.start(from);
     source.stop(to);
   }
@@ -278,15 +347,16 @@ function glide(param: AudioParam, [a, b]: readonly [number, number], from: numbe
   param.exponentialRampToValueAtTime(b, to);
 }
 
-/** The hum: steady sines, started once with the context. Sound off silences them through the effects node. */
-function startHum(ctx: AudioContext, fx: GainNode): void {
-  for (const { freq, gain } of HUM) {
+/** Steady sines, started once with the context, each at its level into `out`. A slider at 0 silences them through
+ * their bus. */
+function startTones(ctx: AudioContext, tones: readonly HumTone[], out: AudioNode): void {
+  for (const { freq, gain } of tones) {
     const osc = ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = freq;
     const level = ctx.createGain();
     level.gain.value = gain;
-    osc.connect(level).connect(fx);
+    osc.connect(level).connect(out);
     osc.start(ctx.currentTime);
   }
 }

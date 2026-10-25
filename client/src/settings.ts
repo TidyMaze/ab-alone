@@ -1,8 +1,9 @@
 // The settings menu (#277, docs/specs/ui.md section 4): a list of items behind a cog button: the toggles Clear board,
-// Reduced motion (#379), Flat HUD (#391) and Sound (#284), Safe mode (#380), the Theme choice (#317), the Shell skin choice (#377), the UI
-// scale (#382), then the actions Export game and Import game (#287). Pure functions only: main.ts feeds them the clicks
-// and builds the DOM.
+// Reduced motion (#379) and Flat HUD (#391), Sound (#284, which opens the four volume sliders of #438), Safe mode (#380),
+// the Theme choice (#317), the Shell skin choice (#377), the UI scale (#382), then the actions Export game and Import
+// game (#287). Pure functions only: main.ts feeds them the clicks and builds the DOM.
 import type { IconName } from './icons';
+import type { Bus } from './sound';
 import { skinById } from './skins';
 import { nextUiScale, type UiScale } from './uiscale';
 
@@ -40,10 +41,10 @@ export const nextDisplay = (
 export const motionReduced = (system: boolean, saved: boolean | null): boolean => saved ?? system;
 
 /** The items the menu lists, in order, with their icon and the toggles' current state. The Theme row shows the UI scale
- *  and holds Safe mode as its pressed state, so the menu keeps eight rows with Reduced motion and Flat HUD. */
+ *  and holds Safe mode as its pressed state, so the menu keeps eight rows with Reduced motion and Flat HUD. Sound is
+ *  no toggle: it opens the sliders. */
 export const settingsList = (
   clear: boolean,
-  sound: boolean,
   theme: Theme,
   skin: string,
   scale: UiScale,
@@ -54,12 +55,15 @@ export const settingsList = (
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: reduced },
   { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: flat },
-  { id: 'sound', label: 'Sound', icon: sound ? 'sound' : 'muted', on: sound },
+  { id: 'sound', label: 'Sound', icon: 'sound' },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme', on: safe },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];
+
+/** The name of each volume slider, the page Sound opens (#438). */
+export const VOLUME_NAMES: Record<Bus, string> = { music: 'Music', ambience: 'Ambience', effects: 'Effects', voice: 'Voice' };
 
 export type MenuEvent = 'button' | 'escape' | 'outside' | 'pick';
 

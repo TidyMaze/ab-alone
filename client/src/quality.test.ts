@@ -12,7 +12,7 @@ import {
   readFlatHud,
   readReducedMotion,
   readSafeMode,
-  readSound,
+  readMix,
   readSkin,
   readTheme,
   readTier,
@@ -20,7 +20,7 @@ import {
   tierFromHints,
   writeClearBoard,
   writeSafeMode,
-  writeSound,
+  writeVolume,
   writeFlatHud,
   writeReducedMotion,
   writeSkin,
@@ -235,29 +235,39 @@ describe('clear-board storage', () => {
   });
 });
 
-describe('sound storage, the on/off toggle until the mix sliders of #60', () => {
-  it('defaults to on', () => {
-    expect(readSound(memoryStorage())).toBe(true);
+describe('mix storage, the four volume sliders (#438)', () => {
+  it('defaults to every slider at 100 %', () => {
+    expect(readMix(memoryStorage())).toEqual({ music: 100, ambience: 100, effects: 100, voice: 100 });
   });
-  it('writes then reads back, under its own key', () => {
+  it('writes then reads back each slider, under its own key', () => {
     const s = memoryStorage();
-    writeSound(s, false);
-    expect(s.data.get('ab-alone.sound')).toBe('off');
-    expect(readSound(s)).toBe(false);
-    writeSound(s, true);
-    expect(s.data.get('ab-alone.sound')).toBe('on');
-    expect(readSound(s)).toBe(true);
+    writeVolume(s, 'music', 30);
+    writeVolume(s, 'voice', 0);
+    expect(s.data.get('ab-alone.volume.music')).toBe('30');
+    expect(s.data.get('ab-alone.volume.voice')).toBe('0');
+    expect(readMix(s)).toEqual({ music: 30, ambience: 100, effects: 100, voice: 0 });
   });
-  it('ignores a garbage stored value: on', () => {
-    expect(readSound(memoryStorage({ 'ab-alone.sound': 'loud' }))).toBe(true);
+  it('maps an old saved Sound off to every slider at 0, and on to 100 %', () => {
+    expect(readMix(memoryStorage({ 'ab-alone.sound': 'off' }))).toEqual({ music: 0, ambience: 0, effects: 0, voice: 0 });
+    expect(readMix(memoryStorage({ 'ab-alone.sound': 'on' }))).toEqual({ music: 100, ambience: 100, effects: 100, voice: 100 });
   });
-  it('falls back to on when storage throws or is missing', () => {
-    expect(readSound(throwing)).toBe(true);
-    expect(readSound(null)).toBe(true);
+  it('a slider saved since wins over the old Sound off', () => {
+    const s = memoryStorage({ 'ab-alone.sound': 'off' });
+    writeVolume(s, 'effects', 70);
+    expect(readMix(s)).toEqual({ music: 0, ambience: 0, effects: 70, voice: 0 });
+  });
+  it('ignores a garbage stored value: the default of that slider', () => {
+    for (const bad of ['loud', '', '-5', '101', '50.5']) {
+      expect(readMix(memoryStorage({ 'ab-alone.volume.music': bad })).music).toBe(100);
+    }
+  });
+  it('falls back to 100 % when storage throws or is missing', () => {
+    expect(readMix(throwing).effects).toBe(100);
+    expect(readMix(null).effects).toBe(100);
   });
   it('does not throw when writing to a broken or missing storage', () => {
-    expect(() => writeSound(throwing, false)).not.toThrow();
-    expect(() => writeSound(null, false)).not.toThrow();
+    expect(() => writeVolume(throwing, 'music', 0)).not.toThrow();
+    expect(() => writeVolume(null, 'music', 0)).not.toThrow();
   });
 });
 

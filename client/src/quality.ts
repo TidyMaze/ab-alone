@@ -1,10 +1,11 @@
-// Quality tiers, fog and the clear-board setting, see docs/specs/tech.md section 5.1, and the sound
-// toggle (docs/specs/world.md section 7).
+// Quality tiers, fog and the clear-board setting, see docs/specs/tech.md section 5.1, and the volume
+// sliders (docs/specs/world.md section 7).
 // Pure functions only: main.ts feeds them the browser values.
 
 import type { View } from './camera';
 import { FRAME } from './frame';
 import type { Theme } from './settings';
+import type { Bus, Mix } from './sound';
 import { skinById } from './skins';
 import { UI_SCALES, type UiScale } from './uiscale';
 
@@ -72,9 +73,18 @@ export const readClearBoard = (store: Store): boolean => read(store, CLEAR_KEY) 
 export const readFps = (store: Store): boolean => read(store, FPS_KEY) === 'on';
 export const writeFps = (store: Store, on: boolean): void => write(store, FPS_KEY, on ? 'on' : 'off');
 export const writeClearBoard = (store: Store, on: boolean): void => write(store, CLEAR_KEY, on ? 'on' : 'off');
-// The one sound on/off toggle until the mix sliders of #60: on unless the player turned it off.
-export const readSound = (store: Store): boolean => read(store, SOUND_KEY) !== 'off';
-export const writeSound = (store: Store, on: boolean): void => write(store, SOUND_KEY, on ? 'on' : 'off');
+// The four volume sliders (#438), 0 to 100 % each, 100 % unless the player moved it. They replace the one Sound
+// toggle: a Sound off saved before them sets every slider without a value of its own to 0.
+const volumeKey = (bus: Bus): string => `ab-alone.volume.${bus}`;
+export const readMix = (store: Store): Mix => {
+  const fallback = read(store, SOUND_KEY) === 'off' ? 0 : 100;
+  const volume = (bus: Bus): number => {
+    const saved = read(store, volumeKey(bus)) ?? '';
+    return /^\d+$/.test(saved) && Number(saved) <= 100 ? Number(saved) : fallback;
+  };
+  return { music: volume('music'), ambience: volume('ambience'), effects: volume('effects'), voice: volume('voice') };
+};
+export const writeVolume = (store: Store, bus: Bus, percent: number): void => write(store, volumeKey(bus), String(percent));
 // Photosensitivity safe mode (#380): on unless the player turned it off.
 export const readSafeMode = (store: Store): boolean => read(store, SAFE_KEY) !== 'off';
 export const writeSafeMode = (store: Store, on: boolean): void => write(store, SAFE_KEY, on ? 'on' : 'off');

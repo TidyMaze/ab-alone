@@ -43,7 +43,7 @@ import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from '.
 import { flatHudHtml, hudHtml } from './hud';
 import { drawSkin } from './skinart';
 import { nextSkin, skinById } from './skins';
-import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
+import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
 import { DECOR, LIGHT } from './light';
@@ -57,7 +57,7 @@ import {
   readReducedMotion,
   readSafeMode,
   readSkin,
-  readSound,
+  readMix,
   readTheme,
   readTier,
   readUiScale,
@@ -68,13 +68,14 @@ import {
   writeReducedMotion,
   writeSafeMode,
   writeSkin,
-  writeSound,
+  writeVolume,
   writeTheme,
   writeUiScale,
 } from './quality';
 import { limitFlash } from './safe';
 import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
-import { Sfx, TellWatch, type Tell } from './sound';
+import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
+import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
 import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
@@ -237,10 +238,10 @@ const applySafe = (): void => {
   document.documentElement.style.setProperty('--end-duration', `${1 / light.rate}s`);
 };
 applySafe();
-// The ejection sound (docs/specs/world.md section 7), on by default, a setting of the menu (#284). The audio
-// context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
-// way down, a touch on the way up, and toggling Sound on starts it too (setEnabled).
-const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readSound(store));
+// The sounds (docs/specs/world.md section 7) through four buses, each with its volume slider in the menu (#438). The
+// audio context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
+// way down, a touch on the way up, and moving a slider up from 0 starts it too (setVolume).
+const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store));
 // The sound twin of each boss tell (#358), only when the tell appears or changes. The cues played, read by the e2e tests.
 const tells = new TellWatch();
 const tellCues: Tell[] = [];
@@ -260,7 +261,7 @@ function applyLook(): void {
   else delete document.documentElement.dataset.motion;
 }
 // The settings menu: one button per item, its icon then its label, opened by the cog only. Escape, a press outside
-// and the cog close it. A toggle shows its state in aria-pressed, Sound a muted speaker while off (#287).
+// and the cog close it. A toggle shows its state in aria-pressed.
 const cog = document.getElementById('settings') as HTMLButtonElement;
 const menu = document.getElementById('settings-menu')!;
 const toggles: Record<string, () => void> = {
@@ -268,9 +269,10 @@ const toggles: Record<string, () => void> = {
     clear = !clear;
     writeClearBoard(store, clear);
   },
+  // Sound opens the volume page (#438): the four sliders in place of the items, until the menu closes.
   sound: () => {
-    sfx.setEnabled(!sfx.enabled);
-    writeSound(store, sfx.enabled);
+    menu.dataset.page = 'volume';
+    sliderAt('music').focus();
   },
   theme: () => {
     const next = nextDisplay(theme, uiScale, safe, maxUiScale(innerWidth, innerHeight));
@@ -300,8 +302,9 @@ const toggles: Record<string, () => void> = {
     refresh();
   },
 };
+const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     row.setAttribute('aria-label', label); // held upright only the icon shows (#414): the name stays for screen readers
@@ -309,7 +312,7 @@ const paintMenu = (): void => {
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
+for (const { id } of settingsList(clear, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -338,6 +341,17 @@ clearGroup.className = 'setting-group';
 clearRow.replaceWith(clearGroup);
 clearGroup.append(clearRow, fpsButton);
 fpsBox.hidden = !fpsOn;
+// The four volume sliders (#438), the page Sound opens: 0 to 100 %, each saved on its own.
+for (const bus of BUSES) {
+  const row = menu.appendChild(document.createElement('label'));
+  row.className = 'setting-volume';
+  row.innerHTML = `<span>${VOLUME_NAMES[bus]}</span><input id="volume-${bus}" type="range" min="0" max="100" step="5">`;
+  sliderAt(bus).value = String(sfx.volume(bus));
+  sliderAt(bus).addEventListener('input', () => {
+    sfx.setVolume(bus, Number(sliderAt(bus).value));
+    writeVolume(store, bus, sfx.volume(bus));
+  });
+}
 fpsButton.addEventListener('click', () => {
   fpsOn = !fpsOn;
   writeFps(store, fpsOn);
@@ -354,6 +368,7 @@ let menuIsOpen = false;
 const moveMenu = (event: MenuEvent): void => {
   menuIsOpen = menuOpen(menuIsOpen, event);
   menu.hidden = !menuIsOpen;
+  delete menu.dataset.page; // the menu opens on its items again
   cog.setAttribute('aria-expanded', String(menuIsOpen));
 };
 cog.addEventListener('click', () => moveMenu('button'));
@@ -1069,6 +1084,8 @@ function refresh(): void {
   }
   tellSound('crack', cracks);
   tellSound('choir', ARMY_NAMES[next] ? [next] : []);
+  // The drones follow how tense the game is (#439): the player's marbles a push could eject, the boss phase.
+  sfx.setTension(tensionLevel(rimDanger(board, glassOf()), engine instanceof Encounter ? engine.phase() : 0));
   document.body.dataset.armies = String(armies.length); // read by the e2e tests
   document.body.dataset.nextArmy = ARMY_NAMES[next] ?? '';
   document.body.dataset.converted = String(converted.length); // read by the e2e tests
@@ -1304,8 +1321,10 @@ addEventListener('resize', () => {
 
 // Used by the browser checks to see whether the audio context exists ('none') and runs.
 (window as unknown as Record<string, unknown>).__audio = () => sfx.state;
-// The effects level: the hum and the ejections fade to 0 with the Sound toggle.
-(window as unknown as Record<string, unknown>).__level = () => sfx.level;
+// The gain of a bus (#438): 0 before a gesture, then its slider's level.
+(window as unknown as Record<string, unknown>).__gain = (bus: Bus) => sfx.gain(bus);
+// The tension level and the gain of each drone layer (#439).
+(window as unknown as Record<string, unknown>).__tension = () => ({ level: sfx.tension, layers: sfx.layers });
 // The sound twins of the boss tells played so far (#358).
 (window as unknown as Record<string, unknown>).__tellCues = () => tellCues;
 
