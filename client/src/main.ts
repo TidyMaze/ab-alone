@@ -139,13 +139,19 @@ const [deckAlbedo, deckRoughness, shellNormal, backdrop] = await Promise.all([
   loadTexture('backdrop.png', true, false),
 ]);
 
+function prefilteredRoom(): THREE.Texture {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const texture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+  return texture;
+}
+
 const scene = new THREE.Scene();
 scene.background = backdrop ?? new THREE.Color(COLORS.base);
 // Reflections (#376): the room prefiltered once, used as the envMap of the marble materials only. The deck and the
 // frame get none, so their warm sodium look stays as it was.
-const pmrem = new THREE.PMREMGenerator(renderer);
-const reflections = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-pmrem.dispose();
+// Not under webdriver: the prefilter costs seconds per page load on the software WebGL of the CI runner (#416).
+const reflections = navigator.webdriver ? null : prefilteredRoom();
 scene.environmentIntensity = LIGHT.environment.intensity;
 const camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 100);
 // The whole board fits the window, held upright too, below the HUD and the buttons (#227).
