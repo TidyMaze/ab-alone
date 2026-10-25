@@ -31,7 +31,7 @@ describe('settingsList', () => {
     ]);
   });
 
-  it('keeps the menu at nine items, the glass skin sharing the shell skin's row, with Reduced motion (#379) and Flat HUD (#391): no separate Display row', () => {
+  it('keeps the menu at nine items, the glass skin sharing the shell skin row, with Reduced motion (#379) and Flat HUD (#391): no separate Display row', () => {
     expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false)).toHaveLength(9);
   });
 
