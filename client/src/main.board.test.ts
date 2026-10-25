@@ -18,10 +18,12 @@ type Mesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 function catchScene(): () => THREE.Scene {
   let scene: THREE.Scene | null = null;
   const add = THREE.Object3D.prototype.add;
-  vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
-    if (this instanceof THREE.Scene) scene ??= this;
+  const spy = vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+    if (this instanceof THREE.Scene && this.name === 'abalone-scene') scene = this;
+    else if (this instanceof THREE.Scene && !scene) scene = this;
     return add.apply(this, objects);
   });
+  onTestFinished(() => spy.mockRestore());
   return () => scene!;
 }
 
@@ -139,6 +141,43 @@ describe('main.ts board and HUD', { timeout: 30_000 }, () => {
     game.hook('__deck', 'cargo');
     await vi.waitFor(() => expect(discs[0]!.material.normalMap).not.toBe(initialNormal));
     expect(discs[0]!.material.normalMap).toBeInstanceOf(THREE.Texture);
+  });
+
+  it('disables airborne particles under automation by default (#443)', async () => {
+    const scene = catchScene();
+    await boot('?bot=off', { webdriver: true });
+    const points = scene().children.find((c): c is THREE.Points => c instanceof THREE.Points);
+    expect(points?.visible ?? false).toBe(false);
+  });
+
+  it('draws airborne particles outside the board volume per deck, off under clear board (#443)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { webdriver: false });
+    const points = scene().children.find((c): c is THREE.Points => c instanceof THREE.Points)!;
+    expect(points).toBeDefined();
+    expect(points.visible).toBe(true);
+
+    // Every particle position is outside the board volume (never over a cell or marble)
+    const pos = points.geometry.getAttribute('position');
+    expect(pos.count).toBeGreaterThan(0);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const dist = Math.hypot(x, z);
+      expect(dist >= 5.0 || y > 2.0 || y < -0.3, `particle ${i} at (${x}, ${y}, ${z}) inside board`).toBe(true);
+    }
+
+    // Switching to Bridge (which has 0 particles): visible becomes false
+    game.hook('__deck', 'bridge');
+    await vi.waitFor(() => expect(points.visible).toBe(false));
+
+    // Switching back to Mess: visible becomes true
+    game.hook('__deck', 'mess');
+    await vi.waitFor(() => expect(points.visible).toBe(true));
+
+    // Toggling clear board: particles turn off
+    game.openSettings();
+    document.getElementById('setting-clear-board')!.click();
+    await vi.waitFor(() => expect(points.visible).toBe(false));
   });
 
   it('keeps the flat steel look when the textures fail to load', async () => {

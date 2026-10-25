@@ -50,11 +50,12 @@ import { fpsOf, keepWindow } from './fps';
 import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
-import { deckOf, type Deck } from './deck';
+import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
   fogSettings,
+  hasParticles,
   isAutomation,
   shadowSettings,
   readClearBoard,
@@ -191,6 +192,7 @@ function prefilteredRoom(): THREE.Texture {
 }
 
 const scene = new THREE.Scene();
+scene.name = 'abalone-scene';
 scene.background = backdrop ?? new THREE.Color(COLORS.base);
 // Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
 const store = (() => {
@@ -250,6 +252,9 @@ let clear = readClearBoard(store);
 const forceShadows =
   new URLSearchParams(location.search).get('shadows') === 'on' ||
   new URLSearchParams(location.search).get('shadows') === '1';
+const forceParticles =
+  new URLSearchParams(location.search).get('particles') === 'on' ||
+  new URLSearchParams(location.search).get('particles') === '1';
 // The deck in play (#400): its light and fog. A page opens on a local game, hot-seat or against the bot, at the Mess.
 let deck: Deck = deckOf('local');
 // The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
@@ -297,6 +302,43 @@ function tellSound(tell: Tell, marks: readonly unknown[]): void {
 // The frame's radius, for the fog that starts at its edge (#399): drawFrame sets it, The Choir plays on radius 3.
 let fogRadius = RADIUS;
 let drawProps: () => void = () => {};
+
+// Airborne particles per deck (#443): light dust/steam/smoke outside the board volume.
+const MAX_PARTICLES = 96;
+const particleGeometry = new THREE.BufferGeometry();
+const particlePositions = new Float32Array(MAX_PARTICLES * 3);
+const resetParticle = (i: number): void => {
+  const angle = Math.random() * Math.PI * 2;
+  const radius = 5.5 + Math.random() * 11.5;
+  particlePositions[i * 3] = Math.cos(angle) * radius;
+  particlePositions[i * 3 + 1] = -0.3 + Math.random() * 7.0;
+  particlePositions[i * 3 + 2] = Math.sin(angle) * radius;
+};
+for (let i = 0; i < MAX_PARTICLES; i++) resetParticle(i);
+const particlePositionAttr = new THREE.BufferAttribute(particlePositions, 3);
+particleGeometry.setAttribute('position', particlePositionAttr);
+const particleMaterial = new THREE.PointsMaterial({
+  size: 0.1,
+  transparent: true,
+  opacity: 0.35,
+  depthWrite: false,
+  fog: false,
+});
+const particles = new THREE.Points(particleGeometry, particleMaterial);
+particles.visible = false;
+scene.add(particles);
+
+function updateParticles(): void {
+  const conf = DECK_PARTICLES[deck];
+  const enabled = hasParticles(tier, clear, reducedMotion(), navigator.webdriver, forceParticles) && conf.count > 0;
+  particles.visible = enabled;
+  if (!enabled) return;
+  particleMaterial.color.setHex(conf.color);
+  particleMaterial.size = conf.size;
+  particleMaterial.opacity = conf.opacity;
+  particleGeometry.setDrawRange(0, conf.count);
+}
+
 function applyLook(): void {
   updateFog();
   renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
@@ -306,6 +348,7 @@ function applyLook(): void {
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
   drawProps();
+  updateParticles();
   if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
   else delete document.documentElement.dataset.motion;
 }
@@ -1985,6 +2028,30 @@ let drawAsked = false;
   drawAsked = true;
   return draws;
 };
+let lastParticleNow = 0;
+function animateParticles(now: number): void {
+  if (!particles.visible) {
+    lastParticleNow = now;
+    return;
+  }
+  const dt = lastParticleNow ? Math.min(0.08, (now - lastParticleNow) / 1000) : 0.016;
+  lastParticleNow = now;
+  const conf = DECK_PARTICLES[deck];
+  for (let i = 0; i < conf.count; i++) {
+    const o = i * 3;
+    particlePositions[o] = (particlePositions[o] ?? 0) + conf.drift[0] * dt * 10;
+    particlePositions[o + 1] = (particlePositions[o + 1] ?? 0) + conf.drift[1] * dt * 10;
+    particlePositions[o + 2] = (particlePositions[o + 2] ?? 0) + conf.drift[2] * dt * 10;
+    const x = particlePositions[o]!;
+    const y = particlePositions[o + 1]!;
+    const z = particlePositions[o + 2]!;
+    if (y > 7.5 || y < -0.4 || Math.hypot(x, z) > 17.5 || Math.hypot(x, z) < 5.2) {
+      resetParticle(i);
+    }
+  }
+  particlePositionAttr.needsUpdate = true;
+}
+
 renderer.setAnimationLoop((now) => {
   if (fpsOn) {
     fpsStamps = keepWindow(fpsStamps, now);
@@ -1993,6 +2060,7 @@ renderer.setAnimationLoop((now) => {
   }
   animateSlides(now);
   animateEjections(now);
+  animateParticles(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   renderer.render(scene, camera);
   draws++;
