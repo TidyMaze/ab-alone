@@ -3,34 +3,36 @@ import { ICONS } from './icons';
 import { menuOpen, nextTheme, settingsList, themeAttribute } from './settings';
 
 describe('settingsList', () => {
-  it('lists Clear board, Sound, Theme, Export game and Import game, labelled, with an icon and the state', () => {
-    expect(settingsList(false, true, 'system', 'scarab')).toEqual([
+  it('lists Clear board, Sound, Safe mode, Theme, UI scale, Export game and Import game, labelled, with an icon and the state', () => {
+    expect(settingsList(false, true, 'system', 100, true)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },
       { id: 'sound', label: 'Sound', icon: 'sound', on: true },
+      { id: 'safe-mode', label: 'Safe mode', icon: 'safe', on: true },
       { id: 'theme', label: 'Theme: System', icon: 'theme' },
-      { id: 'shell-skin', label: 'Scarab ridges', icon: 'skin' },
+      { id: 'ui-scale', label: 'UI scale: 100 %', icon: 'scale' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
-    expect(settingsList(true, false, 'light', 'hex')).toEqual([
+    expect(settingsList(true, false, 'light', 200, false)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'sound', label: 'Sound', icon: 'muted', on: false },
+      { id: 'safe-mode', label: 'Safe mode', icon: 'safe', on: false },
       { id: 'theme', label: 'Theme: Light', icon: 'theme' },
-      { id: 'shell-skin', label: 'Hex chitin', icon: 'skin' },
+      { id: 'ui-scale', label: 'UI scale: 200 %', icon: 'scale' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
   });
 
   it('gives every menu item a name and an icon of the set', () => {
-    for (const s of [...settingsList(false, false, 'dark', 'tar'), ...settingsList(true, true, 'system', 'scarab')]) {
+    for (const s of [...settingsList(false, false, 'dark', 125, false), ...settingsList(true, true, 'system', 200, true)]) {
       expect(s.label).not.toBe('');
       expect(Object.keys(ICONS)).toContain(s.icon);
     }
   });
 
   it('gives every setting a distinct id', () => {
-    const ids = settingsList(false, true, 'system', 'scarab').map((s) => s.id);
+    const ids = settingsList(false, true, 'system', 100, true).map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });

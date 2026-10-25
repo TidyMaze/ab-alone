@@ -135,6 +135,15 @@ for (const { name, viewport, mobile } of sizes) {
       await check(page, testInfo, 'at the start');
     });
 
+    // UI scale 200 % (#382): the HUD and the menu grow, and still cover no cell, marble or target.
+    test('nothing covers the board or the HUD at a 200 % UI scale, #382', async ({ page }, testInfo) => {
+      await page.addInitScript(() => localStorage.setItem('ab-alone.ui-scale', '200'));
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await expect(page.locator('#hud')).toContainText('Black to move');
+      await check(page, testInfo, 'at 200 % UI scale');
+    });
+
     test('nothing covers the board or the HUD with the boss list open, bugs #227 #234', async ({ page }, testInfo) => {
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
