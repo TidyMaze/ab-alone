@@ -9,6 +9,7 @@ import {
   readFps,
   writeFps,
   renderPixelRatio,
+  readReducedMotion,
   readSafeMode,
   readSound,
   readSkin,
@@ -19,6 +20,7 @@ import {
   writeClearBoard,
   writeSafeMode,
   writeSound,
+  writeReducedMotion,
   writeSkin,
   writeTheme,
   writeTier,
@@ -162,6 +164,30 @@ describe('FPS readout storage (#426)', () => {
     writeFps(s, false);
     expect(readFps(s)).toBe(false);
     expect(() => writeFps(throwing, true)).not.toThrow();
+  });
+});
+
+describe('reduced motion storage (#379): no choice until the player presses the toggle', () => {
+  it('defaults to no choice, so the system setting decides', () => {
+    expect(readReducedMotion(memoryStorage())).toBeNull();
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writeReducedMotion(s, true);
+    expect(s.data.get('ab-alone.reduced-motion')).toBe('on');
+    expect(readReducedMotion(s)).toBe(true);
+    writeReducedMotion(s, false);
+    expect(s.data.get('ab-alone.reduced-motion')).toBe('off');
+    expect(readReducedMotion(s)).toBe(false);
+  });
+  it('ignores a garbage stored value: no choice', () => {
+    expect(readReducedMotion(memoryStorage({ 'ab-alone.reduced-motion': 'slow' }))).toBeNull();
+  });
+  it('falls back to no choice when storage throws or is missing, and does not throw writing', () => {
+    expect(readReducedMotion(throwing)).toBeNull();
+    expect(readReducedMotion(null)).toBeNull();
+    expect(() => writeReducedMotion(throwing, true)).not.toThrow();
+    expect(() => writeReducedMotion(null, true)).not.toThrow();
   });
 });
 

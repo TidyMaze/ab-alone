@@ -18,8 +18,9 @@ describe('palette tokens', () => {
     });
   }
 
-  it('turns animation off under prefers-reduced-motion', () => {
-    expect(css).toMatch(/prefers-reduced-motion:\s*reduce/);
+  it('turns animation off under the Reduced motion setting, not the media query (#379)', () => {
+    expect(css).toMatch(/:root\[data-motion='reduced'\] \*, :root\[data-motion='reduced'\] \*::before, :root\[data-motion='reduced'\] \*::after \{ animation-duration: 0s !important; transition-duration: 0s !important; \}/);
+    expect(css).not.toContain('prefers-reduced-motion');
   });
 });
 
@@ -30,7 +31,7 @@ describe('end of game styles, #282', () => {
       expect(css).toContain(`@keyframes end-${anim}`);
     }
     expect(css).toMatch(/body\[data-over\]::before \{[^}]*pointer-events: none[^}]*mask-image: radial-gradient\(ellipse at center, transparent 62%/);
-    expect(css).toMatch(/prefers-reduced-motion: reduce\) \{ body\[data-over\]::before \{ display: none; \} \}/);
+    expect(css).toContain(":root[data-motion='reduced'] body[data-over]::before { display: none; }");
     expect(css).toMatch(/body\[data-over\] canvas \{ filter: brightness/);
   });
 });

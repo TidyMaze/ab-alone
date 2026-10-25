@@ -123,6 +123,23 @@ test('reduced motion: the banner stays and the board is dimmed, nothing animates
   expect(style.veilDisplay).toBe('none'); // no animated light
 });
 
+test('the Reduced motion setting (#379): the banner stays, nothing animates, after a reload', async ({ page }) => {
+  await open(page, '');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Reduced motion' }).click();
+  await open(page, '');
+  await load(page, true, BLACK_WINS);
+  await expectOver(page, 'win', 'You win', '6 out. The books balance.');
+  const style = await page.evaluate(() => ({
+    filter: getComputedStyle(document.querySelector('canvas')!).filter,
+    veilDisplay: getComputedStyle(document.body, '::before').display,
+    running: document.getAnimations().filter((a) => a.playState === 'running').length,
+  }));
+  expect(style.filter).not.toBe('none'); // dimmed
+  expect(style.veilDisplay).toBe('none'); // no animated light
+  expect(style.running).toBe(0);
+});
+
 test('with motion: each outcome has its own animation, and it ends by itself', async ({ page }) => {
   await open(page, '');
   const seen: Record<string, string> = {};
