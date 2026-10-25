@@ -67,6 +67,8 @@ import {
   readTheme,
   readTier,
   readUiScale,
+  hasReflections,
+  meshDetail,
   renderPixelRatio,
   writeClearBoard,
   writeFlatHud,
@@ -175,29 +177,6 @@ function prefilteredRoom(): THREE.Texture {
 
 const scene = new THREE.Scene();
 scene.background = backdrop ?? new THREE.Color(COLORS.base);
-// Reflections (#376): the room prefiltered once, used as the envMap of the marble materials only. The deck and the
-// frame get none, so their warm sodium look stays as it was.
-// Not under webdriver: the prefilter costs seconds per page load on the software WebGL of the CI runner (#416).
-const reflections = navigator.webdriver ? null : prefilteredRoom();
-scene.environmentIntensity = LIGHT.environment.intensity;
-const camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 100);
-// The whole board fits the window, held upright too, below the HUD and the buttons (#227).
-function frameCamera(): void {
-  const { fov, shift } = framing(innerWidth, innerHeight);
-  camera.aspect = innerWidth / innerHeight;
-  camera.fov = fov;
-  camera.setViewOffset(innerWidth, innerHeight, 0, -shift, innerWidth, innerHeight); // updates the projection
-}
-frameCamera();
-let view = resetView();
-function applyView(): void {
-  const p = viewPosition(view);
-  camera.position.set(p.x, p.y, p.z);
-  camera.lookAt(0, 0, 0);
-  camera.updateMatrixWorld(); // picking and __cellToScreen run before the next frame
-  applyLook(); // the fog follows the zoom
-}
-
 // Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
 const store = (() => {
   try {
@@ -218,6 +197,28 @@ const tier = readTier(store, {
   reducedMotion: reducedMotion(),
 });
 diag.log.log('info', 'start', { backend, tier });
+
+// Reflections (#376, #424): prefiltered room used for marble materials on high tier only.
+// Omitted on low tier / mobile and under automation to save WebGL2 fill rate and PMREM prefilter cost (#416, #424).
+const reflections = hasReflections(tier, navigator.webdriver) ? prefilteredRoom() : null;
+scene.environmentIntensity = LIGHT.environment.intensity;
+const camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 100);
+// The whole board fits the window, held upright too, below the HUD and the buttons (#227).
+function frameCamera(): void {
+  const { fov, shift } = framing(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = fov;
+  camera.setViewOffset(innerWidth, innerHeight, 0, -shift, innerWidth, innerHeight); // updates the projection
+}
+frameCamera();
+let view = resetView();
+function applyView(): void {
+  const p = viewPosition(view);
+  camera.position.set(p.x, p.y, p.z);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(); // picking and __cellToScreen run before the next frame
+  applyLook(); // the fog follows the zoom
+}
 let clear = readClearBoard(store);
 const forceShadows =
   new URLSearchParams(location.search).get('shadows') === 'on' ||
@@ -270,6 +271,7 @@ let drawProps: () => void = () => {};
 function applyLook(): void {
   const fog = fogSettings(tier, clear, view, fogRadius);
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
+  renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
   const shadowConf = shadowSettings(tier, isAutomation(navigator.webdriver), forceShadows);
   renderer.shadowMap.enabled = shadowConf.enabled;
   renderer.shadowMap.type = shadowConf.soft ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
@@ -494,8 +496,9 @@ for (const x of [-6, 6]) {
 }
 scene.add(decor);
 
-const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, 32);
-const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, 32, 16);
+const detail = meshDetail(tier);
+const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, detail.discSegments);
+const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidthSegments, detail.marbleHeightSegments);
 const ringGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32);
 const steel = new THREE.MeshStandardMaterial(
   deckAlbedo && deckRoughness
@@ -1384,6 +1387,7 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
 
 addEventListener('resize', () => {
   frameCamera();
+  renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
   renderer.setSize(innerWidth, innerHeight);
 });
 

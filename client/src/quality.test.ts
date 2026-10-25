@@ -8,6 +8,8 @@ import {
   readClearBoard,
   readFps,
   writeFps,
+  hasReflections,
+  meshDetail,
   renderPixelRatio,
   readFlatHud,
   readReducedMotion,
@@ -379,10 +381,16 @@ describe('tier storage', () => {
   });
 });
 
-describe('renderPixelRatio', () => {
-  it('gives a player the device pixel ratio', () => {
-    expect(renderPixelRatio(2, false)).toBe(2);
-    expect(renderPixelRatio(1, false)).toBe(1);
+describe('renderPixelRatio (#424)', () => {
+  it('caps pixel ratio at 1.0 on low tier / mobile to save fill rate', () => {
+    expect(renderPixelRatio(2, false, 'low')).toBe(1);
+    expect(renderPixelRatio(3, false, 'low')).toBe(1);
+    expect(renderPixelRatio(0.8, false, 'low')).toBe(0.8);
+  });
+  it('gives high-tier players up to 2.0 DPR, capping 3x/4x retina waste', () => {
+    expect(renderPixelRatio(1, false, 'high')).toBe(1);
+    expect(renderPixelRatio(2, false, 'high')).toBe(2);
+    expect(renderPixelRatio(3, false, 'high')).toBe(2);
   });
   it('renders at half the pixels under automation, so software WebGL costs less per frame', () => {
     expect(renderPixelRatio(1, true)).toBe(0.5);
@@ -390,6 +398,27 @@ describe('renderPixelRatio', () => {
   });
   it('never renders above the device ratio under automation', () => {
     expect(renderPixelRatio(0.5, true)).toBe(0.5);
+  });
+});
+
+describe('mobile quality optimizations (#424)', () => {
+  it('hasReflections returns true on high tier only, skipping PMREM on low tier and automation', () => {
+    expect(hasReflections('high', false)).toBe(true);
+    expect(hasReflections('low', false)).toBe(false);
+    expect(hasReflections('high', true)).toBe(false);
+    expect(hasReflections('low', true)).toBe(false);
+  });
+
+  it('meshDetail reduces geometry segments on low tier / mobile', () => {
+    const low = meshDetail('low');
+    expect(low.discSegments).toBe(16);
+    expect(low.marbleWidthSegments).toBe(16);
+    expect(low.marbleHeightSegments).toBe(12);
+
+    const high = meshDetail('high');
+    expect(high.discSegments).toBe(32);
+    expect(high.marbleWidthSegments).toBe(32);
+    expect(high.marbleHeightSegments).toBe(16);
   });
 });
 

@@ -146,11 +146,31 @@ const AUTOMATED_DUTY = 4;
 export const drawDue = (now: number, lastStart: number, lastCost: number, automated: boolean): boolean =>
   !automated || now - lastStart >= Math.max(AUTOMATED_MIN_GAP_MS, AUTOMATED_DUTY * lastCost);
 
-// Under automation the canvas renders at half the device pixel ratio: software WebGL costs by pixels (#349).
-// A player always gets the device ratio. The screenshot specs (fog, contrast, eject) pass at this ratio.
+export function hasReflections(tier: Tier, automated: boolean): boolean {
+  return !automated && tier === 'high';
+}
+
+// Geometry detail per tier (#424): low tier reduces vertex count on the 61 discs and 28 marbles for mobile fill/vertex savings.
+export interface MeshDetail {
+  discSegments: number;
+  marbleWidthSegments: number;
+  marbleHeightSegments: number;
+}
+export function meshDetail(tier: Tier): MeshDetail {
+  return tier === 'low'
+    ? { discSegments: 16, marbleWidthSegments: 16, marbleHeightSegments: 12 }
+    : { discSegments: 32, marbleWidthSegments: 32, marbleHeightSegments: 16 };
+}
+
+// On mobile / low tier the canvas renders capped at 1.0 DPR: WebGL2 fills cost by pixels (#424).
+// Even on high tier, DPR is capped at 2.0 to avoid 3x/4x retina waste.
+// Under automation the canvas renders at half DPR (#349).
 const AUTOMATED_PIXEL_RATIO = 0.5;
-export const renderPixelRatio = (dpr: number, automated: boolean): number =>
-  automated ? Math.min(dpr, AUTOMATED_PIXEL_RATIO) : dpr;
+export const renderPixelRatio = (dpr: number, automated: boolean, tier: Tier = 'high'): number => {
+  if (automated) return Math.min(dpr, AUTOMATED_PIXEL_RATIO);
+  if (tier === 'low') return Math.min(dpr, 1.0);
+  return Math.min(dpr, 2.0);
+};
 
 // Under automation (navigator.webdriver) we skip expensive effects like prefiltering and shadows (#459).
 export const isAutomation = (webdriver: boolean): boolean => webdriver;
