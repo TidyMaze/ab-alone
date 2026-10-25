@@ -26,7 +26,7 @@ export const settingsList = (clear: boolean, sound: boolean, theme: Theme, skin:
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'sound', label: 'Sound', icon: sound ? 'sound' : 'muted', on: sound },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme' },
-  { id: 'shell-skin', label: `Shell: ${skinById(skin).name}`, icon: 'skin' },
+  { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];

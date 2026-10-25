@@ -8,7 +8,7 @@ describe('settingsList', () => {
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },
       { id: 'sound', label: 'Sound', icon: 'sound', on: true },
       { id: 'theme', label: 'Theme: System', icon: 'theme' },
-      { id: 'shell-skin', label: 'Shell: Scarab ridges', icon: 'skin' },
+      { id: 'shell-skin', label: 'Scarab ridges', icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
@@ -16,7 +16,7 @@ describe('settingsList', () => {
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'sound', label: 'Sound', icon: 'muted', on: false },
       { id: 'theme', label: 'Theme: Light', icon: 'theme' },
-      { id: 'shell-skin', label: 'Shell: Hex chitin', icon: 'skin' },
+      { id: 'shell-skin', label: 'Hex chitin', icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
