@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DIRECTIONS, axialTo3D } from './board';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt, type Drop } from './blood';
+import { FRAME } from './frame';
 
 // The rim cell (-2,-2), pushed NW (dir 4): the spatter starts beyond it, on the push line.
 const from = axialTo3D(-2, -2);
@@ -47,8 +48,8 @@ describe('bloodAt', () => {
 
   it('draws a fixed count of drops from the first frame, and none once the effect is over', () => {
     expect(at(0)).toHaveLength(BLOOD_DROPS);
-    expect(BLOOD_DROPS).toBeGreaterThanOrEqual(14);
-    expect(BLOOD_DROPS).toBeLessThanOrEqual(24);
+    expect(BLOOD_DROPS).toBeGreaterThanOrEqual(10); // few enough to count at a glance, large enough to read
+    expect(BLOOD_DROPS).toBeLessThanOrEqual(12);
     expect(at(BLOOD_MS)).toEqual([]);
     expect(at(BLOOD_MS + 500)).toEqual([]);
   });
@@ -69,6 +70,22 @@ describe('bloodAt', () => {
         expect(gap).toBeGreaterThan(CELL_RADIUS);
       }
     }
+  });
+
+  it('clears the steel frame: the stain and every drop sit beyond its outer edge', () => {
+    // The frame's outer edge is FRAME.margin + FRAME.rim past the rim cell's centre line (frame.ts).
+    const clear = FRAME.margin + FRAME.rim;
+    const along = (x: number, z: number) => (x - from.x) * dir.x + (z - from.z) * dir.z;
+    for (const ms of [0, 150, 300, 600, BLOOD_MS - 1]) {
+      const s = stainAt(ms)!;
+      expect(along(s.x, s.z) - s.radius).toBeGreaterThanOrEqual(clear);
+      for (const d of at(ms)) expect(along(d.x, d.z)).toBeGreaterThanOrEqual(clear);
+    }
+  });
+
+  it('the drops land on the void by 600 ms, as small dots that fade with the stain', () => {
+    expect(at(0).every((d) => d.y > 0.3)).toBe(true); // still in the air as they leave the rim
+    expect(at(600).every((d) => d.y < 0.05)).toBe(true);
   });
 
   it('spreads outward only: no drop flies back over the board', () => {
