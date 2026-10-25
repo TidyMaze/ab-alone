@@ -96,6 +96,12 @@ run.
     files, or one needs the other (for example two settings in the same menu). Unrelated work
     never shares a PR. Anything found on the way becomes a new issue, never a bigger PR. When two
     solutions work, take the smaller one.
+    **Group small open issues.** When several small open issues look doable together in one PR
+    (same feature or same files, a few lines each, or the same kind of fix such as several slow
+    tests), the one picking work groups them instead of doing them one by one: one branch, one
+    PR, one `Closes #n` line each, every issue assigned and `In Progress` together. A duplicate is
+    closed in favour of the older issue. Groups stay reviewable (rule 18); issues held by someone
+    else join a group only with their holder's written consent (rule 14).
 18. **Reviewable size.** A reader must be able to review any issue, Decision or spec PR in one
     sitting. A Decision asks **one question**, gives 2 or 3 options and a recommendation, and its
     body reads in about 5 minutes (roughly 500 words at most). A spec PR covers **one topic** (one

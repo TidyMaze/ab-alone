@@ -29,7 +29,8 @@ The short version:
    After a rebase on `main` without conflict, rerun only `bun run test` and `tsc` (CONTRIBUTING 6.4).
    Kill the dev servers you started. Finish and merge your open PR before opening another: many
    open PRs mean rebase loops (CONTRIBUTING rule 16). Keep every task and PR minimal: one thing,
-   done well, the simplest way (KISS, CONTRIBUTING rule 17).
+   done well, the simplest way (KISS, CONTRIBUTING rule 17). Group small open issues that fit one
+   PR into that PR, one `Closes` line each (rule 17), instead of one PR per issue.
    Keep every Decision and spec PR short enough to review in one sitting: one question per Decision,
    one topic per spec PR (CONTRIBUTING rule 18).
 8. Assign yourself (your driving owner) before any work. Never touch an issue or PR assigned to
