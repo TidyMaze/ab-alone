@@ -41,7 +41,7 @@ import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from '.
 import { hudHtml } from './hud';
 import { drawSkin } from './skinart';
 import { nextSkin, skinById } from './skins';
-import { menuOpen, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
+import { menuOpen, nextDisplay, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { DECOR, LIGHT } from './light';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -64,7 +64,7 @@ import {
   writeUiScale,
 } from './quality';
 import { limitFlash } from './safe';
-import { clampUiScale, maxUiScale, nextUiScale, uiScaleFactor, type UiScale } from './uiscale';
+import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { Sfx, TellWatch, type Tell } from './sound';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
@@ -248,15 +248,14 @@ const toggles: Record<string, () => void> = {
     sfx.setEnabled(!sfx.enabled);
     writeSound(store, sfx.enabled);
   },
-  'safe-mode': () => {
-    safe = !safe;
-    writeSafeMode(store, safe);
-    applySafe();
-  },
-  'ui-scale': () => {
-    uiScale = nextUiScale(uiScale, maxUiScale(innerWidth, innerHeight));
+  display: () => {
+    const next = nextDisplay(uiScale, safe, maxUiScale(innerWidth, innerHeight));
+    uiScale = next.scale;
+    safe = next.safe;
     writeUiScale(store, uiScale);
+    writeSafeMode(store, safe);
     applyUiScale();
+    applySafe();
   },
   theme: () => {
     theme = nextTheme(theme);

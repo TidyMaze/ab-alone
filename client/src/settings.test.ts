@@ -1,27 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { ICONS } from './icons';
-import { menuOpen, nextTheme, settingsList, themeAttribute } from './settings';
+import { menuOpen, nextDisplay, nextTheme, settingsList, themeAttribute } from './settings';
 
 describe('settingsList', () => {
-  it('lists Clear board, Sound, Safe mode, Theme, UI scale, Export game and Import game, labelled, with an icon and the state', () => {
+  it('lists Clear board, Sound, Theme, Display, Export game and Import game, with an icon and the state', () => {
     expect(settingsList(false, true, 'system', 100, true)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },
       { id: 'sound', label: 'Sound', icon: 'sound', on: true },
-      { id: 'safe-mode', label: 'Safe mode', icon: 'safe', on: true },
       { id: 'theme', label: 'Theme: System', icon: 'theme' },
-      { id: 'ui-scale', label: 'UI scale: 100 %', icon: 'scale' },
+      { id: 'display', label: 'Display: 100 %', icon: 'scale', on: true },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
     expect(settingsList(true, false, 'light', 200, false)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'sound', label: 'Sound', icon: 'muted', on: false },
-      { id: 'safe-mode', label: 'Safe mode', icon: 'safe', on: false },
       { id: 'theme', label: 'Theme: Light', icon: 'theme' },
-      { id: 'ui-scale', label: 'UI scale: 200 %', icon: 'scale' },
+      { id: 'display', label: 'Display: 200 %', icon: 'scale', on: false },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
+  });
+
+  it('steps Display through the UI scale up to the cap, then 100 % with Safe mode flipped', () => {
+    expect(nextDisplay(100, true, 200)).toEqual({ scale: 125, safe: true });
+    expect(nextDisplay(175, true, 200)).toEqual({ scale: 200, safe: true });
+    expect(nextDisplay(200, true, 200)).toEqual({ scale: 100, safe: false });
+    expect(nextDisplay(100, false, 100)).toEqual({ scale: 100, safe: true });
   });
 
   it('gives every menu item a name and an icon of the set', () => {

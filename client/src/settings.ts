@@ -3,7 +3,7 @@
 // actions Export game and Import game (#287). Pure functions only: main.ts feeds them the clicks and builds the DOM.
 import type { IconName } from './icons';
 import { skinById } from './skins';
-import type { UiScale } from './uiscale';
+import { nextUiScale, type UiScale } from './uiscale';
 
 export interface Setting {
   id: string;
@@ -22,14 +22,17 @@ export const nextTheme = (theme: Theme): Theme => (theme === 'system' ? 'dark' :
 /** The `data-theme` value of a choice, null to leave the attribute off so the system setting decides. */
 export const themeAttribute = (theme: Theme): string | null => (theme === 'system' ? null : theme);
 
+/** The choice after a press on Display: the next UI scale step up to the cap, then 100 % with Safe mode flipped. */
+export const nextDisplay = (scale: UiScale, safe: boolean, max: UiScale): { scale: UiScale; safe: boolean } =>
+  scale < max ? { scale: nextUiScale(scale, max), safe } : { scale: 100, safe: !safe };
+
 /** The items the menu lists, in order, with their icon and the toggles' current state. */
 export const settingsList = (clear: boolean, sound: boolean, theme: Theme, skin: string, scale: UiScale, safe: boolean): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'sound', label: 'Sound', icon: sound ? 'sound' : 'muted', on: sound },
-  { id: 'safe-mode', label: 'Safe mode', icon: 'safe', on: safe },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme' },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
-  { id: 'ui-scale', label: `UI scale: ${scale} %`, icon: 'scale' },
+  { id: 'display', label: `Display: ${scale} %`, icon: 'scale', on: safe },
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];
