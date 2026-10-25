@@ -8,6 +8,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
   await expect(page.locator('#hud')).toContainText('White to move');
   expect(loaded.sort()).toEqual([
     '200 backdrop.png',
+    '200 crack-decal.png',
     '200 deck-albedo.png',
     '200 deck-roughness.png',
     '200 shell-normal.png',
