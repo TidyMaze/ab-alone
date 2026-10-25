@@ -16,6 +16,11 @@ export const ASSET_NAMES = [
   'deck-furnace.png',
   'deck-chapel.png',
   'deck-bridge.png',
+  'deck-mess-normal.png',
+  'deck-cargo-normal.png',
+  'deck-furnace-normal.png',
+  'deck-chapel-normal.png',
+  'deck-bridge-normal.png',
 ];
 
 function rng(seed) {
@@ -319,7 +324,88 @@ export function generateAssets(seed) {
   ]);
   // Their own stream, so the assets above keep their bytes (#401).
   for (const [name, buf] of Object.entries(deckSets(256, steel, rng(seed + 401)))) assets.set(`deck-${name}.png`, buf);
+  // Tangent-space normal map per deck (#440).
+  for (const [name, buf] of Object.entries(deckNormals(256, rng(seed + 440)))) assets.set(`deck-${name}-normal.png`, buf);
   return assets;
+}
+
+// Tangent-space normal map per deck (#440): laminate scratches, ore grit, soot-pitted steel, wood grain, panel seams.
+// Tileable: edges wrap. Subtle relief so cell edge contrast stays readable (3:1 minimum against the marble).
+function deckNormals(size, rand) {
+  const normalFromHeight = (h, k = 2.5) => {
+    const px = new Uint8Array(size * size * 3);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const l = h[y * size + ((x + size - 1) % size)], r = h[y * size + ((x + 1) % size)];
+        const u = h[((y + size - 1) % size) * size + x], d = h[((y + 1) % size) * size + x];
+        const nx = (l - r) * k, ny = (u - d) * k, inv = 1 / Math.hypot(nx, ny, 1);
+        const o = (y * size + x) * 3;
+        px[o] = clamp((nx * inv * 0.5 + 0.5) * 255);
+        px[o + 1] = clamp((ny * inv * 0.5 + 0.5) * 255);
+        px[o + 2] = clamp((inv * 0.5 + 0.5) * 255);
+      }
+    }
+    return png(size, size, 3, px);
+  };
+
+  const fine = fbm(size, rand, [32, 64]);
+  const warp = noise(size, 4, rand);
+
+  // 1. Mess: laminate scratches and cup-ring lip depressions
+  const hMess = new Float32Array(size * size);
+  for (let i = 0; i < size * size; i++) hMess[i] = (fine[i] - 0.5) * 0.08;
+  for (let n = 0; n < 32; n++) {
+    let x = rand() * size, y = rand() * size;
+    const a = rand() * Math.PI, len = 15 + rand() * 45;
+    for (let t = 0; t < len; t++, x += Math.cos(a), y += Math.sin(a)) {
+      const idx = (((Math.round(y) % size) + size) % size) * size + (((Math.round(x) % size) + size) % size);
+      hMess[idx] -= 0.35;
+    }
+  }
+  const mess = normalFromHeight(hMess, 2.0);
+
+  // 2. Cargo: ore grit (sharp granular particulate relief on plate)
+  const grit = noise(size, 64, rand);
+  const hCargo = new Float32Array(size * size);
+  for (let i = 0; i < size * size; i++) {
+    const isSpeck = grit[i] > 0.72 ? (grit[i] - 0.72) * 1.5 : 0;
+    hCargo[i] = (fine[i] - 0.5) * 0.12 + isSpeck;
+  }
+  const cargo = normalFromHeight(hCargo, 2.2);
+
+  // 3. Furnace: soot-pitted steel (small crater depressions from heat pitting)
+  const pits = fbm(size, rand, [16, 32, 64]);
+  const hFurnace = new Float32Array(size * size);
+  for (let i = 0; i < size * size; i++) {
+    const pit = pits[i] > 0.65 ? -0.4 : 0;
+    hFurnace[i] = (fine[i] - 0.5) * 0.1 + pit;
+  }
+  const furnace = normalFromHeight(hFurnace, 2.0);
+
+  // 4. Chapel: wood grain ridges along y and raised wire seams
+  const hChapel = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const grain = Math.sin(((y + warp[i] * 24) / size) * Math.PI * 2 * 18) * 0.25;
+      const wire = x % 128 < 2 ? 0.35 : 0;
+      hChapel[i] = grain + wire + (fine[i] - 0.5) * 0.05;
+    }
+  }
+  const chapel = normalFromHeight(hChapel, 2.5);
+
+  // 5. Bridge: polished flat panel with recessed perimeter seams
+  const hBridge = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const seam = x % 128 === 0 || y % 128 === 0 ? -0.5 : 0;
+      hBridge[i] = seam + (fine[i] - 0.5) * 0.02;
+    }
+  }
+  const bridge = normalFromHeight(hBridge, 2.5);
+
+  return { mess, cargo, furnace, chapel, bridge };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

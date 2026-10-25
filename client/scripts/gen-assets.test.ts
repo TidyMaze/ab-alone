@@ -152,6 +152,54 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     });
   });
 
+  // Task #440: each deck has its own generated normal map for the cells.
+  describe('a normal map per deck (#440)', () => {
+    const assets = generateAssets(SEED);
+    const normal = (deck: string) => assets.get(`deck-${deck}-normal.png`)!;
+    const normalStats = (buf: Buffer) => {
+      const { w, rows } = decode(buf);
+      let sumR = 0, sumG = 0, sumB = 0, n = 0;
+      for (const row of rows) {
+        for (let x = 0; x < w; x++) {
+          sumR += row[x * 3]!;
+          sumG += row[x * 3 + 1]!;
+          sumB += row[x * 3 + 2]!;
+          n++;
+        }
+      }
+      return { r: sumR / n, g: sumG / n, b: sumB / n };
+    };
+
+    it('makes one 256 px normal map per deck, within 300 KB a deck with albedo and roughness (art.md section 2)', () => {
+      for (const deck of DECK_NAMES) {
+        const buf = normal(deck);
+        expect(buf, `missing normal map for ${deck}`).toBeDefined();
+        const { w, h } = decode(buf);
+        expect([w, h], deck).toEqual([256, 256]);
+        const deckTotal =
+          buf.length +
+          assets.get(`deck-${deck}.png`)!.length +
+          assets.get('deck-roughness.png')!.length;
+        expect(deckTotal, deck).toBeLessThanOrEqual(300 * 1024);
+      }
+    });
+
+    it('gives every deck its own normal map', () => {
+      expect(new Set(DECK_NAMES.map((deck) => sha(normal(deck)))).size).toBe(DECK_NAMES.length);
+    });
+
+    it('encodes tangent-space normals: Z points outward, X and Y tilt around 128', () => {
+      for (const deck of DECK_NAMES) {
+        const s = normalStats(normal(deck));
+        expect(s.b, `${deck} normal Z`).toBeGreaterThan(180);
+        expect(s.r, `${deck} normal X`).toBeGreaterThan(115);
+        expect(s.r, `${deck} normal X`).toBeLessThan(140);
+        expect(s.g, `${deck} normal Y`).toBeGreaterThan(115);
+        expect(s.g, `${deck} normal Y`).toBeLessThan(140);
+      }
+    });
+  });
+
   it('keeps the total asset size under the budget', () => {
     const total = [...generateAssets(SEED).values()].reduce((n, b) => n + b.length, 0);
     expect(total).toBeLessThan(BUDGET_BYTES);

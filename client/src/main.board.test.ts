@@ -120,6 +120,7 @@ describe('main.ts board and HUD', { timeout: 30_000 }, () => {
     const { discs, plate, near } = parts(scene());
     expect(discs).toHaveLength(61);
     expect(discs[0]!.material.map).toBeInstanceOf(THREE.Texture);
+    expect(discs[0]!.material.normalMap).toBeInstanceOf(THREE.Texture);
     expect(plate.material.map).toBeInstanceOf(THREE.Texture);
     expect(near.material.map).toBeInstanceOf(THREE.Texture);
     const { shells, glass } = drawn(scene());
@@ -127,6 +128,17 @@ describe('main.ts board and HUD', { timeout: 30_000 }, () => {
     expect(shells[0]!.material.normalMap).toBeInstanceOf(THREE.Texture); // the scarab ridges
     expect(shells[0]!.children).toHaveLength(0);
     expect(glass[0]!.children).toHaveLength(1); // its cyan core
+  });
+
+  it('swaps the cells normal map with the albedo on a deck change (#440)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    const { discs } = parts(scene());
+    const initialNormal = discs[0]!.material.normalMap;
+    expect(initialNormal).toBeInstanceOf(THREE.Texture);
+    game.hook('__deck', 'cargo');
+    await vi.waitFor(() => expect(discs[0]!.material.normalMap).not.toBe(initialNormal));
+    expect(discs[0]!.material.normalMap).toBeInstanceOf(THREE.Texture);
   });
 
   it('keeps the flat steel look when the textures fail to load', async () => {
@@ -143,6 +155,7 @@ describe('main.ts board and HUD', { timeout: 30_000 }, () => {
     const game = await boot('?bot=off');
     const { discs, plate, near } = parts(scene());
     expect(discs[0]!.material.map).toBeNull();
+    expect(discs[0]!.material.normalMap).toBeNull();
     expect(discs[0]!.material.color.getHex()).toBe(0x4a5258);
     expect(plate.material.map).toBeNull();
     expect(near.material.map).toBeNull();

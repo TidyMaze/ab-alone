@@ -161,20 +161,26 @@ async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise
     return null;
   }
 }
-// The cells' albedo of each deck (#401), loaded the first time a mode starts on that deck: a page that stays at the
-// Mess loads the Mess one only.
+// The cells' albedo and normal map of each deck (#401, #440), loaded the first time a mode starts on that deck:
+// a page that stays at the Mess loads the Mess one only.
 const deckMaps = new Map<Deck, Promise<THREE.Texture | null>>();
 const deckMap = (name: Deck): Promise<THREE.Texture | null> => {
   if (!deckMaps.has(name)) deckMaps.set(name, loadTexture(`deck-${name}.png`, true, true));
   return deckMaps.get(name)!;
 };
-const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, firstDeckMap] = await Promise.all([
+const deckNormalMaps = new Map<Deck, Promise<THREE.Texture | null>>();
+const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
+  if (!deckNormalMaps.has(name)) deckNormalMaps.set(name, loadTexture(`deck-${name}-normal.png`, false, true));
+  return deckNormalMaps.get(name)!;
+};
+const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, firstDeckMap, firstDeckNormal] = await Promise.all([
   loadTexture('deck-albedo.png', true, true),
   loadTexture('deck-roughness.png', false, true),
   loadTexture('shell-normal.png', false, true),
   loadTexture('backdrop.png', true, false),
   loadTexture('crack-decal.png', false, false),
   deckMap(deckOf('local')), // a page opens at the Mess
+  deckNormalMap(deckOf('local')),
 ]);
 
 function prefilteredRoom(): THREE.Texture {
@@ -497,11 +503,12 @@ function applyDeck(next: Deck): void {
   renderer.toneMappingExposure = light.exposure;
   document.body.dataset.deck = deck; // read by the e2e tests
   applyLook();
-  // The deck's texture set (#401) once loaded, the steel when its file did not load; the frame keeps the steel. Only on
-  // the textured look: a map added to the flat look would rebuild its pipeline. body[data-deck-set] is read by the e2e.
-  void deckMap(next).then((map) => {
+  // The deck's texture set (#401, #440) once loaded, the steel when its file did not load; the frame keeps the steel.
+  // Only on the textured look: a map added to the flat look would rebuild its pipeline. body[data-deck-set] is read by the e2e.
+  void Promise.all([deckMap(next), deckNormalMap(next)]).then(([map, normal]) => {
     if (deck !== next || !steel.map) return; // another deck started meanwhile, or the flat look
     steel.map = map ?? deckAlbedo;
+    if (steel.normalMap && normal) steel.normalMap = normal;
     document.body.dataset.deckSet = map ? next : 'steel';
   });
 }
@@ -544,7 +551,11 @@ const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidt
 const ringGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32);
 const steel = new THREE.MeshStandardMaterial(
   deckAlbedo && deckRoughness
-    ? { map: firstDeckMap ?? deckAlbedo, roughnessMap: deckRoughness }
+    ? {
+        map: firstDeckMap ?? deckAlbedo,
+        roughnessMap: deckRoughness,
+        ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
+      }
     : { color: COLORS.steel, roughness: 0.8 },
 );
 applyDeck(deck);
