@@ -47,6 +47,7 @@ import {
   readSound,
   readTheme,
   readTier,
+  renderPixelRatio,
   writeClearBoard,
   writeSound,
   writeTheme,
@@ -100,7 +101,7 @@ const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, figh
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
 const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL });
 await renderer.init();
-renderer.setPixelRatio(devicePixelRatio);
+renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; // rolls the lamp's highlights off instead of clipping them
 renderer.toneMappingExposure = LIGHT.exposure;

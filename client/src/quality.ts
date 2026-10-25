@@ -79,3 +79,9 @@ const AUTOMATED_MIN_GAP_MS = 100;
 const AUTOMATED_DUTY = 4;
 export const drawDue = (now: number, lastStart: number, lastCost: number, automated: boolean): boolean =>
   !automated || now - lastStart >= Math.max(AUTOMATED_MIN_GAP_MS, AUTOMATED_DUTY * lastCost);
+
+// Under automation the canvas renders at half the device pixel ratio: software WebGL costs by pixels (#349).
+// A player always gets the device ratio. The screenshot specs (fog, contrast, eject) pass at this ratio.
+const AUTOMATED_PIXEL_RATIO = 0.5;
+export const renderPixelRatio = (dpr: number, automated: boolean): number =>
+  automated ? Math.min(dpr, AUTOMATED_PIXEL_RATIO) : dpr;
