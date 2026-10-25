@@ -23,6 +23,11 @@ de combat. Les éléments demandés :
   événement battle royale ;
 - la récolte et l'artisanat façon New World.
 
+**Inspirations** : Baldur's Gate 3, Dofus, World of Warcraft, Diablo 1 à 4, StarCraft 1 et 2,
+New World, et **Clair Obscur: Expedition 33**. Expedition 33 inspire la structure de la
+progression : un grand monde ouvert, d'où le joueur choisit quel couloir d'expédition emprunter
+(section 4.9).
+
 **Ce qui entre en conflit avec les specs actuelles** (à faire valider par un `Decision`, section 0)
 
 - `game-design.md` §1, pilier 1 : « if a trick needs a new move type, we drop the trick ».
@@ -160,7 +165,7 @@ Ce plan a été relu par une revue critique indépendante. Ses corrections sont 
 |---|---|---|
 | Quelques secondes | Rouler de tuile en tuile, repérer une meute, un nœud de récolte ou un coffre | Diablo, Dofus |
 | 2 à 5 min | Un combat sur le plateau de la tuile : placement, tours, victoire, butin | Dofus, BG3 |
-| 30 à 60 min | Quêtes de zone, un donjon, récolte, puis retour au hub pour fabriquer, vendre et dépenser ses talents | WoW, New World |
+| 30 à 60 min | Choisir un couloir d'expédition et le mener jusqu'à son boss, ou faire des quêtes de zone et de la récolte sur le continent, puis rentrer au hub pour fabriquer, vendre et dépenser ses talents | Expedition 33, WoW, New World |
 | Plusieurs semaines | Atteindre le niveau 100, construire son build (runes, capacités, légendaires), Mythique+, raids, saisons | Diablo 3 et 4, WoW |
 
 ---
@@ -214,7 +219,8 @@ Ce plan a été relu par une revue critique indépendante. Ses corrections sont 
 | PNJ ou avant-poste | Quêtes, marchand, Balise | 2 % |
 | Coffre ou cache | Butin, parfois piégé (un combat se lance) | 3 % |
 | Énigme | Un puzzle d'Abalone (« éjecte en 3 coups »), récompense fixe | 1 % |
-| Entrée de donjon | Ouvre une instance (section 17) | rare |
+| Entrée de couloir ou de donjon | Ouvre un couloir d'expédition (section 4.9) ou une instance de donjon (section 17) | rare |
+| Barrière de traversée | Une tuile qu'on ne franchit qu'avec un pouvoir de traversée (section 4.9) : eau profonde, roc-barrière, gouffre, courant de vide | 1 à 2 % |
 | Événement | Un événement dynamique de 5 à 10 min (section 22) | change au fil du temps |
 | Boss de zone ou rare nommé | Combat de boss, réapparition lente | rare |
 
@@ -264,6 +270,90 @@ Ce plan a été relu par une revue critique indépendante. Ses corrections sont 
 - **La météo**, par zone :
   - pluie : foudre +25 %, feu −25 % ;
   - tempête de sable : portée −1.
+
+### 4.9 Progression : le continent ouvert et les couloirs d'expédition (inspiré d'Expedition 33)
+
+**Le principe.** Tout ce qui précède dans la section 4 reste vrai. Le continent est un grand monde
+ouvert. On y trouve les meutes, la récolte, les avant-postes, les quêtes de zone, les événements, les
+boss du monde et les Balises. Par-dessus ce monde ouvert, comme dans Expedition 33, **la
+progression principale passe par des couloirs d'expédition**. Le joueur choisit lesquels emprunter,
+et dans quel ordre.
+
+**Les deux couches**
+
+| Couche | Ce que c'est | Liberté |
+|---|---|---|
+| **Le continent** | Le monde ouvert de la section 4 : la carte, les biomes, tout le contenu des tuiles | Totale, dans la limite des barrières de traversée |
+| **Les couloirs d'expédition** | Des zones faites à la main, semi-linéaires, posées sur le continent. On y entre par une tuile « Entrée de couloir ». Chaque couloir se termine par un boss | On choisit le couloir ; à l'intérieur, la route est guidée mais a des embranchements |
+
+**Un couloir d'expédition**
+- **Une chaîne de 12 à 30 tuiles** (TUNE), larges de 1 à 3 tuiles, de l'entrée jusqu'à l'arène du
+  boss. C'est le même format que l'intérieur d'un donjon (section 17).
+- **Des embranchements facultatifs** : des culs-de-sac avec un coffre, une élite, une énigme, un
+  terminal de lore ou un rare.
+- **Des raccourcis** : on les ouvre depuis l'intérieur (un pont qu'on abaisse, une porte qu'on
+  force). Ils restent ouverts pour toujours.
+- **Des Balises de couloir**, comme les drapeaux d'Expedition 33 : à l'entrée, à mi-chemin, et devant
+  le boss. **Se reposer à une Balise** :
+  - remet les PV au maximum ;
+  - fait réapparaître toutes les meutes du couloir, sauf le boss et les élites uniques ;
+  - permet de se téléporter.
+- **Un niveau recommandé**, affiché sur la carte, avec la couleur et le glyphe de la section 4.4. Le
+  niveau des monstres est **fixe**, il ne s'adapte pas au joueur. On peut entrer trop tôt : c'est un
+  pari risqué qui rapporte plus.
+- **La progression du couloir est persistante** : raccourcis, coffres ouverts, boss vaincu. Un
+  couloir fini reste ouvert, pour récolter, refaire les élites ou faire ses quêtes.
+- **Différence avec un donjon** : un couloir est une zone du monde, sa progression est partagée et
+  persistante, et il n'a qu'une seule difficulté. Un donjon (section 17) est une instance qu'on
+  refait, avec les difficultés Héroïque et Mythique+. Les donjons de la v1 deviennent les couloirs
+  finaux de chaque acte (voir le tableau ci-dessous). Une fois fini en couloir, un donjon se rejoue en
+  instance.
+
+**La structure en actes : choisir son couloir**
+- La quête principale (section 16) est découpée en **un prologue et 3 actes**.
+- Dans chaque acte, **plusieurs couloirs principaux sont ouverts en même temps**. Le joueur choisit
+  l'ordre. Il doit en finir un nombre donné (TUNE) pour ouvrir le **couloir final de l'acte**.
+- Les couloirs non choisis restent ouverts et facultatifs : ils servent de contenu de rattrapage et
+  rapportent toujours leurs récompenses.
+
+| Acte | Niveaux | Couloirs au choix (ordre libre) | Couloirs à finir | Couloir final (boss) |
+|---|---|---|---|---|
+| Prologue | 1-10 | Île de Lumen (tutoriel, linéaire) | — | **Les Cales du Ballast** (8, The Echo) : ouvre le continent |
+| Acte I | 10-38 | Le Terrier de Cendre (Sylve, 15), La Tourbière Engloutie (Marais, 22), Les Dunes Chantantes (Dunes, 28, nouveau) | 2 sur 3 | **La Mine de Verre-étoile** (Crêtes, 38, The Hull) |
+| Acte II | 38-65 | Le Glacier des Échos (Toundra, 45, nouveau), La Fournaise Chantante (Caldeira, 50, The Choir), Les Hauts-fonds de Sel (Littoral, 55, nouveau) | 2 sur 3 | **La Chapelle de Verre** (Terres Vitrifiées, 65, The Chaplain) |
+| Acte III | 65-100 | Le Gouffre du Lest (Puits, 80), La Forêt Vitrifiée (Terres Vitrifiées, 75, nouveau), Les Racines du Puits (Puits, 88, nouveau) | 2 sur 3 | **Le Pont de Tally** (Ballast, 95, The Ballast Mind) |
+
+Tous les niveaux sont TUNE. Les couloirs marqués « nouveau » ont un boss nouveau, à concevoir avec
+la grille de la section 18.
+
+**Les pouvoirs de traversée** (comme les capacités d'Esquie dans Expedition 33)
+- Ce sont des capacités **hors combat** de la boule. Elles ouvrent des régions du continent qui
+  étaient bloquées par des barrières de traversée. C'est un peu un metroidvania.
+- On gagne chacun en finissant un couloir. Le joueur choisit ses couloirs, donc **l'ordre dans lequel
+  il débloque les régions** change d'une partie à l'autre.
+
+| Pouvoir | Ce qu'il permet | Obtenu |
+|---|---|---|
+| **Flottaison** | Rouler sur l'eau profonde : les lacs, la mer de sel, les marais profonds | Premier couloir fini de l'acte I, quel qu'il soit |
+| **Briseur** | Casser les rocs-barrières marqués d'un glyphe | Deuxième couloir fini de l'acte I |
+| **Bond** | Sauter par-dessus un gouffre d'une tuile | Fin de l'acte I (La Mine de Verre-étoile) |
+| **Plongée** | Explorer sous la mer de sel : des grottes secrètes, des élites rares | Premier couloir fini de l'acte II |
+| **Courant de vide** | Glisser sur les courants entre les îles flottantes du Puits | Fin de l'acte II (La Chapelle de Verre) |
+
+- Les barrières de traversée ne bloquent **jamais** le couloir obligatoire suivant. Elles bloquent
+  les raccourcis, les secrets, les régions facultatives et les boss du monde avancés.
+- Un pouvoir est un drapeau dans la sauvegarde du héros. En groupe, une tuile-barrière se franchit
+  si le chef de groupe a le pouvoir (règle de vivacité, section 4.7), mais chaque joueur n'obtient le
+  pouvoir qu'en finissant lui-même le couloir.
+
+**Le contenu facultatif difficile** (comme les grands ennemis optionnels d'Expedition 33)
+- Des **Colosses** errent sur le continent, bien au-dessus du niveau de la zone (+10 à +20, TUNE).
+  Ils sont visibles de loin et jamais agressifs : c'est le joueur qui engage. Ils donnent un
+  Légendaire garanti et un titre.
+- Des **couloirs secrets**, ouverts seulement par un pouvoir de traversée, avec leur propre boss.
+
+**Ce qui ne change pas** : le monde ouvert, les biomes, les niveaux fixes des zones, la récolte, les
+quêtes de zone, les donjons en instance, les boss du monde, le Mythique+ et le reste du jeu.
 
 ---
 
@@ -1450,8 +1540,8 @@ Exemple : la Charge du Guerrier. Variante A : « traverse 1 ennemi ». Variante 
 |---|---|
 | 2 | 1er point passif, choix de la Voie principale |
 | 5 | 1re capacité (épreuve de lignée), Balises |
-| 8 | Premier donjon : Les Cales du Ballast |
-| 10 | Duels, 2e capacité, quête de l'Élan |
+| 8 | Fin du prologue : Les Cales du Ballast (The Echo), le continent s'ouvre |
+| 10 | Acte I : choix entre 3 couloirs. Duels, 2e capacité, quête de l'Élan |
 | 15 | Palier 2 des capacités, recherche de groupe |
 | 20 | Voie secondaire, Élan 1 |
 | 25 | Arène, donjons Héroïques des zones déjà finies |
@@ -1461,6 +1551,9 @@ Exemple : la Charge du Guerrier. Variante A : « traverse 1 ennemi ». Variante 
 | 70 | Niveau de monde Enfer |
 | 80 | Éclats au rang 6 |
 | 100 | Mythique+, Tourment, Failles, saisons |
+
+Les pouvoirs de traversée ne dépendent pas du niveau : ils viennent des couloirs finis (section
+4.9).
 
 ---
 
@@ -1728,7 +1821,7 @@ Exemple : Acier = Lingot de fer + Flux + Charbon.
 
 | Type | Exemple | Référence |
 |---|---|---|
-| Principale | La Comptabilité de Tally : retrouver les 5 « sièges » (les boss qui existent déjà) | WoW |
+| Principale | La Comptabilité de Tally : retrouver les 5 « sièges » (les boss qui existent déjà), en un prologue et 3 actes. Dans chaque acte, on choisit ses couloirs d'expédition (section 4.9) | Expedition 33, WoW |
 | Zone | Une chaîne de 8 à 15 quêtes par zone | WoW |
 | Secondaire | Une quête sur un PNJ ou un lieu | BG3 |
 | Classe | Lignée : une variante cosmétique de l'ultime et un titre | WoW |
@@ -1803,6 +1896,9 @@ Exemple : Acier = Lingot de fer + Flux + Charbon.
 - Une Balise à mi-donjon.
 
 ### Donjons de la v1 (ils reprennent les 5 boss existants)
+
+Chaque donjon se joue d'abord comme un **couloir d'expédition**, dans le monde (section 4.9). Une
+fois fini, il se rejoue en instance, avec les difficultés Héroïque et Mythique+.
 
 | Donjon | Niveau | Biome | Boss final |
 |---|---|---|---|
@@ -2150,6 +2246,14 @@ On prouve d'abord que le combat est amusant. Le monde vient ensuite.
 10. **Héros en PvP.** On vérifie en playtest que les parties ne se résument pas à éjecter le héros
     en 3 tours. Si c'est le cas, on règle d'abord la Formation et l'alerte, et on ne revient pas
     sur la règle « héros éjecté = mort ».
+11. **Couloirs d'expédition.**
+    - Combien de couloirs faut-il finir par acte : 2 sur 3, ou tous ?
+    - Faut-il un 4e couloir au choix par acte ?
+12. **Idée inspirée d'Expedition 33, pas retenue pour l'instant : apprendre les passifs des objets.**
+    - Un objet Légendaire porte un passif (comme les Pictos). Après 4 combats gagnés avec l'objet
+      équipé, le héros apprend ce passif pour toujours (comme les Luminas).
+    - Il peut ensuite l'équiper sans l'objet, avec des points dédiés.
+    - Est-ce qu'on l'ajoute à côté des Cinq Voies, ou jamais ?
 
 ---
 

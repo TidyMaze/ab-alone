@@ -7,6 +7,25 @@ role files: it indexes them, lists where they disagree with a proposed arbitrati
 feedback on the gameplay spec, and merges their 492 Tasks into one backlog. Nothing here is decided
 until an owner answers on #313.
 
+> **Gameplay spec update, after the role specs (2026-10-25).** `plan.fr.md` now lists *Clair
+> Obscur: Expedition 33* as an inspiration, and its new §4.9 adds an Expedition 33-style
+> progression. Everything in §4 stays as it was; on top of the open continent come:
+>
+> - expedition corridors: hand-made, semi-linear, each ending in a boss, with corridor Beacons that
+>   respawn packs when you rest;
+> - main progression in a prologue plus 3 acts, where the player picks 2 of 3 corridors in free
+>   order before the act's final corridor;
+> - traversal powers (Float, Breaker, Leap, Dive, Void current) that open continent regions;
+> - optional Colossi.
+>
+> The v1 dungeons become the final corridors of each act and are replayed as instances afterwards.
+> The role files predate this change. When their Tasks are picked, revise these files first:
+> level-designer, narrative-quest-designer, encounter-boss-designer (5 new corridor bosses),
+> technical-designer (corridor and traversal data), engine-architect and network-programmer
+> (persistent corridor state, traversal flags in the save), ux-designer and
+> graphics-technical-artist (corridor map, act choice screen), playtest-balance-analyst (corridor
+> level targets).
+
 Validated decisions that every arbitration below respects (FINAL):
 
 - **D1** science-fantasy universe on the existing lore;
