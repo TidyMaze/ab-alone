@@ -60,7 +60,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
   font: 0.875rem/1.2 var(--ui);
 }
-#settings { padding: 0.5rem; }
+#settings { padding: 0.5rem; anchor-name: --cog; }
 @media (pointer: coarse) { #settings-menu button { min-height: 2.75rem; } }
 #settings-menu button[hidden] { display: none; }
 /* The FPS switch beside Clear board in one item, so the menu keeps its rows (#426). */
@@ -165,6 +165,11 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   }
   #chrome #online * { max-width: 100%; }
   #settings-box { align-self: stretch; } /* as wide as the column: the menu under the cog fits in it */
+  /* Bug #427: the column scrolls, so a menu inside it is clipped at its bottom edge once the UI scale grows it. Fixed to the
+     viewport and hung from the cog, it leaves that clip. */
+  @supports (anchor-name: --cog) {
+    #settings-menu { position: fixed; position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
+  }
 }
 @media (orientation: portrait) {
   #chrome { flex-direction: column; gap: 0.5rem; }
