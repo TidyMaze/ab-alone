@@ -59,17 +59,37 @@ const problems = (page: Page) =>
 const frame = (page: Page) =>
   page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 
-const check = async (page: Page, testInfo: TestInfo, state: string) => {
-  await frame(page);
-  await page.screenshot({ path: testInfo.outputPath(`${state.replaceAll(' ', '-')}.jpg`), type: 'jpeg', quality: 70 });
-  expect(await problems(page), state).toEqual([]);
-  // The same check with the settings menu open (#277): the cog and the menu cover no cell, marble or target.
+// A real mouse click on the cog, after checking the cog is the element under the pointer (what Playwright's click checks).
+// Playwright's click waits for the page to paint twice before and after, each wait a frame of software WebGL (#349).
+const tapCog = async (page: Page) => {
   const cog = page.getByRole('button', { name: 'Settings' });
-  await cog.click();
+  const { x, y, hit } = await cog.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    return { x, y, hit: el.contains(document.elementFromPoint(x, y)) };
+  });
+  expect(hit, 'the settings cog is not covered').toBe(true);
+  await page.mouse.click(x, y);
+};
+
+const check = async (page: Page, testInfo: TestInfo, state: string) => {
+  const t0 = Date.now(); // TIMING-TEMP
+  const lap = (what: string) => console.log(`TIMING ${state} | ${what} ${Date.now() - t0} ms`); // TIMING-TEMP
+  await frame(page);
+  lap('frame'); // TIMING-TEMP
+  await page.screenshot({ path: testInfo.outputPath(`${state.replaceAll(' ', '-')}.jpg`), type: 'jpeg', quality: 70 });
+  lap('screenshot'); // TIMING-TEMP
+  expect(await problems(page), state).toEqual([]);
+  lap('problems'); // TIMING-TEMP
+  // The same check with the settings menu open (#277): the cog and the menu cover no cell, marble or target.
+  await tapCog(page);
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sound' })).toBeVisible();
+  lap('menu open'); // TIMING-TEMP
   await frame(page);
   expect(await problems(page), `${state}, settings menu open`).toEqual([]);
+  lap('problems open'); // TIMING-TEMP
   // On a touch screen every item of the open menu is a touch target of at least 44 px (#287).
   const small = await page.evaluate(() =>
     [...document.querySelectorAll('#settings-menu button')]
@@ -78,8 +98,9 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
       .map((el) => el.textContent || el.getAttribute('aria-label')),
   );
   expect(small, `${state}, settings menu open, under 44 px`).toEqual([]);
-  await cog.click();
+  await tapCog(page);
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden();
+  lap('menu closed'); // TIMING-TEMP
 };
 
 // The parts of the daily result card (#196) that meet the Copy diagnostics button (#220), each scrolled into view
