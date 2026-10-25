@@ -474,8 +474,8 @@ visit. No dependency: a hand-written service worker and a build step that lists 
 - **Not in dev or tests:** only the production build registers the worker
   (`import.meta.env.PROD`). The e2e suite blocks service workers (`serviceWorkers: 'block'`),
   except `client/e2e/offline.spec.ts`: it runs on `vite build` + `vite preview` (random port,
-  under `/ab-alone/`, started and stopped by `playwright.config.ts`), or on the live site in the
-  nightly run. It loads once, checks the fonts are cached, empties the browser's HTTP cache (it
+  under `/ab-alone/`, started and stopped by `playwright.config.ts`), or on the live site with
+  `E2E_BASE_URL`. It loads once, checks the fonts are cached, empties the browser's HTTP cache (it
   keeps the stylesheet a day at most), goes offline, reloads, checks the UI fonts are loaded and
   plays a bot move.
 
@@ -498,7 +498,7 @@ target under 10 min.
 - **Netcode:** an in-memory fake transport that drops, reorders, duplicates and delays messages
   (reconnect, double send, spectator catch-up, coordinator migration, commit-reveal with a
   silent or lying peer). Royale resolver: order-independence property. One real WebRTC
-  loopback test in Playwright (two pages) per CI run.
+  loopback test in Playwright (two pages) in the e2e suite, run locally before every merge.
 - **Renderer:** Playwright smoke test per backend (WebGPU, WebGL2), screenshot of the start board
   with tolerance. Visual changes reviewed in the PR.
 - **AI:** self-play gauntlet in CI nightly, Elo vs fixed baselines, fail on regression.

@@ -2,7 +2,7 @@ import { defineConfig, type ReporterDescription } from '@playwright/test';
 
 // E2E_PORT lets parallel checkouts each run their own dev server.
 const port = process.env.E2E_PORT ?? '5173';
-// E2E_BASE_URL points the suite at a running site (the nightly run uses the GitHub Pages build).
+// E2E_BASE_URL points the suite at a running site, for example the GitHub Pages build.
 const baseURL = process.env.E2E_BASE_URL;
 // The offline spec needs the production build and its service worker (#193): `vite build`, then `vite preview` on
 // its own random port. The workers read the port and the URL from the environment set here.

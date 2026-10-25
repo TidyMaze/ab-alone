@@ -31,20 +31,18 @@ contributors in mind:
 
 ```mermaid
 flowchart TD
-  A[Owner request, idea, or nightly failure] --> B[Issue from a form, Inbox]
+  A[Owner request or idea] --> B[Issue from a form, Inbox]
   B -->|owner, or lead agent on delegation| C[Ready, with Priority]
   C -->|bugs first, max 4 in progress| D[Sub-agent: own clone, branch, TDD]
-  D --> E[Local checks: verify.sh, unit tests, 1 e2e run]
+  D --> E[Local checks: verify.sh, unit tests, full e2e suite]
   E --> F[PR with Closes #issue]
   F -->|CI rust green, conversations resolved| G[Squash-merge by owner or lead agent]
-  G --> H[main: coverage + e2e jobs, Pages deploy]
-  H --> I[Nightly e2e on the live site]
-  I -->|failure opens a bug| B
+  G --> H[main: coverage job, Pages deploy]
 ```
 
 No human review is required: a PR merges as soon as the required CI check `rust` is green and every
-conversation is resolved. Quality comes from strict TDD, 100 % coverage, e2e tests and the nightly
-run.
+conversation is resolved. Quality comes from strict TDD, 100 % unit coverage of all code and the
+full e2e suite run locally before every merge (decision #445).
 
 ## 1. The golden rules
 
@@ -71,8 +69,9 @@ run.
     created from the form. See section 6.7.
 11. **Bugs before features.** A `Ready` bug is always picked before any `Ready` task of the same
     or lower priority, and an open bug is never below `P1`.
-12. **Test in a real browser regularly.** Playwright on every PR, a scheduled run against the live
-    site, and a manual Chrome check before merging a player-facing change. See section 11.
+12. **Test in a real browser regularly.** The full Playwright suite runs locally on every PR before
+    it merges (CI runs it only on a manual dispatch, decision #445), and a manual Chrome check before merging a
+    player-facing change. See section 11.
 13. **Always assign yourself.** Before working on an issue or a PR, assign it to yourself (an agent
     assigns its driving owner and says so in a comment). Unassigned work does not exist.
 14. **Hands off what others hold.** Never work on, push to, rebase or take over an issue or PR
@@ -224,21 +223,24 @@ the triager does exactly one of:
    A human can also drag the image into the description. No UI change: write "no UI change".
 2. Move the Task to `In Review`. A PR is **ready only when it is ready to merge**. While it is
    unfinished, in conflict, out of date or its local checks are red, it stays a draft. **CI does
-   not run on drafts.** The order is: local checks green (`scripts/verify.sh`, unit tests, one
-   e2e run), mark the PR ready (`gh pr ready`), CI runs (the `ready_for_review` event starts it),
+   not run on drafts.** The order is: local checks green (`scripts/verify.sh`, unit tests, the
+   full e2e suite), mark the PR ready (`gh pr ready`), CI runs (the `ready_for_review` event starts it),
    then merge. The author marks it ready; the lead agent does it for a sub-agent's PR after
    checking its report.
 3. Review is **optional**. Anyone may comment; the author answers every comment in its thread and
    pushes fixes to the same branch.
 4. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
 5. **Merge gate.** A PR is merged into `main` only when all of these hold:
-   - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, the changed e2e specs green locally (the full suite runs on the CI runner).
+   - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, and the **full e2e suite**
+     green locally (`bun run e2e` from `client/`, on a random port, section 13). CI runs the e2e
+     suite only on a manual dispatch (decision #445): the local result goes in the PR body, as the template's line "Full
+     e2e suite run locally: N passed".
      **After a rebase on `main` without conflict**, rerun only `bun run test` and
      `bunx tsc --noEmit` in `client/` (rebuild the WASM first if `crates/` changed on main, section
      13), not `scripts/verify.sh` nor the e2e run: CI runs `rust` (Rust checks plus client `tsc`
-     and unit tests) again on the rebased code, and
-     main runs coverage and e2e after the merge (decision #239). A rebase with a conflict reruns
-     every local check.
+     and unit tests) again on the rebased code, and main runs the Rust coverage after the merge
+     (decision #239). A rebase with a conflict reruns every local check, the full e2e suite
+     included.
    - [ ] CI: the PR is ready (not a draft) and the required check `rust` is green (enforced by
      branch protection, 0 approvals needed). GitHub counts a **skipped** required check as passing,
      so the merger must confirm that the run on the head commit really concluded `success`, not
@@ -273,7 +275,7 @@ the triager does exactly one of:
 
 ### 6.7 Bug
 
-1. Whoever finds a bug (human, agent, CI, a scheduled browser run) opens a **Bug** issue from the
+1. Whoever finds a bug (human, agent, CI) opens a **Bug** issue from the
    form **before touching any code**: steps to reproduce, expected, actual, browser and commit.
    A bug found during another task is filed too, never fixed inside that task's PR.
 2. It lands in `Inbox`. An owner triages it within the next triage: confirm, set `Priority`
@@ -303,7 +305,6 @@ The project holds **issues only**: no draft items, no project-only tasks. Every 
 | `blocked` | Waiting on someone, see the last comment |
 | `top10` | Won the latest priority vote |
 | `security` | Security incident or hardening (section 12) |
-| `flaky` | Opened by the nightly when a spec failed, then passed on its retry. Stands in for the type label: not a `bug`, so no `P1`. Triage turns it into a `task` to make the spec stable, or closes it ([docs/specs/ci-repair.md](docs/specs/ci-repair.md)) |
 
 ## 9. AI agents
 
@@ -359,10 +360,12 @@ the test commit alone to see it fail. The PR is squash-merged, the order lives i
 | Integration | Engine through its WASM bridge, two peers exchanging moves in-process | Per crate / package |
 | End-to-end | Real browser: play a full local game, play an online game between two browser tabs, at least one boss encounter once it exists | E2E suite |
 
-**Coverage gate:** 100 % of lines and regions for Rust (not branches, owner decision), enforced by
-`scripts/verify.sh` locally and by the CI coverage job on main after merge. Below 100 % fails the
-build. Commands: section 13. The client JS coverage (`bun run test`, vitest, 100 % thresholds) and
-`tsc` run in the CI check `rust` on every ready PR and on main (#409). An exclusion
+**Coverage gate:** unit tests cover **100 % of all the code** (decision #445): every client source
+file (`client/src/**`, `client/scripts/**`, `main.ts` included), the MCP package (`mcp/src/**`,
+`main.ts` included) and the Rust crates. Rust: 100 % of lines and regions (not branches, owner
+decision), enforced by `scripts/verify.sh` locally and by the CI coverage job on main after merge.
+Below 100 % fails the build. Commands: section 13. The client JS coverage (`bun run test`, vitest,
+100 % thresholds) and `tsc` run in the CI check `rust` on every ready PR and on main (#409). An exclusion
 needs a one-line comment saying why, and the reviewer must accept it (generated code,
 `unreachable!()`).
 
@@ -372,9 +375,8 @@ needs a one-line comment saying why, and the reviewer must accept it (generated 
 
 | When | What | Who |
 |---|---|---|
-| Every PR | Playwright e2e suite on Chromium, run locally once with `bun run e2e` (section 13). CI runs it on main after merge, not on PRs | Author |
-| Every e2e test | Passes in **under 15 s**, and a test that runs longer **fails**: the Playwright test timeout is 15 s, locally and on CI (#349). A slower test is made cheaper (reach the state through a test hook instead of clicking through, smaller setup) or its logic moves to a fast unit test, keeping one thin e2e for the browser wiring (#349). **A test loads the full game state it needs** (a position, a boss phase, a finished game) through one test hook built on the game file import (#219) instead of replaying steps that other e2e tests already cover | Author |
-| Every night | Playwright suite against the live GitHub Pages site (scheduled workflow). A failed spec is re-run once: failing again opens a `bug` issue ready to work on, passing opens a `flaky` issue. No LLM in CI: an owner starts an agent on the bug by hand ([docs/specs/ci-repair.md](docs/specs/ci-repair.md)) | CI |
+| Every PR | The full Playwright e2e suite on Chromium, run locally before the PR merges with `bun run e2e` on a random port (section 13). Its result goes in the PR body ("Full e2e suite run locally: N passed"). CI runs it only on a manual dispatch (`gh workflow run ci.yml --ref <branch>`, decision #445) | Author |
+| Every e2e test | Passes in **under 15 s**, and a test that runs longer **fails**: the Playwright test timeout is 15 s (#349). A slower test is made cheaper (reach the state through a test hook instead of clicking through, smaller setup) or its logic moves to a fast unit test, keeping one thin e2e for the browser wiring (#349). **A test loads the full game state it needs** (a position, a boss phase, a finished game) through one test hook built on the game file import (#219) instead of replaying steps that other e2e tests already cover | Author |
 | Before merging a player-facing PR | Open the PR build in a real browser, play the changed flow, note the result in the PR | The lead agent (Playwright) or an owner |
 | Once per milestone | Full manual playthrough in Chrome of everything shipped so far, findings filed as `bug` issues | An owner |
 
@@ -411,15 +413,17 @@ rebases on `main` without conflict (section 6.4, merge gate). It runs the CI che
   (vitest, 100 % coverage thresholds) on a cached WASM build, all in the required `rust` job
   (#409). A draft PR shows the `rust` check as skipped.
 - On push to main (after merge): the Rust job always runs. The coverage gate runs only when
-  `crates/`, `Cargo.*` or `ci.yml` changed, the e2e jobs only when `client/`, `crates/abalone-core/`,
-  `crates/abalone-wasm/`, `Cargo.*` or `ci.yml` changed (job `changes`: it diffs against the last
-  successful CI run on `main`, so a cancelled run never hides its commits; a manual dispatch runs
-  everything). The WASM package is built once (job `wasm`, cached) and shared as an artifact, then
-  the e2e suite runs in 4 shards, one runner and one worker each (#257, #258). The tests are dealt
-  to the shards back and forth, so the slow ones spread over all four (`client/scripts/shard-reporter.ts`,
-  #333). A failed shard uploads its own `playwright-report-<n>` artifact. On CI the browser window
-  is 960x540, not 1280x720: software WebGL cost follows the pixels. A new push to `main` still
-  cancels the run in progress.
+  `crates/`, `Cargo.*` or `ci.yml` changed (job `changes`: it diffs against the last successful CI
+  run on `main`, so a cancelled run never hides its commits; a manual dispatch runs everything). A
+  new push to `main` still cancels the run in progress.
+- **e2e only on a manual dispatch** (decision #445): never on a PR or a push, the full Playwright
+  suite runs locally before every merge (see **e2e** below). To run it on CI as well, for example to
+  check a flake on a clean runner: `gh workflow run ci.yml --ref <branch>`. The WASM package is
+  built once (job `wasm`, cached) and shared as an artifact, then the e2e suite runs in 4 shards,
+  one runner and one worker each (#257, #258). The tests are dealt to the shards back and forth, so
+  the slow ones spread over all four (`client/scripts/shard-reporter.ts`, #333). A failed shard
+  uploads its own `playwright-report-<n>` artifact. On CI the browser window is 960x540, not
+  1280x720: software WebGL cost follows the pixels.
 
 **WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
 After pulling main, rebuild it from the repo root:
@@ -446,7 +450,8 @@ what they import, #254). Not in CI. It resolves Trystero from `client/node_modul
 
 - `bun run test`: builds the Node target of the engine into `mcp/engine/` (git-ignored), then
   vitest with coverage thresholds of 100 % (lines, branches, functions, statements) on `mcp/src/`.
-  Only `src/main.ts`, the stdio entry point, is left to the e2e.
+  `src/main.ts`, the stdio entry point, is still left to the e2e until its unit tests land
+  (decision #445 covers all code).
 - `bunx tsc --noEmit`.
 - `bun run e2e`: a scripted MCP client starts the server over stdio and plays a full game, then two
   servers play each other over real WebRTC: it needs the public Nostr relays (internet).
@@ -460,13 +465,15 @@ export LLVM_COV="$(brew --prefix llvm)/bin/llvm-cov"
 export LLVM_PROFDATA="$(brew --prefix llvm)/bin/llvm-profdata"
 ```
 
-**Locally, run the smallest check that proves the change** (save CPU and time; the CI runs the rest):
+**While developing, run the smallest check that proves the change** (save CPU and time):
 only the unit test file you touch (`bunx vitest run src/<file>.test.ts`), only the e2e spec you
 touch (`bunx playwright test e2e/<spec>.spec.ts`, one worker, `-g "<title>"` for one test),
 `bunx tsc --noEmit` when you change client types, `cargo test -p <crate> <name>` for one Rust test.
-**When:** while developing, run only the unit file you touch. Run the changed e2e specs **once, at the moment the draft PR is ready to become ready** (just before `gh pr ready`), not after every edit.
-No full e2e run, no full `scripts/verify.sh` and no `--repeat-each` beyond what a flake needs: for
-the whole suite, dispatch `gh workflow run ci.yml --ref <branch>` once and read the runner.
+**When:** while developing, run only the unit file you touch. Run the **full e2e suite once, at the
+moment the draft PR is ready to become ready** (just before `gh pr ready`), not after every edit,
+and write its result in the PR body ("Full e2e suite run locally: N passed"). CI runs it only on a
+manual dispatch (`gh workflow run ci.yml --ref <branch>`, decision #445). No full `scripts/verify.sh` while developing and no `--repeat-each` beyond what a
+flake needs.
 
 **e2e:** from `client/`, run `bun run e2e` (Chromium project). Playwright starts the dev server
 itself, with `--mode e2e`: that server does not watch files, so a wasm rebuild or an edit during a
@@ -483,5 +490,5 @@ run never reloads a page under test (bug #185). Start a new run to test a change
 - The offline test (`e2e/offline.spec.ts`) needs the production build: Playwright also runs
   `vite build` then `vite preview` on a random port (`E2E_PREVIEW_PORT`, never reused) and stops it
   at the end. Every other spec runs with service workers blocked (docs/specs/tech.md section 9.1).
-- CI sets `E2E_SKIP_WASM_BUILD=1` so the dev server skips the wasm rebuild (the `wasm` job built it). Locally, leave it unset.
+- The manual CI run sets `E2E_SKIP_WASM_BUILD=1` so the dev server skips the wasm rebuild (the `wasm` job built it). Locally, leave it unset.
 - Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
