@@ -27,16 +27,20 @@ export const DIRECTIONS: readonly Axial[] = [
   [0, 1],
 ];
 
-/** The 61 cells in the bridge order: rows from r=-4, q ascending inside a row. */
-export const CELLS: readonly Axial[] = (() => {
+/** The cells of a hex board of this radius in the bridge order: rows from r=-radius, q ascending
+ * inside a row. Radius 8 is the battle royale arena (217 cells). */
+export function cellsFor(radius: number): Axial[] {
   const cells: Axial[] = [];
-  for (let r = -RADIUS; r <= RADIUS; r++) {
-    for (let q = Math.max(-RADIUS, -RADIUS - r); q <= Math.min(RADIUS, RADIUS - r); q++) {
+  for (let r = -radius; r <= radius; r++) {
+    for (let q = Math.max(-radius, -radius - r); q <= Math.min(radius, radius - r); q++) {
       cells.push([q, r]);
     }
   }
   return cells;
-})();
+}
+
+/** The 61 cells of the standard board. */
+export const CELLS: readonly Axial[] = cellsFor(RADIUS);
 
 /** Pointy-top layout: E is +x, rows go down the screen with +r (+z). `spacing` is the distance
  * between two neighbour centres. */
@@ -45,12 +49,12 @@ export function axialTo3D(q: number, r: number, spacing = 1): { x: number; y: nu
 }
 
 /** Index of a cell in the bridge board array, `-1` off the board. */
-export function cellIndex(q: number, r: number): number {
-  return CELLS.findIndex(([cq, cr]) => cq === q && cr === r);
+export function cellIndex(q: number, r: number, cells: readonly Axial[] = CELLS): number {
+  return cells.findIndex(([cq, cr]) => cq === q && cr === r);
 }
 
-export function cellAt(index: number): Axial | undefined {
-  return CELLS[index];
+export function cellAt(index: number, cells: readonly Axial[] = CELLS): Axial | undefined {
+  return cells[index];
 }
 
 /** Splits the flat `legal_moves` array into moves. */
