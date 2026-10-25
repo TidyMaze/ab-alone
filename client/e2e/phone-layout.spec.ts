@@ -110,8 +110,9 @@ for (const { name, viewport, mobile } of sizes) {
     test.skip(({ browserName }) => mobile && browserName === 'firefox', 'Firefox has no mobile emulation');
     test.use({ viewport, isMobile: mobile, hasTouch: mobile });
 
-    test('nothing covers the board or the HUD, the board stays on screen, bugs #227 #234', async ({ page }, testInfo) => {
-      test.slow(); // two page loads and five checks, each with a screenshot of the WebGL page
+    // One test per state (#349): each is one page load and its checks, not the whole walk through the states.
+    test('nothing covers the board or the HUD at the start, bugs #227 #234', async ({ page }, testInfo) => {
+      test.slow(); // one page load and one check, with a screenshot of the WebGL page
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
@@ -119,13 +120,30 @@ for (const { name, viewport, mobile } of sizes) {
       // The plate stays top-left, 16 px from the edges (docs/specs/ui.md section 4).
       expect(await hud.boundingBox()).toMatchObject({ x: 16, y: 16 });
       await check(page, testInfo, 'at the start');
+    });
 
+    test('nothing covers the board or the HUD with the boss list open, bugs #227 #234', async ({ page }, testInfo) => {
+      test.slow(); // one page load and one check, with a screenshot of the WebGL page
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
       await page.getByRole('button', { name: 'Boss fight' }).click();
       await check(page, testInfo, 'with the boss list open');
+    });
+
+    test('nothing covers the board or the HUD in a boss fight, bugs #227 #234', async ({ page }, testInfo) => {
+      test.slow(); // one page load, one boss pick and one check, with a screenshot of the WebGL page
+      const hud = page.locator('#hud');
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await page.getByRole('button', { name: 'Boss fight' }).click();
       await page.locator('#boss-list button').first().click();
       await expect(hud).toContainText('P1');
       await check(page, testInfo, 'in a boss fight');
+    });
 
+    test('nothing covers the board or the HUD waiting for an opponent, turned around, bugs #227 #234', async ({ page }, testInfo) => {
+      test.slow(); // one page load and two checks, with screenshots of the WebGL page
+      const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
       await page.getByRole('button', { name: 'Play online' }).click();
       await expect(hud).toContainText('Waiting for an opponent');
@@ -137,8 +155,7 @@ for (const { name, viewport, mobile } of sizes) {
       await check(page, testInfo, 'turned around');
     });
 
-    test('the end banner covers neither a cell nor a button, #282', async ({ page }, testInfo) => {
-      test.slow(); // a 71 ply game replayed, then two checks
+    const importBlackWins = async (page: Page) => {
       await page.goto('./?net=hook');
       await page.locator('canvas').waitFor();
       await page.locator('#import-file').setInputFiles({
@@ -148,18 +165,35 @@ for (const { name, viewport, mobile } of sizes) {
       });
       await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
       await expect(page.locator('#hud .end')).toContainText('The books balance');
+    };
+
+    test('the end banner covers neither a cell nor a button, #282', async ({ page }, testInfo) => {
+      test.slow(); // a 71 ply game replayed, then one check
+      await importBlackWins(page);
       await check(page, testInfo, 'with the end banner');
+    });
+
+    test('the end banner covers neither a cell nor a button turned around, #282', async ({ page }, testInfo) => {
+      test.slow(); // a 71 ply game replayed, then one check on the turned device
+      await importBlackWins(page);
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'with the end banner turned around');
     });
 
     test('the daily result card covers neither the HUD nor the board, #196', async ({ page }, testInfo) => {
-      test.slow(); // eight plies played by hand, then two checks
+      test.slow(); // eight plies played by hand, then one check
       await startDaily(page);
       await loseByRepetition(page);
       await expect(page.locator('#daily-card')).toBeVisible();
       await check(page, testInfo, 'with the daily result card');
       expect(await cardOverCorner(page), 'the card is clear of Copy diagnostics').toEqual([]);
+    });
+
+    test('the daily result card covers neither the HUD nor the board turned around, #196', async ({ page }, testInfo) => {
+      test.slow(); // eight plies played by hand, then one check on the turned device
+      await startDaily(page);
+      await loseByRepetition(page);
+      await expect(page.locator('#daily-card')).toBeVisible();
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'with the daily result card turned around');
       expect(await cardOverCorner(page), 'turned around, the card is clear of Copy diagnostics').toEqual([]);
