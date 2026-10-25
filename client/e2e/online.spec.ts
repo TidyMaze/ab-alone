@@ -43,10 +43,7 @@ const open = async (page: Page) => {
 };
 const status = (page: Page) => page.locator('#hud .presence');
 
-// Tests with two or three WebGL pages call test.slow() (90 s instead of 30 s): on the CI runners, against
-// the live site, a two-page test takes about 25 s and the three-page one more than 30 s (#138).
 test('a move played on page A shows up on page B over the signed move log', async ({ browser }) => {
-  test.slow();
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await room({ a, b });
@@ -92,7 +89,6 @@ test('a move played on page A shows up on page B over the signed move log', asyn
 });
 
 test('two tabs of the same browser context play an online game, bug #116', async ({ context }) => {
-  test.slow();
   const a = await context.newPage();
   const b = await context.newPage(); // same context: shared localStorage
   const errors: string[] = [];
@@ -133,7 +129,6 @@ test('two tabs of the same browser context play an online game, bug #116', async
 });
 
 test('a third peer opening the link is not a player: room is full, its move changes nothing, bug #117', async ({ browser }) => {
-  test.slow();
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   const all = [a, b, c];
   await room({ a, b, c });
@@ -203,7 +198,6 @@ test('Play online is disabled or works when clicked right after load, bug #127',
 
 // Issue #121: each player sees its own color and whether the opponent is online, updated live.
 test('online status: creator waits with the invite, joiner joins, both see each other, drop, reconnect and close, #121', async ({ browser }) => {
-  test.slow();
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await room({ a, b });
@@ -247,7 +241,6 @@ test('online status: creator waits with the invite, joiner joins, both see each 
 // Issue #143: a move is sent only while the key bound to the opponent's seat is connected, not
 // while just any peer (here a spectator) is.
 test('a player cannot move while the opponent is gone, even with a spectator still there, #143', async ({ browser }) => {
-  test.slow();
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   await room({ a, b, c });
   await a.goto('./?bot=off&net=hook');
@@ -292,9 +285,6 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
 // with the colours swapped. The cheapest real way to finish a game: one marble each, there and
 // back twice, brings the start position back a third time, a draw by threefold repetition.
 test('a finished online game ends in a rematch: colours swapped, the new Black moves first, #186', async ({ browser }) => {
-  // Ten plies on two WebGL pages, each click brings its page to the front: far more than the
-  // four plies of the tests above, so more than test.slow() on a loaded machine.
-  test.setTimeout(240_000);
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await room({ a, b });
@@ -373,7 +363,6 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
 // before page A notices (Trystero sees a peer leave only after a timeout), so A still plays and its move
 // is lost on the way. B comes back on the same key: A sends it the signed move it missed.
 test('a player back after a drop shows the same ply and side to move as the other page, #226', async ({ browser }) => {
-  test.setTimeout(120_000); // four plies on two WebGL pages, each click brings its page to the front
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   const lost = new Set<string>();
@@ -430,7 +419,6 @@ test('a player back after a drop shows the same ply and side to move as the othe
 // White marble off in the 3v2 push of eject.spec.ts, then a spectator joins: it shows the score of that
 // ply, and no effect ever started on it (recorded in the page, so a slow runner cannot miss one).
 test('a spectator joining after an ejection shows the score at once, with no ejection effect, #232', async ({ browser }) => {
-  test.setTimeout(240_000); // five plies on two WebGL pages, each click brings its page to the front, then a third page
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   const lost = new Set(['c']); // the spectator is not there yet
   await room({ a, b, c }, lost);
@@ -510,8 +498,6 @@ test('Play online is disabled with a notice while offline and works again back o
 // turn and score lines the hot-seat page showed, the draw by threefold repetition at ply 8 included.
 // The no-ejection cap needs 100 plies: src/antistalling.test.ts checks it on two real sessions.
 test('threefold repetition ends an online game as a draw on both pages, as in hot-seat, #187', async ({ browser }) => {
-  // Eight plies on one page, then eight on two WebGL pages: as long as the rematch test.
-  test.setTimeout(240_000);
   const plays: [number, number, number, number][] = [
     [0, 2, 0, 1],
     [0, -2, 0, -1],
