@@ -38,6 +38,14 @@ describe('settings menu held upright or in a narrow or short window, #414', () =
   });
 });
 
+describe('settings menu in a window wider than tall, #483', () => {
+  // e2e/phone-layout.spec.ts, a desktop window: the menu grew to its skin pairs' names and covered cell 4,0.
+  it('keeps the width of its other rows: a skin pair adds none and wraps its buttons when their names do not fit', () => {
+    const landscape = css.match(/@media \(orientation: landscape\) \{[^]*?\n\}/)![0];
+    expect(landscape).toContain('.skin-pair { contain: inline-size; flex-wrap: wrap; }');
+  });
+});
+
 describe('end of game styles, #282', () => {
   it('has one animation per outcome on the rim light, keeps the middle clear, and drops the light under reduced motion', () => {
     for (const anim of ['win', 'loss', 'draw']) {
