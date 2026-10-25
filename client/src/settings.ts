@@ -46,7 +46,8 @@ export const settingsList = (clear: boolean, sound: boolean, theme: Theme, skin:
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];
 
-export type MenuEvent = 'cog' | 'escape' | 'outside';
+export type MenuEvent = 'button' | 'escape' | 'outside' | 'pick';
 
-/** Whether the menu is open after `event`: the cog toggles it, Escape and a click outside close it. */
-export const menuOpen = (open: boolean, event: MenuEvent): boolean => (event === 'cog' ? !open : false);
+/** Whether a menu is open after `event`: its button (the cog, the mode button of #357) toggles it, Escape, a click
+ * outside and a picked game mode close it. */
+export const menuOpen = (open: boolean, event: MenuEvent): boolean => (event === 'button' ? !open : false);
