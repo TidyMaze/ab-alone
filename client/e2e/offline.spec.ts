@@ -11,7 +11,6 @@ const click = async (page: Page, q: number, r: number): Promise<void> => {
 };
 
 test('after one visit the game loads offline and the bot answers', async ({ page, context }) => {
-  test.setTimeout(90_000); // two full loads, the precache and a bot move
   await page.goto(process.env.E2E_PREVIEW_URL!);
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');

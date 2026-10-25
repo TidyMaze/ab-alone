@@ -141,10 +141,11 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  for (const page of [b, c]) {
+  // The two joiners load at once: their page loads overlap instead of queueing one after the other.
+  await Promise.all([b, c].map(async (page) => {
     await page.goto(`./?net=hook${hash}`);
     await page.locator('canvas').waitFor();
-  }
+  }));
   for (const page of all) await open(page);
 
   await seat(b, 'player');
@@ -252,10 +253,10 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
   await expect(a.locator('#hud')).not.toBeEmpty();
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  for (const page of [b, c]) {
+  await Promise.all([b, c].map(async (page) => {
     await page.goto(`./?net=hook${hash}`);
     await page.locator('canvas').waitFor();
-  }
+  }));
   for (const page of [a, b, c]) await open(page);
   await seat(b, 'player');
   await seat(c, 'spectator');
@@ -432,8 +433,18 @@ test('a spectator joining after an ejection shows the score at once, with no eje
   await expect(a.locator('#hud')).not.toBeEmpty();
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  await b.goto(`./?net=hook${hash}`);
-  await b.locator('canvas').waitFor();
+  // The spectator's page loads now, in parallel with b's: the room drops its records until it is opened after the plies.
+  await Promise.all([
+    b.goto(`./?net=hook${hash}`).then(() => b.locator('canvas').waitFor()),
+    c.goto(`./?net=hook${hash}`).then(() => c.locator('canvas').waitFor()),
+  ]);
+  await c.evaluate(() => {
+    const w = window as any;
+    w.__effects = [];
+    new MutationObserver((changes) => w.__effects.push(...changes.map((ch) => ch.attributeName))).observe(document.body, {
+      attributeFilter: ['data-ejecting', 'data-ejections', 'data-sound'],
+    });
+  });
   await open(a);
   await open(b);
   await seat(b, 'player');
@@ -456,15 +467,6 @@ test('a spectator joining after an ejection shows the score at once, with no eje
     await expect(page.locator('body')).toHaveAttribute('data-ejections', '1'); // a live move plays its effect
   }
 
-  await c.goto(`./?net=hook${hash}`);
-  await c.locator('canvas').waitFor();
-  await c.evaluate(() => {
-    const w = window as any;
-    w.__effects = [];
-    new MutationObserver((changes) => w.__effects.push(...changes.map((ch) => ch.attributeName))).observe(document.body, {
-      attributeFilter: ['data-ejecting', 'data-ejections', 'data-sound'],
-    });
-  });
   lost.delete('c');
   await open(c);
   // A Hello round trip, then a Sync answered by both players, each record verified: slow with three WebGL pages.

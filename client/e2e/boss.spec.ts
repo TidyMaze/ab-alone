@@ -87,7 +87,6 @@ test('Boss fight is disabled or works when clicked right after load, bug #144', 
 
 // The Hull (#149): a rim cell cracks at ply 8, shows its ticks for 2 plies, then it is a hole.
 test('start The Hull, play to the first wave: a cracked cell ticks down, then vanishes, #149', async ({ page }, testInfo) => {
-  test.slow(); // five boss searches in the worker, then a sixth ply
   await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
   await page.goto('./');
   await page.locator('canvas').waitFor();
@@ -133,73 +132,98 @@ test('start The Hull, play to the first wave: a cracked cell ticks down, then va
   await page.screenshot({ path: testInfo.outputPath('hull-vanished.png') });
 });
 
-// The Chaplain (#150, Decision #154): a hovered move shows the marbles it would expose to a flip at
-// the end of the boss turn, and a converted marble keeps its own look.
-test('start The Chaplain: a hovered move shows the marbles it exposes, a converted marble keeps its look, #150', async ({
-  page,
-}, testInfo) => {
-  test.slow(); // up to 20 boss searches in the worker
-  await page.goto('./');
+// The Chaplain fight from its start. ?nodes=200: the test budget of the bot and the boss search (bot.ts), 20 boss
+// turns cost 27 s on CI at the full budget.
+const startChaplain = async (page: Page) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // slides take no time, no animation is checked
+  await page.goto('./?nodes=200');
   await page.locator('canvas').waitFor();
-  const body = page.locator('body');
-  const hud = page.locator('#hud');
-  const plies = () => page.evaluate(() => (window as any).__plies());
-  const screen = (q: number, r: number) =>
-    page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]) as Promise<{ x: number; y: number }>;
-  const click = async (q: number, r: number) => {
-    const p = await screen(q, r);
-    await page.mouse.click(p.x, p.y);
-  };
-  const DIRS = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
-  const legal = (pick: 'forward' | 'exposing') =>
-    page.evaluate((how) => {
-      const w = window as any;
-      return w.__legal().find((m: any) =>
-        m.cells.length === 1 && (how === 'forward' ? m.dir === 4 || m.dir === 2 : w.__preview(m).length > 0),
-      ) ?? null;
-    }, pick);
-
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Chaplain' }).click();
-  await expect(hud).toContainText('The Chaplain');
-  await expect(body).toHaveAttribute('data-converted', '0');
+  await expect(page.locator('#hud')).toContainText('The Chaplain');
+  await expect(page.locator('body')).toHaveAttribute('data-converted', '0');
+};
+
+const cellScreen = (page: Page, q: number, r: number) =>
+  page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]) as Promise<{ x: number; y: number }>;
+
+const chaplainMove = (page: Page, pick: 'forward' | 'exposing') =>
+  page.evaluate((how) => {
+    const w = window as any;
+    return w.__legal().find((m: any) =>
+      m.cells.length === 1 && (how === 'forward' ? m.dir === 4 || m.dir === 2 : w.__preview(m).length > 0),
+    ) ?? null;
+  }, pick);
+
+/** One boss turn: the player's move, then the boss replies. The first ply goes through the mouse, the rest through __click. */
+const playChaplainTurn = async (page: Page, n: number) => {
+  const mv = await chaplainMove(page, 'forward');
+  const [q, r] = mv.cells[0];
+  const send = async (cq: number, cr: number) => {
+    if (n === 1) {
+      const p = await cellScreen(page, cq, cr);
+      await page.mouse.click(p.x, p.y);
+    } else {
+      await page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
+    }
+  };
+  await send(q, r);
+  await send(mv.dir === 4 ? q : q + 1, r - 1);
+  await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(2 * n); // the boss replied
+};
+
+// The Chaplain (#150, Decision #154): a hovered move shows the marbles it would expose to a flip at the end of the boss turn.
+test('start The Chaplain: a hovered move shows the marbles it exposes, #150', async ({ page }, testInfo) => {
+  const body = page.locator('body');
+  const hud = page.locator('#hud');
+  await startChaplain(page);
+  const DIRS = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
 
   let previewed = false;
-  let converted = false;
-  for (let n = 1; n <= 20 && !(previewed && converted); n++) {
-    const exposing = previewed ? null : await legal('exposing');
+  for (let n = 1; n <= 20 && !previewed; n++) {
+    const exposing = await chaplainMove(page, 'exposing');
     if (exposing) {
       const [q, r] = exposing.cells[0];
       const [dq, dr] = DIRS[exposing.dir]!;
-      await click(q, r); // select the marble
+      const at = await cellScreen(page, q, r);
+      await page.mouse.click(at.x, at.y); // select the marble
       const flipCues = async () => (await tellCues(page)).filter((c) => c === 'flip').length;
       const heard = await flipCues();
-      const t = await screen(q + dq!, r + dr!);
+      const t = await cellScreen(page, q + dq!, r + dr!);
       await page.mouse.move(t.x, t.y); // hover the move: ghost and flip preview
       await expect(body).not.toHaveAttribute('data-flips', '0');
       await expect(hud).toContainText('Flips next boss turn');
       await page.mouse.move(t.x + 2, t.y + 2); // the same move still hovered: the same tell, no second cue
       expect(await flipCues()).toBe(heard + 1);
       await page.screenshot({ path: testInfo.outputPath('chaplain-preview.png') });
-      await click(q, r); // deselect
+      const c = await cellScreen(page, q, r);
+      await page.mouse.click(c.x, c.y); // deselect
       previewed = true;
     }
-    const mv = await legal('forward');
-    const [q, r] = mv.cells[0];
-    const send = n === 1 ? click : (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
-    await send(q, r);
-    await send(mv.dir === 4 ? q : q + 1, r - 1);
-    await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
-    if (!converted && (await body.getAttribute('data-converted')) !== '0') {
-      await expect(hud).toContainText('Converted:');
-      await page.screenshot({ path: testInfo.outputPath('chaplain-converted.png') });
-      const cells = await page.evaluate(() => (window as any).__converted());
-      for (const c of await topContrasts(page, cells)) expect(c).toBeGreaterThanOrEqual(3); // its cap reads (#326)
-      converted = true;
-    }
+    await playChaplainTurn(page, n);
   }
   expect(previewed).toBe(true);
-  expect(converted).toBe(true);
+});
+
+// The same fight, a converted marble keeps its own look (#326): its cap reads 3:1 against its shell. The conversion comes
+// on the 18th boss turn for every seed: the first 17 turns are one __playTurns call (#349), the 18th is two real clicks.
+test('start The Chaplain: a converted marble keeps its look, #150', async ({ page }, testInfo) => {
+  await startChaplain(page);
+  expect(await page.evaluate(() => (window as any).__playTurns(17, [4, 2]))).toBe(17);
+  await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(34);
+  await expect(page.locator('body')).toHaveAttribute('data-converted', '0');
+  const mv = await chaplainMove(page, 'forward');
+  const [q, r] = mv.cells[0];
+  for (const [cq, cr] of [[q, r], [mv.dir === 4 ? q : q + 1, r - 1]]) {
+    const p = await cellScreen(page, cq, cr);
+    await page.mouse.click(p.x, p.y);
+  }
+  await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(36); // the boss replied
+  await expect(page.locator('body')).not.toHaveAttribute('data-converted', '0');
+  await expect(page.locator('#hud')).toContainText('Converted:');
+  await page.screenshot({ path: testInfo.outputPath('chaplain-converted.png') });
+  const cells = await page.evaluate(() => (window as any).__converted());
+  for (const c of await topContrasts(page, cells)) expect(c).toBeGreaterThanOrEqual(3); // its cap reads (#326)
 });
 
 // Bug #299: a boss turn whose flip costs the boss a marble lost to the void (#207), while its move pushes nothing
@@ -207,36 +231,32 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, a convert
 test('The Chaplain: a boss marble lost for a flip counts for the player and the board is drawn after it, bug #299', async ({
   page,
 }) => {
-  test.slow(); // 18 boss searches in the worker
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => {
     crypto.getRandomValues = ((a: Uint32Array) => a.fill(1)) as typeof crypto.getRandomValues; // the fight seed
   });
   await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
-  await page.goto('./');
+  await page.goto('./?nodes=200'); // the boss search at the test budget (bot.ts)
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
   const plies = () => page.evaluate(() => (window as any).__plies());
-  const click = async (q: number, r: number) => {
-    const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
-    await page.mouse.click(p.x, p.y);
-  };
 
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Chaplain' }).click();
   await expect(hud).toContainText('The Chaplain');
   expect(await page.evaluate(() => (window as any).__fight().seed)).toBe(1);
-  for (let n = 1; n <= 18; n++) {
-    const mv = await page.evaluate(() =>
-      (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
-    );
-    const [q, r] = mv.cells[0];
-    const send = n === 1 ? click : (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
-    await send(q, r);
-    await send(mv.dir === 4 ? q : q + 1, r - 1);
-    await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
-  }
+  // Turns 1 to 17 in one call (#349). The 18th, the flip, is played as before: two __click calls.
+  expect(await page.evaluate(() => (window as any).__playTurns(17, [4, 2]))).toBe(17);
+  await expect.poll(plies, { timeout: 30_000 }).toBe(34);
+  const mv = await page.evaluate(() =>
+    (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
+  );
+  const [q, r] = mv.cells[0];
+  const send = (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
+  await send(q, r);
+  await send(mv.dir === 4 ? q : q + 1, r - 1);
+  await expect.poll(plies, { timeout: 30_000 }).toBe(36); // the boss replied
   await expect(hud).toContainText('White ejected 1/6'); // the lost boss marble, drawn without a click
   expect(errors).toEqual([]);
 });
@@ -244,7 +264,6 @@ test('The Chaplain: a boss marble lost for a flip counts for the player and the 
 // The Choir (#183): a radius 3 board, a glyph per army on the boss marbles, only the army in turn
 // moves and the next one wears a ring.
 test('start The Choir: the boss moves the army in turn, the next army is marked, #183', async ({ page }, testInfo) => {
-  test.slow(); // a boss search in the worker
   await page.goto('./');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');

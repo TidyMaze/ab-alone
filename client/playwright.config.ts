@@ -24,13 +24,14 @@ const reporter: ReporterDescription[] = [
 export default defineConfig({
   testDir: 'e2e',
   reporter,
-  // Full traces on every run slowed the 30 s timeout tests (eject, clear-board) past their limit on CI.
   // CI runners have no GPU: every page draws with software WebGL on all cores. Two workers starved each other, a frame took
-  // 1.5 s and clicks timed out (#216); one worker passes all specs (run 40103771311). Its slowest specs take 23 s, hence 60 s.
+  // 1.5 s and clicks timed out (#216); one worker passes all specs (run 40103771311).
   workers: process.env.CI ? 1 : undefined,
   // CI splits the suite across runners with --shard (#257), test by test (scripts/shard-reporter.ts, #333).
   fullyParallel: !!process.env.CI,
-  timeout: process.env.CI ? 60_000 : 30_000,
+  // Every e2e test passes in under 15 s, locally and on CI, and a slower one fails (CONTRIBUTING.md, #349).
+  // No test.slow() or test.setTimeout() override: a test that needs more is made cheaper.
+  timeout: 15_000,
   // One retry on CI records a trace for the retried run only.
   retries: process.env.CI ? 1 : 0,
   // No service worker outside the offline spec: a cache left by one test must never serve another (#193).

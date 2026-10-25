@@ -178,7 +178,6 @@ test('a file that is not a game, of an unknown version or with an illegal move i
 });
 
 test('an imported game replaces a game against the bot in progress, and the bot plays on', async ({ page }, testInfo) => {
-  test.slow(); // two bot searches in the worker
   await page.goto('./?nodes=200');
   await ready(page);
   await move(page, [0, 2], [0, 1]);
@@ -229,36 +228,42 @@ test('an imported finished game shows its result, and a reload starts a new game
   expect(await plies(page)).toBe(0);
 });
 
-test('export and import are not shown during a boss fight, a daily fight or an online game', async ({ page }) => {
-  // In the open settings menu, beside Clear board: shown in a local game, hidden in the others (#287).
-  const local = async () => {
-    await ready(page);
-    await expect(page.locator('#online > #export-game, #online > #import-game')).toHaveCount(0); // no loose HUD buttons
-    await expect(await menuItem(page, 'Export game')).toBeVisible();
-    await expect(await menuItem(page, 'Import game')).toBeVisible();
-    await page.keyboard.press('Escape'); // the open menu floats over the buttons clicked next
-  };
-  const hidden = async () => {
-    await expect(await menuItem(page, 'Clear board')).toBeVisible();
-    await expect(await menuItem(page, 'Export game')).toBeHidden();
-    await expect(await menuItem(page, 'Import game')).toBeHidden();
-  };
+// In the open settings menu, beside Clear board: shown in a local game, hidden in the others (#287).
+async function expectLocalMenu(page: Page): Promise<void> {
+  await ready(page);
+  await expect(page.locator('#online > #export-game, #online > #import-game')).toHaveCount(0); // no loose HUD buttons
+  await expect(await menuItem(page, 'Export game')).toBeVisible();
+  await expect(await menuItem(page, 'Import game')).toBeVisible();
+  await page.keyboard.press('Escape'); // the open menu floats over the buttons clicked next
+}
+
+async function expectNoExportImport(page: Page): Promise<void> {
+  await expect(await menuItem(page, 'Clear board')).toBeVisible();
+  await expect(await menuItem(page, 'Export game')).toBeHidden();
+  await expect(await menuItem(page, 'Import game')).toBeHidden();
+}
+
+test('export and import are not shown during a boss fight, #287', async ({ page }) => {
   await page.goto('./?net=hook');
-  await local();
+  await expectLocalMenu(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(page.locator('#hud')).toContainText('The Echo');
-  await hidden();
+  await expectNoExportImport(page);
+});
 
-  await page.reload();
-  await local();
+test('export and import are not shown during a daily fight, #287', async ({ page }) => {
+  await page.goto('./?net=hook');
+  await expectLocalMenu(page);
   await page.locator('#daily').click();
   await expect(page.locator('#hud')).toContainText('Daily challenge');
-  await hidden();
+  await expectNoExportImport(page);
+});
 
-  await page.reload();
-  await local();
+test('export and import are not shown during an online game, #287', async ({ page }) => {
+  await page.goto('./?net=hook');
+  await expectLocalMenu(page);
   await page.locator('#play-online').click();
   await expect(page.locator('#hud')).toContainText('You are Black');
-  await hidden();
+  await expectNoExportImport(page);
 });

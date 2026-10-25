@@ -50,7 +50,6 @@ const save = (moves: number[][]) => JSON.stringify({ version: 1, mode: 'local', 
 test('Hint shows the best move as a ghost and plays nothing; a second press clears it, #192', async ({
   page,
 }) => {
-  test.slow(); // two hint searches in the worker, each with the bot's budget
   await page.goto('./?bot=off&nodes=200');
   await ready(page);
   const body = page.locator('body');
@@ -75,7 +74,6 @@ test('Hint shows the best move as a ghost and plays nothing; a second press clea
 
 // Split from the test above (#349): a selection clears the hint, then the next move's hint is White's.
 test('a selection clears the hint, and the hint after the next move is for White, #192', async ({ page }) => {
-  test.slow(); // two hint searches in the worker
   await page.goto('./?bot=off&nodes=200');
   await ready(page);
   const body = page.locator('body');
@@ -102,7 +100,6 @@ test('a selection clears the hint, and the hint after the next move is for White
 test('on the start position the marbles the hint takes wear the selection ring, until the hint goes, #301', async ({
   page,
 }) => {
-  test.slow(); // two hint searches in the worker
   await page.goto('./?bot=off&nodes=200');
   await ready(page);
   const body = page.locator('body');
@@ -133,7 +130,6 @@ test('on the start position the marbles the hint takes wear the selection ring, 
 });
 
 test('a hint asked for an older position is never drawn on the new one, #192', async ({ page }) => {
-  test.slow(); // three hint searches in the worker
   // The hint requests are held until __releaseHints. With ?bot=off the analysis worker is the only one: its requests
   // for a move are the hints, its evaluations (#191) pass.
   await page.addInitScript(() => {
@@ -201,7 +197,6 @@ test('a hint asked for an older position is never drawn on the new one, #192', a
 test('against the bot, Hint is disabled while the bot thinks, then shows the hint of the next position, #192', async ({
   page,
 }) => {
-  test.slow(); // a bot search and two hint searches in the workers
   // The bot worker is held until __releaseBot: main.ts makes it first, then the analysis worker, which passes.
   await page.addInitScript(() => {
     const held: (() => void)[] = [];
@@ -262,7 +257,6 @@ test('Hint is disabled once the game is over, #192', async ({ page }) => {
 test('no Hint during a boss fight, a daily fight or an online game, for the room creator and the invited player, #192', async ({
   page,
 }) => {
-  test.slow(); // four page loads
   const hint = page.locator('#hint');
   await page.goto('./?net=hook#room=hint192');
   await page.locator('canvas').waitFor();

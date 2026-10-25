@@ -1040,6 +1040,40 @@ addEventListener('resize', () => {
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
 (window as unknown as Record<string, unknown>).__converted = () =>
   engine instanceof Encounter ? parseCells(engine.converted()) : [];
+// Used by the e2e tests to play `turns` boss turns in one call (#349): each player move is the first legal single-marble
+// move in `dirs`, the boss replies as botTurn does, and each ply is applied as a catch-up is (afterPlay, not live): no
+// slide, ejection or frame per ply, one refresh at the end.
+if (navigator.webdriver) {
+  (window as unknown as Record<string, unknown>).__playTurns = async (turns: number, dirs: number[]): Promise<number> => {
+    if (thinking || online || !worker) return 0;
+    thinking = true;
+    syncHint();
+    await new Promise<void>((done) => whenSettled(done)); // a slide in progress ends first
+    const ply = (record: number[]): void => {
+      const before = Array.from(engine.board());
+      engine.play(Int32Array.from(record));
+      afterPlay(before, record, false);
+    };
+    let played = 0;
+    try {
+      for (let i = 0; i < turns && engine.status() === 0; i++) {
+        const game = engine;
+        const mv = parseMoves(engine.legal_moves()).find((m) => m.cells.length === 1 && dirs.includes(m.dir));
+        if (!mv) break;
+        ply(encodeMove(mv));
+        if (engine.status() !== 0) break;
+        const reply = await askBot(worker, history, budget, fight ?? undefined);
+        if (engine !== game) break; // Retry, New game or an import replaced the game while the bot thought
+        ply(reply);
+        played++;
+      }
+    } finally {
+      thinking = false;
+      refresh();
+    }
+    return played;
+  };
+}
 
 // New game (#230): leaves the local game for the start position, bot on or off as it was, and deletes its
 // save. Once a move is played, the first press asks for a confirmation for a few seconds (newgame.ts).
