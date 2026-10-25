@@ -35,7 +35,8 @@ import { OnlineSession } from './session';
 import { onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
-import { SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
+import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
+import { carryTurns, cellTurn, rolledTurn, turnOf, type Quat } from './orient';
 import { hudHtml } from './hud';
 import { menuOpen, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
@@ -249,7 +250,7 @@ lamp.position.set(...LIGHT.key.position);
 scene.add(lamp);
 
 const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, 32);
-const marbleGeometry = new THREE.SphereGeometry(0.36, 32, 16);
+const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, 32, 16);
 const ringGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32);
 const steel = new THREE.MeshStandardMaterial(
   deckAlbedo && deckRoughness
@@ -306,10 +307,12 @@ const armyGlyphs = [
 ];
 
 // The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
+// Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
 const edgeGeometry = new THREE.TorusGeometry(0.44, 0.03, 8, 32).rotateX(Math.PI / 2);
 const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x25292d });
-const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
+const discs: THREE.Mesh[] = CELLS.map(([q, r], i) => {
   const disc = new THREE.Mesh(discGeometry, steel);
+  disc.rotation.y = cellTurn(i);
   const bevel = new THREE.Mesh(edgeGeometry, edgeMaterial);
   bevel.position.y = 0.05; // the disc's top face, so the bevel is not buried in the disc
   disc.add(bevel);
@@ -354,9 +357,16 @@ function drawFrame(board: ArrayLike<number>): void {
 }
 const marbles = new THREE.Group();
 scene.add(marbles);
-// Cell index to the marble on it and what is drawn on that marble (cap, glyph, tell ring): the
-// slide moves them together.
+// Cell index to the marble on it, first, and what is drawn on that marble (cap, glyph, tell ring): the
+// slide moves them together and rolls the marble only.
 const marbleAt = new Map<number, THREE.Object3D[]>();
+// Each marble's own turn (#346), carried and rolled by its slides (#345), for the game it belongs to (orient.ts).
+let turns: { game: Engine | Encounter; map: Map<number, Quat> } = { game: engine, map: new Map() };
+const gameTurns = (): Map<number, Quat> => {
+  if (turns.game !== engine) turns = { game: engine, map: new Map() };
+  return turns.map;
+};
+const turnAt = (i: number): Quat => turnOf(gameTurns(), fight?.seed ?? 0, i);
 const onMarble = (i: number, obj: THREE.Object3D): void => {
   marbleAt.set(i, [...(marbleAt.get(i) ?? []), obj]);
 };
@@ -473,10 +483,13 @@ function animateSlides(now: number): void {
   const elapsed = now - slide.start;
   for (const track of stale ? [] : slide.tracks) {
     const p = slideAt(track, elapsed);
-    for (const obj of marbleAt.get(cellIndex(track.cell[0], track.cell[1])) ?? []) {
+    const i = cellIndex(track.cell[0], track.cell[1]);
+    const on = marbleAt.get(i) ?? [];
+    for (const obj of on) {
       obj.position.x = p.x;
       obj.position.z = p.z;
     }
+    on[0]?.quaternion.fromArray(rolledTurn(track, elapsed, turnAt(i)));
   }
   if (!stale && elapsed < SLIDE_MS) return;
   slide = null;
@@ -507,10 +520,12 @@ function playMove(record: number[]): void {
 // `live` false: a move replayed by a catch-up shows at once, without its ejection effect and sound (#232).
 function afterPlay(before: number[], record: number[], live = true): void {
   history.push(record);
-  if (!live) return;
   const mv = parseMoves(record)[0]!;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const tracks = slideTracks(before, engine.board(), mv, reducedMotion);
+  const carried = carryTurns(gameTurns(), fight?.seed ?? 0, tracks, mv.dir); // gameTurns first: a new game starts its own
+  turns.map = carried;
+  if (!live) return;
   if (tracks.some((t) => t.durationMs > 0)) {
     slide = { game: engine, tracks, start: performance.now() };
     document.body.dataset.sliding = '1';
@@ -728,6 +743,7 @@ function refresh(): void {
     if (side === 0) return;
     const marble = marbleMesh(side);
     marble.position.set(p.x, 0.36, p.z);
+    marble.quaternion.fromArray(turnAt(i));
     marbles.add(marble);
     onMarble(i, marble);
     if (ringed.some(([sq, sr]) => sq === q && sr === r)) {
@@ -910,6 +926,10 @@ addEventListener('resize', () => {
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
 
+// Used by the browser checks to read the turn of the marble on a cell (#345, #346), null when it has none.
+(window as unknown as Record<string, unknown>).__marbleTurn = (q: number, r: number) =>
+  marbleAt.get(cellIndex(q, r))?.[0]?.quaternion.toArray() ?? null;
+
 // Used by the browser checks to read the frame's size and holes, and that it is drawn (#292).
 (window as unknown as Record<string, unknown>).__frame = () => ({
   radius: frame?.radius,
@@ -958,7 +978,7 @@ addEventListener('resize', () => {
     return boxOf(ring(c.x, c.z, 0.46, 0.05));
   });
   const boardMarbles = marbles.children.map((o) => {
-    const bb = new THREE.Box3().setFromObject(o);
+    const bb = new THREE.Box3().setFromObject(o, true); // precise: a turned marble's box is not its turned bounding cube (#346)
     const corners = [bb.min.x, bb.max.x].flatMap((x) => [bb.min.y, bb.max.y].flatMap((y) => [bb.min.z, bb.max.z].map((z) => px(x, y, z))));
     return boxOf(corners);
   });

@@ -59,3 +59,18 @@ export function slideAt(track: SlideTrack, elapsedMs: number): { x: number; z: n
     z: track.from.z + (track.to.z - track.from.z) * k,
   };
 }
+
+/** The radius of a marble, in cell spacings. */
+export const MARBLE_RADIUS = 0.36;
+
+/** How far the sliding marble has rolled `elapsedMs` after the move (#345): without slipping, about the unit axis on
+ * the board plane square to its path (up × path), by the distance travelled over the radius. */
+export function rollAt(track: SlideTrack, elapsedMs: number): { axis: [number, number, number]; angle: number } {
+  const p = slideAt(track, elapsedMs);
+  const [dx, dz] = [track.to.x - track.from.x, track.to.z - track.from.z];
+  const path = Math.hypot(dx, dz);
+  return {
+    axis: [dz / path, 0, -dx / path],
+    angle: Math.hypot(p.x - track.from.x, p.z - track.from.z) / MARBLE_RADIUS,
+  };
+}
