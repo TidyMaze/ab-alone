@@ -78,8 +78,10 @@ item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG lin
 strokes, one size) then its label: a fog for Clear board, a ball with speed lines for Reduced motion, lines in a box for Flat HUD, a speaker for Sound (crossed out while off), an arrow out
 of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
 or closing it moves no button: under the cog in the column, beside the cog over the first row when the buttons are
-rows. It covers no cell either. Held upright (`orientation: portrait`) each item shows its icon only, a 44 px square,
-so every item fits beside the cog in at most two rows (#414); wider than tall, icon then label. Each item keeps its
+rows. It covers no cell either. Held upright (`orientation: portrait`), or in a narrow or short window (up to 1100 px
+wide or 500 px tall), each item shows its icon only, a 44 px square, so every item fits without reaching the board
+(#414): held upright side by side beside the cog, wider than tall in rows of 3 under the cog (Clear board and FPS
+share one row of two). Roomy windows keep icon then label, one item per row. Each item keeps its
 name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it and a pointer shows it. On a touch screen each item is at least 44 px tall. It closes on Escape, on a press
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
