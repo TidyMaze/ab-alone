@@ -13,6 +13,8 @@ const cell = async (page: Page, q: number, r: number) => {
 // The same click through the game's own handler (window.__click), without the raycast and the frames of a mouse
 // click. The setup plies of a test use it, so each test pays the mouse path once, on its last ply.
 const play = (page: Page, q: number, r: number) => page.evaluate(([cq, cr]) => (window as any).__click(cq, cr), [q, r]);
+// Reduced motion on pages whose test checks no animation: slides and ejection effects take no time.
+const calm = (...pages: Page[]) => Promise.all(pages.map((p) => p.emulateMedia({ reducedMotion: 'reduce' })));
 const plies =(page: Page) => page.evaluate(() => (window as any).__plies());
 // Seating is a Hello round trip after the connection opens: wait for it before the first move.
 const seat = (page: Page, role: 'player' | 'spectator') => expect(page.locator('body')).toHaveAttribute('data-seat', role);
@@ -131,6 +133,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
 test('a third peer opening the link is not a player: room is full, its move changes nothing, bug #117', async ({ browser }) => {
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   const all = [a, b, c];
+  await calm(a, b, c);
   await room({ a, b, c });
 
   await a.goto('./?bot=off&net=hook');
@@ -242,6 +245,7 @@ test('online status: creator waits with the invite, joiner joins, both see each 
 // while just any peer (here a spectator) is.
 test('a player cannot move while the opponent is gone, even with a spectator still there, #143', async ({ browser }) => {
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
+  await calm(a, b, c);
   await room({ a, b, c });
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
@@ -525,6 +529,7 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
 
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
+  await calm(a, b);
   await room({ a, b });
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
