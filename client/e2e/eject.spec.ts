@@ -25,6 +25,7 @@ type Seen = {
   at200: Drawn[];
   at700: Drawn[];
   afterSkip?: { ejecting?: string; blood?: string; marbles: number };
+  spray?: Bloody[]; // the spatter in screen space at 0 to 850 ms, see the overlap checks (#278)
 };
 
 async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
@@ -35,7 +36,13 @@ async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
     const observer = new MutationObserver(() => {
       const kind = document.body.dataset.ejecting;
       if (!kind || w.__seen) return;
-      const seen: Seen = { kind, blood: document.body.dataset.blood, at200: w.__ejectAt(200), at700: w.__ejectAt(700) };
+      const seen: Seen = {
+        kind,
+        blood: document.body.dataset.blood,
+        at200: w.__ejectAt(200),
+        at700: w.__ejectAt(700),
+        spray: [0, 300, 450, 600, 850].map((ms) => ({ ms, ...w.__bloodAt(ms) })),
+      };
       if (skip === 'key') document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
       if (skip === 'click') document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
       if (skip) {
@@ -94,6 +101,52 @@ test('reduced motion: a plain fade, no tumble, no stretch, no spatter, the same 
   await expect(page.locator('body')).not.toHaveAttribute('data-ejecting', /.*/, { timeout: 3000 });
   await expect(page.locator('#hud')).toContainText('White to move');
 });
+
+// #278: the spatter, in screen space, never covers a cell, a marble on the board or the steel frame, and stays on
+// screen. Checked on a desktop and a phone, at the start, the peak (450 ms) and before it ends.
+type Box = { x0: number; y0: number; x1: number; y1: number };
+type Pt = { x: number; y: number };
+type Bloody = { ms: number; spray: Box | null; drops: number; cells: Box[]; marbles: Box[]; frame: Pt[] };
+const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+// A box and a convex polygon are apart when one axis separates them: a box axis, or an edge normal of the polygon.
+function hitsPolygon(box: Box, poly: Pt[]): boolean {
+  const corners = [box.x0, box.x1].flatMap((x) => [box.y0, box.y1].map((y) => ({ x, y })));
+  const normals = poly.map((p, i) => {
+    const q = poly[(i + 1) % poly.length]!;
+    return { x: p.y - q.y, y: q.x - p.x };
+  });
+  const span = (pts: Pt[], axis: Pt) => {
+    const v = pts.map((p) => p.x * axis.x + p.y * axis.y);
+    return [Math.min(...v), Math.max(...v)];
+  };
+  return [...normals, { x: 1, y: 0 }, { x: 0, y: 1 }].every((axis) => {
+    const [b0, b1] = span(corners, axis);
+    const [p0, p1] = span(poly, axis);
+    return b0 < p1 && p0 < b1;
+  });
+}
+
+for (const [name, viewport] of [
+  ['desktop', { width: 1280, height: 720 }],
+  ['phone', { width: 375, height: 812 }],
+] as const) {
+  test.describe(`the spatter on a ${name}`, () => {
+    test.use({ viewport });
+    test('clears every cell, marble and the steel frame, and stays on screen', async ({ page }) => {
+      const { seen } = await pushOffBoard(page);
+      expect(seen.spray).toHaveLength(5);
+      for (const s of seen.spray!) {
+        expect(s.spray, `spatter at ${s.ms} ms`).not.toBeNull();
+        const box = s.spray!;
+        console.log(`${name}, ${s.ms} ms: spatter ${Math.round(box.x1 - box.x0)} x ${Math.round(box.y1 - box.y0)} px, ${s.drops} drops`);
+        expect(s.cells.some((c) => overlaps(box, c)), `a cell at ${s.ms} ms`).toBe(false);
+        expect(s.marbles.some((m) => overlaps(box, m)), `a marble at ${s.ms} ms`).toBe(false);
+        expect(hitsPolygon(box, s.frame), `the frame at ${s.ms} ms`).toBe(false);
+        expect(box.x0 >= 0 && box.y0 >= 0 && box.x1 <= viewport.width && box.y1 <= viewport.height, `on screen at ${s.ms} ms`).toBe(true);
+      }
+    });
+  });
+}
 
 for (const input of ['key', 'click'] as const) {
   test(`a ${input} during the effect ends it at once and never holds the next move`, async ({ page }) => {

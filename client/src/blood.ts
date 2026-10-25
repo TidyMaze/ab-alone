@@ -1,23 +1,29 @@
-/** The blood effect of an ejection (issue #278): a short stylised spatter, just beyond the rim, on
- * the push line. Pure timeline; main.ts draws it. Reduced motion draws nothing (no particles). */
+/** The blood effect of an ejection (issue #278): a short stylised spatter, just past the steel frame,
+ * on the push line. Pure timeline; main.ts draws it. Reduced motion draws nothing (no particles). */
+import { FRAME } from './frame';
 
 /** The whole effect, under 1 s, then it ends by itself. */
 export const BLOOD_MS = 900;
-export const BLOOD_DROPS = 18;
-/** The splash: the drops fly out in this time, then hang, then fade. */
+/** Few, large drops: they read at a glance, then land as small dots on the void. */
+export const BLOOD_DROPS = 11;
+/** The splash: the drops fly out and fall onto the void in SPLASH_MS, then sit and fade with the stain from FADE_MS. */
 const SPLASH_MS = 300;
-const HOLD_UNTIL_MS = 600;
-/** Drops fly within 60 degrees of the push, so none flies back over the board. */
-const SPREAD_RAD = Math.PI / 3;
-/** How far a drop flies out, world units, and how far it drips down (in the void, under the rim). */
+const FADE_MS = 600;
+/** Drops fly within 30 degrees of the push: none flies back over the board, and the wider ones do not reach the
+ * marbles on the rim beside the push (their tops project up the screen). */
+const SPREAD_RAD = Math.PI / 6;
+/** How far a drop flies out, world units. */
 const REACH = 1.1;
-const DRIP = 0.6;
-/** Height of a marble on the board (main.ts holder). */
+/** Height of a marble on the board (main.ts holder), and the height the drops land at, on the void. */
 const HEIGHT = 0.36;
+const LAND_Y = 0.02;
 
-/** The stain's largest radius. Its centre is one cell-centre out (1 away from the rim cell), so its
- * edge stays 0.6 from the rim cell centre, outside the cell (hex circumradius about 0.58). */
-const STAIN_MAX = 0.4;
+/** The stain's largest radius. */
+const STAIN_MAX = 0.35;
+/** The spatter starts this far along the push from the rim cell's centre. The frame's outer edge lies FRAME.margin +
+ * FRAME.rim past the cell's centre line; the stain's near edge then sits one stain radius beyond it, so the stain
+ * (and the marble tops on the rim, which project up the screen) stay clear of the board frame and its marbles. */
+const ORIGIN = FRAME.margin + FRAME.rim + 2 * STAIN_MAX + 0.25; // the 0.25: the rim's marble tops are tall on screen
 
 export interface Drop {
   x: number;
@@ -39,8 +45,13 @@ function splashEase(elapsedMs: number): number {
   return 1 - (1 - splash) ** 3;
 }
 
+/** 0 while the drops are in the air, 1 once they have landed on the void. */
+function landedAt(elapsedMs: number): number {
+  return Math.min(Math.max(elapsedMs / SPLASH_MS, 0), 1);
+}
+
 function fadeAt(elapsedMs: number): number {
-  return 1 - Math.min(Math.max((elapsedMs - HOLD_UNTIL_MS) / (BLOOD_MS - HOLD_UNTIL_MS), 0), 1);
+  return 1 - Math.min(Math.max((elapsedMs - FADE_MS) / (BLOOD_MS - FADE_MS), 0), 1);
 }
 
 /** The drops `elapsedMs` after an ejection at `from` pushed along the unit `dir` (board plane).
@@ -54,11 +65,10 @@ export function bloodAt(
   // A frame timestamp can precede the start: clamp to 0, as trackAt does for the marble.
   elapsedMs = Math.max(elapsedMs, 0);
   if (reducedMotion || elapsedMs >= BLOOD_MS) return [];
-  // The spatter starts one cell-centre out, beyond the rim: nothing is drawn over a cell.
-  const ox = from.x + dir.x;
-  const oz = from.z + dir.z;
+  const ox = from.x + dir.x * ORIGIN;
+  const oz = from.z + dir.z * ORIGIN;
   const ease = splashEase(elapsedMs);
-  const drip = Math.max(elapsedMs - SPLASH_MS, 0) / 1000;
+  const y = LAND_Y + (HEIGHT - LAND_Y) * (1 - landedAt(elapsedMs)) ** 2;
   const alpha = fadeAt(elapsedMs);
   return Array.from({ length: BLOOD_DROPS }, (_, i) => {
     const spin = frac((i + 1) * 0.618);
@@ -67,12 +77,7 @@ export function bloodAt(
     const s = Math.sin(angle);
     const reach = REACH * (0.4 + 0.6 * frac((i + 1) * 0.37)) * ease;
     const u = { x: dir.x * c - dir.z * s, z: dir.x * s + dir.z * c }; // the push, turned by angle
-    return {
-      x: ox + u.x * reach,
-      y: HEIGHT - DRIP * drip * drip,
-      z: oz + u.z * reach,
-      alpha,
-    };
+    return { x: ox + u.x * reach, y, z: oz + u.z * reach, alpha };
   });
 }
 
@@ -87,8 +92,8 @@ export function bloodStainAt(
   elapsedMs = Math.max(elapsedMs, 0);
   if (reducedMotion || elapsedMs >= BLOOD_MS) return null;
   return {
-    x: from.x + dir.x,
-    z: from.z + dir.z,
+    x: from.x + dir.x * ORIGIN,
+    z: from.z + dir.z * ORIGIN,
     radius: STAIN_MAX * splashEase(elapsedMs),
     alpha: fadeAt(elapsedMs),
   };
