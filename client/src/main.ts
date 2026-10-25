@@ -63,7 +63,8 @@ import {
   writeTheme,
   writeUiScale,
 } from './quality';
-import { nextUiScale, uiScaleFactor, type UiScale } from './uiscale';
+import { limitFlash } from './safe';
+import { clampUiScale, maxUiScale, nextUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { Sfx, TellWatch, type Tell } from './sound';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
@@ -203,13 +204,18 @@ function applyTheme(): void {
 // Photosensitivity safe mode (#380), on by default, and the UI scale (#382): one custom property on the root, which
 // the HUD and the settings menu read (ui.css). The board does not scale.
 let safe = readSafeMode(store);
-let uiScale: UiScale = readUiScale(store);
+let uiScale: UiScale = clampUiScale(readUiScale(store), maxUiScale(innerWidth, innerHeight));
 function applyUiScale(): void {
   document.documentElement.style.setProperty('--ui-scale', uiScaleFactor(uiScale));
 }
 applyUiScale();
-// The end-of-game light and dim stop animating in safe mode (ui.css, #380).
-const applySafe = (): void => void (document.body.dataset.safe = String(safe));
+// Safe mode (#380) caps the one flashing effect, the end-of-game light: its peak and duration are custom properties
+// that ui.css reads. The win light pulses once in 1.6 s (0.625 a second), under the 3 a second cap.
+const applySafe = (): void => {
+  const light = limitFlash({ rate: 1 / 1.6, amplitude: 1 }, safe);
+  document.documentElement.style.setProperty('--end-peak', String(light.amplitude));
+  document.documentElement.style.setProperty('--end-duration', `${1 / light.rate}s`);
+};
 applySafe();
 // The ejection sound (docs/specs/world.md section 7), on by default, a setting of the menu (#284). The audio
 // context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
@@ -248,7 +254,7 @@ const toggles: Record<string, () => void> = {
     applySafe();
   },
   'ui-scale': () => {
-    uiScale = nextUiScale(uiScale);
+    uiScale = nextUiScale(uiScale, maxUiScale(innerWidth, innerHeight));
     writeUiScale(store, uiScale);
     applyUiScale();
   },

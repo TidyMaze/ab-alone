@@ -1,6 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { BLACK_WINS } from './end-games';
 import { loseByRepetition, startDaily } from './fight-end';
+import { maxUiScale } from '../src/uiscale';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -135,13 +136,14 @@ for (const { name, viewport, mobile } of sizes) {
       await check(page, testInfo, 'at the start');
     });
 
-    // UI scale 200 % (#382): the HUD and the menu grow, and still cover no cell, marble or target.
-    test('nothing covers the board or the HUD at a 200 % UI scale, #382', async ({ page }, testInfo) => {
+    // UI scale (#382): a stored 200 % is applied at the cap of this window (maxUiScale), 100 % on these viewports.
+    test('a stored 200 % UI scale is applied at the window cap, #382', async ({ page }) => {
       await page.addInitScript(() => localStorage.setItem('ab-alone.ui-scale', '200'));
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
       await expect(page.locator('#hud')).toContainText('Black to move');
-      await check(page, testInfo, 'at 200 % UI scale');
+      const scale = await page.evaluate(() => document.documentElement.style.getPropertyValue('--ui-scale'));
+      expect(scale).toBe(String(maxUiScale(viewport.width, viewport.height) / 100));
     });
 
     test('nothing covers the board or the HUD with the boss list open, bugs #227 #234', async ({ page }, testInfo) => {
@@ -217,6 +219,19 @@ for (const { name, viewport, mobile } of sizes) {
 }
 
 // On a desktop the column stays where it was: top right, one button under the other.
+// UI scale 200 % (#382): only a large desktop window has room for the HUD at 200 % (maxUiScale).
+test.describe('a large desktop window at a 200 % UI scale', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  test('nothing covers the board or the HUD at a 200 % UI scale, #382', async ({ page }, testInfo) => {
+    await page.addInitScript(() => localStorage.setItem('ab-alone.ui-scale', '200'));
+    await page.goto('./?bot=off&net=hook');
+    await page.locator('canvas').waitFor();
+    await expect(page.locator('#hud')).toContainText('Black to move');
+    await check(page, testInfo, 'at 200 % UI scale, large desktop');
+  });
+});
+
 test('on a desktop the buttons stay in a column at the top right, bug #227', async ({ page }) => {
   await page.goto('./?bot=off');
   await expect(page.locator('#hud')).toContainText('Black to move');

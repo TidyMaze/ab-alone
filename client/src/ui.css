@@ -274,7 +274,7 @@ body[data-over]::before {
 }
 body[data-over='win']::before {
   background: radial-gradient(ellipse at center, transparent 55%, rgba(217, 130, 43, 0.85) 100%);
-  animation: end-win 1.6s ease-out forwards;
+  animation: end-win var(--end-duration, 1.6s) ease-out forwards;
 }
 body[data-over='loss']::before {
   background: radial-gradient(ellipse at center, transparent 55%, rgba(18, 36, 66, 0.85) 100%);
@@ -284,10 +284,8 @@ body[data-over='draw']::before {
   background: radial-gradient(ellipse at center, transparent 55%, rgba(154, 163, 168, 0.5) 100%);
   animation: end-draw 1.2s linear forwards;
 }
-@keyframes end-win { 0% { opacity: 0; transform: translateY(12%); } 45% { opacity: 1; transform: none; } 100% { opacity: 0.8; transform: none; } }
+@keyframes end-win { 0% { opacity: 0; transform: translateY(12%); } 45% { opacity: var(--end-peak, 1); transform: none; } 100% { opacity: calc(var(--end-peak, 1) * 0.8); transform: none; } }
 @keyframes end-loss { from { opacity: 0; } to { opacity: 1; } }
 @keyframes end-draw { 0%, 50% { opacity: 0; } 100% { opacity: 1; } }
-/* Photosensitivity safe mode (#380, on by default): the one-shot end light and the loss dim show their final state at once, no fade. */
-body[data-safe='true'][data-over]::before, body[data-safe='true'][data-over] canvas { animation: none; }
 @keyframes end-dim { from { filter: brightness(1) saturate(1); } to { filter: brightness(0.7) saturate(0.65); } }
 @media (prefers-reduced-motion: reduce) { body[data-over]::before { display: none; } }
