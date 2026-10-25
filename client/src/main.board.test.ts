@@ -103,13 +103,15 @@ async function until(game: Game, done: () => boolean): Promise<void> {
 
 // Each test boots a fresh page on the real engine, a few seconds on a loaded machine; the bot games take longer.
 describe('main.ts board and HUD', { timeout: 30_000 }, () => {
-  it('lights the deck with the key lamp and its accents, and sets dim ribs far behind the board', async () => {
+  it('lights the deck with the key lamp and its accents, and sets the dim bulkhead frame far behind the board', async () => {
     const scene = catchScene();
     await boot('?bot=off');
     const lights = scene().children.filter((c) => c instanceof THREE.Light);
     expect(lights.map((l) => l.type)).toEqual(['AmbientLight', 'DirectionalLight', 'DirectionalLight', 'PointLight']);
-    const ribs = scene().children.find((c) => c instanceof THREE.Group && c.children.length === 5)!;
-    expect(ribs.children.every((rib) => rib.position.z === -10)).toBe(true);
+    const decor = scene().children.find(
+      (c) => c instanceof THREE.Group && c.children.length > 0 && c.children.every((m) => m instanceof THREE.Mesh && m.geometry instanceof THREE.BoxGeometry),
+    )!;
+    expect(decor.children.every((part) => part.position.z === -10)).toBe(true);
   });
 
   it('dresses the cells, the frame and the enemy shells in the loaded textures, the glass with its core', async () => {
