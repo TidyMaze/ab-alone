@@ -151,3 +151,19 @@ export const drawDue = (now: number, lastStart: number, lastCost: number, automa
 const AUTOMATED_PIXEL_RATIO = 0.5;
 export const renderPixelRatio = (dpr: number, automated: boolean): number =>
   automated ? Math.min(dpr, AUTOMATED_PIXEL_RATIO) : dpr;
+
+// Under automation (navigator.webdriver) we skip expensive effects like prefiltering and shadows (#459).
+export const isAutomation = (webdriver: boolean): boolean => webdriver;
+
+export interface ShadowSettings {
+  enabled: boolean;
+  soft: boolean;
+}
+
+// Shadows (#459): disabled under low quality tier and automation so software WebGL stays fast.
+// Forced when requested for testing / screenshot captures.
+export function shadowSettings(tier: Tier, automated: boolean, forced?: boolean): ShadowSettings {
+  if (forced) return { enabled: true, soft: true };
+  if (automated || tier === 'low') return { enabled: false, soft: false };
+  return { enabled: true, soft: true };
+}
