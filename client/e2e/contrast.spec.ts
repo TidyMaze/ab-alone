@@ -161,3 +161,24 @@ for (const id of SKIN_IDS) {
     expect(ratios.map((r) => r[0]!).filter((ratio) => ratio < 3), line).toEqual([]);
   });
 }
+
+// Task #377: every pale glass skin reads 3:1 against the deck, the glass cells of the start position (hot-seat, the
+// glass on the far rows) as for #344. The skin comes from the stored setting.
+const GLASS_IDS = ['smoked', 'frost', 'pearl', 'bone', 'moon', 'kintsugi', 'lantern', 'prism', 'nebula', 'visor'];
+for (const id of GLASS_IDS) {
+  test(`the ${id} glass reads 3:1 against the deck, task #377`, async ({ page }, testInfo) => {
+    await page.addInitScript((skin) => localStorage.setItem('ab-alone.glass-skin', skin), id);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('./?bot=off');
+    await page.locator('canvas').waitFor();
+    await page.mouse.move(2, 2); // no hover ghost
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    const png = await page.screenshot({ path: testInfo.outputPath(`glass-${id}.png`), type: 'png' });
+    const mean = (colors: RGB[]) => [0, 1, 2].map((k) => colors.reduce((s, c) => s + c[k]!, 0) / colors.length) as unknown as RGB;
+    const deck = mean(await boxMeans(page, png, DECK_CELLS));
+    const ratios = (await boxMeans(page, png, GLASS_CELLS)).map((rgb) => contrastRatio(rgb, deck));
+    const line = `${id}: glass ${ratios.map((r) => r.toFixed(2)).join(' ')}`;
+    console.log(line);
+    expect(ratios.filter((ratio) => ratio < 3), line).toEqual([]);
+  });
+}

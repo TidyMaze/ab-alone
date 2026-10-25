@@ -65,14 +65,16 @@ const frame = (page: Page) =>
 // Playwright's click waits for the page to paint twice before and after, each wait a frame of software WebGL (#349).
 const tapCog = async (page: Page) => {
   const cog = page.getByRole('button', { name: 'Settings' });
-  const { x, y, hit } = await cog.evaluate((el) => {
+  const { x, y, hit, cover } = await cog.evaluate((el) => {
     el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // as Playwright's click does before it taps
     const r = el.getBoundingClientRect();
     const x = r.left + r.width / 2;
     const y = r.top + r.height / 2;
-    return { x, y, hit: el.contains(document.elementFromPoint(x, y)) };
+    const top = document.elementFromPoint(x, y);
+    const cover = top && { tag: top.tagName, id: top.id, cls: String(top.className), rect: top.getBoundingClientRect().toJSON(), cog: r.toJSON() };
+    return { x, y, hit: el.contains(top), cover };
   });
-  expect(hit, 'the settings cog is not covered').toBe(true);
+  expect(hit, `the settings cog is not covered by ${JSON.stringify(cover)}`).toBe(true);
   await page.mouse.click(x, y);
 };
 
@@ -289,7 +291,7 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(9);
+    await expect(page.locator('#settings-menu button')).toHaveCount(10); // the glass skin shares the shell skin's row (#377)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {
         const r = el.getBoundingClientRect();

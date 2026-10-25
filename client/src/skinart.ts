@@ -3,10 +3,20 @@
 import type { PatternId, Skin } from './skins';
 
 type Ctx = CanvasRenderingContext2D;
-type Drawer = (g: Ctx, w: number, h: number, skin: Skin) => void; // one tile: w x h, its own origin
+/** What a skin paints: the base colour and its motif, null for the plain colour (the pale glass of Smoked glass). */
+export type Look = Pick<Skin, 'color' | 'ink' | 'accent'> & { pattern: PatternId | null };
+type Drawer = (g: Ctx, w: number, h: number, skin: Look) => void; // one tile: w x h, its own origin
 
 const TILES = 4;
 export const css = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
+
+const fillPoly = (g: Ctx, color: number, points: [number, number][]): void => {
+  g.fillStyle = css(color);
+  g.beginPath();
+  points.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+  g.closePath();
+  g.fill();
+};
 
 const line = (g: Ctx, color: number, width: number, points: [number, number][], close = false): void => {
   g.strokeStyle = css(color);
@@ -60,6 +70,21 @@ export const PATTERNS: Record<Exclude<PatternId, 'ridges'>, Drawer> = {
     line(g, s.ink, 2.5, [[w * 0.2, h], [w * 0.2, h * 0.8], [w * 0.6, h * 0.8], [w * 0.6, h * 0.9], [w, h * 0.9]]);
     for (const [x, y] of [[0.3, 0.3], [0.7, 0.55], [0.6, 0.8]] as const) dot(g, s.accent, w * x, h * y, 3.5);
   },
+  frost: (g, w, h, s) => {
+    line(g, s.ink, 2, [[w / 2, h * 0.1], [w / 2, h * 0.9]]);
+    line(g, s.ink, 2, [[w * 0.1, h * 0.25], [w * 0.9, h * 0.75]]);
+    line(g, s.ink, 2, [[w * 0.1, h * 0.75], [w * 0.9, h * 0.25]]);
+  },
+  pearl: (g, w, h, s) => {
+    dot(g, s.ink, w * 0.35, h * 0.4, h * 0.3);
+    dot(g, s.accent, w * 0.65, h * 0.6, h * 0.27);
+  },
+  facets: (g, w, h, s) => {
+    fillPoly(g, s.ink, [[w * 0.5, 0], [w * 0.85, h * 0.45], [w * 0.5, h * 0.4]]);
+    fillPoly(g, s.accent, [[w * 0.5, 0], [w * 0.15, h * 0.45], [w * 0.5, h * 0.4]]);
+    fillPoly(g, s.ink, [[w * 0.15, h * 0.45], [w * 0.5, h], [w * 0.5, h * 0.4]]);
+    fillPoly(g, s.accent, [[w * 0.85, h * 0.45], [w * 0.5, h], [w * 0.5, h * 0.4]]);
+  },
   eye: (g, w, h, s) => {
     for (const [r, c] of [[0.3, 0x15152a], [0.2, s.ink]] as const) {
       g.strokeStyle = css(c);
@@ -75,10 +100,10 @@ export const PATTERNS: Record<Exclude<PatternId, 'ridges'>, Drawer> = {
 
 /** Paints the skin on a w x h canvas: the base colour, then its motif in each of the TILES columns. The ridges are a
  * normal map, nothing to paint. */
-export function drawSkin(g: Ctx, w: number, h: number, skin: Skin): void {
+export function drawSkin(g: Ctx, w: number, h: number, skin: Look): void {
   g.fillStyle = css(skin.color);
   g.fillRect(0, 0, w, h);
-  if (skin.pattern === 'ridges') return;
+  if (skin.pattern === null || skin.pattern === 'ridges') return;
   for (let k = 0; k < TILES; k++) {
     g.save();
     g.translate((k * w) / TILES, 0);
