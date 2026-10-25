@@ -48,6 +48,7 @@ import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOL
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
 import { DECOR, LIGHT } from './light';
+import { ROOM_SURFACE, propList } from './room';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
@@ -265,6 +266,7 @@ function tellSound(tell: Tell, marks: readonly unknown[]): void {
 }
 // The frame's radius, for the fog that starts at its edge (#399): drawFrame sets it, The Choir plays on radius 3.
 let fogRadius = RADIUS;
+let drawProps: () => void = () => {};
 function applyLook(): void {
   const fog = fogSettings(tier, clear, view, fogRadius);
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
@@ -273,6 +275,7 @@ function applyLook(): void {
   renderer.shadowMap.type = shadowConf.soft ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
+  drawProps();
   if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
   else delete document.documentElement.dataset.motion;
 }
@@ -653,7 +656,41 @@ const rim = {
 };
 rim.near.receiveShadow = true;
 rim.far.receiveShadow = true;
-scene.add(plate, rim.near, rim.far);
+
+// The surrounding deck table (#470): grounds the board in the derelict hauler room, replaces empty black void.
+const roomMaterial = new THREE.MeshStandardMaterial(
+  deckAlbedo && deckRoughness
+    ? { map: deckAlbedo, roughnessMap: deckRoughness, color: ROOM_SURFACE.color, fog: false }
+    : { color: ROOM_SURFACE.color, roughness: ROOM_SURFACE.roughness, fog: false },
+);
+const roomDeck = new THREE.Mesh(
+  new THREE.BoxGeometry(ROOM_SURFACE.width, 0.4, ROOM_SURFACE.depth),
+  roomMaterial,
+);
+roomDeck.position.set(0, ROOM_SURFACE.y - 0.2, 0);
+roomDeck.receiveShadow = true;
+
+// Derelict hauler props sitting around the table (#470)
+const propsGroup = new THREE.Group();
+drawProps = (): void => {
+  propsGroup.clear();
+  for (const def of propList(tier)) {
+    const mat = new THREE.MeshStandardMaterial({ color: def.color, roughness: def.roughness, fog: false });
+    const geom =
+      def.type === 'cylinder'
+        ? new THREE.CylinderGeometry(def.size[0], def.size[0], def.size[1], def.size[2])
+        : new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]);
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(...def.position);
+    mesh.rotation.set(...def.rotation);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    propsGroup.add(mesh);
+  }
+}
+drawProps();
+
+scene.add(roomDeck, propsGroup, plate, rim.near, rim.far);
 let frame: FrameShape | null = null;
 // The shape lies on the x z plane: shape y is -z once turned up, extruded from the top down.
 const flat = (points: Point[]): THREE.Vector2[] => points.map((p) => new THREE.Vector2(p.x, -p.z));
