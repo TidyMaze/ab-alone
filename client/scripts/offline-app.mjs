@@ -2,7 +2,8 @@
 // bundled as a classic script, with the URL of every built file to precache (hashed JS, CSS and wasm, the textures,
 // the icons, the manifest, the page), a cache name hashed from their content, and the Google Fonts stylesheets the
 // page links to (#221). Not in the dev server.
-// Plain Node, no dependency. The pure parts are in src/offline.ts, the whole step is covered by e2e/offline.spec.ts.
+// Plain Node, no dependency. The pure parts are in src/offline.ts. offline-app.test.ts checks the build it starts,
+// e2e/offline.spec.ts the whole step.
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';

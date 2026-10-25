@@ -1,5 +1,5 @@
-// IndexedDB behind the KeyStore interface, see docs/specs/tech.md section 8. Browser only: the unit tests
-// use memoryStore, the e2e tests (resume.spec.ts) cover this file in a real browser. Nothing leaves the browser.
+// IndexedDB behind the KeyStore interface, see docs/specs/tech.md section 8. idb.test.ts runs it on fake-indexeddb,
+// the e2e test resume.spec.ts in a real browser. Nothing leaves the browser.
 
 import type { KeyStore } from './savegame';
 
