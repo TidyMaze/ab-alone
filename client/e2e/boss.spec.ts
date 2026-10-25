@@ -53,20 +53,24 @@ const tellCues = (page: Page) => page.evaluate(() => (window as any).__tellCues(
 // of the drawn crack against the steel under it. A point whose pixel does not change is hidden (by a shell, a tick, the
 // bevel) and left out. The page draws at half the pixel ratio under automation, so most crack pixels are mixed with
 // the steel: the check counts the points where the crack is fully drawn and reads 3:1. Returns how many points show
-// and how many of them reach 3:1.
-const crackContrast = async (page: Page, [q, r]: [number, number]): Promise<{ shown: number; reading: number }> => {
+// and how many of them reach 3:1. `path` keeps the screenshot with the decal shown, for the report (#431).
+const crackContrast = async (
+  page: Page,
+  [q, r]: [number, number],
+  path?: string,
+): Promise<{ shown: number; reading: number }> => {
   await page.mouse.move(2, 2); // no hover ghost
   await freshDraw(page); // a draw since the last change
-  const shown = await page.screenshot();
+  const shown = await page.screenshot({ path });
   await page.evaluate(() => (window as any).__crackDecalShown(false));
   let hidden = shown;
   for (let n = 0; n < 50 && hidden.equals(shown); n++) {
     await freshDraw(page);
     hidden = await page.screenshot();
   }
-  await page.evaluate(() => (window as any).__crackDecalShown(true));
   const pairs: [RGB, RGB][] = await page.evaluate(
     async ([a, b, cq, cr]) => {
+      (window as any).__crackDecalShown(true); // shown again, in the same call to the page (#431)
       const pixels = async (src: string) => {
         const img = new Image();
         img.src = src;
@@ -223,16 +227,19 @@ for (const tier of ['high', 'low']) {
     await page.setViewportSize({ width: 1280, height: 720 }); // the contrast check's window, as contrast.spec.ts
     await startHull(page, tier);
     expect(await page.evaluate(() => (window as any).__playTurns(4, [4, 2]))).toBe(4); // the forward moves to the crack
-    await expect(body).toHaveAttribute('data-cracks', '1');
-    const decals: [number, number][] = await page.evaluate(() => (window as any).__crackDecals());
-    expect(decals).toEqual((await page.evaluate(() => (window as any).__cracks())).map((c: any) => c.cell));
+    // The decals and the cracked cells in one call to the page (#431): one crack, which wears the decal.
+    const { decals, cracks } = await page.evaluate(() => {
+      const w = window as any;
+      return { decals: w.__crackDecals() as [number, number][], cracks: w.__cracks().map((c: any) => c.cell) };
+    });
+    expect(cracks).toHaveLength(1);
+    expect(decals).toEqual(cracks);
     await page.getByRole('button', { name: 'Clear board', includeHidden: true }).dispatchEvent('click');
     await expect(body).toHaveAttribute('data-clear', 'on');
     expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual(decals);
-    const clear = await crackContrast(page, decals[0]!);
+    const clear = await crackContrast(page, decals[0]!, testInfo.outputPath('hull-cracked-clear.png'));
     expect(clear.shown).toBeGreaterThan(20);
     expect(clear.reading).toBeGreaterThanOrEqual(5);
-    await page.screenshot({ path: testInfo.outputPath('hull-cracked-clear.png') });
   });
 }
 
