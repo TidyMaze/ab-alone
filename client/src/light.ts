@@ -1,7 +1,18 @@
 // Scene light values (docs/specs/world.md section 5). Data only: main.ts builds the three.js lights from them.
 export const LIGHT = {
   ambient: { color: 0xffffff, intensity: 0.25 },
-  key: { color: 0xd9822b, intensity: 6, position: [-4, 10, 5] as const },
+  key: {
+    color: 0xd9822b,
+    intensity: 6,
+    position: [-4, 10, 5] as const,
+    // Contact shadows (#459): soft shadows cast onto the board, cells and frame.
+    shadow: {
+      mapSize: 1024,
+      camera: { near: 1, far: 25, bounds: 7 },
+      bias: -0.0005,
+      normalBias: 0.02,
+    },
+  },
   exposure: 1,
   // Reflections (#376): the prefiltered room (RoomEnvironment) as the marbles' envMap only, low so the key stays the base.
   // glass: the smoked glass is dark, so its reflection lifts it toward the deck; kept low for the 3:1 of #344.

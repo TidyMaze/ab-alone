@@ -18,4 +18,16 @@ describe('contrast', () => {
     // 10/255 is below the knee: 10/255 / 12.92 after linearising.
     expect(relativeLuminance([10, 10, 10])).toBeCloseTo(10 / 255 / 12.92, 9);
   });
+
+  test('cell edge bevel and marks preserve >= 3:1 contrast against shadowed deck (#459)', () => {
+    // Bevel has emissive 0x25292d and steel highlight 0xc4cacf
+    const bevelRgb: [number, number, number] = [0xc4, 0xca, 0xcf];
+    // Under shadow, deck steel (0x4a5258) receives ambient fill (~0.25)
+    const shadowDeckRgb: [number, number, number] = [
+      Math.round(0x4a * 0.25),
+      Math.round(0x52 * 0.25),
+      Math.round(0x58 * 0.25),
+    ];
+    expect(contrastRatio(bevelRgb, shadowDeckRgb)).toBeGreaterThanOrEqual(3.0);
+  });
 });

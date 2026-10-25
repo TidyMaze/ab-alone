@@ -20,6 +20,8 @@ import {
   readTier,
   readUiScale,
   tierFromHints,
+  isAutomation,
+  shadowSettings,
   writeClearBoard,
   writeGlassSkin,
   writePalette,
@@ -402,5 +404,30 @@ describe('drawDue', () => {
   it('waits four times a slow draw under automation, so software WebGL leaves the CPU to the input', () => {
     expect(drawDue(1799, 1000, 200, true)).toBe(false);
     expect(drawDue(1800, 1000, 200, true)).toBe(true);
+  });
+});
+
+describe('isAutomation and shadowSettings (#459)', () => {
+  it('identifies automation from webdriver flag', () => {
+    expect(isAutomation(true)).toBe(true);
+    expect(isAutomation(false)).toBe(false);
+  });
+
+  it('disables shadows under low tier', () => {
+    expect(shadowSettings('low', false)).toEqual({ enabled: false, soft: false });
+  });
+
+  it('disables shadows under automation to save software WebGL', () => {
+    expect(shadowSettings('high', true)).toEqual({ enabled: false, soft: false });
+    expect(shadowSettings('low', true)).toEqual({ enabled: false, soft: false });
+  });
+
+  it('enables soft shadows under high tier for players', () => {
+    expect(shadowSettings('high', false)).toEqual({ enabled: true, soft: true });
+  });
+
+  it('allows forcing shadows on under automation for testing/screenshots', () => {
+    expect(shadowSettings('low', true, true)).toEqual({ enabled: true, soft: true });
+    expect(shadowSettings('high', true, true)).toEqual({ enabled: true, soft: true });
   });
 });

@@ -14,6 +14,15 @@ describe('scene light (world.md section 5)', () => {
     expect(LIGHT.key.position[1]).toBeGreaterThan(0);
   });
 
+  it('the key shadow settings cover the whole board with soft contact shadows (#459)', () => {
+    expect(LIGHT.key.shadow.mapSize).toBeGreaterThanOrEqual(1024);
+    expect(LIGHT.key.shadow.camera.bounds).toBeGreaterThanOrEqual(6); // board radius ~4.3
+    expect(LIGHT.key.shadow.camera.near).toBeGreaterThan(0);
+    expect(LIGHT.key.shadow.camera.far).toBeGreaterThan(20);
+    expect(LIGHT.key.shadow.bias).toBeLessThan(0); // avoids shadow acne
+    expect(LIGHT.key.shadow.normalBias).toBeGreaterThan(0);
+  });
+
   it('exposure keeps the white marble below clipping', () => {
     expect(LIGHT.exposure).toBeGreaterThan(0);
     expect(LIGHT.exposure).toBeLessThanOrEqual(1);

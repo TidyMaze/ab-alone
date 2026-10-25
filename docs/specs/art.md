@@ -24,9 +24,10 @@ and no new look: each rule names its source (section numbers), and changes when 
   Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
   its own angle, seeded, so the set never lines up and a game always looks the same.
 - **Light** (world.md 5). Low-key: one hard source per deck, a dim cyan fill from the player's
-  marbles, slow and rare flicker. Every cell and marble stays legible: cell edge 3:1, each marble
-  3:1 on the deck (#344). The deck steel is lit to a mid-tone so the black shell stands out, the
-  frame's plate stays dark.
+  marbles, slow and rare flicker. Soft contact shadows ground marbles onto the deck cells and frame
+  (#459), disabled under low quality tier and automation to save software WebGL. Every cell and
+  marble stays legible: cell edge 3:1, each marble 3:1 on the deck (#344). The deck steel is lit to
+  a mid-tone so the black shell stands out, the frame's plate stays dark.
 - **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold,
   steel and ore dust (online, The Hull). Furnace: orange glow, steam (The Choir). Chapel: candles,
   wood and wire (The Chaplain). Bridge: cold white, too clean (The Ballast Mind). Fog thickens

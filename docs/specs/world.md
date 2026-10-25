@@ -94,8 +94,10 @@ Red is reserved for danger (breach, ejection warning). Nothing saturated outside
 dust. PBR textures, no emissive surfaces except lights, screens and marbles.
 
 **Lighting.** Low-key. Mostly one hard source per deck (practical lamp, vent glow, screen), plus
-a dim cyan fill from the player marbles. Flicker is slow and rare (see photosensitivity,
-section 8). Shadows stay readable: cells and marbles must stay legible in every lighting state.
+a dim cyan fill from the player marbles. Soft contact shadows ground the marbles onto the cells
+and frame (#459), disabled under low quality tier and automation to save software WebGL. Flicker
+is slow and rare (see photosensitivity, section 8). Shadows stay readable: cells and marbles must
+stay legible in every lighting state.
 
 **Fog.** Volumetric or screen-space haze, denser at the edges of the board, never over the cells.
 Clear-board mode removes it.

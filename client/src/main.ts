@@ -52,6 +52,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import {
   drawDue,
   fogSettings,
+  isAutomation,
+  shadowSettings,
   readClearBoard,
   readFlatHud,
   readFps,
@@ -216,6 +218,9 @@ const tier = readTier(store, {
 });
 diag.log.log('info', 'start', { backend, tier });
 let clear = readClearBoard(store);
+const forceShadows =
+  new URLSearchParams(location.search).get('shadows') === 'on' ||
+  new URLSearchParams(location.search).get('shadows') === '1';
 // The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
 let theme: Theme = readTheme(store);
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts
@@ -263,6 +268,9 @@ let fogRadius = RADIUS;
 function applyLook(): void {
   const fog = fogSettings(tier, clear, view, fogRadius);
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
+  const shadowConf = shadowSettings(tier, isAutomation(navigator.webdriver), forceShadows);
+  renderer.shadowMap.enabled = shadowConf.enabled;
+  renderer.shadowMap.type = shadowConf.soft ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
   if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
@@ -439,6 +447,17 @@ for (const type of ['pointerdown', 'pointerup', 'keydown']) addEventListener(typ
 scene.add(new THREE.AmbientLight(LIGHT.ambient.color, LIGHT.ambient.intensity));
 const lamp = new THREE.DirectionalLight(LIGHT.key.color, LIGHT.key.intensity);
 lamp.position.set(...LIGHT.key.position);
+lamp.castShadow = true;
+lamp.shadow.mapSize.set(LIGHT.key.shadow.mapSize, LIGHT.key.shadow.mapSize);
+lamp.shadow.camera.near = LIGHT.key.shadow.camera.near;
+lamp.shadow.camera.far = LIGHT.key.shadow.camera.far;
+const shadowBound = LIGHT.key.shadow.camera.bounds;
+lamp.shadow.camera.left = -shadowBound;
+lamp.shadow.camera.right = shadowBound;
+lamp.shadow.camera.top = shadowBound;
+lamp.shadow.camera.bottom = -shadowBound;
+lamp.shadow.bias = LIGHT.key.shadow.bias;
+lamp.shadow.normalBias = LIGHT.key.shadow.normalBias;
 scene.add(lamp);
 // Accents (#376): a cold rim from behind, a small warm point at the lamp's side. Weaker than the key.
 const coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
@@ -541,6 +560,7 @@ const glassOf = (): number => glassSide({ online: online !== null, bot: worker !
 function marbleMesh(side: number, looks = marbleMaterials, core = coreMaterial): THREE.Mesh {
   const glass = side === glassOf();
   const mesh = new THREE.Mesh(marbleGeometry, looks[glass ? 2 : 1]);
+  mesh.castShadow = looks === marbleMaterials;
   if (glass) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
   return mesh;
 }
@@ -586,6 +606,7 @@ const edgeGeometry = new THREE.TorusGeometry(0.44, 0.03, 8, 32).rotateX(Math.PI 
 const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x25292d });
 const discs: THREE.Mesh[] = CELLS.map(([q, r], i) => {
   const disc = new THREE.Mesh(discGeometry, steel);
+  disc.receiveShadow = true;
   disc.rotation.y = cellTurn(i);
   const bevel = new THREE.Mesh(edgeGeometry, edgeMaterial);
   bevel.position.y = 0.05; // the disc's top face, so the bevel is not buried in the disc
@@ -610,10 +631,13 @@ const rimMaterial = new THREE.MeshStandardMaterial(
     : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 0.6 },
 ); // the turn light keeps some of the steel under it
 const plate = new THREE.Mesh(new THREE.BufferGeometry(), plateMaterial);
+plate.receiveShadow = true;
 const rim = {
   near: new THREE.Mesh(new THREE.BufferGeometry(), rimMaterial),
   far: new THREE.Mesh(new THREE.BufferGeometry(), rimMaterial.clone()),
 };
+rim.near.receiveShadow = true;
+rim.far.receiveShadow = true;
 scene.add(plate, rim.near, rim.far);
 let frame: FrameShape | null = null;
 // The shape lies on the x z plane: shape y is -z once turned up, extruded from the top down.
