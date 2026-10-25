@@ -205,21 +205,25 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, #150', as
   expect(previewed).toBe(true);
 });
 
-// The same fight, a converted marble keeps its own look (#326): its cap reads 3:1 against its shell.
+// The same fight, a converted marble keeps its own look (#326): its cap reads 3:1 against its shell. The conversion comes
+// on the 18th boss turn for every seed: the first 17 turns are one __playTurns call (#349), the 18th is two real clicks.
 test('start The Chaplain: a converted marble keeps its look, #150', async ({ page }, testInfo) => {
   await startChaplain(page);
-  let converted = false;
-  for (let n = 1; n <= 20 && !converted; n++) {
-    await playChaplainTurn(page, n);
-    if ((await page.locator('body').getAttribute('data-converted')) !== '0') {
-      await expect(page.locator('#hud')).toContainText('Converted:');
-      await page.screenshot({ path: testInfo.outputPath('chaplain-converted.png') });
-      const cells = await page.evaluate(() => (window as any).__converted());
-      for (const c of await topContrasts(page, cells)) expect(c).toBeGreaterThanOrEqual(3); // its cap reads (#326)
-      converted = true;
-    }
+  expect(await page.evaluate(() => (window as any).__playTurns(17, [4, 2]))).toBe(17);
+  await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(34);
+  await expect(page.locator('body')).toHaveAttribute('data-converted', '0');
+  const mv = await chaplainMove(page, 'forward');
+  const [q, r] = mv.cells[0];
+  for (const [cq, cr] of [[q, r], [mv.dir === 4 ? q : q + 1, r - 1]]) {
+    const p = await cellScreen(page, cq, cr);
+    await page.mouse.click(p.x, p.y);
   }
-  expect(converted).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(36); // the boss replied
+  await expect(page.locator('body')).not.toHaveAttribute('data-converted', '0');
+  await expect(page.locator('#hud')).toContainText('Converted:');
+  await page.screenshot({ path: testInfo.outputPath('chaplain-converted.png') });
+  const cells = await page.evaluate(() => (window as any).__converted());
+  for (const c of await topContrasts(page, cells)) expect(c).toBeGreaterThanOrEqual(3); // its cap reads (#326)
 });
 
 // Bug #299: a boss turn whose flip costs the boss a marble lost to the void (#207), while its move pushes nothing
