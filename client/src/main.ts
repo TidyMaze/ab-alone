@@ -303,8 +303,14 @@ const armyGlyphs = [
   new THREE.BoxGeometry(0.13, 0.13, 0.13),
 ];
 
+// The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
+const edgeGeometry = new THREE.TorusGeometry(0.44, 0.03, 8, 32).rotateX(Math.PI / 2);
+const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x25292d });
 const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
   const disc = new THREE.Mesh(discGeometry, steel);
+  const bevel = new THREE.Mesh(edgeGeometry, edgeMaterial);
+  bevel.position.y = 0.05; // the disc's top face, so the bevel is not buried in the disc
+  disc.add(bevel);
   const p = axialTo3D(q, r);
   disc.position.set(p.x, -0.05, p.z);
   disc.updateMatrixWorld(); // picking can run before the first render computes it (#237)
