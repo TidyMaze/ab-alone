@@ -19,6 +19,7 @@ export type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 
 const TIER_KEY = 'ab-alone.quality';
 const CLEAR_KEY = 'ab-alone.clear-board';
+const FPS_KEY = 'ab-alone.fps';
 const SOUND_KEY = 'ab-alone.sound';
 const THEME_KEY = 'ab-alone.theme';
 const SKIN_KEY = 'ab-alone.shell-skin';
@@ -65,6 +66,9 @@ export function write(store: Store, key: string, value: string): void {
 }
 
 export const readClearBoard = (store: Store): boolean => read(store, CLEAR_KEY) === 'on';
+// The FPS readout (#426): off unless the player switched it on in the settings menu.
+export const readFps = (store: Store): boolean => read(store, FPS_KEY) === 'on';
+export const writeFps = (store: Store, on: boolean): void => write(store, FPS_KEY, on ? 'on' : 'off');
 export const writeClearBoard = (store: Store, on: boolean): void => write(store, CLEAR_KEY, on ? 'on' : 'off');
 // The one sound on/off toggle until the mix sliders of #60: on unless the player turned it off.
 export const readSound = (store: Store): boolean => read(store, SOUND_KEY) !== 'off';

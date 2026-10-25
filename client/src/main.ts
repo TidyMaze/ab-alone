@@ -45,12 +45,14 @@ import { drawSkin } from './skinart';
 import { nextSkin, skinById } from './skins';
 import { menuOpen, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
+import { fpsOf, keepWindow } from './fps';
 import { DECOR, LIGHT } from './light';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
   fogSettings,
   readClearBoard,
+  readFps,
   readSafeMode,
   readSkin,
   readSound,
@@ -59,6 +61,7 @@ import {
   readUiScale,
   renderPixelRatio,
   writeClearBoard,
+  writeFps,
   writeSafeMode,
   writeSkin,
   writeSound,
@@ -200,6 +203,10 @@ let clear = readClearBoard(store);
 // The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
 let theme: Theme = readTheme(store);
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts
+// The FPS readout (#426): off by default. Off, the frame loop only checks the flag; on, it keeps the last frame stamps.
+let fpsOn = readFps(store);
+let fpsStamps: number[] = [];
+let lastFps = 0;
 function applyTheme(): void {
   const value = themeAttribute(theme);
   if (value) document.documentElement.dataset.theme = value;
@@ -296,6 +303,26 @@ for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe
   });
 }
 paintMenu();
+// The FPS switch (#426) is a second button in the Clear board item's group: no row of its own, so the menu keeps its height.
+const fpsBox = document.getElementById('fps') as HTMLDivElement;
+const fpsButton = document.createElement('button');
+fpsButton.id = 'setting-fps';
+fpsButton.type = 'button';
+fpsButton.textContent = 'FPS';
+fpsButton.setAttribute('aria-pressed', String(fpsOn));
+const clearRow = document.getElementById('setting-clear-board')!;
+const clearGroup = document.createElement('div');
+clearGroup.className = 'setting-group';
+clearRow.replaceWith(clearGroup);
+clearGroup.append(clearRow, fpsButton);
+fpsBox.hidden = !fpsOn;
+fpsButton.addEventListener('click', () => {
+  fpsOn = !fpsOn;
+  writeFps(store, fpsOn);
+  fpsBox.hidden = !fpsOn;
+  fpsStamps = [];
+  fpsButton.setAttribute('aria-pressed', String(fpsOn));
+});
 applyView(); // camera and fog
 let menuIsOpen = false;
 const moveMenu = (event: MenuEvent): void => {
@@ -1567,7 +1594,7 @@ copyButton.addEventListener('click', async () => {
   const text = diag.text({
     build: __BUILD__,
     exported: new Date().toISOString(),
-    environment: { mode: import.meta.env.MODE, backend, tier, userAgent: navigator.userAgent },
+    environment: { mode: import.meta.env.MODE, backend, tier, userAgent: navigator.userAgent, fps: fpsOn ? lastFps : null },
     game: gameInfo({
       bot: worker !== null,
       fight,
@@ -1606,6 +1633,11 @@ let draws = 0;
 // Used by the browser checks to wait for a draw: under automation the loop skips frames (#216), so a frame is not a draw (#365).
 (window as unknown as Record<string, unknown>).__draws = () => draws;
 renderer.setAnimationLoop((now) => {
+  if (fpsOn) {
+    fpsStamps = keepWindow(fpsStamps, now);
+    lastFps = fpsOf(fpsStamps);
+    fpsBox.textContent = `${lastFps} FPS`;
+  }
   animateSlides(now);
   animateEjections(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, navigator.webdriver)) return;

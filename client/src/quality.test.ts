@@ -6,6 +6,8 @@ import {
   drawDue,
   fogSettings,
   readClearBoard,
+  readFps,
+  writeFps,
   renderPixelRatio,
   readSafeMode,
   readSound,
@@ -144,6 +146,22 @@ describe('theme storage: System unless the player picked Dark or Light', () => {
     expect(readTheme(null)).toBe('system');
     expect(() => writeTheme(throwing, 'dark')).not.toThrow();
     expect(() => writeTheme(null, 'dark')).not.toThrow();
+  });
+});
+
+describe('FPS readout storage (#426)', () => {
+  it('is off by default, and off when storage throws or is missing', () => {
+    expect(readFps(memoryStorage())).toBe(false);
+    expect(readFps(throwing)).toBe(false);
+    expect(readFps(null)).toBe(false);
+  });
+  it('writes then reads back, and a blocked write does not throw', () => {
+    const s = memoryStorage();
+    writeFps(s, true);
+    expect(readFps(s)).toBe(true);
+    writeFps(s, false);
+    expect(readFps(s)).toBe(false);
+    expect(() => writeFps(throwing, true)).not.toThrow();
   });
 });
 
