@@ -148,8 +148,10 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
    go dark, so it scales to 6 players (a compact arc per seat on the arena rim).
 4. Boss phase notches and tell countdown: notches scratched on the arena frame, one per boss
    marble left until the next phase (lit while remaining, extinguished as they go), a steady
-   glyph marks the next-phase threshold. The tell countdown is a count of engraved ticks next
-   to the telegraphed move. Flat fallback exists but is never the only copy of this info.
+   glyph marks the next-phase threshold. They sit on the near side of the rim, where no marble
+   hides them: a dark groove each, filled bone-white while lit (#356). The tell countdown is a
+   count of engraved ticks next to the telegraphed move. Flat fallback exists but is never the
+   only copy of this info.
 5. Selection and legal directions: ghost marbles and arrow glyphs on the board surface.
 6. Menus and settings: a terminal screen in the scene, not a floating panel.
 7. Tally speaks for system notices, short text on a panel for the same notice.
