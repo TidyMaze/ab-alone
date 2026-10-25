@@ -141,7 +141,17 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #hud .boss .tell { margin-top: 0.25rem; font-size: 0.875rem; color: var(--hazard); }
 #hud .boss .goal { margin-top: 0.25rem; font-size: 0.875rem; }
 #hud .boss .daily { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
-#hud .tally { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
+#hud .tally {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  animation: tally-fade 1s ease-out 4s forwards;
+}
+
+@keyframes tally-fade {
+  from { opacity: 1; }
+  to { opacity: 0; max-height: 0; margin-top: 0; padding: 0; overflow: hidden; }
+}
 /* The flat HUD fallback (#391): every game-critical value as text, one line each, under the rest of the plate. */
 #hud .flat { margin-top: 0.25rem; padding-top: 0.25rem; border-top: 1px solid var(--edge); font-size: 0.875rem; }
 /* Daily result card (#196), under Retry at the end of a daily fight: the text as it is copied, then Copy. */
@@ -256,7 +266,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #hud .turn { font-size: 1.25rem; }
   /* The end of a daily fight adds the daily, result and score lines: tighter lines keep the plate short (#271). */
   #hud { line-height: 1.3; }
-  #hud .pips { margin: 0.25rem 0; }
+  #hud .pips { display: none; }
   #hud .boss { margin-top: 0.25rem; }
   #hud .boss .goal, #hud .boss .daily { font-size: 0.75rem; }
 }
@@ -265,6 +275,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 @media (orientation: landscape) and (max-height: 500px) {
   #hud { max-width: max(8rem, 50vw - 45vh - 1.5rem); }
   #hud .turn { font-size: 1.125rem; }
+  #hud .pips { display: none; }
 }
 
 /* Held upright the plate may span the window, so its score line stays on one line and the button rows under it
