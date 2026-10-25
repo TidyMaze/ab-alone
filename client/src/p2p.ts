@@ -1,6 +1,5 @@
-// Transports that touch the outside world. Out of the coverage gate: the e2e test drives the hook transport,
-// and the Trystero one needs real public relays and a second browser (see the PR body). Its peer
-// bookkeeping is unit tested on a mocked room (p2p.test.ts).
+// Transports that touch the outside world: the hook transport the e2e test drives, and Trystero over public
+// relays. p2p.test.ts tests both, Trystero on a mocked room.
 import { joinRoom } from 'trystero/nostr';
 import type { Wire } from './moverecord';
 import type { ConnectionState, Transport } from './transport';

@@ -35,8 +35,8 @@ export function toMarkdown(times: TestTime[]): string {
   return ['| # | Test | Duration |', '|---|---|---|', ...rows].join('\n');
 }
 
-if (import.meta.main) {
-  const file = process.argv[2] ?? 'e2e-results.json';
+/** The script: prints the table of the report in `file`, or says there is none and exits 0. */
+export function main(file: string): void {
   let report: { suites: Suite[] };
   try {
     report = JSON.parse(readFileSync(file, 'utf8'));
@@ -46,3 +46,6 @@ if (import.meta.main) {
   }
   console.log(toMarkdown(slowestTests(report, 10)));
 }
+
+// Run as a script: the same check as the asset generators, which a test can make true (import.meta.main it cannot).
+if (import.meta.url === `file://${process.argv[1]}`) main(process.argv[2] ?? 'e2e-results.json');

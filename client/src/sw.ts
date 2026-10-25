@@ -1,6 +1,6 @@
 // The service worker of the offline app (#193). scripts/offline-app.mjs builds it into sw.js after the production
 // build, with the precache list, the cache name and the font stylesheets of that build. Thin glue over offline.ts,
-// covered by the Playwright offline test.
+// tested on a fake worker scope (sw.test.ts) and by the Playwright offline test.
 import { fontFiles, olderCaches, route, staleCaches, type Route } from './offline';
 
 declare const __PRECACHE__: string[];

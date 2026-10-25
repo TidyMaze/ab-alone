@@ -1,0 +1,198 @@
+// A harness that runs the whole page, src/main.ts, in vitest under jsdom (decision #445): the test file starts with
+// `// @vitest-environment jsdom`, then `const game = await boot('?bot=off')` loads index.html's body and imports a
+// fresh main.ts on the real wasm engine. What jsdom lacks is stubbed: the three.js renderer (no WebGL or WebGPU, the
+// scene graph stays real), the texture loader, canvas 2D, matchMedia, IndexedDB (fake-indexeddb), the bot workers
+// (the worker's answer() runs in-process), the Trystero transport (one end of a localPair) and the clock of the
+// animation loop (game.frame), and Web Audio on demand (the fake of src/test/audio.ts). Everything is undone when the
+// test ends.
+import { IDBFactory } from 'fake-indexeddb';
+import { onTestFinished, vi } from 'vitest';
+import page from '../../index.html?raw';
+import type { BotRequest, BotResponse } from '../bot';
+import type { Transport } from '../transport';
+import { FakeContext } from './audio';
+
+export interface BootOptions {
+  /** navigator.webdriver, true by default as under Playwright: `?nodes=` sets the bot's budget, `__playTurns` exists. */
+  webdriver?: boolean;
+  /** The IndexedDB the page opens, a fresh one by default. Pass the same one to two boots to reload a saved game. */
+  indexedDB?: IDBFactory;
+  /** The system's prefers-reduced-motion. */
+  reducedMotion?: boolean;
+  /** A fake AudioContext (src/test/audio.ts), read back with `game.hook('__audio')`; none by default, as in a browser
+   * without Web Audio. */
+  audio?: boolean;
+}
+
+export interface Game {
+  /** Calls a window hook main.ts sets for the browser checks (`__legal`, `__rings`, `__plies`, ...), which must exist. */
+  hook<T = unknown>(name: string, ...args: unknown[]): T;
+  /** Plays a click on a cell by its axial coordinates, as `__click` does (no raycast). */
+  click(q: number, r: number): void;
+  /** The whole HUD plate as text, and its turn line alone. */
+  hud(): string;
+  turn(): string;
+  /** Presses the cog of the settings menu, or the button of the mode menu. */
+  openSettings(): void;
+  openModes(): void;
+  /** Moves the clock `ms` on and runs one frame of the animation loop: slides and ejections advance. */
+  frame(ms?: number): void;
+  /** Lets the pending tasks run: the bot workers' replies, IndexedDB. */
+  settle(): Promise<void>;
+  /** The three.js scenes drawn so far. */
+  draws(): number;
+  /** The other end of the online room once the page goes online (Play online, an invite link), else null. */
+  peer(): Transport | null;
+  /** The room the page went online in, else null. */
+  room(): string | null;
+}
+
+const body = /<body>([\s\S]*)<\/body>/.exec(page)![1]!;
+// Taken before any boot wraps them: a second boot in the same test (a reload) wraps these, not the first wrappers.
+const addListener = window.addEventListener.bind(window);
+const every = setInterval;
+
+// Canvas 2D (the skins, skinart.ts) draws into nothing: every property and call of the context is a no-op.
+const nothing: unknown = new Proxy(() => nothing, { get: () => nothing, set: () => true, apply: () => nothing });
+
+/** Loads index.html and a fresh main.ts at `url` (a path, a query and a hash, for example `?bot=off`). */
+export async function boot(url = '/', options: BootOptions = {}): Promise<Game> {
+  const { webdriver = true, reducedMotion = false } = options;
+  const undo: (() => void)[] = [];
+  onTestFinished(() => {
+    for (const fn of undo.reverse()) fn();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.doUnmock('three/webgpu');
+    vi.doUnmock('abalone-wasm');
+    vi.doUnmock('../p2p');
+  });
+
+  // The page: index.html's body, a clean root, no saved settings, the URL.
+  const root = document.documentElement;
+  for (const { name } of [...root.attributes]) if (name !== 'lang') root.removeAttribute(name);
+  document.body.replaceWith(Object.assign(document.createElement('body'), { innerHTML: body }));
+  localStorage.clear();
+  history.replaceState(null, '', new URL(url, location.origin).href);
+  Object.defineProperty(navigator, 'webdriver', { value: webdriver, configurable: true });
+  undo.push(() => Reflect.deleteProperty(navigator, 'webdriver'));
+
+  // The clock of the animation loop, moved by frame() only.
+  let clock = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => clock);
+  vi.spyOn(console, 'info').mockImplementation(() => {}); // the page's diagnostics log (logger.ts)
+
+  vi.stubGlobal('indexedDB', options.indexedDB ?? new IDBFactory());
+  if (options.audio) vi.stubGlobal('AudioContext', FakeContext);
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: reducedMotion && query.includes('reduced-motion'),
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => nothing as RenderingContext);
+  Object.assign(Element.prototype, { setPointerCapture() {}, releasePointerCapture() {} });
+
+  // Window listeners and intervals of this page, removed when the test ends so the next boot starts alone.
+  vi.spyOn(window, 'addEventListener').mockImplementation((type: string, listener, opts) => {
+    addListener(type, listener, opts);
+    undo.push(() => window.removeEventListener(type, listener, opts));
+  });
+  vi.stubGlobal('setInterval', (fn: () => void, ms?: number) => {
+    const id = every(fn, ms);
+    undo.push(() => clearInterval(id));
+    return id;
+  });
+
+  // The renderer draws nothing: it keeps the animation loop for frame() and counts the draws.
+  let loop: ((now: number) => void) | null = null;
+  let draws = 0;
+  vi.resetModules();
+  vi.doMock('abalone-wasm', async (importOriginal) => (await import('./wasm')).nodeWasm(importOriginal as never));
+  vi.doMock('three/webgpu', async (importOriginal) => {
+    const THREE = await importOriginal<typeof import('three/webgpu')>();
+    class WebGPURenderer {
+      domElement = document.createElement('canvas');
+      backend = { isWebGPUBackend: false };
+      shadowMap = { enabled: false, type: 0 };
+      toneMapping = 0;
+      toneMappingExposure = 1;
+      init = async (): Promise<void> => {};
+      setPixelRatio(): void {}
+      setSize(): void {}
+      getMaxAnisotropy = (): number => 1;
+      render(): void {
+        draws++;
+      }
+      setAnimationLoop(fn: ((now: number) => void) | null): void {
+        loop = fn;
+      }
+    }
+    class PMREMGenerator {
+      fromScene = (): { texture: InstanceType<typeof THREE.Texture> } => ({ texture: new THREE.Texture() });
+      dispose(): void {}
+    }
+    class TextureLoader {
+      loadAsync = async (): Promise<InstanceType<typeof THREE.Texture>> => new THREE.Texture();
+    }
+    return { ...THREE, WebGPURenderer, PMREMGenerator, TextureLoader };
+  });
+
+  // The online room: main.ts gets one end of a local pair, the test holds the other.
+  let peer: Transport | null = null;
+  let room: string | null = null;
+  vi.doMock('../p2p', async (importOriginal) => {
+    const { localPair } = await import('../transport');
+    return {
+      ...(await importOriginal<typeof import('../p2p')>()),
+      p2pTransport: (id: string): Transport => {
+        const [mine, theirs] = localPair();
+        [peer, room] = [theirs, id];
+        return mine;
+      },
+    };
+  });
+
+  // The bot workers answer in-process, on the next task, with the page's own engine.
+  const wasm = await import('abalone-wasm');
+  const { answer } = await import('../bot');
+  vi.stubGlobal(
+    'Worker',
+    class {
+      onmessage: ((e: { data: BotResponse }) => void) | null = null;
+      postMessage(req: BotRequest): void {
+        setTimeout(() =>
+          this.onmessage?.({ data: answer(req, () => new wasm.Engine(), (id, seed) => new wasm.Encounter(id, seed)) }),
+        );
+      }
+      terminate(): void {}
+    },
+  );
+
+  await import('../main');
+  const hook = <T>(name: string, ...args: unknown[]): T => {
+    const fn = (window as unknown as Record<string, ((...args: unknown[]) => T) | undefined>)[name];
+    if (!fn) throw new Error(`main.ts sets no ${name} hook`);
+    return fn(...args);
+  };
+  const byId = (id: string): HTMLElement => document.getElementById(id)!;
+  const game: Game = {
+    hook,
+    click: (q, r) => void hook('__click', q, r),
+    hud: () => byId('hud').textContent ?? '',
+    turn: () => byId('hud').querySelector('.turn')?.textContent ?? '',
+    openSettings: () => byId('settings').click(),
+    openModes: () => byId('modes').click(),
+    frame: (ms = 16) => {
+      clock += ms;
+      loop?.(clock);
+    },
+    settle: async () => {
+      for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
+    },
+    draws: () => draws,
+    peer: () => peer,
+    room: () => room,
+  };
+  return game;
+}

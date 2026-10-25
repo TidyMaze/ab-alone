@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain Node script, no type declarations
 import { ASSET_NAMES, SEED, generateAssets } from './gen-assets.mjs';
 
@@ -103,4 +104,28 @@ describe('gen-assets', () => {
     const total = [...generateAssets(SEED).values()].reduce((n, b) => n + b.length, 0);
     expect(total).toBeLessThan(BUDGET_BYTES);
   });
+
+  it('writes every asset file to public/assets/ when run as a script', async () => {
+    const written = new Map<string, Buffer>();
+    vi.doMock('node:fs', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('node:fs')>()),
+      mkdirSync: vi.fn(),
+      writeFileSync: (url: URL, buf: Buffer) => written.set(fileURLToPath(url), buf),
+    }));
+    const log: unknown[][] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((...line) => void log.push(line));
+    const argv = process.argv[1];
+    process.argv[1] = fileURLToPath(new URL('./gen-assets.mjs', import.meta.url)); // as `node scripts/gen-assets.mjs`
+    vi.resetModules();
+    try {
+      await import('./gen-assets.mjs');
+    } finally {
+      process.argv[1] = argv;
+      vi.doUnmock('node:fs');
+      spy.mockRestore();
+    }
+    const dir = fileURLToPath(new URL('../public/assets/', import.meta.url));
+    expect(written).toEqual(new Map([...generateAssets(SEED)].map(([n, b]) => [dir + n, b])));
+    expect(log).toHaveLength(written.size); // one line per file
+  }, 30_000); // draws every file again, seconds on a loaded machine
 });

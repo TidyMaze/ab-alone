@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EJECT_MS, PUSH_MS, VOID_MS } from './eject';
+import { FakeBufferSource, FakeContext, FakeFilter, FakeGain, FakeNode, FakeOscillator } from './test/audio';
 import {
   BUSES,
   CROSSFADE_TAU,
@@ -344,116 +345,6 @@ describe('Sfx.tell, the sound twin of a boss tell', () => {
     expect(ctx.sources.length).toBe(before);
   });
 });
-
-// A fake AudioContext: every node records how it is wired and how its params are automated.
-type Event = [method: string, value: number, time: number];
-class FakeParam {
-  value = 0;
-  events: Event[] = [];
-  setValueAtTime(v: number, t: number) {
-    this.events.push(['set', v, t]);
-  }
-  exponentialRampToValueAtTime(v: number, t: number) {
-    this.events.push(['exp', v, t]);
-  }
-  setTargetAtTime(v: number, t: number, tau: number) {
-    this.events.push(['target', v, t]);
-    expect(tau).toBeGreaterThan(0);
-  }
-}
-class FakeNode {
-  outputs: FakeNode[] = [];
-  connect<T extends FakeNode>(to: T): T {
-    this.outputs.push(to);
-    return to;
-  }
-}
-class FakeGain extends FakeNode {
-  gain = new FakeParam();
-}
-class FakeFilter extends FakeNode {
-  type = '';
-  Q = new FakeParam();
-  frequency = new FakeParam();
-}
-class FakeSource extends FakeNode {
-  times: number[] = [];
-  start(t: number) {
-    this.times.push(t);
-  }
-  stop(t: number) {
-    this.times.push(t);
-  }
-}
-class FakeOscillator extends FakeSource {
-  type = '';
-  frequency = new FakeParam();
-}
-class FakeBufferSource extends FakeSource {
-  buffer: FakeBuffer | null = null;
-  loop = false;
-}
-class FakeBuffer {
-  data: Float32Array;
-  constructor(
-    public channels: number,
-    length: number,
-    public rate: number,
-  ) {
-    this.data = new Float32Array(length);
-  }
-  getChannelData(i: number) {
-    expect(i).toBeLessThan(this.channels);
-    return this.data;
-  }
-}
-class FakeContext {
-  currentTime = 5;
-  sampleRate = 8000;
-  destination = new FakeNode();
-  sources: FakeSource[] = [];
-  gains: FakeGain[] = [];
-  buffers: FakeBuffer[] = [];
-  resumed = 0;
-  rejection: Promise<void> | null = null;
-  constructor(
-    public state: 'suspended' | 'running' = 'running',
-    private failResume = false,
-  ) {}
-  resume() {
-    this.resumed++;
-    if (this.failResume) {
-      this.rejection = Promise.reject(new Error('closed'));
-      vi.spyOn(this.rejection, 'catch');
-      return this.rejection;
-    }
-    this.state = 'running';
-    return Promise.resolve();
-  }
-  createGain() {
-    const g = new FakeGain();
-    this.gains.push(g);
-    return g;
-  }
-  createBiquadFilter() {
-    return new FakeFilter();
-  }
-  createOscillator() {
-    const o = new FakeOscillator();
-    this.sources.push(o);
-    return o;
-  }
-  createBufferSource() {
-    const s = new FakeBufferSource();
-    this.sources.push(s);
-    return s;
-  }
-  createBuffer(channels: number, length: number, rate: number) {
-    const b = new FakeBuffer(channels, length, rate);
-    this.buffers.push(b);
-    return b;
-  }
-}
 
 const FULL: Mix = { music: 100, ambience: 100, effects: 100, voice: 100 };
 const MUTED: Mix = { music: 0, ambience: 0, effects: 0, voice: 0 };

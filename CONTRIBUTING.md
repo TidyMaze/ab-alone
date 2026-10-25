@@ -369,6 +369,16 @@ Below 100 % fails the build. Commands: section 13. The client JS coverage (`bun 
 needs a one-line comment saying why, and the reviewer must accept it (generated code,
 `unreachable!()`).
 
+**`main.ts` in vitest (#447):** `client/src/test/harness.ts` runs the whole page under jsdom. A test file starts
+with `// @vitest-environment jsdom`, then `const game = await boot('?bot=off')` loads `index.html` and a fresh
+`main.ts` on the real wasm engine (build it first, section 13). The renderer, textures, canvas, matchMedia,
+IndexedDB (fake-indexeddb), the bot workers (in-process), the Trystero transport (`game.peer()` is the other end of
+a `localPair`) and the clock are stubbed; `boot` options set `webdriver`, `reducedMotion`, a fake `audio` context and
+the `indexedDB` to share between two boots (a reload). Drive it like an e2e test: `game.click(q, r)`, the page hooks
+through `game.hook('__legal')`, `game.openSettings()`, `game.openModes()`, `game.hud()`, `game.turn()`,
+`game.frame(ms)` to run the animation loop, `await game.settle()` for the bot replies and the saves. Everything is
+undone when the test ends. Example: `client/src/main.test.ts`.
+
 **Bugs:** a bug fix starts with a test that reproduces the bug and fails (section 6.7).
 
 **Browser testing, regularly (Chrome + Playwright):**
@@ -449,9 +459,8 @@ what they import, #254). Not in CI. It resolves Trystero from `client/node_modul
 `client/` first. From `mcp/`, after `bun install`:
 
 - `bun run test`: builds the Node target of the engine into `mcp/engine/` (git-ignored), then
-  vitest with coverage thresholds of 100 % (lines, branches, functions, statements) on `mcp/src/`.
-  `src/main.ts`, the stdio entry point, is still left to the e2e until its unit tests land
-  (decision #445 covers all code).
+  vitest with coverage thresholds of 100 % (lines, branches, functions, statements) on all of `mcp/src/`,
+  the stdio entry point `src/main.ts` included (its test swaps stdio for an in-memory pair).
 - `bunx tsc --noEmit`.
 - `bun run e2e`: a scripted MCP client starts the server over stdio and plays a full game, then two
   servers play each other over real WebRTC: it needs the public Nostr relays (internet).
