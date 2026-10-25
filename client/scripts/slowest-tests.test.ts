@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { slowestTests, toMarkdown } from './slowest-tests';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { main, slowestTests, toMarkdown } from './slowest-tests';
 
 // Shape of Playwright's JSON reporter output, reduced to the fields the script reads.
 const report = {
@@ -44,5 +48,55 @@ describe('toMarkdown', () => {
 
   it('says so when no test ran', () => {
     expect(toMarkdown([])).toBe('No test result in the Playwright report.');
+  });
+});
+
+describe('main', () => {
+  const printed: unknown[] = [];
+  afterEach(() => {
+    printed.length = 0;
+    vi.restoreAllMocks();
+  });
+  const listen = (): void => void vi.spyOn(console, 'log').mockImplementation((line) => void printed.push(line));
+
+  it('prints the table of the report it is given', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'slowest-'));
+    listen();
+    try {
+      writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+      main(join(dir, 'report.json'));
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+    expect(printed).toEqual([toMarkdown(slowestTests(report, 10))]);
+  });
+
+  it('says so and exits 0 without a report: the shard stopped before the tests ran', () => {
+    listen();
+    vi.spyOn(process, 'exit').mockImplementation((code) => {
+      throw new Error(`exit ${code}`);
+    });
+    expect(() => main(join(tmpdir(), 'no-such-report.json'))).toThrow('exit 0');
+    expect(printed).toEqual(['No Playwright JSON report: the shard stopped before the tests ran.']);
+  });
+
+  it('runs on e2e-results.json when started as a script with no argument', async () => {
+    const read: string[] = [];
+    vi.doMock('node:fs', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('node:fs')>()),
+      readFileSync: (file: string) => (read.push(file), JSON.stringify(report)),
+    }));
+    listen();
+    const argv = process.argv.slice();
+    process.argv.splice(1, Infinity, fileURLToPath(new URL('./slowest-tests.ts', import.meta.url))); // as `bun run scripts/slowest-tests.ts`
+    vi.resetModules();
+    try {
+      await import('./slowest-tests');
+    } finally {
+      process.argv.splice(0, Infinity, ...argv);
+      vi.doUnmock('node:fs');
+    }
+    expect(read).toEqual(['e2e-results.json']);
+    expect(printed).toEqual([toMarkdown(slowestTests(report, 10))]);
   });
 });
