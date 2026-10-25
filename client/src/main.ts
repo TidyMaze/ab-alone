@@ -40,7 +40,7 @@ import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
-import { hudHtml } from './hud';
+import { flatHudHtml, hudHtml } from './hud';
 import { drawSkin } from './skinart';
 import { nextSkin, skinById } from './skins';
 import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
@@ -52,6 +52,7 @@ import {
   drawDue,
   fogSettings,
   readClearBoard,
+  readFlatHud,
   readFps,
   readReducedMotion,
   readSafeMode,
@@ -62,6 +63,7 @@ import {
   readUiScale,
   renderPixelRatio,
   writeClearBoard,
+  writeFlatHud,
   writeFps,
   writeReducedMotion,
   writeSafeMode,
@@ -197,6 +199,7 @@ const store = (() => {
 // Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
+let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
 const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
 const tier = readTier(store, {
   width: innerWidth,
@@ -291,9 +294,14 @@ const toggles: Record<string, () => void> = {
     savedMotion = !reducedMotion();
     writeReducedMotion(store, savedMotion);
   },
+  'flat-hud': () => {
+    flatHud = !flatHud;
+    writeFlatHud(store, flatHud);
+    refresh();
+  },
 };
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion())) {
+  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     row.setAttribute('aria-label', label); // held upright only the icon shows (#414): the name stays for screen readers
@@ -301,7 +309,7 @@ const paintMenu = (): void => {
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion())) {
+for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -949,25 +957,31 @@ function hud(extra = ''): void {
   goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
   goalButton.disabled = history.length === 0; // the goal is on the plate until the first move
   goalButton.setAttribute('aria-expanded', String(showGoal));
-  if (engine instanceof Encounter) {
+  const boss = engine instanceof Encounter ? engine : null;
+  const tell = boss
+    ? [crackText(parseCracks(boss.cracks())), chaplainText(exposed, boss.converted().length / 2), choirText(boss.next_army())]
+        .filter((t) => t !== '')
+        .join(' · ')
+    : '';
+  if (boss) {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
       bossHtml({
-        name: engine.name(),
-        phase: engine.phase(),
-        phases: engine.phases(),
-        result: end ? 0 : engine.result(), // the end banner already says Victory or Defeat, one line less in the plate
-        goal: showGoal ? engine.goal() : '',
-        tell: [
-          crackText(parseCracks(engine.cracks())),
-          chaplainText(exposed, engine.converted().length / 2),
-          choirText(engine.next_army()),
-        ]
-          .filter((t) => t !== '')
-          .join(' · '),
+        name: boss.name(),
+        phase: boss.phase(),
+        phases: boss.phases(),
+        result: end ? 0 : boss.result(), // the end banner already says Victory or Defeat, one line less in the plate
+        goal: showGoal ? boss.goal() : '',
+        tell,
         daily: fight?.daily ? dailyLine(fight.daily.day, fight.daily.attempt) : '',
       }),
     );
+  }
+  if (flatHud) {
+    const flat = { phase: boss?.phase() ?? 0, phases: boss?.phases() ?? 0, tell };
+    document
+      .getElementById('hud')!
+      .insertAdjacentHTML('beforeend', flatHudHtml({ side: engine.to_move(), status, glass: glassOf(), ejected, win, boss: boss ? flat : undefined }));
   }
   showResultCard();
 }

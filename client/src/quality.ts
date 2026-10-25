@@ -26,6 +26,7 @@ const SKIN_KEY = 'ab-alone.shell-skin';
 const SAFE_KEY = 'ab-alone.safe-mode';
 const SCALE_KEY = 'ab-alone.ui-scale';
 const MOTION_KEY = 'ab-alone.reduced-motion';
+const FLAT_KEY = 'ab-alone.flat-hud';
 
 export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): Tier {
   const weak = width < 768 || reducedMotion || (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
@@ -95,6 +96,9 @@ export const readReducedMotion = (store: Store): boolean | null => {
   return stored === 'on' ? true : stored === 'off' ? false : null;
 };
 export const writeReducedMotion = (store: Store, on: boolean): void => write(store, MOTION_KEY, on ? 'on' : 'off');
+// The flat HUD fallback (#391): off unless the player turned it on.
+export const readFlatHud = (store: Store): boolean => read(store, FLAT_KEY) === 'on';
+export const writeFlatHud = (store: Store, on: boolean): void => write(store, FLAT_KEY, on ? 'on' : 'off');
 
 // The dark shell skin (#377): Scarab ridges unless the player picked another one of skins.ts.
 export const readSkin = (store: Store): string => skinById(read(store, SKIN_KEY)).id;

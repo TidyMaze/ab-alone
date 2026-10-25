@@ -70,11 +70,12 @@ field covers a cell, and the space between them lets every tap through to the bo
 
 Settings (#277): a cog button, first in the column, opens a menu, one button per item: the toggles Clear board,
 then Reduced motion (#379, see section 6: it follows `prefers-reduced-motion` until pressed, then keeps the player's
-choice), then Sound (#284, the ejection
+choice), then Flat HUD (#391, off by default: the flat HUD fallback of world.md section 6 rule 8, see the Flat HUD
+item below), then Sound (#284, the ejection
 sound, no longer a button of the column; opening the menu and toggling Sound count as
 the first gesture that starts audio), then Theme (#317, System, Dark or Light: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column). Each
 item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG line icons, thin `currentColor`
-strokes, one size) then its label: a fog for Clear board, a ball with speed lines for Reduced motion, a speaker for Sound (crossed out while off), an arrow out
+strokes, one size) then its label: a fog for Clear board, a ball with speed lines for Reduced motion, lines in a box for Flat HUD, a speaker for Sound (crossed out while off), an arrow out
 of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
 or closing it moves no button: under the cog in the column, beside the cog over the first row when the buttons are
 rows. It covers no cell either. Held upright (`orientation: portrait`) each item shows its icon only, a 44 px square,
@@ -127,6 +128,10 @@ in the column, outside the menu.
   Under Reduced motion (section 6) there is no light and no animation: the banner and the dimmed board
   only. No move is accepted and no marble can be selected once over. The score line still carries the
   reason in the HUD's own words ("by 6 ejections", "by threefold repetition").
+- **Flat HUD (#391).** With the Flat HUD setting on, the plate ends with one more block, one line each, built by
+  `flatHudHtml` (`client/src/hud.ts`): "Turn: Black" ("Turn: game over" once over), "Ejected: Black 1/6, White 4/6",
+  and in a boss fight "Boss phase: 2 of 3" and "Tell: " with the tell text and its countdown ("none" without a tell).
+  Off, the block is gone. Strings kept verbatim for the e2e tests.
 - **Online status.** Online games add one line under the turn: the player's own color and
   whether the opponent is connected, updated live (#121). Strings, kept verbatim for the e2e
   tests: "You are Black. Waiting for an opponent..." (room creator alone), "Joining as White..."

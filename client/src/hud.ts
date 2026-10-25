@@ -38,3 +38,22 @@ export function hudHtml({ side, status, glass, score, ejected, win, note, online
     `<small>${note}</small>`
   );
 }
+
+export interface FlatHud {
+  side: number;
+  status: number;
+  glass: number;
+  ejected: readonly [number, number];
+  win: readonly [number, number];
+  boss?: { phase: number; phases: number; tell: string }; // boss fights only: the phase (0 is the first) and the tell text
+}
+
+/** The flat HUD fallback (#391, world.md section 6 rule 8): every game-critical value as text, one line each. */
+export function flatHudHtml({ side, status, glass, ejected, win, boss }: FlatHud): string {
+  const lines = [
+    status === 0 ? `Turn: ${sideName(side, glass)}` : 'Turn: game over',
+    `Ejected: ${sideName(1, glass)} ${ejected[0]}/${win[0]}, ${sideName(2, glass)} ${ejected[1]}/${win[1]}`,
+  ];
+  if (boss) lines.push(`Boss phase: ${boss.phase + 1} of ${boss.phases}`, `Tell: ${boss.tell || 'none'}`);
+  return `<div class="flat">${lines.map((line) => `<div>${line}</div>`).join('')}</div>`;
+}
