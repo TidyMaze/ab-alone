@@ -598,6 +598,17 @@ mod tests {
     }
 
     #[test]
+    fn board_bytes_give_seats_3_to_6_the_codes_4_to_7() {
+        let mut board = Board::empty();
+        board.set(0, -4, Cell::Seat3);
+        board.set(1, -4, Cell::Seat4);
+        board.set(2, -4, Cell::Seat5);
+        board.set(3, -4, Cell::Seat6);
+        board.void(4, -4);
+        assert_eq!(board_bytes(&board)[..6], [4, 5, 6, 7, VANISHED, 0]);
+    }
+
+    #[test]
     fn board_order_is_rows_from_r_minus_4_q_ascending() {
         let cells = Engine::new().board();
         // (0,-4) is White, (0,4) is Black, the centre (0,0) is empty.

@@ -277,6 +277,16 @@ mod tests {
     }
 
     #[test]
+    fn renders_seats_3_to_6_by_their_number() {
+        let mut board = Board::empty();
+        board.set(0, 0, Cell::Seat3);
+        board.set(1, 0, Cell::Seat4);
+        board.set(2, 0, Cell::Seat5);
+        board.set(3, 0, Cell::Seat6);
+        assert_eq!(render(&board).lines().nth(5), Some("e . . . . 3 4 5 6 ."));
+    }
+
+    #[test]
     fn outcome_lines() {
         assert_eq!(outcome_line(Outcome::Win(Player::White)), "Win(White)");
         assert_eq!(outcome_line(Outcome::Win(Player::Black)), "Win(Black)");

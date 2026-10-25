@@ -169,7 +169,7 @@ mod tests {
         match cell {
             Cell::Black => Cell::White,
             Cell::White => Cell::Black,
-            Cell::Empty => Cell::Empty,
+            other => other,
         }
     }
 
@@ -184,13 +184,16 @@ mod tests {
 
     #[test]
     fn with_radius_sizes_the_board() {
-        for (radius, cells) in [(0, 1), (4, 61), (5, 91)] {
+        for (radius, cells) in [(0, 1), (4, 61), (5, 91), (8, 217)] {
             let board = Board::with_radius(radius);
             let on_board = all_coords()
                 .filter(|&(q, r)| board.get(q, r).is_some())
                 .count();
             assert_eq!(on_board, cells, "radius {radius}");
+            assert_eq!(board.radius(), radius);
         }
+        assert_eq!(MAX_RADIUS, 8, "the battle royale arena");
+        assert_eq!(Board::standard().radius(), RADIUS);
         assert_eq!(Board::with_radius(RADIUS), Board::empty());
         assert_eq!(Board::with_radius(5).get(5, -5), Some(Cell::Empty));
         assert_eq!(Board::with_radius(5).get(6, 0), None);
@@ -209,6 +212,19 @@ mod tests {
         let mut board = Board::empty();
         board.set(1, -2, Cell::White);
         assert_eq!(board.get(1, -2), Some(Cell::White));
+    }
+
+    #[test]
+    fn seats_3_to_6_have_their_own_marbles() {
+        let mut board = Board::with_radius(MAX_RADIUS);
+        let seats = [Cell::Seat3, Cell::Seat4, Cell::Seat5, Cell::Seat6];
+        for (i, &seat) in seats.iter().enumerate() {
+            board.set(8 - i as i32, 0, seat);
+        }
+        for (i, &seat) in seats.iter().enumerate() {
+            assert_eq!(board.get(8 - i as i32, 0), Some(seat));
+            assert_eq!(count(&board, seat), 1);
+        }
     }
 
     #[test]

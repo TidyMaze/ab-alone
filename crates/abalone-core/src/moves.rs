@@ -630,6 +630,183 @@ mod tests {
         }
     }
 
+    // Battle royale (rules.md section 10.4): any colour against any other, lead decision on #493.
+    const BK: Cell = Cell::Black;
+    const WH: Cell = Cell::White;
+    const S3: Cell = Cell::Seat3;
+    const S4: Cell = Cell::Seat4;
+    const S5: Cell = Cell::Seat5;
+    const S6: Cell = Cell::Seat6;
+
+    fn arena(marbles: &[(P, Cell)]) -> Board {
+        let mut b = Board::with_radius(MAX_RADIUS);
+        for &((q, r), cell) in marbles {
+            b.set(q, r, cell);
+        }
+        b
+    }
+
+    /// Every marble of `b`, sorted by cell.
+    fn marbles_of(b: &Board) -> Vec<(P, Cell)> {
+        let mut v = Vec::new();
+        for q in -MAX_RADIUS..=MAX_RADIUS {
+            for r in -MAX_RADIUS..=MAX_RADIUS {
+                match b.get(q, r) {
+                    Some(Cell::Empty) | None => {}
+                    Some(cell) => v.push(((q, r), cell)),
+                }
+            }
+        }
+        v
+    }
+
+    #[test]
+    fn sumito_against_any_colour_table() {
+        type Case = (
+            &'static str,
+            &'static [(P, Cell)],
+            Cell,
+            &'static [P],
+            Direction,
+            Result<(&'static [(P, Cell)], bool), MoveError>,
+        );
+        let line = &[(-1, 0), (0, 0), (1, 0)];
+        let cases: &[Case] = &[
+            (
+                "3 pushes a White and a Seat3 into an empty cell",
+                &[
+                    ((-1, 0), BK),
+                    ((0, 0), BK),
+                    ((1, 0), BK),
+                    ((2, 0), WH),
+                    ((3, 0), S3),
+                ],
+                BK,
+                line,
+                E,
+                Ok((
+                    &[
+                        ((0, 0), BK),
+                        ((1, 0), BK),
+                        ((2, 0), BK),
+                        ((3, 0), WH),
+                        ((4, 0), S3),
+                    ],
+                    false,
+                )),
+            ),
+            (
+                "2 cannot push a run of two colours",
+                &[((0, 0), S4), ((1, 0), S4), ((2, 0), WH), ((3, 0), S5)],
+                S4,
+                &[(0, 0), (1, 0)],
+                E,
+                Err(MoveError::NotStrongEnough),
+            ),
+            (
+                "3 cannot push a run of three colours",
+                &[
+                    ((-1, 0), BK),
+                    ((0, 0), BK),
+                    ((1, 0), BK),
+                    ((2, 0), WH),
+                    ((3, 0), S3),
+                    ((4, 0), S6),
+                ],
+                BK,
+                line,
+                E,
+                Err(MoveError::NotStrongEnough),
+            ),
+            (
+                "the mover's own marble behind a mixed run blocks",
+                &[
+                    ((-1, 0), S5),
+                    ((0, 0), S5),
+                    ((1, 0), S5),
+                    ((2, 0), BK),
+                    ((3, 0), S6),
+                    ((4, 0), S5),
+                ],
+                S5,
+                line,
+                E,
+                Err(MoveError::PushBlocked),
+            ),
+            (
+                "a Seat3 pushes a lone Black",
+                &[((0, 0), S3), ((1, 0), S3), ((2, 0), BK)],
+                S3,
+                &[(0, 0), (1, 0)],
+                E,
+                Ok((&[((1, 0), S3), ((2, 0), S3), ((3, 0), BK)], false)),
+            ),
+            (
+                "a mixed run is ejected at the radius 8 rim, its last marble leaves",
+                &[
+                    ((4, 0), S6),
+                    ((5, 0), S6),
+                    ((6, 0), S6),
+                    ((7, 0), S4),
+                    ((8, 0), WH),
+                ],
+                S6,
+                &[(4, 0), (5, 0), (6, 0)],
+                E,
+                Ok((
+                    &[((5, 0), S6), ((6, 0), S6), ((7, 0), S6), ((8, 0), S4)],
+                    true,
+                )),
+            ),
+            (
+                "a broadside onto another colour is blocked",
+                &[((0, 0), S4), ((1, 0), S4), ((0, 1), S6)],
+                S4,
+                &[(0, 0), (1, 0)],
+                SE,
+                Err(MoveError::Blocked),
+            ),
+        ];
+        for &(name, before, own, cells, dir, expected) in cases {
+            let got = apply_for(&arena(before), own, &mv(cells, dir));
+            let got = got.map(|(b, ejected)| (marbles_of(&b), ejected));
+            let expected = expected.map(|(after, ejected)| {
+                let mut after = after.to_vec();
+                after.sort_by_key(|&(c, _)| c);
+                (after, ejected)
+            });
+            assert_eq!(got, expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn apply_for_matches_apply_for_both_sides() {
+        let b = Board::standard();
+        for (player, own) in [(Player::Black, BK), (Player::White, WH)] {
+            for m in legal_moves(&b, player) {
+                assert_eq!(apply_for(&b, own, &m), apply(&b, player, &m));
+            }
+        }
+    }
+
+    #[test]
+    fn legal_moves_for_any_colour_on_the_radius_8_arena() {
+        let corner = arena(&[((8, -8), S5)]);
+        assert_eq!(legal_moves_for(&corner, S5).len(), 3);
+        assert!(legal_moves_for(&corner, S3).is_empty());
+        let b = arena(&[((0, 0), S3), ((1, 0), S3), ((2, 0), S6), ((0, 3), WH)]);
+        let moves = legal_moves_for(&b, S3);
+        assert!(moves.contains(&mv(&[(0, 0), (1, 0)], E)));
+        assert!(!moves.contains(&mv(&[(1, 0)], E)));
+        for m in &moves {
+            apply_for(&b, S3, m).unwrap();
+        }
+        assert_eq!(
+            legal_moves_for(&Board::standard(), BK),
+            legal_moves(&Board::standard(), Player::Black)
+        );
+    }
+
     fn sorted_unique(moves: &[Move]) -> usize {
         let mut seen: Vec<String> = moves.iter().map(|m| format!("{:?}", m)).collect();
         seen.sort();
