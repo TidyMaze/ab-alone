@@ -17,9 +17,10 @@ const axialOffset = (dx: number, dz: number) => {
   return { dq: dx - dr / 2, dr };
 };
 
-const pixel = (page: Page, png: Buffer, x: number, y: number) =>
+// One decode of the screenshot for all the samples: a decode per sample took most of the test's time (#349).
+const pixels = (page: Page, png: Buffer, points: [number, number][]) =>
   page.evaluate(
-    async ([b64, px, py]) => {
+    async ([b64, pts]) => {
       const img = new Image();
       img.src = `data:image/png;base64,${b64}`;
       await img.decode();
@@ -28,10 +29,12 @@ const pixel = (page: Page, png: Buffer, x: number, y: number) =>
       c.height = img.height;
       const g = c.getContext('2d')!;
       g.drawImage(img, 0, 0);
-      const [r, gr, b] = g.getImageData(Math.round(px as number), Math.round(py as number), 1, 1).data;
-      return [r, gr, b] as RGB;
+      return pts.map(([x, y]) => {
+        const [r, gr, b] = g.getImageData(Math.round(x), Math.round(y), 1, 1).data;
+        return [r, gr, b] as RGB;
+      });
     },
-    [png.toString('base64'), x, y] as const,
+    [png.toString('base64'), points] as const,
   );
 
 test('each cell edge is 3:1 against the surface next to it on at least 6 of 8 ring points, bug #339', async ({ page }, testInfo) => {
@@ -41,23 +44,32 @@ test('each cell edge is 3:1 against the surface next to it on at least 6 of 8 ri
   await page.mouse.move(2, 2); // no hover ghost
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const png = await page.screenshot({ path: testInfo.outputPath('cells.png'), type: 'png' });
-  const at = (q: number, r: number) =>
-    page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }, [q, r]);
-  const failures: string[] = [];
+  // Per cell and ring point, the edge then the surface: two axial cells, mapped to the screen in one call.
+  const axial: [number, number][] = [];
   for (const [q, r] of CELLS) {
-    const ratios: number[] = [];
     for (let k = 0; k < 8; k++) {
       const angle = (k * Math.PI) / 4;
       const edgeOff = axialOffset(EDGE * Math.cos(angle), EDGE * Math.sin(angle));
       const surfOff = axialOffset(SURFACE * Math.cos(angle), SURFACE * Math.sin(angle));
-      const edge = await at(q + edgeOff.dq, r + edgeOff.dr);
-      const surface = await at(q + surfOff.dq, r + surfOff.dr);
-      ratios.push(contrastRatio(await pixel(page, png, edge.x, edge.y), await pixel(page, png, surface.x, surface.y)));
+      axial.push([q + edgeOff.dq, r + edgeOff.dr], [q + surfOff.dq, r + surfOff.dr]);
+    }
+  }
+  const screen = await page.evaluate(
+    (list) => list.map(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }),
+    axial,
+  );
+  const colors = await pixels(page, png, screen.map(({ x, y }) => [x, y]));
+  const failures: string[] = [];
+  CELLS.forEach(([q, r], cell) => {
+    const ratios: number[] = [];
+    for (let k = 0; k < 8; k++) {
+      const i = (cell * 8 + k) * 2;
+      ratios.push(contrastRatio(colors[i]!, colors[i + 1]!));
     }
     const passing = ratios.filter((ratio) => ratio >= 3).length;
     const line = `ring (${q},${r}): ${passing}/8 pass, ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
     console.log(line);
     if (passing < MIN_PASSING) failures.push(line);
-  }
+  });
   expect(failures, 'cells below 6 of 8 ring points at 3:1').toEqual([]);
 });
