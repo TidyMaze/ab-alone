@@ -36,7 +36,7 @@ import { onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
-import { carryTurns, cellTurn, rolledTurn, turnOf, type Quat } from './orient';
+import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { hudHtml } from './hud';
 import { menuOpen, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
@@ -530,7 +530,8 @@ function animateSlides(now: number): void {
 // once, and the effect never holds the next move.
 interface Ejecting {
   holder: THREE.Group; // its x axis is the pull, so its scale stretches the marble along the pull
-  mesh: THREE.Mesh;
+  tumble: THREE.Group; // in the holder: the roll and the twist
+  mesh: THREE.Mesh; // in the tumble, turned so the marble starts with its own turn on the board (#364)
   track: EjectTrack;
   start: number;
   skipped: boolean;
@@ -550,8 +551,8 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const mv = parseMoves(record)[0]!;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const tracks = slideTracks(before, engine.board(), mv, reducedMotion);
-  const carried = carryTurns(gameTurns(), fight?.seed ?? 0, tracks, mv.dir); // gameTurns first: a new game starts its own
-  turns.map = carried;
+  const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
+  turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
   if (!live) return;
   if (tracks.some((t) => t.durationMs > 0)) {
     slide = { game: engine, tracks, start: performance.now() };
@@ -572,10 +573,13 @@ function afterPlay(before: number[], record: number[], live = true): void {
     material.userData.opacity = material.opacity; // the glass is see-through before it fades
     (o as THREE.Mesh).material = material;
   });
+  mesh.quaternion.fromArray(inHolder(turnOf(held, fight?.seed ?? 0, cellIndex(...ejection.cell)), trackAt(track, 0).yaw));
+  const tumble = new THREE.Group();
+  tumble.add(mesh);
   const holder = new THREE.Group();
-  holder.add(mesh);
+  holder.add(tumble);
   scene.add(holder);
-  const e: Ejecting = { holder, mesh, track, start: performance.now(), skipped: false };
+  const e: Ejecting = { holder, tumble, mesh, track, start: performance.now(), skipped: false };
   drawEjection(e, 0);
   ejecting.push(e);
   if (!reducedMotion) startBlood(track);
@@ -588,7 +592,7 @@ function drawEjection(e: Ejecting, elapsedMs: number): boolean {
   e.holder.position.set(p.x, 0.36 - p.drop, p.z);
   e.holder.rotation.y = p.yaw;
   e.holder.scale.set(p.along, p.across, p.across);
-  e.mesh.rotation.set(p.twist, 0, -p.roll); // rolling forward, the top turns toward the pull: negative z
+  e.tumble.rotation.set(p.twist, 0, -p.roll); // rolling forward, the top turns toward the pull: negative z
   e.mesh.traverse((o) => {
     const material = (o as THREE.Mesh).material as THREE.Material;
     material.opacity = material.userData.opacity * p.opacity;
@@ -980,10 +984,11 @@ addEventListener('resize', () => {
     return {
       along: e.holder.scale.x,
       across: e.holder.scale.y,
-      roll: -e.mesh.rotation.z,
-      twist: e.mesh.rotation.x,
+      roll: -e.tumble.rotation.z,
+      twist: e.tumble.rotation.x,
       drop: 0.36 - e.holder.position.y,
       opacity: material.opacity / material.userData.opacity, // the fade, the glass's own see-through aside
+      turn: e.mesh.getWorldQuaternion(new THREE.Quaternion()).toArray(),
     };
   });
 

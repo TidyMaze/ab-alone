@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CELLS, DIRECTIONS, cellIndex, type Axial, type Move } from './board';
-import { carryTurns, cellTurn, marbleTurn, random, rolledTurn, turnOf, type Quat } from './orient';
+import { carryTurns, cellTurn, inHolder, marbleTurn, random, rolledTurn, turnOf, type Quat } from './orient';
 import { slideTracks } from './slide';
 
 const length = (q: Quat): number => Math.hypot(...q);
@@ -125,5 +125,27 @@ describe('carryTurns and rolledTurn', () => {
     const turns = carryTurns(given, 3, tracks, 4);
     expect(turns.get(at(3, 0))).toBe(kept);
     expect([...given.keys()]).toEqual([at(3, 0)]);
+  });
+});
+
+describe('inHolder', () => {
+  // The holder of an ejected marble turns by `yaw` about the vertical axis: up, y.
+  const yawed = (yaw: number, q: Quat): Quat => {
+    const [s, c] = [Math.sin(yaw / 2), Math.cos(yaw / 2)];
+    const [x, y, z, w] = q;
+    return [c * x + s * z, c * y + s * w, c * z - s * x, c * w - s * y];
+  };
+
+  it('keeps the marble\'s own turn on the board once its holder is turned (#364)', () => {
+    for (const yaw of [0, 1, -2.5, Math.PI]) {
+      const own = marbleTurn(3, 20);
+      const inside = inHolder(own, yaw);
+      expect(length(inside)).toBeCloseTo(1, 12);
+      sameRotation(yawed(yaw, inside), own);
+    }
+  });
+
+  it('is the turn back against the yaw for a marble never turned', () => {
+    sameRotation(inHolder([0, 0, 0, 1], 1), [0, -Math.sin(0.5), 0, Math.cos(0.5)]);
   });
 });
