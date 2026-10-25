@@ -33,7 +33,8 @@ and no new look: each rule names its source (section numbers), and changes when 
 - **Type** (ui.md 3). Chakra Petch 600, uppercase, for the turn and the result; IBM Plex Sans for
   the rest. Sizes in rem, nothing under 0.8125rem.
 - **HUD** (world.md 6). The board, its rim and its frame carry the game, menus are a terminal in
-  the scene, the flat plate is the fallback.
+  the scene, the flat plate is the fallback. A legal target is a near-black ring and arrow flat on
+  its cell, pointing the way the group goes, 3:1 on the deck (#390).
 - **Motion** (world.md 5, 8, ui.md 6). Weight and vacuum. A moved marble rolls to its new cell in
   200 ms, without slipping. An ejected marble rolls over the rim in 200 ms, the void takes it in
   600 ms, it only fades. The chrome fades in 160 ms, nothing loops. Reduced motion: a plain fade.

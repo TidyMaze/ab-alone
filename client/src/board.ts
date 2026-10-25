@@ -128,14 +128,21 @@ export function moveForClick(moves: Move[], selection: readonly Axial[], target:
 }
 
 /** Cells to highlight for the selected group: every target of a legal move of that group, in
- * direction-code order. */
-export function groupTargets(moves: Move[], selection: readonly Axial[]): Axial[] {
-  const targets: Axial[] = [];
+ * direction-code order, each with the direction of the move a click on it plays. */
+export function groupTargets(moves: Move[], selection: readonly Axial[]): { cell: Axial; dir: number }[] {
+  const targets: { cell: Axial; dir: number }[] = [];
   for (const [dq, dr] of DIRECTIONS) {
     for (const [q, r] of selection) {
-      const t: Axial = [q + dq, r + dr];
-      if (moveForClick(moves, selection, t) && !targets.some((x) => same(x, t))) targets.push(t);
+      const cell: Axial = [q + dq, r + dr];
+      const mv = moveForClick(moves, selection, cell);
+      if (mv && !targets.some((x) => same(x.cell, cell))) targets.push({ cell, dir: mv.dir });
     }
   }
   return targets;
+}
+
+/** Turn about +y that points a flat arrow drawn along +x the way of a direction code, on the board. */
+export function arrowYaw(dir: number): number {
+  const { x, z } = axialTo3D(...DIRECTIONS[dir]!);
+  return -Math.atan2(z, x);
 }
