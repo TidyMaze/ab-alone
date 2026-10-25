@@ -253,15 +253,13 @@ the Ballast Mind) unless conversions made it grow. The phase thresholds of secti
 
 - The Echo P3 (5 left) and the Hull P3 (5 left): never played. The highest phase in the table is P2.
 - The Chaplain P2 (8 left): starts at the moment of the sixth ejection, so it is never fought.
-- The Ballast Mind P2 (10 left): same, and P3 (5 left) after it. The final exam would only ever be
-  plain Abalone, without Hull cracks, Chaplain flips or Echo, unless conversions inflate the boss.
-- The Choir was the same case and is fixed by #131 (win at 10).
-
-This is out of scope here (rule 4 of CONTRIBUTING.md): it needs a decision per boss.
+- The Choir is fixed by Decision #131 (win at 10 ejections).
+- The Ballast Mind is fixed by Decision #482 (win at 12 ejections, 4 boss marbles left): P2 (10
+  left) and P3 (5 left) are reached and fought.
 
 ## 6. Follow-ups
 
-- Decision: the unreachable phases of section 5 (win threshold per boss, or thresholds moved).
+- Decision: unreachable phases for Echo and Hull (win threshold per boss, or thresholds moved).
 - The Chaplain wins 7 of 10 after the flip cost of #207 (section 3). The
   Hull cracks and the Ballast Mind hooks are not in the player tree yet.
 - The Hull (7 of 10 at 10x, 9 with the plain search) and the Choir (10 of 10) may be too easy for

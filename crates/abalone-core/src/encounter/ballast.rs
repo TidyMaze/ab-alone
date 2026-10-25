@@ -13,10 +13,15 @@ use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
 use crate::encounter::echo::mirror_move;
 use crate::encounter::hull::hull_boss;
 use crate::encounter::{BossDef, Encounter};
-use crate::game::Game;
+use crate::game::{Game, WIN_EJECTIONS};
 use crate::moves::{apply, Move, Player};
 
 type P = (i32, i32);
+
+/// Ejections the player needs to win against The Ballast Mind (Decision #482). The boss starts
+/// with 16 marbles: P1 (16 to 11 left, 0 to 5 ejections), P2 (10 to 6 left, 6 to 10 ejections),
+/// P3 (5 left, 11 ejections), win at 12 ejections (4 boss marbles left).
+pub const BALLAST_WIN_EJECTIONS: u8 = 12;
 
 /// Radius of the Ballast board: 91 cells before the pillars.
 pub const BALLAST_RADIUS: i32 = 5;
@@ -138,7 +143,8 @@ pub fn ballast_start(seed: u64) -> Encounter {
     for (q, r) in BALLAST_BOSS_START {
         board.set(q, r, Cell::White);
     }
-    let game = Game::from_position(board, Player::Black, [0, 0]);
+    let game = Game::from_position(board, Player::Black, [0, 0])
+        .with_win([BALLAST_WIN_EJECTIONS, WIN_EJECTIONS]);
     Encounter::new(game, ballast_boss(), seed)
 }
 
@@ -484,5 +490,16 @@ mod tests {
             boards.iter().any(|b| *b != boards[0]),
             "seed changes the cracks"
         );
+    }
+
+    #[test]
+    fn the_ballast_mind_is_won_at_12_ejections_so_p2_and_p3_are_played() {
+        assert_eq!(BALLAST_WIN_EJECTIONS, 12);
+        let enc = ballast_start(0);
+        assert_eq!(
+            enc.game().win_ejections(Player::Black),
+            BALLAST_WIN_EJECTIONS
+        );
+        assert_eq!(enc.game().win_ejections(Player::White), WIN_EJECTIONS);
     }
 }
