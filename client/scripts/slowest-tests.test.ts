@@ -33,6 +33,10 @@ describe('slowestTests', () => {
   it('keeps only the n slowest tests', () => {
     expect(slowestTests(report, 1)).toEqual([{ name: 'board.spec.ts › eject › ejects', ms: 9000 }]);
   });
+
+  it('reads a suite with no spec and no child suite', () => {
+    expect(slowestTests({ suites: [{ title: 'empty.spec.ts' }] }, 10)).toEqual([]);
+  });
 });
 
 describe('toMarkdown', () => {
