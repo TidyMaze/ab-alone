@@ -24,5 +24,5 @@ export const LIGHT = {
   },
 };
 
-// The background decor (#376): a dim bulkhead behind the board, darker than the board's steel so it never competes.
-export const DECOR = { color: 0x1d2328 };
+// The background decor (#376, #432): a dim bulkhead behind the board, darker than the board's steel so it never competes.
+export const DECOR = { color: 0x242c33 };
