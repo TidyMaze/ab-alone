@@ -1,10 +1,10 @@
 // The sounds of the game, docs/specs/world.md section 7, synthesized with Web Audio: no audio file,
 // nothing fetched. The design is data (the cue per side, the voices and their envelopes, the steady tones of
 // the hum and the tension drones), played by a thin wrapper through four bus gains, music, ambience, effects
-// and voice, into one master gain (#438). The ejection follows the ejection effect of eject.ts: a
-// sharp inhale on the push over the rim, a muffled thud as the void takes the marble, vacuum silence
-// while it falls, then, once it is gone, a low toll for a lost player marble or a dry clack for an
-// enemy one. The boss tells have their sound twins too (#358).
+// and voice, into one master gain (#438), music and ambience through a duck node that lowers them under an audio
+// log (#514). The ejection follows the ejection effect of eject.ts: a sharp inhale on the push over the rim, a
+// muffled thud as the void takes the marble, vacuum silence while it falls, then, once it is gone, a low toll for a
+// lost player marble or a dry clack for an enemy one. The boss tells have their sound twins too (#358).
 
 import { EJECT_MS, PUSH_MS } from './eject';
 import type { Tension } from './tension';
@@ -168,6 +168,14 @@ export const SILENT = 0.0001;
 const SLIDER_TAU = 0.007;
 /** The tension layers crossfade over about a second (three time constants). */
 export const CROSSFADE_TAU = 0.3;
+/** The buses an audio log ducks (tech.md section 5.4), each through its own duck node into the master. */
+export const DUCKED: readonly Bus[] = ['music', 'ambience'];
+/** How far a log ducks them, in dB. */
+export const DUCK_DB = -12;
+/** They duck and come back over about 300 ms (three time constants). */
+export const DUCK_TAU = 0.1;
+/** The gain of each duck node, in the order of DUCKED, while a log plays (`active`) or not. */
+export const duckGains = (active: boolean): number[] => DUCKED.map(() => (active ? 10 ** (DUCK_DB / 20) : 1));
 
 /** A steady tone of the hum or a tension drone: pitch in Hz, level before its bus. */
 export interface HumTone {
@@ -199,6 +207,7 @@ interface Graph {
   ctx: AudioContext;
   buses: Record<Bus, GainNode>;
   layers: GainNode[];
+  ducks: GainNode[];
   noise: AudioBuffer;
 }
 
@@ -207,6 +216,7 @@ interface Graph {
 export class Sfx {
   private graph: Graph | null = null;
   private level: Tension = 0;
+  private ducked = false;
 
   constructor(
     private readonly create: () => AudioContext | null,
@@ -251,8 +261,15 @@ export class Sfx {
       for (const bus of BUSES) {
         buses[bus] = ctx.createGain();
         buses[bus].gain.value = busGain(this.mix[bus]);
-        buses[bus].connect(master);
+        if (!DUCKED.includes(bus)) buses[bus].connect(master);
       }
+      const ducks = DUCKED.map((bus, i) => {
+        const duck = ctx.createGain();
+        duck.gain.value = duckGains(this.ducked)[i]!;
+        duck.connect(master);
+        buses[bus].connect(duck);
+        return duck;
+      });
       startTones(ctx, HUM, buses[ROUTE.hum]);
       const layers = TENSION.map((tones, i) => {
         const layer = ctx.createGain();
@@ -261,7 +278,7 @@ export class Sfx {
         startTones(ctx, tones, layer);
         return layer;
       });
-      this.graph = { ctx, buses, layers, noise: whiteNoise(ctx) };
+      this.graph = { ctx, buses, layers, ducks, noise: whiteNoise(ctx) };
     }
     if (this.graph.ctx.state === 'suspended') this.graph.ctx.resume().catch(() => undefined);
   }
@@ -280,6 +297,15 @@ export class Sfx {
     if (!graph) return;
     const gains = layerGains(level);
     graph.layers.forEach((layer, i) => layer.gain.setTargetAtTime(gains[i]!, graph.ctx.currentTime, CROSSFADE_TAU));
+  }
+
+  /** Ducks music and ambience while an audio log plays (`active`), brings them back after, over about 300 ms. */
+  duck(active: boolean): void {
+    this.ducked = active;
+    const graph = this.graph;
+    if (!graph) return;
+    const gains = duckGains(active);
+    graph.ducks.forEach((duck, i) => duck.gain.setTargetAtTime(gains[i]!, graph.ctx.currentTime, DUCK_TAU));
   }
 
   /** Plays the ejection of a marble of `side` from now. Its cue, or null when silent (effects at 0, or no gesture
