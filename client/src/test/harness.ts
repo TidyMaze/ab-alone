@@ -22,6 +22,9 @@ export interface BootOptions {
   /** A fake AudioContext (src/test/audio.ts), read back with `game.hook('__audio')`; none by default, as in a browser
    * without Web Audio. */
   audio?: boolean;
+  /** The texture files under assets/ that fail to load, as a missing file would. The others load, each a texture named
+   * after its file. */
+  missing?: string[];
 }
 
 export interface Game {
@@ -133,7 +136,11 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       dispose(): void {}
     }
     class TextureLoader {
-      loadAsync = async (): Promise<InstanceType<typeof THREE.Texture>> => new THREE.Texture();
+      loadAsync = async (url: string): Promise<InstanceType<typeof THREE.Texture>> => {
+        const name = url.slice(url.lastIndexOf('/') + 1);
+        if (options.missing?.includes(name)) throw new Error(`404 ${name}`);
+        return Object.assign(new THREE.Texture(), { name });
+      };
     }
     return { ...THREE, WebGPURenderer, PMREMGenerator, TextureLoader };
   });
