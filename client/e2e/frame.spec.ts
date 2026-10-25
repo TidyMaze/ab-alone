@@ -76,6 +76,7 @@ const pixel = (page: Page, png: Buffer, p: { x: number; y: number }) =>
   );
 
 test('the rim half at the end of the side to move lights in its colour, then goes out at the end, #300', async ({ page }) => {
+  test.slow(); // under automation a loaded machine can skip draws for seconds after the move (quality.ts drawDue)
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('./?bot=off'); // hot-seat: Black, side 1, wears the shell and starts at the near end
   await page.locator('canvas').waitFor();
@@ -101,7 +102,7 @@ test('the rim half at the end of the side to move lights in its colour, then goe
         contrastRatio(await pixel(page, blackTurn, near), await pixel(page, whiteTurn, near)),
         contrastRatio(await pixel(page, whiteTurn, far), await pixel(page, blackTurn, far)),
       );
-    })
+    }, { timeout: 30_000 })
     .toBeGreaterThanOrEqual(3);
 
   await page.locator('#import-file').setInputFiles({
