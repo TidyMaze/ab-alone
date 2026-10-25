@@ -75,22 +75,15 @@ const tapCog = async (page: Page) => {
 };
 
 const check = async (page: Page, testInfo: TestInfo, state: string) => {
-  const t0 = Date.now(); // TIMING-TEMP
-  const lap = (what: string) => console.log(`TIMING ${state} | ${what} ${Date.now() - t0} ms`); // TIMING-TEMP
   await frame(page);
-  lap('frame'); // TIMING-TEMP
   await page.screenshot({ path: testInfo.outputPath(`${state.replaceAll(' ', '-')}.jpg`), type: 'jpeg', quality: 70 });
-  lap('screenshot'); // TIMING-TEMP
   expect(await problems(page), state).toEqual([]);
-  lap('problems'); // TIMING-TEMP
   // The same check with the settings menu open (#277): the cog and the menu cover no cell, marble or target.
   await tapCog(page);
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sound' })).toBeVisible();
-  lap('menu open'); // TIMING-TEMP
   await frame(page);
   expect(await problems(page), `${state}, settings menu open`).toEqual([]);
-  lap('problems open'); // TIMING-TEMP
   // On a touch screen every item of the open menu is a touch target of at least 44 px (#287).
   const small = await page.evaluate(() =>
     [...document.querySelectorAll('#settings-menu button')]
@@ -101,7 +94,6 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
   expect(small, `${state}, settings menu open, under 44 px`).toEqual([]);
   await tapCog(page);
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden();
-  lap('menu closed'); // TIMING-TEMP
 };
 
 // The parts of the daily result card (#196) that meet the Copy diagnostics button (#220), each scrolled into view
