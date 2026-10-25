@@ -35,7 +35,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
       // in main.ts and scene.ts need a real browser (Playwright e2e, a later task), like the IndexedDB adapter
       // idb.ts (e2e/resume.spec.ts; savegame.ts holds its logic, tested with an in-memory store).
       include: ['src/board.ts', 'src/bot.ts', 'src/ghost.ts', 'src/score.ts', 'src/hud.ts', 'src/quality.ts', 'src/eject.ts',
-        'src/moverecord.ts', 'src/movelog.ts', 'src/transport.ts', 'src/invite.ts', 'src/session.ts', 'src/camera.ts', 'src/seats.ts', 'src/bosshud.ts',
+        'src/moverecord.ts', 'src/movelog.ts', 'src/transport.ts', 'src/invite.ts', 'src/session.ts', 'src/camera.ts', 'src/seats.ts', 'src/bosshud.ts', 'src/tally.ts',
         'src/presence.ts', 'src/hull.ts', 'src/chaplain.ts', 'src/choir.ts', 'src/rematch.ts', 'scripts/nightly-report.mjs', 'scripts/shard-reporter.ts', 'src/connectivity.ts',
         'src/sound.ts', 'src/daily.ts', 'src/savegame.ts', 'src/offline.ts',
         'src/logger.ts', 'src/netcounters.ts', 'src/diagnostics.ts', 'src/newgame.ts',
