@@ -7,11 +7,13 @@ import {
   readClearBoard,
   renderPixelRatio,
   readSound,
+  readSkin,
   readTheme,
   readTier,
   tierFromHints,
   writeClearBoard,
   writeSound,
+  writeSkin,
   writeTheme,
   writeTier,
 } from './quality';
@@ -88,6 +90,22 @@ describe('fogSettings', () => {
   it('is off in clear-board mode, in every tier', () => {
     expect(fogSettings('low', true, resetView().distance)).toBeNull();
     expect(fogSettings('high', true, resetView().distance)).toBeNull();
+  });
+});
+
+describe('shell skin storage: Scarab ridges unless the player picked another', () => {
+  it('defaults to scarab, reads back what was written, under its own key', () => {
+    const s = memoryStorage();
+    expect(readSkin(s)).toBe('scarab');
+    writeSkin(s, 'hex');
+    expect(s.data.get('ab-alone.shell-skin')).toBe('hex');
+    expect(readSkin(s)).toBe('hex');
+  });
+  it('ignores an unknown stored id, and survives storage that throws or is missing', () => {
+    expect(readSkin(memoryStorage({ 'ab-alone.shell-skin': 'gold' }))).toBe('scarab');
+    expect(readSkin(throwing)).toBe('scarab');
+    expect(readSkin(null)).toBe('scarab');
+    expect(() => writeSkin(throwing, 'hex')).not.toThrow();
   });
 });
 

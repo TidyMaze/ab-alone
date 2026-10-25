@@ -310,3 +310,36 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   expect(await tellCues(page)).toEqual(['choir', 'choir']); // once more for Tenor, not for the selection or the human move
   await page.screenshot({ path: testInfo.outputPath('choir-tenor-next.png') });
 });
+
+// Task #377: the boss marks stay readable on other shell skins (a pale and a metal one): the Choir army glyphs at the
+// start and The Chaplain's cap once a marble is converted, 3:1 as for the default skin (#326).
+for (const skin of ['hex', 'riveted']) {
+  test(`the Choir glyphs read 3:1 on the ${skin} shell, task #377`, async ({ page }) => {
+    await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
+    await page.goto('./');
+    await page.locator('canvas').waitFor();
+    await page.getByRole('button', { name: 'Boss fight' }).click();
+    await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
+    await expect(page.locator('body')).toHaveAttribute('data-armies', '12');
+    const armies = (await page.evaluate(() => (window as any).__armies())) as { cell: [number, number] }[];
+    for (const c of await topContrasts(page, armies.map((m) => m.cell))) expect(c).toBeGreaterThanOrEqual(3);
+  });
+
+  test(`The Chaplain's cap reads 3:1 on the ${skin} shell, task #377`, async ({ page }, testInfo) => {
+    await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
+    await startChaplain(page);
+    expect(await page.evaluate(() => (window as any).__playTurns(17, [4, 2]))).toBe(17);
+    await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(34);
+    const mv = await chaplainMove(page, 'forward');
+    const [q, r] = mv.cells[0];
+    for (const [cq, cr] of [[q, r], [mv.dir === 4 ? q : q + 1, r - 1]]) {
+      const p = await cellScreen(page, cq, cr);
+      await page.mouse.click(p.x, p.y);
+    }
+    await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(36);
+    await expect(page.locator('body')).not.toHaveAttribute('data-converted', '0');
+    await page.screenshot({ path: testInfo.outputPath(`chaplain-${skin}.png`) });
+    const cells = await page.evaluate(() => (window as any).__converted());
+    for (const c of await topContrasts(page, cells)) expect(c).toBeGreaterThanOrEqual(3);
+  });
+}

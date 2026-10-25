@@ -39,6 +39,8 @@ import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { hudHtml } from './hud';
+import { drawSkin } from './skinart';
+import { nextSkin, skinById } from './skins';
 import { menuOpen, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { DECOR, LIGHT } from './light';
@@ -47,11 +49,13 @@ import {
   drawDue,
   fogSettings,
   readClearBoard,
+  readSkin,
   readSound,
   readTheme,
   readTier,
   renderPixelRatio,
   writeClearBoard,
+  writeSkin,
   writeSound,
   writeTheme,
 } from './quality';
@@ -179,6 +183,7 @@ diag.log.log('info', 'start', { backend, tier });
 let clear = readClearBoard(store);
 // The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
 let theme: Theme = readTheme(store);
+let skin = readSkin(store); // the dark shell skin (#377), skins.ts
 function applyTheme(): void {
   const value = themeAttribute(theme);
   if (value) document.documentElement.dataset.theme = value;
@@ -220,15 +225,21 @@ const toggles: Record<string, () => void> = {
     writeTheme(store, theme);
     applyTheme();
   },
+  'shell-skin': () => {
+    skin = nextSkin(skin);
+    writeSkin(store, skin);
+    marbleMaterials[1] = shellMaterial(skin);
+    refresh();
+  },
 };
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, sfx.enabled, theme)) {
+for (const { id } of settingsList(clear, sfx.enabled, theme, skin)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -294,13 +305,39 @@ const steel = new THREE.MeshStandardMaterial(
 );
 // Key 1 is the enemy shell (matte, ridged), key 2 the player's smoked glass (marbles.ts).
 const { ridges, ...shell } = SHELL;
+const scarab = new THREE.MeshStandardMaterial({
+  ...shell,
+  envMap: reflections,
+  envMapIntensity: LIGHT.environment.intensity,
+  ...(shellNormal ? { normalMap: shellNormal, normalScale: new THREE.Vector2(ridges, ridges) } : {}),
+});
+// The other dark shells (#377): the skin's pattern drawn once on a small canvas that wraps the sphere; a glowing skin
+// lights its pattern through the same canvas, the base is dark enough to stay dark.
+const shellLooks = new Map<string, THREE.MeshStandardMaterial>([['scarab', scarab]]);
+function shellMaterial(id: string): THREE.MeshStandardMaterial {
+  const s = skinById(id);
+  let look = shellLooks.get(s.id);
+  if (!look) {
+    const canvas = document.createElement('canvas');
+    [canvas.width, canvas.height] = [256, 128];
+    drawSkin(canvas.getContext('2d')!, canvas.width, canvas.height, s);
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.wrapS = THREE.RepeatWrapping;
+    look = new THREE.MeshStandardMaterial({
+      map,
+      roughness: s.roughness,
+      metalness: s.metalness,
+      envMap: reflections,
+      envMapIntensity: LIGHT.environment.intensity,
+      ...(s.glow ? { emissive: 0xffffff, emissiveMap: map, emissiveIntensity: s.glow } : {}),
+    });
+    shellLooks.set(s.id, look);
+  }
+  return look;
+}
 const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
-  1: new THREE.MeshStandardMaterial({
-    ...shell,
-    envMap: reflections,
-    envMapIntensity: LIGHT.environment.intensity,
-    ...(shellNormal ? { normalMap: shellNormal, normalScale: new THREE.Vector2(ridges, ridges) } : {}),
-  }),
+  1: shellMaterial(skin),
   2: new THREE.MeshPhysicalMaterial({ ...GLASS, envMap: reflections, envMapIntensity: LIGHT.environment.glass }),
 };
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
