@@ -1,9 +1,10 @@
 // The settings menu (#277, docs/specs/ui.md section 4): a list of items behind a cog button: the toggles Clear board,
 // Reduced motion (#379) and Flat HUD (#391), Sound (#284, which opens the four volume sliders of #438), Safe mode (#380),
-// the Theme choice (#317), the Shell skin choice (#377), the UI scale (#382), then the actions Export game and Import
+// the Theme choice (#317), the Shell skin and Glass skin choices (#377), the UI scale (#382), then the actions Export game and Import
 // game (#287). Pure functions only: main.ts feeds them the clicks and builds the DOM.
 import type { IconName } from './icons';
 import type { Bus } from './sound';
+import { glassSkinById } from './glassskins';
 import { skinById } from './skins';
 import { nextUiScale, type UiScale } from './uiscale';
 
@@ -47,6 +48,7 @@ export const settingsList = (
   clear: boolean,
   theme: Theme,
   skin: string,
+  glass: string,
   scale: UiScale,
   safe: boolean,
   reduced: boolean,
@@ -58,6 +60,7 @@ export const settingsList = (
   { id: 'sound', label: 'Sound', icon: 'sound' },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme', on: safe },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
+  { id: 'glass-skin', label: glassSkinById(glass).name, icon: 'skin' },
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];

@@ -41,8 +41,9 @@ import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml } from './hud';
-import { drawSkin } from './skinart';
+import { drawSkin, type Look } from './skinart';
 import { nextSkin, skinById } from './skins';
+import { glassSkinById, nextGlassSkin } from './glassskins';
 import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
@@ -55,6 +56,7 @@ import {
   readFlatHud,
   readFps,
   readReducedMotion,
+  readGlassSkin,
   readSafeMode,
   readSkin,
   readMix,
@@ -66,6 +68,7 @@ import {
   writeFlatHud,
   writeFps,
   writeReducedMotion,
+  writeGlassSkin,
   writeSafeMode,
   writeSkin,
   writeVolume,
@@ -213,6 +216,7 @@ let clear = readClearBoard(store);
 // The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
 let theme: Theme = readTheme(store);
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts
+let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 // The FPS readout (#426): off by default. Off, the frame loop only checks the flag; on, it keeps the last frame stamps.
 let fpsOn = readFps(store);
 let fpsStamps: number[] = [];
@@ -301,10 +305,16 @@ const toggles: Record<string, () => void> = {
     writeFlatHud(store, flatHud);
     refresh();
   },
+  'glass-skin': () => {
+    glass = nextGlassSkin(glass);
+    writeGlassSkin(store, glass);
+    setGlassLook(glass);
+    refresh();
+  },
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     row.setAttribute('aria-label', label); // held upright only the icon shows (#414): the name stays for screen readers
@@ -312,7 +322,7 @@ const paintMenu = (): void => {
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
+for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -340,6 +350,12 @@ const clearGroup = document.createElement('div');
 clearGroup.className = 'setting-group';
 clearRow.replaceWith(clearGroup);
 clearGroup.append(clearRow, fpsButton);
+// The glass skin (#377) is a second button in the shell skin's item: no row of its own, so the menu keeps its height.
+const shellSkinRow = document.getElementById('setting-shell-skin')!;
+const skinGroup = document.createElement('div');
+skinGroup.className = 'setting-group skin-pair';
+shellSkinRow.replaceWith(skinGroup);
+skinGroup.append(shellSkinRow, document.getElementById('setting-glass-skin')!);
 fpsBox.hidden = !fpsOn;
 // The four volume sliders (#438), the page Sound opens: 0 to 100 %, each saved on its own.
 for (const bus of BUSES) {
@@ -444,16 +460,21 @@ const scarab = new THREE.MeshStandardMaterial({
 // The other dark shells (#377): the skin's pattern drawn once on a small canvas that wraps the sphere; a glowing skin
 // lights its pattern through the same canvas, the base is dark enough to stay dark.
 const shellLooks = new Map<string, THREE.MeshStandardMaterial>([['scarab', scarab]]);
+// A skin's pattern on a canvas that wraps the sphere (the shells and the pale glass, #377).
+function skinTexture(s: Look): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  [canvas.width, canvas.height] = [256, 128];
+  drawSkin(canvas.getContext('2d')!, canvas.width, canvas.height, s);
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = THREE.RepeatWrapping;
+  return map;
+}
 function shellMaterial(id: string): THREE.MeshStandardMaterial {
   const s = skinById(id);
   let look = shellLooks.get(s.id);
   if (!look) {
-    const canvas = document.createElement('canvas');
-    [canvas.width, canvas.height] = [256, 128];
-    drawSkin(canvas.getContext('2d')!, canvas.width, canvas.height, s);
-    const map = new THREE.CanvasTexture(canvas);
-    map.colorSpace = THREE.SRGBColorSpace;
-    map.wrapS = THREE.RepeatWrapping;
+    const map = skinTexture(s);
     look = new THREE.MeshStandardMaterial({
       map,
       roughness: s.roughness,
@@ -466,12 +487,37 @@ function shellMaterial(id: string): THREE.MeshStandardMaterial {
   }
   return look;
 }
+// The pale glass skins (#377): GLASS in the skin's colour, or its pattern on the same kind of canvas. Smoked glass has no
+// pattern and is GLASS as it was. The inner light takes the skin's colour when it has one (Lantern core).
+const glassLooks = new Map<string, THREE.MeshPhysicalMaterial>();
+function glassMaterial(id: string): THREE.MeshPhysicalMaterial {
+  const s = glassSkinById(id);
+  let look = glassLooks.get(s.id);
+  if (!look) {
+    const map = s.pattern === null ? null : skinTexture(s);
+    look = new THREE.MeshPhysicalMaterial({
+      ...GLASS,
+      color: map ? 0xffffff : s.color,
+      roughness: s.roughness,
+      ...(map ? { map } : {}),
+      envMap: reflections,
+      envMapIntensity: LIGHT.environment.glass,
+    });
+    glassLooks.set(s.id, look);
+  }
+  return look;
+}
 const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
   1: shellMaterial(skin),
-  2: new THREE.MeshPhysicalMaterial({ ...GLASS, envMap: reflections, envMapIntensity: LIGHT.environment.glass }),
+  2: glassMaterial(glass),
 };
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
 const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the glass
+coreMaterial.color.set(glassSkinById(glass).core ?? CORE.color);
+function setGlassLook(id: string): void {
+  marbleMaterials[2] = glassMaterial(id);
+  coreMaterial.color.set(glassSkinById(id).core ?? CORE.color);
+}
 // Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. The glass holds
 // its cyan core as a child: the selection lift, the slide and the ejection carry it.
 const glassOf = (): number => glassSide({ online: online !== null, bot: worker !== null, fight: fight !== null });

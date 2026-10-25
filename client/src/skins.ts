@@ -2,7 +2,7 @@
 // Pure data, no Three.js: main.ts builds one material per skin, skinart.ts draws its pattern.
 import { SHELL } from './marbles';
 
-export type PatternId = 'ridges' | 'arc' | 'cracks' | 'hexes' | 'swirl' | 'rivets' | 'drips' | 'rings' | 'traces' | 'eye';
+export type PatternId = 'ridges' | 'arc' | 'cracks' | 'hexes' | 'swirl' | 'rivets' | 'drips' | 'rings' | 'traces' | 'eye' | 'frost' | 'pearl' | 'facets';
 
 export interface Skin {
   id: string;

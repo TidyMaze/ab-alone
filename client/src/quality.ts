@@ -4,6 +4,7 @@
 
 import type { View } from './camera';
 import { FRAME } from './frame';
+import { glassSkinById } from './glassskins';
 import type { Theme } from './settings';
 import type { Bus, Mix } from './sound';
 import { skinById } from './skins';
@@ -24,6 +25,7 @@ const FPS_KEY = 'ab-alone.fps';
 const SOUND_KEY = 'ab-alone.sound';
 const THEME_KEY = 'ab-alone.theme';
 const SKIN_KEY = 'ab-alone.shell-skin';
+const GLASS_KEY = 'ab-alone.glass-skin';
 const SAFE_KEY = 'ab-alone.safe-mode';
 const SCALE_KEY = 'ab-alone.ui-scale';
 const MOTION_KEY = 'ab-alone.reduced-motion';
@@ -113,6 +115,10 @@ export const writeFlatHud = (store: Store, on: boolean): void => write(store, FL
 // The dark shell skin (#377): Scarab ridges unless the player picked another one of skins.ts.
 export const readSkin = (store: Store): string => skinById(read(store, SKIN_KEY)).id;
 export const writeSkin = (store: Store, id: string): void => write(store, SKIN_KEY, id);
+
+// The pale glass skin (#377): Smoked glass unless the player picked another one of glassskins.ts.
+export const readGlassSkin = (store: Store): string => glassSkinById(read(store, GLASS_KEY)).id;
+export const writeGlassSkin = (store: Store, id: string): void => write(store, GLASS_KEY, id);
 
 export function readTier(store: Store, hints: Hints): Tier {
   const stored = read(store, TIER_KEY);

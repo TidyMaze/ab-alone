@@ -11,6 +11,7 @@ import {
   renderPixelRatio,
   readFlatHud,
   readReducedMotion,
+  readGlassSkin,
   readSafeMode,
   readMix,
   readSkin,
@@ -19,6 +20,7 @@ import {
   readUiScale,
   tierFromHints,
   writeClearBoard,
+  writeGlassSkin,
   writeSafeMode,
   writeVolume,
   writeFlatHud,
@@ -127,6 +129,22 @@ describe('shell skin storage: Scarab ridges unless the player picked another', (
     expect(readSkin(throwing)).toBe('scarab');
     expect(readSkin(null)).toBe('scarab');
     expect(() => writeSkin(throwing, 'hex')).not.toThrow();
+  });
+});
+
+describe('glass skin storage: Smoked glass unless the player picked another', () => {
+  it('defaults to smoked, reads back what was written, under its own key', () => {
+    const s = memoryStorage();
+    expect(readGlassSkin(s)).toBe('smoked');
+    writeGlassSkin(s, 'frost');
+    expect(s.data.get('ab-alone.glass-skin')).toBe('frost');
+    expect(readGlassSkin(s)).toBe('frost');
+  });
+  it('ignores an unknown stored id, and survives storage that throws or is missing', () => {
+    expect(readGlassSkin(memoryStorage({ 'ab-alone.glass-skin': 'gold' }))).toBe('smoked');
+    expect(readGlassSkin(throwing)).toBe('smoked');
+    expect(readGlassSkin(null)).toBe('smoked');
+    expect(() => writeGlassSkin(throwing, 'frost')).not.toThrow();
   });
 });
 
