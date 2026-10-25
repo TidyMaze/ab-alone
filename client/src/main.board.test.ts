@@ -303,6 +303,7 @@ describe('main.ts board and HUD', { timeout: 30_000 }, () => {
     expect(bot.hud()).toContain('Mess: one seat filled. The other is counted.');
     startBoss(bot, 'hull');
     expect(bot.hud()).toContain('Hull: rim on file.');
+    await bot.settle(); // the bot's pending answers arrive before the test ends
   });
 
   it('adds the flat HUD to the plate while its setting is on', async () => {
@@ -325,6 +326,7 @@ describe('main.ts board and HUD', { timeout: 30_000 }, () => {
     expect(vanished).toBeGreaterThan(0);
     expect(game.hook('__frame')).toMatchObject({ holes: vanished, drawn: true });
     expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished);
+    await game.settle();
   });
 
   it('shows the online mode on the plate, and the rematch asks once an online game is over', async () => {
