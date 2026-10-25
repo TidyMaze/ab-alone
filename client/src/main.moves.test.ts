@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BLACK_WINS } from '../e2e/end-games';
 import { type Axial, CELLS, DIRECTIONS, encodeMove, parseMoves } from './board';
 import { BLOOD_MS } from './blood';
@@ -13,6 +13,9 @@ import { boot, type Game } from './test/harness';
 // The moves, the animation and the input of main.ts on the harness (decision #445, #452): a move and its slide, the
 // ejection effect and its blood, the skip, the click and its guards, the pointer orbit, pinch and wheel, Reset view,
 // a resize and the frame loop.
+
+// A boot imports the whole page: on a loaded machine one takes seconds, the default 5 s is too short.
+vi.setConfig({ testTimeout: 30_000 });
 
 type Move = { cells: Axial[]; dir: number };
 const data = (): DOMStringMap => document.body.dataset; // boot() replaces the body
@@ -137,7 +140,7 @@ describe('a move and its slide', () => {
     const indexedDB = globalThis.indexedDB as never;
     const again = await boot('?bot=off', { indexedDB });
     expect(plies(again)).toBe(1);
-  }, 30_000); // two boots
+  });
 
   it('never saves a boss fight: a reload starts a fresh local game', async () => {
     const game = await boot('?nodes=20');
@@ -151,7 +154,7 @@ describe('a move and its slide', () => {
     const indexedDB = globalThis.indexedDB as never;
     const again = await boot('?nodes=20', { indexedDB });
     expect(plies(again)).toBe(0);
-  }, 30_000); // two boots
+  });
 
   it('plays the bot reply once the slide of the move it answers ends', async () => {
     const game = await boot('?nodes=20');
