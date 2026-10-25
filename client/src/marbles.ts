@@ -9,7 +9,7 @@ export const CORE = { color: 0x7fd6e8, radius: 0.09 };
 export const GLASS = {
   color: 0x2c363d,
   transparent: true,
-  opacity: 0.65,
+  opacity: 0.75, // the glass shows a quarter of the deck behind it, so it reads 3:1 on the deck (#344)
   depthWrite: false, // the core inside shows through
   roughness: 0.2,
   metalness: 0,

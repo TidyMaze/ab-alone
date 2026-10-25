@@ -23,7 +23,9 @@ and no new look: each rule names its source (section numbers), and changes when 
   Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
   its own angle, seeded, so the set never lines up and a game always looks the same.
 - **Light** (world.md 5). Low-key: one hard source per deck, a dim cyan fill from the player's
-  marbles, slow and rare flicker. Every cell and marble stays legible, cell edge 3:1.
+  marbles, slow and rare flicker. Every cell and marble stays legible: cell edge 3:1, each marble
+  3:1 on the deck (#344). The deck steel is lit to a mid-tone so the black shell stands out, the
+  frame's plate stays dark.
 - **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold,
   steel and ore dust (online, The Hull). Furnace: orange glow, steam (The Choir). Chapel: candles,
   wood and wire (The Chaplain). Bridge: cold white, too clean (The Ballast Mind). Fog thickens
@@ -61,8 +63,8 @@ source kept out of the Pages artifact). All under the repo's MIT licence; the fo
 
 | Assets | Format and budget | Made | Today, issues |
 |---|---|---|---|
-| Marbles: glass and core, ridged shell, boss accents, flipped look | Materials, geometry; a ridge normal map, 256 px, 64 KB | Procedural, generated | Smoked glass with a cyan core (#291), ridged shell `shell-normal.png` 256 px, 10 KB (#293); boss accents and the dimming core: #26 |
-| Board: light and textures per deck, frame, rim, backdrop | Data, geometry; textures 512 px, 300 KB a deck; backdrop 30 KB | Procedural, generated | One flat light, one steel set, a hexagonal steel frame built in code, plate and rim (#292): #290, #300, #28 |
+| Marbles: glass and core, ridged shell, boss accents, flipped look | Materials, geometry; a ridge normal map, 256 px, 64 KB | Procedural, generated | Smoked glass with a cyan core (#291), opacity 0.75 so it reads 3:1 on the deck (#344), ridged shell `shell-normal.png` 256 px, 10 KB (#293); boss accents and the dimming core: #26 |
+| Board: light and textures per deck, frame, rim, backdrop | Data, geometry; textures 512 px, 300 KB a deck; backdrop 30 KB | Procedural, generated | One flat light, one steel set (deck albedo lightened x1.9 for marble contrast, #344), a hexagonal steel frame built in code, plate and rim (#292): #290, #300, #28 |
 | Props, one lore object per boss arena | glTF, 150 KB each, 1 MB a deck | Procedural, then hand-made | None: #28, #20 |
 | Tells, phase notches, tally marks | Geometry; a crack decal, 128 px, 16 KB | Procedural, generated | Chaplain and Choir done, Hull crack a flat disc: #62, #22 |
 | Effects: ejection, particles, fog | Code; a particle atlas, 128 px, 16 KB | Procedural, generated | Ejection and fog done (#188, #84) |

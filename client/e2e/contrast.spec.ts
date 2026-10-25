@@ -73,3 +73,56 @@ test('each cell edge is 3:1 against the surface next to it on at least 6 of 8 ri
   });
   expect(failures, 'cells below 6 of 8 ring points at 3:1').toEqual([]);
 });
+
+// Task #344: both marbles stand out from the deck at 3:1 (world.md section 5, art.md section 1). The start position,
+// hot-seat: the shell plays the near rows, the glass the far ones. A marble is the mean colour of a small box where its
+// cell's centre is drawn, seen through the lower body of the marble (under the glass's core); the deck is the mean of
+// the same box on five empty cells in the middle. The box follows the cell spacing, so it holds on desktop and phone.
+const SHELL_CELLS: [number, number][] = [[-4, 4], [-2, 4], [0, 4], [-1, 3], [0, 2]];
+const GLASS_CELLS: [number, number][] = [[4, -4], [2, -4], [0, -4], [1, -3], [0, -2]];
+const DECK_CELLS: [number, number][] = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
+
+const boxMeans = (page: Page, png: Buffer, cells: [number, number][]) =>
+  page.evaluate(
+    async ([b64, list]) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      const toScreen = (window as any).__cellToScreen;
+      const half = Math.max(2, Math.round((toScreen(1, 0).x - toScreen(0, 0).x) * 0.08));
+      return list.map(([q, r]) => {
+        const p = toScreen(q, r);
+        const d = g.getImageData(Math.round(p.x) - half, Math.round(p.y) - half, 2 * half, 2 * half).data;
+        const sum = [0, 0, 0];
+        for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) sum[k]! += d[i + k]!;
+        return sum.map((s) => s / (d.length / 4)) as unknown as RGB;
+      });
+    },
+    [png.toString('base64'), cells] as const,
+  );
+
+for (const [name, width, height] of [['desktop', 1280, 720], ['phone', 375, 812]] as const) {
+  test(`each marble reads 3:1 against the deck on ${name}, task #344`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('./?bot=off');
+    await page.locator('canvas').waitFor();
+    await page.mouse.move(2, 2); // no hover ghost
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    const png = await page.screenshot({ path: testInfo.outputPath(`marbles-${name}.png`), type: 'png' });
+    const deck = await boxMeans(page, png, DECK_CELLS);
+    const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
+    const failures: string[] = [];
+    for (const [side, cells] of [['shell', SHELL_CELLS], ['glass', GLASS_CELLS]] as const) {
+      const ratios = (await boxMeans(page, png, cells)).map((rgb) => contrastRatio(rgb, mean));
+      const line = `${side} on ${name}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
+      console.log(line);
+      if (ratios.some((ratio) => ratio < 3)) failures.push(line);
+    }
+    expect(failures, 'marbles below 3:1 against the deck').toEqual([]);
+  });
+}
