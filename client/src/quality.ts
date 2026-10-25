@@ -91,3 +91,7 @@ export const drawDue = (now: number, lastStart: number, lastCost: number, automa
 const AUTOMATED_PIXEL_RATIO = 0.5;
 export const renderPixelRatio = (dpr: number, automated: boolean): number =>
   automated ? Math.min(dpr, AUTOMATED_PIXEL_RATIO) : dpr;
+
+// Under automation the marbles get no room reflections and the scene no accent lights (#376): software WebGL pays for
+// them on every pixel of every frame, and the CI specs timed out waiting for frames (bug #416). A player gets both.
+export const reflectionsAndAccents = (automated: boolean): boolean => !automated;

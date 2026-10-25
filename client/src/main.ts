@@ -53,6 +53,7 @@ import {
   readSound,
   readTheme,
   readTier,
+  reflectionsAndAccents,
   renderPixelRatio,
   writeClearBoard,
   writeSkin,
@@ -142,10 +143,14 @@ const [deckAlbedo, deckRoughness, shellNormal, backdrop] = await Promise.all([
 const scene = new THREE.Scene();
 scene.background = backdrop ?? new THREE.Color(COLORS.base);
 // Reflections (#376): the room prefiltered once, used as the envMap of the marble materials only. The deck and the
-// frame get none, so their warm sodium look stays as it was.
-const pmrem = new THREE.PMREMGenerator(renderer);
-const reflections = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-pmrem.dispose();
+// frame get none, so their warm sodium look stays as it was. None under automation, nor the accents below (#416).
+const rich = reflectionsAndAccents(navigator.webdriver);
+let reflections: THREE.Texture | null = null;
+if (rich) {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  reflections = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+}
 scene.environmentIntensity = LIGHT.environment.intensity;
 const camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 100);
 // The whole board fits the window, held upright too, below the HUD and the buttons (#227).
@@ -283,7 +288,7 @@ const coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accent
 coldRim.position.set(...LIGHT.accents.rim.position);
 const warmLight = new THREE.PointLight(LIGHT.accents.warm.color, LIGHT.accents.warm.intensity, LIGHT.accents.warm.distance);
 warmLight.position.set(...LIGHT.accents.warm.position);
-scene.add(coldRim, warmLight);
+if (rich) scene.add(coldRim, warmLight);
 // Background decor (#376): dim bulkhead ribs far behind the board, below the deck plane, so no cell, marble or mark
 // can sit under them. Only the fog and the key touch them; they never reach the board's brightness.
 const decorMaterial = new THREE.MeshStandardMaterial({ color: DECOR.color, roughness: 0.9 });
