@@ -132,6 +132,8 @@ run `bun install` in `client/` too.
 
 ## Crew manifest
 
+- Built by two co-developers: [@TidyMaze](https://github.com/TidyMaze) and
+  [@Varadiell](https://github.com/Varadiell)
 - What we build: [SPEC.md](SPEC.md) and [docs/specs/](docs/specs/)
 - How we work, strictly, issues first: [CONTRIBUTING.md](CONTRIBUTING.md)
   (AI agents: [AGENTS.md](AGENTS.md))
