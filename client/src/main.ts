@@ -27,6 +27,7 @@ import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type 
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
 import { endBanner } from './endbanner';
+import { tallyLine } from './tally';
 import { generateKeys } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { OnlineSession } from './session';
@@ -590,6 +591,8 @@ function hud(extra = ''): void {
     win,
     note: `${backend}${onlineNote}${online ? '' : offlineNotice}${extra}`,
     online: onlineLine,
+    // Tally's line at the start of a match, the same mode as the end banner (#294).
+    tally: history.length === 0 && status === 0 ? tallyLine({ mode: online ? 'online' : fight ? 'boss' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
     // Who asked for a rematch, for the seated players of a finished online game (#186).
     rematch:
       online?.role === 'player' && status !== 0

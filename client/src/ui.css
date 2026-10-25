@@ -105,6 +105,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #hud .boss .tell { margin-top: 0.25rem; font-size: 0.875rem; color: var(--hazard); }
 #hud .boss .goal { margin-top: 0.25rem; font-size: 0.875rem; }
 #hud .boss .daily { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
+#hud .tally { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
 /* Daily result card (#196), under Retry at the end of a daily fight: the text as it is copied, then Copy. */
 #daily-card { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
 #daily-card[hidden] { display: none; }
