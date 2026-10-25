@@ -6,8 +6,9 @@ import { FRAME } from '../src/frame';
 // must differ at the far rim and match at the near rim. The CSS vignette (body::after) is hidden so
 // only the scene fog is measured. Bug #399: the far rim is the steel rim beyond the cells, the far rim
 // cells must match too: the fog thickens toward the rim, never over a cell.
-const cellToScreen = (page: Page, q: number, r: number) =>
-  page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }, [q, r]);
+// Every call to the page waits for its software WebGL on a CI runner (#429): the points are read in one call.
+const cellsToScreen = (page: Page, cells: [number, number][]) =>
+  page.evaluate((list) => list.map(([q, r]) => (window as any).__cellToScreen(q, r) as { x: number; y: number }), cells);
 
 const settle = (page: Page) =>
   page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
@@ -102,24 +103,26 @@ test('the fog shows at the far rim of the board, not on its cells nor at the nea
   // The evaluation bar's label (#191) is set when the analysis worker answers, which can be after the first shot.
   await page.addStyleTag({ content: 'body::after, #eval { display: none !important; }' });
   await expect(page.locator('#hud')).toContainText('Black to move');
-  const cog = page.getByRole('button', { name: 'Settings' });
-  const toggle = page.getByRole('button', { name: 'Clear board' });
-  // The menu is closed for the shots, so it is in none of them: flip the setting through the cog.
-  const flip = async () => {
-    await cog.click();
-    await toggle.click();
-    await cog.click();
-    await page.mouse.move(2, 2);
-  };
+  // The menu stays closed, so it is in none of the shots: the setting is flipped by a click event on its row. Opening the
+  // menu with the cog is checked in clear-board.spec.ts; here each real click cost seconds on a CI runner (#429).
+  const toggle = page.getByRole('button', { name: 'Clear board', includeHidden: true });
+  const flip = () => toggle.dispatchEvent('click');
   await page.mouse.move(2, 2); // no hover ghost
   await settle(page);
 
   // Under automation the page skips draws while the last one was slow (#216): two animation frames do not prove the board
-  // was drawn again after a flip. Each shot waits for a draw that began after it was asked for (bug #365).
+  // was drawn again after a flip. Each shot waits for a draw that began after it was asked for (bug #365), then two
+  // frames, in one call to the page (#429).
   const shot = async (name: string) => {
-    const draws = await page.evaluate(() => (window as any).__draws() as number);
-    await page.waitForFunction((n) => (window as any).__draws() > n, draws);
-    await settle(page);
+    await page.evaluate(
+      () =>
+        new Promise((done) => {
+          const draws = (window as any).__draws as () => number;
+          const asked = draws();
+          const wait = () => (draws() > asked ? requestAnimationFrame(() => requestAnimationFrame(done)) : requestAnimationFrame(wait));
+          requestAnimationFrame(wait);
+        }),
+    );
     return page.screenshot({ path: testInfo.outputPath(name), type: 'png' });
   };
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
@@ -132,8 +135,6 @@ test('the fog shows at the far rim of the board, not on its cells nor at the nea
   const fogOnAgain = await shot('fog-on-again.png');
 
   const size = page.viewportSize()!;
-  const far = await Promise.all([0, 1, 2, 3, 4].map((q) => cellToScreen(page, q, -4)));
-  const near = await Promise.all([-4, -3, -2, -1, 0].map((q) => cellToScreen(page, q, 4)));
   const band = (cells: { x: number; y: number }[]) => {
     const x = Math.max(0, Math.floor(Math.min(...cells.map((c) => c.x)) - 20));
     const y = Math.max(0, Math.floor(Math.min(...cells.map((c) => c.y)) - 25));
@@ -143,19 +144,24 @@ test('the fog shows at the far rim of the board, not on its cells nor at the nea
 
   // The far half of the steel rim, between the plate's edge and the rim's outer edge (frame.ts), from x = -2 to 2.
   const SQRT3_2 = Math.sqrt(3) / 2;
-  const onPlane = (x: number, z: number) => cellToScreen(page, x - z / SQRT3_2 / 2, z / SQRT3_2);
+  const onPlane = (x: number, z: number): [number, number] => [x - z / SQRT3_2 / 2, z / SQRT3_2];
   const edge = RADIUS * SQRT3_2 + FRAME.margin;
-  const [left, right, inner, outer] = await Promise.all([
+  const points = await cellsToScreen(page, [
+    ...[0, 1, 2, 3, 4].map((q): [number, number] => [q, -4]),
+    ...[-4, -3, -2, -1, 0].map((q): [number, number] => [q, 4]),
     onPlane(-2, -edge),
     onPlane(2, -edge),
     onPlane(0, -edge),
     onPlane(0, -edge - FRAME.rim),
   ]);
+  const [far, near, [left, right, inner, outer]] = [points.slice(0, 5), points.slice(5, 10), points.slice(10)];
   const farRim = { x: Math.round(left.x), y: Math.round(outer.y), w: Math.round(right.x - left.x), h: Math.round(inner.y - outer.y) };
   // A box on each far rim cell's disc, half the cell spacing wide.
   const half = Math.round((far[1]!.x - far[0]!.x) / 4);
   const disc = (c: { x: number; y: number }) => ({ x: Math.round(c.x) - half, y: Math.round(c.y) - half, w: 2 * half, h: 2 * half });
 
+  // The pixels are compared on a blank page: the board no longer draws and takes the runner's cores (#429).
+  await page.goto('about:blank');
   const still = await diffOf(page, fogOn, fogOnAgain, { x: 0, y: 0, w: size.width, h: size.height });
   if (still.mean >= 0.01) {
     await testInfo.attach('still-diff.png', { body: Buffer.from(still.png, 'base64'), contentType: 'image/png' });
