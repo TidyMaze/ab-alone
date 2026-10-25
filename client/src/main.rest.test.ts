@@ -64,3 +64,29 @@ describe('main.ts, the deck textures', () => {
     expect(cells().normalMap).toBeNull();
   });
 });
+
+describe('main.ts, the airborne particles', () => {
+  it('drift with their deck each frame, and one leaving the volume comes back inside it', async () => {
+    let points: THREE.Points | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      points ??= (objects.find((o) => o instanceof THREE.Points) as THREE.Points) ?? null;
+      return add.apply(this, objects);
+    });
+    const game = await boot('?bot=off', { webdriver: false });
+    game.hook('__deck', 'furnace'); // steam, rising: drift [0.02, 0.12, -0.02]
+    const pos = points!.geometry.getAttribute('position') as THREE.BufferAttribute;
+    pos.setXYZ(0, 10, 7.45, 0); // just under the top of the volume
+    pos.setXYZ(1, 10, 3, 0);
+    game.frame(); // the first frame moves by 16 ms
+    game.frame(100); // then by at most 80 ms
+    expect(pos.getX(1)).toBeCloseTo(10 + 0.02 * 0.96);
+    expect(pos.getY(1)).toBeCloseTo(3 + 0.12 * 0.96);
+    expect(pos.getZ(1)).toBeCloseTo(-0.02 * 0.96);
+    expect(pos.getY(0)).toBeLessThanOrEqual(6.7); // 7.45 + 0.115 left the top: back somewhere in the volume
+    expect(pos.getY(0)).toBeGreaterThanOrEqual(-0.3);
+    expect(Math.hypot(pos.getX(0), pos.getZ(0))).toBeGreaterThanOrEqual(5.5);
+    expect(Math.hypot(pos.getX(0), pos.getZ(0))).toBeLessThanOrEqual(17);
+    expect(pos.version).toBeGreaterThan(0); // sent to the GPU again
+  });
+});
