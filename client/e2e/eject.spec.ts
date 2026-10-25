@@ -19,7 +19,14 @@ async function open(page: Page) {
 // effect, the marble drawn 200 ms and 700 ms in, and, with `skip`, the effect right after a key or a
 // click. Recorded in the page, so a slow runner can never miss the effect (#107).
 type Drawn = { along: number; across: number; roll: number; twist: number; drop: number; opacity: number };
-type Seen = { kind: string; at200: Drawn[]; at700: Drawn[]; afterSkip?: { ejecting?: string; marbles: number } };
+type Seen = {
+  kind: string;
+  blood?: string; // data-blood, the spatter of #278, set as the effect starts
+  at200: Drawn[];
+  at700: Drawn[];
+  afterSkip?: { ejecting?: string; blood?: string; marbles: number };
+  spray?: Bloody[]; // the spatter in screen space at 0 to 850 ms, see the overlap checks (#278)
+};
 
 async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
   const click = await open(page);
@@ -29,10 +36,22 @@ async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
     const observer = new MutationObserver(() => {
       const kind = document.body.dataset.ejecting;
       if (!kind || w.__seen) return;
-      const seen: Seen = { kind, at200: w.__ejectAt(200), at700: w.__ejectAt(700) };
+      const seen: Seen = {
+        kind,
+        blood: document.body.dataset.blood,
+        at200: w.__ejectAt(200),
+        at700: w.__ejectAt(700),
+        spray: [0, 300, 450, 600, 850].map((ms) => ({ ms, ...w.__bloodAt(ms) })),
+      };
       if (skip === 'key') document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
       if (skip === 'click') document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-      if (skip) seen.afterSkip = { ejecting: document.body.dataset.ejecting, marbles: w.__ejectAt(0).length };
+      if (skip) {
+        seen.afterSkip = {
+          ejecting: document.body.dataset.ejecting,
+          blood: document.body.dataset.blood,
+          marbles: w.__ejectAt(0).length,
+        };
+      }
       w.__seen = seen;
       observer.disconnect();
     });
@@ -56,6 +75,7 @@ async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
 test('an ejected marble tumbles, stretches and fades into the void, then the effect ends', async ({ page }) => {
   const { seen } = await pushOffBoard(page);
   expect(seen.kind).toBe('tumble');
+  expect(seen.blood).toBe('spatter'); // #278: the spatter starts with the tumble
   expect(seen.at200).toHaveLength(1);
   expect(seen.at200[0]!.opacity).toBe(1); // pushed over the rim, not fading yet
   const [past] = seen.at700;
@@ -66,12 +86,14 @@ test('an ejected marble tumbles, stretches and fades into the void, then the eff
   expect(past!.opacity).toBeGreaterThan(0);
   expect(past!.opacity).toBeLessThan(1);
   await expect(page.locator('body')).not.toHaveAttribute('data-ejecting', /.*/, { timeout: 3000 });
+  await expect(page.locator('body')).not.toHaveAttribute('data-blood', /.*/, { timeout: 3000 }); // #278: it ends by itself
 });
 
-test('reduced motion: a plain fade, no tumble, no stretch, the same outcome', async ({ page }) => {
+test('reduced motion: a plain fade, no tumble, no stretch, no spatter, the same outcome', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { seen } = await pushOffBoard(page);
   expect(seen.kind).toBe('fade');
+  expect(seen.blood).toBeUndefined(); // #278: no particles under reduced motion
   const [mid] = seen.at200;
   expect(mid).toEqual({ along: 1, across: 1, roll: 0, twist: 0, drop: 0, opacity: mid!.opacity });
   expect(mid!.opacity).toBeGreaterThan(0);
@@ -80,11 +102,58 @@ test('reduced motion: a plain fade, no tumble, no stretch, the same outcome', as
   await expect(page.locator('#hud')).toContainText('White to move');
 });
 
+// #278: the spatter, in screen space, never covers a cell, a marble on the board or the steel frame, and stays on
+// screen. Checked on a desktop and a phone, at the start, the peak (450 ms) and before it ends.
+type Box = { x0: number; y0: number; x1: number; y1: number };
+type Pt = { x: number; y: number };
+type Bloody = { ms: number; spray: Box | null; drops: number; cells: Box[]; marbles: Box[]; frame: Pt[] };
+const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+// A box and a convex polygon are apart when one axis separates them: a box axis, or an edge normal of the polygon.
+function hitsPolygon(box: Box, poly: Pt[]): boolean {
+  const corners = [box.x0, box.x1].flatMap((x) => [box.y0, box.y1].map((y) => ({ x, y })));
+  const normals = poly.map((p, i) => {
+    const q = poly[(i + 1) % poly.length]!;
+    return { x: p.y - q.y, y: q.x - p.x };
+  });
+  const span = (pts: Pt[], axis: Pt) => {
+    const v = pts.map((p) => p.x * axis.x + p.y * axis.y);
+    return [Math.min(...v), Math.max(...v)];
+  };
+  return [...normals, { x: 1, y: 0 }, { x: 0, y: 1 }].every((axis) => {
+    const [b0, b1] = span(corners, axis);
+    const [p0, p1] = span(poly, axis);
+    return b0 < p1 && p0 < b1;
+  });
+}
+
+for (const [name, viewport] of [
+  ['desktop', { width: 1280, height: 720 }],
+  ['phone', { width: 375, height: 812 }],
+] as const) {
+  test.describe(`the spatter on a ${name}`, () => {
+    test.use({ viewport });
+    test('clears every cell, marble and the steel frame, and stays on screen', async ({ page }) => {
+      const { seen } = await pushOffBoard(page);
+      expect(seen.spray).toHaveLength(5);
+      for (const s of seen.spray!) {
+        expect(s.spray, `spatter at ${s.ms} ms`).not.toBeNull();
+        const box = s.spray!;
+        console.log(`${name}, ${s.ms} ms: spatter ${Math.round(box.x1 - box.x0)} x ${Math.round(box.y1 - box.y0)} px, ${s.drops} drops`);
+        expect(s.cells.some((c) => overlaps(box, c)), `a cell at ${s.ms} ms`).toBe(false);
+        expect(s.marbles.some((m) => overlaps(box, m)), `a marble at ${s.ms} ms`).toBe(false);
+        expect(hitsPolygon(box, s.frame), `the frame at ${s.ms} ms`).toBe(false);
+        expect(box.x0 >= 0 && box.y0 >= 0 && box.x1 <= viewport.width && box.y1 <= viewport.height, `on screen at ${s.ms} ms`).toBe(true);
+      }
+    });
+  });
+}
+
 for (const input of ['key', 'click'] as const) {
   test(`a ${input} during the effect ends it at once and never holds the next move`, async ({ page }) => {
     const { click, seen } = await pushOffBoard(page, input);
     expect(seen.kind).toBe('tumble');
     expect(seen.afterSkip).toEqual({ marbles: 0 }); // no data-ejecting left, no marble in the void
+    expect(seen.afterSkip?.blood).toBeUndefined(); // #278: the spatter ends at once too
     await click([1, -2], [1, -1]); // White plays at once: one marble SE
     await expect(page.locator('#hud')).toContainText('Black to move');
     await expect(page.locator('body')).toHaveAttribute('data-ejections', '1');

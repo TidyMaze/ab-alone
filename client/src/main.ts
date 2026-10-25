@@ -16,6 +16,7 @@ import { askBot, askEval, BOT_NODES } from './bot';
 import { bossHtml, goalShown } from './bosshud';
 import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
+import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
@@ -534,6 +535,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const e: Ejecting = { holder, mesh, track, start: performance.now(), skipped: false };
   drawEjection(e, 0);
   ejecting.push(e);
+  if (!reducedMotion) startBlood(track);
   body.dataset.ejecting = track.kind; // read by the e2e tests: tumble, or fade with reduced motion
 }
 
@@ -551,6 +553,54 @@ function drawEjection(e: Ejecting, elapsedMs: number): boolean {
   return p.done;
 }
 
+// The blood spatter of an ejection (issue #278): a stylised spatter just past the steel frame, drawn from
+// blood.ts. It never covers a cell, a marble or the frame, ends by itself, and a click or a key ends it at once.
+const BLOOD_COLOR = 0xbd2a20; // 3.3:1 on the void (#0b0d0f), brighter than the rust it replaces, still not the UI danger red
+const DROP_SIZE = 1.6; // world units: big enough to count at 1280x720, still a droplet
+interface Bleeding {
+  points: THREE.Points;
+  stain: THREE.Mesh;
+  from: { x: number; z: number };
+  dir: { x: number; z: number };
+  start: number;
+  skipped: boolean;
+}
+const bleeding: Bleeding[] = [];
+
+function startBlood(track: EjectTrack): void {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BLOOD_DROPS * 3), 3));
+  const material = new THREE.PointsMaterial({ color: BLOOD_COLOR, size: DROP_SIZE, transparent: true, depthWrite: false });
+  const points = new THREE.Points(geometry, material);
+  // The stain: a flat disc on the void just under the rim, its own mesh so it can grow and fade.
+  const stain = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 24),
+    new THREE.MeshBasicMaterial({ color: BLOOD_COLOR, transparent: true, depthWrite: false }),
+  );
+  stain.rotation.x = -Math.PI / 2;
+  scene.add(points, stain);
+  const b: Bleeding = { points, stain, from: track.from, dir: track.dir, start: performance.now(), skipped: false };
+  drawBlood(b, 0);
+  bleeding.push(b);
+  document.body.dataset.blood = 'spatter'; // read by the e2e tests
+}
+
+/** Draws a spatter `elapsedMs` into its effect, true once it is over. */
+function drawBlood(b: Bleeding, elapsedMs: number): boolean {
+  const t = b.skipped ? BLOOD_MS : elapsedMs;
+  const drops = bloodAt(b.from, b.dir, t, false);
+  if (drops.length === 0) return true;
+  const position = b.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+  drops.forEach((d, i) => position.setXYZ(i, d.x, d.y, d.z));
+  position.needsUpdate = true;
+  (b.points.material as THREE.PointsMaterial).opacity = drops[0]!.alpha;
+  const stain = bloodStainAt(b.from, b.dir, t, false)!;
+  b.stain.position.set(stain.x, 0.01, stain.z);
+  b.stain.scale.setScalar(stain.radius);
+  (b.stain.material as THREE.MeshBasicMaterial).opacity = stain.alpha;
+  return false;
+}
+
 function animateEjections(now: number): void {
   for (const e of ejecting.slice()) {
     if (!drawEjection(e, now - e.start)) continue;
@@ -559,11 +609,22 @@ function animateEjections(now: number): void {
     ejecting.splice(ejecting.indexOf(e), 1);
   }
   if (ejecting.length === 0) delete document.body.dataset.ejecting;
+  for (const b of bleeding.slice()) {
+    if (!drawBlood(b, now - b.start)) continue;
+    scene.remove(b.points, b.stain);
+    b.points.geometry.dispose();
+    (b.points.material as THREE.Material).dispose();
+    b.stain.geometry.dispose();
+    (b.stain.material as THREE.Material).dispose();
+    bleeding.splice(bleeding.indexOf(b), 1);
+  }
+  if (bleeding.length === 0) delete document.body.dataset.blood;
 }
 
 // Skip: a click or a key jumps the effect to its end, then goes on to do its usual job.
 function skipEjections(): void {
   for (const e of ejecting) e.skipped = true;
+  for (const b of bleeding) b.skipped = true;
   animateEjections(performance.now());
 }
 addEventListener('pointerdown', skipEjections, { capture: true });
@@ -870,6 +931,44 @@ addEventListener('resize', () => {
       opacity: material.opacity / material.userData.opacity, // the fade, the glass's own see-through aside
     };
   });
+
+// Used by the browser checks to see the spatter `ms` into its effect in screen space (px), beside what it must not
+// cover: each cell disc, each marble on the board, and the frame's outer edge (#278). Draws nothing.
+(window as unknown as Record<string, unknown>).__bloodAt = (ms: number) => {
+  camera.updateMatrixWorld();
+  const px = (x: number, y: number, z: number) => {
+    const v = new THREE.Vector3(x, y, z).project(camera);
+    return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
+  };
+  const boxOf = (pts: { x: number; y: number }[]) => ({
+    x0: Math.min(...pts.map((p) => p.x)),
+    y0: Math.min(...pts.map((p) => p.y)),
+    x1: Math.max(...pts.map((p) => p.x)),
+    y1: Math.max(...pts.map((p) => p.y)),
+  });
+  const ring = (cx: number, cz: number, radius: number, y: number) =>
+    Array.from({ length: 16 }, (_, k) => px(cx + Math.cos((k * Math.PI) / 8) * radius, y, cz + Math.sin((k * Math.PI) / 8) * radius));
+  const b = bleeding.at(-1);
+  const drops = b ? bloodAt(b.from, b.dir, ms, false) : [];
+  const stain = b ? bloodStainAt(b.from, b.dir, ms, false) : null;
+  const spray = [...drops.map((d) => px(d.x, d.y, d.z)), ...(stain ? ring(stain.x, stain.z, stain.radius, 0.01) : [])];
+  const cells = CELLS.map(([q, r]) => {
+    const c = axialTo3D(q, r);
+    return boxOf(ring(c.x, c.z, 0.46, 0.05));
+  });
+  const boardMarbles = marbles.children.map((o) => {
+    const bb = new THREE.Box3().setFromObject(o);
+    const corners = [bb.min.x, bb.max.x].flatMap((x) => [bb.min.y, bb.max.y].flatMap((y) => [bb.min.z, bb.max.z].map((z) => px(x, y, z))));
+    return boxOf(corners);
+  });
+  return {
+    spray: spray.length > 0 ? boxOf(spray) : null,
+    drops: drops.length,
+    cells,
+    marbles: boardMarbles,
+    frame: frame ? frame.outer.map((p) => px(p.x, 0, p.z)) : [],
+  };
+};
 
 // Used by the browser checks to see whether the audio context exists ('none') and runs.
 (window as unknown as Record<string, unknown>).__audio = () => sfx.state;
