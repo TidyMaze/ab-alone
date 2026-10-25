@@ -63,5 +63,6 @@ test('Reset view is disabled until its listener is attached, bug #146', async ({
     ready: document.getElementById('hud')!.innerHTML !== '',
   }));
   expect(atLoad.disabled || atLoad.ready).toBe(true);
-  await expect(page.locator('#reset-view')).toBeEnabled();
+  // Under software WebGL on a loaded runner the top-level awaits can take longer than the 5 s default (#336).
+  await expect(page.locator('#reset-view')).toBeEnabled({ timeout: 30_000 });
 });
