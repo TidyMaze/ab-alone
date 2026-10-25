@@ -189,7 +189,8 @@ test('New game while the bot thinks: its reply to the old game is dropped, the b
   expect(errors).toEqual([]);
 });
 
-test('no New game button during a boss fight, a daily fight or an online game', async ({ page }) => {
+// One test per state (each loads its own page, so each stays under the 15 s limit on the runner).
+test('no New game button during a boss fight', async ({ page }) => {
   const button = page.locator('#new-game');
   await page.goto('./?net=hook');
   await ready(page);
@@ -198,13 +199,19 @@ test('no New game button during a boss fight, a daily fight or an online game', 
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(page.locator('#hud')).toContainText('The Echo');
   await expect(button).toBeHidden();
+});
 
+test('no New game button during a daily fight', async ({ page }) => {
+  const button = page.locator('#new-game');
   await page.goto('./?net=hook');
   await ready(page);
   await page.locator('#daily').click();
   await expect(page.locator('#hud')).toContainText('Daily challenge');
   await expect(button).toBeHidden();
+});
 
+test('no New game button in an online game', async ({ page }) => {
+  const button = page.locator('#new-game');
   await page.goto('./?net=hook');
   await ready(page);
   await page.getByRole('button', { name: 'Play online' }).click();

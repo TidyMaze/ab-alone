@@ -41,7 +41,7 @@ import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from '.
 import { hudHtml } from './hud';
 import { drawSkin } from './skinart';
 import { nextSkin, skinById } from './skins';
-import { menuOpen, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
+import { menuOpen, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { DECOR, LIGHT } from './light';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -49,16 +49,22 @@ import {
   drawDue,
   fogSettings,
   readClearBoard,
+  readSafeMode,
   readSkin,
   readSound,
   readTheme,
   readTier,
+  readUiScale,
   renderPixelRatio,
   writeClearBoard,
+  writeSafeMode,
   writeSkin,
   writeSound,
   writeTheme,
+  writeUiScale,
 } from './quality';
+import { limitFlash } from './safe';
+import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { Sfx, TellWatch, type Tell } from './sound';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
@@ -195,6 +201,22 @@ function applyTheme(): void {
   if (value) document.documentElement.dataset.theme = value;
   else delete document.documentElement.dataset.theme;
 }
+// Photosensitivity safe mode (#380), on by default, and the UI scale (#382): one custom property on the root, which
+// the HUD and the settings menu read (ui.css). The board does not scale.
+let safe = readSafeMode(store);
+let uiScale: UiScale = clampUiScale(readUiScale(store), maxUiScale(innerWidth, innerHeight));
+function applyUiScale(): void {
+  document.documentElement.style.setProperty('--ui-scale', uiScaleFactor(uiScale));
+}
+applyUiScale();
+// Safe mode (#380) caps the one flashing effect, the end-of-game light: its peak and duration are custom properties
+// that ui.css reads. The win light pulses once in 1.6 s (0.625 a second), under the 3 a second cap.
+const applySafe = (): void => {
+  const light = limitFlash({ rate: 1 / 1.6, amplitude: 1 }, safe);
+  document.documentElement.style.setProperty('--end-peak', String(light.amplitude));
+  document.documentElement.style.setProperty('--end-duration', `${1 / light.rate}s`);
+};
+applySafe();
 // The ejection sound (docs/specs/world.md section 7), on by default, a setting of the menu (#284). The audio
 // context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
 // way down, a touch on the way up, and toggling Sound on starts it too (setEnabled).
@@ -227,9 +249,16 @@ const toggles: Record<string, () => void> = {
     writeSound(store, sfx.enabled);
   },
   theme: () => {
-    theme = nextTheme(theme);
+    const next = nextDisplay(theme, uiScale, safe, maxUiScale(innerWidth, innerHeight));
+    theme = next.theme;
+    uiScale = next.scale;
+    safe = next.safe;
     writeTheme(store, theme);
+    writeUiScale(store, uiScale);
+    writeSafeMode(store, safe);
     applyTheme();
+    applyUiScale();
+    applySafe();
   },
   'shell-skin': () => {
     skin = nextSkin(skin);
@@ -239,13 +268,13 @@ const toggles: Record<string, () => void> = {
   },
 };
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, sfx.enabled, theme, skin)) {
+for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';

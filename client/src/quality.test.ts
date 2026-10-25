@@ -6,16 +6,20 @@ import {
   fogSettings,
   readClearBoard,
   renderPixelRatio,
+  readSafeMode,
   readSound,
   readSkin,
   readTheme,
   readTier,
+  readUiScale,
   tierFromHints,
   writeClearBoard,
+  writeSafeMode,
   writeSound,
   writeSkin,
   writeTheme,
   writeTier,
+  writeUiScale,
 } from './quality';
 
 const big = { width: 1920, cores: 8, memory: 8, reducedMotion: false };
@@ -176,6 +180,45 @@ describe('sound storage, the on/off toggle until the mix sliders of #60', () => 
   it('does not throw when writing to a broken or missing storage', () => {
     expect(() => writeSound(throwing, false)).not.toThrow();
     expect(() => writeSound(null, false)).not.toThrow();
+  });
+});
+
+describe('safe mode storage: on unless the player turned it off (#380)', () => {
+  it('defaults to on', () => {
+    expect(readSafeMode(memoryStorage())).toBe(true);
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writeSafeMode(s, false);
+    expect(s.data.get('ab-alone.safe-mode')).toBe('off');
+    expect(readSafeMode(s)).toBe(false);
+    writeSafeMode(s, true);
+    expect(readSafeMode(s)).toBe(true);
+  });
+  it('falls back to on when storage throws or is missing', () => {
+    expect(readSafeMode(throwing)).toBe(true);
+    expect(readSafeMode(null)).toBe(true);
+  });
+});
+
+describe('UI scale storage: 100 % unless the player picked a step (#382)', () => {
+  it('defaults to 100', () => {
+    expect(readUiScale(memoryStorage())).toBe(100);
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writeUiScale(s, 175);
+    expect(s.data.get('ab-alone.ui-scale')).toBe('175');
+    expect(readUiScale(s)).toBe(175);
+  });
+  it('ignores a value that is not a step', () => {
+    expect(readUiScale(memoryStorage({ 'ab-alone.ui-scale': '300' }))).toBe(100);
+    expect(readUiScale(memoryStorage({ 'ab-alone.ui-scale': 'big' }))).toBe(100);
+  });
+  it('falls back to 100 when storage throws or is missing', () => {
+    expect(readUiScale(throwing)).toBe(100);
+    expect(readUiScale(null)).toBe(100);
+    expect(() => writeUiScale(throwing, 200)).not.toThrow();
   });
 });
 
