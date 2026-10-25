@@ -64,6 +64,7 @@ const frame = (page: Page) =>
 const tapCog = async (page: Page) => {
   const cog = page.getByRole('button', { name: 'Settings' });
   const { x, y, hit } = await cog.evaluate((el) => {
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // as Playwright's click does before it taps
     const r = el.getBoundingClientRect();
     const x = r.left + r.width / 2;
     const y = r.top + r.height / 2;
