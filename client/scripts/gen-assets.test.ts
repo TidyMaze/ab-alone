@@ -24,7 +24,9 @@ function decode(buf: Buffer, channels = 3): { w: number; h: number; rows: Buffer
   return { w, h, rows: Array.from({ length: h }, (_, y) => raw.subarray(y * stride + 1, (y + 1) * stride)) };
 }
 
-describe('gen-assets', () => {
+// Each run generates every asset, the five deck sets of #401 included: a few hundred ms alone, seconds when the whole
+// suite runs in parallel with coverage, over vitest's 5 s default on a loaded machine.
+describe('gen-assets', { timeout: 20_000 }, () => {
   it('is deterministic: two runs with the same seed give the same hash', () => {
     expect(hashAll(generateAssets(SEED))).toBe(hashAll(generateAssets(SEED)));
   });
