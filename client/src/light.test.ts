@@ -27,6 +27,11 @@ describe('reflections and accent lights (#376)', () => {
     expect(LIGHT.environment.intensity).toBeLessThanOrEqual(0.3);
   });
 
+  it('the dark glass takes less reflection than the shell, so it keeps 3:1 on the deck', () => {
+    expect(LIGHT.environment.glass).toBeGreaterThan(0);
+    expect(LIGHT.environment.glass).toBeLessThan(LIGHT.environment.intensity);
+  });
+
   it('the cold rim is the player cyan, the warm point is the sodium orange', () => {
     expect(LIGHT.accents.rim.color).toBe(0x7fd6e8);
     expect(LIGHT.accents.warm.color).toBe(0xd9822b);

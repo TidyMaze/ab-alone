@@ -135,9 +135,10 @@ const [deckAlbedo, deckRoughness, shellNormal, backdrop] = await Promise.all([
 
 const scene = new THREE.Scene();
 scene.background = backdrop ?? new THREE.Color(COLORS.base);
-// Reflections (#376): the room prefiltered once into the scene environment, lit low so the marbles catch highlights.
+// Reflections (#376): the room prefiltered once, used as the envMap of the marble materials only. The deck and the
+// frame get none, so their warm sodium look stays as it was.
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const reflections = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 pmrem.dispose();
 scene.environmentIntensity = LIGHT.environment.intensity;
 const camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 100);
@@ -294,9 +295,11 @@ const { ridges, ...shell } = SHELL;
 const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
   1: new THREE.MeshStandardMaterial({
     ...shell,
+    envMap: reflections,
+    envMapIntensity: LIGHT.environment.intensity,
     ...(shellNormal ? { normalMap: shellNormal, normalScale: new THREE.Vector2(ridges, ridges) } : {}),
   }),
-  2: new THREE.MeshPhysicalMaterial(GLASS),
+  2: new THREE.MeshPhysicalMaterial({ ...GLASS, envMap: reflections, envMapIntensity: LIGHT.environment.glass }),
 };
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
 const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the glass
