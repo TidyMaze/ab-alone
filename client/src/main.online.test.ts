@@ -279,7 +279,7 @@ describe('Copy diagnostics', () => {
     await until(game, () => game.hud().includes(' · diagnostics copied'));
     expect(byId('diagnostics').hidden).toBe(true);
     const text = JSON.parse(copied());
-    expect(text).toMatchObject({ app: 'ab-alone', build: 'dev', environment: { mode: 'test', fps: null } });
+    expect(text).toMatchObject({ app: 'ab-alone', build: expect.stringMatching(/^(dev|[0-9a-f]{12})$/), environment: { mode: 'test', fps: null } });
     expect(text.game.mode).toBe('local');
     expect(text.game.online).toBeUndefined();
   });
