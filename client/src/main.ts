@@ -48,7 +48,8 @@ import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOL
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
 import { DECOR, LIGHT } from './light';
-import { ROOM_SURFACE, propList } from './room';
+import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
+import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
@@ -507,6 +508,7 @@ for (const x of [-6, 6]) {
 }
 scene.add(decor);
 
+
 const detail = meshDetail(tier);
 const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, detail.discSegments);
 const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidthSegments, detail.marbleHeightSegments);
@@ -684,24 +686,76 @@ const roomDeck = new THREE.Mesh(
 roomDeck.position.set(0, ROOM_SURFACE.y - 0.2, 0);
 roomDeck.receiveShadow = true;
 
-// Derelict hauler props sitting around the table (#470)
+// Spaceship interior architecture (bulkhead arches, rear wall, airlock, pedestal, conduits) (#478)
+let wallTexture: THREE.Texture | null = null;
+let hazardTexture: THREE.Texture | null = null;
+if (deckAlbedo && tier === 'high' && typeof document !== 'undefined') {
+  try {
+    const wallCanvas = createCanvasTexture(512, 512, drawWallPanel);
+    wallTexture = new THREE.Texture(wallCanvas);
+    wallTexture.needsUpdate = true;
+    wallTexture.wrapS = THREE.RepeatWrapping;
+    wallTexture.wrapT = THREE.RepeatWrapping;
+    wallTexture.repeat.set(4, 2);
+
+    const hazardCanvas = createCanvasTexture(256, 64, drawHazardStripes);
+    hazardTexture = new THREE.Texture(hazardCanvas);
+    hazardTexture.needsUpdate = true;
+    hazardTexture.wrapS = THREE.RepeatWrapping;
+    hazardTexture.wrapT = THREE.ClampToEdgeWrapping;
+    hazardTexture.repeat.set(4, 1);
+  } catch {
+    // Canvas context not available (e.g. in basic headless environments)
+  }
+}
+
 const propsGroup = new THREE.Group();
 drawProps = (): void => {
   propsGroup.clear();
-  for (const def of propList(tier)) {
-    const mat = new THREE.MeshStandardMaterial({ color: def.color, roughness: def.roughness, fog: false });
+  for (const def of spaceshipArchitecture(tier)) {
+    let mat: THREE.MeshStandardMaterial;
+    if (def.id === 'rear-wall' && wallTexture) {
+      mat = new THREE.MeshStandardMaterial({
+        color: def.color,
+        roughness: def.roughness,
+        map: wallTexture,
+        fog: false,
+      });
+    } else if (def.id === 'hazard-lintel' && hazardTexture) {
+      mat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: def.roughness,
+        map: hazardTexture,
+        fog: false,
+      });
+    } else {
+      mat = new THREE.MeshStandardMaterial({
+        color: def.color,
+        roughness: def.roughness,
+        fog: false,
+      });
+    }
+
     const geom =
       def.type === 'cylinder'
-        ? new THREE.CylinderGeometry(def.size[0], def.size[0], def.size[1], def.size[2])
+        ? new THREE.CylinderGeometry(
+            def.size[0],
+            def.size[1],
+            def.size[2],
+            def.size[3] ?? 16,
+          )
         : new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]);
+
     const mesh = new THREE.Mesh(geom, mat);
     mesh.position.set(...def.position);
     mesh.rotation.set(...def.rotation);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    if (def.id.startsWith('pedestal') || def.id.startsWith('conduit')) {
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+    }
     propsGroup.add(mesh);
   }
-}
+};
 drawProps();
 
 scene.add(roomDeck, propsGroup, plate, rim.near, rim.far);
