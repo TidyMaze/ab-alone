@@ -280,7 +280,8 @@ answer: only a `Sync` does.
    per live seat, for its game and round, until the reveal starts. The round has a second, reveal
    deadline: a committed seat that has not revealed by then holds and is flagged. A reveal that
    cannot be pinned on a committed seat (bad signature, no commit) is refused and flags nobody;
-   the first signed reveal of a seat is final.
+   the first signed reveal of a seat is final. Not handled yet: a seat that sends other commits or
+   reveals to other peers can split the honest peers (#532).
 4. **Resolve:** every peer runs `resolve_round(state, orders)` locally. It applies the orders
    one by one in a rotating initiative order (derived from round number and seat list), each
    validated at its turn, an invalid order becomes a pass (game design #53, option C). Pure, so
