@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { contrastRatio, type RGB } from '../src/contrast';
 
 // Bug #326: a tell drawn on top of a boss marble (a Choir army glyph, The Chaplain's converted cap) reads 3:1 against
 // the shell it sits on (world.md section 5, Tell marks). For each cell, the contrast (WCAG 2) of the brightest to the
@@ -39,6 +40,68 @@ const topContrasts = async (page: Page, cells: [number, number][]): Promise<numb
 // #358: every boss tell has a sound twin, played when the tell appears or changes. window.__tellCues() lists the cues
 // played so far. The clicks that open the fight are the gesture that starts the audio.
 const tellCues = (page: Page) => page.evaluate(() => (window as any).__tellCues()) as Promise<string[]>;
+
+// #355: The Hull's crack decal reads 3:1 on its cell (world.md section 5, Tell marks). Two screenshots, the decal shown
+// then hidden: at each texel of crack-decal.png inside a crack line, in the ring round the marble, the contrast (WCAG 2)
+// of the drawn crack against the steel under it. A point whose pixel does not change is hidden (by a shell, a tick, the
+// bevel) and left out. The page draws at half the pixel ratio under automation, so most crack pixels are mixed with
+// the steel: the check counts the points where the crack is fully drawn and reads 3:1. Returns how many points show
+// and how many of them reach 3:1.
+const crackContrast = async (page: Page, [q, r]: [number, number]): Promise<{ shown: number; reading: number }> => {
+  await page.mouse.move(2, 2); // no hover ghost
+  await page.waitForTimeout(250); // a draw since the last change: the page draws at most every 100 ms under automation
+  const shown = await page.screenshot();
+  await page.evaluate(() => (window as any).__crackDecalShown(false));
+  let hidden = shown;
+  for (let n = 0; n < 50 && hidden.equals(shown); n++) {
+    await page.waitForTimeout(100);
+    hidden = await page.screenshot();
+  }
+  await page.evaluate(() => (window as any).__crackDecalShown(true));
+  const pairs: [RGB, RGB][] = await page.evaluate(
+    async ([a, b, cq, cr]) => {
+      const pixels = async (src: string) => {
+        const img = new Image();
+        img.src = src;
+        await img.decode();
+        const canvas = document.createElement('canvas');
+        [canvas.width, canvas.height] = [img.width, img.height];
+        const g = canvas.getContext('2d')!;
+        g.drawImage(img, 0, 0);
+        const { data } = g.getImageData(0, 0, img.width, img.height);
+        const at = (x: number, y: number) => {
+          const i = (y * img.width + x) * 4;
+          return [data[i]!, data[i + 1]!, data[i + 2]!];
+        };
+        return { w: img.width, at };
+      };
+      const [shownPx, hiddenPx] = await Promise.all([a, b].map((png) => pixels(`data:image/png;base64,${png}`)));
+      const decal = await pixels('assets/crack-decal.png');
+      const size = decal.w, CELL = 0.46; // the decal covers the disc, image x and y along the world x and z
+      const line = (x: number, y: number) => {
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (decal.at(x + dx, y + dy)[0]! < 250) return false;
+        return true;
+      };
+      const out: number[][][] = [];
+      for (let y = 1; y < size - 1; y++) {
+        for (let x = 1; x < size - 1; x++) {
+          if (!line(x, y)) continue;
+          const wx = ((2 * (x + 0.5)) / size - 1) * CELL, wz = ((2 * (y + 0.5)) / size - 1) * CELL;
+          if (Math.hypot(wx, wz) < 0.37) continue; // under the marble, seen through the glass
+          const dr = wz / (Math.sqrt(3) / 2); // world (x, z) to axial, as axialTo3D
+          const p = (window as any).__cellToScreen(cq + wx - dr / 2, cr + dr);
+          const [px, py] = [Math.round(p.x), Math.round(p.y)];
+          const pair = [shownPx.at(px, py), hiddenPx.at(px, py)];
+          if (pair[0]!.some((v, i) => Math.abs(v - pair[1]![i]!) > 8)) out.push(pair);
+        }
+      }
+      return out;
+    },
+    [shown.toString('base64'), hidden.toString('base64'), q, r] as const,
+  );
+  const ratios = pairs.map(([crack, steel]) => contrastRatio(crack, steel));
+  return { shown: ratios.length, reading: ratios.filter((ratio) => ratio >= 3).length };
+};
 
 test('start The Echo, play a move, the boss replies, Retry resets the board', async ({ page }) => {
   await page.goto('./');
@@ -87,52 +150,71 @@ test('Boss fight is disabled or works when clicked right after load, bug #144', 
   await expect(page.locator('#boss-fight')).toBeEnabled(); // and it works once the page is ready
 });
 
-// The Hull (#149): a rim cell cracks at ply 8, shows its ticks for 2 plies, then it is a hole.
-test('start The Hull, play to the first wave: a cracked cell ticks down, then vanishes, #149', async ({ page }, testInfo) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
-  await page.goto('./');
-  await page.locator('canvas').waitFor();
-  const body = page.locator('body');
-  const hud = page.locator('#hud');
-  const plies = () => page.evaluate(() => (window as any).__plies());
-  const click = async (q: number, r: number) => {
-    const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
-    await page.mouse.click(p.x, p.y);
-  };
-  // A forward one-marble move (NW or NE): Black never steps back, so no position repeats. The mouse plays the first
-  // one, the test hook the others (the same handler a click calls).
-  const advance = async (mouse: boolean) => {
-    const mv = await page.evaluate(() =>
-      (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
-    );
-    const [q, r] = mv.cells[0];
-    const send = mouse ? click : (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
-    await send(q, r);
-    await send(mv.dir === 4 ? q : q + 1, r - 1);
-  };
+// The Hull (#149): a rim cell cracks at ply 8, shows its ticks for 2 plies, then it is a hole. The cracked cell wears
+// the crack decal in both quality tiers, with Clear board off and on (#355, world.md section 8), 3:1 on the cell with
+// Clear board on: the fog dims the far rim cells under 3:1 (bug #399).
+for (const tier of ['high', 'low']) {
+  test(`start The Hull (${tier} tier), play to the first wave: a cracked cell ticks down, then vanishes, #149`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
+    await page.setViewportSize({ width: 1280, height: 720 }); // the contrast check's window, as contrast.spec.ts
+    await page.addInitScript((t) => localStorage.setItem('ab-alone.quality', t), tier);
+    await page.goto('./');
+    await page.locator('canvas').waitFor();
+    const body = page.locator('body');
+    await expect(body).toHaveAttribute('data-tier', tier);
+    const hud = page.locator('#hud');
+    const plies = () => page.evaluate(() => (window as any).__plies());
+    const click = async (q: number, r: number) => {
+      const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
+      await page.mouse.click(p.x, p.y);
+    };
+    // A forward one-marble move (NW or NE): Black never steps back, so no position repeats. The mouse plays the first
+    // one, the test hook the others (the same handler a click calls).
+    const advance = async (mouse: boolean) => {
+      const mv = await page.evaluate(() =>
+        (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
+      );
+      const [q, r] = mv.cells[0];
+      const send = mouse ? click : (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
+      await send(q, r);
+      await send(mv.dir === 4 ? q : q + 1, r - 1);
+    };
 
-  await page.getByRole('button', { name: 'Boss fight' }).click();
-  await page.locator('#boss-list').getByRole('button', { name: 'The Hull' }).click();
-  await expect(hud).toContainText('The Hull');
-  await expect(body).toHaveAttribute('data-cracks', '0');
-  for (let n = 1; n <= 4; n++) {
-    await advance(n === 1);
-    await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
-  }
-  await expect(body).toHaveAttribute('data-cracks', '1');
-  await expect(hud).toContainText('Rim cracks: 1 cell in 2 plies');
-  expect(await tellCues(page)).toEqual(['crack']); // the crack appears
-  await page.screenshot({ path: testInfo.outputPath('hull-cracked.png') });
+    await page.getByRole('button', { name: 'Boss fight' }).click();
+    await page.locator('#boss-list').getByRole('button', { name: 'The Hull' }).click();
+    await expect(hud).toContainText('The Hull');
+    await expect(body).toHaveAttribute('data-cracks', '0');
+    for (let n = 1; n <= 4; n++) {
+      await advance(n === 1);
+      await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
+    }
+    await expect(body).toHaveAttribute('data-cracks', '1');
+    await expect(hud).toContainText('Rim cracks: 1 cell in 2 plies');
+    expect(await tellCues(page)).toEqual(['crack']); // the crack appears
+    const decals: [number, number][] = await page.evaluate(() => (window as any).__crackDecals());
+    expect(decals).toEqual((await page.evaluate(() => (window as any).__cracks())).map((c: any) => c.cell));
+    await page.screenshot({ path: testInfo.outputPath('hull-cracked.png') });
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Clear board' }).click();
+    await expect(body).toHaveAttribute('data-clear', 'on');
+    await page.keyboard.press('Escape'); // the menu closes, off the board
+    expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual(decals);
+    const clear = await crackContrast(page, decals[0]!);
+    expect(clear.shown).toBeGreaterThan(20);
+    expect(clear.reading).toBeGreaterThanOrEqual(5);
+    await page.screenshot({ path: testInfo.outputPath('hull-cracked-clear.png') });
 
-  await advance(false);
-  await expect.poll(plies, { timeout: 30_000 }).toBe(10);
-  expect(await tellCues(page)).toEqual(['crack', 'crack']); // it ticked down on ply 9, then vanished: no cue for a gone tell
-  await expect(body).toHaveAttribute('data-vanished', '1');
-  expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
-  await expect(body).toHaveAttribute('data-cracks', '0');
-  await expect(hud).not.toContainText('Rim cracks');
-  await page.screenshot({ path: testInfo.outputPath('hull-vanished.png') });
-});
+    await advance(false);
+    await expect.poll(plies, { timeout: 30_000 }).toBe(10);
+    expect(await tellCues(page)).toEqual(['crack', 'crack']); // it ticked down on ply 9, then vanished: no cue for a gone tell
+    await expect(body).toHaveAttribute('data-vanished', '1');
+    expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
+    await expect(body).toHaveAttribute('data-cracks', '0');
+    await expect(hud).not.toContainText('Rim cracks');
+    expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath('hull-vanished.png') });
+  });
+}
 
 // The Chaplain fight from its start. ?nodes=200: the test budget of the bot and the boss search (bot.ts), 20 boss
 // turns cost 27 s on CI at the full budget.
