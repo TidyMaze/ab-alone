@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { endBanner, type EndMode } from './endbanner';
 
-const input = (mode: EndMode, side: number, status: number, reason = 0, win = 6) => ({ mode, side, status, reason, win });
+const input = (mode: EndMode, side: number, status: number, reason = 0, win = 6, glass = 2) => ({ mode, side, status, reason, win, glass });
 const REPEAT = 1;
 const STALL = 2;
 
@@ -39,6 +39,11 @@ describe('endBanner', () => {
       const b = endBanner(input(mode, side, status, reason))!;
       expect([mode, side, status, reason, b.title, b.anim]).toEqual([mode, side, status, reason, title, anim]);
     }
+  });
+
+  it('names the winner after the glass: against the bot side 1 wears it, so side 1 wins as White', () => {
+    expect(endBanner(input('local', 0, 1, 0, 6, 1))!.title).toBe('White wins');
+    expect(endBanner(input('local', 0, 2, 0, 6, 1))!.title).toBe('Black wins');
   });
 
   it('gives the reason in the ship tone, with the ejections the winner needed', () => {

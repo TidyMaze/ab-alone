@@ -40,11 +40,16 @@ describe('colourOf / seatFor', () => {
 
 describe('rematchText', () => {
   it('says nothing until someone asked', () => {
-    expect(rematchText(1, false, false)).toBe('');
+    expect(rematchText(1, false, false, 2)).toBe('');
   });
 
   it('says when we asked and when the opponent asked', () => {
-    expect(rematchText(1, true, false)).toBe('You asked for a rematch. Waiting for White...');
-    expect(rematchText(2, false, true)).toBe('Black asks for a rematch.');
+    expect(rematchText(1, true, false, 2)).toBe('You asked for a rematch. Waiting for White...');
+    expect(rematchText(2, false, true, 2)).toBe('Black asks for a rematch.');
+  });
+
+  it('names the sides after the glass: against the bot the opponent of side 1 is Black', () => {
+    expect(rematchText(1, true, false, 1)).toBe('You asked for a rematch. Waiting for Black...');
+    expect(rematchText(2, false, true, 1)).toBe('White asks for a rematch.');
   });
 });

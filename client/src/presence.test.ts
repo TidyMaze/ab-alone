@@ -39,27 +39,32 @@ describe('Presence', () => {
 
 describe('onlineStatus', () => {
   it('room creator alone: own color and waiting', () => {
-    expect(onlineStatus(1, 'player', 'waiting')).toEqual({ text: 'You are Black. Waiting for an opponent...', tone: 'waiting' });
+    expect(onlineStatus(1, 'player', 'waiting', false, 2)).toEqual({ text: 'You are Black. Waiting for an opponent...', tone: 'waiting' });
   });
 
   it('marks an agent opponent in the line, here or disconnected, and a human one stays unmarked', () => {
-    expect(onlineStatus(1, 'player', 'here', true)).toEqual({ text: 'You are Black. White (agent) is here.', tone: 'here' });
-    expect(onlineStatus(2, 'player', 'gone', true)).toEqual({ text: 'You are White. Black (agent) is disconnected.', tone: 'gone' });
-    expect(onlineStatus(1, 'player', 'here', false)).toEqual({ text: 'You are Black. White is here.', tone: 'here' });
+    expect(onlineStatus(1, 'player', 'here', true, 2)).toEqual({ text: 'You are Black. White (agent) is here.', tone: 'here' });
+    expect(onlineStatus(2, 'player', 'gone', true, 2)).toEqual({ text: 'You are White. Black (agent) is disconnected.', tone: 'gone' });
+    expect(onlineStatus(1, 'player', 'here', false, 2)).toEqual({ text: 'You are Black. White is here.', tone: 'here' });
   });
 
   it('joiner: joining until seated, then the creator is here', () => {
-    expect(onlineStatus(2, 'pending', 'here')).toEqual({ text: 'Joining as White...', tone: 'waiting' });
-    expect(onlineStatus(2, 'player', 'here')).toEqual({ text: 'You are White. Black is here.', tone: 'here' });
+    expect(onlineStatus(2, 'pending', 'here', false, 2)).toEqual({ text: 'Joining as White...', tone: 'waiting' });
+    expect(onlineStatus(2, 'player', 'here', false, 2)).toEqual({ text: 'You are White. Black is here.', tone: 'here' });
   });
 
   it('names the opponent for either side, here or disconnected', () => {
-    expect(onlineStatus(1, 'player', 'here')).toEqual({ text: 'You are Black. White is here.', tone: 'here' });
-    expect(onlineStatus(1, 'player', 'gone')).toEqual({ text: 'You are Black. White is disconnected.', tone: 'gone' });
-    expect(onlineStatus(2, 'player', 'gone')).toEqual({ text: 'You are White. Black is disconnected.', tone: 'gone' });
+    expect(onlineStatus(1, 'player', 'here', false, 2)).toEqual({ text: 'You are Black. White is here.', tone: 'here' });
+    expect(onlineStatus(1, 'player', 'gone', false, 2)).toEqual({ text: 'You are Black. White is disconnected.', tone: 'gone' });
+    expect(onlineStatus(2, 'player', 'gone', false, 2)).toEqual({ text: 'You are White. Black is disconnected.', tone: 'gone' });
+  });
+
+  it('names the sides after the glass: side 1 wearing the pale glass is White', () => {
+    expect(onlineStatus(1, 'player', 'here', false, 1)).toEqual({ text: 'You are White. Black is here.', tone: 'here' });
+    expect(onlineStatus(2, 'player', 'gone', false, 1)).toEqual({ text: 'You are Black. White is disconnected.', tone: 'gone' });
   });
 
   it('room full: watching', () => {
-    expect(onlineStatus(2, 'spectator', 'here')).toEqual({ text: 'Room is full, watching', tone: 'watching' });
+    expect(onlineStatus(2, 'spectator', 'here', false, 2)).toEqual({ text: 'Room is full, watching', tone: 'watching' });
   });
 });

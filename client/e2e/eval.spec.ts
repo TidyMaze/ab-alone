@@ -58,7 +58,7 @@ test('the bar follows a bot game, and is absent in a boss fight, #191', async ({
   test.slow(); // a bot search and a boss search in the worker
   await page.goto('./');
   await page.locator('canvas').waitFor();
-  await expect(page.locator('#hud')).toContainText('Black to move'); // the board listeners are wired
+  await expect(page.locator('#hud')).toContainText('White to move'); // the board listeners are wired
   const bar = page.locator('#eval');
   const plies = () => page.evaluate(() => (window as any).__plies());
   await click(page, 0, 2);

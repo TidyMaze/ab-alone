@@ -50,7 +50,7 @@ import {
   writeTheme,
 } from './quality';
 import { Sfx } from './sound';
-import { glassSide } from './glass';
+import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
 import { formatScore } from './score';
 import { indexedDbStore } from './idb';
@@ -62,7 +62,7 @@ import './ui.css';
 // Palette from docs/specs/world.md section 5.
 const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
 const BONE = 0xd8d4c8; // the pale tells
-const BOT_SIDE = 2; // the human plays Black (1), the bot plays White (2)
+const BOT_SIDE = 2; // the human plays side 1 (the glass), the bot plays side 2
 declare const __BUILD__: string; // the commit, set by vite.config.ts
 
 // Net state changes, refused moves, desyncs and bot search times, kept in memory for Copy diagnostics (#220).
@@ -354,7 +354,7 @@ const analyst = new Analyst(
   (moves) => askEval(analysisWorker, moves),
   (score, { history: moves, side }) => {
     const fill = evalFill(score, side);
-    const words = evalText(score, side);
+    const words = evalText(score, side, glassOf());
     evalBar.style.setProperty('--fill', String(fill));
     evalMeter.setAttribute('aria-valuenow', String(Math.round(fill * 100)));
     evalMeter.setAttribute('aria-valuetext', words);
@@ -540,6 +540,7 @@ function hud(extra = ''): void {
     win: status === 1 || status === 2 ? win[status - 1]! : 0,
     mode: online ? 'online' : fight ? 'boss' : worker ? 'bot' : 'local',
     side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
+    glass: glassOf(),
   });
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
@@ -547,7 +548,8 @@ function hud(extra = ''): void {
     end: end ?? undefined,
     side: engine.to_move(),
     status,
-    score: formatScore(ejected, win, status, engine.draw_reason()),
+    glass: glassOf(),
+    score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
     note: `${backend}${onlineNote}${online ? '' : offlineNotice}${extra}`,
@@ -555,7 +557,7 @@ function hud(extra = ''): void {
     // Who asked for a rematch, for the seated players of a finished online game (#186).
     rematch:
       online?.role === 'player' && status !== 0
-        ? rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side))
+        ? rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side), glassOf())
         : '',
   });
   rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
@@ -1031,10 +1033,10 @@ async function goOnline(room: string, side: number): Promise<void> {
     const role = online?.role ?? 'pending';
     const mine = online?.side ?? side;
     const opponent = online?.presenceOf(3 - mine) ?? 'waiting';
-    document.body.dataset.online = role === 'spectator' ? 'Spectator' : mine === 1 ? 'Black' : 'White';
+    document.body.dataset.online = role === 'spectator' ? 'Spectator' : sideName(mine, glassOf());
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
-    onlineLine = onlineStatus(mine, role, opponent, online?.isAgent(3 - mine) ?? false);
+    onlineLine = onlineStatus(mine, role, opponent, online?.isAgent(3 - mine) ?? false, glassOf());
     onlineNote = netState;
     hud();
   };

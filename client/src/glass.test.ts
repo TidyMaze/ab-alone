@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { glassSide } from './glass';
+import { glassSide, sideName } from './glass';
+
+// The pale glass side is named White, the dark shell side Black, whatever side number it has.
+describe('sideName', () => {
+  it('names the side wearing the pale glass White, and the shell Black, against the bot', () => {
+    expect(sideName(1, 1)).toBe('White');
+    expect(sideName(2, 1)).toBe('Black');
+  });
+  it('keeps hot-seat and online names: glass on side 2, so side 2 is White', () => {
+    expect(sideName(1, 2)).toBe('Black');
+    expect(sideName(2, 2)).toBe('White');
+  });
+});
 
 // world.md section 5: the player is the smoked glass, the enemy and the bosses the shell.
 describe('glassSide, world.md section 5', () => {

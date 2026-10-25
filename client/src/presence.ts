@@ -1,6 +1,5 @@
+import { sideName } from './glass';
 import type { Role } from './session';
-
-const SIDE_NAMES: Record<number, string> = { 1: 'Black', 2: 'White' };
 
 /** `waiting`: the key never showed up. `here`: a peer that proved it is connected. `gone`: it was here and left. */
 export type Seen = 'waiting' | 'here' | 'gone';
@@ -36,9 +35,9 @@ export interface OnlineStatus {
 }
 
 /** The HUD status line of an online game, see docs/specs/ui.md section 4. The e2e tests read these strings. */
-export function onlineStatus(side: number, role: Role, opponent: Seen, agent = false): OnlineStatus {
-  const me = SIDE_NAMES[side];
-  const them = SIDE_NAMES[3 - side] + (agent ? ' (agent)' : ''); // the opponent's Hello carried the agent flag
+export function onlineStatus(side: number, role: Role, opponent: Seen, agent: boolean, glass: number): OnlineStatus {
+  const me = sideName(side, glass);
+  const them = sideName(3 - side, glass) + (agent ? ' (agent)' : ''); // the opponent's Hello carried the agent flag
   if (role === 'spectator') return { text: 'Room is full, watching', tone: 'watching' };
   if (role === 'pending') return { text: `Joining as ${me}...`, tone: 'waiting' };
   if (opponent === 'here') return { text: `You are ${me}. ${them} is here.`, tone: 'here' };
