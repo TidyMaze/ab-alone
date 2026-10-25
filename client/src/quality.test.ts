@@ -5,6 +5,7 @@ import {
   drawDue,
   fogSettings,
   readClearBoard,
+  renderPixelRatio,
   readSound,
   readTheme,
   readTier,
@@ -183,6 +184,20 @@ describe('tier storage', () => {
     expect(s.data.get('ab-alone.quality')).toBe('high');
     expect(() => writeTier(throwing, 'low')).not.toThrow();
     expect(() => writeTier(null, 'low')).not.toThrow();
+  });
+});
+
+describe('renderPixelRatio', () => {
+  it('gives a player the device pixel ratio', () => {
+    expect(renderPixelRatio(2, false)).toBe(2);
+    expect(renderPixelRatio(1, false)).toBe(1);
+  });
+  it('renders at half the pixels under automation, so software WebGL costs less per frame', () => {
+    expect(renderPixelRatio(1, true)).toBe(0.5);
+    expect(renderPixelRatio(2, true)).toBe(0.5);
+  });
+  it('never renders above the device ratio under automation', () => {
+    expect(renderPixelRatio(0.5, true)).toBe(0.5);
   });
 });
 
