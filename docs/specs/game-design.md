@@ -307,7 +307,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Tell**: each twist keeps its original visual language, so the player recognizes it.
 - **Counter**: those of the Hull, the Chaplain and the Echo.
 - **Phases**: P1 at **16**, plain. P2 at **10**: Hull rim crack (interval 8) plus Chaplain
-  (threshold 3). P3 at **5**: adds Echo of your previous move.
+  (threshold 3). P3 at **5**: adds Echo of your previous move. Win at **12** ejections (4 boss
+  marbles left, Decision #482), so all three phases are experienced.
 - **Calibrate**: last. It must be harder than any previous boss, with first win between
   attempt 5 and 10, never a wall.
 
