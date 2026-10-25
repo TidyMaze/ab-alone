@@ -50,7 +50,7 @@ import { fpsOf, keepWindow } from './fps';
 import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
-import { deckOf, type Deck } from './deck';
+import { DECK_NAMES, deckOf, type Deck } from './deck';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
@@ -161,13 +161,16 @@ async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise
     return null;
   }
 }
-const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal] = await Promise.all([
+const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, ...deckMaps] = await Promise.all([
   loadTexture('deck-albedo.png', true, true),
   loadTexture('deck-roughness.png', false, true),
   loadTexture('shell-normal.png', false, true),
   loadTexture('backdrop.png', true, false),
   loadTexture('crack-decal.png', false, false),
+  ...DECK_NAMES.map((name) => loadTexture(`deck-${name}.png`, true, true)), // the cells' albedo of each deck (#401)
 ]);
+// The cells' texture of a deck, the steel when its file did not load. The frame keeps the steel.
+const deckMap = (name: Deck): THREE.Texture | null => deckMaps[DECK_NAMES.indexOf(name)] ?? deckAlbedo;
 
 function prefilteredRoom(): THREE.Texture {
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -487,12 +490,13 @@ function applyDeck(next: Deck): void {
   lamp.intensity = light.key.intensity;
   lamp.position.set(...light.key.position);
   renderer.toneMappingExposure = light.exposure;
+  // The deck's texture set (#401), only on the textured look: a map added to the flat look would rebuild its pipeline.
+  const map = deckMap(deck);
+  if (steel.map && map) steel.map = map;
   document.body.dataset.deck = deck; // read by the e2e tests
+  document.body.dataset.deckSet = steel.map && steel.map === deckMaps[DECK_NAMES.indexOf(deck)] ? deck : 'steel';
   applyLook();
 }
-applyDeck(deck);
-// Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
-(window as unknown as Record<string, unknown>).__deck = applyDeck;
 // Accents (#376): a cold rim from behind, a small warm point at the lamp's side. Weaker than the key.
 const coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
 coldRim.position.set(...LIGHT.accents.rim.position);
@@ -532,9 +536,12 @@ const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidt
 const ringGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32);
 const steel = new THREE.MeshStandardMaterial(
   deckAlbedo && deckRoughness
-    ? { map: deckAlbedo, roughnessMap: deckRoughness }
+    ? { map: deckMap(deck), roughnessMap: deckRoughness }
     : { color: COLORS.steel, roughness: 0.8 },
 );
+applyDeck(deck);
+// Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
+(window as unknown as Record<string, unknown>).__deck = applyDeck;
 // Key 1 is the enemy shell (matte, ridged), key 2 the player's smoked glass (marbles.ts).
 const { ridges, ...shell } = SHELL;
 const scarab = new THREE.MeshStandardMaterial({
