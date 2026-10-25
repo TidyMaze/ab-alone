@@ -160,16 +160,24 @@ test('Boss fight is disabled or works when clicked right after load, bug #144', 
 
 // The Hull (#149): a rim cell cracks at ply 8, shows its ticks for 2 plies, then it is a hole. The cracked cell wears
 // the crack decal in both quality tiers, with Clear board off and on (#355, world.md section 8), 3:1 on the cell with
-// Clear board on: the fog dims the far rim cells under 3:1 (bug #399).
+// Clear board on: the fog dims the far rim cells under 3:1 (bug #399). The crack's course and the decal's contrast are
+// two tests: together they took over 15 s on CI (#431).
+// The fight starts, and Clear board flips, by click events on their buttons, the menus closed: opening them is checked
+// by the Echo test and clear-board.spec.ts, and each real click cost 1.7 to 2.3 s on CI at 1280 x 720 (#429).
+const startHull = async (page: Page, tier: string) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
+  await page.addInitScript((t) => localStorage.setItem('ab-alone.quality', t), tier);
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  await expect(page.locator('body')).toHaveAttribute('data-tier', tier);
+  await page.locator('#boss-list').getByRole('button', { name: 'The Hull', includeHidden: true }).dispatchEvent('click');
+  await expect(page.locator('#hud')).toContainText('The Hull');
+  await expect(page.locator('body')).toHaveAttribute('data-cracks', '0');
+};
+
 for (const tier of ['high', 'low']) {
   test(`start The Hull (${tier} tier), play to the first wave: a cracked cell ticks down, then vanishes, #149`, async ({ page }, testInfo) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
-    await page.setViewportSize({ width: 1280, height: 720 }); // the contrast check's window, as contrast.spec.ts
-    await page.addInitScript((t) => localStorage.setItem('ab-alone.quality', t), tier);
-    await page.goto('./');
-    await page.locator('canvas').waitFor();
     const body = page.locator('body');
-    await expect(body).toHaveAttribute('data-tier', tier);
     const hud = page.locator('#hud');
     const plies = () => page.evaluate(() => (window as any).__plies());
     const click = async (q: number, r: number) => {
@@ -177,7 +185,8 @@ for (const tier of ['high', 'low']) {
       await page.mouse.click(p.x, p.y);
     };
     // A forward one-marble move (NW or NE): Black never steps back, so no position repeats. The mouse plays the first
-    // one, __playTurns the next three (#429, the same moves), the test hook the last (the same handler a click calls).
+    // one, the gesture that starts the audio of the tell cues, __playTurns the next three (#429, the same moves), the
+    // test hook the last (the same handler a click calls).
     const advance = async (mouse: boolean) => {
       const mv = await page.evaluate(() =>
         (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
@@ -188,12 +197,7 @@ for (const tier of ['high', 'low']) {
       await send(mv.dir === 4 ? q : q + 1, r - 1);
     };
 
-    // The fight starts, and Clear board flips below, by click events on their buttons, the menus closed: opening them is
-    // checked by the Echo test and clear-board.spec.ts, and each real click cost 1.7 to 2.3 s on CI in this window (#429).
-    // The first move, a real click, is the gesture that starts the audio of the tell cues.
-    await page.locator('#boss-list').getByRole('button', { name: 'The Hull', includeHidden: true }).dispatchEvent('click');
-    await expect(hud).toContainText('The Hull');
-    await expect(body).toHaveAttribute('data-cracks', '0');
+    await startHull(page, tier);
     await advance(true);
     await expect.poll(plies, { timeout: 30_000 }).toBe(2); // the boss replied
     expect(await page.evaluate(() => (window as any).__playTurns(3, [4, 2]))).toBe(3);
@@ -201,16 +205,7 @@ for (const tier of ['high', 'low']) {
     await expect(body).toHaveAttribute('data-cracks', '1');
     await expect(hud).toContainText('Rim cracks: 1 cell in 2 plies');
     expect(await tellCues(page)).toEqual(['crack']); // the crack appears
-    const decals: [number, number][] = await page.evaluate(() => (window as any).__crackDecals());
-    expect(decals).toEqual((await page.evaluate(() => (window as any).__cracks())).map((c: any) => c.cell));
     await page.screenshot({ path: testInfo.outputPath('hull-cracked.png') });
-    await page.getByRole('button', { name: 'Clear board', includeHidden: true }).dispatchEvent('click');
-    await expect(body).toHaveAttribute('data-clear', 'on');
-    expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual(decals);
-    const clear = await crackContrast(page, decals[0]!);
-    expect(clear.shown).toBeGreaterThan(20);
-    expect(clear.reading).toBeGreaterThanOrEqual(5);
-    await page.screenshot({ path: testInfo.outputPath('hull-cracked-clear.png') });
 
     await advance(false);
     await expect.poll(plies, { timeout: 30_000 }).toBe(10);
@@ -221,6 +216,23 @@ for (const tier of ['high', 'low']) {
     await expect(hud).not.toContainText('Rim cracks');
     expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath('hull-vanished.png') });
+  });
+
+  test(`start The Hull (${tier} tier): the cracked cell wears the crack decal, 3:1 with Clear board on, #355`, async ({ page }, testInfo) => {
+    const body = page.locator('body');
+    await page.setViewportSize({ width: 1280, height: 720 }); // the contrast check's window, as contrast.spec.ts
+    await startHull(page, tier);
+    expect(await page.evaluate(() => (window as any).__playTurns(4, [4, 2]))).toBe(4); // the forward moves to the crack
+    await expect(body).toHaveAttribute('data-cracks', '1');
+    const decals: [number, number][] = await page.evaluate(() => (window as any).__crackDecals());
+    expect(decals).toEqual((await page.evaluate(() => (window as any).__cracks())).map((c: any) => c.cell));
+    await page.getByRole('button', { name: 'Clear board', includeHidden: true }).dispatchEvent('click');
+    await expect(body).toHaveAttribute('data-clear', 'on');
+    expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual(decals);
+    const clear = await crackContrast(page, decals[0]!);
+    expect(clear.shown).toBeGreaterThan(20);
+    expect(clear.reading).toBeGreaterThanOrEqual(5);
+    await page.screenshot({ path: testInfo.outputPath('hull-cracked-clear.png') });
   });
 }
 
