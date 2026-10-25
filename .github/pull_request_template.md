@@ -13,6 +13,7 @@ Closes #
 ## Checklist
 - [ ] Closes one Task or Bug, or several linked ones, each `Ready` when work started
 - [ ] Bug fix: the first commit is a failing test that reproduces it
+- [ ] Full e2e suite run locally (`bun run e2e`, random port): N passed
 - [ ] Player-facing change: checked in a real Chrome (result in the review)
 - [ ] UI change: a screenshot (before and after) is in this description, or "no UI change" is written
 - [ ] Every item of the Task's done checklist is covered

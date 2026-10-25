@@ -5,7 +5,6 @@
 **You are alone. They are shelled. Push them into the void.**
 
 [![CI](https://github.com/TidyMaze/ab-alone/actions/workflows/ci.yml/badge.svg)](https://github.com/TidyMaze/ab-alone/actions/workflows/ci.yml)
-[![Nightly e2e](https://github.com/TidyMaze/ab-alone/actions/workflows/nightly.yml/badge.svg)](https://github.com/TidyMaze/ab-alone/actions/workflows/nightly.yml)
 [![Pages](https://github.com/TidyMaze/ab-alone/actions/workflows/pages.yml/badge.svg)](https://tidymaze.github.io/ab-alone/)
 
 ### [▶ Play in your browser](https://tidymaze.github.io/ab-alone/)
@@ -71,7 +70,7 @@ mcp/                  MCP server: an AI agent plays the bot or a boss over stdio
   Moves are Ed25519-signed and hash-chained. Each seat is bound to one key; extra visitors watch.
 - **Hosted on GitHub Pages.** Free, static, deployed on every merge to `main`.
 - **Tested hard.** Strict TDD, 100 % line and region coverage on the engine, Playwright end to
-  end in Chromium, Firefox and WebKit, plus a nightly run against the live site.
+  end in Chromium, Firefox and WebKit, the full suite run before every merge.
 
 ## Run it locally
 

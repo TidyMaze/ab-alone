@@ -61,7 +61,7 @@ jobs:
         working-directory: client
 
   # On push to main, finds what changed since the last successful CI run on main (not just this push: a cancelled run
-  # never tested its commits). A manual dispatch always runs everything. Only coverage and e2e are conditional, `rust`
+  # never tested its commits). A manual dispatch always runs everything. Only coverage depends on the diff, `rust`
   # always runs, so a skipped job never stands in for a check that mattered (#258, CONTRIBUTING 6.4).
   changes:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -72,7 +72,6 @@ jobs:
       actions: read
     outputs:
       rust: ${{ steps.diff.outputs.rust }}
-      e2e: ${{ steps.diff.outputs.e2e }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -81,18 +80,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rust=true; e2e=true
+          rust=true
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             base=$(gh run list --workflow ci.yml --branch main --event push --status success --limit 1 --json headSha --jq '.[0].headSha')
             if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
               files=$(git diff --name-only "$base" "$GITHUB_SHA")
               echo "changed since $base:"; echo "$files"
               printf '%s\n' "$files" | grep -qE '^(crates/|Cargo\.|\.github/workflows/ci\.yml)' || rust=false
-              printf '%s\n' "$files" | grep -qE '^(client/|crates/abalone-(core|wasm)/|Cargo\.|\.github/workflows/ci\.yml)' || e2e=false
             fi
           fi
           echo "rust=$rust" >> "$GITHUB_OUTPUT"
-          echo "e2e=$e2e" >> "$GITHUB_OUTPUT"
 
   coverage:
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.rust == 'true'
@@ -110,10 +107,11 @@ jobs:
           tool: cargo-llvm-cov
       - run: cargo llvm-cov --workspace --locked --fail-under-lines 100 --fail-under-regions 100
 
+  # The e2e suite runs only on a manual dispatch (`gh workflow run ci.yml --ref <branch>`), never on a PR or a push: the
+  # full suite runs locally before every merge (decision #445).
   # The WASM package is built once here and shared with the e2e shards as an artifact (#258).
   wasm:
-    needs: changes
-    if: needs.changes.outputs.e2e == 'true'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

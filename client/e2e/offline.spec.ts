@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 // The offline app (#193) exists only in the production build. Every other spec blocks service workers
 // (playwright.config.ts), this one allows them. The offline test opens E2E_PREVIEW_URL: the `vite build` +
-// `vite preview` server of playwright.config.ts, or the live site in the nightly run.
+// `vite preview` server of playwright.config.ts, or the live site (E2E_BASE_URL).
 test.use({ serviceWorkers: 'allow' });
 
 const click = async (page: Page, q: number, r: number): Promise<void> => {

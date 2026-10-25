@@ -12,7 +12,8 @@ The short version:
 2. One branch `<issue>-<slug>` and one PR with a `Closes #<task>` line per issue. Linked issues
    (same feature or files) may share one PR to go faster; unrelated work never does. Nothing out
    of scope.
-3. Strict TDD: failing test first, then code. 100 % line and region coverage. Unit and e2e tests.
+3. Strict TDD: failing test first, then code. Unit tests cover 100 % of all code (lines and regions
+   for Rust, decision #445). Unit and e2e tests.
    Every e2e test passes in under 15 s and fails beyond (Playwright timeout 15 s); a slower one is
    made cheaper (test hook instead of clicking through) or its logic becomes a fast unit test.
    An e2e test loads the full game state it needs (test hook on the game file import) instead of
@@ -24,8 +25,10 @@ The short version:
 6. Talk only through issue comments and PR reviews. Sub-agents never merge, never triage, never
    close a `Decision`. The lead agent (driven by an owner) may triage when an owner delegates and
    merge a PR once the CI check `rust` is green; no human review is needed (CONTRIBUTING.md section 0).
-7. At most 4 tasks in progress at once. Locally run only the smallest scoped checks (the touched unit file and e2e spec, CONTRIBUTING 13); the full suite runs on the CI.
-   Run the touched e2e specs once, when the draft is ready to become ready, not after every edit.
+7. At most 4 tasks in progress at once. While developing, run only the smallest scoped checks (the touched unit file and e2e spec, CONTRIBUTING 13).
+   CI runs e2e only on a manual dispatch (decision #445): run the full e2e suite locally once (`bun run e2e`, random
+   port), when the draft is ready to become ready, and write "Full e2e suite run locally: N passed" in the PR body.
+   It can also run on CI by hand: `gh workflow run ci.yml --ref <branch>`.
    After a rebase on `main` without conflict, rerun only `bun run test` and `tsc` (CONTRIBUTING 6.4).
    Kill the dev servers you started. Finish and merge your open PR before opening another: many
    open PRs mean rebase loops (CONTRIBUTING rule 16). Keep every task and PR minimal: one thing,
