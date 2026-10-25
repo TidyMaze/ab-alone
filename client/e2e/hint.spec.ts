@@ -47,7 +47,7 @@ const D = [1, 4, 0, -1, 0, 0, 0, 0]; // White (0, -1) back to (0, -2)
 const E = [1, 5, 0, 0, 0, 0, 0, 0]; // Black (0, 0) back to (0, 1)
 const save = (moves: number[][]) => JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: false, moves });
 
-test('Hint shows the best move as a ghost and plays nothing; a second press or a selection clears it, #192', async ({
+test('Hint shows the best move as a ghost and plays nothing; a second press clears it, #192', async ({
   page,
 }) => {
   test.slow(); // two hint searches in the worker, each with the bot's budget
@@ -71,7 +71,15 @@ test('Hint shows the best move as a ghost and plays nothing; a second press or a
   await expect(body).toHaveAttribute('data-ghosts', '0');
   await expect(hint).toHaveAttribute('aria-pressed', 'false');
   expect(await position(page)).toEqual(start);
+});
 
+// Split from the test above (#349): a selection clears the hint, then the next move's hint is White's.
+test('a selection clears the hint, and the hint after the next move is for White, #192', async ({ page }) => {
+  test.slow(); // two hint searches in the worker
+  await page.goto('./?bot=off');
+  await ready(page);
+  const body = page.locator('body');
+  const hint = page.getByRole('button', { name: 'Hint' });
   await hint.click();
   await expect(body).toHaveAttribute('data-hint', 'shown', { timeout: 30_000 });
   await click(page, 0, 2); // a new selection clears it
