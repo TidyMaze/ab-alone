@@ -114,6 +114,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     class WebGPURenderer {
       domElement = document.createElement('canvas');
       backend = { isWebGPUBackend: false };
+      shadowMap = { enabled: false, type: 0 };
       toneMapping = 0;
       toneMappingExposure = 1;
       init = async (): Promise<void> => {};
