@@ -122,6 +122,37 @@ test('reduced motion: a plain fade, no tumble, no stretch, no spatter, the same 
   await expect(page.locator('#hud')).toContainText('White to move');
 });
 
+// #379: the Reduced motion toggle of the settings menu follows the system setting until pressed, then keeps the
+// player's choice, saved locally: it survives a reload (pushOffBoard opens the page again).
+async function pressReducedMotion(page: Page, before: boolean) {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const toggle = page.getByRole('button', { name: 'Reduced motion' });
+  await expect(toggle).toHaveAttribute('aria-pressed', String(before));
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', String(!before));
+}
+
+test('the Reduced motion setting: a plain fade while the system allows motion, kept after a reload', async ({ page }) => {
+  await pressReducedMotion(page, false);
+  const { seen } = await pushOffBoard(page);
+  expect(seen.kind).toBe('fade');
+  expect(seen.blood).toBeUndefined();
+  await expect(page.locator('html')).toHaveAttribute('data-motion', 'reduced');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('button', { name: 'Reduced motion' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the Reduced motion setting: on by default under the system setting, a press brings the tumble back', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await pressReducedMotion(page, true);
+  const { seen } = await pushOffBoard(page);
+  expect(seen.kind).toBe('tumble');
+  expect(seen.blood).toBe('spatter');
+  await expect(page.locator('html')).not.toHaveAttribute('data-motion', /.*/);
+});
+
 // #278: the spatter, in screen space, never covers a cell, a marble on the board or the steel frame, and stays on
 // screen. Checked on a desktop and a phone, at the start, the peak (450 ms) and before it ends.
 type Box = { x0: number; y0: number; x1: number; y1: number };

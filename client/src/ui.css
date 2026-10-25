@@ -123,6 +123,8 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #hud .boss .goal { margin-top: 0.25rem; font-size: 0.875rem; }
 #hud .boss .daily { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
 #hud .tally { margin-top: 0.25rem; font-size: 0.875rem; color: var(--muted); }
+/* The flat HUD fallback (#391): every game-critical value as text, one line each, under the rest of the plate. */
+#hud .flat { margin-top: 0.25rem; padding-top: 0.25rem; border-top: 1px solid var(--edge); font-size: 0.875rem; }
 /* Daily result card (#196), under Retry at the end of a daily fight: the text as it is copied, then Copy. */
 #daily-card { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
 #daily-card[hidden] { display: none; }
@@ -187,6 +189,17 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   /* The open mode menu starts a new row, the bosses in line after Boss fight: three rows of touch targets at most. */
   #mode-menu { flex: 1 0 100%; flex-flow: row wrap; gap: 0.5rem; }
   #boss-list:not([hidden]) { display: contents; }
+}
+/* Held upright, or in a narrow or short window, each item is its icon only, a 44 px square, so every item fits without
+   reaching the board (#414): the name is its aria-label and title. Roomy windows keep icon then label. */
+@media (orientation: portrait), (max-width: 1100px), (max-height: 500px) {
+  #settings-menu button { justify-content: center; min-width: 2.75rem; min-height: 2.75rem; padding: 0.5rem; }
+  #settings-menu button span { display: none; }
+}
+/* Wider than tall, those icons sit in rows of 3 under the cog, as narrow as the column band. */
+@media (orientation: landscape) and (max-width: 1100px), (orientation: landscape) and (max-height: 500px) {
+  #settings-menu { display: grid; grid-template-columns: repeat(3, 2.75rem); }
+  #settings-menu .setting-group { grid-column: span 2; }
 }
 
 #hud {
@@ -275,9 +288,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 }
 
 @keyframes hud-in { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
-}
+/* The Reduced motion setting (#379): main.ts sets data-motion on the root, from the toggle or the system setting. */
+:root[data-motion='reduced'] *, :root[data-motion='reduced'] *::before, :root[data-motion='reduced'] *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
 
 /* End of game (#282): the banner sits in the HUD plate, which covers no cell. body[data-over] (win, loss, draw)
    dims the board and, on the rim only (the mask keeps the middle clear, never over a cell, a marble or a
@@ -310,4 +322,4 @@ body[data-over='draw']::before {
 @keyframes end-loss { from { opacity: 0; } to { opacity: 1; } }
 @keyframes end-draw { 0%, 50% { opacity: 0; } 100% { opacity: 1; } }
 @keyframes end-dim { from { filter: brightness(1) saturate(1); } to { filter: brightness(0.7) saturate(0.65); } }
-@media (prefers-reduced-motion: reduce) { body[data-over]::before { display: none; } }
+:root[data-motion='reduced'] body[data-over]::before { display: none; }

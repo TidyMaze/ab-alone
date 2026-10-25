@@ -1,6 +1,7 @@
-// The settings menu (#277, docs/specs/ui.md section 4): a list of items behind a cog button: the toggles Clear board
-// and Sound (#284), Safe mode (#380), the Theme choice (#317), the Shell skin choice (#377), the UI scale (#382), then the
-// actions Export game and Import game (#287). Pure functions only: main.ts feeds them the clicks and builds the DOM.
+// The settings menu (#277, docs/specs/ui.md section 4): a list of items behind a cog button: the toggles Clear board,
+// Reduced motion (#379), Flat HUD (#391) and Sound (#284), Safe mode (#380), the Theme choice (#317), the Shell skin choice (#377), the UI
+// scale (#382), then the actions Export game and Import game (#287). Pure functions only: main.ts feeds them the clicks
+// and builds the DOM.
 import type { IconName } from './icons';
 import { skinById } from './skins';
 import { nextUiScale, type UiScale } from './uiscale';
@@ -35,10 +36,24 @@ export const nextDisplay = (
   return scale < max ? { theme: next, scale: nextUiScale(scale, max), safe } : { theme: next, scale: 100, safe: !safe };
 };
 
+/** Whether motion is cut (#379): the player's choice once pressed, else the system's prefers-reduced-motion. */
+export const motionReduced = (system: boolean, saved: boolean | null): boolean => saved ?? system;
+
 /** The items the menu lists, in order, with their icon and the toggles' current state. The Theme row shows the UI scale
- *  and holds Safe mode as its pressed state, so the menu keeps six rows. */
-export const settingsList = (clear: boolean, sound: boolean, theme: Theme, skin: string, scale: UiScale, safe: boolean): Setting[] => [
+ *  and holds Safe mode as its pressed state, so the menu keeps eight rows with Reduced motion and Flat HUD. */
+export const settingsList = (
+  clear: boolean,
+  sound: boolean,
+  theme: Theme,
+  skin: string,
+  scale: UiScale,
+  safe: boolean,
+  reduced: boolean,
+  flat: boolean,
+): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
+  { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: reduced },
+  { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: flat },
   { id: 'sound', label: 'Sound', icon: sound ? 'sound' : 'muted', on: sound },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme', on: safe },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },

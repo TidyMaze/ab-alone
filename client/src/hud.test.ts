@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hudHtml } from './hud';
+import { flatHudHtml, hudHtml } from './hud';
 import css from './ui.css?raw';
 
 const TOKENS = ['bg', 'panel', 'edge', 'text', 'muted', 'accent', 'hazard', 'danger'];
@@ -18,8 +18,23 @@ describe('palette tokens', () => {
     });
   }
 
-  it('turns animation off under prefers-reduced-motion', () => {
-    expect(css).toMatch(/prefers-reduced-motion:\s*reduce/);
+  it('turns animation off under the Reduced motion setting, not the media query (#379)', () => {
+    expect(css).toMatch(/:root\[data-motion='reduced'\] \*, :root\[data-motion='reduced'\] \*::before, :root\[data-motion='reduced'\] \*::after \{ animation-duration: 0s !important; transition-duration: 0s !important; \}/);
+    expect(css).not.toContain('prefers-reduced-motion');
+  });
+});
+
+describe('settings menu held upright or in a narrow or short window, #414', () => {
+  it('shows each item as its icon only, a 44 px square', () => {
+    const icons = css.match(/@media \(orientation: portrait\), \(max-width: 1100px\), \(max-height: 500px\) \{[^]*?\n\}/)![0];
+    expect(icons).toContain('#settings-menu button span { display: none; }');
+    expect(icons).toMatch(/#settings-menu button \{[^}]*min-width: 2\.75rem; min-height: 2\.75rem;[^}]*\}/);
+  });
+
+  it('lays the icons out in rows of 3 under the cog when the window is wider than tall', () => {
+    const rows = css.match(/@media \(orientation: landscape\) and \(max-width: 1100px\), \(orientation: landscape\) and \(max-height: 500px\) \{[^]*?\n\}/)![0];
+    expect(rows).toMatch(/#settings-menu \{[^}]*display: grid; grid-template-columns: repeat\(3, 2\.75rem\);/);
+    expect(rows).toContain('#settings-menu .setting-group { grid-column: span 2; }'); // Clear board and FPS side by side (#426)
   });
 });
 
@@ -30,7 +45,7 @@ describe('end of game styles, #282', () => {
       expect(css).toContain(`@keyframes end-${anim}`);
     }
     expect(css).toMatch(/body\[data-over\]::before \{[^}]*pointer-events: none[^}]*mask-image: radial-gradient\(ellipse at center, transparent 62%/);
-    expect(css).toMatch(/prefers-reduced-motion: reduce\) \{ body\[data-over\]::before \{ display: none; \} \}/);
+    expect(css).toContain(":root[data-motion='reduced'] body[data-over]::before { display: none; }");
     expect(css).toMatch(/body\[data-over\] canvas \{ filter: brightness/);
   });
 });
@@ -122,5 +137,25 @@ describe('the Tally line, #294', () => {
 
   it('shows no tally element when there is no line', () => {
     expect(hudHtml(base)).not.toContain('class="tally"');
+  });
+});
+
+describe('flatHudHtml, the flat HUD fallback (#391)', () => {
+  const game = { side: 1, status: 0, glass: 2, ejected: [1, 4] as const, win: [6, 6] as const };
+
+  it('gives the turn owner and the ejected count as text', () => {
+    expect(flatHudHtml(game)).toBe('<div class="flat"><div>Turn: Black</div><div>Ejected: Black 1/6, White 4/6</div></div>');
+    expect(flatHudHtml({ ...game, side: 2, glass: 1 })).toContain('<div>Turn: Black</div><div>Ejected: White 1/6, Black 4/6</div>');
+  });
+
+  it('says the game is over instead of a turn owner', () => {
+    expect(flatHudHtml({ ...game, status: 3 })).toContain('<div>Turn: game over</div>');
+  });
+
+  it('adds the boss phase and the tell countdown in a boss fight', () => {
+    expect(flatHudHtml({ ...game, boss: { phase: 1, phases: 3, tell: '2 cells in 3 plies' } })).toContain(
+      '<div>Boss phase: 2 of 3</div><div>Tell: 2 cells in 3 plies</div>',
+    );
+    expect(flatHudHtml({ ...game, boss: { phase: 0, phases: 2, tell: '' } })).toContain('<div>Boss phase: 1 of 2</div><div>Tell: none</div>');
   });
 });

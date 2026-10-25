@@ -40,10 +40,10 @@ import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
-import { hudHtml } from './hud';
+import { flatHudHtml, hudHtml } from './hud';
 import { drawSkin } from './skinart';
 import { nextSkin, skinById } from './skins';
-import { menuOpen, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
+import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
 import { DECOR, LIGHT } from './light';
@@ -52,7 +52,9 @@ import {
   drawDue,
   fogSettings,
   readClearBoard,
+  readFlatHud,
   readFps,
+  readReducedMotion,
   readSafeMode,
   readSkin,
   readSound,
@@ -61,7 +63,9 @@ import {
   readUiScale,
   renderPixelRatio,
   writeClearBoard,
+  writeFlatHud,
   writeFps,
+  writeReducedMotion,
   writeSafeMode,
   writeSkin,
   writeSound,
@@ -192,11 +196,16 @@ const store = (() => {
     return null;
   }
 })();
+// Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
+const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let savedMotion = readReducedMotion(store);
+let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
+const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
 const tier = readTier(store, {
   width: innerWidth,
   cores: navigator.hardwareConcurrency,
   memory: (navigator as { deviceMemory?: number }).deviceMemory,
-  reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+  reducedMotion: reducedMotion(),
 });
 diag.log.log('info', 'start', { backend, tier });
 let clear = readClearBoard(store);
@@ -247,6 +256,8 @@ function applyLook(): void {
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
+  if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
+  else delete document.documentElement.dataset.motion;
 }
 // The settings menu: one button per item, its icon then its label, opened by the cog only. Escape, a press outside
 // and the cog close it. A toggle shows its state in aria-pressed, Sound a muted speaker while off (#287).
@@ -279,15 +290,26 @@ const toggles: Record<string, () => void> = {
     marbleMaterials[1] = shellMaterial(skin);
     refresh();
   },
+  'reduced-motion': () => {
+    savedMotion = !reducedMotion();
+    writeReducedMotion(store, savedMotion);
+  },
+  'flat-hud': () => {
+    flatHud = !flatHud;
+    writeFlatHud(store, flatHud);
+    refresh();
+  },
 };
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
+    row.setAttribute('aria-label', label); // held upright only the icon shows (#414): the name stays for screen readers
+    row.title = label; // and as a tooltip
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe)) {
+for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion(), flatHud)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -322,6 +344,10 @@ fpsButton.addEventListener('click', () => {
   fpsBox.hidden = !fpsOn;
   fpsStamps = [];
   fpsButton.setAttribute('aria-pressed', String(fpsOn));
+});
+motionQuery.addEventListener('change', () => {
+  applyLook(); // a system change still counts until the player presses Reduced motion
+  paintMenu();
 });
 applyView(); // camera and fog
 let menuIsOpen = false;
@@ -758,8 +784,8 @@ function playMove(record: number[]): void {
 function afterPlay(before: number[], record: number[], live = true): void {
   history.push(record);
   const mv = parseMoves(record)[0]!;
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const tracks = slideTracks(before, engine.board(), mv, reducedMotion);
+  const reduced = reducedMotion();
+  const tracks = slideTracks(before, engine.board(), mv, reduced);
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
   if (!live) return;
@@ -773,7 +799,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const body = document.body;
   body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
   body.dataset.sound = sfx.ejection(ejection.side, glassOf()) ?? 'none'; // read by the e2e tests: toll, clack or none
-  const track = ejectTrack(ejection.cell, record[1]!, reducedMotion);
+  const track = ejectTrack(ejection.cell, record[1]!, reduced);
   const mesh = marbleMesh(ejection.side);
   mesh.traverse((o) => {
     const material = ((o as THREE.Mesh).material as THREE.Material).clone(); // its own, to fade
@@ -791,7 +817,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const e: Ejecting = { holder, tumble, mesh, track, start: performance.now(), skipped: false };
   drawEjection(e, 0);
   ejecting.push(e);
-  if (!reducedMotion) startBlood(track);
+  if (!reduced) startBlood(track);
   body.dataset.ejecting = track.kind; // read by the e2e tests: tumble, or fade with reduced motion
 }
 
@@ -931,25 +957,31 @@ function hud(extra = ''): void {
   goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
   goalButton.disabled = history.length === 0; // the goal is on the plate until the first move
   goalButton.setAttribute('aria-expanded', String(showGoal));
-  if (engine instanceof Encounter) {
+  const boss = engine instanceof Encounter ? engine : null;
+  const tell = boss
+    ? [crackText(parseCracks(boss.cracks())), chaplainText(exposed, boss.converted().length / 2), choirText(boss.next_army())]
+        .filter((t) => t !== '')
+        .join(' · ')
+    : '';
+  if (boss) {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
       bossHtml({
-        name: engine.name(),
-        phase: engine.phase(),
-        phases: engine.phases(),
-        result: end ? 0 : engine.result(), // the end banner already says Victory or Defeat, one line less in the plate
-        goal: showGoal ? engine.goal() : '',
-        tell: [
-          crackText(parseCracks(engine.cracks())),
-          chaplainText(exposed, engine.converted().length / 2),
-          choirText(engine.next_army()),
-        ]
-          .filter((t) => t !== '')
-          .join(' · '),
+        name: boss.name(),
+        phase: boss.phase(),
+        phases: boss.phases(),
+        result: end ? 0 : boss.result(), // the end banner already says Victory or Defeat, one line less in the plate
+        goal: showGoal ? boss.goal() : '',
+        tell,
         daily: fight?.daily ? dailyLine(fight.daily.day, fight.daily.attempt) : '',
       }),
     );
+  }
+  if (flatHud) {
+    const flat = { phase: boss?.phase() ?? 0, phases: boss?.phases() ?? 0, tell };
+    document
+      .getElementById('hud')!
+      .insertAdjacentHTML('beforeend', flatHudHtml({ side: engine.to_move(), status, glass: glassOf(), ejected, win, boss: boss ? flat : undefined }));
   }
   showResultCard();
 }
