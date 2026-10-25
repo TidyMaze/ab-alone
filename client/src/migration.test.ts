@@ -167,6 +167,18 @@ describe('coordinator migration in a room of four', () => {
     expect(b.coordinators).toEqual([]);
   });
 
+  it('a peer that hears the leave before the successor speaks elects it itself and acknowledges it', async () => {
+    const { b, c } = await room();
+    // b said Hello before c joined. Trystero greets again on each join, this mesh does not: c gets b's Hello now.
+    c.end.record(b.end.sent[0]!, 'b');
+    c.end.left('a'); // only c hears a's channel drop: b has not announced itself yet
+    await settle();
+    expect(seqs(c)).toEqual([2]);
+    expect(c.s.isCoordinator).toBe(false);
+    expect(kinds(c)).toContain('coordinator');
+    expect(seqs(b)).toEqual([1]);
+  });
+
   it('a dropped channel moves it at once, without waiting for the heartbeat', async () => {
     const { mesh, b, c, d } = await room();
     mesh.drop('a');
