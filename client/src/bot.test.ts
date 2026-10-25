@@ -4,6 +4,7 @@ import {
   askBot,
   askEval,
   BOT_NODES,
+  botBudget,
   EVAL_NODES,
   type BotRequest,
   type BotResponse,
@@ -123,5 +124,22 @@ describe('askBot', () => {
     const worker = { onmessage: null, postMessage: (r: BotRequest) => void sent.push(r) };
     void askBot(worker, [], 10, { id: 'echo', seed: 4 });
     expect(sent[0]!.boss).toEqual({ id: 'echo', seed: 4 });
+  });
+});
+
+describe('botBudget', () => {
+  it('uses the test budget of ?nodes under automation, the bot budget otherwise', () => {
+    expect(botBudget('?nodes=200', true)).toBe(200);
+    expect(botBudget('?bot=off&nodes=200', true)).toBe(200);
+    expect(botBudget('?nodes=200', false)).toBe(BOT_NODES);
+  });
+
+  it('keeps the bot budget when ?nodes is missing or is not a positive whole number', () => {
+    expect(botBudget('', true)).toBe(BOT_NODES);
+    expect(botBudget('?nodes=', true)).toBe(BOT_NODES);
+    expect(botBudget('?nodes=0', true)).toBe(BOT_NODES);
+    expect(botBudget('?nodes=-5', true)).toBe(BOT_NODES);
+    expect(botBudget('?nodes=2.5', true)).toBe(BOT_NODES);
+    expect(botBudget('?nodes=many', true)).toBe(BOT_NODES);
   });
 });

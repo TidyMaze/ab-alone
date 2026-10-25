@@ -52,6 +52,13 @@ export const BOT_NODES = 20000;
 /** Evaluation bar budget in positions: a quarter of the bot's, never a clock (#191). */
 export const EVAL_NODES = 5000;
 
+/** Test-only budget: `?nodes=<n>` on the page sets the bot's and the hint's search, but only under automation
+ * (navigator.webdriver), so a player never gets a weaker bot. Anything else keeps BOT_NODES. */
+export function botBudget(search: string, automated: boolean): number {
+  const n = Number(new URLSearchParams(search).get('nodes'));
+  return automated && Number.isInteger(n) && n > 0 ? n : BOT_NODES;
+}
+
 /** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,

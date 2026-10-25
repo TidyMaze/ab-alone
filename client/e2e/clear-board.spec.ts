@@ -26,6 +26,18 @@ test('clear-board toggles, survives a reload, and the board still plays', async 
   await expect(toggle).toBeHidden(); // the menu is closed again after a reload
   await cog.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+});
+
+// Split from the first test (#349): a move on the cleared board, and the menu closing on the first press.
+test('the board still plays with Clear board on, and the first press on it closes the menu', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const body = page.locator('body');
+  const cog = page.getByRole('button', { name: 'Settings' });
+  const toggle = page.getByRole('button', { name: 'Clear board' });
+  await cog.click();
+  await toggle.click();
+  await expect(body).toHaveAttribute('data-clear', 'on');
 
   // Clicks hit nothing before the first rendered frame (the raycaster needs the updated matrices).
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));

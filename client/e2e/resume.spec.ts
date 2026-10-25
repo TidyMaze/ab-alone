@@ -51,7 +51,7 @@ const snapshot = async (page: Page) => ({
   score: await page.locator('#hud .score').textContent(),
 });
 
-test('a hot-seat game survives a reload, and once it is over a reload starts a new game', async ({ page }) => {
+test('a hot-seat game survives a reload', async ({ page }) => {
   await page.goto('./?bot=off');
   await ready(page);
   const hud = page.locator('#hud');
@@ -66,14 +66,18 @@ test('a hot-seat game survives a reload, and once it is over a reload starts a n
   await ready(page);
   expect(await snapshot(page)).toEqual(before);
   await expect(hud).toContainText('White to move');
+});
 
-  // The game goes on from there: the same position a third time ends it in a draw.
-  await move(page, [0, -1], [0, -2]); // White
-  await move(page, [0, 0], [0, 1]); // Black
-  await move(page, [0, -2], [0, -1]); // White
-  await move(page, [0, 1], [0, 0]); // Black
-  await move(page, [0, -1], [0, -2]); // White
-  await move(page, [0, 0], [0, 1]); // Black: the position after the first move, a third time
+// Split from the reload test (#349): the same position a third time ends the game, and a reload then starts a new one.
+test('once a hot-seat game is over, a reload starts a new game', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await ready(page);
+  const hud = page.locator('#hud');
+  const seq: [number, number][][] = [
+    [[0, 2], [0, 1]], [[0, -2], [0, -1]], [[0, 1], [0, 0]], [[0, -1], [0, -2]], [[0, 0], [0, 1]],
+    [[0, -2], [0, -1]], [[0, 1], [0, 0]], [[0, -1], [0, -2]], [[0, 0], [0, 1]], // the position after ply 1 a third time
+  ];
+  for (const [from, to] of seq) await move(page, from, to);
   await expect(hud).toContainText('Draw by threefold repetition');
   await expect.poll(() => savedPlies(page)).toBe(0);
 
@@ -85,7 +89,7 @@ test('a hot-seat game survives a reload, and once it is over a reload starts a n
 });
 
 test('a game against the bot survives a reload, with the bot still playing White', async ({ page }) => {
-  await page.goto('./');
+  await page.goto('./?nodes=200');
   await ready(page);
   const hud = page.locator('#hud');
   await move(page, [0, 2], [0, 1]);

@@ -12,7 +12,7 @@ import {
   toggleSelection,
   type Axial,
 } from './board';
-import { askBot, askEval, BOT_NODES } from './bot';
+import { askBot, askEval, botBudget } from './bot';
 import { bossHtml, goalShown } from './bosshud';
 import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
@@ -419,6 +419,9 @@ function stopAnalysis(): void {
   analyst.stop();
 }
 
+// The bot's and the hint's search budget: BOT_NODES, or the test budget of ?nodes (bot.ts).
+const budget = botBudget(location.search, navigator.webdriver);
+
 // Hint (#192): a press shows the engine's best move for the side to move as a ghost, it never plays it. Asked from
 // the analysis worker with the bot's own budget, so the bot's reply never waits behind it. A hint belongs to the
 // position it was asked for (hint.ts): the next move, New game or an import leave it behind, and a late answer is
@@ -426,7 +429,7 @@ function stopAnalysis(): void {
 const hintButton = document.getElementById('hint') as HTMLButtonElement;
 const here = (): Spot => ({ game: engine, ply: history.length });
 const hint = new Hint(
-  (moves) => askBot(analysisWorker, moves), // the bot's own budget: the move the bot would play there
+  (moves) => askBot(analysisWorker, moves, budget), // the bot's own budget: the move the bot would play there
   () => refresh(), // the ghost and the rings on the marbles the move takes (#301)
 );
 function syncHint(): void {
@@ -449,8 +452,8 @@ async function botTurn(): Promise<void> {
   const current = fight;
   const game = engine;
   const started = performance.now();
-  const move = await askBot(worker, history, BOT_NODES, fight ?? undefined);
-  diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: BOT_NODES });
+  const move = await askBot(worker, history, budget, fight ?? undefined);
+  diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: budget });
   if (engine !== game) return; // Retry, a new fight, New game or an import replaced the game while the bot was thinking
   thinking = false;
   whenSettled(() => {
@@ -909,7 +912,7 @@ addEventListener('resize', () => {
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
-// Used by the online e2e to play its setup plies: the same click, without the raycast and the frames of a mouse click.
+// Used by the browser checks to play their setup plies: the same click, without the raycast and the frames of a mouse click.
 (window as unknown as Record<string, unknown>).__click = (q: number, r: number) => click(q, r);
 
 // Used by the browser checks to read the frame's size and holes, and that it is drawn (#292).

@@ -179,7 +179,7 @@ test('a file that is not a game, of an unknown version or with an illegal move i
 
 test('an imported game replaces a game against the bot in progress, and the bot plays on', async ({ page }, testInfo) => {
   test.slow(); // two bot searches in the worker
-  await page.goto('./');
+  await page.goto('./?nodes=200');
   await ready(page);
   await move(page, [0, 2], [0, 1]);
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2); // the bot replied
