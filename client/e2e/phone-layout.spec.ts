@@ -126,7 +126,6 @@ for (const { name, viewport, mobile } of sizes) {
 
     // One test per state (#349): each is one page load and its checks, not the whole walk through the states.
     test('nothing covers the board or the HUD at the start, bugs #227 #234', async ({ page }, testInfo) => {
-      test.slow(); // one page load and one check, with a screenshot of the WebGL page
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
@@ -137,7 +136,6 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     test('nothing covers the board or the HUD with the boss list open, bugs #227 #234', async ({ page }, testInfo) => {
-      test.slow(); // one page load and one check, with a screenshot of the WebGL page
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
       await page.getByRole('button', { name: 'Boss fight' }).click();
@@ -145,7 +143,6 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     test('nothing covers the board or the HUD in a boss fight, bugs #227 #234', async ({ page }, testInfo) => {
-      test.slow(); // one page load, one boss pick and one check, with a screenshot of the WebGL page
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
@@ -156,7 +153,6 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     test('nothing covers the board or the HUD waiting for an opponent, turned around, bugs #227 #234', async ({ page }, testInfo) => {
-      test.slow(); // one page load and two checks, with screenshots of the WebGL page
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
       await page.getByRole('button', { name: 'Play online' }).click();
@@ -182,20 +178,17 @@ for (const { name, viewport, mobile } of sizes) {
     };
 
     test('the end banner covers neither a cell nor a button, #282', async ({ page }, testInfo) => {
-      test.slow(); // a 71 ply game replayed, then one check
       await importBlackWins(page);
       await check(page, testInfo, 'with the end banner');
     });
 
     test('the end banner covers neither a cell nor a button turned around, #282', async ({ page }, testInfo) => {
-      test.slow(); // a 71 ply game replayed, then one check on the turned device
       await importBlackWins(page);
       await page.setViewportSize({ width: viewport.height, height: viewport.width });
       await check(page, testInfo, 'with the end banner turned around');
     });
 
     test('the daily result card covers neither the HUD nor the board, #196', async ({ page }, testInfo) => {
-      test.slow(); // eight plies played by hand, then one check
       await startDaily(page);
       await loseByRepetition(page);
       await expect(page.locator('#daily-card')).toBeVisible();
@@ -204,7 +197,6 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     test('the daily result card covers neither the HUD nor the board turned around, #196', async ({ page }, testInfo) => {
-      test.slow(); // eight plies played by hand, then one check on the turned device
       await startDaily(page);
       await loseByRepetition(page);
       await expect(page.locator('#daily-card')).toBeVisible();
@@ -241,7 +233,6 @@ for (const { name, viewport } of [
     test.use({ viewport });
 
     test('the plate and the buttons cover no cell after a defeat, bug #271', async ({ page }, testInfo) => {
-      test.slow(); // boss search, eight clicks pairs and a screenshot of the WebGL page
       const hud = page.locator('#hud');
       await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
       await page.goto('./?bot=off&net=hook');

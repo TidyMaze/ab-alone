@@ -71,7 +71,6 @@ test('when the clipboard is refused, the diagnostics are selected in a text box 
 test('an online game exports its connection counters, its refused moves and its signed log, no private key', async ({
   browser,
 }) => {
-  test.slow(); // two WebGL pages, see online.spec.ts (#138)
   const a = await (await browser.newContext({ permissions: PERMISSIONS })).newPage();
   const b = await (await browser.newContext()).newPage();
   // Each page relays its records to the other, with its own name as the sender (the ?net=hook transport).

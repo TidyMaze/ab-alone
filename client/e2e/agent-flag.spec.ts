@@ -35,7 +35,6 @@ async function creatorRoom(page: Page): Promise<string> {
 }
 
 test('a human White seat is not marked as an agent (before)', async ({ browser }) => {
-  test.slow();
   const page = await (await browser.newContext()).newPage();
   const game = await creatorRoom(page);
   await page.evaluate((h) => (window as any).__netIn(h, 'human-peer'), signedHello(game, false));
@@ -44,7 +43,6 @@ test('a human White seat is not marked as an agent (before)', async ({ browser }
 });
 
 test('an agent White seat is marked in the presence line (after)', async ({ browser }) => {
-  test.slow();
   const page = await (await browser.newContext()).newPage();
   const game = await creatorRoom(page);
   await page.evaluate((h) => (window as any).__netIn(h, 'agent-peer'), signedHello(game, true));

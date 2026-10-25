@@ -6,7 +6,6 @@ import { loseByRepetition, startDaily } from './fight-end';
 test('the daily challenge keeps its boss and seed all day, counts attempts, and changes at 00:00 UTC, #195', async ({
   page,
 }, testInfo) => {
-  test.slow(); // boss searches in the worker
   const hud = page.locator('#hud');
   const daily = page.locator('#daily');
   const fight = () => page.evaluate(() => (window as any).__fight());

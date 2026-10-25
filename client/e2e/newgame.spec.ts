@@ -75,7 +75,6 @@ const position = async (page: Page) => ({
 test('New game asks for a confirmation, then starts over from the start position and deletes the save', async ({
   page,
 }) => {
-  test.slow(); // two page loads
   await load(page, './?bot=off');
   const button = page.locator('#new-game');
   const start = await position(page);
@@ -133,7 +132,6 @@ test('New game without a move starts over at once; the confirmation lapses after
 test('New game while the bot thinks: its reply to the old game is dropped, the bot plays the new one', async ({
   page,
 }) => {
-  test.slow(); // two bot searches in the worker
   // The bot worker is held: its requests wait until __releaseBot, so the bot is still thinking when New game starts.
   // Only the bot's move requests are held and counted: the evaluation bar's requests (`evaluate`, #191) go to a
   // second copy of the worker and pass.
@@ -192,7 +190,6 @@ test('New game while the bot thinks: its reply to the old game is dropped, the b
 });
 
 test('no New game button during a boss fight, a daily fight or an online game', async ({ page }) => {
-  test.slow(); // three page loads
   const button = page.locator('#new-game');
   await page.goto('./?net=hook');
   await ready(page);

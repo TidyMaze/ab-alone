@@ -87,7 +87,6 @@ test('Boss fight is disabled or works when clicked right after load, bug #144', 
 
 // The Hull (#149): a rim cell cracks at ply 8, shows its ticks for 2 plies, then it is a hole.
 test('start The Hull, play to the first wave: a cracked cell ticks down, then vanishes, #149', async ({ page }, testInfo) => {
-  test.slow(); // five boss searches in the worker, then a sixth ply
   await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
   await page.goto('./');
   await page.locator('canvas').waitFor();
@@ -138,8 +137,8 @@ test('start The Hull, play to the first wave: a cracked cell ticks down, then va
 test('start The Chaplain: a hovered move shows the marbles it exposes, a converted marble keeps its look, #150', async ({
   page,
 }, testInfo) => {
-  test.slow(); // up to 20 boss searches in the worker
-  await page.goto('./');
+  // ?nodes=200: the test budget of the bot and the boss search (bot.ts), 20 boss turns cost 27 s on CI at the full budget.
+  await page.goto('./?nodes=200');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
   const hud = page.locator('#hud');
@@ -207,7 +206,6 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, a convert
 test('The Chaplain: a boss marble lost for a flip counts for the player and the board is drawn after it, bug #299', async ({
   page,
 }) => {
-  test.slow(); // 18 boss searches in the worker
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => {
@@ -244,7 +242,6 @@ test('The Chaplain: a boss marble lost for a flip counts for the player and the 
 // The Choir (#183): a radius 3 board, a glyph per army on the boss marbles, only the army in turn
 // moves and the next one wears a ring.
 test('start The Choir: the boss moves the army in turn, the next army is marked, #183', async ({ page }, testInfo) => {
-  test.slow(); // a boss search in the worker
   await page.goto('./');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');

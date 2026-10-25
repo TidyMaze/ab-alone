@@ -141,10 +141,11 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  for (const page of [b, c]) {
+  // The two joiners load at once: their page loads overlap instead of queueing one after the other.
+  await Promise.all([b, c].map(async (page) => {
     await page.goto(`./?net=hook${hash}`);
     await page.locator('canvas').waitFor();
-  }
+  }));
   for (const page of all) await open(page);
 
   await seat(b, 'player');
@@ -252,10 +253,10 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
   await expect(a.locator('#hud')).not.toBeEmpty();
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  for (const page of [b, c]) {
+  await Promise.all([b, c].map(async (page) => {
     await page.goto(`./?net=hook${hash}`);
     await page.locator('canvas').waitFor();
-  }
+  }));
   for (const page of [a, b, c]) await open(page);
   await seat(b, 'player');
   await seat(c, 'spectator');

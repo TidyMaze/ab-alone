@@ -97,7 +97,6 @@ test('hot-seat: the colour that won is named', async ({ page }) => {
 });
 
 test('a draw against a boss is a defeat, and the daily result card stays reachable', async ({ page }) => {
-  test.slow(); // eight plies played by hand against the boss search
   await startDaily(page);
   await loseByRepetition(page);
   await expectOver(page, 'loss', 'Defeat', 'Repeated 3 times: a defeat.');

@@ -55,7 +55,6 @@ test('New game puts the bar back on the start position, #191 #230', async ({ pag
 });
 
 test('the bar follows a bot game, and is absent in a boss fight, #191', async ({ page }) => {
-  test.slow(); // a bot search and a boss search in the worker
   await page.goto('./');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move'); // the board listeners are wired
