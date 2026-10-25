@@ -51,5 +51,14 @@ test.describe('Background luminance and decor (#432)', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(500);
     await page.screenshot({ path: '/tmp/screenshots/432-bg-after-phone.png' });
+
+    // Orbit camera to tilt angle showing 360 degree enclosing spaceship walls
+    await page.setViewportSize({ width: 1470, height: 867 });
+    await page.mouse.move(700, 450);
+    await page.mouse.down();
+    await page.mouse.move(850, 600);
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: '/tmp/screenshots/spaceship-orbit-angle.png' });
   });
 });
