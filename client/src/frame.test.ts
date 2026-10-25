@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest';
+import { CELLS, VANISHED, axialTo3D, cellIndex } from './board';
+import { FRAME, frameShape } from './frame';
+
+const DISC = 0.46; // the cell disc radius of main.ts
+const ring = ([q, r]: readonly [number, number]): number => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+const start = (): number[] => CELLS.map(() => 0);
+// Distance from the centre to the farthest side of a hexagon whose sides face 30, 90, 150... degrees.
+const reach = (p: { x: number; z: number }): number =>
+  Math.max(...[0, 1, 2, 3, 4, 5].map((k) => p.x * Math.cos(Math.PI / 6 + (k * Math.PI) / 3) + p.z * Math.sin(Math.PI / 6 + (k * Math.PI) / 3)));
+const apothem = (corners: { x: number; z: number }[]): number => Math.hypot(corners[0]!.x, corners[0]!.z) * (Math.sqrt(3) / 2);
+
+describe('frameShape (world.md section 6)', () => {
+  it('frames the standard board: a hexagon with a corner on each corner cell, no hole', () => {
+    const shape = frameShape(start());
+    expect(shape.radius).toBe(4);
+    expect(shape.holes).toEqual([]);
+    expect(shape.inner).toHaveLength(6);
+    const corner = axialTo3D(4, 0);
+    expect(shape.inner[0]!.z).toBeCloseTo(0);
+    expect(shape.inner[0]!.x).toBeGreaterThan(corner.x);
+    expect(apothem(shape.inner)).toBeCloseTo(4 * (Math.sqrt(3) / 2) + FRAME.margin);
+    for (const p of shape.inner) expect(Math.hypot(p.x, p.z)).toBeCloseTo(Math.hypot(shape.inner[0]!.x, 0));
+  });
+
+  it('covers no cell: every disc sits inside the rim with a gap', () => {
+    const { inner } = frameShape(start());
+    for (const [q, r] of CELLS) expect(reach(axialTo3D(q, r)) + DISC).toBeLessThan(apothem(inner));
+  });
+
+  it('the rim is a band of FRAME.rim around the plate', () => {
+    const { inner, outer } = frameShape(start());
+    expect(outer).toHaveLength(6);
+    expect(apothem(outer)).toBeCloseTo(apothem(inner) + FRAME.rim);
+  });
+
+  it('The Choir plays on radius 3: its frame is that size and the vanished outer ring is outside it', () => {
+    const board = CELLS.map((c) => (ring(c) === 4 ? VANISHED : 0));
+    const shape = frameShape(board);
+    expect(shape.radius).toBe(3);
+    expect(shape.holes).toEqual([]);
+    expect(apothem(shape.inner)).toBeCloseTo(3 * (Math.sqrt(3) / 2) + FRAME.margin);
+  });
+
+  it('a vanished cell of The Hull is a hole in the plate, inside the rim', () => {
+    const board = start();
+    board[cellIndex(4, -1)] = VANISHED;
+    const shape = frameShape(board);
+    expect(shape.radius).toBe(4);
+    const centre = axialTo3D(4, -1);
+    expect(shape.holes).toEqual([{ x: centre.x, z: centre.z }]);
+    expect(FRAME.hole).toBeGreaterThan(DISC);
+    expect(reach(centre) + FRAME.hole).toBeLessThan(apothem(shape.inner));
+  });
+});
