@@ -424,15 +424,19 @@ describe('mobile quality optimizations (#424)', () => {
 
 describe('drawDue', () => {
   it('draws every frame for a player, whatever the draw cost', () => {
-    expect(drawDue(1000, 999, 500, false)).toBe(true);
+    expect(drawDue(1000, 999, 500, false, false)).toBe(true);
   });
   it('draws at most 10 times a second under automation', () => {
-    expect(drawDue(1099, 1000, 5, true)).toBe(false);
-    expect(drawDue(1100, 1000, 5, true)).toBe(true);
+    expect(drawDue(1099, 1000, 5, false, true)).toBe(false);
+    expect(drawDue(1100, 1000, 5, false, true)).toBe(true);
   });
   it('waits four times a slow draw under automation, so software WebGL leaves the CPU to the input', () => {
-    expect(drawDue(1799, 1000, 200, true)).toBe(false);
-    expect(drawDue(1800, 1000, 200, true)).toBe(true);
+    expect(drawDue(1799, 1000, 200, false, true)).toBe(false);
+    expect(drawDue(1800, 1000, 200, false, true)).toBe(true);
+  });
+  it('does not hold a draw a test asked for behind a slow draw, the one that compiled the shaders, bug #435', () => {
+    expect(drawDue(1099, 1000, 3000, true, true)).toBe(false);
+    expect(drawDue(1100, 1000, 3000, true, true)).toBe(true);
   });
 });
 
