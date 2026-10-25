@@ -5,6 +5,7 @@
 import type { View } from './camera';
 import { FRAME } from './frame';
 import { glassSkinById } from './glassskins';
+import { PALETTES, type Palette } from './palettes';
 import type { Theme } from './settings';
 import type { Bus, Mix } from './sound';
 import { skinById } from './skins';
@@ -24,6 +25,7 @@ const CLEAR_KEY = 'ab-alone.clear-board';
 const FPS_KEY = 'ab-alone.fps';
 const SOUND_KEY = 'ab-alone.sound';
 const THEME_KEY = 'ab-alone.theme';
+const PALETTE_KEY = 'ab-alone.palette';
 const SKIN_KEY = 'ab-alone.shell-skin';
 const GLASS_KEY = 'ab-alone.glass-skin';
 const SAFE_KEY = 'ab-alone.safe-mode';
@@ -119,6 +121,13 @@ export const writeSkin = (store: Store, id: string): void => write(store, SKIN_K
 // The pale glass skin (#377): Smoked glass unless the player picked another one of glassskins.ts.
 export const readGlassSkin = (store: Store): string => glassSkinById(read(store, GLASS_KEY)).id;
 export const writeGlassSkin = (store: Store, id: string): void => write(store, GLASS_KEY, id);
+
+// The colorblind palette (#381): Default unless the player picked one.
+export const readPalette = (store: Store): Palette => {
+  const stored = read(store, PALETTE_KEY);
+  return PALETTES.includes(stored as Palette) ? (stored as Palette) : 'default';
+};
+export const writePalette = (store: Store, palette: Palette): void => write(store, PALETTE_KEY, palette);
 
 export function readTier(store: Store, hints: Hints): Tier {
   const stored = read(store, TIER_KEY);

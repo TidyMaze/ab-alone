@@ -11,10 +11,11 @@ and no new look: each rule names its source (section numbers), and changes when 
   player is the last warm thing aboard, glass with a cyan light; the crew hardened into black
   shells and still plays by the rules (world.md 2).
 - **Tone.** Cosmic dread, grief, bureaucracy. Never gore for its own sake (world.md 2).
-- **Palette** (world.md 5, ui.md 2). Near-black `#0b0d0f` base, oxidized steel `#4a5258`, rust
+- **Palette** (world.md 5, 8, ui.md 2). Near-black `#0b0d0f` base, oxidized steel `#4a5258`, rust
   `#7a3b1d`, sodium orange `#d9822b` for hazard and furnace, one cold cyan `#7fd6e8` for the
   player's light, red `#ff6b5a` for danger only, bone-white `#d8d4c8` for tells (3:1 on the
-  surface). Nothing saturated outside it. Dark is the deck; light is only a fallback.
+  surface). Nothing saturated outside it. Colorblind players choose from protan, deutan, tritan
+  and high-contrast palettes in the settings menu (#381). Dark is the deck; light is only a fallback.
 - **Materials** (world.md 5). Brushed, pitted steel, oil stains, welds, taped cables,
   condensation, dust. Nothing emissive but lights, screens and marbles.
 - **Marbles** (world.md 5, 8). Player: smoked glass, a cyan core that dims with each marble lost.

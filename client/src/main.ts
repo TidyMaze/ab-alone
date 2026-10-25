@@ -60,6 +60,7 @@ import {
   readSafeMode,
   readSkin,
   readMix,
+  readPalette,
   readTheme,
   readTier,
   readUiScale,
@@ -69,12 +70,14 @@ import {
   writeFps,
   writeReducedMotion,
   writeGlassSkin,
+  writePalette,
   writeSafeMode,
   writeSkin,
   writeVolume,
   writeTheme,
   writeUiScale,
 } from './quality';
+import { nextPalette, paletteById, type Palette } from './palettes';
 import { limitFlash } from './safe';
 import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
@@ -217,6 +220,7 @@ let clear = readClearBoard(store);
 let theme: Theme = readTheme(store);
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
+let palette: Palette = readPalette(store); // the colorblind palette (#381), palettes.ts
 // The FPS readout (#426): off by default. Off, the frame loop only checks the flag; on, it keeps the last frame stamps.
 let fpsOn = readFps(store);
 let fpsStamps: number[] = [];
@@ -311,10 +315,16 @@ const toggles: Record<string, () => void> = {
     setGlassLook(glass);
     refresh();
   },
+  palette: () => {
+    palette = nextPalette(palette);
+    writePalette(store, palette);
+    applyPalette();
+    refresh();
+  },
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     row.setAttribute('aria-label', label); // held upright only the icon shows (#414): the name stays for screen readers
@@ -322,7 +332,7 @@ const paintMenu = (): void => {
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud)) {
+for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -356,6 +366,12 @@ const skinGroup = document.createElement('div');
 skinGroup.className = 'setting-group skin-pair';
 shellSkinRow.replaceWith(skinGroup);
 skinGroup.append(shellSkinRow, document.getElementById('setting-glass-skin')!);
+// The palette choice (#381) is a second button in the theme item: no row of its own, so the menu keeps its height.
+const themeRow = document.getElementById('setting-theme')!;
+const themeGroup = document.createElement('div');
+themeGroup.className = 'setting-group skin-pair';
+themeRow.replaceWith(themeGroup);
+themeGroup.append(themeRow, document.getElementById('setting-palette')!);
 fpsBox.hidden = !fpsOn;
 // The four volume sliders (#438), the page Sound opens: 0 to 100 %, each saved on its own.
 for (const bus of BUSES) {
@@ -516,7 +532,8 @@ const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparen
 coreMaterial.color.set(glassSkinById(glass).core ?? CORE.color);
 function setGlassLook(id: string): void {
   marbleMaterials[2] = glassMaterial(id);
-  coreMaterial.color.set(glassSkinById(id).core ?? CORE.color);
+  const pal = paletteById(palette);
+  coreMaterial.color.set(glassSkinById(id).core ?? pal.core);
 }
 // Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. The glass holds
 // its cyan core as a child: the selection lift, the slide and the ejection carry it.
@@ -695,6 +712,24 @@ for (const [key, color] of [[1, SHELL.color], [2, GLASS.color]] as const) {
   ghostMaterials[key] = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false });
 }
 const ghostCore = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true, opacity: 0.45, depthWrite: false });
+function applyPalette(): void {
+  const pal = paletteById(palette);
+  document.documentElement.dataset.palette = palette;
+  document.documentElement.style.setProperty('--accent', pal.accent);
+  document.documentElement.style.setProperty('--hazard', pal.hazard);
+  coldRim.color.setHex(pal.rim);
+  warmLight.color.setHex(pal.sodium);
+  ringMaterial.color.setHex(pal.core);
+  tickMaterial.color.setHex(pal.tell);
+  scratchMaterial.color.setHex(pal.tell);
+  paleMaterial.color.setHex(pal.tell);
+  ghostCore.color.setHex(pal.core);
+  scarab.color.setHex(pal.shell);
+  const smoked = glassLooks.get('smoked');
+  if (smoked) smoked.color.setHex(pal.glass);
+  coreMaterial.color.setHex(glassSkinById(glass).core ?? pal.core);
+}
+applyPalette();
 let hover: Axial | null = null;
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
@@ -1373,6 +1408,7 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__tension = () => ({ level: sfx.tension, layers: sfx.layers });
 // The sound twins of the boss tells played so far (#358).
 (window as unknown as Record<string, unknown>).__tellCues = () => tellCues;
+(window as unknown as Record<string, unknown>).__palette = () => palette;
 
 // Used by the browser checks to count the plies played, bot replies included, and to compare them.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;

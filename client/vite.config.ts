@@ -40,7 +40,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
         'src/sound.ts', 'src/tension.ts', 'src/daily.ts', 'src/savegame.ts', 'src/offline.ts',
         'src/logger.ts', 'src/netcounters.ts', 'src/diagnostics.ts', 'src/newgame.ts',
         'src/evalbar.ts', 'src/endbanner.ts', 'src/gamefile.ts', 'src/settings.ts', 'src/fps.ts', 'src/slide.ts', 'src/hint.ts', 'src/icons.ts', 'src/light.ts',
-        'src/marbles.ts', 'src/frame.ts', 'src/orient.ts', 'src/notches.ts', 'src/skins.ts', 'src/skinart.ts', 'src/glassskins.ts', 'src/tallymarks.ts'],
+        'src/marbles.ts', 'src/frame.ts', 'src/orient.ts', 'src/notches.ts', 'src/skins.ts', 'src/skinart.ts', 'src/glassskins.ts', 'src/palettes.ts', 'src/tallymarks.ts'],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },
