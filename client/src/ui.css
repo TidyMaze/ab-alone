@@ -203,6 +203,9 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   }
   #chrome #online *:not(#settings-menu, #settings-menu *) { max-width: 100%; }
   #settings-box { align-self: stretch; } /* as wide as the column: the menu under the cog fits in it */
+  /* Bug #483: a skin pair gives the menu no width, so the menu keeps the width of its other rows and covers no cell; its
+     two buttons share that width, or each takes a row of its own when their names do not fit side by side (#458). */
+  .skin-pair { contain: inline-size; flex-wrap: wrap; }
   /* Bug #427, #458: the column scrolls, so a menu inside it is clipped at its bottom edge or left edge once the UI scale grows it or when it is wider than the column. Fixed to the
      viewport and hung from the cog, it leaves that clip on every browser. */
   #settings-menu { position: fixed; top: calc(16px + 2.75rem + 0.25rem); right: 16px; width: max-content; max-width: calc(100vw - 32px); }
