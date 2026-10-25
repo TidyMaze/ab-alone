@@ -54,6 +54,24 @@ test('rotate and zoom, play a move at that angle, reset the view and play again'
   await expect(page.locator('#hud')).toContainText('Black to move');
 });
 
+// Bug #475: dragging to orbit the camera called applyLook() on every pointermove, which recreated
+// all props geometries/materials and rebuilt THREE.Fog, causing severe stutter.
+test('dragging to orbit camera stays smooth and completes without stalling, bug #475', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+
+  const t0 = Date.now();
+  await page.mouse.move(400, 300);
+  await page.mouse.down();
+  for (let i = 0; i < 20; i++) {
+    const angle = (i / 20) * Math.PI * 2;
+    await page.mouse.move(400 + Math.cos(angle) * 100, 300 + Math.sin(angle) * 100);
+  }
+  await page.mouse.up();
+  const elapsed = Date.now() - t0;
+  expect(elapsed).toBeLessThan(3000);
+});
+
 // Bug #146: the Reset view listener comes after the top-level awaits of main.ts. Before refresh() fills
 // the HUD (it runs after every listener is wired) a click would be lost, so the button must be disabled.
 test('Reset view is disabled until its listener is attached, bug #146', async ({ page }) => {

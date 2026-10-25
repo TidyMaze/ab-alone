@@ -212,12 +212,24 @@ function frameCamera(): void {
 }
 frameCamera();
 let view = resetView();
+const fogObj = new THREE.Fog(COLORS.base, 10, 20);
+function updateFog(): void {
+  const fog = fogSettings(tier, clear, view, fogRadius);
+  if (!fog) {
+    scene.fog = null;
+  } else {
+    fogObj.near = fog.near;
+    fogObj.far = fog.far;
+    if (scene.fog !== fogObj) scene.fog = fogObj;
+  }
+}
+
 function applyView(): void {
   const p = viewPosition(view);
   camera.position.set(p.x, p.y, p.z);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(); // picking and __cellToScreen run before the next frame
-  applyLook(); // the fog follows the zoom
+  updateFog(); // the fog follows the zoom
 }
 let clear = readClearBoard(store);
 const forceShadows =
@@ -269,8 +281,7 @@ function tellSound(tell: Tell, marks: readonly unknown[]): void {
 let fogRadius = RADIUS;
 let drawProps: () => void = () => {};
 function applyLook(): void {
-  const fog = fogSettings(tier, clear, view, fogRadius);
-  scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
+  updateFog();
   renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
   const shadowConf = shadowSettings(tier, isAutomation(navigator.webdriver), forceShadows);
   renderer.shadowMap.enabled = shadowConf.enabled;
