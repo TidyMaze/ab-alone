@@ -5,7 +5,9 @@ import { expect, test, type Page } from '@playwright/test';
 // darkest pixel of a small box where the top of its marble is drawn, read from one screenshot. The box follows the
 // cell spacing, so it holds at any window size.
 const topContrasts = async (page: Page, cells: [number, number][]): Promise<number[]> => {
-  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  // A frame drawn after this call sees the marks the caller just waited for (#383): two rAF can miss it.
+  const drawn = await page.evaluate(() => (window as any).__draws() as number);
+  await page.waitForFunction((n) => (window as any).__draws() > n, drawn);
   const png = (await page.screenshot()).toString('base64');
   return page.evaluate(
     async ([b64, list]) => {
