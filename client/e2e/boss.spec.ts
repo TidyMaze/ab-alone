@@ -171,7 +171,7 @@ for (const tier of ['high', 'low']) {
       await page.mouse.click(p.x, p.y);
     };
     // A forward one-marble move (NW or NE): Black never steps back, so no position repeats. The mouse plays the first
-    // one, the test hook the others (the same handler a click calls).
+    // one, __playTurns the next three (#429, the same moves), the test hook the last (the same handler a click calls).
     const advance = async (mouse: boolean) => {
       const mv = await page.evaluate(() =>
         (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
@@ -187,10 +187,10 @@ for (const tier of ['high', 'low']) {
     await page.locator('#boss-list').getByRole('button', { name: 'The Hull' }).click();
     await expect(hud).toContainText('The Hull');
     await expect(body).toHaveAttribute('data-cracks', '0');
-    for (let n = 1; n <= 4; n++) {
-      await advance(n === 1);
-      await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
-    }
+    await advance(true);
+    await expect.poll(plies, { timeout: 30_000 }).toBe(2); // the boss replied
+    expect(await page.evaluate(() => (window as any).__playTurns(3, [4, 2]))).toBe(3);
+    await expect.poll(plies, { timeout: 30_000 }).toBe(8);
     await expect(body).toHaveAttribute('data-cracks', '1');
     await expect(hud).toContainText('Rim cracks: 1 cell in 2 plies');
     expect(await tellCues(page)).toEqual(['crack']); // the crack appears
