@@ -138,7 +138,10 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 ## 6. Diegetic HUD rules
 
 1. No flat overlay for game-critical info while a match runs.
-2. Turn owner: the board rim lights in the player's color.
+2. Turn owner: the board rim lights in the player's color: the half of the rim at that side's
+   end (where its marbles start), cyan for the glass, sodium for the shell, so the turn reads by
+   place too, never color alone (section 8). It switches at once, keeps in clear-board mode and
+   goes out when the game is over (#300).
 3. Ejected count: tally marks scratched on the board frame, one slot per marble to lose. 1v1
    and bosses: 6 slots per side. Battle royale (10 marbles, out at 0, #49) and the Choir fight
    (10 marbles): the frame shows **marbles left** instead, as a row of notches per player that

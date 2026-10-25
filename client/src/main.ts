@@ -56,7 +56,7 @@ import {
 import { Sfx, TellWatch, type Tell } from './sound';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
-import { FRAME, frameShape, type FrameShape, type Point } from './frame';
+import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
 import { formatScore } from './score';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
@@ -333,7 +333,8 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r], i) => {
   return disc;
 });
 // The steel frame (#292, frame.ts): a plate under the cells and a rim around them, rebuilt when the board's size or
-// its holes change. The rim has its own material, to light for the side to move (#300). Picking tests the discs only.
+// its holes change. The rim is two halves, each with its own material: the half at the end of the side to move lights
+// in that side's colour (#300). Picking tests the discs only.
 const plateMaterial = new THREE.MeshStandardMaterial(
   deckAlbedo && deckRoughness
     ? { map: deckAlbedo, roughnessMap: deckRoughness, color: FRAME_LOOK.plate }
@@ -341,12 +342,15 @@ const plateMaterial = new THREE.MeshStandardMaterial(
 );
 const rimMaterial = new THREE.MeshStandardMaterial(
   deckAlbedo && deckRoughness
-    ? { map: deckAlbedo, roughnessMap: deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3 }
-    : { color: COLORS.steel, roughness: 0.5, metalness: 0.3 },
-);
+    ? { map: deckAlbedo, roughnessMap: deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3, emissiveIntensity: 0.6 }
+    : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 0.6 },
+); // the turn light keeps some of the steel under it
 const plate = new THREE.Mesh(new THREE.BufferGeometry(), plateMaterial);
-const rim = new THREE.Mesh(new THREE.BufferGeometry(), rimMaterial);
-scene.add(plate, rim);
+const rim = {
+  near: new THREE.Mesh(new THREE.BufferGeometry(), rimMaterial),
+  far: new THREE.Mesh(new THREE.BufferGeometry(), rimMaterial.clone()),
+};
+scene.add(plate, rim.near, rim.far);
 let frame: FrameShape | null = null;
 // The shape lies on the x z plane: shape y is -z once turned up, extruded from the top down.
 const flat = (points: Point[]): THREE.Vector2[] => points.map((p) => new THREE.Vector2(p.x, -p.z));
@@ -358,12 +362,19 @@ function drawFrame(board: ArrayLike<number>): void {
   frame = next;
   const plateShape = new THREE.Shape(flat(next.inner));
   for (const h of next.holes) plateShape.holes.push(new THREE.Path().absarc(h.x, -h.z, FRAME.hole, 0, 2 * Math.PI, true));
-  const rimShape = new THREE.Shape(flat(next.outer));
-  rimShape.holes.push(new THREE.Path(flat(next.inner)));
   plate.geometry.dispose();
   plate.geometry = slab(plateShape, -0.1, 0.2); // just under the discs
-  rim.geometry.dispose();
-  rim.geometry = slab(rimShape, 0, 0.3); // level with the cell tops: it hides none of them
+  const halves = rimHalves(next);
+  for (const end of ['near', 'far'] as const) {
+    rim[end].geometry.dispose();
+    rim[end].geometry = slab(new THREE.Shape(flat(halves[end])), 0, 0.3); // level with the cell tops: it hides none of them
+  }
+}
+// The turn on the rim, at once, no fade (world.md section 8). Clear board keeps it: it is game information.
+function lightRim(): void {
+  const light = rimLight(engine.status(), engine.to_move(), glassOf());
+  for (const end of ['near', 'far'] as const) rim[end].material.emissive.set(light?.end === end ? light.color : 0);
+  document.body.dataset.rim = light?.end ?? 'off';
 }
 const marbles = new THREE.Group();
 scene.add(marbles);
@@ -732,6 +743,7 @@ function hud(extra = ''): void {
 function refresh(): void {
   const board = engine.board();
   drawFrame(board);
+  lightRim();
   const moves = parseMoves(engine.legal_moves());
   const targets = groupTargets(moves, selected);
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
@@ -955,7 +967,8 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__frame = () => ({
   radius: frame?.radius,
   holes: frame?.holes.length,
-  drawn: [plate, rim].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
+  drawn: [plate, rim.near, rim.far].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
+  lit: { near: rim.near.material.emissive.getHex(), far: rim.far.material.emissive.getHex() }, // #300
 });
 
 // Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
