@@ -24,6 +24,14 @@ describe('palette tokens', () => {
   });
 });
 
+describe('settings menu held upright, #414', () => {
+  it('shows each item as its icon only, a 44 px square, beside the cog', () => {
+    const portrait = css.match(/@media \(orientation: portrait\) \{\n  #chrome[^]*?\n\}/)![0];
+    expect(portrait).toContain('#settings-menu button span { display: none; }');
+    expect(portrait).toMatch(/#settings-menu button \{[^}]*min-width: 2\.75rem; min-height: 2\.75rem;[^}]*\}/);
+  });
+});
+
 describe('end of game styles, #282', () => {
   it('has one animation per outcome on the rim light, keeps the middle clear, and drops the light under reduced motion', () => {
     for (const anim of ['win', 'loss', 'draw']) {
