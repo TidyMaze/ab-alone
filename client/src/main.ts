@@ -1282,7 +1282,7 @@ canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) press = { x: e.clientX, y: e.clientY, drag: false };
-  else if (press) press.drag = true; // a second finger never selects
+  else press!.drag = true; // a second finger never selects (press is set while any pointer is down)
 });
 
 canvas.addEventListener('pointermove', (e) => {
@@ -1420,7 +1420,7 @@ addEventListener('resize', () => {
     drops: drops.length,
     cells,
     marbles: boardMarbles,
-    frame: frame ? frame.outer.map((p) => px(p.x, 0, p.z)) : [],
+    frame: frame!.outer.map((p) => px(p.x, 0, p.z)), // drawn by the first refresh, before any hook can run
   };
 };
 
