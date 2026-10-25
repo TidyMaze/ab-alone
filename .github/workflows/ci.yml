@@ -158,6 +158,12 @@ jobs:
         working-directory: client
       - run: bun run e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         working-directory: client
+      # The 10 slowest tests of this shard, in the run summary even when the shard fails (#323).
+      - if: always()
+        run: |
+          echo "### Slowest e2e tests, shard ${{ matrix.shard }}/${{ strategy.job-total }}" >> "$GITHUB_STEP_SUMMARY"
+          bun run scripts/slowest-tests.ts e2e-results.json >> "$GITHUB_STEP_SUMMARY"
+        working-directory: client
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

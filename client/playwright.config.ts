@@ -16,6 +16,8 @@ process.env.E2E_PREVIEW_URL ??= baseURL ?? `http://localhost:${previewPort}/ab-a
 const reporter: ReporterDescription[] = [
   ['list'],
   ...(process.env.CI ? [['html', { open: 'never' }] as ReporterDescription] : []),
+  // On CI, the JSON report feeds the slowest-tests table in the run summary (scripts/slowest-tests.ts, #323).
+  ...(process.env.CI ? [['json', { outputFile: 'e2e-results.json' }] as ReporterDescription] : []),
   ['./scripts/shard-reporter.ts'],
 ];
 
