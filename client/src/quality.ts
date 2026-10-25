@@ -2,7 +2,8 @@
 // toggle (docs/specs/world.md section 7).
 // Pure functions only: main.ts feeds them the browser values.
 
-import { RADIUS } from './board';
+import type { View } from './camera';
+import { FRAME } from './frame';
 import type { Theme } from './settings';
 import { skinById } from './skins';
 
@@ -26,13 +27,20 @@ export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): T
   return weak ? 'low' : 'high';
 }
 
-// Linear fog measured from the camera: it starts at the board centre and is thick at the far rim,
-// so it follows every zoom level (bug #171: absolute distances started behind the whole board).
-// The span is in board radii, a shorter span is a thicker fog.
-const FOG_SPAN = { low: RADIUS, high: 0.75 * RADIUS };
+// Linear fog on the depth along the view axis (THREE.Fog). It starts at the plate's edge, the farthest point of the
+// frame's inner hexagon from the camera, and reaches FOG_AT_RIM at the rim's outer edge: it thickens over the rim and
+// beyond, never over a cell, at every zoom and turn of the camera (bugs #171 and #399). `radius` is the frame's.
+const FOG_AT_RIM = { low: 0.5, high: 0.8 };
 
-export function fogSettings(tier: Tier, clear: boolean, distance: number): { near: number; far: number } | null {
-  return clear ? null : { near: distance, far: distance + FOG_SPAN[tier] };
+export function fogSettings(tier: Tier, clear: boolean, view: View, radius: number): { near: number; far: number } | null {
+  if (clear) return null;
+  // How far along the view a hexagon of apothem 1 reaches: its corner nearest the view direction (frame.ts hexagon).
+  const reach =
+    (Math.sin(view.polar) * Math.max(...[0, 1, 2, 3, 4, 5].map((k) => -Math.sin((k * Math.PI) / 3 + view.azimuth)))) /
+    (Math.sqrt(3) / 2);
+  const edge = radius * (Math.sqrt(3) / 2) + FRAME.margin;
+  const near = view.distance + edge * reach;
+  return { near, far: near + (FRAME.rim * reach) / FOG_AT_RIM[tier] };
 }
 
 /** One stored setting, `null` when missing or when storage is blocked. */
