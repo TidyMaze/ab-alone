@@ -85,7 +85,8 @@ describe('RoundBook commits', () => {
     const r = book([a!, b!]);
     const one = (await commitOrder(a!, { game: 'g', round: 1, order: A })).commit;
     const two = (await commitOrder(a!, { game: 'g', round: 1, order: B })).commit;
-    expect(await Promise.all([r.commit(one, 0), r.commit(two, 0)])).toEqual([true, false]);
+    // Either may win: the signature checks run concurrently. Which one stays is #532's equivocation gap.
+    expect((await Promise.all([r.commit(one, 0), r.commit(two, 0)])).filter(Boolean)).toHaveLength(1);
   });
 
   it('refuses a commit once the reveal started', async () => {
