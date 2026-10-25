@@ -13,6 +13,8 @@ The short version:
    (same feature or files) may share one PR to go faster; unrelated work never does. Nothing out
    of scope.
 3. Strict TDD: failing test first, then code. 100 % line and region coverage. Unit and e2e tests.
+   Every e2e test passes in under 15 s and fails beyond (Playwright timeout 15 s); a slower one is
+   made cheaper (test hook instead of clicking through) or its logic becomes a fast unit test.
    Check player-facing changes in Chrome with Playwright. A PR that changes the UI MUST include a
    screenshot in its description (CONTRIBUTING 6.4).
 4. Every bug gets a `bug` issue before any fix. Bugs are picked before tasks.
