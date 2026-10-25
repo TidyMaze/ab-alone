@@ -427,6 +427,8 @@ test('a player back after a drop shows the same ply and side to move as the othe
 test('a spectator joining after an ejection shows the score at once, with no ejection effect, #232', async ({ browser }) => {
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   const lost = new Set(['c']); // the spectator is not there yet
+  // Reduced motion: slides take no time, and a live ejection still plays its effect (a fade) and counts in data-ejections.
+  await calm(a, b, c);
   await room({ a, b, c }, lost);
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
@@ -457,8 +459,9 @@ test('a spectator joining after an ejection shows the score at once, with no eje
     [a, [-2, 0], [-2, 1], [-2, 2], [-2, -1]], // 3v2 push, the last White marble leaves
   ];
   for (const [ply, [page, ...cells]] of plays.entries()) {
-    const press = ply < plays.length - 1 ? play : cell; // the last ply goes through the mouse
-    for (const [q, r] of cells) await press(page, q, r);
+    const last = ply === plays.length - 1;
+    // The last click of the last ply goes through the mouse: each mouse click waits for frames on three WebGL pages.
+    for (const [i, [q, r]] of cells.entries()) await (last && i === cells.length - 1 ? cell : play)(page, q, r);
     await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
   }
   const score = 'Black ejected 1/6 · White ejected 0/6';
