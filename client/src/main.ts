@@ -41,7 +41,7 @@ import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from '.
 import { hudHtml } from './hud';
 import { drawSkin } from './skinart';
 import { nextSkin, skinById } from './skins';
-import { menuOpen, nextDisplay, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
+import { menuOpen, nextDisplay, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { DECOR, LIGHT } from './light';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -248,19 +248,17 @@ const toggles: Record<string, () => void> = {
     sfx.setEnabled(!sfx.enabled);
     writeSound(store, sfx.enabled);
   },
-  display: () => {
-    const next = nextDisplay(uiScale, safe, maxUiScale(innerWidth, innerHeight));
+  theme: () => {
+    const next = nextDisplay(theme, uiScale, safe, maxUiScale(innerWidth, innerHeight));
+    theme = next.theme;
     uiScale = next.scale;
     safe = next.safe;
+    writeTheme(store, theme);
     writeUiScale(store, uiScale);
     writeSafeMode(store, safe);
+    applyTheme();
     applyUiScale();
     applySafe();
-  },
-  theme: () => {
-    theme = nextTheme(theme);
-    writeTheme(store, theme);
-    applyTheme();
   },
   'shell-skin': () => {
     skin = nextSkin(skin);

@@ -22,17 +22,26 @@ export const nextTheme = (theme: Theme): Theme => (theme === 'system' ? 'dark' :
 /** The `data-theme` value of a choice, null to leave the attribute off so the system setting decides. */
 export const themeAttribute = (theme: Theme): string | null => (theme === 'system' ? null : theme);
 
-/** The choice after a press on Display: the next UI scale step up to the cap, then 100 % with Safe mode flipped. */
-export const nextDisplay = (scale: UiScale, safe: boolean, max: UiScale): { scale: UiScale; safe: boolean } =>
-  scale < max ? { scale: nextUiScale(scale, max), safe } : { scale: 100, safe: !safe };
+/** The choice after a press on the Theme row: the theme cycles first; once it is back to System, the UI scale steps
+ *  up to the cap; once the scale is back to 100 %, Safe mode flips. The theme stays the main action of the row. */
+export const nextDisplay = (
+  theme: Theme,
+  scale: UiScale,
+  safe: boolean,
+  max: UiScale,
+): { theme: Theme; scale: UiScale; safe: boolean } => {
+  const next = nextTheme(theme);
+  if (next !== 'system') return { theme: next, scale, safe };
+  return scale < max ? { theme: next, scale: nextUiScale(scale, max), safe } : { theme: next, scale: 100, safe: !safe };
+};
 
-/** The items the menu lists, in order, with their icon and the toggles' current state. */
+/** The items the menu lists, in order, with their icon and the toggles' current state. The Theme row shows the UI scale
+ *  and holds Safe mode as its pressed state, so the menu keeps six rows. */
 export const settingsList = (clear: boolean, sound: boolean, theme: Theme, skin: string, scale: UiScale, safe: boolean): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'sound', label: 'Sound', icon: sound ? 'sound' : 'muted', on: sound },
-  { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme' },
+  { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}, ${scale} %`, icon: 'theme', on: safe },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
-  { id: 'display', label: `Display: ${scale} %`, icon: 'scale', on: safe },
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];
