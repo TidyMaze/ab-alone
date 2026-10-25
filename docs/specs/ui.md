@@ -63,7 +63,7 @@ In a short landscape window (500 px tall or less, a phone held sideways) the pla
 left of the board, like the column, with a smaller turn line, so it covers no cell (#234).
 In a taller landscape window up to 1100 px wide the plate is smaller (max width 15rem) for the
 same reason (#246).
-The buttons (the settings cog, Reset view, Play online, Boss fight and the rest) share one column
+The buttons (the settings cog, Reset view, New game, Game modes and the rest) share one column
 top-right, beside the plate and never over it (#227). Wider than tall, the column keeps to the band
 right of the board. Held upright, the column becomes rows of buttons under the plate. No button or
 field covers a cell, and the space between them lets every tap through to the board.
@@ -78,6 +78,16 @@ or closing it moves no button: under the cog in the column, beside the cog over 
 rows. It covers no cell either. On a touch screen each item is at least 44 px tall. It closes on Escape, on a press
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
+
+Game modes (#357): the buttons that start a game mode, Play online, Boss fight (with the boss list it opens under it)
+and Daily challenge, live in one menu behind an icon-only button, a play triangle of the icon set, labelled "Game
+modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen
+size; the three buttons keep their behaviour and their names. The button is the last of the column and the open menu
+lies under it, so opening or closing it moves no other button. Held upright, the menu starts a new row under the
+buttons, its items side by side, the bosses in line after Boss fight. It closes like the settings menu, on Escape, on
+a press outside and on its button again, and once a mode starts (a boss picked, Daily challenge, Play online). On a
+phone each item is at least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, the invite link) stay
+in the column, outside the menu.
 
 ```
 +---------------------------------+
@@ -122,18 +132,18 @@ button with `aria-pressed`, each item has the visible focus ring of the buttons.
   disconnected, muted watching); the words alone carry it. While the creator waits, the invite
   link below the buttons has a caption and the accent border.
 - **Rematch.** When an online game is over, each seated player sees a Rematch button under
-  Play online, spectators do not. It is greyed once pressed, or while the opponent is
+  Reset view, spectators do not. It is greyed once pressed, or while the opponent is
   disconnected. One more line under the status line says who asked, kept verbatim for the e2e
   tests: "You asked for a rematch. Waiting for White..." and "Black asks for a rematch." When both
   asked, the new game starts with the colours swapped and the line and the button go away (#186).
-- **New game.** A button above Play online, icon only (#297, the name is the tooltip and the accessible name, and the words show while it asks for the confirmation), in local games only (hot-seat or against the bot):
+- **New game.** A button under Reset view, icon only (#297, the name is the tooltip and the accessible name, and the words show while it asks for the confirmation), in local games only (hot-seat or against the bot):
   boss, daily and online games do not show it. It leaves the game in progress for the start
   position, the bot on or off as it was, and deletes the saved game (tech.md section 8). With no
   move played it starts over at once. Once a move is played, the first press turns it into
   "Confirm new game" with the hazard colour for 4 seconds, and only a second press in that time
   starts over; no dialog. Strings kept verbatim for the e2e tests: "New game", "Confirm new game"
   (#230).
-- **Daily challenge.** A button under Boss fight, labelled "Daily challenge 2026-10-24: The Choir"
+- **Daily challenge.** An item of the mode menu under Boss fight and its boss list, labelled "Daily challenge 2026-10-24: The Choir"
   (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
   tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
@@ -206,7 +216,7 @@ Local hot-seat and bot games have a Hint button: it shows the engine's best move
 move as a ghost on the board, and never plays it (#192). Online, boss and daily games never show it
 (fair play, #164): starting one hides it for good, like the evaluation bar.
 
-- **Place.** In the button column, under Daily challenge and above Export game and Import game,
+- **Place.** In the button column, under New game and above the Game modes button,
   the other tools of a local game, styled like the other buttons. Held upright it shares a row with
   one of them, so it adds no row of buttons over the board. The phone layout e2e test checks it
   like every control (#227).

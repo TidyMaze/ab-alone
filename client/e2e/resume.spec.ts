@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
 
 // A local game survives a reload: saved in IndexedDB after every move, replayed on load (#218,
 // docs/specs/tech.md section 8).
@@ -111,6 +112,7 @@ test('a boss fight is not saved: a reload shows a new local game', async ({ page
   await page.goto('./');
   await ready(page);
   const hud = page.locator('#hud');
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(hud).toContainText('The Echo');

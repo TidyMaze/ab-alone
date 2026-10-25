@@ -330,7 +330,7 @@ const moveMenu = (event: MenuEvent): void => {
   menu.hidden = !menuIsOpen;
   cog.setAttribute('aria-expanded', String(menuIsOpen));
 };
-cog.addEventListener('click', () => moveMenu('cog'));
+cog.addEventListener('click', () => moveMenu('button'));
 addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || !menuIsOpen) return;
   moveMenu('escape');
@@ -340,6 +340,27 @@ addEventListener('pointerdown', (e) => {
   if (menuIsOpen && !menu.contains(e.target as Node) && !cog.contains(e.target as Node)) moveMenu('outside');
 });
 cog.disabled = false; // listener ready (#146)
+// The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
+// closed like the settings menu. Starting a mode closes it (startBoss, Play online).
+const modeButton = document.getElementById('modes') as HTMLButtonElement;
+const modeMenu = document.getElementById('mode-menu')!;
+modeButton.innerHTML = icon('modes');
+let modesOpen = false;
+const moveModes = (event: MenuEvent): void => {
+  modesOpen = menuOpen(modesOpen, event);
+  modeMenu.hidden = !modesOpen;
+  modeButton.setAttribute('aria-expanded', String(modesOpen));
+};
+modeButton.addEventListener('click', () => moveModes('button'));
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !modesOpen) return;
+  moveModes('escape');
+  modeButton.focus();
+});
+addEventListener('pointerdown', (e) => {
+  if (modesOpen && !modeMenu.contains(e.target as Node) && !modeButton.contains(e.target as Node)) moveModes('outside');
+});
+modeButton.disabled = false; // listener ready (#146)
 
 for (const type of ['pointerdown', 'pointerup', 'keydown']) addEventListener(type, () => sfx.unlock(), { capture: true });
 scene.add(new THREE.AmbientLight(LIGHT.ambient.color, LIGHT.ambient.intensity));
@@ -1369,6 +1390,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   thinking = false;
   bossList.hidden = true;
   bossButton.setAttribute('aria-expanded', 'false');
+  moveModes('pick');
   retryButton.hidden = false;
   newGameButton.hidden = true;
   document.body.dataset.boss = id;
@@ -1562,6 +1584,7 @@ async function goOnline(room: string, side: number): Promise<void> {
   refresh();
 }
 document.getElementById('play-online')!.addEventListener('click', () => {
+  moveModes('pick');
   const room = newRoomId((b) => crypto.getRandomValues(b));
   location.hash = `room=${room}`;
   inviteBox.value = inviteUrl(location.href, room);

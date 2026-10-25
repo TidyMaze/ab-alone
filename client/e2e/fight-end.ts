@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { openModes } from './modes';
 
 // Reaching the end of a boss fight, for the daily result card tests (#196). With ?bot=off the test
 // plays both sides by hand: one marble each, there and back twice, brings the start position back a
@@ -31,6 +32,7 @@ export async function startDaily(page: Page): Promise<string> {
   const daily = page.locator('#daily');
   await expect(daily).toBeEnabled();
   const name = (await daily.textContent())!.split(': ')[1]!;
+  await openModes(page);
   await daily.click();
   await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 1');
   return name;
