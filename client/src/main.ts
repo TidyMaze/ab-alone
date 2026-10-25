@@ -16,6 +16,7 @@ import { askBot, askEval, BOT_NODES } from './bot';
 import { bossHtml, goalShown } from './bosshud';
 import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
+import { BLOOD_DROPS, BLOOD_MS, bloodAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
@@ -534,6 +535,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const e: Ejecting = { holder, mesh, track, start: performance.now(), skipped: false };
   drawEjection(e, 0);
   ejecting.push(e);
+  if (!reducedMotion) startBlood(track);
   body.dataset.ejecting = track.kind; // read by the e2e tests: tumble, or fade with reduced motion
 }
 
@@ -551,6 +553,41 @@ function drawEjection(e: Ejecting, elapsedMs: number): boolean {
   return p.done;
 }
 
+// The blood spatter of an ejection (issue #278): a stylised spatter just beyond the rim, drawn from
+// blood.ts. It never covers a cell, ends by itself, and a click or a key ends it at once.
+const BLOOD_COLOR = 0x8c2a1c;
+interface Bleeding {
+  points: THREE.Points;
+  from: { x: number; z: number };
+  dir: { x: number; z: number };
+  start: number;
+  skipped: boolean;
+}
+const bleeding: Bleeding[] = [];
+
+function startBlood(track: EjectTrack): void {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BLOOD_DROPS * 3), 3));
+  const material = new THREE.PointsMaterial({ color: BLOOD_COLOR, size: 0.36, transparent: true, depthWrite: false });
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+  const b: Bleeding = { points, from: track.from, dir: track.dir, start: performance.now(), skipped: false };
+  drawBlood(b, 0);
+  bleeding.push(b);
+  document.body.dataset.blood = 'spatter'; // read by the e2e tests
+}
+
+/** Draws a spatter `elapsedMs` into its effect, true once it is over. */
+function drawBlood(b: Bleeding, elapsedMs: number): boolean {
+  const drops = bloodAt(b.from, b.dir, b.skipped ? BLOOD_MS : elapsedMs, false);
+  if (drops.length === 0) return true;
+  const position = b.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+  drops.forEach((d, i) => position.setXYZ(i, d.x, d.y, d.z));
+  position.needsUpdate = true;
+  (b.points.material as THREE.PointsMaterial).opacity = drops[0]!.alpha;
+  return false;
+}
+
 function animateEjections(now: number): void {
   for (const e of ejecting.slice()) {
     if (!drawEjection(e, now - e.start)) continue;
@@ -559,11 +596,20 @@ function animateEjections(now: number): void {
     ejecting.splice(ejecting.indexOf(e), 1);
   }
   if (ejecting.length === 0) delete document.body.dataset.ejecting;
+  for (const b of bleeding.slice()) {
+    if (!drawBlood(b, now - b.start)) continue;
+    scene.remove(b.points);
+    b.points.geometry.dispose();
+    (b.points.material as THREE.Material).dispose();
+    bleeding.splice(bleeding.indexOf(b), 1);
+  }
+  if (bleeding.length === 0) delete document.body.dataset.blood;
 }
 
 // Skip: a click or a key jumps the effect to its end, then goes on to do its usual job.
 function skipEjections(): void {
   for (const e of ejecting) e.skipped = true;
+  for (const b of bleeding) b.skipped = true;
   animateEjections(performance.now());
 }
 addEventListener('pointerdown', skipEjections, { capture: true });
