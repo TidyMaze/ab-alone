@@ -420,10 +420,15 @@ No database server. Everything is client-side.
   (GPU-compressed, small download). Audio: Opus in WebM or Ogg, with an AAC fallback only if
   Safari needs it. Lazy loading per deck, the hub loads a first deck only. Budget (starting
   values, soft until Phase 1): initial load under 5 MB gzipped (wasm + JS + first scene), each
-  deck under 15 MB, whole site under 250 MB, well below the Pages soft limits. CI reports and
-  fails on regressions. Source files (blend, wav) stay out of the Pages artifact. Who makes
-  assets is a design question (world spec open questions), and procedural or generated assets
-  are preferred for the first decks.
+  deck under 15 MB, whole site under 250 MB, well below the Pages soft limits. The 5 MB counts
+  what the first screen downloads before the service worker installs (page, entry JS and CSS,
+  wasm, icons, shared textures, Mess textures); the worker's background precache (section 9.1)
+  counts only toward the 250 MB site budget. CI reports and fails on regressions: the `rust`
+  job runs `vite build` then `client/scripts/size-budget.mjs`, which sums the gzipped files of
+  `dist/` (a deck is its `deck-<deck>*` files), writes a table to the run summary and fails over
+  a budget or when `dist/` holds a source file (`.blend`, `.wav`, `.psd`, `.kra`, `.xcf`). Source
+  files stay out of the Pages artifact. Who makes assets is a design question (world spec open
+  questions), and procedural or generated assets are preferred for the first decks.
 - Versioning: the wire protocol and the engine carry a version number in `Hello`. Peers on
   different engine versions refuse to play (a desync otherwise). Old tabs are told to reload.
 - Only third-party runtime dependencies: public STUN, signaling relays. Both degrade to the

@@ -59,6 +59,11 @@ jobs:
         working-directory: client
       - run: bun run test
         working-directory: client
+      # The download size budget of docs/specs/tech.md section 9 (#505), on the production build.
+      - run: bunx vite build
+        working-directory: client
+      - run: bun run scripts/size-budget.mjs dist
+        working-directory: client
 
   # On push to main, finds what changed since the last successful CI run on main (not just this push: a cancelled run
   # never tested its commits). A manual dispatch always runs everything. Only coverage depends on the diff, `rust`
