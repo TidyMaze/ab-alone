@@ -160,7 +160,7 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect.poll(() => plies(c)).toBe(1); // a spectator still follows the game
 
   // It is White's turn: C tries to play it.
-  await cell(c, 0, -2);
+  await play(c, 0, -2);
   await cell(c, 0, -1);
   await expect(c.locator('#hud')).toContainText('Room is full, watching');
   expect(await plies(c)).toBe(1);
@@ -267,7 +267,7 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
   await leave(b, 'a');
   await leave(b, 'c');
   await expect(status(a)).toHaveText('You are Black. White is disconnected.');
-  await cell(a, 0, 2);
+  await play(a, 0, 2);
   await cell(a, 0, 1);
   await expect(a.locator('#hud')).toContainText('waiting for opponent');
   for (const page of [a, b, c]) expect(await plies(page)).toBe(0);
@@ -276,7 +276,7 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
   await open(b);
   await open(a);
   await expect(status(a)).toHaveText('You are Black. White is here.');
-  await cell(a, 0, 2);
+  await play(a, 0, 2);
   await cell(a, 0, 1);
   await expect.poll(() => plies(b)).toBe(1);
   await expect.poll(() => plies(c)).toBe(1);
@@ -291,6 +291,7 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
 test('a finished online game ends in a rematch: colours swapped, the new Black moves first, #186', async ({ browser }) => {
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
+  await calm(a, b);
   await room({ a, b });
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
@@ -346,15 +347,15 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   }
 
   // The former Black cannot open the new game, the new Black (page B) does and page A sees it.
-  await cell(a, 0, -2);
+  await play(a, 0, -2);
   await cell(a, 0, -1);
   expect(await plies(a)).toBe(0);
-  await cell(b, 0, 2);
+  await play(b, 0, 2);
   await cell(b, 0, 1);
   await expect.poll(() => plies(a)).toBe(1);
   await expect(a.locator('#hud .turn')).toHaveText('White to move');
   await expect(b.locator('#hud .turn')).toHaveText('White to move');
-  await cell(a, 0, -2); // and the new White answers
+  await play(a, 0, -2); // and the new White answers
   await cell(a, 0, -1);
   await expect.poll(() => plies(b)).toBe(2);
   await expect(a.locator('#hud')).not.toContainText('refused');
@@ -511,6 +512,7 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   const shown = (page: Page) => Promise.all(['.turn', '.score'].map((c) => page.locator(`#hud ${c}`).textContent()));
 
   const hot = await (await browser.newContext()).newPage();
+  await calm(hot);
   await hot.goto('./?bot=off');
   await hot.locator('canvas').waitFor();
   await expect(hot.locator('#hud')).toContainText('Black to move');
