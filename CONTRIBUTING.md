@@ -449,9 +449,8 @@ what they import, #254). Not in CI. It resolves Trystero from `client/node_modul
 `client/` first. From `mcp/`, after `bun install`:
 
 - `bun run test`: builds the Node target of the engine into `mcp/engine/` (git-ignored), then
-  vitest with coverage thresholds of 100 % (lines, branches, functions, statements) on `mcp/src/`.
-  `src/main.ts`, the stdio entry point, is still left to the e2e until its unit tests land
-  (decision #445 covers all code).
+  vitest with coverage thresholds of 100 % (lines, branches, functions, statements) on all of `mcp/src/`,
+  the stdio entry point `src/main.ts` included (its test swaps stdio for an in-memory pair).
 - `bunx tsc --noEmit`.
 - `bun run e2e`: a scripted MCP client starts the server over stdio and plays a full game, then two
   servers play each other over real WebRTC: it needs the public Nostr relays (internet).
