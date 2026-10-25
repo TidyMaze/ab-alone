@@ -41,10 +41,11 @@ const pixels = (page: Page, png: Buffer, points: [number, number][]) =>
   );
 
 // Task #400: every deck's light holds the same 3:1, on the same start position. window.__deck lights the board in play as
-// that deck (the Bridge has no mode yet), then the shot waits for a draw that began after it: under automation the page
-// skips draws (#216, #365).
+// that deck (the Bridge has no mode yet) and its texture set, then the shot waits for a draw that began after it: under
+// automation the page skips draws (#216, #365).
 const deckShot = async (page: Page, deck: string, path: string) => {
   await page.evaluate((d) => (window as any).__deck(d), deck);
+  await expect(page.locator('body')).toHaveAttribute('data-deck-set', deck); // the deck's texture is on the cells (#401)
   const draws = await page.evaluate(() => (window as any).__draws() as number);
   await page.waitForFunction((n) => (window as any).__draws() > n, draws);
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));

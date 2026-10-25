@@ -10,11 +10,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 backdrop.png',
     '200 crack-decal.png',
     '200 deck-albedo.png',
-    '200 deck-bridge.png', // the cells' texture of each deck (#401)
-    '200 deck-cargo.png',
-    '200 deck-chapel.png',
-    '200 deck-furnace.png',
-    '200 deck-mess.png',
+    '200 deck-mess.png', // the cells' texture of the Mess, the deck a page opens on (#401)
     '200 deck-roughness.png',
     '200 shell-normal.png',
   ]);
