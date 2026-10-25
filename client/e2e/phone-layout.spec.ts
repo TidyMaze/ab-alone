@@ -94,10 +94,10 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
       .map((el) => el.textContent || el.getAttribute('aria-label')),
   );
   expect(small, `${state}, settings menu open, under 44 px`).toEqual([]);
-  // Held upright the items show their icon only (#414); each keeps its name, for screen readers and as a tooltip. The
-  // FPS switch (#426) is a short word, not an icon item.
+  // Held upright, or in a narrow or short window, the items show their icon only (#414); each keeps its name, for screen
+  // readers and as a tooltip. The FPS switch (#426) is a short word, not an icon item.
   const items = await page.evaluate(() => {
-    const upright = matchMedia('(orientation: portrait)').matches;
+    const upright = matchMedia('(orientation: portrait), (max-width: 1100px), (max-height: 500px)').matches;
     return [...document.querySelectorAll('#settings-menu button')]
       .filter((el) => el.getClientRects().length > 0 && el.querySelector('svg'))
       .map((el) => ({
@@ -110,7 +110,7 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
   for (const item of items) {
     expect(item.name, `${state}, a settings item has a name`).toBeTruthy();
     expect(item.title, `${state}, ${item.name} has its name as a tooltip`).toBe(item.name);
-    expect(item.labelShown, `${state}, ${item.name} shows its label ${item.upright ? 'held upright' : 'wider than tall'}`).toBe(!item.upright);
+    expect(item.labelShown, `${state}, ${item.name} shows its label ${item.upright ? 'held upright or in a small window' : 'in a roomy window'}`).toBe(!item.upright);
   }
   await tapCog(page);
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden();

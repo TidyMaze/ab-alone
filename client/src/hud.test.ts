@@ -24,11 +24,17 @@ describe('palette tokens', () => {
   });
 });
 
-describe('settings menu held upright, #414', () => {
-  it('shows each item as its icon only, a 44 px square, beside the cog', () => {
-    const portrait = css.match(/@media \(orientation: portrait\) \{\n  #chrome[^]*?\n\}/)![0];
-    expect(portrait).toContain('#settings-menu button span { display: none; }');
-    expect(portrait).toMatch(/#settings-menu button \{[^}]*min-width: 2\.75rem; min-height: 2\.75rem;[^}]*\}/);
+describe('settings menu held upright or in a narrow or short window, #414', () => {
+  it('shows each item as its icon only, a 44 px square', () => {
+    const icons = css.match(/@media \(orientation: portrait\), \(max-width: 1100px\), \(max-height: 500px\) \{[^]*?\n\}/)![0];
+    expect(icons).toContain('#settings-menu button span { display: none; }');
+    expect(icons).toMatch(/#settings-menu button \{[^}]*min-width: 2\.75rem; min-height: 2\.75rem;[^}]*\}/);
+  });
+
+  it('lays the icons out in rows of 3 under the cog when the window is wider than tall', () => {
+    const rows = css.match(/@media \(orientation: landscape\) and \(max-width: 1100px\), \(orientation: landscape\) and \(max-height: 500px\) \{[^]*?\n\}/)![0];
+    expect(rows).toMatch(/#settings-menu \{[^}]*display: grid; grid-template-columns: repeat\(3, 2\.75rem\);/);
+    expect(rows).toContain('#settings-menu .setting-group { grid-column: span 2; }'); // Clear board and FPS side by side (#426)
   });
 });
 
