@@ -100,8 +100,9 @@ const diffOf = (page: Page, a: Buffer, b: Buffer, box: Box) =>
 test('the fog shows at the far rim of the board, not on its cells nor at the near rim, bugs #171 and #399', async ({ page }, testInfo) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
-  // The evaluation bar's label (#191) is set when the analysis worker answers, which can be after the first shot.
-  await page.addStyleTag({ content: 'body::after, #eval { display: none !important; }' });
+  // The evaluation bar's label (#191) is set when the analysis worker answers, which can be after the first shot. Tally's
+  // line fades out 4 s after the start (#425), while the shots are taken.
+  await page.addStyleTag({ content: 'body::after, #eval, #hud .tally { display: none !important; }' });
   await expect(page.locator('#hud')).toContainText('Black to move');
   // The menu stays closed, so it is in none of the shots: the setting is flipped by a click event on its row. Opening the
   // menu with the cog is checked in clear-board.spec.ts; here each real click cost seconds on a CI runner (#429).
