@@ -138,6 +138,15 @@ describe('the Tally line, #294', () => {
   it('shows no tally element when there is no line', () => {
     expect(hudHtml(base)).not.toContain('class="tally"');
   });
+
+  it('fades out the tally line after 5 seconds via CSS animation (#425)', () => {
+    expect(css).toMatch(/#hud \.tally \{[^}]*animation:\s*tally-fade 1s ease-out 4s forwards;/);
+    expect(css).toContain('@keyframes tally-fade');
+  });
+
+  it('hides the redundant pips on compact/mobile screens (#425)', () => {
+    expect(css).toMatch(/@media [^{]*max-width:\s*1100px[^{]*\{[^]*?#hud \.pips \{ display: none; \}/);
+  });
 });
 
 describe('flatHudHtml, the flat HUD fallback (#391)', () => {

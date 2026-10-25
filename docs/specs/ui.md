@@ -102,15 +102,20 @@ in the column, outside the menu.
 | (o) BLACK TO MOVE               |   display face, marker + text
 | * You are Black. White is here. |   online only: status line, UI face
 | Black ejected 0/6 . White 0/6   |   UI face, the score line, text kept verbatim
-| ||||||  ||||||                  |   tally pips, decorative, aria-hidden
-| WebGPU                          |   note, muted
+| ||||||  ||||||                  |   tally pips (desktop), decorative, aria-hidden
 +---------------------------------+
 ```
 
 - **Turn.** A marker plus the words "Black to move" or "White to move". The marker is a filled
   disc for Black and a ring for White, so the side never depends on colour (world.md section 8).
-- **Score.** The existing score text from #93 stays the source of truth and the readable copy.
-  Six pips per side are scratched out as marbles are ejected, a visual twin of the text.
+- **Score.** The score text stays the source of truth and the readable copy: each side's ejected
+  count against the win target. Game-over winner names and draw reasons are not duplicated in the
+  score line since the turn line and end banner already announce them (#425). On desktop, six pips
+  per side are scratched out as marbles are ejected; on compact and mobile screens (under 1100 px wide
+  or 500 px tall), decorative pips are hidden to slim down the HUD plate. The render backend note
+  (WebGL2 / WebGPU) is dropped from the player HUD and kept in `environment.backend` of diagnostics.
+- **Tally line (#294, #425).** Matches start with Tally's accounting line per mode/boss, which fades
+  out via CSS animation after 5 seconds or clears on the first move.
 - **End banner (#282).** When the game is over the turn line is replaced by the result in the
   display face, with the accent border, and under it comes the reason, one short line, all inside the
   plate, so nothing covers a cell (the plate may not grow over the board: the phone-layout e2e checks

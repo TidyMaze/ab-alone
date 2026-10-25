@@ -4,18 +4,12 @@
 
 import { sideName } from './glass';
 
-const DRAW_REASON = ['', 'by threefold repetition', 'after 100 plies without ejection'];
-
 export function formatScore(
   ejected: readonly [number, number],
   win: readonly [number, number],
-  status: number,
-  drawReason: number,
+  _status: number,
+  _drawReason: number,
   glass: number,
 ): string {
-  const line = `${sideName(1, glass)} ejected ${ejected[0]}/${win[0]} · ${sideName(2, glass)} ejected ${ejected[1]}/${win[1]}`;
-  if (status === 0) return line;
-  const result =
-    status === 3 ? `Draw ${DRAW_REASON[drawReason]}` : `${sideName(status, glass)} wins by ${win[status - 1]} ejections`;
-  return `${result} · ${line}`;
+  return `${sideName(1, glass)} ejected ${ejected[0]}/${win[0]} · ${sideName(2, glass)} ejected ${ejected[1]}/${win[1]}`;
 }

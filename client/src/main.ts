@@ -1035,7 +1035,7 @@ function hud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${backend}${onlineNote}${online ? '' : offlineNotice}${extra}`,
+    note: `${onlineNote}${online ? '' : offlineNotice}${extra}`,
     online: onlineLine,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
     tally: history.length === 0 && status === 0 ? tallyLine({ mode: online ? 'online' : fight ? 'boss' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
