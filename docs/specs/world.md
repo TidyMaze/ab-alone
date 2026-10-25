@@ -163,6 +163,10 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
   the void takes the marble, then vacuum silence while it falls, for the 600 ms of the void
   (section 5). Once it is gone, a distinct low "toll" for the player's loss (glass), a dry
   "clack" for the enemy's (shell). Synthesized in code (filtered noise and sines), no audio file.
+- **Tells.** Every boss tell has its sound twin (sections 3 and 8), synthesized the same way and
+  played when the tell appears or changes, never on a tell that stays the same: a low creak of the
+  frame for The Hull's crack countdown, a small high bell for The Chaplain's flip tell, two hummed
+  voices a fifth apart for The Choir's next army.
 - **Music.** No melodic loops. Drone and texture layers, 2 to 3 tension layers driven by game
   state (marbles in danger, boss phase). Boss themes are a slow pulse that speeds up per phase.
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
