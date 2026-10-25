@@ -62,3 +62,7 @@ export function carryTurns(turns: ReadonlyMap<number, Quat>, seed: number, track
   }
   return next;
 }
+
+/** The turn inside the holder of an ejected marble, turned by `yaw` about the vertical axis, that keeps the marble's
+ * own turn `own` on the board (#364): the holder's yaw undone, then `own`. */
+export const inHolder = (own: Quat, yaw: number): Quat => mul(about([0, 1, 0], -yaw), own);
