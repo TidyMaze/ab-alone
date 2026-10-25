@@ -125,8 +125,8 @@ deck has a lighting preset (data, not code).
 
 | Tier | Backend | Contents |
 |---|---|---|
-| Full | WebGPU | Whole chain, optional compute extras (particles) |
-| Reduced | WebGL2 fallback, or user choice | Fog, bloom at half resolution, no grain, no compute, fewer dynamic lights |
+| Full | WebGPU / desktop high tier | Whole chain, PMREM reflections, 32-segment discs & 32x16 spheres, DPR up to 2.0 |
+| Reduced | WebGL2 fallback, mobile or user choice | Fog, DPR capped at 1.0 (#424), 16-segment discs & 16x12 spheres, no PMREM reflections, fewer dynamic lights |
 | Clear board | any | No fog, no post chain, flat lighting (SPEC section 5 toggle, also the accessibility mode), a setting in the menu behind the settings cog (#277) |
 
 Tier is picked at start from a one-frame benchmark and `prefers-reduced-motion`, always
