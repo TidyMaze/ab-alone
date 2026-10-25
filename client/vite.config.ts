@@ -31,10 +31,10 @@ export default defineConfig(({ command, mode, isPreview }) => ({
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      // Every source file is unit tested (decision #445). main.ts gets its tests in the next task of #445, on the jsdom
-      // harness in src/test/, which is test code itself.
+      // Every source file is unit tested (decision #445), main.ts included on the jsdom harness in src/test/, which is
+      // test code itself.
       include: ['src/**/*.ts', 'scripts/**/*.{ts,mjs}'],
-      exclude: ['**/*.test.ts', 'src/main.ts', 'src/test/**'],
+      exclude: ['**/*.test.ts', 'src/test/**'],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },
