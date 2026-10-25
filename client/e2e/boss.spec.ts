@@ -2,6 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
 import { openModes } from './modes';
 
+// Waits for a draw that began after this call. It is asked of the page, so the draw throttle does not hold it (#435).
+const freshDraw = async (page: Page) => {
+  const asked = await page.evaluate(() => (window as any).__drawNext() as number);
+  await page.waitForFunction((n) => (window as any).__draws() > n, asked);
+};
+
 // Bug #326: a tell drawn on top of a boss marble (a Choir army glyph, The Chaplain's converted cap) reads 3:1 against
 // the shell it sits on (world.md section 5, Tell marks). For each cell, the contrast (WCAG 2) of the brightest to the
 // darkest pixel of a small box where the top of its marble is drawn, read from one screenshot. The box follows the
@@ -9,8 +15,7 @@ import { openModes } from './modes';
 // `path` keeps the screenshot read, for the report (#429).
 const topContrasts = async (page: Page, cells: [number, number][], path?: string): Promise<number[]> => {
   // A frame drawn after this call sees the marks the caller just waited for (#383): two rAF can miss it.
-  const drawn = await page.evaluate(() => (window as any).__draws() as number);
-  await page.waitForFunction((n) => (window as any).__draws() > n, drawn);
+  await freshDraw(page);
   const png = (await page.screenshot({ path })).toString('base64');
   return page.evaluate(
     async ([b64, list]) => {
@@ -51,12 +56,12 @@ const tellCues = (page: Page) => page.evaluate(() => (window as any).__tellCues(
 // and how many of them reach 3:1.
 const crackContrast = async (page: Page, [q, r]: [number, number]): Promise<{ shown: number; reading: number }> => {
   await page.mouse.move(2, 2); // no hover ghost
-  await page.waitForTimeout(250); // a draw since the last change: the page draws at most every 100 ms under automation
+  await freshDraw(page); // a draw since the last change
   const shown = await page.screenshot();
   await page.evaluate(() => (window as any).__crackDecalShown(false));
   let hidden = shown;
   for (let n = 0; n < 50 && hidden.equals(shown); n++) {
-    await page.waitForTimeout(100);
+    await freshDraw(page);
     hidden = await page.screenshot();
   }
   await page.evaluate(() => (window as any).__crackDecalShown(true));

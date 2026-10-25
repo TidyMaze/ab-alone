@@ -118,7 +118,7 @@ test('the fog shows at the far rim of the board, not on its cells nor at the nea
       () =>
         new Promise((done) => {
           const draws = (window as any).__draws as () => number;
-          const asked = draws();
+          const asked = (window as any).__drawNext() as number; // not held by the draw throttle (#435)
           const wait = () => (draws() > asked ? requestAnimationFrame(() => requestAnimationFrame(done)) : requestAnimationFrame(wait));
           requestAnimationFrame(wait);
         }),
