@@ -41,7 +41,8 @@ import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from '.
 import { hudHtml } from './hud';
 import { menuOpen, nextTheme, settingsList, themeAttribute, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
-import { LIGHT } from './light';
+import { DECOR, LIGHT } from './light';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
   fogSettings,
@@ -135,6 +136,12 @@ const [deckAlbedo, deckRoughness, shellNormal, backdrop] = await Promise.all([
 
 const scene = new THREE.Scene();
 scene.background = backdrop ?? new THREE.Color(COLORS.base);
+// Reflections (#376): the room prefiltered once, used as the envMap of the marble materials only. The deck and the
+// frame get none, so their warm sodium look stays as it was.
+const pmrem = new THREE.PMREMGenerator(renderer);
+const reflections = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
+scene.environmentIntensity = LIGHT.environment.intensity;
 const camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 100);
 // The whole board fits the window, held upright too, below the HUD and the buttons (#227).
 function frameCamera(): void {
@@ -259,6 +266,22 @@ scene.add(new THREE.AmbientLight(LIGHT.ambient.color, LIGHT.ambient.intensity));
 const lamp = new THREE.DirectionalLight(LIGHT.key.color, LIGHT.key.intensity);
 lamp.position.set(...LIGHT.key.position);
 scene.add(lamp);
+// Accents (#376): a cold rim from behind, a small warm point at the lamp's side. Weaker than the key.
+const rimLight = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
+rimLight.position.set(...LIGHT.accents.rim.position);
+const warmLight = new THREE.PointLight(LIGHT.accents.warm.color, LIGHT.accents.warm.intensity, LIGHT.accents.warm.distance);
+warmLight.position.set(...LIGHT.accents.warm.position);
+scene.add(rimLight, warmLight);
+// Background decor (#376): dim bulkhead ribs far behind the board, below the deck plane, so no cell, marble or mark
+// can sit under them. Only the fog and the key touch them; they never reach the board's brightness.
+const decorMaterial = new THREE.MeshStandardMaterial({ color: DECOR.color, roughness: 0.9 });
+const decor = new THREE.Group();
+for (let x = -9; x <= 9; x += 4.5) {
+  const rib = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 0.4), decorMaterial);
+  rib.position.set(x, 0, -10);
+  decor.add(rib);
+}
+scene.add(decor);
 
 const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, 32);
 const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, 32, 16);
@@ -273,9 +296,11 @@ const { ridges, ...shell } = SHELL;
 const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
   1: new THREE.MeshStandardMaterial({
     ...shell,
+    envMap: reflections,
+    envMapIntensity: LIGHT.environment.intensity,
     ...(shellNormal ? { normalMap: shellNormal, normalScale: new THREE.Vector2(ridges, ridges) } : {}),
   }),
-  2: new THREE.MeshPhysicalMaterial(GLASS),
+  2: new THREE.MeshPhysicalMaterial({ ...GLASS, envMap: reflections, envMapIntensity: LIGHT.environment.glass }),
 };
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
 const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the glass
