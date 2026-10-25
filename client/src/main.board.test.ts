@@ -103,8 +103,7 @@ async function until(game: Game, done: () => boolean): Promise<void> {
   expect(done()).toBe(true);
 }
 
-// Each test boots a fresh page on the real engine, a few seconds on a loaded machine; the bot games take longer.
-describe('main.ts board and HUD', { timeout: 30_000 }, () => {
+describe('main.ts board and HUD', () => {
   it('lights the deck with the key lamp and its accents, and sets the dim bulkhead frame far behind the board', async () => {
     const scene = catchScene();
     await boot('?bot=off');

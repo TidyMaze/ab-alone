@@ -824,12 +824,7 @@ drawProps = (): void => {
 
     const geom =
       def.type === 'cylinder'
-        ? new THREE.CylinderGeometry(
-            def.size[0],
-            def.size[1],
-            def.size[2],
-            def.size[3] ?? 16,
-          )
+        ? new THREE.CylinderGeometry(def.size[0], def.size[1], def.size[2], def.size[3])
         : new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]);
 
     const mesh = new THREE.Mesh(geom, mat);
@@ -2039,9 +2034,9 @@ function animateParticles(now: number): void {
   const conf = DECK_PARTICLES[deck];
   for (let i = 0; i < conf.count; i++) {
     const o = i * 3;
-    particlePositions[o] = (particlePositions[o] ?? 0) + conf.drift[0] * dt * 10;
-    particlePositions[o + 1] = (particlePositions[o + 1] ?? 0) + conf.drift[1] * dt * 10;
-    particlePositions[o + 2] = (particlePositions[o + 2] ?? 0) + conf.drift[2] * dt * 10;
+    particlePositions[o]! += conf.drift[0] * dt * 10; // o + 2 < 3 * MAX_PARTICLES: always a number
+    particlePositions[o + 1]! += conf.drift[1] * dt * 10;
+    particlePositions[o + 2]! += conf.drift[2] * dt * 10;
     const x = particlePositions[o]!;
     const y = particlePositions[o + 1]!;
     const z = particlePositions[o + 2]!;

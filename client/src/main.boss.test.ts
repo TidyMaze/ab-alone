@@ -72,9 +72,8 @@ function loseByRepetition(game: Game): void {
 }
 const DAY = Date.parse('2026-10-25T08:00:00Z'); // its daily boss is The Echo
 const NEXT_DAY = Date.parse('2026-10-26T08:00:00Z');
-// Each test boots the page and the bot searches in-process: slow on a loaded machine.
 
-describe('main.ts boss fights', { timeout: 30_000 }, () => {
+describe('main.ts boss fights', () => {
   it('lists the bosses behind Boss fight, the button opens and closes the list', async () => {
     await boot('?bot=off');
     const button = byId('boss-fight');
@@ -229,7 +228,7 @@ describe('main.ts boss fights', { timeout: 30_000 }, () => {
   });
 });
 
-describe('main.ts daily challenge', { timeout: 30_000 }, () => {
+describe('main.ts daily challenge', () => {
   it('the button names the day and its boss; each start counts an attempt, Retry included', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(DAY);
     const game = await boot('?bot=off', { reducedMotion: true });
@@ -307,7 +306,7 @@ describe('main.ts daily challenge', { timeout: 30_000 }, () => {
   });
 });
 
-describe('main.ts boss tells', { timeout: 30_000 }, () => {
+describe('main.ts boss tells', () => {
   it('The Hull: a cracked rim cell wears the decal and its line, ticks down, then is a hole in the frame', async () => {
     const game = await boot('?nodes=200', { reducedMotion: true, audio: true });
     gesture();
