@@ -454,6 +454,7 @@ export LLVM_PROFDATA="$(brew --prefix llvm)/bin/llvm-profdata"
 only the unit test file you touch (`bunx vitest run src/<file>.test.ts`), only the e2e spec you
 touch (`bunx playwright test e2e/<spec>.spec.ts`, one worker, `-g "<title>"` for one test),
 `bunx tsc --noEmit` when you change client types, `cargo test -p <crate> <name>` for one Rust test.
+**When:** while developing, run only the unit file you touch. Run the changed e2e specs **once, at the moment the draft PR is ready to become ready** (just before `gh pr ready`), not after every edit.
 No full e2e run, no full `scripts/verify.sh` and no `--repeat-each` beyond what a flake needs: for
 the whole suite, dispatch `gh workflow run ci.yml --ref <branch>` once and read the runner.
 
