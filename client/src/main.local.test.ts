@@ -406,6 +406,7 @@ describe('main.ts, the hooks of the browser checks', () => {
     expect(game.hook('__gain', 'master')).toBe(0);
     expect(game.hook('__tension')).toEqual({ level: 0, layers: expect.any(Array) });
     expect(game.hook('__tellCues')).toEqual([]);
+    expect(game.hook('__palette')).toBe(document.documentElement.dataset.palette); // the palette of the setting
     const mv = game.hook<Move[]>('__legal')[0]!;
     for (const name of ['__armies', '__cracks', '__converted']) expect(game.hook(name)).toEqual([]);
     expect(game.hook('__preview', mv)).toEqual([]); // no boss, no flip
