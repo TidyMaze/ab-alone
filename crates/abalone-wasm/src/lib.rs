@@ -3,7 +3,8 @@
 //!
 //! Encodings, all stable and documented:
 //! - Board: 61 bytes, row by row from `r = -4` to `r = 4`, inside a row by `q` ascending.
-//!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull).
+//!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull),
+//!   `4` to `7` a marble of battle royale seats 3 to 6.
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
 //! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
@@ -205,6 +206,7 @@ fn board_bytes(board: &Board) -> Vec<u8> {
             Some(Cell::Empty) => 0,
             Some(Cell::Black) => 1,
             Some(Cell::White) => 2,
+            Some(seat) => seat as u8 + 1,
             None => VANISHED,
         })
         .collect()

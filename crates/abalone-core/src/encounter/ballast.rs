@@ -153,8 +153,9 @@ pub fn ballast_start(seed: u64) -> Encounter {
 fn flips(board: &Board) -> Vec<P> {
     let id = CHAPLAIN_BOSS_END + BALLAST_REUSED_PHASE as u8;
     let after = (chaplain_boss().hook)(board, id, 0);
-    (-MAX_RADIUS..=MAX_RADIUS)
-        .flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
+    let radius = board.radius();
+    (-radius..=radius)
+        .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
         .filter(|&(q, r)| {
             board.get(q, r) == Some(Cell::Black) && after.get(q, r) == Some(Cell::White)
         })

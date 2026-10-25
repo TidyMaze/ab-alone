@@ -12,7 +12,7 @@ pub mod hull;
 pub mod ladder;
 pub mod telemetry;
 
-use crate::board::{Board, Cell, MAX_RADIUS};
+use crate::board::{Board, Cell};
 use crate::game::{Game, GameError, Outcome};
 use crate::moves::{Move, Player};
 use crate::search::{search, SearchResult};
@@ -55,8 +55,9 @@ pub struct Encounter {
 /// Marbles of `color` on `board`.
 pub fn marbles(board: &Board, color: Cell) -> u8 {
     let mut n = 0;
-    for q in -MAX_RADIUS..=MAX_RADIUS {
-        for r in -MAX_RADIUS..=MAX_RADIUS {
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
             n += u8::from(board.get(q, r) == Some(color));
         }
     }
@@ -169,8 +170,9 @@ impl Encounter {
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
         let (mut lost_black, mut lost_white) = (0, 0);
-        for q in -MAX_RADIUS..=MAX_RADIUS {
-            for r in -MAX_RADIUS..=MAX_RADIUS {
+        let radius = before.radius();
+        for q in -radius..=radius {
+            for r in -radius..=radius {
                 match (before.get(q, r), after.get(q, r)) {
                     (Some(Cell::Black), Some(Cell::Empty) | None) => lost_black += 1,
                     (Some(Cell::White), Some(Cell::Empty) | None) => lost_white += 1,
@@ -203,6 +205,7 @@ impl Encounter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::board::MAX_RADIUS;
     use crate::moves::Direction::{E, NE, SW, W};
     use crate::moves::{legal_moves, Direction, Player};
 

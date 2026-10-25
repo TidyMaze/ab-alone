@@ -1,6 +1,6 @@
 //! Move generation and validation: inline, broadside and sumito (docs/specs/rules.md sections 3 to 5).
 
-use crate::board::{Board, Cell, MAX_RADIUS};
+use crate::board::{Board, Cell};
 
 /// The six hex directions, as axial vectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,10 +63,10 @@ impl Direction {
 }
 
 impl Player {
-    fn cells(self) -> (Cell, Cell) {
+    fn cell(self) -> Cell {
         match self {
-            Player::Black => (Cell::Black, Cell::White),
-            Player::White => (Cell::White, Cell::Black),
+            Player::Black => Cell::Black,
+            Player::White => Cell::White,
         }
     }
 }
@@ -81,10 +81,15 @@ fn at(board: &Board, (q, r): (i32, i32)) -> Option<Cell> {
 
 /// Every legal move of `player` on `board`.
 pub fn legal_moves(board: &Board, player: Player) -> Vec<Move> {
-    let (own, _) = player.cells();
+    legal_moves_for(board, player.cell())
+}
+
+/// Every legal move of the `own` marbles on `board`, any other colour being an opponent.
+pub fn legal_moves_for(board: &Board, own: Cell) -> Vec<Move> {
     let mut moves = Vec::new();
-    for q in -MAX_RADIUS..=MAX_RADIUS {
-        for r in -MAX_RADIUS..=MAX_RADIUS {
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
             if board.get(q, r) != Some(own) {
                 continue;
             }
@@ -102,7 +107,7 @@ pub fn legal_moves(board: &Board, player: Player) -> Vec<Move> {
                             cells: cells.clone(),
                             dir,
                         };
-                        if apply(board, player, &m).is_ok() {
+                        if apply_for(board, own, &m).is_ok() {
                             moves.push(m);
                         }
                     }
@@ -115,7 +120,13 @@ pub fn legal_moves(board: &Board, player: Player) -> Vec<Move> {
 
 /// Plays `mv` for `player`. Returns the new board and whether an opponent marble was ejected.
 pub fn apply(board: &Board, player: Player, mv: &Move) -> Result<(Board, bool), MoveError> {
-    let (own, opp) = player.cells();
+    apply_for(board, player.cell(), mv)
+}
+
+/// Plays `mv` for the `own` marbles (a marble colour, not `Empty`). Every marble of another
+/// colour is an opponent: the opponent run of a sumito may mix colours, and only an own marble
+/// blocks it (rules.md section 10.4). Returns the new board and whether a marble was ejected.
+pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), MoveError> {
     let mut group = mv.cells.clone();
     group.sort();
     let n = group.len();
@@ -148,7 +159,7 @@ pub fn apply(board: &Board, player: Player, mv: &Move) -> Result<(Board, bool), 
         let front = if d == v { group[n - 1] } else { group[0] };
         let lead = step(front, d, 1);
         let mut run = 0;
-        while at(board, step(lead, d, run)) == Some(opp) {
+        while at(board, step(lead, d, run)).is_some_and(|c| c != own && c != Cell::Empty) {
             run += 1;
         }
         let behind = at(board, step(lead, d, run));
@@ -167,7 +178,10 @@ pub fn apply(board: &Board, player: Player, mv: &Move) -> Result<(Board, bool), 
                 Some(_) => return Err(MoveError::PushBlocked),
                 None => ejected = true,
             }
-            moved.extend((0..run).map(|i| (step(lead, d, i), opp)));
+            moved.extend((0..run).map(|i| {
+                let c = step(lead, d, i);
+                (c, at(board, c).expect("run cell"))
+            }));
         }
     } else {
         for &c in &group {

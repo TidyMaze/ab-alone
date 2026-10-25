@@ -256,7 +256,7 @@ Hooks, from game-design section 7 (starting values):
 
 **Credit rule (FINAL).** The last player whose move touched a marble gets the ejection. Whether a breach removal earns credit is **OPEN-8** (proposal: credit the last toucher if there is one, otherwise nobody).
 
-**Sumito (FINAL).** Section 5 applies against any opponent.
+**Sumito (FINAL).** Section 5 applies against any opponent. The opponent run may mix colours: every marble that is not the mover's counts toward `m`, and only a marble of the mover blocks the push (lead decision on #493, literal reading of section 5 rule 2). So 3 marbles push a White marble then a seat 3 marble (3v2), and 2 cannot (2v2).
 
 **Bots (FINAL).** A bot's order is a pure function of the round-start state and the seed, computed before the reveal. A bot cannot see human orders.
 

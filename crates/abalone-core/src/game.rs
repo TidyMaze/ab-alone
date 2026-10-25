@@ -3,7 +3,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::board::{Board, Cell, MAX_RADIUS};
+use crate::board::{Board, Cell};
 use crate::moves::{apply, Move, MoveError, Player};
 
 /// Ejections needed to win, for both sides unless a boss changes it (the Choir, Decision #131).
@@ -70,19 +70,17 @@ fn other(player: Player) -> Player {
     }
 }
 
+/// `0` empty, `1` Black, `2` White, then `3` to `6` for seats 3 to 6, in declaration order.
 fn code(cell: Cell) -> u8 {
-    match cell {
-        Cell::Empty => 0,
-        Cell::Black => 1,
-        Cell::White => 2,
-    }
+    cell as u8
 }
 
 /// Hash of a position: board and side to move.
 fn position_hash(board: &Board, to_move: Player) -> u64 {
     let mut hasher = DefaultHasher::new();
-    for q in -MAX_RADIUS..=MAX_RADIUS {
-        for r in -MAX_RADIUS..=MAX_RADIUS {
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
             board.get(q, r).map(code).hash(&mut hasher);
         }
     }

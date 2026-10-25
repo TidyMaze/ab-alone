@@ -2,7 +2,7 @@
 
 use std::cmp::Reverse;
 
-use crate::board::{Board, Cell, MAX_RADIUS};
+use crate::board::{Board, Cell};
 use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
 
@@ -90,8 +90,9 @@ fn centre_distance(q: i32, r: i32) -> i32 {
 /// Marbles, sum of centre distances and adjacent pairs of one colour.
 fn shape(board: &Board, cell: Cell) -> (i32, i32, i32) {
     let (mut count, mut distance, mut pairs) = (0, 0, 0);
-    for q in -MAX_RADIUS..=MAX_RADIUS {
-        for r in -MAX_RADIUS..=MAX_RADIUS {
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
             if board.get(q, r) != Some(cell) {
                 continue;
             }

@@ -6,16 +6,22 @@ use std::collections::HashMap;
 /// `|q|`, `|r|` and `|q + r|` are all `<= n`.
 pub const RADIUS: i32 = 4;
 
-/// Largest board radius the engine supports (The Ballast Mind plays on radius 5). Every scan over
-/// the board runs `-MAX_RADIUS..=MAX_RADIUS` and relies on `get` giving `None` off the board.
-pub const MAX_RADIUS: i32 = 5;
+/// Largest board radius the engine supports: the battle royale arena, 217 cells. The game code
+/// scans only a board's own radius (`-radius..=radius`) and relies on `get` giving `None` off the
+/// board, so a smaller board costs no more than before.
+pub const MAX_RADIUS: i32 = 8;
 
-/// Content of one cell.
+/// Content of one cell. Black and White are seats 1 and 2, the other marbles seats 3 to 6 of a
+/// battle royale.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cell {
     Empty,
     Black,
     White,
+    Seat3,
+    Seat4,
+    Seat5,
+    Seat6,
 }
 
 /// Standard start, Black side (bottom, r > 0): row r=4 (5 cells), row r=3 (6), the three centre cells of r=2.
@@ -63,6 +69,7 @@ const BELGIAN_DAISY_BLACK: [(i32, i32); 14] = [
 /// Hexagonal Abalone board.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
+    radius: i32,
     cells: HashMap<(i32, i32), Cell>,
     /// Cracked cells with the plies left before they vanish, for the Hull boss.
     cracks: Vec<((i32, i32), u8)>,
@@ -87,10 +94,16 @@ impl Board {
             }
         }
         Self {
+            radius,
             cells,
             cracks: Vec::new(),
             converted: Vec::new(),
         }
+    }
+
+    /// Radius the board was built with. Vanished cells do not shrink it.
+    pub fn radius(&self) -> i32 {
+        self.radius
     }
 
     /// Content of `(q, r)`, or `None` when the cell is off the board.

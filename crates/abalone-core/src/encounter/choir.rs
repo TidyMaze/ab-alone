@@ -7,7 +7,7 @@
 //! a free extra move on every fourth boss turn. P3: one army is left, it plays every turn and
 //! cannot push (no sumito).
 
-use crate::board::{Board, Cell, MAX_RADIUS};
+use crate::board::{Board, Cell};
 use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
 use crate::game::{Game, GameError, WIN_EJECTIONS};
 use crate::moves::{apply, legal_moves, Move, Player};
@@ -146,8 +146,9 @@ fn centre_distance((q, r): P) -> i32 {
 /// The Choir board with no marble: the standard board with its outer ring void.
 fn arena() -> Board {
     let mut board = Board::empty();
-    for q in -MAX_RADIUS..=MAX_RADIUS {
-        for r in -MAX_RADIUS..=MAX_RADIUS {
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
             if board.get(q, r).is_some() && centre_distance((q, r)) > CHOIR_RADIUS {
                 board.void(q, r);
             }
@@ -159,8 +160,9 @@ fn arena() -> Board {
 /// Cells of the Black marbles on `board`.
 fn black_cells(board: &Board) -> Vec<P> {
     let mut out = Vec::new();
-    for q in -MAX_RADIUS..=MAX_RADIUS {
-        for r in -MAX_RADIUS..=MAX_RADIUS {
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
             if board.get(q, r) == Some(Cell::Black) {
                 out.push((q, r));
             }
@@ -368,6 +370,7 @@ fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::board::MAX_RADIUS;
     use crate::game::Outcome;
     use crate::moves::Direction::{E, SE, SW, W};
     use crate::moves::{legal_moves, Direction, MoveError};
