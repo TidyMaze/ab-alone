@@ -8,9 +8,6 @@ import { boot, type Game } from './test/harness';
 // and its textures, the view and the fog, the theme, the UI scale, safe mode, the settings menu with its toggles and
 // volume sliders, the FPS readout and the mode menu.
 
-// A boot runs the whole page: on a loaded machine, and the first one cold, it can take more than the default 5 s.
-vi.setConfig({ testTimeout: 30_000 });
-
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const row = (id: string): HTMLButtonElement => byId(`setting-${id}`);
 const root = document.documentElement;

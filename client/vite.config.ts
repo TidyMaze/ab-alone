@@ -29,6 +29,9 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   test: {
     css: true, // hud.test reads ui.css as raw text, vitest empties css files by default
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
+    // A main.ts test boots the whole page on the jsdom harness (src/test/), a reload two: on a loaded machine, and the
+    // first boot cold, that takes more than the default 5 s.
+    testTimeout: 30_000,
     coverage: {
       provider: 'v8',
       // Every source file is unit tested (decision #445), main.ts included on the jsdom harness in src/test/, which is

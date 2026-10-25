@@ -62,8 +62,6 @@ function startBoss(name: string): void {
   [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === name)!.click();
 }
 
-// Two boots in one test (a reload) take more than the default 5 s on a loaded machine.
-vi.setConfig({ testTimeout: 30_000 });
 afterEach(() => vi.useRealTimers());
 
 describe('main.ts, the bot', () => {
