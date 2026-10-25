@@ -909,6 +909,8 @@ addEventListener('resize', () => {
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
+// Used by the online e2e to play its setup plies: the same click, without the raycast and the frames of a mouse click.
+(window as unknown as Record<string, unknown>).__click = (q: number, r: number) => click(q, r);
 
 // Used by the browser checks to read the frame's size and holes, and that it is drawn (#292).
 (window as unknown as Record<string, unknown>).__frame = () => ({

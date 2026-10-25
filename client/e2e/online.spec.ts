@@ -10,7 +10,12 @@ const cell = async (page: Page, q: number, r: number) => {
   const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
   return page.mouse.click(p.x, p.y);
 };
-const plies = (page: Page) => page.evaluate(() => (window as any).__plies());
+// The same click through the game's own handler (window.__click), without the raycast and the frames of a mouse
+// click. The setup plies of a test use it, so each test pays the mouse path once, on its last ply.
+const play = (page: Page, q: number, r: number) => page.evaluate(([cq, cr]) => (window as any).__click(cq, cr), [q, r]);
+// Reduced motion on pages whose test checks no animation: slides and ejection effects take no time.
+const calm = (...pages: Page[]) => Promise.all(pages.map((p) => p.emulateMedia({ reducedMotion: 'reduce' })));
+const plies =(page: Page) => page.evaluate(() => (window as any).__plies());
 // Seating is a Hello round trip after the connection opens: wait for it before the first move.
 const seat = (page: Page, role: 'player' | 'spectator') => expect(page.locator('body')).toHaveAttribute('data-seat', role);
 // Every page relays its records to the others with its own name as the sender, like a Trystero room,
@@ -40,10 +45,7 @@ const open = async (page: Page) => {
 };
 const status = (page: Page) => page.locator('#hud .presence');
 
-// Tests with two or three WebGL pages call test.slow() (90 s instead of 30 s): on the CI runners, against
-// the live site, a two-page test takes about 25 s and the three-page one more than 30 s (#138).
 test('a move played on page A shows up on page B over the signed move log', async ({ browser }) => {
-  test.slow();
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await room({ a, b });
@@ -89,7 +91,6 @@ test('a move played on page A shows up on page B over the signed move log', asyn
 });
 
 test('two tabs of the same browser context play an online game, bug #116', async ({ context }) => {
-  test.slow();
   const a = await context.newPage();
   const b = await context.newPage(); // same context: shared localStorage
   const errors: string[] = [];
@@ -130,9 +131,9 @@ test('two tabs of the same browser context play an online game, bug #116', async
 });
 
 test('a third peer opening the link is not a player: room is full, its move changes nothing, bug #117', async ({ browser }) => {
-  test.slow();
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   const all = [a, b, c];
+  await calm(a, b, c);
   await room({ a, b, c });
 
   await a.goto('./?bot=off&net=hook');
@@ -153,8 +154,8 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect(status(b)).toHaveText('You are White. Black is here.');
   await expect(status(a)).toHaveText('You are Black. White is here.');
 
-  await cell(a, 0, 2);
-  await cell(a, 0, 1);
+  await play(a, 0, 2);
+  await play(a, 0, 1);
   await expect.poll(() => plies(b)).toBe(1);
   await expect.poll(() => plies(c)).toBe(1); // a spectator still follows the game
 
@@ -200,7 +201,6 @@ test('Play online is disabled or works when clicked right after load, bug #127',
 
 // Issue #121: each player sees its own color and whether the opponent is online, updated live.
 test('online status: creator waits with the invite, joiner joins, both see each other, drop, reconnect and close, #121', async ({ browser }) => {
-  test.slow();
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await room({ a, b });
@@ -244,8 +244,8 @@ test('online status: creator waits with the invite, joiner joins, both see each 
 // Issue #143: a move is sent only while the key bound to the opponent's seat is connected, not
 // while just any peer (here a spectator) is.
 test('a player cannot move while the opponent is gone, even with a spectator still there, #143', async ({ browser }) => {
-  test.slow();
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
+  await calm(a, b, c);
   await room({ a, b, c });
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
@@ -289,9 +289,6 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
 // with the colours swapped. The cheapest real way to finish a game: one marble each, there and
 // back twice, brings the start position back a third time, a draw by threefold repetition.
 test('a finished online game ends in a rematch: colours swapped, the new Black moves first, #186', async ({ browser }) => {
-  // Ten plies on two WebGL pages, each click brings its page to the front: far more than the
-  // four plies of the tests above, so more than test.slow() on a loaded machine.
-  test.setTimeout(240_000);
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await room({ a, b });
@@ -316,8 +313,9 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   ];
   for (let ply = 0; ply < 8; ply++) {
     const [page, fq, fr, tq, tr] = cycle[ply % 4]!;
-    await cell(page, fq, fr);
-    await cell(page, tq, tr);
+    const press = ply < 7 ? play : cell; // the last ply goes through the mouse
+    await press(page, fq, fr);
+    await press(page, tq, tr);
     await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
   }
   for (const page of [a, b]) await expect(page.locator('#hud .turn')).toHaveText('Draw');
@@ -369,7 +367,6 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
 // before page A notices (Trystero sees a peer leave only after a timeout), so A still plays and its move
 // is lost on the way. B comes back on the same key: A sends it the signed move it missed.
 test('a player back after a drop shows the same ply and side to move as the other page, #226', async ({ browser }) => {
-  test.setTimeout(120_000); // four plies on two WebGL pages, each click brings its page to the front
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   const lost = new Set<string>();
@@ -385,19 +382,19 @@ test('a player back after a drop shows the same ply and side to move as the othe
   await open(b);
   await seat(b, 'player');
   await expect(status(a)).toHaveText('You are Black. White is here.');
-  await cell(a, 0, 2);
-  await cell(a, 0, 1);
+  await play(a, 0, 2);
+  await play(a, 0, 1);
   await expect.poll(() => plies(b)).toBe(1);
-  await cell(b, 0, -2);
-  await cell(b, 0, -1);
+  await play(b, 0, -2);
+  await play(b, 0, -1);
   await expect.poll(() => plies(a)).toBe(2);
 
   // B's connection breaks: B sees Black leave, A does not notice yet and plays.
   lost.add('b');
   await leave(b, 'a');
   await expect(status(b)).toHaveText('You are White. Black is disconnected.');
-  await cell(a, 0, 1);
-  await cell(a, 0, 2);
+  await play(a, 0, 1);
+  await play(a, 0, 2);
   await expect(a.locator('#hud .turn')).toHaveText('White to move');
   expect(await plies(a)).toBe(3);
   expect(await plies(b)).toBe(2);
@@ -426,7 +423,6 @@ test('a player back after a drop shows the same ply and side to move as the othe
 // White marble off in the 3v2 push of eject.spec.ts, then a spectator joins: it shows the score of that
 // ply, and no effect ever started on it (recorded in the page, so a slow runner cannot miss one).
 test('a spectator joining after an ejection shows the score at once, with no ejection effect, #232', async ({ browser }) => {
-  test.setTimeout(240_000); // five plies on two WebGL pages, each click brings its page to the front, then a third page
   const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
   const lost = new Set(['c']); // the spectator is not there yet
   await room({ a, b, c }, lost);
@@ -449,7 +445,8 @@ test('a spectator joining after an ejection shows the score at once, with no eje
     [a, [-2, 0], [-2, 1], [-2, 2], [-2, -1]], // 3v2 push, the last White marble leaves
   ];
   for (const [ply, [page, ...cells]] of plays.entries()) {
-    for (const [q, r] of cells) await cell(page, q, r);
+    const press = ply < plays.length - 1 ? play : cell; // the last ply goes through the mouse
+    for (const [q, r] of cells) await press(page, q, r);
     await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
   }
   const score = 'Black ejected 1/6 · White ejected 0/6';
@@ -505,8 +502,6 @@ test('Play online is disabled with a notice while offline and works again back o
 // turn and score lines the hot-seat page showed, the draw by threefold repetition at ply 8 included.
 // The no-ejection cap needs 100 plies: src/antistalling.test.ts checks it on two real sessions.
 test('threefold repetition ends an online game as a draw on both pages, as in hot-seat, #187', async ({ browser }) => {
-  // Eight plies on one page, then eight on two WebGL pages: as long as the rematch test.
-  test.setTimeout(240_000);
   const plays: [number, number, number, number][] = [
     [0, 2, 0, 1],
     [0, -2, 0, -1],
@@ -522,8 +517,9 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   const hotSeat: (string | null)[][] = [];
   for (let ply = 0; ply < 8; ply++) {
     const [fq, fr, tq, tr] = plays[ply % 4]!;
-    await cell(hot, fq, fr);
-    await cell(hot, tq, tr);
+    const press = ply < 7 ? play : cell; // the last ply goes through the mouse
+    await press(hot, fq, fr);
+    await press(hot, tq, tr);
     await expect.poll(() => plies(hot)).toBe(ply + 1);
     hotSeat.push(await shown(hot));
   }
@@ -533,6 +529,7 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
 
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
+  await calm(a, b);
   await room({ a, b });
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
@@ -548,8 +545,9 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   for (let ply = 0; ply < 8; ply++) {
     const [fq, fr, tq, tr] = plays[ply % 4]!;
     const [mover, other] = ply % 2 === 0 ? [a, b] : [b, a];
-    await cell(mover, fq, fr);
-    await cell(mover, tq, tr);
+    const press = ply < 7 ? play : cell; // the last ply goes through the mouse
+    await press(mover, fq, fr);
+    await press(mover, tq, tr);
     await expect.poll(() => plies(other)).toBe(ply + 1); // the other page replayed it
     for (const page of [a, b]) {
       await expect(page.locator('#hud .turn')).toHaveText(hotSeat[ply]![0]!);
