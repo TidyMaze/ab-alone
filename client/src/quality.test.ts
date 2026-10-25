@@ -23,6 +23,7 @@ import {
   readUiScale,
   tierFromHints,
   isAutomation,
+  hasParticles,
   shadowSettings,
   writeClearBoard,
   writeGlassSkin,
@@ -473,5 +474,31 @@ describe('isAutomation and shadowSettings (#459)', () => {
   it('allows forcing shadows on under automation for testing/screenshots', () => {
     expect(shadowSettings('low', true, true)).toEqual({ enabled: true, soft: true });
     expect(shadowSettings('high', true, true)).toEqual({ enabled: true, soft: true });
+  });
+
+  describe('hasParticles (#443)', () => {
+    it('enables particles for high tier when clear, reduced motion and automation are off', () => {
+      expect(hasParticles('high', false, false, false)).toBe(true);
+    });
+
+    it('disables particles under low quality tier', () => {
+      expect(hasParticles('low', false, false, false)).toBe(false);
+    });
+
+    it('disables particles under clear board', () => {
+      expect(hasParticles('high', true, false, false)).toBe(false);
+    });
+
+    it('disables particles under reduced motion', () => {
+      expect(hasParticles('high', false, true, false)).toBe(false);
+    });
+
+    it('disables particles under automation to save software WebGL', () => {
+      expect(hasParticles('high', false, false, true)).toBe(false);
+    });
+
+    it('allows forcing particles on under automation for tests/screenshots', () => {
+      expect(hasParticles('low', false, false, true, true)).toBe(true);
+    });
   });
 });

@@ -197,3 +197,19 @@ export function shadowSettings(tier: Tier, automated: boolean, forced?: boolean)
   if (automated || tier === 'low') return { enabled: false, soft: false };
   return { enabled: true, soft: true };
 }
+
+/**
+ * Airborne particles (#443): light dust/steam/smoke outside the board volume.
+ * Disabled under clear board, reduced motion, low quality tier and automation.
+ */
+export function hasParticles(
+  tier: Tier,
+  clear: boolean,
+  reducedMotion: boolean,
+  automated: boolean,
+  forced?: boolean,
+): boolean {
+  if (forced) return true;
+  if (clear || reducedMotion || automated || tier === 'low') return false;
+  return true;
+}
