@@ -232,6 +232,34 @@ test.describe('a large desktop window at a 200 % UI scale', () => {
   });
 });
 
+// Bug #427: the open settings menu was clipped by the column it sits in at a 200 % UI scale (landscape), so Skin, Export
+// game and Import game were hidden and the board took the click. Every row must be on screen and receive a click at its centre.
+for (const { name, viewport, scale } of [
+  { name: 'a large desktop window at 200 % UI scale', viewport: { width: 1920, height: 1080 }, scale: '200' },
+  { name: 'a large desktop window at 100 % UI scale', viewport: { width: 1920, height: 1080 }, scale: '100' },
+  { name: 'a phone held sideways at 100 % UI scale', viewport: { width: 844, height: 390 }, scale: '100' },
+  { name: 'a phone held upright at 100 % UI scale', viewport: { width: 390, height: 844 }, scale: '100' },
+]) {
+  test(`every settings row is on screen and reachable, ${name}, bug #427`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.addInitScript((s) => localStorage.setItem('ab-alone.ui-scale', s), scale);
+    await page.goto('./?bot=off&net=hook');
+    await page.locator('canvas').waitFor();
+    await expect(page.locator('#settings')).toBeEnabled();
+    await page.locator('#settings').click();
+    await expect(page.locator('#settings-menu button')).toHaveCount(6);
+    const rows = await page.evaluate(() =>
+      [...document.querySelectorAll('#settings-menu button')].map((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        const onScreen = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+        return { name: el.textContent, reachable: el.contains(hit) && onScreen };
+      }),
+    );
+    expect(rows.filter((row) => !row.reachable).map((row) => row.name), 'rows covered or off screen').toEqual([]);
+  });
+}
+
 test('on a desktop the buttons stay in a column at the top right, bug #227', async ({ page }) => {
   await page.goto('./?bot=off');
   await expect(page.locator('#hud')).toContainText('Black to move');
