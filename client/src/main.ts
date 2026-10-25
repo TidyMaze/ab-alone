@@ -268,11 +268,11 @@ const lamp = new THREE.DirectionalLight(LIGHT.key.color, LIGHT.key.intensity);
 lamp.position.set(...LIGHT.key.position);
 scene.add(lamp);
 // Accents (#376): a cold rim from behind, a small warm point at the lamp's side. Weaker than the key.
-const rimLight = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
-rimLight.position.set(...LIGHT.accents.rim.position);
+const coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
+coldRim.position.set(...LIGHT.accents.rim.position);
 const warmLight = new THREE.PointLight(LIGHT.accents.warm.color, LIGHT.accents.warm.intensity, LIGHT.accents.warm.distance);
 warmLight.position.set(...LIGHT.accents.warm.position);
-scene.add(rimLight, warmLight);
+scene.add(coldRim, warmLight);
 // Background decor (#376): dim bulkhead ribs far behind the board, below the deck plane, so no cell, marble or mark
 // can sit under them. Only the fog and the key touch them; they never reach the board's brightness.
 const decorMaterial = new THREE.MeshStandardMaterial({ color: DECOR.color, roughness: 0.9 });
