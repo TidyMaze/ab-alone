@@ -3,6 +3,7 @@ import {
   CELLS,
   DIRECTIONS,
   MOVE_STRIDE,
+  arrowYaw,
   axialTo3D,
   cellAt,
   cellIndex,
@@ -172,9 +173,30 @@ describe('moveForClick and groupTargets', () => {
     expect(moveForClick(moves, [[2, 2]], [2, 1])).toBeNull();
   });
 
-  it('lists the target cells of the selected group, without duplicates', () => {
-    expect(groupTargets(moves, [[0, 4], [0, 3]])).toEqual([[1, 4], [1, 3], [0, 2]]);
-    expect(groupTargets(moves, [[0, 4]])).toEqual([[0, 3]]);
+  it('lists the target cells of the selected group, without duplicates, each with the direction a click plays', () => {
+    expect(groupTargets(moves, [[0, 4], [0, 3]])).toEqual([
+      { cell: [1, 4], dir: 0 },
+      { cell: [1, 3], dir: 0 }, // also NE of (0, 4), but a click on it plays the broadside E
+      { cell: [0, 2], dir: 4 },
+    ]);
+    expect(groupTargets(moves, [[0, 4]])).toEqual([{ cell: [0, 3], dir: 4 }]);
     expect(groupTargets(moves, [])).toEqual([]);
+  });
+});
+
+describe('arrowYaw', () => {
+  // A flat arrow drawn along +x, turned about +y by the yaw, points from a cell to its neighbour in that direction.
+  it('turns the arrow from +x towards the neighbour of each direction', () => {
+    DIRECTIONS.forEach(([dq, dr], dir) => {
+      const to = axialTo3D(dq, dr);
+      const yaw = arrowYaw(dir);
+      expect(Math.cos(yaw)).toBeCloseTo(to.x);
+      expect(-Math.sin(yaw)).toBeCloseTo(to.z);
+    });
+  });
+
+  it('is 0 for E and a sixth of a turn for SE', () => {
+    expect(arrowYaw(0)).toBeCloseTo(0);
+    expect(arrowYaw(5)).toBeCloseTo(-Math.PI / 3);
   });
 });
