@@ -1,4 +1,38 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+// Bug #326: a tell drawn on top of a boss marble (a Choir army glyph, The Chaplain's converted cap) reads 3:1 against
+// the shell it sits on (world.md section 5, Tell marks). For each cell, the contrast (WCAG 2) of the brightest to the
+// darkest pixel of a small box where the top of its marble is drawn, read from one screenshot. The box follows the
+// cell spacing, so it holds at any window size.
+const topContrasts = async (page: Page, cells: [number, number][]): Promise<number[]> => {
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  const png = (await page.screenshot()).toString('base64');
+  return page.evaluate(
+    async ([b64, list]) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      [canvas.width, canvas.height] = [img.width, img.height];
+      const g = canvas.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      const linear = (v: number) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+      return list.map(([q, r]) => {
+        const toScreen = (window as any).__cellToScreen;
+        const c = toScreen(q, r);
+        const step = toScreen(q + 1, r).x - c.x; // one cell to the right, same row
+        const half = Math.round(step * 0.12);
+        const d = g.getImageData(Math.round(c.x) - half, Math.round(c.y - step * 0.55) - half, 2 * half, 2 * half).data;
+        const lum: number[] = [];
+        for (let i = 0; i < d.length; i += 4) {
+          lum.push(0.2126 * linear(d[i]!) + 0.7152 * linear(d[i + 1]!) + 0.0722 * linear(d[i + 2]!));
+        }
+        return (Math.max(...lum) + 0.05) / (Math.min(...lum) + 0.05);
+      });
+    },
+    [png, cells] as const,
+  );
+};
 
 test('start The Echo, play a move, the boss replies, Retry resets the board', async ({ page }) => {
   await page.goto('./');
@@ -144,6 +178,8 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, a convert
     if (!converted && (await body.getAttribute('data-converted')) !== '0') {
       await expect(hud).toContainText('Converted:');
       await page.screenshot({ path: testInfo.outputPath('chaplain-converted.png') });
+      const cells = await page.evaluate(() => (window as any).__converted());
+      for (const c of await topContrasts(page, cells)) expect(c).toBeGreaterThanOrEqual(3); // its cap reads (#326)
       converted = true;
     }
   }
@@ -218,6 +254,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   await page.screenshot({ path: testInfo.outputPath('choir-start.png') });
 
   const before = await armies();
+  for (const c of await topContrasts(page, before.map((m) => m.cell))) expect(c).toBeGreaterThanOrEqual(3); // #326
   const mv = await page.evaluate(() =>
     (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
   );

@@ -841,6 +841,9 @@ addEventListener('resize', () => {
 // Used by the browser checks to see which Choir army moved.
 (window as unknown as Record<string, unknown>).__armies = () =>
   engine instanceof Encounter ? parseArmies(engine.armies()) : [];
+// Used by the browser checks to find The Chaplain's converted marbles (#326).
+(window as unknown as Record<string, unknown>).__converted = () =>
+  engine instanceof Encounter ? parseCells(engine.converted()) : [];
 
 // New game (#230): leaves the local game for the start position, bot on or off as it was, and deletes its
 // save. Once a move is played, the first press asks for a confirmation for a few seconds (newgame.ts).
