@@ -824,12 +824,7 @@ drawProps = (): void => {
 
     const geom =
       def.type === 'cylinder'
-        ? new THREE.CylinderGeometry(
-            def.size[0],
-            def.size[1],
-            def.size[2],
-            def.size[3] ?? 16,
-          )
+        ? new THREE.CylinderGeometry(def.size[0], def.size[1], def.size[2], def.size[3])
         : new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]);
 
     const mesh = new THREE.Mesh(geom, mat);

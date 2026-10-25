@@ -11,15 +11,17 @@ export interface RoomSurface {
   roughness: number;
 }
 
-export interface StructuralPart {
+// A box's size is its width, height and depth; a cylinder's its radiusTop, radiusBottom, height and radialSegments.
+export type StructuralPart = {
   id: string;
-  type: 'box' | 'cylinder';
-  size: readonly [number, number, number] | readonly [number, number, number, number];
   position: readonly [number, number, number];
   rotation: readonly [number, number, number];
   color: number;
   roughness: number;
-}
+} & (
+  | { type: 'box'; size: readonly [number, number, number] }
+  | { type: 'cylinder'; size: readonly [number, number, number, number] }
+);
 
 // The floor deck plane the board sits on: extends 64x64 to sit beneath all surrounding walls at radius 24
 export const ROOM_SURFACE: RoomSurface = {
