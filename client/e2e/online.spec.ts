@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
 
 // Two isolated browser contexts. The transport is the ?net=hook test hook: the test relays records
 // from one page to the other, so no public Nostr relay is involved.
@@ -53,6 +54,7 @@ test('a move played on page A shows up on page B over the signed move log', asyn
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
+  await openModes(a);
   await a.locator('#play-online').click();
   const invite = await a.locator('#invite').inputValue();
   expect(invite).toMatch(/#room=[\w-]+$/);
@@ -109,6 +111,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
   await a.goto('./?bot=off&net=hook'); // './' keeps the /ab-alone/ path of E2E_BASE_URL, '/' is the Pages host root (404)
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
+  await openModes(a);
   await a.locator('#play-online').click();
   const invite = await a.locator('#invite').inputValue();
   await b.goto(`./?net=hook${new URL(invite).hash}`, { waitUntil: 'commit' }); // held textures can hold the load event
@@ -139,6 +142,7 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
+  await openModes(a);
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   // The two joiners load at once: their page loads overlap instead of queueing one after the other.
@@ -209,6 +213,7 @@ test('online status: creator waits with the invite, joiner joins, both see each 
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
   await a.locator('#play-online').click();
   await expect(status(a)).toHaveText('You are Black. Waiting for an opponent...');
   await expect(a.locator('#invite')).toBeVisible();
@@ -251,6 +256,7 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   await Promise.all([b, c].map(async (page) => {
@@ -297,6 +303,7 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   await b.goto(`./?net=hook${hash}`);
@@ -376,6 +383,7 @@ test('a player back after a drop shows the same ply and side to move as the othe
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   await b.goto(`./?net=hook${hash}`);
@@ -431,6 +439,7 @@ test('a spectator joining after an ejection shows the score at once, with no eje
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   // The spectator's page loads now, in parallel with b's: the room drops its records until it is opened after the plies.
@@ -495,6 +504,7 @@ test('Play online is disabled with a notice while offline and works again back o
   await context.setOffline(false);
   await expect(button).toBeEnabled();
   await expect(page.locator('#hud')).not.toContainText('online play needs a connection');
+  await openModes(page);
   await button.click();
   await expect(page.locator('#hud')).toContainText('You are Black');
 });
@@ -538,6 +548,7 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   await b.goto(`./?net=hook${hash}`);
@@ -577,6 +588,7 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   await a.goto('./?bot=off&net=hook&beat=1200');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
   await a.locator('#play-online').click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   await open(a);

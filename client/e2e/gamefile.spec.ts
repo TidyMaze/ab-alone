@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
 
 // A local game exported as a JSON file and imported back, replayed through the engine (#219,
 // docs/specs/tech.md section 8). The file is the save format of the resume task (#218).
@@ -246,6 +247,7 @@ async function expectNoExportImport(page: Page): Promise<void> {
 test('export and import are not shown during a boss fight, #287', async ({ page }) => {
   await page.goto('./?net=hook');
   await expectLocalMenu(page);
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(page.locator('#hud')).toContainText('The Echo');
@@ -255,6 +257,7 @@ test('export and import are not shown during a boss fight, #287', async ({ page 
 test('export and import are not shown during a daily fight, #287', async ({ page }) => {
   await page.goto('./?net=hook');
   await expectLocalMenu(page);
+  await openModes(page);
   await page.locator('#daily').click();
   await expect(page.locator('#hud')).toContainText('Daily challenge');
   await expectNoExportImport(page);
@@ -263,6 +266,7 @@ test('export and import are not shown during a daily fight, #287', async ({ page
 test('export and import are not shown during an online game, #287', async ({ page }) => {
   await page.goto('./?net=hook');
   await expectLocalMenu(page);
+  await openModes(page);
   await page.locator('#play-online').click();
   await expect(page.locator('#hud')).toContainText('You are Black');
   await expectNoExportImport(page);

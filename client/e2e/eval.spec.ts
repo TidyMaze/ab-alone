@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
 
 // The evaluation bar (#191): the engine's search score of the position, in local and bot games only.
 const click = async (page: Page, q: number, r: number) => {
@@ -65,6 +66,7 @@ test('the bar follows a bot game, and is absent in a boss fight, #191', async ({
   await expect.poll(plies, { timeout: 30_000 }).toBe(2); // the bot answered
   await expect(bar).toHaveAttribute('data-ply', '2', { timeout: 30_000 });
 
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(page.locator('#hud')).toContainText('The Echo');
@@ -84,6 +86,7 @@ test('the bar is absent in an online game, for the room creator and the invited 
   await page.goto('./?bot=off&net=hook');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#eval')).toBeVisible();
+  await openModes(page);
   await page.locator('#play-online').click();
   await expect(page.locator('#hud')).toContainText('You are Black');
   await expect(page.locator('#eval')).toBeHidden();

@@ -64,13 +64,13 @@ describe('theme', () => {
 });
 
 describe('menuOpen', () => {
-  it('opens on the cog and closes on the cog again', () => {
-    expect(menuOpen(false, 'cog')).toBe(true);
-    expect(menuOpen(true, 'cog')).toBe(false);
+  it('opens on its button (the cog, the mode button) and closes on it again', () => {
+    expect(menuOpen(false, 'button')).toBe(true);
+    expect(menuOpen(true, 'button')).toBe(false);
   });
 
-  it('closes on Escape and on a click outside, and stays closed', () => {
-    for (const event of ['escape', 'outside'] as const) {
+  it('closes on Escape, on a click outside and on a picked mode, and stays closed', () => {
+    for (const event of ['escape', 'outside', 'pick'] as const) {
       expect(menuOpen(true, event)).toBe(false);
       expect(menuOpen(false, event)).toBe(false);
     }

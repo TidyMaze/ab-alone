@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
+import { openModes } from './modes';
 
 // Bug #326: a tell drawn on top of a boss marble (a Choir army glyph, The Chaplain's converted cap) reads 3:1 against
 // the shell it sits on (world.md section 5, Tell marks). For each cell, the contrast (WCAG 2) of the brightest to the
@@ -113,6 +114,7 @@ test('start The Echo, play a move, the boss replies, Retry resets the board', as
     await page.mouse.click(p.x, p.y);
   };
 
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(hud).toContainText('The Echo');
@@ -180,6 +182,7 @@ for (const tier of ['high', 'low']) {
       await send(mv.dir === 4 ? q : q + 1, r - 1);
     };
 
+    await openModes(page);
     await page.getByRole('button', { name: 'Boss fight' }).click();
     await page.locator('#boss-list').getByRole('button', { name: 'The Hull' }).click();
     await expect(hud).toContainText('The Hull');
@@ -222,6 +225,7 @@ const startChaplain = async (page: Page) => {
   await page.emulateMedia({ reducedMotion: 'reduce' }); // slides take no time, no animation is checked
   await page.goto('./?nodes=200');
   await page.locator('canvas').waitFor();
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Chaplain' }).click();
   await expect(page.locator('#hud')).toContainText('The Chaplain');
@@ -326,6 +330,7 @@ test('The Chaplain: a boss marble lost for a flip counts for the player and the 
   const hud = page.locator('#hud');
   const plies = () => page.evaluate(() => (window as any).__plies());
 
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Chaplain' }).click();
   await expect(hud).toContainText('The Chaplain');
@@ -362,6 +367,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
     await page.mouse.click(p.x, p.y);
   };
 
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
   await expect(hud).toContainText('The Choir');
@@ -400,6 +406,7 @@ for (const skin of ['hex', 'riveted']) {
     await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
     await page.goto('./');
     await page.locator('canvas').waitFor();
+    await openModes(page);
     await page.getByRole('button', { name: 'Boss fight' }).click();
     await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
     await expect(page.locator('body')).toHaveAttribute('data-armies', '12');

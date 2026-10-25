@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
 
 // The ejected count scratched on the board frame as tally marks (#389, world.md section 6 rule 3): per side, the
 // slots drawn and the bone-white marks in them. Clear board and the low tier keep them (section 8).
@@ -35,6 +36,7 @@ test('an ejection scratches one mark on the frame at the losing side, with clear
 test('The Choir shows the marbles left as lit notches, #389', async ({ page }) => {
   await page.goto('./');
   await page.locator('canvas').waitFor();
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
   await expect(page.locator('#hud')).toContainText('The Choir');

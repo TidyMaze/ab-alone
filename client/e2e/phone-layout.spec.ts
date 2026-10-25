@@ -2,6 +2,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { BLACK_WINS } from './end-games';
 import { loseByRepetition, startDaily } from './fight-end';
 import { maxUiScale } from '../src/uiscale';
+import { openModes } from './modes';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -146,17 +147,20 @@ for (const { name, viewport, mobile } of sizes) {
       expect(scale).toBe(String(maxUiScale(viewport.width, viewport.height) / 100));
     });
 
-    test('nothing covers the board or the HUD with the boss list open, bugs #227 #234', async ({ page }, testInfo) => {
+    // The open mode menu (#357) with its boss list, its tallest state, covers no cell either.
+    test('nothing covers the board or the HUD with the mode menu and the boss list open, bugs #227 #234 #357', async ({ page }, testInfo) => {
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
+      await openModes(page);
       await page.getByRole('button', { name: 'Boss fight' }).click();
-      await check(page, testInfo, 'with the boss list open');
+      await check(page, testInfo, 'with the mode menu and the boss list open');
     });
 
     test('nothing covers the board or the HUD in a boss fight, bugs #227 #234', async ({ page }, testInfo) => {
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
+      await openModes(page);
       await page.getByRole('button', { name: 'Boss fight' }).click();
       await page.locator('#boss-list button').first().click();
       await expect(hud).toContainText('P1');
@@ -166,6 +170,7 @@ for (const { name, viewport, mobile } of sizes) {
     test('nothing covers the board or the HUD waiting for an opponent, turned around, bugs #227 #234', async ({ page }, testInfo) => {
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
+      await openModes(page);
       await page.getByRole('button', { name: 'Play online' }).click();
       await expect(hud).toContainText('Waiting for an opponent');
       await expect(page.locator('#invite')).toBeVisible();
@@ -237,7 +242,7 @@ test('on a desktop the buttons stay in a column at the top right, bug #227', asy
   await expect(page.locator('#hud')).toContainText('Black to move');
   const width = page.viewportSize()!.width;
   const boxes = await Promise.all(
-    ['Settings', 'Reset view', 'Play online', 'Boss fight'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
+    ['Settings', 'Reset view', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
   );
   expect(boxes[0]!.y).toBe(16);
   for (const [i, box] of boxes.entries()) {
@@ -260,6 +265,7 @@ for (const { name, viewport } of [
       const hud = page.locator('#hud');
       await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
       await page.goto('./?bot=off&net=hook');
+      await openModes(page);
       await page.locator('#daily').click();
       await expect(hud).toContainText('Daily challenge 2026-10-25 · attempt 1');
       const move = async (from: [number, number], to: [number, number]) => {

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { loseByRepetition, startDaily } from './fight-end';
+import { openModes } from './modes';
 
 // Daily challenge (#195): the UTC date gives the boss and the seed, the same for every load of the
 // day, and each start counts one attempt of the day in localStorage. The clock is fixed by page.clock.
@@ -14,6 +15,7 @@ test('the daily challenge keeps its boss and seed all day, counts attempts, and 
     await page.clock.setFixedTime(new Date(time));
     await page.goto('./');
     await expect(daily).toBeEnabled();
+    await openModes(page);
   };
   const click = async (q: number, r: number) => {
     const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
@@ -71,11 +73,13 @@ test('the daily challenge keeps its boss and seed all day, counts attempts, and 
 test('a plain boss fight shows no daily line and does not count a daily attempt, #195', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
   await page.goto('./');
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(page.locator('#hud')).toContainText('The Echo');
   await expect(page.locator('#hud')).not.toContainText('Daily challenge');
   await page.getByRole('button', { name: 'Retry' }).click();
+  await openModes(page);
   await page.locator('#daily').click();
   await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 1');
 });
@@ -88,6 +92,7 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
   await page.goto('./?bot=off');
   await expect(page.locator('#daily')).toBeEnabled();
+  await openModes(page);
   await page.locator('#daily').click();
   const goal = page.locator('#hud .goal');
   const control = page.getByRole('button', { name: 'Goal' });
@@ -171,6 +176,7 @@ test('when the clipboard is refused, the result text is selected to copy by hand
 
 test('a plain boss fight shows no result card at its end, #196', async ({ page }) => {
   await page.goto('./?bot=off');
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(page.locator('#hud')).toContainText('The Echo');

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
 import { FRAME } from '../src/frame';
 import { BLACK_WINS } from './end-games';
+import { openModes } from './modes';
 
 // The 61 cells sit on a hexagonal steel frame (#292, world.md section 6): a plate under them, a rim around them.
 const frame = (page: Page) => page.evaluate(() => (window as any).__frame());
@@ -43,6 +44,7 @@ test('clear board and the low tier keep the frame, #292', async ({ page }) => {
 test("The Choir's radius 3 board gets a frame of its size, #292", async ({ page }) => {
   await page.goto('./');
   await page.locator('canvas').waitFor();
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
   await expect(page.locator('#hud')).toContainText('The Choir');

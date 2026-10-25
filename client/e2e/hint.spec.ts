@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
 
 // Hint (#192, docs/specs/ui.md section 4.2): a press shows the engine's best move for the side to move as a ghost,
 // and plays nothing. A second press, a new selection or the next move clears it. Local hot-seat and bot games only.
@@ -265,6 +266,7 @@ test('no Hint during a boss fight, a daily fight or an online game, for the room
 
   await page.goto('./?net=hook');
   await ready(page);
+  await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   await expect(page.locator('#hud')).toContainText('The Echo');
@@ -272,12 +274,14 @@ test('no Hint during a boss fight, a daily fight or an online game, for the room
 
   await page.goto('./?net=hook');
   await ready(page);
+  await openModes(page);
   await page.locator('#daily').click();
   await expect(page.locator('#hud')).toContainText('Daily challenge');
   await expect(hint).toBeHidden();
 
   await page.goto('./?net=hook');
   await ready(page);
+  await openModes(page);
   await page.getByRole('button', { name: 'Play online' }).click();
   await expect(page.locator('#hud')).toContainText('Waiting for an opponent');
   await expect(hint).toBeHidden();
