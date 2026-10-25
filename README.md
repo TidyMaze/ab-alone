@@ -68,7 +68,7 @@ mcp/                  MCP server: an AI agent plays the bot or a boss over stdio
   moves, so an illegal or tampered move never lands.
 - **Online without a server.** WebRTC through Trystero, signaling over public Nostr relays.
   Moves are Ed25519-signed and hash-chained. Each seat is bound to one key; extra visitors watch.
-- **Hosted on GitHub Pages.** Free, static, deployed on every merge to `main`.
+- **Hosted on GitHub Pages.** Free, static, deployed on every merge to `main` that changes the game (docs, tests and CI merges don't deploy; Actions > Pages > Run workflow deploys by hand).
 - **Tested hard.** Strict TDD, 100 % line and region coverage on the engine, Playwright end to
   end in Chromium, Firefox and WebKit, the full suite run before every merge.
 

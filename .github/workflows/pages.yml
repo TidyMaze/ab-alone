@@ -1,9 +1,27 @@
 name: Pages
 
 on:
+  # Only a merge that changes what the built game is made of deploys (#479): docs, tests, e2e, CI and tooling don't.
   push:
     branches: [main]
-    paths-ignore: ['**.md', 'docs/**']
+    paths:
+      - 'client/index.html'
+      - 'client/public/**'
+      - 'client/src/**'
+      - '!client/src/**/*.test.ts'
+      - '!client/src/test/**'
+      - 'client/scripts/offline-app.mjs'
+      - 'client/package.json'
+      - 'client/bun.lock'
+      - 'client/tsconfig.json'
+      - 'client/vite.config.ts'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/abalone-core/Cargo.toml'
+      - 'crates/abalone-core/src/**'
+      - 'crates/abalone-wasm/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
