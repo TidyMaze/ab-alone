@@ -241,25 +241,22 @@ test('The Chaplain: a boss marble lost for a flip counts for the player and the 
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
   const plies = () => page.evaluate(() => (window as any).__plies());
-  const click = async (q: number, r: number) => {
-    const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
-    await page.mouse.click(p.x, p.y);
-  };
 
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Chaplain' }).click();
   await expect(hud).toContainText('The Chaplain');
   expect(await page.evaluate(() => (window as any).__fight().seed)).toBe(1);
-  for (let n = 1; n <= 18; n++) {
-    const mv = await page.evaluate(() =>
-      (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
-    );
-    const [q, r] = mv.cells[0];
-    const send = n === 1 ? click : (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
-    await send(q, r);
-    await send(mv.dir === 4 ? q : q + 1, r - 1);
-    await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
-  }
+  // Turns 1 to 17 in one call (#349). The 18th, the flip, is played as before: two __click calls.
+  expect(await page.evaluate(() => (window as any).__playTurns(17, [4, 2]))).toBe(17);
+  await expect.poll(plies, { timeout: 30_000 }).toBe(34);
+  const mv = await page.evaluate(() =>
+    (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
+  );
+  const [q, r] = mv.cells[0];
+  const send = (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
+  await send(q, r);
+  await send(mv.dir === 4 ? q : q + 1, r - 1);
+  await expect.poll(plies, { timeout: 30_000 }).toBe(36); // the boss replied
   await expect(hud).toContainText('White ejected 1/6'); // the lost boss marble, drawn without a click
   expect(errors).toEqual([]);
 });
