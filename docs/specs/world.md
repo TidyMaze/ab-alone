@@ -146,7 +146,10 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 3. Ejected count: tally marks scratched on the board frame, one slot per marble to lose. 1v1
    and bosses: 6 slots per side. Battle royale (10 marbles, out at 0, #49) and the Choir fight
    (10 marbles): the frame shows **marbles left** instead, as a row of notches per player that
-   go dark, so it scales to 6 players (a compact arc per seat on the arena rim).
+   go dark, so it scales to 6 players (a compact arc per seat on the arena rim). In the Choir
+   the boss row has one notch per boss marble (12). Each side's row sits on the right side of
+   the rim at its own end (near right for the side that starts near, far right for the other),
+   clear of the phase notches: a dark groove per slot, a bone-white mark in it (#389).
 4. Boss phase notches and tell countdown: notches scratched on the arena frame, one per boss
    marble left until the next phase (lit while remaining, extinguished as they go), a steady
    glyph marks the next-phase threshold. They sit on the near side of the rim, where no marble
