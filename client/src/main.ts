@@ -285,13 +285,14 @@ const crackMaterials: Record<number, THREE.MeshStandardMaterial> = {
 const tickGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.1);
 const tickMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // The Chaplain tell: a steady pale ring and a glyph on each marble a hovered move would expose to a
-// flip, never a halo or colour alone. A converted marble wears a cap of the dark shell over the glass.
+// flip, never a halo or colour alone. A converted marble is a shell under a cap of the player's cyan light: half
+// glass, half ridged, 3:1 on the shell (#326).
 const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
 const shellCapGeometry = new THREE.SphereGeometry(0.37, 32, 8, 0, Math.PI * 2, 0, Math.PI * 0.35);
 let exposed = 0; // marbles the hovered move would expose, for the HUD
-// The Choir: each army wears its own glyph in the dark shell on top of its marbles, Alto a spike,
+// The Choir: each army wears its own glyph in the pale tell colour on top of its marbles, Alto a spike,
 // Tenor a ring, Bass a block, never colour alone. The army that moves next gets the pale ring.
 const armyGlyphs = [
   new THREE.ConeGeometry(0.08, 0.18, 4),
@@ -632,14 +633,14 @@ function refresh(): void {
   });
   for (const [q, r] of converted) {
     const p = axialTo3D(q, r);
-    const cap = new THREE.Mesh(shellCapGeometry, marbleMaterials[1]);
+    const cap = new THREE.Mesh(shellCapGeometry, coreMaterial);
     cap.position.set(p.x, 0.36, p.z);
     marbles.add(cap);
     onMarble(cellIndex(q, r), cap);
   }
   for (const { cell, army } of armies) {
     const p = axialTo3D(cell[0], cell[1]);
-    const glyph = new THREE.Mesh(armyGlyphs[army], marbleMaterials[1]);
+    const glyph = new THREE.Mesh(armyGlyphs[army], paleMaterial);
     glyph.position.set(p.x, 0.76, p.z);
     if (army === 1) glyph.rotation.x = Math.PI / 2; // the ring lies flat, read from above
     marbles.add(glyph);
