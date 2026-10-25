@@ -52,6 +52,7 @@ import {
 import { Sfx } from './sound';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
+import { FRAME, frameShape, type FrameShape, type Point } from './frame';
 import { formatScore } from './score';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
@@ -62,6 +63,7 @@ import './ui.css';
 // Palette from docs/specs/world.md section 5.
 const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
 const BONE = 0xd8d4c8; // the pale tells
+const FRAME_LOOK = { plate: 0x3a3a3a, rim: 0xb0b0b0 }; // tints of the deck textures: the plate darker than the cells, the rim between
 const BOT_SIDE = 2; // the human plays side 1 (the glass), the bot plays side 2
 declare const __BUILD__: string; // the commit, set by vite.config.ts
 
@@ -308,6 +310,39 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r]) => {
   scene.add(disc);
   return disc;
 });
+// The steel frame (#292, frame.ts): a plate under the cells and a rim around them, rebuilt when the board's size or
+// its holes change. The rim has its own material, to light for the side to move (#300). Picking tests the discs only.
+const plateMaterial = new THREE.MeshStandardMaterial(
+  deckAlbedo && deckRoughness
+    ? { map: deckAlbedo, roughnessMap: deckRoughness, color: FRAME_LOOK.plate }
+    : { color: FRAME_LOOK.plate, roughness: 0.8 },
+);
+const rimMaterial = new THREE.MeshStandardMaterial(
+  deckAlbedo && deckRoughness
+    ? { map: deckAlbedo, roughnessMap: deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3 }
+    : { color: COLORS.steel, roughness: 0.5, metalness: 0.3 },
+);
+const plate = new THREE.Mesh(new THREE.BufferGeometry(), plateMaterial);
+const rim = new THREE.Mesh(new THREE.BufferGeometry(), rimMaterial);
+scene.add(plate, rim);
+let frame: FrameShape | null = null;
+// The shape lies on the x z plane: shape y is -z once turned up, extruded from the top down.
+const flat = (points: Point[]): THREE.Vector2[] => points.map((p) => new THREE.Vector2(p.x, -p.z));
+const slab = (shape: THREE.Shape, top: number, depth: number): THREE.ExtrudeGeometry =>
+  new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, top - depth, 0);
+function drawFrame(board: ArrayLike<number>): void {
+  const next = frameShape(board);
+  if (JSON.stringify(next) === JSON.stringify(frame)) return;
+  frame = next;
+  const plateShape = new THREE.Shape(flat(next.inner));
+  for (const h of next.holes) plateShape.holes.push(new THREE.Path().absarc(h.x, -h.z, FRAME.hole, 0, 2 * Math.PI, true));
+  const rimShape = new THREE.Shape(flat(next.outer));
+  rimShape.holes.push(new THREE.Path(flat(next.inner)));
+  plate.geometry.dispose();
+  plate.geometry = slab(plateShape, -0.1, 0.2); // just under the discs
+  rim.geometry.dispose();
+  rim.geometry = slab(rimShape, 0, 0.3); // level with the cell tops: it hides none of them
+}
 const marbles = new THREE.Group();
 scene.add(marbles);
 // Cell index to the marble on it and what is drawn on that marble (cap, glyph, tell ring): the
@@ -594,6 +629,7 @@ function hud(extra = ''): void {
 
 function refresh(): void {
   const board = engine.board();
+  drawFrame(board);
   const moves = parseMoves(engine.legal_moves());
   const targets = groupTargets(moves, selected);
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
@@ -802,6 +838,13 @@ addEventListener('resize', () => {
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
+
+// Used by the browser checks to read the frame's size and holes, and that it is drawn (#292).
+(window as unknown as Record<string, unknown>).__frame = () => ({
+  radius: frame?.radius,
+  holes: frame?.holes.length,
+  drawn: [plate, rim].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
+});
 
 // Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
 // frame draws them at the real time again).
