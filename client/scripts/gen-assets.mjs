@@ -276,7 +276,7 @@ function deckSets(size, steel, rand) {
     }
   }
   const mess = set((i) => {
-    const shade = 0.92 + (fine[i] - 0.5) * 0.3 + (broad[i] - 0.5) * 0.08 - Math.max(0, marks[i]) * 0.25 - Math.min(0, marks[i]) * 0.25;
+    const shade = 0.98 + (fine[i] - 0.5) * 0.3 + (broad[i] - 0.5) * 0.08 - Math.max(0, marks[i]) * 0.25 - Math.min(0, marks[i]) * 0.25;
     return [0xa4 * shade, 0x98 * shade, 0x86 * shade];
   });
   // Ore dust on the steel plate (Cargo): rust-brown grit gathered in drifts.
