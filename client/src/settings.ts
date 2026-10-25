@@ -1,8 +1,9 @@
 // The settings menu (#277, docs/specs/ui.md section 4): a list of items behind a cog button: the toggles Clear board
-// and Sound (#284), the Theme choice (#317), the Shell skin choice (#377), then the actions Export game and Import game (#287). Pure functions only:
-// main.ts feeds them the clicks and builds the DOM.
+// and Sound (#284), Safe mode (#380), the Theme choice (#317), the Shell skin choice (#377), the UI scale (#382), then the
+// actions Export game and Import game (#287). Pure functions only: main.ts feeds them the clicks and builds the DOM.
 import type { IconName } from './icons';
 import { skinById } from './skins';
+import type { UiScale } from './uiscale';
 
 export interface Setting {
   id: string;
@@ -22,11 +23,13 @@ export const nextTheme = (theme: Theme): Theme => (theme === 'system' ? 'dark' :
 export const themeAttribute = (theme: Theme): string | null => (theme === 'system' ? null : theme);
 
 /** The items the menu lists, in order, with their icon and the toggles' current state. */
-export const settingsList = (clear: boolean, sound: boolean, theme: Theme, skin: string): Setting[] => [
+export const settingsList = (clear: boolean, sound: boolean, theme: Theme, skin: string, scale: UiScale, safe: boolean): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'sound', label: 'Sound', icon: sound ? 'sound' : 'muted', on: sound },
+  { id: 'safe-mode', label: 'Safe mode', icon: 'safe', on: safe },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme' },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
+  { id: 'ui-scale', label: `UI scale: ${scale} %`, icon: 'scale' },
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];

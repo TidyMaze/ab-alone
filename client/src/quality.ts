@@ -5,6 +5,7 @@
 import { RADIUS } from './board';
 import type { Theme } from './settings';
 import { skinById } from './skins';
+import { UI_SCALES, type UiScale } from './uiscale';
 
 export type Tier = 'low' | 'high';
 export interface Hints {
@@ -20,6 +21,8 @@ const CLEAR_KEY = 'ab-alone.clear-board';
 const SOUND_KEY = 'ab-alone.sound';
 const THEME_KEY = 'ab-alone.theme';
 const SKIN_KEY = 'ab-alone.shell-skin';
+const SAFE_KEY = 'ab-alone.safe-mode';
+const SCALE_KEY = 'ab-alone.ui-scale';
 
 export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): Tier {
   const weak = width < 768 || reducedMotion || (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
@@ -58,6 +61,15 @@ export const writeClearBoard = (store: Store, on: boolean): void => write(store,
 // The one sound on/off toggle until the mix sliders of #60: on unless the player turned it off.
 export const readSound = (store: Store): boolean => read(store, SOUND_KEY) !== 'off';
 export const writeSound = (store: Store, on: boolean): void => write(store, SOUND_KEY, on ? 'on' : 'off');
+// Photosensitivity safe mode (#380): on unless the player turned it off.
+export const readSafeMode = (store: Store): boolean => read(store, SAFE_KEY) !== 'off';
+export const writeSafeMode = (store: Store, on: boolean): void => write(store, SAFE_KEY, on ? 'on' : 'off');
+// The UI scale (#382): 100 % unless the player picked a step.
+export const readUiScale = (store: Store): UiScale => {
+  const stored = Number(read(store, SCALE_KEY));
+  return (UI_SCALES as readonly number[]).includes(stored) ? (stored as UiScale) : 100;
+};
+export const writeUiScale = (store: Store, scale: UiScale): void => write(store, SCALE_KEY, String(scale));
 // The theme (#317): System unless the player picked Dark or Light. index.html reads the same key before the first paint.
 export const readTheme = (store: Store): Theme => {
   const stored = read(store, THEME_KEY);

@@ -49,16 +49,21 @@ import {
   drawDue,
   fogSettings,
   readClearBoard,
+  readSafeMode,
   readSkin,
   readSound,
   readTheme,
   readTier,
+  readUiScale,
   renderPixelRatio,
   writeClearBoard,
+  writeSafeMode,
   writeSkin,
   writeSound,
   writeTheme,
+  writeUiScale,
 } from './quality';
+import { nextUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { Sfx, TellWatch, type Tell } from './sound';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
@@ -195,6 +200,17 @@ function applyTheme(): void {
   if (value) document.documentElement.dataset.theme = value;
   else delete document.documentElement.dataset.theme;
 }
+// Photosensitivity safe mode (#380), on by default, and the UI scale (#382): one custom property on the root, which
+// the HUD and the settings menu read (ui.css). The board does not scale.
+let safe = readSafeMode(store);
+let uiScale: UiScale = readUiScale(store);
+function applyUiScale(): void {
+  document.documentElement.style.setProperty('--ui-scale', uiScaleFactor(uiScale));
+}
+applyUiScale();
+// The end-of-game light and dim stop animating in safe mode (ui.css, #380).
+const applySafe = (): void => void (document.body.dataset.safe = String(safe));
+applySafe();
 // The ejection sound (docs/specs/world.md section 7), on by default, a setting of the menu (#284). The audio
 // context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
 // way down, a touch on the way up, and toggling Sound on starts it too (setEnabled).
@@ -226,6 +242,16 @@ const toggles: Record<string, () => void> = {
     sfx.setEnabled(!sfx.enabled);
     writeSound(store, sfx.enabled);
   },
+  'safe-mode': () => {
+    safe = !safe;
+    writeSafeMode(store, safe);
+    applySafe();
+  },
+  'ui-scale': () => {
+    uiScale = nextUiScale(uiScale);
+    writeUiScale(store, uiScale);
+    applyUiScale();
+  },
   theme: () => {
     theme = nextTheme(theme);
     writeTheme(store, theme);
@@ -239,13 +265,13 @@ const toggles: Record<string, () => void> = {
   },
 };
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, sfx.enabled, theme, skin)) {
+for (const { id } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';

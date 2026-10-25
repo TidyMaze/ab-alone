@@ -11,6 +11,8 @@ export const ICONS = {
   diagnostics: 'M9 4h6v3H9zM8 5H5v15h14V5h-3M9 12h6M9 16h6',
   theme: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 3v18',
   skin: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M8 8.5a5 5 0 0 1 3-2',
+  safe: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z',
+  scale: 'M10 4.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11M14.5 14.5 20 20M10 7.5v5M7.5 10h5',
 } as const;
 
 export type IconName = keyof typeof ICONS;
