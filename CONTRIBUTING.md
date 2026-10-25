@@ -229,7 +229,8 @@ the triager does exactly one of:
    - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, the changed e2e specs green locally (the full suite runs on the CI runner).
      **After a rebase on `main` without conflict**, rerun only `bun run test` and
      `bunx tsc --noEmit` in `client/` (rebuild the WASM first if `crates/` changed on main, section
-     13), not `scripts/verify.sh` nor the e2e run: CI runs `rust` again on the rebased code, and
+     13), not `scripts/verify.sh` nor the e2e run: CI runs `rust` (Rust checks plus client `tsc`
+     and unit tests) again on the rebased code, and
      main runs coverage and e2e after the merge (decision #239). A rebase with a conflict reruns
      every local check.
    - [ ] CI: the PR is ready (not a draft) and the required check `rust` is green (enforced by
@@ -354,7 +355,8 @@ the test commit alone to see it fail. The PR is squash-merged, the order lives i
 
 **Coverage gate:** 100 % of lines and regions for Rust (not branches, owner decision), enforced by
 `scripts/verify.sh` locally and by the CI coverage job on main after merge. Below 100 % fails the
-build. Commands: section 13. The client JS coverage (`bun run test`, vitest) is not in CI. An exclusion
+build. Commands: section 13. The client JS coverage (`bun run test`, vitest, 100 % thresholds) and
+`tsc` run in the CI check `rust` on every ready PR and on main (#409). An exclusion
 needs a one-line comment saying why, and the reviewer must accept it (generated code,
 `unreachable!()`).
 
@@ -398,8 +400,10 @@ rebases on `main` without conflict (section 6.4, merge gate). It runs the CI che
 
 **What CI runs** (`.github/workflows/ci.yml`):
 
-- On every **ready** PR (not on drafts), on open, push and `ready_for_review`: fmt, clippy and
-  `cargo test --all --locked`. A draft PR shows the `rust` check as skipped.
+- On every **ready** PR (not on drafts), on open, push and `ready_for_review`: fmt, clippy,
+  `cargo test --all --locked`, then the client checks `bunx tsc --noEmit` and `bun run test`
+  (vitest, 100 % coverage thresholds) on a cached WASM build, all in the required `rust` job
+  (#409). A draft PR shows the `rust` check as skipped.
 - On push to main (after merge): the Rust job always runs. The coverage gate runs only when
   `crates/`, `Cargo.*` or `ci.yml` changed, the e2e jobs only when `client/`, `crates/abalone-core/`,
   `crates/abalone-wasm/`, `Cargo.*` or `ci.yml` changed (job `changes`: it diffs against the last

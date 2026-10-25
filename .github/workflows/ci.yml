@@ -32,6 +32,33 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --all --locked
+      # The client checks run here because `rust` is the only check branch protection requires (#409): two PRs green
+      # alone once broke `tsc` on main together (#402). Both need the wasm package, cached like in the `wasm` job.
+      - id: wasm-cache
+        uses: actions/cache@v4
+        with:
+          path: crates/abalone-wasm/pkg
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: rustup target add wasm32-unknown-unknown
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: wasm-pack build crates/abalone-wasm --target web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: client/package.json
+      - run: bun install --frozen-lockfile
+        working-directory: client
+      - run: bunx tsc --noEmit
+        working-directory: client
+      - run: bun run test
+        working-directory: client
 
   # On push to main, finds what changed since the last successful CI run on main (not just this push: a cancelled run
   # never tested its commits). A manual dispatch always runs everything. Only coverage and e2e are conditional, `rust`
