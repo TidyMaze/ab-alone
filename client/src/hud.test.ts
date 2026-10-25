@@ -102,3 +102,25 @@ describe('hudHtml', () => {
     expect(html.match(/class="pip out"/g)).toHaveLength(4);
   });
 });
+
+describe('the Tally line, #294', () => {
+  const base = {
+    side: 1,
+    status: 0,
+    glass: 0,
+    score: '0 out',
+    ejected: [0, 0] as const,
+    win: [6, 6] as const,
+    note: '',
+  };
+
+  it('shows the line in the plate, after the turn line', () => {
+    const html = hudHtml({ ...base, tally: 'Mess: two crews, one table. Ledger open.' });
+    expect(html).toContain('<div class="tally">Mess: two crews, one table. Ledger open.</div>');
+    expect(html.indexOf('class="tally"')).toBeGreaterThan(html.indexOf('class="turn"'));
+  });
+
+  it('shows no tally element when there is no line', () => {
+    expect(hudHtml(base)).not.toContain('class="tally"');
+  });
+});
