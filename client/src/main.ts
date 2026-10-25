@@ -50,7 +50,7 @@ import { fpsOf, keepWindow } from './fps';
 import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
-import { DECK_NAMES, deckOf, type Deck } from './deck';
+import { deckOf, type Deck } from './deck';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
@@ -161,16 +161,21 @@ async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise
     return null;
   }
 }
-const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, ...deckMaps] = await Promise.all([
+// The cells' albedo of each deck (#401), loaded the first time a mode starts on that deck: a page that stays at the
+// Mess loads the Mess one only.
+const deckMaps = new Map<Deck, Promise<THREE.Texture | null>>();
+const deckMap = (name: Deck): Promise<THREE.Texture | null> => {
+  if (!deckMaps.has(name)) deckMaps.set(name, loadTexture(`deck-${name}.png`, true, true));
+  return deckMaps.get(name)!;
+};
+const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, firstDeckMap] = await Promise.all([
   loadTexture('deck-albedo.png', true, true),
   loadTexture('deck-roughness.png', false, true),
   loadTexture('shell-normal.png', false, true),
   loadTexture('backdrop.png', true, false),
   loadTexture('crack-decal.png', false, false),
-  ...DECK_NAMES.map((name) => loadTexture(`deck-${name}.png`, true, true)), // the cells' albedo of each deck (#401)
+  deckMap(deckOf('local')), // a page opens at the Mess
 ]);
-// The cells' texture of a deck, the steel when its file did not load. The frame keeps the steel.
-const deckMap = (name: Deck): THREE.Texture | null => deckMaps[DECK_NAMES.indexOf(name)] ?? deckAlbedo;
 
 function prefilteredRoom(): THREE.Texture {
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -490,12 +495,15 @@ function applyDeck(next: Deck): void {
   lamp.intensity = light.key.intensity;
   lamp.position.set(...light.key.position);
   renderer.toneMappingExposure = light.exposure;
-  // The deck's texture set (#401), only on the textured look: a map added to the flat look would rebuild its pipeline.
-  const map = deckMap(deck);
-  if (steel.map && map) steel.map = map;
   document.body.dataset.deck = deck; // read by the e2e tests
-  document.body.dataset.deckSet = steel.map && steel.map === deckMaps[DECK_NAMES.indexOf(deck)] ? deck : 'steel';
   applyLook();
+  // The deck's texture set (#401) once loaded, the steel when its file did not load; the frame keeps the steel. Only on
+  // the textured look: a map added to the flat look would rebuild its pipeline. body[data-deck-set] is read by the e2e.
+  void deckMap(next).then((map) => {
+    if (deck !== next || !steel.map) return; // another deck started meanwhile, or the flat look
+    steel.map = map ?? deckAlbedo;
+    document.body.dataset.deckSet = map ? next : 'steel';
+  });
 }
 // Accents (#376): a cold rim from behind, a small warm point at the lamp's side. Weaker than the key.
 const coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
@@ -536,7 +544,7 @@ const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidt
 const ringGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32);
 const steel = new THREE.MeshStandardMaterial(
   deckAlbedo && deckRoughness
-    ? { map: deckMap(deck), roughnessMap: deckRoughness }
+    ? { map: firstDeckMap ?? deckAlbedo, roughnessMap: deckRoughness }
     : { color: COLORS.steel, roughness: 0.8 },
 );
 applyDeck(deck);
