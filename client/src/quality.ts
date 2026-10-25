@@ -140,11 +140,13 @@ export const writeTier = (store: Store, tier: Tier): void => write(store, TIER_K
 
 // Under automation (navigator.webdriver) the page draws only while the last draw took under a fifth of the time since it
 // began, and at most every 100 ms. CI runners have no GPU: software WebGL takes every core for each draw, and input,
-// evaluate and click wait seconds for a frame (bug #216). A player draws every frame.
+// evaluate and click wait seconds for a frame (bug #216). A draw a test asked for (`asked`) waits the 100 ms only: the
+// first draw of a page compiles the shaders, and 4 times its cost made a test that waited for a draw wait 7 to 12 s
+// (bug #435). A player draws every frame.
 const AUTOMATED_MIN_GAP_MS = 100;
 const AUTOMATED_DUTY = 4;
-export const drawDue = (now: number, lastStart: number, lastCost: number, automated: boolean): boolean =>
-  !automated || now - lastStart >= Math.max(AUTOMATED_MIN_GAP_MS, AUTOMATED_DUTY * lastCost);
+export const drawDue = (now: number, lastStart: number, lastCost: number, asked: boolean, automated: boolean): boolean =>
+  !automated || now - lastStart >= Math.max(AUTOMATED_MIN_GAP_MS, asked ? 0 : AUTOMATED_DUTY * lastCost);
 
 export function hasReflections(tier: Tier, automated: boolean): boolean {
   return !automated && tier === 'high';
