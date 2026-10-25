@@ -107,7 +107,11 @@ test('the fog shows at the far rim of the board and not at the near rim, bug #17
   await page.mouse.move(2, 2); // no hover ghost
   await settle(page);
 
+  // Under automation the page skips draws while the last one was slow (#216): two animation frames do not prove the board
+  // was drawn again after a flip. Each shot waits for a draw that began after it was asked for (bug #365).
   const shot = async (name: string) => {
+    const draws = await page.evaluate(() => (window as any).__draws() as number);
+    await page.waitForFunction((n) => (window as any).__draws() > n, draws);
     await settle(page);
     return page.screenshot({ path: testInfo.outputPath(name), type: 'png' });
   };

@@ -1381,10 +1381,14 @@ if (serviceWorker) {
 refresh();
 void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw = { start: -Infinity, cost: 0 };
+let draws = 0;
+// Used by the browser checks to wait for a draw: under automation the loop skips frames (#216), so a frame is not a draw (#365).
+(window as unknown as Record<string, unknown>).__draws = () => draws;
 renderer.setAnimationLoop((now) => {
   animateSlides(now);
   animateEjections(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, navigator.webdriver)) return;
   renderer.render(scene, camera);
+  draws++;
   lastDraw = { start: now, cost: performance.now() - now };
 });
