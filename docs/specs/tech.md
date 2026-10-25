@@ -272,6 +272,16 @@ answer: only a `Sync` does.
 3. **Reveal:** once all live peers committed (or the deadline passed: missing = `hold`), each
    broadcasts `order || nonce`. Peers verify against the commit. A bad reveal counts as `hold`
    and flags the peer.
+   Built in #500 (`client/src/royale-round.ts`, not wired yet): an order is a move record of 8
+   integers, an empty one is `hold`. `Commit {game, round, hash, pub, sig}` with
+   `hash = SHA-256(JSON [order, nonce])` and a random 32-byte nonce, then
+   `Reveal {game, round, order, nonce, pub, sig}`, both signed like a move record whose game names
+   the kind (`commit:<id>`, `reveal:<id>`), so neither can pass for a move. A peer keeps one commit
+   per live seat, for its game and round, until the reveal starts. The round has a second, reveal
+   deadline: a committed seat that has not revealed by then holds and is flagged. A reveal that
+   cannot be pinned on a committed seat (bad signature, no commit) is refused and flags nobody;
+   the first signed reveal of a seat is final. Not handled yet: a seat that sends other commits or
+   reveals to other peers can split the honest peers (#532).
 4. **Resolve:** every peer runs `resolve_round(state, orders)` locally. It applies the orders
    one by one in a rotating initiative order (derived from round number and seat list), each
    validated at its turn, an invalid order becomes a pass (game design #53, option C). Pure, so
