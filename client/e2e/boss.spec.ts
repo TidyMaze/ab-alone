@@ -34,6 +34,10 @@ const topContrasts = async (page: Page, cells: [number, number][]): Promise<numb
   );
 };
 
+// #358: every boss tell has a sound twin, played when the tell appears or changes. window.__tellCues() lists the cues
+// played so far. The clicks that open the fight are the gesture that starts the audio.
+const tellCues = (page: Page) => page.evaluate(() => (window as any).__tellCues()) as Promise<string[]>;
+
 test('start The Echo, play a move, the boss replies, Retry resets the board', async ({ page }) => {
   await page.goto('./');
   await page.locator('canvas').waitFor();
@@ -116,10 +120,12 @@ test('start The Hull, play to the first wave: a cracked cell ticks down, then va
   }
   await expect(body).toHaveAttribute('data-cracks', '1');
   await expect(hud).toContainText('Rim cracks: 1 cell in 2 plies');
+  expect(await tellCues(page)).toEqual(['crack']); // the crack appears
   await page.screenshot({ path: testInfo.outputPath('hull-cracked.png') });
 
   await advance(false);
   await expect.poll(plies, { timeout: 30_000 }).toBe(10);
+  expect(await tellCues(page)).toEqual(['crack', 'crack']); // it ticked down on ply 9, then vanished: no cue for a gone tell
   await expect(body).toHaveAttribute('data-vanished', '1');
   expect(await page.evaluate(() => (window as any).__frame())).toEqual({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
   await expect(body).toHaveAttribute('data-cracks', '0');
@@ -166,10 +172,14 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, a convert
       const [q, r] = exposing.cells[0];
       const [dq, dr] = DIRS[exposing.dir]!;
       await click(q, r); // select the marble
+      const flipCues = async () => (await tellCues(page)).filter((c) => c === 'flip').length;
+      const heard = await flipCues();
       const t = await screen(q + dq!, r + dr!);
       await page.mouse.move(t.x, t.y); // hover the move: ghost and flip preview
       await expect(body).not.toHaveAttribute('data-flips', '0');
       await expect(hud).toContainText('Flips next boss turn');
+      await page.mouse.move(t.x + 2, t.y + 2); // the same move still hovered: the same tell, no second cue
+      expect(await flipCues()).toBe(heard + 1);
       await page.screenshot({ path: testInfo.outputPath('chaplain-preview.png') });
       await click(q, r); // deselect
       previewed = true;
@@ -258,6 +268,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   await expect(body).toHaveAttribute('data-vanished', '24'); // the outer ring is a hole
   await expect(body).toHaveAttribute('data-armies', '12');
   await expect(body).toHaveAttribute('data-next-army', 'Alto');
+  expect(await tellCues(page)).toEqual(['choir']); // the next-army tell appears
   await page.screenshot({ path: testInfo.outputPath('choir-start.png') });
 
   const before = await armies();
@@ -275,5 +286,6 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   expect(cellsOf(after, 2)).toEqual(cellsOf(before, 2));
   await expect(hud).toContainText('Next army: Tenor');
   await expect(body).toHaveAttribute('data-next-army', 'Tenor');
+  expect(await tellCues(page)).toEqual(['choir', 'choir']); // once more for Tenor, not for the selection or the human move
   await page.screenshot({ path: testInfo.outputPath('choir-tenor-next.png') });
 });

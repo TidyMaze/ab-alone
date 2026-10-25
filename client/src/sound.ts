@@ -3,7 +3,7 @@
 // thin wrapper through one effects gain node. Its times follow the ejection effect of eject.ts: a
 // sharp inhale on the push over the rim, a muffled thud as the void takes the marble, vacuum silence
 // while it falls, then, once it is gone, a low toll for a lost player marble or a dry clack for an
-// enemy one.
+// enemy one. The boss tells have their sound twins too (#358).
 
 import { EJECT_MS, PUSH_MS } from './eject';
 
@@ -87,6 +87,59 @@ export function knockVoices(pitch: number): Voice[] {
     { source: 'triangle', freq: [pitch, pitch * 0.9], env: strike(0, 0.6, 0.12) },
     { source: 'noise', filter: { type: 'bandpass', freq: [pitch * 6, pitch * 4], q: 3 }, env: strike(0, 0.3, 0.02) },
   ];
+}
+
+/** A boss tell with a sound twin (world.md sections 3 and 8, #358): The Hull's crack countdown, The Chaplain's
+ * flip tell, The Choir's next army. */
+export type Tell = 'crack' | 'flip' | 'choir';
+
+const TELLS: Record<Tell, Voice[]> = {
+  // The frame groans as a rim cell cracks or ticks down: a low falling creak and a splinter of noise.
+  crack: [
+    {
+      source: 'triangle',
+      freq: [90, 60],
+      env: [
+        [0, 0],
+        [0.03, 0.5],
+        [0.35, 0],
+      ],
+    },
+    { source: 'noise', filter: { type: 'bandpass', freq: [900, 300], q: 5 }, env: strike(0, 0.4, 0.12) },
+  ],
+  // A small high chapel bell over the marbles a move would expose: two pure partials, the higher dies first.
+  flip: [
+    { source: 'sine', freq: [1320, 1320], env: strike(0, 0.25, 0.6) },
+    { source: 'sine', freq: [3640, 3640], env: strike(0, 0.08, 0.25) },
+  ],
+  // The next army takes the note: two hummed voices a fifth apart that swell, then fade.
+  choir: [220, 330].map(
+    (hz, i): Voice => ({
+      source: 'sine',
+      freq: [hz, hz],
+      env: [
+        [0, 0],
+        [0.12, 0.3 - i * 0.1],
+        [0.5, 0],
+      ],
+    }),
+  ),
+};
+
+/** Every voice of the sound twin of `tell`. */
+export const tellVoices = (tell: Tell): Voice[] => TELLS[tell];
+
+/** The last marks of each tell, so that a tell sounds only when it appears or changes, never on a redraw. */
+export class TellWatch {
+  private readonly last = new Map<Tell, string>();
+
+  /** True when `tell` shows `marks` (none: an empty list) and did not show them last time. */
+  changed(tell: Tell, marks: readonly unknown[]): boolean {
+    const key = JSON.stringify(marks);
+    const was = this.last.get(tell);
+    this.last.set(tell, key);
+    return marks.length > 0 && key !== was;
+  }
 }
 
 /** The gain of the effects node while the sound is on. */
@@ -177,6 +230,14 @@ export class Sfx {
     const now = this.graph.ctx.currentTime;
     for (const voice of knockVoices(pitch)) this.play(this.graph, voice, now);
     return pitch;
+  }
+
+  /** Plays the sound twin of `tell` from now. The tell, or null when silent (sound off, or no gesture yet). */
+  tell(tell: Tell): Tell | null {
+    if (!this.on || !this.graph) return null;
+    const now = this.graph.ctx.currentTime;
+    for (const voice of tellVoices(tell)) this.play(this.graph, voice, now);
+    return tell;
   }
 
   private play({ ctx, fx, noise }: Graph, voice: Voice, now: number): void {

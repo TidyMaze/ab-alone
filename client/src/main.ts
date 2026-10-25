@@ -52,7 +52,7 @@ import {
   writeSound,
   writeTheme,
 } from './quality';
-import { Sfx } from './sound';
+import { Sfx, TellWatch, type Tell } from './sound';
 import { glassSide, sideName } from './glass';
 import { CORE, GLASS, SHELL } from './marbles';
 import { FRAME, frameShape, type FrameShape, type Point } from './frame';
@@ -176,6 +176,14 @@ function applyTheme(): void {
 // context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
 // way down, a touch on the way up, and toggling Sound on starts it too (setEnabled).
 const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readSound(store));
+// The sound twin of each boss tell (#358), only when the tell appears or changes. The cues played, read by the e2e tests.
+const tells = new TellWatch();
+const tellCues: Tell[] = [];
+function tellSound(tell: Tell, marks: readonly unknown[]): void {
+  if (!tells.changed(tell, marks)) return;
+  const cue = sfx.tell(tell);
+  if (cue) tellCues.push(cue);
+}
 function applyLook(): void {
   const fog = fogSettings(tier, clear, view.distance);
   scene.fog = fog && new THREE.Fog(COLORS.base, fog.near, fog.far);
@@ -762,6 +770,8 @@ function refresh(): void {
     marbles.add(ring);
     onMarble(cellIndex(cell[0], cell[1]), ring);
   }
+  tellSound('crack', cracks);
+  tellSound('choir', ARMY_NAMES[next] ? [next] : []);
   document.body.dataset.armies = String(armies.length); // read by the e2e tests
   document.body.dataset.nextArmy = ARMY_NAMES[next] ?? '';
   document.body.dataset.converted = String(converted.length); // read by the e2e tests
@@ -798,6 +808,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
     glyph.position.set(p.x, 0.85, p.z);
     ghosts.add(ring, glyph);
   }
+  tellSound('flip', flips);
   document.body.dataset.flips = String(flips.length); // read by the e2e tests
   if (flips.length !== exposed) {
     exposed = flips.length;
@@ -980,6 +991,8 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__audio = () => sfx.state;
 // The effects level: the hum and the ejections fade to 0 with the Sound toggle.
 (window as unknown as Record<string, unknown>).__level = () => sfx.level;
+// The sound twins of the boss tells played so far (#358).
+(window as unknown as Record<string, unknown>).__tellCues = () => tellCues;
 
 // Used by the browser checks to count the plies played, bot replies included, and to compare them.
 (window as unknown as Record<string, unknown>).__plies = () => history.length;
