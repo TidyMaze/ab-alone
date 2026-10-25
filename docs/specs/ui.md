@@ -70,14 +70,16 @@ field covers a cell, and the space between them lets every tap through to the bo
 
 Settings (#277): a cog button, first in the column, opens a menu, one button per item: the toggles Clear board,
 then Reduced motion (#379, see section 6: it follows `prefers-reduced-motion` until pressed, then keeps the player's
-choice; second, so that held upright the items still fit in two rows beside the cog), then Sound (#284, the ejection
+choice), then Sound (#284, the ejection
 sound, no longer a button of the column; opening the menu and toggling Sound count as
 the first gesture that starts audio), then Theme (#317, System, Dark or Light: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column). Each
 item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG line icons, thin `currentColor`
 strokes, one size) then its label: a fog for Clear board, a ball with speed lines for Reduced motion, a speaker for Sound (crossed out while off), an arrow out
 of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
 or closing it moves no button: under the cog in the column, beside the cog over the first row when the buttons are
-rows. It covers no cell either. On a touch screen each item is at least 44 px tall. It closes on Escape, on a press
+rows. It covers no cell either. Held upright (`orientation: portrait`) each item shows its icon only, a 44 px square,
+so every item fits beside the cog in at most two rows (#414); wider than tall, icon then label. Each item keeps its
+name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it and a pointer shows it. On a touch screen each item is at least 44 px tall. It closes on Escape, on a press
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 

@@ -296,6 +296,8 @@ const paintMenu = (): void => {
   for (const { id, label, icon: name, on } of settingsList(clear, sfx.enabled, theme, skin, uiScale, safe, reducedMotion())) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
+    row.setAttribute('aria-label', label); // held upright only the icon shows (#414): the name stays for screen readers
+    row.title = label; // and as a tooltip
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
