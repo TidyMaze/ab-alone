@@ -101,7 +101,7 @@ describe('fogSettings', () => {
       const outer = frameShape(CELLS.map((c) => (ring(c) > radius ? VANISHED : 0))).outer;
       it(`${tier}, radius ${radius}: never over a cell, thick at the far rim, at every view`, () => {
         for (const v of views) {
-          const fog = fogSettings(tier, false, v, radius)!;
+          const fog = fogSettings(tier, false, v, radius, 1)!;
           const reach = DISC * Math.sin(v.polar); // the disc's farthest point from its centre, along the view
           const cellDepth = Math.max(...cells.map(([q, r]) => depth(v, axialTo3D(q, r).x, axialTo3D(q, r).z) + reach));
           expect(factor(fog, cellDepth)).toBe(0);
@@ -111,14 +111,25 @@ describe('fogSettings', () => {
     }
   }
   it('is lighter on low than on high', () => {
-    const low = fogSettings('low', false, resetView(), 4)!;
-    const high = fogSettings('high', false, resetView(), 4)!;
+    const low = fogSettings('low', false, resetView(), 4, 1)!;
+    const high = fogSettings('high', false, resetView(), 4, 1)!;
     expect(low.near).toBe(high.near);
     expect(low.far).toBeGreaterThan(high.far);
   });
-  it('is off in clear-board mode, in every tier', () => {
-    expect(fogSettings('low', true, resetView(), 4)).toBeNull();
-    expect(fogSettings('high', true, resetView(), 4)).toBeNull();
+  // #400: a deck's density thickens the fog over the rim, from the same start: never over a cell on any deck.
+  it('a denser deck fog starts at the same edge and is thick sooner, at every view', () => {
+    for (const v of views) {
+      const haze = fogSettings('high', false, v, 4, 1)!;
+      const steam = fogSettings('high', false, v, 4, 2)!;
+      expect(steam.near).toBe(haze.near);
+      expect(steam.far - steam.near).toBeCloseTo((haze.far - haze.near) / 2);
+    }
+  });
+  it('is off in clear-board mode, in every tier and on every deck', () => {
+    for (const density of [0.3, 1, 2]) {
+      expect(fogSettings('low', true, resetView(), 4, density)).toBeNull();
+      expect(fogSettings('high', true, resetView(), 4, density)).toBeNull();
+    }
   });
 });
 

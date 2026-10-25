@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain Node script, no type declarations
 import { ASSET_NAMES, SEED, generateAssets } from './gen-assets.mjs';
+import { relativeLuminance } from '../src/contrast';
+import { DECK_NAMES } from '../src/deck';
 
 const sha = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 const hashAll = (assets: Map<string, Buffer>): string =>
@@ -22,7 +24,9 @@ function decode(buf: Buffer, channels = 3): { w: number; h: number; rows: Buffer
   return { w, h, rows: Array.from({ length: h }, (_, y) => raw.subarray(y * stride + 1, (y + 1) * stride)) };
 }
 
-describe('gen-assets', () => {
+// Each run generates every asset, the five deck sets of #401 included: a few hundred ms alone, seconds when the whole
+// suite runs in parallel with coverage, over vitest's 5 s default on a loaded machine.
+describe('gen-assets', { timeout: 20_000 }, () => {
   it('is deterministic: two runs with the same seed give the same hash', () => {
     expect(hashAll(generateAssets(SEED))).toBe(hashAll(generateAssets(SEED)));
   });
@@ -98,6 +102,54 @@ describe('gen-assets', () => {
     expect([...sixths].sort()).toEqual([0, 1, 2, 3, 4, 5]);
     expect(lit / inDisc).toBeGreaterThan(0.03);
     expect(lit / inDisc).toBeLessThan(0.4);
+  });
+
+  // Task #401: each deck of docs/specs/world.md section 5 has its own albedo for the cells, with the shared roughness.
+  describe('a texture set per deck (#401)', () => {
+    const assets = generateAssets(SEED);
+    const albedo = (deck: string) => assets.get(`deck-${deck}.png`)!;
+    // Mean relative luminance, its spread, and the mean red minus blue (warmth), over every pixel.
+    const stats = (buf: Buffer) => {
+      const { w, rows } = decode(buf);
+      let sum = 0, sq = 0, warm = 0, n = 0;
+      for (const row of rows) {
+        for (let x = 0; x < w; x++) {
+          const l = relativeLuminance([row[x * 3]!, row[x * 3 + 1]!, row[x * 3 + 2]!]);
+          sum += l;
+          sq += l * l;
+          warm += row[x * 3]! - row[x * 3 + 2]!;
+          n++;
+        }
+      }
+      return { mean: sum / n, spread: Math.sqrt(sq / n - (sum / n) ** 2), warm: warm / n };
+    };
+
+    it('makes one 256 px albedo per deck, within 300 KB a deck with the shared roughness (art.md section 2)', () => {
+      for (const deck of DECK_NAMES) {
+        const { w, h } = decode(albedo(deck));
+        expect([w, h], deck).toEqual([256, 256]);
+        expect(albedo(deck).length + assets.get('deck-roughness.png')!.length, deck).toBeLessThanOrEqual(300 * 1024);
+      }
+    });
+
+    it('gives every deck its own look', () => {
+      expect(new Set(DECK_NAMES.map((deck) => sha(albedo(deck)))).size).toBe(DECK_NAMES.length);
+    });
+
+    it('keeps every deck a mid-tone like the steel of #344, so both marbles can read 3:1 on it', () => {
+      for (const deck of DECK_NAMES) {
+        const { mean } = stats(albedo(deck));
+        expect(mean, deck).toBeGreaterThan(0.2);
+        expect(mean, deck).toBeLessThan(0.4);
+      }
+    });
+
+    it('the laminate of the Mess and the wood of the Chapel are warm, the Bridge panel is the smoothest', () => {
+      expect(stats(albedo('mess')).warm).toBeGreaterThan(0);
+      expect(stats(albedo('chapel')).warm).toBeGreaterThan(0);
+      const spreads = DECK_NAMES.map((deck) => stats(albedo(deck)).spread);
+      expect(stats(albedo('bridge')).spread).toBe(Math.min(...spreads));
+    });
   });
 
   it('keeps the total asset size under the budget', () => {

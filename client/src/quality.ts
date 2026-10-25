@@ -43,7 +43,15 @@ export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): T
 // beyond, never over a cell, at every zoom and turn of the camera (bugs #171 and #399). `radius` is the frame's.
 const FOG_AT_RIM = { low: 0.5, high: 0.8 };
 
-export function fogSettings(tier: Tier, clear: boolean, view: View, radius: number): { near: number; far: number } | null {
+// `density` is the deck's (light.ts, #400): it divides the span over the rim, from the same start, so a denser fog is
+// thick sooner and still never over a cell.
+export function fogSettings(
+  tier: Tier,
+  clear: boolean,
+  view: View,
+  radius: number,
+  density: number,
+): { near: number; far: number } | null {
   if (clear) return null;
   // How far along the view a hexagon of apothem 1 reaches: its corner nearest the view direction (frame.ts hexagon).
   const reach =
@@ -51,7 +59,7 @@ export function fogSettings(tier: Tier, clear: boolean, view: View, radius: numb
     (Math.sqrt(3) / 2);
   const edge = radius * (Math.sqrt(3) / 2) + FRAME.margin;
   const near = view.distance + edge * reach;
-  return { near, far: near + (FRAME.rim * reach) / FOG_AT_RIM[tier] };
+  return { near, far: near + (FRAME.rim * reach) / (FOG_AT_RIM[tier] * density) };
 }
 
 /** One stored setting, `null` when missing or when storage is blocked. */

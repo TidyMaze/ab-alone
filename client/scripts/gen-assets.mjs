@@ -11,6 +11,11 @@ export const ASSET_NAMES = [
   'shell-normal.png',
   'backdrop.png',
   'crack-decal.png',
+  'deck-mess.png',
+  'deck-cargo.png',
+  'deck-furnace.png',
+  'deck-chapel.png',
+  'deck-bridge.png',
 ];
 
 function rng(seed) {
@@ -118,7 +123,7 @@ function deck(size, rand) {
       rough[i] = clamp(150 + grain[i] * 60 + rustMix * 40 - brush * 40);
     }
   }
-  return [png(size, size, 3, albedo), png(size, size, 1, rough)];
+  return [png(size, size, 3, albedo), png(size, size, 1, rough), albedo];
 }
 
 // Tangent-space normal map of the enemy shell, ridged like a scarab (world.md section 5): rounded ridges with sharp
@@ -241,16 +246,80 @@ function crackDecal(size, rand) {
   return png(size, size, 1, Uint8Array.from(mask, (v) => clamp(v * 255)));
 }
 
+// The cells' albedo of each deck (world.md section 5, #401), each a mid-tone like the steel above, so both marbles read
+// 3:1 on it under the deck's own light. The frame keeps the steel. Tileable: every pattern wraps at the edges.
+function deckSets(size, steel, rand) {
+  const set = (fn) => {
+    const px = new Uint8Array(size * size * 3);
+    for (let i = 0; i < size * size; i++) fn(i, i % size, Math.floor(i / size)).forEach((v, k) => (px[i * 3 + k] = clamp(v)));
+    return png(size, size, 3, px);
+  };
+  const fine = fbm(size, rand, [32, 64]);
+  const broad = fbm(size, rand, [2, 4]);
+  const warp = noise(size, 4, rand);
+  // Worn laminate (Mess): a warm grey sheet, fine speckle, coffee rings and scratches.
+  const marks = new Float32Array(size * size);
+  for (let n = 0; n < 4; n++) {
+    const cx = rand() * size, cy = rand() * size, r = 14 + rand() * 12;
+    for (let i = 0; i < size * size; i++) {
+      const dx = Math.abs((i % size) - cx), dy = Math.abs(Math.floor(i / size) - cy);
+      const d = Math.hypot(Math.min(dx, size - dx), Math.min(dy, size - dy));
+      marks[i] = Math.max(marks[i], Math.max(0, 1 - Math.abs(d - r) / 1.5) * 0.6);
+    }
+  }
+  for (let n = 0; n < 24; n++) {
+    let x = rand() * size, y = rand() * size;
+    const a = rand() * Math.PI, len = 20 + rand() * 60;
+    for (let t = 0; t < len; t++, x += Math.cos(a), y += Math.sin(a)) {
+      const i = (((Math.round(y) % size) + size) % size) * size + (((Math.round(x) % size) + size) % size);
+      marks[i] = Math.min(marks[i], -0.5);
+    }
+  }
+  const mess = set((i) => {
+    const shade = 0.98 + (fine[i] - 0.5) * 0.3 + (broad[i] - 0.5) * 0.08 - Math.max(0, marks[i]) * 0.25 - Math.min(0, marks[i]) * 0.25;
+    return [0xa4 * shade, 0x98 * shade, 0x86 * shade];
+  });
+  // Ore dust on the steel plate (Cargo): rust-brown grit gathered in drifts.
+  const cargo = set((i) => {
+    const dust = Math.min(0.85, Math.max(0, (broad[i] - 0.4) * 2.2) * (fine[i] > 0.5 ? 1 : 0.5));
+    return [0, 1, 2].map((k) => steel[i * 3 + k] * (1 - dust) + [0xa8, 0x80, 0x5c][k] * dust);
+  });
+  // Blackened steel (Furnace): soot clouds over the steel, a faint heat tint where it is clean.
+  const furnace = set((i) => {
+    const soot = Math.min(1, Math.max(0, (broad[i] - 0.42) * 2.5)) * (0.7 + fine[i] * 0.3);
+    const shade = 1 - soot * 0.5;
+    return [steel[i * 3] * shade * 1.06, steel[i * 3 + 1] * shade, steel[i * 3 + 2] * shade * 0.92];
+  });
+  // Wood and wire (Chapel): grain along the boards, two binding wires, pale wax drips.
+  const chapel = set((i, x, y) => {
+    const grain = Math.sin(((y + warp[i] * 24) / size) * Math.PI * 2 * 18) * 0.5 + 0.5;
+    const wire = x % 128 < 2 ? 0.55 : 1;
+    const wax = fine[i] > 0.8 ? 1 : 0;
+    const shade = (0.9 + grain * 0.18 + (fine[i] - 0.5) * 0.1) * wire;
+    return [0, 1, 2].map((k) => [0xb0, 0x8a, 0x66][k] * shade * (1 - wax) + [0xd8, 0xd0, 0xb8][k] * wax);
+  });
+  // Polished white-grey panel (Bridge): clean, thin seams between the panels, too tidy.
+  const bridge = set((i, x, y) => {
+    const seam = x % 128 === 0 || y % 128 === 0 ? 0.6 : 1;
+    const shade = (1 + (fine[i] - 0.5) * 0.03) * seam;
+    return [0x92 * shade, 0x98 * shade, 0x9e * shade];
+  });
+  return { mess, cargo, furnace, chapel, bridge };
+}
+
 export function generateAssets(seed) {
   const rand = rng(seed);
-  const [albedo, rough] = deck(256, rand);
-  return new Map([
+  const [albedo, rough, steel] = deck(256, rand);
+  const assets = new Map([
     ['deck-albedo.png', albedo],
     ['deck-roughness.png', rough],
     ['shell-normal.png', shellNormal(256, rand)],
     ['backdrop.png', backdrop(256, 256, rand)],
     ['crack-decal.png', crackDecal(128, rand)],
   ]);
+  // Their own stream, so the assets above keep their bytes (#401).
+  for (const [name, buf] of Object.entries(deckSets(256, steel, rng(seed + 401)))) assets.set(`deck-${name}.png`, buf);
+  return assets;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
