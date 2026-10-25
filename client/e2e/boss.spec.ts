@@ -84,6 +84,7 @@ test('Boss fight is disabled or works when clicked right after load, bug #144', 
 // The Hull (#149): a rim cell cracks at ply 8, shows its ticks for 2 plies, then it is a hole.
 test('start The Hull, play to the first wave: a cracked cell ticks down, then vanishes, #149', async ({ page }, testInfo) => {
   test.slow(); // five boss searches in the worker, then a sixth ply
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
   await page.goto('./');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
@@ -93,14 +94,16 @@ test('start The Hull, play to the first wave: a cracked cell ticks down, then va
     const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
     await page.mouse.click(p.x, p.y);
   };
-  // A forward one-marble move (NW or NE): Black never steps back, so no position repeats.
-  const advance = async () => {
+  // A forward one-marble move (NW or NE): Black never steps back, so no position repeats. The mouse plays the first
+  // one, the test hook the others (the same handler a click calls).
+  const advance = async (mouse: boolean) => {
     const mv = await page.evaluate(() =>
       (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
     );
     const [q, r] = mv.cells[0];
-    await click(q, r);
-    await click(mv.dir === 4 ? q : q + 1, r - 1);
+    const send = mouse ? click : (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
+    await send(q, r);
+    await send(mv.dir === 4 ? q : q + 1, r - 1);
   };
 
   await page.getByRole('button', { name: 'Boss fight' }).click();
@@ -108,14 +111,14 @@ test('start The Hull, play to the first wave: a cracked cell ticks down, then va
   await expect(hud).toContainText('The Hull');
   await expect(body).toHaveAttribute('data-cracks', '0');
   for (let n = 1; n <= 4; n++) {
-    await advance();
+    await advance(n === 1);
     await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
   }
   await expect(body).toHaveAttribute('data-cracks', '1');
   await expect(hud).toContainText('Rim cracks: 1 cell in 2 plies');
   await page.screenshot({ path: testInfo.outputPath('hull-cracked.png') });
 
-  await advance();
+  await advance(false);
   await expect.poll(plies, { timeout: 30_000 }).toBe(10);
   await expect(body).toHaveAttribute('data-vanished', '1');
   expect(await page.evaluate(() => (window as any).__frame())).toEqual({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
@@ -173,8 +176,9 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, a convert
     }
     const mv = await legal('forward');
     const [q, r] = mv.cells[0];
-    await click(q, r);
-    await click(mv.dir === 4 ? q : q + 1, r - 1);
+    const send = n === 1 ? click : (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
+    await send(q, r);
+    await send(mv.dir === 4 ? q : q + 1, r - 1);
     await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
     if (!converted && (await body.getAttribute('data-converted')) !== '0') {
       await expect(hud).toContainText('Converted:');
@@ -199,6 +203,7 @@ test('The Chaplain: a boss marble lost for a flip counts for the player and the 
   await page.addInitScript(() => {
     crypto.getRandomValues = ((a: Uint32Array) => a.fill(1)) as typeof crypto.getRandomValues; // the fight seed
   });
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
   await page.goto('./');
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
@@ -217,8 +222,9 @@ test('The Chaplain: a boss marble lost for a flip counts for the player and the 
       (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
     );
     const [q, r] = mv.cells[0];
-    await click(q, r);
-    await click(mv.dir === 4 ? q : q + 1, r - 1);
+    const send = n === 1 ? click : (cq: number, cr: number) => page.evaluate(([x, y]) => (window as any).__click(x, y), [cq, cr]);
+    await send(q, r);
+    await send(mv.dir === 4 ? q : q + 1, r - 1);
     await expect.poll(plies, { timeout: 30_000 }).toBe(2 * n); // the boss replied
   }
   await expect(hud).toContainText('White ejected 1/6'); // the lost boss marble, drawn without a click
