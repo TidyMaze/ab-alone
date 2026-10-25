@@ -563,3 +563,37 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   await a.context().close();
   await b.context().close();
 });
+
+// #359: a room of three (Black, White and a spectator: the smallest room with a host, tech.md section 6). A 4-peer room costs
+// four page loads, 10 to 14 s of the 15 s a test has, so the four-peer room is the unit test (migration.test.ts) and this is
+// the thin e2e of the result. The coordinator page closes without a leave event, as a crashed tab does: only the missing
+// heartbeats show it. beat=1200 shortens the 5 s heartbeat (not lower: a background page runs timers once a second at best),
+// honoured under webdriver.
+test('the coordinator page closes: the lowest join_seq live peer coordinates on every page, #359', async ({ browser }) => {
+  const [a, b, c] = await Promise.all([0, 1, 2].map(async () => (await browser.newContext()).newPage()));
+  const rest = [b, c];
+  await calm(a, b, c);
+  await room({ a, b, c });
+  await a.goto('./?bot=off&net=hook&beat=1200');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await a.locator('#play-online').click();
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  await open(a);
+  // White first, so its join_seq is 2 and the spectator's 3.
+  const join = async (page: Page) => {
+    await page.goto(`./?net=hook&beat=1200${hash}`);
+    await page.locator('canvas').waitFor();
+    await open(page);
+  };
+  await join(b);
+  await seat(b, 'player');
+  await join(c);
+  await seat(c, 'spectator');
+  for (const page of [a, ...rest]) await expect(page.locator('body')).toHaveAttribute('data-coordinator', '1');
+
+  await a.context().close(); // no __netLeave anywhere
+  for (const page of rest) await expect(page.locator('body')).toHaveAttribute('data-coordinator', '2');
+  await expect(b.locator('body')).toHaveAttribute('data-handover', 'done'); // the spectator acknowledged it
+  for (const page of rest) await page.context().close();
+});

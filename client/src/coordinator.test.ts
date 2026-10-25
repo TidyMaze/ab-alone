@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BEAT_MS, chooseCoordinator, Coordination, MISSES } from './coordinator';
+import { BEAT_MS, beatPeriod, chooseCoordinator, Coordination, MISSES } from './coordinator';
 
 // Issue #359, docs/specs/tech.md section 6 (Host / coordinator migration). No test here waits for a time:
 // `now` is a number the test moves.
@@ -179,13 +179,31 @@ describe('hand-over', () => {
     expect(c.done).toBe(true);
   });
 
-  it('follows an announcement of a later key than ours, accepts the one it already chose, refuses an older one', () => {
+  it('accepts the announcement of the coordinator it has, and refuses a later key while a lower one is live', () => {
     const c = room('d');
-    expect(c.announced('a')).toBe(true); // the coordinator we have: nothing changes
-    expect(c.announced('c')).toBe(true); // we had not timed out yet: a peer ahead of us did
-    expect(c.coordinator).toBe('c');
-    expect(c.announced('b')).toBe(false); // older than the coordinator we follow
-    expect(c.announced('z')).toBe(false); // not in the order
-    expect(c.coordinator).toBe('c');
+    expect(c.announced('a', 0)).toBe(true);
+    expect(c.announced('c', 0)).toBe(false); // b and a are alive in our view: we elect c ourselves if they time out
+    expect(c.announced('z', 0)).toBe(false); // not in the order
+    expect(c.coordinator).toBe('a');
+  });
+
+  it('follows the announcement of the lowest join_seq even when its own view was partial', () => {
+    const c = new Coordination('d'); // joined last: only the creator said Hello to it
+    c.adopt(ORDER);
+    c.beat('a', 0);
+    expect(c.leave('a')).toBe('d'); // alone in its view, it elects itself
+    expect(c.announced('b', 1)).toBe(true); // b proves itself live and is lower
+    expect(c.coordinator).toBe('b');
+    expect(c.waiting).toEqual(['d']);
+  });
+});
+
+describe('beatPeriod', () => {
+  it('takes the beat parameter in ms only under navigator.webdriver, never below 50 ms', () => {
+    expect(beatPeriod('?beat=200', true)).toBe(200);
+    expect(beatPeriod('?beat=200', false)).toBe(BEAT_MS);
+    expect(beatPeriod('?beat=10', true)).toBe(BEAT_MS);
+    expect(beatPeriod('?beat=x', true)).toBe(BEAT_MS);
+    expect(beatPeriod('', true)).toBe(BEAT_MS);
   });
 });

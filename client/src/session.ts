@@ -1,5 +1,9 @@
+import { Coordination } from './coordinator';
 import { MoveLog } from './movelog';
 import {
+  parseCoordinator,
+  signCoordinator,
+  verifyCoordinator,
   parseHello,
   parseMissed,
   parseRecord,
@@ -13,6 +17,7 @@ import {
   type Keys,
   type Missed,
   type MoveRecord,
+  type Coordinator,
   type Rematch,
   type Sync,
   type Wire,
@@ -51,6 +56,9 @@ export interface SessionOptions {
   onPresence?(): void; // a key said Hello or its peer left: read presenceOf again
   onRematchAsk?(): void; // a seated key asked for a rematch: read askedRematch again
   onRematch?(): void; // every seat asked: the judge restarted for the new game, read side again
+  /** Heartbeat and coordinator migration (docs/specs/tech.md section 6, #359). `every` runs `fn` each `ms`. Off without it. */
+  beat?: { ms: number; now(): number; every(fn: () => void, ms: number): void };
+  onCoordinator?(): void; // the coordinator changed or a hand-over progressed: read coordinatorSeq and handover again
 }
 
 /** One game of the room: its signed log and the signed rematch asks of it, by key. */
@@ -77,6 +85,9 @@ export class OnlineSession {
   private queue: Promise<void> = Promise.resolve();
   private current: Role;
   private readonly games: Game[] = []; // every game of the room so far, the one being played last
+  private readonly coord: Coordination;
+  private readonly order: string[] = []; // the creator's: keys in the order their Hello was first seen
+  private migrated = false;
   private syncDue = false; // our Sync waits for the creator's roster: what answers it is checked against the seats
 
   constructor(private readonly o: SessionOptions) {
@@ -84,6 +95,11 @@ export class OnlineSession {
     this.seats = new Seats(o.seatCount ?? 2);
     this.current = o.side === CREATOR ? 'player' : 'pending';
     if (o.side === CREATOR) this.seats.claim(CREATOR, o.keys.pub);
+    this.coord = new Coordination(o.keys.pub, o.beat?.ms);
+    if (o.side === CREATOR) {
+      this.order.push(o.keys.pub);
+      this.coord.adopt(this.order);
+    }
     o.transport.onRecord((m, peer) => {
       // Verification is async: a queue keeps messages handled in arrival order.
       this.queue = this.queue.then(() => this.receive(m, peer));
@@ -91,7 +107,10 @@ export class OnlineSession {
     // In the same queue: a peer that leaves right after its Hello is gone once both are handled.
     o.transport.onLeave((peer) => {
       this.queue = this.queue.then(() => {
-        if (this.presence.leave(peer)) o.onPresence?.();
+        const key = this.presence.keyOf(peer);
+        if (!this.presence.leave(peer)) return;
+        o.onPresence?.();
+        if (o.beat && this.presence.of(key) !== 'here') return this.moved(this.coord.leave(key));
       });
     });
     o.transport.onState((s) => {
@@ -99,6 +118,26 @@ export class OnlineSession {
       if (s === 'open') this.queue = this.queue.then(() => this.greet());
     });
     if (o.transport.state === 'open') this.queue = this.queue.then(() => this.greet());
+    if (o.beat) {
+      const { ms, now, every } = o.beat;
+      every(() => o.transport.state === 'open' && o.transport.send({ kind: 'beat' }), ms);
+      // Checked more often than it beats, so three misses are noticed within a second of the third.
+      every(() => (this.queue = this.queue.then(() => this.moved(this.coord.tick(now())))), ms / 5);
+    }
+  }
+
+  /** The join_seq of the coordinator, from 1, 0 until the creator's order is known. */
+  get coordinatorSeq(): number {
+    return this.coord.seq;
+  }
+
+  get isCoordinator(): boolean {
+    return this.coord.coordinator === this.o.keys.pub;
+  }
+
+  /** `none` until the coordinator changed, then `pending` until every live peer acknowledged the new one. */
+  get handover(): 'none' | 'pending' | 'done' {
+    return !this.migrated ? 'none' : this.coord.done ? 'done' : 'pending';
   }
 
   /** Settles once everything queued so far is handled: messages, leaves, our Hello and Sync, our rematch ask.
@@ -197,7 +236,8 @@ export class OnlineSession {
 
   private async hello(): Promise<void> {
     const roster = this.o.side === CREATOR ? this.seats.roster() : [];
-    this.o.transport.send(await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster, agent: this.o.agent }));
+    const order = this.o.beat && this.o.side === CREATOR ? [...this.order] : undefined; // the join order, for the coordinator migration
+    this.o.transport.send(await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster, agent: this.o.agent, order }));
   }
 
   /** On open: our Hello, then our Sync, so that a peer ahead of us sends what we missed (#226). */
@@ -218,6 +258,8 @@ export class OnlineSession {
   private async receive(raw: Wire, peer: string): Promise<void> {
     const kind = (raw as { kind?: unknown } | null)?.kind;
     if (kind === 'hello') return this.receiveHello(parseHello(raw), peer);
+    if (kind === 'beat') return this.receiveBeat(peer);
+    if (kind === 'coordinator') return this.receiveCoordinator(parseCoordinator(raw));
     if (kind === 'sync') return this.answer(parseSync(raw), peer);
     if (kind === 'missed') return this.receiveMissed(parseMissed(raw));
     if (kind === 'rematch') return this.receiveRematch(parseRematch(raw), true);
@@ -301,9 +343,45 @@ export class OnlineSession {
     this.o.onRematch?.();
   }
 
+  private receiveBeat(peer: string): void {
+    const key = this.presence.keyOf(peer);
+    if (this.o.beat && key !== '') this.coord.beat(key, this.o.beat.now());
+  }
+
+  /** The coordinator changed here: tell the caller, and announce ourselves when we are the new one. */
+  private async moved(next: string | null): Promise<void> {
+    if (next === null) return;
+    this.migrated = true;
+    this.o.onCoordinator?.();
+    if (next !== this.o.keys.pub) this.coord.ack(this.o.keys.pub, next);
+    await this.say(next); // the announcement when we are the new coordinator, our acknowledgement when not
+  }
+
+  private async say(coordinator: string): Promise<void> {
+    this.o.transport.send(await signCoordinator(this.o.keys, { game: this.o.game, coordinator }));
+  }
+
+  /** An announcement (the coordinator itself speaks) is followed and acknowledged, an acknowledgement is counted.
+   * Only the signed word of a key counts, and only for this room. */
+  private async receiveCoordinator(c: Coordinator | null): Promise<void> {
+    if (!this.o.beat || !c || c.game !== this.o.game || !(await verifyCoordinator(c))) return;
+    if (c.pub !== c.coordinator) {
+      this.coord.ack(c.pub, c.coordinator);
+    } else if (this.coord.announced(c.pub, this.o.beat.now())) {
+      this.migrated = true;
+      this.coord.ack(this.o.keys.pub, c.pub);
+      await this.say(c.pub);
+    } else {
+      return;
+    }
+    this.o.onCoordinator?.();
+  }
+
   private async receiveHello(h: Hello | null, peer: string): Promise<void> {
     if (!h || h.game !== this.o.game || !(await verifyHello(h))) return this.o.onRefuse('bad-hello');
     this.presence.hello(peer, h.pub);
+    if (this.o.beat) this.coord.beat(h.pub, this.o.beat.now());
+    if (this.o.side === CREATOR && !this.order.includes(h.pub)) this.order.push(h.pub);
     if (h.agent) this.agents.add(h.pub);
     await this.seat(h);
     this.o.onPresence?.();
@@ -318,6 +396,7 @@ export class OnlineSession {
     // Joiners trust the first Hello for seat 1 (the creator) and take the roster from it.
     if (h.seat !== CREATOR || (this.seats.keyOf(CREATOR) !== '' && this.seats.keyOf(CREATOR) !== h.pub)) return;
     if (h.roster[0] !== h.pub || !this.seats.adopt(h.roster)) return;
+    if (h.order) this.coord.adopt(h.order);
     const mine = this.seats.seatOf(this.o.keys.pub);
     this.setRole(mine === this.o.side ? 'player' : this.seats.full ? 'spectator' : 'pending');
     if (this.syncDue) this.sync();

@@ -61,10 +61,11 @@ async function settle(): Promise<void> {
 }
 
 // One peer: its timers are in `timers`, run by `Room.advance`.
-async function peer(mesh: Mesh, name: string, side: number, clock: { t: number }, beat = true) {
+async function peer(mesh: Mesh, name: string, side: number, clock: { t: number }, beat = true, watch = true) {
   const timers: { fn: () => void; ms: number; next: number }[] = [];
   const end = mesh.end(name);
   const coordinators: number[] = [];
+  const handovers: string[] = [];
   const s = new OnlineSession({
     game: 'g',
     side,
@@ -73,22 +74,22 @@ async function peer(mesh: Mesh, name: string, side: number, clock: { t: number }
     judge,
     onMove: () => {},
     onRefuse: () => {},
-    onCoordinator: () => coordinators.push(s.coordinatorSeq),
+    ...(watch ? { onCoordinator: () => (coordinators.push(s.coordinatorSeq), handovers.push(s.handover)) } : {}),
     ...(beat ? { beat: { ms: BEAT, now: () => clock.t, every: (fn: () => void, ms: number) => void timers.push({ fn, ms, next: ms }) } } : {}),
   });
   sessions.push(s);
-  return { name, s, end, timers, coordinators };
+  return { name, s, end, timers, coordinators, handovers };
 }
 type Peer = Awaited<ReturnType<typeof peer>>;
 
 // Creator a, player b, spectators c and d, in this join order.
-async function room(beat = true) {
+async function room(beat = true, watch = true) {
   const mesh = new Mesh();
   const clock = { t: 0 };
-  const a = await peer(mesh, 'a', 1, clock, beat);
-  const b = await peer(mesh, 'b', 2, clock, beat);
-  const c = await peer(mesh, 'c', 2, clock, beat);
-  const d = await peer(mesh, 'd', 2, clock, beat);
+  const a = await peer(mesh, 'a', 1, clock, beat, watch);
+  const b = await peer(mesh, 'b', 2, clock, beat, watch);
+  const c = await peer(mesh, 'c', 2, clock, beat, watch);
+  const d = await peer(mesh, 'd', 2, clock, beat, watch);
   await settle();
   const all = [a, b, c, d];
   // Moves the clock by `ms`, one second at a time: the timers of the peers still in the room run, then the work they queued.
@@ -148,6 +149,22 @@ describe('coordinator migration in a room of four', () => {
     for (const p of [b, c, d]) expect(p.s.handover).toBe('done');
     expect(kinds(b).filter((k) => k === 'coordinator')).toHaveLength(1); // b announced and nobody else did
     expect(kinds(c)).toContain('coordinator'); // c acknowledged
+  });
+
+  it('the hand-over is pending while acknowledgements are missing, done once they are in', async () => {
+    const { mesh, c, advance } = await room();
+    mesh.drop('a');
+    await settle();
+    expect(c.handovers[0]).toBe('pending'); // c elected b before b's announcement reached it
+    expect(c.handovers.at(-1)).toBe('done');
+  });
+
+  it('works with no callback to tell', async () => {
+    const { mesh, b, c } = await room(true, false);
+    mesh.drop('a');
+    await settle();
+    expect(seqs(b, c)).toEqual([2, 2]);
+    expect(b.coordinators).toEqual([]);
   });
 
   it('a dropped channel moves it at once, without waiting for the heartbeat', async () => {
