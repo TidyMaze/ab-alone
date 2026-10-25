@@ -10,7 +10,10 @@ const cell = async (page: Page, q: number, r: number) => {
   const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
   return page.mouse.click(p.x, p.y);
 };
-const plies = (page: Page) => page.evaluate(() => (window as any).__plies());
+// The same click through the game's own handler (window.__click), without the raycast and the frames of a mouse
+// click. The setup plies of a test use it, so each test pays the mouse path once, on its last ply.
+const play = (page: Page, q: number, r: number) => page.evaluate(([cq, cr]) => (window as any).__click(cq, cr), [q, r]);
+const plies =(page: Page) => page.evaluate(() => (window as any).__plies());
 // Seating is a Hello round trip after the connection opens: wait for it before the first move.
 const seat = (page: Page, role: 'player' | 'spectator') => expect(page.locator('body')).toHaveAttribute('data-seat', role);
 // Every page relays its records to the others with its own name as the sender, like a Trystero room,
@@ -153,8 +156,8 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect(status(b)).toHaveText('You are White. Black is here.');
   await expect(status(a)).toHaveText('You are Black. White is here.');
 
-  await cell(a, 0, 2);
-  await cell(a, 0, 1);
+  await play(a, 0, 2);
+  await play(a, 0, 1);
   await expect.poll(() => plies(b)).toBe(1);
   await expect.poll(() => plies(c)).toBe(1); // a spectator still follows the game
 
@@ -316,8 +319,9 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   ];
   for (let ply = 0; ply < 8; ply++) {
     const [page, fq, fr, tq, tr] = cycle[ply % 4]!;
-    await cell(page, fq, fr);
-    await cell(page, tq, tr);
+    const press = ply < 7 ? play : cell; // the last ply goes through the mouse
+    await press(page, fq, fr);
+    await press(page, tq, tr);
     await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
   }
   for (const page of [a, b]) await expect(page.locator('#hud .turn')).toHaveText('Draw');
@@ -385,19 +389,19 @@ test('a player back after a drop shows the same ply and side to move as the othe
   await open(b);
   await seat(b, 'player');
   await expect(status(a)).toHaveText('You are Black. White is here.');
-  await cell(a, 0, 2);
-  await cell(a, 0, 1);
+  await play(a, 0, 2);
+  await play(a, 0, 1);
   await expect.poll(() => plies(b)).toBe(1);
-  await cell(b, 0, -2);
-  await cell(b, 0, -1);
+  await play(b, 0, -2);
+  await play(b, 0, -1);
   await expect.poll(() => plies(a)).toBe(2);
 
   // B's connection breaks: B sees Black leave, A does not notice yet and plays.
   lost.add('b');
   await leave(b, 'a');
   await expect(status(b)).toHaveText('You are White. Black is disconnected.');
-  await cell(a, 0, 1);
-  await cell(a, 0, 2);
+  await play(a, 0, 1);
+  await play(a, 0, 2);
   await expect(a.locator('#hud .turn')).toHaveText('White to move');
   expect(await plies(a)).toBe(3);
   expect(await plies(b)).toBe(2);
@@ -449,7 +453,8 @@ test('a spectator joining after an ejection shows the score at once, with no eje
     [a, [-2, 0], [-2, 1], [-2, 2], [-2, -1]], // 3v2 push, the last White marble leaves
   ];
   for (const [ply, [page, ...cells]] of plays.entries()) {
-    for (const [q, r] of cells) await cell(page, q, r);
+    const press = ply < plays.length - 1 ? play : cell; // the last ply goes through the mouse
+    for (const [q, r] of cells) await press(page, q, r);
     await expect.poll(() => plies(page === a ? b : a)).toBe(ply + 1); // the other page replayed it
   }
   const score = 'Black ejected 1/6 · White ejected 0/6';
@@ -522,8 +527,9 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   const hotSeat: (string | null)[][] = [];
   for (let ply = 0; ply < 8; ply++) {
     const [fq, fr, tq, tr] = plays[ply % 4]!;
-    await cell(hot, fq, fr);
-    await cell(hot, tq, tr);
+    const press = ply < 7 ? play : cell; // the last ply goes through the mouse
+    await press(hot, fq, fr);
+    await press(hot, tq, tr);
     await expect.poll(() => plies(hot)).toBe(ply + 1);
     hotSeat.push(await shown(hot));
   }
@@ -548,8 +554,9 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   for (let ply = 0; ply < 8; ply++) {
     const [fq, fr, tq, tr] = plays[ply % 4]!;
     const [mover, other] = ply % 2 === 0 ? [a, b] : [b, a];
-    await cell(mover, fq, fr);
-    await cell(mover, tq, tr);
+    const press = ply < 7 ? play : cell; // the last ply goes through the mouse
+    await press(mover, fq, fr);
+    await press(mover, tq, tr);
     await expect.poll(() => plies(other)).toBe(ply + 1); // the other page replayed it
     for (const page of [a, b]) {
       await expect(page.locator('#hud .turn')).toHaveText(hotSeat[ply]![0]!);
