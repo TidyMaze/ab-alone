@@ -1,4 +1,4 @@
-// Generates the board and marble textures as PNG files under client/public/assets/.
+// Generates the board, marble and tell textures as PNG files under client/public/assets/.
 // Pure Node (zlib only), no download, no secret. Same seed, same bytes.
 // Run: node scripts/gen-assets.mjs
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -10,6 +10,7 @@ export const ASSET_NAMES = [
   'deck-roughness.png',
   'shell-normal.png',
   'backdrop.png',
+  'crack-decal.png',
 ];
 
 function rng(seed) {
@@ -166,6 +167,43 @@ function backdrop(w, h, rand) {
   return png(w, h, 3, px);
 }
 
+// The Hull's crack decal (world.md section 3: the board crumbles as the hull fails), a grey mask, white where the steel
+// is split; main.ts draws it near-black on the cracked cell. Jagged cracks run from near the middle out to the rim, one
+// in every sixth of the turn so they show round the marble, each with a few short branches, wide enough to stay 3:1
+// when the cell is small on screen.
+const CRACKS = 6;
+function crackDecal(size, rand) {
+  const mask = new Float32Array(size * size);
+  const c = (size - 1) / 2, rim = size / 2 - 7;
+  // An anti-aliased segment `width` px wide, kept at its brightest where segments cross.
+  const segment = (x0, y0, x1, y1, width) => {
+    const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
+    for (let y = Math.floor(Math.min(y0, y1) - width); y <= Math.ceil(Math.max(y0, y1) + width); y++) {
+      for (let x = Math.floor(Math.min(x0, x1) - width); x <= Math.ceil(Math.max(x0, x1) + width); x++) {
+        const t = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / len2));
+        const v = Math.max(0, Math.min(1, width / 2 + 0.5 - Math.hypot(x - x0 - t * dx, y - y0 - t * dy)));
+        mask[y * size + x] = Math.max(mask[y * size + x], v);
+      }
+    }
+  };
+  // A jagged crack heading out along `toward`, straight 7 px runs at sharp turns, thinner as it goes, until the rim or
+  // `steps` run out.
+  const crack = (x, y, toward, width, steps, branches) => {
+    for (let n = 0; n < steps; n++) {
+      const angle = toward + (rand() - 0.5) * 1.4;
+      const nx = x + Math.cos(angle) * 7, ny = y + Math.sin(angle) * 7;
+      if (Math.hypot(nx - c, ny - c) > rim) return;
+      segment(x, y, nx, ny, width);
+      [x, y] = [nx, ny];
+      width = Math.max(9, width * 0.95);
+      if (branches && rand() < 0.3) crack(x, y, toward + (rand() < 0.5 ? -1 : 1) * (0.7 + rand() * 0.4), 6, 1 + rand() * 3, false);
+    }
+  };
+  const x0 = c + (rand() - 0.5) * 8, y0 = c + (rand() - 0.5) * 8;
+  for (let k = 0; k < CRACKS; k++) crack(x0, y0, (k * 2 * Math.PI) / CRACKS + (rand() - 0.5) * 0.4, 12, Infinity, true);
+  return png(size, size, 1, Uint8Array.from(mask, (v) => clamp(v * 255)));
+}
+
 export function generateAssets(seed) {
   const rand = rng(seed);
   const [albedo, rough] = deck(256, rand);
@@ -174,6 +212,7 @@ export function generateAssets(seed) {
     ['deck-roughness.png', rough],
     ['shell-normal.png', shellNormal(256, rand)],
     ['backdrop.png', backdrop(256, 256, rand)],
+    ['crack-decal.png', crackDecal(128, rand)],
   ]);
 }
 

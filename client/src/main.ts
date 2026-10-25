@@ -72,7 +72,7 @@ import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import './ui.css';
 
 // Palette from docs/specs/world.md section 5.
-const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
+const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 };
 const BONE = 0xd8d4c8; // the pale tells
 // Tints of the deck textures: the plate darker than the cells, the rim between. Divided by the deck albedo's LIGHTEN
 // (scripts/gen-assets.mjs, #344), so the frame looks as it did before the deck was lightened.
@@ -132,11 +132,12 @@ async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise
     return null;
   }
 }
-const [deckAlbedo, deckRoughness, shellNormal, backdrop] = await Promise.all([
+const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal] = await Promise.all([
   loadTexture('deck-albedo.png', true, true),
   loadTexture('deck-roughness.png', false, true),
   loadTexture('shell-normal.png', false, true),
   loadTexture('backdrop.png', true, false),
+  loadTexture('crack-decal.png', false, false),
 ]);
 
 function prefilteredRoom(): THREE.Texture {
@@ -363,11 +364,13 @@ const targetMaterial = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.5,
 });
 const ringMaterial = new THREE.MeshBasicMaterial({ color: COLORS.cyan });
-// The Hull tell: a cracked cell glows orange, brighter on its last ply, with one pale tick per ply left.
-const crackMaterials: Record<number, THREE.MeshStandardMaterial> = {
-  1: new THREE.MeshStandardMaterial({ color: COLORS.sodium, emissive: COLORS.sodium, emissiveIntensity: 0.8 }),
-  2: new THREE.MeshStandardMaterial({ color: COLORS.sodium, emissive: COLORS.sodium, emissiveIntensity: 0.3 }),
-};
+// The Hull tell: a cracked cell wears the crack decal on its steel (crack-decal.png, a steady shape), near-black fissures
+// that read 3:1 on the light deck, with one pale tick per ply left. Without the texture, the ticks and the HUD line
+// carry the tell.
+const crackGeometry = new THREE.CircleGeometry(0.46, 32).rotateX(-Math.PI / 2);
+if (crackDecal) crackDecal.anisotropy = renderer.getMaxAnisotropy(); // the cell is seen at a slant: no blur along it
+const crackMaterial = new THREE.MeshBasicMaterial({ color: COLORS.base, alphaMap: crackDecal, transparent: true, depthWrite: false });
+let crackDecals: Axial[] = []; // the cells drawn with the decal, for the e2e tests
 const tickGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.1);
 const tickMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // The Chaplain tell: a steady pale ring and a glyph on each marble a hovered move would expose to a
@@ -856,6 +859,7 @@ function refresh(): void {
   const next = engine instanceof Encounter ? engine.next_army() : -1;
   marbles.clear();
   marbleAt.clear();
+  crackDecals = [];
   discs.forEach((disc, i) => {
     const [q, r] = CELLS[i]!;
     const side = board[i]!;
@@ -864,7 +868,13 @@ function refresh(): void {
     const p = axialTo3D(q, r);
     const plies = left.get(i) ?? 0;
     const target = targets.some(([tq, tr]) => tq === q && tr === r);
-    disc.material = target ? targetMaterial : plies > 0 ? crackMaterials[Math.min(plies, 2)]! : steel;
+    disc.material = target ? targetMaterial : steel;
+    if (plies > 0 && crackDecal) {
+      const decal = new THREE.Mesh(crackGeometry, crackMaterial); // on the disc's top face, under the ticks
+      decal.position.set(p.x, 0.003, p.z);
+      marbles.add(decal);
+      crackDecals.push([q, r]);
+    }
     for (const dx of tickOffsets(plies)) {
       const tick = new THREE.Mesh(tickGeometry, tickMaterial); // on the front edge, clear of the marble
       tick.position.set(p.x + dx, 0.01, p.z + 0.39);
@@ -1159,6 +1169,11 @@ addEventListener('resize', () => {
 // Used by the browser checks to see which Choir army moved.
 (window as unknown as Record<string, unknown>).__armies = () =>
   engine instanceof Encounter ? parseArmies(engine.armies()) : [];
+// Used by the browser checks to find The Hull's cracked cells and the ones drawn with the crack decal (#355).
+(window as unknown as Record<string, unknown>).__cracks = () =>
+  engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
+(window as unknown as Record<string, unknown>).__crackDecals = () => crackDecals;
+(window as unknown as Record<string, unknown>).__crackDecalShown = (shown: boolean) => (crackMaterial.visible = shown);
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
 (window as unknown as Record<string, unknown>).__converted = () =>
   engine instanceof Encounter ? parseCells(engine.converted()) : [];

@@ -233,7 +233,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Concept**: the ship itself, rusted, falling apart under you.
 - **Twist**: every 8 plies, rim cells crack, 2 plies later they vanish. A marble on a vanished
   cell is ejected, either side. Boss plays standard Abalone, depth 3.
-- **Tell**: cracked cells glow orange and tick for 2 plies.
+- **Tell**: cracked cells wear a dark crack and tick for 2 plies.
 - **Counter**: keep marbles off the rim, and **push boss marbles onto cracked cells**.
 - **Phases**: P1 above. P2 when the boss has **10** marbles left: timer drops to 6 plies, two
   cells crack at once. P3 at **5**: timer 4, but the board is small and the boss is cornered.
