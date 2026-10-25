@@ -4,8 +4,10 @@ import { contrastRatio, type RGB } from '../src/contrast';
 // Bug #339: a cell's edge must stay 3:1 against the surface next to it (docs/specs/world.md section 5, art.md section 1).
 // The start position, 1280x720. Around each listed cell, 8 points on its bevel ring (radius 0.44, 45 degrees apart),
 // each against the surface 0.52 further out along the same direction. A cell passes when at least 6 of the 8 points
-// reach 3:1: a seam point where the neighbouring cell occludes the bevel may fail.
-const CELLS: [number, number][] = [[0, 0], [-2, 1], [2, -1], [1, 1]];
+// reach 3:1: a seam point where the neighbouring cell occludes the bevel may fail. The empty rim cells of the far half
+// too, at the high tier with Clear board off: the fog stays off the cells (bug #399). The far row holds marbles, which
+// hide its bevels, so fog.spec.ts checks that row.
+const CELLS: [number, number][] = [[0, 0], [-2, 1], [2, -1], [1, 1], [-2, -2], [4, -2]];
 const EDGE = 0.44;
 const SURFACE = 0.52;
 const MIN_PASSING = 6;
@@ -39,9 +41,18 @@ const pixels = (page: Page, png: Buffer, points: [number, number][]) =>
 
 test('each cell edge is 3:1 against the surface next to it on at least 6 of 8 ring points, bug #339', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 720 });
+  await page.addInitScript(() => {
+    localStorage.setItem('ab-alone.quality', 'high');
+    localStorage.setItem('ab-alone.clear-board', 'off');
+  });
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
+  await expect(page.locator('body')).toHaveAttribute('data-tier', 'high');
+  await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
   await page.mouse.move(2, 2); // no hover ghost
+  // Under automation the page skips draws (#216): wait for a draw that began after the mouse moved (#365).
+  const drawn = await page.evaluate(() => (window as any).__draws() as number);
+  await page.waitForFunction((n) => (window as any).__draws() > n, drawn);
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const png = await page.screenshot({ path: testInfo.outputPath('cells.png'), type: 'png' });
   // Per cell and ring point, the edge then the surface: two axial cells, mapped to the screen in one call.

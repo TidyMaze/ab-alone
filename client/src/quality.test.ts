@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { axialTo3D, CELLS } from './board';
-import { DIST_MAX, DIST_MIN, resetView, viewPosition, type View } from './camera';
+import { axialTo3D, CELLS, VANISHED } from './board';
+import { DIST_MAX, DIST_MIN, POLAR_MAX, POLAR_MIN, resetView, viewPosition, type View } from './camera';
+import { frameShape } from './frame';
 import {
   drawDue,
   fogSettings,
@@ -57,39 +58,49 @@ describe('tierFromHints', () => {
 });
 
 describe('fogSettings', () => {
-  const view = (distance: number): View => ({ ...resetView(), distance });
   // Fog is linear on the depth along the view axis, like THREE.Fog.
   const factor = (f: { near: number; far: number }, depth: number): number =>
     Math.min(1, Math.max(0, (depth - f.near) / (f.far - f.near)));
-  // Depth of every cell centre for a camera that looks at the board centre.
-  const depths = (v: View): number[] => {
+  // Depth of a point of the board plane for a camera that looks at the board centre.
+  const depth = (v: View, x: number, z: number): number => {
     const c = viewPosition(v);
     const len = Math.hypot(c.x, c.y, c.z);
-    return CELLS.map(([q, r]) => {
-      const p = axialTo3D(q, r);
-      return ((p.x - c.x) * -c.x + (p.y - c.y) * -c.y + (p.z - c.z) * -c.z) / len;
-    });
+    return ((x - c.x) * -c.x + -c.y * -c.y + (z - c.z) * -c.z) / len;
   };
-  const zooms = [DIST_MIN, resetView().distance, DIST_MAX];
+  const DISC = 0.46; // a cell disc's radius (main.ts)
+  const ring = ([q, r]: readonly [number, number]): number => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+  const views: View[] = [];
+  for (let k = 0; k < 24; k++) {
+    for (const polar of [POLAR_MIN, resetView().polar, POLAR_MAX]) {
+      for (const distance of [DIST_MIN, resetView().distance, DIST_MAX]) views.push({ azimuth: (k * Math.PI) / 12, polar, distance });
+    }
+  }
 
+  // Bug #399: the fog was over the far rim cells. At every view, for the full board and The Choir's radius 3.
   for (const tier of ['low', 'high'] as const) {
-    for (const distance of zooms) {
-      it(`${tier}: fogs the far rim and spares the near cells at distance ${distance.toFixed(1)}`, () => {
-        const fog = fogSettings(tier, false, distance)!;
-        const d = depths(view(distance));
-        expect(factor(fog, Math.max(...d))).toBeGreaterThanOrEqual(0.25);
-        expect(factor(fog, Math.min(...d))).toBeLessThanOrEqual(0.05);
+    for (const radius of [4, 3]) {
+      const cells = CELLS.filter((c) => ring(c) <= radius);
+      const outer = frameShape(CELLS.map((c) => (ring(c) > radius ? VANISHED : 0))).outer;
+      it(`${tier}, radius ${radius}: never over a cell, thick at the far rim, at every view`, () => {
+        for (const v of views) {
+          const fog = fogSettings(tier, false, v, radius)!;
+          const reach = DISC * Math.sin(v.polar); // the disc's farthest point from its centre, along the view
+          const cellDepth = Math.max(...cells.map(([q, r]) => depth(v, axialTo3D(q, r).x, axialTo3D(q, r).z) + reach));
+          expect(factor(fog, cellDepth)).toBe(0);
+          expect(factor(fog, Math.max(...outer.map((p) => depth(v, p.x, p.z))))).toBeGreaterThanOrEqual(0.49);
+        }
       });
     }
   }
   it('is lighter on low than on high', () => {
-    const low = fogSettings('low', false, resetView().distance)!;
-    const high = fogSettings('high', false, resetView().distance)!;
-    expect(low.far).toBeGreaterThanOrEqual(high.far);
+    const low = fogSettings('low', false, resetView(), 4)!;
+    const high = fogSettings('high', false, resetView(), 4)!;
+    expect(low.near).toBe(high.near);
+    expect(low.far).toBeGreaterThan(high.far);
   });
   it('is off in clear-board mode, in every tier', () => {
-    expect(fogSettings('low', true, resetView().distance)).toBeNull();
-    expect(fogSettings('high', true, resetView().distance)).toBeNull();
+    expect(fogSettings('low', true, resetView(), 4)).toBeNull();
+    expect(fogSettings('high', true, resetView(), 4)).toBeNull();
   });
 });
 
