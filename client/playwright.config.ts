@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, type ReporterDescription } from '@playwright/test';
 
 // E2E_PORT lets parallel checkouts each run their own dev server.
 const port = process.env.E2E_PORT ?? '5173';
@@ -11,7 +11,13 @@ const previewPort = process.env.E2E_PREVIEW_PORT;
 process.env.E2E_PREVIEW_URL ??= baseURL ?? `http://localhost:${previewPort}/ab-alone/`;
 
 // On CI, the HTML report is uploaded with test-results/ when the e2e job fails.
-const reporter = process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list';
+// scripts/shard-reporter.ts does the --shard split: it deals the tests to the shards back and forth, so a run of slow
+// tests is spread over every shard instead of landing in one (#333). Without --shard it does nothing.
+const reporter: ReporterDescription[] = [
+  ['list'],
+  ...(process.env.CI ? [['html', { open: 'never' }] as ReporterDescription] : []),
+  ['./scripts/shard-reporter.ts'],
+];
 
 export default defineConfig({
   testDir: 'e2e',
@@ -20,7 +26,7 @@ export default defineConfig({
   // CI runners have no GPU: every page draws with software WebGL on all cores. Two workers starved each other, a frame took
   // 1.5 s and clicks timed out (#216); one worker passes all specs (run 40103771311). Its slowest specs take 23 s, hence 60 s.
   workers: process.env.CI ? 1 : undefined,
-  // CI splits the suite across runners with --shard (#257): by test, so one long spec file does not hold one shard back.
+  // CI splits the suite across runners with --shard (#257), test by test (scripts/shard-reporter.ts, #333).
   fullyParallel: !!process.env.CI,
   timeout: process.env.CI ? 60_000 : 30_000,
   // One retry on CI records a trace for the retried run only.
