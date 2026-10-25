@@ -126,3 +126,27 @@ for (const [name, width, height] of [['desktop', 1280, 720], ['phone', 375, 812]
     expect(failures, 'marbles below 3:1 against the deck').toEqual([]);
   });
 }
+
+// Task #377: every dark shell skin reads 3:1 against the deck (asserted) and its ratio against the void is logged: the void
+// (the near-black backdrop, a pixel at the left edge of the window) is out of reach for any dark shell, the default Scarab
+// ridges included (1.0 to 1.1), so it is reported in the PR, not asserted. The skin comes from the stored setting; the deck
+// and the marbles are measured as for #344.
+const SKIN_IDS = ['scarab', 'obsidian', 'slag', 'hex', 'ash', 'riveted', 'tar', 'ember', 'copper', 'void'];
+for (const id of SKIN_IDS) {
+  test(`the ${id} shell reads 3:1 against the deck, task #377`, async ({ page }, testInfo) => {
+    await page.addInitScript((skin) => localStorage.setItem('ab-alone.shell-skin', skin), id);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('./?bot=off');
+    await page.locator('canvas').waitFor();
+    await page.mouse.move(2, 2); // no hover ghost
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    const png = await page.screenshot({ path: testInfo.outputPath(`skin-${id}.png`), type: 'png' });
+    const mean = (colors: RGB[]) => [0, 1, 2].map((k) => colors.reduce((s, c) => s + c[k]!, 0) / colors.length) as unknown as RGB;
+    const deck = mean(await boxMeans(page, png, DECK_CELLS));
+    const [voidColor] = await pixels(page, png, [[20, 360]]);
+    const ratios = (await boxMeans(page, png, SHELL_CELLS)).map((rgb) => [contrastRatio(rgb, deck), contrastRatio(rgb, voidColor!)]);
+    const line = `${id}: deck ${ratios.map((r) => r[0]!.toFixed(2)).join(' ')}, void ${ratios.map((r) => r[1]!.toFixed(2)).join(' ')}`;
+    console.log(line);
+    expect(ratios.map((r) => r[0]!).filter((ratio) => ratio < 3), line).toEqual([]);
+  });
+}

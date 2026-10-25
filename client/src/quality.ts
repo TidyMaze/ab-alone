@@ -4,6 +4,7 @@
 
 import { RADIUS } from './board';
 import type { Theme } from './settings';
+import { skinById } from './skins';
 
 export type Tier = 'low' | 'high';
 export interface Hints {
@@ -18,6 +19,7 @@ const TIER_KEY = 'ab-alone.quality';
 const CLEAR_KEY = 'ab-alone.clear-board';
 const SOUND_KEY = 'ab-alone.sound';
 const THEME_KEY = 'ab-alone.theme';
+const SKIN_KEY = 'ab-alone.shell-skin';
 
 export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): Tier {
   const weak = width < 768 || reducedMotion || (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
@@ -62,6 +64,10 @@ export const readTheme = (store: Store): Theme => {
   return stored === 'dark' || stored === 'light' ? stored : 'system';
 };
 export const writeTheme = (store: Store, theme: Theme): void => write(store, THEME_KEY, theme);
+
+// The dark shell skin (#377): Scarab ridges unless the player picked another one of skins.ts.
+export const readSkin = (store: Store): string => skinById(read(store, SKIN_KEY)).id;
+export const writeSkin = (store: Store, id: string): void => write(store, SKIN_KEY, id);
 
 export function readTier(store: Store, hints: Hints): Tier {
   const stored = read(store, TIER_KEY);

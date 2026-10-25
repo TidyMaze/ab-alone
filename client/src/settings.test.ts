@@ -4,31 +4,33 @@ import { menuOpen, nextTheme, settingsList, themeAttribute } from './settings';
 
 describe('settingsList', () => {
   it('lists Clear board, Sound, Theme, Export game and Import game, labelled, with an icon and the state', () => {
-    expect(settingsList(false, true, 'system')).toEqual([
+    expect(settingsList(false, true, 'system', 'scarab')).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },
       { id: 'sound', label: 'Sound', icon: 'sound', on: true },
       { id: 'theme', label: 'Theme: System', icon: 'theme' },
+      { id: 'shell-skin', label: 'Shell: Scarab ridges', icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
-    expect(settingsList(true, false, 'light')).toEqual([
+    expect(settingsList(true, false, 'light', 'hex')).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'sound', label: 'Sound', icon: 'muted', on: false },
       { id: 'theme', label: 'Theme: Light', icon: 'theme' },
+      { id: 'shell-skin', label: 'Shell: Hex chitin', icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
   });
 
   it('gives every menu item a name and an icon of the set', () => {
-    for (const s of [...settingsList(false, false, 'dark'), ...settingsList(true, true, 'system')]) {
+    for (const s of [...settingsList(false, false, 'dark', 'tar'), ...settingsList(true, true, 'system', 'scarab')]) {
       expect(s.label).not.toBe('');
       expect(Object.keys(ICONS)).toContain(s.icon);
     }
   });
 
   it('gives every setting a distinct id', () => {
-    const ids = settingsList(false, true, 'system').map((s) => s.id);
+    const ids = settingsList(false, true, 'system', 'scarab').map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });

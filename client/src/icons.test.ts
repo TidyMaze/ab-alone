@@ -11,8 +11,8 @@ describe('icon', () => {
     }
   });
 
-  it('has the icons of the HUD buttons (New game, Play online, Copy diagnostics) and of the theme setting', () => {
-    expect(Object.keys(ICONS)).toEqual(expect.arrayContaining(['newgame', 'online', 'diagnostics', 'theme']));
+  it('has the icons of the HUD buttons (New game, Play online, Copy diagnostics) and of the theme and shell settings', () => {
+    expect(Object.keys(ICONS)).toEqual(expect.arrayContaining(['newgame', 'online', 'diagnostics', 'theme', 'skin']));
   });
 
   it('gives every icon its own drawing', () => {
