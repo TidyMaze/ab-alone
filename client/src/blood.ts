@@ -10,16 +10,37 @@ const HOLD_UNTIL_MS = 600;
 /** Drops fly within 60 degrees of the push, so none flies back over the board. */
 const SPREAD_RAD = Math.PI / 3;
 /** How far a drop flies out, world units, and how far it drips down (in the void, under the rim). */
-const REACH = 0.9;
+const REACH = 1.1;
 const DRIP = 0.6;
 /** Height of a marble on the board (main.ts holder). */
 const HEIGHT = 0.36;
+
+/** The stain's largest radius. Its centre is one cell-centre out (1 away from the rim cell), so its
+ * edge stays 0.6 from the rim cell centre, outside the cell (hex circumradius about 0.58). */
+const STAIN_MAX = 0.4;
 
 export interface Drop {
   x: number;
   y: number;
   z: number;
   alpha: number;
+}
+
+export interface Stain {
+  x: number;
+  z: number;
+  radius: number;
+  alpha: number;
+}
+
+/** The splash grows in SPLASH_MS (ease out), then holds, then fades to 0 at BLOOD_MS. */
+function splashEase(elapsedMs: number): number {
+  const splash = Math.min(elapsedMs / SPLASH_MS, 1);
+  return 1 - (1 - splash) ** 3;
+}
+
+function fadeAt(elapsedMs: number): number {
+  return 1 - Math.min(Math.max((elapsedMs - HOLD_UNTIL_MS) / (BLOOD_MS - HOLD_UNTIL_MS), 0), 1);
 }
 
 /** The drops `elapsedMs` after an ejection at `from` pushed along the unit `dir` (board plane).
@@ -36,10 +57,9 @@ export function bloodAt(
   // The spatter starts one cell-centre out, beyond the rim: nothing is drawn over a cell.
   const ox = from.x + dir.x;
   const oz = from.z + dir.z;
-  const splash = Math.min(elapsedMs / SPLASH_MS, 1);
-  const ease = 1 - (1 - splash) ** 3;
+  const ease = splashEase(elapsedMs);
   const drip = Math.max(elapsedMs - SPLASH_MS, 0) / 1000;
-  const alpha = 1 - Math.min(Math.max((elapsedMs - HOLD_UNTIL_MS) / (BLOOD_MS - HOLD_UNTIL_MS), 0), 1);
+  const alpha = fadeAt(elapsedMs);
   return Array.from({ length: BLOOD_DROPS }, (_, i) => {
     const spin = frac((i + 1) * 0.618);
     const angle = (spin - 0.5) * 2 * SPREAD_RAD;
@@ -54,6 +74,24 @@ export function bloodAt(
       alpha,
     };
   });
+}
+
+/** The stain on the void under the splash, same centre as the drops: it spreads with the splash,
+ * then fades with them. Null under reduced motion, and from BLOOD_MS on. */
+export function bloodStainAt(
+  from: { x: number; z: number },
+  dir: { x: number; z: number },
+  elapsedMs: number,
+  reducedMotion: boolean,
+): Stain | null {
+  elapsedMs = Math.max(elapsedMs, 0);
+  if (reducedMotion || elapsedMs >= BLOOD_MS) return null;
+  return {
+    x: from.x + dir.x,
+    z: from.z + dir.z,
+    radius: STAIN_MAX * splashEase(elapsedMs),
+    alpha: fadeAt(elapsedMs),
+  };
 }
 
 function frac(x: number): number {

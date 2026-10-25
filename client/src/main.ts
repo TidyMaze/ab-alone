@@ -16,7 +16,7 @@ import { askBot, askEval, BOT_NODES } from './bot';
 import { bossHtml, goalShown } from './bosshud';
 import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
-import { BLOOD_DROPS, BLOOD_MS, bloodAt } from './blood';
+import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
@@ -556,8 +556,10 @@ function drawEjection(e: Ejecting, elapsedMs: number): boolean {
 // The blood spatter of an ejection (issue #278): a stylised spatter just beyond the rim, drawn from
 // blood.ts. It never covers a cell, ends by itself, and a click or a key ends it at once.
 const BLOOD_COLOR = 0x8c2a1c;
+const DROP_SIZE = 1.0; // world units: big enough to read at 1280x720, still a droplet
 interface Bleeding {
   points: THREE.Points;
+  stain: THREE.Mesh;
   from: { x: number; z: number };
   dir: { x: number; z: number };
   start: number;
@@ -568,10 +570,16 @@ const bleeding: Bleeding[] = [];
 function startBlood(track: EjectTrack): void {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BLOOD_DROPS * 3), 3));
-  const material = new THREE.PointsMaterial({ color: BLOOD_COLOR, size: 0.36, transparent: true, depthWrite: false });
+  const material = new THREE.PointsMaterial({ color: BLOOD_COLOR, size: DROP_SIZE, transparent: true, depthWrite: false });
   const points = new THREE.Points(geometry, material);
-  scene.add(points);
-  const b: Bleeding = { points, from: track.from, dir: track.dir, start: performance.now(), skipped: false };
+  // The stain: a flat disc on the void just under the rim, its own mesh so it can grow and fade.
+  const stain = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 24),
+    new THREE.MeshBasicMaterial({ color: BLOOD_COLOR, transparent: true, depthWrite: false }),
+  );
+  stain.rotation.x = -Math.PI / 2;
+  scene.add(points, stain);
+  const b: Bleeding = { points, stain, from: track.from, dir: track.dir, start: performance.now(), skipped: false };
   drawBlood(b, 0);
   bleeding.push(b);
   document.body.dataset.blood = 'spatter'; // read by the e2e tests
@@ -579,12 +587,17 @@ function startBlood(track: EjectTrack): void {
 
 /** Draws a spatter `elapsedMs` into its effect, true once it is over. */
 function drawBlood(b: Bleeding, elapsedMs: number): boolean {
-  const drops = bloodAt(b.from, b.dir, b.skipped ? BLOOD_MS : elapsedMs, false);
+  const t = b.skipped ? BLOOD_MS : elapsedMs;
+  const drops = bloodAt(b.from, b.dir, t, false);
   if (drops.length === 0) return true;
   const position = b.points.geometry.getAttribute('position') as THREE.BufferAttribute;
   drops.forEach((d, i) => position.setXYZ(i, d.x, d.y, d.z));
   position.needsUpdate = true;
   (b.points.material as THREE.PointsMaterial).opacity = drops[0]!.alpha;
+  const stain = bloodStainAt(b.from, b.dir, t, false)!;
+  b.stain.position.set(stain.x, 0.01, stain.z);
+  b.stain.scale.setScalar(stain.radius);
+  (b.stain.material as THREE.MeshBasicMaterial).opacity = stain.alpha;
   return false;
 }
 
@@ -598,9 +611,11 @@ function animateEjections(now: number): void {
   if (ejecting.length === 0) delete document.body.dataset.ejecting;
   for (const b of bleeding.slice()) {
     if (!drawBlood(b, now - b.start)) continue;
-    scene.remove(b.points);
+    scene.remove(b.points, b.stain);
     b.points.geometry.dispose();
     (b.points.material as THREE.Material).dispose();
+    b.stain.geometry.dispose();
+    (b.stain.material as THREE.Material).dispose();
     bleeding.splice(bleeding.indexOf(b), 1);
   }
   if (bleeding.length === 0) delete document.body.dataset.blood;
