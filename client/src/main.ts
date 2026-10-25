@@ -966,6 +966,7 @@ addEventListener('resize', () => {
       twist: e.mesh.rotation.x,
       drop: 0.36 - e.holder.position.y,
       opacity: material.opacity / material.userData.opacity, // the fade, the glass's own see-through aside
+      turn: e.mesh.getWorldQuaternion(new THREE.Quaternion()).toArray(),
     };
   });
 

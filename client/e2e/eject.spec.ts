@@ -18,10 +18,12 @@ async function open(page: Page) {
 // What the page saw the moment the effect started, before any frame could draw it: the kind of
 // effect, the marble drawn 200 ms and 700 ms in, and, with `skip`, the effect right after a key or a
 // click. Recorded in the page, so a slow runner can never miss the effect (#107).
-type Drawn = { along: number; across: number; roll: number; twist: number; drop: number; opacity: number };
+// `turn`: the marble's quaternion on screen, as __marbleTurn reads it on the board (#364).
+type Drawn = { along: number; across: number; roll: number; twist: number; drop: number; opacity: number; turn: number[] };
 type Seen = {
   kind: string;
   blood?: string; // data-blood, the spatter of #278, set as the effect starts
+  at0: Drawn[];
   at200: Drawn[];
   at700: Drawn[];
   afterSkip?: { ejecting?: string; blood?: string; marbles: number };
@@ -39,6 +41,7 @@ async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
       const seen: Seen = {
         kind,
         blood: document.body.dataset.blood,
+        at0: w.__ejectAt(0),
         at200: w.__ejectAt(200),
         at700: w.__ejectAt(700),
         spray: [0, 300, 450, 600, 850].map((ms) => ({ ms, ...w.__bloodAt(ms) })),
@@ -65,11 +68,28 @@ async function pushOffBoard(page: Page, skip?: 'key' | 'click') {
   await click([-1, -2], [-1, -1], [-2, -2]); // 4. White pair W, into the Black column
   await expect(hud).toContainText('Black to move');
   await expect(page.locator('body')).not.toHaveAttribute('data-ejections', /.*/);
+  // The marble to leave, at rest: the clicks of plies 3 and 4 may still wait for a slide.
+  await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(4);
+  await expect(page.locator('body')).not.toHaveAttribute('data-sliding', /.*/);
+  const turn = (await page.evaluate(() => (window as any).__marbleTurn(-2, -2))) as number[];
   await click([-2, 0], [-2, 1], [-2, 2], [-2, -1]); // 5. 3v2 push, the last White marble leaves
   await expect(hud).toContainText('White to move');
   await expect(page.locator('body')).toHaveAttribute('data-ejections', '1');
   await expect.poll(() => page.evaluate(() => (window as any).__seen)).not.toBeNull();
-  return { click, seen: (await page.evaluate(() => (window as any).__seen)) as Seen };
+  return { click, turn, seen: (await page.evaluate(() => (window as any).__seen)) as Seen };
+}
+
+// Two unit quaternions give the same rotation when they are equal or opposite.
+const sameRotation = (a: number[], b: number[]) =>
+  expect(Math.abs(a.reduce((sum, x, i) => sum + x * b[i]!, 0))).toBeCloseTo(1, 4);
+
+for (const reduced of [false, true]) {
+  test(`an ejected marble starts its ${reduced ? 'fade' : 'tumble'} with the turn it had on the board, #364`, async ({ page }) => {
+    if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' });
+    const { turn, seen } = await pushOffBoard(page);
+    expect(seen.at0).toHaveLength(1);
+    sameRotation(seen.at0[0]!.turn, turn);
+  });
 }
 
 test('an ejected marble tumbles, stretches and fades into the void, then the effect ends', async ({ page }) => {
@@ -95,7 +115,7 @@ test('reduced motion: a plain fade, no tumble, no stretch, no spatter, the same 
   expect(seen.kind).toBe('fade');
   expect(seen.blood).toBeUndefined(); // #278: no particles under reduced motion
   const [mid] = seen.at200;
-  expect(mid).toEqual({ along: 1, across: 1, roll: 0, twist: 0, drop: 0, opacity: mid!.opacity });
+  expect(mid).toEqual({ along: 1, across: 1, roll: 0, twist: 0, drop: 0, opacity: mid!.opacity, turn: mid!.turn });
   expect(mid!.opacity).toBeGreaterThan(0);
   expect(mid!.opacity).toBeLessThan(1);
   await expect(page.locator('body')).not.toHaveAttribute('data-ejecting', /.*/, { timeout: 3000 });
