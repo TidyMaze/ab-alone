@@ -116,6 +116,8 @@ jobs:
 
   # Software WebGL on a 4-vCPU runner starves two workers (#216), so each shard runs one worker and the shards run in
   # parallel on their own runners: the wall clock is the slowest shard.
+  # --shard does not cut the test list into four runs: client/scripts/shard-reporter.ts deals the tests to the shards back
+  # and forth (1, 2, 3, 4, 4, 3, 2, 1, ...), so the slow tests of one spec file spread over every shard (#333).
   e2e:
     needs: wasm
     runs-on: ubuntu-latest

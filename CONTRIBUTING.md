@@ -398,10 +398,11 @@ rebases on `main` without conflict (section 6.4, merge gate). It runs the CI che
   `crates/abalone-wasm/`, `Cargo.*` or `ci.yml` changed (job `changes`: it diffs against the last
   successful CI run on `main`, so a cancelled run never hides its commits; a manual dispatch runs
   everything). The WASM package is built once (job `wasm`, cached) and shared as an artifact, then
-  the e2e suite runs in 4 shards, one runner and one worker each (#257, #258): a failed shard
-  uploads its own `playwright-report-<n>` artifact. On CI the browser window is 960x540, not
-  1280x720: software WebGL cost follows the pixels. A new push to `main` still cancels the run
-  in progress.
+  the e2e suite runs in 4 shards, one runner and one worker each (#257, #258). The tests are dealt
+  to the shards back and forth, so the slow ones spread over all four (`client/scripts/shard-reporter.ts`,
+  #333). A failed shard uploads its own `playwright-report-<n>` artifact. On CI the browser window
+  is 960x540, not 1280x720: software WebGL cost follows the pixels. A new push to `main` still
+  cancels the run in progress.
 
 **WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
 After pulling main, rebuild it from the repo root:
