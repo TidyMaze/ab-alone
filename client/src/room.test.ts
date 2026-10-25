@@ -40,12 +40,45 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     }
   });
 
+  it('outer walls are placed at radius >= 20 so camera orbit up to DIST_MAX (18) never crashes into them', () => {
+    const elements = spaceshipArchitecture('low');
+    const wallElements = elements.filter((el) => el.id.includes('wall') || el.id.includes('column') || el.id.includes('bulkhead'));
+    expect(wallElements.length).toBeGreaterThan(0);
+    for (const el of wallElements) {
+      const radius = Math.hypot(el.position[0], el.position[2]);
+      expect(radius, `wall element ${el.id} radius`).toBeGreaterThanOrEqual(20);
+    }
+  });
+
+  it('surrounds the board in 360 degrees with architecture in all four quadrants', () => {
+    const elements = spaceshipArchitecture('low');
+    const hasNorth = elements.some((el) => el.position[2] < -15);
+    const hasSouth = elements.some((el) => el.position[2] > 15);
+    const hasWest = elements.some((el) => el.position[0] < -15);
+    const hasEast = elements.some((el) => el.position[0] > 15);
+    expect(hasNorth, 'has north wall').toBe(true);
+    expect(hasSouth, 'has south wall').toBe(true);
+    expect(hasWest, 'has west wall').toBe(true);
+    expect(hasEast, 'has east wall').toBe(true);
+  });
+
+  it('provides corner equipment modules in all four quadrants outside the board radius', () => {
+    const elements = spaceshipArchitecture('low');
+    const cornerElements = elements.filter((el) => el.id.startsWith('corner-'));
+    expect(cornerElements.length).toBeGreaterThanOrEqual(4);
+    for (const el of cornerElements) {
+      const radius = Math.hypot(el.position[0], el.position[2]);
+      expect(radius, `corner element ${el.id} radius`).toBeGreaterThan(5.0);
+      expect(radius, `corner element ${el.id} radius`).toBeLessThan(12.0);
+    }
+  });
+
   it('architectural materials are low-key and preserve contrast against board steel', () => {
     const hex = (c: number): [number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
     const elements = spaceshipArchitecture('high');
     for (const el of elements) {
-      // Accent parts like emergency lintel can have controlled hazard tones, but structural steel stays dark
-      if (el.id !== 'hazard-lintel') {
+      // Accent parts like emergency lintels can have controlled hazard tones, but structural steel stays dark
+      if (!el.id.includes('hazard')) {
         expect(relativeLuminance(hex(el.color))).toBeLessThan(relativeLuminance(hex(0x4a5258)));
       }
     }

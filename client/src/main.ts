@@ -485,7 +485,7 @@ scene.add(coldRim, warmLight);
 // Background decor (#376, #432): industrial bulkhead frame of the ore hauler far behind the board, below the deck
 // plane, so no cell, marble or mark can sit under them. Ribs, girders and diagonal trusses catch the accent lights
 // with parallax depth as the camera rotates, without competing with the board.
-const decorMaterial = new THREE.MeshStandardMaterial({ color: DECOR.color, roughness: 0.85 });
+const decorMaterial = new THREE.MeshStandardMaterial({ color: DECOR.color, roughness: 0.85, fog: false });
 const decor = new THREE.Group();
 for (let x = -10; x <= 10; x += 4) {
   const rib = new THREE.Mesh(new THREE.BoxGeometry(0.35, 6, 0.4), decorMaterial);
@@ -714,14 +714,14 @@ drawProps = (): void => {
   propsGroup.clear();
   for (const def of spaceshipArchitecture(tier)) {
     let mat: THREE.MeshStandardMaterial;
-    if (def.id === 'rear-wall' && wallTexture) {
+    if (def.id.includes('wall') && wallTexture) {
       mat = new THREE.MeshStandardMaterial({
         color: def.color,
         roughness: def.roughness,
         map: wallTexture,
         fog: false,
       });
-    } else if (def.id === 'hazard-lintel' && hazardTexture) {
+    } else if (def.id.includes('hazard') && hazardTexture) {
       mat = new THREE.MeshStandardMaterial({
         color: 0xffffff,
         roughness: def.roughness,
