@@ -66,7 +66,9 @@ import './ui.css';
 // Palette from docs/specs/world.md section 5.
 const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, sodium: 0xd9822b, cyan: 0x7fd6e8 };
 const BONE = 0xd8d4c8; // the pale tells
-const FRAME_LOOK = { plate: 0x3a3a3a, rim: 0xb0b0b0 }; // tints of the deck textures: the plate darker than the cells, the rim between
+// Tints of the deck textures: the plate darker than the cells, the rim between. Divided by the deck albedo's LIGHTEN
+// (scripts/gen-assets.mjs, #344), so the frame looks as it did before the deck was lightened.
+const FRAME_LOOK = { plate: 0x1f1f1f, rim: 0x5d5d5d };
 const BOT_SIDE = 2; // the human plays side 1 (the glass), the bot plays side 2
 declare const __BUILD__: string; // the commit, set by vite.config.ts
 

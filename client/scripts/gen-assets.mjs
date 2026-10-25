@@ -93,7 +93,10 @@ export function png(w, h, channels, pixels) {
 
 const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
 
-// Brushed, pitted oxidized steel (world.md palette: steel #4a5258, rust #7a3b1d).
+// Brushed, pitted oxidized steel (world.md palette: steel #4a5258, rust #7a3b1d), lightened LIGHTEN times so both
+// marbles, the dark shell and the smoked glass, read 3:1 against it under the low-key lamp (#344). The frame's plate
+// and rim tints in main.ts are lowered by the same factor, so the frame keeps its look.
+const LIGHTEN = 1.9;
 function deck(size, rand) {
   const grain = fbm(size, rand);
   const rust = fbm(size, rand, [2, 4, 8]);
@@ -107,7 +110,7 @@ function deck(size, rand) {
       const brush = streak[(y * size + (x * 7) % size) % streak.length] - 0.5;
       const rustMix = Math.max(0, (rust[i] - 0.68) * 2.2);
       const pit = pits[i] > 0.66 ? 0.6 : 1;
-      const shade = (0.8 + grain[i] * 0.45 + brush * 0.12) * pit;
+      const shade = (0.8 + grain[i] * 0.45 + brush * 0.12) * pit * LIGHTEN;
       albedo[i * 3] = clamp((0x4a * (1 - rustMix) + 0x7a * rustMix) * shade);
       albedo[i * 3 + 1] = clamp((0x52 * (1 - rustMix) + 0x3b * rustMix) * shade);
       albedo[i * 3 + 2] = clamp((0x58 * (1 - rustMix) + 0x1d * rustMix) * shade);
