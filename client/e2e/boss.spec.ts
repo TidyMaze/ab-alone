@@ -183,9 +183,10 @@ for (const tier of ['high', 'low']) {
       await send(mv.dir === 4 ? q : q + 1, r - 1);
     };
 
-    await openModes(page);
-    await page.getByRole('button', { name: 'Boss fight' }).click();
-    await page.locator('#boss-list').getByRole('button', { name: 'The Hull' }).click();
+    // The fight starts, and Clear board flips below, by click events on their buttons, the menus closed: opening them is
+    // checked by the Echo test and clear-board.spec.ts, and each real click cost 1.7 to 2.3 s on CI in this window (#429).
+    // The first move, a real click, is the gesture that starts the audio of the tell cues.
+    await page.locator('#boss-list').getByRole('button', { name: 'The Hull', includeHidden: true }).dispatchEvent('click');
     await expect(hud).toContainText('The Hull');
     await expect(body).toHaveAttribute('data-cracks', '0');
     await advance(true);
@@ -198,10 +199,8 @@ for (const tier of ['high', 'low']) {
     const decals: [number, number][] = await page.evaluate(() => (window as any).__crackDecals());
     expect(decals).toEqual((await page.evaluate(() => (window as any).__cracks())).map((c: any) => c.cell));
     await page.screenshot({ path: testInfo.outputPath('hull-cracked.png') });
-    await page.getByRole('button', { name: 'Settings' }).click();
-    await page.getByRole('button', { name: 'Clear board' }).click();
+    await page.getByRole('button', { name: 'Clear board', includeHidden: true }).dispatchEvent('click');
     await expect(body).toHaveAttribute('data-clear', 'on');
-    await page.keyboard.press('Escape'); // the menu closes, off the board
     expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual(decals);
     const clear = await crackContrast(page, decals[0]!);
     expect(clear.shown).toBeGreaterThan(20);
