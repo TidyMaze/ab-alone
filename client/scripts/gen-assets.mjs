@@ -149,19 +149,56 @@ function shellNormal(size, rand) {
   return png(size, size, 3, px);
 }
 
-// Near-black base (#0b0d0f) with a vignette, cold haze and faint grime.
+// Background (#432): ore hauler viewport into the void, with the Hollow Moon arc,
+// cold cyan ore dust drifts, warm sodium backscatter from ship gantries, and industrial framing.
 function backdrop(w, h, rand) {
   const grime = fbm(w, rand, [4, 8, 16]);
+  const dust = fbm(w, rand, [2, 6, 12]);
   const px = new Uint8Array(w * h * 3);
+  const moonX = w * 0.72, moonY = h * 0.22, moonR = w * 0.42;
+
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const dx = x / w - 0.5, dy = y / h - 0.5;
-      const vig = Math.max(0, 1 - Math.hypot(dx, dy) * 1.6);
+      const u = x / w, v = y / h;
+      const dx = u - 0.5, dy = v - 0.5;
+      const distCenter = Math.hypot(dx, dy);
+      const vig = Math.max(0, 1 - distCenter * 1.4);
       const g = grime[y * w + x];
+      const d = dust[y * w + x];
+
+      // Deep space base: dark blue-grey (#12171b)
+      let r = 18 + vig * 8 + g * 5;
+      let gr = 23 + vig * 10 + g * 6;
+      let b = 28 + vig * 14 + g * 8;
+
+      // Distance to hollow moon rim
+      const dMoon = Math.hypot(x - moonX, y - moonY);
+      const moonDistNorm = Math.abs(dMoon - moonR) / (moonR * 0.35);
+      if (moonDistNorm < 1) {
+        const angle = Math.atan2(y - moonY, x - moonX);
+        const crescent = Math.max(0, -Math.cos(angle - 0.75 * Math.PI));
+        const arc = (1 - moonDistNorm * moonDistNorm) * crescent;
+        r += arc * 14;
+        gr += arc * 24;
+        b += arc * 32;
+      }
+
+      // Cold cyan ore dust drift (right / top)
+      const cyanDrift = Math.max(0, (u * 0.7 + (1 - v) * 0.5) - 0.3) * d;
+      r += cyanDrift * 6;
+      gr += cyanDrift * 16;
+      b += cyanDrift * 24;
+
+      // Warm sodium hazard glow from gantry on left
+      const warmDrift = Math.max(0, ((1 - u) * 0.8 + (1 - v) * 0.4) - 0.4) * (1 - g * 0.5);
+      r += warmDrift * 18;
+      gr += warmDrift * 10;
+      b += warmDrift * 4;
+
       const o = (y * w + x) * 3;
-      px[o] = clamp(11 + vig * 10 + g * 6);
-      px[o + 1] = clamp(13 + vig * 13 + g * 7);
-      px[o + 2] = clamp(15 + vig * 18 + g * 8);
+      px[o] = clamp(r);
+      px[o + 1] = clamp(gr);
+      px[o + 2] = clamp(b);
     }
   }
   return png(w, h, 3, px);
