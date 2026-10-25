@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CELLS, VANISHED, axialTo3D, cellIndex } from './board';
-import { FRAME, frameShape } from './frame';
+import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight } from './frame';
 
 const DISC = 0.46; // the cell disc radius of main.ts
 const ring = ([q, r]: readonly [number, number]): number => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
@@ -51,5 +51,29 @@ describe('frameShape (world.md section 6)', () => {
     expect(shape.holes).toEqual([{ x: centre.x, z: centre.z }]);
     expect(FRAME.hole).toBeGreaterThan(DISC);
     expect(reach(centre) + FRAME.hole).toBeLessThan(apothem(shape.inner));
+  });
+});
+
+describe('the rim lights for the side to move (#300, world.md section 6 rule 2)', () => {
+  it('splits the rim at the two corners on the x axis: the near half at side 1\'s end (+z), the far half at side 2\'s', () => {
+    const shape = frameShape(start());
+    const { near, far } = rimHalves(shape);
+    expect(near).toEqual([...shape.outer.slice(0, 4), ...shape.inner.slice(0, 4).reverse()]);
+    expect(far).toEqual([shape.outer[3], shape.outer[4], shape.outer[5], shape.outer[0], shape.inner[0], shape.inner[5], shape.inner[4], shape.inner[3]]);
+    for (const p of near) expect(p.z).toBeGreaterThanOrEqual(-1e-9);
+    for (const p of far) expect(p.z).toBeLessThanOrEqual(1e-9);
+    expect(axialTo3D(0, 4).z).toBeGreaterThan(0); // side 1 starts on r = 4: the near end
+  });
+
+  it('lights the half at the end of the side to move, in its colour: cyan glass, sodium shell', () => {
+    expect(rimLight(0, 1, 1)).toEqual({ end: 'near', color: RIM_LIGHT.glass });
+    expect(rimLight(0, 1, 2)).toEqual({ end: 'near', color: RIM_LIGHT.shell });
+    expect(rimLight(0, 2, 2)).toEqual({ end: 'far', color: RIM_LIGHT.glass });
+    expect(rimLight(0, 2, 1)).toEqual({ end: 'far', color: RIM_LIGHT.shell });
+    expect([RIM_LIGHT.glass, RIM_LIGHT.shell]).toEqual([0x7fd6e8, 0xd9822b]); // the palette of world.md section 5
+  });
+
+  it('lights nothing once the game is over: nobody is to move', () => {
+    for (const status of [1, 2, 3]) expect(rimLight(status, 1, 1)).toBeNull();
   });
 });

@@ -40,3 +40,20 @@ export function frameShape(board: ArrayLike<number>): FrameShape {
   });
   return { radius, inner: hexagon(edge), outer: hexagon(edge + FRAME.rim), holes };
 }
+
+/** The rim's two halves, split at the corners on the x axis: `near` at side 1's end (+z, where it starts), `far` at
+ * side 2's. Each is the outline of a band of three hexagon sides, so the turn reads by place, not colour alone (#300). */
+export function rimHalves({ inner, outer }: FrameShape): { near: Point[]; far: Point[] } {
+  const band = (ks: number[]): Point[] => [...ks.map((k) => outer[k]!), ...ks.reverse().map((k) => inner[k]!)];
+  return { near: band([0, 1, 2, 3]), far: band([3, 4, 5, 0]) };
+}
+
+/** The lights of the rim (world.md section 5): the player's cold cyan for the glass, sodium orange for the shell. */
+export const RIM_LIGHT = { glass: 0x7fd6e8, shell: 0xd9822b };
+
+/** The half of the rim that lights and its colour: the end of the side to move, in that side's colour (world.md
+ * section 6 rule 2). Nothing once the game is over (`status` not 0): nobody is to move. */
+export function rimLight(status: number, side: number, glass: number): { end: 'near' | 'far'; color: number } | null {
+  if (status !== 0) return null;
+  return { end: side === 1 ? 'near' : 'far', color: side === glass ? RIM_LIGHT.glass : RIM_LIGHT.shell };
+}

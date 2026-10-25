@@ -126,7 +126,7 @@ test('start The Hull, play to the first wave: a cracked cell ticks down, then va
   await expect.poll(plies, { timeout: 30_000 }).toBe(10);
   expect(await tellCues(page)).toEqual(['crack', 'crack']); // it ticked down on ply 9, then vanished: no cue for a gone tell
   await expect(body).toHaveAttribute('data-vanished', '1');
-  expect(await page.evaluate(() => (window as any).__frame())).toEqual({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
+  expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
   await expect(body).toHaveAttribute('data-cracks', '0');
   await expect(hud).not.toContainText('Rim cracks');
   await page.screenshot({ path: testInfo.outputPath('hull-vanished.png') });

@@ -64,7 +64,7 @@ source kept out of the Pages artifact). All under the repo's MIT licence; the fo
 | Assets | Format and budget | Made | Today, issues |
 |---|---|---|---|
 | Marbles: glass and core, ridged shell, boss accents, flipped look | Materials, geometry; a ridge normal map, 256 px, 64 KB | Procedural, generated | Smoked glass with a cyan core (#291), opacity 0.75 so it reads 3:1 on the deck (#344), ridged shell `shell-normal.png` 256 px, 10 KB (#293); boss accents and the dimming core: #26 |
-| Board: light and textures per deck, frame, rim, backdrop | Data, geometry; textures 512 px, 300 KB a deck; backdrop 30 KB | Procedural, generated | One flat light, one steel set (deck albedo lightened x1.9 for marble contrast, #344), a hexagonal steel frame built in code, plate and rim (#292): #290, #300, #28 |
+| Board: light and textures per deck, frame, rim, backdrop | Data, geometry; textures 512 px, 300 KB a deck; backdrop 30 KB | Procedural, generated | One flat light, one steel set (deck albedo lightened x1.9 for marble contrast, #344), a hexagonal steel frame built in code, plate and rim (#292), the rim lights for the side to move (#300): #290, #28 |
 | Props, one lore object per boss arena | glTF, 150 KB each, 1 MB a deck | Procedural, then hand-made | None: #28, #20 |
 | Tells, phase notches, tally marks | Geometry; a crack decal, 128 px, 16 KB | Procedural, generated | Chaplain and Choir done, Hull crack a flat disc: #62, #22 |
 | Effects: ejection, particles, fog | Code; a particle atlas, 128 px, 16 KB | Procedural, generated | Ejection and fog done (#188, #84) |
