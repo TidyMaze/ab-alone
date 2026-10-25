@@ -24,7 +24,7 @@ The short version:
 6. Talk only through issue comments and PR reviews. Sub-agents never merge, never triage, never
    close a `Decision`. The lead agent (driven by an owner) may triage when an owner delegates and
    merge a PR once the CI check `rust` is green; no human review is needed (CONTRIBUTING.md section 0).
-7. At most 4 tasks in progress at once. Run the local checks and one e2e run before opening a PR.
+7. At most 4 tasks in progress at once. Locally run only the smallest scoped checks (the touched unit file and e2e spec, CONTRIBUTING 13); the full suite runs on the CI.
    After a rebase on `main` without conflict, rerun only `bun run test` and `tsc` (CONTRIBUTING 6.4).
    Kill the dev servers you started. Finish and merge your open PR before opening another: many
    open PRs mean rebase loops (CONTRIBUTING rule 16). Keep every task and PR minimal: one thing,

@@ -226,7 +226,7 @@ the triager does exactly one of:
    pushes fixes to the same branch.
 4. A comment that adds scope gets the answer "new issue #N" and goes to `Inbox`.
 5. **Merge gate.** A PR is merged into `main` only when all of these hold:
-   - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, one full e2e run green.
+   - [ ] Checked locally: `scripts/verify.sh` green, unit tests green, the changed e2e specs green locally (the full suite runs on the CI runner).
      **After a rebase on `main` without conflict**, rerun only `bun run test` and
      `bunx tsc --noEmit` in `client/` (rebuild the WASM first if `crates/` changed on main, section
      13), not `scripts/verify.sh` nor the e2e run: CI runs `rust` again on the rebased code, and
@@ -449,6 +449,13 @@ export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_LINKER=wasm-ld
 export LLVM_COV="$(brew --prefix llvm)/bin/llvm-cov"
 export LLVM_PROFDATA="$(brew --prefix llvm)/bin/llvm-profdata"
 ```
+
+**Locally, run the smallest check that proves the change** (save CPU and time; the CI runs the rest):
+only the unit test file you touch (`bunx vitest run src/<file>.test.ts`), only the e2e spec you
+touch (`bunx playwright test e2e/<spec>.spec.ts`, one worker, `-g "<title>"` for one test),
+`bunx tsc --noEmit` when you change client types, `cargo test -p <crate> <name>` for one Rust test.
+No full e2e run, no full `scripts/verify.sh` and no `--repeat-each` beyond what a flake needs: for
+the whole suite, dispatch `gh workflow run ci.yml --ref <branch>` once and read the runner.
 
 **e2e:** from `client/`, run `bun run e2e` (Chromium project). Playwright starts the dev server
 itself, with `--mode e2e`: that server does not watch files, so a wasm rebuild or an edit during a
