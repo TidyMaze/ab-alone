@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { VANISHED, axialTo3D, cellIndex, type Axial, type Move } from './board';
-import { SLIDE_MS, slideAt, slideTracks } from './slide';
+import { DIRECTIONS, VANISHED, axialTo3D, cellIndex, type Axial, type Move } from './board';
+import { MARBLE_RADIUS, SLIDE_MS, rollAt, slideAt, slideTracks } from './slide';
 
 const empty = (): number[] => new Array<number>(61).fill(0);
 const put = (cells: Array<[number, number, number]>): number[] => {
@@ -99,5 +99,42 @@ describe('slideAt', () => {
 
   it('reduced motion: at the new cell at once', () => {
     expect(slideAt({ ...track, durationMs: 0 }, 0)).toEqual({ x: 1, z: 2 });
+  });
+});
+
+describe('rollAt', () => {
+  // One cell east: the path is 1 long, along +x.
+  const east = { cell: [1, 0] as Axial, from: { x: 0, z: 0 }, to: { x: 1, z: 0 }, durationMs: 200 };
+
+  it('has not rolled at the start', () => {
+    expect(rollAt(east, 0).angle).toBe(0);
+  });
+
+  it('rolls by the distance travelled over the radius: half way at half time', () => {
+    // The ease out has gone 0.875 of the path at half time.
+    expect(rollAt(east, 100).angle).toBeCloseTo(0.875 / MARBLE_RADIUS);
+  });
+
+  it('has rolled one cell over the radius at the end, and no further', () => {
+    expect(rollAt(east, 200).angle).toBeCloseTo(1 / MARBLE_RADIUS);
+    expect(rollAt(east, 5000).angle).toBeCloseTo(1 / MARBLE_RADIUS);
+    expect(rollAt({ ...east, durationMs: 0 }, 0).angle).toBeCloseTo(1 / MARBLE_RADIUS); // reduced motion
+  });
+
+  it('turns about the axis on the board plane square to the path, up × path: rolling, not slipping', () => {
+    expect(MARBLE_RADIUS).toBe(0.36);
+    for (const [dq, dr] of DIRECTIONS) {
+      const a = axialTo3D(0, 0);
+      const b = axialTo3D(dq, dr);
+      const track = { cell: [dq, dr] as Axial, from: { x: a.x, z: a.z }, to: { x: b.x, z: b.z }, durationMs: 200 };
+      const [ax, ay, az] = rollAt(track, 100).axis;
+      const [px, pz] = [b.x - a.x, b.z - a.z];
+      expect(Math.hypot(ax, ay, az)).toBeCloseTo(1); // a unit axis
+      expect(ay).toBe(0); // on the board plane
+      expect(ax * px + az * pz).toBeCloseTo(0); // square to the path
+      // up × path: the contact point does not move. The top of the marble turns toward the path.
+      expect(ax).toBeCloseTo(pz / Math.hypot(px, pz));
+      expect(az).toBeCloseTo(-px / Math.hypot(px, pz));
+    }
   });
 });

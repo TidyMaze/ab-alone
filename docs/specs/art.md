@@ -20,7 +20,8 @@ and no new look: each rule names its source (section numbers), and changes when 
 - **Marbles** (world.md 5, 8). Player: smoked glass, a cyan core that dims with each marble lost.
   Shell: matte black, ridged like a scarab, a faint heat pulse, no core. Boss: the shell plus one
   accent (rust crown, candle wax, wire wrap). Flipped by The Chaplain: ridges creep up the glass.
-  Silhouette before colour.
+  Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
+  its own angle, seeded, so the set never lines up and a game always looks the same.
 - **Light** (world.md 5). Low-key: one hard source per deck, a dim cyan fill from the player's
   marbles, slow and rare flicker. Every cell and marble stays legible, cell edge 3:1.
 - **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold,
@@ -31,9 +32,10 @@ and no new look: each rule names its source (section numbers), and changes when 
   the rest. Sizes in rem, nothing under 0.8125rem.
 - **HUD** (world.md 6). The board, its rim and its frame carry the game, menus are a terminal in
   the scene, the flat plate is the fallback.
-- **Motion** (world.md 5, 8, ui.md 6). Weight and vacuum. An ejected marble rolls over the rim in
-  200 ms, the void takes it in 600 ms, it only fades. The chrome fades in 160 ms, nothing loops.
-  Reduced motion: a plain fade. Never more than 3 flashes a second.
+- **Motion** (world.md 5, 8, ui.md 6). Weight and vacuum. A moved marble rolls to its new cell in
+  200 ms, without slipping. An ejected marble rolls over the rim in 200 ms, the void takes it in
+  600 ms, it only fades. The chrome fades in 160 ms, nothing loops. Reduced motion: a plain fade.
+  Never more than 3 flashes a second.
 - **Sound** (world.md 7). Low, weight first, silence as a tool. A hum per deck; a knock per move,
   a scrape per sumito, lower for more marbles; an ejection's inhale, thud and silence, then a toll
   for lost glass or a clack for a lost shell. Drones, never a melodic loop. Every cue has a visual
