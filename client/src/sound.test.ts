@@ -1,18 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EJECT_MS, PUSH_MS, VOID_MS } from './eject';
 import {
+  BUSES,
+  CROSSFADE_TAU,
   CUE_AT,
-  FX_LEVEL,
   HUM,
+  MASTER_LEVEL,
+  ROUTE,
   SILENT,
   Sfx,
+  TENSION,
   TellWatch,
+  busGain,
   cueFor,
   ejectionVoices,
   knockPitch,
   knockVoices,
+  layerGains,
   tellVoices,
+  type Bus,
   type Cue,
+  type Mix,
   type Tell,
   type Voice,
 } from './sound';
@@ -49,6 +57,46 @@ describe('HUM, world.md section 7 ambience', () => {
   it('quiet under the effects: the tones together stay at a tenth of the full level or less', () => {
     for (const tone of HUM) expect(tone.gain).toBeGreaterThan(0);
     expect(HUM.reduce((sum, tone) => sum + tone.gain, 0)).toBeLessThanOrEqual(0.1);
+  });
+});
+
+describe('TENSION, the drone tension layers (world.md section 7, Music; #439)', () => {
+  it('two layers of steady low tones: drones, no melody, none in the knock or toll range', () => {
+    expect(TENSION).toHaveLength(2);
+    for (const layer of TENSION) {
+      expect(layer.length).toBeGreaterThan(0);
+      for (const tone of layer) {
+        expect(tone.freq).toBeGreaterThanOrEqual(30);
+        expect(tone.freq).toBeLessThan(200);
+        expect(tone.gain).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('as quiet as the hum: each layer at a tenth of the full level or less', () => {
+    for (const layer of TENSION) expect(layer.reduce((sum, tone) => sum + tone.gain, 0)).toBeLessThanOrEqual(0.1);
+  });
+
+  it('level 0 plays no layer, 1 the first, 2 both', () => {
+    expect(layerGains(0)).toEqual([0, 0]);
+    expect(layerGains(1)).toEqual([1, 0]);
+    expect(layerGains(2)).toEqual([1, 1]);
+  });
+});
+
+describe('the mix: four buses into one master (world.md section 7, Mix; #438)', () => {
+  it('has the four sliders of the spec: music, ambience, effects, voice', () => {
+    expect(BUSES).toEqual(['music', 'ambience', 'effects', 'voice']);
+  });
+
+  it('routes the hum to ambience, the drones to music, the knock, the ejection and the tells to effects', () => {
+    expect(ROUTE).toEqual({ hum: 'ambience', tension: 'music', knock: 'effects', ejection: 'effects', tell: 'effects' });
+  });
+
+  it('turns a slider percentage into a gain: 0 silent, 100 full', () => {
+    expect(busGain(0)).toBe(0);
+    expect(busGain(50)).toBe(0.5);
+    expect(busGain(100)).toBe(1);
   });
 });
 
@@ -175,10 +223,10 @@ describe('Sfx.knock, the move sound', () => {
     expect(ctx.sources.length).toBeGreaterThan(before);
   });
 
-  it('is silent with the sound off: no source, no report', () => {
+  it('is silent with the effects slider at 0: no source, no report', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
-    sfx.setEnabled(false);
+    sfx.setVolume('effects', 0);
     const before = ctx.sources.length;
     expect(sfx.knock(2)).toBeNull();
     expect(ctx.sources.length).toBe(before);
@@ -271,26 +319,26 @@ describe('Sfx.tell, the sound twin of a boss tell', () => {
   });
 
   for (const tell of tells) {
-    it(`${tell}: plays every voice from now through the effects node, and says so`, () => {
+    it(`${tell}: plays every voice from now through the effects bus, and says so`, () => {
       const { ctx, sfx } = setup();
       sfx.unlock();
       expect(sfx.tell(tell)).toBe(tell);
       const voices = tellVoices(tell);
-      expect(ctx.sources).toHaveLength(HUM.length + voices.length);
+      expect(ctx.sources).toHaveLength(STEADY + voices.length);
       voices.forEach((voice, i) => {
-        const source = ctx.sources[HUM.length + i]!;
+        const source = ctx.sources[STEADY + i]!;
         expect(source.times).toEqual([5, 5 + end(voice)]);
         let node = next(source);
         if (voice.source === 'noise') node = next(node); // through its filter
-        expect(next(node)).toBe(ctx.gains[0]); // its envelope, then the one effects node
+        expect(next(node)).toBe(bus(ctx, 'effects')); // its envelope, then the effects bus
       });
     });
   }
 
-  it('is silent with the sound off: no source, no cue', () => {
+  it('is silent with the effects slider at 0: no source, no cue', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
-    sfx.setEnabled(false);
+    sfx.setVolume('effects', 0);
     const before = ctx.sources.length;
     expect(sfx.tell('choir')).toBeNull();
     expect(ctx.sources.length).toBe(before);
@@ -407,10 +455,17 @@ class FakeContext {
   }
 }
 
-function setup(on = true, ctx = new FakeContext()) {
+const FULL: Mix = { music: 100, ambience: 100, effects: 100, voice: 100 };
+const MUTED: Mix = { music: 0, ambience: 0, effects: 0, voice: 0 };
+function setup(mix: Mix = FULL, ctx = new FakeContext()) {
   const make = vi.fn(() => ctx as unknown as AudioContext);
-  return { ctx, make, sfx: new Sfx(make, on) };
+  return { ctx, make, sfx: new Sfx(make, { ...mix }) };
 }
+/** The graph is made master first, then the buses in their order. */
+const master = (ctx: FakeContext): FakeGain => ctx.gains[0]!;
+const bus = (ctx: FakeContext, b: Bus): FakeGain => ctx.gains[1 + BUSES.indexOf(b)]!;
+/** The steady sources started with the context: the hum, then the tension drones. */
+const STEADY = HUM.length + TENSION.flat().length;
 /** The node after `node` on the way out, through its only output. */
 const next = (node: FakeNode): FakeNode => {
   expect(node.outputs).toHaveLength(1);
@@ -427,22 +482,25 @@ describe('Sfx, before a user gesture', () => {
 });
 
 describe('Sfx.unlock, on a user gesture', () => {
-  it('makes the context once, with one effects gain node into the speakers', () => {
-    const { ctx, make, sfx } = setup();
+  it('makes the context once: a master gain into the speakers, four bus gains into it, each at its slider', () => {
+    const { ctx, make, sfx } = setup({ music: 20, ambience: 40, effects: 60, voice: 80 });
     sfx.unlock();
     sfx.unlock();
     expect(make).toHaveBeenCalledTimes(1);
     expect(sfx.state).toBe('running');
-    expect(ctx.gains).toHaveLength(1 + HUM.length); // the effects node, then one level per hum tone
-    const [fx] = ctx.gains;
-    expect(fx!.gain.value).toBe(FX_LEVEL);
-    expect(next(fx!)).toBe(ctx.destination);
+    expect(master(ctx).gain.value).toBe(MASTER_LEVEL);
+    expect(next(master(ctx))).toBe(ctx.destination);
+    for (const b of BUSES) {
+      expect(next(bus(ctx, b))).toBe(master(ctx));
+      expect(bus(ctx, b).gain.value).toBe(busGain(sfx.volume(b)));
+      expect(sfx.gain(b)).toBe(busGain(sfx.volume(b)));
+    }
+    expect(sfx.volume('music')).toBe(20);
   });
 
-  it('starts the hum with the context: one steady sine per tone, never stopped, under the effects node', () => {
+  it('starts the hum with the context: one steady sine per tone, never stopped, under the ambience bus', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
-    expect(ctx.sources).toHaveLength(HUM.length);
     HUM.forEach((tone, i) => {
       const osc = ctx.sources[i] as FakeOscillator;
       expect(osc.type).toBe('sine');
@@ -450,19 +508,42 @@ describe('Sfx.unlock, on a user gesture', () => {
       expect(osc.times).toEqual([5]); // started now, no stop
       const level = next(osc) as FakeGain;
       expect(level.gain.value).toBe(tone.gain);
-      expect(next(level)).toBe(ctx.gains[0]);
+      expect(next(level)).toBe(bus(ctx, ROUTE.hum));
     });
   });
 
-  it('reads the level: 0 before a context, the effects level once it runs', () => {
-    const { sfx } = setup();
-    expect(sfx.level).toBe(0);
+  it('starts the tension drones with the context, each layer through its own gain into the music bus, silent while calm', () => {
+    const { ctx, sfx } = setup();
     sfx.unlock();
-    expect(sfx.level).toBe(FX_LEVEL);
+    expect(ctx.sources).toHaveLength(STEADY);
+    const layers = ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension));
+    expect(layers).toHaveLength(TENSION.length);
+    let s = HUM.length;
+    TENSION.forEach((tones, i) => {
+      expect(layers[i]!.gain.value).toBe(0);
+      for (const tone of tones) {
+        const osc = ctx.sources[s++] as FakeOscillator;
+        expect(osc.type).toBe('sine');
+        expect(osc.frequency.value).toBe(tone.freq);
+        expect(osc.times).toEqual([5]);
+        const level = next(osc) as FakeGain;
+        expect(level.gain.value).toBe(tone.gain);
+        expect(next(level)).toBe(layers[i]);
+      }
+    });
+    expect(sfx.layers).toEqual([0, 0]);
+  });
+
+  it('reads the gains: 0 before a context, the bus and layer gains once it runs', () => {
+    const { sfx } = setup();
+    expect(sfx.gain('effects')).toBe(0);
+    expect(sfx.layers).toEqual([0, 0]);
+    sfx.unlock();
+    expect(sfx.gain('effects')).toBe(1);
   });
 
   it('resumes a context the browser started suspended, and only then', async () => {
-    const { ctx, sfx } = setup(true, new FakeContext('suspended'));
+    const { ctx, sfx } = setup(FULL, new FakeContext('suspended'));
     sfx.unlock();
     expect(ctx.resumed).toBe(1);
     await Promise.resolve();
@@ -472,7 +553,7 @@ describe('Sfx.unlock, on a user gesture', () => {
   });
 
   it('swallows a failed resume: the game goes on, silent', async () => {
-    const { ctx, sfx } = setup(true, new FakeContext('suspended', true));
+    const { ctx, sfx } = setup(FULL, new FakeContext('suspended', true));
     sfx.unlock();
     expect(ctx.resumed).toBe(1);
     expect(ctx.rejection!.catch).toHaveBeenCalled(); // handled: no unhandled rejection
@@ -481,17 +562,23 @@ describe('Sfx.unlock, on a user gesture', () => {
   });
 
   it('stays silent without Web Audio', () => {
-    const sfx = new Sfx(() => null, true);
+    const sfx = new Sfx(() => null, { ...FULL });
     sfx.unlock();
     expect(sfx.state).toBe('none');
     expect(sfx.ejection(2)).toBeNull();
   });
 
-  it('does nothing while the sound is off: no context for a muted player', () => {
-    const { make, sfx } = setup(false);
+  it('does nothing while every slider is at 0: no context for a muted player', () => {
+    const { make, sfx } = setup(MUTED);
     sfx.unlock();
     expect(make).not.toHaveBeenCalled();
-    expect(sfx.enabled).toBe(false);
+    for (const b of BUSES) expect(sfx.volume(b)).toBe(0);
+  });
+
+  it('makes the context while any one slider is above 0', () => {
+    const { make, sfx } = setup({ ...MUTED, voice: 10 });
+    sfx.unlock();
+    expect(make).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -505,10 +592,10 @@ describe('Sfx.ejection', () => {
       sfx.unlock();
       expect(sfx.ejection(side)).toBe(cue);
       const voices = ejectionVoices(cue);
-      expect(ctx.sources).toHaveLength(HUM.length + voices.length);
-      const fx = ctx.gains[0]!;
+      expect(ctx.sources).toHaveLength(STEADY + voices.length);
+      const fx = bus(ctx, ROUTE.ejection);
       voices.forEach((voice, i) => {
-        const source = ctx.sources[HUM.length + i]!;
+        const source = ctx.sources[STEADY + i]!;
         expect(source.times).toEqual([5 + start(voice), 5 + end(voice)]);
         let node = next(source);
         if (voice.source === 'noise') {
@@ -535,7 +622,7 @@ describe('Sfx.ejection', () => {
         expect(gain.gain.events).toEqual(
           voice.env.map(([t, g], j) => [j === 0 ? 'set' : 'exp', Math.max(g, SILENT), 5 + t]),
         );
-        expect(next(gain)).toBe(fx); // every voice goes through the one effects node
+        expect(next(gain)).toBe(fx); // every voice goes through the effects bus
       });
     });
   }
@@ -560,40 +647,89 @@ describe('Sfx.ejection', () => {
   });
 });
 
-describe('Sfx.setEnabled, the sound toggle', () => {
-  it('off fades the effects node out at once, a ringing toll included, and plays nothing more', () => {
+describe('Sfx.setVolume, a slider', () => {
+  it('0 fades its bus out at once, a ringing toll included, and plays nothing more through it', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
     sfx.ejection(2);
     const played = ctx.sources.length;
     ctx.currentTime = 6;
-    sfx.setEnabled(false);
-    expect(sfx.enabled).toBe(false);
-    expect(ctx.gains[0]!.gain.events).toEqual([['target', 0, 6]]);
+    sfx.setVolume('effects', 0);
+    expect(sfx.volume('effects')).toBe(0);
+    expect(bus(ctx, 'effects').gain.events).toEqual([['target', 0, 6]]);
     expect(sfx.ejection(2)).toBeNull();
     expect(ctx.sources).toHaveLength(played);
   });
 
-  it('back on fades the effects node in and plays again', () => {
+  it('moves only its own bus, to its gain', () => {
     const { ctx, sfx } = setup();
     sfx.unlock();
-    sfx.setEnabled(false);
-    sfx.setEnabled(true);
-    expect(ctx.gains[0]!.gain.events.at(-1)).toEqual(['target', FX_LEVEL, 5]);
+    sfx.setVolume('music', 30);
+    expect(bus(ctx, 'music').gain.events).toEqual([['target', 0.3, 5]]);
+    for (const b of BUSES.filter((b) => b !== 'music')) expect(bus(ctx, b).gain.events).toEqual([]);
+  });
+
+  it('back above 0 fades the bus in and plays again', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    sfx.setVolume('effects', 0);
+    sfx.setVolume('effects', 100);
+    expect(bus(ctx, 'effects').gain.events.at(-1)).toEqual(['target', 1, 5]);
     expect(sfx.ejection(1)).toBe('clack');
   });
 
-  it('on from a muted start makes the context: the toggle click is a user gesture', () => {
-    const { make, sfx } = setup(false);
-    sfx.setEnabled(true);
+  it('above 0 from a muted start makes the context: moving a slider is a user gesture', () => {
+    const { make, sfx } = setup(MUTED);
+    sfx.setVolume('effects', 50);
     expect(make).toHaveBeenCalledTimes(1);
     expect(sfx.ejection(2)).toBe('toll');
   });
 
-  it('off before any gesture makes nothing', () => {
-    const { make, sfx } = setup();
-    sfx.setEnabled(false);
+  it('a slider of another bus at 0 leaves the effects playing', () => {
+    const { sfx } = setup();
+    sfx.unlock();
+    sfx.setVolume('music', 0);
+    sfx.setVolume('ambience', 0);
+    expect(sfx.knock(1)).toBe(knockPitch(1));
+  });
+
+  it('0 before any gesture makes nothing', () => {
+    const { make, sfx } = setup({ ...MUTED, effects: 100 });
+    sfx.setVolume('effects', 0);
     expect(make).not.toHaveBeenCalled();
     expect(sfx.state).toBe('none');
+  });
+});
+
+describe('Sfx.setTension, the drone layers crossfade on the tension level (#439)', () => {
+  it('crossfades each layer to its gain at the new level over about a second', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    const layers = ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension));
+    sfx.setTension(1);
+    expect(sfx.tension).toBe(1);
+    expect(layers.map((l) => l.gain.events)).toEqual([[['target', 1, 5]], [['target', 0, 5]]]);
+    ctx.currentTime = 7;
+    sfx.setTension(2);
+    expect(layers.map((l) => l.gain.events.at(-1))).toEqual([
+      ['target', 1, 7],
+      ['target', 1, 7],
+    ]);
+    expect(3 * CROSSFADE_TAU).toBeGreaterThanOrEqual(0.5); // about a second to settle
+    expect(3 * CROSSFADE_TAU).toBeLessThanOrEqual(1.5);
+  });
+
+  it('keeps the level before a gesture, and the context starts the layers at it', () => {
+    const { ctx, sfx } = setup();
+    sfx.setTension(2);
+    expect(sfx.tension).toBe(2);
+    expect(sfx.layers).toEqual([0, 0]); // no context yet: silent
+    sfx.unlock();
+    expect(sfx.layers).toEqual([1, 1]);
+    expect(ctx.gains.filter((g) => g.outputs[0] === bus(ctx, ROUTE.tension)).map((l) => l.gain.events)).toEqual([[], []]);
+  });
+
+  it('starts calm', () => {
+    expect(setup().sfx.tension).toBe(0);
   });
 });

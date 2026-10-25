@@ -116,6 +116,24 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden();
 };
 
+// The volume page of the settings menu (#438): Sound shows the four sliders in place of the items; they cover no cell
+// either, and on a touch screen each is a touch target of at least 44 px.
+const checkVolumes = async (page: Page, state: string) => {
+  await tapCog(page);
+  await page.getByRole('button', { name: 'Sound' }).click();
+  await expect(page.getByRole('slider', { name: 'Music' })).toBeVisible();
+  await frame(page);
+  expect(await problems(page), `${state}, volume sliders open`).toEqual([]);
+  const small = await page.evaluate(() =>
+    [...document.querySelectorAll('#settings-menu .setting-volume')]
+      .filter((el) => navigator.maxTouchPoints > 0 && el.getBoundingClientRect().height < 44)
+      .map((el) => el.textContent),
+  );
+  expect(small, `${state}, volume sliders under 44 px`).toEqual([]);
+  await tapCog(page);
+  await expect(page.getByRole('slider', { name: 'Music' })).toBeHidden();
+};
+
 // The parts of the daily result card (#196) that meet the Copy diagnostics button (#220), each scrolled into view
 // first, as a scrolling column shows it.
 const cardOverCorner = (page: Page) =>
@@ -153,6 +171,7 @@ for (const { name, viewport, mobile } of sizes) {
       // The plate stays top-left, 16 px from the edges (docs/specs/ui.md section 4).
       expect(await hud.boundingBox()).toMatchObject({ x: 16, y: 16 });
       await check(page, testInfo, 'at the start');
+      await checkVolumes(page, 'at the start');
     });
 
     // UI scale (#382): a stored 200 % is applied at the cap of this window (maxUiScale), 100 % on these viewports.

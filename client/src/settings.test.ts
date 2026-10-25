@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { ICONS } from './icons';
-import { menuOpen, motionReduced, nextDisplay, nextTheme, settingsList, themeAttribute } from './settings';
+import { menuOpen, motionReduced, nextDisplay, nextTheme, settingsList, themeAttribute, VOLUME_NAMES } from './settings';
+import { BUSES } from './sound';
 import { skinById } from './skins';
 
 describe('settingsList', () => {
-  it('lists Clear board, Reduced motion, Flat HUD, Sound, Theme (with the UI scale and Safe mode), the shell skin, Export game and Import game', () => {
-    expect(settingsList(false, true, 'system', 'scarab', 100, true, false, false)).toEqual([
+  it('lists Clear board, Reduced motion, Flat HUD, Sound (no toggle: it opens the sliders), Theme (with the UI scale and Safe mode), the shell skin, Export game and Import game', () => {
+    expect(settingsList(false, 'system', 'scarab', 100, true, false, false)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },
       { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: false },
       { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: false },
-      { id: 'sound', label: 'Sound', icon: 'sound', on: true },
+      { id: 'sound', label: 'Sound', icon: 'sound' },
       { id: 'theme', label: 'Theme: System', icon: 'theme', on: true },
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
-    expect(settingsList(true, false, 'light', 'scarab', 200, false, true, true)).toEqual([
+    expect(settingsList(true, 'light', 'scarab', 200, false, true, true)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: true },
       { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: true },
-      { id: 'sound', label: 'Sound', icon: 'muted', on: false },
+      { id: 'sound', label: 'Sound', icon: 'sound' },
       { id: 'theme', label: 'Theme: Light', icon: 'theme', on: false },
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
@@ -28,7 +29,11 @@ describe('settingsList', () => {
   });
 
   it('keeps the menu at eight rows with Reduced motion (#379) and Flat HUD (#391): no separate Display row', () => {
-    expect(settingsList(false, true, 'system', 'scarab', 100, true, false, false)).toHaveLength(8);
+    expect(settingsList(false, 'system', 'scarab', 100, true, false, false)).toHaveLength(8);
+  });
+
+  it('names the four volume sliders, one per bus (#438)', () => {
+    expect(BUSES.map((bus) => VOLUME_NAMES[bus])).toEqual(['Music', 'Ambience', 'Effects', 'Voice']);
   });
 
   it('cycles the theme first; once back to System, steps the UI scale up to the cap; then 100 % with Safe mode flipped', () => {
@@ -41,14 +46,14 @@ describe('settingsList', () => {
   });
 
   it('gives every menu item a name and an icon of the set', () => {
-    for (const s of [...settingsList(false, false, 'dark', 'scarab', 125, false, false, false), ...settingsList(true, true, 'system', 'scarab', 200, true, true, true)]) {
+    for (const s of [...settingsList(false, 'dark', 'scarab', 125, false, false, false), ...settingsList(true, 'system', 'scarab', 200, true, true, true)]) {
       expect(s.label).not.toBe('');
       expect(Object.keys(ICONS)).toContain(s.icon);
     }
   });
 
   it('gives every setting a distinct id', () => {
-    const ids = settingsList(false, true, 'system', 'scarab', 100, true, false, false).map((s) => s.id);
+    const ids = settingsList(false, 'system', 'scarab', 100, true, false, false).map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
