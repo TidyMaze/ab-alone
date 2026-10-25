@@ -4,6 +4,7 @@ import {
   CELLS,
   RADIUS,
   VANISHED,
+  arrowYaw,
   axialTo3D,
   cellIndex,
   encodeMove,
@@ -390,11 +391,16 @@ function marbleMesh(side: number, looks = marbleMaterials, core = coreMaterial):
   if (glass) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
   return mesh;
 }
-const targetMaterial = new THREE.MeshStandardMaterial({
-  color: COLORS.cyan,
-  emissive: COLORS.cyan,
-  emissiveIntensity: 0.5,
-});
+// A legal target (#390): a ring and an arrow glyph flat on the cell, pointing the way the group goes (world.md 6, rule
+// 5). Near-black like the shell, so it reads 3:1 on the lit deck in every mode; the shape carries it, not a colour.
+const targetRingGeometry = new THREE.RingGeometry(0.34, 0.42, 32);
+const arrowShape = new THREE.Shape(
+  [[0.26, 0], [0.04, 0.18], [0.04, 0.07], [-0.2, 0.07], [-0.2, -0.07], [0.04, -0.07], [0.04, -0.18]].map(
+    ([x, y]) => new THREE.Vector2(x, y),
+  ),
+);
+const arrowGeometry = new THREE.ShapeGeometry(arrowShape);
+const targetMaterial = new THREE.MeshBasicMaterial({ color: COLORS.base });
 const ringMaterial = new THREE.MeshBasicMaterial({ color: COLORS.cyan });
 // The Hull tell: a cracked cell wears the crack decal on its steel (crack-decal.png, a steady shape), near-black fissures
 // that read 3:1 on the light deck, with one pale tick per ply left. Without the texture, the ticks and the HUD line
@@ -813,6 +819,7 @@ addEventListener('keydown', skipEjections, { capture: true });
 
 let selected: Axial[] = [];
 let ringed: Axial[] = []; // the marbles drawn with the selection ring, read by the e2e tests
+let targets: ReturnType<typeof groupTargets> = []; // the cells drawn with a target arrow, read by the e2e tests
 
 function hud(extra = ''): void {
   const status = engine.status();
@@ -884,7 +891,7 @@ function refresh(): void {
   lightRim();
   drawNotches();
   const moves = parseMoves(engine.legal_moves());
-  const targets = groupTargets(moves, selected);
+  targets = groupTargets(moves, selected);
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
@@ -901,13 +908,22 @@ function refresh(): void {
     if (side === VANISHED) return;
     const p = axialTo3D(q, r);
     const plies = left.get(i) ?? 0;
-    const target = targets.some(([tq, tr]) => tq === q && tr === r);
-    disc.material = target ? targetMaterial : steel;
+    disc.material = steel;
     if (plies > 0 && crackDecal) {
       const decal = new THREE.Mesh(crackGeometry, crackMaterial); // on the disc's top face, under the ticks
       decal.position.set(p.x, 0.003, p.z);
       marbles.add(decal);
       crackDecals.push([q, r]);
+    }
+    const target = targets.find(({ cell: [tq, tr] }) => tq === q && tr === r);
+    if (target) {
+      const ring = new THREE.Mesh(targetRingGeometry, targetMaterial);
+      const arrow = new THREE.Mesh(arrowGeometry, targetMaterial);
+      ring.rotation.x = -Math.PI / 2; // flat on the cell, facing up
+      arrow.rotation.set(-Math.PI / 2, arrowYaw(target.dir), 0, 'YXZ');
+      ring.position.set(p.x, 0.005, p.z);
+      arrow.position.set(p.x, 0.005, p.z);
+      marbles.add(ring, arrow);
     }
     for (const dx of tickOffsets(plies)) {
       const tick = new THREE.Mesh(tickGeometry, tickMaterial); // on the front edge, clear of the marble
@@ -1194,6 +1210,8 @@ addEventListener('resize', () => {
 // Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
 (window as unknown as Record<string, unknown>).__hint = () => hint.shown(here());
 (window as unknown as Record<string, unknown>).__rings = () => ringed;
+// Used by the browser checks to read the target cells and the direction of their arrow (#390).
+(window as unknown as Record<string, unknown>).__targets = () => targets;
 
 // Used by the browser checks to pick a legal move (the boss tests play forward), and to find one that
 // exposes a marble to The Chaplain.
