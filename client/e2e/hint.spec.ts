@@ -51,7 +51,7 @@ test('Hint shows the best move as a ghost and plays nothing; a second press clea
   page,
 }) => {
   test.slow(); // two hint searches in the worker, each with the bot's budget
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&nodes=200');
   await ready(page);
   const body = page.locator('body');
   const hint = page.getByRole('button', { name: 'Hint' });
@@ -76,7 +76,7 @@ test('Hint shows the best move as a ghost and plays nothing; a second press clea
 // Split from the test above (#349): a selection clears the hint, then the next move's hint is White's.
 test('a selection clears the hint, and the hint after the next move is for White, #192', async ({ page }) => {
   test.slow(); // two hint searches in the worker
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&nodes=200');
   await ready(page);
   const body = page.locator('body');
   const hint = page.getByRole('button', { name: 'Hint' });
@@ -103,7 +103,7 @@ test('on the start position the marbles the hint takes wear the selection ring, 
   page,
 }) => {
   test.slow(); // two hint searches in the worker
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&nodes=200');
   await ready(page);
   const body = page.locator('body');
   const hint = page.getByRole('button', { name: 'Hint' });
@@ -163,7 +163,7 @@ test('a hint asked for an older position is never drawn on the new one, #192', a
       }
     };
   });
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&nodes=200');
   await ready(page);
   const body = page.locator('body');
   const hint = page.getByRole('button', { name: 'Hint' });
@@ -225,7 +225,7 @@ test('against the bot, Hint is disabled while the bot thinks, then shows the hin
       }
     };
   });
-  await page.goto('./');
+  await page.goto('./?nodes=200');
   await ready(page);
   const body = page.locator('body');
   const hint = page.getByRole('button', { name: 'Hint' });
@@ -251,7 +251,7 @@ test('against the bot, Hint is disabled while the bot thinks, then shows the hin
 });
 
 test('Hint is disabled once the game is over, #192', async ({ page }) => {
-  await page.goto('./?bot=off');
+  await page.goto('./?bot=off&nodes=200');
   await ready(page);
   // The position after the first move comes back a third time: a draw.
   await importText(page, save([A, B, C, D, E, B, C, D, E]));
