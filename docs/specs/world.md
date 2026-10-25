@@ -123,7 +123,8 @@ Clear-board mode removes it.
 **Tell marks.** Boss tells use engraved glyphs and steady ring outlines on the cell or marble
 (pale bone-white, 3:1 against the surface), never a halo or glow alone: a black halo is lost on
 a matte black shell. The Chaplain's tell is a ring outline on the marbles about to flip plus a
-glyph on the three boss marbles in contact.
+glyph on the three boss marbles in contact. A tell on a cell is pale bone-white or near-black,
+whichever reads 3:1 on that surface: The Hull's crack is near-black on the light deck (#355).
 
 **Ejection.** A marble pushed off the board rolls one cell out over the rim with the line that
 pushes it, in 200 ms (the sharp inhale of section 7). Then the void takes it (the thud): it falls,
