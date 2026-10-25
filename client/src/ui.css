@@ -34,6 +34,10 @@
   --hazard: #8f4a0c;
   --danger: #a3241a;
 }
+:root[data-palette='protan'] { --accent: #38bdf8; --hazard: #facc15; }
+:root[data-palette='deutan'] { --accent: #60a5fa; --hazard: #fbbf24; }
+:root[data-palette='tritan'] { --accent: #2dd4bf; --hazard: #f43f5e; }
+:root[data-palette='contrast'] { --accent: #00ffff; --hazard: #ffaa00; }
 
 html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 canvas { display: block; touch-action: none; }
@@ -191,11 +195,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #settings-box { align-self: stretch; } /* as wide as the column: the menu under the cog fits in it */
   /* Bug #427: the column scrolls, so a menu inside it is clipped at its bottom edge once the UI scale grows it. Fixed to the
      viewport and hung from the cog, it leaves that clip. */
-  /* Only in a tall window, where the 200 % scale exists: on a short one the cog scrolls away and a fixed menu would hang over it. */
-  @media (min-height: 900px) {
-    @supports (anchor-name: --cog) {
-      #settings-menu { position: fixed; position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
-    }
+  @supports (anchor-name: --cog) {
+    #settings-menu { position: fixed; position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
   }
 }
 @media (orientation: portrait) {

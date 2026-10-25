@@ -3,27 +3,30 @@ import { ICONS } from './icons';
 import { menuOpen, motionReduced, nextDisplay, nextTheme, settingsList, themeAttribute, VOLUME_NAMES } from './settings';
 import { BUSES } from './sound';
 import { glassSkinById } from './glassskins';
+import { PALETTE_NAMES } from './palettes';
 import { skinById } from './skins';
 
 describe('settingsList', () => {
-  it('lists Clear board, Reduced motion, Flat HUD, Sound (no toggle: it opens the sliders), Theme (with the UI scale and Safe mode), the shell skin and the glass skin (one row), Export game and Import game', () => {
-    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false)).toEqual([
+  it('lists Clear board, Reduced motion, Flat HUD, Sound (no toggle: it opens the sliders), Theme (with the UI scale and Safe mode), Palette, the shell skin and the glass skin (one row), Export game and Import game', () => {
+    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default')).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },
       { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: false },
       { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: false },
       { id: 'sound', label: 'Sound', icon: 'sound' },
       { id: 'theme', label: 'Theme: System', icon: 'theme', on: true },
+      { id: 'palette', label: 'Palette: Default', icon: 'palette' },
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'glass-skin', label: glassSkinById('smoked').name, icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
-    expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true)).toEqual([
+    expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true, 'protan')).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: true },
       { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: true },
       { id: 'sound', label: 'Sound', icon: 'sound' },
       { id: 'theme', label: 'Theme: Light', icon: 'theme', on: false },
+      { id: 'palette', label: 'Palette: Protan', icon: 'palette' },
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'glass-skin', label: glassSkinById('frost').name, icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
@@ -31,8 +34,8 @@ describe('settingsList', () => {
     ]);
   });
 
-  it('keeps the menu at nine items, the glass skin sharing the shell skin row, with Reduced motion (#379) and Flat HUD (#391): no separate Display row', () => {
-    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false)).toHaveLength(9);
+  it('keeps the menu at ten items, the glass skin sharing the shell skin row, with Reduced motion (#379), Flat HUD (#391) and Palette (#381)', () => {
+    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default')).toHaveLength(10);
   });
 
   it('names the four volume sliders, one per bus (#438)', () => {
@@ -49,14 +52,14 @@ describe('settingsList', () => {
   });
 
   it('gives every menu item a name and an icon of the set', () => {
-    for (const s of [...settingsList(false, 'dark', 'scarab', 'smoked', 125, false, false, false), ...settingsList(true, 'system', 'scarab', 'smoked', 200, true, true, true)]) {
+    for (const s of [...settingsList(false, 'dark', 'scarab', 'smoked', 125, false, false, false, 'default'), ...settingsList(true, 'system', 'scarab', 'smoked', 200, true, true, true, 'contrast')]) {
       expect(s.label).not.toBe('');
       expect(Object.keys(ICONS)).toContain(s.icon);
     }
   });
 
   it('gives every setting a distinct id', () => {
-    const ids = settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false).map((s) => s.id);
+    const ids = settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default').map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });

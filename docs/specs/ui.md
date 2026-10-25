@@ -180,6 +180,9 @@ in the column, outside the menu.
   Export game downloads the game, Import game opens the browser's file picker. A refused file adds a
   short note to the HUD, kept verbatim for the e2e tests: "import refused: not a game file", "import
   refused: unknown file version", "import refused: illegal move in the file".
+- **Palette.** An item of the settings menu sharing a row with Theme (#381): cycles Default, Protan,
+  Deutan, Tritan and High contrast, and recolours the marbles, the rim light, tells and the HUD accent dot.
+  Saved locally.
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 

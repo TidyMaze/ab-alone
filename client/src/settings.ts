@@ -5,6 +5,7 @@
 import type { IconName } from './icons';
 import type { Bus } from './sound';
 import { glassSkinById } from './glassskins';
+import { PALETTE_NAMES, type Palette } from './palettes';
 import { skinById } from './skins';
 import { nextUiScale, type UiScale } from './uiscale';
 
@@ -53,12 +54,14 @@ export const settingsList = (
   safe: boolean,
   reduced: boolean,
   flat: boolean,
+  palette: Palette,
 ): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: reduced },
   { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: flat },
   { id: 'sound', label: 'Sound', icon: 'sound' },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme', on: safe },
+  { id: 'palette', label: `Palette: ${PALETTE_NAMES[palette]}`, icon: 'palette' },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
   { id: 'glass-skin', label: glassSkinById(glass).name, icon: 'skin' },
   { id: 'export-game', label: 'Export game', icon: 'export' },

@@ -15,12 +15,14 @@ import {
   readSafeMode,
   readMix,
   readSkin,
+  readPalette,
   readTheme,
   readTier,
   readUiScale,
   tierFromHints,
   writeClearBoard,
   writeGlassSkin,
+  writePalette,
   writeSafeMode,
   writeVolume,
   writeFlatHud,
@@ -168,6 +170,27 @@ describe('theme storage: System unless the player picked Dark or Light', () => {
     expect(readTheme(null)).toBe('system');
     expect(() => writeTheme(throwing, 'dark')).not.toThrow();
     expect(() => writeTheme(null, 'dark')).not.toThrow();
+  });
+});
+
+describe('palette storage: default unless the player picked one', () => {
+  it('defaults to default', () => {
+    expect(readPalette(memoryStorage())).toBe('default');
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writePalette(s, 'protan');
+    expect(s.data.get('ab-alone.palette')).toBe('protan');
+    expect(readPalette(s)).toBe('protan');
+  });
+  it('ignores garbage value and falls back to default', () => {
+    expect(readPalette(memoryStorage({ 'ab-alone.palette': 'invalid' }))).toBe('default');
+  });
+  it('falls back to default when storage throws or is missing', () => {
+    expect(readPalette(throwing)).toBe('default');
+    expect(readPalette(null)).toBe('default');
+    expect(() => writePalette(throwing, 'protan')).not.toThrow();
+    expect(() => writePalette(null, 'protan')).not.toThrow();
   });
 });
 

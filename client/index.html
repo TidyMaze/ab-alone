@@ -13,6 +13,8 @@
       try {
         const theme = localStorage.getItem('ab-alone.theme');
         if (theme === 'dark' || theme === 'light') document.documentElement.dataset.theme = theme;
+        const palette = localStorage.getItem('ab-alone.palette');
+        if (palette) document.documentElement.dataset.palette = palette;
       } catch {}
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

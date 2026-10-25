@@ -193,8 +193,8 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 
 ## 8. Accessibility
 
-- **Colorblind.** Three palettes (protan, deutan, tritan) plus a high-contrast one. Factions
-  differ by silhouette and glyph, never by color alone.
+- **Colorblind.** Three palettes (protan, deutan, tritan) plus a high-contrast one, chosen in the
+  settings menu and saved locally (#381). Factions differ by silhouette and glyph, never by color alone.
 - **Clear-board mode.** Disables fog, bloom, grain, vignette, flicker, props over the board.
   It never removes a boss tell, a preview ghost or a phase notch.
 - **Boss tells survive every mode.** Each tell is a steady shape or glyph plus a sound twin, not
