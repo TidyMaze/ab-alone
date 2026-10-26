@@ -230,7 +230,9 @@ stay in the column, outside the menu. Opening the root URL without query paramet
 - **Daily result card.** When a daily fight is over, under Retry: a read-only box with the text to
   share (game-design.md section 7.6), as wide as its text, with the accent border, then a Copy
   result button. Held upright, the rows of buttons leave no room above the board, so the card sits
-  in the bottom-left corner, under the board, with Copy result beside Copy diagnostics. Wider than
+  in the bottom-left corner, under the board, with Copy result beside Copy diagnostics. On a phone
+  held upright Copy result is a 44 px touch target like Copy diagnostics, and the box above them both
+  may be as wide as the window, so its first line does not wrap (#619). Wider than
   tall, the column stops above the Copy diagnostics corner, so neither the card nor a button
   scrolls under it. Like the buttons, the card never covers the plate or a cell. Copy puts the
   text in the clipboard and the note line says "result copied". When the browser refuses the
