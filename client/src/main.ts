@@ -71,7 +71,7 @@ import { fpsOf, keepWindow } from './fps';
 import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
-import { applyDeckAtmosphere, type DeckId, loadSpaceshipBay, type SpaceshipBayAssets } from './roomloader';
+import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, type SpaceshipBayAssets } from './roomloader';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
@@ -276,7 +276,7 @@ let view = resetView();
 // The terminal reader (#512): while the player reads the deck console, the view to go back to, else null.
 let reading: View | null = null;
 const consoleDef = spaceshipArchitecture(tier).find((p) => p.id === 'console-screen')!; // in every tier (room.ts)
-const fogObj = new THREE.Fog(COLORS.base, 10, 20);
+const fogObj = new THREE.Fog(DECK_ATMOSPHERES.mess.fogColor, 10, 20);
 function updateFog(): void {
   const fog = fogSettings(tier, clear, view, fogRadius, DECKS[deck].fog);
   if (!fog) {
@@ -284,6 +284,7 @@ function updateFog(): void {
   } else {
     fogObj.near = fog.near;
     fogObj.far = fog.far;
+    fogObj.color.setHex(DECK_ATMOSPHERES[deck as DeckId].fogColor);
     if (scene.fog !== fogObj) scene.fog = fogObj;
   }
 }

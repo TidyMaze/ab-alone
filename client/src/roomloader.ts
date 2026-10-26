@@ -129,6 +129,7 @@ export interface DeckAtmosphereConfig {
   lightColor: number;
   roughness: number;
   accentLightColor: number;
+  fogColor: number;
 }
 
 export const DECK_ATMOSPHERES: Record<DeckId, DeckAtmosphereConfig> = {
@@ -139,6 +140,7 @@ export const DECK_ATMOSPHERES: Record<DeckId, DeckAtmosphereConfig> = {
     lightColor: 0xd9822b,
     roughness: 0.8,
     accentLightColor: 0xd9822b,
+    fogColor: 0x1c1612,
   },
   cargo: {
     deckColor: 0x2a2f34,
@@ -147,6 +149,7 @@ export const DECK_ATMOSPHERES: Record<DeckId, DeckAtmosphereConfig> = {
     lightColor: 0x7fd6e8,
     roughness: 0.85,
     accentLightColor: 0x7fd6e8,
+    fogColor: 0x12161a,
   },
   furnace: {
     deckColor: 0x38221c,
@@ -155,6 +158,7 @@ export const DECK_ATMOSPHERES: Record<DeckId, DeckAtmosphereConfig> = {
     lightColor: 0xe86a33,
     roughness: 0.75,
     accentLightColor: 0xff4d00,
+    fogColor: 0x20120d,
   },
   chapel: {
     deckColor: 0x323038,
@@ -163,6 +167,7 @@ export const DECK_ATMOSPHERES: Record<DeckId, DeckAtmosphereConfig> = {
     lightColor: 0xa29bfe,
     roughness: 0.9,
     accentLightColor: 0x6c5ce7,
+    fogColor: 0x181620,
   },
   bridge: {
     deckColor: 0x243238,
@@ -171,6 +176,7 @@ export const DECK_ATMOSPHERES: Record<DeckId, DeckAtmosphereConfig> = {
     lightColor: 0x55efc4,
     roughness: 0.7,
     accentLightColor: 0x00cec9,
+    fogColor: 0x0f191d,
   },
 };
 

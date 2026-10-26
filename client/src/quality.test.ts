@@ -113,13 +113,14 @@ describe('fogSettings', () => {
     for (const radius of [4, 3]) {
       const cells = CELLS.filter((c) => ring(c) <= radius);
       const outer = frameShape(CELLS.map((c) => (ring(c) > radius ? VANISHED : 0))).outer;
-      it(`${tier}, radius ${radius}: never over a cell, thick at the far rim, at every view`, () => {
+      it(`${tier}, radius ${radius}: never over a cell, gentle at the rim, extends into bay (#665)`, () => {
         for (const v of views) {
           const fog = fogSettings(tier, false, v, radius, 1)!;
           const reach = DISC * Math.sin(v.polar); // the disc's farthest point from its centre, along the view
           const cellDepth = Math.max(...cells.map(([q, r]) => depth(v, axialTo3D(q, r).x, axialTo3D(q, r).z) + reach));
           expect(factor(fog, cellDepth)).toBe(0);
-          expect(factor(fog, Math.max(...outer.map((p) => depth(v, p.x, p.z))))).toBeGreaterThanOrEqual(0.49);
+          expect(factor(fog, Math.max(...outer.map((p) => depth(v, p.x, p.z))))).toBeLessThan(0.05);
+          expect(fog.far - fog.near).toBeGreaterThanOrEqual(30);
         }
       });
     }
@@ -129,6 +130,10 @@ describe('fogSettings', () => {
     const high = fogSettings('high', false, resetView(), 4, 1)!;
     expect(low.near).toBe(high.near);
     expect(low.far).toBeGreaterThan(high.far);
+  });
+  it('extends far smoothly to 45m+ at default view on standard density (#665)', () => {
+    const fog = fogSettings('high', false, resetView(), 4, 1)!;
+    expect(fog.far).toBeGreaterThanOrEqual(45);
   });
   // #400: a deck's density thickens the fog over the rim, from the same start: never over a cell on any deck.
   it('a denser deck fog starts at the same edge and is thick sooner, at every view', () => {
