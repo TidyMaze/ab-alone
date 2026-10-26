@@ -171,6 +171,10 @@ describe('main.ts, the offline battle royale (#502)', () => {
       '2nd Bot 5 · 6 points',
     ]);
     expect(button('royale-hold').disabled).toBe(true);
+    game.click(-2, 4); // a marble of the player, then its NW target: no round after the end (#611)
+    game.click(-2, 3);
+    expect(game.hook<Axial[]>('__rings')).toEqual([]);
+    expect(turn()).toBe('You win');
     game.openModes();
     button('ship').click();
     expect(document.body.dataset.over).toBeUndefined(); // no end light over the hub
