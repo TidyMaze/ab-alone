@@ -111,7 +111,7 @@ See section 6.
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
 | Gate | Only the lifts. A lift onto a deck opens once the boss of the deck below it is beaten (the Mess is always open). A locked lift keeps the marble out and Tally says one short line |
 | Return | When the game a room started ends, "Back to the ship" puts the marble back on that room's cell |
-| Save | Local storage: deck, cell and bosses beaten. Later a signed export/import file (accounts are out of scope) |
+| Save | Local storage (`client/src/progress.ts`, key `ab-alone.progress`): deck, cell and bosses beaten as versioned JSON. A save that does not read back (corrupt, another version) starts over on the centre cell of the Mess. Every boss win counts, the boss menu and the daily included. Later a signed export/import file (accounts are out of scope) |
 
 Room kinds:
 
