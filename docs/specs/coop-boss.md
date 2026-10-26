@@ -77,7 +77,9 @@ tech.md section 6, with two differences (#531):
 - **No colour swap**: the players stay Black against the boss, seat 1 still moves first, and the
   fight restarts with the same boss and the same seed.
 
-The room keeps one attempt counter, shared by both players. Spectators follow the new game.
+The room keeps one attempt counter, shared by both players: the number of the game of the room, from 1, the same on
+every peer since each one counts the same new games. The boss block shows it (ui.md section 4). Asks and presence go
+by seat, since no colour swaps. Spectators follow the new game.
 
 ## 6. Later, not in v1
 

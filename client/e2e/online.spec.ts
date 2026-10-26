@@ -675,3 +675,62 @@ test('a co-op boss fight from Fight together: the seats take turns, both pages p
   await a.context().close();
   await b.context().close();
 });
+
+// Co-op Retry (docs/specs/coop-boss.md section 5, #531): the fight of the test above ends in a Defeat, both seats ask
+// for a Retry, and the same fight restarts on both pages: no colour swap, seat 1 first, one attempt counter.
+test('a co-op Retry once both seats asked restarts the same fight, attempt 2 on both pages, #531', async ({ browser }) => {
+  const [a, b] = await Promise.all([0, 1].map(async () => (await browser.newContext()).newPage()));
+  await calm(a, b);
+  await room({ a, b });
+  const fight = (page: Page) => page.evaluate(() => (window as any).__fight());
+  const retry = (page: Page) => page.getByRole('button', { name: 'Retry' });
+  const asked = (page: Page) => page.locator('#hud .rematch');
+
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await openModes(a);
+  await a.getByRole('button', { name: 'Fight together' }).click();
+  await a.locator('#coop-list').getByRole('button', { name: 'The Echo' }).click();
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  await b.goto(`./?bot=off&net=hook${hash}`);
+  await b.locator('canvas').waitFor();
+  await open(a);
+  await open(b);
+  await seat(b, 'player');
+  await expect(status(a)).toHaveText('Your partner is here.');
+  for (const page of [a, b]) await expect(page.locator('#hud .boss')).toContainText('Fight together · attempt 1');
+  for (let i = 0; i < 2; i++) {
+    await play(a, 0, 2); // there, then the boss mirrors it
+    await play(a, 0, 1);
+    await expect.poll(() => plies(b)).toBe(4 * i + 2);
+    await play(b, 0, 1); // and back
+    await play(b, 0, 2);
+    await expect.poll(() => plies(a)).toBe(4 * i + 4);
+  }
+  for (const page of [a, b]) await expect(page.locator('#hud .turn')).toHaveText('Defeat');
+
+  await retry(a).click();
+  await expect(asked(a)).toHaveText('You asked for a retry. Waiting for your partner...');
+  await expect(retry(a)).toBeDisabled();
+  await expect(asked(b)).toHaveText('Your partner asks for a retry.');
+  expect(await plies(b)).toBe(8); // nothing starts on one ask
+  await retry(b).click();
+  for (const page of [a, b]) {
+    await expect.poll(() => plies(page)).toBe(0);
+    await expect(page.locator('#hud .boss')).toContainText('Fight together · attempt 2');
+    await expect(retry(page)).toBeHidden();
+    await expect(asked(page)).toHaveCount(0);
+  }
+  await expect(a.locator('#hud .turn')).toHaveText('Your turn'); // seat 1 opens the new attempt, both still Black
+  await expect(b.locator('#hud .turn')).toHaveText("Partner's turn");
+  expect(await fight(a)).toEqual(await fight(b));
+  await play(a, 0, 2); // the same boss and seed: the same boss reply on both engines
+  await cell(a, 0, 1);
+  for (const page of [a, b]) await expect.poll(() => plies(page)).toBe(2); // each page played the boss reply
+  expect(await a.evaluate(() => (window as any).__history())).toEqual(await b.evaluate(() => (window as any).__history()));
+  await expect(a.locator('#hud')).not.toContainText('refused');
+  await expect(b.locator('#hud')).not.toContainText('refused');
+  await a.context().close();
+  await b.context().close();
+});

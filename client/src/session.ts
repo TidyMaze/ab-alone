@@ -167,12 +167,23 @@ export class OnlineSession {
     return this.now.log.from(0);
   }
 
+  /** Our room seat: 1 for the creator. */
+  get ourSeat(): number {
+    return this.o.side;
+  }
+
+  /** The number of the game being played in the room, from 1: in co-op, the attempt at the fight (#531). */
+  get attempt(): number {
+    return this.games.length;
+  }
+
   /** The colour we play in this game, 1 Black or 2 White. */
   get side(): number {
     return this.o.judge.mover ? COOP_SIDE : colourOf(this.o.side, this.games.length - 1, this.seats.count);
   }
 
-  /** Whether the key that plays `side` in this game is connected. A free seat is `waiting`. */
+  /** Whether the key that plays `side` in this game is connected (in co-op, where every seat plays Black, the key of
+   * seat `side`). A free seat is `waiting`. */
   presenceOf(side: number): Seen {
     return this.presence.of(this.keyOf(side));
   }
@@ -240,6 +251,7 @@ export class OnlineSession {
   }
 
   private keyOf(side: number): string {
+    if (this.o.judge.mover) return this.seats.keyOf(side); // co-op: no colour swap, a side is a seat (#531)
     return this.seats.keyOf(seatFor(side, this.games.length - 1, this.seats.count));
   }
 

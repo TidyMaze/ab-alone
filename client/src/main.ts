@@ -30,7 +30,7 @@ import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { coopFromHash, inviteUrl, newRoomId, roomFromHash, type CoopFight } from './invite';
-import { COOP_SIDE, coopTurn, seatAfter } from './coop';
+import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
 import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
@@ -1584,11 +1584,13 @@ function hud(extra = ''): void {
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
     tally: history.length === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
-    // Who asked for a rematch, for the seated players of a finished online game (#186).
+    // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).
     rematch:
-      online?.role === 'player' && status !== 0
-        ? rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side), glassOf())
-        : '',
+      online?.role !== 'player' || status === 0
+        ? ''
+        : fight
+          ? retryText(online.askedRematch(online.ourSeat), online.askedRematch(3 - online.ourSeat))
+          : rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side), glassOf()),
   });
   rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
@@ -1620,7 +1622,8 @@ function hud(extra = ''): void {
         result: end ? 0 : boss.result(), // the end banner already says Victory or Defeat, one line less in the plate
         goal: showGoal ? boss.goal() : '',
         tell,
-        daily: fight?.daily ? dailyLine(fight.daily.day, fight.daily.attempt) : '',
+        // The daily line, or the attempt of a co-op room (#531).
+        daily: fight?.daily ? dailyLine(fight.daily.day, fight.daily.attempt) : online ? attemptLine(online.attempt) : '',
       }),
     );
   }
@@ -2421,6 +2424,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   leaveHub();
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
+  rematchButton.textContent = coop ? 'Retry' : 'Rematch'; // co-op: the same fight again, both seats asked (#531)
   delete document.body.dataset.boss;
   applyDeck(deckOf('online'));
   retryButton.hidden = true;
