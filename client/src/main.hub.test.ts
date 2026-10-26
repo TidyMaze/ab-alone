@@ -37,6 +37,7 @@ function drawn(scene: THREE.Scene) {
     shells: marbles.filter((m) => m.geometry instanceof THREE.SphereGeometry && !(m.material instanceof THREE.MeshPhysicalMaterial)),
     glyphs: marbles.filter((m) => m.geometry instanceof THREE.TorusGeometry).length,
     bars: marbles.filter((m) => m.geometry instanceof THREE.BoxGeometry), // the bar across a closed room (#522)
+    arrows: marbles.filter((m) => m.geometry instanceof THREE.ShapeGeometry), // a lift's arrow (#523)
   };
 }
 
@@ -370,5 +371,71 @@ describe('main.ts, the hub doors (#522)', () => {
     await game.hook<Promise<number>>('__playTurns', 30, [4]);
     expect(data().over).toBe('loss');
     expect(back().hidden).toBe(true);
+  });
+});
+
+// The lift gate (#523, game-design.md section 3.5): a lift wears an arrow toward its deck, and a bar across it while it is
+// locked. Bumping a locked lift keeps the marble out and Tally says one short line. body[data-lifts] lists the lifts of
+// the deck, read by the e2e tests.
+describe('main.ts, the lift gate (#523)', () => {
+  const lifts = (): string | undefined => document.body.dataset.lifts;
+  const on = (mesh: Mesh, [q, r]: [number, number]): boolean => {
+    const p = axialTo3D(q, r);
+    return Math.abs(mesh.position.x - p.x) < 1e-9 && Math.abs(mesh.position.z - p.z) < 1e-9;
+  };
+
+  it('a locked lift wears its arrow with a bar across, keeps the marble out and Tally says why', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    shipAt(game, [1, -1]);
+    expect(lifts()).toBe('cargo locked');
+    const { arrows, bars } = drawn(scene());
+    expect(arrows).toHaveLength(1);
+    expect(on(arrows[0]!, [1, -2])).toBe(true);
+    expect(arrows[0]!.rotation.y).toBeCloseTo(Math.PI / 2); // up the map, toward the deck above
+    expect(bars.filter((bar) => on(bar, [1, -2]))).toHaveLength(1);
+    press('ArrowUp');
+    expect(hub()).toBe('mess 1,-1');
+    expect(saved()).toMatchObject({ cell: [1, -1] });
+    expect(game.hud()).toBe("Ship · MessLift to Cargo: locked. This deck's boss is still on the books.");
+    press('ArrowLeft'); // the next roll: the line is gone
+    expect(game.hud()).toBe('Ship · Mess');
+    press('ArrowRight');
+    press('ArrowUp');
+    ship(game); // Ship again: a fresh plate
+    expect(game.hud()).toBe('Ship · Mess');
+  });
+
+  it('on a middle deck the lift down is open and the lift up waits for this deck\'s boss', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'cargo', cell: [0, 0], beaten: ['echo'] }));
+    ship(game);
+    expect(lifts()).toBe('furnace locked,mess open');
+    const { arrows, bars } = drawn(scene());
+    const down = arrows.find((arrow) => on(arrow, [-1, 2]))!;
+    expect(down.rotation.y).toBeCloseTo(-Math.PI / 2); // down the map, toward the deck below
+    expect(bars.filter((bar) => on(bar, [-1, 2]))).toHaveLength(0);
+    expect(bars.filter((bar) => on(bar, [1, -2]))).toHaveLength(1);
+  });
+
+  it('a boss win opens the lift onto the next deck', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    shipAt(game, [1, 0]);
+    game.click(2, 0); // the boss door: the Echo
+    expect(document.body.dataset.boss).toBe('echo');
+    const { Encounter } = await import('abalone-wasm');
+    const win = vi.spyOn(Encounter.prototype, 'result').mockReturnValue(1); // a win, without playing six ejections
+    game.click(0, 2); // a selection redraws the plate, which records the win
+    win.mockRestore();
+    expect(lifts()).toBeUndefined(); // no hub, no lift
+    ship(game);
+    expect(hub()).toBe('mess 2,0');
+    expect(lifts()).toBe('cargo open');
+    expect(drawn(scene()).bars.filter((bar) => on(bar, [1, -2]))).toHaveLength(0);
+    for (const [q, r] of [[1, 0], [1, -1], [1, -2]] as const) game.click(q, r);
+    expect(hub()).toBe('cargo -1,2');
+    expect(lifts()).toBe('furnace locked,mess open');
   });
 });
