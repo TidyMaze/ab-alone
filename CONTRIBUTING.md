@@ -517,6 +517,7 @@ network outage never holds a page load (bug #585). Start a new run to test a cha
 - The offline test (`e2e/offline.spec.ts`) needs the production build: Playwright also runs
   `vite build` then `vite preview` on a random port (`E2E_PREVIEW_PORT`, never reused) and stops it
   at the end. Every other spec runs with service workers blocked (docs/specs/tech.md section 9.1).
+  It answers the Google Fonts requests itself, so it too never waits on the network (bug #649).
 - The manual CI run sets `E2E_SKIP_WASM_BUILD=1` so the dev server skips the wasm rebuild (the `wasm` job built it). Locally, leave it unset.
 - Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
 - On a Mac, the local Chromium draws on the GPU, still with the WebGL2 backend (WebGPU is turned off). CI runners
