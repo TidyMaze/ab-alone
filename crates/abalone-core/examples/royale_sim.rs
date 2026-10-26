@@ -1,18 +1,19 @@
 //! The battle royale anti-kingmaking check (rules.md section 10.4):
-//! `cargo run --release --example royale_sim`. Plays 1000 games of 6 bots (seeds 0 to 999)
+//! `cargo run --release --example royale_sim`. Plays 10 000 games of 6 bots (seeds 0 to 9999)
 //! twice: simultaneous rounds (option C, every order counts), then the sequential baseline
 //! (option A: only the first seat in initiative order still in the game plays each round).
 //!
 //! The first round that starts with exactly 3 seats left opens the final phase. The seat of the
-//! three that goes out first is the dying third, the other two are the final two, and the one
-//! of them with more marbles at that round is the final-two leader. The leader loses to the
+//! three with the worst place in `Royale::standings` is the dying third: two of them going out
+//! in the same void are ranked by the breach tie rule. The other two are the final two, and the
+//! one of them with more marbles at that round is the final-two leader. The leader loses to the
 //! dying third when it does not win and the third ejected at least one of its marbles in the
-//! final phase. A game without a final-two leader (no round with 3 seats left, two of the three
-//! out in the same round, or the final two tied on marbles) is not counted.
+//! final phase. A game without a final-two leader (no round with 3 seats left, the third sharing
+//! its place, or the final two tied on marbles) is not counted.
 
 use abalone_core::royale::{bot, initiative, resolve_round, start, Order};
 
-const GAMES: u64 = 1000;
+const GAMES: u64 = 10_000;
 const SEATS: usize = 6;
 
 /// Plays the game of `seed`. `None` when it has no final-two leader, else whether the leader
@@ -23,8 +24,6 @@ fn play(seed: u64, sequential: bool) -> Option<bool> {
     let mut three: Option<Vec<(usize, usize)>> = None;
     // (pusher, victim) of every ejection in the final phase.
     let mut hits = Vec::new();
-    // Round at the end of which each seat went out.
-    let mut out_at = [u32::MAX; SEATS];
     while !s.is_over() {
         let left: Vec<usize> = (0..SEATS).filter(|&k| !s.is_out(k)).collect();
         if left.len() == 3 && three.is_none() {
@@ -51,19 +50,15 @@ fn play(seed: u64, sequential: bool) -> Option<bool> {
                     .filter_map(|t| t.ejected.map(|victim| (t.seat, victim))),
             );
         }
-        for &k in &left {
-            if next.is_out(k) {
-                out_at[k] = log.round;
-            }
-        }
         s = next;
     }
+    let place = |k: usize| s.standings().unwrap()[k].place;
     let mut three = three?;
-    three.sort_by_key(|&(k, _)| out_at[k]);
+    three.sort_by_key(|&(k, _)| std::cmp::Reverse(place(k)));
     let [(third, _), (a, ma), (b, mb)] = three[..] else {
         unreachable!("three seats");
     };
-    if out_at[third] == out_at[a] || ma == mb {
+    if place(third) == place(a) || ma == mb {
         return None;
     }
     let leader = if ma > mb { a } else { b };
