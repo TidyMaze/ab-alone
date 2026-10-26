@@ -94,12 +94,13 @@ export const writeFps = (store: Store, on: boolean): void => write(store, FPS_KE
 export const writeClearBoard = (store: Store, on: boolean): void => write(store, CLEAR_KEY, on ? 'on' : 'off');
 // The four volume sliders (#438), 0 to 100 % each, 100 % unless the player moved it. They replace the one Sound
 // toggle: a Sound off saved before them sets every slider without a value of its own to 0.
+const DEFAULT_MIX: Mix = { music: 100, ambience: 5, effects: 100, voice: 100 };
 const volumeKey = (bus: Bus): string => `ab-alone.volume.${bus}`;
 export const readMix = (store: Store): Mix => {
-  const fallback = read(store, SOUND_KEY) === 'off' ? 0 : 100;
+  const muted = read(store, SOUND_KEY) === 'off';
   const volume = (bus: Bus): number => {
     const saved = read(store, volumeKey(bus)) ?? '';
-    return /^\d+$/.test(saved) && Number(saved) <= 100 ? Number(saved) : fallback;
+    return /^\d+$/.test(saved) && Number(saved) <= 100 ? Number(saved) : muted ? 0 : DEFAULT_MIX[bus];
   };
   return { music: volume('music'), ambience: volume('ambience'), effects: volume('effects'), voice: volume('voice') };
 };

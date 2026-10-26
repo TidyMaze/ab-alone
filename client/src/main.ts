@@ -1196,11 +1196,31 @@ if (deckAlbedo && tier === 'high' && typeof document !== 'undefined') {
 
 drawProps = (): void => {
   propsGroup.clear();
+  const sLights = spaceshipLights(deck);
   for (const def of spaceshipArchitecture(tier)) {
     let mat: THREE.Material;
     const screen = def.id === 'console-screen';
     if (screen) {
       mat = new THREE.MeshBasicMaterial({ map: consoleTexture, fog: false }); // a screen gives its own light
+    } else if (def.id === 'log-recorder') {
+      mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+    } else if (def.id.includes('neon')) {
+      const neonColor =
+        def.id === 'pedestal-neon-3' ||
+        def.id === 'pedestal-neon-4' ||
+        def.id === 'pedestal-neon-5' ||
+        def.id.endsWith('-sw') ||
+        def.id.endsWith('-ne') ||
+        def.id.includes('airlock')
+          ? sLights.emergency.color
+          : sLights.rim.color;
+      mat = new THREE.MeshStandardMaterial({
+        color: neonColor,
+        emissive: neonColor,
+        emissiveIntensity: 2.2,
+        roughness: 0.15,
+        fog: true,
+      });
     } else if (def.id.includes('wall') && wallTexture) {
       mat = new THREE.MeshStandardMaterial({
         color: def.color,
@@ -1231,6 +1251,9 @@ drawProps = (): void => {
     const mesh = new THREE.Mesh(geom, mat);
     if (screen) consoleScreen = mesh;
     if (def.id === 'log-recorder') recorder = mesh;
+    if (!screen && def.id !== 'log-recorder' && !def.id.includes('neon') && !def.id.startsWith('bulkhead-column-')) {
+      mesh.visible = !currentBay;
+    }
     mesh.position.set(...def.position);
     mesh.rotation.set(...def.rotation);
     if (def.id.startsWith('pedestal') || def.id.startsWith('conduit')) {
@@ -1239,14 +1262,21 @@ drawProps = (): void => {
     }
     propsGroup.add(mesh);
   }
-  const sLights = spaceshipLights(deck);
   const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
   emergencyLight.position.set(...sLights.emergency.position);
   const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
   consoleBounceLight.position.set(...sLights.consoleBounce.position);
   const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity, sLights.pedestalGlow.distance);
   pedestalGlowLight.position.set(...sLights.pedestalGlow.position);
-  propsGroup.add(emergencyLight, consoleBounceLight, pedestalGlowLight);
+  const neonWestLight = new THREE.PointLight(sLights.rim.color, 1.4, 12.0);
+  neonWestLight.position.set(-5.5, 0.35, -1.0);
+  const neonEastLight = new THREE.PointLight(sLights.emergency.color, 1.4, 12.0);
+  neonEastLight.position.set(5.5, 0.35, -1.0);
+  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 3.0, 18.0);
+  neonWallNwLight.position.set(-9.8, 2.5, -20.0);
+  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 18.0);
+  neonWallNeLight.position.set(9.8, 2.5, -20.0);
+  propsGroup.add(emergencyLight, consoleBounceLight, pedestalGlowLight, neonWestLight, neonEastLight, neonWallNwLight, neonWallNeLight);
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
@@ -1255,6 +1285,7 @@ drawProps = (): void => {
 let currentBay: SpaceshipBayAssets | null = null;
 const mountBay = (bay: SpaceshipBayAssets | null): void => {
   currentBay = bay;
+  drawProps();
   sceneRenderer.mountBay(bay, deck);
   if (currentBay) {
     document.body.dataset.bay = 'ready'; // the room is complete: the browser checks of a still scene wait for it (#661)

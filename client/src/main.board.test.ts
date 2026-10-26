@@ -113,7 +113,7 @@ describe('main.ts board and HUD', () => {
     const decor = scene().children.find(
       (c) => c instanceof THREE.Group && c.children.length > 0 && c.children.every((m) => m instanceof THREE.Mesh && m.geometry instanceof THREE.BoxGeometry),
     )!;
-    expect(decor.children.every((part) => part.position.z === -10)).toBe(true);
+    expect(decor.children.every((part) => part.position.z === -23.2)).toBe(true);
   });
 
   it('dresses the cells, the frame and the enemy shells in the loaded textures, the glass with its core', async () => {

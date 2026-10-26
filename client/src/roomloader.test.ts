@@ -94,10 +94,12 @@ describe('roomloader PBR pipeline', () => {
     pedestalMesh.name = 'Pedestal_Core';
     const wallMesh = new THREE.Mesh(new THREE.BoxGeometry());
     wallMesh.name = 'Bulkhead_Wall_North';
+    const terminalMesh = new THREE.Mesh(new THREE.BoxGeometry());
+    terminalMesh.name = 'CRT_Terminal_Bank';
     const ribMesh = new THREE.Mesh(new THREE.BoxGeometry());
     ribMesh.name = 'Gantry_Arch_Rib_1';
 
-    mockGroup.add(floorMesh, pedestalMesh, wallMesh, ribMesh);
+    mockGroup.add(floorMesh, pedestalMesh, wallMesh, terminalMesh, ribMesh);
 
     const mockGltfLoader = {
       loadAsync: vi.fn(async () => ({
@@ -121,6 +123,7 @@ describe('roomloader PBR pipeline', () => {
     expect(Math.abs(pedestalMesh.geometry.getAttribute('uv').getX(0))).toBeCloseTo(1.5);
     expect(bay!.materials.deck.map?.repeat.x).toBe(0.5);
     expect(wallMesh.material).toBe(bay!.materials.bulkhead);
+    expect(terminalMesh.visible).toBe(false);
     expect(ribMesh.material).toBe(bay!.materials.grate);
 
     // Test with textures failing: falls back to fallbackMat

@@ -34,28 +34,37 @@ export const ROOM_SURFACE: RoomSurface = {
 
 // Pedestal anchoring the board into the deck floor
 export function pedestalParts(): readonly StructuralPart[] {
-  return [
+  const parts: StructuralPart[] = [
     // Main pedestal body under the board plate
     {
       id: 'pedestal-core',
       type: 'cylinder',
-      size: [3.9, 4.1, 0.22, 16], // radiusTop, radiusBottom, height, radialSegments
+      size: [3.9, 3.95, 0.22, 24], // radiusTop, radiusBottom, height, radialSegments
       position: [0, -0.20, 0],
       rotation: [0, 0, 0],
       color: 0x262c32,
       roughness: 0.8,
     },
-    // Flanged base plate welded to the deck
-    {
-      id: 'pedestal-flange',
-      type: 'cylinder',
-      size: [4.4, 4.4, 0.08, 16],
-      position: [0, -0.27, 0],
-      rotation: [0, 0, 0],
-      color: 0x1e2328,
-      roughness: 0.88,
-    },
   ];
+  // 6 recessed neon light bars aligned with the 6 hexagonal sides of the board frame (apothem 4.30)
+  const apothem = 4.3;
+  for (let i = 0; i < 6; i++) {
+    const angle = (i * Math.PI) / 3 + Math.PI / 6;
+    parts.push({
+      id: `pedestal-neon-${i}`,
+      type: 'box',
+      size: [3.2, 0.045, 0.07],
+      position: [
+        Number((Math.cos(angle) * apothem).toFixed(3)),
+        -0.27,
+        Number((Math.sin(angle) * apothem).toFixed(3)),
+      ],
+      rotation: [0, Math.PI / 2 - angle, 0],
+      color: 0x263840,
+      roughness: 0.2,
+    });
+  }
+  return parts;
 }
 
 // 360-degree spaceship bay enclosure surrounding the camera orbit (radius 24, well outside DIST_MAX 18)
@@ -63,94 +72,124 @@ export function spaceshipArchitecture(tier: Tier): readonly StructuralPart[] {
   const parts: StructuralPart[] = [
     ...pedestalParts(),
 
-    // --- CORNER EQUIPMENT MODULES (Framing the 4 viewport corners around the board, radius 6.5 - 8.0) ---
-    // NW corner: Avionics & Navigation terminal console (visible under top-left HUD)
-    {
-      id: 'corner-console-desk-nw',
-      type: 'box',
-      size: [2.0, 1.0, 1.2],
-      position: [-5.5, 0.3, -5.5],
-      color: 0x323a42,
-      roughness: 0.75,
-      rotation: [0, Math.PI / 4, 0],
-    },
-    {
-      id: 'corner-console-screen-nw',
-      type: 'box',
-      size: [1.6, 0.7, 0.1],
-      position: [-5.5, 0.95, -5.5],
-      color: 0x223c34, // Phosphor screen tone
-      roughness: 0.45,
-      rotation: [0, Math.PI / 4, 0],
-    },
-
-    // NE corner: Auxiliary power reactor & conduit stack (visible under top-right buttons)
-    {
-      id: 'corner-generator-housing-ne',
-      type: 'box',
-      size: [1.8, 1.4, 1.4],
-      position: [5.5, 0.5, -5.5],
-      color: 0x303840,
-      roughness: 0.78,
-      rotation: [0, -Math.PI / 4, 0],
-    },
-    {
-      id: 'corner-generator-cell-ne',
-      type: 'cylinder',
-      size: [0.35, 0.35, 1.8, 10],
-      position: [5.5, 1.4, -5.5],
-      color: 0x38424a,
-      roughness: 0.7,
-      rotation: [0, 0, 0],
-    },
-
-    // SW corner: Sealed ore cargo container with hazard straps (anchoring bottom-left)
-    {
-      id: 'corner-cargo-crate-sw',
-      type: 'box',
-      size: [1.8, 1.0, 1.4],
-      position: [-5.5, 0.3, 3.8],
-      color: 0x343c44,
-      roughness: 0.82,
-      rotation: [0, -Math.PI / 6, 0],
-    },
-    {
-      id: 'corner-cargo-pallet-sw',
-      type: 'box',
-      size: [2.0, 0.15, 1.6],
-      position: [-5.5, -0.22, 3.8],
-      color: 0x242a30,
-      roughness: 0.9,
-      rotation: [0, -Math.PI / 6, 0],
-    },
-    // The deck's log recorder (#517, world.md section 4), left on the crate lid: a click plays its audio log.
+    // The deck's log recorder (#517, world.md section 4), flush on the SW deck: a click plays its audio log.
     {
       id: 'log-recorder',
       type: 'box',
-      size: [0.6, 0.2, 0.4],
-      position: [-5.5, 0.9, 3.8],
-      color: 0x5a4426, // worn amber casing, apart from the steel around it
-      roughness: 0.6,
-      rotation: [0, -Math.PI / 6, 0],
+      size: [0.6, 0.04, 0.4],
+      position: [-5.2, -0.28, 3.6],
+      color: 0x262c32,
+      roughness: 0.8,
+      rotation: [0, -Math.PI / 4, 0],
     },
 
-    // SE corner: Life-support / oxygen tank rack (anchoring bottom-right)
+    // --- BULKHEAD & GANTRY NEON TUBES (Framing the bay walls and overhead arches) ---
     {
-      id: 'corner-machinery-frame-se',
+      id: 'corner-neon-nw',
       type: 'box',
-      size: [1.6, 1.2, 1.2],
-      position: [5.5, 0.4, 3.8],
-      color: 0x303840,
-      roughness: 0.76,
-      rotation: [0, Math.PI / 6, 0],
+      size: [0.14, 7.5, 0.14],
+      position: [-9.8, 3.8, -23.1],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
     },
     {
-      id: 'corner-machinery-tank-se',
-      type: 'cylinder',
-      size: [0.25, 0.25, 1.5, 10],
-      position: [5.5, 1.1, 3.8],
-      color: 0x3a444c,
-      roughness: 0.65,
+      id: 'corner-neon-ne',
+      type: 'box',
+      size: [0.14, 7.5, 0.14],
+      position: [9.8, 3.8, -23.1],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'corner-neon-sw',
+      type: 'box',
+      size: [0.14, 7.5, 0.14],
+      position: [-9.8, 3.8, 23.1],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'corner-neon-se',
+      type: 'box',
+      size: [0.14, 7.5, 0.14],
+      position: [9.8, 3.8, 23.1],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'neon-column-wn',
+      type: 'box',
+      size: [0.14, 7.5, 0.14],
+      position: [-23.1, 3.8, -9.8],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'neon-column-ws',
+      type: 'box',
+      size: [0.14, 7.5, 0.14],
+      position: [-23.1, 3.8, 9.8],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'neon-column-en',
+      type: 'box',
+      size: [0.14, 7.5, 0.14],
+      position: [23.1, 3.8, -9.8],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'neon-column-es',
+      type: 'box',
+      size: [0.14, 7.5, 0.14],
+      position: [23.1, 3.8, 9.8],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'neon-airlock-top',
+      type: 'box',
+      size: [4.8, 0.12, 0.12],
+      position: [0, 6.9, -23.3],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'neon-observation-top',
+      type: 'box',
+      size: [7.6, 0.12, 0.12],
+      position: [0, 6.4, 23.3],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'neon-gantry-north',
+      type: 'box',
+      size: [16.0, 0.14, 0.14],
+      position: [0, 14.2, -12.0],
+      color: 0x263840,
+      roughness: 0.2,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'neon-gantry-south',
+      type: 'box',
+      size: [16.0, 0.14, 0.14],
+      position: [0, 14.2, 12.0],
+      color: 0x263840,
+      roughness: 0.2,
       rotation: [0, 0, 0],
     },
 
@@ -458,7 +497,7 @@ export function spaceshipArchitecture(tier: Tier): readonly StructuralPart[] {
     },
   ];
 
-  // High tier gets fine architectural details (hazard lintels, locking wheel, floor conduits)
+  // High tier gets fine architectural details (hazard lintels and overhead conduit manifolds)
   if (tier === 'high') {
     parts.push(
       // Hazard warning lintel strip directly above airlock frame
@@ -480,53 +519,6 @@ export function spaceshipArchitecture(tier: Tier): readonly StructuralPart[] {
         color: 0x483a24,
         roughness: 0.6,
         rotation: [0, 0, 0],
-      },
-      // Airlock manual locking wheel hub
-      {
-        id: 'airlock-wheel-hub',
-        type: 'cylinder',
-        size: [0.45, 0.45, 0.1, 12],
-        position: [0, 3.5, -23.7],
-        color: 0x384048,
-        roughness: 0.7,
-        rotation: [Math.PI / 2, 0, 0],
-      },
-      // Floor power conduit lines routing from pedestal out toward bulkhead walls
-      {
-        id: 'conduit-deck-north',
-        type: 'cylinder',
-        size: [0.08, 0.08, 16.0, 8],
-        position: [0, -0.27, -12.0],
-        color: 0x20252a,
-        roughness: 0.88,
-        rotation: [Math.PI / 2, 0, 0],
-      },
-      {
-        id: 'conduit-deck-south',
-        type: 'cylinder',
-        size: [0.08, 0.08, 16.0, 8],
-        position: [0, -0.27, 12.0],
-        color: 0x20252a,
-        roughness: 0.88,
-        rotation: [Math.PI / 2, 0, 0],
-      },
-      {
-        id: 'conduit-deck-west',
-        type: 'cylinder',
-        size: [0.08, 0.08, 16.0, 8],
-        position: [-12.0, -0.27, 0],
-        color: 0x20252a,
-        roughness: 0.88,
-        rotation: [0, 0, Math.PI / 2],
-      },
-      {
-        id: 'conduit-deck-east',
-        type: 'cylinder',
-        size: [0.08, 0.08, 16.0, 8],
-        position: [12.0, -0.27, 0],
-        color: 0x20252a,
-        roughness: 0.88,
-        rotation: [0, 0, Math.PI / 2],
       },
       // Starboard high-pressure conduit distribution manifold
       {

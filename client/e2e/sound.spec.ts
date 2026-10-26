@@ -73,9 +73,10 @@ test('a lost enemy shell clacks', async ({ page }) => {
 });
 
 // #438: four sliders, one per bus, all at 100 % by default. window.__gain(bus) is the gain of a bus, 0 before a gesture.
-test('Sound opens four sliders at 100 %, each moves its own bus, and the menu closes back on its items', async ({ page }) => {
+test('Sound opens four sliders at defaults, each moves its own bus, and the menu closes back on its items', async ({ page }) => {
   await open(page);
-  for (const name of ['Music', 'Ambience', 'Effects', 'Voice'] as const) await expect(await slider(page, name)).toHaveValue('100');
+  for (const name of ['Music', 'Effects', 'Voice'] as const) await expect(await slider(page, name)).toHaveValue('100');
+  await expect(await slider(page, 'Ambience')).toHaveValue('5');
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden(); // the sliders in place of the items
   const music = await slider(page, 'Music');
   await music.focus();
@@ -85,7 +86,8 @@ test('Sound opens four sliders at 100 %, each moves its own bus, and the menu cl
   await page.keyboard.press('ArrowRight');
   await expect(music).toHaveValue('5');
   await expect.poll(() => gain(page, 'music')).toBeCloseTo(0.05, 2);
-  for (const bus of ['ambience', 'effects', 'voice']) expect(await gain(page, bus)).toBe(1);
+  expect(await gain(page, 'ambience')).toBeCloseTo(0.05, 2);
+  for (const bus of ['effects', 'voice']) expect(await gain(page, bus)).toBe(1);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeVisible();
@@ -159,7 +161,7 @@ test('the hum runs after a gesture, and fades out with the Ambience slider', asy
   expect(await gain(page, 'ambience')).toBe(0); // no audio context before a gesture, so no hum
   expect([...tracks]).toEqual([]);
   await click([0, 2]); // a gesture on the board starts the audio, and with it the hum and tracks
-  await expect.poll(() => gain(page, 'ambience')).toBeGreaterThan(0.9);
+  await expect.poll(() => gain(page, 'ambience')).toBeCloseTo(0.05, 2);
   await expect.poll(() => [...tracks].sort()).toEqual([
     'dead-ore-hauler.mp3',
     'reactor-room-tone-1.mp3',

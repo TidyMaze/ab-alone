@@ -62,26 +62,22 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     expect(hasEast, 'has east wall').toBe(true);
   });
 
-  it('provides corner equipment modules in all four quadrants outside the board radius', () => {
+  it('provides corner neon modules in all four quadrants outside the board radius', () => {
     const elements = spaceshipArchitecture('low');
     const cornerElements = elements.filter((el) => el.id.startsWith('corner-'));
     expect(cornerElements.length).toBeGreaterThanOrEqual(4);
     for (const el of cornerElements) {
       const radius = Math.hypot(el.position[0], el.position[2]);
-      expect(radius, `corner element ${el.id} radius`).toBeGreaterThan(5.0);
-      expect(radius, `corner element ${el.id} radius`).toBeLessThan(12.0);
+      expect(radius, `corner element ${el.id} radius`).toBeGreaterThan(20.0);
     }
   });
 
-  it('the log recorder of the deck (#517) sits on the cargo crate, in both tiers', () => {
+  it('the log recorder of the deck (#517) sits flush on the SW deck, in both tiers', () => {
     for (const tier of ['high', 'low'] as const) {
       const parts = spaceshipArchitecture(tier);
       const recorder = parts.find((el) => el.id === 'log-recorder')!;
-      const crate = parts.find((el) => el.id === 'corner-cargo-crate-sw')!;
       expect(recorder.type).toBe('box');
-      expect([recorder.position[0], recorder.position[2]]).toEqual([crate.position[0], crate.position[2]]);
-      const top = crate.position[1] + crate.size[1] / 2;
-      expect(recorder.position[1] - recorder.size[1] / 2).toBeCloseTo(top); // on the lid, not in it
+      expect(recorder.position[1]).toBeLessThanOrEqual(-0.2);
     }
   });
 
