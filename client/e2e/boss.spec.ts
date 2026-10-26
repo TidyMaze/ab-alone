@@ -459,3 +459,26 @@ for (const skin of ['hex', 'riveted']) {
     for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3);
   });
 }
+
+// Task #507: in boss mode the shells of the boss side wear their boss's accent (world.md section 5), a rust crown for
+// The Hull, candle wax for The Chaplain, under any palette, safe mode and Clear board. window.__accents() lists the cells
+// whose marble wears one. The screenshot is kept for the report.
+for (const [name, accent, stored] of [
+  ['The Hull', 'crown', { 'ab-alone.palette': 'contrast' }],
+  ['The Chaplain', 'wax', { 'ab-alone.safe-mode': 'off', 'ab-alone.clear-board': 'on' }],
+] as const) {
+  test(`the boss side wears ${name}'s ${accent}, task #507`, async ({ page }, testInfo) => {
+    await page.addInitScript((s) => {
+      for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v);
+    }, stored);
+    await page.goto('./');
+    await page.locator('canvas').waitFor();
+    await page.locator('#boss-list').getByRole('button', { name, includeHidden: true }).dispatchEvent('click');
+    await expect(page.locator('#hud')).toContainText(name);
+    const worn = (await page.evaluate(() => (window as any).__accents())) as { cell: [number, number]; accent: string }[];
+    expect(worn).toHaveLength(14);
+    expect(worn.every((w) => w.accent === accent)).toBe(true);
+    await freshDraw(page);
+    await page.screenshot({ path: testInfo.outputPath(`accent-${accent}.png`) });
+  });
+}

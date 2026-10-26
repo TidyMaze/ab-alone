@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CORE, coreLevel, GLASS, SEATS, SHELL } from './marbles';
+import { ACCENTS, CORE, type Accent, coreLevel, GLASS, SEATS, SHELL } from './marbles';
+import { PALETTE_DEFS } from './palettes';
+import { SKINS } from './skins';
 
 // Relative luminance and contrast ratio (WCAG 2), on 0xrrggbb colours.
 const channels = (c: number): number[] => [(c >> 16) & 255, (c >> 8) & 255, c & 255].map((v) => v / 255);
@@ -101,5 +103,42 @@ describe('battle royale seat tints', () => {
     seen.forEach((a, i) =>
       seen.slice(i + 1).forEach((b) => expect(Math.hypot(...a.map((v, k) => v - b[k]!))).toBeGreaterThanOrEqual(0.15)),
     );
+  });
+});
+
+// #507: in boss mode the boss side's shells wear their boss's accent (world.md section 5, lead decision on the issue).
+describe('boss accents', () => {
+  it('gives The Hull a rust crown, The Chaplain candle wax, The Ballast Mind a wire wrap', () => {
+    expect(Object.fromEntries(Object.entries(ACCENTS).map(([boss, a]) => [boss, a.name]))).toEqual({
+      hull: 'crown',
+      chaplain: 'wax',
+      ballast: 'wire',
+    });
+  });
+
+  it('leaves The Echo and The Choir the plain shell (the Choir army glyphs are its shape cue)', () => {
+    expect(ACCENTS).not.toHaveProperty('echo');
+    expect(ACCENTS).not.toHaveProperty('choir');
+  });
+
+  // How far out of the marble's centre it reaches: a cylinder's top, a ring's outer edge.
+  const reach = (a: Accent): number => (a.shape === 'cylinder' ? a.y + a.args[2] / 2 : a.args[0] + a.args[1]);
+  it.each(Object.values(ACCENTS))('adds to the silhouette: the $name stands out of the 0.36 shell', (a) => {
+    expect(reach(a)).toBeGreaterThan(0.36);
+  });
+
+  // The shell under the accent: every palette's (#381) and every skin's base colour (#377).
+  const shells = [...Object.values(PALETTE_DEFS).map((p) => p.shell), ...SKINS.map((s) => s.color)];
+  const views: Record<string, (c: number[]) => number[]> = {
+    normal: (c) => c,
+    ...Object.fromEntries(Object.entries(SIMULATIONS).map(([name, m]) => [name, (c: number[]) => simulate(m, c)])),
+  };
+  it.each(Object.keys(views))('every accent stands out from every shell at 3:1 in %s vision', (name) => {
+    for (const a of Object.values(ACCENTS)) {
+      for (const shell of shells) {
+        const ratio = contrast(views[name]!(channels(a.color)), views[name]!(channels(shell)));
+        expect(ratio, `${a.name} on ${shell.toString(16)}`).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 });
