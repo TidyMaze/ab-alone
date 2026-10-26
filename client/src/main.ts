@@ -70,7 +70,7 @@ import { fpsOf, keepWindow } from './fps';
 import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
-import { loadSpaceshipBay } from './roomloader';
+import { applyDeckAtmosphere, type DeckId, loadSpaceshipBay, type SpaceshipBayAssets } from './roomloader';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
@@ -1212,7 +1212,7 @@ drawProps = (): void => {
     }
     propsGroup.add(mesh);
   }
-  const sLights = spaceshipLights();
+  const sLights = spaceshipLights(deck);
   const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
   emergencyLight.position.set(...sLights.emergency.position);
   const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
@@ -1220,11 +1220,21 @@ drawProps = (): void => {
   const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity, sLights.pedestalGlow.distance);
   pedestalGlowLight.position.set(...sLights.pedestalGlow.position);
   propsGroup.add(emergencyLight, consoleBounceLight, pedestalGlowLight);
+  if (currentBay) {
+    applyDeckAtmosphere(currentBay, deck as DeckId);
+    propsGroup.add(currentBay.scene);
+  }
 };
+let currentBay: SpaceshipBayAssets | null = null;
+const mountBay = (bay: SpaceshipBayAssets | null): void => {
+  currentBay = bay;
+  if (currentBay) {
+    applyDeckAtmosphere(currentBay, deck as DeckId);
+    propsGroup.add(currentBay.scene);
+  }
+};
+(window as unknown as Record<string, unknown>).__mountBay = mountBay;
 drawProps();
-const mountBay = (bay: { scene: THREE.Object3D } | null): void => {
-  if (bay) propsGroup.add(bay.scene);
-};
 void loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`).then(mountBay);
 
 scene.add(roomDeck, propsGroup, plate, rim.near, rim.far);

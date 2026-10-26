@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import {
+  applyDeckAtmosphere,
   applyPbrToMesh,
+  createBayLights,
   createPbrStandardMaterial,
+  DECK_ATMOSPHERES,
+  type DeckId,
   loadPbrMaterial,
   loadSpaceshipBay,
   type PbrMaterialSet,
@@ -129,5 +133,51 @@ describe('roomloader PBR pipeline', () => {
 
     const bay = await loadSpaceshipBay('/assets/pbr/', mockGltfLoader as any, mockTexLoader);
     expect(bay).toBeNull();
+  });
+
+  it('defines 5 unique deck atmospheric profiles (#660)', () => {
+    const decks: DeckId[] = ['mess', 'cargo', 'furnace', 'chapel', 'bridge'];
+    for (const d of decks) {
+      const conf = DECK_ATMOSPHERES[d];
+      expect(conf).toBeDefined();
+      expect(typeof conf.deckColor).toBe('number');
+      expect(typeof conf.bulkheadColor).toBe('number');
+      expect(typeof conf.grateColor).toBe('number');
+      expect(typeof conf.lightColor).toBe('number');
+      expect(typeof conf.roughness).toBe('number');
+    }
+  });
+
+  it('applies deck atmosphere colors and roughness to bay materials (#660)', () => {
+    const deckMat = new THREE.MeshStandardMaterial();
+    const bulkheadMat = new THREE.MeshStandardMaterial();
+    const grateMat = new THREE.MeshStandardMaterial();
+    const bay = {
+      scene: new THREE.Group(),
+      materials: { deck: deckMat, bulkhead: bulkheadMat, grate: grateMat },
+    };
+
+    applyDeckAtmosphere(bay, 'furnace');
+    expect(deckMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.deckColor);
+    expect(bulkheadMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.bulkheadColor);
+    expect(grateMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.grateColor);
+    expect(deckMat.roughness).toBe(DECK_ATMOSPHERES.furnace.roughness);
+
+    applyDeckAtmosphere(bay, 'bridge');
+    expect(deckMat.color.getHex()).toBe(DECK_ATMOSPHERES.bridge.deckColor);
+    expect(bulkheadMat.color.getHex()).toBe(DECK_ATMOSPHERES.bridge.bulkheadColor);
+  });
+
+  it('creates atmospheric bay lights matching deck specifications (#660)', () => {
+    const lights = createBayLights('mess');
+    expect(lights).toBeInstanceOf(THREE.Group);
+    expect(lights.children.length).toBeGreaterThanOrEqual(3);
+
+    const pointLights = lights.children.filter((c) => (c as THREE.PointLight).isPointLight) as THREE.PointLight[];
+    expect(pointLights.length).toBeGreaterThanOrEqual(3);
+
+    // Overrides with deck-specific accent light
+    const furnaceLights = createBayLights('furnace');
+    expect(furnaceLights.children.length).toBe(lights.children.length);
   });
 });
