@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::board::{Board, Cell};
 
+mod breach;
 mod round;
 mod setup;
 
@@ -141,6 +142,12 @@ mod tests {
         let mut touched = s.clone();
         touched.touched.insert((-4, 6), 0);
         assert_ne!(s.hash(), touched.hash());
+        let mut cracked = s.clone();
+        cracked.board.set_cracks(vec![((8, 0), 1)]);
+        assert_ne!(s.hash(), cracked.hash());
+        let mut voided = s.clone();
+        voided.last_void[2] = 3;
+        assert_ne!(s.hash(), voided.hash());
     }
 
     #[test]

@@ -156,6 +156,7 @@ mod tests {
             round: 1,
             ejections: vec![0; seats],
             touched: BTreeMap::new(),
+            last_void: vec![0; seats],
         }
     }
 
@@ -330,13 +331,14 @@ mod tests {
     #[test]
     fn a_seat_at_0_marbles_is_out_and_its_orders_are_ignored() {
         // Seat 1's last marble is ejected by seat 0 in round 1; its own order comes later.
-        // Seat 2 was out before the round.
-        let s = arena(3, &[((6, 0), 0), ((7, 0), 0), ((8, 0), 1)]);
+        // Seat 2 was out before the round. Seat 3 keeps the game going.
+        let s = arena(4, &[((6, 0), 0), ((7, 0), 0), ((8, 0), 1), ((0, 5), 3)]);
         assert!(s.is_out(2));
         let orders = [
             (0, go(&[(6, 0), (7, 0)], E)),
             (1, go(&[(8, 0)], W)),
             (2, Order::Hold),
+            (3, Order::Hold),
         ];
         let (after, log) = resolve_round(&s, &orders).unwrap();
         assert!(after.is_out(1));
@@ -351,6 +353,7 @@ mod tests {
                 },
                 turn(1, Outcome::Out),
                 turn(2, Outcome::Out),
+                turn(3, Outcome::Held),
             ]
         );
         // Round 2: seat 1 leads, still out.
@@ -423,7 +426,7 @@ mod tests {
         let mut fizzled = 0;
         let mut ejected = 0;
         for _ in 0..30 {
-            for state in states.iter_mut() {
+            for state in states.iter_mut().filter(|s| !s.is_over()) {
                 let mut orders: Vec<(usize, Order)> = Vec::new();
                 for seat in 0..state.seats() {
                     let own = seat_cell(seat);
