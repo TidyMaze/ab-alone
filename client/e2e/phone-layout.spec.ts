@@ -291,7 +291,7 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(11); // the glass skin shares the shell skin's row (#377), Palette is row 6 (#381)
+    await expect(page.locator('#settings-menu button')).toHaveCount(12); // the glass skin shares the shell skin's row (#377), Palette is row 6 (#381), Transcript shares Sound's (#516)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {
         const r = el.getBoundingClientRect();

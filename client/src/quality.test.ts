@@ -12,6 +12,7 @@ import {
   meshDetail,
   renderPixelRatio,
   readFlatHud,
+  readTranscript,
   readReducedMotion,
   readGlassSkin,
   readSafeMode,
@@ -31,6 +32,7 @@ import {
   writeSafeMode,
   writeVolume,
   writeFlatHud,
+  writeTranscript,
   writeReducedMotion,
   writeSkin,
   writeTheme,
@@ -223,6 +225,26 @@ describe('FPS readout storage (#426)', () => {
     writeFps(s, false);
     expect(readFps(s)).toBe(false);
     expect(() => writeFps(throwing, true)).not.toThrow();
+  });
+});
+
+describe('transcript storage (#516): on unless the player turned it off', () => {
+  it('defaults to on', () => {
+    expect(readTranscript(memoryStorage())).toBe(true);
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writeTranscript(s, false);
+    expect(s.data.get('ab-alone.transcript')).toBe('off');
+    expect(readTranscript(s)).toBe(false);
+    writeTranscript(s, true);
+    expect(s.data.get('ab-alone.transcript')).toBe('on');
+    expect(readTranscript(s)).toBe(true);
+  });
+  it('falls back to on when storage throws or is missing, and does not throw writing', () => {
+    expect(readTranscript(throwing)).toBe(true);
+    expect(readTranscript(null)).toBe(true);
+    expect(() => writeTranscript(throwing, false)).not.toThrow();
   });
 });
 
