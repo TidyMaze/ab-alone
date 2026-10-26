@@ -4,8 +4,8 @@ import type { Axial } from './board';
 import { boot, type Game } from './test/harness';
 
 // The offline battle royale on the harness (#502): Battle royale in the mode menu starts 1 player against 5 bots on
-// the radius 8 arena, at the Furnace. The player picks an order on the arena and locks it, or holds; the round
-// resolves and the HUD plate shows the reveal log in initiative order, a fizzle marked, and the next round's
+// the radius 8 arena, at the Furnace. The player presses a target on the arena, which locks the order, or holds; the
+// round resolves and the HUD plate shows the reveal log in initiative order, a fizzle marked, and the next round's
 // initiative before its reveal. A boss fight or Play online leaves it.
 
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -45,32 +45,31 @@ const END = {
 };
 
 describe('main.ts, the offline battle royale (#502)', () => {
-  it('Battle royale starts round 1 on the arena at the Furnace, its initiative shown, Lock off until an order', async () => {
+  it('Battle royale starts round 1 on the arena at the Furnace, its initiative shown, Hold on and no Lock order (#611)', async () => {
     const game = await royale();
     expect(byId('mode-menu').hidden).toBe(true); // picking a mode closes the menu
     expect(document.body.dataset.royale).toBe('1');
     expect(document.body.dataset.deck).toBe('furnace');
     expect(turn()).toBe('Battle royale · Round 1');
     expect(items('.initiative li')).toEqual(['You', 'Bot 1', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5']);
-    expect(byId('hud').textContent).toContain('Your order: none');
+    expect(byId('hud').textContent).not.toContain('Your order');
     expect(items('.reveal li')).toEqual([]);
     expect(game.hook<{ drawn: boolean }>('__frame').drawn).toBe(false); // the radius 4 frame is put away
-    expect(button('royale-lock').hidden).toBe(false);
-    expect(button('royale-lock').disabled).toBe(true);
+    expect(byId('royale-lock')).toBeNull();
     expect(button('royale-hold').hidden).toBe(false);
     expect(button('royale-hold').disabled).toBe(false);
     for (const id of ['new-game', 'boss-retry', 'hint', 'eval', 'setting-export-game', 'setting-import-game'])
       expect(byId(id).hidden, id).toBe(true);
   });
 
-  it('a press on a marble of the player selects it, a press on a target picks the order, Lock plays the round', async () => {
+  it('a press on a marble of the player selects it, a press on a target locks the order and plays the round (#611)', async () => {
     const game = await royale();
     tap(game, -6, 3); // a marble of Bot 1: nothing
     expect(game.hook<Axial[]>('__rings')).toEqual([]);
     tap(game, -4, 8); // the player's marble is selected
     expect(game.hook<Axial[]>('__rings')).toEqual([[-4, 8]]);
     tap(game, 0, 0); // no target there: nothing changes
-    expect(byId('hud').textContent).toContain('Your order: none');
+    expect(turn()).toBe('Battle royale · Round 1');
     game.click(-4, 8);
     expect(game.hook<Axial[]>('__rings')).toEqual([]); // a second press lets it go
     game.click(-2, 6);
@@ -78,23 +77,13 @@ describe('main.ts, the offline battle royale (#502)', () => {
     const { x, y } = game.hook<{ x: number; y: number }>('__cellToScreen', -2, 5);
     canvas().dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, pointerId: 2, bubbles: true }));
     expect(document.body.dataset.ghosts).toBe('0'); // no ghost over the arena
-    game.click(-2, 5); // (-2, 6) NW
-    expect(byId('hud').textContent).toContain('Your order: 1 marble NW');
-    expect(button('royale-lock').disabled).toBe(false);
-    game.click(-3, 6); // a new selection drops the order picked
-    expect(game.hook<Axial[]>('__rings')).toEqual([[-2, 6], [-3, 6]]);
-    expect(byId('hud').textContent).toContain('Your order: none');
-    game.click(-3, 6);
-    game.click(-2, 5);
-    button('royale-lock').click();
+    game.click(-2, 5); // (-2, 6) NW: the round resolves at once
     expect(document.body.dataset.royale).toBe('2');
     expect(turn()).toBe('Battle royale · Round 2');
     expect(items('.initiative li')).toEqual(['Bot 1', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5', 'You']);
     expect(items('.reveal li')[0]).toBe('You: moved');
     expect(items('.reveal li').map((t) => t.split(':')[0])).toEqual(['You', 'Bot 1', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5']);
     expect(game.hook<Axial[]>('__rings')).toEqual([]);
-    expect(byId('hud').textContent).toContain('Your order: none');
-    expect(button('royale-lock').disabled).toBe(true);
   });
 
   it("each seat's marbles on the arena wear the seat's glyph, a picked one too (#558)", async () => {
@@ -120,13 +109,12 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(fizzled.textContent).toBe('You: fizzled');
   });
 
-  it('a finished game takes no more round: Lock and Hold are off', async () => {
+  it('a finished game takes no more round: Hold is off', async () => {
     const game = await boot('?bot=off');
     game.hook('__royale', { seed: 7, rounds: [] });
     // Every game ends by round 52, when the centre cell goes void (rules.md 10.4).
     for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) button('royale-hold').click();
     expect(button('royale-hold').disabled).toBe(true);
-    expect(button('royale-lock').disabled).toBe(true);
   });
 
   it('a cracked ring glows with the crack decal and its countdown a round before it goes void, then vanishes (#503)', async () => {
@@ -168,7 +156,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(items('.placement li').at(-1)).toBe('6th You · 0 points');
   });
 
-  it('an end position loads: the banner names the winner, the places and points, Lock and Hold off (#503)', async () => {
+  it('an end position loads: the banner names the winner, the places and points, Hold off (#503)', async () => {
     const game = await boot('?bot=off');
     game.hook('__royale', END);
     expect(turn()).toBe('You win');
@@ -182,7 +170,6 @@ describe('main.ts, the offline battle royale (#502)', () => {
       '2nd Bot 4 · 6 points',
       '2nd Bot 5 · 6 points',
     ]);
-    expect(button('royale-lock').disabled).toBe(true);
     expect(button('royale-hold').disabled).toBe(true);
     game.openModes();
     button('ship').click();
@@ -195,7 +182,6 @@ describe('main.ts, the offline battle royale (#502)', () => {
     button('boss-fight').click();
     [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Echo')!.click();
     expect(document.body.dataset.royale).toBeUndefined();
-    expect(button('royale-lock').hidden).toBe(true);
     expect(button('royale-hold').hidden).toBe(true);
     expect(game.hook<{ drawn: boolean }>('__frame').drawn).toBe(true);
     expect(turn()).not.toContain('Battle royale');
