@@ -5,6 +5,7 @@ import { cellsFor, type Axial } from './board';
 import { ordinal, royaleBanner } from './endbanner';
 import type { Crack } from './hull';
 import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
+import type { OnlineStatus } from './presence';
 
 /** The 217 cells of the arena, in the order of the wasm board. */
 export const ARENA: readonly Axial[] = cellsFor(8);
@@ -110,37 +111,46 @@ export function loadRoyale<G extends RoyaleGame>(file: RoyaleFile, make: (seats:
 
 const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
 // The seat's tint and glyph beside its name, as on its marbles (#558): the name carries the seat, the mark repeats it.
-const seat = (s: number): string => {
+const seat = (s: number, names: readonly string[]): string => {
   const { name, points } = SEAT_GLYPHS[s]!;
   const outline = points.map(([x, y]) => `${x},${-y}`).join(' ');
   return (
     `<span class="seat" data-glyph="${name}" style="background: ${hex(SEATS[s]!)}" aria-hidden="true">` +
-    `<svg viewBox="-1.3 -1.3 2.6 2.6"><polygon points="${outline}" fill="${hex(SEAT_INK)}"/></svg></span>${seatName(s)}`
+    `<svg viewBox="-1.3 -1.3 2.6 2.6"><polygon points="${outline}" fill="${hex(SEAT_INK)}"/></svg></span>${names[s]}`
   );
 };
 
-function turnText({ seat: s, outcome, ejected }: Turn): string {
-  return `${seat(s)}: ${outcome}${ejected >= 0 ? `, ejected ${seatName(ejected)}` : ''}`;
+function turnText({ seat: s, outcome, ejected }: Turn, names: readonly string[]): string {
+  return `${seat(s, names)}: ${outcome}${ejected >= 0 ? `, ejected ${names[ejected]}` : ''}`;
 }
 
-/** What the plate shows besides the log (#503): the seats out, the cracked cells, the standings once the game is over. */
+const OFFLINE = Array.from({ length: SEAT_COUNT }, (_, s) => seatName(s));
+
+/** What the plate shows besides the log (#503): the seats out, the cracked cells, the standings once the game is over.
+ * Online (#504): each seat's name, our seat (-1 for a spectator, who gets no end banner) and the status line. */
 export interface RoyaleView {
   out?: readonly number[];
   cracks?: readonly Crack[];
   standings?: readonly Standing[];
+  names?: readonly string[];
+  you?: number;
+  status?: OnlineStatus;
 }
 
 /** The HUD plate: the round, its initiative order before the reveal (the seats out greyed), the breach warning, and
  * the reveal of the last round in initiative order, each order's outcome named, a fizzle marked.
  * Once the game is over: the end banner and each seat's place and points. */
-export function royaleHtml(log: RoundLog | null, { out = [], cracks = [], standings = [] }: RoyaleView = {}): string {
+export function royaleHtml(log: RoundLog | null, view: RoyaleView = {}): string {
+  const { out = [], cracks = [], standings = [], names = OFFLINE, you = YOU, status } = view;
   const round = nextRound(log);
   const items = (list: string[], cls: string[] = []): string => list.map((t, i) => `<li${cls[i] ? ` class="${cls[i]}"` : ''}>${t}</li>`).join('');
-  const end = royaleBanner(standings, YOU);
+  const line = status ? `<div class="presence ${status.tone}">${status.text}</div>` : '';
+  const end = royaleBanner(standings, you);
   if (end) {
-    const places = standings.map((s) => `${ordinal(s.place)} ${seat(s.seat)} · ${count(s.points, 'point')}`);
+    const places = standings.map((s) => `${ordinal(s.place)} ${seat(s.seat, names)} · ${count(s.points, 'point')}`);
     return (
       `<div class="turn"><span>${end.title}</span></div>` +
+      line +
       `<div class="end" data-anim="${end.anim}">${end.line}</div>` +
       `<ol class="placement" aria-label="Placement">${items(places)}</ol>`
     );
@@ -149,10 +159,11 @@ export function royaleHtml(log: RoundLog | null, { out = [], cracks = [], standi
   const breach = breachText(cracks);
   return (
     `<div class="turn"><span>Battle royale · Round ${round}</span></div>` +
-    `<ol class="initiative" aria-label="Initiative">${items(seats.map(seat), seats.map((s) => (out.includes(s) ? 'out' : '')))}</ol>` +
+    line +
+    `<ol class="initiative" aria-label="Initiative">${items(seats.map((s) => seat(s, names)), seats.map((s) => (out.includes(s) ? 'out' : '')))}</ol>` +
     (breach ? `<small class="breach">${breach}</small>` : '') +
     (log
-      ? `<ol class="reveal" aria-label="Round ${log.round} reveal">${items(log.turns.map(turnText), log.turns.map((t) => t.outcome))}</ol>`
+      ? `<ol class="reveal" aria-label="Round ${log.round} reveal">${items(log.turns.map((t) => turnText(t, names)), log.turns.map((t) => t.outcome))}</ol>`
       : '')
   );
 }
