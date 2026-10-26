@@ -45,11 +45,12 @@ export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): T
 }
 
 // Linear fog on the depth along the view axis (THREE.Fog). It starts at the plate's edge, the farthest point of the
-// frame's inner hexagon from the camera, and reaches FOG_AT_RIM at the rim's outer edge: it thickens over the rim and
-// beyond, never over a cell, at every zoom and turn of the camera (bugs #171 and #399). `radius` is the frame's.
-const FOG_AT_RIM = { low: 0.5, high: 0.8 };
+// frame's inner hexagon from the camera, and smoothly extends across the hauler bay (#665).
+// It thickens into atmospheric haze, never over a cell, at every zoom and turn of the camera. `radius` is the frame's.
+export const BAY_FOG_SPAN = 32;
+const FOG_TIER_SCALE = { low: 1.25, high: 1.0 };
 
-// `density` is the deck's (light.ts, #400): it divides the span over the rim, from the same start, so a denser fog is
+// `density` is the deck's (light.ts, #400): it divides the span over the bay, from the same start, so a denser fog is
 // thick sooner and still never over a cell.
 export function fogSettings(
   tier: Tier,
@@ -65,7 +66,7 @@ export function fogSettings(
     (Math.sqrt(3) / 2);
   const edge = radius * (Math.sqrt(3) / 2) + FRAME.margin;
   const near = view.distance + edge * reach;
-  return { near, far: near + (FRAME.rim * reach) / (FOG_AT_RIM[tier] * density) };
+  return { near, far: near + (BAY_FOG_SPAN * FOG_TIER_SCALE[tier]) / density };
 }
 
 /** One stored setting, `null` when missing or when storage is blocked. */

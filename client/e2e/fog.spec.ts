@@ -97,7 +97,7 @@ const diffOf = (page: Page, a: Buffer, b: Buffer, box: Box) =>
     [a.toString('base64'), b.toString('base64'), box] as const,
   );
 
-test('the fog shows at the far rim of the board, not on its cells nor at the near rim, bugs #171 and #399', async ({ page }, testInfo) => {
+test('the fog shows smoothly across the bay, not on board cells nor as a brutal rim cut, bugs #171, #399, #665', async ({ page }, testInfo) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   // The evaluation bar's label (#191) is set when the analysis worker answers, which can be after the first shot. Tally's
@@ -170,8 +170,10 @@ test('the fog shows at the far rim of the board, not on its cells nor at the nea
     await testInfo.attach('fog-on-again.png', { body: fogOnAgain, contentType: 'image/png' });
   }
   expect(still.mean, `changed pixels ${JSON.stringify(still.changed)}`).toBeLessThan(0.01); // still scene
+  const fullDiff = await diffOf(page, fogOn, fogOff, { x: 0, y: 0, w: size.width, h: size.height });
+  expect(fullDiff.mean, 'fog modifies the rendered scene background').toBeGreaterThan(0.01);
   const [rimDiff, nearDiff, ...cellDiffs] = await meanDiffs(page, fogOn, fogOff, [farRim, band(near), ...far.map(disc)]);
-  expect(rimDiff, 'fog on the far rim').toBeGreaterThan(4);
+  expect(rimDiff, 'gentle rim without brutal cut').toBeLessThan(1);
   cellDiffs.forEach((d, q) => expect(d, `fog on the far rim cell (${q},-4)`).toBeLessThan(1));
   expect(nearDiff).toBeLessThan(1);
 });

@@ -225,6 +225,7 @@ describe('the view and the fog', () => {
     const fog = scene.fog as THREE.Fog;
     expect(fog.near).toBeGreaterThan(0);
     expect(fog.far).toBeGreaterThan(fog.near);
+    expect(fog.color.getHex()).toBe(0x1c1612);
     expect(document.body.dataset.clear).toBe('off');
     expect(row('clear-board').getAttribute('aria-pressed')).toBe('false');
     row('clear-board').click();
@@ -232,6 +233,20 @@ describe('the view and the fog', () => {
     expect(document.body.dataset.clear).toBe('on');
     expect(row('clear-board').getAttribute('aria-pressed')).toBe('true');
     expect(localStorage.getItem('ab-alone.clear-board')).toBe('on');
+  });
+
+  it('tints the fog to match the active deck atmosphere (#665)', async () => {
+    const game = await boot('?bot=off');
+    const { scene } = await drawn(game);
+    const fog = scene.fog as THREE.Fog;
+    expect(fog.color.getHex()).toBe(0x1c1612);
+    expect(fog.far).toBeGreaterThanOrEqual(45);
+
+    game.hook('__deck', 'cargo');
+    expect(fog.color.getHex()).toBe(0x12161a);
+
+    game.hook('__deck', 'furnace');
+    expect(fog.color.getHex()).toBe(0x20120d);
   });
 
   it('starts clear when saved so, and on the saved quality tier', async () => {

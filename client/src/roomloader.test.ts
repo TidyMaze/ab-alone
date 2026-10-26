@@ -145,7 +145,16 @@ describe('roomloader PBR pipeline', () => {
       expect(typeof conf.grateColor).toBe('number');
       expect(typeof conf.lightColor).toBe('number');
       expect(typeof conf.roughness).toBe('number');
+      expect(typeof conf.fogColor).toBe('number');
     }
+  });
+
+  it('defines distinct fogColor for all decks matching agreed atmospheres (#665)', () => {
+    expect(DECK_ATMOSPHERES.mess.fogColor).toBe(0x1c1612);
+    expect(DECK_ATMOSPHERES.cargo.fogColor).toBe(0x12161a);
+    expect(DECK_ATMOSPHERES.furnace.fogColor).toBe(0x20120d);
+    expect(DECK_ATMOSPHERES.chapel.fogColor).toBe(0x181620);
+    expect(DECK_ATMOSPHERES.bridge.fogColor).toBe(0x0f191d);
   });
 
   it('applies deck atmosphere colors and roughness to bay materials (#660)', () => {
