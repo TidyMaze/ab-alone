@@ -72,6 +72,12 @@ describe('hudHtml', () => {
     expect(hudHtml({ ...base, glass: 1, status: 2 })).toContain('Black wins');
   });
 
+  it("says Your turn or Partner's turn in place of Black to move on a co-op human ply, and the winner once over (#530)", () => {
+    expect(hudHtml({ ...base, turn: "Partner's turn" })).toContain("<span>Partner's turn</span>");
+    expect(hudHtml({ ...base, turn: "Partner's turn" })).not.toContain('to move');
+    expect(hudHtml({ ...base, turn: 'Your turn', status: 2 })).toContain('White wins');
+  });
+
   it('keeps the score text verbatim and the note', () => {
     const html = hudHtml(base);
     expect(html).toContain('Black ejected 0/6 · White ejected 0/6');

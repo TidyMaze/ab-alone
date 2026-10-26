@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { onlineStatus, Presence } from './presence';
+import { coopStatus, onlineStatus, Presence } from './presence';
 
 describe('Presence', () => {
   it('knows no key at first, and never the empty key of a free seat', () => {
@@ -66,5 +66,22 @@ describe('onlineStatus', () => {
 
   it('room full: watching', () => {
     expect(onlineStatus(2, 'spectator', 'here', false, 2)).toEqual({ text: 'Room is full, watching', tone: 'watching' });
+  });
+});
+
+describe('coopStatus, #530', () => {
+  it('names the partner, never a colour: both seats play Black against the boss', () => {
+    expect(coopStatus('player', 'waiting', false)).toEqual({ text: 'Waiting for a partner...', tone: 'waiting' });
+    expect(coopStatus('player', 'here', false)).toEqual({ text: 'Your partner is here.', tone: 'here' });
+    expect(coopStatus('player', 'gone', false)).toEqual({ text: 'Your partner is disconnected.', tone: 'gone' });
+  });
+
+  it('marks an agent partner in the line', () => {
+    expect(coopStatus('player', 'here', true)).toEqual({ text: 'Your partner (agent) is here.', tone: 'here' });
+  });
+
+  it('joining the fight until seated, and watching once the room is full', () => {
+    expect(coopStatus('pending', 'here', false)).toEqual({ text: 'Joining the fight...', tone: 'waiting' });
+    expect(coopStatus('spectator', 'here', false)).toEqual({ text: 'Room is full, watching', tone: 'watching' });
   });
 });

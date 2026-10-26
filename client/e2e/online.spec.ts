@@ -619,49 +619,57 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   for (const page of rest) await page.context().close();
 });
 
-// Co-op (docs/specs/coop-boss.md, #529): no menu entry yet (#530), page A opens the room with the __coop hook. Both
-// pages fight The Echo together: each human move is followed on every page by the boss reply its own engine computes.
-test('a co-op boss fight: both pages play the boss reply to each human move, the seats take turns, #529', async ({ browser }) => {
+// Co-op (docs/specs/coop-boss.md, #529, #530): page A opens the room with Fight together in the mode menu. Both pages
+// fight The Echo together: each human move is followed on every page by the boss reply its own engine computes. The
+// Echo mirrors each move in its first phase, so the fixture of e2e/fight-end.ts, one marble there and back twice, is a
+// draw by repetition at ply 8: a Defeat on both pages.
+test('a co-op boss fight from Fight together: the seats take turns, both pages play the boss replies and end alike, #529 #530', async ({ browser }) => {
   const [a, b] = await Promise.all([0, 1].map(async () => (await browser.newContext()).newPage()));
   await calm(a, b);
   await room({ a, b });
   const history = (page: Page) => page.evaluate(() => (window as any).__history());
-  // The first legal one-marble move forward of Black, as two clicks: its marble, then the cell it goes to.
-  const forward = (page: Page) =>
-    page.evaluate(() => {
-      const mv = (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4));
-      const [q, r] = mv.cells[0];
-      const [dq, dr] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]][mv.dir]!;
-      (window as any).__click(q, r);
-      (window as any).__click(q + dq, r + dr);
-    });
+  const turn = (page: Page) => page.locator('#hud .turn');
 
   await a.goto('./?bot=off&net=hook');
   await a.locator('canvas').waitFor();
   await expect(a.locator('#hud')).not.toBeEmpty();
-  await a.evaluate(() => (window as any).__coop('echo', 7));
+  await openModes(a);
+  await a.getByRole('button', { name: 'Fight together' }).click();
+  await a.locator('#coop-list').getByRole('button', { name: 'The Echo' }).click();
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  expect(hash).toMatch(/^#room=[\w-]+&boss=echo&seed=7$/);
+  expect(hash).toMatch(/^#room=[\w-]+&boss=echo&seed=\d+$/);
   await b.goto(`./?bot=off&net=hook${hash}`);
   await b.locator('canvas').waitFor();
   await open(a);
   await open(b);
   await seat(b, 'player');
-  await expect(a.locator('body')).toHaveAttribute('data-opponent', 'here');
-  await expect(a.locator('#hud')).toContainText('The Echo');
-  await expect(b.locator('#hud')).toContainText('The Echo');
+  await expect(status(a)).toHaveText('Your partner is here.');
+  await expect(status(b)).toHaveText('Your partner is here.');
+  await expect(turn(a)).toHaveText('Your turn');
+  await expect(turn(b)).toHaveText("Partner's turn");
 
-  await forward(b); // seat 1 plays first: a move from seat 2 changes nothing
+  await play(b, 0, 2); // seat 1 plays first: a move from seat 2 changes nothing
+  await play(b, 0, 1);
   expect(await plies(b)).toBe(0);
-  await forward(a);
-  await expect.poll(() => plies(a)).toBe(2);
-  await expect.poll(() => plies(b)).toBe(2);
-  await forward(a); // now seat 2's ply
-  expect(await plies(a)).toBe(2);
-  await forward(b);
-  await expect.poll(() => plies(a)).toBe(4);
-  await expect.poll(() => plies(b)).toBe(4);
+  for (let i = 0; i < 2; i++) {
+    await play(a, 0, 2); // there
+    await play(a, 0, 1);
+    await expect.poll(() => plies(b)).toBe(4 * i + 2);
+    if (i === 0) {
+      await expect(turn(a)).toHaveText("Partner's turn");
+      await expect(turn(b)).toHaveText('Your turn');
+      await play(a, 0, 1); // now seat 2's ply
+      await play(a, 0, 2);
+      expect(await plies(a)).toBe(2);
+    }
+    await play(b, 0, 1); // and back
+    await play(b, 0, 2);
+    await expect.poll(() => plies(a)).toBe(4 * i + 4);
+  }
+  for (const page of [a, b]) await expect(turn(page)).toHaveText('Defeat');
   expect(await history(a)).toEqual(await history(b));
+  await expect(a.locator('#hud .boss')).toHaveText((await b.locator('#hud .boss').textContent())!); // phase notches, tell, result
+  expect(await a.evaluate(() => (window as any).__notches())).toEqual(await b.evaluate(() => (window as any).__notches()));
   await expect(a.locator('#hud')).not.toContainText('refused');
   await expect(b.locator('#hud')).not.toContainText('refused');
   await a.context().close();
