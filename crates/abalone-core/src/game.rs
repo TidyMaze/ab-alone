@@ -91,6 +91,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.converted().is_empty() {
         board.converted().hash(&mut hasher);
     }
+    if !board.eggs().is_empty() {
+        board.eggs().hash(&mut hasher);
+    }
     hasher.finish()
 }
 

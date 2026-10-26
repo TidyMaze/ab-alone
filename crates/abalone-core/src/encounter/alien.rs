@@ -4,10 +4,12 @@
 //! crushes it; otherwise it hatches into a new Alien marble after 4 player turns. The egg cell is
 //! picked by a seeded integer PRNG of the fight seed and the ply, so every peer gets the same eggs.
 
-use crate::board::Board;
+use crate::board::{Board, Cell};
+use crate::encounter::hull::mix;
 use crate::encounter::{BossDef, Encounter};
 use crate::game::Game;
-use crate::moves::{Move, Player};
+use crate::moves::{apply, Move, Player};
+use crate::search::{search_with, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -37,38 +39,106 @@ pub const ALIEN_NODE_BUDGET: u32 = 3000;
 pub const ALIEN_PLAYER_END: u8 = 0;
 /// Special id at the end of a boss turn with no lay. A lay's id is the new egg's counter.
 pub const ALIEN_BOSS_END: u8 = 1;
+const _: () = assert!(
+    ALIEN_HATCH_TURNS[2] > ALIEN_BOSS_END,
+    "a lay id is never a turn id"
+);
+
+/// Special id of the ply that just ended: the player's (odd plies, Black moves first), a boss
+/// turn with no lay, or a lay with the counter of the phase.
+fn special(ply: u32, phase: usize) -> Option<u8> {
+    Some(if ply % 2 == 1 {
+        ALIEN_PLAYER_END
+    } else if (ply / 2).is_multiple_of(ALIEN_LAY_EVERY[phase]) {
+        ALIEN_HATCH_TURNS[phase]
+    } else {
+        ALIEN_BOSS_END
+    })
+}
+
+/// End of a ply: an egg under a marble is crushed. Then a player turn counts the eggs down and
+/// hatches the ones at zero into Alien marbles, and a lay puts one egg on an empty cell picked by
+/// `seed`, unless `ALIEN_EGG_CAP` eggs are out.
+fn hook(board: &Board, id: u8, seed: u64) -> Board {
+    let mut out = board.clone();
+    let mut eggs: Vec<_> = board
+        .eggs()
+        .iter()
+        .copied()
+        .filter(|&((q, r), _)| board.get(q, r) == Some(Cell::Empty))
+        .collect();
+    if id == ALIEN_PLAYER_END {
+        for egg in &mut eggs {
+            egg.1 -= 1;
+            if egg.1 == 0 {
+                out.set(egg.0 .0, egg.0 .1, Cell::White);
+            }
+        }
+        eggs.retain(|&(_, left)| left > 0);
+    } else if id != ALIEN_BOSS_END && eggs.len() < ALIEN_EGG_CAP {
+        let radius = board.radius();
+        let free: Vec<P> = (-radius..=radius)
+            .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::Empty))
+            .filter(|&c| eggs.iter().all(|&(e, _)| e != c))
+            .collect();
+        if !free.is_empty() {
+            eggs.push((free[(mix(seed) % free.len() as u64) as usize], id));
+        }
+    }
+    out.set_eggs(eggs);
+    out
+}
 
 /// The Alien boss definition.
 pub fn alien_boss() -> BossDef {
     BossDef {
-        name: "",
-        phase_marbles: Vec::new(),
-        special: |_, _| None,
-        hook: |board, _, _| board.clone(),
-        node_budget: 0,
+        name: "The Alien",
+        phase_marbles: ALIEN_PHASE_MARBLES.to_vec(),
+        special,
+        hook,
+        node_budget: ALIEN_NODE_BUDGET,
     }
 }
 
 /// A new encounter: the player is Black on the standard layout and moves first.
 pub fn alien_start(seed: u64) -> Encounter {
-    Encounter::new(Game::new(), alien_boss(), seed)
+    let mut board = Board::standard();
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
+            if board.get(q, r) == Some(Cell::White) {
+                board.set(q, r, Cell::Empty);
+            }
+        }
+    }
+    for (q, r) in ALIEN_START {
+        board.set(q, r, Cell::White);
+    }
+    Encounter::new(
+        Game::from_position(board, Player::Black, [0, 0]),
+        alien_boss(),
+        seed,
+    )
 }
 
 /// The boss reply: its node-limited search, among the moves that leave every egg empty when
 /// there is one. `None` on the player's turn or when the game is over.
-pub fn alien_move(_enc: &Encounter) -> Option<Move> {
-    None
-}
-
-#[allow(dead_code)]
-fn special(_ply: u32, _phase: usize) -> Option<u8> {
-    None
-}
-
-#[allow(dead_code)]
-fn hook(board: &Board, _id: u8, _seed: u64) -> Board {
-    let _ = Player::Black;
-    board.clone()
+pub fn alien_move(enc: &Encounter) -> Option<Move> {
+    if enc.game().to_move() != Player::White {
+        return None;
+    }
+    let board = enc.game().board();
+    let spares_eggs = |mv: &Move| {
+        let (after, _) = apply(board, Player::White, mv).expect("a legal move");
+        board
+            .eggs()
+            .iter()
+            .all(|&((q, r), _)| after.get(q, r) == Some(Cell::Empty))
+    };
+    search_with(enc.game(), ALIEN_NODE_BUDGET, DEFAULT_WEIGHTS, &spares_eggs)
+        .or_else(|| enc.boss_search())
+        .map(|r| r.mv)
 }
 
 #[cfg(test)]

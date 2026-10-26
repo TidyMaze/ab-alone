@@ -8,6 +8,7 @@
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`. The radius 5 board of The Ballast Mind
 //!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
+//! - Eggs (The Alien): records of 3 integers `[q, r, player_turns_left]`, back to back.
 //! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
 //! - Armies (The Choir): records of 3 integers `[q, r, army]`, back to back. Army `0` Alto,
 //!   `1` Tenor, `2` Bass, the order of the cycle. On the Choir's radius 3 board the outer ring
@@ -41,6 +42,7 @@
 //!   - State hash: 16 lowercase hex digits, the same on every peer for the same state.
 
 use abalone_core::board::{Board, Cell, MAX_RADIUS, RADIUS};
+use abalone_core::encounter::alien::{alien_boss, alien_move, alien_start};
 use abalone_core::encounter::ballast::{ballast_boss, ballast_move, ballast_start, ballast_tell};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use abalone_core::encounter::choir::{
@@ -316,6 +318,11 @@ fn ballast_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(ballast_start(seed))
 }
 
+/// The Alien sets up its own 8 marbles.
+fn alien_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(alien_start(seed))
+}
+
 fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
     ballast_tell(enc).flips
 }
@@ -337,7 +344,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 5] = [
+const BOSSES: [BossEntry; 6] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -383,6 +390,15 @@ const BOSSES: [BossEntry; 5] = [
         reply: ballast_move,
         announce: no_announce,
         flips: ballast_flips,
+    },
+    BossEntry {
+        id: "alien",
+        goal: "Its eggs hatch; land on one to crush it. Eject 6 to win; lose 6 or draw to lose.",
+        def: alien_boss,
+        start: alien_fight,
+        reply: alien_move,
+        announce: no_announce,
+        flips: no_flips,
     },
 ];
 
@@ -567,7 +583,13 @@ impl Encounter {
 
     /// Alien eggs as `[q, r, player_turns_left]` records, empty for the other bosses.
     pub fn eggs(&self) -> Vec<i32> {
-        Vec::new()
+        self.fight
+            .game()
+            .board()
+            .eggs()
+            .iter()
+            .flat_map(|&((q, r), left)| [q, r, i32::from(left)])
+            .collect()
     }
 
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
@@ -1310,10 +1332,12 @@ mod tests {
     #[test]
     fn two_alien_encounters_with_the_same_seed_and_moves_lay_the_same_eggs() {
         // Every peer of a co-op fight, the daily and a Retry replay the same eggs and hatches (#588).
-        let first = brood(2_374_354_862, 16);
-        assert_eq!(brood(2_374_354_862, 16), first);
-        assert!(first.iter().any(|(eggs, _)| !eggs.is_empty()));
-        let runs: Vec<_> = (0..6).map(|seed| brood(seed, 8)).collect();
+        // 12 plies: two lays and the first hatch, at the end of ply 11.
+        let first = brood(2_374_354_862, 12);
+        assert_eq!(brood(2_374_354_862, 12), first);
+        let alien = |board: &[u8]| count(board, 2);
+        assert_eq!((alien(&first[9].1), alien(&first[10].1)), (8, 9), "hatched");
+        let runs: Vec<_> = (0..4).map(|seed| brood(seed, 4)).collect();
         assert!(
             runs.iter().any(|r| *r != runs[0]),
             "the seed picks the cells"

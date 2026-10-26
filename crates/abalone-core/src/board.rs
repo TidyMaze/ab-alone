@@ -147,10 +147,12 @@ impl Board {
 
     /// Alien eggs and the player turns left before each hatches.
     pub fn eggs(&self) -> &[((i32, i32), u8)] {
-        &[]
+        &self.eggs
     }
 
-    pub fn set_eggs(&mut self, _eggs: Vec<((i32, i32), u8)>) {}
+    pub fn set_eggs(&mut self, eggs: Vec<((i32, i32), u8)>) {
+        self.eggs = eggs;
+    }
 
     /// Standard start layout: 14 marbles per side.
     pub fn standard() -> Self {
