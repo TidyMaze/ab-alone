@@ -532,7 +532,9 @@ visit. No dependency: a hand-written service worker and a build step that lists 
   under `/ab-alone/`, started and stopped by `playwright.config.ts`), or on the live site with
   `E2E_BASE_URL`. It loads once, checks the fonts are cached, empties the browser's HTTP cache (it
   keeps the stylesheet a day at most), goes offline, reloads, checks the UI fonts are loaded and
-  plays a bot move.
+  plays a bot move. The two font hosts answer from the spec (a stylesheet of the two families on a
+  font file Playwright ships), never from Google: a network outage held the first load past the
+  15 s timeout (bug #649).
 
 ## 10. CI, testing, observability
 
