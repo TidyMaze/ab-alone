@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateKeys, type Wire } from './moverecord';
 import { parseRoyale, ROOM_JUDGE, RoyaleNet, seedOf } from './royale-net';
 import { OnlineSession } from './session';
@@ -9,8 +9,8 @@ import type { Transport } from './transport';
 // The online battle royale on the harness (#504, docs/specs/tech.md section 6): Invite, in an offline battle royale,
 // opens a room of 6 seats with its invite link, the creator starts the game, each round a target press or Hold commits the order and the
 // round resolves on every peer once each seat revealed or the deadline passed. The other player is a real session and
-// RoyaleNet on the other end of the room, with its own engine. `?round=300` shortens the round deadline, for the test
-// of a silent player alone: on a loaded machine a page may take longer than that to press a button.
+// RoyaleNet on the other end of the room, with its own engine. Date is frozen in this file: a round deadline passes only
+// when a test moves it on, so a loaded machine never lets one pass between two steps (#705).
 
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const button = (id: string): HTMLButtonElement => byId<HTMLButtonElement>(id);
@@ -102,6 +102,9 @@ async function started(url?: string, reducedMotion?: boolean) {
 }
 
 describe('Battle royale online (#504)', () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
+  afterEach(() => vi.useRealTimers());
+
   it('Invite opens a room of 6 seats: its invite link, the arena in the lobby, Start for the creator alone', async () => {
     const game = await boot('?bot=off');
     game.openModes();
@@ -153,6 +156,8 @@ describe('Battle royale online (#504)', () => {
     const { game } = await started('?bot=off&round=300', false);
     await new Promise((done) => setTimeout(done, 400)); // a loaded machine (#705): the page is slow to press Hold
     button('royale-hold').click();
+    await until(game, () => data().net === 'locked');
+    vi.advanceTimersByTime(300); // the other player said nothing: the deadline passes
     await until(game, () => data().royale === '2');
     expect(data().reveal).toBe('turn');
     game.frame(10_000);
@@ -167,10 +172,12 @@ describe('Battle royale online (#504)', () => {
     button('royale-start').click();
     await until(lobby.game, () => data().net === 'choosing');
     expect(deadline()).toBe('Order deadline: 2 s');
+    vi.advanceTimersByTime(600);
     await until(lobby.game, () => deadline() === 'Order deadline: 1 s'); // redrawn as the seconds pass
     expect(byId('hud').querySelector('.deadline')!.className).toBe('deadline short');
+    vi.advanceTimersByTime(900);
     await until(lobby.game, () => data().royale === '2'); // nobody committed: round 1 resolves at its deadline
-    expect(deadline()).toMatch(/^Order deadline: [12] s$/); // and counts again from round 2's start
+    expect(deadline()).toBe('Order deadline: 2 s'); // and counts again from round 2's start
   });
 
   it('an invite link takes the first free seat, waits for the start, and reports a desync', async () => {
