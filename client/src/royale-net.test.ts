@@ -371,6 +371,71 @@ describe('RoyaleNet rounds', () => {
   });
 });
 
+describe('RoyaleNet deadline (#673)', () => {
+  it('gives the ms left to commit while the open round takes commits, to a spectator too, and none otherwise', async () => {
+    const room = table();
+    const a = await room.join('a', 0);
+    const b = await room.join('b', 1);
+    const watcher = await room.join('w');
+    expect(a.net.left).toBeNull(); // the lobby
+    await a.net.start();
+    await room.settle();
+    expect([a.net.left, b.net.left, watcher.net.left]).toEqual([MS, MS, MS]);
+    await room.pass(300);
+    expect(a.net.left).toBe(MS - 300);
+    await a.net.play([]);
+    await room.settle();
+    expect(a.net.left).toBe(MS - 300); // locked: the others still have that long
+    room.lost.add('a'); // a's reveal never comes
+    await room.pass(MS - 300);
+    expect([b.net.left, watcher.net.left]).toEqual([null, null]); // the reveal
+  });
+});
+
+describe('RoyaleNet dropped seat (#674)', () => {
+  /** The order the seat played in the round `orders` of a peer played out, [] for a hold. */
+  const playedBy = (orders: Int32Array, seat: number): number[] => {
+    for (let i = 0; i < orders.length; i += 9) if (orders[i] === seat) return Array.from(orders.slice(i + 1, i + 9));
+    return [];
+  };
+
+  it('a seat that missed 2 commits is played by the bot from the next round on, on every peer, until it commits again', async () => {
+    const { room, a, b, c } = await started();
+    room.lost.add('c'); // c is gone
+    const bots: number[][] = [];
+    for (let i = 0; i < 3; i++) {
+      bots.push(Array.from(a.game.bot_order(2))); // what the bot would order for c's seat from this round's start
+      for (const p of [a, b]) await p.net.play([]);
+      await room.pass(MS);
+    }
+    expect(a.net.round).toBe(4);
+    expect(playedBy(a.rounds[0]!, 2)).toEqual([]); // rounds 1 and 2: c's seat holds
+    expect(playedBy(a.rounds[1]!, 2)).toEqual([]);
+    expect(playedBy(a.rounds[2]!, 2)).toEqual(bots[2]); // round 3: the first after 2 missed commits, the bot plays it
+    expect(playedBy(b.rounds[2]!, 2)).toEqual(bots[2]);
+    expect(b.game.state_hash()).toBe(a.game.state_hash());
+    // Round 4: c is still gone, the bot plays on. Then c is back: it replays the rounds it missed, the same way.
+    for (const p of [a, b]) await p.net.play([]);
+    await room.pass(MS);
+    expect(playedBy(a.rounds[3]!, 2)).toHaveLength(8);
+    room.lost.delete('c');
+    await c.net.resync();
+    await room.settle();
+    expect(c.net.round).toBe(5);
+    expect(c.game.state_hash()).toBe(a.game.state_hash());
+    // Round 5: c commits again and retakes its seat; a silent round after that holds, as for any seat.
+    for (const p of [a, b, c]) await p.net.play([]);
+    await room.settle();
+    expect(playedBy(a.rounds[4]!, 2)).toEqual([]);
+    expect(outcomes(a)[2]).toBe('held');
+    for (const p of [a, b]) await p.net.play([]);
+    await room.pass(MS);
+    expect(playedBy(a.rounds[5]!, 2)).toEqual([]);
+    for (const p of [a, b, c]) expect(p.game.state_hash()).toBe(a.game.state_hash());
+    expect([a.net.desync, b.net.desync, c.net.desync]).toEqual([0, 0, 0]);
+  });
+});
+
 describe('RoyaleNet catch-up', () => {
   it('a peer back after missing 2 rounds says it is behind at the next start, replays them and plays on', async () => {
     const { room, a, b, c } = await started();

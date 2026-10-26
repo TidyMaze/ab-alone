@@ -6,6 +6,7 @@ import {
   ARENA,
   BOTS,
   breachText,
+  deadlineText,
   initiative,
   loadRoyale,
   nextRound,
@@ -237,6 +238,26 @@ describe('the plate of an online battle royale (#504)', () => {
     const line = document.querySelector('.presence')!;
     expect(line.textContent).toBe('Your order: a move or Hold');
     expect(line.className).toBe('presence here');
+  });
+
+  it('counts the order deadline down in whole seconds under the status line, the last 5 s marked to pulse (#673)', () => {
+    expect(deadlineText(null)).toBe('');
+    expect(deadlineText(undefined)).toBe('');
+    expect(deadlineText(15_000)).toBe('Order deadline: 15 s');
+    expect(deadlineText(12_001)).toBe('Order deadline: 13 s');
+    expect(deadlineText(1)).toBe('Order deadline: 1 s');
+    const status = { text: 'Your order: a move or Hold', tone: 'here' as const };
+    document.body.innerHTML = royaleHtml(null, { names, you: 1, status, left: 5001 });
+    const clock = document.querySelector('.presence + .deadline')!;
+    expect(clock.textContent).toBe('Order deadline: 6 s');
+    expect(clock.className).toBe('deadline');
+    document.body.innerHTML = royaleHtml(null, { names, you: 1, status, left: 5000 });
+    expect(document.querySelector('.deadline')!.className).toBe('deadline short');
+    document.body.innerHTML = royaleHtml(null, { names, you: 1, status, left: null });
+    expect(document.querySelector('.deadline')).toBeNull();
+    const placed = standings([2, 6, 1, 10, 2, 6, 2, 6, 2, 6, 2, 6]);
+    document.body.innerHTML = royaleHtml(null, { names, you: 1, standings: placed, left: 3000 }); // over: no deadline
+    expect(document.querySelector('.deadline')).toBeNull();
   });
 
   it('ends from our own seat: its place, the others by their names', () => {
