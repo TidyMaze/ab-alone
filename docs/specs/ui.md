@@ -222,6 +222,8 @@ stay in the column, outside the menu.
   tests. The card shows only at the end of a daily fight, never in a plain boss fight (#196).
 - **Export game, Import game.** Two items of the settings menu, after Sound (#287), for local
   games only: hidden during online, boss and daily games (#219, file format in tech.md section 8).
+  The hub (Ship) has no game on: it hides them too until a game leaves it, and a file still being
+  read when the player opens the hub is dropped (#589).
   Export game downloads the game, Import game opens the browser's file picker. A refused file adds a
   short note to the HUD, kept verbatim for the e2e tests: "import refused: not a game file", "import
   refused: unknown file version", "import refused: illegal move in the file".
