@@ -293,6 +293,9 @@ answer: only a `Sync` does.
    `Royale::hash` is the state hash the peers compare. Since #496 each round ends with the hull
    breach, and `Royale::winners` gives the winners once the game is over. Since #497
    `Royale::standings` gives each seat its place and points (`royale/score.rs`).
+   Since #498 `royale::bot::order(state, seat, seed)` gives a bot seat its order (eject if it
+   can, else keep off cracked and rim cells and move toward the centre), and
+   `cargo run --release --example royale_sim` runs the anti-kingmaking check of rules.md 10.4.
 - **Who arbitrates?** Nobody has authority over the outcome, the pure function does. A
   **coordinator** (the host peer) exists only for liveness: it announces round start, collects
   the timeout decision and drives membership. If the coordinator lies about a deadline, peers

@@ -282,9 +282,9 @@ Hooks, from game-design section 7 (starting values):
 
 **Sumito (FINAL).** Section 5 applies against any opponent. The opponent run may mix colours: every marble that is not the mover's counts toward `m`, and only a marble of the mover blocks the push (lead decision on #493, literal reading of section 5 rule 2). So 3 marbles push a White marble then a seat 3 marble (3v2), and 2 cannot (2v2).
 
-**Bots (FINAL).** A bot's order is a pure function of the round-start state and the seed, computed before the reveal. A bot cannot see human orders.
+**Bots (FINAL).** A bot's order is a pure function of the round-start state and the seed, computed before the reveal. A bot cannot see human orders. Built in #498 (`royale::bot::order(state, seat, seed)`): it ejects a marble if it can, else it plays the move that best keeps its marbles off cracked and rim cells and near the centre, the seed breaking ties, and holds when no move beats staying put.
 
-**Anti-kingmaking check (TUNE).** In 1000 bot games, the final-two leader loses to a dying third player in under 1 game in 5, measured against option A as a baseline.
+**Anti-kingmaking check (TUNE).** In 1000 bot games, the final-two leader loses to a dying third player in under 1 game in 5, measured against option A as a baseline. `cargo run --release --example royale_sim` measures it (#498).
 
 ## 11. Numbers index
 
