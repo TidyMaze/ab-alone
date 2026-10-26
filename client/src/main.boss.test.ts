@@ -248,6 +248,7 @@ describe('main.ts daily challenge', () => {
     const daily = byId<HTMLButtonElement>('daily');
     expect(daily.disabled).toBe(false);
     expect(daily.textContent).toBe('Daily challenge 2026-10-25: The Echo');
+    expect(daily.querySelector('span')!.textContent).toBe('The Echo'); // held upright it takes a line of its own (#575)
     game.openModes();
     daily.click();
     expect(byId('mode-menu').hidden).toBe(true);

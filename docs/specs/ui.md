@@ -179,7 +179,8 @@ stay in the column, outside the menu.
   starts over; no dialog. Strings kept verbatim for the e2e tests: "New game", "Confirm new game"
   (#230).
 - **Daily challenge.** An item of the mode menu under Boss fight and its boss list, labelled "Daily challenge 2026-10-24: The Choir"
-  (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
+  (the UTC date and that day's boss; on a phone held upright the boss name takes a second line, so a long name pushes
+  no item over the board, #575), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
   tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
 - **Battle royale (#502).** An item of the mode menu under Play online. It starts an offline battle royale, the
