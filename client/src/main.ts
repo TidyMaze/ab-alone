@@ -2092,7 +2092,9 @@ bossButton.addEventListener('click', () => {
 const dailyButton = document.getElementById('daily') as HTMLButtonElement;
 function today(): Daily {
   const daily = dailyFor(utcDay(Date.now()), boss_ids());
-  dailyButton.textContent = dailyTitle(daily.day, boss_name(daily.id)!);
+  // The boss name is a span: held upright on a phone it takes a line of its own (ui.css, #575).
+  const name = Object.assign(document.createElement('span'), { textContent: boss_name(daily.id)! });
+  dailyButton.replaceChildren(dailyTitle(daily.day, ''), name);
   return daily;
 }
 function startDaily(): void {

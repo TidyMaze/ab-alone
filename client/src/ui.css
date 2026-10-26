@@ -236,6 +236,12 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #mode-menu { flex: 1 0 100%; flex-flow: row wrap; gap: 0.5rem; }
   #boss-list:not([hidden]) { display: contents; }
 }
+/* Bug #575: on a phone held upright the boss name of the Daily challenge label takes a second line of the 44 px tall
+   button, so a long boss name makes the label no wider and pushes no item onto a row over the board. */
+@media (orientation: portrait) and (max-width: 600px), (orientation: portrait) and (pointer: coarse) {
+  #daily { padding-block: 0.25rem; }
+  #daily span { display: block; }
+}
 /* Held upright, or in a narrow or short window, each item is its icon only, a 44 px square, so every item fits without
    reaching the board (#414): the name is its aria-label and title. Roomy windows keep icon then label. */
 @media (orientation: portrait), (max-width: 1100px), (max-height: 500px) {
