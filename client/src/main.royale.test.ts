@@ -323,6 +323,18 @@ describe('main.ts, a battle royale round plays out (#612)', () => {
     expect(document.body.dataset.cracks).toBe('0');
   });
 
+  it('the end shows once the last round played out, and Hold during it plays no more round', async () => {
+    const game = await seeded(7);
+    // Each Hold ends the reveal before it; the one during the last round's reveal only ends it.
+    for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) {
+      expect(turn()).toContain('Battle royale'); // the end waits for the reveal
+      button('royale-hold').click();
+    }
+    expect(reveal()).toBe('done');
+    expect(turn()).toBe('You place 6th');
+    expect(game.hook<number[]>('__seatGlyphs')[0]).toBe(0);
+  });
+
   it('reduced motion: the board jumps to the new position at once', async () => {
     const game = await seeded(7, { reducedMotion: true });
     game.click(-2, 6);
@@ -338,8 +350,8 @@ describe('main.ts, a battle royale round plays out (#612)', () => {
     game.openModes();
     button('ship').click();
     expect(reveal()).toBeUndefined();
-    game.frame(10_000);
+    game.frame(10_000); // nothing of it plays on over the hub
     expect(document.body.dataset.hub).toBeDefined();
-    expect(drawnAt(game, -2, 5)).toBeNull();
+    expect(reveal()).toBeUndefined();
   });
 });
