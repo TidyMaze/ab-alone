@@ -2,6 +2,7 @@
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Axial } from './board';
+import type { View } from './camera';
 import { SHOCK_MS, SHOCK_RADIUS, type Pulsar } from './pulsar';
 import { boot, type Game } from './test/harness';
 
@@ -161,6 +162,18 @@ describe('main.ts The Pulsar (#675)', () => {
     expect(shock(game)).toBeNull();
     expect(body().pulses).toBe('1'); // only the first fight's
     expect(marbleAt(game, 4, -4)).not.toBeNull(); // the start position
+  });
+
+  it('frames the board at radius 5 so all six pulsars and the counter fit the camera view, #691', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightPulsar(game);
+    const view = game.hook<View>('__view');
+    expect(view.distance).toBeCloseTo((5 / 4) * Math.hypot(11, 8));
+    byId('reset-view').click();
+    expect(game.hook<View>('__view').distance).toBeCloseTo((5 / 4) * Math.hypot(11, 8));
+    type Bounds = { name: string; rect: { x: number; y: number; width: number; height: number } };
+    const bounds = game.hook<Bounds[]>('__pulsarBounds');
+    expect(bounds.length).toBeGreaterThan(0);
   });
 
   it('a game that is no Pulsar fight draws no pulsar', async () => {

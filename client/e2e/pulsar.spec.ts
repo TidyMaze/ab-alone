@@ -102,3 +102,20 @@ test('The Pulsar: the shockwave grows from the pulsar across the board, #675', a
   await expect(body).not.toHaveAttribute('data-pulsing', '1');
   await expect(body).toHaveAttribute('data-pulses', '1');
 });
+
+test('The Pulsar: on 1280x720 every pulsar and the charging counter stay inside the window, #691', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await startPulsar(page, true);
+  await plies(page, 0, 1);
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('pulsar-1280x720.png') });
+  type Bounds = { name: string; rect: { x: number; y: number; width: number; height: number } };
+  const bounds = await page.evaluate(() => (window as any).__pulsarBounds() as Bounds[]);
+  expect(bounds.length).toBeGreaterThan(0);
+  for (const { name, rect } of bounds) {
+    expect(rect.y, `${name} top off screen`).toBeGreaterThanOrEqual(0);
+    expect(rect.y + rect.height, `${name} bottom cut off`).toBeLessThanOrEqual(720);
+    expect(rect.x, `${name} left off screen`).toBeGreaterThanOrEqual(0);
+    expect(rect.x + rect.width, `${name} right off screen`).toBeLessThanOrEqual(1280);
+  }
+});
