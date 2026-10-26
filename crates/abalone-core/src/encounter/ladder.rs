@@ -5,6 +5,7 @@
 //! from the unit tests beyond a tiny run.
 
 use crate::board::{Board, Cell};
+use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
 use crate::encounter::ballast::{ballast_move, ballast_start, ballast_tell, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use crate::encounter::choir::Choir;
@@ -32,15 +33,17 @@ pub enum LadderBoss {
     Chaplain,
     Choir,
     Ballast,
+    Alien,
 }
 
 impl LadderBoss {
-    pub const ALL: [LadderBoss; 5] = [
+    pub const ALL: [LadderBoss; 6] = [
         LadderBoss::Echo,
         LadderBoss::Hull,
         LadderBoss::Chaplain,
         LadderBoss::Choir,
         LadderBoss::Ballast,
+        LadderBoss::Alien,
     ];
 
     /// Stable id used in the telemetry.
@@ -51,6 +54,7 @@ impl LadderBoss {
             LadderBoss::Chaplain => "chaplain",
             LadderBoss::Choir => "choir",
             LadderBoss::Ballast => "ballast",
+            LadderBoss::Alien => "alien",
         }
     }
 
@@ -67,6 +71,7 @@ impl LadderBoss {
             LadderBoss::Chaplain => chaplain_boss().node_budget,
             LadderBoss::Choir => crate::encounter::choir::CHOIR_NODE_BUDGET,
             LadderBoss::Ballast => BALLAST_NODE_BUDGET,
+            LadderBoss::Alien => ALIEN_NODE_BUDGET,
         }
     }
 }
@@ -88,6 +93,7 @@ impl Arena {
         let plain = |def| Arena::Plain(Encounter::new(Game::new(), def, seed), boss);
         match boss {
             LadderBoss::Ballast => Arena::Plain(ballast_start(seed), boss),
+            LadderBoss::Alien => Arena::Plain(alien_start(seed), boss),
             LadderBoss::Echo => plain(echo_boss()),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
@@ -127,6 +133,7 @@ impl Arena {
         match self {
             Arena::Plain(enc, LadderBoss::Echo) => echo_move(enc),
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_move(enc),
+            Arena::Plain(enc, LadderBoss::Alien) => alien_move(enc),
             Arena::Plain(enc, _) => enc.boss_search().map(|r| r.mv),
             Arena::Choir(choir) => choir.boss_move(),
         }
@@ -363,7 +370,6 @@ pub fn run_ladder(boss: LadderBoss, player_budget: u32, seeds: u32, ply_cap: u32
 mod tests {
     use super::*;
     use crate::board::{Board, Cell};
-    use crate::encounter::alien::{alien_move, alien_start};
     use crate::encounter::ballast::{ballast_boss, ballast_start};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::echo_boss;
@@ -458,7 +464,10 @@ mod tests {
     #[test]
     fn every_boss_has_an_id_and_a_budget() {
         let ids: Vec<_> = LadderBoss::ALL.iter().map(|b| b.id()).collect();
-        assert_eq!(ids, ["echo", "hull", "chaplain", "choir", "ballast", "alien"]);
+        assert_eq!(
+            ids,
+            ["echo", "hull", "chaplain", "choir", "ballast", "alien"]
+        );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
         assert_eq!(budgets, [400, 3000, 2000, 1500, 150_000, 3000]);
     }
@@ -574,7 +583,11 @@ mod tests {
             };
             a.play(&mv).unwrap();
         }
-        assert_eq!(a.game().board().eggs().len(), 1, "the first egg after ply 4");
+        assert_eq!(
+            a.game().board().eggs().len(),
+            1,
+            "the first egg after ply 4"
+        );
     }
 
     #[test]
