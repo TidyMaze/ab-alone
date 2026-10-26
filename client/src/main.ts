@@ -104,8 +104,8 @@ import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
 import { loadProgress, recordWin, saveProgress } from './progress';
-import { roomAt, roomsOf, step, type Spot as HubSpot } from './hub';
-import { arrowCell, HUB_BOARD, hubHtml } from './hubview';
+import { canEnter, roomAt, roomsOf, step, type Spot as HubSpot } from './hub';
+import { arrowCell, bumpLine, HUB_BOARD, hubHtml } from './hubview';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
@@ -1174,6 +1174,7 @@ applyPalette();
 let hover: Axial | null = null;
 let hubAt: HubSpot | null = null; // where the marble stands while the hub is shown (#521), else null
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
+let bumped = ''; // Tally's line after the marble bumped a locked lift, until the next roll (#523)
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
@@ -1461,7 +1462,7 @@ function hud(extra = ''): void {
   backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
   if (hubAt) {
     delete document.body.dataset.over; // no end light over the hub
-    document.getElementById('hud')!.innerHTML = hubHtml(hubAt);
+    document.getElementById('hud')!.innerHTML = hubHtml(hubAt, bumped);
     return;
   }
   if (royale) return royaleHud(royale);
@@ -1635,8 +1636,11 @@ function refresh(): void {
 }
 
 // The hub map (#521): the board's discs on the map cells only, in a frame shrunk to the map, a pale ring on each room
-// and the glass marble on its cell. No rim light, phase notch or tally mark: no game is on.
+// and the glass marble on its cell. No rim light, phase notch or tally mark: no game is on. A lift wears a near-black
+// arrow toward its deck, as a target arrow reads 3:1 on the lit cell, with a bar across while it is locked (#523).
 function drawHub(at: HubSpot): void {
+  const { beaten } = loadProgress(store);
+  const lifts: string[] = [];
   drawFrame(HUB_BOARD);
   lightRim();
   notches.clear();
@@ -1651,12 +1655,22 @@ function drawHub(at: HubSpot): void {
     glyph.rotation.x = Math.PI / 2;
     glyph.position.set(p.x, 0.02, p.z);
     marbles.add(glyph);
-    if (door.kind !== 'royale') continue;
-    const bar = new THREE.Mesh(barGeometry, paleMaterial); // a bar across the ring: the lobby is closed (#522)
+    const open = door.kind === 'lift' && canEnter(door, beaten);
+    if (door.kind === 'lift') {
+      const arrow = new THREE.Mesh(arrowGeometry, targetMaterial);
+      arrow.rotation.set(-Math.PI / 2, ((cell[1] < 0 ? 1 : -1) * Math.PI) / 2, 0, 'YXZ'); // up or down the map
+      arrow.position.set(p.x, 0.02, p.z);
+      marbles.add(arrow);
+      lifts.push(`${door.to} ${open ? 'open' : 'locked'}`);
+    }
+    if (door.kind !== 'royale' && (door.kind !== 'lift' || open)) continue;
+    const closed = door.kind === 'lift' ? targetMaterial : paleMaterial;
+    const bar = new THREE.Mesh(barGeometry, closed); // a bar across the ring: the lobby is closed (#522), a lift locked
     bar.rotation.y = Math.PI / 4;
     bar.position.set(p.x, 0.02, p.z);
     marbles.add(bar);
   }
+  document.body.dataset.lifts = lifts.join(','); // read by the e2e tests
   const p = axialTo3D(...at.cell);
   const marble = marbleMesh(glassOf());
   marble.position.set(p.x, 0.36, p.z);
@@ -2120,6 +2134,7 @@ shipButton.addEventListener('click', () => {
 shipButton.disabled = false; // listener ready (#146)
 function enterHub(at: HubSpot): void {
   roomOf = null;
+  bumped = '';
   hubAt = at;
   applyDeck(at.deck);
   refresh();
@@ -2128,7 +2143,8 @@ function walk(to: Axial): void {
   const progress = loadProgress(store);
   const from = hubAt!;
   hubAt = step(from, to, progress.beaten);
-  if (hubAt === from) return; // not a neighbour, or a locked lift
+  bumped = bumpLine(from, to, progress.beaten);
+  if (hubAt === from) return hud(); // not a neighbour, or a locked lift
   saveProgress(store, { ...progress, at: hubAt });
   if (hubAt.deck !== deck) applyDeck(hubAt.deck);
   refresh();
@@ -2159,6 +2175,7 @@ backButton.addEventListener('click', () => {
 function leaveHub(): void {
   hubAt = null;
   delete document.body.dataset.hub;
+  delete document.body.dataset.lifts;
 }
 addEventListener('keydown', (e) => {
   // An open terminal reader pages by them, a text field moves its caret.

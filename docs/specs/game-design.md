@@ -109,7 +109,7 @@ See section 6.
 | Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
 | Rooms | Cells with a glyph, at least 6 per deck. Rolling onto a room enters it; standing on it again (Ship, Back to the ship) does not |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
-| Gate | Only the lifts. A lift onto a deck opens once the boss of the deck below it is beaten (the Mess is always open). A locked lift keeps the marble out and Tally says one short line |
+| Gate | Only the lifts. A lift onto a deck opens once the boss of the deck below it is beaten (the Mess is always open). A locked lift keeps the marble out and Tally says one short line: "Lift to Cargo: locked. This deck's boss is still on the books." |
 | Return | When the game a room started ends, "Back to the ship" puts the marble back on that room's cell. From an online table it leaves the room first |
 | Save | Local storage (`client/src/progress.ts`, key `ab-alone.progress`): deck, cell and bosses beaten as versioned JSON. A save that does not read back (corrupt, another version) starts over on the centre cell of the Mess. Every boss win counts, the boss menu and the daily included. Later a signed export/import file (accounts are out of scope) |
 
@@ -120,7 +120,7 @@ Room kinds:
 | Boss | The deck's boss: the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
-| Lift | The deck above or below. The marble arrives on that deck's lift back |
+| Lift | The deck above or below. The marble arrives on that deck's lift back. Its glyph holds a near-black arrow up or down the map, toward its deck, with a bar across while it is locked (3:1 on the lit cell, as a target arrow) |
 | BR lobby | Shown closed until battle royale ships (Phase 4): a bar across its glyph, the HUD says closed, the marble may stand on it. Every deck has one |
 
 Layout, the same on every deck so it is learned once: the centre and its 6 neighbours are floor,
