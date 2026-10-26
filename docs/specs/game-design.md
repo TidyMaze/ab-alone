@@ -180,7 +180,7 @@ a move log equals the live history.
 | Item | Value |
 |---|---|
 | Players | 3 to 6 (default 6, bots fill, see below) |
-| Arena | Hex radius 8 (217 cells) |
+| Arena | Hex radius 8 (217 cells), with a hole of radius 1 in the centre (7 void cells, #610) |
 | Marbles | 10 per player, placed in 6 wedges at the rim sides, 3 players use alternating wedges |
 | Win | Last player with marbles. If the breach ends the game, most marbles, then most ejections credited |
 | Sumito | Same rule against any opponent, strictly smaller group, free cell or void behind |
@@ -193,7 +193,11 @@ human orders. N-player bots need MCTS or a cheap heuristic early, not "later".
 - Rounds 1 to 11: safe. Players close the distance.
 - Round 12: outer ring (radius 8) cracks. One round later it is void.
 - Then a new ring every 6 rounds, down to radius 3.
-- From radius 3, a ring every 3 rounds until one marble group is left in the core.
+- From radius 3, a ring every 3 rounds down to ring 2, around the hole: its void at round 46
+  ends every game.
+- The hole in the centre (#610): parking there won every game, since once everyone is packed in
+  the middle nothing can move. The centre cell and its 6 neighbours are void from round 1, so a
+  marble next to the hole can be pushed into it.
 - A marble on a cracked ring cell is **not** safe: it is ejected when the ring vanishes.
 - Cracks glow and show a countdown. Wide warning, no surprise.
 

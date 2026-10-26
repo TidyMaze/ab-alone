@@ -217,6 +217,7 @@ Hooks, from game-design section 7 (starting values):
 
 - **FINAL.** 3 to 6 players. **TUNE** for the default of 6, with bots filling empty seats.
 - **FINAL.** Arena: hex radius 8, 217 cells.
+- **FINAL (#610, owner request, lead decision).** The arena has a hole of radius 1 in its centre: the centre cell and its 6 neighbours are void from round 1 (`royale::start`), so 210 cells are left to play on. A void cell is off the board, so a push onto the hole ejects, credited as any push. Nobody can sit in the centre where nothing can move them.
 - **TUNE.** 10 marbles per player (game-design open question Q3).
 - **FINAL (OPEN-5, lead decision on #494).** Start position (`royale::start`): 6 wedges of 10 cells, one centred on each rim side. Wedge 0 sits on the bottom side (r = 8, Black's side as in section 2.1), in rows of 3, 4 and 3 from the rim inwards, symmetric about the middle of the side. Wedge `k` is wedge 0 turned `k` times by 60 degrees about the centre, `(q,r) -> (-r,q+r)` (clockwise on screen, E goes to SE). With 6 seats the start is 6-fold symmetric.
 
@@ -256,11 +257,9 @@ Hooks, from game-design section 7 (starting values):
 | 4 | 36 | 37 |
 | 3 | 42 | 43 |
 | 2 | 45 | 46 |
-| 1 | 48 | 49 |
-| 0 (centre cell) | 51 | 52 |
 
 - Rounds 1 to 11: safe.
-- **FINAL (OPEN-6, lead decision on #496).** After radius 3, a ring cracks every 3 rounds down to the centre cell, which also goes void, so every game ends by round 52 with no round cap.
+- **FINAL (OPEN-6, lead decision on #496, ring 2 last since #610).** After radius 3, a ring cracks every 3 rounds down to ring 2, the last ring around the hole: its void at round 46 ends every game, with no round cap.
 - **FINAL (`royale::resolve_round`, #496).** The breach runs at the end of a round, after every order. First the cracked cells go void (`Board::void`) with their marbles, then the ring the table schedules for that round cracks. The cracked cells are in `board().cracks()`, each with 1 round left, for the whole next round: the warning. A void cell is off the board, so a push onto it ejects.
 - A marble on a cracked cell is not safe. It is removed when the ring goes void.
 - Cracks glow and show a countdown.
@@ -282,9 +281,9 @@ Hooks, from game-design section 7 (starting values):
 
 **Sumito (FINAL).** Section 5 applies against any opponent. The opponent run may mix colours: every marble that is not the mover's counts toward `m`, and only a marble of the mover blocks the push (lead decision on #493, literal reading of section 5 rule 2). So 3 marbles push a White marble then a seat 3 marble (3v2), and 2 cannot (2v2).
 
-**Bots (FINAL).** A bot's order is a pure function of the round-start state and the seed, computed before the reveal. A bot cannot see human orders. Built in #498 (`royale::bot::order(state, seat, seed)`): it ejects a marble if it can, else it plays the move that best keeps its marbles off cracked and rim cells and near the centre, the seed breaking ties, and holds when no move beats staying put.
+**Bots (FINAL).** A bot's order is a pure function of the round-start state and the seed, computed before the reveal. A bot cannot see human orders. Built in #498 (`royale::bot::order(state, seat, seed)`), with no pull toward the centre since #610: it ejects a marble if it can (off the rim or into the hole), else it plays the move that best keeps its marbles off cracked cells and edge cells (next to the rim or the hole) and pushes opponent marbles onto them, the seed breaking ties, and holds when no move beats staying put.
 
-**Anti-kingmaking check (TUNE).** In 10 000 bot games, the final-two leader loses to a dying third player in under 1 game in 5, measured against option A as a baseline. `cargo run --release --example royale_sim` measures it (#498). The dying third is the seat of the last three with the worst place, so two of them going out in the same void are ranked by the breach tie rule (#547).
+**Anti-kingmaking check (TUNE).** In 10 000 bot games, the final-two leader loses to a dying third player in under 1 game in 5, measured against option A as a baseline. `cargo run --release --example royale_sim` measures it (#498). The dying third is the seat of the last three with the worst place, so two of them going out in the same void are ranked by the breach tie rule (#547). It also counts the games whose first place is shared, when the last void takes seats tied on the tie rule (#610).
 
 ## 11. Numbers index
 
@@ -503,7 +502,7 @@ These are raised in the PR body. Owners decide. Nothing here was picked silently
 - **OPEN-3. Who moves first.** No source. PROPOSAL: Black.
 - **OPEN-4. Belgian daisy coordinates.** Resolved in #69: checked against three diagrams, section 2.2 is FINAL.
 - **OPEN-5. Battle royale wedge coordinates.** Resolved in #494: section 10.4 is FINAL.
-- **OPEN-6. Battle royale rings below radius 3.** Resolved in #496: a ring every 3 rounds down to the centre cell (section 10.4, FINAL).
+- **OPEN-6. Battle royale rings below radius 3.** Resolved in #496: a ring every 3 rounds down to the centre cell, down to ring 2 since the hole of #610 (section 10.4, FINAL).
 - **OPEN-7. Battle royale ties and placement tables.** Resolved: the tie at breach end in #496, the places, shared places and tables for 3 to 6 players in #497 (section 10.4, FINAL).
 - **OPEN-8. Credit for breach ejections.** Resolved in #496: last toucher if any and not the owner, else nobody (section 10.4, FINAL).
 - **OPEN-9. Same-cell conflict in battle royale.** Resolved in #495: first in initiative wins, the second fizzles (section 10.4, FINAL).

@@ -9,16 +9,17 @@
 //! one of them with more marbles at that round is the final-two leader. The leader loses to the
 //! dying third when it does not win and the third ejected at least one of its marbles in the
 //! final phase. A game without a final-two leader (no round with 3 seats left, the third sharing
-//! its place, or the final two tied on marbles) is not counted.
+//! its place, or the final two tied on marbles) is not counted. A game whose first place is
+//! shared is counted apart: every game should have one winner.
 
-use abalone_core::royale::{bot, initiative, resolve_round, start, Order};
+use abalone_core::royale::{bot, initiative, resolve_round, start, Order, Royale};
 
 const GAMES: u64 = 10_000;
 const SEATS: usize = 6;
 
-/// Plays the game of `seed`. `None` when it has no final-two leader, else whether the leader
-/// lost to the dying third.
-fn play(seed: u64, sequential: bool) -> Option<bool> {
+/// Plays the game of `seed`: whether its first place is shared, then `None` when it has no
+/// final-two leader, else whether the leader lost to the dying third.
+fn play(seed: u64, sequential: bool) -> (bool, Option<bool>) {
     let mut s = start(SEATS).unwrap();
     // Seats left and their marbles at the start of the final phase.
     let mut three: Option<Vec<(usize, usize)>> = None;
@@ -52,6 +53,19 @@ fn play(seed: u64, sequential: bool) -> Option<bool> {
         }
         s = next;
     }
+    (
+        s.winners().unwrap().len() > 1,
+        leader_lost(&s, three, &hits),
+    )
+}
+
+/// Whether the final-two leader of the finished game `s` lost to the dying third, `None` when
+/// the game has no final-two leader.
+fn leader_lost(
+    s: &Royale,
+    three: Option<Vec<(usize, usize)>>,
+    hits: &[(usize, usize)],
+) -> Option<bool> {
     let place = |k: usize| s.standings().unwrap()[k].place;
     let mut three = three?;
     three.sort_by_key(|&(k, _)| std::cmp::Reverse(place(k)));
@@ -66,8 +80,9 @@ fn play(seed: u64, sequential: bool) -> Option<bool> {
     Some(lost && hits.contains(&(third, leader)))
 }
 
-/// Plays every game on all cores: (games with a final-two leader, games it lost to the third).
-fn tally(sequential: bool) -> (u32, u32) {
+/// Plays every game on all cores: (games with a final-two leader, games it lost to the third,
+/// games with a shared first place).
+fn tally(sequential: bool) -> (u32, u32, u32) {
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get() as u64);
     std::thread::scope(|scope| {
         let handles: Vec<_> = (0..threads)
@@ -75,28 +90,34 @@ fn tally(sequential: bool) -> (u32, u32) {
                 scope.spawn(move || {
                     (t..GAMES)
                         .step_by(threads as usize)
-                        .filter_map(|seed| play(seed, sequential))
-                        .fold((0, 0), |(n, k), lost| (n + 1, k + u32::from(lost)))
+                        .map(|seed| play(seed, sequential))
+                        .fold((0, 0, 0), |(n, k, w), (shared, lost)| {
+                            (
+                                n + u32::from(lost.is_some()),
+                                k + u32::from(lost == Some(true)),
+                                w + u32::from(shared),
+                            )
+                        })
                 })
             })
             .collect();
         handles
             .into_iter()
             .map(|h| h.join().unwrap())
-            .fold((0, 0), |(n, k), (a, b)| (n + a, k + b))
+            .fold((0, 0, 0), |(n, k, w), (a, b, c)| (n + a, k + b, w + c))
     })
 }
 
 fn main() {
     println!(
-        "| Rounds | Games | With a final-two leader | Leader lost to the dying third | Rate |"
+        "| Rounds | Games | Shared first place | With a final-two leader | Leader lost to the dying third | Rate |"
     );
-    println!("|---|---|---|---|---|");
+    println!("|---|---|---|---|---|---|");
     for (name, sequential) in [("simultaneous (C)", false), ("sequential (A)", true)] {
-        let (counted, lost) = tally(sequential);
+        let (counted, lost, shared) = tally(sequential);
         let rate = f64::from(lost) / f64::from(counted.max(1));
         println!(
-            "| {name} | {GAMES} | {counted} | {lost} | {:.1} % |",
+            "| {name} | {GAMES} | {shared} | {counted} | {lost} | {:.1} % |",
             100.0 * rate
         );
     }

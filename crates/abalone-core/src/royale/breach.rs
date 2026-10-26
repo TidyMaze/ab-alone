@@ -4,8 +4,8 @@
 use super::{seat_of, Royale};
 
 /// Round at the end of which each ring (radius) cracks: every 6 rounds from round 12 down to
-/// radius 3, then every 3 rounds down to the centre cell, so every game ends by round 52.
-const SCHEDULE: [(u32, i32); 9] = [
+/// radius 3, then ring 2, the last one around the hole, so every game ends by round 46.
+const SCHEDULE: [(u32, i32); 7] = [
     (12, 8),
     (18, 7),
     (24, 6),
@@ -13,8 +13,6 @@ const SCHEDULE: [(u32, i32); 9] = [
     (36, 4),
     (42, 3),
     (45, 2),
-    (48, 1),
-    (51, 0),
 ];
 
 /// Ring that cracks at the end of `round`, if any.
