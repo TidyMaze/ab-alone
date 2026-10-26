@@ -304,14 +304,14 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .rematch { margin-bottom: 0.25rem; color: var(--accent); }
 /* The battle royale (#502): Battle royale in the mode menu, Hold in the column, greyed once the game is over (a target
    press locks the order, #611). On the plate the initiative order in a row, then the reveal log one seat a line,
-   a fizzle in the hazard colour. The seat's name carries it, its tint dot only repeats it. Online (#504): Battle royale
-   online in the menu, greyed offline, and Start in the column for the creator, in the accent like Rematch. */
-#battle-royale, #royale-hold, #royale-online, #royale-start {
+   a fizzle in the hazard colour. The seat's name carries it, its tint dot only repeats it. Online (#504): Invite in the
+   column of an offline game, greyed while offline, then Start for the creator, in the accent like Rematch. */
+#battle-royale, #royale-hold, #royale-invite, #royale-start {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#battle-royale:focus-visible, #royale-hold:focus-visible, #royale-online:focus-visible, #royale-start:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#royale-hold:disabled, #royale-online:disabled { cursor: default; color: var(--muted); }
+#battle-royale:focus-visible, #royale-hold:focus-visible, #royale-invite:focus-visible, #royale-start:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#royale-hold:disabled, #royale-invite:disabled { cursor: default; color: var(--muted); }
 #royale-start { border-color: var(--accent); }
 #hud .initiative, #hud .reveal { margin: 0.25rem 0 0; padding: 0; list-style: none; font-size: 0.875rem; }
 #hud .initiative { display: flex; flex-wrap: wrap; gap: 0 0.75rem; }

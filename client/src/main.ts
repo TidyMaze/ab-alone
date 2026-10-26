@@ -2746,6 +2746,7 @@ setButton(playOnlineButton, 'Play online', icon('online'));
 // and it leaves Ship.
 const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
 const startButton = document.getElementById('royale-start') as HTMLButtonElement; // the creator's, online (#504)
+const royaleInviteButton = document.getElementById('royale-invite') as HTMLButtonElement; // offline: opens a room (#504)
 function startRoyale(file: RoyaleFile): void {
   leaveHub();
   stopAnalysis();
@@ -2772,7 +2773,7 @@ function leaveRoyale(): void {
     online = null;
     link!.close();
   }
-  startButton.hidden = true;
+  startButton.hidden = royaleInviteButton.hidden = true;
   for (const key of ['net', 'desync', 'online', 'seat']) delete document.body.dataset[key];
   royale = null;
   reveal = null;
@@ -2885,6 +2886,7 @@ function royaleHud(game: Royale): void {
   const room = royaleNet && { names: royaleNet.names, you: me(), status: royaleStatus(royaleNet) };
   document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out: outSeats(board), cracks, standings: placed, ...room });
   holdButton.disabled = end !== null || !canOrder();
+  royaleInviteButton.hidden = royaleNet !== null;
   backButton.hidden = !roomOf || end === null;
 }
 // A press on one of the player's marbles selects it, a press on a target locks that move as the order and plays the
@@ -2970,8 +2972,8 @@ royaleButton.addEventListener('click', () => {
 holdButton.addEventListener('click', () => playRound([]));
 royaleButton.disabled = false; // listener ready (#146)
 
-// The online battle royale (#504, docs/specs/tech.md section 6): Battle royale online opens a room of 6 seats and shows
-// its invite link, each link opener takes the first free seat. The creator coordinates: Start begins the game, the
+// The online battle royale (#504, docs/specs/tech.md section 6): Invite, in an offline battle royale, opens a room of 6
+// seats and shows its invite link, each link opener takes the first free seat. The creator coordinates: Start begins the game, the
 // seats empty then are bots, played alike on every peer. Each round a target press or Hold commits the order, the
 // round resolves once every seat revealed or its deadline passed (royale-net.ts), and the arena plays it out.
 const ONLINE_SEATS = 6;
@@ -3044,9 +3046,7 @@ async function goRoyale(room: string, side: number): Promise<void> {
   refresh();
 }
 startButton.addEventListener('click', () => void royaleNet?.start());
-const royaleOnlineButton = document.getElementById('royale-online') as HTMLButtonElement;
-royaleOnlineButton.addEventListener('click', () => {
-  moveModes('pick');
+royaleInviteButton.addEventListener('click', () => {
   const room = newRoomId((b) => crypto.getRandomValues(b));
   inviteBox.value = royaleUrl(location.href, room);
   location.hash = new URL(inviteBox.value).hash;
@@ -3066,7 +3066,7 @@ royaleOnlineButton.addEventListener('click', () => {
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
-  playOnlineButton.disabled = coopButton.disabled = royaleOnlineButton.disabled = state.disabled;
+  playOnlineButton.disabled = coopButton.disabled = royaleInviteButton.disabled = state.disabled;
   offlineNotice = state.notice;
   hud();
 }
