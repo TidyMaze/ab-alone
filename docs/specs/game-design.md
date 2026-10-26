@@ -244,6 +244,7 @@ Player always starts with 14 marbles on the standard layout unless stated.
 | B4 Converter | 4 Chapel | The Chaplain (was The Marker, renamed, see #19) | #45 | 4th |
 | B5 Mind | 5 Bridge | The Ballast Mind | #47 | 5th |
 | Extra | 2 Cargo | The Alien (proposed by @Varadiell, section 7.7) | #588 | any time, boss menu |
+| Extra | 2 Cargo | The Rail Yard (proposed by @Varadiell, section 7.8) | #626 | any time, boss menu |
 
 Issue numbers keep their original order, play order is the last column. The Echo opens the
 game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
@@ -375,6 +376,56 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Calibrate**: knobs = starting marbles (8), lay interval (2), hatch time (4), egg cap (3), phase
   ejections (2, 4), AI depth (3). Fail if the median fight ends with fewer than 2 eggs crushed (nobody learns the
   counter) or the Alien's marble count only ever goes up (the brood outruns the player).
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
+  the days after it ships changes, section 7.6). It has no hub door: each deck keeps its one boss.
+
+### 7.8 The Rail Yard: freight trains sweep whole lines
+
+- **Concept**: the ore hauler's cargo rail yard. Freight trains still run on the old tracks
+  through the Cargo hold, and they stop for nothing on the line.
+- **Board and sides**: standard radius 4 board, 14 marbles each on the standard layout, Cargo
+  deck look. Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3). The boss plays
+  standard Abalone.
+- **Lines**: a train runs along one **whole line** of the board, edge to edge: a row on any of
+  the 3 axes, 27 lines of 5 to 9 cells. Line `9 * axis + offset + 4`: axis 0 holds the cells with
+  `r = offset` (it runs E or W), axis 1 `q = offset` (SE or NW), axis 2 `q + r = -offset` (NE or
+  SW), offset -4 to 4. A track is a line and the end the train enters by: track `2 * line`
+  enters at the line's cell of lowest `q` (lowest `r` on axis 1), track `2 * line + 1` at the
+  other end.
+- **The pass**: a train ejects **every marble on its line, either side**. A boss marble it
+  ejects counts as an ejection for you, one of yours for the boss, as the Hull's voids. If one
+  pass brings both sides to 6, the boss wins (it is credited first).
+- **Announce**: each train is announced **5 of your turns** ahead. Its counter starts at 5 and
+  goes down by 1 after each of your moves; after your 5th move from the announce it passes,
+  before the boss replies. At the end of your move the order is: the counters go down, the
+  trains at 0 pass, then a new train may be announced.
+- **Rhythm**: the first train is announced at the start of the fight. Then a new one is
+  announced at the end of your turn `n` (your moves so far) when `n` is a multiple of **10** in
+  P1, **5** in P2, **3** in P3, with the phase at the start of that turn.
+- **No overlap**: a new train takes a line that no announced train holds (lines may cross).
+  At most 2 trains are announced at once, and their passing turns always differ, as they were
+  announced on different turns.
+- **Deterministic, for P2P**: the track is splitmix64 of the fight seed mixed with the ply (the
+  Hull's cracks; ply 0 for the train of the start), modulo the free tracks, in track order. No
+  `Math.random`, floats or clock: a Retry, the daily, a replayed game file and every peer get the
+  same trains.
+- **Moves never change** (`rules.md` §10): a train is a hook between plies, like the Hull's
+  crack. It is no marble and no wall, and moves and pushes are standard Abalone.
+- **Tell**: chevrons pointing the way the train runs, at the two board edges where the line
+  enters and leaves and on every cell of the line, readable at 3:1, and the counter (5 to 1) at
+  the entry edge, facing the camera. Rails run under the line, out past both edges onto the
+  deck. The HUD line reads "Trains pass: 1 in 2 turns · 1 in 5 turns".
+- **The pass, drawn**: a low-poly freight train, a locomotive and ore wagons in the Cargo look,
+  comes in at the entry edge, runs the line and leaves at the other edge. Each marble on the
+  line is knocked off with the ejection fall when the train reaches it. Reduced motion: the
+  train jumps across, no slide, and the marbles fade.
+- **Counter**: move out of the line in time, or push boss marbles onto it. The boss AI avoids
+  announced lines, as you should: its search keeps to the moves that leave the fewest of its
+  marbles on the announced lines. Its budget is the Hull's (3000 nodes).
+- **Phases**: P1 at the start, **P2 after 3 ejections** credited to you, **P3 after 5** (a
+  boss marble a train ejects counts), as The Alien's phases (#621).
+- **Calibrate**: knobs = announce lead (5), rhythm (10, 5, 3), AI depth. Fail if the median fight
+  ends with no boss marble ejected by a train (nobody learns the counter).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). It has no hub door: each deck keeps its one boss.
 
