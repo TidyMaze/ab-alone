@@ -20,3 +20,18 @@ test('rewriting the wasm package during a run does not reload the page under tes
   await Promise.all(pkg.map((file) => utimes(file, now, now))); // what a rebuild does to the files the page loaded
   expect(await reloaded).toBe(false);
 });
+
+// Bug #585: the page linked the Google Fonts stylesheet, which holds the load event that page.goto waits for. During
+// one of the machine's network outages every page.goto of the run timed out until the network came back. The e2e
+// dev server serves a page that loads nothing from another host.
+test('the e2e page loads nothing from another host, bug #585', async ({ page }) => {
+  test.skip(!!process.env.E2E_BASE_URL, 'the live site is the production build, its fonts come from Google Fonts');
+  const remote: string[] = [];
+  page.on('request', (request) => {
+    const { protocol, hostname } = new URL(request.url());
+    if (protocol.startsWith('http') && hostname !== 'localhost') remote.push(request.url()); // data: and blob: are local
+  });
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  expect(remote).toEqual([]);
+});

@@ -25,7 +25,20 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   // The bot worker imports the wasm package with top-level await: it needs ES module output.
   worker: { format: 'es' },
   // The production build also writes sw.js, the service worker of the offline app (#193).
-  plugins: [offlineApp()],
+  // The e2e dev server serves the page without its Google Fonts links, the text falls back to the system fonts: the
+  // stylesheet holds the load event that page.goto waits for, and during a network outage every test of the run timed
+  // out (bug #585). The production build and its preview (the offline spec) keep them.
+  plugins: [
+    offlineApp(),
+    ...(mode === 'e2e'
+      ? [
+          {
+            name: 'no-remote-fonts',
+            transformIndexHtml: (html: string) => html.replace(/\s*<link[^>]*fonts\.(googleapis|gstatic)\.com[^>]*>/g, ''),
+          },
+        ]
+      : []),
+  ],
   test: {
     css: true, // hud.test reads ui.css as raw text, vitest empties css files by default
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],

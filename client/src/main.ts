@@ -164,7 +164,6 @@ await renderer.init();
 renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; // rolls the lamp's highlights off instead of clipping them
-document.body.appendChild(renderer.domElement);
 const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend
   ? 'WebGPU'
   : 'WebGL2';
@@ -2760,6 +2759,9 @@ if (serviceWorker) {
 }
 
 refresh();
+// The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
+// starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
+document.body.appendChild(renderer.domElement);
 void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw = { start: -Infinity, cost: 0 };
 let draws = 0;

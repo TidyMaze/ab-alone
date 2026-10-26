@@ -101,12 +101,15 @@ test('two tabs of the same browser context play an online game, bug #116', async
   const errors: string[] = [];
   for (const page of [a, b]) page.on('pageerror', (e) => errors.push(e.message));
   await room({ a, b });
-  // Bug #238: page b shows its canvas before main.ts loads the textures and the saved game, and its
-  // hook transport only comes after both. Its textures are held until open(b) has run in the page, so
-  // the test opens a page that is still loading on every run, not only on a loaded machine.
+  // Bug #238: page b's hook transport only comes after main.ts loads the textures and the saved game. Its textures
+  // are held until open(b) has run in the page, so the test opens a page that is still loading on every run, not only
+  // on a loaded machine.
   let release!: () => void;
   const held = new Promise<void>((done) => (release = () => done()));
+  let loading!: () => void;
+  const textures = new Promise<void>((done) => (loading = done));
   await b.route('**/assets/*.png', async (route) => {
+    loading();
     await held;
     await route.continue();
   });
@@ -118,7 +121,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
   await a.locator('#play-online').click();
   const invite = await a.locator('#invite').inputValue();
   await b.goto(`./?net=hook${new URL(invite).hash}`, { waitUntil: 'commit' }); // held textures can hold the load event
-  await b.locator('canvas').waitFor();
+  await textures; // main.ts runs on page b and waits for its textures (its canvas comes after them, #585)
   await open(a);
   // Calls on a page run in order: the textures go only once a later call on page b came back, so open(b)
   // reaches page b while it still loads.
