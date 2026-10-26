@@ -45,7 +45,7 @@ import { flatHudHtml, hudHtml } from './hud';
 import { drawSkin, type Look } from './skinart';
 import { nextSkin, skinById } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
-import { menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
+import { archiveList, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
 import { DECKS, DECOR, LIGHT } from './light';
@@ -54,7 +54,7 @@ import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
-import { markRead } from './lorestore';
+import { markRead, readLore } from './lorestore';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
@@ -507,6 +507,36 @@ for (const bus of BUSES) {
     writeVolume(store, bus, sfx.volume(bus));
   });
 }
+// The log archive (#513): its button, Logs, is a short word beside Import game, as FPS is beside Clear board, so the menu
+// keeps its height. It opens a page of one button per entry read, in place of the items; a press on one closes the menu
+// and reopens the entry in the terminal reader.
+const archiveButton = Object.assign(document.createElement('button'), {
+  id: 'setting-log-archive',
+  type: 'button',
+  textContent: 'Logs',
+  title: 'Log archive',
+});
+const importRow = document.getElementById('setting-import-game')!;
+const importGroup = document.createElement('div');
+importGroup.className = 'setting-group';
+importRow.replaceWith(importGroup);
+importGroup.append(importRow, archiveButton);
+archiveButton.addEventListener('click', openArchive);
+const archive = menu.appendChild(document.createElement('div'));
+archive.className = 'setting-archive';
+function openArchive(): void {
+  menu.dataset.page = 'archive';
+  const rows = archiveList(readLore(store), LORE).map((entry) => {
+    const row = Object.assign(document.createElement('button'), { type: 'button', textContent: entry.title });
+    row.addEventListener('click', () => {
+      moveMenu('pick');
+      openReader(entry.id);
+    });
+    return row;
+  });
+  archive.replaceChildren(...(rows.length ? rows : ['Nothing read yet.']));
+  rows[0]?.focus();
+}
 fpsButton.addEventListener('click', () => {
   fpsOn = !fpsOn;
   writeFps(store, fpsOn);
@@ -585,9 +615,11 @@ let consoleEntry = '';
 let consolePages: TerminalPage[] = [];
 let consolePage = -1;
 let consoleSince = 0;
-function layoutConsole(): void {
+// The console shows its deck's first entry (every deck has its entries, lore.test.ts), or one reopened from the archive.
+const deckEntry = (): string => LORE.find((e) => e.deck === deck)!.id;
+function layoutConsole(id = deckEntry()): void {
   if (!consoleFonts) return;
-  const entry = LORE.find((e) => e.deck === deck)!; // every deck has its entries (lore.test.ts)
+  const entry = LORE.find((e) => e.id === id)!;
   consolePages = terminalPages(entry, uiScale, (text, font) => {
     consoleG.font = font;
     return consoleG.measureText(text).width;
@@ -619,7 +651,8 @@ function turnConsole(now: number): void {
 const reader = document.getElementById('reader')!;
 reader.classList.toggle('flat', flatHud);
 let consoleScreen!: THREE.Mesh; // set by drawProps
-function openReader(): void {
+function openReader(id?: string): void {
+  if (id) layoutConsole(id); // an entry of the log archive (#513)
   if (!consolePages.length) return; // the fonts are not in yet
   reading = view;
   reader.hidden = false;
@@ -635,6 +668,7 @@ function leaveReader(): void {
   reader.hidden = true;
   delete document.body.dataset.reading;
   consoleSince = performance.now() - consolePage * TERMINAL.pageMs; // the screen turns on from the page left
+  if (consoleEntry !== deckEntry()) layoutConsole(); // after an entry of the log archive, the deck's own again
   applyView();
   paintLog();
 }

@@ -2,7 +2,7 @@
 // Reduced motion (#379) and Flat HUD (#391), Sound (#284, which opens the four volume sliders of #438), the audio log
 // Transcript (#516), Safe mode (#380),
 // the Theme choice (#317), the Shell skin and Glass skin choices (#377), the UI scale (#382), then the actions Export game and Import
-// game (#287). Pure functions only: main.ts feeds them the clicks and builds the DOM.
+// game (#287), and the list of the Log archive (#513). Pure functions only: main.ts feeds them the clicks and builds the DOM.
 import type { IconName } from './icons';
 import type { Bus } from './sound';
 import { glassSkinById } from './glassskins';
@@ -73,6 +73,16 @@ export const settingsList = (
 
 /** The name of each volume slider, the page Sound opens (#438). */
 export const VOLUME_NAMES: Record<Bus, string> = { music: 'Music', ambience: 'Ambience', effects: 'Effects', voice: 'Voice' };
+
+/** An entry of the log archive (#513): a lore entry, and an audio log once they are collected (#517). */
+export interface ArchiveEntry {
+  id: string;
+  title: string;
+}
+
+/** The page Log archive opens: the entries whose id was saved in `seen`, in the order of `entries`. */
+export const archiveList = <T extends ArchiveEntry>(seen: readonly string[], entries: readonly T[]): T[] =>
+  entries.filter((entry) => seen.includes(entry.id));
 
 export type MenuEvent = 'button' | 'escape' | 'outside' | 'pick';
 

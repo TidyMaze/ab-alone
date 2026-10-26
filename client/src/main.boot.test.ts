@@ -332,6 +332,7 @@ describe('the settings toggles', () => {
       'setting-glass-skin',
       'setting-export-game',
       'setting-import-game',
+      'setting-log-archive',
     ]);
     const sound = row('sound');
     expect(sound.querySelector('svg')).not.toBeNull();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ICONS } from './icons';
-import { menuOpen, motionReduced, nextDisplay, nextTheme, settingsList, themeAttribute, VOLUME_NAMES } from './settings';
+import { archiveList, menuOpen, motionReduced, nextDisplay, nextTheme, settingsList, themeAttribute, VOLUME_NAMES } from './settings';
 import { BUSES } from './sound';
 import { glassSkinById } from './glassskins';
 import { PALETTE_NAMES } from './palettes';
@@ -63,6 +63,23 @@ describe('settingsList', () => {
   it('gives every setting a distinct id', () => {
     const ids = settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true).map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('archiveList', () => {
+  const entries = [
+    { id: 'a', title: 'First', kind: 'lore' },
+    { id: 'b', title: 'Second', kind: 'lore' },
+    { id: 'c', title: 'Third', kind: 'audio' },
+  ];
+
+  it('lists the entries already seen, in the order of the entries, whatever their kind (#513)', () => {
+    expect(archiveList(['c', 'a'], entries)).toEqual([entries[0], entries[2]]);
+  });
+
+  it('skips an id saved for no entry, and is empty before anything is seen', () => {
+    expect(archiveList(['gone', 'b'], entries)).toEqual([entries[1]]);
+    expect(archiveList([], entries)).toEqual([]);
   });
 });
 
