@@ -45,7 +45,7 @@ export function endBanner({ status, reason, win, mode, side, glass }: EndInput):
 export const ordinal = (place: number): string => `${place}${['st', 'nd', 'rd'][place - 1] ?? 'th'}`;
 
 /** The battle royale's banner (#503, rules.md section 10.4) from the standings, null while the game runs: first place,
- * shared or not, wins, any other place is named. The line gives the points the player scored. */
+ * one seat since #641, wins, any other place is named. The line gives the points the player scored. */
 export function royaleBanner(standings: readonly { seat: number; place: number; points: number }[], you: number): EndBanner | null {
   const mine = standings.find((s) => s.seat === you);
   if (!mine) return null;

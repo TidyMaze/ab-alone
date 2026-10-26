@@ -1,7 +1,7 @@
 //! Hull breach: from round 12, a ring of the arena cracks at the end of a round and goes void
 //! at the end of the next one, with the marbles on it (rules.md section 10.4).
 
-use super::{seat_of, Royale};
+use super::{initiative, seat_of, Royale};
 
 /// Round at the end of which each ring (radius) cracks: every 6 rounds from round 12 down to
 /// radius 3, then ring 2, the last one around the hole, so every game ends by round 46.
@@ -64,10 +64,10 @@ impl Royale {
         self.board.set_cracks(cracks);
     }
 
-    /// Seats sharing first place once the game is over, `None` while two seats or more have
+    /// The one seat in first place once the game is over, `None` while two seats or more have
     /// marbles. The last seat with marbles wins. When a void takes the last marbles of every
-    /// seat left, the most marbles held before it wins, then the most ejections credited; a tie
-    /// still standing shares the place.
+    /// seat left, the most marbles held before it wins, then the most ejections credited, then
+    /// the first in that round's initiative order.
     pub fn winners(&self) -> Option<Vec<usize>> {
         let left: Vec<usize> = (0..self.seats).filter(|&s| !self.is_out(s)).collect();
         if left.len() > 1 {
@@ -78,7 +78,8 @@ impl Royale {
         }
         let key = |s: usize| (self.last_void[s], self.ejections[s]);
         let best = (0..self.seats).map(key).max();
-        Some((0..self.seats).filter(|&s| Some(key(s)) == best).collect())
+        let mut first = initiative(self.round - 1, self.seats).into_iter();
+        Some(first.find(|&s| Some(key(s)) == best).into_iter().collect())
     }
 
     /// The game is over: at most one seat has marbles. No round can be resolved any more.

@@ -26,14 +26,23 @@ fn placement_points(seats: usize, place: usize) -> u32 {
 
 impl Royale {
     /// Each seat's place and points once the game is over, in seat order, `None` before. The
-    /// seats left with marbles come first, then the others in reverse order of elimination;
-    /// every seat of a shared place gets its points.
+    /// winner comes first, alone, then the others in reverse order of elimination; every seat
+    /// of a shared place gets its points.
     pub fn standings(&self) -> Option<Vec<Standing>> {
         let winners = self.winners()?;
-        let mut groups = self.eliminated.clone();
-        if !self.is_out(winners[0]) {
-            groups.push(winners);
-        }
+        let mut groups: Vec<Vec<usize>> = self
+            .eliminated
+            .iter()
+            .map(|group| {
+                group
+                    .iter()
+                    .copied()
+                    .filter(|s| !winners.contains(s))
+                    .collect()
+            })
+            .filter(|group: &Vec<usize>| !group.is_empty())
+            .collect();
+        groups.push(winners);
         let mut place = vec![0; self.seats];
         let mut above = 0;
         for group in groups.iter().rev() {
