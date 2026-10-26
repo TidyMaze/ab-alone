@@ -239,9 +239,11 @@ Hooks, from game-design section 7 (starting values):
 4. An order that is illegal at its turn **fizzles**: it counts as a pass. The player loses tempo only. **FINAL.**
 5. **Round timer**: 15 s (**TUNE**). **OPEN-2**: tech.md section 6 says 30 s after the previous round. See section 13.
 
-**Initiative order.** Seats in list order `s0 ... s(N-1)`. Round `k` (starting at 1) starts at seat `s((k-1) mod N)` and goes round the list. Every player leads once every N rounds. **PROPOSAL.** game-design says only "derived from round number and seat list" (**OPEN-10**).
+**Initiative order (FINAL, OPEN-10, lead decision on #495).** Seats in list order `s0 ... s(N-1)`. Round `k` (starting at 1) starts at seat `s((k-1) mod N)` and goes round the list. Every player leads once every N rounds.
 
-**Same-cell conflict.** Two orders target one cell. The one resolved first takes it. The second is validated at its turn, so if it is now illegal, it fizzles. **PROPOSAL** (follows from option C; not written in game-design, **OPEN-9**).
+**Same-cell conflict (FINAL, OPEN-9, lead decision on #495).** Two orders target one cell. The one resolved first takes it. The second is validated at its turn, so if it is now illegal, it fizzles.
+
+**Resolution (FINAL, `royale::resolve_round`).** The function is pure: the same state and the same set of orders give the same state, hash and log in whatever order the orders are listed. At most one order per seat; an order for a seat the game does not have, or a second order for one seat, is refused. A seat with no order holds. At its turn, a seat with no marble left is out and its order is ignored, even if it lost its last marble earlier in the same round. Each move makes its seat the last toucher of every marble it shifts (its own group and the run it pushes), and an ejection is credited to that seat. The round log lists every seat in initiative order with its outcome (applied, fizzled with the reason, held, or out) and the seat whose marble its move ejected, if any.
 
 **Hull breach (TUNE for every number):**
 
@@ -493,8 +495,8 @@ These are raised in the PR body. Owners decide. Nothing here was picked silently
 - **OPEN-6. Battle royale rings below radius 3.** game-design.md is ambiguous.
 - **OPEN-7. Battle royale ties and placement tables.** Points are defined for 6 players only. The tie at breach end is not defined.
 - **OPEN-8. Credit for breach ejections.** PROPOSAL: last toucher if any, else nobody.
-- **OPEN-9. Same-cell conflict in battle royale.** PROPOSAL: first in initiative wins, the second fizzles. Not written in game-design.md.
-- **OPEN-10. Initiative formula.** game-design.md says "derived from round number and seat list". PROPOSAL: rotate by round.
+- **OPEN-9. Same-cell conflict in battle royale.** Resolved in #495: first in initiative wins, the second fizzles (section 10.4, FINAL).
+- **OPEN-10. Initiative formula.** Resolved in #495: rotate by round (section 10.4, FINAL).
 - **OPEN-11. Online 1v1 after the 60 s grace.** Forfeit or wait? Not defined.
 - **OPEN-12. Resign.** Not defined.
 - **OPEN-13. Credit for boss-hook removals in PvE.** PROPOSAL: a player marble removed by a hook raises the boss's ejected count, and the reverse.

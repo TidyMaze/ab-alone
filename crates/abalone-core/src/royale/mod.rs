@@ -52,6 +52,11 @@ pub fn seat_cell(seat: usize) -> Cell {
     SEAT_CELLS[seat]
 }
 
+/// Seat whose marbles have colour `cell`, or `None` for an empty cell.
+fn seat_of(cell: Cell) -> Option<usize> {
+    SEAT_CELLS.iter().position(|&c| c == cell)
+}
+
 impl Royale {
     pub fn board(&self) -> &Board {
         &self.board
@@ -118,6 +123,8 @@ mod tests {
         assert_eq!(cells, SEAT_CELLS);
         assert_eq!(seat_cell(0), Cell::Black);
         assert_eq!(seat_cell(5), Cell::Seat6);
+        assert_eq!(seat_of(Cell::Seat4), Some(3));
+        assert_eq!(seat_of(Cell::Empty), None);
     }
 
     #[test]

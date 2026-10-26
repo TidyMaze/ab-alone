@@ -1,8 +1,9 @@
 //! One battle royale round: every seat's order applied in rotating initiative, each validated
 //! at its turn (rules.md section 10.4).
 
-use super::{Royale, RoyaleError};
-use crate::moves::{Move, MoveError};
+use super::{seat_cell, seat_of, Royale, RoyaleError};
+use crate::board::Cell;
+use crate::moves::{apply_for, Move, MoveError};
 
 /// What a seat revealed for a round.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,32 +41,103 @@ pub struct RoundLog {
     pub turns: Vec<Turn>,
 }
 
-/// Seats in initiative order for `round` (from 1): round `k` starts at seat `(k - 1) mod N`.
+/// Seats in initiative order for `round` (from 1): round `k` starts at seat `(k - 1) mod N`
+/// and goes round the list, so every seat leads once every N rounds.
 pub fn initiative(round: u32, seats: usize) -> Vec<usize> {
-    let _ = (round, seats);
-    Vec::new()
+    let first = (round as usize + seats - 1) % seats;
+    (0..seats).map(|i| (first + i) % seats).collect()
 }
 
-/// Plays one round: `orders` holds at most one order per seat, in any order.
+/// Plays one round. `orders` holds at most one order per seat, in any order: the orders are
+/// applied one by one in initiative order, each validated against the state the orders before
+/// it produced. An illegal order fizzles, a seat with no order holds, and a seat with no marble
+/// left at its turn is out, its order ignored.
 pub fn resolve_round(
     state: &Royale,
     orders: &[(usize, Order)],
 ) -> Result<(Royale, RoundLog), RoyaleError> {
-    let _ = orders;
-    Ok((
-        state.clone(),
-        RoundLog {
-            round: state.round,
-            turns: Vec::new(),
-        },
-    ))
+    let mut by_seat: Vec<Option<&Order>> = vec![None; state.seats];
+    for (seat, order) in orders {
+        let slot = by_seat
+            .get_mut(*seat)
+            .ok_or(RoyaleError::UnknownSeat(*seat))?;
+        if slot.replace(order).is_some() {
+            return Err(RoyaleError::DuplicateSeat(*seat));
+        }
+    }
+    let mut next = state.clone();
+    let mut turns = Vec::new();
+    for seat in initiative(state.round, state.seats) {
+        let (outcome, ejected) = if next.is_out(seat) {
+            (Outcome::Out, None)
+        } else {
+            match by_seat[seat] {
+                Some(Order::Move(mv)) => match next.play(seat, mv) {
+                    Ok(ejected) => (Outcome::Applied, ejected),
+                    Err(err) => (Outcome::Fizzled(err), None),
+                },
+                _ => (Outcome::Held, None),
+            }
+        };
+        turns.push(Turn {
+            seat,
+            outcome,
+            ejected,
+        });
+    }
+    next.round += 1;
+    let log = RoundLog {
+        round: state.round,
+        turns,
+    };
+    Ok((next, log))
+}
+
+impl Royale {
+    /// Plays `mv` for `seat`: the seat becomes the last toucher of every marble the move
+    /// shifts, and gets the credit for an ejection. Returns the seat whose marble was ejected.
+    fn play(&mut self, seat: usize, mv: &Move) -> Result<Option<usize>, MoveError> {
+        let own = seat_cell(seat);
+        let (board, _) = apply_for(&self.board, own, mv)?;
+        let (dq, dr) = mv.dir.vector();
+        let ahead = |(q, r): (i32, i32)| (q + dq, r + dr);
+        // The shifted marbles: the group, then the opponent run ahead of its front.
+        let mut shifted = mv.cells.clone();
+        for &cell in &mv.cells {
+            let mut c = ahead(cell);
+            while !mv.cells.contains(&c)
+                && self
+                    .board
+                    .get(c.0, c.1)
+                    .is_some_and(|x| x != own && x != Cell::Empty)
+            {
+                shifted.push(c);
+                c = ahead(c);
+            }
+        }
+        for c in &shifted {
+            self.touched.remove(c);
+        }
+        let mut ejected = None;
+        for &c in &shifted {
+            let to = ahead(c);
+            if board.get(to.0, to.1).is_some() {
+                self.touched.insert(to, seat);
+            } else {
+                ejected = self.board.get(c.0, c.1).and_then(seat_of);
+                self.ejections[seat] += 1;
+            }
+        }
+        self.board = board;
+        Ok(ejected)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::super::{seat_cell, start};
+    use super::super::start;
     use super::*;
     use crate::board::{Board, MAX_RADIUS};
     use crate::moves::{legal_moves_for, Direction, Direction::*};
@@ -118,8 +190,8 @@ mod tests {
     fn initiative_rotates_by_round() {
         // Example 38, and every round 1 to N + 1 for 3 and 6 seats.
         let three = [[0, 1, 2], [1, 2, 0], [2, 0, 1], [0, 1, 2]];
-        for (k, expected) in three.iter().enumerate() {
-            assert_eq!(initiative(k as u32 + 1, 3), expected, "round {}", k + 1);
+        for (round, expected) in (1..).zip(three) {
+            assert_eq!(initiative(round, 3), expected, "round {round}");
         }
         let six = [
             [0, 1, 2, 3, 4, 5],
@@ -130,8 +202,8 @@ mod tests {
             [5, 0, 1, 2, 3, 4],
             [0, 1, 2, 3, 4, 5],
         ];
-        for (k, expected) in six.iter().enumerate() {
-            assert_eq!(initiative(k as u32 + 1, 6), expected, "round {}", k + 1);
+        for (round, expected) in (1..).zip(six) {
+            assert_eq!(initiative(round, 6), expected, "round {round}");
         }
         assert_eq!(initiative(4, 4), [3, 0, 1, 2]);
         assert_eq!(initiative(7, 5), [1, 2, 3, 4, 0]);
@@ -337,24 +409,34 @@ mod tests {
     #[test]
     fn shuffling_the_order_list_gives_the_same_state_and_hash() {
         let mut rng = Lcg(494);
-        // A crowded centre, so orders conflict, push and fizzle.
+        // A crowd against the east rim, so orders conflict, push, fizzle and eject.
         let mut marbles = Vec::new();
         for seat in 0..6 {
-            for _ in 0..6 {
-                let (q, r) = (rng.below(7) as i32 - 3, rng.below(7) as i32 - 3);
-                if (q + r).abs() <= 3 && !marbles.iter().any(|&(c, _)| c == (q, r)) {
+            for _ in 0..10 {
+                let (q, r) = (rng.below(5) as i32 + 4, rng.below(9) as i32 - 4);
+                if q + r <= 8 && !marbles.iter().any(|&(c, _)| c == (q, r)) {
                     marbles.push(((q, r), seat));
                 }
             }
         }
-        let mut states = vec![arena(6, &marbles), start(6).unwrap(), start(3).unwrap()];
+        let mut states = [arena(6, &marbles), start(6).unwrap(), start(3).unwrap()];
         let mut fizzled = 0;
         let mut ejected = 0;
         for _ in 0..30 {
             for state in states.iter_mut() {
                 let mut orders: Vec<(usize, Order)> = Vec::new();
                 for seat in 0..state.seats() {
-                    let moves = legal_moves_for(state.board(), seat_cell(seat));
+                    let own = seat_cell(seat);
+                    let mut moves = legal_moves_for(state.board(), own);
+                    // A seat that can eject does.
+                    let ejecting: Vec<Move> = moves
+                        .iter()
+                        .filter(|m| apply_for(state.board(), own, m).unwrap().1)
+                        .cloned()
+                        .collect();
+                    if !ejecting.is_empty() {
+                        moves = ejecting;
+                    }
                     let pick = rng.below(moves.len() + 1);
                     let order = moves.get(pick).cloned().map_or(Order::Hold, Order::Move);
                     orders.push((seat, order));
