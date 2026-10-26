@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { bossIds, newEncounter, newEngine } from './engine';
-import { BOT_NODES, drawReasonName, Session, sideName, statusName, type EngineLike, type Result, type State, type ToolError } from './game';
+import { BOT_NODES, drawReasonName, Session, sideName, statusName, type EncounterLike, type EngineLike, type Result, type State, type ToolError } from './game';
 import { formatMove, fromRecord, parseMove, toRecord } from './notation';
 
 function value<T>(result: Result<T>): T {
@@ -375,9 +375,20 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
     expect(spy.nodes).toEqual([]);
   });
 
-  // The Ballast Mind searches 150 000 nodes a move: its determinism is tested at start (#572).
+  // The Ballast Mind searches 150 000 nodes a move: its determinism is tested at start (#572). A boss search is the
+  // slow part, so each game asks for one boss reply: the engine tests the whole fight for each boss (#693).
   test.each(bossIds().filter((id) => id !== 'ballast'))('the same boss id and seed always give the same fight: %s', (boss) => {
-    const games = [session(), session()];
+    let searches = 0;
+    const counted = (id: string, seed: number): EncounterLike => {
+      const encounter = newEncounter(id, seed);
+      const search = encounter.boss_move.bind(encounter);
+      encounter.boss_move = () => {
+        searches += 1;
+        return search();
+      };
+      return encounter;
+    };
+    const games = [0, 1].map(() => new Session(engines().factory, counted, noNetwork));
     const starts = games.map((game) => value(game.newGame({ boss, seed: 11 })));
     expect(position(starts[1]!)).toEqual(position(starts[0]!));
     for (let round = 0; round < 4; round++) {
@@ -386,6 +397,7 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
       expect(second!.reply).toBe(first!.reply);
       expect(position(second!.state)).toEqual(position(first!.state));
     }
+    expect(searches).toBe(2);
   });
 
   test('legal_moves: the Echo announces its reply for every move, the other bosses announce nothing', () => {
