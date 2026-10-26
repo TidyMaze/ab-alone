@@ -47,6 +47,7 @@ test('reduced motion: the marble jumps with no slide', async ({ page }) => {
   const { click, slides } = await open(page);
   await click([0, 2], [0, 1]);
   await expect(page.locator('#hud')).toContainText('White to move');
-  await page.waitForTimeout(400); // longer than the 200 ms slide
+  await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(1);
+  await expect(page.locator('body')).not.toHaveAttribute('data-sliding', /.*/);
   expect(await slides()).toBe(0);
 });
