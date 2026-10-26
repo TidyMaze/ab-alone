@@ -123,6 +123,16 @@ export function spaceshipArchitecture(tier: Tier): readonly StructuralPart[] {
       roughness: 0.9,
       rotation: [0, -Math.PI / 6, 0],
     },
+    // The deck's log recorder (#517, world.md section 4), left on the crate lid: a click plays its audio log.
+    {
+      id: 'log-recorder',
+      type: 'box',
+      size: [0.6, 0.2, 0.4],
+      position: [-5.5, 0.9, 3.8],
+      color: 0x5a4426, // worn amber casing, apart from the steel around it
+      roughness: 0.6,
+      rotation: [0, -Math.PI / 6, 0],
+    },
 
     // SE corner: Life-support / oxygen tank rack (anchoring bottom-right)
     {

@@ -73,6 +73,18 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     }
   });
 
+  it('the log recorder of the deck (#517) sits on the cargo crate, in both tiers', () => {
+    for (const tier of ['high', 'low'] as const) {
+      const parts = spaceshipArchitecture(tier);
+      const recorder = parts.find((el) => el.id === 'log-recorder')!;
+      const crate = parts.find((el) => el.id === 'corner-cargo-crate-sw')!;
+      expect(recorder.type).toBe('box');
+      expect([recorder.position[0], recorder.position[2]]).toEqual([crate.position[0], crate.position[2]]);
+      const top = crate.position[1] + crate.size[1] / 2;
+      expect(recorder.position[1] - recorder.size[1] / 2).toBeCloseTo(top); // on the lid, not in it
+    }
+  });
+
   it('architectural materials are low-key and preserve contrast against board steel', () => {
     const hex = (c: number): [number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
     const elements = spaceshipArchitecture('high');

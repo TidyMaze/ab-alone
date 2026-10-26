@@ -77,8 +77,9 @@ covers no cell; the menu opens on its items again once closed; opening the menu 
 gesture that starts audio; the Transcript toggle of the audio logs, #516, shares its item, on by default and saved
 locally), then Theme (#317, System, Dark or Light: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column),
 then Logs, the log archive of world.md section 4 (#513): a short word beside Import game, as FPS is beside Clear board,
-titled "Log archive"; a press shows the lore entries read, one button per title in ship order, in place of the items
-("Nothing read yet." before any), and a press on one closes the menu and opens that entry in the terminal reader. Each
+titled "Log archive"; a press shows the lore entries read, then the audio logs heard (#517), one button per title
+in ship order, in place of the items ("Nothing read yet." before any), and a press on one closes the menu and opens that
+entry in the terminal reader, or replays that log. Each
 item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG line icons, thin `currentColor`
 strokes, one size) then its label: a fog for Clear board, a ball with speed lines for Reduced motion, lines in a box for Flat HUD, a speaker for Sound, an arrow out
 of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
