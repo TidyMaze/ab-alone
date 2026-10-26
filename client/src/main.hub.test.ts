@@ -2,7 +2,7 @@
 import * as THREE from 'three/webgpu';
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { axialTo3D, encodeMove, moveForClick, parseMoves } from './board';
+import { axialTo3D, encodeMove, moveForClick, parseMoves, type Axial } from './board';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
@@ -416,17 +416,37 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(game.room()).toBeNull();
   });
 
-  it('the battle royale lobby is shown closed and opens nothing', async () => {
+const NW_ORDER = (...cells: Axial[]): number[] => [0, cells.length, 4, ...[...cells, [0, 0], [0, 0]].slice(0, 3).flat()];
+const columnOrders = (cells: Axial[], steps: number): number[][] =>
+  Array.from({ length: steps }, (_, s) => NW_ORDER(...cells.map(([q, r]): Axial => [q, r - s])));
+const END_ROYALE = {
+  seed: 7,
+  rounds: [
+    ...columnOrders([[-4, 8], [-4, 7], [-4, 6]], 3),
+    ...columnOrders([[-3, 8], [-3, 7], [-3, 6]], 3),
+    ...columnOrders([[-5, 8], [-5, 7]], 3),
+    ...columnOrders([[-2, 7], [-2, 6]], 2),
+    ...Array.from({ length: 14 }, () => []),
+  ],
+};
+
+  it('the battle royale lobby door starts battle royale; Back to the ship lands on the door (#593)', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     shipAt(game, [-1, 1]);
-    const [bar] = drawn(scene()).bars;
-    const p = axialTo3D(-2, 2);
-    expect(bar!.position.x).toBeCloseTo(p.x);
-    expect(bar!.position.z).toBeCloseTo(p.z);
+    expect(drawn(scene()).bars).toHaveLength(1); // the locked lift to Cargo only (#523)
+    expect(drawn(scene()).bars[0]!.position.x).not.toBeCloseTo(axialTo3D(-2, 2).x); // no bar over the lobby
     game.click(-2, 2);
+    expect(hub()).toBeUndefined();
+    expect(data().royale).toBe('1');
+    expect(back().hidden).toBe(true); // while game is on
+    game.hook('__royale', END_ROYALE);
+    expect(data().over).toBe('win');
+    expect(back().hidden).toBe(false);
+    back().click();
     expect(hub()).toBe('mess -2,2');
-    expect(game.hud()).toBe('Ship · MessBattle royale lobby · closed');
+    expect(game.hud()).toBe('Ship · MessBattle royale lobby');
+    expect(data().royale).toBeUndefined();
   });
 
   it('Back to the ship never shows after a game no room started', async () => {

@@ -50,20 +50,20 @@ test('the marble walks the Mess past its rooms, and a reload lands it on the sam
 
   const rooms: [number, number, string][] = [
     [1, 1, 'Terminal'],
-    [-2, 2, 'Battle royale lobby · closed'],
   ];
   // One mouse click, then the same click without the raycast and the frames of a mouse click (__click), to stay fast.
   await clickCell(page, 1, 0);
   await expect(body).toHaveAttribute('data-hub', 'mess 1,0');
-  const path: [number, number][] = [[1, 1], [0, 2], [-1, 2], [-2, 2]];
+  const path: [number, number][] = [[1, 1], [0, 2], [-1, 2]];
   for (const [q, r] of path) {
     await hookClick(page, q, r);
     await expect(body).toHaveAttribute('data-hub', `mess ${q},${r}`);
     const room = rooms.find(([rq, rr]) => rq === q && rr === r);
-    if (room) await expect(hud).toContainText(room[2]);
+    if (room) {
+      await expect(hud).toContainText(room[2]);
+      if (await body.getAttribute('data-reading')) await page.keyboard.press('Escape');
+    }
   }
-  await page.keyboard.press('ArrowRight');
-  await expect(body).toHaveAttribute('data-hub', 'mess -1,2');
   await page.keyboard.press('ArrowUp');
   await expect(body).toHaveAttribute('data-hub', 'mess 0,1');
 
@@ -140,12 +140,38 @@ test('the online table opens a room with its invite link, as Play online does, #
   await expect(page.locator('#hud')).toContainText('You are Black');
 });
 
-test('the battle royale lobby is shown closed and opens nothing, #522', async ({ page }, testInfo) => {
+test('the battle royale lobby door starts battle royale, and Back to the ship lands on the door, #593', async ({ page }, testInfo) => {
   await shipAt(page, './?bot=off', [-1, 1]);
+  const body = page.locator('body');
   await hookClick(page, -2, 2);
-  await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess -2,2');
-  await expect(page.locator('#hud')).toContainText('Battle royale lobby · closed');
-  await page.screenshot({ path: testInfo.outputPath('royale-closed.png') });
+  await expect(body).not.toHaveAttribute('data-hub');
+  await expect(body).toHaveAttribute('data-royale', '1');
+  await expect(page.locator('#hud')).toContainText('Battle royale');
+  await page.screenshot({ path: testInfo.outputPath('royale-arena.png') });
+  await page.evaluate(() => (window as any).__royale({
+    seed: 7,
+    rounds: [
+      [0, 3, 4, -4, 8, -4, 7, -4, 6],
+      [0, 3, 4, -4, 7, -4, 6, -4, 5],
+      [0, 3, 4, -4, 6, -4, 5, -4, 4],
+      [0, 3, 4, -3, 8, -3, 7, -3, 6],
+      [0, 3, 4, -3, 7, -3, 6, -3, 5],
+      [0, 3, 4, -3, 6, -3, 5, -3, 4],
+      [0, 3, 4, -5, 8, -5, 7, -5, 6],
+      [0, 3, 4, -5, 7, -5, 6, -5, 5],
+      [0, 3, 4, -5, 6, -5, 5, -5, 4],
+      [0, 2, 4, -2, 7, -2, 6, 0, 0],
+      [0, 2, 4, -2, 6, -2, 5, 0, 0],
+      ...Array.from({ length: 14 }, () => []),
+    ],
+  }));
+  await expect(body).toHaveAttribute('data-over', 'win');
+  const back = page.getByRole('button', { name: 'Back to the ship' });
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(body).toHaveAttribute('data-hub', 'mess -2,2');
+  await expect(page.locator('#hud')).toContainText('Battle royale lobby');
+  await page.screenshot({ path: testInfo.outputPath('royale-after.png') });
 });
 
 /** The colour of the lift glyph at the centre of `cell` and of the floor next to it, after a draw that began now: under
@@ -234,4 +260,6 @@ test('the tension drones calm to 0 over the hub, #586', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-hub', /^mess /);
   expect(await page.evaluate(() => (window as any).__tension().level)).toBe(0);
 });
+
+
 

@@ -61,7 +61,7 @@ describe('the hub HUD plate', () => {
     expect(at([-1, -1])).toContain('<small>Hot-seat table</small>');
     expect(at([-2, 0])).toContain('<small>Bot table</small>');
     expect(at([-2, 1])).toContain('<small>Online table</small>');
-    expect(at([-2, 2])).toContain('<small>Battle royale lobby · closed</small>'); // until Phase 4 ships (#522)
+    expect(at([-2, 2])).toContain('<small>Battle royale lobby</small>'); // #522, #593
     expect(at([1, -2])).toContain('<small>Lift to Cargo</small>');
     expect(at([-1, 2], 'bridge')).toContain('<small>Lift to Chapel</small>');
   });
