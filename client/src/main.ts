@@ -731,10 +731,12 @@ function tickLog(now: number): void {
   if (now - playing.since >= playing.log.seconds * 1000) stopLog();
   else paintLog();
 }
-void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fonts.load(font))).then(() => {
-  consoleFonts = true;
-  layoutConsole();
-});
+void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fonts.load(font)))
+  .catch(() => undefined)
+  .then(() => {
+    consoleFonts = true;
+    layoutConsole();
+  });
 function applyDeck(next: Deck): void {
   deck = next;
   const light = DECKS[deck];
