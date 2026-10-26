@@ -299,6 +299,14 @@ export class Sfx {
     if (this.graph.ctx.state === 'suspended') this.graph.ctx.resume().catch(() => undefined);
   }
 
+  /** The page was hidden (`shown` false: tab switch, locked phone) or shown again: the context is suspended while hidden,
+   * so nothing plays or runs in the background (#728). Nothing to do before the first gesture made a context. */
+  visible(shown: boolean): void {
+    const ctx = this.graph?.ctx;
+    if (!ctx) return;
+    (shown ? ctx.resume() : ctx.suspend()).catch(() => undefined);
+  }
+
   /** A slider, itself a user gesture: fades `bus` to `percent`, 0 silences what still rings through it. */
   setVolume(bus: Bus, percent: number): void {
     this.mix[bus] = percent;
