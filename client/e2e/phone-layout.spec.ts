@@ -196,24 +196,27 @@ for (const { name, viewport, mobile } of sizes) {
     // The open mode menu (#357) with its boss list, its tallest state, covers no cell either. Bug #575: the Daily
     // challenge button names the boss of the day, so the menu's rows change with the date: each boss of the list is
     // checked on a day it is the daily boss, the longest name included. Bug #603: the boss list of Fight together
-    // (#530) is checked too.
+    // (#530) is checked too. One page load (bug #629): the page clock moves to each day, and the minute timer of an open
+    // page renames the button, as it does at 00:00 UTC.
     test('nothing covers the board or the HUD with the mode menu and a boss list open, every daily boss, bugs #227 #234 #357 #575 #603', async ({ page }, testInfo) => {
-      const open = async (day: string, list: string) => {
-        await page.clock.setFixedTime(new Date(`${day}T08:00:00Z`));
-        await page.goto('./?bot=off&net=hook');
-        await page.locator('canvas').waitFor();
-        await openModes(page);
-        await page.getByRole('button', { name: list }).click();
-      };
-      await open('2026-10-23', 'Boss fight');
+      await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await openModes(page);
+      await page.getByRole('button', { name: 'Boss fight' }).click();
       const names = await page.locator('#boss-list button').allTextContents(); // in the order of boss_ids()
       for (const name of names) {
         let ms = Date.UTC(2026, 9, 23);
         while (dailyFor(utcDay(ms), names).id !== name) ms += 86_400_000;
         const day = utcDay(ms);
+        await page.clock.setSystemTime(new Date(`${day}T08:00:00Z`));
+        await page.clock.fastForward(60_000); // the minute timer fires once
+        await expect(page.locator('#daily')).toHaveText(dailyTitle(day, name));
         for (const list of ['Boss fight', 'Fight together']) {
-          await open(day, list);
-          await expect(page.locator('#daily')).toHaveText(dailyTitle(day, name));
+          await openModes(page); // the settings menu of the last check closed it
+          const button = page.getByRole('button', { name: list });
+          if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click(); // closes the other list
+          await expect(button).toHaveAttribute('aria-expanded', 'true');
           await check(page, testInfo, `with the mode menu and the ${list} list open, daily ${name}`);
         }
       }
