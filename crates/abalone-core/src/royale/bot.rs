@@ -1,12 +1,83 @@
 //! Battle royale bots: a cheap heuristic that gives a seat its order from the round-start state
 //! and a seed alone, so it never sees the other orders (rules.md section 10.4, bots).
 
-use super::{Order, Royale};
+use super::{seat_cell, Order, Royale};
+use crate::board::Board;
+use crate::moves::{apply_for, legal_moves_for};
 
-/// The order of `seat` for the next round of `state`. The same state and seed give the same
-/// order.
-pub fn order(_state: &Royale, _seat: usize, _seed: u64) -> Order {
-    todo!()
+/// Score of a move that ejects a marble: above anything the place of the marbles can give.
+const EJECT: i64 = 10_000;
+/// Cost of an own marble on a cracked cell, which goes void at the end of the round.
+const CRACKED: i64 = 100;
+/// Cost of an own marble on the rim, where a push ejects it.
+const RIM: i64 = 10;
+/// Cost of each step between an own marble and the centre.
+const CENTRE: i64 = 4;
+/// The seed adds 0 to `CENTRE - 1` to each move: it only breaks ties.
+const NOISE: u64 = CENTRE as u64;
+
+/// The six neighbours of a cell, as axial vectors.
+const NEIGHBOURS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
+
+/// The order of `seat` for the next round of `state`, from that state and `seed` alone: the
+/// same state and seed give the same order. It ejects a marble if it can, else it plays the
+/// move that best keeps its marbles off cracked and rim cells and near the centre, and holds
+/// when no move does better than staying put.
+pub fn order(state: &Royale, seat: usize, seed: u64) -> Order {
+    let own = seat_cell(seat);
+    let board = state.board();
+    let radius = board.radius();
+    let mine: Vec<(i32, i32)> = (-radius..=radius)
+        .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
+        .filter(|&(q, r)| board.get(q, r) == Some(own))
+        .collect();
+    let stay = place(board, &mine);
+    let key = mix(mix(mix(seed) ^ u64::from(state.round())) ^ seat as u64);
+    legal_moves_for(board, own)
+        .into_iter()
+        .enumerate()
+        .map(|(i, mv)| {
+            let (dq, dr) = mv.dir.vector();
+            let after: Vec<(i32, i32)> = mine
+                .iter()
+                .map(|&(q, r)| {
+                    if mv.cells.contains(&(q, r)) {
+                        (q + dq, r + dr)
+                    } else {
+                        (q, r)
+                    }
+                })
+                .collect();
+            let ejects = apply_for(board, own, &mv).is_ok_and(|(_, ejected)| ejected);
+            let score = place(board, &after) + if ejects { EJECT } else { 0 };
+            (score, mix(key ^ i as u64) % NOISE, mv)
+        })
+        .filter(|&(score, _, _)| score > stay)
+        .max_by_key(|&(score, noise, _)| (score, noise))
+        .map_or(Order::Hold, |(_, _, mv)| Order::Move(mv))
+}
+
+/// How well placed `cells` are on `board`: the higher, the safer.
+fn place(board: &Board, cells: &[(i32, i32)]) -> i64 {
+    cells
+        .iter()
+        .map(|&(q, r)| {
+            let cracked = board.cracks().iter().any(|&(c, _)| c == (q, r));
+            let rim = NEIGHBOURS
+                .iter()
+                .any(|&(dq, dr)| board.get(q + dq, r + dr).is_none());
+            let centre = i64::from(q.abs().max(r.abs()).max((q + r).abs()));
+            -CENTRE * centre - CRACKED * i64::from(cracked) - RIM * i64::from(rim)
+        })
+        .sum()
+}
+
+/// SplitMix64 step: a cheap, well spread hash of `x`, the same on every peer.
+fn mix(x: u64) -> u64 {
+    let mut z = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
 }
 
 #[cfg(test)]
