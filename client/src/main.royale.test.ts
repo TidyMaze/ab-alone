@@ -144,7 +144,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
   });
 
   it('without the crack decal, the glow, the ticks and the plate line still warn (#503)', async () => {
-    const game = await boot('?bot=off', { missing: ['crack-decal.png'] });
+    const game = await boot('?bot=off', { missing: ['crack-decal.ktx2'] });
     game.hook('__royale', CRACKED);
     expect(document.body.dataset.cracks).toBe('48');
     expect(game.hook<Axial[]>('__crackDecals')).toEqual([]);

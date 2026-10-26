@@ -146,16 +146,19 @@ test('a hint asked for an older position is never drawn on the new one, #192', a
     };
     const Real = window.Worker;
     w.Worker = class extends Real {
+      // The game's workers only: KTX2Loader's transcoder workers (#700) run from a blob URL, and pass.
+      game: boolean;
       constructor(url: string | URL, options?: WorkerOptions) {
         super(url, options);
+        this.game = !String(url).startsWith('blob:');
         // The page handles the reply in the same task. An evaluation answer carries a score, not a move.
         this.addEventListener('message', (e) => {
-          if (!('score' in e.data)) answers++;
+          if (this.game && !('score' in e.data)) answers++;
         });
       }
       postMessage(msg: unknown): void {
         const sent = structuredClone(msg); // what the worker gets is copied now, as postMessage does
-        if (holding && !(msg as { evaluate?: boolean }).evaluate) held.push(() => super.postMessage(sent));
+        if (this.game && holding && !(msg as { evaluate?: boolean }).evaluate) held.push(() => super.postMessage(sent));
         else super.postMessage(sent);
       }
     };
@@ -212,7 +215,7 @@ test('against the bot, Hint is disabled while the bot thinks, then shows the hin
       bot: boolean;
       constructor(url: string | URL, options?: WorkerOptions) {
         super(url, options);
-        this.bot = made++ === 0;
+        this.bot = !String(url).startsWith('blob:') && made++ === 0; // not a KTX2Loader transcoder worker (#700)
       }
       postMessage(msg: unknown): void {
         const sent = structuredClone(msg);

@@ -45,22 +45,22 @@ describe('main.ts, the deck textures', () => {
     const cells = catchCells();
     await boot('?bot=off');
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
-    expect(name(cells().map)).toBe('deck-mess.png');
-    expect(name(cells().normalMap)).toBe('deck-mess-normal.png');
+    expect(name(cells().map)).toBe('deck-mess.ktx2');
+    expect(name(cells().normalMap)).toBe('deck-mess-normal.ktx2');
   });
 
   it('without its own set, a deck keeps the shared steel albedo and no normal map', async () => {
     const cells = catchCells();
-    const game = await boot('?bot=off', { missing: ['deck-mess.png', 'deck-mess-normal.png', 'deck-cargo.png'] });
+    const game = await boot('?bot=off', { missing: ['deck-mess.ktx2', 'deck-mess-normal.ktx2', 'deck-cargo.ktx2'] });
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('steel'));
-    expect(name(cells().map)).toBe('deck-albedo.png');
+    expect(name(cells().map)).toBe('deck-albedo.ktx2');
     expect(cells().normalMap).toBeNull();
-    expect(name(cells().roughnessMap)).toBe('deck-roughness.png');
+    expect(name(cells().roughnessMap)).toBe('deck-roughness.ktx2');
     game.hook('__deck', 'cargo'); // its normal map loads, its albedo does not: still no normal map to swap
     await vi.waitFor(() => expect(document.body.dataset.deck).toBe('cargo'));
     await game.settle();
     expect(document.body.dataset.deckSet).toBe('steel');
-    expect(name(cells().map)).toBe('deck-albedo.png');
+    expect(name(cells().map)).toBe('deck-albedo.ktx2');
     expect(cells().normalMap).toBeNull();
   });
 });

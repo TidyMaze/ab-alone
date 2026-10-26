@@ -30,7 +30,6 @@ describe('SceneRenderer (#632)', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({
       renderer,
-      forceWebGL: true,
       innerWidth: 1000,
       innerHeight: 800,
       backdrop: new THREE.Texture(),

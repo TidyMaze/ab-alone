@@ -1,7 +1,7 @@
 // A harness that runs the whole page, src/main.ts, in vitest under jsdom (decision #445): the test file starts with
 // `// @vitest-environment jsdom`, then `const game = await boot('?bot=off')` loads index.html's body and imports a fresh
 // main.ts on the real wasm engine. What jsdom lacks is stubbed: the three.js renderer (no WebGL or WebGPU, the scene
-// graph stays real), the texture loader, the bay's model loader, canvas 2D, the web fonts, matchMedia, IndexedDB
+// graph stays real), the KTX2 texture loader, the bay's model loader, canvas 2D, the web fonts, matchMedia, IndexedDB
 // (fake-indexeddb), the bot workers (the worker's answer() runs in-process), the Trystero transport (one end of a
 // localPair) and the clock of the animation loop (game.frame), and Web Audio on demand (the fake of src/test/audio.ts).
 // Everything is undone when the test ends.
@@ -88,7 +88,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     vi.doUnmock('three/webgpu');
     vi.doUnmock('abalone-wasm');
     vi.doUnmock('../p2p');
-    vi.doUnmock('three');
+    vi.doUnmock('three/examples/jsm/loaders/KTX2Loader.js');
     vi.doUnmock('three/examples/jsm/loaders/GLTFLoader.js');
   });
 
@@ -139,16 +139,28 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     return id;
   });
 
-  // The texture loader: each file under assets/ loads as a texture named after it, but the missing ones.
+  // The KTX2 texture loader (#700): each file under assets/ loads as a texture named after it, but the missing ones. As
+  // the real one, it needs the renderer up first.
   const missing = (url: string): boolean => !!options.missing?.includes(url.slice(url.lastIndexOf('/') + 1));
-  const textureLoader = (Texture: typeof import('three').Texture) =>
-    class TextureLoader {
-      loadAsync = async (url: string): Promise<InstanceType<typeof Texture>> => {
-        const name = url.slice(url.lastIndexOf('/') + 1);
-        if (missing(url)) throw new Error(`404 ${name}`);
-        return Object.assign(new Texture(), { name });
-      };
+  vi.doMock('three/examples/jsm/loaders/KTX2Loader.js', async () => {
+    const { Texture } = await vi.importActual<typeof import('three')>('three');
+    return {
+      KTX2Loader: class {
+        ready = false;
+        detectSupport(renderer: { initialized?: boolean }): this {
+          if (!renderer.initialized) throw new Error('detectSupport() before await renderer.init()');
+          this.ready = true;
+          return this;
+        }
+        loadAsync = async (url: string): Promise<InstanceType<typeof Texture>> => {
+          const name = url.slice(url.lastIndexOf('/') + 1);
+          if (!this.ready) throw new Error('THREE.KTX2Loader: Missing initialization with `.detectSupport( renderer )`.');
+          if (missing(url)) throw new Error(`404 ${name}`);
+          return Object.assign(new Texture(), { name });
+        };
+      },
     };
+  });
 
   // The renderer draws nothing: it keeps the animation loop for frame() and counts the draws.
   let loop: ((now: number) => void) | null = null;
@@ -163,7 +175,8 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       shadowMap = { enabled: false, type: 0 };
       toneMapping = 0;
       toneMappingExposure = 1;
-      init = async (): Promise<void> => {};
+      initialized = false;
+      init = async (): Promise<void> => void (this.initialized = true);
       setPixelRatio(): void {}
       setSize(): void {}
       getMaxAnisotropy = (): number => 1;
@@ -178,13 +191,9 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       fromScene = (): { texture: InstanceType<typeof THREE.Texture> } => ({ texture: new THREE.Texture() });
       dispose(): void {}
     }
-    return { ...THREE, WebGPURenderer, PMREMGenerator, TextureLoader: textureLoader(THREE.Texture) };
+    return { ...THREE, WebGPURenderer, PMREMGenerator };
   });
-  // The spaceship bay (#648, roomloader.ts on 'three'): its maps load as above, its model as an empty scene, unless missing.
-  vi.doMock('three', async (importOriginal) => {
-    const THREE = await importOriginal<typeof import('three')>();
-    return { ...THREE, TextureLoader: textureLoader(THREE.Texture) };
-  });
+  // The spaceship bay (#648): its maps load as above, its model as an empty scene, unless missing.
   vi.doMock('three/examples/jsm/loaders/GLTFLoader.js', async () => {
     const { Group } = await vi.importActual<typeof import('three')>('three');
     return {

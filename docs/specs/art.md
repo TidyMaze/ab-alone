@@ -61,7 +61,9 @@ and no new look: each rule names its source (section numbers), and changes when 
 
 **Budget** (tech.md 9, #61): initial load under 5 MB gzipped, a deck under 15 MB. At 0b64f5e the
 first screen is about 0.6 MB gzipped (JS 258 KB, wasm 41 KB, textures 171 KB, app icons 98 KB).
-Art gets 3 MB per deck at most. Models are glTF with meshopt (#701); PNG textures today, KTX2 comes with #61.
+Art gets 3 MB per deck at most. Models are glTF with meshopt (#701). Every texture ships as KTX2,
+encoded at build time from its PNG or JPG source in `client/textures/` (#700, tech.md 9); the
+sizes below are the sources'.
 
 **Made by**, the first that works: **procedural** (run-time code: geometry, materials, Web Audio;
 no file), **generated** (a seeded script in `client/scripts/` like `gen-assets.mjs`: same seed,

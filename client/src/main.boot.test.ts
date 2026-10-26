@@ -191,7 +191,10 @@ describe('the renderer and its textures', () => {
             loop = fn;
           }
         },
-        TextureLoader: class {
+      }));
+      vi.doMock('three/examples/jsm/loaders/KTX2Loader.js', () => ({
+        KTX2Loader: class {
+          detectSupport = (): this => this;
           loadAsync = async (): Promise<never> => Promise.reject(new Error('404'));
         },
       }));

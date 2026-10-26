@@ -485,12 +485,20 @@ No database server. Everything is client-side.
 - **Asset pipeline (#61).** Models: glTF with meshopt compression (#701): `client/scripts/pack-models.mjs`
   (gltfpack, a pinned dev dependency) packs each Blender export of `client/models/`, outside the build, into
   `client/public/assets/pbr/`, committed; the GLTFLoader decodes it with three's MeshoptDecoder. Textures: KTX2/Basis
-  (GPU-compressed, small download). Audio: Opus in WebM or Ogg, with an AAC fallback only if
+  (GPU-compressed, small download, #700): the PNG and JPG sources live in `client/textures/`, out
+  of the build; the Vite plugin `client/scripts/ktx2-textures.mjs` encodes each one to
+  `assets/<path>.ktx2` (normal maps UASTC with RDO and Zstandard, colour and data maps ETC1S, all
+  with mipmaps) with `ktx2-encoder`, Basis Universal built to WebAssembly, a pinned dev
+  dependency that runs the same on Linux and macOS with nothing to install. The dev server serves
+  them, the build writes them. An encode is cached by the hash of its source and settings in
+  `~/.cache/ab-alone-ktx2/`, shared by the checkouts and kept between CI runs. The page reads them
+  with three's `KTX2Loader` once the renderer is up; its transcoder is a hashed asset of the build,
+  never a CDN. Audio: Opus in WebM or Ogg, with an AAC fallback only if
   Safari needs it. Lazy loading per deck, the hub loads a first deck only. Budget (starting
   values, soft until Phase 1): initial load under 5 MB gzipped (wasm + JS + first scene), each
   deck under 15 MB, whole site under 250 MB, well below the Pages soft limits. The 5 MB counts
   what the first screen downloads before the service worker installs (page, entry JS and CSS,
-  wasm, icons, shared textures, Mess textures); the worker's background precache (section 9.1)
+  wasm, icons, shared textures, Mess textures, the KTX2 transcoder); the worker's background precache (section 9.1)
   counts only toward the 250 MB site budget. CI reports and fails on regressions: the `rust`
   job runs `vite build` then `client/scripts/size-budget.mjs`, which sums the gzipped files of
   `dist/` (a deck is its `deck-<deck>*` files), writes a table to the run summary and fails over
@@ -520,7 +528,8 @@ visit. No dependency: a hand-written service worker and a build step that lists 
   are drawn by `client/scripts/gen-icons.mjs` and committed; a test keeps them equal to the
   generator output.
 - **Build:** after `vite build`, the plugin `client/scripts/offline-app.mjs` lists every built file
-  (hashed JS, CSS, wasm and bot worker, the textures, icons, manifest and page; not `sw.js` nor
+  (hashed JS, CSS, wasm and bot worker, the KTX2 textures and their transcoder, icons, manifest
+  and page; not `sw.js` nor
   source maps), hashes their content, and bundles `client/src/sw.ts` into `dist/sw.js` with that
   list, the cache name `ab-alone-<16 hex of the hash>` and the Google Fonts stylesheets the built
   page links to. Any changed file gives a new cache name, so a new `sw.js`. The pure parts
@@ -676,8 +685,7 @@ Suggested order: #23, #25, #37 (Phase 0), then #27, #31 (Phase 1), then #33, #34
    estimated) triggers a rethink?
 3. Signaling dependency: are we fine relying on public Nostr / BitTorrent relays, with the
    manual link as fallback?
-4. Royale order timer and the exact conflict rules (#13, #49): game design input needed.
-5. Time controls are advisory in v1. Is that enough for 1v1 (#41)?
-6. Draw / anti-stalling rule (#12, #40) affects `outcome`, the AI and the signed log.
-7. Perf targets in 5.5 are starting values: who owns the low-end reference machine?
-8. Who produces the art and audio assets (world spec open question)? Drives the budget in 9.
+4. Time controls are advisory in v1. Is that enough for 1v1 (#41)?
+5. Draw / anti-stalling rule (#12, #40) affects `outcome`, the AI and the signed log.
+6. Perf targets in 5.5 are starting values: who owns the low-end reference machine?
+7. Who produces the art and audio assets (world spec open question)? Drives the budget in 9.

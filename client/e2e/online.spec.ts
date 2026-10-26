@@ -108,7 +108,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
   const held = new Promise<void>((done) => (release = () => done()));
   let loading!: () => void;
   const textures = new Promise<void>((done) => (loading = done));
-  await b.route('**/assets/*.png', async (route) => {
+  await b.route('**/assets/*.ktx2', async (route) => {
     loading();
     await held;
     await route.continue();

@@ -1,4 +1,5 @@
-// Generates the board, marble and tell textures as PNG files under client/public/assets/.
+// Generates the board, marble and tell textures as PNG files under client/textures/: the sources that
+// scripts/ktx2-textures.mjs encodes to KTX2 (#700).
 // Pure Node (zlib only), no download, no secret. Same seed, same bytes.
 // Run: node scripts/gen-assets.mjs
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -409,7 +410,7 @@ function deckNormals(size, rand) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const dir = new URL('../public/assets/', import.meta.url);
+  const dir = new URL('../textures/', import.meta.url);
   mkdirSync(dir, { recursive: true });
   for (const [name, buf] of generateAssets(SEED)) {
     writeFileSync(new URL(name, dir), buf);
