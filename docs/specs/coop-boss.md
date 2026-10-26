@@ -38,7 +38,10 @@ reply. The signed log holds only the human moves:
 1. A seated peer signs and sends its human move as in versus (`{game, seq, prev, move, pub, sig}`).
 2. Every peer checks it (signature, hash chain, seat, turn, legality), applies it, then applies the
    boss reply at once, before it handles the next message. So the partner's next move can never
-   arrive before the boss reply on any engine (#529).
+   arrive before the boss reply on any engine (#529). The reply is asked from a worker, not computed
+   on the main thread: one reply of The Hull or The Choir takes 150 to 440 ms (measured on #529).
+   Messages that come meanwhile wait in the session's queue until the reply is played, and a move
+   from the room also waits for the reply to our own last move.
 3. Tells, phase changes, notches, ejections and the result come from that engine, so every page
    shows the same ones.
 

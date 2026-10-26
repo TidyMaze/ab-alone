@@ -29,10 +29,12 @@ import { Seats } from './seats';
 import type { ConnectionState, Transport } from './transport';
 
 /** The rules engine, the only judge of legality. `play` throws on an illegal move. Its `live` is false for a
- * move we missed, replayed from a catch-up answer: the caller shows it without its effects (#232). */
+ * move we missed, replayed from a catch-up answer: the caller shows it without its effects (#232). A `play` that
+ * returns a promise holds the next message until it settles: the judge of a co-op room plays the boss reply then
+ * (docs/specs/coop-boss.md section 3, #529), and a rejection refuses the move as a throw does. */
 export interface Judge {
   to_move(): number;
-  play(mv: Int32Array, live: boolean): void;
+  play(mv: Int32Array, live: boolean): void | Promise<void>;
   status(): number; // 0 while the game runs
   restart(): void; // a new game from the start position: the rematch
   /** Co-op only (docs/specs/coop-boss.md section 2): the seat whose human ply it is, see `seatOfPly`.
@@ -188,7 +190,12 @@ export class OnlineSession {
   /** We are a seated player, our turn, the transport is open and the key of every other seat is
    * connected: a move now would reach the opponents, not just any peer such as a spectator (#143). */
   canPlay(): boolean {
-    return this.reachesOpponents() && this.toMove(this.o.side);
+    return this.reachesOpponents() && this.ourTurn();
+  }
+
+  /** Whether our seat is to move now: our colour in versus, our human ply in co-op. */
+  ourTurn(): boolean {
+    return this.toMove(this.o.side);
   }
 
   /** Same as canPlay, for a rematch ask: the game is over and we did not ask yet. */
@@ -293,7 +300,7 @@ export class OnlineSession {
     if (seat === 0) return this.o.onRefuse('wrong-key');
     if (!this.toMove(seat)) return this.o.onRefuse('not-their-turn');
     try {
-      this.o.judge.play(Int32Array.from(r.move), live);
+      await this.o.judge.play(Int32Array.from(r.move), live);
     } catch {
       return this.o.onRefuse('illegal');
     }

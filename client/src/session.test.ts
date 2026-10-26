@@ -58,6 +58,16 @@ class CoopJudge extends FakeJudge {
   }
 }
 
+// A co-op judge whose boss reply takes time, as it does in the worker (#529): play resolves once the test calls the
+// reply it holds.
+class SlowCoopJudge extends CoopJudge {
+  replies: (() => void)[] = [];
+  override async play(mv: Int32Array, live = true): Promise<void> {
+    super.play(mv, live);
+    await new Promise<void>((done) => this.replies.push(done));
+  }
+}
+
 // Every session the tests make, for settle. Those of earlier tests are idle: waiting on them is free.
 const live: OnlineSession[] = [];
 class WatchedSession extends OnlineSession {
@@ -310,6 +320,50 @@ describe('OnlineSession', () => {
     await settle();
     expect(two.refused).toEqual(['not-their-turn']);
     expect(two.judge.played).toEqual([M1]);
+  });
+
+  it('co-op: knows whether it is our ply in the rotation, the partner here or not (#529)', async () => {
+    const [ta, tb] = localPair();
+    const one = await player(ta, 1, 2, ENGINE, new CoopJudge());
+    expect([one.session.ourTurn(), one.session.canPlay()]).toEqual([true, false]); // our ply, but no partner yet
+    const two = await player(tb, 2, 2, ENGINE, new CoopJudge());
+    await settle();
+    expect([one.session.ourTurn(), two.session.ourTurn()]).toEqual([true, false]);
+    await play(one, M1);
+    expect([one.session.ourTurn(), two.session.ourTurn()]).toEqual([false, true]);
+  });
+
+  it('co-op: holds the next message until the judge played the boss reply, so nothing overtakes it (#529)', async () => {
+    const [x, y] = localPair();
+    const judge = new SlowCoopJudge();
+    const two = await player(y, 2, 2, ENGINE, judge);
+    const creator = await generateKeys();
+    x.send(await hello(creator, 1, [creator.pub, '']));
+    await settle();
+    x.send(await signMove(creator, { game: 'g', seq: 0, prev: GENESIS, move: M1 }));
+    for (let i = 0; i < 50 && judge.replies.length === 0; i++) await new Promise((done) => setTimeout(done));
+    x.send({ nope: 1 } as unknown as MoveRecord);
+    await new Promise((done) => setTimeout(done, 20));
+    expect(judge.played).toEqual([M1]); // the human move is played, its boss reply is not yet
+    expect(two.moves).toEqual([]);
+    expect(two.refused).toEqual([]); // the next message waits behind the reply
+    judge.replies[0]!();
+    await settle();
+    expect(two.moves).toEqual([M1]);
+    expect(two.refused).toEqual(['malformed']);
+  });
+
+  it('co-op: refuses as illegal a move whose play rejects, as the judge of a co-op room may (#529)', async () => {
+    const [x, y] = localPair();
+    const two = await player(y, 2, 2, ENGINE, new SlowCoopJudge());
+    const creator = await generateKeys();
+    x.send(await hello(creator, 1, [creator.pub, '']));
+    await settle();
+    x.send(await signMove(creator, { game: 'g', seq: 0, prev: GENESIS, move: [9, 0, 0, 0, 0, 0, 0, 0] }));
+    await settle();
+    expect(two.refused).toEqual(['illegal']);
+    expect(two.moves).toEqual([]);
+    expect(two.session.signedLog).toEqual([]);
   });
 
   it('refuses something that is not a record', async () => {

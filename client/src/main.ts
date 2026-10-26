@@ -27,7 +27,8 @@ import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
-import { inviteUrl, newRoomId, roomFromHash } from './invite';
+import { coopFromHash, inviteUrl, newRoomId, roomFromHash, type CoopFight } from './invite';
+import { seatAfter } from './coop';
 import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
@@ -1758,7 +1759,7 @@ function click(q: number, r: number): void {
   if (engine.status() !== 0) return; // over: no move, no selection (#282)
   if (thinking || online?.role === 'spectator') return;
   if (sliding()) return whenSettled(() => click(q, r)); // the next move waits for the slide
-  if (online && engine.to_move() !== online.side) return; // not our turn
+  if (online && !online.ourTurn()) return; // not our turn: our colour in versus, our human ply in co-op
   if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
@@ -1772,6 +1773,7 @@ function click(q: number, r: number): void {
       playMove(record);
       selected = [];
       void online?.send(record);
+      if (online && fight) void answerBoss(true); // co-op: our move's boss reply
     }
   }
   refresh();
@@ -2297,15 +2299,34 @@ const inviteBox = document.getElementById('invite') as HTMLInputElement;
 const inviteLabel = document.getElementById('invite-label')!;
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
 rematchButton.addEventListener('click', () => void online?.rematch());
-async function goOnline(room: string, side: number): Promise<void> {
+// Co-op (docs/specs/coop-boss.md section 3): every page plays the boss reply to each human move itself, from the same
+// encounter. It is asked from the analysis worker, idle online: on the main thread one reply of The Hull or The Choir
+// blocks the page for 150 ms typically, up to 440 ms (#529). Until it is played, the room's next message waits in the
+// session's queue, so a partner's next move never comes before it; the boss reply to our own move is awaited first too.
+let bossReply: Promise<void> = Promise.resolve();
+function answerBoss(live: boolean): Promise<void> {
+  bossReply = (async () => {
+    if (engine.status() !== 0) return; // the human move ended the fight
+    const move = await askBot(analysisWorker, history.slice(), budget, fight!);
+    await new Promise<void>((done) => whenSettled(() => (replay(move, live), refresh(), done())));
+  })();
+  return bossReply;
+}
+function replay(mv: ArrayLike<number>, live: boolean): void {
+  const before = Array.from(engine.board());
+  engine.play(Int32Array.from(mv));
+  afterPlay(before, Array.from(mv), live);
+}
+/** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. */
+async function goOnline(room: string, side: number, coop?: CoopFight): Promise<void> {
   leaveHub();
   stopAnalysis();
-  fight = null;
+  fight = coop ? { id: coop.boss, seed: coop.seed } : null;
   delete document.body.dataset.boss;
   applyDeck(deckOf('online'));
   retryButton.hidden = true;
   newGameButton.hidden = true;
-  engine = new Engine();
+  engine = makeGame();
   history.length = 0;
   selected = [];
   leaveRoyale();
@@ -2326,13 +2347,14 @@ async function goOnline(room: string, side: number): Promise<void> {
     if (!session) return; // the room was left for the ship (#522)
     const role = session.role;
     const mine = session.side;
-    const opponent = session.presenceOf(3 - mine);
+    const other = coop ? 3 - side : 3 - mine; // co-op: the partner's seat, both seats play Black
+    const opponent = session.presenceOf(other);
     document.body.dataset.online = role === 'spectator' ? 'Spectator' : sideName(mine, glassOf());
     document.body.dataset.seat = role; // read by the e2e tests
     document.body.dataset.opponent = opponent;
     document.body.dataset.coordinator = String(session.coordinatorSeq); // join_seq of the coordinator, read by the e2e tests (#359)
     document.body.dataset.handover = session.handover;
-    onlineLine = onlineStatus(mine, role, opponent, session.isAgent(3 - mine), glassOf());
+    onlineLine = onlineStatus(mine, role, opponent, session.isAgent(other), glassOf());
     onlineNote = netState;
     hud();
   };
@@ -2344,16 +2366,19 @@ async function goOnline(room: string, side: number): Promise<void> {
     transport: net,
     judge: {
       to_move: () => engine.to_move(),
-      play: (mv, live) => {
-        const before = Array.from(engine.board());
-        engine.play(mv);
-        afterPlay(before, Array.from(mv), live);
-      },
+      play: coop
+        ? async (mv, live) => {
+            await bossReply;
+            replay(mv, live);
+            await answerBoss(live);
+          }
+        : replay,
       status: () => engine.status(),
       restart: () => {
-        engine = new Engine();
+        engine = makeGame();
         history.length = 0;
       },
+      ...(coop && { mover: () => seatAfter(history.length, 2) }),
     },
     onMove: () => refresh(),
     onRefuse: (reason) => {
@@ -2379,16 +2404,19 @@ async function goOnline(room: string, side: number): Promise<void> {
   note();
   refresh();
 }
-function playOnline(): void {
+/** Opens a new room as its creator and shows its invite link: a co-op room with `coop` (#529), a versus room without. */
+function playOnline(coop?: CoopFight): void {
   moveModes('pick');
   const room = newRoomId((b) => crypto.getRandomValues(b));
-  location.hash = `room=${room}`;
-  inviteBox.value = inviteUrl(location.href, room);
+  inviteBox.value = inviteUrl(location.href, room, coop);
+  location.hash = new URL(inviteBox.value).hash;
   inviteBox.hidden = false;
   inviteLabel.hidden = false;
-  void goOnline(room, 1);
+  void goOnline(room, 1, coop);
 }
-document.getElementById('play-online')!.addEventListener('click', playOnline);
+document.getElementById('play-online')!.addEventListener('click', () => playOnline());
+// Used by the browser checks to open a co-op room against `boss` with `seed` until the mode menu has an entry (#530).
+(window as unknown as Record<string, unknown>).__coop = (boss: string, seed: number) => playOnline({ boss, seed });
 // Back to the ship from an online table (#522): the room is closed and the page is a local one again.
 function leaveOnline(): void {
   if (!online) return;
@@ -2551,7 +2579,9 @@ addEventListener('offline', syncConnectivity);
 playReady = true; // engine and listener ready (#127)
 syncConnectivity();
 const invited = roomFromHash(location.hash);
+const coopInvite = coopFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
+else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite); // an unknown boss starts nothing
 else analyse(); // the start position
 
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
