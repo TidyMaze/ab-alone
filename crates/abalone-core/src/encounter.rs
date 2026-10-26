@@ -96,8 +96,8 @@ fn removals(before: &Board, after: &Board) -> [u8; 2] {
 }
 
 /// Black and White marbles fewer on `after` than on `before`.
-pub(crate) fn losses(_before: &Board, _after: &Board) -> [u8; 2] {
-    [0, 0]
+pub(crate) fn losses(before: &Board, after: &Board) -> [u8; 2] {
+    [Cell::Black, Cell::White].map(|c| marbles(before, c) - marbles(after, c))
 }
 
 /// Where `marks` sit after `mv`: marks on moved or pushed marbles shift one step, in order.
@@ -217,6 +217,7 @@ impl Encounter {
                 .map(|&(c, _)| c)
                 .collect();
             self.credit_removals(&board);
+            self.hooked = Some((self.game.board().clone(), id));
             self.game.replace_board(board);
             self.settle(!seed);
         }
@@ -269,7 +270,11 @@ impl Encounter {
     /// marbles and flips none, so its losses are counted by colour.
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
-        let [lost_black, lost_white] = removals(before, after);
+        let [lost_black, lost_white] = if before.pulsar().is_some() {
+            losses(before, after)
+        } else {
+            removals(before, after)
+        };
         self.game.credit(Player::White, lost_black);
         self.game.credit(Player::Black, lost_white);
     }

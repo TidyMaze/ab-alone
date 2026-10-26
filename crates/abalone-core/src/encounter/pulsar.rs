@@ -32,14 +32,46 @@ pub const PULSAR_NODE_BUDGET: u32 = 3000;
 /// marbles of both colours smaller than the force move one cell; the first group as big as the
 /// force resists and shields the rest of the line. A marble pushed past the rim is off the board.
 pub fn pulse(board: &Board, pulsar: u8, force: Option<u8>) -> (Board, Vec<P>) {
-    (board.clone(), Vec::new()) // stub
+    let (dq, dr) = PULSAR_PUSH[usize::from(pulsar)];
+    let on = |(q, r): P| board.get(q, r).is_some();
+    let radius = board.radius();
+    let mut moved = Vec::new();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
+            if !on((q, r)) || on((q - dq, r - dr)) {
+                continue;
+            }
+            let line: Vec<P> = (0..)
+                .map(|k| (q + k * dq, r + k * dr))
+                .take_while(|&c| on(c))
+                .collect();
+            let groups = line
+                .split(|&(q, r)| board.get(q, r) == Some(Cell::Empty))
+                .filter(|g| !g.is_empty());
+            for group in groups {
+                if force.is_some_and(|f| group.len() >= usize::from(f)) {
+                    break;
+                }
+                moved.extend_from_slice(group);
+            }
+        }
+    }
+    let mut out = board.clone();
+    for &(q, r) in &moved {
+        out.set(q, r, Cell::Empty);
+    }
+    for &(q, r) in &moved {
+        out.set(q + dq, r + dr, board.get(q, r).unwrap_or(Cell::Empty));
+    }
+    (out, moved)
 }
 
 /// Player turns left before the next pulse when `clock` turns of the cycle are played: from 1
 /// (the pulse fires at the end of this turn) to 4 (the first turn of the rest).
 pub fn turns_left(clock: u8) -> u8 {
-    let _ = clock;
-    0 // stub
+    (1..=PULSAR_CYCLE)
+        .find(|k| PULSAR_FIRES.contains(&((clock + k) % PULSAR_CYCLE)))
+        .unwrap_or(PULSAR_CYCLE)
 }
 
 /// Special id of the ply that just ended: the phase at the end of each player turn (Black moves
@@ -50,15 +82,29 @@ fn special(ply: u32, phase: usize) -> Option<u8> {
 
 /// The pulsar after `pulsar`, drawn by `seed` among the 5 others in id order.
 fn next_pulsar(pulsar: u8, seed: u64) -> u8 {
-    let _ = seed;
-    pulsar // stub
+    let others: Vec<u8> = (0..6).filter(|&p| p != pulsar).collect();
+    others[(mix(seed) % 5) as usize]
 }
 
 /// End of a player turn in `phase`: the cycle moves on one turn, the pulsar fires when the turn
 /// says so, and after its last pulse the next pulsar is drawn.
 fn hook(board: &Board, phase: u8, seed: u64) -> Board {
-    let _ = (phase, seed);
-    board.clone() // stub
+    let Some((pulsar, clock)) = board.pulsar() else {
+        return board.clone();
+    };
+    let clock = (clock + 1) % PULSAR_CYCLE;
+    let mut out = if PULSAR_FIRES.contains(&clock) {
+        pulse(board, pulsar, PULSAR_FORCE[usize::from(phase)]).0
+    } else {
+        board.clone()
+    };
+    let next = if clock == PULSAR_FIRES[2] {
+        next_pulsar(pulsar, seed)
+    } else {
+        pulsar
+    };
+    out.set_pulsar(Some((next, clock)));
+    out
 }
 
 /// The Pulsar boss definition.
@@ -76,32 +122,58 @@ pub fn pulsar_boss() -> BossDef {
 /// A new encounter: the standard layout, the player is Black and moves first, and the first
 /// pulsar is drawn (ply 0 of the seed) at turn 0 of its cycle.
 pub fn pulsar_start(seed: u64) -> Encounter {
+    let mut board = Board::standard();
+    board.set_pulsar(Some(((mix(seed) % 6) as u8, 0)));
     Encounter::new(
-        Game::from_position(Board::standard(), Player::Black, [0, 0]),
+        Game::from_position(board, Player::Black, [0, 0]),
         pulsar_boss(),
         seed,
-    ) // stub
+    )
 }
 
 /// The next pulse: the pulsar, the player turns left before it fires and its force (`None`
 /// infinite), with the phase now. `None` for the other bosses.
 pub fn pulsar_tell(enc: &Encounter) -> Option<(u8, u8, Option<u8>)> {
-    let _ = enc;
-    None // stub
+    let (pulsar, clock) = enc.game().board().pulsar()?;
+    Some((pulsar, turns_left(clock), PULSAR_FORCE[enc.phase()]))
 }
 
 /// The pulse of the last ply: the pulsar, the board just before it and the marbles it moved,
 /// from where they stood. `None` when the last ply fired no pulse.
 pub fn last_pulse(enc: &Encounter) -> Option<(u8, Board, Vec<P>)> {
-    let _ = enc;
-    None // stub
+    let (before, phase) = enc.hooked()?;
+    let (pulsar, clock) = before.pulsar()?;
+    let fired = PULSAR_FIRES.contains(&((clock + 1) % PULSAR_CYCLE));
+    fired.then(|| {
+        let force = PULSAR_FORCE[usize::from(*phase)];
+        (pulsar, before.clone(), pulse(before, pulsar, force).1)
+    })
 }
 
 /// The boss reply: its node-limited search, where every player ply of the tree goes through the
 /// hook (seed 0 for the next pulsar), so it sees the pulses. `None` on the player's turn or when
 /// the game is over.
 pub fn pulsar_move(enc: &Encounter) -> Option<Move> {
-    enc.boss_search().map(|r| r.mv) // stub
+    if enc.game().to_move() != Player::White {
+        return None;
+    }
+    let phase = enc.phase() as u8;
+    let step = |_: &Board, mover: Player, _: &Move, after: Board| {
+        if mover == Player::White {
+            return (after, [0, 0]);
+        }
+        let out = hook(&after, phase, 0);
+        let [black, white] = losses(&after, &out);
+        (out, [white, black])
+    };
+    search_hooked(
+        enc.game(),
+        PULSAR_NODE_BUDGET,
+        DEFAULT_WEIGHTS,
+        &|_| true,
+        &step,
+    )
+    .map(|r| r.mv)
 }
 
 #[cfg(test)]

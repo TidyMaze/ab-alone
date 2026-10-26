@@ -97,6 +97,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.trains().is_empty() {
         board.trains().hash(&mut hasher);
     }
+    if let Some(pulsar) = board.pulsar() {
+        pulsar.hash(&mut hasher);
+    }
     if !board.polarities().is_empty() {
         board.polarities().hash(&mut hasher);
     }

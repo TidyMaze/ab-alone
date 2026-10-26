@@ -444,15 +444,30 @@ impl Encounter {
     /// The Pulsar's next pulse as `[pulsar, player_turns_left, force]`, force `0` for infinite,
     /// empty for the other bosses.
     pub fn pulsar(&self) -> Vec<i32> {
-        let _ = (&self.fight, pulsar_tell);
-        Vec::new() // stub
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        pulsar_tell(e).map_or_else(Vec::new, |(pulsar, left, force)| {
+            vec![
+                i32::from(pulsar),
+                i32::from(left),
+                i32::from(force.unwrap_or(0)),
+            ]
+        })
     }
 
     /// The pulse of the last ply (The Pulsar): the pulsar, the 61 board codes just before it, then
     /// the cells it moved from, see the module docs. Empty when the last ply fired no pulse.
     pub fn last_pulse(&self) -> Vec<i32> {
-        let _ = (&self.fight, last_pulse);
-        Vec::new() // stub
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        last_pulse(e).map_or_else(Vec::new, |(pulsar, before, moved)| {
+            std::iter::once(i32::from(pulsar))
+                .chain(board_bytes(&before).into_iter().map(i32::from))
+                .chain(cell_list(&moved))
+                .collect()
+        })
     }
 
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
