@@ -245,7 +245,6 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     test('nothing covers the board or the HUD in a boss fight, bugs #227 #234', async ({ page }, testInfo) => {
-      test.fixme(viewport.width === 360, 'bug #618: the settings menu covers the top row on a 360 px phone');
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
@@ -294,7 +293,6 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     test('the daily result card covers neither the HUD nor the board, #196', async ({ page }, testInfo) => {
-      test.fixme(viewport.width === 360, 'bug #619: the card covers the bottom row on a 360 px phone');
       await startDaily(page);
       await loseByRepetition(page);
       await expect(page.locator('#daily-card')).toBeVisible();
