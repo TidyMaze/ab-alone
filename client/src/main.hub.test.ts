@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
+import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D, encodeMove, moveForClick, parseMoves } from './board';
 import { generateKeys } from './moverecord';
@@ -293,6 +294,26 @@ describe('main.ts, the hub doors (#522)', () => {
     back().click();
     expect(hub()).toBe('mess -1,-1');
     expect(game.hud()).toBe('Ship · MessHot-seat table');
+  });
+
+  it('a hot-seat table game is back after a reload, still with no bot (#565)', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?nodes=100', { indexedDB });
+    shipAt(game, [-1, 0]);
+    game.click(-1, -1);
+    game.click(0, 2); // Black (0, 2) to (0, 1)
+    game.click(0, 1);
+    game.frame(5000);
+    await game.settle();
+    expect(game.hook('__plies')).toBe(1);
+    const again = await boot('?nodes=100', { indexedDB });
+    expect(again.hook('__plies')).toBe(1);
+    await again.settle();
+    expect(again.hook('__plies')).toBe(1); // no bot reply for White
+    again.click(0, -2); // the page plays White
+    again.click(0, -1);
+    await until(again, () => again.hook('__plies') === 2);
+    expect(again.turn()).toBe('Black to move');
   });
 
   it('the bot table brings the bot back after the hot-seat one; Back to the ship after its loss', async () => {
