@@ -142,6 +142,7 @@ Input:
 
 - No `boss`: a game against the bot, mode `bot`. The bot searches at most `bot_nodes` positions per move (`Engine.best_move(nodes)`). 20000 is `BOT_NODES` in `client/src/bot.ts`.
 - With `boss`: mode `boss`, `Encounter.new(boss, seed)`. The same id and seed always give the same fight. `bot_nodes` is ignored, the boss uses its own budget.
+- `boss_ids()` here leaves out `ballast`: The Ballast Mind plays on a radius 5 board, which `board` and `ascii` cannot show yet (#572). It is an `unknown_boss`.
 
 Output: the `get_state` object.
 

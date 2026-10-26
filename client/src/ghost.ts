@@ -1,4 +1,4 @@
-import { CELLS, isMarble, type Axial } from './board';
+import { BOARD_CELLS, isMarble, type Axial } from './board';
 
 export interface GhostEngine {
   play(mv: Int32Array): void;
@@ -28,7 +28,7 @@ export function ghostMarbles(
     return [];
   }
   const after = engine.board();
-  return CELLS.flatMap((cell, i) =>
+  return BOARD_CELLS.flatMap((cell, i) =>
     isMarble(after[i]) && after[i] !== before[i] ? [{ cell, side: after[i]! }] : [],
   );
 }

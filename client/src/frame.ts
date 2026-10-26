@@ -1,6 +1,6 @@
 // The steel frame the cells sit on (docs/specs/world.md section 6): a plate under the cells, a rim around them.
 // Pure outline maths on the board plane (x, z), in cell spacings; main.ts extrudes the meshes.
-import { CELLS, VANISHED, axialTo3D } from './board';
+import { BOARD_CELLS, VANISHED, axialTo3D } from './board';
 
 export const FRAME = {
   margin: 0.55, // from the outer cell centres to the plate edge, where the rim starts: a disc is 0.46 wide
@@ -30,11 +30,13 @@ const hexagon = (apothem: number): Point[] =>
     return { x: corner * Math.cos(a), z: corner * Math.sin(a) };
   });
 
-/** The frame of a board: as big as its cells (The Choir plays on radius 3), with a hole for each vanished cell. */
+/** The frame of a board: as big as its cells (The Choir plays on radius 3, The Ballast Mind on 5), with a hole for each
+ * vanished cell. */
 export function frameShape(board: ArrayLike<number>): FrameShape {
-  const radius = CELLS.reduce((max, c, i) => (board[i] === VANISHED ? max : Math.max(max, ring(c))), 0);
+  const cells = BOARD_CELLS.slice(0, board.length);
+  const radius = cells.reduce((max, c, i) => (board[i] === VANISHED ? max : Math.max(max, ring(c))), 0);
   const edge = radius * (Math.sqrt(3) / 2) + FRAME.margin;
-  const holes = CELLS.filter((c, i) => board[i] === VANISHED && ring(c) <= radius).map(([q, r]) => {
+  const holes = cells.filter((c, i) => board[i] === VANISHED && ring(c) <= radius).map(([q, r]) => {
     const p = axialTo3D(q, r);
     return { x: p.x, z: p.z };
   });

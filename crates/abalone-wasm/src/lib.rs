@@ -5,7 +5,8 @@
 //! - Board: 61 bytes, row by row from `r = -4` to `r = 4`, inside a row by `q` ascending.
 //!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull),
 //!   `4` to `7` a marble of battle royale seats 3 to 6.
-//!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
+//!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`. The radius 5 board of The Ballast Mind
+//!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
 //! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
 //! - Armies (The Choir): records of 3 integers `[q, r, army]`, back to back. Army `0` Alto,
@@ -40,6 +41,7 @@
 //!   - State hash: 16 lowercase hex digits, the same on every peer for the same state.
 
 use abalone_core::board::{Board, Cell, MAX_RADIUS, RADIUS};
+use abalone_core::encounter::ballast::{ballast_boss, ballast_move, ballast_start, ballast_tell};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use abalone_core::encounter::choir::{
     choir_boss, Army, Choir, ChoirError, ARMY_SIZE, CYCLE, PHASE_ARMIES,
@@ -238,9 +240,18 @@ fn cell_code(board: &Board, q: i32, r: i32) -> u8 {
     }
 }
 
-/// The 61 cells of the hexagon, vanished ones included, so the indices never shift.
+/// The cells of a board in board order, see the module docs: the 61, then the outer ring of a
+/// radius 5 board.
+fn board_cells(radius: i32) -> impl Iterator<Item = (i32, i32)> {
+    let ring = |(q, r): (i32, i32)| q.abs().max(r.abs()).max((q + r).abs());
+    cells().chain(cells_of(radius).filter(move |&c| ring(c) > RADIUS))
+}
+
+/// The cells of the board, vanished ones included, so the indices never shift.
 fn board_bytes(board: &Board) -> Vec<u8> {
-    cells().map(|(q, r)| cell_code(board, q, r)).collect()
+    board_cells(board.radius())
+        .map(|(q, r)| cell_code(board, q, r))
+        .collect()
 }
 
 /// Result code of an encounter, see the module docs.
@@ -300,6 +311,15 @@ fn choir_fight(_def: BossDef, _seed: u64) -> Fight {
     Fight::Choir(Choir::start())
 }
 
+/// The Ballast Mind sets up its own radius 5 board.
+fn ballast_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(ballast_start(seed))
+}
+
+fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
+    ballast_tell(enc).flips
+}
+
 fn echo_announce(mv: &Move) -> Option<Move> {
     Some(mirror_move(mv))
 }
@@ -317,7 +337,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 4] = [
+const BOSSES: [BossEntry; 5] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -353,6 +373,16 @@ const BOSSES: [BossEntry; 4] = [
         reply: search_reply,
         announce: no_announce,
         flips: chaplain_tell,
+    },
+    BossEntry {
+        id: "ballast",
+        goal:
+            "Void pillars; later cracks, flips and echoes. Eject 12 to win; lose 6 or draw to lose.",
+        def: ballast_boss,
+        start: ballast_fight,
+        reply: ballast_move,
+        announce: no_announce,
+        flips: ballast_flips,
     },
 ];
 

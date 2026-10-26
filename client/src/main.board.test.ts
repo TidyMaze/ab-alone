@@ -146,7 +146,7 @@ describe('main.ts board and HUD', () => {
     const ring5 = game.hook<{ cells: Axial[] }[]>('__legal').find((m) => m.cells.length === 1 && Math.abs(m.cells[0]![0]) === 5)!;
     step(game, ring5.cells[0]);
     expect(game.hook('__plies')).toBe(1);
-    byId('new-game').click();
+    startBoss(game, 'echo'); // back on 61 cells, ring 5 hides again
     expect(shown()).toBe(61);
     expect(game.hook('__frame')).toMatchObject({ radius: 4, holes: 0 });
   });
@@ -425,7 +425,7 @@ describe('main.ts board and HUD', () => {
     const vanished = Number(document.body.dataset.vanished);
     expect(vanished).toBeGreaterThan(0);
     expect(game.hook('__frame')).toMatchObject({ holes: vanished, drawn: true });
-    expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished);
+    expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished + 30); // ring 5 is off this board (#564)
     await game.settle();
   });
 

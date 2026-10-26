@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version } from 'abalone-wasm';
 import {
+  BOARD_CELLS,
   CELLS,
   RADIUS,
   VANISHED,
@@ -939,7 +940,7 @@ const armyGlyphs = [
 // Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
 const edgeGeometry = new THREE.TorusGeometry(0.44, 0.03, 8, 32).rotateX(Math.PI / 2);
 const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x25292d });
-const discs: THREE.Mesh[] = CELLS.map(([q, r], i) => {
+const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   const disc = new THREE.Mesh(discGeometry, steel);
   disc.receiveShadow = true;
   disc.rotation.y = cellTurn(i);
@@ -1594,8 +1595,8 @@ function refresh(): void {
   marbleAt.clear();
   crackDecals = [];
   discs.forEach((disc, i) => {
-    const [q, r] = CELLS[i]!;
-    const side = board[i]!;
+    const [q, r] = BOARD_CELLS[i]!;
+    const side = board[i] ?? VANISHED; // ring 5 is off a board of 61 cells (#564)
     disc.visible = side !== VANISHED; // a vanished cell is a hole: no disc, no marble
     if (side === VANISHED) return;
     const p = axialTo3D(q, r);
@@ -1683,7 +1684,7 @@ function drawHub(at: HubSpot): void {
   lightRim();
   notches.clear();
   for (const group of tallies) group.clear();
-  discs.forEach((disc, i) => (disc.visible = HUB_BOARD[i] !== VANISHED));
+  discs.forEach((disc, i) => (disc.visible = (HUB_BOARD[i] ?? VANISHED) !== VANISHED));
   marbles.clear();
   marbleAt.clear();
   ghosts.clear();
@@ -1789,8 +1790,8 @@ function aim(e: PointerEvent | MouseEvent): void {
 }
 function cellAt(e: PointerEvent | MouseEvent): Axial | null {
   aim(e);
-  const [shown, cells] = royale ? [arenaDiscs, ARENA] : [discs, CELLS];
-  const hit = raycaster.intersectObjects(shown)[0];
+  const [shown, cells] = royale ? [arenaDiscs, ARENA] : [discs, BOARD_CELLS];
+  const hit = raycaster.intersectObjects(shown.filter((disc) => disc.visible))[0]; // no cell where no disc is drawn
   return hit ? cells[shown.indexOf(hit.object as THREE.Mesh)]! : null;
 }
 function onConsole(e: PointerEvent): boolean {
@@ -1904,7 +1905,7 @@ addEventListener('resize', () => {
   marbleAt.get(cellIndex(q, r))?.[0]?.quaternion.toArray() ?? null;
 // Used by the browser checks to list the marbles that wear a boss accent (#507): their cell and the accent's name.
 (window as unknown as Record<string, unknown>).__accents = () =>
-  [...marbleAt].flatMap(([i, [marble]]) => marble!.children.filter((c) => c.name).map((c) => ({ cell: CELLS[i], accent: c.name })));
+  [...marbleAt].flatMap(([i, [marble]]) => marble!.children.filter((c) => c.name).map((c) => ({ cell: BOARD_CELLS[i], accent: c.name })));
 
 // Used by the browser checks to count the phase notches drawn on the frame and see the threshold glyph (#356).
 (window as unknown as Record<string, unknown>).__notches = () => {
