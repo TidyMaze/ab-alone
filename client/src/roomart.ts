@@ -55,6 +55,17 @@ export function drawWallPanel(g: Ctx, w: number, h: number): void {
       g.fill();
     }
   }
+
+  // Corner reinforcement gussets on bulkhead quadrants
+  g.fillStyle = '#1c2126';
+  for (const [gx, gy] of [[0, 0], [w, 0], [0, h], [w, h]] as const) {
+    g.beginPath();
+    g.moveTo(gx, gy);
+    g.lineTo(gx === 0 ? 32 : w - 32, gy);
+    g.lineTo(gx, gy === 0 ? 32 : h - 32);
+    g.closePath();
+    g.fill();
+  }
 }
 
 /**
@@ -99,7 +110,7 @@ export function drawDeckGrating(g: Ctx, w: number, h: number): void {
   g.rect(0, 0, w, h);
   g.stroke();
 
-  // Anti-slip tread grooves
+  // Anti-slip tread grooves and cross-reinforcing slots
   g.strokeStyle = '#232a30';
   g.lineWidth = 1.5;
   const step = w / 16;
@@ -107,6 +118,10 @@ export function drawDeckGrating(g: Ctx, w: number, h: number): void {
   for (let x = step; x < w; x += step) {
     g.moveTo(x, 4);
     g.lineTo(x, h - 4);
+  }
+  for (let y = h / 4; y < h; y += h / 4) {
+    g.moveTo(4, y);
+    g.lineTo(w - 4, y);
   }
   g.stroke();
 }
