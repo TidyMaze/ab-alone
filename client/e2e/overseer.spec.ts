@@ -73,3 +73,72 @@ test('The Overseer: the boss pushing the 6th core in wins the fight for the play
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('overseer-victory.png') });
 });
+
+// The Overseer speaks and its vents turn toxic (#741, docs/specs/ui.md).
+const LINES = [
+  'That core was load-bearing. Like your hopes.',
+  "Do you know what that cost? No. You can't count.",
+  'Stop touching my things.',
+  'I will remember that. I remember everything.',
+  'Congratulations. You broke something. Again.',
+  'That was mine. Everything here is mine.',
+];
+const bubbleText = (page: Page) => page.locator('#bubble-text').textContent() as Promise<string>;
+
+test('The Overseer: its taunt is typed in a bubble over its marble, with a flicker, then fades, #741', async ({ page }, testInfo) => {
+  await startOverseer(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.evaluate(() => document.getElementById('boss-retry')!.click()); // the same fight again: the taunt types in
+  const bubble = page.locator('#bubble');
+  await expect(bubble).toBeVisible();
+  const lengths: number[] = [];
+  for (let n = 0; n < 3; n++) {
+    lengths.push((await bubbleText(page)).length);
+    await page.waitForTimeout(300);
+  }
+  expect(lengths[0]).toBeLessThan(lengths[2]!);
+  expect(lengths[2]).toBeLessThan('Take your time. The neurotoxin will wait.'.length);
+  await page.mouse.move(2, 2);
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('overseer-typing.png') });
+  await expect(page.locator('#bubble-text')).toHaveText('Take your time. The neurotoxin will wait.');
+  const box = (await bubble.boundingBox())!;
+  const view = page.viewportSize()!;
+  expect(box.x).toBeGreaterThan(0);
+  expect(box.x + box.width).toBeLessThan(view.width);
+  expect(box.y).toBeGreaterThan(0);
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('overseer-taunt.png') });
+  await expect(bubble).toBeHidden({ timeout: 8000 }); // 3 s after the last character, then the fade
+});
+
+test('The Overseer: a burnt core makes the bubble angry and shaking, and the vents turn toxic in P2, #741', async ({ page }, testInfo) => {
+  await startOverseer(page);
+  await plies(page, 0, 6);
+  await expect(page.locator('body')).toHaveAttribute('data-haze', '0'); // P1: the vents burn the boss's marbles only
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.mouse.move(2, 2);
+  await plies(page, 6, 7);
+  const bubble = page.locator('#bubble');
+  await expect(bubble).toHaveClass(/angry/);
+  await expect(bubble).not.toHaveClass(/still/);
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('overseer-angry.png') });
+  await expect(page.locator('#bubble-text')).toHaveText(new RegExp(`^(${LINES.map((l) => l.replace(/[.?]/g, '\\$&')).join('|')})$`));
+  await expect(page.locator('#hud .boss .tell')).toContainText('The vents now burn your marbles too.');
+  await expect(page.locator('#hud .notch.active')).toHaveText('P2');
+  await expect(page.locator('body')).toHaveAttribute('data-haze', '18');
+  await expect(bubble).toBeHidden({ timeout: 8000 }); // 1 s after the last character, then the fade
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('overseer-haze.png') });
+});
+
+test('The Overseer: reduced motion shows the whole angry line at once and holds it still, #741', async ({ page }, testInfo) => {
+  await startOverseer(page);
+  await plies(page, 0, 7);
+  await expect(page.locator('#bubble')).toHaveClass(/still/);
+  await expect(page.locator('#bubble-text')).toHaveText(new RegExp(`^(${LINES.map((l) => l.replace(/[.?]/g, '\\$&')).join('|')})$`));
+  await page.mouse.move(2, 2);
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('overseer-angry-reduced.png') });
+});

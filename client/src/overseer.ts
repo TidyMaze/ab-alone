@@ -60,7 +60,7 @@ export const HAZE_MS = 3000;
  * widens and fades in and out in a loop; reduced motion: one faint puff held at mid-height. */
 export function hazeAt(nowMs: number, k: number, reduced: boolean): { y: number; scale: number; opacity: number } {
   const t = reduced ? 0.5 : (((nowMs / HAZE_MS + k) % 1) + 1) % 1;
-  return { y: 0.15 + 0.9 * t, scale: 0.5 + 0.5 * t, opacity: (reduced ? 0.3 : 0.4) * Math.sin(Math.PI * t) };
+  return { y: 0.15 + 0.9 * t, scale: 0.5 + 0.5 * t, opacity: (reduced ? 0.35 : 0.55) * Math.sin(Math.PI * t) };
 }
 
 /** Where the Overseer's bubble points: over its pedestal and eye, on the centre cell. */

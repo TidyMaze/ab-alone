@@ -1069,7 +1069,7 @@ function animateHaze(now: number): void {
   for (const { sprite, k } of hazes) {
     const at = hazeAt(now, k, reducedMotion());
     sprite.position.y = at.y;
-    sprite.scale.setScalar(0.9 * at.scale);
+    sprite.scale.setScalar(1.3 * at.scale);
     sprite.material.opacity = at.opacity;
   }
   if (hazes[0]) document.body.dataset.hazeY = hazes[0].sprite.position.y.toFixed(3); // read by the e2e tests

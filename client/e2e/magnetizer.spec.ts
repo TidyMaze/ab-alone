@@ -101,3 +101,26 @@ test('The Magnetizer: the phase changes after 3 ejections, #645', async ({ page 
   await expect(page.locator('#hud')).toContainText('3/6');
   await expect(page.locator('#hud .boss .tell')).toHaveText('Polarity in 2 turns');
 });
+
+test('The Magnetizer: the announced marble blinks in opacity, with reduced motion it wears a steady outline, #741', async ({ page }, testInfo) => {
+  await startMagnetizer(page);
+  await plies(page, 0, 2);
+  await page.mouse.move(2, 2);
+  await freshDraw(page);
+  await expect(page.locator('body')).toHaveAttribute('data-announce-blink', '1.00'); // steady
+  await page.screenshot({ path: testInfo.outputPath('magnetizer-outline.png') });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const seen = await page.evaluate(async () => {
+    const values: number[] = [];
+    for (let n = 0; n < 12; n++) {
+      values.push(Number(document.body.dataset.announceBlink));
+      await new Promise((done) => setTimeout(done, 100));
+    }
+    return values;
+  });
+  expect(Math.min(...seen)).toBeLessThan(0.5);
+  expect(Math.max(...seen)).toBeGreaterThan(0.9);
+  await page.waitForFunction(() => Number(document.body.dataset.announceBlink) < 0.45);
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('magnetizer-blink.png') });
+});

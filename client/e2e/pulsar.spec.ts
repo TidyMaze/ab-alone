@@ -158,3 +158,23 @@ test.describe('a phone turned upright', () => {
     expect(hidden).toEqual([]);
   });
 });
+
+test('The Pulsar: the pulsar that fires next turn loops faint small rings while the player thinks, #741', async ({ page }, testInfo) => {
+  const body = page.locator('body');
+  await startPulsar(page, false);
+  await plies(page, 0, 1);
+  await expect(body).toHaveAttribute('data-ripples', '0'); // 2 turns away: only the glow
+  await plies(page, 1, 4);
+  await expect(page.locator('#hud .boss .tell')).toHaveText('Pulse in 1 turn, force 2');
+  await expect(body).toHaveAttribute('data-ripples', '2');
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('pulsar-ripples.png') });
+});
+
+test('The Pulsar: with reduced motion the next pulsar wears one static faint ring, #741', async ({ page }, testInfo) => {
+  await startPulsar(page, true);
+  await plies(page, 0, 4);
+  await expect(page.locator('body')).toHaveAttribute('data-ripples', '1');
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('pulsar-ripple-reduced.png') });
+});

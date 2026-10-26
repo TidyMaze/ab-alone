@@ -54,8 +54,8 @@ export function pulseText(p: Pulsar | null): string {
 /** The ripples of a pulsar that fires next turn (#741): two small faint rings in a loop. */
 export const RIPPLES = 2;
 export const RIPPLE_MS = 1600;
-export const RIPPLE_RADIUS = 1.1;
-export const RIPPLE_OPACITY = 0.25;
+export const RIPPLE_RADIUS = 1.4;
+export const RIPPLE_OPACITY = 0.4;
 
 /** Whether the pulsar fires on the player's next move: it ripples while they think. */
 export const rippling = (p: Pulsar): boolean => p.left === 1;

@@ -491,7 +491,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   3:1 on both glass skins). A marble whose polarity the last assignment set or changed wears a
   pale ring until the next ply. The announced marble wears an indicator floating above it: the
   coming sign on a pale-edged near-black diamond, distinct from the disc on top and from the
-  ring. Repulsions play in the engine's order: the pair slides apart and its glyphs fade out, the
+  ring, and the announced marble itself **blinks in opacity** about once a second until it gets its
+  sign (reduced motion: a steady pale outline instead, #741). Repulsions play in the engine's order: the pair slides apart and its glyphs fade out, the
   pushed lines slide, an ejected marble falls; reduced motion jumps to the end. The HUD line reads
   "Polarity in 2 turns" (P1, P2), "Polarity next turn" when the next turn assigns, and "Polarity
   every turn" in P3.
@@ -549,7 +550,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   core, its counter (2, then 1) beside it, facing the camera, and an amber chevron one cell out
   before each of its 9 lines, pointing the way it pushes (3:1 and more, the Rail Yard's chevrons).
   During a run the pulsar is always charging; the next pulsar starts charging 2 turns before its
-  first pulse, so the rest shows no charge. The HUD line reads "Pulse in 2 turns, force 2" ("force
+  first pulse, so the rest shows no charge. The pulsar that fires **next turn** (counter 1) also
+  loops two small faint shockwave rings on itself while you think (the pulse's ring, much smaller
+  and dimmer; reduced motion: one static faint ring, #741). The HUD line reads "Pulse in 2 turns, force 2" ("force
   ∞" in P3).
 - **The pulse, drawn**: a low-poly pulsar off each corner, in the Bridge's cold white: a base, a
   core that spins, and two beam cones along its push axis. On each pulse a **circular shockwave**
@@ -602,6 +605,17 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Tell**: the Overseer is a dark hexagonal pedestal with a pale eye; a core is a pale marble with
   a dark eye on top, a shape and not a colour (3:1 on both glass skins). Each incinerator wears a
   warm disc crossed by 3 dark slots on its cell. A burning marble sinks into its vent and fades (reduced motion: a fade).
+  **Vents by phase** (#741): from P2, when the vents start burning your marbles too, a toxic green
+  haze rises from them (reduced motion: a faint still haze) and the HUD adds "The vents now burn
+  your marbles too." for 2 plies.
+  **It talks** (#741): the sarcastic line of each 20 % is typed (17 characters a second, monospace,
+  a short flicker and a soft blip per character; reduced motion: all at once) in a bubble over its
+  pedestal, held 3 s after the last character, then faded. A core burnt on a vent angers it: a
+  red bubble that shakes (reduced motion: still), typed the same way, held 1 s, with one of 6
+  lines picked from the fight seed and the ply (the same on every peer): "That core was
+  load-bearing. Like your hopes.", "Do you know what that cost? No. You can't count.", "Stop
+  touching my things.", "I will remember that. I remember everything.", "Congratulations. You
+  broke something. Again.", "That was mine. Everything here is mine."
   The HUD line reads "Neurotoxin 25 % · 30 turns left", then one sarcastic line of the Overseer
   that changes with the level, every 20 %: "Take your time. The neurotoxin will wait.", "The
   neurotoxin is now at a level we call festive.", "You are doing very well. For a corpse.", "Most

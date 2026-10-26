@@ -180,7 +180,7 @@ describe('the ripples of a pulsar that fires next turn (#741)', () => {
     for (const k of [0, 1]) for (const t of [0, 400, 1100]) {
       const at = rippleAt(t, k, false);
       expect(at.radius).toBeLessThan(SHOCK_RADIUS / 3);
-      expect(at.opacity).toBeLessThan(0.3);
+      expect(at.opacity).toBeLessThan(0.5);
     }
   });
 

@@ -62,7 +62,7 @@ Die, read the tell, retry with the same seed.
 | Cargo | **The Rail Yard** | freight trains sweep a whole line, edge to edge, either side |
 | Furnace | **The Magnetizer** | charges your marbles, and opposite charges side by side throw each other apart |
 | Bridge | **The Pulsar** | six beacons pulse, pushing every line like a sumito |
-| Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn |
+| Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; it talks back in typed bubbles and its vents turn toxic |
 
 ## What it looks like
 

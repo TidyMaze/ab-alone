@@ -365,6 +365,13 @@ mode once that toggle exists (#32), and it has no motion.
   (`:root[data-motion='reduced']`), and the renderer swaps the ejection tumble for a plain fade, drops the
   spatter and the slide. Until the player presses it, it follows `prefers-reduced-motion`; the choice is saved
   locally like the volume sliders and Theme. One pure function, `motionReduced` in `client/src/settings.ts`, decides it.
+- The Overseer's speech bubble (#741) is a fixed element over its pedestal: monospace, pale text on near-black (an
+  angry one white on dark red), 3:1 and more on every skin, sized with the UI scale and at most 16 rem wide. Typing is
+  17 characters a second with a 1 px colour split of the text for 25 ms per character (not a flash) and a soft blip on
+  the effects bus; it holds 3 s (angry: 1 s) after the last character, fades over 400 ms, and the angry one shakes
+  for as long as it shows. Reduced motion shows the whole text at once, with no split and no shake. Screen readers get
+  the whole line at once. Strings: "The vents now burn your marbles too." (HUD, 2 plies) and the 6 angry lines
+  (game-design.md section 7.11).
 - No flash above 3 per second, no full-screen white, ever (photosensitivity, world.md section 8).
 
 ## 7. Contrast targets (WCAG 2.1 AA)
