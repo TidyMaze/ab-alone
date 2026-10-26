@@ -51,6 +51,23 @@ export function pulseText(p: Pulsar | null): string {
   return p ? `Pulse in ${turns(p.left)}, force ${p.force === 0 ? '∞' : p.force}` : '';
 }
 
+/** The ripples of a pulsar that fires next turn (#741): two small faint rings in a loop. */
+export const RIPPLES = 2;
+export const RIPPLE_MS = 1600;
+export const RIPPLE_RADIUS = 1.1;
+export const RIPPLE_OPACITY = 0.25;
+
+/** Whether the pulsar fires on the player's next move: it ripples while they think. */
+export const rippling = (p: Pulsar): boolean => p.left === 1;
+
+/** Ring `k` of a rippling pulsar `nowMs` into the page: its radius and opacity. The rings are half a cycle apart;
+ * reduced motion: the first is one static faint ring, the others are not drawn. */
+export function rippleAt(nowMs: number, k: number, reduced: boolean): { radius: number; opacity: number } {
+  if (reduced) return { radius: RIPPLE_RADIUS * 0.6, opacity: k === 0 ? RIPPLE_OPACITY * 0.8 : 0 };
+  const t = (nowMs / RIPPLE_MS + k / RIPPLES) % 1;
+  return { radius: RIPPLE_RADIUS * t, opacity: RIPPLE_OPACITY * (1 - t) };
+}
+
 /** Whether the pulsar shows its charge: a pulse is announced 2 turns ahead. */
 export const charging = (p: Pulsar): boolean => p.left <= CHARGE_TURNS;
 

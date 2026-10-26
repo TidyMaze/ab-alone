@@ -51,7 +51,7 @@ describe('The Overseer speech and vents (#741)', () => {
 
   it('shows the note of the vents for two plies from the change only', () => {
     expect(VENT_NOTE).toBe('The vents now burn your marbles too.');
-    expect([-1, 4, 6].map((since) => ventNote(since, 4))).toEqual(['', VENT_NOTE, '']);
+    expect([-1, 4, 2].map((since) => ventNote(since, 4))).toEqual(['', VENT_NOTE, '']);
     expect(ventNote(4, 5)).toBe(VENT_NOTE);
   });
 
