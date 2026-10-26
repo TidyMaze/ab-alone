@@ -340,8 +340,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   standard layout. The Alien starts with **8** marbles: its two back rows (11 cells), minus the 3
   outer marbles of its second row. Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
 - **Twist, the eggs**: every **2nd** boss turn (its 2nd, 4th, 6th... move), after its move, the
-  Alien lays **1 egg** on an empty cell picked at random. The pick is seeded by the fight's seed
-  and the ply, so a Retry, the daily and both co-op peers get the same eggs. At most **3** eggs
+  Alien lays **1 egg** on an empty cell picked at random. The pick is deterministic, for P2P: a
+  seeded integer PRNG of the fight's seed and the ply, in the engine, never `Math.random`, floats or
+  the clock, so a Retry, the daily, a replayed game file and every co-op peer get the same eggs. At most **3** eggs
   are on the board at once; a lay with 3 eggs out is skipped.
 - **Hatching**: an egg hatches after **4 of your turns**. The count runs down by 1 after each of
   your moves; when it reaches 0, at the start of the boss turn, a new Alien marble appears on the
