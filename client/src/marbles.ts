@@ -2,8 +2,12 @@
 // Plain transparency, no transmission pass: it stays cheap under software WebGL.
 
 /** The player's inner light: a small unlit sphere of the palette's cold cyan inside each glass marble, drawn after
- * the glass so the glass never dims it. */
-export const CORE = { color: 0x7fd6e8, radius: 0.09 };
+ * the glass so the glass never dims it. `floor`: its opacity once the game is lost, still 3:1 on the shell (#506). */
+export const CORE = { color: 0x7fd6e8, radius: 0.09, floor: 0.4 };
+
+/** The core's opacity (#506): full light, one even step down per marble lost, the floor at the losing marble. */
+export const coreLevel = (lost: number, toWin: number): number =>
+  Math.max(CORE.floor, 1 - (lost * (1 - CORE.floor)) / toWin);
 
 /** The player's smoked glass: dark, see-through, smooth, with a clear coat that catches the lamp. */
 export const GLASS = {
