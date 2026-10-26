@@ -150,6 +150,22 @@ describe('co-op: the encounter judges the room', () => {
     expect(byId('rematch').textContent).toBe('Rematch'); // and its button, Retry in co-op (#531)
   });
 
+  it('opening one boss list closes the other, so both are never open at once (bug #615)', async () => {
+    const game = await boot('?bot=off', calm);
+    game.openModes();
+    const lists = () => ({
+      boss: [byId('boss-list').hidden, byId('boss-fight').getAttribute('aria-expanded')],
+      coop: [byId('coop-list').hidden, byId('fight-together').getAttribute('aria-expanded')],
+    });
+    byId('boss-fight').click();
+    byId('fight-together').click();
+    expect(lists()).toEqual({ boss: [true, 'false'], coop: [false, 'true'] });
+    byId('boss-fight').click();
+    expect(lists()).toEqual({ boss: [false, 'true'], coop: [true, 'false'] });
+    byId('boss-fight').click(); // closing a list opens no other
+    expect(lists()).toEqual({ boss: [true, 'false'], coop: [true, 'false'] });
+  });
+
   it('disables Fight together while the browser is offline, as Play online, and enables it back online', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     await boot('?bot=off', calm);
