@@ -1,13 +1,28 @@
 name: Feature
 description: Something a player can see or do (owners create these at triage)
-title: "Feature: "
+title: "Feature: As a [role], I can [capability] because [value]"
 labels: [feature]
 body:
+  - type: input
+    id: user_story
+    attributes:
+      label: User Story
+      description: "Format: As a [role], I can [capability] because [value/reason]"
+      placeholder: "As a [role], I can [capability] because [value]"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & User Story Description
+      description: Why this capability matters, background context, and motivation.
+    validations:
+      required: true
   - type: textarea
     id: outcome
     attributes:
-      label: Player-facing outcome
-      description: What the player can see or do once this is done.
+      label: Expected Outcome
+      description: What the player or user can see or do once this is done.
     validations:
       required: true
   - type: textarea

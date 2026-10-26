@@ -20,7 +20,10 @@ The short version:
    replaying steps that other e2e tests already cover.
    Check player-facing changes in Chrome with Playwright. A PR that changes the UI MUST include a
    screenshot in its description (CONTRIBUTING 6.4).
-4. Every bug gets a `bug` issue before any fix. Bugs are picked before tasks.
+4. Every bug gets a `bug` issue before any fix (clear name, exact steps to reproduce, screenshot or
+   visual proof, and expected behaviour once fixed). Bugs are picked before tasks.
+   Every new feature or improvement must be formulated as a User Story ("As [role] I can [action] because [reason]")
+   with proper description, context, and expected outcome.
 5. This repo is public: never commit or print a secret.
 6. Talk only through issue comments and PR reviews. Sub-agents never merge, never triage, never
    close a `Decision`. The lead agent (driven by an owner) may triage when an owner delegates and
