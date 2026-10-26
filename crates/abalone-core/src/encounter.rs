@@ -3,6 +3,7 @@
 //! adds phases, a tell and a rule hook on top. Everything is a pure function of the game and the
 //! seed, so the same seed and the same player moves give the same boss moves.
 
+pub mod alien;
 pub mod ballast;
 pub mod chaplain;
 pub mod choir;

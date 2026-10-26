@@ -75,6 +75,8 @@ pub struct Board {
     cracks: Vec<((i32, i32), u8)>,
     /// Boss marbles that were player marbles, for the Chaplain: only these flip back.
     converted: Vec<(i32, i32)>,
+    /// Alien eggs on empty cells, with the player turns left before each hatches.
+    eggs: Vec<((i32, i32), u8)>,
 }
 
 impl Board {
@@ -98,6 +100,7 @@ impl Board {
             cells,
             cracks: Vec::new(),
             converted: Vec::new(),
+            eggs: Vec::new(),
         }
     }
 
@@ -141,6 +144,13 @@ impl Board {
     pub fn set_converted(&mut self, converted: Vec<(i32, i32)>) {
         self.converted = converted;
     }
+
+    /// Alien eggs and the player turns left before each hatches.
+    pub fn eggs(&self) -> &[((i32, i32), u8)] {
+        &[]
+    }
+
+    pub fn set_eggs(&mut self, _eggs: Vec<((i32, i32), u8)>) {}
 
     /// Standard start layout: 14 marbles per side.
     pub fn standard() -> Self {
@@ -417,6 +427,17 @@ mod tests {
         assert_eq!(board.converted(), &[(1, 0)]);
         assert_ne!(board, Board::empty());
         board.set_converted(vec![]);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn eggs_start_empty_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert!(board.eggs().is_empty());
+        board.set_eggs(vec![((1, 0), 4)]);
+        assert_eq!(board.eggs(), &[((1, 0), 4)]);
+        assert_ne!(board, Board::empty());
+        board.set_eggs(vec![]);
         assert_eq!(board, Board::empty());
     }
 }

@@ -618,6 +618,20 @@ mod tests {
     }
 
     #[test]
+    fn egg_marks_change_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut laid = Board::empty();
+        laid.set_eggs(vec![((1, 0), 4)]);
+        assert_ne!(position_hash(&laid, Player::Black), plain);
+        let mut older = Board::empty();
+        older.set_eggs(vec![((1, 0), 3)]);
+        assert_ne!(
+            position_hash(&older, Player::Black),
+            position_hash(&laid, Player::Black)
+        );
+    }
+
+    #[test]
     fn pass_gives_the_move_back_and_rehashes_the_last_ply() {
         let mut game = lone();
         game.play(&mv(&[(0, 0)], E)).unwrap();
