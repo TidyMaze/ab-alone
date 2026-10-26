@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inviteUrl, newRoomId, roomFromHash } from './invite';
+import { coopFromHash, inviteUrl, newRoomId, roomFromHash } from './invite';
 
 describe('invite links', () => {
   it('makes a url safe room id from random bytes', () => {
@@ -19,5 +19,28 @@ describe('invite links', () => {
     expect(roomFromHash('#other=1')).toBeNull();
     expect(roomFromHash('#room=')).toBeNull();
     expect(roomFromHash('#room=a b')).toBeNull();
+  });
+
+  it('puts the boss and the seed of a co-op fight next to the room and reads them back', () => {
+    const url = inviteUrl('https://x.github.io/ab-alone/#old', 'abc_DEF-123', { boss: 'echo', seed: 4294967295 });
+    expect(url).toBe('https://x.github.io/ab-alone/#room=abc_DEF-123&boss=echo&seed=4294967295');
+    expect(coopFromHash(new URL(url).hash)).toEqual({ room: 'abc_DEF-123', boss: 'echo', seed: 4294967295 });
+    expect(coopFromHash('#room=r&boss=hull&seed=0')).toEqual({ room: 'r', boss: 'hull', seed: 0 });
+  });
+
+  it('keeps a co-op invite apart from a versus invite', () => {
+    expect(roomFromHash('#room=r&boss=echo&seed=7')).toBeNull();
+    expect(coopFromHash('#room=r')).toBeNull();
+  });
+
+  it('finds no co-op fight in a malformed hash', () => {
+    expect(coopFromHash('')).toBeNull();
+    expect(coopFromHash('#room=r&boss=&seed=7')).toBeNull();
+    expect(coopFromHash('#room=r&seed=7&boss=echo')).toBeNull();
+    expect(coopFromHash('#room=r&boss=echo&seed=')).toBeNull();
+    expect(coopFromHash('#room=r&boss=echo&seed=-1')).toBeNull();
+    expect(coopFromHash('#room=r&boss=echo&seed=07')).toBeNull();
+    expect(coopFromHash('#room=r&boss=echo&seed=1.5')).toBeNull();
+    expect(coopFromHash('#room=r&boss=echo&seed=4294967296')).toBeNull();
   });
 });
