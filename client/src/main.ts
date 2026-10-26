@@ -661,6 +661,7 @@ addEventListener('pointerdown', (e) => {
 modeButton.disabled = false; // listener ready (#146)
 
 for (const type of ['pointerdown', 'pointerup', 'keydown']) addEventListener(type, () => sfx.unlock(), { capture: true });
+document.addEventListener('visibilitychange', () => sfx.visible(!document.hidden)); // no sound in a hidden tab (#728)
 // The deck console (#511): the console-screen prop shows its deck's first lore entry, paged for the UI scale and drawn
 // once the web fonts are in, so no fallback font shows first. Drawn again on a page turn only, never per frame.
 const consoleCanvas = Object.assign(document.createElement('canvas'), { width: TERMINAL.width, height: TERMINAL.height });

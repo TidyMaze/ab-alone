@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { logOf } from './audiologs';
 import { boot, type Game } from './test/harness';
 
@@ -106,6 +106,22 @@ describe('main.ts, the audio log player (#516)', () => {
     game.hook('__deck', 'bridge');
     play();
     expect(data().log).toBe('bridge-crew-count');
+  });
+
+  it('suspends the sound while the tab is hidden and resumes it when shown again (#728)', async () => {
+    const game = await boot('?bot=off', { audio: true });
+    await game.settle();
+    dispatchEvent(new PointerEvent('pointerdown'));
+    expect(game.hook('__audio')).toBe('running');
+    const hidden = vi.spyOn(document, 'hidden', 'get');
+    hidden.mockReturnValue(true);
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(game.hook('__audio')).toBe('suspended');
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+    expect(game.hook('__audio')).toBe('running');
+    hidden.mockRestore();
   });
 
   it('sounds on the voice bus once audio runs, the voice slider at 0 silences it', async () => {

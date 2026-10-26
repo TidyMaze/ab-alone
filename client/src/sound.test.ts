@@ -500,6 +500,34 @@ describe('Sfx.unlock, on a user gesture', () => {
     expect(sfx.state).toBe('suspended');
   });
 
+  it('suspends the context while the page is hidden and resumes it once shown again (#728)', async () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    sfx.visible(false);
+    expect(ctx.suspended).toBe(1);
+    expect(sfx.state).toBe('suspended');
+    sfx.visible(true);
+    await Promise.resolve();
+    expect(ctx.resumed).toBe(1);
+    expect(sfx.state).toBe('running');
+  });
+
+  it('swallows a failed resume when the page is shown again (#728)', async () => {
+    const { ctx, sfx } = setup(FULL, new FakeContext('running', true));
+    sfx.unlock();
+    sfx.visible(true);
+    expect(ctx.resumed).toBe(1);
+    await new Promise((done) => setTimeout(done, 0)); // no unhandled rejection
+  });
+
+  it('makes no context when the page is hidden or shown before any gesture (#728)', () => {
+    const { make, sfx } = setup();
+    sfx.visible(false);
+    sfx.visible(true);
+    expect(make).not.toHaveBeenCalled();
+    expect(sfx.state).toBe('none');
+  });
+
   it('stays silent without Web Audio', () => {
     const sfx = new Sfx(() => null, { ...FULL });
     sfx.unlock();
