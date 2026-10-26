@@ -7,6 +7,7 @@ import {
   axialTo3D,
   cellAt,
   cellIndex,
+  cellsFor,
   directionBetween,
   encodeMove,
   groupTargets,
@@ -62,6 +63,38 @@ describe('cell order of the bridge', () => {
     expect(cellIndex(-4, -1)).toBe(-1);
     expect(cellIndex(0, 5)).toBe(-1);
     expect(cellAt(61)).toBeUndefined();
+  });
+});
+
+describe('a board of any radius (#501)', () => {
+  it('radius 4 gives the 61 cells of today, in the same order', () => {
+    expect(cellsFor(4)).toEqual(CELLS);
+  });
+
+  it.each([
+    [3, 37],
+    [4, 61],
+    [8, 217],
+  ])('radius %i has %i cells, rows from r=-radius, q ascending', (radius, count) => {
+    const cells = cellsFor(radius);
+    expect(cells).toHaveLength(count);
+    expect(cells[0]).toEqual([0, -radius]);
+    expect(cells[radius]).toEqual([radius, -radius]);
+    expect(cells[radius + 1]).toEqual([-1, 1 - radius]);
+    expect(cells[(count - 1) / 2]).toEqual([0, 0]);
+    expect(cells[count - 1]).toEqual([0, radius]);
+  });
+
+  it.each([3, 4, 8])('radius %i round-trips every cell and rejects the ring outside it', (radius) => {
+    const cells = cellsFor(radius);
+    cells.forEach(([q, r], i) => {
+      expect(cellIndex(q, r, cells)).toBe(i);
+      expect(cellAt(i, cells)).toEqual([q, r]);
+    });
+    expect(cellIndex(radius + 1, 0, cells)).toBe(-1);
+    expect(cellIndex(0, -radius - 1, cells)).toBe(-1);
+    expect(cellIndex(-radius, -1, cells)).toBe(-1);
+    expect(cellAt(cells.length, cells)).toBeUndefined();
   });
 });
 

@@ -19,3 +19,7 @@ export const GLASS = {
 
 /** The enemy shell: matte black, ridged by shell-normal.png (scripts/gen-assets.mjs) at this normal scale. */
 export const SHELL = { color: 0x101214, roughness: 0.6, metalness: 0.1, ridges: 1 };
+
+/** Battle royale shell tints, one per seat (#49): the Okabe-Ito colours a colour-blind eye still tells apart, without
+ * its blue and black, too dark on the deck. An engraved glyph marks the seat as well, never the tint alone. */
+export const SEATS: readonly number[] = [0xe69f00, 0x56b4e9, 0x009e73, 0xf0e442, 0xd55e00, 0xcc79a7];

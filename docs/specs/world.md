@@ -112,7 +112,7 @@ Clear-board mode removes it.
 | Shelled (enemy) | Matte black organic shell, ridged like a scarab, faint heat pulse | Ridged, no core |
 | Boss variants | Same shell with one accent (rust crown, candle wax, wire wrap) | Added silhouette |
 | Flipped (by The Chaplain) | Player glass slowly shelling over: black ridges creep from the base up, the cyan core dims but stays visible until the flip completes | Half glass, half ridged |
-| Battle royale slots | Shell tint per player plus an engraved glyph, never color alone | Unique glyph each |
+| Battle royale slots | Shell tint per player (six Okabe-Ito tints, 3:1 on the deck in every colour vision, #501) plus an engraved glyph, never color alone | Unique glyph each |
 
 **Board look per deck.**
 

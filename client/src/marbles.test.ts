@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CORE, GLASS, SHELL } from './marbles';
+import { CORE, GLASS, SEATS, SHELL } from './marbles';
 
 // Relative luminance and contrast ratio (WCAG 2), on 0xrrggbb colours.
 const channels = (c: number): number[] => [(c >> 16) & 255, (c >> 8) & 255, c & 255].map((v) => v / 255);
@@ -47,5 +47,33 @@ describe('marble looks, world.md section 5', () => {
   it.each(Object.keys(SIMULATIONS))('the core stands out from the shell at 3:1 under %s simulation (#26)', (name) => {
     const m = SIMULATIONS[name]!;
     expect(contrast(simulate(m, channels(CORE.color)), simulate(m, channels(SHELL.color)))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// Battle royale (#49, #501): one shell tint per seat, world.md section 5. A glyph tells the seats apart too, never the
+// colour alone, but the tints stay apart and readable on the deck for every colour vision.
+describe('battle royale seat tints', () => {
+  const deck = channels(0x0b0d0f);
+  const views: Record<string, (c: number[]) => number[]> = {
+    normal: (c) => c,
+    ...Object.fromEntries(Object.entries(SIMULATIONS).map(([name, m]) => [name, (c: number[]) => simulate(m, c)])),
+  };
+
+  it('has six distinct tints', () => {
+    expect(SEATS).toHaveLength(6);
+    expect(new Set(SEATS).size).toBe(6);
+  });
+
+  it.each(Object.keys(views))('every tint stands out from the deck at 3:1 in %s vision', (name) => {
+    for (const seat of SEATS) {
+      expect(contrast(views[name]!(channels(seat)), deck), seat.toString(16)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it.each(Object.keys(views))('no two tints look alike in %s vision', (name) => {
+    const seen = SEATS.map((seat) => views[name]!(channels(seat)));
+    seen.forEach((a, i) =>
+      seen.slice(i + 1).forEach((b) => expect(Math.hypot(...a.map((v, k) => v - b[k]!))).toBeGreaterThanOrEqual(0.15)),
+    );
   });
 });
