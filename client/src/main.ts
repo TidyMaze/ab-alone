@@ -42,6 +42,7 @@ import {
   trainText,
   type Train,
 } from './railyard';
+import { drawGlyph, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
@@ -1058,6 +1059,22 @@ interface Passing {
   skipped: boolean;
 }
 const passing: Passing[] = [];
+// The Magnetizer tell (#645, game-design.md section 7.9): a pale + or − on a near-black disc over each polarized
+// marble, a sprite that faces the camera and slides with it (magnetizer.ts, 3:1 and more). A marble that just got its
+// polarity wears a pale ring until the next ply. During the repulsions of a ply the board drawn is the engine's board
+// before the one playing (`shown`), then the engine's own board.
+const glyphMaterials = new Map(
+  [1, -1].map((sign) => {
+    const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+    drawGlyph(canvas.getContext('2d')!, sign, 128);
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    return [sign, new THREE.SpriteMaterial({ map, depthTest: false })];
+  }),
+);
+let shown: { game: Engine | Encounter; board: number[]; poles: number[] } | null = null;
+const showing = (): { board: number[]; poles: number[] } | null => (shown?.game === engine ? shown : null);
+let polesDrawn: { cell: Axial; sign: number; fresh: boolean }[] = []; // read by the e2e tests
 
 // The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
 // Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
@@ -1513,26 +1530,62 @@ function afterPlay(before: number[], record: number[], live = true): void {
   history.push(record);
   const mv = parseMoves(record)[0]!;
   const reduced = reducedMotion();
-  const tracks = slideTracks(before, engine.board(), mv, reduced);
+  // The Magnetizer's repulsions (#645): the move slides to the board before the first one, then each plays in turn.
+  const repulsions = live && !reduced && engine instanceof Encounter ? parseRepulsions(engine.repulsions()) : [];
+  const after = repulsions[0]?.board ?? engine.board();
+  const tracks = slideTracks(before, after, mv, reduced);
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
   if (!live) return;
+  delete document.body.dataset.repulsions;
   if (tracks.some((t) => t.durationMs > 0)) {
     slide = { game: engine, tracks, start: performance.now() };
     document.body.dataset.sliding = '1';
   }
   document.body.dataset.knock = String(sfx.knock(mv.cells.length) ?? 'none'); // the knock's pitch in Hz, read by the e2e tests (#289)
   startPasses(before, mv, reduced);
-  const ejection = findEjection(before, engine.board(), mv);
-  if (!ejection) return;
+  if (repulsions.length > 0) {
+    const game = engine;
+    shown = { game, ...repulsions[0]! };
+    whenSettled(() => repel(game, repulsions, 0));
+  }
+  const ejection = findEjection(before, after, mv);
+  if (ejection) eject(ejection, mv.dir, held, reduced);
+}
+
+/** The effect and sound of `ejection`, pushed off in direction `dir`, the marble with its turn in `held`. */
+function eject(ejection: NonNullable<ReturnType<typeof findEjection>>, dir: number, held: Map<number, Quat>, reduced: boolean): void {
   const body = document.body;
   body.dataset.ejections = String(Number(body.dataset.ejections ?? 0) + 1);
   body.dataset.sound = sfx.ejection(ejection.side, glassOf()) ?? 'none'; // read by the e2e tests: toll, clack or none
-  const track = ejectTrack(ejection.cell, record[1]!, reduced);
+  const track = ejectTrack(ejection.cell, dir, reduced);
   const mesh = marbleMesh(ejection.side);
   turnMarble(mesh, inHolder(turnOf(held, fight?.seed ?? 0, cellIndex(...ejection.cell)), trackAt(track, 0).yaw));
   startEjection(mesh, track, scene);
   if (!reduced) startBlood(track);
+}
+
+/** Plays repulsion `k` of `game` (#645): the pair slides apart with the lines it pushes, an ejected marble falls, then
+ * the next repulsion, or the engine's board after the last. A replaced game drops what waits for its slide. */
+function repel(game: Engine | Encounter, repulsions: Repulsion[], k: number): void {
+  const rep = repulsions[k]!;
+  const next = repulsions[k + 1];
+  const after = next?.board ?? Array.from(engine.board());
+  const held = gameTurns();
+  const tracks: SlideTrack[] = [];
+  for (const half of repulsionMoves(rep.pair)) {
+    const moved = slideTracks(rep.board, after, half, false);
+    turns.map = carryTurns(turns.map, fight!.seed, moved, half.dir); // a Magnetizer fight
+    tracks.push(...moved);
+    const ejection = findEjection(rep.board, after, half);
+    if (ejection) eject(ejection, half.dir, held, false);
+  }
+  shown = next ? { game, ...next } : null;
+  refresh();
+  slide = { game: engine, tracks, start: performance.now() };
+  document.body.dataset.sliding = '1';
+  document.body.dataset.repulsions = String(k + 1); // read by the e2e tests: the repulsions played this ply
+  if (next) afterSlide.push(() => repel(game, repulsions, k + 1));
 }
 
 /** Starts the effect of the ejected marble `mesh` along `track`, in `parent`: the scene, or the battle royale arena at
@@ -1711,6 +1764,7 @@ function hud(extra = ''): void {
         crackText(parseCracks(boss.cracks())),
         eggText(parseEggs(boss.eggs())),
         trainText(parseTrains(boss.trains())),
+        fight?.id === 'magnetizer' ? polarityText(boss.phase(), history.length) : '',
         chaplainText(exposed, boss.converted().length / 2),
         choirText(boss.next_army()),
       ]
@@ -1745,7 +1799,7 @@ function hud(extra = ''): void {
 function refresh(): void {
   if (hubAt) return drawHub(hubAt);
   if (royale) return drawRoyale(royale);
-  const board = engine.board();
+  const board = showing()?.board ?? engine.board();
   drawFrame(board);
   lightRim();
   drawNotches();
@@ -1760,6 +1814,8 @@ function refresh(): void {
   const next = engine instanceof Encounter ? engine.next_army() : -1;
   const eggs = engine instanceof Encounter ? parseEggs(engine.eggs()) : [];
   trainsShown = engine instanceof Encounter ? parseTrains(engine.trains()) : [];
+  const poles = showing()?.poles ?? (engine instanceof Encounter ? Array.from(engine.polarities()) : []);
+  const fresh = showing() || !(engine instanceof Encounter) ? [] : parseCells(engine.assigned());
   marbles.clear();
   marbleAt.clear();
   crackDecals = [];
@@ -1821,6 +1877,25 @@ function refresh(): void {
     marbles.add(ring);
     onMarble(cellIndex(cell[0], cell[1]), ring);
   }
+  polesDrawn = poles.flatMap((sign, i) => {
+    if (sign === 0) return [];
+    const [q, r] = BOARD_CELLS[i]!;
+    const p = axialTo3D(q, r);
+    const glyph = Object.assign(new THREE.Sprite(glyphMaterials.get(sign)), { renderOrder: 2 });
+    glyph.position.set(p.x, 0.86, p.z);
+    glyph.scale.setScalar(0.34);
+    marbles.add(glyph);
+    onMarble(i, glyph);
+    const isFresh = fresh.some(([fq, fr]) => fq === q && fr === r);
+    if (isFresh) {
+      const ring = new THREE.Mesh(outlineGeometry, paleMaterial);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(p.x, 0.36, p.z);
+      marbles.add(ring);
+      onMarble(i, ring);
+    }
+    return [{ cell: [q, r] as Axial, sign, fresh: isFresh }];
+  });
   eggsDrawn = eggs.map(({ cell: [q, r], left }) => {
     const p = axialTo3D(q, r);
     const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg', castShadow: true });
@@ -2299,6 +2374,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__trains = () => trainsShown;
 (window as unknown as Record<string, unknown>).__passes = () =>
   passing.map((p) => ({ line: p.train.line, x: p.model.position.x, z: p.model.position.z }));
+// Used by the browser checks to find The Magnetizer's polarities as drawn: the cell, the sign and the ring of a fresh one.
+(window as unknown as Record<string, unknown>).__polarities = () => polesDrawn;
 // Used by the browser checks to read the shell's heat pulse (#509).
 (window as unknown as Record<string, unknown>).__shellPulse = () => scarab.emissiveIntensity;
 // Used by the browser checks to find The Chaplain's converted marbles (#326).

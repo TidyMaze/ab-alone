@@ -94,7 +94,8 @@ Boss structure (all five follow it):
 - **Twist**: the added rule, written as a hook (start of turn, end of turn, board mask).
 - **Tell**: shown exactly one ply before the twist fires.
 - **Counter**: a positional answer that exists on the board, not a stat check.
-- **Phases**: triggered by **boss marbles remaining** (The Alien: by your ejections, section 7.7),
+- **Phases**: triggered by **boss marbles remaining** (The Alien, The Rail Yard and The
+  Magnetizer: by your ejections, sections 7.7 to 7.9),
   always shown on the HUD as notches.
 
 ### 3.4 Battle royale (Phase 4, #49)
@@ -239,6 +240,8 @@ third player less than 1 time in 5. Compare against option A as a baseline.
 
 Five bosses, mapped to the lore slots of `world.md` (PR #51). Numbers (marble counts, timers) are **starting values** to tune in playtest.
 Player always starts with 14 marbles on the standard layout unless stated.
+Every boss mechanic can be turned against the boss (owner rule, #645): a new boss's twist must
+also give the player a way to hurt the boss with it.
 
 | Lore slot (`world.md`) | Deck | Our boss | Issue | Play order |
 |---|---|---|---|---|
@@ -249,6 +252,7 @@ Player always starts with 14 marbles on the standard layout unless stated.
 | B5 Mind | 5 Bridge | The Ballast Mind | #47 | 5th |
 | Extra | 2 Cargo | The Alien (proposed by @Varadiell, section 7.7) | #588 | any time, boss menu |
 | Extra | 2 Cargo | The Rail Yard (proposed by @Varadiell, section 7.8) | #626 | any time, boss menu |
+| Extra | 3 Furnace | The Magnetizer (proposed by @Varadiell, section 7.9) | #645 | any time, boss menu |
 
 Issue numbers keep their original order, play order is the last column. The Echo opens the
 game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
@@ -432,6 +436,53 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   ends with no boss marble ejected by a train (nobody learns the counter).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). It has no hub door: each deck keeps its one boss.
+
+### 7.9 The Magnetizer: polarities that repel
+
+- **Concept**: the smelter's lifting magnets came back on by themselves. Whatever runs the Furnace
+  now charges your marbles, and two opposite charges side by side throw each other apart.
+- **Board and sides**: standard radius 4 board, Furnace deck look (its magnet cranes). 14 marbles
+  each on the standard layout. Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
+- **Polarity**: only **your** marbles carry a polarity (+, − or none), never the boss's. A polarity
+  moves with its marble (moves, pushes, repulsions); an ejected marble loses it. The fight starts
+  with none.
+- **Assignment**: a marble picked at random among your marbles on the board, polarized or not,
+  takes the sign that fewer of your **other** marbles hold (on a tie, the PRNG picks), so the
+  signs stay balanced. Its new sign may equal its old one.
+- **Repulsion**: two of your marbles of **opposite** polarity on adjacent cells repel: each moves
+  **1 cell straight away from the other**, along the line they share. The push ignores sumito
+  (owner rule): every marble in front of it on that line, of either side and any number, moves one
+  cell too, and the last one goes off the board if the line reaches the rim (ejected). A boss
+  marble ejected this way counts for you, one of yours counts for the boss. Same polarity: nothing.
+  Your own moves and pushes stay standard Abalone (`rules.md` §10): a repulsion is a hook between plies.
+- **Settle (owner rule)**: after every ply (yours and the boss's) and after every assignment, the
+  engine lists every repelling pair (in `q` then `r` order of the pair's first cell), the PRNG
+  draws **one pair**, it repels, the list is rebuilt (chain reactions) and so on until no pair is
+  left. Safety cap: 64 repulsions per settle; the engine tests show random fights never reach it.
+- **Rhythm**, in completed player turns, after your ply settles and before the boss replies:
+  - **P1** (start): every **2nd** player turn, 1 marble gets a polarity.
+  - **P2** after your **3rd** ejection: every player turn, 1 marble gets a polarity.
+  - **P3** after your **5th** ejection: every player turn, **all** your marbles get a new polarity,
+    half + and half − (an odd count: the PRNG picks the extra sign), shuffled by the PRNG.
+  The phase of a turn is the one before your move, as the other bosses' tells.
+- **Deterministic, for P2P**: every random pick (the marble, the sign on a tie, the pair, the P3
+  shuffle) is splitmix64 of the fight seed mixed with the ply, in the engine, never
+  `Math.random`, floats or the clock.
+- **Tell**: a polarized marble wears a pale **+** or **−** glyph on top (a shape, not a colour,
+  3:1 on both glass skins). A marble whose polarity the last assignment set or changed wears a
+  pale ring until the next ply. Repulsions play in the engine's order: the pair slides apart, the pushed lines slide, an
+  ejected marble falls; reduced motion jumps to the end. The HUD line reads "Polarity in 2 turns"
+  in P1, "Polarity every turn" in P2 and "All polarities every turn" in P3.
+- **Counter, turn it against the boss**: walk a + marble next to a − marble aimed at a boss line:
+  the repulsion shoves 3 or more boss marbles with one marble and can eject the last one, breaking
+  a defence sumito never could. Keep opposite marbles apart near your own rim. The boss search sees
+  repulsions (every ply of its tree settles, with the seed 0 for the pair draws) and keeps its
+  marbles out of your repulsion lines; it cannot foresee an assignment.
+- **Calibrate**: knobs = rhythm (2, 1, all), phase ejections (3, 5), AI depth (3, the Hull's 3000
+  nodes). Fail if most fights end with no boss marble ejected by a repulsion (nobody learns the
+  counter) or most losses come from the player's own repulsions in P3.
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
+  the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
 
 ### 7.6 Daily challenge (#166)
 

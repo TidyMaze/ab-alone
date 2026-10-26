@@ -4,7 +4,7 @@ import { openModes } from './modes';
 // Reaching the end of a boss fight, for the daily result card tests (#196). With ?bot=off the test
 // plays both sides by hand: one marble each, there and back twice, brings the start position back a
 // third time at ply 8, a draw by threefold repetition, which is a loss against a boss. The daily boss
-// of 2026-10-25 is The Echo, a plain fight where this works (The Choir moves its armies in turn, so it
+// of 2026-10-28 is The Echo, a plain fight where this works (The Choir moves its armies in turn, so it
 // would refuse White's move).
 const THERE_AND_BACK: [number, number, number, number][] = [
   [0, 2, 0, 1], // Black (0,2) to (0,1)
@@ -25,15 +25,15 @@ export async function loseByRepetition(page: Page): Promise<void> {
   await expect(page.locator('#hud')).toContainText('Defeat');
 }
 
-/** Opens the daily challenge of 2026-10-25 (clock fixed), starts it and returns the boss name. */
+/** Opens the daily challenge of 2026-10-28 (clock fixed), starts it and returns the boss name. */
 export async function startDaily(page: Page): Promise<string> {
-  await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
+  await page.clock.setFixedTime(new Date('2026-10-28T08:00:00Z'));
   await page.goto('./?bot=off');
   const daily = page.locator('#daily');
   await expect(daily).toBeEnabled();
   const name = (await daily.textContent())!.split(': ')[1]!;
   await openModes(page);
   await daily.click();
-  await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 1');
+  await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-28 · attempt 1');
   return name;
 }

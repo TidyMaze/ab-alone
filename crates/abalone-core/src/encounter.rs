@@ -11,10 +11,12 @@ pub mod echo;
 pub mod fixture;
 pub mod hull;
 pub mod ladder;
+pub mod magnetizer;
 pub mod railyard;
 pub mod telemetry;
 
 use crate::board::{Board, Cell};
+use crate::encounter::magnetizer::{carried_poles, settle, Repulsion};
 use crate::game::{Game, GameError, Outcome};
 use crate::moves::{Move, Player};
 use crate::search::{search, SearchResult};
@@ -55,6 +57,10 @@ pub struct Encounter {
     game: Game,
     boss: BossDef,
     seed: u64,
+    /// The repulsions of the last ply, in order (The Magnetizer).
+    repulsions: Vec<Repulsion>,
+    /// The cells whose polarity the last ply's hook set, before the board settled again.
+    assigned: Vec<(i32, i32)>,
 }
 
 /// Marbles of `color` on `board`.
@@ -116,7 +122,23 @@ pub fn trivial_boss() -> BossDef {
 
 impl Encounter {
     pub fn new(game: Game, boss: BossDef, seed: u64) -> Self {
-        Self { game, boss, seed }
+        Self {
+            game,
+            boss,
+            seed,
+            repulsions: Vec::new(),
+            assigned: Vec::new(),
+        }
+    }
+
+    /// The repulsions of the last ply, in the order they happened (The Magnetizer).
+    pub fn repulsions(&self) -> &[Repulsion] {
+        &self.repulsions
+    }
+
+    /// The cells of the player marbles that got a polarity at the end of the last ply.
+    pub fn assigned(&self) -> &[(i32, i32)] {
+        &self.assigned
     }
 
     pub fn game(&self) -> &Game {
@@ -140,34 +162,71 @@ impl Encounter {
         (self.boss.special)(self.game.history().len() as u32 + 1, self.phase())
     }
 
-    /// Plays `mv` for the side to move, then fires the hook when the tell announced it.
+    /// Plays `mv` for the side to move, then settles the polarities, then fires the hook when the
+    /// tell announced it and settles again.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         let told = self.tell();
-        let carried = carried_marks(self.game.board(), mv, self.game.board().converted());
+        let before = self.game.board().clone();
         self.game.play(mv)?;
-        self.carry_marks(carried);
+        self.carry_marks(&before, mv);
+        self.repulsions.clear();
+        self.assigned.clear();
+        let ply = self.game.history().len() as u64;
+        let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        self.settle(seed);
         if let (Some(id), None) = (told, self.game.outcome()) {
-            let ply = self.game.history().len() as u64;
-            let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
             let board = (self.boss.hook)(self.game.board(), id, seed);
+            let poles = self.game.board().polarities();
+            self.assigned = board
+                .polarities()
+                .iter()
+                .filter(|p| !poles.contains(p))
+                .map(|&(c, _)| c)
+                .collect();
             self.credit_removals(&board);
             self.game.replace_board(board);
+            self.settle(!seed);
         }
         Ok(())
     }
 
-    /// Keeps the converted marks that still sit on a White marble after the move.
-    fn carry_marks(&mut self, carried: Vec<(i32, i32)>) {
+    /// Keeps the converted marks that still sit on a White marble after `mv`, and the polarities
+    /// on a Black one.
+    fn carry_marks(&mut self, before: &Board, mv: &Move) {
         let board = self.game.board();
-        let kept: Vec<_> = carried
+        let kept: Vec<_> = carried_marks(before, mv, before.converted())
             .into_iter()
             .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
             .collect();
-        if kept != board.converted() {
+        let poles = carried_poles(before, mv, board);
+        if kept != board.converted() || poles != board.polarities() {
             let mut next = board.clone();
             next.set_converted(kept);
+            next.set_polarities(poles);
             self.game.replace_board(next);
         }
+    }
+
+    /// Repels the pairs of opposite polarities until none is left, while the game runs, and
+    /// credits the ejections.
+    fn settle(&mut self, seed: u64) {
+        if self.game.outcome().is_some() {
+            return;
+        }
+        let mut seen = Vec::new();
+        let (board, credits) = settle(self.game.board(), seed, &mut |b, pair| {
+            seen.push(Repulsion {
+                pair,
+                before: b.clone(),
+            });
+        });
+        if seen.is_empty() {
+            return;
+        }
+        self.game.replace_board(board);
+        self.game.credit(Player::Black, credits[0]);
+        self.game.credit(Player::White, credits[1]);
+        self.repulsions.extend(seen);
     }
 
     /// A marble a hook removed (its cell is now empty or gone) counts for the opponent of its

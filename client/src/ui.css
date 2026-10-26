@@ -259,13 +259,14 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
    and the items are closer and the items narrower again, each still a 44 px touch target at least. Bug #618: the open
    settings menu is as close to the cog, so in a boss fight Sound fits on its first row and it keeps to two rows. Bug
    #619: Copy result is a 44 px touch target like Copy diagnostics beside it, so the result box above them both can be as
-   wide as the window: its first line no longer wraps and the card stays under the board. */
+   wide as the window: its first line no longer wraps and the card stays under the board. #645: with 8 bosses the items
+   of the open mode menu take a 12 px label and closer sides, so their rows still keep off the board. */
 @media (orientation: portrait) and (max-width: 600px), (orientation: portrait) and (pointer: coarse) {
   #chrome, #online, #mode-menu { gap: 0.25rem; }
   #settings-menu { left: calc(100% + 0.25rem); max-width: calc(100vw - 32px - 100% - 0.25rem); }
   #daily-copy { min-height: 2.75rem; }
   #daily-result { max-width: calc(100vw - 32px); }
-  #mode-menu button { padding-inline: 0.4rem; min-width: 2.75rem; }
+  #mode-menu button { padding-inline: 0.25rem; min-width: 2.75rem; font-size: 0.75rem; }
   #daily { padding-block: 0.25rem; }
   #daily span { display: block; }
 }
