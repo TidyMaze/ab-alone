@@ -94,6 +94,7 @@ export class FakeContext {
   gains: FakeGain[] = [];
   buffers: FakeBuffer[] = [];
   resumed = 0;
+  suspended = 0;
   rejection: Promise<void> | null = null;
   constructor(
     public state: 'suspended' | 'running' = 'running',
@@ -109,6 +110,11 @@ export class FakeContext {
       return this.rejection;
     }
     this.state = 'running';
+    return Promise.resolve();
+  }
+  suspend() {
+    this.suspended++;
+    this.state = 'suspended';
     return Promise.resolve();
   }
   createGain() {
