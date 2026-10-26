@@ -61,6 +61,10 @@
         <label id="invite-label" for="invite" hidden>Invite link: send it to your opponent</label>
         <input id="invite" type="text" readonly hidden aria-label="Invite link" />
       </div>
+      <div id="log" role="region" aria-label="Audio log">
+        <p id="transcript" aria-live="polite" hidden></p>
+        <button id="log-button" type="button" hidden>Play log</button>
+      </div>
     </div>
     <div id="support">
       <div id="eval" hidden>
@@ -73,10 +77,6 @@
       <button id="copy-diagnostics" type="button" disabled>Copy diagnostics</button>
     </div>
     <div id="reader" role="region" aria-label="Terminal" aria-live="polite" hidden></div>
-    <div id="log" role="region" aria-label="Audio log">
-      <p id="transcript" aria-live="polite" hidden></p>
-      <button id="log-button" type="button" hidden>Play log</button>
-    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

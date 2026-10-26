@@ -85,7 +85,7 @@ No cutscenes, no forced dialogue, no quest log.
   the words exist only in the transcript. The player (#516): while reading the deck console, Play log plays
   the deck's log on the voice bus, music and ambience ducked under it (section 7, Mix); Skip log stops it
   at any time, on the console or off it, and the game goes on meanwhile. The transcript shows line by line,
-  bottom left, on by default; the Transcript toggle beside Sound in the settings menu hides it, saved
+  over the button (ui.md section 4), on by default; the Transcript toggle beside Sound in the settings menu hides it, saved
   locally. The collectable recorder prop and the archive come later (#517).
 - **Tally.** One-line announcements at match start and end. Never explains itself.
 - **Boss arenas.** Each boss board carries one lore object the player can inspect before the

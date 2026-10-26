@@ -147,11 +147,13 @@ outside the menu.
   when the player leaves. The page shown is copied into `#reader` (`aria-live="polite"`, labelled
   "Terminal"): its title, its text and "Page 1 of 2", read by screen readers only, and with the Flat HUD on
   shown as a plate at the bottom of the window, in the UI face at the UI scale.
-- **Audio log player (#516, world.md section 4).** Bottom left, in `#log` (labelled "Audio log"): a Play log
-  button while the reader is open, Skip log while a log plays, and above it the transcript line shown
-  (`#transcript`, `aria-live="polite"`) unless the Transcript toggle is off. Wider than tall it keeps to the
-  band left of the board, over the evaluation plate; held upright, over the bottom-right corner's rows; with
-  the Flat HUD on in the reader, at the top. The line lets every press through to the board.
+- **Audio log player (#516, world.md section 4).** `#log` (labelled "Audio log"), the last of the page chrome
+  but shown in the reader too: a Play log button while the reader is open, Skip log while a log plays, and
+  above it the transcript line shown (`#transcript`, `aria-live="polite"`) unless the Transcript toggle is off.
+  Wider than tall it lies bottom left, in the band left of the board, over the evaluation plate (at the top
+  with the Flat HUD on in the reader); held upright it is the last row of the column, under the buttons and
+  over the board. Like the evaluation plate it covers no cell and no control, and the line lets every press
+  through to the board.
 - **Online status.** Online games add one line under the turn: the player's own color and
   whether the opponent is connected, updated live (#121). Strings, kept verbatim for the e2e
   tests: "You are Black. Waiting for an opponent..." (room creator alone), "Joining as White..."
