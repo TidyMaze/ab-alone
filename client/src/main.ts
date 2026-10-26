@@ -44,6 +44,21 @@ import {
   type Train,
 } from './railyard';
 import { drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
+import {
+  PULSAR_PARTS,
+  SHOCK_COLOR,
+  charging,
+  chevronSpots as pulseChevrons,
+  fallen,
+  parsePulse,
+  parsePulsar,
+  pulseMove,
+  pulseText,
+  pulsarSpot,
+  shockAt,
+  type Pulse,
+  type Pulsar,
+} from './pulsar';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
@@ -1012,6 +1027,28 @@ const fading: { sprite: THREE.Sprite; start: number }[] = [];
 let shown: { game: Engine | Encounter; board: number[]; poles: number[] } | null = null;
 const showing = (): { board: number[]; poles: number[] } | null => (shown?.game === engine ? shown : null);
 let polesDrawn: { cell: Axial; sign: number; fresh: boolean }[] = []; // read by the e2e tests
+// The Pulsar (#675, game-design.md section 7.10): six low-poly beacons off the corners of the board, a steel base, a
+// pale core that spins and two beam cones along the way it pushes. The one that charges glows steady, its counter (2,
+// then 1) beside it and an amber chevron before each of its 9 lines, the Rail Yard's. On a pulse a pale ring grows from
+// it across the board while the pushed marbles slide a cell and the ones past the rim fall; reduced motion: the ring
+// shows whole and fades, the marbles jump. During the move's slide the board drawn is the one before the pulse.
+const pulsarGeometries = PULSAR_PARTS.map(({ type, size, flip }) =>
+  type === 'base'
+    ? new THREE.CylinderGeometry(size[0], size[0]! * 1.2, size[1], 6)
+    : type === 'core'
+      ? new THREE.IcosahedronGeometry(size[0])
+      : new THREE.ConeGeometry(size[0], size[1], 6).rotateZ(flip ? Math.PI / 2 : -Math.PI / 2),
+);
+const pulsarMaterials = PULSAR_PARTS.map(
+  ({ type, color }) =>
+    new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: type === 'base' ? 0.6 : 0, emissive: type === 'base' ? 0 : color, emissiveIntensity: 0.15 }),
+);
+const chargeMaterial = new THREE.MeshStandardMaterial({ color: PULSAR_PARTS[1]!.color, emissive: PULSAR_PARTS[1]!.color, emissiveIntensity: 1.6 });
+const shockGeometry = new THREE.RingGeometry(0.96, 1, 96).rotateX(-Math.PI / 2);
+const shockMaterial = new THREE.MeshBasicMaterial({ color: SHOCK_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+let pulsarShown: Pulsar | null = null; // the next pulse of the last refresh
+let pulsarCores: THREE.Mesh[] = []; // spun by the animation loop
+let shock: { mesh: THREE.Mesh; id: number; start: number; reduced: boolean; skipped: boolean } | null = null;
 
 // The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
 // Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
@@ -1392,7 +1429,9 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const reduced = reducedMotion();
   // The Magnetizer's repulsions (#645): the move slides to the board before the first one, then each plays in turn.
   const repulsions = live && !reduced && engine instanceof Encounter ? parseRepulsions(engine.repulsions()) : [];
-  const after = repulsions[0]?.board ?? engine.board();
+  // The Pulsar's pulse (#675): the move slides to the board before the pulse, then the pulse plays.
+  const pulse = live && engine instanceof Encounter ? parsePulse(engine.last_pulse()) : null;
+  const after = repulsions[0]?.board ?? pulse?.board ?? engine.board();
   const tracks = slideTracks(before, after, mv, reduced);
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
@@ -1416,6 +1455,10 @@ function afterPlay(before: number[], record: number[], live = true): void {
         refresh();
       });
     });
+  }
+  if (pulse) {
+    shown = { game: engine, board: pulse.board, poles: [] };
+    whenSettled(() => firePulse(pulse, reduced));
   }
   const ejection = findEjection(before, after, mv);
   if (ejection) eject(ejection, mv.dir, held, reduced);
@@ -1479,6 +1522,40 @@ function fadeGlyphs(now: number): void {
     f.sprite.material.dispose();
     fading.splice(fading.indexOf(f), 1);
   }
+}
+
+/** Plays the pulse of the last ply (#675): the ring grows from the pulsar, the pushed marbles slide a cell and the ones
+ * past the rim fall, then the engine's board shows. It waits for the move's slide, so a replaced game drops it. */
+function firePulse(pulse: Pulse, reduced: boolean): void {
+  const after = Array.from(engine.board());
+  const held = gameTurns();
+  const tracks = slideTracks(pulse.board, after, pulseMove(pulse), reduced);
+  turns.map = carryTurns(turns.map, fight!.seed, tracks, pulse.id); // a Pulsar fight
+  for (const ejection of fallen(pulse)) eject(ejection, pulse.id, held, reduced);
+  shown = null;
+  refresh();
+  if (tracks.some((t) => t.durationMs > 0)) {
+    slide = { game: engine, tracks, start: performance.now() };
+    document.body.dataset.sliding = '1';
+  }
+  if (shock) scene.remove(shock.mesh);
+  shock = { mesh: new THREE.Mesh(shockGeometry, shockMaterial), id: pulse.id, start: performance.now(), reduced, skipped: false };
+  scene.add(shock.mesh);
+  drawShock(0);
+  document.body.dataset.pulses = String(Number(document.body.dataset.pulses ?? 0) + 1); // read by the e2e tests
+  document.body.dataset.pulsing = '1';
+}
+
+/** Draws the shockwave `elapsedMs` into the pulse, and takes it away once it is over. */
+function drawShock(elapsedMs: number): void {
+  const at = shockAt(shock!.id, shock!.skipped ? Infinity : elapsedMs, shock!.reduced);
+  shock!.mesh.position.set(at.x, 0.05, at.z);
+  shock!.mesh.scale.setScalar(Math.max(at.radius, 0.01));
+  shockMaterial.opacity = at.opacity;
+  if (!at.done) return;
+  scene.remove(shock!.mesh);
+  shock = null;
+  delete document.body.dataset.pulsing;
 }
 
 /** Starts the effect of the ejected marble `mesh` along `track`, in `parent`: the scene, or the battle royale arena at
@@ -1589,8 +1666,10 @@ function skipEjections(): void {
   for (const e of ejecting) e.skipped = true;
   for (const b of bleeding) b.skipped = true;
   for (const p of passing) p.skipped = true;
+  if (shock) shock.skipped = true;
   animateEjections(performance.now());
   animatePasses(performance.now());
+  if (shock) drawShock(0);
 }
 addEventListener('pointerdown', skipEjections, { capture: true });
 addEventListener('keydown', skipEjections, { capture: true });
@@ -1657,6 +1736,7 @@ function hud(extra = ''): void {
         crackText(parseCracks(boss.cracks())),
         eggText(parseEggs(boss.eggs())),
         trainText(parseTrains(boss.trains())),
+        pulseText(parsePulsar(boss.pulsar())),
         fight?.id === 'magnetizer' ? polarityText(boss.phase(), history.length) : '',
         chaplainText(exposed, boss.converted().length / 2),
         choirText(boss.next_army()),
@@ -1819,6 +1899,8 @@ function refresh(): void {
     return { cell: [q, r], left, glow: left === 1 };
   });
   for (const train of trainsShown) drawTrack(train);
+  pulsarShown = engine instanceof Encounter ? parsePulsar(engine.pulsar()) : null;
+  pulsarCores = pulsarShown ? drawPulsars(pulsarShown) : [];
   tellSound('crack', cracks);
   tellSound('choir', ARMY_NAMES[next] ? [next] : []);
   // The drones follow how tense the game is (#439): the player's marbles a push could eject, the boss phase.
@@ -1831,6 +1913,7 @@ function refresh(): void {
   document.body.dataset.eggCounters = eggs.map((e) => e.left).join(',');
   document.body.dataset.trains = String(trainsShown.length);
   document.body.dataset.trainCounters = trainsShown.map((t) => t.left).join(',');
+  document.body.dataset.pulseCounter = pulsarShown && charging(pulsarShown) ? String(pulsarShown.left) : '';
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
   const enemy = 3 - glassOf(); // the core dims a step per player marble the enemy ejected (#506)
   coreMaterial.opacity = coreLevel(engine.ejected(enemy), engine.win_ejections(enemy));
@@ -1874,6 +1957,39 @@ function drawTrack(train: Train): void {
   counter.position.set(entry.x, 0.75, entry.z);
   counter.scale.setScalar(0.5);
   marbles.add(counter);
+}
+
+/** The six pulsars of a Pulsar fight, and the charge of the one whose pulse is 2 turns or less away: its core glows,
+ * its counter shows beside it and a chevron lies before each of its lines. Returns the cores, which spin. */
+function drawPulsars(next: Pulsar): THREE.Mesh[] {
+  return [0, 1, 2, 3, 4, 5].map((id) => {
+    const spot = pulsarSpot(id);
+    const lit = id === next.id && charging(next);
+    const model = Object.assign(new THREE.Group(), { name: lit ? 'pulsar-charging' : 'pulsar' });
+    PULSAR_PARTS.forEach((part, i) => {
+      const material = lit && part.type === 'core' ? chargeMaterial : pulsarMaterials[i];
+      const mesh = Object.assign(new THREE.Mesh(pulsarGeometries[i], material), { name: part.id, castShadow: true });
+      mesh.position.set(...part.position);
+      model.add(mesh);
+    });
+    model.position.set(spot.x, 0, spot.z);
+    model.rotation.y = spot.yaw;
+    marbles.add(model);
+    if (lit) {
+      const counter = Object.assign(new THREE.Sprite(counterMaterials[next.left - 1]), { renderOrder: 2, name: 'pulse-counter' });
+      counter.position.set(spot.x, 1.35, spot.z);
+      counter.scale.setScalar(0.5);
+      marbles.add(counter);
+      for (const c of pulseChevrons(id)) {
+        const chevron = Object.assign(new THREE.Mesh(chevronGeometry, chevronMaterial), { name: 'pulse-chevron' });
+        chevron.rotation.y = c.yaw;
+        chevron.position.set(c.x, 0.03, c.z);
+        chevron.scale.setScalar(1.5);
+        marbles.add(chevron);
+      }
+    }
+    return model.getObjectByName('pulsar-core') as THREE.Mesh;
+  });
 }
 
 /** Starts the pass of each train the move let through: the freight train runs its line, and each marble that sat on it
@@ -2243,6 +2359,10 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__trains = () => trainsShown;
 (window as unknown as Record<string, unknown>).__passes = () =>
   passing.map((p) => ({ line: p.train.line, x: p.model.position.x, z: p.model.position.z }));
+// Used by the browser checks to find The Pulsar's next pulse as drawn (#675), and the shockwave of a pulse now.
+(window as unknown as Record<string, unknown>).__pulsar = () => pulsarShown && { ...pulsarShown, charging: charging(pulsarShown) };
+(window as unknown as Record<string, unknown>).__shock = () =>
+  shock && { radius: shock.mesh.scale.x, opacity: shockMaterial.opacity, x: shock.mesh.position.x, z: shock.mesh.position.z };
 // Used by the browser checks to find The Magnetizer's polarities as drawn: the cell, the sign and the ring of a fresh one.
 (window as unknown as Record<string, unknown>).__polarities = () => polesDrawn;
 // The announced marble and its coming sign as drawn (#671), and the opacity of the glyphs of a spent pair still fading.
@@ -3126,6 +3246,8 @@ renderer.setAnimationLoop((now) => {
   animateReveal(now);
   animateEjections(now);
   animatePasses(now);
+  if (shock) drawShock(now - shock.start);
+  if (!reducedMotion()) for (const core of pulsarCores) core.rotation.y = now / 600;
   animateParticles(now);
   eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
   scarab.emissiveIntensity = pulsing ? pulseAt(now / 1000) : 0;

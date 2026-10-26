@@ -22,7 +22,7 @@ export const SHOCK_MS = 700;
 /** Reduced motion: the ring shows at full size and fades, no growth. */
 export const FLASH_MS = 400;
 /** Cells from the board's centre to a pulsar's core, out past its corner. */
-export const PULSAR_DISTANCE = RADIUS + 1.8;
+export const PULSAR_DISTANCE = RADIUS + 1.3;
 /** The radius the shockwave reaches: past the corner across the board. */
 export const SHOCK_RADIUS = 2 * PULSAR_DISTANCE;
 /** The pale cold white of the ring, the Bridge's light. */
@@ -30,35 +30,46 @@ export const SHOCK_COLOR = 0xdff3ff;
 
 /** The next pulse of `Encounter.pulsar()`, `null` for the other bosses. */
 export function parsePulsar(flat: ArrayLike<number>): Pulsar | null {
-  return flat.length < 0 ? null : null; // stub
+  if (flat.length === 0) return null;
+  return { id: flat[0]!, left: flat[1]!, force: flat[2]! };
 }
 
 /** The pulse of the last ply from `Encounter.last_pulse()`: the pulsar, 61 board codes, then `[q, r]` pairs. `null`
  * when the last ply fired none. */
 export function parsePulse(flat: ArrayLike<number>): Pulse | null {
-  return flat.length < 0 ? null : null; // stub
+  if (flat.length === 0) return null;
+  const all = Array.from(flat);
+  const moved: Axial[] = [];
+  for (let i = 62; i < all.length; i += 2) moved.push([all[i]!, all[i + 1]!]);
+  return { id: all[0]!, board: all.slice(1, 62), moved };
 }
 
 const turns = (n: number): string => `${n} ${n === 1 ? 'turn' : 'turns'}`;
 
 /** HUD line of the tell: "Pulse in 2 turns, force 2", "force ∞" in P3. '' without a pulsar. */
 export function pulseText(p: Pulsar | null): string {
-  return p ? '' : ''; // stub
+  return p ? `Pulse in ${turns(p.left)}, force ${p.force === 0 ? '∞' : p.force}` : '';
 }
 
 /** Whether the pulsar shows its charge: a pulse is announced 2 turns ahead. */
-export const charging = (p: Pulsar): boolean => p.left < 0; // stub
+export const charging = (p: Pulsar): boolean => p.left <= CHARGE_TURNS;
 
 /** Where pulsar `id` stands on the board plane, off its corner, and its turn about +y (its model points +x the way it
  * pushes). */
 export function pulsarSpot(id: number): { x: number; z: number; yaw: number } {
-  return { x: id * 0, z: 0, yaw: 0 }; // stub
+  const [dq, dr] = DIRECTIONS[id]!;
+  const corner = axialTo3D(-dq, -dr);
+  return { x: corner.x * PULSAR_DISTANCE, z: corner.z * PULSAR_DISTANCE, yaw: arrowYaw(id) };
 }
 
 /** The chevrons of pulsar `id`: one cell out before the pulsar's end of each of its 9 lines, pointing the way it
  * pushes. */
 export function chevronSpots(id: number): { x: number; z: number; yaw: number }[] {
-  return id < 0 ? [] : []; // stub
+  const [dq, dr] = DIRECTIONS[id]!;
+  return CELLS.filter(([q, r]) => cellIndex(q - dq, r - dr, CELLS) === -1).map(([q, r]) => {
+    const { x, z } = axialTo3D(q - dq, r - dr);
+    return { x, z, yaw: arrowYaw(id) };
+  });
 }
 
 /** The pulse as one move of all the marbles it pushed, for the slide tracks: every group's head has room ahead. */
@@ -66,13 +77,18 @@ export const pulseMove = (p: Pulse): Move => ({ cells: p.moved, dir: p.id });
 
 /** The marbles the pulse threw off the board: pushed past the rim, with their side. */
 export function fallen(p: Pulse): { cell: Axial; side: number }[] {
-  return p.moved.length < 0 ? [] : []; // stub
+  const [dq, dr] = DIRECTIONS[p.id]!;
+  return p.moved
+    .filter(([q, r]) => (p.board[cellIndex(q + dq, r + dr)] ?? VANISHED) === VANISHED)
+    .map((cell) => ({ cell, side: p.board[cellIndex(...cell)]! }));
 }
 
 /** The shockwave of pulsar `id` `elapsedMs` into the pulse: its centre, radius and opacity, and whether it is over.
  * Reduced motion: the full ring from the start, fading. */
 export function shockAt(id: number, elapsedMs: number, reduced: boolean): { x: number; z: number; radius: number; opacity: number; done: boolean } {
-  return { x: id * 0, z: 0, radius: elapsedMs * 0, opacity: reduced ? 0 : 0, done: true }; // stub
+  const { x, z } = pulsarSpot(id);
+  const t = Math.min(1, Math.max(0, elapsedMs) / (reduced ? FLASH_MS : SHOCK_MS));
+  return { x, z, radius: reduced ? SHOCK_RADIUS : SHOCK_RADIUS * (1 - (1 - t) ** 2), opacity: 0.85 * (1 - t), done: t >= 1 };
 }
 
 /** One low-poly part of a pulsar, in its own frame: +x is the way it pushes, +y up. A base's size is its radius and
@@ -91,8 +107,7 @@ const WHITE = 0xe6edf2;
 const BEAM = 0xbfe6ff;
 
 /** The Bridge's navigation beacon: a steel base, a pale core that spins, and two beam cones along its push axis. */
-export const PULSAR_PARTS: readonly PulsarPart[] = []; // stub
-export const UNUSED_PARTS: readonly PulsarPart[] = [
+export const PULSAR_PARTS: readonly PulsarPart[] = [
   { id: 'pulsar-base', type: 'base', size: [0.45, 0.2], position: [0, 0.1, 0], color: STEEL },
   { id: 'pulsar-core', type: 'core', size: [0.3], position: [0, 0.65, 0], color: WHITE },
   { id: 'pulsar-beam-in', type: 'cone', size: [0.18, 0.6], position: [0.55, 0.65, 0], color: BEAM },

@@ -18,6 +18,8 @@ export interface BossLike {
   trains(): Int32Array;
   /** One polarity per cell in the board order: `0` none, `1` +, `-1` −. */
   polarities(): Int32Array;
+  /** `[pulsar, player_turns_left, force]` of The Pulsar's next pulse, force `0` for infinite; empty otherwise. */
+  pulsar(): Int32Array;
   /** `[q, r]` pairs. */
   flips(): Int32Array;
   /** `[q, r]` pairs. */
@@ -54,6 +56,8 @@ export interface BossState {
 }
 
 const RESULTS: BossResult[] = ['playing', 'won', 'lost'];
+/** Move direction codes, the way a pulsar pushes. */
+const DIRECTIONS = ['E', 'W', 'NE', 'SW', 'NW', 'SE'];
 /** Army codes of the Choir, the order of its cycle. */
 const ARMIES = ['Alto', 'Tenor', 'Bass'];
 
@@ -102,7 +106,8 @@ export function bossState(id: string, boss: BossLike): BossState {
   };
 }
 
-/** The most specific kind wins: the next army, then the marbles that flip, then the bare special id. */
+/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the bare special
+ * id. */
 function tell(boss: BossLike, armies: number[][]): Tell | null {
   const army = boss.next_army();
   if (army >= 0) {
@@ -113,6 +118,11 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   if (flips.length > 0) {
     const text = 'these marbles of yours become boss marbles after the boss turn unless they move';
     return { kind: 'flip', cells: flips.map(cell), text };
+  }
+  const [pulsar, left, force] = Array.from(boss.pulsar());
+  if (pulsar !== undefined) {
+    const text = `a pulse pushes every line ${DIRECTIONS[pulsar]} after ${left} of your turns, force ${force || 'infinite'}: groups smaller than the force move one cell, the first group as big resists and shields the rest`;
+    return { kind: 'pulse', cells: [], text };
   }
   const special = boss.tell();
   return special < 0 ? null : { kind: 'special', cells: [], text: `board special ${special} fires after the next ply` };

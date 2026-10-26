@@ -23,8 +23,9 @@ export const DECK_PARTICLES: Record<Deck, DeckParticles> = {
 
 const MODE_DECK: Record<Exclude<Mode, 'boss'>, Deck> = { local: 'mess', bot: 'mess', online: 'cargo', royale: 'furnace' };
 // One boss per deck (world.md section 3), and the extra bosses: The Alien and The Rail Yard in the Cargo hold too
-// (game-design.md sections 7.7 and 7.8), The Magnetizer in the Furnace, by its magnet cranes (section 7.9). A daily is
-// a fight against one of them, so it plays on that boss's deck.
+// (game-design.md sections 7.7 and 7.8), The Magnetizer in the Furnace, by its magnet cranes (section 7.9), The Pulsar
+// on the Bridge, by the ship mind's navigation beacons (section 7.10). A daily is a fight against one of them, so it
+// plays on that boss's deck.
 const BOSS_DECK: Record<string, Deck> = {
   echo: 'mess',
   hull: 'cargo',
@@ -34,6 +35,7 @@ const BOSS_DECK: Record<string, Deck> = {
   alien: 'cargo',
   railyard: 'cargo',
   magnetizer: 'furnace',
+  pulsar: 'bridge',
 };
 
 /** The deck of a mode, or of a boss fight: the Mess for a boss the client does not know. */
