@@ -249,10 +249,11 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 /* Bug #575: on a phone held upright the boss name of the Daily challenge label takes a second line of the 44 px tall
    button, so a long boss name makes the label no wider and pushes no item onto a row over the board. Bugs #603, #606:
    since Fight together and The Alien, the items are a little narrower and closer, so they keep to four rows with the
-   web fonts and with the fallback fonts. */
+   web fonts and with the fallback fonts. Bug #614: on a phone 360 px wide the board sits higher, so the plate, the rows
+   and the items are closer and the items narrower again, each still a 44 px touch target at least. */
 @media (orientation: portrait) and (max-width: 600px), (orientation: portrait) and (pointer: coarse) {
-  #mode-menu { gap: 0.35rem; }
-  #mode-menu button { padding-inline: 0.5rem; }
+  #chrome, #online, #mode-menu { gap: 0.25rem; }
+  #mode-menu button { padding-inline: 0.4rem; min-width: 2.75rem; }
   #daily { padding-block: 0.25rem; }
   #daily span { display: block; }
 }

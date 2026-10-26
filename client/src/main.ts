@@ -2234,6 +2234,7 @@ bossButton.addEventListener('click', () => {
   if (online) return;
   bossList.hidden = !bossList.hidden;
   bossButton.setAttribute('aria-expanded', String(!bossList.hidden));
+  if (!bossList.hidden) showCoopList(false); // one boss list open at a time (#615)
 });
 (bossButton as HTMLButtonElement).disabled = false; // engine, boss list and listener ready (#144)
 
@@ -2544,7 +2545,13 @@ for (const id of boss_ids()) {
   });
   coopList.appendChild(entry);
 }
-coopButton.addEventListener('click', () => showCoopList(!!coopList.hidden)); // hidden: open it
+coopButton.addEventListener('click', () => {
+  if (coopList.hidden) {
+    bossList.hidden = true; // one boss list open at a time (#615)
+    bossButton.setAttribute('aria-expanded', 'false');
+  }
+  showCoopList(!!coopList.hidden); // hidden: open it
+});
 // Back to the ship from an online table (#522): the room is closed and the page is a local one again.
 function leaveOnline(): void {
   if (!online) return;
