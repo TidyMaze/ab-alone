@@ -342,7 +342,11 @@ function updateParticles(): void {
   particleGeometry.setDrawRange(0, conf.count);
 }
 
+// How many times the look was rebuilt: an orbit never rebuilds it (bug #475, e2e/camera.spec.ts).
+let looks = 0;
+(window as unknown as Record<string, unknown>).__looks = () => looks;
 function applyLook(): void {
+  looks++;
   updateFog();
   renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
   const shadowConf = shadowSettings(tier, isAutomation(navigator.webdriver), forceShadows);

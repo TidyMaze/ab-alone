@@ -55,12 +55,15 @@ test('rotate and zoom, play a move at that angle, reset the view and play again'
 });
 
 // Bug #475: dragging to orbit the camera called applyLook() on every pointermove, which recreated
-// all props geometries/materials and rebuilt THREE.Fog, causing severe stutter.
-test('dragging to orbit camera stays smooth and completes without stalling, bug #475', async ({ page }) => {
+// all props geometries/materials and rebuilt THREE.Fog, causing severe stutter. The page counts its look
+// rebuilds (__looks), so the check holds on a loaded machine, unlike a wall-clock budget (#545).
+test('dragging to orbit the camera rebuilds no props nor fog per move, bug #475', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
+  const looks = () => page.evaluate(() => (window as any).__looks() as number);
+  const start = await cellToScreen(page, 4, 0);
+  const before = await looks();
 
-  const t0 = Date.now();
   await page.mouse.move(400, 300);
   await page.mouse.down();
   for (let i = 0; i < 20; i++) {
@@ -68,8 +71,10 @@ test('dragging to orbit camera stays smooth and completes without stalling, bug 
     await page.mouse.move(400 + Math.cos(angle) * 100, 300 + Math.sin(angle) * 100);
   }
   await page.mouse.up();
-  const elapsed = Date.now() - t0;
-  expect(elapsed).toBeLessThan(3000);
+
+  const moved = await cellToScreen(page, 4, 0);
+  expect(Math.hypot(moved.x - start.x, moved.y - start.y)).toBeGreaterThan(0); // the drag orbited
+  expect(await looks()).toBe(before);
 });
 
 // Bug #146: the Reset view listener comes after the top-level awaits of main.ts. Before refresh() fills
