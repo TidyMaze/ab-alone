@@ -4,6 +4,7 @@ import { loseByRepetition, startDaily } from './fight-end';
 import { maxUiScale } from '../src/uiscale';
 import { openModes } from './modes';
 import { logOf } from '../src/audiologs';
+import { dailyFor, dailyTitle, utcDay } from '../src/daily';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -190,13 +191,27 @@ for (const { name, viewport, mobile } of sizes) {
       expect(scale).toBe(String(maxUiScale(viewport.width, viewport.height) / 100));
     });
 
-    // The open mode menu (#357) with its boss list, its tallest state, covers no cell either.
-    test('nothing covers the board or the HUD with the mode menu and the boss list open, bugs #227 #234 #357', async ({ page }, testInfo) => {
-      await page.goto('./?bot=off&net=hook');
-      await page.locator('canvas').waitFor();
-      await openModes(page);
-      await page.getByRole('button', { name: 'Boss fight' }).click();
-      await check(page, testInfo, 'with the mode menu and the boss list open');
+    // The open mode menu (#357) with its boss list, its tallest state, covers no cell either. Bug #575: the Daily
+    // challenge button names the boss of the day, so the menu's rows change with the date: each boss of the list is
+    // checked on a day it is the daily boss, the longest name included.
+    test('nothing covers the board or the HUD with the mode menu and the boss list open, every daily boss, bugs #227 #234 #357 #575', async ({ page }, testInfo) => {
+      const open = async (day: string) => {
+        await page.clock.setFixedTime(new Date(`${day}T08:00:00Z`));
+        await page.goto('./?bot=off&net=hook');
+        await page.locator('canvas').waitFor();
+        await openModes(page);
+        await page.getByRole('button', { name: 'Boss fight' }).click();
+      };
+      await open('2026-10-23');
+      const names = await page.locator('#boss-list button').allTextContents(); // in the order of boss_ids()
+      for (const name of names) {
+        let ms = Date.UTC(2026, 9, 23);
+        while (dailyFor(utcDay(ms), names).id !== name) ms += 86_400_000;
+        const day = utcDay(ms);
+        await open(day);
+        await expect(page.locator('#daily')).toHaveText(dailyTitle(day, name));
+        await check(page, testInfo, `with the mode menu and the boss list open, daily ${name}`);
+      }
     });
 
     // The audio log player (#516): its transcript line and Skip log cover no cell, no control and not the HUD.
