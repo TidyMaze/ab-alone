@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COOP_SIDE, coopTurn, seatAfter, seatOfPly } from './coop';
+import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter, seatOfPly } from './coop';
 
 describe('co-op turns, docs/specs/coop-boss.md section 2', () => {
   it('gives human ply k to seat (k % seats) + 1: the creator first, then the partner, in turn', () => {
@@ -18,5 +18,16 @@ describe('co-op turns, docs/specs/coop-boss.md section 2', () => {
   it("names the human ply on the HUD from the seat's own side: Your turn or Partner's turn (#530)", () => {
     expect(coopTurn(true)).toBe('Your turn');
     expect(coopTurn(false)).toBe("Partner's turn");
+  });
+
+  it('says who asked for a Retry of the finished fight, naming the partner, never a colour (#531)', () => {
+    expect(retryText(true, false)).toBe('You asked for a retry. Waiting for your partner...');
+    expect(retryText(false, true)).toBe('Your partner asks for a retry.');
+    expect(retryText(false, false)).toBe('');
+  });
+
+  it("counts the room's attempts in the boss plate: one counter for both players (#531)", () => {
+    expect(attemptLine(1)).toBe('Fight together · attempt 1');
+    expect(attemptLine(2)).toBe('Fight together · attempt 2');
   });
 });

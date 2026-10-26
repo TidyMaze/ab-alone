@@ -749,6 +749,36 @@ describe('OnlineSession rematch, #186', { timeout: 30_000 }, () => {
     expect(white.refused).toEqual([]);
   });
 
+  it('co-op: a Retry once both seats asked keeps both seats on Black, seat 1 first, and counts one attempt for the room (#531)', async () => {
+    const [ta, tb] = localPair();
+    const one = await player(ta, 1, 2, ENGINE, new CoopJudge());
+    const two = await player(tb, 2, 2, ENGINE, new CoopJudge());
+    await until(() => expect([one.session.presenceOf(2), two.session.presenceOf(1)]).toEqual(['here', 'here']));
+    expect([one.session.ourSeat, two.session.ourSeat]).toEqual([1, 2]);
+    expect([one.session.attempt, two.session.attempt]).toEqual([1, 1]);
+    for (const attempt of [2, 3]) {
+      one.judge.play(Int32Array.from(WIN)); // the fight is over
+      await one.session.send(WIN);
+      await until(() => expect(two.judge.status()).toBe(1));
+      await one.session.rematch();
+      // Asks and presence go by seat in co-op: both seats play Black in every attempt, nothing rotates.
+      await until(() => expect(two.session.askedRematch(1)).toBe(true));
+      expect([one.session.askedRematch(1), one.session.askedRematch(2), two.session.askedRematch(2)]).toEqual([true, false, false]);
+      await two.session.rematch();
+      await until(() => expect(one.session.attempt).toBe(attempt));
+      for (const p of [one, two]) {
+        expect(p.session.attempt).toBe(attempt);
+        expect(p.session.side).toBe(1);
+        expect(p.judge.played).toEqual([]);
+      }
+      expect([one.session.presenceOf(2), two.session.presenceOf(1)]).toEqual(['here', 'here']);
+      expect([one.session.canPlay(), two.session.canPlay()]).toEqual([true, false]); // seat 1 opens every attempt
+    }
+    expect(one.rematches).toEqual([1, 1]);
+    expect(two.rematches).toEqual([1, 1]);
+    expect([...one.refused, ...two.refused]).toEqual([]);
+  });
+
   it('refuses a move signed for the old game id and an ask replayed from the old game, and takes the new game moves', async () => {
     const { r, black, white } = await hostWithWhite();
     await blackWins(black);

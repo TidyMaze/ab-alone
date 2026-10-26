@@ -37,10 +37,10 @@ function play(game: Game, mv: Move): void {
 }
 
 /** The partner: a session on `transport` with its own encounter, which plays the boss reply to every human move at
- * once, as every peer does. `fight` is the boss and seed it believes the room has. */
+ * once, as every peer does. `fight` is the boss and seed it believes the room has, and a Retry restarts it. */
 async function partner(transport: Transport, room: string, side: number, fight = ECHO) {
   const { Encounter, engine_version } = await import('abalone-wasm');
-  const encounter = new Encounter(fight.boss, fight.seed);
+  let encounter = new Encounter(fight.boss, fight.seed);
   const history: number[][] = [];
   const apply = (mv: ArrayLike<number>): void => {
     encounter.play(Int32Array.from(mv));
@@ -60,7 +60,10 @@ async function partner(transport: Transport, room: string, side: number, fight =
       to_move: () => encounter.to_move(),
       play: human,
       status: () => encounter.status(),
-      restart: () => {},
+      restart: () => {
+        encounter = new Encounter(fight.boss, fight.seed);
+        history.length = 0;
+      },
       mover: () => seatAfter(history.length, 2),
     },
     onMove: () => {},
@@ -144,6 +147,7 @@ describe('co-op: the encounter judges the room', () => {
     expect(game.hud()).toContain('Echo: mirror logged.'); // Tally's line of the boss, as in solo
     byId('play-online').click(); // a versus room after it: the label is the versus one again
     expect(byId('invite-label').textContent).toBe('Invite link: send it to your opponent');
+    expect(byId('rematch').textContent).toBe('Rematch'); // and its button, Retry in co-op (#531)
   });
 
   it('disables Fight together while the browser is offline, as Play online, and enables it back online', async () => {
@@ -280,19 +284,50 @@ describe('co-op: the invite link', () => {
 });
 
 describe('co-op: the end of the fight', () => {
-  it('ends on both engines at once: there and back twice is a draw by repetition, a Defeat against the boss', async () => {
-    const { game, two } = await hosted();
-    // The Echo mirrors each move in its first phase: Black (0,2) up and back, the boss (0,-2) down and back (e2e/fight-end.ts).
-    const up = { cells: [[0, 2]] as Axial[], dir: 4 };
-    const down = { cells: [[0, 1]] as Axial[], dir: 5 };
+  // The Echo mirrors each move in its first phase: Black (0,2) up and back, the boss (0,-2) down and back (e2e/fight-end.ts).
+  const up = { cells: [[0, 2]] as Axial[], dir: 4 };
+  const down = { cells: [[0, 1]] as Axial[], dir: 5 };
+  /** Our seat plays up, the partner's down, twice: a draw by repetition at ply 8, a Defeat against the boss. */
+  async function defeat(game: Game, two: Awaited<ReturnType<typeof partner>>): Promise<void> {
     for (let i = 0; i < 2; i++) {
       play(game, up);
       await until(game, () => game.hook('__plies') === 4 * i + 2);
       await two.send(encodeMove(down));
       await until(game, () => game.hook('__plies') === 4 * i + 4);
     }
+  }
+
+  it('ends on both engines at once: there and back twice is a draw by repetition, a Defeat against the boss', async () => {
+    const { game, two } = await hosted();
+    await defeat(game, two);
     expect(game.hook('__history')).toEqual(two.history);
     expect(game.turn()).toBe('Defeat');
     expect(data().over).toBe('loss');
+  });
+
+  it('ends in a shared Retry: once both seats asked, the same fight restarts with seat 1 first, attempt 2 (#531)', async () => {
+    const { game, two } = await hosted();
+    const fight = game.hook('__fight');
+    const retry = byId<HTMLButtonElement>('rematch');
+    expect(game.hud()).toContain('Fight together · attempt 1');
+    await defeat(game, two);
+    expect(retry.hidden).toBe(false);
+    expect(retry.textContent).toBe('Retry');
+    await two.session.rematch();
+    await until(game, () => game.hud().includes('Your partner asks for a retry.'));
+    expect(game.hook('__plies')).toBe(8); // nothing starts on one ask
+
+    retry.click();
+    await until(game, () => game.hook('__plies') === 0);
+    expect(game.turn()).toBe('Your turn');
+    expect(game.hud()).toContain('Fight together · attempt 2');
+    expect(game.hook('__fight')).toEqual(fight); // the same boss and seed
+    expect(data().online).toBe('Black'); // no colour swap
+    expect(retry.hidden).toBe(true);
+    expect(document.querySelector('#hud .rematch')).toBeNull();
+    play(game, up);
+    await until(game, () => game.hook('__plies') === 2 && two.history.length === 2);
+    expect(game.hook('__history')).toEqual(two.history); // both engines restarted the same encounter
+    expect(game.hud()).not.toContain('refused');
   });
 });
