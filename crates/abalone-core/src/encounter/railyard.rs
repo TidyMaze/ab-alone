@@ -315,14 +315,11 @@ mod tests {
     }
 
     #[test]
-    fn the_fight_starts_on_the_standard_layout_with_one_train_announced() {
+    fn the_fight_starts_on_the_standard_layout_with_no_train() {
         let enc = railyard_start(0);
         let b = enc.game().board();
-        let mut plain = b.clone();
-        plain.set_trains(vec![]);
-        assert_eq!(plain, Board::standard());
-        assert_eq!(b.trains().len(), 1);
-        assert_eq!(b.trains()[0].1, RAILYARD_LEAD, "5 player turns ahead");
+        assert_eq!(*b, Board::standard());
+        assert!(b.trains().is_empty(), "the first train comes on turn 2");
         assert_eq!(enc.game().to_move(), Player::Black);
         assert_eq!(enc.phase(), 0);
         assert_eq!(enc.game().win_ejections(Player::Black), 6);
@@ -333,6 +330,9 @@ mod tests {
     fn special_schedule_follows_the_player_turn_and_the_phase() {
         let table = [
             ((1, 0), Some(RAILYARD_COUNT)),
+            ((3, 0), Some(RAILYARD_ANNOUNCE)),
+            ((3, 1), Some(RAILYARD_ANNOUNCE)),
+            ((3, 2), Some(RAILYARD_ANNOUNCE)),
             ((2, 0), None),
             ((9, 0), Some(RAILYARD_COUNT)),
             ((19, 0), Some(RAILYARD_ANNOUNCE)),
@@ -355,7 +355,7 @@ mod tests {
     /// passes, and the most trains announced at once, for a fight held in `phase`.
     fn schedule(phase: usize) -> (Vec<u32>, Vec<u32>, usize) {
         let mut b = railyard_start(5).game().board().clone();
-        let (mut announced, mut passed, mut most) = (Vec::new(), Vec::new(), 1);
+        let (mut announced, mut passed, mut most) = (Vec::new(), Vec::new(), 0);
         for n in 1..=30u32 {
             let before = b.trains().to_vec();
             b = hook(&b, special(2 * n - 1, phase).unwrap(), u64::from(n));
@@ -371,22 +371,22 @@ mod tests {
     }
 
     #[test]
-    fn a_train_is_announced_every_10_5_or_3_player_turns_and_passes_5_turns_later() {
+    fn the_first_train_is_announced_on_turn_2_then_every_10_5_or_3_turns() {
         let (announced, passed, most) = schedule(0);
-        assert_eq!(announced, vec![10, 20, 30]);
-        assert_eq!(passed, vec![5, 15, 25]);
+        assert_eq!(announced, vec![2, 10, 20, 30]);
+        assert_eq!(passed, vec![7, 15, 25]);
         assert_eq!(most, 1);
         let (announced, passed, most) = schedule(1);
-        assert_eq!(announced, vec![5, 10, 15, 20, 25, 30]);
-        assert_eq!(
-            passed, announced,
-            "the start train at 5, then each 5 turns on"
-        );
-        assert_eq!(most, 1, "a train passes before the next is announced");
+        assert_eq!(announced, vec![2, 5, 10, 15, 20, 25, 30]);
+        assert_eq!(passed, vec![7, 10, 15, 20, 25, 30]);
+        assert_eq!(most, 2, "the turn 2 train and the turn 5 one");
         let (announced, passed, most) = schedule(2);
-        assert_eq!(announced, (1..=10).map(|k| 3 * k).collect::<Vec<_>>());
-        assert_eq!(passed, vec![5, 8, 11, 14, 17, 20, 23, 26, 29]);
-        assert_eq!(most, 2, "two trains, never passing on the same turn");
+        assert_eq!(
+            announced,
+            [vec![2], (1..=10).map(|k| 3 * k).collect()].concat()
+        );
+        assert_eq!(passed, vec![7, 8, 11, 14, 17, 20, 23, 26, 29]);
+        assert_eq!(most, 3, "a fight cannot be in P3 by turn 2: only a test gets 3");
     }
 
     #[test]
