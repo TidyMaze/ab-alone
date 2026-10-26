@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { encodeMove, parseMoves, type Axial, type Move } from './board';
 import { seatAfter } from './coop';
+import { coopFromHash } from './invite';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
@@ -10,8 +11,8 @@ import type { Transport } from './transport';
 
 // Co-op boss fights online on the harness (docs/specs/coop-boss.md, #529): the encounter is the judge of the room.
 // Every page plays the boss reply to each human move itself, before it handles the next message. The partner is a
-// real OnlineSession on the other end of the room, with its own encounter. No menu entry yet (#530): the creator opens
-// the room with the __coop hook, the partner joins with the co-op invite link.
+// real OnlineSession on the other end of the room, with its own encounter. The creator opens the room with Fight
+// together in the mode menu (#530), the partner joins with the co-op invite link.
 
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const data = (): DOMStringMap => document.body.dataset;
@@ -89,28 +90,91 @@ async function invited(hash: string) {
   return { game, end, open: () => w.__netOpen!() };
 }
 
-/** Opens a co-op room against The Echo with the __coop hook and seats the partner once the page's session exists. */
+/** Presses Fight together in the mode menu, then the boss called `name` in the list it opens. */
+function fightTogether(game: Game, name: string): void {
+  game.openModes();
+  byId('fight-together').click();
+  [...byId('coop-list').querySelectorAll('button')].find((b) => b.textContent === name)!.click();
+}
+
+/** The status line of the online room under the turn line. */
+const presence = (): string => document.querySelector('#hud .presence')?.textContent ?? '';
+
+/** Opens a co-op room against The Echo with Fight together and seats the partner once the page's session exists. The
+ * partner reads the boss and the seed from the invite link, as a joiner does. */
 async function hosted() {
   const game = await boot('?bot=off', calm);
-  game.hook('__coop', ECHO.boss, ECHO.seed);
+  fightTogether(game, 'The Echo');
   await until(game, () => data().seat === 'player');
-  const two = await partner(game.peer()!, game.room()!, 2);
+  const two = await partner(game.peer()!, game.room()!, 2, coopFromHash(location.hash)!);
   await until(game, () => data().opponent === 'here');
   return { game, two };
 }
 
 describe('co-op: the encounter judges the room', () => {
-  it('__coop opens a co-op room: the invite and the address carry the boss and the seed, the fight is the boss', async () => {
+  it('Fight together lists the bosses, and picking one opens a co-op room: the invite carries the boss and a random seed', async () => {
     const game = await boot('?bot=off', calm);
-    game.hook('__coop', 'echo', 7);
+    game.openModes();
+    const button = byId('fight-together');
+    const list = byId('coop-list');
+    expect(list.hidden).toBe(true);
+    button.click();
+    expect(list.hidden).toBe(false);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    const names = (id: string) => [...byId(id).querySelectorAll('button')].map((b) => b.textContent);
+    expect(names('coop-list')).toEqual(names('boss-list')); // the bosses of solo boss mode
+    button.click();
+    expect(list.hidden).toBe(true);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    button.click();
+    [...list.querySelectorAll('button')].find((b) => b.textContent === 'The Echo')!.click();
+    expect(byId('mode-menu').hidden).toBe(true); // picking a boss closes the menu, and the list for next time
+    expect(list.hidden).toBe(true);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
     const room = game.room()!;
-    expect(location.hash).toBe(`#room=${room}&boss=echo&seed=7`);
+    expect(location.hash).toMatch(new RegExp(`^#room=${room}&boss=echo&seed=(0|[1-9]\\d*)$`));
     expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(location.hash);
     expect(byId('invite').hidden).toBe(false);
-    expect(game.hook('__fight')).toEqual({ id: 'echo', seed: 7 });
+    expect(byId('invite-label').textContent).toBe('Invite link: send it to your partner');
+    expect(game.hook('__fight')).toEqual({ id: 'echo', seed: coopFromHash(location.hash)!.seed });
     await until(game, () => data().seat === 'player');
     expect(data().online).toBe('Black');
     expect(game.hud()).toContain('The Echo');
+    expect(presence()).toBe('Waiting for a partner...');
+    expect(game.hud()).toContain('Echo: mirror logged.'); // Tally's line of the boss, as in solo
+    byId('play-online').click(); // a versus room after it: the label is the versus one again
+    expect(byId('invite-label').textContent).toBe('Invite link: send it to your opponent');
+  });
+
+  it('disables Fight together while the browser is offline, as Play online, and enables it back online', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    await boot('?bot=off', calm);
+    expect(byId<HTMLButtonElement>('fight-together').disabled).toBe(true);
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    window.dispatchEvent(new Event('online'));
+    expect(byId<HTMLButtonElement>('fight-together').disabled).toBe(false);
+    Reflect.deleteProperty(navigator, 'onLine');
+  });
+
+  it("says Your turn or Partner's turn on the human plies, the boss turn as in solo, and names the partner", async () => {
+    const { game, two } = await hosted();
+    expect(game.turn()).toBe('Your turn');
+    expect(presence()).toBe('Your partner is here.');
+    const held: (() => void)[] = [];
+    const post = Worker.prototype.postMessage;
+    const spy = vi.spyOn(Worker.prototype, 'postMessage').mockImplementation(function (this: Worker, req) {
+      held.push(() => post.call(this, req));
+    });
+    play(game, forward(game.hook('__legal')));
+    await until(game, () => held.length === 1);
+    expect(game.turn()).toBe('White to move'); // the boss reply is being computed
+    spy.mockRestore();
+    held.pop()!();
+    await until(game, () => game.hook('__plies') === 2);
+    expect(game.turn()).toBe("Partner's turn");
+    await two.send(encodeMove(forward(two.legal())));
+    await until(game, () => game.hook('__plies') === 4);
+    expect(game.turn()).toBe('Your turn');
   });
 
   it('plays the boss reply to our move at once, then the partner plays its ply and gets its own reply', async () => {
@@ -195,13 +259,16 @@ describe('co-op: the invite link', () => {
     const one = await partner(end, 'R0', 1);
     open();
     await until(game, () => data().seat === 'player' && data().opponent === 'here');
+    expect(game.turn()).toBe("Partner's turn");
     await one.send(encodeMove(forward(one.legal())));
     await until(game, () => game.hook('__plies') === 2);
+    expect(game.turn()).toBe('Your turn');
     play(game, forward(game.hook('__legal')));
     await until(game, () => game.hook('__plies') === 4 && one.history.length === 4);
     expect(game.hook('__history')).toEqual(one.history);
     end.leave();
     await until(game, () => data().opponent === 'gone'); // the partner's presence, not our own seat's
+    expect(presence()).toBe('Your partner is disconnected.');
   });
 
   it('starts nothing for an unknown boss', async () => {
@@ -209,5 +276,23 @@ describe('co-op: the invite link', () => {
     expect(game.room()).toBeNull();
     expect(data().seat).toBeUndefined();
     expect(game.hook('__fight')).toBeNull();
+  });
+});
+
+describe('co-op: the end of the fight', () => {
+  it('ends on both engines at once: there and back twice is a draw by repetition, a Defeat against the boss', async () => {
+    const { game, two } = await hosted();
+    // The Echo mirrors each move in its first phase: Black (0,2) up and back, the boss (0,-2) down and back (e2e/fight-end.ts).
+    const up = { cells: [[0, 2]] as Axial[], dir: 4 };
+    const down = { cells: [[0, 1]] as Axial[], dir: 5 };
+    for (let i = 0; i < 2; i++) {
+      play(game, up);
+      await until(game, () => game.hook('__plies') === 4 * i + 2);
+      await two.send(encodeMove(down));
+      await until(game, () => game.hook('__plies') === 4 * i + 4);
+    }
+    expect(game.hook('__history')).toEqual(two.history);
+    expect(game.turn()).toBe('Defeat');
+    expect(data().over).toBe('loss');
   });
 });

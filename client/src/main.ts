@@ -30,7 +30,7 @@ import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { coopFromHash, inviteUrl, newRoomId, roomFromHash, type CoopFight } from './invite';
-import { seatAfter } from './coop';
+import { COOP_SIDE, coopTurn, seatAfter } from './coop';
 import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
@@ -39,7 +39,7 @@ import { generateKeys } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { beatPeriod } from './coordinator';
 import { OnlineSession } from './session';
-import { onlineStatus, type OnlineStatus } from './presence';
+import { coopStatus, onlineStatus, type OnlineStatus } from './presence';
 import { playOnlineState } from './connectivity';
 import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
@@ -1564,7 +1564,7 @@ function hud(extra = ''): void {
     status,
     reason: engine.draw_reason(),
     win: status === 1 || status === 2 ? win[status - 1]! : 0,
-    mode: online ? 'online' : fight ? 'boss' : worker ? 'bot' : 'local',
+    mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', // a co-op fight is a boss fight on the HUD (#530)
     side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
     glass: glassOf(),
   });
@@ -1580,8 +1580,10 @@ function hud(extra = ''): void {
     win,
     note: `${onlineNote}${online ? '' : offlineNotice}${extra}`,
     online: onlineLine,
+    // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
+    turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
-    tally: history.length === 0 && status === 0 ? tallyLine({ mode: online ? 'online' : fight ? 'boss' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
+    tally: history.length === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
     // Who asked for a rematch, for the seated players of a finished online game (#186).
     rematch:
       online?.role === 'player' && status !== 0
@@ -2451,7 +2453,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
     document.body.dataset.opponent = opponent;
     document.body.dataset.coordinator = String(session.coordinatorSeq); // join_seq of the coordinator, read by the e2e tests (#359)
     document.body.dataset.handover = session.handover;
-    onlineLine = onlineStatus(mine, role, opponent, session.isAgent(other), glassOf());
+    onlineLine = coop ? coopStatus(role, opponent, session.isAgent(other)) : onlineStatus(mine, role, opponent, session.isAgent(other), glassOf());
     onlineNote = netState;
     hud();
   };
@@ -2509,11 +2511,29 @@ function playOnline(coop?: CoopFight): void {
   location.hash = new URL(inviteBox.value).hash;
   inviteBox.hidden = false;
   inviteLabel.hidden = false;
+  inviteLabel.textContent = `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`;
   void goOnline(room, 1, coop);
 }
 document.getElementById('play-online')!.addEventListener('click', () => playOnline());
-// Used by the browser checks to open a co-op room against `boss` with `seed` until the mode menu has an entry (#530).
-(window as unknown as Record<string, unknown>).__coop = (boss: string, seed: number) => playOnline({ boss, seed });
+// Fight together (#530): the mode menu lists the bosses again, under it; picking one opens a co-op room against that
+// boss with a random seed, the creator in seat 1.
+const coopButton = document.getElementById('fight-together') as HTMLButtonElement;
+const coopList = document.getElementById('coop-list')!;
+function showCoopList(shown: boolean): void {
+  coopList.hidden = !shown;
+  coopButton.setAttribute('aria-expanded', String(shown));
+}
+for (const id of boss_ids()) {
+  const entry = document.createElement('button');
+  entry.type = 'button';
+  entry.textContent = boss_name(id)!;
+  entry.addEventListener('click', () => {
+    showCoopList(false);
+    playOnline({ boss: id, seed: crypto.getRandomValues(new Uint32Array(1))[0]! });
+  });
+  coopList.appendChild(entry);
+}
+coopButton.addEventListener('click', () => showCoopList(!!coopList.hidden)); // hidden: open it
 // Back to the ship from an online table (#522): the room is closed and the page is a local one again.
 function leaveOnline(): void {
   if (!online) return;
@@ -2671,7 +2691,7 @@ royaleButton.disabled = false; // listener ready (#146)
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
-  playOnlineButton.disabled = state.disabled;
+  playOnlineButton.disabled = coopButton.disabled = state.disabled;
   offlineNotice = state.notice;
   hud();
 }

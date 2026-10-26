@@ -13,3 +13,8 @@ export function seatOfPly(ply: number, seats: number): number {
 export function seatAfter(plies: number, seats: number): number {
   return seatOfPly(Math.ceil(plies / 2), seats);
 }
+
+/** The HUD turn line of a human ply, from a seated player's side: its own ply or the partner's (#530). */
+export function coopTurn(ours: boolean): string {
+  return ours ? 'Your turn' : "Partner's turn";
+}

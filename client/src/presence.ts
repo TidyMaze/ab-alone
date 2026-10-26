@@ -49,3 +49,13 @@ export function onlineStatus(side: number, role: Role, opponent: Seen, agent: bo
   if (opponent === 'gone') return { text: `You are ${me}. ${them} is disconnected.`, tone: 'gone' };
   return { text: `You are ${me}. Waiting for an opponent...`, tone: 'waiting' };
 }
+
+/** The HUD status line of a co-op room (docs/specs/coop-boss.md, #530): both seats play Black, so it names the partner. */
+export function coopStatus(role: Role, partner: Seen, agent: boolean): OnlineStatus {
+  const them = 'Your partner' + (agent ? ' (agent)' : '');
+  if (role === 'spectator') return { text: 'Room is full, watching', tone: 'watching' };
+  if (role === 'pending') return { text: 'Joining the fight...', tone: 'waiting' };
+  if (partner === 'here') return { text: `${them} is here.`, tone: 'here' };
+  if (partner === 'gone') return { text: `${them} is disconnected.`, tone: 'gone' };
+  return { text: 'Waiting for a partner...', tone: 'waiting' };
+}
