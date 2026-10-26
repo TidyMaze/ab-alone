@@ -438,6 +438,29 @@ describe('RoyaleNet catch-up', () => {
     expect(c.game.state_hash()).toBe(a.game.state_hash());
   });
 
+  it('a peer back after a short drop asks at once, and gets the commits it missed into its open round', async () => {
+    const { room, a, b, c } = await started();
+    room.lost.add('c');
+    await a.net.play(firstOrder(a)); // c misses it
+    await room.settle();
+    room.lost.delete('c');
+    await c.net.resync();
+    await room.settle();
+    expect(kinds(room.sent.filter((s) => s.from === 'c'))).toContain('behind');
+    for (const p of [b, c]) await p.net.play([]);
+    await room.settle();
+    expect([a.net.round, c.net.round]).toEqual([2, 2]);
+    expect(outcomes(c)[0]).toBe('moved');
+    expect(c.game.state_hash()).toBe(a.game.state_hash());
+  });
+
+  it('says nothing when it asks again from the lobby: there is no round to miss yet', async () => {
+    const room = table();
+    const a = await room.join('a', 0);
+    await a.net.resync();
+    expect(room.sent).toEqual([]);
+  });
+
   it('a spectator joining late gets the seats and every round so far', async () => {
     const { room, a, b, c } = await started();
     for (const p of [a, b, c]) await p.net.play([]);

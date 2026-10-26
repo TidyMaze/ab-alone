@@ -60,12 +60,16 @@ async function player(transport: Transport, room: string, side: number) {
 }
 
 /** The other end of the hook transport (?net=hook): what the page sends to `__netOut`, what it gets on `__netIn`. */
-function hookEnd(): Transport {
+function hookEnd(heard: Wire[] = []): Transport {
   const w = window as unknown as Record<string, (...args: unknown[]) => void>;
   return {
     state: 'open',
     send: (message) => w.__netIn!(message, 'host'),
-    onRecord: (cb) => (w.__netOut = (message) => cb(message as Wire, 'page')),
+    onRecord: (cb) =>
+      (w.__netOut = (message) => {
+        heard.push(message as Wire);
+        cb(message as Wire, 'page');
+      }),
     onState: () => {},
     onLeave: () => {},
     close: () => {},
@@ -152,8 +156,10 @@ describe('Battle royale online (#504)', () => {
     const game = await boot(`?bot=off&net=hook#royale=${room}`);
     await game.online();
     expect(data().seat).toBe('pending');
-    const host = await player(hookEnd(), room, 1);
-    (window as unknown as Record<string, () => void>).__netOpen!();
+    const heard: Wire[] = [];
+    const host = await player(hookEnd(heard), room, 1);
+    const netOpen = (window as unknown as Record<string, () => void>).__netOpen!;
+    netOpen();
     await until(game, () => data().seat === 'player');
     expect(presence()).toBe('2 players in. Waiting for the start...');
     expect(button('royale-start').hidden).toBe(true);
@@ -168,6 +174,8 @@ describe('Battle royale online (#504)', () => {
     host.transport.send({ kind: 'hash', game: room, round: 1, hash: 'not ours' });
     await until(game, () => data().desync === '1');
     expect(presence()).toBe("Desync after round 1: a peer's game differs");
+    netOpen(); // the connection is back after a drop: the page asks for the rounds it may have missed
+    await until(game, () => heard.some((m) => (m as { kind?: string }).kind === 'behind'));
   });
 
   it('Play online leaves the room: closed, no round, no Start; the round on its way is not resolved', async () => {
