@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import type { Axial } from './board';
+import { axialTo3D, type Axial } from './board';
+import { MARK_MS, STEP_MS } from './royale-reveal';
+import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
 
 // The offline battle royale on the harness (#502): Battle royale in the mode menu starts 1 player against 5 bots on
@@ -78,6 +80,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
     canvas().dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, pointerId: 2, bubbles: true }));
     expect(document.body.dataset.ghosts).toBe('0'); // no ghost over the arena
     game.click(-2, 5); // (-2, 6) NW: the round resolves at once
+    game.frame(10_000); // its reveal plays out (#612)
     expect(document.body.dataset.royale).toBe('2');
     expect(turn()).toBe('Battle royale · Round 2');
     expect(items('.initiative li')).toEqual(['Bot 1', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5', 'You']);
@@ -113,7 +116,10 @@ describe('main.ts, the offline battle royale (#502)', () => {
     const game = await boot('?bot=off');
     game.hook('__royale', { seed: 7, rounds: [] });
     // Every game ends by round 52, when the centre cell goes void (rules.md 10.4).
-    for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) button('royale-hold').click();
+    for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) {
+      button('royale-hold').click();
+      game.frame(10_000);
+    }
     expect(button('royale-hold').disabled).toBe(true);
   });
 
@@ -127,6 +133,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(game.hook<Axial[]>('__crackDecals')).toContainEqual([0, 8]);
     expect(byId('hud').querySelector('.breach')!.textContent).toBe('Breach: 48 cells void in 1 round');
     button('royale-hold').click();
+    game.frame(10_000); // the reveal ends with the breach (#612)
     expect(turn()).toBe('Battle royale · Round 14');
     expect(document.body.dataset.cracks).toBe('0');
     expect(document.body.dataset.vanished).toBe('48');
@@ -147,9 +154,13 @@ describe('main.ts, the offline battle royale (#502)', () => {
     game.hook('__royale', { seed: 7, rounds: [] });
     // The player holds on the rim while the bots play: its last marbles go void at the end of round 25.
     for (let round = 0; round < 25; round++) button('royale-hold').click();
+    game.frame(10_000); // the last reveal plays out (#612)
     expect(items('.initiative li.out')).toEqual(['You']);
     expect(document.body.dataset.over).toBeUndefined();
-    for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) button('royale-hold').click();
+    for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) {
+      button('royale-hold').click();
+      game.frame(10_000);
+    }
     expect(turn()).toBe('You place 6th');
     expect(document.body.dataset.over).toBe('loss');
     expect(items('.placement li')).toHaveLength(6);
@@ -215,5 +226,132 @@ describe('main.ts, the offline battle royale (#502)', () => {
     game.openModes();
     button('battle-royale').click();
     expect(document.body.dataset.royale).toBeUndefined();
+  });
+});
+
+// A round played out (#612): each order in initiative order with the slide, the push and the ejection fall of a normal
+// game, a fizzled or held seat briefly ringed, then the breach; its log lines appear in step. A press skips it.
+const reveal = (): string | undefined => document.body.dataset.reveal;
+const xz = (q: number, r: number): { x: number; z: number } => {
+  const p = axialTo3D(q, r);
+  return { x: p.x, z: p.z };
+};
+const drawnAt = (game: Game, q: number, r: number) => game.hook<{ seat: number; x: number; z: number } | null>('__arenaAt', q, r);
+async function seeded(seed: number, options = {}): Promise<Game> {
+  const game = await boot('?bot=off', options);
+  game.hook('__royale', { seed, rounds: [] });
+  return game;
+}
+// Runs frames until `done` holds, at most 10 s of reveal; true when it held.
+function until(game: Game, done: () => boolean): boolean {
+  for (let ms = 0; ms < 10_000 && !done(); ms += 50) game.frame(50);
+  return done();
+}
+
+describe('main.ts, a battle royale round plays out (#612)', () => {
+  it('each order slides in initiative order, its log line in step, then the board settles on the new position', async () => {
+    const game = await seeded(7);
+    expect(reveal()).toBe('done'); // a loaded game shows at once
+    game.click(-2, 6);
+    game.click(-2, 5); // (-2, 6) NW, first in initiative
+    expect(reveal()).toBe('turn');
+    expect(turn()).toBe('Battle royale · Round 2');
+    expect(items('.reveal li')).toEqual(['You: moved']);
+    expect(drawnAt(game, -2, 5)).toEqual({ seat: 0, ...xz(-2, 6) }); // the slide starts at the old cell
+    expect(drawnAt(game, -2, 6)).toBeNull();
+    game.frame(SLIDE_MS / 2);
+    const mid = drawnAt(game, -2, 5)!;
+    expect(mid.x).toBeLessThan(xz(-2, 6).x);
+    expect(mid.x).toBeGreaterThan(xz(-2, 5).x);
+    game.frame(STEP_MS - SLIDE_MS / 2); // Bot 1's turn
+    expect(drawnAt(game, -2, 5)).toEqual({ seat: 0, ...xz(-2, 5) });
+    expect(items('.reveal li').map((t) => t.split(':')[0])).toEqual(['You', 'Bot 1']);
+    expect(until(game, () => reveal() === 'done')).toBe(true);
+    expect(items('.reveal li')).toHaveLength(6);
+    expect(drawnAt(game, -2, 5)).toEqual({ seat: 0, ...xz(-2, 5) });
+    expect(game.hook<number[]>('__seatGlyphs')).toEqual([10, 10, 10, 10, 10, 10]);
+  });
+
+  it('a held seat is briefly ringed, then the next turn plays', async () => {
+    const game = await seeded(7);
+    button('royale-hold').click();
+    expect(items('.reveal li')).toEqual(['You: held']);
+    expect(game.hook<Axial[]>('__rings')).toHaveLength(10); // the player's marbles
+    game.frame(MARK_MS);
+    expect(game.hook<Axial[]>('__rings')).toEqual([]);
+    expect(items('.reveal li')).toHaveLength(2);
+  });
+
+  it('a press skips the reveal to its end, and Hold during it plays the next round', async () => {
+    const game = await seeded(7);
+    button('royale-hold').click();
+    dispatchEvent(new PointerEvent('pointerdown'));
+    expect(reveal()).toBe('done');
+    expect(items('.reveal li')).toHaveLength(6);
+    button('royale-hold').click();
+    button('royale-hold').click(); // the reveal of round 2 ends, round 3 resolves
+    expect(turn()).toBe('Battle royale · Round 4');
+    expect(reveal()).toBe('turn');
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(reveal()).toBe('done');
+    expect(items('.reveal li')).toHaveLength(6);
+  });
+
+  it('a move that ejects plays the ejection fall', async () => {
+    // Seed 1, the player holding: Bot 3 ejects a marble of Bot 2 in round 26.
+    const game = await seeded(1);
+    for (let round = 0; round < 25; round++) button('royale-hold').click();
+    game.frame(10_000);
+    button('royale-hold').click();
+    expect(until(game, () => document.body.dataset.ejecting === 'tumble')).toBe(true);
+    expect(reveal()).toBe('turn');
+    expect(items('.reveal li').at(-1)).toBe('Bot 3: moved, ejected Bot 2');
+    expect(until(game, () => reveal() === 'done' && !document.body.dataset.ejecting)).toBe(true);
+  });
+
+  it('then the breach: the cracked cells sink away, their marbles fall, and the ring is void', async () => {
+    const game = await boot('?bot=off');
+    game.hook('__royale', CRACKED);
+    button('royale-hold').click();
+    expect(until(game, () => reveal() === 'breach')).toBe(true);
+    expect(document.body.dataset.ejecting).toBe('tumble'); // the marbles on the ring fall
+    expect(document.body.dataset.vanished).toBe('0');
+    expect(items('.reveal li')).toHaveLength(6);
+    game.frame(100);
+    expect(until(game, () => reveal() === 'done')).toBe(true);
+    expect(document.body.dataset.vanished).toBe('48');
+    expect(document.body.dataset.cracks).toBe('0');
+  });
+
+  it('the end shows once the last round played out, and Hold during it plays no more round', async () => {
+    const game = await seeded(7);
+    // Each Hold ends the reveal before it; the one during the last round's reveal only ends it.
+    for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) {
+      expect(turn()).toContain('Battle royale'); // the end waits for the reveal
+      button('royale-hold').click();
+    }
+    expect(reveal()).toBe('done');
+    expect(turn()).toBe('You place 6th');
+    expect(game.hook<number[]>('__seatGlyphs')[0]).toBe(0);
+  });
+
+  it('reduced motion: the board jumps to the new position at once', async () => {
+    const game = await seeded(7, { reducedMotion: true });
+    game.click(-2, 6);
+    game.click(-2, 5);
+    expect(reveal()).toBe('done');
+    expect(items('.reveal li')).toHaveLength(6);
+    expect(drawnAt(game, -2, 5)).toEqual({ seat: 0, ...xz(-2, 5) });
+  });
+
+  it('leaving during the reveal drops it', async () => {
+    const game = await seeded(7);
+    button('royale-hold').click();
+    game.openModes();
+    button('ship').click();
+    expect(reveal()).toBeUndefined();
+    game.frame(10_000); // nothing of it plays on over the hub
+    expect(document.body.dataset.hub).toBeDefined();
+    expect(reveal()).toBeUndefined();
   });
 });

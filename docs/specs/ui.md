@@ -213,6 +213,14 @@ stay in the column, outside the menu.
   "You win" for first place, shared or not, else "You place 3rd", then the points the player scored, "10 points. The
   books balance." or "5 points. Tally strikes your name.", and the places, best first, one seat a line: "1st You · 10
   points", "2nd Bot 1 · 6 points". These strings are kept verbatim for the e2e tests.
+- **Battle royale round played out (#612).** When a round resolves, the arena plays it out instead of jumping to the
+  new position: each seat's turn in initiative order, a move sliding its marbles and pushing the line ahead as in a
+  normal game (350 ms a turn), a marble pushed off the arena or onto a void cell falling with the ejection effect, a
+  fizzled or held seat's marbles lifted and ringed for 250 ms, a seat out taking no time. Then the breach: the cracked
+  cells sink away and the marbles on them fall (800 ms). Each line of the reveal appears on the plate as its turn
+  starts, and the end banner waits for the end. A press or a key ends it at once, then does its usual job; an order (a
+  target press, Hold) during it ends it first. Reduced motion: no animation, the arena jumps to the new position and
+  the whole reveal shows. body[data-reveal] is "turn", "breach" or "done", for the e2e tests.
 - **Copy diagnostics.** A button in the bottom-right corner, in every mode, icon only (#297: its name is the tooltip and the accessible name, at least 44 px on a phone), styled like the
   others but kept apart from the play buttons and off the board, even at phone width. It copies
   the diagnostics text (tech.md section 10) and the note line says "diagnostics copied". When the

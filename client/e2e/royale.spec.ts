@@ -134,3 +134,19 @@ test('battle royale arena is fully visible with fog at arena rim (#503)', async 
   const p = await page.evaluate(() => (window as any).__cellToScreen(0, -4));
   expect(p.y).toBeGreaterThan(50);
 });
+
+test('a round plays out on the arena, then ends on the new position (#612)', async ({ page }) => {
+  await ready(page);
+  await page.evaluate(() => (window as any).__royale({ seed: 7, rounds: [] }));
+  const body = page.locator('body');
+  await expect(body).toHaveAttribute('data-reveal', 'done');
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
+  await click(page, -2, 6);
+  await click(page, -2, 5); // (-2, 6) NW
+  await expect(body).toHaveAttribute('data-reveal', 'turn');
+  await expect(body).toHaveAttribute('data-reveal', 'done');
+  await expect(page.locator('#hud .reveal li')).toHaveCount(6);
+  const at = (q: number, r: number) => page.evaluate(([cq, cr]) => (window as any).__arenaAt(cq, cr), [q, r]);
+  expect(await at(-2, 5)).toEqual({ seat: 0, x: -2 + 5 / 2, z: (Math.sqrt(3) / 2) * 5 });
+  expect(await at(-2, 6)).toBeNull();
+});
