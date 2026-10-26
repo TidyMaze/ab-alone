@@ -112,6 +112,21 @@ const CASES: Record<string, () => void> = {
     // An egg is a mark with the player turns left before it hatches.
     expect(bossState('alien', alien).marks).toEqual([{ kind: 'egg', cell: `(${q},${r})`, value: left }]);
   },
+
+  railyard() {
+    // Fight seed 3 announces its first train at the start on the diagonal q + r = 0, from (4, -4) to (-4, 4).
+    const railyard = newEncounter('railyard', 3);
+    const diagonal = [4, 3, 2, 1, 0, -1, -2, -3, -4].map((q) => ({ kind: 'train', cell: `(${q},${-q})`, value: 5 }));
+    // Each cell of the line is a mark with the player turns left before the train passes; Encounter.tell() is 0, the
+    // count down at the end of the player turn.
+    expect(bossState('railyard', railyard)).toMatchObject({
+      name: 'The Rail Yard',
+      tell: { kind: 'special', cells: [], text: 'board special 0 fires after the next ply' },
+      marks: diagonal,
+    });
+    const row = bossState('railyard', withData(railyard, { trains: [4, 2, 4, 0, -4, 0] }));
+    expect(row.marks.map((mark) => mark.cell)).toEqual([4, 3, 2, 1, 0, -1, -2, -3, -4].map((q) => `(${q},0)`));
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -119,8 +134,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind joins the boss list (#572), The Alien is in (#588)', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien']);
+  test('The Ballast Mind joins the boss list (#572), The Alien (#588) and The Rail Yard (#626) are in', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard']);
   });
 
   test('every boss of the engine has its case', () => {

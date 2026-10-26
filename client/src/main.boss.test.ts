@@ -86,6 +86,7 @@ describe('main.ts boss fights', () => {
       'The Chaplain',
       'The Ballast Mind',
       'The Alien',
+      'The Rail Yard',
     ]);
     expect(list.hidden).toBe(true);
     button.click();

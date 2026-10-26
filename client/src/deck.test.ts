@@ -27,6 +27,7 @@ describe('deckOf (world.md sections 1, 3 and 5)', () => {
     expect(deckOf('boss', 'chaplain')).toBe('chapel');
     expect(deckOf('boss', 'ballast')).toBe('bridge');
     expect(deckOf('boss', 'alien')).toBe('cargo'); // an extra boss, in the Cargo hold (game-design.md 7.7)
+    expect(deckOf('boss', 'railyard')).toBe('cargo'); // an extra boss, the hold's rail yard (game-design.md 7.8)
   });
 
   it('a boss the client does not know yet plays at the Mess', () => {
