@@ -419,6 +419,20 @@ describe('the pointer on the board', () => {
     expect(rings(game)).toEqual([]);
   });
 
+  // Bug #475: an orbit rebuilt the look (props, fog, pixel ratio) on every pointermove. __looks counts the rebuilds,
+  // so e2e/camera.spec.ts checks it without a wall-clock budget (#545).
+  it('rebuilds no look while orbiting, however many moves, bug #475', async () => {
+    const game = await boot('?bot=off');
+    const looks = (): number => game.hook<number>('__looks');
+    const before = looks();
+    document.getElementById('setting-clear-board')!.click(); // a setting rebuilds the look once
+    expect(looks()).toBe(before + 1);
+    pointer('pointerdown', 400, 300);
+    for (let i = 1; i <= 20; i++) pointer('pointermove', 400 + i * 10, 300);
+    pointer('pointerup', 600, 300);
+    expect(looks()).toBe(before + 1);
+  });
+
   it('zooms on a pinch, which never selects', async () => {
     const game = await boot('?bot=off');
     const black = legal(game).find((m) => m.cells.length === 1)!.cells[0]!;
