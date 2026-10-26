@@ -107,10 +107,10 @@ See section 6.
 | Entry | A "Ship" entry of the mode menu. The menu itself stays ungated: the daily challenge and the tests need every boss |
 | Space | One small hex map per deck (`client/src/hub.ts`): 19 cells (radius 2), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
 | Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
-| Rooms | Cells with a glyph, at least 6 per deck. Rolling onto a room enters it |
+| Rooms | Cells with a glyph, at least 6 per deck. Rolling onto a room enters it; standing on it again (Ship, Back to the ship) does not |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
 | Gate | Only the lifts. A lift onto a deck opens once the boss of the deck below it is beaten (the Mess is always open). A locked lift keeps the marble out and Tally says one short line |
-| Return | When the game a room started ends, "Back to the ship" puts the marble back on that room's cell |
+| Return | When the game a room started ends, "Back to the ship" puts the marble back on that room's cell. From an online table it leaves the room first |
 | Save | Local storage (`client/src/progress.ts`, key `ab-alone.progress`): deck, cell and bosses beaten as versioned JSON. A save that does not read back (corrupt, another version) starts over on the centre cell of the Mess. Every boss win counts, the boss menu and the daily included. Later a signed export/import file (accounts are out of scope) |
 
 Room kinds:
@@ -121,13 +121,13 @@ Room kinds:
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
 | Lift | The deck above or below. The marble arrives on that deck's lift back |
-| BR lobby | Shown closed until battle royale ships (Phase 4) |
+| BR lobby | Shown closed until battle royale ships (Phase 4): a bar across its glyph, the HUD says closed, the marble may stand on it. Every deck has one |
 
 Layout, the same on every deck so it is learned once: the centre and its 6 neighbours are floor,
 the rooms sit on the outer ring. Lift up at the top (q 1, r -2), lift down at the bottom (-1, 2),
 boss at the east corner (2, 0) between the two terminals (2, -1) and (1, 1), the tables on the
-west side: hot-seat (-1, -1), bot (-2, 0), online (-2, 1). The Mess has no lift down, the Bridge
-no lift up, so every deck has 7 or 8 rooms.
+west side: hot-seat (-1, -1), bot (-2, 0), online (-2, 1), and the BR lobby on the south-west corner (-2, 2)
+next to them. The Mess has no lift down, the Bridge no lift up, so every deck has 8 or 9 rooms.
 
 Lobbies without a matchmaker: a PvP table or BR lobby is a public peer-to-peer room (Trystero)
 where waiting players are listed and pick each other, plus invite links. Invite-first. With no

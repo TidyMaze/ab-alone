@@ -6,7 +6,7 @@ import { DECK_NAMES, type Deck } from './deck';
 
 export type Door =
   | { kind: 'boss'; boss: string }
-  | { kind: 'hotseat' | 'bot' | 'online' }
+  | { kind: 'hotseat' | 'bot' | 'online' | 'royale' }
   | { kind: 'terminal'; lore: string }
   | { kind: 'lift'; to: Deck };
 
@@ -53,6 +53,7 @@ function roomsFor(deck: Deck, i: number): Room[] {
     { cell: [-1, -1], door: { kind: 'hotseat' } },
     { cell: [-2, 0], door: { kind: 'bot' } },
     { cell: [-2, 1], door: { kind: 'online' } },
+    { cell: [-2, 2], door: { kind: 'royale' } }, // the battle royale lobby, closed until Phase 4 ships (#522)
   ];
   const up = DECK_NAMES[i + 1];
   const down = DECK_NAMES[i - 1];

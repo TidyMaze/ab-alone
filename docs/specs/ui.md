@@ -95,8 +95,8 @@ names. The button is the last of the column and the open menu lies under it, so 
 button. Held upright, the menu starts a new row under the buttons, its items side by side, the bosses in line after
 Boss fight. It closes like the settings menu, on Escape, on a press outside and on its button again, and once a mode
 starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at least 44 px
-tall. The controls of a running mode (Rematch, Goal, Retry, Lock order and Hold, the invite link) stay in the column,
-outside the menu.
+tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Lock order and Hold, the invite link)
+stay in the column, outside the menu.
 
 ```
 +---------------------------------+
@@ -128,7 +128,8 @@ outside the menu.
   "6 out. The seat is empty." (10 against the Choir), "6 out. The seat holds.", "Same position three
   times. Tally closes the page.", "100 plies, nothing ejected. Tally calls it even.", and against a boss
   "Repeated 3 times: a defeat." or "100 plies idle: a defeat.". The one action offered is the button
-  already in the column: New game (local, bot), Retry (boss, daily), Rematch (online players).
+  already in the column: New game (local, bot), Retry (boss, daily), Rematch (online players), and Back to the
+  ship when a hub room started the game (game-design.md section 3.5, #522).
   `body[data-over]` is `win`, `loss` or `draw` while the game is over (a draw against a boss is `loss`):
   the board dims (filter on the canvas) and one light plays on the rim only, the middle stays clear of
   cells, marbles and targets. Win: a warm sodium rim light rises and pulses once (1.6 s) and stays as a
