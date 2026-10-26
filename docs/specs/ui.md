@@ -87,15 +87,15 @@ name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
-Game modes (#357): the buttons that start a game mode, Play online, Boss fight (with the boss list it opens under it)
-and Daily challenge, live in one menu behind an icon-only button, a play triangle of the icon set, labelled "Game
-modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen
-size; the three buttons keep their behaviour and their names. The button is the last of the column and the open menu
-lies under it, so opening or closing it moves no other button. Held upright, the menu starts a new row under the
-buttons, its items side by side, the bosses in line after Boss fight. It closes like the settings menu, on Escape, on
-a press outside and on its button again, and once a mode starts (a boss picked, Daily challenge, Play online). On a
-phone each item is at least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, the invite link) stay
-in the column, outside the menu.
+Game modes (#357): the buttons that start a game mode, Play online, Boss fight (with the boss list it opens under it),
+Daily challenge and Ship (the hub, game-design.md section 3.5, #521), live in one menu behind an icon-only button, a
+play triangle of the icon set, labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The
+menu is closed at the start on every screen size; the buttons keep their behaviour and their names. The button is the
+last of the column and the open menu lies under it, so opening or closing it moves no other button. Held upright, the
+menu starts a new row under the buttons, its items side by side, the bosses in line after Boss fight. It closes like
+the settings menu, on Escape, on a press outside and on its button again, and once a mode starts (a boss picked, Daily
+challenge, Play online, Ship). On a phone each item is at least 44 px tall. The controls of a running mode (Rematch,
+Goal, Retry, the invite link) stay in the column, outside the menu.
 
 ```
 +---------------------------------+

@@ -99,7 +99,9 @@ import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } f
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
-import { recordWin } from './progress';
+import { loadProgress, recordWin, saveProgress } from './progress';
+import { roomsOf, step, type Spot as HubSpot } from './hub';
+import { arrowCell, HUB_BOARD, hubHtml } from './hubview';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
@@ -962,7 +964,7 @@ function drawFrame(board: ArrayLike<number>): void {
 }
 // The turn on the rim, at once, no fade (world.md section 8). Clear board keeps it: it is game information.
 function lightRim(): void {
-  const light = rimLight(engine.status(), engine.to_move(), glassOf());
+  const light = hubAt ? null : rimLight(engine.status(), engine.to_move(), glassOf()); // no game on in the hub (#521)
   for (const end of ['near', 'far'] as const) rim[end].material.emissive.set(light?.end === end ? light.color : 0);
   document.body.dataset.rim = light?.end ?? 'off';
 }
@@ -1055,6 +1057,7 @@ function applyPalette(): void {
 }
 applyPalette();
 let hover: Axial | null = null;
+let hubAt: HubSpot | null = null; // where the marble stands while the hub is shown (#521), else null
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
 // (the rules e2e tests drive both sides by hand).
@@ -1337,6 +1340,11 @@ let ringed: Axial[] = []; // the marbles drawn with the selection ring, read by 
 let targets: ReturnType<typeof groupTargets> = []; // the cells drawn with a target arrow, read by the e2e tests
 
 function hud(extra = ''): void {
+  if (hubAt) {
+    delete document.body.dataset.over; // no end light over the hub
+    document.getElementById('hud')!.innerHTML = hubHtml(hubAt);
+    return;
+  }
   const status = engine.status();
   const ejected = [engine.ejected(1), engine.ejected(2)] as const;
   const win = [engine.win_ejections(1), engine.win_ejections(2)] as const;
@@ -1408,6 +1416,7 @@ function hud(extra = ''): void {
 }
 
 function refresh(): void {
+  if (hubAt) return drawHub(hubAt);
   const board = engine.board();
   drawFrame(board);
   lightRim();
@@ -1504,6 +1513,32 @@ function refresh(): void {
   refreshGhosts(moves);
 }
 
+// The hub map (#521): the board's discs on the map cells only, in a frame shrunk to the map, a pale ring on each room
+// and the glass marble on its cell. No rim light, phase notch or tally mark: no game is on.
+function drawHub(at: HubSpot): void {
+  drawFrame(HUB_BOARD);
+  lightRim();
+  notches.clear();
+  for (const group of tallies) group.clear();
+  discs.forEach((disc, i) => (disc.visible = HUB_BOARD[i] !== VANISHED));
+  marbles.clear();
+  marbleAt.clear();
+  ghosts.clear();
+  for (const { cell } of roomsOf(at.deck)) {
+    const p = axialTo3D(...cell);
+    const glyph = new THREE.Mesh(outlineGeometry, paleMaterial);
+    glyph.rotation.x = Math.PI / 2;
+    glyph.position.set(p.x, 0.02, p.z);
+    marbles.add(glyph);
+  }
+  const p = axialTo3D(...at.cell);
+  const marble = marbleMesh(glassOf());
+  marble.position.set(p.x, 0.36, p.z);
+  marbles.add(marble);
+  document.body.dataset.hub = `${at.deck} ${at.cell[0]},${at.cell[1]}`; // read by the e2e tests
+  hud();
+}
+
 function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   const mv = hover ? moveForClick(moves, selected, hover) : null;
   const record = mv ? encodeMove(mv) : hint.shown(here()); // the hovered move, else the hint (#192)
@@ -1540,6 +1575,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 }
 
 function click(q: number, r: number): void {
+  if (hubAt) return walk([q, r]);
   if (engine.status() !== 0) return; // over: no move, no selection (#282)
   if (thinking || online?.role === 'spectator') return;
   if (sliding()) return whenSettled(() => click(q, r)); // the next move waits for the slide
@@ -1609,6 +1645,7 @@ canvas.addEventListener('pointermove', (e) => {
     applyView();
     return;
   }
+  if (hubAt) return; // no ghost over the hub
   const next = cellAt(e);
   if (next === hover) return;
   hover = next;
@@ -1857,6 +1894,10 @@ newGameButton.addEventListener('click', () => {
   const press = pressNewGame(confirmNew, performance.now(), history.length);
   askNewGame(press.confirm);
   if (!press.start) return;
+  if (hubAt) {
+    leaveHub();
+    applyDeck(deckOf('local'));
+  }
   engine = new Engine();
   history.length = 0;
   selected = [];
@@ -1873,6 +1914,7 @@ const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }): void {
+  leaveHub();
   stopAnalysis();
   fight = { id, seed, daily };
   goalOpen = false;
@@ -1926,6 +1968,37 @@ goalButton.addEventListener('click', () => {
   hud();
 });
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
+
+// The hub (#521, game-design.md section 3.5): Ship draws the map of the saved deck, in that deck's look, with the
+// player's glass marble on the saved cell. A click on a neighbour cell or an arrow key rolls it one cell (hub.ts step),
+// and the spot is saved (progress.ts). A new game, a boss fight or Play online leaves it; the doors open nothing yet.
+const shipButton = document.getElementById('ship') as HTMLButtonElement;
+shipButton.addEventListener('click', () => {
+  if (online) return;
+  moveModes('pick');
+  hubAt = loadProgress(store).at;
+  applyDeck(hubAt.deck);
+  refresh();
+});
+shipButton.disabled = false; // listener ready (#146)
+function walk(to: Axial): void {
+  const progress = loadProgress(store);
+  hubAt = step(hubAt!, to, progress.beaten);
+  saveProgress(store, { ...progress, at: hubAt });
+  if (hubAt.deck !== deck) applyDeck(hubAt.deck);
+  refresh();
+}
+function leaveHub(): void {
+  hubAt = null;
+  delete document.body.dataset.hub;
+}
+addEventListener('keydown', (e) => {
+  // An open terminal reader pages by them, a text field moves its caret.
+  const to = hubAt && !reading && !(e.target instanceof HTMLInputElement) ? arrowCell(hubAt.cell, e.key) : null;
+  if (!to) return;
+  e.preventDefault(); // no page scroll
+  walk(to);
+});
 
 // Daily result card (#196): once a daily fight is over, the text to share, and Copy. The text is
 // built here and goes nowhere but the clipboard, and only when the player copies it. Copy uses the
@@ -2002,6 +2075,7 @@ const inviteLabel = document.getElementById('invite-label')!;
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
 rematchButton.addEventListener('click', () => void online?.rematch());
 async function goOnline(room: string, side: number): Promise<void> {
+  leaveHub();
   stopAnalysis();
   fight = null;
   delete document.body.dataset.boss;
