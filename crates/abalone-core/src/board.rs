@@ -80,6 +80,8 @@ pub struct Board {
     /// Rail Yard trains: the track of each announced train and the player turns left before it
     /// passes.
     trains: Vec<(u8, u8)>,
+    /// The Magnetizer's polarities on player marbles: `1` for +, `-1` for −.
+    polarities: Vec<((i32, i32), i8)>,
 }
 
 impl Board {
@@ -105,6 +107,7 @@ impl Board {
             converted: Vec::new(),
             eggs: Vec::new(),
             trains: Vec::new(),
+            polarities: Vec::new(),
         }
     }
 
@@ -165,6 +168,15 @@ impl Board {
 
     pub fn set_trains(&mut self, trains: Vec<(u8, u8)>) {
         self.trains = trains;
+    }
+
+    /// Player marbles with a polarity (The Magnetizer): `1` for +, `-1` for −.
+    pub fn polarities(&self) -> &[((i32, i32), i8)] {
+        &self.polarities
+    }
+
+    pub fn set_polarities(&mut self, polarities: Vec<((i32, i32), i8)>) {
+        self.polarities = polarities;
     }
 
     /// Standard start layout: 14 marbles per side.
@@ -464,6 +476,17 @@ mod tests {
         assert_eq!(board.trains(), &[(26, 5)]);
         assert_ne!(board, Board::empty());
         board.set_trains(vec![]);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn polarities_start_empty_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert!(board.polarities().is_empty());
+        board.set_polarities(vec![((1, 0), 1), ((2, 0), -1)]);
+        assert_eq!(board.polarities(), &[((1, 0), 1), ((2, 0), -1)]);
+        assert_ne!(board, Board::empty());
+        board.set_polarities(vec![]);
         assert_eq!(board, Board::empty());
     }
 }

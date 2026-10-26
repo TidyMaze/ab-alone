@@ -12,7 +12,11 @@
 //! - Trains (The Rail Yard): records of 6 integers `[line, player_turns_left, entry_q, entry_r,
 //!   exit_q, exit_r]`, back to back: the train runs its line from the entry cell to the exit cell
 //!   (docs/specs/game-design.md section 7.8 numbers the lines).
-//! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
+//! - Cell list (The Chaplain, the cells The Magnetizer just polarized): pairs `[q, r]`, back to back.
+//! - Polarities (The Magnetizer): one integer per cell, in the board order: `0` none, `1` +, `-1` −.
+//! - Repulsions (The Magnetizer): records of 126 integers, the pair `[q_a, r_a, q_b, r_b]` (`b`
+//!   moves away from `a` and `a` away from `b`), then the 61 board codes and the 61 polarities just
+//!   before that repulsion, in the order they happened during the last ply.
 //! - Armies (The Choir): records of 3 integers `[q, r, army]`, back to back. Army `0` Alto,
 //!   `1` Tenor, `2` Bass, the order of the cycle. On the Choir's radius 3 board the outer ring
 //!   is `3`, like a vanished cell.
@@ -53,6 +57,7 @@ use abalone_core::encounter::choir::{
 };
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
+use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
 use abalone_core::encounter::railyard::{
     railyard_boss, railyard_move, railyard_start, track_cells,
 };
@@ -359,7 +364,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 7] = [
+const BOSSES: [BossEntry; 8] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -424,12 +429,35 @@ const BOSSES: [BossEntry; 7] = [
         announce: no_announce,
         flips: no_flips,
     },
+    BossEntry {
+        id: "magnetizer",
+        goal:
+            "Your + and − marbles repel and push any line. Eject 6 to win; lose 6 or draw to lose.",
+        def: magnetizer_boss,
+        start: plain_fight,
+        reply: magnetizer_move,
+        announce: no_announce,
+        flips: no_flips,
+    },
 ];
 
 /// `[lit, dark]` notches for `left` boss marbles in a phase that began at `from` and ends at `to`,
 /// none when there is no next phase. A converted marble (The Chaplain) adds a lit notch.
 fn notches(left: u8, from: u8, to: Option<u8>) -> Vec<u8> {
     to.map_or_else(Vec::new, |to| vec![left - to, from.saturating_sub(left)])
+}
+
+/// The polarity of every cell of `board`, in the board order: `0` none, `1` +, `-1` −.
+fn polarity_cells(board: &Board) -> Vec<i32> {
+    board_cells(board.radius())
+        .map(|c| {
+            board
+                .polarities()
+                .iter()
+                .find(|p| p.0 == c)
+                .map_or(0, |p| i32::from(p.1))
+        })
+        .collect()
 }
 
 fn cell_list(cells: &[(i32, i32)]) -> Vec<i32> {
@@ -655,6 +683,38 @@ impl Encounter {
     pub fn flips(&self) -> Vec<i32> {
         match &self.fight {
             Fight::Plain(e) => cell_list(&(self.entry.flips)(e)),
+            Fight::Choir(_) => Vec::new(),
+        }
+    }
+
+    /// The polarity of every cell (The Magnetizer), all `0` for the other bosses.
+    pub fn polarities(&self) -> Vec<i32> {
+        polarity_cells(self.fight.game().board())
+    }
+
+    /// The repulsions of the last ply in order (The Magnetizer), records of 126 integers, see the
+    /// module docs. Empty for the other bosses.
+    pub fn repulsions(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        e.repulsions()
+            .iter()
+            .flat_map(|rep| {
+                let [(qa, ra), (qb, rb)] = rep.pair;
+                let codes = board_bytes(&rep.before).into_iter().map(i32::from);
+                [qa, ra, qb, rb]
+                    .into_iter()
+                    .chain(codes)
+                    .chain(polarity_cells(&rep.before))
+            })
+            .collect()
+    }
+
+    /// The player marbles whose polarity the last ply set (The Magnetizer), a cell list.
+    pub fn assigned(&self) -> Vec<i32> {
+        match &self.fight {
+            Fight::Plain(e) => cell_list(e.assigned()),
             Fight::Choir(_) => Vec::new(),
         }
     }
@@ -1081,7 +1141,8 @@ mod tests {
                 "chaplain".to_string(),
                 "ballast".to_string(),
                 "alien".to_string(),
-                "railyard".to_string()
+                "railyard".to_string(),
+                "magnetizer".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -1091,6 +1152,7 @@ mod tests {
         assert_eq!(boss_name("ballast"), Some("The Ballast Mind".to_string()));
         assert_eq!(boss_name("alien"), Some("The Alien".to_string()));
         assert_eq!(boss_name("railyard"), Some("The Rail Yard".to_string()));
+        assert_eq!(boss_name("magnetizer"), Some("The Magnetizer".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1448,6 +1510,99 @@ mod tests {
         );
     }
 
+    // The Magnetizer (#645): polarities per cell, repulsions with the board before each.
+
+    /// The e2e fixture of client/e2e/magnetizer.spec.ts (seed 153, core magnetizer tests): one
+    /// marble per move, `[q, r, dir]`.
+    const MAGNET_FIXTURE: [[i32; 3]; 19] = [
+        [0, 2, 4],
+        [4, -3, 5],
+        [0, 1, 4],
+        [4, -2, 5],
+        [0, 0, 4],
+        [4, -1, 5],
+        [0, 3, 4],
+        [3, -3, 5],
+        [0, 2, 4],
+        [3, -2, 5],
+        [0, 1, 4],
+        [4, -4, 5],
+        [0, 1, 4],
+        [4, -3, 5],
+        [0, 0, 4],
+        [3, -4, 5],
+        [0, 0, 4],
+        [3, -3, 5],
+        [0, -1, 4],
+    ];
+
+    /// The board, polarities, repulsions and assigned cells after each of the first `plies` plies
+    /// of the fixture.
+    type MagnetPly = (Vec<u8>, Vec<i32>, Vec<i32>, Vec<i32>);
+
+    fn magnet_run(seed: u32, plies: usize) -> Vec<MagnetPly> {
+        let mut f = Encounter::new("magnetizer", seed).unwrap();
+        MAGNET_FIXTURE[..plies]
+            .iter()
+            .map(|&[q, r, dir]| {
+                f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
+                (f.board(), f.polarities(), f.repulsions(), f.assigned())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_magnetizer_exposes_polarities_per_cell_and_the_repulsions_in_order() {
+        let f = Encounter::new("magnetizer", 153).unwrap();
+        assert_eq!(f.name(), "The Magnetizer");
+        assert_eq!((f.phase(), f.phases()), (0, 3));
+        assert_eq!(f.polarities(), vec![0; 61]);
+        assert!(f.repulsions().is_empty() && f.assigned().is_empty());
+        let run = magnet_run(153, 11);
+        let polarized = |p: &[i32]| p.iter().filter(|&&s| s != 0).count();
+        assert_eq!(polarized(&run[2].1), 1, "after turn 2");
+        assert_eq!(run[2].3.len(), 2, "one cell assigned");
+        assert_eq!(run[2].1[index(run[2].3[0], run[2].3[1])].abs(), 1);
+        let reps = &run[10].2;
+        assert_eq!(reps.len(), 126, "one repulsion");
+        assert_eq!(reps[..4], [0, -1, 0, 0]);
+        let before = &reps[4..65];
+        let poles = &reps[65..];
+        assert_eq!(before[index(0, -4)], 2, "the boss column is still there");
+        assert_eq!(poles[index(0, -1)], -poles[index(0, 0)]);
+        assert_eq!(run[10].0[index(0, -4)], 2, "(0, -3) pushed onto it");
+        assert_eq!(run[10].0[index(0, -1)], 0);
+        assert_eq!(
+            run[10].1[index(0, -2)],
+            poles[index(0, -1)],
+            "the − moved along"
+        );
+        let mut f = Encounter::new("magnetizer", 153).unwrap();
+        for &[q, r, dir] in &MAGNET_FIXTURE {
+            f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
+        }
+        assert_eq!((f.ejected(1), f.phase()), (3, 1), "P2 after 3 ejections");
+        assert_eq!(Encounter::new("choir", 1).unwrap().repulsions(), vec![]);
+        assert_eq!(Encounter::new("choir", 1).unwrap().assigned(), vec![]);
+    }
+
+    #[test]
+    fn two_magnetizer_encounters_with_the_same_seed_and_moves_give_the_same_fight() {
+        // Every peer of a co-op fight, the daily and a Retry replay the same polarities (#645).
+        assert_eq!(magnet_run(153, 19), magnet_run(153, 19));
+        assert!((0..4).any(|seed| magnet_run(seed, 3) != magnet_run(153, 3)));
+    }
+
+    #[test]
+    fn the_magnetizer_replies_with_a_legal_move() {
+        let mut f = Encounter::new("magnetizer", 3).unwrap();
+        ply(&mut f);
+        let mv = f.boss_move();
+        assert_eq!(mv.len(), MOVE_STRIDE);
+        f.play(&mv).unwrap();
+        assert_eq!(f.to_move(), 1);
+    }
+
     // The Ballast Mind (#47, #564): a radius 5 board with six void pillars, 16 boss marbles.
 
     /// Ring of `(q, r)`: its distance from the centre.
@@ -1543,7 +1698,15 @@ mod tests {
 
     #[test]
     fn the_boards_of_the_other_bosses_keep_their_61_cells() {
-        for id in ["echo", "hull", "choir", "chaplain", "alien", "railyard"] {
+        for id in [
+            "echo",
+            "hull",
+            "choir",
+            "chaplain",
+            "alien",
+            "railyard",
+            "magnetizer",
+        ] {
             assert_eq!(Encounter::new(id, 7).unwrap().board().len(), 61, "{id}");
         }
         assert_eq!(Engine::new().board().len(), 61);
