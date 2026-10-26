@@ -2191,6 +2191,8 @@ function enterHub(at: HubSpot): void {
   roomOf = null;
   bumped = '';
   hubAt = at;
+  evalBar.hidden = hintButton.hidden = true; // no game on in the hub: a new game shows them again (#583)
+  analyst.stop();
   applyDeck(at.deck);
   refresh();
 }

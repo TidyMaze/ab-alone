@@ -234,7 +234,8 @@ stay in the column, outside the menu.
 ### 4.1 Evaluation bar
 
 Local hot-seat and bot games show who is ahead, from our own engine (#191). Online and boss games
-never show it (fair play, #164): starting one hides it for good.
+never show it (fair play, #164): starting one hides it for good. The hub (Ship) has no game on: it
+hides the bar and drops the evaluation in flight until a game leaves it (#583).
 
 ```
 +------------------------+                  +-------------------------------------+
@@ -274,7 +275,8 @@ never show it (fair play, #164): starting one hides it for good.
 
 Local hot-seat and bot games have a Hint button: it shows the engine's best move for the side to
 move as a ghost on the board, and never plays it (#192). Online, boss and daily games never show it
-(fair play, #164): starting one hides it for good, like the evaluation bar.
+(fair play, #164): starting one hides it for good, like the evaluation bar. The hub hides it too
+until a game leaves it (#583).
 
 - **Place.** In the button column, under New game and above the Game modes button,
   the other tools of a local game, styled like the other buttons. Held upright it shares a row with
