@@ -219,3 +219,19 @@ test('a terminal room opens its lore entry in the reader, and Esc gives the hub 
   await expect(page.locator('#hud')).toContainText('Terminal');
   await page.screenshot({ path: testInfo.outputPath('terminal-after.png') });
 });
+
+test('the tension drones calm to 0 over the hub, #586', async ({ page }) => {
+  await page.goto('./?nodes=100');
+  await page.locator('#hud').waitFor();
+  await page.evaluate(async () => {
+    for (let t = 1; t <= 30; t++) {
+      await (window as any).__playTurns(1, [4]);
+      if ((window as any).__tension().level > 0) break;
+    }
+  });
+  expect(await page.evaluate(() => (window as any).__tension().level)).toBeGreaterThan(0);
+  await ship(page);
+  await expect(page.locator('body')).toHaveAttribute('data-hub', /^mess /);
+  expect(await page.evaluate(() => (window as any).__tension().level)).toBe(0);
+});
+

@@ -1697,6 +1697,7 @@ function drawHub(at: HubSpot): void {
   marbles.clear();
   marbleAt.clear();
   ghosts.clear();
+  sfx.setTension(0);
   for (const { cell, door } of roomsOf(at.deck)) {
     const p = axialTo3D(...cell);
     const glyph = new THREE.Mesh(outlineGeometry, paleMaterial);
