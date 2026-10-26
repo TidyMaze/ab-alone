@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
 import { DECK_NAMES } from '../src/deck';
+import { HEAT } from '../src/marbles';
 
 // Bug #339: a cell's edge must stay 3:1 against the surface next to it (docs/specs/world.md section 5, art.md section 1).
 // The start position, 1280x720. Around each listed cell, 8 points on its bevel ring (radius 0.44, 45 degrees apart),
@@ -148,6 +149,36 @@ for (const deckName of DECK_NAMES) {
       expect(failures, 'marbles below 3:1 against the deck').toEqual([]);
     });
   }
+}
+
+// Task #509: at the heat pulse's brightest the shell still reads 3:1 against the deck, on every deck: safe mode off on
+// the high tier, the start position measured as for #344. The shot is a draw asked for once the glow is near its peak,
+// and the glow is still near it after the shot, so the frame drawn between is too (the pulse is smooth, period 4 s+).
+for (const deckName of DECK_NAMES) {
+  test(`${deckName}: the shell reads 3:1 against the deck at the heat pulse's brightest, task #509`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript(() => {
+      localStorage.setItem('ab-alone.quality', 'high');
+      localStorage.setItem('ab-alone.safe-mode', 'off');
+    });
+    await page.goto('./?bot=off');
+    await page.locator('canvas').waitFor();
+    await expect(page.locator('body')).toHaveAttribute('data-pulse', 'on');
+    await page.mouse.move(2, 2); // no hover ghost
+    await page.evaluate((d) => (window as any).__deck(d), deckName);
+    await expect(page.locator('body')).toHaveAttribute('data-deck-set', deckName);
+    await page.waitForFunction((peak) => (window as any).__shellPulse() >= 0.98 * peak, HEAT.peak, { timeout: 10000 });
+    const draws = await page.evaluate(() => (window as any).__drawNext() as number);
+    await page.waitForFunction((n) => (window as any).__draws() > n, draws);
+    const png = await page.screenshot({ path: testInfo.outputPath(`pulse-${deckName}.png`), type: 'png' });
+    expect(await page.evaluate(() => (window as any).__shellPulse() as number)).toBeGreaterThanOrEqual(0.9 * HEAT.peak);
+    const deck = await boxMeans(page, png, DECK_CELLS);
+    const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
+    const ratios = (await boxMeans(page, png, SHELL_CELLS)).map((rgb) => contrastRatio(rgb, mean));
+    const line = `${deckName} shell at the pulse's peak: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
+    console.log(line);
+    expect(ratios.filter((ratio) => ratio < 3), line).toEqual([]);
+  });
 }
 
 // Task #377: every dark shell skin reads 3:1 against the deck (asserted) and its ratio against the void is logged: the void
