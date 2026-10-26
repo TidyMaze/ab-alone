@@ -82,8 +82,9 @@ async function repeat(game: Game, white?: Play): Promise<void> {
     await until(game, () => game.hook('__plies') === ply + 1);
   }
 }
-/** The White player of an online room: a session with its own engine on `transport`. */
-async function opponent(transport: Transport, room: string) {
+/** The White player of the page's online room: a session with its own engine, which plays once Black's move is in. */
+async function opponent(game: Game) {
+  const [transport, room] = [game.peer()!, game.room()!];
   const { Engine, engine_version } = await import('abalone-wasm');
   const engine = new Engine();
   const session = new OnlineSession({
@@ -98,6 +99,7 @@ async function opponent(transport: Transport, room: string) {
     beat: { ms: 5000, now: Date.now, every: () => {} },
   });
   return async (q: number, r: number, tq: number, tr: number): Promise<void> => {
+    await until(game, () => engine.to_move() === 2);
     const record = encodeMove(moveForClick(parseMoves(engine.legal_moves()), [[q, r]], [tq, tr])!);
     engine.play(Int32Array.from(record));
     await session.send(record);
@@ -316,7 +318,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(byId('invite').hidden).toBe(false);
     expect(location.hash).toBe(`#room=${game.room()}`);
     await until(game, () => data().seat === 'player');
-    const white = await opponent(game.peer()!, game.room()!);
+    const white = await opponent(game);
     await until(game, () => data().opponent === 'here');
     await repeat(game, white);
     expect(game.turn()).toBe('Draw');
@@ -339,7 +341,7 @@ describe('main.ts, the hub doors (#522)', () => {
   it('the online table opens nothing while the browser is offline', async () => {
     const game = await boot('?bot=off');
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-    onTestFinished(() => Reflect.deleteProperty(navigator, 'onLine'));
+    onTestFinished(() => void Reflect.deleteProperty(navigator, 'onLine'));
     window.dispatchEvent(new Event('offline'));
     shipAt(game, [-1, 1]);
     game.click(-2, 1);

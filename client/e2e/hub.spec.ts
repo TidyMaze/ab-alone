@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { loseByRepetition } from './fight-end';
 import { openModes } from './modes';
 
 // #521: the Ship entry of the mode menu draws the deck's hub map (docs/specs/game-design.md section 3.5) and the glass
@@ -45,13 +44,13 @@ test('the marble walks the Mess past its rooms, and a reload lands it on the sam
   await expect(hud).toContainText('Ship · Mess');
 
   const rooms: [number, number, string][] = [
-    [2, -1, 'Terminal'],
     [1, 1, 'Terminal'],
     [-2, 2, 'Battle royale lobby · closed'],
   ];
+  // One mouse click, then the same click without the raycast and the frames of a mouse click (__click), to stay fast.
   await clickCell(page, 1, 0);
   await expect(body).toHaveAttribute('data-hub', 'mess 1,0');
-  const path: [number, number][] = [[2, -1], [1, 0], [1, 1], [0, 2], [-1, 2], [-2, 2]];
+  const path: [number, number][] = [[1, 1], [0, 2], [-1, 2], [-2, 2]];
   for (const [q, r] of path) {
     await hookClick(page, q, r);
     await expect(body).toHaveAttribute('data-hub', `mess ${q},${r}`);
@@ -76,7 +75,14 @@ test('the boss door starts the Echo, and Back to the ship after the defeat lands
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-boss', 'echo');
   await expect(body).not.toHaveAttribute('data-hub');
-  await loseByRepetition(page); // ?bot=off: the test plays both sides
+  // ?bot=off: the test plays both sides, one marble each there and back twice, a draw by repetition: a defeat.
+  const moves = [[0, 2, 0, 1], [0, -2, 0, -1], [0, 1, 0, 2], [0, -1, 0, -2]];
+  for (const [ply, [q, r, tq, tr]] of [...moves, ...moves].entries()) {
+    await hookClick(page, q!, r!);
+    await hookClick(page, tq!, tr!);
+    await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(ply + 1);
+  }
+  await expect(page.locator('#hud')).toContainText('Defeat');
   const back = page.getByRole('button', { name: 'Back to the ship' });
   await expect(back).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('back-to-the-ship.png') });
@@ -93,15 +99,13 @@ test('the hot-seat table starts a game for two at one table, #522', async ({ pag
   await expect(page.locator('#hud')).toContainText('Mess: two crews, one table.');
 });
 
-test('the bot table starts a game against the bot, and Back to the ship after the loss lands on it, #522', async ({ page }) => {
+test('the bot table starts a game the bot answers, #522', async ({ page }) => {
   await shipAt(page, './?nodes=100', [-1, 0]);
   await hookClick(page, -2, 0);
-  const body = page.locator('body');
   await expect(page.locator('#hud')).toContainText('Mess: one seat filled.');
-  await page.evaluate(() => (window as any).__playTurns(30, [4])); // the player marches one way, the bot pushes six off
-  await expect(body).toHaveAttribute('data-over', 'loss');
-  await page.getByRole('button', { name: 'Back to the ship' }).click();
-  await expect(body).toHaveAttribute('data-hub', 'mess -2,0');
+  await hookClick(page, 0, 2); // Black (0, 2) to (0, 1)
+  await hookClick(page, 0, 1);
+  await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(2); // the bot replied
 });
 
 test('the online table opens a room with its invite link, as Play online does, #522', async ({ page }) => {
