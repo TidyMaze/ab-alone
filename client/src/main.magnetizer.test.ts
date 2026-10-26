@@ -4,25 +4,31 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Axial } from './board';
 import { boot, type Game } from './test/harness';
 
-// The Magnetizer on the harness (#645, game-design.md section 7.9): the + and − glyphs over the polarized marbles,
-// the ring on a fresh one, the HUD line, and the repulsions played in the engine's order. ?bot=off plays both sides
-// from the fixture of the core tests: fight seed 153, quiet boss moves on the right, the player walks the centre
-// column up. Turns 2 and 4 polarize its two marbles; on turn 6 the + steps next to the −, which shoves the boss column
-// of 3 off at (0, -4). Two more steps of the + eject 2 more: P2.
+// The Magnetizer on the harness (#645, #671, game-design.md section 7.9): the + and − glyphs over the polarized
+// marbles, the announce one turn ahead, the ring on a fresh one, the HUD line, and the repulsions played in the engine's
+// order, the pair's glyphs fading out. ?bot=off plays both sides from the fixture of the core tests: fight seed 42,
+// quiet boss moves on the right, the player walks the centre column up. The starts of turns 3 and 6 polarize its two
+// marbles, opposite signs; on turn 6 the second steps next to the first, which shoves the boss column of 3 off at
+// (0, -4), and both lose their sign. Three marbles in line then push the rest of the column off twice: P2.
 
 type Pole = { cell: Axial; sign: number; fresh: boolean };
+type Announce = { cell: Axial; sign: number } | null;
 const DIRS: Axial[] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
+const NE = 2;
+const SW = 3;
 const NW = 4;
 const SE = 5;
-const FIXTURE: [number, number, number][] = [
-  [0, 2, NW], [4, -3, SE], [0, 1, NW], [4, -2, SE], [0, 0, NW], [4, -1, SE], [0, 3, NW], [3, -3, SE], [0, 2, NW],
-  [3, -2, SE], [0, 1, NW], [4, -4, SE], [0, 1, NW], [4, -3, SE], [0, 0, NW], [3, -4, SE], [0, 0, NW], [3, -3, SE],
-  [0, -1, NW],
+const FIXTURE: [Axial[], number][] = [
+  [[[0, 2]], NW], [[[4, -3]], SE], [[[0, 1]], NW], [[[4, -2]], SE], [[[0, 0]], NW], [[[4, -1]], SE], [[[0, 3]], NW],
+  [[[3, -3]], SE], [[[0, 2]], NW], [[[3, -2]], SE], [[[0, 1]], NW], [[[4, -4]], SE], [[[0, 1]], NW], [[[4, -3]], SE],
+  [[[0, 0]], NW], [[[3, -4]], SE], [[[-1, 2]], NE], [[[3, -3]], SE], [[[0, 1]], NW], [[[4, -2]], SE],
+  [[[0, -2], [0, -1], [0, 0]], NW], [[[4, 0]], SW], [[[0, -3], [0, -2], [0, -1]], NW],
 ];
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const body = (): DOMStringMap => document.body.dataset;
 const tell = (): string | null | undefined => byId('hud').querySelector('.boss .tell')?.textContent;
 const poles = (game: Game): Pole[] => game.hook<Pole[]>('__polarities');
+const announce = (game: Game): Announce => game.hook<Announce>('__announce');
 
 /** Catches the scene main.ts builds: call before boot. */
 function catchScene(): () => THREE.Scene {
@@ -37,7 +43,7 @@ function catchScene(): () => THREE.Scene {
 }
 
 /** Starts the fight against The Magnetizer from the mode menu, on fight seed `seed`. */
-function fightMagnetizer(game: Game, seed = 153): void {
+function fightMagnetizer(game: Game, seed = 42): void {
   vi.spyOn(crypto, 'getRandomValues').mockImplementation((a) => {
     (a as Uint32Array).fill(seed);
     return a;
@@ -47,19 +53,25 @@ function fightMagnetizer(game: Game, seed = 153): void {
   [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Magnetizer')!.click();
 }
 
-/** Plays plies `from` to `to` (excluded) of the fixture by two clicks each, the slides run to their end. */
+/** Plays ply `i` of the fixture by clicks: its marbles, then the cell in front of the first one. */
+function ply(game: Game, i: number): void {
+  const [cells, dir] = FIXTURE[i]!;
+  for (const [q, r] of cells) game.click(q, r);
+  game.click(cells[0]![0] + DIRS[dir]![0], cells[0]![1] + DIRS[dir]![1]);
+}
+
+/** Plays plies `from` to `to` (excluded) of the fixture, the slides run to their end. */
 function plies(game: Game, from: number, to: number): void {
-  for (const [q, r, dir] of FIXTURE.slice(from, to)) {
-    game.click(q, r);
-    game.click(q + DIRS[dir]![0], r + DIRS[dir]![1]);
+  for (let i = from; i < to; i++) {
+    ply(game, i);
     for (let n = 0; n < 4; n++) game.frame(1000);
   }
 }
 
 const marbleAt = (game: Game, q: number, r: number): unknown => game.hook('__marbleTurn', q, r);
 
-describe('main.ts The Magnetizer (#645)', () => {
-  it('plays in the Furnace with its Tally line, counts the turns to a polarity and draws the glyph with its ring', async () => {
+describe('main.ts The Magnetizer (#645, #671)', () => {
+  it('announces the marble a turn ahead with an indicator over it, then draws its glyph with the ring', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off', { reducedMotion: true });
     fightMagnetizer(game);
@@ -67,59 +79,53 @@ describe('main.ts The Magnetizer (#645)', () => {
     expect(body().deck).toBe('furnace');
     expect(game.hud()).toContain('Magnetizer: charges on file. Six out to balance the books.');
     expect(tell()).toBe('Polarity in 2 turns');
+    plies(game, 0, 2); // the start of turn 2: turn 3 is announced
+    const coming = announce(game)!;
+    expect(Math.abs(coming.sign)).toBe(1);
     expect(poles(game)).toEqual([]);
-    plies(game, 0, 1);
-    expect(tell()).toBe('Polarity in 1 turn');
-    plies(game, 1, 3); // turn 2: the first polarity
-    const [first] = poles(game);
-    expect(poles(game)).toEqual([{ cell: first!.cell, sign: first!.sign, fresh: true }]);
-    expect(Math.abs(first!.sign)).toBe(1);
-    expect(tell()).toBe('Polarity in 2 turns');
-    const glyphs = scene().getObjectsByProperty('type', 'Sprite') as THREE.Sprite[];
-    expect(glyphs).toHaveLength(1); // a sprite always faces the camera
-    expect(glyphs[0]!.material.depthTest).toBe(false); // never hidden behind a marble
-    plies(game, 3, 4); // the boss ply: the ring is gone, the glyph stays
-    expect(poles(game)).toEqual([{ ...first!, fresh: false }]);
-    plies(game, 4, 7); // turn 4: the second polarity, the other sign
-    expect(poles(game).map((p) => p.sign).sort()).toEqual([-1, 1]);
+    expect(tell()).toBe('Polarity next turn');
+    const indicator = scene().getObjectByName('announce') as THREE.Sprite;
+    expect(indicator.material.depthTest).toBe(false);
+    expect(indicator.position.y).toBeGreaterThan(1);
+    plies(game, 2, 3);
+    const followed = announce(game)!; // it follows its marble
+    expect(followed.sign).toBe(coming.sign);
+    plies(game, 3, 4); // the start of turn 3
+    expect(poles(game)).toEqual([{ cell: followed.cell, sign: coming.sign, fresh: true }]);
+    expect(announce(game)).toBeNull();
+    expect(scene().getObjectByName('announce')).toBeUndefined();
+    expect(tell()).toBe('Polarity in 3 turns');
+    plies(game, 4, 5); // the ring lasts until the next ply
+    expect(poles(game).map((p) => p.fresh)).toEqual([false]);
   });
 
-  it('a + stepping next to a − shoves the boss column of 3: the pair slides apart, the last marble falls', async () => {
+  it('a marble stepping next to its opposite shoves the boss column of 3: the pair slides apart, its glyphs fade', async () => {
     const game = await boot('?bot=off');
     fightMagnetizer(game);
     plies(game, 0, 10);
+    expect(poles(game)).toHaveLength(2);
     const ejections = Number(body().ejections ?? 0);
-    game.click(0, 1);
-    game.click(0, 0); // turn 6: the + next to the −
+    ply(game, 10); // turn 6: the second marble steps next to the first
     expect(body().sliding).toBe('1');
     expect(marbleAt(game, 0, -4)).not.toBeNull(); // the move slides first, on the board before the repulsion
-    expect(poles(game).map((p) => String(p.cell))).toContain('0,0');
+    expect(poles(game)).toHaveLength(2);
     expect(body().repulsions).toBeUndefined();
     game.frame(1000); // the move slide ends: the repulsion plays
     expect(body().repulsions).toBe('1');
     expect(body().sliding).toBe('1');
     expect(Number(body().ejections)).toBe(ejections + 1);
     expect(body().ejecting).toBe('tumble');
+    expect(poles(game)).toEqual([]); // the pair is spent
+    expect(game.hook<number[]>('__fading')).toEqual([1, 1]);
+    game.frame(100);
+    const half = game.hook<number[]>('__fading');
+    expect(half).toHaveLength(2);
+    expect(half[0]).toBeGreaterThan(0);
+    expect(half[0]).toBeLessThan(1);
     game.frame(1000);
+    expect(game.hook('__fading')).toEqual([]);
     expect(body().sliding).toBeUndefined();
-    expect(poles(game).filter((p) => !p.fresh).map((p) => [String(p.cell), p.sign])).toEqual(
-      expect.arrayContaining([['0,-2', -1], ['0,1', 1]]),
-    );
     expect(game.hud()).toContain('1/6');
-  });
-
-  it('a chain plays its repulsions one after the other, in the engine order', async () => {
-    const game = await boot('?bot=off');
-    fightMagnetizer(game, 82); // on this seed turn 6 sets off 2 repulsions
-    plies(game, 0, 10);
-    game.click(0, 1);
-    game.click(0, 0);
-    game.frame(1000);
-    expect(body().repulsions).toBe('1');
-    game.frame(1000);
-    expect(body().repulsions).toBe('2');
-    game.frame(1000);
-    expect(body().sliding).toBeUndefined();
   });
 
   it('reduced motion jumps to the board after the repulsions, and 3 ejections bring P2', async () => {
@@ -129,17 +135,17 @@ describe('main.ts The Magnetizer (#645)', () => {
     expect(body().repulsions).toBeUndefined();
     expect(game.hud()).toContain('1/6');
     expect(marbleAt(game, 0, -2)).not.toBeNull();
-    plies(game, 11, 19);
+    expect(poles(game)).toEqual([]);
+    plies(game, 11, 23);
     expect(game.hud()).toContain('3/6');
-    expect(tell()).toBe('Polarity every turn');
+    expect(tell()).toBe('Polarity in 2 turns'); // turn 12 of P2: the next one is turn 14
   });
 
   it('a new fight during the repulsions draws its own board', async () => {
     const game = await boot('?bot=off');
     fightMagnetizer(game);
     plies(game, 0, 10);
-    game.click(0, 1);
-    game.click(0, 0);
+    ply(game, 10);
     fightMagnetizer(game); // Retry by the menu while the move slides
     game.frame(1000);
     game.frame(1000);
@@ -148,9 +154,10 @@ describe('main.ts The Magnetizer (#645)', () => {
     expect(marbleAt(game, 0, 2)).not.toBeNull(); // the start position
   });
 
-  it('a game that is no Magnetizer fight draws no polarity', async () => {
+  it('a game that is no Magnetizer fight draws no polarity and no announce', async () => {
     const game = await boot('?bot=off');
     expect(poles(game)).toEqual([]);
+    expect(announce(game)).toBeNull();
     expect(tell()).toBeUndefined();
   });
 });

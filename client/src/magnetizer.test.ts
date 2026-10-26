@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTER } from './alien';
 import { contrastRatio, type RGB } from './contrast';
-import { drawGlyph, parseRepulsions, polarityText, REPULSION_STRIDE, repulsionMoves } from './magnetizer';
+import { drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, REPULSION_STRIDE, repulsionMoves } from './magnetizer';
 
 const rgb = (hex: number): RGB => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
 
@@ -32,21 +32,31 @@ describe('repulsionMoves', () => {
   });
 });
 
+describe('parseAnnounce', () => {
+  it('reads the [q, r, sign] of the bridge, null when nothing is announced', () => {
+    expect(parseAnnounce([0, -1, -1])).toEqual({ cell: [0, -1], sign: -1 });
+    expect(parseAnnounce([])).toBeNull();
+  });
+});
+
 describe('polarityText', () => {
-  it('counts the player turns to the next polarity in P1', () => {
-    expect([0, 1, 2, 3, 4, 5].map((plies) => polarityText(0, plies))).toEqual([
+  it('counts the player turns to the next polarity: turns 3, 6, 9 in P1', () => {
+    expect([0, 1, 2, 3, 4, 5, 8, 10].map((plies) => polarityText(0, plies))).toEqual([
+      'Polarity in 2 turns', // turn 1
       'Polarity in 2 turns',
-      'Polarity in 1 turn',
-      'Polarity in 1 turn',
-      'Polarity in 2 turns',
-      'Polarity in 2 turns',
-      'Polarity in 1 turn',
+      'Polarity next turn', // turn 2: turn 3 is announced
+      'Polarity next turn',
+      'Polarity in 3 turns', // turn 3 got it at its start
+      'Polarity in 3 turns',
+      'Polarity next turn', // turn 5
+      'Polarity in 3 turns',
     ]);
   });
 
-  it('says every turn in P2, and all the marbles in P3', () => {
-    expect(polarityText(1, 7)).toBe('Polarity every turn');
-    expect(polarityText(2, 7)).toBe('All polarities every turn');
+  it('every 2nd turn in P2, every turn in P3', () => {
+    expect(polarityText(1, 4)).toBe('Polarity next turn'); // turn 3
+    expect(polarityText(1, 6)).toBe('Polarity in 2 turns'); // turn 4
+    expect(polarityText(2, 7)).toBe('Polarity every turn');
   });
 });
 
@@ -75,5 +85,33 @@ describe('drawGlyph', () => {
 
   it('reads at 3:1 and more, the tell colours of The Alien', () => {
     expect(contrastRatio(rgb(COUNTER.ink), rgb(COUNTER.plate))).toBeGreaterThan(3);
+  });
+});
+
+describe('drawAnnounce', () => {
+  it('draws the coming sign on a near-black diamond with a pale edge, smaller than the glyph', () => {
+    const calls: string[] = [];
+    const styles: string[] = [];
+    const g = {
+      clearRect: () => calls.push('clear'),
+      beginPath: () => {},
+      moveTo: (x: number, y: number) => calls.push(`move ${x} ${y}`),
+      lineTo: (x: number, y: number) => calls.push(`line ${x} ${y}`),
+      closePath: () => {},
+      fill: () => calls.push('fill'),
+      stroke: () => calls.push('stroke'),
+      fillRect: (x: number, y: number, w: number, h: number) => calls.push(`bar ${x} ${y} ${w} ${h}`),
+      set fillStyle(v: string) {
+        styles.push(v);
+      },
+      set strokeStyle(v: string) {
+        styles.push(`edge ${v}`);
+      },
+      lineWidth: 0,
+    };
+    drawAnnounce(g as unknown as CanvasRenderingContext2D, 1, 64);
+    expect(calls).toEqual(['clear', 'move 32 4', 'line 60 32', 'line 32 60', 'line 4 32', 'fill', 'stroke', 'bar 19 28 26 8', 'bar 28 19 8 26']);
+    expect(styles).toEqual(['#0b0d0f', 'edge #d8d4c8', '#d8d4c8']);
+    expect(g.lineWidth).toBe(4);
   });
 });
