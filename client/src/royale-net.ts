@@ -6,6 +6,7 @@
 import type { Keys } from './moverecord';
 import type { OnlineStatus } from './presence';
 import { commitOrder, RoundBook, type Commit, type Reveal } from './royale-round';
+import type { Judge } from './session';
 
 /** The round deadline (rules.md section 10.4, OPEN-2): every seat commits within it of the round's start. */
 export const ROUND_MS = 15_000;
@@ -23,6 +24,16 @@ export function seedOf(room: string): number {
   for (let i = 0; i < room.length; i++) h = Math.imul(h ^ room.charCodeAt(i), 0x01000193);
   return h >>> 0;
 }
+
+/** The judge of a royale room's session (session.ts): the rounds carry the orders, a move record never counts there. */
+export const ROOM_JUDGE: Judge = {
+  to_move: () => 0, // no seat's turn
+  play: () => {
+    throw new Error('a battle royale room plays no move record');
+  },
+  status: () => 0,
+  restart: () => {},
+};
 
 /** The coordinator opens a round. `seats` are the keys by arena seat, '' for a bot: the first start fixes them. */
 export interface Start {

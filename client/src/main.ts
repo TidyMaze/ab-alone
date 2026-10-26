@@ -45,7 +45,7 @@ import {
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
-import { coopFromHash, inviteUrl, newRoomId, roomFromHash, type CoopFight } from './invite';
+import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
 import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
 import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
@@ -132,6 +132,7 @@ import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame'
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import { ARENA, ARENA_SCALE, YOU, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
 import { buildReveal, shownAt, sinkAt, type Fall, type Reveal } from './royale-reveal';
+import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf } from './royale-net';
 import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
 import './ui.css';
 
@@ -171,8 +172,11 @@ let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
-// The offline battle royale (#502) while it is on, else null.
+// The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
+// Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
+let royaleNet: RoyaleNet<Royale> | null = null;
+let ticking = 0;
 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
@@ -2591,6 +2595,14 @@ function replay(mv: ArrayLike<number>, live: boolean): void {
   engine.play(Int32Array.from(mv));
   afterPlay(before, Array.from(mv), live);
 }
+/** The creator waits for the others as long as it takes, a joiner should find the creator's room at once. */
+function signalingTimeout(side: number): void {
+  if (side !== 1) setTimeout(() => diag.timeout(), SIGNALING_TIMEOUT_MS);
+}
+/** The transport of `room`: Trystero, or the page hook the e2e test wires under ?net=hook. */
+function roomTransport(room: string): Transport {
+  return new URLSearchParams(location.search).get('net') === 'hook' ? hookTransport() : p2pTransport(room, (message) => diag.joinError(message));
+}
 /** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. */
 async function goOnline(room: string, side: number, coop?: CoopFight): Promise<void> {
   leaveHub();
@@ -2606,13 +2618,9 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   selected = [];
   leaveRoyale();
   diag.connecting();
-  const net =
-    new URLSearchParams(location.search).get('net') === 'hook'
-      ? hookTransport()
-      : p2pTransport(room, (message) => diag.joinError(message));
+  const net = roomTransport(room);
   link = net;
-  // The creator waits for an opponent as long as it takes, a joiner should find the creator's room at once.
-  if (side !== 1) setTimeout(() => diag.timeout(), SIGNALING_TIMEOUT_MS);
+  signalingTimeout(side);
   let netState = '';
   // An extra peer is a spectator: it follows the game and never sends (the spectator view is #34).
   // The status line shows our color and whether the key bound to the other seat is connected (#121).
@@ -2737,6 +2745,7 @@ setButton(playOnlineButton, 'Play online', icon('online'));
 // initiative order before its reveal, and the reveal of the last round. A boss fight, Play online or Ship leaves it,
 // and it leaves Ship.
 const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
+const startButton = document.getElementById('royale-start') as HTMLButtonElement; // the creator's, online (#504)
 function startRoyale(file: RoyaleFile): void {
   leaveHub();
   stopAnalysis();
@@ -2757,6 +2766,14 @@ function startRoyale(file: RoyaleFile): void {
   refresh();
 }
 function leaveRoyale(): void {
+  if (royaleNet) {
+    royaleNet = null;
+    clearInterval(ticking);
+    online = null;
+    link!.close();
+  }
+  startButton.hidden = true;
+  for (const key of ['net', 'desync', 'online', 'seat']) delete document.body.dataset[key];
   royale = null;
   reveal = null;
   arena.visible = false;
@@ -2800,7 +2817,7 @@ function drawRoyale(game: Royale): void {
   const left = crackLeft(cracks, ARENA);
   breachGlow.color.set(paletteById(palette).hazard);
   crackDecals = [];
-  targets = reveal ? [] : groupTargets(parseMoves(game.legal_orders(YOU)), selected);
+  targets = reveal || !canOrder() ? [] : groupTargets(parseMoves(game.legal_orders(me())), selected);
   ringed = marked >= 0 ? ARENA.filter((_, i) => seatAt(board[i]!) === marked) : [...selected];
   ARENA.forEach(([q, r], i) => {
     arenaDiscs[i]!.visible = board[i] !== VANISHED;
@@ -2859,14 +2876,15 @@ function drawRoyale(game: Royale): void {
 // During the reveal, the log lines of the turns played so far and no end yet.
 function royaleHud(game: Royale): void {
   const placed = reveal ? [] : standings(game.placement());
-  const end = royaleBanner(placed, YOU);
+  const end = royaleBanner(placed, me());
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
   const { board, cracks } = arenaView(game);
   const log = parseLog(game.round_log());
   const shown = log && reveal ? { ...log, turns: log.turns.slice(0, shownAt(reveal.plan, reveal.ms)) } : log;
-  document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out: outSeats(board), cracks, standings: placed });
-  holdButton.disabled = end !== null;
+  const room = royaleNet && { names: royaleNet.names, you: me(), status: royaleStatus(royaleNet) };
+  document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out: outSeats(board), cracks, standings: placed, ...room });
+  holdButton.disabled = end !== null || !canOrder();
   backButton.hidden = !roomOf || end === null;
 }
 // A press on one of the player's marbles selects it, a press on a target locks that move as the order and plays the
@@ -2874,12 +2892,12 @@ function royaleHud(game: Royale): void {
 function pickRoyale(q: number, r: number): void {
   endReveal();
   const game = royale!;
-  if (game.placement().length) return;
-  if (seatAt(game.board()[cellIndex(q, r, ARENA)]!) === YOU) {
+  if (game.placement().length || !canOrder()) return;
+  if (seatAt(game.board()[cellIndex(q, r, ARENA)]!) === me()) {
     selected = toggleSelection(selected, [q, r]);
     return refresh();
   }
-  const mv = moveForClick(parseMoves(game.legal_orders(YOU)), selected, [q, r]);
+  const mv = moveForClick(parseMoves(game.legal_orders(me())), selected, [q, r]);
   if (mv) playRound(encodeMove(mv));
 }
 // Under reduced motion the arena jumps to the new position (#612).
@@ -2887,14 +2905,19 @@ function playRound(mine: readonly number[]): void {
   endReveal();
   const game = royale!;
   if (game.placement().length) return; // Hold pressed during the reveal of the last round
+  selected = [];
+  if (royaleNet) return void royaleNet.play([...mine]); // online: committed, the round resolves on every peer (#504)
   const before = game.board();
   const cracks = game.cracks();
   const orders = roundOrders(game, mine);
   game.resolve(orders);
-  selected = [];
+  showRound(game, before, cracks, orders);
+}
+/** Plays out the round `game` just resolved from the arena `before` it, with its cracks then and its orders. */
+function showRound(game: Royale, before: ArrayLike<number>, cracks: ArrayLike<number>, orders: Int32Array): void {
   if (reducedMotion()) return refresh();
   const plan = buildReveal(before, orders, parseLog(game.round_log())!, game.board());
-  reveal = { plan, cracks, start: performance.now(), ms: 0, at: -1 };
+  reveal = { plan, cracks: Int32Array.from(cracks), start: performance.now(), ms: 0, at: -1 };
   animateReveal(reveal.start);
 }
 // Each frame of the reveal: a new turn or the breach redraws the arena and starts its falls, the turn's marbles slide,
@@ -2946,6 +2969,83 @@ royaleButton.addEventListener('click', () => {
 });
 holdButton.addEventListener('click', () => playRound([]));
 royaleButton.disabled = false; // listener ready (#146)
+
+// The online battle royale (#504, docs/specs/tech.md section 6): Battle royale online opens a room of 6 seats and shows
+// its invite link, each link opener takes the first free seat. The creator coordinates: Start begins the game, the
+// seats empty then are bots, played alike on every peer. Each round a target press or Hold commits the order, the
+// round resolves once every seat revealed or its deadline passed (royale-net.ts), and the arena plays it out.
+const ONLINE_SEATS = 6;
+const me = (): number => (royaleNet ? royaleNet.you : YOU);
+const canOrder = (): boolean => !royaleNet || royaleNet.phase === 'choosing';
+function royaleStatus(net: RoyaleNet<Royale>): OnlineStatus {
+  const session = online!;
+  document.body.dataset.online = 'royale'; // read by the e2e tests, as data-seat, data-net and data-desync
+  document.body.dataset.seat = session.role;
+  document.body.dataset.net = net.phase;
+  document.body.dataset.desync = String(net.desync);
+  startButton.hidden = net.phase !== 'lobby' || !session.isCoordinator;
+  return netStatus(net.phase, session.isCoordinator, net.players, net.desync);
+}
+async function goRoyale(room: string, side: number): Promise<void> {
+  leaveRoyale();
+  startRoyale({ seed: seedOf(room), rounds: [] });
+  const game = royale!;
+  diag.connecting();
+  const net = roomTransport(room);
+  link = net;
+  signalingTimeout(side);
+  const keys = await generateKeys();
+  const session: OnlineSession = new OnlineSession({
+    game: room,
+    side,
+    seatCount: ONLINE_SEATS,
+    engine: engine_version(),
+    keys,
+    transport: net,
+    judge: ROOM_JUDGE,
+    onMove: refresh, // never: the judge plays no move
+    onRefuse: (reason) => diag.refused(reason),
+    onState: (state) => {
+      diag.netState(state);
+      refresh();
+    },
+    onRole: refresh,
+    onPresence: refresh,
+    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: (fn, ms) => void setInterval(fn, ms) },
+    onOther: (m, key, peer) => {
+      const message = parseRoyale(m);
+      if (message) return ours.receive(message, key, peer);
+    },
+  });
+  const ours: RoyaleNet<Royale> = new RoyaleNet({
+    game: room,
+    keys,
+    royale: game,
+    roundMs: roundPeriod(location.search, navigator.webdriver),
+    now: Date.now,
+    connected: () => net.state === 'open',
+    send: (m, to) => net.send(m, to),
+    coordinator: () => session.coordinator,
+    roster: () => session.seats.roster(),
+    onRound: (before, cracks, orders) => showRound(game, before, cracks, orders), // the room's link closes when it is left
+    onChange: refresh,
+  });
+  online = session;
+  royaleNet = ours;
+  ticking = setInterval(() => void ours.tick(), 100) as unknown as number;
+  refresh();
+}
+startButton.addEventListener('click', () => void royaleNet?.start());
+const royaleOnlineButton = document.getElementById('royale-online') as HTMLButtonElement;
+royaleOnlineButton.addEventListener('click', () => {
+  moveModes('pick');
+  const room = newRoomId((b) => crypto.getRandomValues(b));
+  inviteBox.value = royaleUrl(location.href, room);
+  location.hash = new URL(inviteBox.value).hash;
+  inviteBox.hidden = inviteLabel.hidden = false;
+  inviteLabel.textContent = 'Invite link: send it to the other players';
+  void goRoyale(room, 1);
+});
 // Used by the browser checks to load a royale game file (#502).
 (window as unknown as Record<string, unknown>).__royale = startRoyale;
 // Used by the browser checks to read the marble drawn for an arena cell, where it is now: its seat and place (#612).
@@ -2958,7 +3058,7 @@ royaleButton.disabled = false; // listener ready (#146)
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
-  playOnlineButton.disabled = coopButton.disabled = state.disabled;
+  playOnlineButton.disabled = coopButton.disabled = royaleOnlineButton.disabled = state.disabled;
   offlineNotice = state.notice;
   hud();
 }
@@ -2968,7 +3068,9 @@ playReady = true; // engine and listener ready (#127)
 syncConnectivity();
 const invited = roomFromHash(location.hash);
 const coopInvite = coopFromHash(location.hash);
+const royaleInvite = royaleFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
+else if (royaleInvite) void goRoyale(royaleInvite, 2);
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite); // an unknown boss starts nothing
 else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Ship hub (#602)
 else analyse(); // the start position
