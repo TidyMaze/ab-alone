@@ -1,17 +1,65 @@
 //! Start position of a battle royale: 10 marbles per seat in the rim wedges (rules.md
 //! section 10.4).
 
-use super::{Royale, RoyaleError};
+use std::collections::BTreeMap;
+
+use super::{seat_cell, Royale, RoyaleError};
+use crate::board::{Board, MAX_RADIUS};
 
 /// Fewest seats in a battle royale.
 pub const MIN_SEATS: usize = 3;
 /// Most seats in a battle royale.
 pub const MAX_SEATS: usize = 6;
 
+/// Wedge 0, centred on the bottom side (r = 8): rows of 3, 4 and 3 marbles from the rim inwards,
+/// symmetric about the side's middle. Wedge `k` is wedge 0 turned `k` times by 60 degrees.
+const WEDGE_0: [(i32, i32); 10] = [
+    (-5, 8),
+    (-4, 8),
+    (-3, 8),
+    (-5, 7),
+    (-4, 7),
+    (-3, 7),
+    (-2, 7),
+    (-4, 6),
+    (-3, 6),
+    (-2, 6),
+];
+
+/// Wedge of each seat, by seat count from 3 to 6: 3 seats alternate, 4 seats leave two
+/// opposite wedges empty.
+const WEDGES: [&[usize]; 4] = [
+    &[0, 2, 4],
+    &[0, 1, 3, 4],
+    &[0, 1, 2, 3, 4],
+    &[0, 1, 2, 3, 4, 5],
+];
+
+/// Turns `(q, r)` by 60 degrees about the centre, clockwise on screen (E goes to SE).
+fn rotate((q, r): (i32, i32)) -> (i32, i32) {
+    (-r, q + r)
+}
+
 /// The radius 8 arena with 10 marbles per seat, round 1. Fewer than 3 or more than 6 seats is
 /// refused.
 pub fn start(seats: usize) -> Result<Royale, RoyaleError> {
-    Err(RoyaleError::SeatCount(seats))
+    if !(MIN_SEATS..=MAX_SEATS).contains(&seats) {
+        return Err(RoyaleError::SeatCount(seats));
+    }
+    let mut board = Board::with_radius(MAX_RADIUS);
+    for (seat, &wedge) in WEDGES[seats - MIN_SEATS].iter().enumerate() {
+        for &cell in &WEDGE_0 {
+            let (q, r) = (0..wedge).fold(cell, |c, _| rotate(c));
+            board.set(q, r, seat_cell(seat));
+        }
+    }
+    Ok(Royale {
+        board,
+        seats,
+        round: 1,
+        ejections: vec![0; seats],
+        touched: BTreeMap::new(),
+    })
 }
 
 #[cfg(test)]

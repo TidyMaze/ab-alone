@@ -218,7 +218,18 @@ Hooks, from game-design section 7 (starting values):
 - **FINAL.** 3 to 6 players. **TUNE** for the default of 6, with bots filling empty seats.
 - **FINAL.** Arena: hex radius 8, 217 cells.
 - **TUNE.** 10 marbles per player (game-design open question Q3).
-- **OPEN-5.** Starting coordinates for the 6 wedges are not defined in any source. Needed before a test.
+- **FINAL (OPEN-5, lead decision on #494).** Start position (`royale::start`): 6 wedges of 10 cells, one centred on each rim side. Wedge 0 sits on the bottom side (r = 8, Black's side as in section 2.1), in rows of 3, 4 and 3 from the rim inwards, symmetric about the middle of the side. Wedge `k` is wedge 0 turned `k` times by 60 degrees about the centre, `(q,r) -> (-r,q+r)` (clockwise on screen, E goes to SE). With 6 seats the start is 6-fold symmetric.
+
+  | Wedge | Cells |
+  |---|---|
+  | 0 (bottom) | (-5,8) (-4,8) (-3,8) (-5,7) (-4,7) (-3,7) (-2,7) (-4,6) (-3,6) (-2,6) |
+  | 1 (bottom left) | (-8,3) (-8,4) (-8,5) (-7,2) (-7,3) (-7,4) (-7,5) (-6,2) (-6,3) (-6,4) |
+  | 2 (top left) | (-3,-5) (-4,-4) (-5,-3) (-2,-5) (-3,-4) (-4,-3) (-5,-2) (-2,-4) (-3,-3) (-4,-2) |
+  | 3 (top) | (5,-8) (4,-8) (3,-8) (5,-7) (4,-7) (3,-7) (2,-7) (4,-6) (3,-6) (2,-6) |
+  | 4 (top right) | (8,-3) (8,-4) (8,-5) (7,-2) (7,-3) (7,-4) (7,-5) (6,-2) (6,-3) (6,-4) |
+  | 5 (bottom right) | (3,5) (4,4) (5,3) (2,5) (3,4) (4,3) (5,2) (2,4) (3,3) (4,2) |
+
+  Seats `s0 ... s(N-1)` take the wedges in this order: 3 seats `0, 2, 4` (alternating), 4 seats `0, 1, 3, 4` (the two empty wedges are opposite), 5 seats `0` to `4`, 6 seats `0` to `5`. Seat colours in seat order: Black, White, then seats 3 to 6. Fewer than 3 or more than 6 seats is refused.
 
 **Round structure (FINAL, game-design option C):** all players commit at once, then reveal, then the round resolves.
 
@@ -478,7 +489,7 @@ These are raised in the PR body. Owners decide. Nothing here was picked silently
 - **OPEN-2. Battle royale round timer.** game-design.md section 6 says 15 s. tech.md section 6 says 30 s. This spec uses 15 s (TUNE).
 - **OPEN-3. Who moves first.** No source. PROPOSAL: Black.
 - **OPEN-4. Belgian daisy coordinates.** Resolved in #69: checked against three diagrams, section 2.2 is FINAL.
-- **OPEN-5. Battle royale wedge coordinates.** Not defined.
+- **OPEN-5. Battle royale wedge coordinates.** Resolved in #494: section 10.4 is FINAL.
 - **OPEN-6. Battle royale rings below radius 3.** game-design.md is ambiguous.
 - **OPEN-7. Battle royale ties and placement tables.** Points are defined for 6 players only. The tie at breach end is not defined.
 - **OPEN-8. Credit for breach ejections.** PROPOSAL: last toucher if any, else nobody.
