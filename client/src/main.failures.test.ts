@@ -32,6 +32,17 @@ describe('a bot worker that cannot answer, #736', () => {
     expect(byId<HTMLButtonElement>('hint').disabled).toBe(false);
   });
 
+  it('says nothing of a game the player left while the bot failed', async () => {
+    const game = await boot('?nodes=50', { fails: 'worker' });
+    await game.settle();
+    playFirstMove(game);
+    byId('new-game').click();
+    byId('new-game').click(); // the second press confirms
+    await game.settle();
+    expect(byId<HTMLButtonElement>('hint').disabled).toBe(false);
+    expect(game.hook<number>('__plies')).toBe(0);
+  });
+
   it('turns the hint off when it cannot be asked', async () => {
     const game = await boot('?nodes=50', { fails: 'worker' });
     await game.settle();

@@ -49,6 +49,16 @@ body::after {
 
 /* Low tier and clear-board mode draw no post effect (the vignette is the only one so far). */
 body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
+/* A failed start (#737): a plate over the blank page, with the reason and Reload. */
+#boot-error {
+  position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1rem; padding: 1rem; text-align: center; color: var(--text); background: var(--bg); font: 1rem/1.4 var(--ui);
+}
+#boot-error[hidden] { display: none; }
+#boot-error button {
+  padding: 0.5rem 1rem; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge);
+  border-radius: 2px; font: 0.875rem/1.2 var(--ui);
+}
 /* The page chrome: the HUD plate top-left, the button column top-right, side by side so neither covers
    the other (#227). Only the buttons and fields catch the pointer, the rest goes to the board. */
 #chrome {

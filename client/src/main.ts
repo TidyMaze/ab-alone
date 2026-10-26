@@ -20,6 +20,7 @@ import {
   type Move,
 } from './board';
 import { askBot, askEval, botBudget } from './bot';
+import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
@@ -187,7 +188,8 @@ if (serviceWorker) {
   });
 }
 
-await init();
+document.getElementById('boot-reload')!.addEventListener('click', () => location.reload());
+await init().catch(bootFailed);
 let engine: Engine | Encounter = new Engine();
 // Encounter mode: the boss and seed of the running fight, kept so Retry restarts the same one. A daily
 // fight also keeps its UTC day and its attempt of that day (#195).
@@ -219,7 +221,7 @@ const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webg
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
 const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL });
-await renderer.init();
+await renderer.init().catch(bootFailed);
 const loader = new KTX2Loader().detectSupport(renderer);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {
@@ -261,7 +263,7 @@ const sceneRenderer = new SceneRenderer({
   firstDeckMap,
   firstDeckNormal,
 });
-await sceneRenderer.init();
+await sceneRenderer.init().catch(bootFailed);
 const {
   scene,
   camera,
@@ -1417,6 +1419,7 @@ const analyst = new Analyst(
     evalLabel.textContent = words;
     evalBar.dataset.ply = String(moves.length); // read by the e2e tests
   },
+  botFailed,
 );
 let analysing = true;
 function analyse(): void {
@@ -1442,6 +1445,7 @@ const here = (): Spot => ({ game: engine, ply: history.length });
 const hint = new Hint(
   (moves) => askBot(analysisWorker, moves, scaleBudget(budget, difficulty)), // the bot's own budget: the move the bot would play there
   () => refresh(), // the ghost and the rings on the marbles the move takes (#301)
+  botFailed,
 );
 function syncHint(): void {
   const state = hint.state(here());
@@ -1456,6 +1460,12 @@ hintButton.addEventListener('click', () => {
   refresh();
 });
 
+// The bot, the boss, the evaluation bar or the hint got no answer from its worker (#736): the game must not wait for it.
+function botFailed(): void {
+  hud(` · The bot could not answer: press New game`);
+  syncHint();
+}
+
 async function botTurn(): Promise<void> {
   if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
   thinking = true;
@@ -1465,7 +1475,16 @@ async function botTurn(): Promise<void> {
   const started = performance.now();
   const searchBudget = scaleBudget(budget, difficulty);
   const diffPercent = DIFFICULTY_PERCENT[difficulty];
-  const move = await askBot(worker, history, searchBudget, fight ?? undefined, diffPercent);
+  let move: number[];
+  try {
+    move = await askBot(worker, history, searchBudget, fight ?? undefined, diffPercent);
+  } catch {
+    if (engine === game) {
+      thinking = false; // the worker cannot answer (#736); a replaced game has nothing to say
+      botFailed();
+    }
+    return;
+  }
   diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: searchBudget });
   if (engine !== game) return; // Retry, a new fight, New game or an import replaced the game while the bot was thinking
   thinking = false;

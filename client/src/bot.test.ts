@@ -6,6 +6,7 @@ import {
   BOT_NODES,
   botBudget,
   EVAL_NODES,
+  type BotFailure,
   type BotRequest,
   type BotResponse,
   type EncounterLike,
@@ -92,7 +93,7 @@ describe('askBot', () => {
   /** A worker that answers every request with `answer`, asynchronously, like a real one. */
   function fakeWorker() {
     const worker = {
-      onmessage: null as ((e: MessageEvent<BotResponse>) => void) | null,
+      onmessage: null as ((e: MessageEvent<BotResponse | BotFailure>) => void) | null,
       postMessage(req: BotRequest) {
         const reply = answer(req, () => new FakeEngine(), noEncounter);
         // A reply for another request must be ignored.
@@ -149,8 +150,8 @@ describe('askBot', () => {
 describe('askBot failures, #736', () => {
   const never = () => {
     const worker = {
-      onmessage: null as ((e: MessageEvent<BotResponse | { id: number; error: string }>) => void) | null,
-      onerror: null as ((e: unknown) => void) | null,
+      onmessage: null as ((e: MessageEvent<BotResponse | BotFailure>) => void) | null,
+      onerror: null as ((e: ErrorEvent) => void) | null,
       sent: [] as BotRequest[],
       postMessage(req: BotRequest) {
         worker.sent.push(req);
@@ -173,7 +174,7 @@ describe('askBot failures, #736', () => {
     const worker = never();
     const first = askBot(worker, [], 10);
     const second = askEval(worker, [], 10);
-    worker.onerror!({ message: 'no wasm' });
+    worker.onerror!({ message: 'no wasm' } as ErrorEvent);
     await expect(first).rejects.toThrow('The bot worker failed');
     await expect(second).rejects.toThrow('The bot worker failed');
     // A reply that comes after is ignored, and a fresh request is asked again.

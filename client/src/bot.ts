@@ -32,6 +32,12 @@ export interface ScoreAnswer {
 
 export type BotResponse = MoveAnswer | ScoreAnswer;
 
+/** The worker could not answer request `id`: `error` says why (#736). */
+export interface BotFailure {
+  id: number;
+  error: string;
+}
+
 export interface EngineLike {
   play(mv: Int32Array): void;
   best_move(nodes: number): Int32Array | number[];
@@ -45,7 +51,8 @@ export interface EncounterLike {
 }
 
 export interface WorkerLike {
-  onmessage: ((e: MessageEvent<BotResponse>) => void) | null;
+  onmessage: ((e: MessageEvent<BotResponse | BotFailure>) => void) | null;
+  onerror?: ((e: ErrorEvent) => void) | null;
   postMessage(req: BotRequest): void;
 }
 
@@ -85,22 +92,34 @@ export function answer(
 let nextId = 0;
 /** The replies each worker still owes, by request id: several requests can be in flight on one worker (the
  * evaluation bar and the hint share the analysis worker, #192). A reply with an unknown id is ignored. */
-const owed = new WeakMap<WorkerLike, Map<number, (reply: BotResponse) => void>>();
+const owed = new WeakMap<WorkerLike, Map<number, Owed>>();
 
-/** Posts one request, resolves with the reply that has its id. */
+interface Owed {
+  resolve: (reply: BotResponse) => void;
+  reject: (reason: Error) => void;
+}
+
+/** Posts one request, resolves with the reply that has its id, rejects when the worker answers an error or fails (#736). */
 function ask<T extends BotResponse>(worker: WorkerLike, req: Omit<BotRequest, 'id'>): Promise<T> {
   const id = nextId++;
   let replies = owed.get(worker);
   if (!replies) {
-    const waiting = new Map<number, (reply: BotResponse) => void>();
-    worker.onmessage = (e) => {
-      waiting.get(e.data.id)?.(e.data);
-      waiting.delete(e.data.id);
+    const waiting = new Map<number, Owed>();
+    worker.onmessage = ({ data }) => {
+      const pending = waiting.get(data.id);
+      waiting.delete(data.id);
+      if (!pending) return;
+      if ('error' in data) pending.reject(new Error(data.error));
+      else pending.resolve(data);
+    };
+    worker.onerror = () => {
+      for (const pending of waiting.values()) pending.reject(new Error('The bot worker failed'));
+      waiting.clear();
     };
     owed.set(worker, (replies = waiting));
   }
-  return new Promise((resolve) => {
-    replies.set(id, resolve as (reply: BotResponse) => void);
+  return new Promise((resolve, reject) => {
+    replies.set(id, { resolve: resolve as (reply: BotResponse) => void, reject });
     worker.postMessage({ id, ...req });
   });
 }

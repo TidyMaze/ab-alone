@@ -22,6 +22,7 @@ export class Hint {
   constructor(
     private readonly ask: (history: number[][]) => Promise<number[]>,
     private readonly changed: () => void,
+    private readonly failed: () => void,
   ) {}
 
   /** A press with `history` played in `game`: asks the best move of that position, or clears its hint when it is
@@ -31,11 +32,18 @@ export class Hint {
     if (this.state(spot) !== 'off') return this.clear();
     this.on = spot;
     this.move = null;
-    void this.ask([...history]).then((move) => {
-      if (!same(this.on, spot)) return; // cleared, or asked for another position since
-      this.move = move;
-      this.changed();
-    });
+    this.ask([...history]).then(
+      (move) => {
+        if (!same(this.on, spot)) return; // cleared, or asked for another position since
+        this.move = move;
+        this.changed();
+      },
+      () => {
+        if (!same(this.on, spot)) return;
+        this.clear(); // the engine cannot answer (#736): no hint to wait for
+        this.failed();
+      },
+    );
     this.changed();
   }
 

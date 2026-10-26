@@ -48,6 +48,7 @@ export class Analyst {
   constructor(
     private readonly ask: (history: number[][]) => Promise<number>,
     private readonly show: (score: number, position: Position) => void,
+    private readonly failed: () => void,
   ) {}
 
   /** Evaluates `position` as soon as the worker is free, instead of any older one still waiting. */
@@ -67,10 +68,19 @@ export class Analyst {
     if (!job) return;
     this.wanted = null;
     this.busy = true;
-    void this.ask(job.position.history).then((score) => {
+    const done = (): void => {
       this.busy = false;
-      if (job.tag === this.tag) this.show(score, job.position);
       this.next();
-    });
+    };
+    this.ask(job.position.history).then(
+      (score) => {
+        if (job.tag === this.tag) this.show(score, job.position);
+        done();
+      },
+      () => {
+        if (job.tag === this.tag) this.failed(); // the worker cannot answer (#736): the bar keeps its last score
+        done();
+      },
+    );
   }
 }
