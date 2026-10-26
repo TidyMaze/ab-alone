@@ -79,7 +79,7 @@ fn ballast_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(ballast_start(seed))
 }
 
-/// The Alien sets up its own 8 marbles.
+/// The Alien sets up its own 7 marbles.
 fn alien_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(alien_start(seed))
 }
