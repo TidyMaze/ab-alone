@@ -1,58 +1,162 @@
 //! The Rail Yard (#626, docs/specs/game-design.md section 7.8): freight trains sweep whole lines.
-//! Stubbed: the tests below describe it.
+//! A train is announced 5 player turns ahead on one line of the board, edge to edge, then passes
+//! and ejects every marble on it, either side. The trains are marks on the board
+//! (`Board::trains`), never marbles, so they change no move or push. The track is picked by a
+//! seeded integer PRNG of the fight seed and the ply, so every peer gets the same trains.
 
-use crate::board::{Board, Cell};
+use crate::board::{Board, Cell, RADIUS};
+use crate::encounter::hull::mix;
 use crate::encounter::{BossDef, Encounter};
 use crate::game::Game;
 use crate::moves::{apply, legal_moves, Move, Player};
+use crate::search::{search_with, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
+/// Lines of the board, 9 on each of the 3 axes. A track is a line and its entry end: twice as many.
 pub const RAILYARD_LINES: u8 = 27;
+/// Player turns from the announce of a train to its pass. TUNE.
 pub const RAILYARD_LEAD: u8 = 5;
+/// A new train is announced every this many player turns, per phase. TUNE.
 pub const RAILYARD_EVERY: [u32; 3] = [10, 5, 3];
+/// P2 and P3 start after this many ejections credited to the player. TUNE.
 pub const RAILYARD_PHASE_EJECTIONS: [u8; 2] = [3, 5];
+/// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
 pub const RAILYARD_NODE_BUDGET: u32 = 3000;
+/// Special id at the end of a player turn: the trains count down and the ones at zero pass.
 pub const RAILYARD_COUNT: u8 = 0;
+/// Special id at the end of a player turn that also announces a new train.
 pub const RAILYARD_ANNOUNCE: u8 = 1;
 
-pub fn line_cells(_line: u8) -> Vec<P> {
-    Vec::new()
+/// The cells of `line`, from its end of lowest `q` (lowest `r` on axis 1). Line
+/// `9 * axis + offset + 4`: axis 0 holds `r = offset`, axis 1 `q = offset`, axis 2
+/// `q + r = -offset`.
+pub fn line_cells(line: u8) -> Vec<P> {
+    let (axis, offset) = (line / 9, i32::from(line % 9) - RADIUS);
+    let on = move |(q, r): P| match axis {
+        0 => r == offset,
+        1 => q == offset,
+        _ => q + r == -offset,
+    };
+    (-RADIUS..=RADIUS)
+        .flat_map(|q| (-RADIUS..=RADIUS).map(move |r| (q, r)))
+        .filter(|&(q, r)| (q + r).abs() <= RADIUS && on((q, r)))
+        .collect()
 }
 
-pub fn track_cells(_track: u8) -> Vec<P> {
-    vec![(0, 0)]
+/// The cells of `track` in the order its train runs them, the entry cell first: track
+/// `2 * line` enters at the first cell of [`line_cells`], track `2 * line + 1` at the last.
+pub fn track_cells(track: u8) -> Vec<P> {
+    let mut cells = line_cells(track / 2);
+    if track % 2 == 1 {
+        cells.reverse();
+    }
+    cells
 }
 
-fn special(_ply: u32, _phase: usize) -> Option<u8> {
-    None
+/// Special id of the ply that just ended: none for a boss turn (Black moves first, so the
+/// player's plies are odd), an announce at the end of the player's turn `n` when `n` is a
+/// multiple of the phase's rhythm, else the count down.
+fn special(ply: u32, phase: usize) -> Option<u8> {
+    (ply % 2 == 1).then(|| {
+        if ply.div_ceil(2).is_multiple_of(RAILYARD_EVERY[phase]) {
+            RAILYARD_ANNOUNCE
+        } else {
+            RAILYARD_COUNT
+        }
+    })
 }
 
-fn hook(board: &Board, _id: u8, _seed: u64) -> Board {
-    board.clone()
+/// Announces a train with `RAILYARD_LEAD` turns left, on a track whose line no announced train
+/// holds, picked by `seed` in track order.
+fn announce(board: &mut Board, seed: u64) {
+    let mut trains = board.trains().to_vec();
+    let free: Vec<u8> = (0..RAILYARD_LINES * 2)
+        .filter(|t| trains.iter().all(|&(u, _)| u / 2 != t / 2))
+        .collect();
+    trains.push((
+        free[(mix(seed) % free.len() as u64) as usize],
+        RAILYARD_LEAD,
+    ));
+    board.set_trains(trains);
 }
 
+/// End of a player turn: every train counts down, the ones at zero pass and clear every marble
+/// off their line, then a train is announced when `id` says so.
+fn hook(board: &Board, id: u8, seed: u64) -> Board {
+    let mut out = board.clone();
+    let mut kept = Vec::new();
+    for &(track, left) in board.trains() {
+        if left > 1 {
+            kept.push((track, left - 1));
+            continue;
+        }
+        for (q, r) in line_cells(track / 2) {
+            out.set(q, r, Cell::Empty);
+        }
+    }
+    out.set_trains(kept);
+    if id == RAILYARD_ANNOUNCE {
+        announce(&mut out, seed);
+    }
+    out
+}
+
+/// The Rail Yard boss definition.
 pub fn railyard_boss() -> BossDef {
     BossDef {
-        name: "",
+        name: "The Rail Yard",
         phase_marbles: Vec::new(),
-        phase_ejections: Vec::new(),
+        phase_ejections: RAILYARD_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
-        node_budget: 0,
+        node_budget: RAILYARD_NODE_BUDGET,
     }
 }
 
+/// A new encounter: the standard layout, the player is Black and moves first, and the first
+/// train is announced (ply 0 of the seed).
 pub fn railyard_start(seed: u64) -> Encounter {
+    let mut board = Board::standard();
+    announce(&mut board, seed);
     Encounter::new(
-        Game::from_position(Board::standard(), Player::Black, [0, 0]),
+        Game::from_position(board, Player::Black, [0, 0]),
         railyard_boss(),
         seed,
     )
 }
 
-pub fn railyard_move(_enc: &Encounter) -> Option<Move> {
-    None
+/// The boss reply: its node-limited search, among the moves that leave the fewest of its marbles
+/// on the announced lines. `None` on the player's turn or when the game is over.
+pub fn railyard_move(enc: &Encounter) -> Option<Move> {
+    let game = enc.game();
+    if game.to_move() != Player::White {
+        return None;
+    }
+    let board = game.board();
+    let mut rails: Vec<P> = board
+        .trains()
+        .iter()
+        .flat_map(|&(track, _)| line_cells(track / 2))
+        .collect();
+    rails.sort_unstable();
+    rails.dedup();
+    let exposed = |mv: &Move| {
+        let (after, _) = apply(board, Player::White, mv).expect("a legal move");
+        rails
+            .iter()
+            .filter(|&&(q, r)| after.get(q, r) == Some(Cell::White))
+            .count()
+    };
+    let least = legal_moves(board, Player::White)
+        .iter()
+        .map(exposed)
+        .min()
+        .unwrap_or(0);
+    search_with(game, RAILYARD_NODE_BUDGET, DEFAULT_WEIGHTS, &|mv| {
+        exposed(mv) == least
+    })
+    .map(|r| r.mv)
 }
 
 #[cfg(test)]
@@ -391,8 +495,10 @@ mod tests {
         enc.play(&mv(&[(-2, -1)], Direction::E)).unwrap();
         assert_eq!(trains(&enc), vec![(2 * COLUMN, 1)]);
         enc.play(&mv(&[(2, 0)], Direction::SE)).unwrap();
-        assert_eq!(trains(&enc).len(), 1, "passed, and P3 announces at turn 3");
-        assert_eq!(trains(&enc)[0].1, RAILYARD_LEAD);
+        assert!(
+            trains(&enc).is_empty(),
+            "passed, no announce at turn 3 in P1"
+        );
         assert_eq!(enc.game().board().get(0, 2), Some(Cell::Empty));
         assert_eq!(enc.game().ejected(Player::White), 1);
     }

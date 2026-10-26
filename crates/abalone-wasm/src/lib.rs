@@ -637,7 +637,17 @@ impl Encounter {
     /// Rail Yard trains as `[line, player_turns_left, entry_q, entry_r, exit_q, exit_r]` records,
     /// empty for the other bosses.
     pub fn trains(&self) -> Vec<i32> {
-        Vec::new()
+        self.fight
+            .game()
+            .board()
+            .trains()
+            .iter()
+            .flat_map(|&(track, left)| {
+                let cells = track_cells(track);
+                let ((eq, er), (xq, xr)) = (cells[0], cells[cells.len() - 1]);
+                [i32::from(track / 2), i32::from(left), eq, er, xq, xr]
+            })
+            .collect()
     }
 
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
