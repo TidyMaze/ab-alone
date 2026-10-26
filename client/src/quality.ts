@@ -35,7 +35,12 @@ const FLAT_KEY = 'ab-alone.flat-hud';
 const TRANSCRIPT_KEY = 'ab-alone.transcript';
 
 export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): Tier {
-  const weak = width < 768 || reducedMotion || (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
+  if (reducedMotion || width < 360) return 'low';
+  if (width < 768) {
+    const capable = (cores ?? 0) >= 6 && memory !== undefined && memory >= 4;
+    return capable ? 'high' : 'low';
+  }
+  const weak = (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
   return weak ? 'low' : 'high';
 }
 

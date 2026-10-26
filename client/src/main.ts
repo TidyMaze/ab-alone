@@ -94,6 +94,7 @@ import {
   readPalette,
   readTheme,
   readTier,
+  type Tier,
   readTranscript,
   readUiScale,
   hasReflections,
@@ -109,6 +110,7 @@ import {
   writeSkin,
   writeVolume,
   writeTheme,
+  writeTier,
   writeTranscript,
   writeUiScale,
 } from './quality';
@@ -243,12 +245,17 @@ let savedMotion = readReducedMotion(store);
 let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
 let transcriptOn = readTranscript(store); // the audio log transcript (#516), on by default
 const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
-const tier = readTier(store, {
+let tier = readTier(store, {
   width: innerWidth,
   cores: navigator.hardwareConcurrency,
   memory: (navigator as { deviceMemory?: number }).deviceMemory,
   reducedMotion: reducedMotion(),
 });
+const queryQuality = new URLSearchParams(location.search).get('quality');
+if (queryQuality === 'high' || queryQuality === 'low') {
+  tier = queryQuality;
+  writeTier(store, tier);
+}
 diag.log.log('info', 'start', { backend, tier });
 
 // Reflections (#376, #424): prefiltered room used for marble materials on high tier only.
@@ -385,6 +392,11 @@ function updateParticles(): void {
 let looks = 0;
 let pulsing = false;
 (window as unknown as Record<string, unknown>).__looks = () => looks;
+(window as unknown as Record<string, unknown>).__setTier = (nextTier: Tier) => {
+  tier = nextTier;
+  writeTier(store, tier);
+  applyLook();
+};
 function applyLook(): void {
   looks++;
   updateFog();
