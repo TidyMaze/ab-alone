@@ -3,6 +3,7 @@ import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version } 
 import {
   BOARD_CELLS,
   CELLS,
+  DIRECTIONS,
   RADIUS,
   VANISHED,
   arrowYaw,
@@ -42,7 +43,7 @@ import {
   trainText,
   type Train,
 } from './railyard';
-import { drawGlyph, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
+import { drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
@@ -1068,15 +1069,22 @@ const passing: Passing[] = [];
 // marble, a sprite that faces the camera and slides with it (magnetizer.ts, 3:1 and more). A marble that just got its
 // polarity wears a pale ring until the next ply. During the repulsions of a ply the board drawn is the engine's board
 // before the one playing (`shown`), then the engine's own board.
-const glyphMaterials = new Map(
-  [1, -1].map((sign) => {
-    const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
-    drawGlyph(canvas.getContext('2d')!, sign, 128);
-    const map = new THREE.CanvasTexture(canvas);
-    map.colorSpace = THREE.SRGBColorSpace;
-    return [sign, new THREE.SpriteMaterial({ map, depthTest: false })];
-  }),
-);
+// The marble announced for the next assignment wears an indicator floating higher: the coming sign on a diamond (#671).
+// A pair that repels loses its glyphs: they fade out as the pair slides apart.
+const signMaterials = (draw: typeof drawGlyph): Map<number, THREE.SpriteMaterial> =>
+  new Map(
+    [1, -1].map((sign) => {
+      const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+      draw(canvas.getContext('2d')!, sign, 128);
+      const map = new THREE.CanvasTexture(canvas);
+      map.colorSpace = THREE.SRGBColorSpace;
+      return [sign, new THREE.SpriteMaterial({ map, depthTest: false })];
+    }),
+  );
+const glyphMaterials = signMaterials(drawGlyph);
+const announceMaterials = signMaterials(drawAnnounce);
+let announceDrawn: { cell: Axial; sign: number } | null = null; // read by the e2e tests
+const fading: { sprite: THREE.Sprite; start: number }[] = [];
 let shown: { game: Engine | Encounter; board: number[]; poles: number[] } | null = null;
 const showing = (): { board: number[]; poles: number[] } | null => (shown?.game === engine ? shown : null);
 let polesDrawn: { cell: Axial; sign: number; fresh: boolean }[] = []; // read by the e2e tests
@@ -1551,9 +1559,17 @@ function afterPlay(before: number[], record: number[], live = true): void {
   document.body.dataset.knock = String(sfx.knock(mv.cells.length) ?? 'none'); // the knock's pitch in Hz, read by the e2e tests (#289)
   startPasses(before, mv, reduced);
   if (repulsions.length > 0) {
+    // Each repulsion slides from its board to the next one's, the last to the engine's; then the engine's own tells.
     const game = engine;
-    shown = { game, ...repulsions[0]! };
-    whenSettled(() => repel(game, repulsions, 0));
+    const steps = [...repulsions, { board: Array.from(engine.board()), poles: Array.from((engine as Encounter).polarities()) }];
+    shown = { game, ...steps[0]! };
+    whenSettled(() => {
+      repulsions.forEach((rep, k) => whenSettled(() => repel(game, rep, steps[k + 1]!)));
+      whenSettled(() => {
+        shown = null;
+        refresh();
+      });
+    });
   }
   const ejection = findEjection(before, after, mv);
   if (ejection) eject(ejection, mv.dir, held, reduced);
@@ -1571,27 +1587,52 @@ function eject(ejection: NonNullable<ReturnType<typeof findEjection>>, dir: numb
   if (!reduced) startBlood(track);
 }
 
-/** Plays repulsion `k` of `game` (#645): the pair slides apart with the lines it pushes, an ejected marble falls, then
- * the next repulsion, or the engine's board after the last. A replaced game drops what waits for its slide. */
-function repel(game: Engine | Encounter, repulsions: Repulsion[], k: number): void {
-  const rep = repulsions[k]!;
-  const next = repulsions[k + 1];
-  const after = next?.board ?? Array.from(engine.board());
+/** Plays repulsion `rep` of `game` (#645): the pair slides apart with the lines it pushes to the board `to`, its glyphs
+ * fade out (#671), an ejected marble falls. A replaced game drops what waits for its slide. */
+function repel(game: Engine | Encounter, rep: Repulsion, to: { board: number[]; poles: number[] }): void {
   const held = gameTurns();
   const tracks: SlideTrack[] = [];
+  const spent: { cell: Axial; sign: number }[] = []; // the pair, whose glyphs fade out
   for (const half of repulsionMoves(rep.pair)) {
-    const moved = slideTracks(rep.board, after, half, false);
+    const moved = slideTracks(rep.board, to.board, half, false);
+    // The member's own track comes first; a member pushed off the board has none, as its line is itself alone.
+    const sign = rep.poles[cellIndex(...half.cells[0]!)]!;
+    spent.push(...moved.slice(0, 1).map((t) => ({ cell: t.cell, sign })));
     turns.map = carryTurns(turns.map, fight!.seed, moved, half.dir); // a Magnetizer fight
     tracks.push(...moved);
-    const ejection = findEjection(rep.board, after, half);
+    const ejection = findEjection(rep.board, to.board, half);
     if (ejection) eject(ejection, half.dir, held, false);
   }
-  shown = next ? { game, ...next } : null;
+  shown = { game, ...to };
   refresh();
+  for (const { cell, sign } of spent) fadeGlyph(cell, sign);
   slide = { game: engine, tracks, start: performance.now() };
   document.body.dataset.sliding = '1';
-  document.body.dataset.repulsions = String(k + 1); // read by the e2e tests: the repulsions played this ply
-  if (next) afterSlide.push(() => repel(game, repulsions, k + 1));
+  document.body.dataset.repulsions = String(Number(document.body.dataset.repulsions ?? 0) + 1); // read by the e2e tests
+}
+
+/** The glyph `sign` of a pair member, drawn on its marble that slides to `cell` and fading out with the slide: the pair
+ * loses its polarities (#671). */
+function fadeGlyph(cell: Axial, sign: number): void {
+  const sprite = Object.assign(new THREE.Sprite(glyphMaterials.get(sign)!.clone()), { renderOrder: 2 });
+  const p = axialTo3D(...cell);
+  sprite.position.set(p.x, 0.86, p.z);
+  sprite.scale.setScalar(0.34);
+  marbles.add(sprite);
+  onMarble(cellIndex(...cell), sprite);
+  fading.push({ sprite, start: performance.now() });
+}
+
+/** Fades the glyphs of a spent pair out over the slide, then drops them. */
+function fadeGlyphs(now: number): void {
+  for (const f of fading.slice()) {
+    const t = Math.min(1, (now - f.start) / SLIDE_MS);
+    f.sprite.material.opacity = 1 - t;
+    if (t < 1) continue;
+    f.sprite.removeFromParent();
+    f.sprite.material.dispose();
+    fading.splice(fading.indexOf(f), 1);
+  }
 }
 
 /** Starts the effect of the ejected marble `mesh` along `track`, in `parent`: the scene, or the battle royale arena at
@@ -1822,6 +1863,7 @@ function refresh(): void {
   trainsShown = engine instanceof Encounter ? parseTrains(engine.trains()) : [];
   const poles = showing()?.poles ?? (engine instanceof Encounter ? Array.from(engine.polarities()) : []);
   const fresh = showing() || !(engine instanceof Encounter) ? [] : parseCells(engine.assigned());
+  announceDrawn = showing() || !(engine instanceof Encounter) ? null : parseAnnounce(engine.announce());
   marbles.clear();
   marbleAt.clear();
   crackDecals = [];
@@ -1902,6 +1944,15 @@ function refresh(): void {
     }
     return [{ cell: [q, r] as Axial, sign, fresh: isFresh }];
   });
+  if (announceDrawn) {
+    const { cell, sign } = announceDrawn;
+    const p = axialTo3D(...cell);
+    const indicator = Object.assign(new THREE.Sprite(announceMaterials.get(sign)), { renderOrder: 2, name: 'announce' });
+    indicator.position.set(p.x, 1.3, p.z); // over the glyph disc of a marble that will flip
+    indicator.scale.setScalar(0.5);
+    marbles.add(indicator);
+    onMarble(cellIndex(...cell), indicator);
+  }
   eggsDrawn = eggs.map(({ cell: [q, r], left }) => {
     const p = axialTo3D(q, r);
     const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg', castShadow: true });
@@ -2382,6 +2433,9 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
   passing.map((p) => ({ line: p.train.line, x: p.model.position.x, z: p.model.position.z }));
 // Used by the browser checks to find The Magnetizer's polarities as drawn: the cell, the sign and the ring of a fresh one.
 (window as unknown as Record<string, unknown>).__polarities = () => polesDrawn;
+// The announced marble and its coming sign as drawn (#671), and the opacity of the glyphs of a spent pair still fading.
+(window as unknown as Record<string, unknown>).__announce = () => announceDrawn;
+(window as unknown as Record<string, unknown>).__fading = () => fading.map((f) => f.sprite.material.opacity);
 // Used by the browser checks to read the shell's heat pulse (#509).
 (window as unknown as Record<string, unknown>).__shellPulse = () => scarab.emissiveIntensity;
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
@@ -3271,6 +3325,7 @@ renderer.setAnimationLoop((now) => {
     fpsBox.textContent = `${lastFps} FPS`;
   }
   animateSlides(now);
+  fadeGlyphs(now);
   animateReveal(now);
   animateEjections(now);
   animatePasses(now);

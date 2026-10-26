@@ -35,8 +35,7 @@ export function repulsionMoves([a, b]: [Axial, Axial]): [Move, Move] {
 
 /** The marble `Encounter.announce()` names for the next assignment and its coming sign, null when none. */
 export function parseAnnounce(flat: ArrayLike<number>): { cell: Axial; sign: number } | null {
-  void flat;
-  return null; // stub
+  return flat.length === 3 ? { cell: [flat[0]!, flat[1]!], sign: flat[2]! } : null;
 }
 
 /** Player turns between two polarities, per phase: turns 3, 6, 9... in P1, the even turns in P2, every turn in P3. */
@@ -45,8 +44,10 @@ const EVERY = [3, 2, 1];
 /** HUD line of the tell: the player turns to the next polarity, which comes at the start of a turn. `plies` is the
  * plies played, so the player's turn now is `floor(plies / 2) + 1`. */
 export function polarityText(phase: number, plies: number): string {
-  void [phase, plies, EVERY];
-  return ''; // stub
+  const every = EVERY[phase]!;
+  if (every === 1) return 'Polarity every turn';
+  const n = every - ((Math.floor(plies / 2) + 1) % every);
+  return n === 1 ? 'Polarity next turn' : `Polarity in ${n} turns`;
 }
 
 const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
@@ -74,5 +75,18 @@ export function drawGlyph(g: CanvasRenderingContext2D, sign: number, size: numbe
 /** Draws the announce indicator on a `size` square: the coming sign on a near-black diamond with a pale edge, a shape
  * apart from the glyph's disc and the ring. */
 export function drawAnnounce(g: CanvasRenderingContext2D, sign: number, size: number): void {
-  void [g, sign, size]; // stub
+  const [half, edge] = [size / 2, Math.round(size / 16)];
+  g.clearRect(0, 0, size, size);
+  g.beginPath();
+  g.moveTo(half, edge);
+  g.lineTo(size - edge, half);
+  g.lineTo(half, size - edge);
+  g.lineTo(edge, half);
+  g.closePath();
+  g.fillStyle = css(COUNTER.plate);
+  g.fill();
+  g.lineWidth = edge;
+  g.strokeStyle = css(COUNTER.ink);
+  g.stroke();
+  bars(g, sign, size, Math.round(size * 0.4));
 }
