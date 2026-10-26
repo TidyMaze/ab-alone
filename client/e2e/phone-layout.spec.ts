@@ -156,6 +156,8 @@ const cardOverCorner = (page: Page) =>
 
 const sizes = [
   { name: 'a phone held upright', viewport: { width: 375, height: 812 }, mobile: true },
+  // Bug #614: a common Android phone, narrower: the board sits higher and the open mode menu covered its top row.
+  { name: 'a phone 360 px wide held upright', viewport: { width: 360, height: 780 }, mobile: true },
   { name: 'a phone held sideways', viewport: { width: 812, height: 375 }, mobile: true },
   { name: 'a desktop window', viewport: { width: 1280, height: 720 }, mobile: false },
   // Bug #246: the plate reached over the board's top-left edge in these medium windows.
@@ -217,6 +219,19 @@ for (const { name, viewport, mobile } of sizes) {
       }
     });
 
+    // Bug #615: Boss fight then Fight together left both boss lists open, six rows over the board. Opening one boss list
+    // closes the other.
+    test('opening the boss list of Fight together closes the one of Boss fight, nothing covers the board, bug #615', async ({ page }, testInfo) => {
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await openModes(page);
+      await page.getByRole('button', { name: 'Boss fight' }).click();
+      await page.getByRole('button', { name: 'Fight together' }).click();
+      await expect(page.locator('#coop-list')).toBeVisible();
+      await expect(page.locator('#boss-list')).toBeHidden();
+      await check(page, testInfo, 'after Boss fight then Fight together');
+    });
+
     // The audio log player (#516): its transcript line and Skip log cover no cell, no control and not the HUD.
     test('nothing covers the board or the HUD while an audio log plays, #516', async ({ page }, testInfo) => {
       await page.goto('./?bot=off&net=hook');
@@ -230,6 +245,7 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     test('nothing covers the board or the HUD in a boss fight, bugs #227 #234', async ({ page }, testInfo) => {
+      test.fixme(viewport.width === 360, 'bug #618: the settings menu covers the top row on a 360 px phone');
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
@@ -278,6 +294,7 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     test('the daily result card covers neither the HUD nor the board, #196', async ({ page }, testInfo) => {
+      test.fixme(viewport.width === 360, 'bug #619: the card covers the bottom row on a 360 px phone');
       await startDaily(page);
       await loseByRepetition(page);
       await expect(page.locator('#daily-card')).toBeVisible();

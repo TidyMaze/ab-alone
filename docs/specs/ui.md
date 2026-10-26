@@ -98,7 +98,7 @@ game-design.md section 3.5, #521), live in one menu behind an icon-only button, 
 labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their
 names. The button is the last of the column and the open menu lies under it, so opening or closing it moves no other
 button. Held upright, the menu starts a new row under the buttons, its items side by side, the bosses in line after
-Boss fight or Fight together. It closes like the settings menu, on Escape, on a press outside and on its button again,
+Boss fight or Fight together. One boss list is open at a time: opening one closes the other (#615). It closes like the settings menu, on Escape, on a press outside and on its button again,
 and once a mode starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at
 least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Hold, the invite link)
 stay in the column, outside the menu.
