@@ -16,7 +16,7 @@ import {
 } from './board';
 import { askBot, askEval, botBudget } from './bot';
 import { bossHtml, goalShown } from './bosshud';
-import { FOV, framing, isDrag, orbit, pinchScale, resetView, viewPosition, wheelScale, zoom } from './camera';
+import { FOV, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -52,6 +52,7 @@ import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { LORE } from './lore';
+import { markRead } from './lorestore';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
@@ -232,6 +233,9 @@ function frameCamera(): void {
 }
 frameCamera();
 let view = resetView();
+// The terminal reader (#512): while the player reads the deck console, the view to go back to, else null.
+let reading: View | null = null;
+const consoleDef = spaceshipArchitecture(tier).find((p) => p.id === 'console-screen')!; // in every tier (room.ts)
 const fogObj = new THREE.Fog(COLORS.base, 10, 20);
 function updateFog(): void {
   const fog = fogSettings(tier, clear, view, fogRadius, DECKS[deck].fog);
@@ -245,9 +249,12 @@ function updateFog(): void {
 }
 
 function applyView(): void {
-  const p = viewPosition(view);
+  // The reader looks at the console screen, which stands on the west wall and faces the room, along +x.
+  const [x, y, z] = reading ? consoleDef.position : [0, 0, 0];
+  const [, height, width] = consoleDef.size;
+  const p = reading ? screenView({ x, y, z }, { x: 1, y: 0, z: 0 }, width, height, camera.fov, camera.aspect) : viewPosition(view);
   camera.position.set(p.x, p.y, p.z);
-  camera.lookAt(0, 0, 0);
+  camera.lookAt(x, y, z);
   camera.updateMatrixWorld(); // picking and __cellToScreen run before the next frame
   updateFog(); // the fog follows the zoom
 }
@@ -399,6 +406,7 @@ const toggles: Record<string, () => void> = {
   'flat-hud': () => {
     flatHud = !flatHud;
     writeFlatHud(store, flatHud);
+    reader.classList.toggle('flat', flatHud);
     refresh();
   },
   'glass-skin': () => {
@@ -564,15 +572,59 @@ function layoutConsole(): void {
   consolePage = -1;
   consoleSince = performance.now();
   consoleEntry = entry.id;
+  if (reading) showConsole(0);
 }
-function turnConsole(now: number): void {
-  const page = consolePages.length ? pageAt(now - consoleSince, consolePages.length) : consolePage;
-  if (page === consolePage) return;
+// Draws a page on the screen and copies it into #reader, for screen readers and the flat HUD.
+function showConsole(page: number): void {
   consolePage = page;
-  drawTerminal(consoleG, consolePages[page]!, uiScale);
+  const shown = consolePages[page]!;
+  drawTerminal(consoleG, shown, uiScale);
   consoleTexture.needsUpdate = true;
   document.body.dataset.console = `${consoleEntry} ${page + 1}/${consolePages.length}`; // read by the e2e tests
+  const lines = [shown.title.join(' '), shown.body.join(' '), `Page ${page + 1} of ${shown.pages}`];
+  reader.replaceChildren(...lines.map((text) => Object.assign(document.createElement('p'), { textContent: text })));
 }
+function turnConsole(now: number): void {
+  if (reading) return; // the player turns the pages
+  const page = consolePages.length ? pageAt(now - consoleSince, consolePages.length) : consolePage;
+  if (page !== consolePage) showConsole(page);
+}
+// The terminal reader (#512): a click on the console screen or the T key frames the camera on it; a click on the screen
+// or the right arrow turns the page, the left arrow goes back; Esc, a click off the screen or a click past the last page
+// leaves, to the view the player had. The page chrome hides meanwhile (ui.css), so nothing covers the text at any UI
+// scale; the game goes on: a move played or received lands as always.
+const reader = document.getElementById('reader')!;
+reader.classList.toggle('flat', flatHud);
+let consoleScreen!: THREE.Mesh; // set by drawProps
+function openReader(): void {
+  if (!consolePages.length) return; // the fonts are not in yet
+  reading = view;
+  reader.hidden = false;
+  document.body.dataset.reading = consoleEntry; // read by the e2e tests
+  markRead(store, consoleEntry);
+  showConsole(0);
+  applyView();
+}
+function leaveReader(): void {
+  view = reading!;
+  reading = null;
+  reader.hidden = true;
+  delete document.body.dataset.reading;
+  consoleSince = performance.now() - consolePage * TERMINAL.pageMs; // the screen turns on from the page left
+  applyView();
+}
+function turnReader(step: number): void {
+  const page = Math.max(0, consolePage + step);
+  if (page === consolePages.length) leaveReader();
+  else showConsole(page);
+}
+addEventListener('keydown', (e) => {
+  if (!reading) {
+    if (e.key.toLowerCase() === 't') openReader();
+  } else if (e.key === 'Escape') leaveReader();
+  else if (e.key === 'ArrowRight') turnReader(1);
+  else if (e.key === 'ArrowLeft') turnReader(-1);
+});
 void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fonts.load(font))).then(() => {
   consoleFonts = true;
   layoutConsole();
@@ -843,7 +895,8 @@ drawProps = (): void => {
   propsGroup.clear();
   for (const def of spaceshipArchitecture(tier)) {
     let mat: THREE.Material;
-    if (def.id === 'console-screen') {
+    const screen = def.id === 'console-screen';
+    if (screen) {
       mat = new THREE.MeshBasicMaterial({ map: consoleTexture, fog: false }); // a screen gives its own light
     } else if (def.id.includes('wall') && wallTexture) {
       mat = new THREE.MeshStandardMaterial({
@@ -873,6 +926,7 @@ drawProps = (): void => {
         : new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]);
 
     const mesh = new THREE.Mesh(geom, mat);
+    if (screen) consoleScreen = mesh;
     mesh.position.set(...def.position);
     mesh.rotation.set(...def.rotation);
     if (def.id.startsWith('pedestal') || def.id.startsWith('conduit')) {
@@ -1507,13 +1561,20 @@ function click(q: number, r: number): void {
 }
 
 const raycaster = new THREE.Raycaster();
-function cellAt(e: PointerEvent | MouseEvent): Axial | null {
+function aim(e: PointerEvent | MouseEvent): void {
   raycaster.setFromCamera(
     new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1),
     camera,
   );
+}
+function cellAt(e: PointerEvent | MouseEvent): Axial | null {
+  aim(e);
   const hit = raycaster.intersectObjects(discs)[0];
   return hit ? CELLS[discs.indexOf(hit.object as THREE.Mesh)]! : null;
+}
+function onConsole(e: PointerEvent): boolean {
+  aim(e);
+  return raycaster.intersectObject(consoleScreen).length > 0;
 }
 
 // One pointer that stays put is a click, one that moves is an orbit, two pointers are a pinch.
@@ -1555,8 +1616,15 @@ function release(e: PointerEvent): void {
   const wasClick = e.type === 'pointerup' && press && !press.drag && pointers.size === 1;
   pointers.delete(e.pointerId);
   if (pointers.size === 0) press = null;
-  const cell = wasClick ? cellAt(e) : null;
+  if (!wasClick) return;
+  if (reading) {
+    if (onConsole(e)) turnReader(1);
+    else leaveReader();
+    return;
+  }
+  const cell = cellAt(e);
   if (cell) click(cell[0], cell[1]);
+  else if (onConsole(e)) openReader();
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
@@ -1581,6 +1649,7 @@ addEventListener('resize', () => {
   frameCamera();
   renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
   renderer.setSize(innerWidth, innerHeight);
+  applyView(); // the reader fits the screen to the new window
 });
 
 // Used by the browser checks to click a cell by its axial coordinates.
@@ -1589,6 +1658,21 @@ addEventListener('resize', () => {
   camera.updateMatrixWorld();
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
+};
+// Used by the browser checks to see the console screen on the window (#512): the box around its corners, in pixels.
+(window as unknown as Record<string, unknown>).__consoleRect = () => {
+  const box = new THREE.Box3().setFromObject(consoleScreen);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const x of [box.min.x, box.max.x])
+    for (const y of [box.min.y, box.max.y])
+      for (const z of [box.min.z, box.max.z]) {
+        const v = new THREE.Vector3(x, y, z).project(camera);
+        xs.push(((v.x + 1) / 2) * innerWidth);
+        ys.push(((1 - v.y) / 2) * innerHeight);
+      }
+  const [left, top] = [Math.min(...xs), Math.min(...ys)];
+  return { x: left, y: top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
 };
 // Used by the browser checks to play their setup plies: the same click, without the raycast and the frames of a mouse click.
 (window as unknown as Record<string, unknown>).__click = (q: number, r: number) => click(q, r);

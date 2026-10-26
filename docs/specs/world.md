@@ -75,6 +75,10 @@ No cutscenes, no forced dialogue, no quest log.
 - **Lore terminals.** Short text logs on in-world screens (max 120 words). Optional. Two per deck
   (`client/src/lore.ts`, #510). The room's console screen shows its deck's first entry, wrapped and paged
   for the UI scale (`client/src/terminal.ts`, #511): a page turn every 8 s, drawn once the web fonts are in.
+  The reader (#512): a click on the screen or the T key frames the camera on it (`client/src/camera.ts`); a
+  click on the screen or the right arrow turns the page, the left arrow goes back; Esc, a click off the
+  screen or a click past the last page leaves, back to the view the player had. The ids read are saved
+  locally (`client/src/lorestore.ts`), for the log archive. The game goes on while the player reads.
 - **Audio logs.** Short ambient recordings (max 60 s), collectable, replayable from an archive.
   Optional. One per deck (`client/src/audiologs.ts`, #515): a synthesized recording (room tone,
   footsteps, machinery, the Choir's hum) with a timed transcript. No voice acting (section 11):
