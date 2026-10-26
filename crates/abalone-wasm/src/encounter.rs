@@ -14,10 +14,10 @@ use abalone_core::encounter::choir::{
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
+use abalone_core::encounter::overseer::{overseer_boss, overseer_move, overseer_start};
 use abalone_core::encounter::pulsar::{
     last_pulse, pulsar_boss, pulsar_move, pulsar_start, pulsar_tell,
 };
-use abalone_core::encounter::overseer::{overseer_boss, overseer_move, overseer_start};
 use abalone_core::encounter::railyard::{
     railyard_boss, railyard_move, railyard_start, track_cells,
 };
@@ -210,7 +210,8 @@ const BOSSES: [BossEntry; 10] = [
     },
     BossEntry {
         id: "overseer",
-        goal: "Push its cores onto the vents. Eject 6 to win, cores count; lose 6, draw or 40 turns.",
+        goal:
+            "Push its cores onto the vents. Eject 6 to win, cores count; lose 6, draw or 40 turns.",
         def: overseer_boss,
         start: overseer_fight,
         reply: overseer_move,
@@ -1149,9 +1150,16 @@ mod tests {
         assert_eq!(f.name(), "The Overseer");
         assert_eq!((f.phase(), f.phases(), f.turns_left()), (0, 3, 40));
         let board = f.board();
-        assert_eq!((at(&board, 0, 0), at(&board, 2, -1)), (9, 8), "the Overseer, a core");
+        assert_eq!(
+            (at(&board, 0, 0), at(&board, 2, -1)),
+            (9, 8),
+            "the Overseer, a core"
+        );
         assert_eq!(count(&board, 8), 6);
-        assert_eq!(f.incinerators(), vec![-3, -1, 4, -1, -4, 0, 4, 0, -4, 1, 3, 1]);
+        assert_eq!(
+            f.incinerators(),
+            vec![-3, -1, 4, -1, -4, 0, 4, 0, -4, 1, 3, 1]
+        );
         let mut burns = Vec::new();
         for ply in OVERSEER_FIXTURE {
             let mut record = [0; MOVE_STRIDE];

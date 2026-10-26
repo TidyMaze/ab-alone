@@ -12,8 +12,8 @@ pub mod fixture;
 pub mod hull;
 pub mod ladder;
 pub mod magnetizer;
-pub mod pulsar;
 pub mod overseer;
+pub mod pulsar;
 pub mod railyard;
 pub mod telemetry;
 
@@ -83,21 +83,29 @@ pub fn marbles(board: &Board, color: Cell) -> u8 {
     n
 }
 
-/// Black and White marbles a hook removed: their cell is now empty or gone. A flip keeps the
-/// marble and removes nothing (rules.md OPEN-13).
-fn removals(before: &Board, after: &Board) -> [u8; 2] {
-    let mut lost = [0, 0];
+/// The marbles a hook removed and what they were, in `q` then `r` order: their cell is now empty
+/// or gone. A flip keeps the marble and removes nothing (rules.md OPEN-13).
+fn removed(before: &Board, after: &Board) -> Vec<((i32, i32), Cell)> {
+    let mut out = Vec::new();
     let radius = before.radius();
     for q in -radius..=radius {
         for r in -radius..=radius {
-            match (before.get(q, r), after.get(q, r)) {
-                (Some(Cell::Black), Some(Cell::Empty) | None) => lost[0] += 1,
-                (Some(Cell::White), Some(Cell::Empty) | None) => lost[1] += 1,
+            let gone = matches!(after.get(q, r), Some(Cell::Empty) | None);
+            match before.get(q, r) {
+                Some(cell @ (Cell::Black | Cell::White | Cell::Core)) if gone => {
+                    out.push(((q, r), cell));
+                }
                 _ => {}
             }
         }
     }
-    lost
+    out
+}
+
+/// The removed marbles that count for the boss (Black) and for the player (White, and a core).
+fn removals(removed: &[((i32, i32), Cell)]) -> [u8; 2] {
+    let black = removed.iter().filter(|m| m.1 == Cell::Black).count() as u8;
+    [black, removed.len() as u8 - black]
 }
 
 /// Black and White marbles fewer on `after` than on `before`.
@@ -179,10 +187,10 @@ impl Encounter {
     /// Player turns left before the boss wins on the clock, `None` for a fight with no clock.
     pub fn turns_left(&self) -> Option<u32> {
         let played = (self.game.history().len() as u32).div_ceil(2);
-        self.turn_limit.map(|n| n.saturating_sub(played)).and(None)
+        self.turn_limit.map(|n| n.saturating_sub(played))
     }
 
-    /// The marbles the last ply's hook removed, with what they were, in board order.
+    /// The marbles the last ply's hook removed, with what they were, in `q` then `r` order.
     pub fn removed(&self) -> &[((i32, i32), Cell)] {
         &self.removed
     }
@@ -246,6 +254,9 @@ impl Encounter {
             self.game.replace_board(board);
             self.settle(!seed);
         }
+        if self.turns_left() == Some(0) && self.game.to_move() == Player::White {
+            self.game.end(Player::White);
+        }
         Ok(())
     }
 
@@ -291,14 +302,16 @@ impl Encounter {
         self.repulsions.extend(seen);
     }
 
-    /// A marble a hook removed counts for the opponent of its colour. A pulse (The Pulsar) moves
-    /// marbles and flips none, so its losses are counted by colour.
+    /// A marble a hook removed counts for the opponent of its colour, a core for the player (The
+    /// Overseer). A pulse (The Pulsar) moves marbles and flips none, so its losses are counted by
+    /// colour.
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
         let [lost_black, lost_white] = if before.pulsar().is_some() {
             losses(before, after)
         } else {
-            removals(before, after)
+            self.removed = removed(before, after);
+            removals(&self.removed)
         };
         self.game.credit(Player::White, lost_black);
         self.game.credit(Player::Black, lost_white);

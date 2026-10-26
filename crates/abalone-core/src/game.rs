@@ -239,6 +239,12 @@ impl Game {
         }
     }
 
+    /// Ends a running game with `winner`, for a boss rule that ends the fight (The Overseer's
+    /// neurotoxin). A finished game keeps its outcome.
+    pub(crate) fn end(&mut self, winner: Player) {
+        self.outcome.get_or_insert(Outcome::Win(winner));
+    }
+
     /// Plays `mv` for the side to move.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         if self.outcome.is_some() {

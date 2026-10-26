@@ -42,7 +42,7 @@ fn burn(board: &Board, id: u8) -> Board {
             Some(Cell::Black) => black,
             _ => false,
         };
-        if burns && id > 9 {
+        if burns {
             out.set(q, r, Cell::Empty);
         }
     }
@@ -63,7 +63,8 @@ pub fn overseer_step(board: Board, phase: usize) -> (Board, [u8; 2]) {
             .count() as u8
     };
     let black = count(&board, &[Cell::Black]) - count(&after, &[Cell::Black]);
-    let other = count(&board, &[Cell::White, Cell::Core]) - count(&after, &[Cell::White, Cell::Core]);
+    let other =
+        count(&board, &[Cell::White, Cell::Core]) - count(&after, &[Cell::White, Cell::Core]);
     (after, [other, black])
 }
 
@@ -173,11 +174,21 @@ mod tests {
     }
 
     /// A fight on a hand-made position with the incinerators, `ejected` already credited.
-    fn fight(black: &[P], white: &[P], cores: &[P], to_move: Player, ejected: [u8; 2]) -> Encounter {
+    fn fight(
+        black: &[P],
+        white: &[P],
+        cores: &[P],
+        to_move: Player,
+        ejected: [u8; 2],
+    ) -> Encounter {
         let mut board = Board::empty();
         board.set(0, 0, Cell::Overseer);
         board.set_incinerators(OVERSEER_INCINERATORS.to_vec());
-        for (cells, cell) in [(black, Cell::Black), (white, Cell::White), (cores, Cell::Core)] {
+        for (cells, cell) in [
+            (black, Cell::Black),
+            (white, Cell::White),
+            (cores, Cell::Core),
+        ] {
             for &(q, r) in cells {
                 board.set(q, r, cell);
             }
@@ -212,7 +223,9 @@ mod tests {
         let board = enc.game().board();
         assert_eq!(board.get(0, 0), Some(Cell::Overseer));
         assert_eq!(marbles(board, Cell::Core), 6);
-        assert!(OVERSEER_CORES.iter().all(|&(q, r)| board.get(q, r) == Some(Cell::Core)));
+        assert!(OVERSEER_CORES
+            .iter()
+            .all(|&(q, r)| board.get(q, r) == Some(Cell::Core)));
         assert_eq!(board.incinerators(), &OVERSEER_INCINERATORS);
         for (q, r) in OVERSEER_INCINERATORS {
             assert_eq!(board.get(q, r), Some(Cell::Empty), "{q},{r} starts empty");
@@ -227,23 +240,46 @@ mod tests {
 
     #[test]
     fn nothing_moves_the_overseer() {
-        let enc = fight(&[(-3, 0), (-2, 0), (-1, 0)], &[(1, 0)], &[], Player::Black, [0, 0]);
+        let enc = fight(
+            &[(-3, 0), (-2, 0), (-1, 0)],
+            &[(1, 0)],
+            &[],
+            Player::Black,
+            [0, 0],
+        );
         let board = enc.game().board();
         let trio = [(-3, 0), (-2, 0), (-1, 0)];
-        assert!(apply(board, Player::Black, &mv(&trio, E)).is_err(), "onto it");
+        assert!(
+            apply(board, Player::Black, &mv(&trio, E)).is_err(),
+            "onto it"
+        );
         let enc = fight(&[(-3, 0), (-2, 0)], &[(-1, 0)], &[], Player::Black, [0, 0]);
         let push = mv(&[(-3, 0), (-2, 0)], E);
-        assert!(apply(enc.game().board(), Player::Black, &push).is_err(), "a push into it");
+        assert!(
+            apply(enc.game().board(), Player::Black, &push).is_err(),
+            "a push into it"
+        );
         let enc = fight(&[(-1, 1), (0, 1)], &[], &[], Player::Black, [0, 0]);
         let side = mv(&[(-1, 1), (0, 1)], NE);
-        assert!(apply(enc.game().board(), Player::Black, &side).is_err(), "broadside onto it");
-        assert!(legal_moves(enc.game().board(), Player::White).is_empty(), "never the boss's");
+        assert!(
+            apply(enc.game().board(), Player::Black, &side).is_err(),
+            "broadside onto it"
+        );
+        assert!(
+            legal_moves(enc.game().board(), Player::White).is_empty(),
+            "never the boss's"
+        );
     }
 
     #[test]
     fn both_sides_push_a_core_like_an_opponent_marble() {
         let enc = fight(&[(-1, 1), (0, 1)], &[], &[(1, 1)], Player::Black, [0, 0]);
-        let (after, ejected) = apply(enc.game().board(), Player::Black, &mv(&[(-1, 1), (0, 1)], E)).unwrap();
+        let (after, ejected) = apply(
+            enc.game().board(),
+            Player::Black,
+            &mv(&[(-1, 1), (0, 1)], E),
+        )
+        .unwrap();
         assert_eq!((after.get(2, 1), ejected), (Some(Cell::Core), false));
         let enc = fight(&[], &[(0, -2), (0, -1)], &[(1, -1)], Player::White, [0, 0]);
         let lone = apply(enc.game().board(), Player::White, &mv(&[(0, -1)], E));
@@ -256,9 +292,17 @@ mod tests {
             board.set(c.0, c.1, Cell::White);
         }
         let (after, ejected) = apply(&board, Player::White, &mv(&trio, E)).unwrap();
-        assert!(ejected, "a core and a player marble in one line, the marble off");
+        assert!(
+            ejected,
+            "a core and a player marble in one line, the marble off"
+        );
         assert_eq!(after.get(2, 2), Some(Cell::Core));
-        assert!(legal_moves(&board, Player::Black).iter().all(|m| !m.cells.contains(&(1, 2))), "a core never moves itself");
+        assert!(
+            legal_moves(&board, Player::Black)
+                .iter()
+                .all(|m| !m.cells.contains(&(1, 2))),
+            "a core never moves itself"
+        );
     }
 
     #[test]
@@ -266,7 +310,11 @@ mod tests {
         let pair = mv(&[(0, 2), (1, 2)], E);
         let enc = fight(&[(0, 2), (1, 2)], &[], &[(2, 2)], Player::Black, [0, 0]);
         let refused = apply(enc.game().board(), Player::Black, &pair);
-        assert_eq!(refused, Err(MoveError::PushBlocked), "only an incinerator takes it");
+        assert_eq!(
+            refused,
+            Err(MoveError::PushBlocked),
+            "only an incinerator takes it"
+        );
         let enc = fight(&[(2, 2)], &[(0, 2), (1, 2)], &[], Player::White, [0, 0]);
         let (_, ejected) = apply(enc.game().board(), Player::White, &pair).unwrap();
         assert!(ejected, "a marble still goes off");
@@ -274,7 +322,13 @@ mod tests {
 
     #[test]
     fn a_core_pushed_onto_an_incinerator_burns_and_counts_for_the_player() {
-        let mut enc = fight(&[(0, 1), (1, 1)], &[(4, -4)], &[(2, 1)], Player::Black, [0, 0]);
+        let mut enc = fight(
+            &[(0, 1), (1, 1)],
+            &[(4, -4)],
+            &[(2, 1)],
+            Player::Black,
+            [0, 0],
+        );
         enc.play(&mv(&[(0, 1), (1, 1)], E)).unwrap();
         assert_eq!(at(&enc, 3, 1), Some(Cell::Empty), "burnt");
         assert_eq!(enc.removed(), &[((3, 1), Cell::Core)]);
@@ -284,18 +338,38 @@ mod tests {
 
     #[test]
     fn turn_it_against_the_boss_its_own_push_burns_a_core_for_the_player() {
-        let mut enc = fight(&[(-4, 4)], &[(1, -1), (2, -1)], &[(3, -1)], Player::White, [0, 0]);
+        let mut enc = fight(
+            &[(-4, 4)],
+            &[(1, -1), (2, -1)],
+            &[(3, -1)],
+            Player::White,
+            [0, 0],
+        );
         enc.play(&mv(&[(1, -1), (2, -1)], E)).unwrap();
         assert_eq!(enc.removed(), &[((4, -1), Cell::Core)]);
-        assert_eq!(ejected(&enc), [1, 0], "the boss's push, the player's ejection");
+        assert_eq!(
+            ejected(&enc),
+            [1, 0],
+            "the boss's push, the player's ejection"
+        );
     }
 
     #[test]
     fn turn_it_against_the_boss_its_marbles_burn_in_p1_and_p2_not_in_p3() {
         for (credited, burns) in [(0, true), (2, true), (4, false)] {
-            let mut enc = fight(&[(1, 0), (2, 0)], &[(3, 0)], &[], Player::Black, [credited, 0]);
+            let mut enc = fight(
+                &[(1, 0), (2, 0)],
+                &[(3, 0)],
+                &[],
+                Player::Black,
+                [credited, 0],
+            );
             enc.play(&mv(&[(1, 0), (2, 0)], E)).unwrap();
-            assert_eq!(at(&enc, 4, 0) == Some(Cell::White), !burns, "{credited} credited");
+            assert_eq!(
+                at(&enc, 4, 0) == Some(Cell::White),
+                !burns,
+                "{credited} credited"
+            );
             assert_eq!(ejected(&enc)[0], credited + u8::from(burns));
         }
     }
@@ -305,7 +379,11 @@ mod tests {
         for (credited, burns) in [(0, false), (2, true), (4, true)] {
             let mut enc = fight(&[(3, 0)], &[(4, -4)], &[], Player::Black, [credited, 0]);
             enc.play(&mv(&[(3, 0)], E)).unwrap();
-            assert_eq!(at(&enc, 4, 0) == Some(Cell::Black), !burns, "{credited} credited");
+            assert_eq!(
+                at(&enc, 4, 0) == Some(Cell::Black),
+                !burns,
+                "{credited} credited"
+            );
             assert_eq!(ejected(&enc)[1], u8::from(burns));
         }
     }
@@ -323,12 +401,21 @@ mod tests {
         assert_eq!(enc.turns_left(), Some(0));
         assert_eq!(enc.result(), Some(PveResult::Lost));
         assert_eq!(enc.game().winner(), Some(Player::White));
-        assert_eq!(Encounter::new(Game::new(), overseer_boss(), 0).turns_left(), None);
+        assert_eq!(
+            Encounter::new(Game::new(), overseer_boss(), 0).turns_left(),
+            None
+        );
     }
 
     #[test]
     fn the_40th_move_still_wins_with_the_6th_ejection() {
-        let mut enc = fight(&[(0, 1), (1, 1)], &[(4, -4)], &[(2, 1)], Player::Black, [5, 0]);
+        let mut enc = fight(
+            &[(0, 1), (1, 1)],
+            &[(4, -4)],
+            &[(2, 1)],
+            Player::Black,
+            [5, 0],
+        );
         let mut fresh = Encounter::new(enc.game().clone(), overseer_boss(), 0).with_turn_limit(1);
         fresh.play(&mv(&[(0, 1), (1, 1)], E)).unwrap();
         assert_eq!(fresh.result(), Some(PveResult::Won));
@@ -355,10 +442,13 @@ mod tests {
         let enc = fight(&[(-4, 4)], &[(3, -1), (2, -2)], &[], Player::White, [0, 0]);
         let reply = overseer_move(&enc).unwrap();
         let (after, _) = apply(enc.game().board(), Player::White, &reply).unwrap();
-        assert!(OVERSEER_INCINERATORS.iter().all(|&(q, r)| after.get(q, r) != Some(Cell::White)));
+        assert!(OVERSEER_INCINERATORS
+            .iter()
+            .all(|&(q, r)| after.get(q, r) != Some(Cell::White)));
         assert_eq!(overseer_move(&overseer_start(0)), None, "the player's turn");
         let mut enc = overseer_start(3);
-        enc.play(&legal_moves(enc.game().board(), Player::Black)[0]).unwrap();
+        enc.play(&legal_moves(enc.game().board(), Player::Black)[0])
+            .unwrap();
         let reply = overseer_move(&enc).unwrap();
         assert!(legal_moves(enc.game().board(), Player::White).contains(&reply));
     }
@@ -375,7 +465,11 @@ mod tests {
         assert_eq!(credits[3], 1, "a boss marble burns on (4, -1)");
         assert_eq!(credits[6], 2, "the core (1, 1) burns on (3, 1): P2");
         assert_eq!(enc.result(), Some(PveResult::Won));
-        assert_eq!(enc.removed(), &[((4, -1), Cell::Core)], "the boss's own push");
+        assert_eq!(
+            enc.removed(),
+            &[((4, -1), Cell::Core)],
+            "the boss's own push"
+        );
         assert_eq!(ejected(&enc), [6, 0]);
         assert_eq!(enc.turns_left(), Some(28));
     }
