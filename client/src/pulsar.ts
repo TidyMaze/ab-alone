@@ -62,6 +62,15 @@ export function pulsarSpot(id: number): { x: number; z: number; yaw: number } {
   return { x: corner.x * PULSAR_DISTANCE, z: corner.z * PULSAR_DISTANCE, yaw: arrowYaw(id) };
 }
 
+/** The world size of the counter a charging pulsar shows. */
+export const PULSE_COUNTER_SIZE = 0.5;
+
+/** Where the counter of pulsar `id` stands while it charges: above its core. */
+export function counterSpot(id: number): { x: number; y: number; z: number } {
+  const { x, z } = pulsarSpot(id);
+  return { x, y: 1.35, z };
+}
+
 /** The chevrons of pulsar `id`: one cell out before the pulsar's end of each of its 9 lines, pointing the way it
  * pushes. */
 export function chevronSpots(id: number): { x: number; z: number; yaw: number }[] {

@@ -170,4 +170,25 @@ describe('main.ts The Pulsar (#675)', () => {
     expect(named(scene(), 'pulsar')).toHaveLength(0);
     expect(tell()).toBeUndefined();
   });
+
+  // Bug #691: the bottom pulsars and the counter of the charging one were cut off at the edge of a desktop window, the
+  // side ones on a phone held upright.
+  for (const [width, height] of [
+    [1280, 720],
+    [375, 812],
+  ] as const) {
+    it(`the fight opens on a view where every pulsar and its counter lie in a ${width}x${height} window`, async () => {
+      const inner = { innerWidth, innerHeight };
+      Object.assign(window, { innerWidth: width, innerHeight: height });
+      onTestFinished(() => void Object.assign(window, inner));
+      const game = await boot('?bot=off');
+      fightPulsar(game);
+      plies(game, 0, 1);
+      type Rect = { x: number; y: number; width: number; height: number };
+      const rects = game.hook<{ pulsar: Rect; counter: Rect }[]>('__pulsarRects');
+      expect(rects).toHaveLength(6);
+      const inside = (r: Rect): boolean => r.width > 0 && r.x >= 0 && r.y >= 0 && r.x + r.width <= width && r.y + r.height <= height;
+      expect(rects.map(({ pulsar, counter }) => [inside(pulsar), inside(counter)])).toEqual(Array(6).fill([true, true]));
+    });
+  }
 });

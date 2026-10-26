@@ -6,10 +6,12 @@ import {
   FLASH_MS,
   PULSAR_DISTANCE,
   PULSAR_PARTS,
+  PULSE_COUNTER_SIZE,
   SHOCK_MS,
   SHOCK_RADIUS,
   charging,
   chevronSpots,
+  counterSpot,
   fallen,
   parsePulsar,
   parsePulse,
@@ -93,6 +95,11 @@ describe('pulsarSpot and chevronSpots', () => {
     expect(e.yaw).toBeCloseTo(0);
     const spots = new Set([0, 1, 2, 3, 4, 5].map((id) => pulsarSpot(id)).map(({ x, z }) => `${x.toFixed(2)},${z.toFixed(2)}`));
     expect(spots.size).toBe(6);
+  });
+
+  it('stands the counter of a charging pulsar above its core, #691', () => {
+    expect(counterSpot(NW)).toEqual({ x: pulsarSpot(NW).x, y: 1.35, z: pulsarSpot(NW).z });
+    expect(PULSE_COUNTER_SIZE).toBe(0.5);
   });
 
   it('puts a chevron one cell out before the pulsar end of each of its 9 lines', () => {
