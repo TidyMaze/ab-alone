@@ -132,7 +132,7 @@ test('a game against the bot survives a reload, with the bot still playing White
 });
 
 test('a boss fight is not saved: a reload shows a new local game', async ({ page }) => {
-  await page.goto('./');
+  await page.goto('./?bot=on');
   await ready(page);
   const hud = page.locator('#hud');
   await openModes(page);
@@ -175,7 +175,7 @@ const A = [1, 4, 0, 2, 0, 0, 0, 0]; // Black (0, 2) to its NW neighbour (0, 1)
 const save = (bot: boolean, moves: number[][], version = 1) => ({ version, mode: 'local', layout: 'standard', bot, moves });
 
 test('a game saved while the bot was thinking resumes with the bot reply', async ({ page }) => {
-  await page.goto('./');
+  await page.goto('./?bot=on');
   await ready(page);
   await writeSave(page, save(true, [A]));
 

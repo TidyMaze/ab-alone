@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('the HUD shows 0/6 for each side at the start, and still after a plain move', async ({
   page,
 }) => {
-  await page.goto('./');
+  await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
   await expect(hud).toContainText('White ejected 0/6 · Black ejected 0/6');

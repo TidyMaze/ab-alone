@@ -40,6 +40,15 @@ async function hookClick(page: Page, q: number, r: number): Promise<void> {
   await page.evaluate(([q, r]) => (window as any).__click(q, r), [q, r]);
 }
 
+test('a new player opening the main URL lands directly on the Ship hub, #602', async ({ page }) => {
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
+  await expect(page.locator('#hud')).toContainText('Ship · Mess');
+  await expect(page.locator('#eval')).toBeHidden();
+  await expect(page.locator('#hint')).toBeHidden();
+});
+
 test('the marble walks the Mess past its rooms, and a reload lands it on the same cell, #521', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();

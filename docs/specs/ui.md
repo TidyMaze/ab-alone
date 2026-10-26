@@ -101,7 +101,7 @@ button. Held upright, the menu starts a new row under the buttons, its items sid
 Boss fight or Fight together. One boss list is open at a time: opening one closes the other (#615). It closes like the settings menu, on Escape, on a press outside and on its button again,
 and once a mode starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at
 least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Hold, the invite link)
-stay in the column, outside the menu.
+stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Ship hub (Mess deck, #602). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
 
 ```
 +---------------------------------+

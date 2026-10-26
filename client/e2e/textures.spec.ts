@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('textures are requested and the board still renders', async ({ page }) => {
   const loaded: string[] = [];
   page.on('response', (r) => r.url().includes('/assets/') && loaded.push(`${r.status()} ${r.url().split('/').pop()}`));
-  await page.goto('./');
+  await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move');
   expect(loaded.sort()).toEqual([
@@ -19,7 +19,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
 
 test('falls back to the flat look when the textures fail to load', async ({ page }) => {
   await page.route('**/assets/*.png', (route) => route.abort());
-  await page.goto('./');
+  await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move');
 });

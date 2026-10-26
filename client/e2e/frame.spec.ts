@@ -118,7 +118,7 @@ test('the rim half at the end of the side to move lights in its colour, then goe
 });
 
 test('against the bot the human glass moves first: the near half lights cyan, #300', async ({ page }) => {
-  await page.goto('./');
+  await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move');
   await expect(page.locator('body')).toHaveAttribute('data-rim', 'near');
