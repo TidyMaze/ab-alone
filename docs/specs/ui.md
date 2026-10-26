@@ -265,6 +265,13 @@ stay in the column, outside the menu. Opening the root URL without query paramet
 - **Palette.** An item of the settings menu sharing a row with Theme (#381): cycles Default, Protan,
   Deutan, Tritan and High contrast, and recolours the marbles, the rim light, tells and the HUD accent dot.
   Saved locally.
+- **A bot that cannot answer (#736).** When the bot worker fails (its wasm did not start, or the search threw),
+  the bot turn, the boss turn, the evaluation bar and the hint end instead of waiting for ever: the game is
+  not "thinking" any more, a hint that was asked is off, and the HUD adds one note, kept verbatim for the e2e
+  tests: "The bot could not answer: press New game".
+- **A failed start (#737).** If the wasm or the renderer cannot start, a box (`#boot-error`, `role="alert"`) covers
+  the page with "The game could not start: <reason>" and a Reload button (`#boot-reload`), instead of a blank
+  page with greyed buttons. The strings are kept verbatim for the e2e tests.
 - The HUD is a live region (`role="status"`, `aria-live="polite"`) so a screen reader hears the
   turn change. `#hud` and its text are read by the e2e tests: ids and strings do not change.
 
