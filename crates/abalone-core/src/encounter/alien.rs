@@ -256,7 +256,11 @@ mod tests {
         let b = enc.game().board();
         assert_eq!(marbles(b, Cell::Black), 14);
         assert_eq!(marbles(b, Cell::White), 7);
-        assert_eq!(b.get(1, -2), Some(Cell::Empty), "the front marble is dropped");
+        assert_eq!(
+            b.get(1, -2),
+            Some(Cell::Empty),
+            "the front marble is dropped"
+        );
         assert!(ALIEN_START
             .iter()
             .all(|&(q, r)| b.get(q, r) == Some(Cell::White)));

@@ -84,7 +84,7 @@ fn alien_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(alien_start(seed))
 }
 
-/// The Rail Yard announces its first train at the start.
+/// The Rail Yard announces its first train at the end of the player's turn 2.
 fn railyard_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(railyard_start(seed))
 }

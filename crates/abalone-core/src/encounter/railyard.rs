@@ -19,6 +19,8 @@ pub const RAILYARD_LINES: u8 = 27;
 pub const RAILYARD_LEAD: u8 = 5;
 /// A new train is announced every this many player turns, per phase. TUNE.
 pub const RAILYARD_EVERY: [u32; 3] = [10, 5, 3];
+/// The ply that ends the player's turn 2, where the first train is announced. TUNE.
+pub const RAILYARD_FIRST_PLY: u32 = 3;
 /// P2 and P3 start after this many ejections credited to the player. TUNE.
 pub const RAILYARD_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
@@ -55,11 +57,11 @@ pub fn track_cells(track: u8) -> Vec<P> {
 }
 
 /// Special id of the ply that just ended: none for a boss turn (Black moves first, so the
-/// player's plies are odd), an announce at the end of the player's turn `n` when `n` is a
-/// multiple of the phase's rhythm, else the count down.
+/// player's plies are odd), an announce at the end of the player's turn 2 (the first train, #740)
+/// and of the player's turn `n` when `n` is a multiple of the phase's rhythm, else the count down.
 fn special(ply: u32, phase: usize) -> Option<u8> {
     (ply % 2 == 1).then(|| {
-        if ply.div_ceil(2).is_multiple_of(RAILYARD_EVERY[phase]) {
+        if ply == RAILYARD_FIRST_PLY || ply.div_ceil(2).is_multiple_of(RAILYARD_EVERY[phase]) {
             RAILYARD_ANNOUNCE
         } else {
             RAILYARD_COUNT
@@ -114,13 +116,11 @@ pub fn railyard_boss() -> BossDef {
     }
 }
 
-/// A new encounter: the standard layout, the player is Black and moves first, and the first
-/// train is announced (ply 0 of the seed).
+/// A new encounter: the standard layout, the player is Black and moves first, and no train is
+/// announced before the end of the player's turn 2.
 pub fn railyard_start(seed: u64) -> Encounter {
-    let mut board = Board::standard();
-    announce(&mut board, seed);
     Encounter::new(
-        Game::from_position(board, Player::Black, [0, 0]),
+        Game::from_position(Board::standard(), Player::Black, [0, 0]),
         railyard_boss(),
         seed,
     )
@@ -386,7 +386,10 @@ mod tests {
             [vec![2], (1..=10).map(|k| 3 * k).collect()].concat()
         );
         assert_eq!(passed, vec![7, 8, 11, 14, 17, 20, 23, 26, 29]);
-        assert_eq!(most, 3, "a fight cannot be in P3 by turn 2: only a test gets 3");
+        assert_eq!(
+            most, 3,
+            "a fight cannot be in P3 by turn 2: only a test gets 3"
+        );
     }
 
     #[test]
@@ -493,11 +496,12 @@ mod tests {
         enc.play(&mv(&[(-3, -1)], Direction::E)).unwrap();
         enc.play(&mv(&[(2, 1)], Direction::NW)).unwrap();
         enc.play(&mv(&[(-2, -1)], Direction::E)).unwrap();
-        assert_eq!(trains(&enc), vec![(2 * COLUMN, 1)]);
+        assert_eq!(trains(&enc)[0], (2 * COLUMN, 1));
         enc.play(&mv(&[(2, 0)], Direction::SE)).unwrap();
-        assert!(
-            trains(&enc).is_empty(),
-            "passed, no announce at turn 3 in P1"
+        assert_eq!(
+            trains(&enc).len(),
+            1,
+            "passed, only the turn 2 train is left"
         );
         assert_eq!(enc.game().board().get(0, 2), Some(Cell::Empty));
         assert_eq!(enc.game().ejected(Player::White), 1);
@@ -505,9 +509,11 @@ mod tests {
 
     #[test]
     fn the_phase_changes_after_3_and_5_ejections_by_the_player() {
-        // The first train of seed 3 runs the diagonal: 3 marbles of each side sit on it.
-        let mut enc = railyard_start(3);
-        assert_eq!(trains(&enc)[0].0 / 2, DIAGONAL);
+        // A train on the diagonal, 5 turns out: 3 marbles of each side sit on it.
+        let mut start = Board::standard();
+        start.set_trains(vec![(2 * DIAGONAL, RAILYARD_LEAD)]);
+        let game = Game::from_position(start, Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, railyard_boss(), 1);
         for _ in 0..8 {
             quiet(&mut enc);
             assert_eq!(enc.phase(), 0);
