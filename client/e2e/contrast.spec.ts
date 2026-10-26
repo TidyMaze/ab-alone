@@ -152,7 +152,7 @@ for (const deckName of DECK_NAMES) {
 }
 
 // Task #509: at the heat pulse's brightest the shell still reads 3:1 against the deck, on every deck: safe mode off on
-// the high tier, the start position measured as for #344. The shot is a draw asked for once the glow is near its peak,
+// the high tier, the start position measured as for #344. The shot is a draw asked for as the glow rises near its peak,
 // and the glow is still near it after the shot, so the frame drawn between is too (the pulse is smooth, period 4 s+).
 for (const deckName of DECK_NAMES) {
   test(`${deckName}: the shell reads 3:1 against the deck at the heat pulse's brightest, task #509`, async ({ page }, testInfo) => {
@@ -167,8 +167,19 @@ for (const deckName of DECK_NAMES) {
     await page.mouse.move(2, 2); // no hover ghost
     await page.evaluate((d) => (window as any).__deck(d), deckName);
     await expect(page.locator('body')).toHaveAttribute('data-deck-set', deckName);
-    await page.waitForFunction((peak) => (window as any).__shellPulse() >= 0.98 * peak, HEAT.peak, { timeout: 10000 });
-    const draws = await page.evaluate(() => (window as any).__drawNext() as number);
+    // Polled each frame: once the glow rises past 0.95 of its peak, ask for a draw there and then, and hand back the
+    // draws so far (plus one: 0 would keep the wait going).
+    const asked = await page.waitForFunction(
+      (peak) => {
+        const w = window as any;
+        const [glow, last] = [w.__shellPulse() as number, (w.__lastGlow ?? Infinity) as number];
+        w.__lastGlow = glow;
+        return glow > last && glow >= 0.95 * peak && (w.__drawNext() as number) + 1;
+      },
+      HEAT.peak,
+      { timeout: 10000 },
+    );
+    const draws = ((await asked.jsonValue()) as number) - 1;
     await page.waitForFunction((n) => (window as any).__draws() > n, draws);
     const png = await page.screenshot({ path: testInfo.outputPath(`pulse-${deckName}.png`), type: 'png' });
     expect(await page.evaluate(() => (window as any).__shellPulse() as number)).toBeGreaterThanOrEqual(0.9 * HEAT.peak);
