@@ -256,7 +256,7 @@ describe('Sfx.knock, the move sound', () => {
 });
 
 // #358: every boss tell has a sound twin (world.md sections 3 and 8), short, played at once, one per tell.
-const tells: Tell[] = ['crack', 'flip', 'choir'];
+const tells: Tell[] = ['crack', 'flip', 'choir', 'blip']; // blip: the Overseer typing a letter (#741)
 
 describe('tellVoices, the sound twins of the boss tells', () => {
   for (const tell of tells) {

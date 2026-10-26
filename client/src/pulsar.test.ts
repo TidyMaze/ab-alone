@@ -19,8 +19,7 @@ import {
   pulseMove,
   pulseText,
   pulsarSpot,
-  shockAt,
-} from './pulsar';
+  shockAt, RIPPLES, RIPPLE_MS, SHOCK_COLOR, rippleAt, rippling } from './pulsar';
 import { slideTracks } from './slide';
 
 const NW = 4;
@@ -161,5 +160,33 @@ describe('PULSAR_PARTS', () => {
     const [base, core] = PULSAR_PARTS;
     expect(contrastRatio(rgb(core!.color), rgb(base!.color))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(rgb(core!.color), rgb(0x0b0d0f))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('the ripples of a pulsar that fires next turn (#741)', () => {
+  it('ripple only with 1 turn left', () => {
+    expect([0, 1, 2, 3].map((left) => rippling({ id: NW, left, force: 2 }))).toEqual([false, true, false, false]);
+  });
+
+  it('are rings like the shockwave, much smaller and dimmer, that grow and fade in a loop', () => {
+    expect(RIPPLES).toBe(2);
+    expect(SHOCK_COLOR).toBeGreaterThan(0);
+    const start = rippleAt(0, 0, false);
+    const mid = rippleAt(RIPPLE_MS / 2, 0, false);
+    expect(mid.radius).toBeGreaterThan(start.radius);
+    expect(mid.opacity).toBeLessThan(start.opacity);
+    expect(rippleAt(RIPPLE_MS, 0, false).radius).toBeCloseTo(start.radius);
+    expect(rippleAt(0, 1, false).radius).toBeCloseTo(mid.radius); // the second ring is half a cycle on
+    for (const k of [0, 1]) for (const t of [0, 400, 1100]) {
+      const at = rippleAt(t, k, false);
+      expect(at.radius).toBeLessThan(SHOCK_RADIUS / 3);
+      expect(at.opacity).toBeLessThan(0.3);
+    }
+  });
+
+  it('is one static faint ring with reduced motion', () => {
+    expect(rippleAt(0, 0, true)).toEqual(rippleAt(777, 0, true));
+    expect(rippleAt(0, 0, true).opacity).toBeGreaterThan(0);
+    expect(rippleAt(0, 1, true).opacity).toBe(0); // the second ring is not drawn
   });
 });
