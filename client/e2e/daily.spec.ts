@@ -32,46 +32,46 @@ test('the daily challenge keeps its boss and seed all day, counts attempts, and 
     await expect.poll(async () => (await history()).length, { timeout: 30_000 }).toBe(2);
   };
 
-  await load('2026-10-25T08:00:00Z');
-  await expect(daily).toHaveText(/^Daily challenge 2026-10-25: The /);
+  await load('2026-10-28T08:00:00Z');
+  await expect(daily).toHaveText(/^Daily challenge 2026-10-28: The /);
   const title = (await daily.textContent())!;
   const name = title.split(': ')[1]!;
   await daily.click();
   await expect(hud).toContainText(name);
-  await expect(hud).toContainText('Daily challenge 2026-10-25 · attempt 1');
+  await expect(hud).toContainText('Daily challenge 2026-10-28 · attempt 1');
   const first = await fight();
-  expect(first.daily).toEqual({ day: '2026-10-25', attempt: 1 });
+  expect(first.daily).toEqual({ day: '2026-10-28', attempt: 1 });
   await advance();
   const played = await history();
   await page.screenshot({ path: testInfo.outputPath('daily-attempt-1.png') });
 
   // Retry counts one more attempt, and the same seed gives the same boss reply to the same move.
   await page.getByRole('button', { name: 'Retry' }).click();
-  await expect(hud).toContainText('Daily challenge 2026-10-25 · attempt 2');
-  expect(await fight()).toEqual({ ...first, daily: { day: '2026-10-25', attempt: 2 } });
+  await expect(hud).toContainText('Daily challenge 2026-10-28 · attempt 2');
+  expect(await fight()).toEqual({ ...first, daily: { day: '2026-10-28', attempt: 2 } });
   await advance();
   expect(await history()).toEqual(played);
 
   // A second load the same day, a second before midnight: the same boss and seed, attempt 3.
-  await load('2026-10-25T23:59:59Z');
+  await load('2026-10-28T23:59:59Z');
   await expect(daily).toHaveText(title);
   await daily.click();
-  await expect(hud).toContainText('Daily challenge 2026-10-25 · attempt 3');
-  expect(await fight()).toEqual({ ...first, daily: { day: '2026-10-25', attempt: 3 } });
+  await expect(hud).toContainText('Daily challenge 2026-10-28 · attempt 3');
+  expect(await fight()).toEqual({ ...first, daily: { day: '2026-10-28', attempt: 3 } });
 
   // 00:00 UTC: a new day and a new seed (the boss may be the same), the counter starts again.
-  await load('2026-10-26T00:00:00Z');
-  await expect(daily).toHaveText(/^Daily challenge 2026-10-26: The /);
+  await load('2026-10-29T00:00:00Z');
+  await expect(daily).toHaveText(/^Daily challenge 2026-10-29: The /);
   await daily.click();
-  await expect(hud).toContainText('Daily challenge 2026-10-26 · attempt 1');
+  await expect(hud).toContainText('Daily challenge 2026-10-29 · attempt 1');
   const next = await fight();
   expect(next.seed).not.toBe(first.seed);
-  expect(next.daily).toEqual({ day: '2026-10-26', attempt: 1 });
+  expect(next.daily).toEqual({ day: '2026-10-29', attempt: 1 });
   await page.screenshot({ path: testInfo.outputPath('daily-next-day.png') });
 });
 
 test('a plain boss fight shows no daily line and does not count a daily attempt, #195', async ({ page }) => {
-  await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
+  await page.clock.setFixedTime(new Date('2026-10-28T08:00:00Z'));
   await page.goto('./');
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
@@ -81,7 +81,7 @@ test('a plain boss fight shows no daily line and does not count a daily attempt,
   await page.getByRole('button', { name: 'Retry' }).click();
   await openModes(page);
   await page.locator('#daily').click();
-  await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 1');
+  await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-28 · attempt 1');
 });
 
 // The goal (#248): the HUD states it before the first move, folds away at the first move so the plate keeps its
@@ -89,7 +89,7 @@ test('a plain boss fight shows no daily line and does not count a daily attempt,
 test('the daily goal shows before the first move, folds away after it, and the Goal control brings it back, #248', async ({
   page,
 }, testInfo) => {
-  await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
+  await page.clock.setFixedTime(new Date('2026-10-28T08:00:00Z'));
   await page.goto('./?bot=off');
   await expect(page.locator('#daily')).toBeEnabled();
   await openModes(page);
@@ -127,7 +127,7 @@ test('the daily goal shows before the first move, folds away after it, and the G
 
 // The result card (#196).
 const card = (name: string) =>
-  `AB-ALONE daily 2026-10-25: ${name}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
+  `AB-ALONE daily 2026-10-28: ${name}\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
 
 test('a finished daily fight shows the result card, and Copy puts its text in the clipboard, #196', async ({
   page,
@@ -151,7 +151,7 @@ test('a finished daily fight shows the result card, and Copy puts its text in th
 
   // Retry starts the next attempt: the card goes away until that fight is over.
   await page.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-25 · attempt 2');
+  await expect(page.locator('#hud')).toContainText('Daily challenge 2026-10-28 · attempt 2');
   await expect(page.locator('#daily-card')).toBeHidden();
 });
 

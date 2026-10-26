@@ -382,11 +382,11 @@ for (const { name, viewport } of [
 
     test('the plate and the buttons cover no cell after a defeat, bug #271', async ({ page }, testInfo) => {
       const hud = page.locator('#hud');
-      await page.clock.setFixedTime(new Date('2026-10-25T08:00:00Z'));
+      await page.clock.setFixedTime(new Date('2026-10-28T08:00:00Z'));
       await page.goto('./?bot=off&net=hook');
       await openModes(page);
       await page.locator('#daily').click();
-      await expect(hud).toContainText('Daily challenge 2026-10-25 · attempt 1');
+      await expect(hud).toContainText('Daily challenge 2026-10-28 · attempt 1');
       const move = async (from: [number, number], to: [number, number]) => {
         for (const [q, r] of [from, to]) {
           const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
