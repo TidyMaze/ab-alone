@@ -1,4 +1,4 @@
-import { DIRECTIONS, axialTo3D, cellIndex, isMarble, type Axial, type Move } from './board';
+import { BOARD_CELLS, DIRECTIONS, axialTo3D, cellIndex, isMarble, type Axial, type Move } from './board';
 
 /** Length of the slide of a moved marble to its new cell, ease out. */
 export const SLIDE_MS = 200;
@@ -14,12 +14,13 @@ export interface SlideTrack {
 /** One track per marble the move slides: the moved group, then the opponent marbles its head
  * pushes. A marble pushed off the board or into a vanished cell is left to the ejection animation,
  * and a marble the board after the move does not show at its new cell (a boss special flipped it)
- * just appears. */
+ * just appears. `cells` are the cells the boards hold: the battle royale arena has its own (#612). */
 export function slideTracks(
   before: ArrayLike<number>,
   after: ArrayLike<number>,
   mv: Move,
   reducedMotion: boolean,
+  cells: readonly Axial[] = BOARD_CELLS,
 ): SlideTrack[] {
   const [dq, dr] = DIRECTIONS[mv.dir]!;
   const inGroup = (q: number, r: number): boolean => mv.cells.some(([gq, gr]) => gq === q && gr === r);
@@ -29,15 +30,15 @@ export function slideTracks(
     // The head of the group: every marble in line ahead of it is pushed, up to an empty cell, the
     // rim or a vanished cell (The Hull).
     let [pq, pr] = [q + dq, r + dr];
-    while (isMarble(before[cellIndex(pq, pr)])) {
+    while (isMarble(before[cellIndex(pq, pr, cells)])) {
       moved.push([pq, pr]);
       [pq, pr] = [pq + dq, pr + dr];
     }
   }
   const tracks: SlideTrack[] = [];
   for (const [q, r] of moved) {
-    const to = cellIndex(q + dq, r + dr);
-    if (to === -1 || after[to] !== before[cellIndex(q, r)]) continue;
+    const to = cellIndex(q + dq, r + dr, cells);
+    if (to === -1 || after[to] !== before[cellIndex(q, r, cells)]) continue;
     const a = axialTo3D(q, r);
     const b = axialTo3D(q + dq, r + dr);
     tracks.push({

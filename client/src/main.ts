@@ -114,6 +114,7 @@ import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import { ARENA, ARENA_SCALE, YOU, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
+import { buildReveal, shownAt, sinkAt, type Fall, type Reveal } from './royale-reveal';
 import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
 import './ui.css';
 
@@ -1438,6 +1439,14 @@ function afterPlay(before: number[], record: number[], live = true): void {
   body.dataset.sound = sfx.ejection(ejection.side, glassOf()) ?? 'none'; // read by the e2e tests: toll, clack or none
   const track = ejectTrack(ejection.cell, record[1]!, reduced);
   const mesh = marbleMesh(ejection.side);
+  turnMarble(mesh, inHolder(turnOf(held, fight?.seed ?? 0, cellIndex(...ejection.cell)), trackAt(track, 0).yaw));
+  startEjection(mesh, track, scene);
+  if (!reduced) startBlood(track);
+}
+
+/** Starts the effect of the ejected marble `mesh` along `track`, in `parent`: the scene, or the battle royale arena at
+ * its own scale (#612). */
+function startEjection(mesh: THREE.Mesh, track: EjectTrack, parent: THREE.Object3D): void {
   mesh.traverse((o) => {
     const material = ((o as THREE.Mesh).material as THREE.Material).clone(); // its own, to fade
     material.transparent = true;
@@ -1445,17 +1454,15 @@ function afterPlay(before: number[], record: number[], live = true): void {
     material.userData.opacity = material.opacity; // the glass is see-through before it fades
     (o as THREE.Mesh).material = material;
   });
-  turnMarble(mesh, inHolder(turnOf(held, fight?.seed ?? 0, cellIndex(...ejection.cell)), trackAt(track, 0).yaw));
   const tumble = new THREE.Group();
   tumble.add(mesh);
   const holder = new THREE.Group();
   holder.add(tumble);
-  scene.add(holder);
+  parent.add(holder);
   const e: Ejecting = { holder, tumble, mesh, track, start: performance.now(), skipped: false };
   drawEjection(e, 0);
   ejecting.push(e);
-  if (!reduced) startBlood(track);
-  body.dataset.ejecting = track.kind; // read by the e2e tests: tumble, or fade with reduced motion
+  document.body.dataset.ejecting = track.kind; // read by the e2e tests: tumble, or fade with reduced motion
 }
 
 /** Draws an ejected marble `elapsedMs` into its effect, true once the effect is over. */
@@ -1523,7 +1530,7 @@ function drawBlood(b: Bleeding, elapsedMs: number): boolean {
 function animateEjections(now: number): void {
   for (const e of ejecting.slice()) {
     if (!drawEjection(e, now - e.start)) continue;
-    scene.remove(e.holder);
+    e.holder.removeFromParent();
     e.mesh.traverse((o) => ((o as THREE.Mesh).material as THREE.Material).dispose());
     ejecting.splice(ejecting.indexOf(e), 1);
   }
@@ -2576,6 +2583,7 @@ function startRoyale(file: RoyaleFile): void {
   history.length = 0;
   thinking = false;
   selected = [];
+  reveal = null;
   royale = loadRoyale(file, (seats, seed) => new Royale(seats, seed));
   moveModes('pick');
   for (const control of [newGameButton, retryButton, goalButton, hintButton, exportButton, importButton, resultCard]) control.hidden = true;
@@ -2586,11 +2594,35 @@ function startRoyale(file: RoyaleFile): void {
 }
 function leaveRoyale(): void {
   royale = null;
+  reveal = null;
   arena.visible = false;
   fogRadius = frame?.radius ?? RADIUS;
   for (const mesh of [plate, rim.near, rim.far]) mesh.visible = true;
   holdButton.hidden = true;
   delete document.body.dataset.royale;
+  delete document.body.dataset.reveal;
+}
+// The round played out (#612, royale-reveal.ts) from `start`, `ms` into it, `at` the turn drawn (the number of turns
+// for the breach), and the cracks before it; null once the arena shows the game as it stands. A press or a key ends it
+// at once, and the next order waits for its end.
+interface Revealing {
+  plan: Reveal;
+  cracks: Int32Array;
+  start: number;
+  ms: number;
+  at: number;
+}
+let reveal: Revealing | null = null;
+// The marble and glyph drawn on each arena cell, which the reveal slides.
+const arenaAt = new Map<number, THREE.Mesh[]>();
+const phaseOf = (r: Revealing): number => (r.ms >= r.plan.breach.start ? r.plan.steps.length : shownAt(r.plan, r.ms) - 1);
+// What the arena shows: the game, or the reveal's turn or breach with the seat a fizzle or a hold marks.
+function arenaView(game: Royale): { board: ArrayLike<number>; cracks: ReturnType<typeof parseCracks>; marked: number } {
+  if (!reveal) return { board: game.board(), cracks: parseCracks(game.cracks()), marked: -1 };
+  const step = reveal.plan.steps[phaseOf(reveal)];
+  if (!step) return { board: reveal.plan.breach.board, cracks: [], marked: -1 };
+  const marked = step.outcome === 'fizzled' || step.outcome === 'held' ? step.seat : -1;
+  return { board: step.board, cracks: parseCracks(reveal.cracks), marked };
 }
 // The arena in place of the board: the cells left, each seat's marbles, the selection and its targets.
 function drawRoyale(game: Royale): void {
@@ -2598,16 +2630,17 @@ function drawRoyale(game: Royale): void {
   for (const mesh of [...discs, plate, rim.near, rim.far]) mesh.visible = false;
   for (const group of [marbles, ghosts, notches, ...tallies, arenaMarbles]) group.clear();
   marbleAt.clear();
+  arenaAt.clear();
   arena.visible = true;
-  const board = game.board();
-  const cracks = parseCracks(game.cracks());
+  const { board, cracks, marked } = arenaView(game);
   const left = crackLeft(cracks, ARENA);
   breachGlow.color.set(paletteById(palette).hazard);
   crackDecals = [];
-  targets = groupTargets(parseMoves(game.legal_orders(YOU)), selected);
-  ringed = [...selected];
+  targets = reveal ? [] : groupTargets(parseMoves(game.legal_orders(YOU)), selected);
+  ringed = marked >= 0 ? ARENA.filter((_, i) => seatAt(board[i]!) === marked) : [...selected];
   ARENA.forEach(([q, r], i) => {
     arenaDiscs[i]!.visible = board[i] !== VANISHED;
+    arenaDiscs[i]!.position.y = -0.05; // a disc the breach sank is back once void
     const p = axialTo3D(q, r);
     const rounds = left.get(i) ?? 0;
     if (rounds > 0) {
@@ -2645,6 +2678,7 @@ function drawRoyale(game: Royale): void {
     const glyph = new THREE.Mesh(seatGlyphs[seat], seatInk);
     glyph.position.copy(marble.position).add(glyphLift);
     arenaMarbles.add(marble, glyph);
+    arenaAt.set(i, [marble, glyph]);
     if (!picked) return;
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
     ring.rotation.x = Math.PI / 2;
@@ -2652,24 +2686,29 @@ function drawRoyale(game: Royale): void {
     arenaMarbles.add(ring);
   });
   document.body.dataset.royale = String(nextRound(parseLog(game.round_log()))); // read by the e2e tests
+  document.body.dataset.reveal = !reveal ? 'done' : reveal.plan.steps[phaseOf(reveal)] ? 'turn' : 'breach'; // read by the e2e tests
   document.body.dataset.cracks = String(cracks.length);
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
   hud();
 }
 // The plate, and once the game is over the end banner and its light (body[data-over], #282, #503).
+// During the reveal, the log lines of the turns played so far and no end yet.
 function royaleHud(game: Royale): void {
-  const placed = standings(game.placement());
+  const placed = reveal ? [] : standings(game.placement());
   const end = royaleBanner(placed, YOU);
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
-  const view = { out: outSeats(game.board()), cracks: parseCracks(game.cracks()), standings: placed };
-  document.getElementById('hud')!.innerHTML = royaleHtml(parseLog(game.round_log()), view);
+  const { board, cracks } = arenaView(game);
+  const log = parseLog(game.round_log());
+  const shown = log && reveal ? { ...log, turns: log.turns.slice(0, shownAt(reveal.plan, reveal.ms)) } : log;
+  document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out: outSeats(board), cracks, standings: placed });
   holdButton.disabled = end !== null;
   backButton.hidden = !roomOf || end === null;
 }
 // A press on one of the player's marbles selects it, a press on a target locks that move as the order and plays the
 // round (#611). Once the game is over a press does nothing.
 function pickRoyale(q: number, r: number): void {
+  endReveal();
   const game = royale!;
   if (game.placement().length) return;
   if (seatAt(game.board()[cellIndex(q, r, ARENA)]!) === YOU) {
@@ -2679,11 +2718,63 @@ function pickRoyale(q: number, r: number): void {
   const mv = moveForClick(parseMoves(game.legal_orders(YOU)), selected, [q, r]);
   if (mv) playRound(encodeMove(mv));
 }
+// Under reduced motion the arena jumps to the new position (#612).
 function playRound(mine: readonly number[]): void {
-  royale!.resolve(roundOrders(royale!, mine));
+  endReveal();
+  const game = royale!;
+  if (game.placement().length) return; // Hold pressed during the reveal of the last round
+  const before = game.board();
+  const cracks = game.cracks();
+  const orders = roundOrders(game, mine);
+  game.resolve(orders);
   selected = [];
+  if (reducedMotion()) return refresh();
+  const plan = buildReveal(before, orders, parseLog(game.round_log())!, game.board());
+  reveal = { plan, cracks, start: performance.now(), ms: 0, at: -1 };
+  animateReveal(reveal.start);
+}
+// Each frame of the reveal: a new turn or the breach redraws the arena and starts its falls, the turn's marbles slide,
+// the voided discs sink.
+function animateReveal(now: number): void {
+  if (!reveal) return;
+  const { plan } = reveal;
+  const ms = now - reveal.start;
+  if (ms >= plan.total) return endReveal();
+  reveal.ms = ms;
+  const at = phaseOf(reveal);
+  const step = plan.steps[at];
+  if (at !== reveal.at) {
+    reveal.at = at;
+    refresh();
+    for (const fall of step ? (step.ejected ? [step.ejected] : []) : plan.breach.falls) fallInto(fall);
+  }
+  if (!step) {
+    for (const i of plan.breach.voids) arenaDiscs[i]!.position.y = -0.05 - sinkAt(ms - plan.breach.start);
+    return;
+  }
+  for (const track of step.tracks) {
+    const p = slideAt(track, ms - step.start);
+    const [marble, glyph] = arenaAt.get(cellIndex(...track.cell, ARENA))!;
+    marble!.position.x = p.x;
+    marble!.position.z = p.z;
+    glyph!.position.copy(marble!.position).add(glyphLift);
+  }
+}
+// A marble the reveal ejects or the breach takes: the ejection fall of a normal game, in the arena.
+function fallInto({ cell, seat, dir }: Fall): void {
+  const mesh = new THREE.Mesh(marbleGeometry, seatLooks[seat]);
+  const glyph = new THREE.Mesh(seatGlyphs[seat], seatInk);
+  glyph.position.copy(glyphLift);
+  mesh.add(glyph);
+  startEjection(mesh, ejectTrack(cell, dir, false), arena);
+}
+function endReveal(): void {
+  if (!reveal) return;
+  reveal = null;
   refresh();
 }
+addEventListener('pointerdown', endReveal, { capture: true });
+addEventListener('keydown', endReveal, { capture: true });
 const royaleButton = document.getElementById('battle-royale') as HTMLButtonElement;
 royaleButton.addEventListener('click', () => {
   if (online) return;
@@ -2693,6 +2784,11 @@ holdButton.addEventListener('click', () => playRound([]));
 royaleButton.disabled = false; // listener ready (#146)
 // Used by the browser checks to load a royale game file (#502).
 (window as unknown as Record<string, unknown>).__royale = startRoyale;
+// Used by the browser checks to read the marble drawn for an arena cell, where it is now: its seat and place (#612).
+(window as unknown as Record<string, unknown>).__arenaAt = (q: number, r: number) => {
+  const marble = arenaAt.get(cellIndex(q, r, ARENA))?.[0];
+  return marble ? { seat: seatLooks.indexOf(marble.material as THREE.MeshStandardMaterial), x: marble.position.x, z: marble.position.z } : null;
+};
 // Used by the browser checks to count each seat's glyphs drawn on the arena, in seat order (#558).
 (window as unknown as Record<string, unknown>).__seatGlyphs = () =>
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
@@ -2799,6 +2895,7 @@ renderer.setAnimationLoop((now) => {
     fpsBox.textContent = `${lastFps} FPS`;
   }
   animateSlides(now);
+  animateReveal(now);
   animateEjections(now);
   animateParticles(now);
   eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
