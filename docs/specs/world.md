@@ -89,8 +89,8 @@ No cutscenes, no forced dialogue, no quest log.
   at any time, on the console or off it, and the game goes on meanwhile. The transcript shows line by line,
   over the button (ui.md section 4), on by default; the Transcript toggle beside Sound in the settings menu hides it, saved
   locally. Collectable (#517): a recorder prop lies on the cargo crate of the room (`client/src/room.ts`); a click on it
-  plays the deck's log and saves it collected (`client/src/lorestore.ts`). The log archive lists the logs collected
-  after the entries read, and a press on one replays it.
+  plays the deck's log too. Any log heard, from the recorder or Play log, is saved collected (`client/src/lorestore.ts`):
+  the log archive lists the logs collected after the entries read, and a press on one replays it.
 - **Tally.** One-line announcements at match start and end. Never explains itself.
 - **Boss arenas.** Each boss board carries one lore object the player can inspect before the
   fight.

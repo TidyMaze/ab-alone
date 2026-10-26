@@ -710,7 +710,9 @@ function stopLog(): void {
   delete document.body.dataset.log;
   paintLog();
 }
+// Any log heard joins the log archive (#517).
 function playLog(log: AudioLog): void {
+  markCollected(store, log.id);
   playing = { log, since: performance.now() };
   document.body.dataset.logSound = sfx.playLog(log.voices) ? 'voice' : 'none'; // read by the tests
   document.body.dataset.log = log.id; // read by the e2e tests
@@ -720,12 +722,6 @@ logButton.addEventListener('click', () => {
   if (playing) stopLog();
   else playLog(logOf(LORE.find((e) => e.id === consoleEntry)!.deck));
 });
-// The deck's recorder prop (#517): a click plays the deck's log and collects it for the log archive.
-function pickRecorder(): void {
-  const log = logOf(deck);
-  markCollected(store, log.id);
-  playLog(log);
-}
 // Called every frame: the next transcript line, and the end of the log.
 function tickLog(now: number): void {
   if (!playing) return;
@@ -1860,7 +1856,7 @@ function release(e: PointerEvent): void {
   const cell = cellAt(e);
   if (cell) click(cell[0], cell[1]);
   else if (onProp(e, consoleScreen)) openReader();
-  else if (onProp(e, recorder)) pickRecorder();
+  else if (onProp(e, recorder)) playLog(logOf(deck)); // the deck's recorder prop (#517)
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
