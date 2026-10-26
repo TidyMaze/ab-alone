@@ -65,6 +65,16 @@ describe('reset target', () => {
     expect(clampPolar(v.polar)).toBe(v.polar);
     expect(clampDistance(v.distance)).toBe(v.distance);
   });
+
+  it('scales distance with radius for radius 5 boards (#573)', () => {
+    const v4 = resetView(4);
+    const v5 = resetView(5);
+    expect(v4.distance).toBe(Math.hypot(11, 8));
+    expect(v5.distance).toBeCloseTo((5 / 4) * Math.hypot(11, 8));
+    expect(v5.polar).toBe(v4.polar);
+    expect(v5.azimuth).toBe(0);
+    expect(v5.distance).toBeLessThan(DIST_MAX);
+  });
 });
 
 describe('orbit', () => {

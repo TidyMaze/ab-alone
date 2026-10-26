@@ -782,7 +782,7 @@ mod tests {
         BALLAST_BOSS_START, BALLAST_PILLARS, BALLAST_PLAYER_START,
     };
     use abalone_core::encounter::choir::{ALTO_START, BASS_START, TENOR_START};
-    use abalone_core::moves::{legal_moves, Player};
+    use abalone_core::moves::{legal_moves, Direction, Player};
 
     fn count(cells: &[u8], value: u8) -> usize {
         cells.iter().filter(|&&c| c == value).count()
@@ -1270,6 +1270,57 @@ mod tests {
     /// Ring of `(q, r)`: its distance from the centre.
     fn ring((q, r): (i32, i32)) -> i32 {
         q.abs().max(r.abs()).max((q + r).abs())
+    }
+
+    #[test]
+    fn the_ballast_mind_announces_echo_in_phase_3() {
+        let entry = boss_entry("ballast").unwrap();
+        let f1 = Encounter::new("ballast", 1).unwrap();
+        assert!(f1.tell_move(&first_move(&f1)).is_empty(), "no echo in P1");
+
+        // Set up P3 with a history of moves
+        let mut board = abalone_core::encounter::ballast::ballast_board();
+        for (q, r) in [(-2, 3), (-2, 4), (-3, 4)] {
+            board.set(q, r, Cell::Black);
+        }
+        for &(q, r) in &[(2, -3), (2, -4), (3, -4), (3, -5), (4, -5)] {
+            board.set(q, r, Cell::White);
+        }
+        let mut enc = CoreEncounter::new(
+            Game::from_position(board, Player::Black, [0, 0]),
+            abalone_core::encounter::ballast::ballast_boss(),
+            0,
+        );
+        let m1 = Move {
+            cells: vec![(-2, 3)],
+            dir: Direction::E,
+        };
+        enc.play(&m1).unwrap();
+        enc.play(&Move {
+            cells: vec![(4, -5)],
+            dir: Direction::SE,
+        })
+        .unwrap();
+        let m2 = Move {
+            cells: vec![(-1, 3)],
+            dir: Direction::E,
+        };
+        enc.play(&m2).unwrap();
+        enc.play(&abalone_core::encounter::ballast::ballast_move(&enc).unwrap())
+            .unwrap();
+        assert_eq!(enc.game().to_move(), Player::Black);
+
+        let f_p3 = Encounter {
+            fight: Fight::Plain(enc),
+            entry,
+        };
+        let hovered = first_move(&f_p3);
+        let announced = f_p3.tell_move(&hovered);
+        assert_eq!(
+            decode(&announced).unwrap(),
+            mirror_move(&m2),
+            "P3 announces mirror of previous player move"
+        );
     }
 
     #[test]

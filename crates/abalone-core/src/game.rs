@@ -120,7 +120,7 @@ impl Game {
     }
 
     /// Game on a hand-made position: a boss start layout, or a test position.
-    pub(crate) fn from_position(board: Board, to_move: Player, ejected: [u8; 2]) -> Self {
+    pub fn from_position(board: Board, to_move: Player, ejected: [u8; 2]) -> Self {
         let win = [WIN_EJECTIONS; 2];
         Self {
             start_hash: position_hash(&board, to_move),
