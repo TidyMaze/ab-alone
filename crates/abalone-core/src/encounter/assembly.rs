@@ -730,4 +730,87 @@ mod tests {
         let m = assembly_move(&enc).unwrap();
         assert!(legal_moves(enc.game().board(), Player::White).contains(&m));
     }
+
+    /// The fixture shared with the wasm bridge, the client harness and client/e2e/assembly.spec.ts:
+    /// fight seed 1, whose centre belt first runs toward +q, then one-marble moves `(q, r,
+    /// direction)` where the boss marbles walk onto the belts and you wait on the back rows. A boss
+    /// marble is carried off the east end after ply 7 (turn 4), the belt reverses after turn 5, the
+    /// side belts run from ply 21 (P2 after ply 19), P3 after ply 29, the presses are announced
+    /// after ply 31 and strike your marble on the lower belt after ply 33.
+    const FIXTURE_SEED: u64 = 1;
+    const FIXTURE: [(i32, i32, Direction); 33] = [
+        (-4, 3, Direction::NE),
+        (2, -2, Direction::SE),
+        (-4, 4, Direction::NW),
+        (2, -1, Direction::SE),
+        (-4, 3, Direction::NW),
+        (3, 0, Direction::E),
+        (-4, 2, Direction::SE),
+        (0, -2, Direction::SW),
+        (-4, 3, Direction::NW),
+        (-1, -1, Direction::SW),
+        (-4, 2, Direction::SE),
+        (-3, 0, Direction::W),
+        (-4, 3, Direction::NW),
+        (-1, -3, Direction::SW),
+        (-4, 2, Direction::SE),
+        (-2, -2, Direction::SW),
+        (-4, 3, Direction::NW),
+        (-3, -1, Direction::SW),
+        (-4, 2, Direction::SE),
+        (1, -2, Direction::SW),
+        (-4, 3, Direction::NW),
+        (-1, -1, Direction::W),
+        (-4, 2, Direction::SE),
+        (0, -3, Direction::SW),
+        (-4, 3, Direction::NW),
+        (-1, -2, Direction::SW),
+        (-4, 2, Direction::SE),
+        (1, -3, Direction::SW),
+        (-4, 3, Direction::NW),
+        (0, -4, Direction::SW),
+        (-4, 2, Direction::NE),
+        (-1, -3, Direction::E),
+        (-3, 2, Direction::NW),
+    ];
+
+    #[test]
+    fn the_fixture_carries_a_boss_marble_off_reverses_and_ends_in_a_strike_on_your_marble() {
+        let mut enc = assembly_start(FIXTURE_SEED);
+        let mut falls = Vec::new();
+        for (i, &(q, r, dir)) in FIXTURE.iter().enumerate() {
+            enc.play(&mv(&[(q, r)], dir)).unwrap();
+            let seen = last_belts(&enc);
+            if let Some(c) = seen.iter().find(|c| c.fate != Fate::Moved) {
+                falls.push((i + 1, c.fate, c.cell));
+            }
+            let belts = enc.game().board().belts().unwrap();
+            match i + 1 {
+                7 => assert_eq!(
+                    assembly_tell(&enc).unwrap().0,
+                    1,
+                    "after turn 4: the next is the last"
+                ),
+                10 => assert!(!assembly_tell(&enc).unwrap().1[0].forward, "reversed"),
+                19 => assert_eq!(enc.phase(), 1),
+                29 => assert_eq!(enc.phase(), 2),
+                31 => assert_eq!(belts.strike, [Some(5), Some(3), Some(5)]),
+                _ => {}
+            }
+        }
+        assert_eq!(
+            falls,
+            vec![
+                (7, Fate::Fell, Cell::White),
+                (13, Fate::Fell, Cell::White),
+                (19, Fate::Fell, Cell::White),
+                (25, Fate::Fell, Cell::White),
+                (29, Fate::Fell, Cell::White),
+                (33, Fate::Struck, Cell::Black),
+            ]
+        );
+        assert_eq!(enc.game().ejected(Player::Black), 5);
+        assert_eq!(enc.game().ejected(Player::White), 1);
+        assert_eq!(enc.result(), None);
+    }
 }
