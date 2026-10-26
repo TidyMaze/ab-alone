@@ -100,6 +100,7 @@ const diffOf = (page: Page, a: Buffer, b: Buffer, box: Box) =>
 test('the fog shows smoothly across the bay, not on board cells nor as a brutal rim cut, bugs #171, #399, #665', async ({ page }, testInfo) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
+  await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
   // The evaluation bar's label (#191) is set when the analysis worker answers, which can be after the first shot. Tally's
   // line fades out 4 s after the start (#425), while the shots are taken.
   await page.addStyleTag({ content: 'body::after, #eval, #hud .tally { display: none !important; }' });

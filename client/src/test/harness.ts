@@ -1,10 +1,10 @@
 // A harness that runs the whole page, src/main.ts, in vitest under jsdom (decision #445): the test file starts with
 // `// @vitest-environment jsdom`, then `const game = await boot('?bot=off')` loads index.html's body and imports a fresh
 // main.ts on the real wasm engine. What jsdom lacks is stubbed: the three.js renderer (no WebGL or WebGPU, the scene
-// graph stays real), the texture loader, canvas 2D, the web fonts, matchMedia, IndexedDB (fake-indexeddb), the bot
-// workers (the worker's answer() runs in-process), the Trystero transport (one end of a localPair) and the clock of the
-// animation loop (game.frame), and Web Audio on demand (the fake of src/test/audio.ts). Everything is undone when the
-// test ends.
+// graph stays real), the texture loader, the bay's model loader, canvas 2D, the web fonts, matchMedia, IndexedDB
+// (fake-indexeddb), the bot workers (the worker's answer() runs in-process), the Trystero transport (one end of a
+// localPair) and the clock of the animation loop (game.frame), and Web Audio on demand (the fake of src/test/audio.ts).
+// Everything is undone when the test ends.
 import { IDBFactory } from 'fake-indexeddb';
 import { onTestFinished, vi } from 'vitest';
 import page from '../../index.html?raw';
@@ -22,8 +22,8 @@ export interface BootOptions {
   /** A fake AudioContext (src/test/audio.ts), read back with `game.hook('__audio')`; none by default, as in a browser
    * without Web Audio. */
   audio?: boolean;
-  /** The texture files under assets/ that fail to load, as a missing file would. The others load, each a texture named
-   * after its file. */
+  /** The texture files under assets/ that fail to load, as a missing file would, `spaceship-bay.glb` included. The others
+   * load, each a texture named after its file. */
   missing?: string[];
   /** document.fonts.load, which jsdom lacks: by default every font is in at once. */
   fonts?: (font: string) => Promise<unknown>;
@@ -88,6 +88,8 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     vi.doUnmock('three/webgpu');
     vi.doUnmock('abalone-wasm');
     vi.doUnmock('../p2p');
+    vi.doUnmock('three');
+    vi.doUnmock('three/examples/jsm/loaders/GLTFLoader.js');
   });
 
   // The page: index.html's body, a clean root, no saved settings, the URL.
@@ -137,6 +139,17 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     return id;
   });
 
+  // The texture loader: each file under assets/ loads as a texture named after it, but the missing ones.
+  const missing = (url: string): boolean => !!options.missing?.includes(url.slice(url.lastIndexOf('/') + 1));
+  const textureLoader = (Texture: typeof import('three').Texture) =>
+    class TextureLoader {
+      loadAsync = async (url: string): Promise<InstanceType<typeof Texture>> => {
+        const name = url.slice(url.lastIndexOf('/') + 1);
+        if (missing(url)) throw new Error(`404 ${name}`);
+        return Object.assign(new Texture(), { name });
+      };
+    };
+
   // The renderer draws nothing: it keeps the animation loop for frame() and counts the draws.
   let loop: ((now: number) => void) | null = null;
   let draws = 0;
@@ -165,14 +178,23 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       fromScene = (): { texture: InstanceType<typeof THREE.Texture> } => ({ texture: new THREE.Texture() });
       dispose(): void {}
     }
-    class TextureLoader {
-      loadAsync = async (url: string): Promise<InstanceType<typeof THREE.Texture>> => {
-        const name = url.slice(url.lastIndexOf('/') + 1);
-        if (options.missing?.includes(name)) throw new Error(`404 ${name}`);
-        return Object.assign(new THREE.Texture(), { name });
-      };
-    }
-    return { ...THREE, WebGPURenderer, PMREMGenerator, TextureLoader };
+    return { ...THREE, WebGPURenderer, PMREMGenerator, TextureLoader: textureLoader(THREE.Texture) };
+  });
+  // The spaceship bay (#648, roomloader.ts on 'three'): its maps load as above, its model as an empty scene, unless missing.
+  vi.doMock('three', async (importOriginal) => {
+    const THREE = await importOriginal<typeof import('three')>();
+    return { ...THREE, TextureLoader: textureLoader(THREE.Texture) };
+  });
+  vi.doMock('three/examples/jsm/loaders/GLTFLoader.js', async () => {
+    const { Group } = await vi.importActual<typeof import('three')>('three');
+    return {
+      GLTFLoader: class {
+        loadAsync = async (url: string): Promise<{ scene: InstanceType<typeof Group> }> => {
+          if (missing(url)) throw new Error(`404 ${url}`);
+          return { scene: new Group() };
+        };
+      },
+    };
   });
 
   // The online room: main.ts gets one end of a local pair, the test holds the other.

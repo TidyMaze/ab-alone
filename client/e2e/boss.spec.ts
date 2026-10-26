@@ -60,6 +60,7 @@ const crackContrast = async (
   [q, r]: [number, number],
   path?: string,
 ): Promise<{ shown: number; reading: number }> => {
+  await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
   await page.mouse.move(2, 2); // no hover ghost
   await freshDraw(page); // a draw since the last change
   const shown = await page.screenshot({ path });

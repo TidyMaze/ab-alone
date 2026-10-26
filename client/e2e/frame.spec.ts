@@ -86,6 +86,7 @@ test('the rim half at the end of the side to move lights in its colour, then goe
   await expect(page.locator('#hud')).toContainText('Black to move'); // the flat copy stays
   await expect(page.locator('body')).toHaveAttribute('data-rim', 'near');
   expect((await frame(page)).lit).toEqual({ near: SODIUM, far: 0 });
+  await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const blackTurn = await page.screenshot({ type: 'png' });
 
