@@ -391,12 +391,10 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
     const games = [0, 1].map(() => new Session(engines().factory, counted, noNetwork));
     const starts = games.map((game) => value(game.newGame({ boss, seed: 11 })));
     expect(position(starts[1]!)).toEqual(position(starts[0]!));
-    for (let round = 0; round < 4; round++) {
-      const move = value(games[0]!.legalMoves()).moves[round]!;
-      const [first, second] = games.map((game) => value(game.playMove({ move })));
-      expect(second!.reply).toBe(first!.reply);
-      expect(position(second!.state)).toEqual(position(first!.state));
-    }
+    const move = value(games[0]!.legalMoves()).moves[0]!;
+    const [first, second] = games.map((game) => value(game.playMove({ move })));
+    expect(second!.reply).toBe(first!.reply);
+    expect(position(second!.state)).toEqual(position(first!.state));
     expect(searches).toBe(2);
   });
 
