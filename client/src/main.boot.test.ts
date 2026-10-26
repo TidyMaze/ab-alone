@@ -646,3 +646,12 @@ it('mounts the progressive PBR spaceship bay into propsGroup (#648)', async () =
   game.hook('__mountBay', dummyBay);
   game.hook('__mountBay', null);
 });
+
+it('honors query quality param and allows setting tier live (#655)', async () => {
+  const game = await boot('?bot=off&quality=high');
+  expect(document.body.dataset.tier).toBe('high');
+  game.hook('__setTier', 'low');
+  expect(document.body.dataset.tier).toBe('low');
+  game.hook('__setTier', 'high');
+  expect(document.body.dataset.tier).toBe('high');
+});
