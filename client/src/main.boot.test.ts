@@ -116,6 +116,19 @@ describe('the service worker (#193)', () => {
 });
 
 describe('the renderer and its textures', () => {
+  // Bug #585: the e2e tests take a canvas in the page for a page that is ready. It joins the page once the HUD is filled,
+  // after every listener and page hook, not while the textures and the saved game still load.
+  it('puts the canvas in the page only once the page is ready, bug #585', async () => {
+    let hud: string | null = null;
+    const append = Node.prototype.appendChild;
+    vi.spyOn(Node.prototype, 'appendChild').mockImplementation(function <T extends Node>(this: Node, child: T): T {
+      if (child instanceof HTMLCanvasElement && this === document.body) hud = byId('hud').textContent;
+      return append.call(this, child) as T;
+    });
+    await boot('?bot=off');
+    expect(hud).toContain('Black to move');
+  });
+
   it('draws the generated textures, and frames the whole board in the window', async () => {
     const game = await boot('?bot=off');
     const { scene, camera } = await drawn(game);
