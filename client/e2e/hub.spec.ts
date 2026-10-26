@@ -10,6 +10,7 @@ import { openModes } from './modes';
 // #523: a lift wears an arrow toward its deck, with a bar across while it is locked. A locked lift keeps the marble out
 // and Tally says one short line; a boss win opens it. body[data-lifts] lists the lifts of the deck.
 // #524: rolling onto a terminal opens its lore entry in the reader; Esc leaves it to the hub on the same cell.
+// #583: no game is on in the hub: the evaluation bar and Hint are hidden there.
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
@@ -94,6 +95,25 @@ test('the boss door starts the Echo, and Back to the ship after the defeat lands
   await expect(body).toHaveAttribute('data-hub', 'mess 2,0');
   await expect(page.locator('#hud')).toContainText('Boss door');
   await expect(back).toBeHidden();
+});
+
+test('the evaluation bar and Hint are off in the hub and back once a new game leaves it, #583', async ({ page }, testInfo) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const bar = page.locator('#eval');
+  const hint = page.getByRole('button', { name: 'Hint' });
+  await expect(bar).toBeVisible();
+  await expect(hint).toBeVisible();
+  await ship(page);
+  await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
+  await expect(bar).toBeHidden();
+  await expect(hint).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath('hub-no-eval.png') });
+  await page.locator('#new-game').click(); // no move played: one press starts over
+  await expect(page.locator('body')).not.toHaveAttribute('data-hub');
+  await expect(bar).toBeVisible();
+  await expect(bar).toHaveAttribute('data-ply', '0', { timeout: 10_000 });
+  await expect(hint).toBeVisible();
 });
 
 test('the hot-seat table starts a game for two at one table, #522', async ({ page }) => {

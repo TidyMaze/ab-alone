@@ -230,6 +230,27 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(hub()).toBeUndefined();
   });
 
+  it('hides the evaluation bar and Hint in the hub, and drops the evaluation in flight; a new game brings them back (#583)', async () => {
+    const game = await boot('?bot=off');
+    const bar = byId<HTMLElement>('eval');
+    expect(bar.hidden).toBe(false); // the start position is being evaluated
+    expect(byId('hint').hidden).toBe(false);
+    ship(game);
+    await game.settle();
+    expect(bar.hidden).toBe(true);
+    expect(bar.dataset.ply).toBeUndefined(); // the answer for the start position never reached the bar
+    expect(byId('hint').hidden).toBe(true);
+    game.click(1, 0); // walking keeps them hidden
+    expect(hub()).toBe('mess 1,0');
+    expect(bar.hidden).toBe(true);
+    expect(byId('hint').hidden).toBe(true);
+    byId('new-game').click();
+    await game.settle();
+    expect(bar.hidden).toBe(false);
+    expect(bar.dataset.ply).toBe('0');
+    expect(byId('hint').hidden).toBe(false);
+  });
+
   it('puts the end light of a finished game out in the hub', async () => {
     const game = await boot('?nodes=100');
     await game.hook<Promise<number>>('__playTurns', 30, [4]); // the player marches one way, the bot pushes six off
