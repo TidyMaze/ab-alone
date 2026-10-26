@@ -42,3 +42,23 @@ test('play a log, move a marble while it plays, toggle the transcript, skip it, 
   await expect(transcript).toBeHidden();
   expect(await ducked(page)).toBe(false);
 });
+
+// #517: a click on the deck's recorder prop plays its log and collects it; the log archive lists it and replays it.
+test('collect a log from the recorder, then replay it from the log archive, #517', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const body = page.locator('body');
+  await expect(body).toHaveAttribute('data-console', /^mess-house-rule /);
+  type Rect = { x: number; y: number; width: number; height: number };
+  const r = await page.evaluate(() => (window as unknown as { __recorderRect: () => Rect }).__recorderRect());
+  await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
+  await expect(body).toHaveAttribute('data-log', 'mess-first-game');
+  expect(await page.evaluate(() => localStorage.getItem('ab-alone.logs-collected'))).toBe('mess-first-game');
+  await page.getByRole('button', { name: 'Skip log' }).click();
+  await expect(body).not.toHaveAttribute('data-log');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Logs', exact: true }).click();
+  await page.getByRole('button', { name: logOf('mess').title }).click();
+  await expect(body).toHaveAttribute('data-log', 'mess-first-game');
+  await expect(page.locator('#transcript')).toHaveText(logOf('mess').lines[0]!.text);
+});
