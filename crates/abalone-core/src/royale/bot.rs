@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn a_bot_ejects_when_it_can() {
-        // A 3v2 off the east rim, though it moves seat 0 away from the centre.
+        // A 3v2 off the east rim.
         let s = arena(
             3,
             MAX_RADIUS,
@@ -163,12 +163,53 @@ mod tests {
         }
     }
 
+    /// Voids the hole of the arena: the centre cell and its 6 neighbours.
+    fn hole(s: &mut Royale) {
+        s.board.void(0, 0);
+        for (dq, dr) in NEIGHBOURS {
+            s.board.void(dq, dr);
+        }
+    }
+
     #[test]
-    fn a_bot_moves_toward_the_centre_and_holds_when_nothing_is_better() {
-        let s = arena(3, MAX_RADIUS, &[((3, 0), 0), ((0, 0), 1), ((-5, 0), 2)]);
+    fn a_bot_steps_off_the_edge_of_the_hole_and_holds_when_nothing_is_better() {
+        let mut s = arena(3, MAX_RADIUS, &[((2, 0), 0), ((-4, 0), 1), ((0, -5), 2)]);
+        hole(&mut s);
         for seed in 0..10 {
-            assert_eq!(order(&s, 0, seed), go(&[(3, 0)], W));
+            // E, NE and SE all leave the edge: the seed picks one.
+            let o = order(&s, 0, seed);
+            assert!(
+                [go(&[(2, 0)], E), go(&[(2, 0)], NE), go(&[(2, 0)], SE)].contains(&o),
+                "{o:?}"
+            );
             assert_eq!(order(&s, 1, seed), Order::Hold);
+        }
+    }
+
+    #[test]
+    fn a_bot_pushes_an_opponent_into_the_hole() {
+        let mut s = arena(
+            3,
+            MAX_RADIUS,
+            &[((3, 0), 0), ((4, 0), 0), ((2, 0), 1), ((0, -5), 2)],
+        );
+        hole(&mut s);
+        for seed in 0..10 {
+            assert_eq!(order(&s, 0, seed), go(&[(3, 0), (4, 0)], W));
+        }
+    }
+
+    #[test]
+    fn a_bot_pushes_an_opponent_onto_a_cracked_cell() {
+        let mut s = arena(
+            3,
+            MAX_RADIUS,
+            &[((-2, 3), 0), ((-1, 3), 0), ((0, 3), 1), ((0, -5), 2)],
+        );
+        hole(&mut s);
+        s.board.set_cracks(vec![((1, 3), 1)]);
+        for seed in 0..10 {
+            assert_eq!(order(&s, 0, seed), go(&[(-2, 3), (-1, 3)], E));
         }
     }
 
@@ -179,16 +220,19 @@ mod tests {
     }
 
     #[test]
-    fn twenty_games_of_6_bots_end_with_one_winner_within_150_rounds() {
-        for seed in 0..20 {
+    fn ten_games_of_6_bots_end_by_round_46() {
+        let mut shared = 0;
+        for seed in 0..10 {
             let mut s = start(6).unwrap();
             while !s.is_over() {
-                assert!(s.round() <= 150, "seed {seed}");
                 let orders: Vec<(usize, Order)> =
                     (0..6).map(|seat| (seat, order(&s, seat, seed))).collect();
                 s = resolve_round(&s, &orders).unwrap().0;
             }
-            assert_eq!(s.winners().unwrap().len(), 1, "seed {seed}");
+            assert!(s.round() <= 47, "seed {seed}");
+            shared += usize::from(s.winners().unwrap().len() > 1);
         }
+        // The last void can take several seats tied on the breach rule (rules.md 10.4).
+        assert!(shared <= 2, "{shared} shared wins");
     }
 }

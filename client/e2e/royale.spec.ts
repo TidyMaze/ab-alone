@@ -44,10 +44,10 @@ test('the outer ring cracks with a warning a round before it goes void, then it 
   await expect(hud.locator('.turn')).toHaveText('Battle royale · Round 13');
   await expect(hud.locator('.breach')).toHaveText('Breach: 48 cells void in 1 round');
   await expect(body).toHaveAttribute('data-cracks', '48');
-  await expect(body).toHaveAttribute('data-vanished', '0');
+  await expect(body).toHaveAttribute('data-vanished', '7'); // the hole in the centre (#610)
   await page.getByRole('button', { name: 'Hold' }).click();
   await expect(hud.locator('.turn')).toHaveText('Battle royale · Round 14');
-  await expect(body).toHaveAttribute('data-vanished', '48');
+  await expect(body).toHaveAttribute('data-vanished', '55');
   await expect(body).toHaveAttribute('data-cracks', '0');
   await expect(hud.locator('.breach')).toHaveCount(0);
 });

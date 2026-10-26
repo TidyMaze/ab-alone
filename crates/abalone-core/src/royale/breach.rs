@@ -142,7 +142,7 @@ mod tests {
     }
 
     #[test]
-    fn the_schedule_cracks_a_ring_every_6_rounds_then_every_3_down_to_the_centre() {
+    fn the_schedule_cracks_a_ring_every_6_rounds_then_every_3_down_to_ring_2() {
         let schedule = [
             (12, 8),
             (18, 7),
@@ -151,8 +151,6 @@ mod tests {
             (36, 4),
             (42, 3),
             (45, 2),
-            (48, 1),
-            (51, 0),
         ];
         for round in 1..=60 {
             let expected = schedule
@@ -172,18 +170,18 @@ mod tests {
         // After round 11: nothing cracked yet.
         assert_eq!(s.round(), 12);
         assert!(s.board().cracks().is_empty());
-        assert_eq!(cells(&s).len(), 217);
+        assert_eq!(cells(&s).len(), 210);
         // After round 12: the radius 8 ring is cracked, readable one round before it voids.
         s = hold(&s);
         assert_eq!(s.board().cracks(), cracked_ring(8));
         assert_eq!(s.board().cracks().len(), 48);
-        assert_eq!(cells(&s).len(), 217);
+        assert_eq!(cells(&s).len(), 210);
         assert!((0..6).all(|seat| s.marbles(seat) == 10));
         // After round 13: the ring is void with its marbles, nobody touched them: no credit.
         s = hold(&s);
         assert!(s.board().cracks().is_empty());
-        assert_eq!(cells(&s).len(), 169);
-        assert!(cells(&s).iter().all(|&c| distance(c) <= 7));
+        assert_eq!(cells(&s).len(), 162);
+        assert!(cells(&s).iter().all(|&c| (2..=7).contains(&distance(c))));
         assert!((0..6).all(|seat| s.marbles(seat) == 7 && s.ejections(seat) == 0));
         assert_eq!(s.last_void, vec![3; 6]);
         for _ in 14..=17 {
@@ -194,57 +192,43 @@ mod tests {
         s = hold(&s);
         assert_eq!(s.board().cracks(), cracked_ring(7));
         s = hold(&s);
-        assert_eq!(cells(&s).len(), 127);
+        assert_eq!(cells(&s).len(), 120);
         assert!((0..6).all(|seat| s.marbles(seat) == 3));
     }
 
     #[test]
-    fn below_radius_3_a_ring_cracks_every_3_rounds_and_the_breach_ends_the_game() {
-        let mut s = arena(3, 42, &[((0, 0), 0), ((1, 0), 1), ((0, 1), 2)]);
-        // Rings 8 to 4 are already void.
+    fn below_radius_3_a_ring_cracks_every_3_rounds_and_ring_2_ends_the_game() {
+        let mut s = arena(
+            3,
+            42,
+            &[((2, 0), 0), ((-2, 0), 0), ((0, 2), 1), ((0, -2), 2)],
+        );
+        // Rings 8 to 4 are already void, and so is the hole.
         for c in cells(&s) {
-            if distance(c) > 3 {
+            if distance(c) > 3 || distance(c) < 2 {
                 s.board.void(c.0, c.1);
             }
         }
         let mut cracks = Vec::new();
         let mut left = Vec::new();
-        for round in 42..=49 {
+        for round in 42..=46 {
             assert_eq!(s.winners(), None, "round {round}");
             s = hold(&s);
             cracks.push(s.board().cracks().to_vec());
             left.push(cells(&s).len());
         }
-        let expected = [
-            cracked_ring(3),
-            vec![],
-            vec![],
-            cracked_ring(2),
-            vec![],
-            vec![],
-            cracked_ring(1),
-            vec![],
-        ];
-        assert_eq!(cracks, expected);
-        assert_eq!(left, [37, 19, 19, 19, 7, 7, 7, 1]);
-        // Ring 1 took the last marbles of seats 1 and 2: seat 0 is left alone and wins.
-        assert_eq!(s.round(), 50);
-        assert!(s.is_out(1) && s.is_out(2));
+        assert_eq!(
+            cracks,
+            [cracked_ring(3), vec![], vec![], cracked_ring(2), vec![]]
+        );
+        assert_eq!(left, [30, 12, 12, 12, 0]);
+        // Ring 2 took every marble left: seat 0 held the most and wins.
+        assert_eq!(s.round(), 47);
+        assert!((0..3).all(|seat| s.is_out(seat)));
+        assert_eq!(s.last_void, [2, 1, 1]);
         assert_eq!(s.winners(), Some(vec![0]));
         assert!(s.is_over());
         assert_eq!(resolve_round(&s, &[]), Err(RoyaleError::Over));
-    }
-
-    #[test]
-    fn the_centre_cell_cracks_at_round_51_and_voids_at_round_52() {
-        let mut s = arena(3, 51, &[]);
-        s.breach();
-        assert_eq!(s.board().cracks(), [((0, 0), 1)]);
-        s.round = 52;
-        s.breach();
-        assert!(s.board().cracks().is_empty());
-        assert_eq!(s.board().get(0, 0), None);
-        assert_eq!(cells(&s).len(), 216);
     }
 
     #[test]

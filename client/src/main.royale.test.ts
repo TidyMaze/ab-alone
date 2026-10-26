@@ -115,7 +115,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
   it('a finished game takes no more round: Hold is off', async () => {
     const game = await boot('?bot=off');
     game.hook('__royale', { seed: 7, rounds: [] });
-    // Every game ends by round 52, when the centre cell goes void (rules.md 10.4).
+    // Every game ends by round 46, when ring 2 goes void (rules.md 10.4).
     for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) {
       button('royale-hold').click();
       game.frame(10_000);
@@ -128,7 +128,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
     game.hook('__royale', CRACKED);
     expect(turn()).toBe('Battle royale · Round 13');
     expect(document.body.dataset.cracks).toBe('48');
-    expect(document.body.dataset.vanished).toBe('0');
+    expect(document.body.dataset.vanished).toBe('7'); // the hole in the centre (#610)
     expect(game.hook<Axial[]>('__crackDecals')).toHaveLength(48);
     expect(game.hook<Axial[]>('__crackDecals')).toContainEqual([0, 8]);
     expect(byId('hud').querySelector('.breach')!.textContent).toBe('Breach: 48 cells void in 1 round');
@@ -136,7 +136,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
     game.frame(10_000); // the reveal ends with the breach (#612)
     expect(turn()).toBe('Battle royale · Round 14');
     expect(document.body.dataset.cracks).toBe('0');
-    expect(document.body.dataset.vanished).toBe('48');
+    expect(document.body.dataset.vanished).toBe('55');
     expect(game.hook<Axial[]>('__crackDecals')).toEqual([]);
     expect(byId('hud').querySelector('.breach')).toBeNull();
   });

@@ -114,12 +114,12 @@ mod tests {
     ];
 
     #[test]
-    fn the_arena_has_217_cells_and_10_marbles_per_seat() {
+    fn the_arena_has_210_cells_and_10_marbles_per_seat() {
         for seats in MIN_SEATS..=MAX_SEATS {
             let s = start(seats).unwrap();
             assert_eq!(s.seats(), seats);
             assert_eq!(s.board().radius(), 8);
-            assert_eq!(on_board(s.board()).len(), 217);
+            assert_eq!(on_board(s.board()).len(), 210);
             for seat in 0..6 {
                 let expected = if seat < seats { 10 } else { 0 };
                 assert_eq!(s.marbles(seat), expected, "{seats} seats, seat {seat}");
@@ -129,6 +129,24 @@ mod tests {
             assert!(on_board(s.board())
                 .iter()
                 .all(|&(q, r)| s.last_toucher(q, r).is_none()));
+        }
+    }
+
+    #[test]
+    fn the_centre_cell_and_its_6_neighbours_are_a_hole_from_round_1() {
+        for seats in MIN_SEATS..=MAX_SEATS {
+            let s = start(seats).unwrap();
+            let hole: Vec<P> = (-MAX_RADIUS..=MAX_RADIUS)
+                .flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
+                .filter(|&(q, r)| q.abs().max(r.abs()).max((q + r).abs()) <= MAX_RADIUS)
+                .filter(|&(q, r)| s.board().get(q, r).is_none())
+                .collect();
+            assert_eq!(
+                hole,
+                [(-1, 0), (-1, 1), (0, -1), (0, 0), (0, 1), (1, -1), (1, 0)],
+                "{seats} seats"
+            );
+            assert!(s.board().cracks().is_empty());
         }
     }
 
