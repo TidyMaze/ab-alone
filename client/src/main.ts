@@ -51,6 +51,8 @@ import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
+import { LORE } from './lore';
+import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   drawDue,
@@ -377,6 +379,7 @@ const toggles: Record<string, () => void> = {
     applyTheme();
     applyUiScale();
     applySafe();
+    layoutConsole();
   },
   'shell-skin': () => {
     skin = nextSkin(skin);
@@ -535,6 +538,40 @@ lamp.shadow.camera.bottom = -shadowBound;
 lamp.shadow.bias = LIGHT.key.shadow.bias;
 lamp.shadow.normalBias = LIGHT.key.shadow.normalBias;
 scene.add(ambient, lamp);
+// The deck console (#511): the console-screen prop shows its deck's first lore entry, paged for the UI scale and drawn
+// once the web fonts are in, so no fallback font shows first. Drawn again on a page turn only, never per frame.
+const consoleCanvas = Object.assign(document.createElement('canvas'), { width: TERMINAL.width, height: TERMINAL.height });
+const consoleG = consoleCanvas.getContext('2d')!;
+const consoleTexture = new THREE.CanvasTexture(consoleCanvas);
+consoleTexture.colorSpace = THREE.SRGBColorSpace;
+let consoleFonts = false;
+let consoleEntry = '';
+let consolePages: TerminalPage[] = [];
+let consolePage = -1;
+let consoleSince = 0;
+function layoutConsole(): void {
+  if (!consoleFonts) return;
+  const entry = LORE.find((e) => e.deck === deck)!; // every deck has its entries (lore.test.ts)
+  consolePages = terminalPages(entry, uiScale, (text, font) => {
+    consoleG.font = font;
+    return consoleG.measureText(text).width;
+  });
+  consolePage = -1;
+  consoleSince = performance.now();
+  consoleEntry = entry.id;
+}
+function turnConsole(now: number): void {
+  const page = consolePages.length ? pageAt(now - consoleSince, consolePages.length) : consolePage;
+  if (page === consolePage) return;
+  consolePage = page;
+  drawTerminal(consoleG, consolePages[page]!, uiScale);
+  consoleTexture.needsUpdate = true;
+  document.body.dataset.console = `${consoleEntry} ${page + 1}/${consolePages.length}`; // read by the e2e tests
+}
+void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fonts.load(font))).then(() => {
+  consoleFonts = true;
+  layoutConsole();
+});
 function applyDeck(next: Deck): void {
   deck = next;
   const light = DECKS[deck];
@@ -546,6 +583,7 @@ function applyDeck(next: Deck): void {
   renderer.toneMappingExposure = light.exposure;
   document.body.dataset.deck = deck; // read by the e2e tests
   applyLook();
+  layoutConsole();
   // The deck's texture set (#401, #440) once loaded, the steel when its file did not load; the frame keeps the steel.
   // Only on the textured look: a map added to the flat look would rebuild its pipeline. body[data-deck-set] is read by the e2e.
   void Promise.all([deckMap(next), deckNormalMap(next)]).then(([map, normal]) => {
@@ -799,8 +837,10 @@ const propsGroup = new THREE.Group();
 drawProps = (): void => {
   propsGroup.clear();
   for (const def of spaceshipArchitecture(tier)) {
-    let mat: THREE.MeshStandardMaterial;
-    if (def.id.includes('wall') && wallTexture) {
+    let mat: THREE.Material;
+    if (def.id === 'console-screen') {
+      mat = new THREE.MeshBasicMaterial({ map: consoleTexture, fog: false }); // a screen gives its own light
+    } else if (def.id.includes('wall') && wallTexture) {
       mat = new THREE.MeshStandardMaterial({
         color: def.color,
         roughness: def.roughness,
@@ -2056,6 +2096,7 @@ renderer.setAnimationLoop((now) => {
   animateSlides(now);
   animateEjections(now);
   animateParticles(now);
+  turnConsole(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   renderer.render(scene, camera);
   draws++;

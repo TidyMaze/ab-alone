@@ -7,13 +7,14 @@ import { boot } from './test/harness';
 // UI scale, once the web fonts are in. body[data-console] names the entry and the page shown, read by the e2e test.
 
 type Screen = THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
-/** The console screen main.ts draws last, caught when its props are added to their group: call before boot. */
+/** The console screen main.ts draws last, the one unlit mesh with a canvas map, caught when its props are added to
+ *  their group: call before boot. */
 function catchScreen(): () => Screen {
   let screen: Screen | null = null;
   const add = THREE.Object3D.prototype.add;
   vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
     for (const o of objects)
-      if (o instanceof THREE.Mesh && (o.material as THREE.MeshBasicMaterial).map instanceof THREE.CanvasTexture)
+      if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshBasicMaterial && o.material.map?.image instanceof HTMLCanvasElement)
         screen = o as Screen;
     return add.apply(this, objects);
   });
@@ -37,7 +38,7 @@ describe('main.ts, the deck console (#511)', () => {
     game.frame(9000);
     expect(asked).toEqual(['600 24px "Chakra Petch"', '400 24px "IBM Plex Sans"']);
     expect(shown()).toBeUndefined(); // nothing drawn in a fallback font
-    expect(version(screen)).toBe(0);
+    const blank = version(screen); // the empty canvas, uploaded once
     game.hook('__deck', 'cargo'); // a deck change before the fonts draws nothing either
     game.frame();
     expect(shown()).toBeUndefined();
@@ -45,7 +46,7 @@ describe('main.ts, the deck console (#511)', () => {
     await game.settle();
     game.frame();
     expect(shown()).toBe('cargo-assay 1/1');
-    expect(version(screen)).toBe(1);
+    expect(version(screen)).toBe(blank + 1);
   });
 
   it('turns the page every 8 s and draws the screen only then: no flicker under safe mode', async () => {

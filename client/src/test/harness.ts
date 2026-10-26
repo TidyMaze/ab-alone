@@ -1,8 +1,8 @@
 // A harness that runs the whole page, src/main.ts, in vitest under jsdom (decision #445): the test file starts with
-// `// @vitest-environment jsdom`, then `const game = await boot('?bot=off')` loads index.html's body and imports a
-// fresh main.ts on the real wasm engine. What jsdom lacks is stubbed: the three.js renderer (no WebGL or WebGPU, the
-// scene graph stays real), the texture loader, canvas 2D, matchMedia, IndexedDB (fake-indexeddb), the bot workers
-// (the worker's answer() runs in-process), the Trystero transport (one end of a localPair) and the clock of the
+// `// @vitest-environment jsdom`, then `const game = await boot('?bot=off')` loads index.html's body and imports a fresh
+// main.ts on the real wasm engine. What jsdom lacks is stubbed: the three.js renderer (no WebGL or WebGPU, the scene
+// graph stays real), the texture loader, canvas 2D, the web fonts, matchMedia, IndexedDB (fake-indexeddb), the bot
+// workers (the worker's answer() runs in-process), the Trystero transport (one end of a localPair) and the clock of the
 // animation loop (game.frame), and Web Audio on demand (the fake of src/test/audio.ts). Everything is undone when the
 // test ends.
 import { IDBFactory } from 'fake-indexeddb';

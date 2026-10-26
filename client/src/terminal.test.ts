@@ -35,8 +35,9 @@ describe('wrap', () => {
     expect(wrap('a enormous b', 4, (t) => t.length)).toEqual(['a', 'enormous', 'b']);
   });
 
-  it('ignores runs of spaces', () => {
+  it('ignores runs of spaces, and has no line for no word', () => {
     expect(wrap('  a   b  ', 10, (t) => t.length)).toEqual(['a b']);
+    expect(wrap('   ', 10, (t) => t.length)).toEqual([]);
   });
 });
 
