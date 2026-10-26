@@ -18,7 +18,7 @@ const eventNames = (d: { events: { event: string }[] }) => d.events.map((e) => e
 
 test('Copy diagnostics puts the move, the bot search and the build in the clipboard', async ({ page, context }) => {
   await context.grantPermissions(PERMISSIONS);
-  await page.goto('./');
+  await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move');
   await cell(page, 0, 2);

@@ -104,7 +104,7 @@ See section 6.
 
 | Item | Rule |
 |---|---|
-| Entry | A "Ship" entry of the mode menu. The menu itself stays ungated: the daily challenge and the tests need every boss |
+| Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Ship hub (Mess deck, #602). A "Ship" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
 | Space | One small hex map per deck (`client/src/hub.ts`): 19 cells (radius 2), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
 | Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
 | Rooms | Cells with a glyph, at least 6 per deck. Rolling onto a room enters it; standing on it again (Ship, Back to the ship) does not |

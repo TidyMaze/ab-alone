@@ -115,6 +115,13 @@ async function opponent(game: Game) {
 }
 
 describe('main.ts, walking the hub (#521)', () => {
+  it('lands directly on the Ship hub when booted with no query string, no hash and no saved game, #602', async () => {
+    const game = await boot('');
+    expect(hub()).toBe('mess 0,0');
+    expect(document.body.dataset.deck).toBe('mess');
+    expect(game.hud()).toBe('Ship · Mess');
+  });
+
   it('Ship draws the Mess map, its room glyphs and the glass marble on the centre cell, in the HUD too', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');

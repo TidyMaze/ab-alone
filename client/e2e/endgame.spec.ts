@@ -14,8 +14,9 @@ const DRAW = [A, B, C, D, E, B, C, D, E]; // the start position after A comes ba
 
 const plies = (page: Page) => page.evaluate(() => (window as any).__plies() as number);
 
-async function open(page: Page, query: string): Promise<void> {
-  await page.goto(`./${query}`);
+async function open(page: Page, query = '?bot=on'): Promise<void> {
+  const target = query === '' ? '?bot=on' : query;
+  await page.goto(`./${target}`);
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('to move');
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));

@@ -11,7 +11,9 @@ const click = async (page: Page, q: number, r: number): Promise<void> => {
 };
 
 test('after one visit the game loads offline and the bot answers', async ({ page, context }) => {
-  await page.goto(process.env.E2E_PREVIEW_URL!);
+  const url = process.env.E2E_PREVIEW_URL!;
+  const withBot = url.includes('?') ? `${url}&bot=on` : `${url}?bot=on`;
+  await page.goto(withBot);
   await page.locator('canvas').waitFor();
   const hud = page.locator('#hud');
   await expect(hud).toContainText('White to move');

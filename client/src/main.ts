@@ -2717,6 +2717,7 @@ const invited = roomFromHash(location.hash);
 const coopInvite = coopFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite); // an unknown boss starts nothing
+else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Ship hub (#602)
 else analyse(); // the start position
 
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
@@ -2764,7 +2765,7 @@ refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 document.body.appendChild(renderer.domElement);
-void botTurn(); // a resumed game saved while the bot was thinking
+if (!hubAt) void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw = { start: -Infinity, cost: 0 };
 let draws = 0;
 let drawAsked = false;

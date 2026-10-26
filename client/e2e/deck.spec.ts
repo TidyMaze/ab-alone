@@ -31,7 +31,7 @@ test('hot-seat, each boss and online play on their decks, #400', async ({ page }
 });
 
 test('the bot plays at the Mess, the daily on the deck of its boss, #400', async ({ page }) => {
-  await page.goto('./');
+  await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-deck', 'mess');
