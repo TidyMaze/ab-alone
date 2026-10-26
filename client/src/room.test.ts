@@ -128,5 +128,21 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     expect(lights.rim.intensity).toBeGreaterThan(0);
     expect(lights.consoleBounce.intensity).toBeGreaterThan(0);
     expect(lights.pedestalGlow.intensity).toBeGreaterThan(0);
+
+    const furnace = spaceshipLights('furnace');
+    expect(furnace.emergency.color).toBe(0xff4d00);
+    expect(furnace.consoleBounce.color).toBe(0xe86a33);
+
+    const bridge = spaceshipLights('bridge');
+    expect(bridge.emergency.color).toBe(0x00cec9);
+    expect(bridge.consoleBounce.color).toBe(0x55efc4);
+
+    const chapel = spaceshipLights('chapel');
+    expect(chapel.emergency.color).toBe(0x6c5ce7);
+    expect(chapel.consoleBounce.color).toBe(0xa29bfe);
+
+    const cargo = spaceshipLights('cargo');
+    expect(cargo.emergency.color).toBe(0x7fd6e8);
+    expect(cargo.consoleBounce.color).toBe(0x7fd6e8);
   });
 });

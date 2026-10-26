@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import type * as THREE from 'three/webgpu';
+import * as THREE from 'three';
+import type * as THREEWebGPU from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { framing } from './camera';
 import { boot, type Game } from './test/harness';
@@ -18,12 +19,12 @@ const press = (target: EventTarget): void => void target.dispatchEvent(new Event
 /** The scene, the camera and the renderer of the next draw. */
 async function drawn(
   game: Game,
-): Promise<{ scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREE.WebGPURenderer }> {
+): Promise<{ scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREEWebGPU.WebGPURenderer }> {
   const { WebGPURenderer } = await import('three/webgpu');
   const render = vi.spyOn(WebGPURenderer.prototype, 'render');
   game.frame(1000); // past the gap the loop keeps between two draws under automation
   const [scene, camera] = render.mock.lastCall as unknown as [THREE.Scene, THREE.PerspectiveCamera];
-  const renderer = render.mock.contexts.at(-1) as THREE.WebGPURenderer;
+  const renderer = render.mock.contexts.at(-1) as THREEWebGPU.WebGPURenderer;
   render.mockRestore();
   return { scene, camera, renderer };
 }
@@ -640,10 +641,18 @@ it("draws a hovered move's ghost on a fresh game, the fight's own in a boss figh
   expect(Number(await ghosts('The Choir'))).toBeGreaterThan(0);
 });
 
-it('mounts the progressive PBR spaceship bay into propsGroup (#648)', async () => {
+it('mounts the progressive PBR spaceship bay into propsGroup (#648, #660)', async () => {
   const game = await boot('?bot=off');
-  const dummyBay = { scene: { name: 'bay-scene' } };
+  const dummyBay = {
+    scene: new THREE.Group(),
+    materials: {
+      deck: new THREE.MeshStandardMaterial(),
+      bulkhead: new THREE.MeshStandardMaterial(),
+      grate: new THREE.MeshStandardMaterial(),
+    },
+  };
   game.hook('__mountBay', dummyBay);
+  game.hook('__setTier', 'low'); // calls applyLook() and drawProps() with currentBay active
   game.hook('__mountBay', null);
 });
 

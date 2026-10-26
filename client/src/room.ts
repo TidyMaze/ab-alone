@@ -570,11 +570,26 @@ export interface SpaceshipLights {
   };
 }
 
-export function spaceshipLights(): SpaceshipLights {
+export function spaceshipLights(deck?: string): SpaceshipLights {
+  let emergencyColor = 0xd9822b;
+  let consoleColor = 0xd9822b;
+  if (deck === 'furnace') {
+    emergencyColor = 0xff4d00;
+    consoleColor = 0xe86a33;
+  } else if (deck === 'bridge') {
+    emergencyColor = 0x00cec9;
+    consoleColor = 0x55efc4;
+  } else if (deck === 'chapel') {
+    emergencyColor = 0x6c5ce7;
+    consoleColor = 0xa29bfe;
+  } else if (deck === 'cargo') {
+    emergencyColor = 0x7fd6e8;
+    consoleColor = 0x7fd6e8;
+  }
   return {
     // Dim sodium emergency light above the airlock hatch
     emergency: {
-      color: 0xd9822b,
+      color: emergencyColor,
       intensity: 0.6,
       position: [0, 8.0, -22.0],
       distance: 28.0,
@@ -587,7 +602,7 @@ export function spaceshipLights(): SpaceshipLights {
     },
     // Warm sodium console bounce from the avionics terminal screen desk
     consoleBounce: {
-      color: 0xd9822b,
+      color: consoleColor,
       intensity: 0.35,
       position: [-5.5, 1.2, -5.5],
       distance: 8.0,
