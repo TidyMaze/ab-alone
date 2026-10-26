@@ -14,6 +14,7 @@ test('play a log, move a marble while it plays, toggle the transcript, skip it, 
   await page.keyboard.press('t');
   await page.getByRole('button', { name: 'Play log' }).click();
   await expect(body).toHaveAttribute('data-log', 'mess-first-game');
+  expect(await page.evaluate(() => localStorage.getItem('ab-alone.logs-collected'))).toBe('mess-first-game'); // #517
   expect(await ducked(page)).toBe(true);
   const transcript = page.locator('#transcript');
   await expect(transcript).toHaveText(logOf('mess').lines[0]!.text);

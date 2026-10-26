@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { boot, type Game } from './test/harness';
 
-// The collectable audio logs (#517, world.md section 4): a click on the recorder prop of the deck plays the deck's log
-// and saves it collected; the log archive (#513) lists the logs collected after the entries read, and a press on one
-// replays it. Play log on an archived entry of another deck plays that deck's log.
+// The collectable audio logs (#517, world.md section 4): a click on the recorder prop of the deck, or Play log at the
+// console, plays the deck's log and saves it collected; the log archive (#513) lists the logs collected after the
+// entries read, and a press on one replays it. Play log on an archived entry of another deck plays that deck's log.
 
 type Rect = { x: number; y: number; width: number; height: number };
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
@@ -75,5 +75,13 @@ describe('main.ts, the collectable audio logs (#517)', () => {
     expect(data().reading).toBe('cargo-assay');
     byId('log-button').click();
     expect(data().log).toBe('cargo-night-shift');
+  });
+
+  it('Play log at the console collects the log too: any log heard joins the archive', async () => {
+    await ready();
+    dispatchEvent(new KeyboardEvent('keydown', { key: 't' }));
+    byId('log-button').click();
+    expect(data().log).toBe('mess-first-game');
+    expect(localStorage.getItem('ab-alone.logs-collected')).toBe('mess-first-game');
   });
 });
