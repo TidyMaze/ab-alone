@@ -122,9 +122,9 @@ full e2e suite run locally before every merge (decision #445).
 | Type label | What it is | Size | Parent | Closed when |
 |---|---|---|---|---|
 | `epic` | One phase of SPEC.md (Phase 0 to 5, one per milestone), plus the `Project setup` epic for specs, workflow and tooling | Weeks | none | All its children are done |
-| `feature` | Something a player can see or do | Several Tasks | Epic | Owner verified every acceptance criterion |
+| `feature` | Something a player can see or do. Named with a User Story: "As [role], I can [capability] because [value]". Contains US description, context, and expected outcome | Several Tasks | Epic | Owner verified every acceptance criterion |
 | `task` | One PR worth of work | 1 PR, ideally under a day | Feature or Epic | Its PR is merged |
-| `bug` | Something that works differently from its spec or acceptance criteria | 1 PR | The broken Feature, if known | Its PR is merged (with the reproducing test) |
+| `bug` | Something that works differently from its spec or acceptance criteria. Clear descriptive name, exact reproduction steps, screenshot/visual proof, and expected behaviour once fixed | 1 PR | The broken Feature, if known | Its PR is merged (with the reproducing test) |
 | `decision` | A choice between options | n/a | optional | An owner writes the chosen option and closes it |
 
 Parent links use GitHub **sub-issues** (issue page, "Create sub-issue" or "Add existing issue").
@@ -152,11 +152,20 @@ flowchart LR
 ## 5. Definitions of Ready and Done
 
 **Feature is Ready when:**
-- [ ] Problem and player-facing outcome are written
+- [ ] User Story naming: `As [role], I can [capability] because [value]`
+- [ ] User Story description, context, and expected outcome are clearly written
 - [ ] Acceptance criteria are a checklist an owner can verify by hand
 - [ ] Linked to the spec section that defines it
 - [ ] Milestone, `Priority` and parent Epic are set
 - [ ] Split into at least one Task sub-issue
+
+**Bug is Ready when:**
+- [ ] Clear and descriptive title indicating what fails under what condition
+- [ ] Steps to reproduce are exact and unambiguous
+- [ ] Screenshot or visual recording attached (or console log / failing test output)
+- [ ] Expected behaviour once fixed is documented
+- [ ] Linked to the broken Feature, if known
+- [ ] `Priority` is set (`P0` or `P1`)
 
 **Task is Ready when:**
 - [ ] Parent Feature or Epic is set
@@ -183,7 +192,9 @@ then closed it.
 
 1. Anyone posts the idea in Discussions, category **Ideas**.
 2. When an owner wants it in the backlog, they create a **Feature** issue from the form, link the
-   discussion, and the discussion gets a comment with the issue link.
+   discussion, and the discussion gets a comment with the issue link. The Feature is formulated as a
+   User Story: title and body follow `As [role], I can [capability] because [value]`, with context,
+   user motivation, expected outcome, and acceptance criteria.
 3. The Feature lands in `Inbox`.
 
 ### 6.2 Triage (owners, or the lead agent on delegation)
@@ -276,7 +287,12 @@ the triager does exactly one of:
 ### 6.7 Bug
 
 1. Whoever finds a bug (human, agent, CI) opens a **Bug** issue from the
-   form **before touching any code**: steps to reproduce, expected, actual, browser and commit.
+   form **before touching any code**:
+   - **Clear name**: concise title describing what fails under what condition.
+   - **Steps to reproduce**: exact numbered sequence to trigger the issue reliably.
+   - **Screenshot or visual recording**: proof of the broken state (or terminal/console log if non-visual).
+   - **Expected behaviour once fixed**: explicit description of how the system should behave after the fix.
+   - **Environment**: browser, OS and commit.
    A bug found during another task is filed too, never fixed inside that task's PR.
 2. It lands in `Inbox`. An owner triages it within the next triage: confirm, set `Priority`
    (**`P0` if it breaks a game or loses data, never lower than `P1`**), link the broken Feature,

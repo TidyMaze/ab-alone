@@ -1,27 +1,28 @@
 name: Bug
 description: Something works differently from its spec. File it before touching any code.
-title: "Bug: "
+title: "Bug: [Clear description of what fails under what condition]"
 labels: [bug]
 body:
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
+      description: Exact numbered sequence of steps to reproduce the bug.
       value: "1. "
-    validations:
-      required: true
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected
-      description: What the spec or acceptance criteria say should happen. Link it.
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: Actual
-      description: What happens. Screenshot, console log or failing test output. No secrets.
+      label: Actual behavior & Screenshot
+      description: What happens. Attach a screenshot, screen recording, console log, or failing test output. No secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour once fixed
+      description: What the spec or acceptance criteria say should happen once the bug is fixed.
     validations:
       required: true
   - type: input
