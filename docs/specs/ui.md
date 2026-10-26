@@ -97,8 +97,9 @@ it, #530), Battle royale (#502), Boss fight (with the boss list it opens under i
 game-design.md section 3.5, #521), live in one menu behind an icon-only button, a play triangle of the icon set,
 labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their
 names. The button is the last of the column and the open menu lies under it, so opening or closing it moves no other
-button. Held upright, the menu starts a new row under the buttons, its items side by side, the bosses in line after
-Boss fight or Fight together. In a desktop window (wider than tall, over 1100 px wide, a mouse) an open boss list holds two bosses a row, each row compact, so every boss and Daily challenge fit a 1280x720 window without a scroll, with room for more bosses (#653). One boss list is open at a time: opening one closes the other (#615). It closes like the settings menu, on Escape, on a press outside and on its button again,
+button. Held upright, the menu starts a new row under the buttons, its items side by side; an open boss list is one row
+of its own under Boss fight or Fight together that scrolls sideways, so a new boss adds no row over the board (room for
+12 bosses and more on a phone 360 px wide, #666). In a desktop window (wider than tall, over 1100 px wide, a mouse) an open boss list holds two bosses a row, each row compact, so every boss and Daily challenge fit a 1280x720 window without a scroll, with room for more bosses (#653). One boss list is open at a time: opening one closes the other (#615). It closes like the settings menu, on Escape, on a press outside and on its button again,
 and once a mode starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at
 least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Hold, the invite link)
 stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Ship hub (Mess deck, #602). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.

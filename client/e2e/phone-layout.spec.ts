@@ -314,6 +314,41 @@ for (const { name, viewport, mobile } of sizes) {
   });
 }
 
+// #666: on a phone held upright the open mode menu has room for 12 bosses, so a new boss needs no layout change. Each
+// boss list gets copies of its last entry, as #663 does on a desktop; the Daily challenge names the longest boss name.
+for (const { name, viewport } of sizes.filter((s) => s.mobile && s.viewport.width < s.viewport.height)) {
+  test.describe(`${name}, 12 bosses`, () => {
+    test.skip(({ browserName }) => browserName === 'firefox', 'Firefox has no mobile emulation');
+    test.use({ viewport, isMobile: true, hasTouch: true });
+
+    for (const list of ['Boss fight', 'Fight together']) {
+      test(`nothing covers the board or the HUD with the ${list} list of 12 bosses open, #666`, async ({ page }, testInfo) => {
+        await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
+        await page.goto('./?bot=off&net=hook');
+        await page.locator('canvas').waitFor();
+        await openModes(page);
+        await page.getByRole('button', { name: 'Boss fight' }).click();
+        const names = await page.locator('#boss-list button').allTextContents();
+        const longest = names.reduce((a, b) => (b.length > a.length ? b : a));
+        let ms = Date.UTC(2026, 9, 23);
+        while (dailyFor(utcDay(ms), names).id !== longest) ms += 86_400_000;
+        await page.clock.setSystemTime(new Date(`${utcDay(ms)}T08:00:00Z`));
+        await page.clock.fastForward(60_000); // the minute timer renames Daily challenge
+        await expect(page.locator('#daily')).toHaveText(dailyTitle(utcDay(ms), longest));
+        await page.evaluate(() => {
+          for (const el of document.querySelectorAll('#boss-list, #coop-list')) {
+            while (el.children.length < 12) el.appendChild(el.lastElementChild!.cloneNode(true));
+          }
+        });
+        const button = page.getByRole('button', { name: list });
+        if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click(); // closes the other list
+        await expect(page.locator(list === 'Boss fight' ? '#boss-list' : '#coop-list').getByRole('button')).toHaveCount(12);
+        await check(page, testInfo, `with the mode menu and the ${list} list of 12 bosses open`);
+      });
+    }
+  });
+}
+
 // On a desktop the column stays where it was: top right, one button under the other.
 // UI scale 200 % (#382): only a large desktop window has room for the HUD at 200 % (maxUiScale).
 test.describe('a large desktop window at a 200 % UI scale', () => {
