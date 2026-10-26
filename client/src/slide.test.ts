@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIRECTIONS, VANISHED, axialTo3D, cellIndex, type Axial, type Move } from './board';
+import { DIRECTIONS, VANISHED, axialTo3D, cellIndex, cellsFor, type Axial, type Move } from './board';
 import { MARBLE_RADIUS, SLIDE_MS, rollAt, slideAt, slideTracks } from './slide';
 
 const empty = (): number[] => new Array<number>(61).fill(0);
@@ -62,6 +62,19 @@ describe('slideTracks', () => {
     const after = put([[0, 0, 1], [0, -1, 1], [0, -2, VANISHED], [0, -3, 2], [0, -4, 2]]);
     const tracks = slideTracks(before, after, move(4, [0, 0], [0, 1]), false);
     expect(tracks.map((t) => t.cell)).toEqual([[0, -1], [0, 0]]);
+  });
+
+  it('slides on another board given its cells: the battle royale arena (#612)', () => {
+    const arena = cellsFor(8);
+    const board = (cells: Array<[number, number]>): number[] => {
+      const b = new Array<number>(arena.length).fill(0);
+      for (const [q, r] of cells) b[cellIndex(q, r, arena)] = 1;
+      return b;
+    };
+    // (0, 8) pushes (0, 7) NW, both beyond the radius 4 board.
+    const tracks = slideTracks(board([[0, 8], [0, 7]]), board([[0, 7], [0, 6]]), move(4, [0, 8]), false, arena);
+    expect(tracks.map((t) => t.cell)).toEqual([[0, 7], [0, 6]]);
+    expect(tracks[0]!.from).toEqual(xz(0, 8));
   });
 
   it('skips a marble the board after the move does not show at its new cell', () => {
