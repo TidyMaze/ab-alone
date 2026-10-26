@@ -84,3 +84,29 @@ test('a click on the console screen opens the reader, a click off it leaves, and
   await page.mouse.click(to.x, to.y);
   await expect(page.locator('#hud')).toContainText('Black to move');
 });
+
+// #513: the Log archive item of the settings menu lists the entries read and reopens one in the reader.
+test('the log archive rereads an entry read on another deck, #513', async ({ page }, testInfo) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const body = page.locator('body');
+  await page.evaluate(() => (window as unknown as { __deck: (deck: string) => void }).__deck('cargo'));
+  await expect(body).toHaveAttribute('data-console', /^cargo-assay 1\/\d$/);
+  await page.keyboard.press('t');
+  await expect(body).toHaveAttribute('data-reading', 'cargo-assay');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => (window as unknown as { __deck: (deck: string) => void }).__deck('mess'));
+  await expect(body).toHaveAttribute('data-console', /^mess-house-rule 1\/\d$/);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Logs' }).click();
+  const entry = page.getByRole('button', { name: 'Assay note, ore bay two' });
+  await expect(entry).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('log-archive.png') });
+  await entry.click();
+  await expect(body).toHaveAttribute('data-reading', 'cargo-assay');
+  await expect(page.locator('#reader')).toContainText('Assay note, ore bay two');
+  await expect(page.locator('#settings-menu')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#reader')).toBeHidden();
+  await expect(body).toHaveAttribute('data-console', /^mess-house-rule /);
+});
