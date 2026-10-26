@@ -247,10 +247,12 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
      lower than the rows when the plate is tall (#284, #287). */
   #settings-menu { top: 0; left: calc(100% + 0.5rem); right: auto; flex-flow: row wrap; max-width: calc(100vw - 32px - 100% - 0.5rem); }
   #settings-menu :is(.setting-volume, .setting-archive) { flex: 1 0 100%; box-sizing: border-box; }
-  /* The open mode menu starts a new row, the bosses in line after Boss fight (or Fight together): four rows of touch
-     targets at most. */
-  #mode-menu { flex: 1 0 100%; flex-flow: row wrap; gap: 0.5rem; }
-  #boss-list:not([hidden]), #coop-list:not([hidden]) { display: contents; }
+  /* The open mode menu starts a new row. #666: an open boss list is one row of its own under Boss fight (or Fight
+     together) that scrolls sideways, so a new boss adds no row over the board: the menu is no wider than the
+     window (min-width), the padding keeps the focus outlines inside the scroll box. */
+  #mode-menu { flex: 1 0 100%; min-width: 0; flex-flow: row wrap; gap: 0.5rem; }
+  #boss-list:not([hidden]), #coop-list:not([hidden]) { flex: 1 0 100%; flex-flow: row nowrap; overflow-x: auto; margin: -4px; padding: 4px; }
+  #boss-list button, #coop-list button { flex: none; }
 }
 /* Bug #575: on a phone held upright the boss name of the Daily challenge label takes a second line of the 44 px tall
    button, so a long boss name makes the label no wider and pushes no item onto a row over the board. Bugs #603, #606:
