@@ -1,7 +1,7 @@
 //! Hull breach: from round 12, a ring of the arena cracks at the end of a round and goes void
 //! at the end of the next one, with the marbles on it (rules.md section 10.4).
 
-use super::{seat_of, Royale};
+use super::{initiative, seat_of, Royale};
 
 /// Round at the end of which each ring (radius) cracks: every 6 rounds from round 12 down to
 /// radius 3, then ring 2, the last one around the hole, so every game ends by round 46.
@@ -64,10 +64,10 @@ impl Royale {
         self.board.set_cracks(cracks);
     }
 
-    /// Seats sharing first place once the game is over, `None` while two seats or more have
+    /// The one seat in first place once the game is over, `None` while two seats or more have
     /// marbles. The last seat with marbles wins. When a void takes the last marbles of every
-    /// seat left, the most marbles held before it wins, then the most ejections credited; a tie
-    /// still standing shares the place.
+    /// seat left, the most marbles held before it wins, then the most ejections credited, then
+    /// the first in that round's initiative order.
     pub fn winners(&self) -> Option<Vec<usize>> {
         let left: Vec<usize> = (0..self.seats).filter(|&s| !self.is_out(s)).collect();
         if left.len() > 1 {
@@ -78,7 +78,8 @@ impl Royale {
         }
         let key = |s: usize| (self.last_void[s], self.ejections[s]);
         let best = (0..self.seats).map(key).max();
-        Some((0..self.seats).filter(|&s| Some(key(s)) == best).collect())
+        let mut first = initiative(self.round - 1, self.seats).into_iter();
+        Some(first.find(|&s| Some(key(s)) == best).into_iter().collect())
     }
 
     /// The game is over: at most one seat has marbles. No round can be resolved any more.
@@ -279,11 +280,11 @@ mod tests {
         let s = last_void();
         assert_eq!(s.winners(), None);
         assert!(!s.is_over());
-        // A tie on marbles and ejections shares the place.
+        // A tie on marbles and ejections goes to the first of round 13's initiative: 0, 1, 2.
         let end = hold(&hold(&s));
         assert!((0..3).all(|seat| end.is_out(seat)));
         assert_eq!(end.last_void, [2, 2, 1]);
-        assert_eq!(end.winners(), Some(vec![0, 1]));
+        assert_eq!(end.winners(), Some(vec![0]));
         assert!(end.is_over());
         assert_eq!(resolve_round(&end, &[]), Err(RoyaleError::Over));
         // More ejections break the tie on marbles.
@@ -299,6 +300,29 @@ mod tests {
         // Seat 2 has the most ejections but the fewest marbles held.
         let mut s2 = s;
         s2.ejections[2] = 5;
-        assert_eq!(hold(&hold(&s2)).winners(), Some(vec![0, 1]));
+        assert_eq!(hold(&hold(&s2)).winners(), Some(vec![0]));
+    }
+
+    #[test]
+    fn a_tie_still_standing_goes_to_the_first_in_the_last_rounds_initiative() {
+        // 5 seats: seats 0 and 2 have 2 marbles on the radius 8 ring, the others 1. Round 13's
+        // initiative is 2, 3, 4, 0, 1: seat 2 wins the tie with seat 0.
+        let s = arena(
+            5,
+            12,
+            &[
+                ((8, 0), 0),
+                ((8, -1), 0),
+                ((0, 8), 1),
+                ((-8, 0), 2),
+                ((-8, 1), 2),
+                ((0, -8), 3),
+                ((-1, -7), 4),
+            ],
+        );
+        let end = hold(&hold(&s));
+        assert!((0..5).all(|seat| end.is_out(seat)));
+        assert_eq!(end.last_void, [2, 1, 2, 1, 1]);
+        assert_eq!(end.winners(), Some(vec![2]));
     }
 }

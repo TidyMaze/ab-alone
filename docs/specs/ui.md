@@ -210,7 +210,7 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   the end of that round the ring is void: its discs are gone. A seat with no marble left is out: on the plate its name
   is greyed out and struck through in the initiative order, its tint dot faded, and its "out" line of the reveal is
   greyed. Once the game is over the plate is the end banner, lit like the others (End banner, #282):
-  "You win" for first place, shared or not, else "You place 3rd", then the points the player scored, "10 points. The
+  "You win" for first place (one seat, #641), else "You place 3rd", then the points the player scored, "10 points. The
   books balance." or "5 points. Tally strikes your name.", and the places, best first, one seat a line: "1st You · 10
   points", "2nd Bot 1 · 6 points". These strings are kept verbatim for the e2e tests.
 - **Battle royale round played out (#612).** When a round resolves, the arena plays it out instead of jumping to the

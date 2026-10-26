@@ -1961,10 +1961,10 @@ mod tests {
     fn placement_gives_each_seat_its_place_and_points_once_over() {
         let mut g = Royale::new(3, 7).unwrap();
         hold_to_the_end(&mut g);
-        // Nobody moved: the void of ring 6 takes the last 3 marbles of every seat at once, a
-        // shared first place.
+        // Nobody moved: the void of ring 6 takes the last 3 marbles of every seat at once. Seat 0
+        // leads round 25 and wins the tie, the others share second (#641).
         assert_eq!(g.round_log()[0], 25);
-        assert_eq!(g.placement(), vec![1, 10, 1, 10, 1, 10]);
+        assert_eq!(g.placement(), vec![1, 10, 2, 6, 2, 6]);
         assert!(g.resolve(&[]).is_err(), "the game is over");
     }
 }

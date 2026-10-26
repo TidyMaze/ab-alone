@@ -224,8 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn ten_games_of_6_bots_end_by_round_46() {
-        let mut shared = 0;
+    fn ten_games_of_6_bots_end_by_round_46_with_one_winner() {
         for seed in 0..10 {
             let mut s = start(6).unwrap();
             while !s.is_over() {
@@ -234,9 +233,9 @@ mod tests {
                 s = resolve_round(&s, &orders).unwrap().0;
             }
             assert!(s.round() <= 47, "seed {seed}");
-            shared += usize::from(s.winners().unwrap().len() > 1);
+            let standings = s.standings().unwrap();
+            let firsts = standings.iter().filter(|x| x.place == 1).count();
+            assert_eq!(firsts, 1, "seed {seed}");
         }
-        // The last void can take several seats tied on the breach rule (rules.md 10.4).
-        assert!(shared <= 2, "{shared} shared wins");
     }
 }

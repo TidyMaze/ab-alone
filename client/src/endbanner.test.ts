@@ -66,9 +66,8 @@ describe('royaleBanner (#503)', () => {
     expect(royaleBanner([], 0)).toBeNull();
   });
 
-  it('first place wins, a shared first place too, with the points scored', () => {
+  it('first place wins, with the points scored', () => {
     expect(royaleBanner([at(1, 12), at(2, 6, 1)], 0)).toEqual({ title: 'You win', line: '12 points. The books balance.', anim: 'win' });
-    expect(royaleBanner([at(1, 10, 1), at(1, 10)], 0)!.title).toBe('You win');
   });
 
   it('any other place names it, a loss', () => {

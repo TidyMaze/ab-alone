@@ -9,8 +9,8 @@
 //! one of them with more marbles at that round is the final-two leader. The leader loses to the
 //! dying third when it does not win and the third ejected at least one of its marbles in the
 //! final phase. A game without a final-two leader (no round with 3 seats left, the third sharing
-//! its place, or the final two tied on marbles) is not counted. A game whose first place is
-//! shared is counted apart: every game should have one winner.
+//! its place, or the final two tied on marbles) is not counted. The games with more than one
+//! seat at first place in `Royale::standings` are counted apart: there must be none (#641).
 
 use abalone_core::royale::{bot, initiative, resolve_round, start, Order, Royale};
 
@@ -53,10 +53,13 @@ fn play(seed: u64, sequential: bool) -> (bool, Option<bool>) {
         }
         s = next;
     }
-    (
-        s.winners().unwrap().len() > 1,
-        leader_lost(&s, three, &hits),
-    )
+    let firsts = s
+        .standings()
+        .unwrap()
+        .iter()
+        .filter(|x| x.place == 1)
+        .count();
+    (firsts > 1, leader_lost(&s, three, &hits))
 }
 
 /// Whether the final-two leader of the finished game `s` lost to the dying third, `None` when
