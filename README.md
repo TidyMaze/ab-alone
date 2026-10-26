@@ -58,9 +58,9 @@ Die, read the tell, retry with the same seed.
 | Furnace | **The Choir** | three armies of four, one sings (moves) per turn, in a fixed cycle |
 | Chapel | **The Chaplain** | three of its shells around one of yours convert it |
 | Bridge | **The Ballast Mind** | the final exam: a bigger board, void pillars, the Hull, Chaplain and Echo rules at once |
-| Cargo | **The Alien** | lays eggs that hatch into new marbles unless you crush them |
-| Cargo | **The Rail Yard** | freight trains sweep a whole line, edge to edge, either side |
-| Furnace | **The Magnetizer** | charges your marbles, and opposite charges side by side throw each other apart |
+| Cargo | **The Alien** | lays eggs near your marbles that hatch into new marbles unless you crush them |
+| Cargo | **The Rail Yard** | freight trains, the first on turn 2, sweep a whole line, edge to edge, either side |
+| Furnace | **The Magnetizer** | charges marbles of both sides, + then − in turn, and opposite charges side by side throw each other apart |
 | Bridge | **The Pulsar** | six beacons pulse, pushing every line like a sumito |
 | Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; it talks back in typed bubbles and its vents turn toxic |
 

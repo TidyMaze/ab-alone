@@ -252,7 +252,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    3 // 3: The Magnetizer's new rhythm, announce, flip and spent pairs (#671)
+    4 // 4: Magnetizer signs alternate on both sides, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -649,8 +649,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_3_since_the_magnetizer_s_new_rules() {
-        assert_eq!(engine_version(), 3);
+    fn the_engine_version_is_4_since_the_boss_rule_tweaks() {
+        assert_eq!(engine_version(), 4);
     }
 
     #[test]
@@ -966,11 +966,11 @@ mod tests {
     }
 
     #[test]
-    fn the_alien_starts_with_8_marbles_and_lays_an_egg_at_ply_4_that_counts_down() {
+    fn the_alien_starts_with_7_marbles_and_lays_an_egg_at_ply_4_that_counts_down() {
         let f = Encounter::new("alien", 7).unwrap();
         assert_eq!(f.name(), "The Alien");
         assert_eq!((f.phase(), f.phases()), (0, 3));
-        assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (14, 8));
+        assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (14, 7));
         assert!(f.eggs().is_empty());
         let run = brood(7, 5);
         assert!(run[..3].iter().all(|(eggs, _)| eggs.is_empty()));
@@ -992,7 +992,7 @@ mod tests {
         let first = brood(2_374_354_862, 12);
         assert_eq!(brood(2_374_354_862, 12), first);
         let alien = |board: &[u8]| count(board, 2);
-        assert_eq!((alien(&first[9].1), alien(&first[10].1)), (8, 9), "hatched");
+        assert_eq!((alien(&first[9].1), alien(&first[10].1)), (7, 8), "hatched");
         let runs: Vec<_> = (0..4).map(|seed| brood(seed, 4)).collect();
         assert!(
             runs.iter().any(|r| *r != runs[0]),
@@ -1013,20 +1013,22 @@ mod tests {
     }
 
     #[test]
-    fn the_rail_yard_announces_a_train_at_the_start_that_passes_after_5_player_turns() {
-        // Seed 3: the first train runs the diagonal q + r = 0 from (4, -4), 3 marbles a side on it.
-        let f = Encounter::new("railyard", 3).unwrap();
+    fn the_rail_yard_announces_its_first_train_on_turn_2_that_passes_after_5_player_turns() {
+        // Seed 5: the first train runs the diagonal q + r = 0 from (4, -4), 3 marbles a side on it.
+        let f = Encounter::new("railyard", 5).unwrap();
         assert_eq!(f.name(), "The Rail Yard");
         assert_eq!((f.phase(), f.phases()), (0, 3));
         assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (14, 14));
-        assert_eq!(f.trains(), vec![22, 5, 4, -4, -4, 4]);
-        let run = yard(3, 9);
-        assert_eq!(run[0].0[1], 4, "down after the player move");
-        assert_eq!(run[1].0[1], 4, "not after the boss move");
-        assert_eq!(run[7].0, vec![22, 1, 4, -4, -4, 4]);
-        assert!(run[8].0.is_empty(), "passed after the player's 5th move");
+        assert!(f.trains().is_empty(), "no train at the start");
+        let run = yard(5, 13);
+        assert!(run[..2].iter().all(|(trains, _)| trains.is_empty()));
+        assert_eq!(run[2].0, vec![22, 5, 4, -4, -4, 4], "the end of turn 2");
+        assert_eq!(run[3].0[1], 5, "not after the boss move");
+        assert_eq!(run[4].0[1], 4, "down after the player move");
+        assert_eq!(run[10].0, vec![22, 1, 4, -4, -4, 4]);
+        assert!(run[12].0.is_empty(), "passed after the player's 7th move");
         let on_line = |board: &[u8]| (-4..=4).filter(|&q| board[index(q, -q)] != 0).count();
-        assert_eq!(on_line(&run[8].1), 0, "the diagonal is swept");
+        assert_eq!(on_line(&run[12].1), 0, "the diagonal is swept");
     }
 
     #[test]
@@ -1034,14 +1036,14 @@ mod tests {
         // Every peer of a co-op fight, the daily and a Retry replay the same trains (#626).
         let first = yard(2_374_354_862, 24);
         assert_eq!(yard(2_374_354_862, 24), first);
-        let runs: Vec<_> = (0..4).map(|seed| yard(seed, 1)).collect();
+        let runs: Vec<_> = (0..4).map(|seed| yard(seed, 3)).collect();
         assert!(
             runs.iter().any(|r| *r != runs[0]),
             "the seed picks the tracks"
         );
     }
 
-    /// The e2e fixture of client/e2e/magnetizer.spec.ts (seed 42, core magnetizer tests): move
+    /// The e2e fixture of client/e2e/magnetizer.spec.ts (seed 120, core magnetizer tests): move
     /// records, `[n, dir, q0, r0, q1, r1, q2, r2]`.
     const MAGNET_FIXTURE: [[i32; 8]; 23] = [
         [1, 4, 0, 2, 0, 0, 0, 0],
@@ -1087,12 +1089,12 @@ mod tests {
 
     #[test]
     fn the_magnetizer_exposes_polarities_per_cell_the_announce_and_the_repulsions_in_order() {
-        let f = Encounter::new("magnetizer", 42).unwrap();
+        let f = Encounter::new("magnetizer", 120).unwrap();
         assert_eq!(f.name(), "The Magnetizer");
         assert_eq!((f.phase(), f.phases()), (0, 3));
         assert_eq!(f.polarities(), vec![0; 61]);
         assert!(f.repulsions().is_empty() && f.assigned().is_empty() && f.announce().is_empty());
-        let run = magnet_run(42, 11);
+        let run = magnet_run(120, 11);
         let polarized = |p: &[i32]| p.iter().filter(|&&s| s != 0).count();
         assert!(run[0].4.is_empty());
         let announce = &run[1].4;
@@ -1115,7 +1117,7 @@ mod tests {
         assert_eq!(run[10].0[index(0, -4)], 2, "(0, -3) pushed onto it");
         assert_eq!(run[10].0[index(0, -1)], 0);
         assert_eq!(polarized(&run[10].1), 0, "the pair lost its signs");
-        let mut f = Encounter::new("magnetizer", 42).unwrap();
+        let mut f = Encounter::new("magnetizer", 120).unwrap();
         for record in &MAGNET_FIXTURE {
             f.play(record).unwrap();
         }
@@ -1128,8 +1130,8 @@ mod tests {
     #[test]
     fn two_magnetizer_encounters_with_the_same_seed_and_moves_give_the_same_fight() {
         // Every peer of a co-op fight, the daily and a Retry replay the same polarities (#645).
-        assert_eq!(magnet_run(42, 23), magnet_run(42, 23));
-        assert!((0..4).any(|seed| magnet_run(seed, 4) != magnet_run(42, 4)));
+        assert_eq!(magnet_run(120, 23), magnet_run(120, 23));
+        assert!((0..4).any(|seed| magnet_run(seed, 4) != magnet_run(120, 4)));
     }
 
     /// The fixture of the core tests and client/e2e/overseer.spec.ts: `[n, dir, q0, r0, q1, r1]`.

@@ -1,6 +1,6 @@
-//! The Magnetizer (#645, #671, docs/specs/game-design.md section 7.9): at the start of some of the
-//! player's turns one of their marbles gets a + or − polarity, announced one turn ahead, and two
-//! adjacent marbles of opposite polarity repel one cell each, pushing every marble in front of them
+//! The Magnetizer (#645, #671, #740, docs/specs/game-design.md section 7.9): at the start of some of
+//! the player's turns one marble of either side with no polarity gets one, + then − in turn,
+//! announced one turn ahead, and two adjacent marbles of opposite polarity repel one cell each, pushing every marble in front of them
 //! on their line with no sumito limit, off the board at the rim; the pair then loses both
 //! polarities. The polarities and the announce live on the board (`Board::polarities`,
 //! `Board::announce`) and move with their marbles. Every random pick is splitmix64 of the fight
@@ -50,35 +50,45 @@ fn special(ply: u32, phase: usize) -> Option<u8> {
         })
 }
 
-/// Black marbles of `board`, in `q` then `r` order.
-fn player_marbles(board: &Board) -> Vec<P> {
+/// The marbles of `board` of both sides, in `q` then `r` order.
+fn marble_cells(board: &Board) -> Vec<P> {
     let radius = board.radius();
     (-radius..=radius)
         .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
-        .filter(|&(q, r)| board.get(q, r) == Some(Cell::Black))
+        .filter(|&(q, r)| matches!(board.get(q, r), Some(Cell::Black | Cell::White)))
         .collect()
 }
 
-/// A player marble picked by `state` and its coming sign: the other sign when it has one, a coin
-/// when it has none.
-fn pick(board: &Board, state: u64) -> (P, i8) {
-    let cells = player_marbles(board);
-    let cell = cells[(state % cells.len() as u64) as usize];
-    let sign = match board.polarities().iter().find(|p| p.0 == cell) {
-        Some(&(_, s)) => -s,
-        None => [1, -1][(mix(state) % 2) as usize],
-    };
-    (cell, sign)
+/// The sign after `board`'s last one: + first, then − and + in turn over the whole fight.
+fn next_sign(board: &Board) -> i8 {
+    if board.last_sign() == 1 {
+        -1
+    } else {
+        1
+    }
+}
+
+/// A marble picked by `state` among the marbles with no polarity, of either side; among all of
+/// them once every marble holds one.
+fn pick(board: &Board, state: u64) -> P {
+    let all = marble_cells(board);
+    let plain: Vec<P> = all
+        .iter()
+        .copied()
+        .filter(|c| board.polarities().iter().all(|p| p.0 != *c))
+        .collect();
+    let pool = if plain.is_empty() { all } else { plain };
+    pool[(state % pool.len() as u64) as usize]
 }
 
 /// The start of a player turn: the announced marble takes its sign (a marble picked by `seed`
 /// when the announced one left the board), then, on `MAGNETIZER_ANNOUNCE`, the next marble and
-/// its sign are announced.
+/// the next sign of the cycle are announced.
 fn hook(board: &Board, id: u8, seed: u64) -> Board {
     let mut out = board.clone();
     let state = mix(seed);
     if let Some((cell, sign)) = board.announce() {
-        let (cell, sign) = cell.map_or_else(|| pick(board, state), |c| (c, sign));
+        let cell = cell.unwrap_or_else(|| pick(board, state));
         let mut poles: Vec<_> = board
             .polarities()
             .iter()
@@ -87,11 +97,10 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
             .collect();
         poles.push((cell, sign));
         out.set_polarities(poles);
+        out.set_last_sign(sign);
     }
-    let next = (id == MAGNETIZER_ANNOUNCE).then(|| {
-        let (cell, sign) = pick(&out, mix(mix(state)));
-        (Some(cell), sign)
-    });
+    let next =
+        (id == MAGNETIZER_ANNOUNCE).then(|| (Some(pick(&out, mix(mix(state)))), next_sign(&out)));
     out.set_announce(next);
     out
 }
@@ -183,13 +192,13 @@ pub(crate) fn settle(
     (out, credits)
 }
 
-/// The polarities of `before` carried by `mv`, kept on the Black marbles of `after`.
+/// The polarities of `before` carried by `mv`, kept on the marbles of `after`.
 pub(crate) fn carried_poles(before: &Board, mv: &Move, after: &Board) -> Vec<(P, i8)> {
     let cells: Vec<P> = before.polarities().iter().map(|&(c, _)| c).collect();
     carried_marks(before, mv, &cells)
         .into_iter()
         .zip(before.polarities().iter().map(|&(_, s)| s))
-        .filter(|&((q, r), _)| after.get(q, r) == Some(Cell::Black))
+        .filter(|&((q, r), _)| matches!(after.get(q, r), Some(Cell::Black | Cell::White)))
         .collect()
 }
 
@@ -198,7 +207,7 @@ pub(crate) fn carried_announce(before: &Board, mv: &Move, after: &Board) -> Opti
     before.announce().map(|(cell, sign)| {
         let cell = cell
             .map(|c| carried_marks(before, mv, &[c])[0])
-            .filter(|&(q, r)| after.get(q, r) == Some(Cell::Black));
+            .filter(|&(q, r)| matches!(after.get(q, r), Some(Cell::Black | Cell::White)));
         (cell, sign)
     })
 }
@@ -248,7 +257,7 @@ mod tests {
     use crate::moves::{legal_moves, Direction};
 
     /// The fight seed of the e2e fixture (client/e2e/magnetizer.spec.ts).
-    pub(crate) const FIXTURE_SEED: u64 = 42;
+    pub(crate) const FIXTURE_SEED: u64 = 120;
 
     fn mv(cells: &[P], dir: Direction) -> Move {
         Move {
@@ -372,11 +381,12 @@ mod tests {
 
     #[test]
     fn the_announce_comes_one_turn_ahead_and_the_marble_then_takes_its_sign() {
-        let mut enc = quiet_fight(0, 9);
+        let mut enc = quiet_fight(0, 7);
         enc.play(&mv(&[(0, 0)], E)).unwrap();
         assert_eq!(enc.game().board().announce(), None);
         enc.play(&mv(&[(0, -3)], E)).unwrap(); // the start of turn 2: turn 3 is announced
         let (cell, sign) = enc.game().board().announce().unwrap();
+        assert_eq!(sign, 1, "the first is +");
         let cell = cell.unwrap();
         assert!(enc.game().board().polarities().is_empty());
         assert_eq!(enc.game().board().get(cell.0, cell.1), Some(Cell::Black));
@@ -760,8 +770,8 @@ mod tests {
     }
 
     /// The e2e fixture (client/e2e/magnetizer.spec.ts), fight seed `FIXTURE_SEED`: quiet boss
-    /// moves on the right, the player walks the centre column up. Turns 3 and 6 polarize its two
-    /// marbles, opposite signs; turn 6 moves the second next to the first, which shoves the boss
+    /// moves on the right, the player walks the centre column up. Turns 3 and 6 polarize two of
+    /// its marbles, + then −; turn 6 moves the second next to the first, which shoves the boss
     /// column of 3 off at (0, -4), and both lose their sign. Then 3 player marbles in line push the
     /// rest of the column off, twice: 3 ejections, P2.
     pub(crate) fn fixture() -> Vec<Move> {

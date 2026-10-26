@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
 
-// The Magnetizer (#645, #671, game-design.md section 7.9) from the fixture of the core tests: fight seed 42 and ?bot=off,
+// The Magnetizer (#645, #671, game-design.md section 7.9) from the fixture of the core tests: fight seed 120 and ?bot=off,
 // so the test plays both sides through the click hook. Quiet boss moves on the right; the player walks the centre
-// column up. The starts of turns 3 and 6 polarize its two marbles, opposite signs, each announced a turn ahead; on turn
+// column up. The starts of turns 3 and 6 polarize two of its marbles, + then −, each announced a turn ahead; on turn
 // 6 the second steps next to the first, which shoves the boss column of 3 off at (0, -4), and both lose their sign.
 // Three marbles in line then push the rest of the column off twice: P2. The screenshots are kept for the report.
 
@@ -30,7 +30,7 @@ const freshDraw = async (page: Page) => {
 
 async function startMagnetizer(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    crypto.getRandomValues = ((a: Uint32Array) => a.fill(42)) as typeof crypto.getRandomValues; // the fight seed
+    crypto.getRandomValues = ((a: Uint32Array) => a.fill(120)) as typeof crypto.getRandomValues; // the fight seed
   });
   await page.emulateMedia({ reducedMotion: 'reduce' }); // the setup slides take no time
   await page.goto('./?bot=off');
