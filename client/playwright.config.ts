@@ -44,7 +44,18 @@ export default defineConfig({
     ...(process.env.CI ? { viewport: { width: 960, height: 540 } } : {}),
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } },
+    // Locally on a Mac, Chromium draws on the GPU: with SwiftShader, its software WebGL, the first draw of a page built
+    // every shader pipeline in one task of 2 to 10 s that blocked the page (bug #563). CI runners have no GPU. With
+    // WebGPUService off the page keeps the WebGL2 backend that CI tests.
+    {
+      name: 'chromium',
+      use: {
+        browserName: 'chromium',
+        ...(!process.env.CI && process.platform === 'darwin'
+          ? { launchOptions: { args: ['--enable-gpu', '--disable-features=WebGPUService'] } }
+          : {}),
+      },
+    },
     { name: 'firefox', use: { browserName: 'firefox' } },
     { name: 'webkit', use: { browserName: 'webkit' } },
   ],

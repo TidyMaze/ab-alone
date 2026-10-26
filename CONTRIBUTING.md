@@ -502,3 +502,5 @@ run never reloads a page under test (bug #185). Start a new run to test a change
   at the end. Every other spec runs with service workers blocked (docs/specs/tech.md section 9.1).
 - The manual CI run sets `E2E_SKIP_WASM_BUILD=1` so the dev server skips the wasm rebuild (the `wasm` job built it). Locally, leave it unset.
 - Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
+- On a Mac, the local Chromium draws on the GPU, still with the WebGL2 backend (WebGPU is turned off). CI runners
+  have no GPU and draw with SwiftShader, whose first draw of a page blocks it for seconds (bug #563).
