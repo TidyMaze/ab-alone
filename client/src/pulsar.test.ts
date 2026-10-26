@@ -4,6 +4,7 @@ import { contrastRatio, type RGB } from './contrast';
 import {
   CHARGE_TURNS,
   FLASH_MS,
+  PULSAR_BOUNDS,
   PULSAR_DISTANCE,
   PULSAR_PARTS,
   PULSE_COUNTER_SIZE,
@@ -100,6 +101,17 @@ describe('pulsarSpot and chevronSpots', () => {
   it('stands the counter of a charging pulsar above its core, #691', () => {
     expect(counterSpot(NW)).toEqual({ x: pulsarSpot(NW).x, y: 1.35, z: pulsarSpot(NW).z });
     expect(PULSE_COUNTER_SIZE).toBe(0.5);
+  });
+
+  it('bounds the six pulsars, their beam tips and the counter above each, for the camera fit, #691', () => {
+    expect(PULSAR_BOUNDS).toHaveLength(6 * 23);
+    const xs = PULSAR_BOUNDS.map((p) => p.x);
+    expect(Math.min(...xs)).toBeCloseTo(pulsarSpot(E).x - 0.85); // the outer beam tip of the pulsar off the W corner
+    expect(Math.max(...PULSAR_BOUNDS.map((p) => p.y))).toBeCloseTo(1.35 + PULSE_COUNTER_SIZE / 2); // a counter's top
+    expect(Math.min(...PULSAR_BOUNDS.map((p) => p.y))).toBe(0); // a base's foot
+    const nw = pulsarSpot(NW);
+    const reach = Math.max(...PULSAR_BOUNDS.map((p) => Math.hypot(p.x - nw.x, p.z - nw.z)).filter((d) => d < 1));
+    expect(reach).toBeCloseTo(0.85); // its beam tips, the farthest points of a pulsar
   });
 
   it('puts a chevron one cell out before the pulsar end of each of its 9 lines', () => {

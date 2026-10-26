@@ -19,7 +19,7 @@ import {
 } from './board';
 import { askBot, askEval, botBudget } from './bot';
 import { bossHtml, goalShown } from './bosshud';
-import { FOV, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
+import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -45,6 +45,7 @@ import {
 } from './railyard';
 import { drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import {
+  PULSAR_BOUNDS,
   PULSAR_PARTS,
   PULSE_COUNTER_SIZE,
   SHOCK_COLOR,
@@ -187,6 +188,10 @@ const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
 let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
+// The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
+// its counter fit the window too (#691).
+const fightView = (): View =>
+  fight?.id === 'pulsar' ? fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight) : resetView(activeRadius());
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 // The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
@@ -2187,7 +2192,7 @@ canvas.addEventListener(
 );
 
 document.getElementById('reset-view')!.addEventListener('click', () => {
-  view = resetView(activeRadius());
+  view = fightView();
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
@@ -2504,7 +2509,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   newGameButton.hidden = true;
   document.body.dataset.boss = id;
   applyDeck(deckOf('boss', id));
-  view = resetView(activeRadius());
+  view = fightView();
   applyView();
   refresh();
 }

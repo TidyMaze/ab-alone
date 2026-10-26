@@ -71,6 +71,27 @@ export function counterSpot(id: number): { x: number; y: number; z: number } {
   return { x, y: 1.35, z };
 }
 
+/** Points round a pulsar in its own frame, the model main.ts builds from PULSAR_PARTS: the tips of its beam cones, the
+ * top of its core and the foot of its base, which flares to a radius of 0.54. */
+const OUTLINE: readonly [number, number, number][] = [
+  [0.85, 0.65, 0],
+  [-0.85, 0.65, 0],
+  [0, 0.95, 0],
+  ...Array.from({ length: 12 }, (_, k): [number, number, number] => [0.54 * Math.cos((k * Math.PI) / 6), 0, 0.54 * Math.sin((k * Math.PI) / 6)]),
+];
+
+/** Points round the six pulsars as they stand and the counter above each, a box round its sprite (#691): the camera of
+ * a Pulsar fight fits them in the window. */
+export const PULSAR_BOUNDS: readonly { x: number; y: number; z: number }[] = [0, 1, 2, 3, 4, 5].flatMap((id) => {
+  const { x, z, yaw } = pulsarSpot(id);
+  const [cos, sin] = [Math.cos(yaw), Math.sin(yaw)];
+  const model = OUTLINE.map(([px, py, pz]) => ({ x: x + px * cos + pz * sin, y: py, z: z - px * sin + pz * cos }));
+  const c = counterSpot(id);
+  const h = PULSE_COUNTER_SIZE / 2;
+  const counter = [-h, h].flatMap((dx) => [-h, h].flatMap((dy) => [-h, h].map((dz) => ({ x: c.x + dx, y: c.y + dy, z: c.z + dz }))));
+  return [...model, ...counter];
+});
+
 /** The chevrons of pulsar `id`: one cell out before the pulsar's end of each of its 9 lines, pointing the way it
  * pushes. */
 export function chevronSpots(id: number): { x: number; z: number; yaw: number }[] {
