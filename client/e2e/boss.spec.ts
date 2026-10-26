@@ -8,7 +8,8 @@ const freshDraw = async (page: Page) => {
   await page.waitForFunction((n) => (window as any).__draws() > n, asked);
 };
 
-// Bug #326: a tell drawn on top of a boss marble (a Choir army glyph, The Chaplain's converted cap) reads 3:1 against
+// Bug #326: a tell drawn on top of a boss marble (a Choir army glyph, the glass half of a marble The Chaplain converted,
+// #508) reads 3:1 against
 // the shell it sits on (world.md section 5, Tell marks). For each cell, the contrast (WCAG 2) of the brightest to the
 // darkest pixel of a small box where the top of its marble is drawn, read from one screenshot. The box follows the
 // cell spacing, so it holds at any window size.
@@ -317,7 +318,8 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, #150', as
   expect(previewed).toBe(true);
 });
 
-// The same fight, a converted marble keeps its own look (#326): its cap reads 3:1 against its shell. With NE moves only
+// The same fight, a converted marble keeps its own look (#326): half ridged shell, half glass with a dimmed core, under
+// the wax (#508), its glass half 3:1 against its shell. With NE moves only
 // (direction 2) the conversion comes on the 5th boss turn for every seed (64 seeds checked, #429), not the 18th as with
 // the forward moves: the first 4 turns are one __playTurns call (#349), the 5th is two real clicks.
 test('start The Chaplain: a converted marble keeps its look, #150', async ({ page }, testInfo) => {
@@ -336,8 +338,11 @@ test('start The Chaplain: a converted marble keeps its look, #150', async ({ pag
   await expect(page.locator('body')).not.toHaveAttribute('data-converted', '0');
   await expect(page.locator('#hud')).toContainText('Converted:');
   const cells = await page.evaluate(() => (window as any).__converted());
+  const looks = await page.evaluate(() => (window as any).__convertedLooks());
+  expect(looks).toHaveLength(cells.length);
+  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'core'] }))));
   const contrasts = await topContrasts(page, cells, testInfo.outputPath('chaplain-converted.png'));
-  for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3); // its cap reads (#326)
+  for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3); // its glass half reads (#326, #508)
 });
 
 // Bug #299: a boss turn whose flip costs the boss a marble lost to the void (#207), while its move pushes nothing
@@ -426,7 +431,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
 });
 
 // Task #377: the boss marks stay readable on other shell skins (a pale and a metal one): the Choir army glyphs at the
-// start and The Chaplain's cap once a marble is converted, 3:1 as for the default skin (#326).
+// start and a converted marble's glass half once The Chaplain converts one, 3:1 as for the default skin (#326, #508).
 for (const skin of ['hex', 'riveted']) {
   test(`the Choir glyphs read 3:1 on the ${skin} shell, task #377`, async ({ page }) => {
     await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
@@ -440,7 +445,7 @@ for (const skin of ['hex', 'riveted']) {
     for (const c of await topContrasts(page, armies.map((m) => m.cell))) expect(c).toBeGreaterThanOrEqual(3);
   });
 
-  test(`The Chaplain's cap reads 3:1 on the ${skin} shell, task #377`, async ({ page }, testInfo) => {
+  test(`The Chaplain's converted marble reads 3:1 on the ${skin} shell, task #377`, async ({ page }, testInfo) => {
     await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
     await startChaplain(page);
     // NE moves only: the conversion on the 5th boss turn, as in the default skin's test (#429).
