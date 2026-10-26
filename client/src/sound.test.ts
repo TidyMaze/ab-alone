@@ -5,6 +5,9 @@ import {
   BUSES,
   CROSSFADE_TAU,
   CUE_AT,
+  DUCKED,
+  DUCK_DB,
+  DUCK_TAU,
   HUM,
   MASTER_LEVEL,
   ROUTE,
@@ -14,6 +17,7 @@ import {
   TellWatch,
   busGain,
   cueFor,
+  duckGains,
   ejectionVoices,
   knockPitch,
   knockVoices,
@@ -98,6 +102,21 @@ describe('the mix: four buses into one master (world.md section 7, Mix; #438)', 
     expect(busGain(0)).toBe(0);
     expect(busGain(50)).toBe(0.5);
     expect(busGain(100)).toBe(1);
+  });
+});
+
+describe('duckGains, music and ambience under an audio log (tech.md section 5.4, #514)', () => {
+  it('ducks the music and the ambience, nothing else', () => {
+    expect(DUCKED).toEqual(['music', 'ambience']);
+  });
+
+  it('leaves them at full gain while no log plays', () => {
+    expect(duckGains(false)).toEqual([1, 1]);
+  });
+
+  it('lowers them by about 12 dB while a log plays', () => {
+    expect(DUCK_DB).toBe(-12);
+    for (const gain of duckGains(true)) expect(20 * Math.log10(gain)).toBeCloseTo(-12, 6);
   });
 });
 
@@ -355,6 +374,8 @@ function setup(mix: Mix = FULL, ctx = new FakeContext()) {
 /** The graph is made master first, then the buses in their order. */
 const master = (ctx: FakeContext): FakeGain => ctx.gains[0]!;
 const bus = (ctx: FakeContext, b: Bus): FakeGain => ctx.gains[1 + BUSES.indexOf(b)]!;
+/** The duck node a ducked bus goes through on its way to the master. */
+const duck = (ctx: FakeContext, b: Bus): FakeGain => next(bus(ctx, b)) as FakeGain;
 /** The steady sources started with the context: the hum, then the tension drones. */
 const STEADY = HUM.length + TENSION.flat().length;
 /** The node after `node` on the way out, through its only output. */
@@ -382,7 +403,7 @@ describe('Sfx.unlock, on a user gesture', () => {
     expect(master(ctx).gain.value).toBe(MASTER_LEVEL);
     expect(next(master(ctx))).toBe(ctx.destination);
     for (const b of BUSES) {
-      expect(next(bus(ctx, b))).toBe(master(ctx));
+      expect(DUCKED.includes(b) ? next(duck(ctx, b)) : next(bus(ctx, b))).toBe(master(ctx));
       expect(bus(ctx, b).gain.value).toBe(busGain(sfx.volume(b)));
       expect(sfx.gain(b)).toBe(busGain(sfx.volume(b)));
     }
@@ -622,5 +643,45 @@ describe('Sfx.setTension, the drone layers crossfade on the tension level (#439)
 
   it('starts calm', () => {
     expect(setup().sfx.tension).toBe(0);
+  });
+});
+
+describe('Sfx.duck, an audio log lowers music and ambience (#514)', () => {
+  it('starts every ducked bus through its own duck node at full gain, the effects and the voice never ducked', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    for (const b of DUCKED) {
+      expect(duck(ctx, b)).not.toBe(master(ctx));
+      expect(duck(ctx, b).gain.value).toBe(1);
+    }
+    expect(next(bus(ctx, 'effects'))).toBe(master(ctx));
+    expect(next(bus(ctx, 'voice'))).toBe(master(ctx));
+  });
+
+  it('ramps music and ambience down over about 300 ms while a log plays, then back up, the sliders untouched', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    sfx.duck(true);
+    const down = duckGains(true)[0]!;
+    expect(DUCKED.map((b) => duck(ctx, b).gain.events)).toEqual([[['target', down, 5]], [['target', down, 5]]]);
+    ctx.currentTime = 9;
+    sfx.duck(false);
+    expect(DUCKED.map((b) => duck(ctx, b).gain.events.at(-1))).toEqual([
+      ['target', 1, 9],
+      ['target', 1, 9],
+    ]);
+    for (const b of BUSES) expect(bus(ctx, b).gain.events).toEqual([]);
+    expect(3 * DUCK_TAU).toBeGreaterThanOrEqual(0.25); // about 300 ms to settle
+    expect(3 * DUCK_TAU).toBeLessThanOrEqual(0.35);
+  });
+
+  it('keeps the duck before a gesture, and the context starts the duck nodes at it', () => {
+    const { ctx, sfx } = setup();
+    sfx.duck(true);
+    sfx.unlock();
+    for (const b of DUCKED) {
+      expect(duck(ctx, b).gain.value).toBe(duckGains(true)[0]);
+      expect(duck(ctx, b).gain.events).toEqual([]);
+    }
   });
 });
