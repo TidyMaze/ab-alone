@@ -193,24 +193,27 @@ for (const { name, viewport, mobile } of sizes) {
 
     // The open mode menu (#357) with its boss list, its tallest state, covers no cell either. Bug #575: the Daily
     // challenge button names the boss of the day, so the menu's rows change with the date: each boss of the list is
-    // checked on a day it is the daily boss, the longest name included.
-    test('nothing covers the board or the HUD with the mode menu and the boss list open, every daily boss, bugs #227 #234 #357 #575', async ({ page }, testInfo) => {
-      const open = async (day: string) => {
+    // checked on a day it is the daily boss, the longest name included. Bug #603: the boss list of Fight together
+    // (#530) is checked too.
+    test('nothing covers the board or the HUD with the mode menu and a boss list open, every daily boss, bugs #227 #234 #357 #575 #603', async ({ page }, testInfo) => {
+      const open = async (day: string, list: string) => {
         await page.clock.setFixedTime(new Date(`${day}T08:00:00Z`));
         await page.goto('./?bot=off&net=hook');
         await page.locator('canvas').waitFor();
         await openModes(page);
-        await page.getByRole('button', { name: 'Boss fight' }).click();
+        await page.getByRole('button', { name: list }).click();
       };
-      await open('2026-10-23');
+      await open('2026-10-23', 'Boss fight');
       const names = await page.locator('#boss-list button').allTextContents(); // in the order of boss_ids()
       for (const name of names) {
         let ms = Date.UTC(2026, 9, 23);
         while (dailyFor(utcDay(ms), names).id !== name) ms += 86_400_000;
         const day = utcDay(ms);
-        await open(day);
-        await expect(page.locator('#daily')).toHaveText(dailyTitle(day, name));
-        await check(page, testInfo, `with the mode menu and the boss list open, daily ${name}`);
+        for (const list of ['Boss fight', 'Fight together']) {
+          await open(day, list);
+          await expect(page.locator('#daily')).toHaveText(dailyTitle(day, name));
+          await check(page, testInfo, `with the mode menu and the ${list} list open, daily ${name}`);
+        }
       }
     });
 
