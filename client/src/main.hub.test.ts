@@ -238,6 +238,17 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(document.body.dataset.over).toBeUndefined();
     expect(game.hud()).toBe('Ship · Mess');
   });
+
+  it('resets the tension level to calm in the hub (#586)', async () => {
+    const game = await boot('?nodes=100');
+    for (let t = 1; t <= 30; t++) {
+      await game.hook<Promise<number>>('__playTurns', 1, [4]);
+      if (game.hook<{ level: number }>('__tension').level > 0) break;
+    }
+    expect(game.hook<{ level: number }>('__tension').level).toBeGreaterThan(0);
+    ship(game);
+    expect(game.hook<{ level: number }>('__tension').level).toBe(0);
+  });
 });
 
 // The doors (#522, game-design.md section 3.5): rolling onto a boss door or a table starts the same game as its mode
