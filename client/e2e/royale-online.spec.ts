@@ -76,7 +76,6 @@ test('three players: a round resolves at its deadline, the silent player holds, 
   await deadlinePasses();
 
   for (const p of [a, b, c]) await expect(p.locator('body')).toHaveAttribute('data-royale', '2');
-  await a.waitForTimeout(1700); // a loaded machine (#707): the next round deadline passes before the reveal is read
   await expect(reveal(a).nth(0)).toHaveText('You: moved');
   await expect(reveal(a).nth(1)).toHaveText('Player 2: held');
   await expect(reveal(a).nth(2)).toHaveText('Player 3: held');
