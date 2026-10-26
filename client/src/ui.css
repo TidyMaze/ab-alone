@@ -249,6 +249,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 /* Bug #575: on a phone held upright the boss name of the Daily challenge label takes a second line of the 44 px tall
    button, so a long boss name makes the label no wider and pushes no item onto a row over the board. */
 @media (orientation: portrait) and (max-width: 600px), (orientation: portrait) and (pointer: coarse) {
+  #mode-menu { gap: 0.35rem; }
+  #mode-menu button { padding-inline: 0.5rem; }
   #daily { padding-block: 0.25rem; }
   #daily span { display: block; }
 }

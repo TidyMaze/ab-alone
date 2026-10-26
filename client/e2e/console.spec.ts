@@ -13,6 +13,16 @@ test('the deck console shows the entry of the deck in play, #511', async ({ page
   await expect(body).toHaveAttribute('data-console', /^chapel-door 1\/\d$/);
 });
 
+test('the deck console falls back to system fonts when web font files fail to load, bug #600', async ({ page }) => {
+  await page.route(/fonts\.gstatic\.com/, (r) => r.abort());
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const body = page.locator('body');
+  await expect(body).toHaveAttribute('data-console', /^mess-house-rule 1\/\d$/);
+  await page.keyboard.press('t');
+  await expect(page.locator('#reader')).toBeVisible();
+});
+
 // #512: the terminal reader. The T key or a click on the console screen frames the camera on it; the arrows and a click
 // on the screen page through, Esc or a click off it leaves. The page is copied into #reader, the entries read are saved.
 type Rect = { x: number; y: number; width: number; height: number };

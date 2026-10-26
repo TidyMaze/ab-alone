@@ -92,4 +92,13 @@ describe('main.ts, the deck console (#511)', () => {
     expect(shown()).toBe('mess-house-rule 1/4');
     expect(version(screen)).toBeGreaterThan(drawn);
   });
+
+  it('falls back to local fonts when document.fonts.load rejects, bug #600', async () => {
+    const game = await boot('?bot=off', {
+      fonts: () => Promise.reject(new Error('NetworkError: A network error occurred.')),
+    });
+    await game.settle();
+    game.frame();
+    expect(shown()).toBe('mess-house-rule 1/2');
+  });
 });
