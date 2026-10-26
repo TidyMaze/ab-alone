@@ -78,6 +78,27 @@ const CASES: Record<string, () => void> = {
     expect(state.marks).toEqual([{ kind: 'converted', cell: '(2,-3)' }]);
   },
 
+  ballast() {
+    const ballast = newEncounter('ballast', 0);
+    expect(bossState('ballast', ballast)).toEqual({
+      id: 'ballast',
+      name: 'The Ballast Mind',
+      phase: 0,
+      phases: 3,
+      tell: null,
+      marks: [],
+      result: 'playing',
+    });
+    // In P2/P3 it reuses cracks and flips
+    const state = bossState('ballast', withData(ballast, { cracks: [0, -5, 8], flips: [1, 2] }));
+    expect(state.marks).toEqual([{ kind: 'crack', cell: '(0,-5)', value: 8 }]);
+    expect(state.tell).toEqual({
+      kind: 'flip',
+      cells: ['(1,2)'],
+      text: 'these marbles of yours become boss marbles after the boss turn unless they move',
+    });
+  },
+
   alien() {
     const alien = newEncounter('alien', 0);
     // Encounter.tell() is 0, the countdown at the end of the player turn.
@@ -98,8 +119,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind stays out of the list until its radius 5 board has a text (#572), The Alien is in (#588)', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'alien']);
+  test('The Ballast Mind joins the boss list (#572), The Alien is in (#588)', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien']);
   });
 
   test('every boss of the engine has its case', () => {

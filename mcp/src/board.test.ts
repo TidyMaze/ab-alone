@@ -1,10 +1,15 @@
 import { describe, expect, test } from 'vitest';
-import { ascii, boardText, CELLS } from './board';
-import { newEngine } from './engine';
+import { ascii, BOARD_CELLS, boardText, CELLS } from './board';
+import { newEncounter, newEngine } from './engine';
 
 /** Board bytes with the given cells set, everything else empty. */
 function bytes(marks: Record<string, number>): Uint8Array {
   return Uint8Array.from(CELLS, ([q, r]) => marks[`${q},${r}`] ?? 0);
+}
+
+/** Board bytes for 91 cells with the given cells set, everything else empty. */
+function bytes91(marks: Record<string, number>): Uint8Array {
+  return Uint8Array.from(BOARD_CELLS, ([q, r]) => marks[`${q},${r}`] ?? 0);
 }
 
 describe('the 61 cells, in abalone-wasm board order', () => {
@@ -81,5 +86,33 @@ describe('ascii, as printed by render in abalone-cli', () => {
       'h . . . . . .',
       'i . . . .',
     ]);
+  });
+
+  test('renders radius 5 board with 91 cells, header 0 to A and rows a to k (#572)', () => {
+    const expected = [
+      '  0 1 2 3 4 5 6 7 8 9 A',
+      'a           W W W W W W',
+      'b         W W W W W W W',
+      'c       . . . W W W . .',
+      'd     . . . .   . . . .',
+      'e   . . .   . .   . . .',
+      'f . . . . . . . . . . .',
+      'g . . .   . .   . . .',
+      'h . . . .   . . . .',
+      'i . . B B B . . .',
+      'j B B B B B B B',
+      'k . B B B B .',
+    ].join('\n');
+    expect(ascii(newEncounter('ballast', 1).board())).toBe(expected);
+  });
+});
+
+describe('the 91 cells for radius 5 boards (#572)', () => {
+  test('the first 61 are CELLS, followed by the 30 cells of ring 5', () => {
+    expect(BOARD_CELLS).toHaveLength(91);
+    expect(BOARD_CELLS.slice(0, 61)).toEqual(CELLS);
+    const ring5 = BOARD_CELLS.slice(61);
+    expect(ring5).toHaveLength(30);
+    expect(ring5.every(([q, r]) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) === 5)).toBe(true);
   });
 });
