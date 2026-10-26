@@ -107,17 +107,20 @@ export class LocalSaves {
     private readonly storage?: PersistApi,
   ) {}
 
-  /** The saved game of this mode (bot on or off), replayed. A save that does not decode or replay is
-   * deleted, never shown half-done. A save of the other mode is left alone. */
-  async load<E extends ReplayEngine>(bot: boolean, make: () => E): Promise<{ engine: E; moves: number[][] } | null> {
+  /** The saved game of this mode (bot on or off), or of either mode when `bot` is undefined, replayed, with its mode.
+   * A save that does not decode or replay is deleted, never shown half-done. A save of the other mode is left alone. */
+  async load<E extends ReplayEngine>(
+    bot: boolean | undefined,
+    make: () => E,
+  ): Promise<{ engine: E; moves: number[][]; bot: boolean } | null> {
     try {
       const raw = await this.store.get(LOCAL_GAME);
       if (raw === undefined) return null;
       const game = decodeGame(raw);
-      if (game && game.bot !== bot) return null;
+      if (game && bot !== undefined && game.bot !== bot) return null;
       const engine = game && replay(game.moves, make);
       this.mine = engine !== null;
-      if (engine) return { engine, moves: game.moves };
+      if (engine) return { engine, moves: game.moves, bot: game.bot };
       await this.store.delete(LOCAL_GAME);
     } catch {
       // Storage blocked: a new game.
