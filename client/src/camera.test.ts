@@ -13,6 +13,8 @@ import {
   orbit,
   pinchScale,
   resetView,
+  SCREEN_MARGIN,
+  screenView,
   viewPosition,
   wheelScale,
   zoom,
@@ -138,5 +140,32 @@ describe('framing, bug #227', () => {
   it('a window taller than wide moves the board down by a quarter of the spare height, for the HUD and buttons', () => {
     expect(framing(375, 812).shift).toBe((812 - 375) / 4);
     expect(framing(768, 1024).shift).toBe(64);
+  });
+});
+
+describe('screenView, the terminal reader (#512)', () => {
+  // The half width and half height a camera at `d` sees, for a vertical field of view and an aspect.
+  const seen = (d: number, fov: number, aspect: number) => {
+    const half = Math.tan((fov * Math.PI) / 360) * d;
+    return { width: half * aspect, height: half };
+  };
+
+  it('stands in front of the screen centre, along its normal', () => {
+    const at = screenView({ x: -22.95, y: 2.2, z: 0 }, { x: 1, y: 0, z: 0 }, 2.8, 1.4, FOV, 16 / 9);
+    expect(at.y).toBe(2.2);
+    expect(at.z).toBe(0);
+    expect(at.x).toBeGreaterThan(-22.95);
+    const up = screenView({ x: 0, y: 1, z: 0 }, { x: 0, y: 1, z: 0 }, 2, 1, FOV, 1);
+    expect([up.x, up.z]).toEqual([0, 0]);
+    expect(up.y).toBeGreaterThan(1);
+  });
+
+  it('a wide window fits the screen height with the margin, a narrow one its width', () => {
+    const wide = screenView({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 2.8, 1.4, FOV, 4);
+    expect(seen(wide.x, FOV, 4).height).toBeCloseTo(SCREEN_MARGIN * 0.7, 9);
+    expect(seen(wide.x, FOV, 4).width).toBeGreaterThan(SCREEN_MARGIN * 1.4);
+    const narrow = screenView({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 2.8, 1.4, FOV, 16 / 9);
+    expect(seen(narrow.x, FOV, 16 / 9).width).toBeCloseTo(SCREEN_MARGIN * 1.4, 9);
+    expect(seen(narrow.x, FOV, 16 / 9).height).toBeGreaterThan(SCREEN_MARGIN * 0.7);
   });
 });

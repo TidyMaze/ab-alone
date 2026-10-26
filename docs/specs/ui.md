@@ -140,6 +140,11 @@ in the column, outside the menu.
   `flatHudHtml` (`client/src/hud.ts`): "Turn: Black" ("Turn: game over" once over), "Ejected: Black 1/6, White 4/6",
   and in a boss fight "Boss phase: 2 of 3" and "Tell: " with the tell text and its countdown ("none" without a tell).
   Off, the block is gone. Strings kept verbatim for the e2e tests.
+- **Terminal reader (#512, world.md section 4).** While the camera frames the deck console, the HUD, the
+  buttons and the support corner hide, so nothing covers the screen's text at any UI scale; they come back
+  when the player leaves. The page shown is copied into `#reader` (`aria-live="polite"`, labelled
+  "Terminal"): its title, its text and "Page 1 of 2", read by screen readers only, and with the Flat HUD on
+  shown as a plate at the bottom of the window, in the UI face at the UI scale.
 - **Online status.** Online games add one line under the turn: the player's own color and
   whether the opponent is connected, updated live (#121). Strings, kept verbatim for the e2e
   tests: "You are Black. Waiting for an opponent..." (room creator alone), "Joining as White..."

@@ -56,3 +56,13 @@ export const viewPosition = (v: View): { x: number; y: number; z: number } => ({
   y: v.distance * Math.cos(v.polar),
   z: v.distance * Math.sin(v.polar) * Math.cos(v.azimuth),
 });
+
+// The terminal reader (#512): the camera that reads a flat screen stands in front of its centre, along its normal, as
+// close as fits the whole screen and a margin around it, in both the height and the width of the view.
+export const SCREEN_MARGIN = 1.1;
+type Vec3 = { x: number; y: number; z: number };
+export function screenView(centre: Vec3, normal: Vec3, width: number, height: number, fov: number, aspect: number): Vec3 {
+  const half = Math.tan((fov * Math.PI) / 360);
+  const d = SCREEN_MARGIN * Math.max(height / 2 / half, width / 2 / (half * aspect));
+  return { x: centre.x + normal.x * d, y: centre.y + normal.y * d, z: centre.z + normal.z * d };
+}
