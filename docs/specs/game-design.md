@@ -95,7 +95,7 @@ Boss structure (all five follow it):
 - **Tell**: shown exactly one ply before the twist fires.
 - **Counter**: a positional answer that exists on the board, not a stat check.
 - **Phases**: triggered by **boss marbles remaining** (The Alien, The Rail Yard, The
-  Magnetizer and The Pulsar: by your ejections, sections 7.7 to 7.10),
+  Magnetizer, The Pulsar and The Overseer: by your ejections, sections 7.7 to 7.11),
   always shown on the HUD as notches.
 
 ### 3.4 Battle royale (Phase 4, #49)
@@ -254,6 +254,7 @@ also give the player a way to hurt the boss with it.
 | Extra | 2 Cargo | The Rail Yard (proposed by @Varadiell, section 7.8) | #626 | any time, boss menu |
 | Extra | 3 Furnace | The Magnetizer (proposed by @Varadiell, section 7.9) | #645 | any time, boss menu |
 | Extra | 5 Bridge | The Pulsar (proposed by @Varadiell, section 7.10) | #675 | any time, boss menu |
+| Extra | 4 Chapel | The Overseer (proposed by @TidyMaze, section 7.11) | #635 | any time, boss menu |
 
 Issue numbers keep their original order, play order is the last column. The Echo opens the
 game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
@@ -563,6 +564,58 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Calibrate**: knobs = forces (2, 3, ∞), rhythm (3 pulses, 2 apart, 2 of rest), phase ejections
   (3, 5), AI depth. Fail if most fights end with no boss marble ejected by a pulse (nobody learns
   the counter).
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
+  the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
+
+### 7.11 The Overseer: burn its cores before the neurotoxin
+
+- **Concept**: the Chapel's old test supervisor woke up. It sits bolted to the middle of the
+  chamber, guards its personality cores, comments on your every move and floods the room with
+  neurotoxin while you think.
+- **Board and sides**: standard radius 4 board, Chapel deck look. 14 marbles each on the standard
+  layout: the boss has its army (14) and plays it with standard Abalone. On top of it:
+  - **The Overseer** on the centre cell `(0, 0)`. Nothing moves it: a move onto it is refused and
+    a push whose line reaches it is refused, as a push into your own marble (`PushBlocked`). It is
+    not a marble of either side and is never ejected.
+  - **6 cores**, the cells 2 steps from the centre on the 3 middle rows: `(-1,-1)`, `(2,-1)`,
+    `(-2,0)`, `(2,0)`, `(-2,1)`, `(1,1)`. A core never moves by itself. Both sides push it as an
+    opponent marble (the sumito counts it, a line may mix it with the other side's marbles), but a
+    push that would take a core off the board over the rim is refused: only an incinerator takes it.
+  - **6 incinerators**, the rim cells of the 3 middle rows, each 2 steps beyond a core:
+    `(-3,-1)`, `(4,-1)`, `(-4,0)`, `(4,0)`, `(-4,1)`, `(3,1)`. A normal cell for moves.
+- **Burn**: at the end of every ply, yours and the boss's, every core on an incinerator burns
+  (removed) and counts as **one ejection for you, whoever pushed it**. The incinerators also burn,
+  by phase: the boss's marbles in P1 and P2, yours in P2 and P3; a burnt marble counts for the
+  other side, as the Hull's voids. The phase of a ply is the one before it.
+- **Win and lose**: win at **6** ejections as usual (`rules.md` §10.3): the 6 cores burnt win, and a
+  boss marble ejected or burnt counts too. Lose at 6 of yours, a draw, or the **neurotoxin**: at
+  the end of your turn **40**, if you have not won, the boss wins. Your 40th move still wins if it
+  brings your 6th ejection.
+- **Phases**: P1 at the start, **P2 after 2 ejections** credited to you, **P3 after 4**, one change
+  each: P2 burns your marbles too, P3 stops burning the boss's (the Overseer reroutes the vents to
+  spare its guards, so a boss marble may stand on an incinerator in front of a core).
+- **Deterministic, for P2P**: nothing is random. The burns, the clock and the boss search are pure
+  functions of the position; a Retry, the daily, a replayed game file and every peer get the same
+  fight.
+- **Moves never change** except the three rules above (the Overseer blocks, a core never crosses
+  the rim, the burns between plies, `rules.md` §10).
+- **Tell**: the Overseer is a dark pedestal with a pale eye; a core is a pale marble with a dark
+  ring, a shape and not a colour (3:1 on both glass skins). Each incinerator wears a vent decal of
+  dark slots on its cell. A burning marble sinks into its vent and fades (reduced motion: a fade).
+  The HUD line reads "Neurotoxin 25 % · 30 turns left", then one sarcastic line of the Overseer
+  that changes with the level, every 20 %: "Take your time. The neurotoxin will wait.", "The
+  neurotoxin is now at a level we call festive.", "You are doing very well. For a corpse.", "Most
+  test subjects stop moving around now.", "Goodbye. I mean it this time."
+- **Counter, turn it against the boss**: the boss's own push burns a core when it puts one on an
+  incinerator, and the vents burn its marbles in P1 and P2: push a boss marble one cell onto an
+  incinerator instead of two cells off the board. The boss search sees the burns (every ply of its
+  tree burns, in the phase at its root) and keeps cores and its marbles off the vents; it never
+  pushes a core in unless every other move costs it more.
+- **Winnable** (`cargo run --release --example overseer_sim`): the bot ladder's player (4x the boss
+  budget, its search sees the burns) wins about half of 20 seeded fights inside the 40 turns. The
+  example fails when it wins none.
+- **Calibrate**: knobs = the clock (40), phase ejections (2, 4), AI depth (the Hull's 3000 nodes).
+  Fail if most fights end with fewer than 2 cores burnt (nobody learns the counter).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
 
