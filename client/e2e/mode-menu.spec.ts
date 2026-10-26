@@ -58,6 +58,24 @@ test('picking a boss closes the mode menu and keeps Retry and Goal in the column
   await expect(page.getByRole('button', { name: 'Goal' })).toBeVisible();
 });
 
+test('picking Ranked starts a ranked queue with rank badge and updates Elo in Battle royale (#711)', async ({ page }) => {
+  await page.goto('./?bot=off&net=hook');
+  const modes = page.getByRole('button', { name: 'Game modes' });
+  await modes.click();
+  await page.getByRole('button', { name: 'Battle royale' }).click();
+  await modes.click();
+  await page.getByRole('button', { name: 'Ranked' }).click();
+  await expect(modes).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#hud .rank-badge')).toContainText('Silver1200');
+
+  await page.goto('./?bot=off&net=hook');
+  await modes.click();
+  await page.getByRole('button', { name: 'Ranked' }).click();
+  await expect(modes).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#hud .rank-badge')).toContainText('Silver1200');
+  await expect(page.locator('#hud .rank-queue')).toHaveText('Queue ±100');
+});
+
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 375, height: 812 }, hasTouch: true });
 
