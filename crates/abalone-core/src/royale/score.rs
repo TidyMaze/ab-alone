@@ -1,6 +1,55 @@
 //! Battle royale placement and points: the order of elimination sets the places, and a place
 //! gives its points plus 1 per ejection credited (rules.md section 10.4).
 
+use super::Royale;
+
+/// Points of the places, best first: a game of N seats takes the first N - 1, then 0 for last.
+const POINTS: [u32; 5] = [10, 6, 4, 2, 1];
+
+/// One seat's result in a finished game.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Standing {
+    /// From 1. Seats sharing a place skip the places below it: 1, 1, 3.
+    pub place: usize,
+    /// Points of the place plus 1 per ejection credited.
+    pub points: u32,
+}
+
+/// Points of `place` (from 1) in a game of `seats` seats.
+fn placement_points(seats: usize, place: usize) -> u32 {
+    if place == seats {
+        0
+    } else {
+        POINTS[place - 1]
+    }
+}
+
+impl Royale {
+    /// Each seat's place and points once the game is over, in seat order, `None` before. The
+    /// seats left with marbles come first, then the others in reverse order of elimination;
+    /// every seat of a shared place gets its points.
+    pub fn standings(&self) -> Option<Vec<Standing>> {
+        let winners = self.winners()?;
+        let mut groups = self.eliminated.clone();
+        if !self.is_out(winners[0]) {
+            groups.push(winners);
+        }
+        let mut place = vec![0; self.seats];
+        let mut above = 0;
+        for group in groups.iter().rev() {
+            for &seat in group {
+                place[seat] = above + 1;
+            }
+            above += group.len();
+        }
+        let standing = |seat: usize| Standing {
+            place: place[seat],
+            points: placement_points(self.seats, place[seat]) + self.ejections[seat],
+        };
+        Some((0..self.seats).map(standing).collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;

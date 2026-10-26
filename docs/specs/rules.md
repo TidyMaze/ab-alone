@@ -269,7 +269,14 @@ Hooks, from game-design section 7 (starting values):
 
 **Win.** **FINAL.** The game is over when at most one player has marbles; `resolve_round` then refuses any further round. The last player with marbles wins. **FINAL (OPEN-7 tie, lead decision on #496):** when a void takes the last marbles of every player left, they are ranked by the marbles each held before it, then by ejections credited (the void's own credits included); a tie still standing shares the place (`Royale::winners`).
 
-**Placement points (TUNE):** 6 players: 10, 6, 4, 2, 1, 0 for places 1 to 6, plus 1 point per ejection caused. Tables for 3 to 5 players are **OPEN-7**.
+**Placement and points (FINAL, OPEN-7, lead decision on #497, `Royale::standings`).** The order of elimination sets the places: the seat left with marbles is first, then the others from the last out to the first out. Pushes resolve one by one and eject one marble each, so only a void puts several seats out at once; those are ranked by the tie rule above (marbles lost to that void, then ejections credited), and a tie still standing shares the place, the next seat skipping the shared places (1, 1, 3). Each seat scores its place's points, the same for every seat of a shared place, plus 1 per ejection credited by the end of the game. N players take the first N - 1 values of 10, 6, 4, 2, 1, then 0 for last:
+
+| Players | Places 1 to N |
+|---|---|
+| 3 | 10, 6, 0 |
+| 4 | 10, 6, 4, 0 |
+| 5 | 10, 6, 4, 2, 0 |
+| 6 | 10, 6, 4, 2, 1, 0 |
 
 **Credit rule (FINAL).** The last player whose move touched a marble gets the ejection. **FINAL (OPEN-8, #496):** a marble removed by the breach is credited to its last toucher, and to nobody when no move touched it or its last toucher is its owner.
 
@@ -281,7 +288,7 @@ Hooks, from game-design section 7 (starting values):
 
 ## 11. Numbers index
 
-Every number in this spec is tagged FINAL or TUNE where it appears. The FINAL numbers are: board radius 4 (61 cells), 6 directions, group size 1 to 3, 6 ejections to win (10 for the player against the Choir), 3 repetitions for a draw, 100 plies for a draw (decided), BR 3 to 6 players, BR radius 8 (217 cells). The TUNE numbers are: BR round timer, BR marbles per player, the breach schedule, hook intervals and thresholds, boss depths, the 10 s clock grace, the 60 s disconnect grace, the HUD warning at 10 plies, and placement points.
+Every number in this spec is tagged FINAL or TUNE where it appears. The FINAL numbers are: board radius 4 (61 cells), 6 directions, group size 1 to 3, 6 ejections to win (10 for the player against the Choir), 3 repetitions for a draw, 100 plies for a draw (decided), BR 3 to 6 players, BR radius 8 (217 cells), BR placement points. The TUNE numbers are: BR round timer, BR marbles per player, the breach schedule, hook intervals and thresholds, boss depths, the 10 s clock grace, the 60 s disconnect grace, and the HUD warning at 10 plies.
 
 ## 12. Examples
 
@@ -497,7 +504,7 @@ These are raised in the PR body. Owners decide. Nothing here was picked silently
 - **OPEN-4. Belgian daisy coordinates.** Resolved in #69: checked against three diagrams, section 2.2 is FINAL.
 - **OPEN-5. Battle royale wedge coordinates.** Resolved in #494: section 10.4 is FINAL.
 - **OPEN-6. Battle royale rings below radius 3.** Resolved in #496: a ring every 3 rounds down to the centre cell (section 10.4, FINAL).
-- **OPEN-7. Battle royale ties and placement tables.** Points are defined for 6 players only. The tie at breach end is resolved in #496 (section 10.4, FINAL); the tables are still open.
+- **OPEN-7. Battle royale ties and placement tables.** Resolved: the tie at breach end in #496, the places, shared places and tables for 3 to 6 players in #497 (section 10.4, FINAL).
 - **OPEN-8. Credit for breach ejections.** Resolved in #496: last toucher if any and not the owner, else nobody (section 10.4, FINAL).
 - **OPEN-9. Same-cell conflict in battle royale.** Resolved in #495: first in initiative wins, the second fizzles (section 10.4, FINAL).
 - **OPEN-10. Initiative formula.** Resolved in #495: rotate by round (section 10.4, FINAL).

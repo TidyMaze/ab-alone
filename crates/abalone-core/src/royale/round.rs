@@ -100,7 +100,8 @@ pub fn resolve_round(
 
 impl Royale {
     /// Plays `mv` for `seat`: the seat becomes the last toucher of every marble the move
-    /// shifts, and gets the credit for an ejection. Returns the seat whose marble was ejected.
+    /// shifts, and gets the credit for an ejection, which puts its owner out at its last marble.
+    /// Returns the seat whose marble was ejected.
     fn play(&mut self, seat: usize, mv: &Move) -> Result<Option<usize>, MoveError> {
         let own = seat_cell(seat);
         let (board, _) = apply_for(&self.board, own, mv)?;
@@ -134,6 +135,9 @@ impl Royale {
             }
         }
         self.board = board;
+        if let Some(out) = ejected.filter(|&s| self.is_out(s)) {
+            self.eliminated.push(vec![out]);
+        }
         Ok(ejected)
     }
 }
@@ -162,6 +166,7 @@ mod tests {
             ejections: vec![0; seats],
             touched: BTreeMap::new(),
             last_void: vec![0; seats],
+            eliminated: Vec::new(),
         }
     }
 
