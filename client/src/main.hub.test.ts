@@ -103,6 +103,19 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(hub()).toBe('mess 0,-2');
   });
 
+  it('leaves the arrow keys to the terminal reader while it is open', async () => {
+    const game = await boot('?bot=off');
+    await game.settle(); // the web fonts of the console are in
+    ship(game);
+    press('t');
+    expect(document.body.dataset.reading).toBeDefined();
+    press('ArrowRight');
+    expect(hub()).toBe('mess 0,0');
+    press('Escape');
+    press('ArrowRight');
+    expect(hub()).toBe('mess 1,0');
+  });
+
   it('opens on the saved spot, and an open lift carries the marble onto the lift back of the next deck', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
