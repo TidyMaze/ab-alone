@@ -582,4 +582,21 @@ mod tests {
         board.set_pulsar(None);
         assert_eq!(board, Board::empty());
     }
+
+    #[test]
+    fn the_belts_start_unset_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert_eq!(board.belts(), None);
+        let belts = Belts {
+            first: true,
+            turns: 2,
+            shift: [1, 0, 3],
+            strike: [None, Some(5), None],
+        };
+        board.set_belts(Some(belts));
+        assert_eq!(board.belts(), Some(belts));
+        assert_ne!(board, Board::empty());
+        board.set_belts(None);
+        assert_eq!(board, Board::empty());
+    }
 }

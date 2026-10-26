@@ -6,6 +6,9 @@ use crate::convert::{
 };
 use abalone_core::board::{Board, Cell};
 use abalone_core::encounter::alien::{alien_boss, alien_move, alien_start};
+use abalone_core::encounter::assembly::{
+    assembly_boss, assembly_move, assembly_start, assembly_tell, belt_cells, last_belts, Fate,
+};
 use abalone_core::encounter::ballast::{ballast_boss, ballast_move, ballast_start, ballast_tell};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use abalone_core::encounter::choir::{
@@ -94,6 +97,11 @@ fn pulsar_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(pulsar_start(seed))
 }
 
+/// The Assembly Line draws the first way of its centre belt at the start.
+fn assembly_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(assembly_start(seed))
+}
+
 /// The Overseer sets up its cores, its incinerators and its clock.
 fn overseer_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(overseer_start(seed))
@@ -124,7 +132,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 10] = [
+const BOSSES: [BossEntry; 11] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -215,6 +223,15 @@ const BOSSES: [BossEntry; 10] = [
         def: overseer_boss,
         start: overseer_fight,
         reply: overseer_move,
+        announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "assembly",
+        goal: "Belts carry every marble off the board; later, presses strike. Eject 6 to win; lose 6 or draw to lose.",
+        def: assembly_boss,
+        start: assembly_fight,
+        reply: assembly_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -492,6 +509,64 @@ impl Encounter {
                 .chain(cell_list(&moved))
                 .collect()
         })
+    }
+
+    /// The Assembly Line's belts as `[turns_left, then one record of 6 per belt]`, the centre belt
+    /// first: `[row, q0, len, dir, shift, strike]`, see the module docs. Empty for the other bosses.
+    pub fn belts(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        assembly_tell(e).map_or_else(Vec::new, |(left, tell)| {
+            std::iter::once(i32::from(left))
+                .chain(tell.iter().enumerate().flat_map(|(belt, t)| {
+                    let cells = belt_cells(belt);
+                    let dir = match (t.running, t.forward) {
+                        (false, _) => 0,
+                        (true, true) => 1,
+                        (true, false) => -1,
+                    };
+                    let strike = t.strike.map_or(-1, |s| {
+                        (usize::from(s) + usize::from(t.shift)) as i32 % cells.len() as i32
+                    });
+                    [
+                        cells[0].1,
+                        cells[0].0,
+                        cells.len() as i32,
+                        dir,
+                        i32::from(t.shift),
+                        strike,
+                    ]
+                }))
+                .collect()
+        })
+    }
+
+    /// What the belts and presses did to the marbles on the last ply, records of 6 integers
+    /// `[q, r, to_q, to_r, fate, board_code]`: fate `0` carried, `1` fell off the end (the target
+    /// is the cell past it), `2` struck. Empty when the last ply fired no belt.
+    pub fn last_belts(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        last_belts(e)
+            .iter()
+            .flat_map(|c| {
+                let fate = match c.fate {
+                    Fate::Moved => 0,
+                    Fate::Fell => 1,
+                    Fate::Struck => 2,
+                };
+                [
+                    c.from.0,
+                    c.from.1,
+                    c.to.0,
+                    c.to.1,
+                    fate,
+                    i32::from(code(Some(c.cell))),
+                ]
+            })
+            .collect()
     }
 
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),

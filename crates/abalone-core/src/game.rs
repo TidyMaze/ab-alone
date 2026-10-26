@@ -712,6 +712,27 @@ mod tests {
     }
 
     #[test]
+    fn the_belts_change_the_position_hash() {
+        use crate::board::Belts;
+        let belts = Belts {
+            first: true,
+            turns: 0,
+            shift: [0; 3],
+            strike: [None; 3],
+        };
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut running = Board::empty();
+        running.set_belts(Some(belts));
+        assert_ne!(position_hash(&running, Player::Black), plain);
+        let mut later = Board::empty();
+        later.set_belts(Some(Belts { turns: 1, ..belts }));
+        assert_ne!(
+            position_hash(&later, Player::Black),
+            position_hash(&running, Player::Black)
+        );
+    }
+
+    #[test]
     fn pass_gives_the_move_back_and_rehashes_the_last_ply() {
         let mut game = lone();
         game.play(&mv(&[(0, 0)], E)).unwrap();

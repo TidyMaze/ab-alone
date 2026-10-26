@@ -94,8 +94,76 @@ fn special(ply: u32, phase: usize) -> Option<u8> {
 /// The board after one turn of the belts in `phase`, and the marbles it touched: the running
 /// belts shift their marbles one cell at once, then the presses strike the slots announced on the
 /// last turn, then in P3 every second turn a strike slot per belt is announced by `seed`.
-pub fn turn(_board: &Board, _phase: u8, _seed: u64) -> (Board, Vec<Carry>) {
-    unimplemented!()
+pub fn turn(board: &Board, phase: u8, seed: u64) -> (Board, Vec<Carry>) {
+    let Some(mut belts) = board.belts() else {
+        return (board.clone(), Vec::new());
+    };
+    let mut out = board.clone();
+    let mut carries = Vec::new();
+    for belt in 0..running(phase) {
+        let cells = belt_cells(belt);
+        let step: i32 = if forward(&belts, belt) { 1 } else { -1 };
+        let held: Vec<Cell> = cells
+            .iter()
+            .map(|&(q, r)| board.get(q, r).unwrap_or(Cell::Empty))
+            .collect();
+        for &(q, r) in &cells {
+            if matches!(board.get(q, r), Some(Cell::Black | Cell::White)) {
+                out.set(q, r, Cell::Empty);
+            }
+        }
+        for (i, &cell) in held.iter().enumerate() {
+            if !matches!(cell, Cell::Black | Cell::White) {
+                continue;
+            }
+            let to = i as i32 + step;
+            let (q, r) = cells[i];
+            if to < 0 || to >= cells.len() as i32 {
+                let off = (q + step, r);
+                carries.push(Carry {
+                    from: (q, r),
+                    to: off,
+                    fate: Fate::Fell,
+                    cell,
+                });
+            } else {
+                let dest = cells[to as usize];
+                out.set(dest.0, dest.1, cell);
+                carries.push(Carry {
+                    from: (q, r),
+                    to: dest,
+                    fate: Fate::Moved,
+                    cell,
+                });
+            }
+        }
+        let len = cells.len() as u8;
+        belts.shift[belt] = (belts.shift[belt] + if step > 0 { 1 } else { len - 1 }) % len;
+    }
+    for belt in 0..3 {
+        let Some(s) = belts.strike[belt].take() else {
+            continue;
+        };
+        let cells = belt_cells(belt);
+        let (q, r) = cells[(usize::from(s) + usize::from(belts.shift[belt])) % cells.len()];
+        if let Some(cell @ (Cell::Black | Cell::White)) = out.get(q, r) {
+            out.set(q, r, Cell::Empty);
+            carries.push(Carry {
+                from: (q, r),
+                to: (q, r),
+                fate: Fate::Struck,
+                cell,
+            });
+        }
+    }
+    belts.turns += 1;
+    if phase == 2 && belts.turns % ASSEMBLY_STRIKE_EVERY == 0 {
+        for belt in 0..3 {
+            belts.strike[belt] = Some(2 * (mix(seed.wrapping_add(belt as u64)) % 4) as u8 + 1);
+        }
+    }
+    out.set_belts(Some(belts));
+    (out, carries)
 }
 
 /// The hook: one turn of the belts at the end of a player turn.
@@ -565,9 +633,15 @@ mod tests {
     #[test]
     fn a_boss_turn_moves_no_belt_and_reports_nothing() {
         let b = board(&[(0, 4)], &[(-4, 0), (0, -4)], belts(true, 0));
-        let mut enc = fight(b, Player::White, [0, 0]);
+        let mut enc = fight(b, Player::Black, [0, 0]);
+        enc.play(&mv(&[STEP.0], STEP.1)).unwrap();
+        assert_eq!(enc.game().board().belts().unwrap().turns, 1);
         enc.play(&mv(&[(0, -4)], Direction::E)).unwrap();
-        assert_eq!(enc.game().board().belts().unwrap().turns, 0);
+        assert_eq!(
+            enc.game().board().belts().unwrap().turns,
+            1,
+            "the boss turn"
+        );
         assert_eq!(last_belts(&enc), vec![]);
         assert_eq!(
             last_belts(&fight(Board::empty(), Player::Black, [0, 0])),
