@@ -59,6 +59,12 @@ jobs:
         working-directory: client
       - run: bun run test
         working-directory: client
+      # The KTX2 encodes of the textures (#700), by the hash of each source: only a changed texture is encoded again.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ab-alone-ktx2
+          key: ktx2-${{ hashFiles('client/textures/**', 'client/scripts/ktx2-textures.mjs', 'client/bun.lock') }}
+          restore-keys: ktx2-
       # The download size budget of docs/specs/tech.md section 9 (#505), on the production build.
       - run: bunx vite build
         working-directory: client
@@ -186,6 +192,12 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: bunx playwright install --with-deps chromium
         working-directory: client
+      # The KTX2 encodes of the textures (#700), by the hash of each source: only a changed texture is encoded again.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ab-alone-ktx2
+          key: ktx2-${{ hashFiles('client/textures/**', 'client/scripts/ktx2-textures.mjs', 'client/bun.lock') }}
+          restore-keys: ktx2-
       - run: bun run e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         working-directory: client
       # The 10 slowest tests of this shard, in the run summary even when the shard fails (#323).

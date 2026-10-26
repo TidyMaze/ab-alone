@@ -1,6 +1,8 @@
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 // @ts-expect-error plain Node script, no type declarations (the client has no Node types)
+import { ktx2Textures } from './scripts/ktx2-textures.mjs';
+// @ts-expect-error plain Node script, no type declarations (the client has no Node types)
 import { offlineApp } from './scripts/offline-app.mjs';
 
 export default defineConfig(({ command, mode, isPreview }) => ({
@@ -24,11 +26,13 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   },
   // The bot worker imports the wasm package with top-level await: it needs ES module output.
   worker: { format: 'es' },
+  // The textures ship as KTX2, encoded from client/textures/ (scripts/ktx2-textures.mjs, #700).
   // The production build also writes sw.js, the service worker of the offline app (#193).
   // The e2e dev server serves the page without its Google Fonts links, the text falls back to the system fonts: the
   // stylesheet holds the load event that page.goto waits for, and during a network outage every test of the run timed
   // out (bug #585). The production build and its preview (the offline spec) keep them.
   plugins: [
+    ktx2Textures(),
     offlineApp(),
     ...(mode === 'e2e'
       ? [

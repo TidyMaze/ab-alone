@@ -28,21 +28,25 @@ function configureTiling(tex: THREE.Texture, repeat: number): void {
   tex.repeat.set(repeat, repeat);
 }
 
+/** What loads the maps: main.ts's KTX2Loader, every map ships as KTX2 (#700). */
+export interface TextureSource {
+  loadAsync(url: string): Promise<THREE.Texture>;
+}
+
 /** Loads one PBR texture set (albedo, normal, roughness, displacement). */
 export async function loadPbrMaterial(
-  loader: THREE.TextureLoader,
+  loader: TextureSource,
   basePath: string,
   prefix: string,
   displacementScale = 0.05,
   repeat = 4,
 ): Promise<PbrMaterialSet | null> {
   try {
-    const extAlbedo = prefix === 'deck-pbr' || prefix === 'bulkhead' || prefix === 'grate' ? 'jpg' : 'png';
     const [albedo, normal, roughness, displacement] = await Promise.all([
-      loader.loadAsync(`${basePath}${prefix}-albedo.${extAlbedo}`),
-      loader.loadAsync(`${basePath}${prefix}-normal.png`),
-      loader.loadAsync(`${basePath}${prefix}-roughness.png`),
-      loader.loadAsync(`${basePath}${prefix}-displacement.png`),
+      loader.loadAsync(`${basePath}${prefix}-albedo.ktx2`),
+      loader.loadAsync(`${basePath}${prefix}-normal.ktx2`),
+      loader.loadAsync(`${basePath}${prefix}-roughness.ktx2`),
+      loader.loadAsync(`${basePath}${prefix}-displacement.ktx2`),
     ]);
 
     albedo.colorSpace = THREE.SRGBColorSpace;
@@ -82,7 +86,7 @@ export function meshoptLoader(): GLTFLoader {
 export async function loadSpaceshipBay(
   basePath = '/assets/pbr/',
   gltfLoader = meshoptLoader(),
-  texLoader = new THREE.TextureLoader(),
+  texLoader: TextureSource,
 ): Promise<SpaceshipBayAssets | null> {
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([

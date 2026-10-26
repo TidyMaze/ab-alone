@@ -16,8 +16,8 @@ export const FRAME_LOOK = { plate: 0x1f1f1f, rim: 0x5d5d5d } as const;
 export type NotchRow = NonNullable<ReturnType<typeof notchRow>>;
 
 export interface SceneRendererOptions {
-  renderer?: THREE.WebGPURenderer;
-  forceWebGL?: boolean;
+  /** main.ts makes it first: KTX2Loader asks it which GPU formats it reads (#700). */
+  renderer: THREE.WebGPURenderer;
   innerWidth?: number;
   innerHeight?: number;
   devicePixelRatio?: number;
@@ -85,13 +85,13 @@ export class SceneRenderer {
   currentBay: SpaceshipBayAssets | null = null;
   private lastParticleNow = 0;
 
-  constructor(options: SceneRendererOptions = {}) {
+  constructor(options: SceneRendererOptions) {
     const width = options.innerWidth ?? innerWidth;
     const height = options.innerHeight ?? innerHeight;
     const dpr = options.devicePixelRatio ?? devicePixelRatio;
     const webdriver = options.webdriver ?? Boolean(navigator.webdriver);
 
-    this.renderer = options.renderer ?? new THREE.WebGPURenderer({ antialias: true, forceWebGL: options.forceWebGL });
+    this.renderer = options.renderer;
     this.renderer.setPixelRatio(renderPixelRatio(dpr, webdriver));
     this.renderer.setSize(width, height);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
