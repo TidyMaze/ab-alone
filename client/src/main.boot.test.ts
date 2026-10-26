@@ -290,6 +290,13 @@ describe('the shadows (#459)', () => {
     expect(await shadows('?bot=off&shadows=1')).toEqual([true, 'soft']);
   });
 
+  it('show their state on the page, for the browser checks (#729)', async () => {
+    await shadows('?bot=off');
+    expect(document.body.dataset.shadows).toBe('off');
+    await shadows('?bot=off&shadows=on');
+    expect(document.body.dataset.shadows).toBe('on');
+  });
+
   it('are soft for a player on the high tier, off on the low tier', async () => {
     expect(await shadows('?bot=off', { webdriver: false }, { 'ab-alone.quality': 'high' })).toEqual([true, 'soft']);
     expect(await shadows('?bot=off', { webdriver: false }, { 'ab-alone.quality': 'low' })).toEqual([false, 'basic']);
