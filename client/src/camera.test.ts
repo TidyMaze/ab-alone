@@ -118,7 +118,7 @@ describe('zoom', () => {
 
 describe('viewPosition', () => {
   it('turns a quarter around the board with azimuth pi/2', () => {
-    const p = viewPosition({ azimuth: Math.PI / 2, polar: Math.PI / 4, distance: 10 });
+    const p = viewPosition({ azimuth: Math.PI / 2, polar: Math.PI / 4, distance: 10, aside: 0 });
     expect(p.x).toBeCloseTo(10 * Math.SQRT1_2);
     expect(p.y).toBeCloseTo(10 * Math.SQRT1_2);
     expect(p.z).toBeCloseTo(0);
@@ -203,6 +203,41 @@ describe('fitView, bug #691', () => {
     const side = { x: 6, y: 0, z: 0 };
     expect(fitView(resetView(), [side], 1280, 720)).toEqual(resetView());
     expect(fitView(resetView(), [side], 375, 812).distance).toBeGreaterThan(resetView().distance * 1.2);
+  });
+
+  it('slides the picture aside, no farther than needed, until no point lies under a covered box, the HUD plate, bug #695', () => {
+    const west = { x: -4, y: 0, z: 0 }; // the board's left corner, sideways on a phone
+    const open = fitView(resetView(), [west], 812, 375);
+    expect(open.aside).toBe(0);
+    const plate = { x: 16, y: 16, width: 300, height: 343 };
+    const fit = fitView(resetView(), [west], 812, 375, [plate]);
+    expect(fit.distance).toBe(open.distance); // not drawn back
+    expect(fit.aside).toBeGreaterThan(0); // to the right, away from the plate
+    expect(fitView(resetView(), [west], 812, 375, [{ ...plate, width: 300 - 10 }]).aside).toBeLessThan(fit.aside);
+    expect(fitView(resetView(), [{ x: 4, y: 0, z: 0 }], 812, 375, [{ ...plate, x: 812 - 316 }]).aside).toBeLessThan(0);
+    for (const clear of [
+      { ...plate, width: 100 }, // left of the point
+      { ...plate, x: 500 }, // right of it
+      { ...plate, height: 50 }, // above it
+      { ...plate, y: 300, height: 59 }, // below it
+      { x: 0, y: 0, width: 0, height: 0 }, // a plate not laid out
+    ])
+      expect(fitView(resetView(), [west], 812, 375, [clear])).toEqual(open);
+  });
+
+  it('draws back when no slide clears every point, a box on each side', () => {
+    const sides = [
+      { x: -4, y: 0, z: 0 },
+      { x: 4, y: 0, z: 0 },
+    ];
+    const open = fitView(resetView(), sides, 812, 375);
+    const plates = [
+      { x: 16, y: 16, width: 250, height: 343 },
+      { x: 812 - 266, y: 16, width: 250, height: 343 },
+    ];
+    const fit = fitView(resetView(), sides, 812, 375, plates);
+    expect(fit.distance).toBeGreaterThan(open.distance);
+    expect(fitView(fit, sides, 812, 375, plates)).toEqual(fit);
   });
 
   it('leaves the margin to the edge, and stops at the farthest distance', () => {

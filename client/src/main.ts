@@ -192,9 +192,14 @@ let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
-// its counter fit the window too (#691).
+// its counter fit the window too (#691), off the HUD plate (#695).
 const fightView = (): View =>
-  fight?.id === 'pulsar' ? fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight) : resetView(activeRadius());
+  fight?.id === 'pulsar'
+    ? fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, [document.getElementById('hud')!.getBoundingClientRect()])
+    : resetView(activeRadius());
+// The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
+// camera himself and a new window size fits it again. Once he orbits or zooms, his view stays until Reset view.
+let fitted: View | null = null;
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 // The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
@@ -2256,12 +2261,13 @@ canvas.addEventListener(
 );
 
 document.getElementById('reset-view')!.addEventListener('click', () => {
-  view = fightView();
+  view = fitted = fightView();
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
 
 addEventListener('resize', () => {
+  if (view === fitted) view = fitted = fightView();
   frameCamera();
   renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
   renderer.setSize(innerWidth, innerHeight);
@@ -2575,9 +2581,9 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   newGameButton.hidden = true;
   document.body.dataset.boss = id;
   applyDeck(deckOf('boss', id));
-  view = fightView();
+  refresh(); // the HUD of the fight first: the view keeps off its plate
+  view = fitted = fightView();
   applyView();
-  refresh();
 }
 for (const id of boss_ids()) {
   const entry = document.createElement('button');
@@ -2872,6 +2878,10 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   });
   note();
   refresh();
+  if (coop) {
+    view = fitted = fightView(); // as in a solo fight (#695)
+    applyView();
+  }
 }
 /** Opens a new room as its creator and shows its invite link: a co-op room with `coop` (#529), a versus room without. */
 function playOnline(coop?: CoopFight): void {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { encodeMove, parseMoves, type Axial, type Move } from './board';
+import { resetView, type View } from './camera';
 import { seatAfter } from './coop';
 import { coopFromHash } from './invite';
 import { generateKeys } from './moverecord';
@@ -345,5 +346,22 @@ describe('co-op: the end of the fight', () => {
     await until(game, () => game.hook('__plies') === 2 && two.history.length === 2);
     expect(game.hook('__history')).toEqual(two.history); // both engines restarted the same encounter
     expect(game.hud()).not.toContain('refused');
+  });
+});
+
+// Bug #695: a co-op fight against The Pulsar opens on the view of the solo fight, drawn back so every pulsar and its
+// counter fit the window, off the HUD plate (#691), and a new window size fits it again (#696).
+describe('co-op: the view of a Pulsar fight', () => {
+  it('opens drawn back as in solo, and a new window size fits it again', async () => {
+    const game = await boot('?bot=off', calm);
+    fightTogether(game, 'The Pulsar');
+    await until(game, () => data().seat === 'player');
+    const fitted = game.hook<View>('__view');
+    expect(fitted.distance).toBeGreaterThan(resetView().distance);
+    const inner = { innerWidth, innerHeight };
+    Object.assign(window, { innerWidth: 375, innerHeight: 812 });
+    dispatchEvent(new Event('resize'));
+    Object.assign(window, inner);
+    expect(game.hook<View>('__view').distance).toBeGreaterThan(fitted.distance); // upright needs more room
   });
 });
