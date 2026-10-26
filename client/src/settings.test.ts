@@ -7,8 +7,8 @@ import { PALETTE_NAMES } from './palettes';
 import { skinById } from './skins';
 
 describe('settingsList', () => {
-  it('lists Clear board, Reduced motion, Flat HUD, Sound (no toggle: it opens the sliders), Transcript (#516, sharing the Sound row), Theme (with the UI scale and Safe mode), Palette, the shell skin and the glass skin (one row), Export game and Import game', () => {
-    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true)).toEqual([
+  it('lists Clear board, Reduced motion, Flat HUD, Sound, Transcript, Difficulty, Theme, Palette, shell and glass skin, Export and Import game', () => {
+    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: false },
       { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: false },
       { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: false },
@@ -19,9 +19,10 @@ describe('settingsList', () => {
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'glass-skin', label: glassSkinById('smoked').name, icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
+      { id: 'difficulty', label: '100%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
-    expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true, 'protan', false)).toEqual([
+    expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true, 'protan', false, 'hard')).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: true },
       { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: true },
@@ -32,12 +33,13 @@ describe('settingsList', () => {
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'glass-skin', label: glassSkinById('frost').name, icon: 'skin' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
+      { id: 'difficulty', label: '200%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
   });
 
-  it('keeps the menu at eleven items, the glass skin sharing the shell skin row, with Reduced motion (#379), Flat HUD (#391), Palette (#381) and Transcript (#516)', () => {
-    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true)).toHaveLength(11);
+  it('keeps the menu at twelve items, including difficulty setting', () => {
+    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toHaveLength(12);
   });
 
   it('names the four volume sliders, one per bus (#438)', () => {

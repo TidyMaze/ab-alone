@@ -326,6 +326,11 @@ impl Encounter {
         search(&self.game, self.boss.node_budget)
     }
 
+    /// Scales the boss node budget by a percentage (e.g. 50, 100, 200). Minimum is 1.
+    pub fn scale_node_budget(&mut self, percent: u32) {
+        self.boss.node_budget = (self.boss.node_budget as u64 * percent as u64 / 100).max(1) as u32;
+    }
+
     /// `None` while the game runs. A draw is a loss for the player.
     pub fn result(&self) -> Option<PveResult> {
         self.game.outcome().map(|o| match o {
@@ -549,6 +554,18 @@ mod tests {
             assert!(legal.contains(&found.mv));
             assert_eq!(enc.boss_search(), Some(found), "same position, same move");
         }
+    }
+
+    #[test]
+    fn scale_node_budget_scales_the_budget_proportionally() {
+        let mut enc = Encounter::new(Game::new(), trivial_boss(), 0);
+        assert_eq!(enc.boss.node_budget, 200);
+        enc.scale_node_budget(50);
+        assert_eq!(enc.boss.node_budget, 100);
+        enc.scale_node_budget(200);
+        assert_eq!(enc.boss.node_budget, 200);
+        enc.scale_node_budget(0);
+        assert_eq!(enc.boss.node_budget, 1, "floor of 1");
     }
 
     fn clear_black(board: &Board, _id: u8, _seed: u64) -> Board {

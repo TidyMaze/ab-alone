@@ -153,7 +153,7 @@ pub fn railyard_move(enc: &Encounter) -> Option<Move> {
         .map(exposed)
         .min()
         .unwrap_or(0);
-    search_with(game, RAILYARD_NODE_BUDGET, DEFAULT_WEIGHTS, &|mv| {
+    search_with(game, enc.boss.node_budget, DEFAULT_WEIGHTS, &|mv| {
         exposed(mv) == least
     })
     .map(|r| r.mv)

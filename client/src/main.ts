@@ -87,6 +87,7 @@ import { flatHudHtml, hudHtml } from './hud';
 import { drawSkin, type Look } from './skinart';
 import { nextSkin, skinById } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
+import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { archiveList, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
@@ -356,6 +357,7 @@ let theme: Theme = readTheme(store);
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 let palette: Palette = readPalette(store); // the colorblind palette (#381), palettes.ts
+let difficulty: Difficulty = readDifficulty(store); // the AI and boss difficulty (#704), difficulty.ts
 // The FPS readout (#426): off by default. Off, the frame loop only checks the flag; on, it keeps the last frame stamps.
 let fpsOn = readFps(store);
 let fpsStamps: number[] = [];
@@ -486,18 +488,23 @@ const toggles: Record<string, () => void> = {
     applyPalette();
     refresh();
   },
+  difficulty: () => {
+    difficulty = nextDifficulty(difficulty);
+    writeDifficulty(store, difficulty);
+  },
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
-    row.setAttribute('aria-label', label); // held upright only the icon shows (#414): the name stays for screen readers
-    row.title = label; // and as a tooltip
+    const full = id === 'difficulty' ? `Difficulty: ${difficulty} (${DIFFICULTY_PERCENT[difficulty]}%)` : label;
+    row.setAttribute('aria-label', full); // held upright only the icon shows (#414): the name stays for screen readers
+    row.title = full; // and as a tooltip
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn)) {
+for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -555,6 +562,12 @@ for (const bus of BUSES) {
     writeVolume(store, bus, sfx.volume(bus));
   });
 }
+// The difficulty setting (#704) is a second button in the Export game item, so the menu keeps its height.
+const exportRow = document.getElementById('setting-export-game')!;
+const exportGroup = document.createElement('div');
+exportGroup.className = 'setting-group';
+exportRow.replaceWith(exportGroup);
+exportGroup.append(exportRow, document.getElementById('setting-difficulty')!);
 // The log archive (#513): its button, Logs, is a short word beside Import game, as FPS is beside Clear board, so the menu
 // keeps its height. It opens a page of one button per entry read, then per audio log collected (#517), in place of the
 // items; a press on one closes the menu and reopens the entry in the terminal reader, or replays the log.
@@ -1387,7 +1400,7 @@ const budget = botBudget(location.search, navigator.webdriver);
 const hintButton = document.getElementById('hint') as HTMLButtonElement;
 const here = (): Spot => ({ game: engine, ply: history.length });
 const hint = new Hint(
-  (moves) => askBot(analysisWorker, moves, budget), // the bot's own budget: the move the bot would play there
+  (moves) => askBot(analysisWorker, moves, scaleBudget(budget, difficulty)), // the bot's own budget: the move the bot would play there
   () => refresh(), // the ghost and the rings on the marbles the move takes (#301)
 );
 function syncHint(): void {
@@ -1410,8 +1423,10 @@ async function botTurn(): Promise<void> {
   const current = fight;
   const game = engine;
   const started = performance.now();
-  const move = await askBot(worker, history, budget, fight ?? undefined);
-  diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: budget });
+  const searchBudget = scaleBudget(budget, difficulty);
+  const diffPercent = DIFFICULTY_PERCENT[difficulty];
+  const move = await askBot(worker, history, searchBudget, fight ?? undefined, diffPercent);
+  diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: searchBudget });
   if (engine !== game) return; // Retry, a new fight, New game or an import replaced the game while the bot was thinking
   thinking = false;
   whenSettled(() => {
@@ -2502,7 +2517,7 @@ if (navigator.webdriver) {
         if (!mv) break;
         ply(encodeMove(mv));
         if (engine.status() !== 0) break;
-        const reply = await askBot(worker, history, budget, fight ?? undefined);
+        const reply = await askBot(worker, history, scaleBudget(budget, difficulty), fight ?? undefined, DIFFICULTY_PERCENT[difficulty]);
         if (engine !== game) break; // Retry, New game or an import replaced the game while the bot thought
         ply(reply);
         played++;
@@ -2777,7 +2792,9 @@ let bossReply: Promise<void> = Promise.resolve();
 function answerBoss(live: boolean): Promise<void> {
   bossReply = (async () => {
     if (engine.status() !== 0) return; // the human move ended the fight
-    const move = await askBot(analysisWorker, history.slice(), budget, fight!);
+    const searchBudget = scaleBudget(budget, difficulty);
+    const diffPercent = DIFFICULTY_PERCENT[difficulty];
+    const move = await askBot(analysisWorker, history.slice(), searchBudget, fight!, diffPercent);
     await new Promise<void>((done) => whenSettled(() => (replay(move, live), refresh(), done())));
   })();
   return bossReply;

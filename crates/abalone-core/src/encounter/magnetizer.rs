@@ -231,7 +231,7 @@ pub fn magnetizer_move(enc: &Encounter) -> Option<Move> {
     let step = |before: &Board, _: Player, mv: &Move, after: Board| search_step(before, mv, after);
     search_hooked(
         enc.game(),
-        MAGNETIZER_NODE_BUDGET,
+        enc.boss.node_budget,
         DEFAULT_WEIGHTS,
         &|_| true,
         &step,

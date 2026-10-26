@@ -8,6 +8,8 @@ export interface BotRequest {
   nodes: number;
   /** Set in encounter mode: the worker replays the history into this boss fight. */
   boss?: BossRef;
+  /** Search budget scaling percentage for boss encounter (e.g. 50, 100, 200). */
+  difficultyPercent?: number;
   /** Set to ask for the search score of the position instead of a move (never with a boss). */
   evaluate?: boolean;
 }
@@ -39,6 +41,7 @@ export interface EngineLike {
 export interface EncounterLike {
   play(mv: Int32Array): void;
   boss_move(): Int32Array | number[];
+  scale_node_budget?(percent: number): void;
 }
 
 export interface WorkerLike {
@@ -67,6 +70,9 @@ export function answer(
 ): BotResponse {
   if (req.boss) {
     const fight = makeEncounter(req.boss.id, req.boss.seed);
+    if (req.difficultyPercent && fight.scale_node_budget) {
+      fight.scale_node_budget(req.difficultyPercent);
+    }
     for (const mv of req.history) fight.play(Int32Array.from(mv));
     return { id: req.id, move: Array.from(fight.boss_move()) };
   }
@@ -105,8 +111,9 @@ export async function askBot(
   history: number[][],
   nodes = BOT_NODES,
   boss?: BossRef,
+  difficultyPercent?: number,
 ): Promise<number[]> {
-  return (await ask<MoveAnswer>(worker, { history, nodes, boss })).move;
+  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent })).move;
 }
 
 /** Page side: the search score of the position after `history`, for the side to move. */

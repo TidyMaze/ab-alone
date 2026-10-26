@@ -138,9 +138,14 @@ pub fn alien_move(enc: &Encounter) -> Option<Move> {
             .iter()
             .all(|&((q, r), _)| after.get(q, r) == Some(Cell::Empty))
     };
-    search_with(enc.game(), ALIEN_NODE_BUDGET, DEFAULT_WEIGHTS, &spares_eggs)
-        .or_else(|| enc.boss_search())
-        .map(|r| r.mv)
+    search_with(
+        enc.game(),
+        enc.boss.node_budget,
+        DEFAULT_WEIGHTS,
+        &spares_eggs,
+    )
+    .or_else(|| enc.boss_search())
+    .map(|r| r.mv)
 }
 
 #[cfg(test)]

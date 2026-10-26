@@ -108,7 +108,7 @@ pub fn overseer_move(enc: &Encounter) -> Option<Move> {
     let step = |_: &Board, _: Player, _: &Move, after: Board| overseer_step(after, phase);
     search_hooked(
         enc.game(),
-        OVERSEER_NODE_BUDGET,
+        enc.boss.node_budget,
         DEFAULT_WEIGHTS,
         &|_| true,
         &step,
