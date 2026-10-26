@@ -1459,11 +1459,14 @@ describe('OnlineSession in a battle royale room, #504', () => {
     b.transport.send(start);
     m.end('x').send(start); // a peer that never said Hello: no key
     await settle();
-    expect(other).toEqual([
-      ['a', start, b.keys.pub, 'b'],
-      ['a', start, '', 'x'],
-      ['b', start, '', 'x'],
-    ]);
+    expect(other).toHaveLength(3); // the two sessions run their queues side by side: in any order
+    expect(other).toEqual(
+      expect.arrayContaining([
+        ['a', start, b.keys.pub, 'b'],
+        ['a', start, '', 'x'],
+        ['b', start, '', 'x'],
+      ]),
+    );
     expect(a.refused).toEqual([]);
     expect([a.session.coordinator, b.session.coordinator]).toEqual([a.keys.pub, a.keys.pub]);
   });

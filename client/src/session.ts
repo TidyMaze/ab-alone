@@ -66,6 +66,10 @@ export interface SessionOptions {
   /** Heartbeat and coordinator migration (docs/specs/tech.md section 6, #359). `every` runs `fn` each `ms`. Off without it. */
   beat?: { ms: number; now(): number; every(fn: () => void, ms: number): void };
   onCoordinator?(): void; // the coordinator changed or a hand-over progressed: read coordinatorSeq and handover again
+  /** A message of a kind the session does not know (the battle royale rounds, #504), with the key its peer proved ('' for
+   * none) and the peer. In the session's queue: the next message waits until it settles. Without it such a message is
+   * refused as malformed. */
+  onOther?(message: Wire, key: string, peer: string): void | Promise<void>;
 }
 
 /** One game of the room: its signed log and the signed rematch asks of it, by key. */
@@ -136,6 +140,11 @@ export class OnlineSession {
   /** The join_seq of the coordinator, from 1, 0 until the creator's order is known. */
   get coordinatorSeq(): number {
     return this.coord.seq;
+  }
+
+  /** The key of the coordinator, '' until the creator's order is known. */
+  get coordinator(): string {
+    return this.coord.coordinator;
   }
 
   get isCoordinator(): boolean {
@@ -267,8 +276,9 @@ export class OnlineSession {
   private async hello(): Promise<void> {
     const roster = this.o.side === CREATOR ? this.seats.roster() : [];
     const order = this.o.beat && this.o.side === CREATOR ? [...this.order] : undefined; // the join order, for the coordinator migration
+    const seat = this.seats.seatOf(this.o.keys.pub) || this.o.side; // the seat we hold, once the creator gave us one
     this.o.transport.send(
-      await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster, agent: this.o.agent, order, engine: this.o.engine }),
+      await signHello(this.o.keys, { game: this.o.game, seat, roster, agent: this.o.agent, order, engine: this.o.engine }),
     );
   }
 
@@ -295,6 +305,7 @@ export class OnlineSession {
     if (kind === 'sync') return this.answer(parseSync(raw), peer);
     if (kind === 'missed') return this.receiveMissed(parseMissed(raw));
     if (kind === 'rematch') return this.receiveRematch(parseRematch(raw), true);
+    if (kind !== undefined && this.o.onOther) return this.o.onOther(raw, this.presence.keyOf(peer), peer);
     return this.receiveRecord(parseRecord(raw), true);
   }
 
@@ -428,8 +439,10 @@ export class OnlineSession {
 
   private async seat(h: Hello): Promise<void> {
     if (this.o.side === CREATOR) {
-      // First valid Hello for a free seat wins. Everyone, the refused included, gets the new roster.
-      if (!this.seats.claim(h.seat, h.pub)) this.o.onRefuse('seat-refused');
+      // First valid Hello for a free seat wins, or it gets the first free seat (a battle royale room, #504). Everyone,
+      // the refused included, gets the new roster.
+      const free = this.seats.roster().indexOf('') + 1;
+      if (!this.seats.claim(h.seat, h.pub) && !this.seats.claim(free, h.pub)) this.o.onRefuse('seat-refused');
       return this.hello();
     }
     // Joiners trust the first Hello for seat 1 (the creator) and take the roster from it.
@@ -437,7 +450,7 @@ export class OnlineSession {
     if (h.roster[0] !== h.pub || !this.seats.adopt(h.roster)) return;
     if (h.order) this.coord.adopt(h.order);
     const mine = this.seats.seatOf(this.o.keys.pub);
-    this.setRole(mine === this.o.side ? 'player' : this.seats.full ? 'spectator' : 'pending');
+    this.setRole(mine !== 0 ? 'player' : this.seats.full ? 'spectator' : 'pending');
     if (this.syncDue) this.sync();
   }
 
