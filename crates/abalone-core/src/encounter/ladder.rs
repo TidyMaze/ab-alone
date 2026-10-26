@@ -363,6 +363,7 @@ pub fn run_ladder(boss: LadderBoss, player_budget: u32, seeds: u32, ply_cap: u32
 mod tests {
     use super::*;
     use crate::board::{Board, Cell};
+    use crate::encounter::alien::{alien_move, alien_start};
     use crate::encounter::ballast::{ballast_boss, ballast_start};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::echo_boss;
@@ -457,9 +458,9 @@ mod tests {
     #[test]
     fn every_boss_has_an_id_and_a_budget() {
         let ids: Vec<_> = LadderBoss::ALL.iter().map(|b| b.id()).collect();
-        assert_eq!(ids, ["echo", "hull", "chaplain", "choir", "ballast"]);
+        assert_eq!(ids, ["echo", "hull", "chaplain", "choir", "ballast", "alien"]);
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
-        assert_eq!(budgets, [400, 3000, 2000, 1500, 150_000]);
+        assert_eq!(budgets, [400, 3000, 2000, 1500, 150_000, 3000]);
     }
 
     #[test]
@@ -518,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    fn all_five_bosses_open_a_round() {
+    fn every_boss_opens_a_round() {
         for boss in LadderBoss::ALL {
             let r = play_attempt(boss, 1, 2, 30, 1);
             assert_eq!((r.boss, r.plies, r.attempt), (boss.id(), 1, 2), "{boss:?}");
@@ -553,6 +554,27 @@ mod tests {
         );
         let reply = a.boss_move().expect("the boss has a move");
         assert!(legal_moves(a.game().board(), Player::White).contains(&reply));
+    }
+
+    #[test]
+    fn the_alien_lays_its_eggs_and_answers_through_its_own_move() {
+        let mut a = Arena::new(LadderBoss::Alien, 3);
+        assert_eq!(a.game().board(), alien_start(3).game().board());
+        for _ in 0..4 {
+            let mv = match a.game().to_move() {
+                Player::Black => legal_moves(a.game().board(), Player::Black)[0].clone(),
+                Player::White => {
+                    let Arena::Plain(enc, _) = &a else {
+                        unreachable!("a plain encounter")
+                    };
+                    let reply = a.boss_move();
+                    assert_eq!(reply, alien_move(enc));
+                    reply.unwrap()
+                }
+            };
+            a.play(&mv).unwrap();
+        }
+        assert_eq!(a.game().board().eggs().len(), 1, "the first egg after ply 4");
     }
 
     #[test]
