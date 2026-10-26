@@ -108,11 +108,11 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #mode-menu[hidden] { display: none; }
 #modes[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 600px), (pointer: coarse) { #mode-menu button { min-height: 2.75rem; } }
-#update, #reset-view, #hint, #new-game, #modes, #play-online, #rematch, #boss-fight, #daily, #boss-retry, #boss-goal, #boss-list button, #copy-diagnostics {
+#update, #reset-view, #hint, #new-game, #modes, #play-online, #rematch, #boss-fight, #daily, #ship, #boss-retry, #boss-goal, #boss-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#update:focus-visible, #reset-view:focus-visible, #hint:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #boss-retry:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#update:focus-visible, #reset-view:focus-visible, #hint:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #boss-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
 #boss-list[hidden], #boss-retry[hidden], #boss-goal[hidden], #rematch[hidden], #update[hidden], #hint[hidden], #new-game[hidden] { display: none; }
 /* Goal (#248): open, it is lit like Hint; a phone-sized touch target on a small or touch screen. */
