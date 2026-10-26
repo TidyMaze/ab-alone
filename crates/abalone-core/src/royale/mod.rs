@@ -7,8 +7,10 @@ use std::hash::{Hash, Hasher};
 
 use crate::board::{Board, Cell};
 
+mod round;
 mod setup;
 
+pub use round::{initiative, resolve_round, Order, Outcome, RoundLog, Turn};
 pub use setup::{start, MAX_SEATS, MIN_SEATS};
 
 /// Marble colour of each seat, in seat order.
