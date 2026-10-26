@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ACCENTS, CONVERTED, CORE, type Accent, coreLevel, GLASS, SEAT_GLYPHS, SEAT_INK, SEATS, SHELL } from './marbles';
+import { ACCENTS, CONVERTED, CORE, type Accent, coreLevel, GLASS, HEAT, pulseAt, SEAT_GLYPHS, SEAT_INK, SEATS, SHELL } from './marbles';
 import { PALETTE_DEFS, PALETTES } from './palettes';
+import { SAFE_MAX_RATE } from './safe';
 import { SKINS } from './skins';
 
 // Relative luminance and contrast ratio (WCAG 2), on 0xrrggbb colours.
@@ -187,5 +188,40 @@ describe('the converted look', () => {
     const dim = lit.map((v, i) => CONVERTED.core * v + (1 - CONVERTED.core) * behind[i]!);
     expect(contrast(dim, see(deck))).toBeGreaterThanOrEqual(3);
     expect(contrast(dim, see(channels(shell)))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// #509: the enemy shell has a faint heat pulse (world.md section 5, art.md section 1): a slow, small glow of the sodium
+// orange, never a flash (world.md section 8). WCAG 2.3.1 counts a flash from a swing of a tenth of the full luminance.
+describe('the heat pulse', () => {
+  // One pulse, sampled every 25 ms (a frame at 40 FPS).
+  const samples = (): number[] => Array.from({ length: Math.ceil(HEAT.period / 0.025) + 1 }, (_, i) => i * 0.025);
+
+  it('glows the sodium orange of the palette', () => {
+    expect(HEAT.color).toBe(0xd9822b);
+  });
+
+  it('is slow: one pulse in 4 s or more, far under the safe cap of 3 a second', () => {
+    expect(HEAT.period).toBeGreaterThanOrEqual(4);
+    expect(1 / HEAT.period).toBeLessThan(SAFE_MAX_RATE);
+    for (const t of samples()) expect(pulseAt(t + HEAT.period)).toBeCloseTo(pulseAt(t), 10);
+  });
+
+  it('rises from nothing to its peak and back, smoothly', () => {
+    expect(pulseAt(0)).toBe(0);
+    expect(pulseAt(HEAT.period / 2)).toBeCloseTo(HEAT.peak, 10);
+    const levels = samples().map(pulseAt);
+    for (const level of levels) {
+      expect(level).toBeGreaterThanOrEqual(0);
+      expect(level).toBeLessThanOrEqual(HEAT.peak);
+    }
+    const steps = levels.slice(1).map((level, i) => Math.abs(level - levels[i]!));
+    expect(Math.max(...steps)).toBeLessThan(HEAT.peak / 20); // no jump from one frame to the next
+  });
+
+  it('is faint: its brightest glow swings the luminance far less than a flash', () => {
+    const glow = luminance(channels(HEAT.color)) * HEAT.peak; // the emissive adds colour times intensity, linear
+    expect(glow).toBeGreaterThan(0);
+    expect(glow).toBeLessThan(0.1 / 4);
   });
 });
