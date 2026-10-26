@@ -98,6 +98,7 @@ import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } f
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
+import { recordWin } from './progress';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
@@ -1325,6 +1326,7 @@ function hud(extra = ''): void {
         .join(' · ')
     : '';
   if (boss) {
+    if (boss.result() === 1) recordWin(store, fight!.id); // a boss win opens the lift onto the next deck (#520)
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
       bossHtml({
