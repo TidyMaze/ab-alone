@@ -12,6 +12,7 @@ pub mod fixture;
 pub mod hull;
 pub mod ladder;
 pub mod magnetizer;
+pub mod pulsar;
 pub mod railyard;
 pub mod telemetry;
 
@@ -61,6 +62,8 @@ pub struct Encounter {
     repulsions: Vec<Repulsion>,
     /// The cells whose polarity the last ply's hook set, before the board settled again.
     assigned: Vec<(i32, i32)>,
+    /// The board just before the last ply's hook and the special id it fired with.
+    hooked: Option<(Board, u8)>,
 }
 
 /// Marbles of `color` on `board`.
@@ -73,6 +76,28 @@ pub fn marbles(board: &Board, color: Cell) -> u8 {
         }
     }
     n
+}
+
+/// Black and White marbles a hook removed: their cell is now empty or gone. A flip keeps the
+/// marble and removes nothing (rules.md OPEN-13).
+fn removals(before: &Board, after: &Board) -> [u8; 2] {
+    let mut lost = [0, 0];
+    let radius = before.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
+            match (before.get(q, r), after.get(q, r)) {
+                (Some(Cell::Black), Some(Cell::Empty) | None) => lost[0] += 1,
+                (Some(Cell::White), Some(Cell::Empty) | None) => lost[1] += 1,
+                _ => {}
+            }
+        }
+    }
+    lost
+}
+
+/// Black and White marbles fewer on `after` than on `before`.
+pub(crate) fn losses(_before: &Board, _after: &Board) -> [u8; 2] {
+    [0, 0]
 }
 
 /// Where `marks` sit after `mv`: marks on moved or pushed marbles shift one step, in order.
@@ -128,7 +153,14 @@ impl Encounter {
             seed,
             repulsions: Vec::new(),
             assigned: Vec::new(),
+            hooked: None,
         }
+    }
+
+    /// The board just before the last ply's hook and the special id it fired with, `None` when the
+    /// last ply fired no hook (The Pulsar draws its pulse from it).
+    pub fn hooked(&self) -> Option<&(Board, u8)> {
+        self.hooked.as_ref()
     }
 
     /// The repulsions of the last ply, in the order they happened (The Magnetizer).
@@ -171,6 +203,7 @@ impl Encounter {
         self.carry_marks(&before, mv);
         self.repulsions.clear();
         self.assigned.clear();
+        self.hooked = None;
         let ply = self.game.history().len() as u64;
         let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
         self.settle(seed);
@@ -232,21 +265,11 @@ impl Encounter {
         self.repulsions.extend(seen);
     }
 
-    /// A marble a hook removed (its cell is now empty or gone) counts for the opponent of its
-    /// colour. A flip keeps the marble and credits nothing (rules.md OPEN-13).
+    /// A marble a hook removed counts for the opponent of its colour. A pulse (The Pulsar) moves
+    /// marbles and flips none, so its losses are counted by colour.
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
-        let (mut lost_black, mut lost_white) = (0, 0);
-        let radius = before.radius();
-        for q in -radius..=radius {
-            for r in -radius..=radius {
-                match (before.get(q, r), after.get(q, r)) {
-                    (Some(Cell::Black), Some(Cell::Empty) | None) => lost_black += 1,
-                    (Some(Cell::White), Some(Cell::Empty) | None) => lost_white += 1,
-                    _ => {}
-                }
-            }
-        }
+        let [lost_black, lost_white] = removals(before, after);
         self.game.credit(Player::White, lost_black);
         self.game.credit(Player::Black, lost_white);
     }

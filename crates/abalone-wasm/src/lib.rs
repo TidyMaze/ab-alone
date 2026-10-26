@@ -12,6 +12,11 @@
 //! - Trains (The Rail Yard): records of 6 integers `[line, player_turns_left, entry_q, entry_r,
 //!   exit_q, exit_r]`, back to back: the train runs its line from the entry cell to the exit cell
 //!   (docs/specs/game-design.md section 7.8 numbers the lines).
+//! - Pulsar (The Pulsar): `[pulsar, player_turns_left, force]`, the pulsar of the next pulse as
+//!   the direction code it pushes in (it stands off the corner the other way), the player turns
+//!   before it fires and its force, `0` for infinite (docs/specs/game-design.md section 7.10).
+//! - Last pulse (The Pulsar): the pulsar, then the 61 board codes just before the pulse, then the
+//!   cells of the marbles it moved, from where they stood, as `[q, r]` pairs.
 //! - Cell list (The Chaplain, the cells The Magnetizer just polarized): pairs `[q, r]`, back to back.
 //! - Polarities (The Magnetizer): one integer per cell, in the board order: `0` none, `1` +, `-1` −.
 //! - Announce (The Magnetizer): `[q, r, sign]` of the marble that takes `sign` at the start of the

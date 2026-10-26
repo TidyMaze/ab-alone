@@ -14,6 +14,9 @@ use abalone_core::encounter::choir::{
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
+use abalone_core::encounter::pulsar::{
+    last_pulse, pulsar_boss, pulsar_move, pulsar_start, pulsar_tell,
+};
 use abalone_core::encounter::railyard::{
     railyard_boss, railyard_move, railyard_start, track_cells,
 };
@@ -85,6 +88,11 @@ fn railyard_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(railyard_start(seed))
 }
 
+/// The Pulsar draws its first pulsar at the start.
+fn pulsar_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(pulsar_start(seed))
+}
+
 fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
     ballast_tell(enc).flips
 }
@@ -110,7 +118,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 8] = [
+const BOSSES: [BossEntry; 9] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -182,6 +190,15 @@ const BOSSES: [BossEntry; 8] = [
         def: magnetizer_boss,
         start: plain_fight,
         reply: magnetizer_move,
+        announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "pulsar",
+        goal: "Pulses push every lone marble or pair away. Eject 6 to win; lose 6 or draw to lose.",
+        def: pulsar_boss,
+        start: pulsar_fight,
+        reply: pulsar_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -424,6 +441,20 @@ impl Encounter {
             .collect()
     }
 
+    /// The Pulsar's next pulse as `[pulsar, player_turns_left, force]`, force `0` for infinite,
+    /// empty for the other bosses.
+    pub fn pulsar(&self) -> Vec<i32> {
+        let _ = (&self.fight, pulsar_tell);
+        Vec::new() // stub
+    }
+
+    /// The pulse of the last ply (The Pulsar): the pulsar, the 61 board codes just before it, then
+    /// the cells it moved from, see the module docs. Empty when the last ply fired no pulse.
+    pub fn last_pulse(&self) -> Vec<i32> {
+        let _ = (&self.fight, last_pulse);
+        Vec::new() // stub
+    }
+
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
     /// a cell list. Empty for the other bosses.
     pub fn flips(&self) -> Vec<i32> {
@@ -569,7 +600,8 @@ mod tests {
                 "ballast".to_string(),
                 "alien".to_string(),
                 "railyard".to_string(),
-                "magnetizer".to_string()
+                "magnetizer".to_string(),
+                "pulsar".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -580,6 +612,7 @@ mod tests {
         assert_eq!(boss_name("alien"), Some("The Alien".to_string()));
         assert_eq!(boss_name("railyard"), Some("The Rail Yard".to_string()));
         assert_eq!(boss_name("magnetizer"), Some("The Magnetizer".to_string()));
+        assert_eq!(boss_name("pulsar"), Some("The Pulsar".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1034,6 +1067,94 @@ mod tests {
         assert_eq!(f.to_move(), 1);
     }
 
+    // The Pulsar (#675): a pulsar pushes every line like a sumito of force 2, 3 or infinite.
+
+    /// The fixture of the core pulsar tests and client/e2e/pulsar.spec.ts (seed 2, the first
+    /// pulsar pushes NW): one marble per move, `[q, r, dir]`.
+    const PULSAR_FIXTURE: [[i32; 3]; 13] = [
+        [-2, 2, 4],
+        [4, -3, 3],
+        [-1, 2, 4],
+        [0, -2, 3],
+        [0, 2, 4],
+        [3, -3, 0],
+        [-2, 1, 4],
+        [-1, -1, 1],
+        [-1, 1, 4],
+        [-2, -1, 1],
+        [0, 1, 4],
+        [-3, -1, 5],
+        [-2, 0, 4],
+    ];
+
+    /// The board, the next pulse and the last pulse after each of the first `plies` plies of the
+    /// fixture.
+    fn pulsar_run(seed: u32, plies: usize) -> Vec<(Vec<u8>, Vec<i32>, Vec<i32>)> {
+        let mut f = Encounter::new("pulsar", seed).unwrap();
+        PULSAR_FIXTURE[..plies]
+            .iter()
+            .map(|&[q, r, dir]| {
+                f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
+                (f.board(), f.pulsar(), f.last_pulse())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_pulsar_exposes_the_next_pulse_and_the_moves_of_the_last_one() {
+        let f = Encounter::new("pulsar", 2).unwrap();
+        assert_eq!(f.name(), "The Pulsar");
+        assert_eq!((f.phase(), f.phases()), (0, 3));
+        assert_eq!(f.pulsar(), vec![4, 3, 2], "NW, 3 turns, force 2");
+        assert!(f.last_pulse().is_empty());
+        let run = pulsar_run(2, 13);
+        assert_eq!(run[3].1, vec![4, 1, 2], "on 1 before the first pulse");
+        let pulse = &run[4].2;
+        assert_eq!(pulse[0], 4);
+        assert_eq!(pulse[1 + index(4, -4)], 2, "the board before the pulse");
+        assert_eq!(pulse[62..], [1, 3, 4, -4], "(1, 3) and (4, -4) moved");
+        assert_eq!(run[4].0[index(4, -4)], 0, "thrown off");
+        assert!(run[5].2.is_empty(), "the boss ply fires none");
+        assert_eq!(run[12].1[1..], [4, 3], "at rest after P2 starts: force 3");
+        let mut f = Encounter::new("pulsar", 2).unwrap();
+        for &[q, r, dir] in &PULSAR_FIXTURE {
+            f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
+        }
+        assert_eq!((f.ejected(1), f.phase()), (3, 1));
+        assert!(choir().pulsar().is_empty() && choir().last_pulse().is_empty());
+        assert!(Encounter::new("echo", 1).unwrap().pulsar().is_empty());
+    }
+
+    #[test]
+    fn the_pulsar_reports_infinite_force_as_0() {
+        let mut board = Board::standard();
+        board.set_pulsar(Some((0, 0)));
+        let fight = Fight::Plain(CoreEncounter::new(
+            Game::from_position(board, Player::Black, [5, 0]),
+            pulsar_boss(),
+            0,
+        ));
+        let entry = boss_entry("pulsar").unwrap();
+        assert_eq!(Encounter { fight, entry }.pulsar(), vec![0, 3, 0]);
+    }
+
+    #[test]
+    fn two_pulsar_encounters_with_the_same_seed_and_moves_give_the_same_pulses() {
+        // Every peer of a co-op fight, the daily and a Retry replay the same pulses (#675).
+        assert_eq!(pulsar_run(2, 13), pulsar_run(2, 13));
+        assert!((0..8).any(|seed| pulsar_run(seed, 1) != pulsar_run(2, 1)));
+    }
+
+    #[test]
+    fn the_pulsar_replies_with_a_legal_move() {
+        let mut f = Encounter::new("pulsar", 3).unwrap();
+        ply(&mut f);
+        let mv = f.boss_move();
+        assert_eq!(mv.len(), MOVE_STRIDE);
+        f.play(&mv).unwrap();
+        assert_eq!(f.to_move(), 1);
+    }
+
     fn ring((q, r): (i32, i32)) -> i32 {
         q.abs().max(r.abs()).max((q + r).abs())
     }
@@ -1133,6 +1254,7 @@ mod tests {
             "alien",
             "railyard",
             "magnetizer",
+            "pulsar",
         ] {
             assert_eq!(Encounter::new(id, 7).unwrap().board().len(), 61, "{id}");
         }
@@ -1258,6 +1380,7 @@ mod tests {
         assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");
         assert_eq!(lit("alien"), vec![2, 0], "P2 after 2 ejections");
         assert_eq!(lit("railyard"), vec![3, 0], "P2 after 3 ejections");
+        assert_eq!(lit("pulsar"), vec![3, 0], "P2 after 3 ejections");
     }
 
     #[test]

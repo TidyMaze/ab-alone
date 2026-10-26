@@ -686,6 +686,20 @@ mod tests {
     }
 
     #[test]
+    fn the_pulsar_mark_changes_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut charging = Board::empty();
+        charging.set_pulsar(Some((4, 1)));
+        assert_ne!(position_hash(&charging, Player::Black), plain);
+        let mut later = Board::empty();
+        later.set_pulsar(Some((4, 2)));
+        assert_ne!(
+            position_hash(&later, Player::Black),
+            position_hash(&charging, Player::Black)
+        );
+    }
+
+    #[test]
     fn pass_gives_the_move_back_and_rehashes_the_last_ply() {
         let mut game = lone();
         game.play(&mv(&[(0, 0)], E)).unwrap();
