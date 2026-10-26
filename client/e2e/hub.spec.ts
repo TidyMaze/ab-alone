@@ -269,7 +269,7 @@ test('a terminal room opens its lore entry in the reader, and Esc gives the hub 
 
 test('the tension drones calm to 0 over the hub, #586', async ({ page }) => {
   await page.goto('./?nodes=100');
-  await page.locator('#hud').waitFor();
+  await page.locator('canvas').waitFor(); // the page hooks are set (#585)
   await page.evaluate(async () => {
     for (let t = 1; t <= 30; t++) {
       await (window as any).__playTurns(1, [4]);
