@@ -94,7 +94,8 @@ Boss structure (all five follow it):
 - **Twist**: the added rule, written as a hook (start of turn, end of turn, board mask).
 - **Tell**: shown exactly one ply before the twist fires.
 - **Counter**: a positional answer that exists on the board, not a stat check.
-- **Phases**: triggered by **boss marbles remaining**, always shown on the HUD as notches.
+- **Phases**: triggered by **boss marbles remaining** (The Alien: by your ejections, section 7.7),
+  always shown on the HUD as notches.
 
 ### 3.4 Battle royale (Phase 4, #49)
 
@@ -365,11 +366,14 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   motion: it hatches after your next move. The HUD line reads "Eggs hatch: 1 in 1 turn · 2 in 4 turns".
 - **Counter**: walk or push a marble onto an egg to crush it before it hatches, and press the
   Alien early, while it has few marbles. Every turn spent on eggs is a turn not spent pushing.
-- **Phases**: P1 above. P2 when the Alien has **5** marbles left: it lays an egg every boss turn.
-  P3 at **3**: eggs hatch after **3** of your turns (the counter starts at 3). The phase follows the
-  marble count, so a hatch can bring an earlier phase back; an egg keeps the counter it was laid with.
-- **Calibrate**: knobs = starting marbles (8), lay interval (2), hatch time (4), egg cap (3), AI
-  depth (3). Fail if the median fight ends with fewer than 2 eggs crushed (nobody learns the
+- **Phases**: P1 above. P2 after your **2nd** ejection: it lays an egg every boss turn. P3 after
+  your **4th**: eggs hatch after **3** of your turns (the counter starts at 3). Unlike the other
+  bosses, the phase follows the ejections credited to you, not the Alien's marbles left: the hatches
+  add marbles and the fight ends at 6 ejections, so a marble count would never be reached (#621).
+  A hatch never brings an earlier phase back; an egg keeps the counter it was laid with. The rim
+  notches count the ejections left until the next phase.
+- **Calibrate**: knobs = starting marbles (8), lay interval (2), hatch time (4), egg cap (3), phase
+  ejections (2, 4), AI depth (3). Fail if the median fight ends with fewer than 2 eggs crushed (nobody learns the
   counter) or the Alien's marble count only ever goes up (the brood outruns the player).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). It has no hub door: each deck keeps its one boss.

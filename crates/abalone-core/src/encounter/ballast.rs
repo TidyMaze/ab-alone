@@ -128,6 +128,7 @@ pub fn ballast_boss() -> BossDef {
     BossDef {
         name: "The Ballast Mind",
         phase_marbles: BALLAST_PHASE_MARBLES.to_vec(),
+        phase_ejections: Vec::new(),
         special,
         hook,
         node_budget: BALLAST_NODE_BUDGET,

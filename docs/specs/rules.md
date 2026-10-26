@@ -203,7 +203,7 @@ Player (Black, 14 marbles on the standard layout unless the boss says otherwise)
 
 Boss rule hooks run inside `apply`, so the AI search sees them. A hook removing a marble counts toward the ejected count of the side that loses the marble's opponent. For example, a player marble removed by a hook raises the boss's ejected count. **PROPOSAL, OPEN-13.**
 
-Phases trigger when the boss's marble count reaches a threshold, shown on the HUD as notches. **TUNE** for every threshold below.
+Phases trigger when the boss's marble count reaches a threshold (The Alien: when the player's ejections reach one, game-design section 7.7), shown on the HUD as notches. **TUNE** for every threshold below.
 
 Hooks, from game-design section 7 (starting values):
 

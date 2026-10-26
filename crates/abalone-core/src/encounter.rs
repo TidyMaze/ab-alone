@@ -32,6 +32,9 @@ pub struct BossDef {
     pub name: &'static str,
     /// Phase `n` starts when the boss has at most `phase_marbles[n - 1]` marbles, highest first.
     pub phase_marbles: Vec<u8>,
+    /// Or when the player has ejected at least `phase_ejections[n - 1]` boss marbles, lowest
+    /// first (The Alien, whose brood grows). A boss uses one of the two.
+    pub phase_ejections: Vec<u8>,
     pub special: SpecialFn,
     pub hook: HookFn,
     /// Positions the boss search may visit per move. Never a clock.
@@ -103,6 +106,7 @@ pub fn trivial_boss() -> BossDef {
     BossDef {
         name: "Trivial",
         phase_marbles: vec![10],
+        phase_ejections: Vec::new(),
         special: no_special,
         hook: keep_board,
         node_budget: 200,
@@ -121,11 +125,10 @@ impl Encounter {
     /// Current phase, 0 at the start.
     pub fn phase(&self) -> usize {
         let left = marbles(self.game.board(), Cell::White);
-        self.boss
-            .phase_marbles
-            .iter()
-            .filter(|&&t| left <= t)
-            .count()
+        let ejected = self.game.ejected(Player::Black);
+        let by_marbles = self.boss.phase_marbles.iter().filter(|&&t| left <= t);
+        let by_ejections = self.boss.phase_ejections.iter().filter(|&&t| ejected >= t);
+        by_marbles.count() + by_ejections.count()
     }
 
     /// The special that fires right after the next ply, visible one ply ahead.
@@ -264,6 +267,7 @@ mod tests {
         BossDef {
             name: "test",
             phase_marbles: vec![],
+            phase_ejections: Vec::new(),
             special,
             hook: clear_white,
             node_budget: 200,

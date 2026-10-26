@@ -23,6 +23,7 @@ pub fn echo_boss() -> BossDef {
     BossDef {
         name: "The Echo",
         phase_marbles: ECHO_PHASE_MARBLES.to_vec(),
+        phase_ejections: Vec::new(),
         special: no_special,
         hook: keep_board,
         node_budget: ECHO_NODE_BUDGET,

@@ -73,6 +73,7 @@ describe('main.ts The Alien (#588)', () => {
     expect(game.hud()).toContain('The Alien');
     expect(game.hud()).toContain('Alien: brood on file. Six out to balance the books.');
     expect(body().eggs).toBe('0');
+    expect(game.hook('__notches')).toEqual({ lit: 2, dark: 0, glyph: true }); // P2 after 2 ejections (#621)
     plies(game, 3);
     expect(eggs(game)).toEqual([]);
     plies(game, 1);
@@ -115,6 +116,7 @@ describe('main.ts The Alien (#588)', () => {
     expect(body().eggs).toBe('1');
     const alien = game.hook<Move[]>('__legal'); // the Alien's turn: the new marble can move
     expect(alien.some((m) => String(m.cells) === String(FIRST_EGG))).toBe(true);
+    expect(game.hook('__notches')).toEqual({ lit: 2, dark: 0, glyph: true }); // a hatch is no ejection (#621)
   });
 
   it('the glow on 1 holds still under reduced motion', async () => {

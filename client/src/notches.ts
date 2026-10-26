@@ -1,5 +1,6 @@
 // Boss phase notches scratched on the arena frame (#356, docs/specs/world.md section 6 rule 4): one lit notch per
-// boss marble left until the next phase, dark as they go, and a steady glyph at the threshold. The counts come from
+// boss marble left until the next phase (per ejection for The Alien, #621), dark as they go, and a steady glyph at the
+// threshold. The counts come from
 // the encounter (phase_notches in crates/abalone-wasm); this places them on the rim, main.ts draws them.
 import { FRAME, type FrameShape, type Point } from './frame';
 

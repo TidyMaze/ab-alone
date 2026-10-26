@@ -73,6 +73,8 @@ test('The Alien lays an egg whose counter goes down, then it hatches into an Ali
   await expect(body).toHaveAttribute('data-egg-counters', '2');
   const alien = (await page.evaluate(() => (window as any).__legal())) as Move[];
   expect(alien.some((m) => String(m.cells) === String(FIRST_EGG))).toBe(true); // the new Alien marble moves
+  // The phases count the player's ejections, not the brood: a hatch leaves the 2 notches to P2 lit (#621).
+  expect(await page.evaluate(() => (window as any).__notches())).toEqual({ lit: 2, dark: 0, glyph: true });
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('alien-hatched.png') });
 });

@@ -31,8 +31,9 @@ pub const ALIEN_LAY_EVERY: [u32; 3] = [2, 1, 1];
 pub const ALIEN_HATCH_TURNS: [u8; 3] = [4, 4, 3];
 /// Eggs on the board at most: a lay with this many out is skipped. TUNE.
 pub const ALIEN_EGG_CAP: usize = 3;
-/// P2 and P3 start at this many boss marbles left. TUNE.
-pub const ALIEN_PHASE_MARBLES: [u8; 2] = [5, 3];
+/// P2 and P3 start after this many ejections credited to the player, not at a count of marbles
+/// left: the hatches add marbles, and the fight ends at 6 ejections (#621). TUNE.
+pub const ALIEN_PHASE_EJECTIONS: [u8; 2] = [2, 4];
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
 pub const ALIEN_NODE_BUDGET: u32 = 3000;
 /// Special id at the end of a player turn: the eggs count down and hatch.
@@ -94,7 +95,8 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
 pub fn alien_boss() -> BossDef {
     BossDef {
         name: "The Alien",
-        phase_marbles: ALIEN_PHASE_MARBLES.to_vec(),
+        phase_marbles: Vec::new(),
+        phase_ejections: ALIEN_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
         node_budget: ALIEN_NODE_BUDGET,
@@ -211,7 +213,8 @@ mod tests {
     fn boss_definition_matches_the_spec() {
         let b = alien_boss();
         assert_eq!(b.name, "The Alien");
-        assert_eq!(b.phase_marbles, vec![5, 3]);
+        assert!(b.phase_marbles.is_empty());
+        assert_eq!(b.phase_ejections, vec![2, 4]);
         assert_eq!(b.node_budget, ALIEN_NODE_BUDGET);
     }
 
@@ -388,15 +391,45 @@ mod tests {
         );
     }
 
-    /// Black's lone marble and `n` Alien marbles on the far left.
-    fn with_alien_marbles(n: usize, seed: u64) -> Encounter {
+    /// Black's lone marble and `n` Alien marbles on the far left, `ejected` Alien marbles already
+    /// credited to the player.
+    fn with_alien_marbles(n: usize, ejected: u8, seed: u64) -> Encounter {
         let left = [(-4, 0), (-4, 1), (-4, 2), (-4, 3), (-4, 4)];
-        fight(&[(2, 2)], &left[..n], &[], Player::Black, seed)
+        let game = Game::from_position(
+            board(&[(2, 2)], &left[..n], &[]),
+            Player::Black,
+            [ejected, 0],
+        );
+        Encounter::new(game, alien_boss(), seed)
+    }
+
+    /// A fight where eggs hatched: the 8 start marbles and 5 hatched ones, `ejected` of them
+    /// already credited to the player.
+    fn brood_after(ejected: u8) -> Encounter {
+        let hatched = [(-4, 0), (-4, 1), (-4, 2), (-4, 3), (-4, 4)];
+        let white: Vec<P> = ALIEN_START.iter().chain(&hatched).copied().collect();
+        let game = Game::from_position(board(&[(2, 2)], &white, &[]), Player::Black, [ejected, 0]);
+        Encounter::new(game, alien_boss(), 1)
+    }
+
+    #[test]
+    fn the_phase_follows_the_ejections_credited_to_the_player_not_the_brood() {
+        let phases: Vec<usize> = (0..=5).map(|n| brood_after(n).phase()).collect();
+        assert_eq!(
+            phases,
+            vec![0, 0, 1, 1, 2, 2],
+            "P2 after 2 ejections, P3 after 4"
+        );
+        assert_eq!(
+            with_alien_marbles(3, 0, 1).phase(),
+            0,
+            "few marbles left, none ejected"
+        );
     }
 
     #[test]
     fn p2_lays_every_boss_turn_up_to_the_cap() {
-        let mut enc = with_alien_marbles(5, 1);
+        let mut enc = with_alien_marbles(5, 2, 1);
         assert_eq!(enc.phase(), 1);
         let mut counts = Vec::new();
         for _ in 0..8 {
@@ -412,7 +445,7 @@ mod tests {
 
     #[test]
     fn p3_eggs_hatch_after_3_player_turns() {
-        let mut enc = with_alien_marbles(3, 1);
+        let mut enc = with_alien_marbles(3, 4, 1);
         assert_eq!(enc.phase(), 2);
         quiet(&mut enc);
         quiet(&mut enc);
