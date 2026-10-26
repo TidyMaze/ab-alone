@@ -32,6 +32,17 @@ describe('the heat pulse of the shell (#509)', () => {
     expect(Math.max(...seen)).toBeLessThanOrEqual(HEAT.peak);
   });
 
+  // Bug #716: the browser checks hold the pulse at a phase instead of waiting for it in real time; half a period in is
+  // its peak.
+  it('holds at the phase window.__holdPulse sets, still off when the pulse is', async () => {
+    const game = await bootWith(ON);
+    game.hook('__holdPulse', HEAT.period / 2);
+    expect(glows(game)).toEqual(Array(8).fill(HEAT.peak));
+    game.openSettings();
+    document.getElementById('setting-reduced-motion')!.click();
+    expect(glows(game)).toEqual(Array(8).fill(0));
+  });
+
   it.each([
     ['safe mode, on by default', { 'ab-alone.quality': 'high' }, {}],
     ['the low tier', { ...ON, 'ab-alone.quality': 'low' }, {}],

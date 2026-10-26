@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
+import { dailyFor, dailyTitle, utcDay } from './daily';
 import { boot, slowKeys, type Game } from './test/harness';
 
 // Boss fights and the daily challenge on the harness (decision #445, task #454): the boss list, Retry, the Goal control,
@@ -268,6 +269,23 @@ describe('main.ts daily challenge', () => {
     expect(game.hook('__plies')).toBe(0);
     expect(game.hook('__fight')).toEqual({ id: 'echo', seed, daily: { day: '2027-01-25', attempt: 2 } });
     expect(byId('hud').querySelector('.boss .daily')!.textContent).toBe('Daily challenge 2027-01-25 · attempt 2');
+  });
+
+  // Bug #715: each boss of the list, on a day it is the daily boss, is named on the button (the e2e layout check takes
+  // the widest name only).
+  it('names every boss of the list on a day it is the daily boss', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(DAY);
+    const game = await boot('?bot=off');
+    const names = [...byId('boss-list').querySelectorAll('button')].map((b) => b.textContent!); // in the order of boss_ids()
+    expect(names.length).toBeGreaterThan(1);
+    for (const name of names) {
+      let ms = DAY;
+      while (dailyFor(utcDay(ms), names).id !== name) ms += 86_400_000;
+      now.mockReturnValue(ms);
+      byId('daily').click(); // the start reads the day again, as the minute timer does
+      expect(byId('daily').textContent).toBe(dailyTitle(utcDay(ms), name));
+      expect(game.hud()).toContain(name);
+    }
   });
 
   it('Retry after 00:00 UTC starts the new day’s fight, its first attempt', async () => {

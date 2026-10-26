@@ -152,8 +152,8 @@ for (const deckName of DECK_NAMES) {
 }
 
 // Task #509: at the heat pulse's brightest the shell still reads 3:1 against the deck, on every deck: safe mode off on
-// the high tier, the start position measured as for #344. The shot is a draw asked for as the glow rises near its peak,
-// and the glow is still near it after the shot, so the frame drawn between is too (the pulse is smooth, period 4 s+).
+// the high tier, the start position measured as for #344. The pulse is held at its peak, half a period in, through a page
+// hook, then a draw is asked for: the shot never depends on frame timing (bug #716).
 for (const deckName of DECK_NAMES) {
   test(`${deckName}: the shell reads 3:1 against the deck at the heat pulse's brightest, task #509`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -167,22 +167,11 @@ for (const deckName of DECK_NAMES) {
     await page.mouse.move(2, 2); // no hover ghost
     await page.evaluate((d) => (window as any).__deck(d), deckName);
     await expect(page.locator('body')).toHaveAttribute('data-deck-set', deckName);
-    // Polled each frame: once the glow rises past 0.95 of its peak, ask for a draw there and then, and hand back the
-    // draws so far (plus one: 0 would keep the wait going).
-    const asked = await page.waitForFunction(
-      (peak) => {
-        const w = window as any;
-        const [glow, last] = [w.__shellPulse() as number, (w.__lastGlow ?? Infinity) as number];
-        w.__lastGlow = glow;
-        return glow > last && glow >= 0.95 * peak && (w.__drawNext() as number) + 1;
-      },
-      HEAT.peak,
-      { timeout: 10000 },
-    );
-    const draws = ((await asked.jsonValue()) as number) - 1;
+    await page.evaluate((t) => (window as any).__holdPulse(t), HEAT.period / 2);
+    const draws = await page.evaluate(() => (window as any).__drawNext() as number);
     await page.waitForFunction((n) => (window as any).__draws() > n, draws);
+    expect(await page.evaluate(() => (window as any).__shellPulse() as number)).toBe(HEAT.peak);
     const png = await page.screenshot({ path: testInfo.outputPath(`pulse-${deckName}.png`), type: 'png' });
-    expect(await page.evaluate(() => (window as any).__shellPulse() as number)).toBeGreaterThanOrEqual(0.9 * HEAT.peak);
     const deck = await boxMeans(page, png, DECK_CELLS);
     const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
     const ratios = (await boxMeans(page, png, SHELL_CELLS)).map((rgb) => contrastRatio(rgb, mean));

@@ -2504,6 +2504,11 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__fading = () => fading.map((f) => f.sprite.material.opacity);
 // Used by the browser checks to read the shell's heat pulse (#509).
 (window as unknown as Record<string, unknown>).__shellPulse = () => scarab.emissiveIntensity;
+// Used by the browser checks to hold the pulse `t` seconds into its cycle instead of following the clock (#716).
+let pulseHeld: number | null = null;
+(window as unknown as Record<string, unknown>).__holdPulse = (t: number) => {
+  pulseHeld = t;
+};
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
 (window as unknown as Record<string, unknown>).__converted = () =>
   engine instanceof Encounter ? parseCells(engine.converted()) : [];
@@ -3425,7 +3430,7 @@ renderer.setAnimationLoop((now) => {
   if (!reducedMotion()) for (const core of pulsarCores) core.rotation.y = now / 600;
   animateParticles(now);
   eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
-  scarab.emissiveIntensity = pulsing ? pulseAt(now / 1000) : 0;
+  scarab.emissiveIntensity = pulsing ? pulseAt(pulseHeld ?? now / 1000) : 0;
   turnConsole(now);
   tickLog(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
