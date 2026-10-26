@@ -129,6 +129,7 @@ import { formatScore } from './score';
 import { loadProgress, recordWin, saveProgress } from './progress';
 import { canEnter, roomAt, roomsOf, step, type Spot as HubSpot } from './hub';
 import { arrowCell, bumpLine, HUB_BOARD, hubHtml } from './hubview';
+import { createDoorGlyph } from './hubart';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
@@ -1379,6 +1380,7 @@ function applyPalette(): void {
 applyPalette();
 let hover: Axial | null = null;
 let hubAt: HubSpot | null = null; // where the marble stands while the hub is shown (#521), else null
+let hubHover: Axial | null = null; // cell hovered in the hub (#628), else null
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
 let bumped = ''; // Tally's line after the marble bumped a locked lift, until the next roll (#523)
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
@@ -1716,7 +1718,7 @@ function hud(extra = ''): void {
   backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
   if (hubAt) {
     delete document.body.dataset.over; // no end light over the hub
-    document.getElementById('hud')!.innerHTML = hubHtml(hubAt, bumped);
+    document.getElementById('hud')!.innerHTML = hubHtml(hubAt, bumped, hubHover);
     return;
   }
   if (royale) return royaleHud(royale);
@@ -2028,23 +2030,11 @@ function drawHub(at: HubSpot): void {
   sfx.setTension(0);
   for (const { cell, door } of roomsOf(at.deck)) {
     const p = axialTo3D(...cell);
-    const glyph = new THREE.Mesh(outlineGeometry, paleMaterial);
-    glyph.rotation.x = Math.PI / 2;
+    const open = door.kind === 'lift' && canEnter(door, beaten);
+    const glyph = createDoorGlyph(door, { open, cell });
     glyph.position.set(p.x, 0.02, p.z);
     marbles.add(glyph);
-    const open = door.kind === 'lift' && canEnter(door, beaten);
-    if (door.kind === 'lift') {
-      const arrow = new THREE.Mesh(arrowGeometry, targetMaterial);
-      arrow.rotation.set(-Math.PI / 2, ((cell[1] < 0 ? 1 : -1) * Math.PI) / 2, 0, 'YXZ'); // up or down the map
-      arrow.position.set(p.x, 0.02, p.z);
-      marbles.add(arrow);
-      lifts.push(`${door.to} ${open ? 'open' : 'locked'}`);
-    }
-    if (door.kind !== 'lift' || open) continue;
-    const bar = new THREE.Mesh(barGeometry, targetMaterial); // a bar across the ring: a lift locked (#522, #523)
-    bar.rotation.y = Math.PI / 4;
-    bar.position.set(p.x, 0.02, p.z);
-    marbles.add(bar);
+    if (door.kind === 'lift') lifts.push(`${door.to} ${open ? 'open' : 'locked'}`);
   }
   document.body.dataset.lifts = lifts.join(','); // read by the e2e tests
   const p = axialTo3D(...at.cell);
@@ -2165,7 +2155,15 @@ canvas.addEventListener('pointermove', (e) => {
     applyView();
     return;
   }
-  if (hubAt) return; // no ghost over the hub
+  if (hubAt) {
+    const next = cellAt(e);
+    if (next === hubHover) return;
+    hubHover = next;
+    if (hubHover) document.body.dataset.hubHover = `${hubHover[0]},${hubHover[1]}`;
+    else delete document.body.dataset.hubHover;
+    hud();
+    return;
+  }
   const next = cellAt(e);
   if (next === hover) return;
   hover = next;
@@ -2190,6 +2188,13 @@ function release(e: PointerEvent): void {
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
+canvas.addEventListener('pointerleave', () => {
+  if (hubAt && hubHover) {
+    hubHover = null;
+    delete document.body.dataset.hubHover;
+    hud();
+  }
+});
 
 canvas.addEventListener(
   'wheel',
@@ -2547,6 +2552,8 @@ shipButton.disabled = false; // listener ready (#146)
 function enterHub(at: HubSpot): void {
   roomOf = null;
   bumped = '';
+  hubHover = null;
+  delete document.body.dataset.hubHover;
   hubAt = at;
   evalBar.hidden = hintButton.hidden = exportButton.hidden = importButton.hidden = true; // no game on in the hub: a new game shows them again (#583, #589)
   analyst.stop();
@@ -2554,6 +2561,8 @@ function enterHub(at: HubSpot): void {
   refresh();
 }
 function walk(to: Axial): void {
+  hubHover = null;
+  delete document.body.dataset.hubHover;
   const progress = loadProgress(store);
   const from = hubAt!;
   hubAt = step(from, to, progress.beaten);
@@ -2592,6 +2601,8 @@ backButton.addEventListener('click', () => {
 });
 function leaveHub(): void {
   hubAt = null;
+  hubHover = null;
+  delete document.body.dataset.hubHover;
   delete document.body.dataset.hub;
   delete document.body.dataset.lifts;
 }

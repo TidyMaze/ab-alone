@@ -34,12 +34,64 @@ const DOORS: Record<Exclude<Door['kind'], 'lift'>, string> = {
   royale: 'Battle royale lobby',
 };
 
-/** The HUD plate in the hub: the deck, the room the marble stands on, and Tally's line when there is one. */
-export function hubHtml({ deck, cell }: Spot, tally = ''): string {
+const BOSS_NAMES: Record<string, string> = {
+  echo: 'The Echo',
+  hull: 'The Hull',
+  choir: 'The Choir',
+  chaplain: 'The Chaplain',
+  ballast: 'The Ballast Mind',
+};
+
+export function bossTitle(boss: string): string {
+  return BOSS_NAMES[boss] ?? 'Boss';
+}
+
+const DESCRIPTORS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, string> = {
+  bot: 'Practice match against AI',
+  hotseat: '2 players, one screen',
+  online: 'Peer-to-peer 1v1 match',
+  royale: 'Multi-player battle royale',
+  terminal: 'Ship archive and audio log',
+};
+
+/** Reachability hint for a hovered hub cell relative to the marble's position (#628). */
+export function reachabilityText(from: Axial, target: Axial): string {
+  if (from[0] === target[0] && from[1] === target[1]) return 'Current position';
+  const isNeighbour = neighbours(from).some(([q, r]) => q === target[0] && r === target[1]);
+  return isNeighbour ? 'Click to move' : 'Out of reach (roll closer)';
+}
+
+/** Name, purpose subtitle and reachability affordance of any hub cell hovered by the player (#628). */
+export function hubTargetText(at: Spot, hovered: Axial): { name: string; desc: string; reach: string } {
+  const door = roomAt(at.deck, hovered);
+  const name = !door
+    ? 'Deck floor'
+    : door.kind === 'lift'
+      ? `Lift to ${title(door.to)}`
+      : DOORS[door.kind];
+  const desc = !door
+    ? 'Open transit corridor'
+    : door.kind === 'boss'
+      ? `${bossTitle(door.boss)} (${title(at.deck)} boss)`
+      : door.kind === 'lift'
+        ? `Transit to ${title(door.to)}`
+        : DESCRIPTORS[door.kind];
+  const reach = reachabilityText(at.cell, hovered);
+  return { name, desc, reach };
+}
+
+/** The HUD plate in the hub: the deck, the room the marble stands on, Tally's line, and target inspection (#628). */
+export function hubHtml({ deck, cell }: Spot, tally = '', hover: Axial | null = null): string {
   const door = roomAt(deck, cell);
   const room = !door ? '' : door.kind === 'lift' ? `Lift to ${title(door.to)}` : DOORS[door.kind];
   const line = tally ? `<div class="tally">${tally}</div>` : '';
-  return `<div class="turn"><span>Ship · ${title(deck)}</span></div><small>${room}</small>${line}`;
+  const preview = hover
+    ? (() => {
+        const { name, desc, reach } = hubTargetText({ deck, cell }, hover);
+        return `<div class="hub-preview">Target: ${name} · ${desc} <span class="affordance">(${reach})</span></div>`;
+      })()
+    : '';
+  return `<div class="turn"><span>Ship · ${title(deck)}</span></div><small>${room}</small>${line}${preview}`;
 }
 
 /** Tally's line when a roll to `to` bumps a locked lift next to the marble (#523), else ''. */
