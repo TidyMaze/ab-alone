@@ -38,8 +38,15 @@ pub struct Repulsion {
 /// The assignment at the end of ply `ply`: after every `MAGNETIZER_ASSIGN_EVERY[phase]`th player
 /// turn (odd plies, Black moves first), none after a boss ply.
 fn special(ply: u32, phase: usize) -> Option<u8> {
-    let _ = (ply, phase);
-    None // stub
+    let assigns = ply % 2 == 1
+        && ply
+            .div_ceil(2)
+            .is_multiple_of(MAGNETIZER_ASSIGN_EVERY[phase]);
+    assigns.then_some(if phase >= MAGNETIZER_ALL_PHASE {
+        MAGNETIZER_ASSIGN_ALL
+    } else {
+        MAGNETIZER_ASSIGN_ONE
+    })
 }
 
 /// Black marbles of `board`, in `q` then `r` order.
@@ -54,8 +61,37 @@ fn player_marbles(board: &Board) -> Vec<P> {
 /// The assignment: one marble picked by `seed` takes the sign fewer of the player's other marbles
 /// hold (a tie: the seed picks), or every marble gets a new sign, half and half, shuffled.
 fn hook(board: &Board, id: u8, seed: u64) -> Board {
-    let _ = (id, seed, player_marbles(board));
-    board.clone() // stub
+    let cells = player_marbles(board);
+    let n = cells.len();
+    let mut state = mix(seed);
+    let mut out = board.clone();
+    if id == MAGNETIZER_ASSIGN_ONE {
+        let pick = cells[(state % n as u64) as usize];
+        let mut poles: Vec<_> = board
+            .polarities()
+            .iter()
+            .copied()
+            .filter(|&(c, _)| c != pick)
+            .collect();
+        let lean: i32 = poles.iter().map(|&(_, s)| i32::from(s)).sum();
+        let sign = match lean.signum() {
+            0 => [1, -1][(mix(state) % 2) as usize],
+            s => -s as i8,
+        };
+        poles.push((pick, sign));
+        out.set_polarities(poles);
+    } else {
+        let mut signs = [vec![1; n / 2], vec![-1; n / 2]].concat();
+        if n % 2 == 1 {
+            signs.push([1, -1][(state % 2) as usize]);
+        }
+        for i in (1..n).rev() {
+            state = mix(state);
+            signs.swap(i, (state % (i as u64 + 1)) as usize);
+        }
+        out.set_polarities(cells.into_iter().zip(signs).collect());
+    }
+    out
 }
 
 /// The repelling pairs of `board`: adjacent polarized marbles of opposite signs, in `q` then `r`
@@ -124,19 +160,30 @@ pub(crate) fn settle(
     seed: u64,
     seen: &mut dyn FnMut(&Board, [P; 2]),
 ) -> (Board, [u8; 2]) {
-    let _ = (
-        seed,
-        seen,
-        pairs(board),
-        repel as fn(&Board, [P; 2]) -> (Board, [u8; 2]),
-    );
-    (board.clone(), [0, 0]) // stub
+    let (mut out, mut credits, mut state) = (board.clone(), [0, 0], seed);
+    for _ in 0..MAGNETIZER_SETTLE_CAP {
+        let pairs = pairs(&out);
+        if pairs.is_empty() {
+            break;
+        }
+        state = mix(state);
+        let pair = pairs[(state % pairs.len() as u64) as usize];
+        seen(&out, pair);
+        let (next, gained) = repel(&out, pair);
+        out = next;
+        credits = [credits[0] + gained[0], credits[1] + gained[1]];
+    }
+    (out, credits)
 }
 
 /// The polarities of `before` carried by `mv`, kept on the Black marbles of `after`.
 pub(crate) fn carried_poles(before: &Board, mv: &Move, after: &Board) -> Vec<(P, i8)> {
-    let _ = (before, mv, after, carried_marks(before, mv, &[]));
-    Vec::new() // stub
+    let cells: Vec<P> = before.polarities().iter().map(|&(c, _)| c).collect();
+    carried_marks(before, mv, &cells)
+        .into_iter()
+        .zip(before.polarities().iter().map(|&(_, s)| s))
+        .filter(|&((q, r), _)| after.get(q, r) == Some(Cell::Black))
+        .collect()
 }
 
 /// What a ply does in the boss search: the polarities follow the move, then the board settles.
