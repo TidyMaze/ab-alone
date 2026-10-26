@@ -83,7 +83,8 @@ describe('main.ts The Overseer (#635)', () => {
   it('reduced motion fades the burns, and the boss pushing the 6th core in wins the fight for the player', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightOverseer(game);
-    plies(game, 0, 24);
+    plies(game, 0, 23);
+    for (const [q, r] of FIXTURE[23]!) game.click(q, r); // the boss pushes the core (2, -1) onto (4, -1)
     expect(body().burns).toBe('1');
     expect(body().ejecting).toBe('fade');
     expect(game.hud()).toContain('Victory');

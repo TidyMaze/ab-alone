@@ -599,9 +599,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   fight.
 - **Moves never change** except the three rules above (the Overseer blocks, a core never crosses
   the rim, the burns between plies, `rules.md` §10).
-- **Tell**: the Overseer is a dark pedestal with a pale eye; a core is a pale marble with a dark
-  ring, a shape and not a colour (3:1 on both glass skins). Each incinerator wears a vent decal of
-  dark slots on its cell. A burning marble sinks into its vent and fades (reduced motion: a fade).
+- **Tell**: the Overseer is a dark hexagonal pedestal with a pale eye; a core is a pale marble with
+  a dark eye on top, a shape and not a colour (3:1 on both glass skins). Each incinerator wears a
+  warm disc crossed by 3 dark slots on its cell. A burning marble sinks into its vent and fades (reduced motion: a fade).
   The HUD line reads "Neurotoxin 25 % · 30 turns left", then one sarcastic line of the Overseer
   that changes with the level, every 20 %: "Take your time. The neurotoxin will wait.", "The
   neurotoxin is now at a level we call festive.", "You are doing very well. For a corpse.", "Most
