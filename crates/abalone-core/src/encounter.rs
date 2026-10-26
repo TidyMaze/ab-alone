@@ -13,6 +13,7 @@ pub mod hull;
 pub mod ladder;
 pub mod magnetizer;
 pub mod pulsar;
+pub mod overseer;
 pub mod railyard;
 pub mod telemetry;
 
@@ -64,6 +65,10 @@ pub struct Encounter {
     assigned: Vec<(i32, i32)>,
     /// The board just before the last ply's hook and the special id it fired with.
     hooked: Option<(Board, u8)>,
+    /// The marbles the last ply's hook removed, with what they were (The Overseer's burns).
+    removed: Vec<((i32, i32), Cell)>,
+    /// Player turns before the boss wins, for a fight on a clock (The Overseer's neurotoxin).
+    turn_limit: Option<u32>,
 }
 
 /// Marbles of `color` on `board`.
@@ -154,6 +159,8 @@ impl Encounter {
             repulsions: Vec::new(),
             assigned: Vec::new(),
             hooked: None,
+            removed: Vec::new(),
+            turn_limit: None,
         }
     }
 
@@ -161,6 +168,23 @@ impl Encounter {
     /// last ply fired no hook (The Pulsar draws its pulse from it).
     pub fn hooked(&self) -> Option<&(Board, u8)> {
         self.hooked.as_ref()
+    }
+
+    /// The same fight, lost by the player at the end of its `turns`-th turn when it has not won.
+    pub fn with_turn_limit(mut self, turns: u32) -> Self {
+        self.turn_limit = Some(turns);
+        self
+    }
+
+    /// Player turns left before the boss wins on the clock, `None` for a fight with no clock.
+    pub fn turns_left(&self) -> Option<u32> {
+        let played = (self.game.history().len() as u32).div_ceil(2);
+        self.turn_limit.map(|n| n.saturating_sub(played)).and(None)
+    }
+
+    /// The marbles the last ply's hook removed, with what they were, in board order.
+    pub fn removed(&self) -> &[((i32, i32), Cell)] {
+        &self.removed
     }
 
     /// The repulsions of the last ply, in the order they happened (The Magnetizer).
@@ -204,6 +228,7 @@ impl Encounter {
         self.repulsions.clear();
         self.assigned.clear();
         self.hooked = None;
+        self.removed.clear();
         let ply = self.game.history().len() as u64;
         let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
         self.settle(seed);

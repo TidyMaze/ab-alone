@@ -112,15 +112,20 @@ pub(crate) fn cells() -> impl Iterator<Item = (i32, i32)> {
     cells_of(RADIUS)
 }
 
-/// Board code of `(q, r)`, see the module docs.
-pub(crate) fn cell_code(board: &Board, q: i32, r: i32) -> u8 {
-    match board.get(q, r) {
+/// Board code of a cell's content, `None` for a vanished cell, see the module docs.
+pub(crate) fn code(cell: Option<Cell>) -> u8 {
+    match cell {
         Some(Cell::Empty) => 0,
         Some(Cell::Black) => 1,
         Some(Cell::White) => 2,
         Some(seat) => seat as u8 + 1,
         None => VANISHED,
     }
+}
+
+/// Board code of `(q, r)`, see the module docs.
+pub(crate) fn cell_code(board: &Board, q: i32, r: i32) -> u8 {
+    code(board.get(q, r))
 }
 
 /// The cells of a board in board order, see the module docs: the 61, then the outer ring of a
