@@ -224,11 +224,12 @@ mod tests {
     }
 
     #[test]
-    fn the_fight_starts_with_8_alien_marbles_against_14_and_no_egg() {
+    fn the_fight_starts_with_7_alien_marbles_against_14_and_no_egg() {
         let enc = alien_start(0);
         let b = enc.game().board();
         assert_eq!(marbles(b, Cell::Black), 14);
-        assert_eq!(marbles(b, Cell::White), 8);
+        assert_eq!(marbles(b, Cell::White), 7);
+        assert_eq!(b.get(1, -2), Some(Cell::Empty), "the front marble is dropped");
         assert!(ALIEN_START
             .iter()
             .all(|&(q, r)| b.get(q, r) == Some(Cell::White)));
@@ -285,6 +286,51 @@ mod tests {
         picked.sort();
         picked.dedup();
         assert!(picked.len() > 10, "the seed spreads the eggs");
+    }
+
+    /// Hex distance between two cells.
+    fn distance(a: P, b: P) -> i32 {
+        let (dq, dr) = (a.0 - b.0, a.1 - b.1);
+        dq.abs().max(dr.abs()).max((dq + dr).abs())
+    }
+
+    #[test]
+    fn an_egg_goes_within_3_cells_of_a_player_marble_when_such_a_cell_is_free() {
+        let (a, b) = ((-4, 0), (4, -4));
+        let start = board(&[a, b], &[(0, 0)], &[]);
+        let mut picked = Vec::new();
+        for seed in 0..64 {
+            let out = hook(&start, 4, seed);
+            let cell = out.eggs()[0].0;
+            assert!(
+                distance(cell, a).min(distance(cell, b)) <= 3,
+                "seed {seed}: {cell:?}"
+            );
+            picked.push(cell);
+        }
+        picked.sort();
+        picked.dedup();
+        assert!(picked.len() > 10, "the seed spreads the eggs");
+    }
+
+    #[test]
+    fn an_egg_goes_on_any_free_cell_when_none_is_near_a_player_marble() {
+        let start = board(&[], &[(0, 0)], &[]);
+        let far = (0..64)
+            .map(|seed| hook(&start, 4, seed).eggs()[0].0)
+            .any(|c| distance(c, (-4, 0)) > 3 && distance(c, (4, 0)) > 3);
+        assert!(far, "with no player marble the whole board is free");
+        let mut walled = board(&[(0, 0)], &[], &[]);
+        let near: Vec<P> = cells()
+            .filter(|&c| walled.get(c.0, c.1).is_some() && distance(c, (0, 0)) <= 3)
+            .collect();
+        for (q, r) in near.into_iter().filter(|&c| c != (0, 0)) {
+            walled.set(q, r, Cell::White);
+        }
+        for seed in 0..16 {
+            let cell = hook(&walled, 4, seed).eggs()[0].0;
+            assert_eq!(distance(cell, (0, 0)), 4, "the only free cells are far");
+        }
     }
 
     #[test]
