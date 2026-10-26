@@ -222,3 +222,36 @@ describe('the breach, the seats out and the placement (#503)', () => {
     for (const gone of ['.initiative', '.reveal', '.breach']) expect(document.querySelector(gone), gone).toBeNull();
   });
 });
+
+describe('the plate of an online battle royale (#504)', () => {
+  const names = ['Player 1', 'You', 'Bot 3', 'Player 4', 'Bot 5', 'Bot 6'];
+
+  it('names each seat as the room has it, and shows the status line', () => {
+    const log = parseLog([1, 0, 2, 1, 1, 0, -1])!;
+    const status = { text: 'Your order: a move or Hold', tone: 'here' as const };
+    document.body.innerHTML = royaleHtml(log, { names, you: 1, status });
+    expect([...document.querySelectorAll('.initiative li')].map((li) => li.textContent)).toEqual([
+      'You', 'Bot 3', 'Player 4', 'Bot 5', 'Bot 6', 'Player 1',
+    ]);
+    expect([...document.querySelectorAll('.reveal li')].map((li) => li.textContent)).toEqual(['Player 1: held, ejected You', 'You: moved']);
+    const line = document.querySelector('.presence')!;
+    expect(line.textContent).toBe('Your order: a move or Hold');
+    expect(line.className).toBe('presence here');
+  });
+
+  it('ends from our own seat: its place, the others by their names', () => {
+    const placed = standings([2, 6, 1, 10, 2, 6, 2, 6, 2, 6, 2, 6]);
+    document.body.innerHTML = royaleHtml(null, { names, you: 1, standings: placed, status: { text: '3 players, game over', tone: 'watching' } });
+    expect(document.querySelector('.turn')!.textContent).toBe('You win');
+    expect(document.querySelector('.placement li')!.textContent).toBe('1st You · 10 points');
+    expect(document.querySelector('.presence')!.textContent).toBe('3 players, game over');
+  });
+
+  it('shows a spectator no end banner: the plate goes on with the last round', () => {
+    const placed = standings([2, 6, 1, 10, 2, 6, 2, 6, 2, 6, 2, 6]);
+    document.body.innerHTML = royaleHtml(null, { names, you: -1, standings: placed });
+    expect(document.querySelector('.end')).toBeNull();
+    expect(document.querySelector('.presence')).toBeNull();
+  });
+});
+
