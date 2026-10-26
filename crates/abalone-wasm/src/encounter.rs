@@ -219,7 +219,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    2 // stub
+    3 // 3: The Magnetizer's new rhythm, announce, flip and spent pairs (#671)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -460,7 +460,10 @@ impl Encounter {
     /// The marble announced for the next assignment and its coming sign (The Magnetizer) as
     /// `[q, r, sign]`, empty when none is announced or the marble left the board.
     pub fn announce(&self) -> Vec<i32> {
-        Vec::new() // stub
+        match self.fight.game().board().announce() {
+            Some((Some((q, r)), sign)) => vec![q, r, i32::from(sign)],
+            _ => Vec::new(),
+        }
     }
 
     /// The player marbles whose polarity the last ply set (The Magnetizer), a cell list.

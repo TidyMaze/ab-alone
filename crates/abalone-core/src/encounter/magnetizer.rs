@@ -41,8 +41,13 @@ pub struct Repulsion {
 /// moves first, so ply `2t - 2` ends just before turn `t`). It announces when the turn after that
 /// one is an assignment turn of `phase`.
 fn special(ply: u32, phase: usize) -> Option<u8> {
-    let _ = (ply, phase);
-    None // stub
+    let next = ply / 2 + 2;
+    ply.is_multiple_of(2)
+        .then_some(if next.is_multiple_of(MAGNETIZER_ASSIGN_EVERY[phase]) {
+            MAGNETIZER_ANNOUNCE
+        } else {
+            MAGNETIZER_TURN
+        })
 }
 
 /// Black marbles of `board`, in `q` then `r` order.
@@ -57,16 +62,38 @@ fn player_marbles(board: &Board) -> Vec<P> {
 /// A player marble picked by `state` and its coming sign: the other sign when it has one, a coin
 /// when it has none.
 fn pick(board: &Board, state: u64) -> (P, i8) {
-    let _ = (state, player_marbles(board));
-    ((0, 0), 1) // stub
+    let cells = player_marbles(board);
+    let cell = cells[(state % cells.len() as u64) as usize];
+    let sign = match board.polarities().iter().find(|p| p.0 == cell) {
+        Some(&(_, s)) => -s,
+        None => [1, -1][(mix(state) % 2) as usize],
+    };
+    (cell, sign)
 }
 
 /// The start of a player turn: the announced marble takes its sign (a marble picked by `seed`
 /// when the announced one left the board), then, on `MAGNETIZER_ANNOUNCE`, the next marble and
 /// its sign are announced.
 fn hook(board: &Board, id: u8, seed: u64) -> Board {
-    let _ = (id, seed);
-    board.clone() // stub
+    let mut out = board.clone();
+    let state = mix(seed);
+    if let Some((cell, sign)) = board.announce() {
+        let (cell, sign) = cell.map_or_else(|| pick(board, state), |c| (c, sign));
+        let mut poles: Vec<_> = board
+            .polarities()
+            .iter()
+            .copied()
+            .filter(|p| p.0 != cell)
+            .collect();
+        poles.push((cell, sign));
+        out.set_polarities(poles);
+    }
+    let next = (id == MAGNETIZER_ANNOUNCE).then(|| {
+        let (cell, sign) = pick(&out, mix(mix(state)));
+        (Some(cell), sign)
+    });
+    out.set_announce(next);
+    out
 }
 
 /// The repelling pairs of `board`: adjacent polarized marbles of opposite signs, in `q` then `r`
@@ -124,6 +151,7 @@ fn repel(board: &Board, [a, b]: [P; 2]) -> (Board, [u8; 2]) {
     let poles = board
         .polarities()
         .iter()
+        .filter(|&&(c, _)| c != a && c != b)
         .filter_map(|&(c, s)| shift(c).map(|to| (to, s)))
         .collect();
     out.set_polarities(poles);
@@ -167,8 +195,12 @@ pub(crate) fn carried_poles(before: &Board, mv: &Move, after: &Board) -> Vec<(P,
 
 /// The announce of `before` carried by `mv`: its cell `None` once the marble left the board.
 pub(crate) fn carried_announce(before: &Board, mv: &Move, after: &Board) -> Option<Announce> {
-    let _ = (before, mv, after);
-    None // stub
+    before.announce().map(|(cell, sign)| {
+        let cell = cell
+            .map(|c| carried_marks(before, mv, &[c])[0])
+            .filter(|&(q, r)| after.get(q, r) == Some(Cell::Black));
+        (cell, sign)
+    })
 }
 
 /// What a ply does in the boss search: the polarities follow the move, then the board settles.
@@ -348,8 +380,8 @@ mod tests {
         let cell = cell.unwrap();
         assert!(enc.game().board().polarities().is_empty());
         assert_eq!(enc.game().board().get(cell.0, cell.1), Some(Cell::Black));
-        enc.play(&mv(&[(1, 0)], Direction::SW)).unwrap();
-        let moved = if cell == (1, 0) { (0, 1) } else { cell };
+        enc.play(&mv(&[cell], NE)).unwrap(); // the announced marble itself moves
+        let moved = (cell.0 + 1, cell.1 - 1);
         assert_eq!(
             enc.game().board().announce(),
             Some((Some(moved), sign)),
@@ -421,7 +453,7 @@ mod tests {
         );
         let next = hook(&plain, MAGNETIZER_ANNOUNCE, 3);
         assert!(next.polarities().is_empty());
-        assert!(matches!(next.announce(), Some((Some((0, 0)), _))));
+        assert_eq!(next.announce().map(|a| a.0), Some(Some((0, 0))));
     }
 
     #[test]
