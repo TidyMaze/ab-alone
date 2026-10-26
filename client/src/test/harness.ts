@@ -115,6 +115,15 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     undo.push(() => clearInterval(id));
     return id;
   });
+  // Timeouts too: one left pending (a bot reply, the joiner's 30 s signaling timeout) would fire in a later test, or log
+  // after the file's environment closed (#623). Taken at boot, not before: a test may spy on setTimeout first.
+  const later = setTimeout;
+  const cancel = clearTimeout;
+  vi.stubGlobal('setTimeout', (...args: Parameters<typeof setTimeout>) => {
+    const id = later(...args);
+    undo.push(() => cancel(id));
+    return id;
+  });
 
   // The renderer draws nothing: it keeps the animation loop for frame() and counts the draws.
   let loop: ((now: number) => void) | null = null;
