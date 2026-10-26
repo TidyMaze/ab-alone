@@ -618,3 +618,52 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   await expect(b.locator('body')).toHaveAttribute('data-handover', 'done'); // the spectator acknowledged it
   for (const page of rest) await page.context().close();
 });
+
+// Co-op (docs/specs/coop-boss.md, #529): no menu entry yet (#530), page A opens the room with the __coop hook. Both
+// pages fight The Echo together: each human move is followed on every page by the boss reply its own engine computes.
+test('a co-op boss fight: both pages play the boss reply to each human move, the seats take turns, #529', async ({ browser }) => {
+  const [a, b] = await Promise.all([0, 1].map(async () => (await browser.newContext()).newPage()));
+  await calm(a, b);
+  await room({ a, b });
+  const history = (page: Page) => page.evaluate(() => (window as any).__history());
+  // The first legal one-marble move forward of Black, as two clicks: its marble, then the cell it goes to.
+  const forward = (page: Page) =>
+    page.evaluate(() => {
+      const mv = (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 2 || m.dir === 4));
+      const [q, r] = mv.cells[0];
+      const [dq, dr] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]][mv.dir]!;
+      (window as any).__click(q, r);
+      (window as any).__click(q + dq, r + dr);
+    });
+
+  await a.goto('./?bot=off&net=hook');
+  await a.locator('canvas').waitFor();
+  await expect(a.locator('#hud')).not.toBeEmpty();
+  await a.evaluate(() => (window as any).__coop('echo', 7));
+  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  expect(hash).toMatch(/^#room=[\w-]+&boss=echo&seed=7$/);
+  await b.goto(`./?bot=off&net=hook${hash}`);
+  await b.locator('canvas').waitFor();
+  await open(a);
+  await open(b);
+  await seat(b, 'player');
+  await expect(a.locator('body')).toHaveAttribute('data-opponent', 'here');
+  await expect(a.locator('#hud')).toContainText('The Echo');
+  await expect(b.locator('#hud')).toContainText('The Echo');
+
+  await forward(b); // seat 1 plays first: a move from seat 2 changes nothing
+  expect(await plies(b)).toBe(0);
+  await forward(a);
+  await expect.poll(() => plies(a)).toBe(2);
+  await expect.poll(() => plies(b)).toBe(2);
+  await forward(a); // now seat 2's ply
+  expect(await plies(a)).toBe(2);
+  await forward(b);
+  await expect.poll(() => plies(a)).toBe(4);
+  await expect.poll(() => plies(b)).toBe(4);
+  expect(await history(a)).toEqual(await history(b));
+  await expect(a.locator('#hud')).not.toContainText('refused');
+  await expect(b.locator('#hud')).not.toContainText('refused');
+  await a.context().close();
+  await b.context().close();
+});
