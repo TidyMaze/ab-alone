@@ -469,4 +469,32 @@ describe('main.ts boss tells', () => {
     expect(hull).toBeGreaterThan(0);
     expect(echo).toBeGreaterThan(hull); // The Echo announces its mirror reply
   });
+
+  it('The Ballast Mind announces echo only from phase 3 (#574)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightBoss(game, 'The Ballast Mind');
+    const mv = forward(game);
+    const [q, r] = mv.cells[0]!;
+    const [dq, dr] = DIRS[mv.dir]!;
+    game.click(q, r);
+    hover(game, [q + dq, r + dr]);
+    expect(Number(body().ghosts)).toBe(1);
+
+    const { Encounter } = await import('abalone-wasm');
+    const echoRecord = new Int32Array([1, 5, 2, -3, 0, 0, 0, 0]);
+    vi.spyOn(Encounter.prototype, 'tell_move').mockReturnValue(echoRecord);
+    hover(game, null);
+    hover(game, [q + dq, r + dr]);
+    expect(Number(body().ghosts)).toBeGreaterThan(1);
+  });
+
+  it('The Ballast Mind fight sets view for radius 5 and reset-view restores it (#573)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightBoss(game, 'The Ballast Mind');
+    const v = game.hook<{ distance: number }>('__view');
+    expect(v.distance).toBeCloseTo((5 / 4) * Math.hypot(11, 8));
+    byId('reset-view').click();
+    const vReset = game.hook<{ distance: number }>('__view');
+    expect(vReset.distance).toBeCloseTo((5 / 4) * Math.hypot(11, 8));
+  });
 });

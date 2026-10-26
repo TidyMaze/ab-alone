@@ -504,3 +504,53 @@ test('start The Ballast Mind: its radius 5 board on the Bridge, its shells in th
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('ballast-start.png') });
 });
+
+// Task #573: The Ballast Mind default view and reset view frame its whole radius 5 board
+test('The Ballast Mind radius 5 board frames in 1280x720 and phone upright, task #573', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Ballast Mind' }).click();
+  await expect(page.locator('#hud')).toContainText('The Ballast Mind');
+
+  // Verify all radius 5 cells fit within the 1280x720 viewport
+  const cells = await page.evaluate(() => {
+    const list: [number, number][] = [];
+    for (let q = -5; q <= 5; q++) {
+      for (let r = -5; r <= 5; r++) {
+        if (Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) <= 5) {
+          list.push([q, r]);
+        }
+      }
+    }
+    const toScreen = (window as any).__cellToScreen;
+    return list.map(([q, r]) => ({ q, r, ...toScreen(q, r) }));
+  });
+  expect(cells.every((c) => c.x > 30 && c.x < 1250 && c.y > 30 && c.y < 690)).toBe(true);
+
+  // Reset view keeps the framing
+  await page.getByRole('button', { name: 'Reset view' }).click();
+  const resetCells = await page.evaluate(() => {
+    const toScreen = (window as any).__cellToScreen;
+    return [toScreen(0, 5), toScreen(0, -5)];
+  });
+  expect(resetCells[0].y).toBeLessThan(690);
+  expect(resetCells[1].y).toBeGreaterThan(30);
+
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('ballast-view-1280x720.png') });
+
+  // On a phone held upright
+  await page.setViewportSize({ width: 375, height: 812 });
+  await freshDraw(page);
+  const phoneCells = await page.evaluate(() => {
+    const toScreen = (window as any).__cellToScreen;
+    return [toScreen(-5, 0), toScreen(5, 0), toScreen(0, 5)];
+  });
+  expect(phoneCells[0].x).toBeGreaterThan(10);
+  expect(phoneCells[1].x).toBeLessThan(365);
+  expect(phoneCells[2].y).toBeLessThan(780);
+  await page.screenshot({ path: testInfo.outputPath('ballast-view-phone.png') });
+});

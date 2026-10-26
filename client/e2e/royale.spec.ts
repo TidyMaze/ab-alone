@@ -121,3 +121,19 @@ test('each seat wears its own glyph on its marbles and beside its name on the pl
     'diamond',
   ]);
 });
+
+test('battle royale arena is fully visible with fog at arena rim (#503)', async ({ page }) => {
+  await ready(page);
+  // First enter hub to verify entering royale from hub doesn't inherit hub fog radius
+  await openModes(page);
+  await page.getByRole('button', { name: 'Ship' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-hub');
+  // Then enter battle royale
+  await openModes(page);
+  await page.getByRole('button', { name: 'Battle royale' }).click();
+  await expect(page.locator('#hud .turn')).toHaveText('Battle royale · Round 1');
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
+  // Check that the top rim cells are within viewport and rendered
+  const p = await page.evaluate(() => (window as any).__cellToScreen(0, -4));
+  expect(p.y).toBeGreaterThan(50);
+});

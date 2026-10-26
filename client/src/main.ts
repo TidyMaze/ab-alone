@@ -151,6 +151,7 @@ let engine: Engine | Encounter = new Engine();
 const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
 let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
+const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 // The offline battle royale (#502) while it is on, else null, and the player's order picked for its round (empty: none).
 let royale: Royale | null = null;
@@ -1912,7 +1913,7 @@ canvas.addEventListener(
 );
 
 document.getElementById('reset-view')!.addEventListener('click', () => {
-  view = resetView();
+  view = resetView(activeRadius());
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
@@ -2051,6 +2052,7 @@ function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height
 (window as unknown as Record<string, unknown>).__history = () => history;
 // Used by the browser checks to read the boss, seed and daily attempt of the running fight.
 (window as unknown as Record<string, unknown>).__fight = () => fight;
+(window as unknown as Record<string, unknown>).__view = () => view;
 
 // Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
 (window as unknown as Record<string, unknown>).__hint = () => hint.shown(here());
@@ -2148,6 +2150,8 @@ function newGame(): void {
   selected = [];
   thinking = false; // the bot's reply to the old game is dropped (botTurn)
   void saves.clear();
+  view = resetView(4);
+  applyView();
   refresh();
   analyse(); // the bar follows the new game, an answer for the old one is dropped
 }
@@ -2176,6 +2180,8 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   newGameButton.hidden = true;
   document.body.dataset.boss = id;
   applyDeck(deckOf('boss', id));
+  view = resetView(activeRadius());
+  applyView();
   refresh();
 }
 for (const id of boss_ids()) {
@@ -2517,18 +2523,21 @@ function startRoyale(file: RoyaleFile): void {
   moveModes('pick');
   for (const control of [newGameButton, retryButton, goalButton, hintButton, exportButton, importButton, resultCard]) control.hidden = true;
   lockButton.hidden = holdButton.hidden = false;
+  fogRadius = 4.2;
   applyDeck(deckOf('royale'));
   refresh();
 }
 function leaveRoyale(): void {
   royale = null;
   arena.visible = false;
+  fogRadius = frame?.radius ?? RADIUS;
   for (const mesh of [plate, rim.near, rim.far]) mesh.visible = true;
   lockButton.hidden = holdButton.hidden = true;
   delete document.body.dataset.royale;
 }
 // The arena in place of the board: the cells left, each seat's marbles, the selection and its targets.
 function drawRoyale(game: Royale): void {
+  fogRadius = 4.2;
   for (const mesh of [...discs, plate, rim.near, rim.far]) mesh.visible = false;
   for (const group of [marbles, ghosts, notches, ...tallies, arenaMarbles]) group.clear();
   marbleAt.clear();
