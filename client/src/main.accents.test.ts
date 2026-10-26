@@ -7,8 +7,7 @@ import { boot, type Game } from './test/harness';
 
 // The boss accents of main.ts (#507): in boss mode the shells of the boss side wear their boss's accent (marbles.ts), a
 // child mesh kept upright on the shell whatever its turn, through every palette, safe mode and clear board. The scene
-// the page draws is caught when main.ts builds it, so a test reads what the renderer would draw. The Ballast Mind's wire
-// wrap is data in marbles.ts until the boss list has The Ballast Mind (#564).
+// the page draws is caught when main.ts builds it, so a test reads what the renderer would draw.
 
 type Mesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 type Worn = { cell: Axial; accent: string };
@@ -45,17 +44,18 @@ const upright = (mesh: THREE.Object3D): boolean => {
 
 describe('main.ts boss accents (#507)', () => {
   it.each([
-    ['The Hull', 'hull', 'crown'],
-    ['The Chaplain', 'chaplain', 'wax'],
-  ])('against %s every shell of the boss side wears its accent, the glass none', async (name, id, accent) => {
+    ['The Hull', 'hull', 'crown', 14],
+    ['The Chaplain', 'chaplain', 'wax', 14],
+    ['The Ballast Mind', 'ballast', 'wire', 16], // #564
+  ])('against %s every shell of the boss side wears its accent, the glass none', async (name, id, accent, shells) => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     fightBoss(game, name);
     const worn = game.hook<Worn[]>('__accents');
-    expect(worn).toHaveLength(14);
+    expect(worn).toHaveLength(shells);
     expect(new Set(worn.map((w) => w.accent))).toEqual(new Set([accent]));
     const drawn = accents(scene());
-    expect(drawn).toHaveLength(14);
+    expect(drawn).toHaveLength(shells);
     for (const mesh of drawn) {
       expect(mesh.parent).toBeInstanceOf(THREE.Mesh);
       expect((mesh.parent as Mesh).material).not.toBeInstanceOf(THREE.MeshPhysicalMaterial); // a shell, not the glass

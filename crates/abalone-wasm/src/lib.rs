@@ -748,6 +748,9 @@ impl Default for Engine {
 mod tests {
     use super::*;
     use abalone_core::board::Board;
+    use abalone_core::encounter::ballast::{
+        BALLAST_BOSS_START, BALLAST_PILLARS, BALLAST_PLAYER_START,
+    };
     use abalone_core::encounter::choir::{ALTO_START, BASS_START, TENOR_START};
     use abalone_core::moves::{legal_moves, Player};
 
@@ -960,13 +963,15 @@ mod tests {
                 "echo".to_string(),
                 "hull".to_string(),
                 "choir".to_string(),
-                "chaplain".to_string()
+                "chaplain".to_string(),
+                "ballast".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
         assert_eq!(boss_name("hull"), Some("The Hull".to_string()));
         assert_eq!(boss_name("choir"), Some("The Choir".to_string()));
         assert_eq!(boss_name("chaplain"), Some("The Chaplain".to_string()));
+        assert_eq!(boss_name("ballast"), Some("The Ballast Mind".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1221,11 +1226,63 @@ mod tests {
     #[test]
     fn the_same_seed_and_moves_give_the_same_boss_replies_for_every_boss() {
         // The daily challenge (#195) gives everyone one seed a day: the fight must replay the same.
-        for id in boss_ids() {
+        // The Ballast Mind searches 150 000 nodes a move, minutes in a debug build: ballast.rs
+        // replays it on a small budget (`same_seed_gives_the_same_game`).
+        for id in boss_ids().into_iter().filter(|id| id != "ballast") {
             let first = replies(&id, 2_374_354_862);
             assert_eq!(first.0.len(), 4);
             assert_eq!(replies(&id, 2_374_354_862), first, "{id} replays the same");
         }
+    }
+
+    // The Ballast Mind (#47, #564): a radius 5 board with six void pillars, 16 boss marbles.
+
+    /// Ring of `(q, r)`: its distance from the centre.
+    fn ring((q, r): (i32, i32)) -> i32 {
+        q.abs().max(r.abs()).max((q + r).abs())
+    }
+
+    #[test]
+    fn the_ballast_mind_plays_on_radius_5_with_its_pillars_the_61_cells_first() {
+        let f = Encounter::new("ballast", 7).unwrap();
+        assert_eq!(f.name(), "The Ballast Mind");
+        assert_eq!(f.to_move(), 1);
+        assert_eq!((f.phase(), f.phases()), (0, 3));
+        assert_eq!((f.win_ejections(1), f.win_ejections(2)), (12, 6));
+        assert_eq!(f.tell(), -1, "no hook in P1");
+        assert!(f.cracks().is_empty() && f.flips().is_empty());
+        assert!(f.tell_move(&first_move(&f)).is_empty());
+        let order: Vec<(i32, i32)> = cells()
+            .chain(cells_of(5).filter(|&c| ring(c) == 5))
+            .collect();
+        assert_eq!(
+            order.len(),
+            91,
+            "the 61 cells of the standard board, then ring 5"
+        );
+        let board = f.board();
+        assert_eq!(board.len(), 91);
+        for (i, &(q, r)) in order.iter().enumerate() {
+            let expected = if BALLAST_PILLARS.contains(&(q, r)) {
+                3
+            } else if BALLAST_PLAYER_START.contains(&(q, r)) {
+                1
+            } else if BALLAST_BOSS_START.contains(&(q, r)) {
+                2
+            } else {
+                0
+            };
+            assert_eq!(board[i], expected, "({q}, {r})");
+        }
+        assert_eq!((count(&board, 1), count(&board, 2)), (14, 16));
+    }
+
+    #[test]
+    fn the_boards_of_the_other_bosses_keep_their_61_cells() {
+        for id in ["echo", "hull", "choir", "chaplain"] {
+            assert_eq!(Encounter::new(id, 7).unwrap().board().len(), 61, "{id}");
+        }
+        assert_eq!(Engine::new().board().len(), 61);
     }
 
     // The Choir (#183): its own wrapper, a radius 3 board and three armies.
@@ -1360,6 +1417,7 @@ mod tests {
         assert_eq!(lit("hull"), vec![4, 0], "14 boss marbles, P2 at 10");
         assert_eq!(lit("chaplain"), vec![6, 0], "14 boss marbles, P2 at 8");
         assert_eq!(lit("choir"), vec![4, 0], "P2 once an army of four is wiped");
+        assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");
     }
 
     #[test]

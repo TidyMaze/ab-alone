@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELLS, cellIndex, VANISHED, type Axial } from './board';
+import { BOARD_CELLS, CELLS, cellIndex, VANISHED, type Axial } from './board';
 import { rimDanger, tensionLevel } from './tension';
 
 /** A board with only the given marbles: [cell, side] pairs, every other cell empty. */
@@ -45,6 +45,16 @@ describe('rimDanger, own marbles on the rim that one push could eject (world.md 
   it('counts each own marble in danger', () => {
     const two = board([[0, -4], 2], [[0, -3], 1], [[0, -2], 1], [[0, 4], 2], [[0, 3], 1], [[0, 2], 1]);
     expect(rimDanger(two, 2)).toBe(2);
+  });
+
+  it('on the radius 5 board of The Ballast Mind (#564), the rim is ring 5', () => {
+    const wide = (...marbles: [Axial, number][]): number[] => {
+      const b = BOARD_CELLS.map(() => 0);
+      for (const [[q, r], side] of marbles) b[cellIndex(q, r)] = side;
+      return b;
+    };
+    expect(rimDanger(wide([[0, -5], 2], [[0, -4], 1], [[0, -3], 1]), 2)).toBe(1);
+    expect(rimDanger(wide([[0, -4], 2], [[0, -3], 1], [[0, -2], 1]), 2)).toBe(0); // ring 4 is not the rim there
   });
 
   it('counts a push into a vanished cell (The Hull) as a push off', () => {

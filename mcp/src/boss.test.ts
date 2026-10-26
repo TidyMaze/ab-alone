@@ -84,6 +84,10 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
+  test('The Ballast Mind stays out of the list until its radius 5 board has a text (#572)', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain']);
+  });
+
   test('every boss of the engine has its case', () => {
     expect(Object.keys(CASES)).toEqual(bossIds());
   });

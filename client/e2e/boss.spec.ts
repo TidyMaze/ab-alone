@@ -482,3 +482,25 @@ for (const [name, accent, stored] of [
     await page.screenshot({ path: testInfo.outputPath(`accent-${accent}.png`) });
   });
 }
+
+// Task #564: The Ballast Mind is in the boss list. Its fight plays on the Bridge, on a radius 5 board with six void
+// pillars, and its 16 shells wear the wire wrap (#507). The screenshot is kept for the report.
+test('start The Ballast Mind: its radius 5 board on the Bridge, its shells in the wire wrap, task #564', async ({ page }, testInfo) => {
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  const body = page.locator('body');
+  await openModes(page);
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Ballast Mind' }).click();
+  await expect(page.locator('#hud')).toContainText('The Ballast Mind');
+  await expect(page.locator('#hud')).toContainText('White ejected 0/12 · Black ejected 0/6');
+  await expect(body).toHaveAttribute('data-deck', 'bridge');
+  await expect(body).toHaveAttribute('data-vanished', '6'); // the pillars
+  expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 5, holes: 6 });
+  const worn = (await page.evaluate(() => (window as any).__accents())) as { cell: [number, number]; accent: string }[];
+  expect(worn).toHaveLength(16);
+  expect(worn.every((w) => w.accent === 'wire')).toBe(true);
+  expect(worn.some((w) => Math.abs(w.cell[0]) === 5)).toBe(true); // ring 5 is drawn too
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('ballast-start.png') });
+});
