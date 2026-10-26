@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { generateKeys, type Keys } from './moverecord';
 import { parseLog } from './royale';
-import { netStatus, parseRoyale, roundPeriod, ROUND_MS, RoyaleNet, seedOf, type RoyaleMessage, type Sealed } from './royale-net';
+import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, ROUND_MS, RoyaleNet, seedOf, type RoyaleMessage, type Sealed } from './royale-net';
 import { commitOrder, signReveal } from './royale-round';
 
 // Issue #504, docs/specs/tech.md section 6: the rounds of an online battle royale between peers on the real engine.
@@ -107,6 +107,15 @@ describe('roundPeriod / seedOf', () => {
     expect(seedOf('abc')).not.toBe(seedOf('abd'));
     expect(seedOf('')).toBe(0x811c9dc5);
     expect(Number.isInteger(seedOf('x'.repeat(40))) && seedOf('x'.repeat(40)) >= 0).toBe(true);
+  });
+});
+
+describe('ROOM_JUDGE', () => {
+  it('gives no seat the turn and refuses any move record: the rounds carry the orders', () => {
+    expect(ROOM_JUDGE.to_move()).toBe(0);
+    expect(ROOM_JUDGE.status()).toBe(0);
+    expect(() => ROOM_JUDGE.play(Int32Array.from([1, 0, 0, 0, 0, 0, 0, 0]), true)).toThrow('no move record');
+    expect(ROOM_JUDGE.restart()).toBeUndefined();
   });
 });
 

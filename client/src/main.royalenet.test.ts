@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { generateKeys, type Wire } from './moverecord';
-import { parseRoyale, RoyaleNet, seedOf } from './royale-net';
+import { parseRoyale, ROOM_JUDGE, RoyaleNet, seedOf } from './royale-net';
 import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
 import type { Transport } from './transport';
@@ -9,7 +9,8 @@ import type { Transport } from './transport';
 // The online battle royale on the harness (#504, docs/specs/tech.md section 6): Battle royale online opens a room of 6
 // seats with its invite link, the creator starts the game, each round a target press or Hold commits the order and the
 // round resolves on every peer once each seat revealed or the deadline passed. The other player is a real session and
-// RoyaleNet on the other end of the room, with its own engine. `?round=300` shortens the round deadline.
+// RoyaleNet on the other end of the room, with its own engine. `?round=300` shortens the round deadline, for the test
+// of a silent player alone: on a loaded machine a page may take longer than that to press a button.
 
 const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const button = (id: string): HTMLButtonElement => byId<HTMLButtonElement>(id);
@@ -35,7 +36,7 @@ async function player(transport: Transport, room: string, side: number) {
     engine: engine_version(),
     keys,
     transport,
-    judge: { to_move: () => 0, play: () => {}, status: () => 0, restart: () => {} },
+    judge: ROOM_JUDGE,
     onMove: () => {},
     onRefuse: () => {},
     beat: { ms: 5000, now: Date.now, every: () => {} }, // the join order: who coordinates
@@ -58,8 +59,21 @@ async function player(transport: Transport, room: string, side: number) {
   return { session, net, royale, transport };
 }
 
+/** The other end of the hook transport (?net=hook): what the page sends to `__netOut`, what it gets on `__netIn`. */
+function hookEnd(): Transport {
+  const w = window as unknown as Record<string, (...args: unknown[]) => void>;
+  return {
+    state: 'open',
+    send: (message) => w.__netIn!(message, 'host'),
+    onRecord: (cb) => (w.__netOut = (message) => cb(message as Wire, 'page')),
+    onState: () => {},
+    onLeave: () => {},
+    close: () => {},
+  };
+}
+
 /** Boots and presses Battle royale online in the mode menu; a second player joins once the page's session exists. */
-async function hosted(url = '?bot=off&round=300', reducedMotion = true) {
+async function hosted(url = '?bot=off', reducedMotion = true) {
   const game = await boot(url, { reducedMotion });
   game.openModes();
   button('royale-online').click();
@@ -135,9 +149,11 @@ describe('Battle royale online (#504)', () => {
 
   it('an invite link takes the first free seat, waits for the start, and reports a desync', async () => {
     const room = 'abc_DEF-123';
-    const game = await boot(`?bot=off#royale=${room}`);
+    const game = await boot(`?bot=off&net=hook#royale=${room}`);
     await game.online();
-    const host = await player(game.peer()!, room, 1);
+    expect(data().seat).toBe('pending');
+    const host = await player(hookEnd(), room, 1);
+    (window as unknown as Record<string, () => void>).__netOpen!();
     await until(game, () => data().seat === 'player');
     expect(presence()).toBe('2 players in. Waiting for the start...');
     expect(button('royale-start').hidden).toBe(true);
@@ -145,6 +161,7 @@ describe('Battle royale online (#504)', () => {
     await host.net.start();
     await until(game, () => data().net === 'choosing');
     host.transport.send({ kind: 'start', game: room } as unknown as Wire); // malformed: ignored
+    host.transport.send({ kind: 'hello' } as unknown as Wire); // refused, for the diagnostics
     await host.net.play([]);
     button('royale-hold').click();
     await until(game, () => data().royale === '2');
@@ -153,7 +170,7 @@ describe('Battle royale online (#504)', () => {
     expect(presence()).toBe("Desync after round 1: a peer's game differs");
   });
 
-  it('Play online leaves the room: closed, no round, no Start; what the room still sends is dropped', async () => {
+  it('Play online leaves the room: closed, no round, no Start; the round on its way is not resolved', async () => {
     const { game, other } = await started();
     const old = game.peer()!;
     button('royale-hold').click();
