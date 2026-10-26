@@ -2,7 +2,7 @@
 import * as THREE from 'three/webgpu';
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { axialTo3D, encodeMove, moveForClick, parseMoves } from './board';
+import { axialTo3D, encodeMove, moveForClick, parseMoves, type Axial } from './board';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
@@ -434,7 +434,8 @@ const END_ROYALE = {
     const scene = catchScene();
     const game = await boot('?bot=off');
     shipAt(game, [-1, 1]);
-    expect(drawn(scene()).bars).toHaveLength(0); // no closed bar over the lobby door
+    expect(drawn(scene()).bars).toHaveLength(1); // the locked lift to Cargo only (#523)
+    expect(drawn(scene()).bars[0]!.position.x).not.toBeCloseTo(axialTo3D(-2, 2).x); // no bar over the lobby
     game.click(-2, 2);
     expect(hub()).toBeUndefined();
     expect(data().royale).toBe('1');

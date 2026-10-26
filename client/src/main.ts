@@ -1712,9 +1712,8 @@ function drawHub(at: HubSpot): void {
       marbles.add(arrow);
       lifts.push(`${door.to} ${open ? 'open' : 'locked'}`);
     }
-    if (door.kind !== 'royale' && (door.kind !== 'lift' || open)) continue;
-    const closed = door.kind === 'lift' ? targetMaterial : paleMaterial;
-    const bar = new THREE.Mesh(barGeometry, closed); // a bar across the ring: the lobby is closed (#522), a lift locked
+    if (door.kind !== 'lift' || open) continue;
+    const bar = new THREE.Mesh(barGeometry, targetMaterial); // a bar across the ring: a lift locked (#522, #523)
     bar.rotation.y = Math.PI / 4;
     bar.position.set(p.x, 0.02, p.z);
     marbles.add(bar);
@@ -2210,13 +2209,14 @@ function walk(to: Axial): void {
 }
 // The doors (#522): rolling onto a boss door or a table starts the same game as its mode menu entry, and the room is
 // kept for Back to the ship. A terminal opens its lore entry in the reader, and Esc leaves it to the hub on the same
-// cell (#524). A lift and the closed battle royale lobby start nothing here.
+// cell (#524). A lift starts nothing here.
 function enterRoom(at: HubSpot): void {
   const door = roomAt(at.deck, at.cell);
   if (door?.kind === 'terminal') return openReader(door.lore);
   if (door?.kind === 'boss') startBoss(door.boss, crypto.getRandomValues(new Uint32Array(1))[0]!);
   else if (door?.kind === 'hotseat' || door?.kind === 'bot') startLocal(door.kind === 'bot');
   else if (door?.kind === 'online' && !playOnlineButton.disabled) playOnline();
+  else if (door?.kind === 'royale') startRoyale({ seed: crypto.getRandomValues(new Uint32Array(1))[0]!, rounds: [] });
   else return;
   roomOf = at;
 }
@@ -2230,6 +2230,7 @@ function startLocal(bot: boolean): void {
 }
 backButton.addEventListener('click', () => {
   leaveOnline();
+  leaveRoyale();
   enterHub(roomOf!);
 });
 function leaveHub(): void {
@@ -2557,6 +2558,7 @@ function royaleHud(game: Royale): void {
   document.getElementById('hud')!.innerHTML = royaleHtml(parseLog(game.round_log()), order, view);
   lockButton.disabled = end !== null || order.length === 0;
   holdButton.disabled = end !== null;
+  backButton.hidden = !roomOf || end === null;
 }
 // A press on one of the player's marbles selects it, a press on a target picks that move as the order.
 function pickRoyale(q: number, r: number): void {
