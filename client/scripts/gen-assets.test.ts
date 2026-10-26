@@ -43,11 +43,12 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     }
   });
 
+  // Bug #609: it took 20 s on a loaded machine. Comparing the files is cheap, it must stay well under a second.
   it('keeps the committed files identical to the generator output', () => {
     for (const [name, buf] of generateAssets(SEED)) {
       expect(readFileSync(new URL(`../public/assets/${name}`, import.meta.url))).toEqual(buf);
     }
-  });
+  }, 1_000);
 
   // docs/specs/art.md section 2: the shell's ridge normal map, 256 px at most, 64 KB at most (#293).
   it('makes a ridge normal map for the shell within 256 px and 64 KB', () => {
