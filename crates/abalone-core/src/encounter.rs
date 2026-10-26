@@ -11,6 +11,7 @@ pub mod echo;
 pub mod fixture;
 pub mod hull;
 pub mod ladder;
+pub mod railyard;
 pub mod telemetry;
 
 use crate::board::{Board, Cell};

@@ -12,6 +12,8 @@ export interface BossLike {
   cracks(): Int32Array;
   /** `[q, r, player_turns_left]` records. */
   eggs(): Int32Array;
+  /** `[line, player_turns_left, entry_q, entry_r, exit_q, exit_r]` records. */
+  trains(): Int32Array;
   /** `[q, r]` pairs. */
   flips(): Int32Array;
   /** `[q, r]` pairs. */
@@ -63,11 +65,22 @@ function records(flat: Int32Array, size: number): number[][] {
 /** The cell of a record that starts with `q, r`, in notation. */
 const cell = ([q, r]: number[]) => `(${q},${r})`;
 
+/** A train's marks: one per cell of its line, from the entry to the exit, with the player turns left before it passes. */
+function trainMarks([, left, q, r, toQ, toR]: number[]): Mark[] {
+  const length = Math.max(Math.abs(toQ! - q!), Math.abs(toR! - r!));
+  return Array.from({ length: length + 1 }, (_, i) => ({
+    kind: 'train',
+    cell: cell([q! + (i * (toQ! - q!)) / length, r! + (i * (toR! - r!)) / length]),
+    value: left!,
+  }));
+}
+
 export function bossState(id: string, boss: BossLike): BossState {
   const armies = records(boss.armies(), 3);
   const marks: Mark[] = [
     ...records(boss.cracks(), 3).map((record) => ({ kind: 'crack', cell: cell(record), value: record[2]! })),
     ...records(boss.eggs(), 3).map((record) => ({ kind: 'egg', cell: cell(record), value: record[2]! })),
+    ...records(boss.trains(), 6).flatMap(trainMarks),
     ...records(boss.converted(), 2).map((record) => ({ kind: 'converted', cell: cell(record) })),
     ...armies.map((record) => ({ kind: 'army', cell: cell(record), value: record[2]! })),
   ];

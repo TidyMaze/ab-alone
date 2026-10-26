@@ -14,6 +14,7 @@ import {
   parseMoves,
   toggleSelection,
   type Axial,
+  type Move,
 } from './board';
 import { askBot, askEval, botBudget } from './bot';
 import { bossHtml, goalShown } from './bosshud';
@@ -26,6 +27,21 @@ import { ghostMarbles } from './ghost';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
+import {
+  CHEVRON_COLOR,
+  CHEVRON_SHAPE,
+  TRAIN_LEAD,
+  TRAIN_PARTS,
+  chevronSpots,
+  knockedMarbles,
+  parseTrains,
+  passedTrains,
+  railSpan,
+  reachMs,
+  trainAt,
+  trainText,
+  type Train,
+} from './railyard';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
@@ -982,7 +998,7 @@ const eggGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).tra
 const eggMaterial = new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.55 });
 const eggGlowGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
 const eggGlowMaterial = new THREE.MeshBasicMaterial({ color: BONE, transparent: true, depthWrite: false });
-const counterMaterials = Array.from({ length: COUNTER_MAX }, (_, i) => {
+const counterMaterials = Array.from({ length: Math.max(COUNTER_MAX, TRAIN_LEAD) }, (_, i) => {
   const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
   drawCounter(canvas.getContext('2d')!, i + 1, 128);
   const map = new THREE.CanvasTexture(canvas);
@@ -990,6 +1006,45 @@ const counterMaterials = Array.from({ length: COUNTER_MAX }, (_, i) => {
   return new THREE.SpriteMaterial({ map, depthTest: false });
 });
 let eggsDrawn: { cell: Axial; left: number; glow: boolean }[] = []; // read by the e2e tests
+// The Rail Yard tell (#626, game-design.md section 7.8): rails under each announced line, out past both edges onto the
+// deck, an amber chevron on both edges and on every cell of the line, pointing the way the train runs (railyard.ts, 3:1
+// and more), and the counter of the player turns left above the entry edge, the eggs' sprite. Its pass: the low-poly
+// freight train runs the line and knocks each marble on it off with the ejection fall; under reduced motion it jumps.
+const chevronGeometry = new THREE.ShapeGeometry(
+  new THREE.Shape(CHEVRON_SHAPE.map(([x, z]) => new THREE.Vector2(x, -z))),
+).rotateX(-Math.PI / 2);
+const chevronMaterial = new THREE.MeshBasicMaterial({ color: CHEVRON_COLOR });
+const railGeometry = new THREE.BoxGeometry(1, 0.03, 0.04);
+const sleeperGeometry = new THREE.BoxGeometry(0.08, 0.02, 0.6);
+const railMaterial = new THREE.MeshStandardMaterial({ color: 0x8a9096, metalness: 0.6, roughness: 0.4 });
+const sleeperMaterial = new THREE.MeshStandardMaterial({ color: 0x3a2c22, roughness: 0.9 });
+const trainGeometries = TRAIN_PARTS.map(({ type, size }) =>
+  type === 'box'
+    ? new THREE.BoxGeometry(size[0], size[1], size[2])
+    : type === 'wheel'
+      ? new THREE.CylinderGeometry(size[0], size[0], size[1], 8).rotateX(Math.PI / 2)
+      : new THREE.DodecahedronGeometry(size[0]).scale(1.4, 0.45, 0.8),
+);
+const trainMaterials = new Map(TRAIN_PARTS.map((p) => [p.color, new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.75 })]));
+/** A new freight train, its front at its origin, running along +x. */
+function trainModel(): THREE.Group {
+  const train = Object.assign(new THREE.Group(), { name: 'train' });
+  TRAIN_PARTS.forEach((part, i) => {
+    const mesh = Object.assign(new THREE.Mesh(trainGeometries[i], trainMaterials.get(part.color)), { name: part.id, castShadow: true });
+    mesh.position.set(...part.position);
+    train.add(mesh);
+  });
+  return train;
+}
+let trainsShown: Train[] = []; // the trains of the last refresh, to see which passed after a move
+interface Passing {
+  train: Train;
+  model: THREE.Group;
+  rails: THREE.Group; // kept under the train until it is gone
+  start: number;
+  skipped: boolean;
+}
+const passing: Passing[] = [];
 
 // The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
 // Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
@@ -1440,6 +1495,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
     document.body.dataset.sliding = '1';
   }
   document.body.dataset.knock = String(sfx.knock(mv.cells.length) ?? 'none'); // the knock's pitch in Hz, read by the e2e tests (#289)
+  startPasses(before, mv, reduced);
   const ejection = findEjection(before, engine.board(), mv);
   if (!ejection) return;
   const body = document.body;
@@ -1454,7 +1510,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
 
 /** Starts the effect of the ejected marble `mesh` along `track`, in `parent`: the scene, or the battle royale arena at
  * its own scale (#612). */
-function startEjection(mesh: THREE.Mesh, track: EjectTrack, parent: THREE.Object3D): void {
+function startEjection(mesh: THREE.Mesh, track: EjectTrack, parent: THREE.Object3D, delayMs = 0): void {
   mesh.traverse((o) => {
     const material = ((o as THREE.Mesh).material as THREE.Material).clone(); // its own, to fade
     material.transparent = true;
@@ -1467,7 +1523,7 @@ function startEjection(mesh: THREE.Mesh, track: EjectTrack, parent: THREE.Object
   const holder = new THREE.Group();
   holder.add(tumble);
   parent.add(holder);
-  const e: Ejecting = { holder, tumble, mesh, track, start: performance.now(), skipped: false };
+  const e: Ejecting = { holder, tumble, mesh, track, start: performance.now() + delayMs, skipped: false }; // waits on its cell
   drawEjection(e, 0);
   ejecting.push(e);
   document.body.dataset.ejecting = track.kind; // read by the e2e tests: tumble, or fade with reduced motion
@@ -1559,7 +1615,9 @@ function animateEjections(now: number): void {
 function skipEjections(): void {
   for (const e of ejecting) e.skipped = true;
   for (const b of bleeding) b.skipped = true;
+  for (const p of passing) p.skipped = true;
   animateEjections(performance.now());
+  animatePasses(performance.now());
 }
 addEventListener('pointerdown', skipEjections, { capture: true });
 addEventListener('keydown', skipEjections, { capture: true });
@@ -1625,6 +1683,7 @@ function hud(extra = ''): void {
     ? [
         crackText(parseCracks(boss.cracks())),
         eggText(parseEggs(boss.eggs())),
+        trainText(parseTrains(boss.trains())),
         chaplainText(exposed, boss.converted().length / 2),
         choirText(boss.next_army()),
       ]
@@ -1673,6 +1732,7 @@ function refresh(): void {
   const armies = engine instanceof Encounter ? parseArmies(engine.armies()) : [];
   const next = engine instanceof Encounter ? engine.next_army() : -1;
   const eggs = engine instanceof Encounter ? parseEggs(engine.eggs()) : [];
+  trainsShown = engine instanceof Encounter ? parseTrains(engine.trains()) : [];
   marbles.clear();
   marbleAt.clear();
   crackDecals = [];
@@ -1749,6 +1809,7 @@ function refresh(): void {
     }
     return { cell: [q, r], left, glow: left === 1 };
   });
+  for (const train of trainsShown) drawTrack(train);
   tellSound('crack', cracks);
   tellSound('choir', ARMY_NAMES[next] ? [next] : []);
   // The drones follow how tense the game is (#439): the player's marbles a push could eject, the boss phase.
@@ -1759,12 +1820,87 @@ function refresh(): void {
   document.body.dataset.cracks = String(cracks.length);
   document.body.dataset.eggs = String(eggs.length);
   document.body.dataset.eggCounters = eggs.map((e) => e.left).join(',');
+  document.body.dataset.trains = String(trainsShown.length);
+  document.body.dataset.trainCounters = trainsShown.map((t) => t.left).join(',');
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
   const enemy = 3 - glassOf(); // the core dims a step per player marble the enemy ejected (#506)
   coreMaterial.opacity = coreLevel(engine.ejected(enemy), engine.win_ejections(enemy));
   document.body.dataset.core = coreMaterial.opacity.toFixed(2); // read by the e2e tests
   hud();
   refreshGhosts(moves);
+}
+
+/** The rails and sleepers under the line of `train`, out past both edges onto the deck. */
+function railsOf(train: Train): THREE.Group {
+  const rails = new THREE.Group();
+  const span = railSpan(train);
+  for (const side of [-0.22, 0.22]) {
+    const rail = Object.assign(new THREE.Mesh(railGeometry, railMaterial), { name: 'rail' });
+    rail.scale.x = span.length;
+    rail.rotation.y = span.yaw;
+    rail.position.set(span.x - Math.sin(span.yaw) * side, 0.02, span.z - Math.cos(span.yaw) * side);
+    rails.add(rail);
+  }
+  for (let d = 0.25 - span.length / 2; d < span.length / 2; d += 0.5) {
+    const sleeper = new THREE.Mesh(sleeperGeometry, sleeperMaterial);
+    sleeper.rotation.y = span.yaw;
+    sleeper.position.set(span.x + Math.cos(span.yaw) * d, 0.008, span.z - Math.sin(span.yaw) * d);
+    rails.add(sleeper);
+  }
+  return rails;
+}
+
+/** The tell of an announced train: its rails, its chevrons, and its counter above the entry edge. */
+function drawTrack(train: Train): void {
+  marbles.add(railsOf(train));
+  for (const spot of chevronSpots(train)) {
+    const chevron = Object.assign(new THREE.Mesh(chevronGeometry, chevronMaterial), { name: spot.edge ? 'edge-chevron' : 'chevron' });
+    chevron.rotation.y = spot.yaw;
+    chevron.position.set(spot.x, 0.03, spot.z);
+    chevron.scale.setScalar(spot.edge ? 1.5 : 1);
+    marbles.add(chevron);
+  }
+  const entry = chevronSpots(train)[0]!;
+  const counter = Object.assign(new THREE.Sprite(counterMaterials[train.left - 1]), { renderOrder: 2, name: 'train-counter' });
+  counter.position.set(entry.x, 0.75, entry.z);
+  counter.scale.setScalar(0.5);
+  marbles.add(counter);
+}
+
+/** Starts the pass of each train the move let through: the freight train runs its line, and each marble that sat on it
+ * after the move falls off with the ejection effect when the train reaches it. */
+function startPasses(before: number[], mv: Move, reduced: boolean): void {
+  if (!(engine instanceof Encounter)) return;
+  for (const train of passedTrains(trainsShown, parseTrains(engine.trains()))) {
+    const [model, rails] = [trainModel(), railsOf(train)];
+    scene.add(model, rails);
+    const pass: Passing = { train, model, rails, start: performance.now(), skipped: false };
+    drawPass(pass, 0);
+    passing.push(pass);
+    for (const { cell, side, at } of knockedMarbles(before, mv, train)) {
+      const mesh = marbleMesh(side);
+      turnMarble(mesh, turnAt(cellIndex(...cell)));
+      startEjection(mesh, ejectTrack(cell, train.dir, reduced), scene, reachMs(train, at, reduced));
+    }
+  }
+  document.body.dataset.passing = String(passing.length); // read by the e2e tests
+}
+
+/** Draws a passing train `elapsedMs` into its pass, true once it is over. */
+function drawPass(p: Passing, elapsedMs: number): boolean {
+  const at = trainAt(p.train, p.skipped ? Infinity : elapsedMs, reducedMotion());
+  p.model.position.set(at.x, 0, at.z);
+  p.model.rotation.y = at.yaw;
+  return at.done;
+}
+
+function animatePasses(now: number): void {
+  for (const p of passing.slice()) {
+    if (!drawPass(p, now - p.start)) continue;
+    scene.remove(p.model, p.rails);
+    passing.splice(passing.indexOf(p), 1);
+    document.body.dataset.passing = String(passing.length);
+  }
 }
 
 // The hub map (#521): the board's discs on the map cells only, in a frame shrunk to the map, a pale ring on each room
@@ -2129,6 +2265,11 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to find The Alien's eggs as drawn: their cell, counter and glow on 1 (#588), and the glow.
 (window as unknown as Record<string, unknown>).__eggs = () => eggsDrawn;
 (window as unknown as Record<string, unknown>).__eggGlow = () => eggGlowMaterial.opacity;
+// Used by the browser checks to find The Rail Yard's trains as drawn (#626): each line, its cells from the entry and
+// its counter, and the trains passing now, with where their front is.
+(window as unknown as Record<string, unknown>).__trains = () => trainsShown;
+(window as unknown as Record<string, unknown>).__passes = () =>
+  passing.map((p) => ({ line: p.train.line, x: p.model.position.x, z: p.model.position.z }));
 // Used by the browser checks to read the shell's heat pulse (#509).
 (window as unknown as Record<string, unknown>).__shellPulse = () => scarab.emissiveIntensity;
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
@@ -2914,6 +3055,7 @@ renderer.setAnimationLoop((now) => {
   animateSlides(now);
   animateReveal(now);
   animateEjections(now);
+  animatePasses(now);
   animateParticles(now);
   eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
   scarab.emissiveIntensity = pulsing ? pulseAt(now / 1000) : 0;

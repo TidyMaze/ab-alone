@@ -11,6 +11,23 @@ export interface SlideTrack {
   durationMs: number;
 }
 
+/** The cells of the marbles `mv` moves on `before`: the moved group, then the opponent marbles its head pushes, up to
+ * an empty cell, the rim or a vanished cell (The Hull). */
+export function pushedCells(before: ArrayLike<number>, mv: Move, cells: readonly Axial[] = BOARD_CELLS): Axial[] {
+  const [dq, dr] = DIRECTIONS[mv.dir]!;
+  const inGroup = (q: number, r: number): boolean => mv.cells.some(([gq, gr]) => gq === q && gr === r);
+  const moved: Axial[] = [...mv.cells];
+  for (const [q, r] of mv.cells) {
+    if (inGroup(q + dq, r + dr)) continue;
+    let [pq, pr] = [q + dq, r + dr];
+    while (isMarble(before[cellIndex(pq, pr, cells)])) {
+      moved.push([pq, pr]);
+      [pq, pr] = [pq + dq, pr + dr];
+    }
+  }
+  return moved;
+}
+
 /** One track per marble the move slides: the moved group, then the opponent marbles its head
  * pushes. A marble pushed off the board or into a vanished cell is left to the ejection animation,
  * and a marble the board after the move does not show at its new cell (a boss special flipped it)
@@ -23,20 +40,8 @@ export function slideTracks(
   cells: readonly Axial[] = BOARD_CELLS,
 ): SlideTrack[] {
   const [dq, dr] = DIRECTIONS[mv.dir]!;
-  const inGroup = (q: number, r: number): boolean => mv.cells.some(([gq, gr]) => gq === q && gr === r);
-  const moved: Axial[] = [...mv.cells];
-  for (const [q, r] of mv.cells) {
-    if (inGroup(q + dq, r + dr)) continue;
-    // The head of the group: every marble in line ahead of it is pushed, up to an empty cell, the
-    // rim or a vanished cell (The Hull).
-    let [pq, pr] = [q + dq, r + dr];
-    while (isMarble(before[cellIndex(pq, pr, cells)])) {
-      moved.push([pq, pr]);
-      [pq, pr] = [pq + dq, pr + dr];
-    }
-  }
   const tracks: SlideTrack[] = [];
-  for (const [q, r] of moved) {
+  for (const [q, r] of pushedCells(before, mv, cells)) {
     const to = cellIndex(q + dq, r + dr, cells);
     if (to === -1 || after[to] !== before[cellIndex(q, r, cells)]) continue;
     const a = axialTo3D(q, r);

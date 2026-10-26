@@ -94,6 +94,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.eggs().is_empty() {
         board.eggs().hash(&mut hasher);
     }
+    if !board.trains().is_empty() {
+        board.trains().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -631,6 +634,20 @@ mod tests {
         assert_ne!(
             position_hash(&older, Player::Black),
             position_hash(&laid, Player::Black)
+        );
+    }
+
+    #[test]
+    fn train_marks_change_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut announced = Board::empty();
+        announced.set_trains(vec![(26, 5)]);
+        assert_ne!(position_hash(&announced, Player::Black), plain);
+        let mut nearer = Board::empty();
+        nearer.set_trains(vec![(26, 4)]);
+        assert_ne!(
+            position_hash(&nearer, Player::Black),
+            position_hash(&announced, Player::Black)
         );
     }
 

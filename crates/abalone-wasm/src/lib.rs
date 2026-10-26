@@ -9,6 +9,9 @@
 //!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
 //! - Eggs (The Alien): records of 3 integers `[q, r, player_turns_left]`, back to back.
+//! - Trains (The Rail Yard): records of 6 integers `[line, player_turns_left, entry_q, entry_r,
+//!   exit_q, exit_r]`, back to back: the train runs its line from the entry cell to the exit cell
+//!   (docs/specs/game-design.md section 7.8 numbers the lines).
 //! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
 //! - Armies (The Choir): records of 3 integers `[q, r, army]`, back to back. Army `0` Alto,
 //!   `1` Tenor, `2` Bass, the order of the cycle. On the Choir's radius 3 board the outer ring
@@ -50,6 +53,9 @@ use abalone_core::encounter::choir::{
 };
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
+use abalone_core::encounter::railyard::{
+    railyard_boss, railyard_move, railyard_start, track_cells,
+};
 use abalone_core::encounter::{marbles, BossDef, Encounter as CoreEncounter, PveResult};
 use abalone_core::game::{DrawReason, Game, Outcome};
 use abalone_core::moves::{legal_moves, legal_moves_for, Direction, Move, Player};
@@ -323,6 +329,11 @@ fn alien_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(alien_start(seed))
 }
 
+/// The Rail Yard announces its first train at the start.
+fn railyard_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(railyard_start(seed))
+}
+
 fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
     ballast_tell(enc).flips
 }
@@ -348,7 +359,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 6] = [
+const BOSSES: [BossEntry; 7] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -401,6 +412,15 @@ const BOSSES: [BossEntry; 6] = [
         def: alien_boss,
         start: alien_fight,
         reply: alien_move,
+        announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "railyard",
+        goal: "Trains sweep the marked lines. Eject 6 to win; lose 6 or draw to lose.",
+        def: railyard_boss,
+        start: railyard_fight,
+        reply: railyard_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -611,6 +631,22 @@ impl Encounter {
             .eggs()
             .iter()
             .flat_map(|&((q, r), left)| [q, r, i32::from(left)])
+            .collect()
+    }
+
+    /// Rail Yard trains as `[line, player_turns_left, entry_q, entry_r, exit_q, exit_r]` records,
+    /// empty for the other bosses.
+    pub fn trains(&self) -> Vec<i32> {
+        self.fight
+            .game()
+            .board()
+            .trains()
+            .iter()
+            .flat_map(|&(track, left)| {
+                let cells = track_cells(track);
+                let ((eq, er), (xq, xr)) = (cells[0], cells[cells.len() - 1]);
+                [i32::from(track / 2), i32::from(left), eq, er, xq, xr]
+            })
             .collect()
     }
 
@@ -1044,7 +1080,8 @@ mod tests {
                 "choir".to_string(),
                 "chaplain".to_string(),
                 "ballast".to_string(),
-                "alien".to_string()
+                "alien".to_string(),
+                "railyard".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -1053,6 +1090,7 @@ mod tests {
         assert_eq!(boss_name("chaplain"), Some("The Chaplain".to_string()));
         assert_eq!(boss_name("ballast"), Some("The Ballast Mind".to_string()));
         assert_eq!(boss_name("alien"), Some("The Alien".to_string()));
+        assert_eq!(boss_name("railyard"), Some("The Rail Yard".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1092,6 +1130,7 @@ mod tests {
         assert_eq!(f.tell(), -1, "the Echo has no board special");
         assert!(f.cracks().is_empty(), "the Echo cracks nothing");
         assert!(f.eggs().is_empty(), "the Echo lays no egg");
+        assert!(f.trains().is_empty(), "the Echo runs no train");
         assert!(f.flips().is_empty(), "the Echo flips nothing");
         assert!(f.converted().is_empty());
         assert!(f.armies().is_empty(), "the Echo has no armies");
@@ -1366,6 +1405,49 @@ mod tests {
         );
     }
 
+    // The Rail Yard (#626): trains announced 5 player turns ahead sweep a whole line.
+
+    /// The trains and the board after each of `plies` plies: the player's first legal move, the
+    /// boss move on its turn.
+    fn yard(seed: u32, plies: usize) -> Vec<(Vec<i32>, Vec<u8>)> {
+        let mut f = Encounter::new("railyard", seed).unwrap();
+        (0..plies)
+            .map(|_| {
+                ply(&mut f);
+                (f.trains(), f.board())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_rail_yard_announces_a_train_at_the_start_that_passes_after_5_player_turns() {
+        // Seed 3: the first train runs the diagonal q + r = 0 from (4, -4), 3 marbles a side on it.
+        let f = Encounter::new("railyard", 3).unwrap();
+        assert_eq!(f.name(), "The Rail Yard");
+        assert_eq!((f.phase(), f.phases()), (0, 3));
+        assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (14, 14));
+        assert_eq!(f.trains(), vec![22, 5, 4, -4, -4, 4]);
+        let run = yard(3, 9);
+        assert_eq!(run[0].0[1], 4, "down after the player move");
+        assert_eq!(run[1].0[1], 4, "not after the boss move");
+        assert_eq!(run[7].0, vec![22, 1, 4, -4, -4, 4]);
+        assert!(run[8].0.is_empty(), "passed after the player's 5th move");
+        let on_line = |board: &[u8]| (-4..=4).filter(|&q| board[index(q, -q)] != 0).count();
+        assert_eq!(on_line(&run[8].1), 0, "the diagonal is swept");
+    }
+
+    #[test]
+    fn two_rail_yard_encounters_with_the_same_seed_and_moves_run_the_same_trains() {
+        // Every peer of a co-op fight, the daily and a Retry replay the same trains (#626).
+        let first = yard(2_374_354_862, 24);
+        assert_eq!(yard(2_374_354_862, 24), first);
+        let runs: Vec<_> = (0..4).map(|seed| yard(seed, 1)).collect();
+        assert!(
+            runs.iter().any(|r| *r != runs[0]),
+            "the seed picks the tracks"
+        );
+    }
+
     // The Ballast Mind (#47, #564): a radius 5 board with six void pillars, 16 boss marbles.
 
     /// Ring of `(q, r)`: its distance from the centre.
@@ -1461,7 +1543,7 @@ mod tests {
 
     #[test]
     fn the_boards_of_the_other_bosses_keep_their_61_cells() {
-        for id in ["echo", "hull", "choir", "chaplain", "alien"] {
+        for id in ["echo", "hull", "choir", "chaplain", "alien", "railyard"] {
             assert_eq!(Encounter::new(id, 7).unwrap().board().len(), 61, "{id}");
         }
         assert_eq!(Engine::new().board().len(), 61);
@@ -1601,6 +1683,7 @@ mod tests {
         assert_eq!(lit("choir"), vec![4, 0], "P2 once an army of four is wiped");
         assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");
         assert_eq!(lit("alien"), vec![2, 0], "P2 after 2 ejections");
+        assert_eq!(lit("railyard"), vec![3, 0], "P2 after 3 ejections");
     }
 
     #[test]
