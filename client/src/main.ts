@@ -29,7 +29,7 @@ import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
-import { endBanner } from './endbanner';
+import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
 import { generateKeys } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
@@ -106,7 +106,7 @@ import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
-import { ARENA, ARENA_SCALE, YOU, loadRoyale, nextRound, parseLog, roundOrders, royaleHtml, seatAt, type RoyaleFile } from './royale';
+import { ARENA, ARENA_SCALE, YOU, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
 import { SEATS } from './marbles';
 import './ui.css';
 
@@ -861,6 +861,8 @@ arena.add(arenaMarbles);
 arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
 const seatLooks = SEATS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: SHELL.roughness, metalness: SHELL.metalness }));
+// The breach (#503): a cracked arena cell glows in the hazard colour under the Hull's crack decal and ticks.
+const breachGlow = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false });
 // The steel frame (#292, frame.ts): a plate under the cells and a rim around them, rebuilt when the board's size or
 // its holes change. The rim is two halves, each with its own material: the half at the end of the side to move lights
 // in that side's colour (#300). Picking tests the discs only.
@@ -2238,11 +2240,32 @@ function drawRoyale(game: Royale): void {
   marbleAt.clear();
   arena.visible = true;
   const board = game.board();
+  const cracks = parseCracks(game.cracks());
+  const left = crackLeft(cracks, ARENA);
+  breachGlow.color.set(paletteById(palette).hazard);
+  crackDecals = [];
   targets = groupTargets(parseMoves(game.legal_orders(YOU)), selected);
   ringed = [...selected];
   ARENA.forEach(([q, r], i) => {
     arenaDiscs[i]!.visible = board[i] !== VANISHED;
     const p = axialTo3D(q, r);
+    const rounds = left.get(i) ?? 0;
+    if (rounds > 0) {
+      const glow = new THREE.Mesh(crackGeometry, breachGlow);
+      glow.position.set(p.x, 0.002, p.z);
+      arenaMarbles.add(glow);
+      if (crackDecal) {
+        const decal = new THREE.Mesh(crackGeometry, crackMaterial);
+        decal.position.set(p.x, 0.003, p.z);
+        arenaMarbles.add(decal);
+        crackDecals.push([q, r]);
+      }
+      for (const dx of tickOffsets(rounds)) {
+        const tick = new THREE.Mesh(tickGeometry, tickMaterial); // one per round left, on the front edge
+        tick.position.set(p.x + dx, 0.01, p.z + 0.39);
+        arenaMarbles.add(tick);
+      }
+    }
     const target = targets.find(({ cell: [tq, tr] }) => tq === q && tr === r);
     if (target) {
       const ring = new THREE.Mesh(targetRingGeometry, targetMaterial);
@@ -2267,13 +2290,20 @@ function drawRoyale(game: Royale): void {
     arenaMarbles.add(ring);
   });
   document.body.dataset.royale = String(nextRound(parseLog(game.round_log()))); // read by the e2e tests
+  document.body.dataset.cracks = String(cracks.length);
+  document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
   hud();
 }
+// The plate, and once the game is over the end banner and its light (body[data-over], #282, #503).
 function royaleHud(game: Royale): void {
-  document.getElementById('hud')!.innerHTML = royaleHtml(parseLog(game.round_log()), order);
-  const over = game.placement().length > 0;
-  lockButton.disabled = over || order.length === 0;
-  holdButton.disabled = over;
+  const placed = standings(game.placement());
+  const end = royaleBanner(placed, YOU);
+  if (end) document.body.dataset.over = end.anim;
+  else delete document.body.dataset.over;
+  const view = { out: outSeats(game.board()), cracks: parseCracks(game.cracks()), standings: placed };
+  document.getElementById('hud')!.innerHTML = royaleHtml(parseLog(game.round_log()), order, view);
+  lockButton.disabled = end !== null || order.length === 0;
+  holdButton.disabled = end !== null;
 }
 // A press on one of the player's marbles selects it, a press on a target picks that move as the order.
 function pickRoyale(q: number, r: number): void {

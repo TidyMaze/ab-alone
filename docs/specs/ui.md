@@ -180,7 +180,16 @@ outside the menu.
   round in initiative order, one line a seat: "Bot 1: moved, ejected Bot 3", "You: fizzled" (in the hazard colour),
   "Bot 3: held", "Bot 4: out". The player is "You", the bots "Bot 1" to "Bot 5", each name after a dot of its tint.
   These strings are kept verbatim for the e2e tests. Once the game is over, Lock order and Hold are greyed. A boss
-  fight, Play online or Ship leaves it. The breach warning, the eliminated seats and the placement banner are #503.
+  fight, Play online or Ship leaves it.
+- **Battle royale breach, seats out and placement (#503).** A ring that cracks at the end of a round (rules.md section
+  10.4, ring 8 at the end of round 12) glows in the hazard colour for the whole next round, under the Hull's crack
+  decal and one tick per round left, and the plate warns in the hazard colour: "Breach: 48 cells void in 1 round". At
+  the end of that round the ring is void: its discs are gone. A seat with no marble left is out: on the plate its name
+  is greyed out and struck through in the initiative order, its tint dot faded, and its "out" line of the reveal is
+  greyed. Once the game is over the plate is the end banner, lit like the others (End banner, #282):
+  "You win" for first place, shared or not, else "You place 3rd", then the points the player scored, "10 points. The
+  books balance." or "5 points. Tally strikes your name.", and the places, best first, one seat a line: "1st You · 10
+  points", "2nd Bot 1 · 6 points". These strings are kept verbatim for the e2e tests.
 - **Copy diagnostics.** A button in the bottom-right corner, in every mode, icon only (#297: its name is the tooltip and the accessible name, at least 44 px on a phone), styled like the
   others but kept apart from the play buttons and off the board, even at phone width. It copies
   the diagnostics text (tech.md section 10) and the note line says "diagnostics copied". When the

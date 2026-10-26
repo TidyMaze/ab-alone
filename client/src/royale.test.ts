@@ -175,6 +175,9 @@ describe('the breach, the seats out and the placement (#503)', () => {
 
   it('the wasm placement gives each seat its place and points, best place first, seat order in a shared place', () => {
     expect(standings([])).toEqual([]);
+    document.body.innerHTML = royaleHtml(null, [], { standings: standings([2, 1, 1, 10]) });
+    expect(document.querySelector('.placement li')!.textContent).toBe('1st Bot 1 · 10 points');
+    expect(document.querySelectorAll('.placement li')[1]!.textContent).toBe('2nd You · 1 point');
     expect(standings([2, 6, 1, 12, 2, 6])).toEqual([
       { seat: 1, place: 1, points: 12 },
       { seat: 0, place: 2, points: 6 },

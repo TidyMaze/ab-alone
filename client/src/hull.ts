@@ -23,9 +23,9 @@ export function parseCracks(flat: ArrayLike<number>): Crack[] {
   return cracks;
 }
 
-/** Plies left by board index, for the cells that are cracked. */
-export function crackLeft(cracks: readonly Crack[]): Map<number, number> {
-  return new Map(cracks.map((c) => [cellIndex(c.cell[0], c.cell[1]), c.left]));
+/** Plies left by board index, for the cells that are cracked; `cells` is the board's cell order (the arena's, #503). */
+export function crackLeft(cracks: readonly Crack[], cells?: readonly Axial[]): Map<number, number> {
+  return new Map(cracks.map((c) => [cellIndex(c.cell[0], c.cell[1], cells), c.left]));
 }
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;

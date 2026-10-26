@@ -73,6 +73,7 @@ describe('royaleBanner (#503)', () => {
 
   it('any other place names it, a loss', () => {
     expect(royaleBanner([at(1, 10, 1), at(3, 5)], 0)).toEqual({ title: 'You place 3rd', line: '5 points. Tally strikes your name.', anim: 'loss' });
+    expect(royaleBanner([at(5, 1)], 0)!.line).toBe('1 point. Tally strikes your name.');
   });
 
   it('names the places 1st to 6th', () => {

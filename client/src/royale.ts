@@ -2,6 +2,8 @@
 // Pure: the game is the wasm `Royale`, passed in; main.ts draws the arena and wires the buttons. Codes and records are
 // the wasm encodings (crates/abalone-wasm/src/lib.rs).
 import { cellsFor, type Axial } from './board';
+import { ordinal, royaleBanner } from './endbanner';
+import type { Crack } from './hull';
 import { SEATS } from './marbles';
 
 /** The 217 cells of the arena, in the order of the wasm board. */
@@ -24,6 +26,33 @@ export interface RoyaleGame {
 export function seatAt(code: number): number {
   const c = code & 7;
   return c === 1 ? 0 : c === 2 ? 1 : c >= 4 ? c - 2 : -1;
+}
+
+/** The seats with no marble left on the arena: they are out and spectate (rules.md 10.4). */
+export function outSeats(board: ArrayLike<number>): number[] {
+  const held = new Set(Array.from(board, seatAt));
+  return Array.from({ length: SEAT_COUNT }, (_, s) => s).filter((s) => !held.has(s));
+}
+
+export interface Standing {
+  seat: number;
+  place: number; // from 1, shared by a tie
+  points: number;
+}
+
+/** The wasm placement (`[place, points]` per seat in seat order), best place first, seat order within a shared place;
+ * empty while the game runs. */
+export function standings(flat: ArrayLike<number>): Standing[] {
+  const list: Standing[] = [];
+  for (let i = 0; i < flat.length; i += 2) list.push({ seat: i / 2, place: flat[i]!, points: flat[i + 1]! });
+  return list.sort((a, b) => a.place - b.place);
+}
+
+const count = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+/** The breach warning, '' without cracks: "Breach: 48 cells void in 1 round". The cracked cells all go void together. */
+export function breachText(cracks: readonly Crack[]): string {
+  return cracks.length ? `Breach: ${count(cracks.length, 'cell')} void in ${count(cracks[0]!.left, 'round')}` : '';
 }
 
 export const seatName = (seat: number): string => (seat === YOU ? 'You' : `Bot ${seat}`);
@@ -95,15 +124,35 @@ function turnText({ seat: s, outcome, ejected }: Turn): string {
   return `${seat(s)}: ${outcome}${ejected >= 0 ? `, ejected ${seatName(ejected)}` : ''}`;
 }
 
-/** The HUD plate: the round, its initiative order before the reveal, the order picked, and the reveal of the last
- * round in initiative order, each order's outcome named, a fizzle marked. */
-export function royaleHtml(log: RoundLog | null, order: readonly number[]): string {
+/** What the plate shows besides the log (#503): the seats out, the cracked cells, the standings once the game is over. */
+export interface RoyaleView {
+  out?: readonly number[];
+  cracks?: readonly Crack[];
+  standings?: readonly Standing[];
+}
+
+/** The HUD plate: the round, its initiative order before the reveal (the seats out greyed), the order picked, the
+ * breach warning, and the reveal of the last round in initiative order, each order's outcome named, a fizzle marked.
+ * Once the game is over: the end banner and each seat's place and points. */
+export function royaleHtml(log: RoundLog | null, order: readonly number[], { out = [], cracks = [], standings = [] }: RoyaleView = {}): string {
   const round = nextRound(log);
   const items = (list: string[], cls: string[] = []): string => list.map((t, i) => `<li${cls[i] ? ` class="${cls[i]}"` : ''}>${t}</li>`).join('');
+  const end = royaleBanner(standings, YOU);
+  if (end) {
+    const places = standings.map((s) => `${ordinal(s.place)} ${seat(s.seat)} · ${count(s.points, 'point')}`);
+    return (
+      `<div class="turn"><span>${end.title}</span></div>` +
+      `<div class="end" data-anim="${end.anim}">${end.line}</div>` +
+      `<ol class="placement" aria-label="Placement">${items(places)}</ol>`
+    );
+  }
+  const seats = initiative(round);
+  const breach = breachText(cracks);
   return (
     `<div class="turn"><span>Battle royale · Round ${round}</span></div>` +
-    `<ol class="initiative" aria-label="Initiative">${items(initiative(round).map(seat))}</ol>` +
+    `<ol class="initiative" aria-label="Initiative">${items(seats.map(seat), seats.map((s) => (out.includes(s) ? 'out' : '')))}</ol>` +
     `<small>Your order: ${orderText(order)}</small>` +
+    (breach ? `<small class="breach">${breach}</small>` : '') +
     (log
       ? `<ol class="reveal" aria-label="Round ${log.round} reveal">${items(log.turns.map(turnText), log.turns.map((t) => t.outcome))}</ol>`
       : '')
