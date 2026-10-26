@@ -1189,8 +1189,11 @@ let thinking = false;
 // A local game survives a reload: saved in IndexedDB after every move, replayed through the engine on
 // load (docs/specs/tech.md section 8). Loaded before the board listeners exist, so no click races it.
 const saves = new LocalSaves(indexedDbStore(), navigator.storage);
-const resumed = await saves.load(worker !== null, () => new Engine());
+// Without ?bot=off the page resumes the game of either mode: a hot-seat game from the hub's table goes on with
+// no bot (#565).
+const resumed = await saves.load(worker ? undefined : false, () => new Engine());
 if (resumed) {
+  if (!resumed.bot) worker = null;
   engine = resumed.engine;
   history.push(...resumed.moves);
 }

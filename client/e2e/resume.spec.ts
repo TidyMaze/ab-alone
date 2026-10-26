@@ -69,6 +69,29 @@ test('a hot-seat game survives a reload', async ({ page }) => {
   await expect(hud).toContainText('White to move');
 });
 
+test('a game at the hub hot-seat table survives a reload, still with no bot (#565)', async ({ page }) => {
+  await page.goto('./?nodes=200');
+  await ready(page);
+  await page.evaluate(() => {
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell: [-1, 0], beaten: [] }));
+  });
+  await openModes(page);
+  await page.getByRole('button', { name: 'Ship' }).click();
+  await click(page, -1, -1); // the hot-seat table
+  const hud = page.locator('#hud');
+  await expect(hud).toContainText('Mess: two crews, one table.');
+  await move(page, [0, 2], [0, 1]); // Black
+  await expect.poll(() => savedPlies(page)).toBe(1);
+
+  await page.reload();
+  await ready(page);
+  expect(await plies(page)).toBe(1);
+  await expect(hud).toContainText('White to move');
+  await move(page, [0, -2], [0, -1]); // White, played on the page: no bot
+  await expect.poll(() => plies(page)).toBe(2);
+  await expect(hud).toContainText('Black to move');
+});
+
 // Split from the reload test (#349): the same position a third time ends the game, and a reload then starts a new one.
 test('once a hot-seat game is over, a reload starts a new game', async ({ page }) => {
   await page.goto('./?bot=off');

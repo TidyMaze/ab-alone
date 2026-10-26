@@ -416,9 +416,10 @@ No database server. Everything is client-side.
   `local`. On the next load the engine replays it and the page shows it at the same ply, side to
   move and score (the bot answers if it was its turn). A finished game deletes the save, so the
   next load starts a new game. The New game button (#230, ui.md section 4) deletes it too, only
-  the save of the game it leaves. There is one saved local game: a save of the other mode (bot on or
-  off) is left alone, and the first move in this mode replaces it. Online and boss games are not
-  saved (online needs the log catch-up of #34). A save that does not decode (unknown `version`,
+  the save of the game it leaves. There is one saved local game. A page without `?bot=off`
+  resumes it in its own mode, against the bot or hot-seat (a game of the hub's hot-seat table goes
+  on with no bot, #565). A page with `?bot=off` leaves a save against the bot alone, and its first
+  move replaces it. Online and boss games are not saved (online needs the log catch-up of #34). A save that does not decode (unknown `version`,
   `mode` or `layout`, a bad record) or does not replay (a move the engine refuses, a finished game)
   is deleted, never shown half-done. A storage error loses the save, never the game. The format is
   versioned and minimal, it is also the export file of #219:

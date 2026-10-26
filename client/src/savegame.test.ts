@@ -267,7 +267,7 @@ describe('LocalSaves', () => {
     await new LocalSaves(store).save({ bot: false, moves: [A, B, C] }, false);
     const { make, engines } = fake();
     const loaded = await new LocalSaves(store).load(false, make);
-    expect(loaded).toEqual({ engine: engines[0], moves: [A, B, C] });
+    expect(loaded).toEqual({ engine: engines[0], moves: [A, B, C], bot: false });
     expect(engines[0]!.played).toEqual([A, B, C]);
     expect(store.data.has(LOCAL_GAME)).toBe(true);
   });
@@ -277,6 +277,15 @@ describe('LocalSaves', () => {
     const { make, engines } = fake();
     expect(await new LocalSaves(store).load(true, make)).toBeNull();
     expect(engines).toEqual([]);
+  });
+
+  it('loads the saved game of either mode when no mode is given, with its mode (#565)', async () => {
+    for (const bot of [false, true]) {
+      const store = memoryStore();
+      await new LocalSaves(store).save({ bot, moves: [A, B] }, false);
+      const { make, engines } = fake();
+      expect(await new LocalSaves(store).load(undefined, make)).toEqual({ engine: engines[0], moves: [A, B], bot });
+    }
   });
 
   it('leaves the game of the other mode (bot on or off) alone', async () => {
