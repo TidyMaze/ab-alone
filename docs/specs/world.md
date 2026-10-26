@@ -73,8 +73,10 @@ No cutscenes, no forced dialogue, no quest log.
 - **Environment.** Props tell the story: unfinished games left on mess tables, scratch counters
   on walls, shelled marbles frozen mid-push in cargo bays. Each deck has 3 to 5 "scenes".
 - **Lore terminals.** Short text logs on in-world screens (max 120 words). Optional.
-- **Audio logs.** Short voice or ambient recordings (max 60 s), collectable, replayable from an
-  archive. Optional.
+- **Audio logs.** Short ambient recordings (max 60 s), collectable, replayable from an archive.
+  Optional. One per deck (`client/src/audiologs.ts`, #515): a synthesized recording (room tone,
+  footsteps, machinery, the Choir's hum) with a timed transcript. No voice acting (section 11):
+  the words exist only in the transcript.
 - **Tally.** One-line announcements at match start and end. Never explains itself.
 - **Boss arenas.** Each boss board carries one lore object the player can inspect before the
   fight.
