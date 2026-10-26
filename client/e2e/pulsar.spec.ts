@@ -104,8 +104,24 @@ test('The Pulsar: the shockwave grows from the pulsar across the board, #675', a
 });
 
 // Bug #691: on a 1280x720 window the two bottom corner pulsars and the counter of the charging one were cut off at the
-// screen edge. In the default view of the fight, every pulsar, its glowing core and the counter it shows when it
-// charges lie inside the window, on desktop windows and on phones held upright and sideways.
+// screen edge. Bug #695: on a phone held sideways the HUD plate covered the west pulsar. In the default view of the
+// fight, every pulsar, its glowing core and the counter it shows when it charges lie inside the window and off the
+// plate, on desktop windows and on phones held upright and sideways.
+type Rect = { x: number; y: number; width: number; height: number };
+async function hiddenPulsars(page: Page, viewport: { width: number; height: number }): Promise<string[]> {
+  await freshDraw(page);
+  const rects = await page.evaluate(() => (window as any).__pulsarRects() as { pulsar: Rect; counter: Rect }[]);
+  expect(rects).toHaveLength(6);
+  const plate = (await page.locator('#hud').boundingBox())!;
+  const off = (r: Rect) => r.x < 0 || r.y < 0 || r.x + r.width > viewport.width || r.y + r.height > viewport.height;
+  const under = (r: Rect) => r.x < plate.x + plate.width && r.x + r.width > plate.x && r.y < plate.y + plate.height && r.y + r.height > plate.y;
+  return rects.flatMap(({ pulsar, counter }, id) =>
+    Object.entries({ pulsar, counter })
+      .filter(([, r]) => off(r) || under(r))
+      .map(([what, r]) => `${what} ${id} ${off(r) ? 'off screen' : 'under the plate'} at ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`),
+  );
+}
+
 const sizes = [
   { name: 'a 1280x720 window', viewport: { width: 1280, height: 720 }, mobile: false },
   { name: 'a 1280x800 window', viewport: { width: 1280, height: 800 }, mobile: false },
@@ -116,21 +132,29 @@ const sizes = [
 for (const { name, viewport, mobile } of sizes) {
   test.describe(name, () => {
     test.use({ viewport, isMobile: mobile, hasTouch: mobile });
-    test('The Pulsar: every pulsar and its counter are on screen, bug #691', async ({ page }, testInfo) => {
+    test('The Pulsar: every pulsar and its counter are on screen, off the plate, bugs #691 and #695', async ({ page }, testInfo) => {
       await startPulsar(page, true);
       await plies(page, 0, 1);
       await expect(page.locator('body')).toHaveAttribute('data-pulse-counter', '2');
-      await freshDraw(page);
+      const hidden = await hiddenPulsars(page, viewport);
       await page.screenshot({ path: testInfo.outputPath('pulsars-on-screen.png') });
-      type Rect = { x: number; y: number; width: number; height: number };
-      const rects = await page.evaluate(() => (window as any).__pulsarRects() as { pulsar: Rect; counter: Rect }[]);
-      expect(rects).toHaveLength(6);
-      const off = rects.flatMap(({ pulsar, counter }, id) =>
-        Object.entries({ pulsar, counter })
-          .filter(([, r]) => r.x < 0 || r.y < 0 || r.x + r.width > viewport.width || r.y + r.height > viewport.height)
-          .map(([what, r]) => `${what} ${id} at ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`),
-      );
-      expect(off).toEqual([]);
+      expect(hidden).toEqual([]);
     });
   });
 }
+
+// Bug #696: the view was fitted at the start of the fight only, so turning a phone upright put the side pulsars off
+// screen until Reset view. The fitted view follows the window while the player has not moved the camera himself.
+test.describe('a phone turned upright', () => {
+  test.use({ viewport: { width: 812, height: 375 }, isMobile: true, hasTouch: true });
+  test('The Pulsar: turning the phone upright refits the view, bug #696', async ({ page }, testInfo) => {
+    await startPulsar(page, true);
+    await plies(page, 0, 1);
+    await expect(page.locator('body')).toHaveAttribute('data-pulse-counter', '2');
+    const upright = { width: 375, height: 812 };
+    await page.setViewportSize(upright);
+    const hidden = await hiddenPulsars(page, upright);
+    await page.screenshot({ path: testInfo.outputPath('turned-upright.png') });
+    expect(hidden).toEqual([]);
+  });
+});
