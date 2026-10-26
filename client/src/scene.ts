@@ -126,26 +126,18 @@ export class SceneRenderer {
     this.warmLight = new THREE.PointLight(LIGHT.accents.warm.color, LIGHT.accents.warm.intensity, LIGHT.accents.warm.distance);
     this.warmLight.position.set(...LIGHT.accents.warm.position);
 
-    this.decorMaterial = new THREE.MeshStandardMaterial({ color: DECOR.color, roughness: 0.85, fog: false });
+    this.decorMaterial = new THREE.MeshStandardMaterial({
+      color: DECOR.color,
+      emissive: 0x38e8ff,
+      emissiveIntensity: 2.2,
+      roughness: 0.2,
+      fog: true,
+    });
     this.decor = new THREE.Group();
-    for (let x = -10; x <= 10; x += 4) {
-      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.35, 6, 0.4), this.decorMaterial);
-      rib.position.set(x, 0.5, -10);
-      this.decor.add(rib);
-    }
-    const topGirder = new THREE.Mesh(new THREE.BoxGeometry(24, 0.4, 0.4), this.decorMaterial);
-    topGirder.position.set(0, 3, -10);
-    const midGirder = new THREE.Mesh(new THREE.BoxGeometry(24, 0.3, 0.4), this.decorMaterial);
-    midGirder.position.set(0, -1.8, -10);
-    this.decor.add(topGirder, midGirder);
-    for (const x of [-6, 6]) {
-      const truss1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 5.2, 0.3), this.decorMaterial);
-      truss1.rotation.z = Math.PI / 4;
-      truss1.position.set(x, 0.6, -10);
-      const truss2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 5.2, 0.3), this.decorMaterial);
-      truss2.rotation.z = -Math.PI / 4;
-      truss2.position.set(x, 0.6, -10);
-      this.decor.add(truss1, truss2);
+    for (const x of [-15, -5.5, 5.5, 15]) {
+      const neon = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.14, 0.14), this.decorMaterial);
+      neon.position.set(x, 14.8, -23.2);
+      this.decor.add(neon);
     }
 
     this.fogObj = new THREE.Fog(DECK_ATMOSPHERES.mess.fogColor, 10, 20);

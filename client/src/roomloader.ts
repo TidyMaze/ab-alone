@@ -113,9 +113,12 @@ export async function loadSpaceshipBay(
           for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) * 0.75, pos.getZ(i) * 0.75);
           uv.needsUpdate = true;
           applyPbrToMesh(mesh, deckMat);
-        } else if (name.includes('deck') || name.includes('tank')) {
+        } else if (name.includes('terminal') || name.includes('tank')) {
+          mesh.visible = false;
+          applyPbrToMesh(mesh, bulkheadMat);
+        } else if (name.includes('deck')) {
           applyPbrToMesh(mesh, deckMat);
-        } else if (name.includes('wall') || name.includes('terminal') || name.includes('console')) {
+        } else if (name.includes('wall') || name.includes('console')) {
           applyPbrToMesh(mesh, bulkheadMat);
         } else {
           applyPbrToMesh(mesh, grateMat);

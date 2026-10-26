@@ -331,8 +331,8 @@ describe('clear-board storage', () => {
 });
 
 describe('mix storage, the four volume sliders (#438)', () => {
-  it('defaults to every slider at 100 %', () => {
-    expect(readMix(memoryStorage())).toEqual({ music: 100, ambience: 100, effects: 100, voice: 100 });
+  it('defaults to music, effects and voice at 100 %, ambience at 5 %', () => {
+    expect(readMix(memoryStorage())).toEqual({ music: 100, ambience: 5, effects: 100, voice: 100 });
   });
   it('writes then reads back each slider, under its own key', () => {
     const s = memoryStorage();
@@ -340,11 +340,11 @@ describe('mix storage, the four volume sliders (#438)', () => {
     writeVolume(s, 'voice', 0);
     expect(s.data.get('ab-alone.volume.music')).toBe('30');
     expect(s.data.get('ab-alone.volume.voice')).toBe('0');
-    expect(readMix(s)).toEqual({ music: 30, ambience: 100, effects: 100, voice: 0 });
+    expect(readMix(s)).toEqual({ music: 30, ambience: 5, effects: 100, voice: 0 });
   });
-  it('maps an old saved Sound off to every slider at 0, and on to 100 %', () => {
+  it('maps an old saved Sound off to every slider at 0, and on to defaults', () => {
     expect(readMix(memoryStorage({ 'ab-alone.sound': 'off' }))).toEqual({ music: 0, ambience: 0, effects: 0, voice: 0 });
-    expect(readMix(memoryStorage({ 'ab-alone.sound': 'on' }))).toEqual({ music: 100, ambience: 100, effects: 100, voice: 100 });
+    expect(readMix(memoryStorage({ 'ab-alone.sound': 'on' }))).toEqual({ music: 100, ambience: 5, effects: 100, voice: 100 });
   });
   it('a slider saved since wins over the old Sound off', () => {
     const s = memoryStorage({ 'ab-alone.sound': 'off' });
