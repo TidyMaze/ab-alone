@@ -159,6 +159,19 @@ describe('Battle royale online (#504)', () => {
     expect(items('.reveal li').slice(0, 2)).toEqual(['You: held', 'Player 2: held']);
   });
 
+  it('counts the order deadline down on the plate, from each round start (#673)', async () => {
+    const deadline = (): string => document.querySelector('#hud .presence + .deadline')?.textContent ?? '';
+    const lobby = await hosted('?bot=off&round=1500');
+    expect(deadline()).toBe(''); // no round yet
+    button('royale-start').click();
+    await until(lobby.game, () => data().net === 'choosing');
+    expect(deadline()).toBe('Order deadline: 2 s');
+    await until(lobby.game, () => deadline() === 'Order deadline: 1 s'); // redrawn as the seconds pass
+    expect(byId('hud').querySelector('.deadline')!.className).toBe('deadline short');
+    await until(lobby.game, () => data().royale === '2'); // nobody committed: round 1 resolves at its deadline
+    expect(deadline()).toMatch(/^Order deadline: [12] s$/); // and counts again from round 2's start
+  });
+
   it('an invite link takes the first free seat, waits for the start, and reports a desync', async () => {
     const room = 'abc_DEF-123';
     const game = await boot(`?bot=off&net=hook#royale=${room}`);

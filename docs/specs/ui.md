@@ -213,8 +213,12 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   round line a status line: "2 players in. Start: bots take the empty seats" for the creator, who also gets Start in
   the column, in the accent; "2 players in. Waiting for the start..." for the others; then "Your order: a move or
   Hold", "Order locked, waiting for the others..." once the order is committed, "Waiting for the round..." past the
-  deadline or for a spectator, and "Desync after round 4: a peer's game differs" in the danger colour. Hold and the
-  targets work only while the order can be committed. These strings are kept verbatim for the e2e tests, with
+  deadline or for a spectator, and "Desync after round 4: a peer's game differs" in the danger colour. Under it,
+  while the open round takes orders (to a spectator too), the order deadline in whole seconds, "Order deadline: 12 s"
+  (#673), in the text colour (above 3:1 on the plate in both themes), redrawn each second from the round start as it
+  reached the page; in the last 5 s it pulses its opacity (to 0.6 at least), not under Reduced motion. It goes once
+  every seat committed or the deadline passed. A seat silent for 2 rounds is played by the bot (tech.md section 6,
+  #674): its reveal line reads as for any seat. Hold and the targets work only while the order can be committed. These strings are kept verbatim for the e2e tests, with
   body[data-net] (lobby, choosing, locked, waiting, over) and body[data-desync] (the round, 0 for none).
 - **Battle royale breach, seats out and placement (#503).** A ring that cracks at the end of a round (rules.md section
   10.4, ring 8 at the end of round 12) glows in the hazard colour for the whole next round, under the Hull's crack

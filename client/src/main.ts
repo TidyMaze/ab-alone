@@ -133,7 +133,7 @@ import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
-import { ARENA, ARENA_SCALE, YOU, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
+import { ARENA, ARENA_SCALE, YOU, deadlineText, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
 import { buildReveal, shownAt, sinkAt, type Fall, type Reveal } from './royale-reveal';
 import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf } from './royale-net';
 import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
@@ -2794,7 +2794,7 @@ function royaleHud(game: Royale): void {
   const { board, cracks } = arenaView(game);
   const log = parseLog(game.round_log());
   const shown = log && reveal ? { ...log, turns: log.turns.slice(0, shownAt(reveal.plan, reveal.ms)) } : log;
-  const room = royaleNet && { names: royaleNet.names, you: me(), status: royaleStatus(royaleNet) };
+  const room = royaleNet && { names: royaleNet.names, you: me(), status: royaleStatus(royaleNet), left: royaleNet.left };
   document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out: outSeats(board), cracks, standings: placed, ...room });
   holdButton.disabled = end !== null || !canOrder();
   royaleInviteButton.hidden = royaleNet !== null;
@@ -2953,7 +2953,14 @@ async function goRoyale(room: string, side: number): Promise<void> {
   });
   online = session;
   royaleNet = ours;
-  ticking = setInterval(() => void ours.tick(), 100) as unknown as number;
+  // The deadlines pass, and the plate is drawn again once its countdown shows another second (#673).
+  let clock = '';
+  ticking = setInterval(() => {
+    const now = deadlineText(ours.left);
+    if (now !== clock) hud();
+    clock = now;
+    void ours.tick();
+  }, 100) as unknown as number;
   refresh();
 }
 startButton.addEventListener('click', () => void royaleNet?.start());

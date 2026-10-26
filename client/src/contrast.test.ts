@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { contrastRatio, relativeLuminance } from './contrast';
+import { contrastRatio, relativeLuminance, type RGB } from './contrast';
 
 // WCAG 2 contrast, the measure of the cell edge and the marbles against the surface (docs/specs/world.md section 5).
 describe('contrast', () => {
@@ -29,5 +29,13 @@ describe('contrast', () => {
       Math.round(0x58 * 0.25),
     ];
     expect(contrastRatio(bevelRgb, shadowDeckRgb)).toBeGreaterThanOrEqual(3.0);
+  });
+  test('the online royale countdown (--text on --panel, ui.css) stays above 3:1 in both themes, at its pulse low too (#673)', () => {
+    const at = (text: RGB, panel: RGB, alpha: number): RGB => [0, 1, 2].map((i) => Math.round(text[i]! * alpha + panel[i]! * (1 - alpha))) as unknown as RGB;
+    const themes: [RGB, RGB][] = [
+      [[0xd8, 0xd4, 0xc8], [0x16, 0x1a, 0x1d]], // dark
+      [[0x14, 0x18, 0x1b], [0xf3, 0xf0, 0xe6]], // light
+    ];
+    for (const [text, panel] of themes) expect(contrastRatio(at(text, panel, 0.6), panel)).toBeGreaterThanOrEqual(3);
   });
 });

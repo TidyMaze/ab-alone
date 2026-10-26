@@ -135,13 +135,19 @@ export interface RoyaleView {
   names?: readonly string[];
   you?: number;
   status?: OnlineStatus;
+  left?: number | null; // online: the ms left to commit in the open round, null while no round takes commits (#673)
+}
+
+/** The order deadline line of an online round, in whole seconds left, '' while no round takes commits (#673). */
+export function deadlineText(left: number | null | undefined): string {
+  return left == null ? '' : `Order deadline: ${Math.ceil(left / 1000)} s`;
 }
 
 /** The HUD plate: the round, its initiative order before the reveal (the seats out greyed), the breach warning, and
  * the reveal of the last round in initiative order, each order's outcome named, a fizzle marked.
  * Once the game is over: the end banner and each seat's place and points. */
 export function royaleHtml(log: RoundLog | null, view: RoyaleView = {}): string {
-  const { out = [], cracks = [], standings = [], names = OFFLINE, you = YOU, status } = view;
+  const { out = [], cracks = [], standings = [], names = OFFLINE, you = YOU, status, left = null } = view;
   const round = nextRound(log);
   const items = (list: string[], cls: string[] = []): string => list.map((t, i) => `<li${cls[i] ? ` class="${cls[i]}"` : ''}>${t}</li>`).join('');
   const line = status ? `<div class="presence ${status.tone}">${status.text}</div>` : '';
@@ -157,9 +163,11 @@ export function royaleHtml(log: RoundLog | null, view: RoyaleView = {}): string 
   }
   const seats = initiative(round);
   const breach = breachText(cracks);
+  const clock = left === null ? '' : `<div class="deadline${left <= 5000 ? ' short' : ''}">${deadlineText(left)}</div>`;
   return (
     `<div class="turn"><span>Battle royale · Round ${round}</span></div>` +
     line +
+    clock +
     `<ol class="initiative" aria-label="Initiative">${items(seats.map((s) => seat(s, names)), seats.map((s) => (out.includes(s) ? 'out' : '')))}</ol>` +
     (breach ? `<small class="breach">${breach}</small>` : '') +
     (log

@@ -160,6 +160,8 @@ export class RoyaleNet<G extends NetGame> {
   private kept: Sealed = { round: 0, commits: [], reveals: [] }; // what the book of the open round took
   private mine: Reveal | null = null; // our reveal, sent once the reveal starts
   private committed = false;
+  private commitBy = 0; // the open round's commit deadline, on our clock
+  private readonly missed: number[] = []; // by arena seat: the resolved rounds in a row it committed nothing in
   private stale = false; // the open round's deadline passed while we were cut off: only a catch-up resolves it
   private readonly sealed: Sealed[] = []; // what we kept of each resolved round, for a peer behind
   private readonly hashes: string[] = []; // ours after each round
@@ -190,6 +192,12 @@ export class RoyaleNet<G extends NetGame> {
     if (!this.book || this.you < 0) return 'waiting';
     if (this.committed) return 'locked';
     return this.book.revealing(this.o.now()) ? 'waiting' : 'choosing';
+  }
+
+  /** The ms left to commit in the open round, to a spectator too, or null while no round takes commits (#673). */
+  get left(): number | null {
+    const now = this.o.now();
+    return this.book && !this.book.revealing(now) ? this.commitBy - now : null;
   }
 
   /** The coordinator starts the game from the lobby: the keys seated now play, the empty seats are bots. */
@@ -278,7 +286,8 @@ export class RoyaleNet<G extends NetGame> {
 
   private async openBook(): Promise<void> {
     const now = this.o.now();
-    this.book = new RoundBook(this.o.game, this.round, this.humans, now + this.o.roundMs, now + 2 * this.o.roundMs);
+    this.commitBy = now + this.o.roundMs;
+    this.book = new RoundBook(this.o.game, this.round, this.humans, this.commitBy, now + 2 * this.o.roundMs);
     this.kept = { round: this.round, commits: [], reveals: [] };
     this.committed = false;
     this.stale = false;
@@ -328,13 +337,16 @@ export class RoyaleNet<G extends NetGame> {
     await this.replay();
   }
 
-  /** Resolves the open round from its orders by human seat, the bots' orders added, and sends our state hash. */
+  /** Resolves the open round from its orders by human seat, the bots' orders added, and sends our state hash. A seat
+   * that committed nothing in `kept` nor in the 2 rounds before is gone: the bot plays it (#674). */
   private resolve(orders: number[][], kept: Sealed, live: boolean): void {
     const game = this.o.royale;
     const humans = this.humans;
     const all: number[] = [];
     this.seats!.forEach((key, seat) => {
-      const order = key ? orders[humans.indexOf(key)]! : Array.from(game.bot_order(seat));
+      const missed = kept.commits.some((c) => c.pub === key) ? 0 : (this.missed[seat] ?? 0) + 1;
+      this.missed[seat] = missed;
+      const order = key && missed <= 2 ? orders[humans.indexOf(key)]! : Array.from(game.bot_order(seat));
       if (wellFormed(order)) all.push(seat, ...order);
     });
     const before = Array.from(game.board());

@@ -345,6 +345,10 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .initiative .out { text-decoration: line-through; }
 #hud .out .seat { opacity: 0.4; }
 #hud .breach { display: block; color: var(--hazard); }
+/* #673: the order deadline of an online round, in the text colour; its last 5 s pulse (none under Reduced motion). */
+#hud .deadline { margin-bottom: 0.25rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+#hud .deadline.short { animation: deadline-pulse 1s ease-in-out infinite; }
+@keyframes deadline-pulse { 50% { opacity: 0.6; } }
 #hud .placement { margin: 0.25rem 0 0; padding: 0; list-style: none; font-size: 0.875rem; }
 /* A medium landscape window has little room above the board's top-left edge, which runs at about 45 degrees:
    a smaller plate keeps clear of it (#246). Shorter windows have the rule below. */

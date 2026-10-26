@@ -338,9 +338,16 @@ answer: only a `Sync` does.
   such a round), sends `behind {round}`; a peer that has more answers it alone with `played`: the
   signed commits and reveals it kept of every round from there and of the round open now. The late
   peer replays each round through a fresh book past its deadlines and takes what it lacks of the
-  open one, so a peer back after a drop of any length catches up (two rounds of grace,
-  Reconnection below, are not enforced: the seat simply holds meanwhile). Not done: the deadline is not shown, a dropped seat
-  never becomes a bot, and nothing stops a peer that ignores the deadline of a coordinator who lies.
+  open one, so a peer back after a drop of any length catches up. The two rounds of grace
+  (Reconnection below, #674) count missed commits, the same on every peer: a seat with no commit
+  in a resolved round missed it, and a seat that missed the 2 rounds before is played by the bot,
+  its order from the round-start state with the room's seed like an empty seat's, in every round
+  it commits nothing. Its first commit after that (a peer back, or a player silent so far) plays
+  its own order again and resets the count. A peer back from a drop replays the rounds it missed
+  the same way, so the hashes stay equal, and retakes its seat at the next round it commits in.
+  The seat stays in each round's book, so a round waits its deadline for it. The plate counts the
+  order deadline down (#673, ui.md). Not done: nothing stops a peer that ignores the deadline of
+  a coordinator who lies.
 
 **Host / coordinator migration.** State is fully replicated, so the host holds no unique data.
 When the coordinator's channel drops (heartbeat 5 s, three misses), the live peer with the
