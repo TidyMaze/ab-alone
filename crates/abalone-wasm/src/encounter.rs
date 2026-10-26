@@ -414,6 +414,14 @@ impl Encounter {
         mv.map(|m| encode(&m).to_vec()).unwrap_or_default()
     }
 
+    /// Scales the boss search node budget by a percentage relative to baseline (e.g. 50, 100, 200).
+    pub fn scale_node_budget(&mut self, percent: u32) {
+        match &mut self.fight {
+            Fight::Plain(e) => e.scale_node_budget(percent),
+            Fight::Choir(c) => c.scale_node_budget(percent),
+        }
+    }
+
     /// The 61 cells, board specials included. On the Choir's radius 3 board the outer ring is `3`.
     pub fn board(&self) -> Vec<u8> {
         board_bytes(self.fight.game().board())
@@ -779,6 +787,14 @@ mod tests {
             .legal_moves()
             .chunks(MOVE_STRIDE)
             .any(|m| m == reply.as_slice()));
+    }
+
+    #[test]
+    fn scale_node_budget_scales_plain_and_choir_fights() {
+        let mut f = fight();
+        f.scale_node_budget(50);
+        let mut choir = Encounter::new("choir", 0).unwrap();
+        choir.scale_node_budget(200);
     }
 
     /// Index of `(q, r)` in the board bytes: rows from `r = -4`, `q` ascending.

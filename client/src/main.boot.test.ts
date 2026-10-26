@@ -360,6 +360,7 @@ describe('the settings toggles', () => {
       'setting-shell-skin',
       'setting-glass-skin',
       'setting-export-game',
+      'setting-difficulty',
       'setting-import-game',
       'setting-log-archive',
     ]);
@@ -467,6 +468,25 @@ describe('the settings toggles', () => {
     const game = await bootWith({ 'ab-alone.palette': 'tritan' });
     expect(row('palette').textContent).toBe('Palette: Tritan');
     expect(game.hook('__palette')).toBe('tritan');
+  });
+
+  it('cycles difficulty and saves it to localStorage', async () => {
+    await boot('?bot=off');
+    expect(row('difficulty').textContent).toBe('100%');
+    row('difficulty').click();
+    expect(row('difficulty').textContent).toBe('200%');
+    expect(localStorage.getItem('ab-alone.difficulty')).toBe('hard');
+    row('difficulty').click();
+    expect(row('difficulty').textContent).toBe('50%');
+    expect(localStorage.getItem('ab-alone.difficulty')).toBe('easy');
+    row('difficulty').click();
+    expect(row('difficulty').textContent).toBe('100%');
+    expect(localStorage.getItem('ab-alone.difficulty')).toBe('normal');
+  });
+
+  it('starts on the saved difficulty', async () => {
+    await bootWith({ 'ab-alone.difficulty': 'hard' });
+    expect(row('difficulty').textContent).toBe('200%');
   });
 
   it('keeps working, unsaved, when the storage is blocked', async () => {

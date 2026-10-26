@@ -5,6 +5,7 @@
 // game (#287), and the list of the Log archive (#513). Pure functions only: main.ts feeds them the clicks and builds the DOM.
 import type { IconName } from './icons';
 import type { Bus } from './sound';
+import { DIFFICULTY_LABELS, type Difficulty } from './difficulty';
 import { glassSkinById } from './glassskins';
 import { PALETTE_NAMES, type Palette } from './palettes';
 import { skinById } from './skins';
@@ -57,6 +58,7 @@ export const settingsList = (
   flat: boolean,
   palette: Palette,
   transcript: boolean,
+  difficulty: Difficulty = 'normal',
 ): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: reduced },
@@ -68,6 +70,7 @@ export const settingsList = (
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
   { id: 'glass-skin', label: glassSkinById(glass).name, icon: 'skin' },
   { id: 'export-game', label: 'Export game', icon: 'export' },
+  { id: 'difficulty', label: DIFFICULTY_LABELS[difficulty], icon: 'scale' },
   { id: 'import-game', label: 'Import game', icon: 'import' },
 ];
 

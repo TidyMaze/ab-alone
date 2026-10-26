@@ -168,7 +168,7 @@ pub fn pulsar_move(enc: &Encounter) -> Option<Move> {
     };
     search_hooked(
         enc.game(),
-        PULSAR_NODE_BUDGET,
+        enc.boss.node_budget,
         DEFAULT_WEIGHTS,
         &|_| true,
         &step,

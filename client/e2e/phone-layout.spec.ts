@@ -378,7 +378,7 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(13); // the glass skin shares the shell skin's row (#377), Palette is row 6 (#381), Transcript shares Sound's (#516), Logs shares Import game's (#513)
+    await expect(page.locator('#settings-menu button')).toHaveCount(14); // Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {
         const r = el.getBoundingClientRect();

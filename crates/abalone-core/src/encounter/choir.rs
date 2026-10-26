@@ -343,7 +343,12 @@ impl Choir {
         }
         let allow = |mv: &Move| self.check(mv).is_ok();
         let weights = self.army_in_turn().weights();
-        search_with(self.game(), CHOIR_NODE_BUDGET, weights, &allow).map(|r| r.mv)
+        search_with(self.game(), self.enc.boss.node_budget, weights, &allow).map(|r| r.mv)
+    }
+
+    /// Scales the Choir node budget by a percentage relative to baseline.
+    pub fn scale_node_budget(&mut self, percent: u32) {
+        self.enc.scale_node_budget(percent);
     }
 }
 
