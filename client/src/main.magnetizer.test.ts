@@ -6,9 +6,9 @@ import { boot, type Game } from './test/harness';
 
 // The Magnetizer on the harness (#645, #671, game-design.md section 7.9): the + and − glyphs over the polarized
 // marbles, the announce one turn ahead, the ring on a fresh one, the HUD line, and the repulsions played in the engine's
-// order, the pair's glyphs fading out. ?bot=off plays both sides from the fixture of the core tests: fight seed 42,
-// quiet boss moves on the right, the player walks the centre column up. The starts of turns 3 and 6 polarize its two
-// marbles, opposite signs; on turn 6 the second steps next to the first, which shoves the boss column of 3 off at
+// order, the pair's glyphs fading out. ?bot=off plays both sides from the fixture of the core tests: fight seed 120,
+// quiet boss moves on the right, the player walks the centre column up. The starts of turns 3 and 6 polarize two of its
+// marbles, + then −; on turn 6 the second steps next to the first, which shoves the boss column of 3 off at
 // (0, -4), and both lose their sign. Three marbles in line then push the rest of the column off twice: P2.
 
 type Pole = { cell: Axial; sign: number; fresh: boolean };
@@ -43,7 +43,7 @@ function catchScene(): () => THREE.Scene {
 }
 
 /** Starts the fight against The Magnetizer from the mode menu, on fight seed `seed`. */
-function fightMagnetizer(game: Game, seed = 42): void {
+function fightMagnetizer(game: Game, seed = 120): void {
   vi.spyOn(crypto, 'getRandomValues').mockImplementation((a) => {
     (a as Uint32Array).fill(seed);
     return a;

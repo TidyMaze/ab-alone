@@ -6,7 +6,7 @@ import { boot, type Game } from './test/harness';
 
 // The Alien on the harness (#588, game-design.md section 7.7): its eggs drawn on their cells with a counter above
 // each, facing the camera, the pulse on 1, the crush and the hatch. ?bot=off plays both sides from a fixture: fight
-// seed 7 and the quiet forward moves below lay the first egg on (-3, 1) at ply 4, next to a Black marble.
+// seed 7 and the quiet forward moves below lay the first egg on (2, 1) at ply 4, within 3 cells of a Black marble.
 
 type Move = { cells: Axial[]; dir: number };
 type Egg = { cell: Axial; left: number; glow: boolean };
@@ -14,7 +14,8 @@ const DIRS: Axial[] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const body = (): DOMStringMap => document.body.dataset;
 const SEED = 7;
-const FIRST_EGG: Axial = [-3, 1];
+const CRUSH_SEED = 10; // a seed whose first egg a single Black marble can reach
+const FIRST_EGG: Axial = [2, 1];
 
 /** Catches the scene main.ts builds: call before boot. */
 function catchScene(): () => THREE.Scene {
@@ -28,10 +29,10 @@ function catchScene(): () => THREE.Scene {
   return () => scene!;
 }
 
-/** Starts the fight against The Alien from the mode menu, on fight seed `SEED`. */
-function fightAlien(game: Game): void {
+/** Starts the fight against The Alien from the mode menu, on fight seed `seed`. */
+function fightAlien(game: Game, seed = SEED): void {
   vi.spyOn(crypto, 'getRandomValues').mockImplementation((a) => {
-    (a as Uint32Array).fill(SEED);
+    (a as Uint32Array).fill(seed);
     return a;
   });
   game.openModes();
@@ -134,16 +135,16 @@ describe('main.ts The Alien (#588)', () => {
 
   it('a marble that ends its move on an egg crushes it: no counter, no hatch', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
-    fightAlien(game);
+    fightAlien(game, CRUSH_SEED);
     plies(game, 4);
-    expect(eggs(game).map((e) => e.cell)).toEqual([FIRST_EGG]);
-    play(game, { cells: [[-3, 2]], dir: 4 }); // Black (-3, 2) NW onto the egg
+    const egg = eggs(game)[0]!.cell;
+    play(game, game.hook<Move[]>('__legal').find((m) => m.cells.length === 1 && String(to(m)) === String(egg))!); // a Black marble onto the egg
     expect(eggs(game)).toEqual([]);
     expect(body().eggs).toBe('0');
     expect(body().eggCounters).toBe('');
     expect(byId('hud').querySelector('.boss .tell')).toBeNull();
     plies(game, 6); // to ply 11, when it would have hatched: no Alien marble on its cell
-    expect(game.hook<Move[]>('__legal').some((m) => String(m.cells) === String(FIRST_EGG))).toBe(false);
+    expect(game.hook<Move[]>('__legal').some((m) => String(m.cells) === String(egg))).toBe(false);
   });
 
   it('a game that is no Alien fight draws no egg', async () => {

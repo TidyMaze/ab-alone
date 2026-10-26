@@ -536,7 +536,7 @@ impl Encounter {
         }
     }
 
-    /// The player marbles whose polarity the last ply set (The Magnetizer), a cell list.
+    /// The marbles of either side whose polarity the last ply set (The Magnetizer), a cell list.
     pub fn assigned(&self) -> Vec<i32> {
         match &self.fight {
             Fight::Plain(e) => cell_list(e.assigned()),

@@ -1,4 +1,4 @@
-// The Magnetizer (docs/specs/game-design.md section 7.9, #645): the player's marbles carry a + or − polarity, and two
+// The Magnetizer (docs/specs/game-design.md section 7.9, #645): marbles of either side carry a + or − polarity, and two
 // opposite ones side by side repel, pushing whole lines. Pure helpers over the bridge's `polarities()` and
 // `repulsions()`; the board drawing and the repulsion animation live in main.ts.
 import { COUNTER } from './alien';
