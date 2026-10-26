@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CELLS, VANISHED, type Axial } from './board';
 import { frameShape } from './frame';
-import { HUB_CELLS, neighbours } from './hub';
-import { arrowCell, HUB_BOARD, hubHtml } from './hubview';
+import { HUB_CELLS, neighbours, type Spot } from './hub';
+import { arrowCell, bumpLine, HUB_BOARD, hubHtml } from './hubview';
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
@@ -64,5 +64,27 @@ describe('the hub HUD plate', () => {
     expect(at([-2, 2])).toContain('<small>Battle royale lobby · closed</small>'); // until Phase 4 ships (#522)
     expect(at([1, -2])).toContain('<small>Lift to Cargo</small>');
     expect(at([-1, 2], 'bridge')).toContain('<small>Lift to Chapel</small>');
+  });
+});
+
+describe('a locked lift (#523)', () => {
+  const below: Spot = { deck: 'mess', cell: [1, -1] };
+
+  it('makes Tally say one short line when the marble bumps it', () => {
+    expect(bumpLine(below, [1, -2], [])).toBe("Lift to Cargo: locked. This deck's boss is still on the books.");
+    expect(bumpLine({ deck: 'cargo', cell: [0, -1] }, [1, -2], ['echo'])).toContain('Lift to Furnace: locked.');
+  });
+
+  it('says nothing for an open lift, another cell, or a lift more than one cell away', () => {
+    expect(bumpLine(below, [1, -2], ['echo'])).toBe('');
+    expect(bumpLine({ deck: 'cargo', cell: [0, 1] }, [-1, 2], [])).toBe(''); // the lift down is always open
+    expect(bumpLine(below, [0, -1], [])).toBe('');
+    expect(bumpLine({ deck: 'mess', cell: [0, 0] }, [1, -2], [])).toBe('');
+  });
+
+  it("puts Tally's line under the HUD plate", () => {
+    expect(hubHtml(below, 'Locked.')).toBe(
+      '<div class="turn"><span>Ship · Mess</span></div><small></small><div class="tally">Locked.</div>',
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { contrastRatio, type RGB } from '../src/contrast';
 import { openModes } from './modes';
 
 // #521: the Ship entry of the mode menu draws the deck's hub map (docs/specs/game-design.md section 3.5) and the glass
@@ -6,6 +7,8 @@ import { openModes } from './modes';
 // cell. The spot is saved: after a reload, Ship lands on the same cell.
 // #522: rolling onto a boss door or a table starts its game, and once that game is over Back to the ship puts the
 // marble back on the door. The battle royale lobby is shown closed.
+// #523: a lift wears an arrow toward its deck, with a bar across while it is locked. A locked lift keeps the marble out
+// and Tally says one short line; a boss win opens it. body[data-lifts] lists the lifts of the deck.
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
@@ -122,4 +125,58 @@ test('the battle royale lobby is shown closed and opens nothing, #522', async ({
   await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess -2,2');
   await expect(page.locator('#hud')).toContainText('Battle royale lobby · closed');
   await page.screenshot({ path: testInfo.outputPath('royale-closed.png') });
+});
+
+/** The colour of the lift glyph at the centre of `cell` and of the floor next to it, after a draw that began now: under
+ * automation the page skips draws (#216, #365). */
+async function liftPixels(page: Page, [q, r]: [number, number], path: string): Promise<[RGB, RGB]> {
+  const draws = await page.evaluate(() => (window as any).__draws() as number);
+  await page.waitForFunction((n) => (window as any).__draws() > n, draws);
+  const png = await page.screenshot({ path });
+  // The floor 0.28 west and 0.1 north of the centre: inside the ring, clear of the arrow and the bar.
+  const floor: [number, number] = [q - 0.28 + 0.1 / Math.sqrt(3), r - 0.2 / Math.sqrt(3)];
+  return page.evaluate(
+    async ([b64, cells]) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement('canvas');
+      [c.width, c.height] = [img.width, img.height];
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      return cells.map(([cq, cr]) => {
+        const { x, y } = (window as any).__cellToScreen(cq, cr);
+        const [red, green, blue] = g.getImageData(Math.round(x), Math.round(y), 1, 1).data;
+        return [red, green, blue];
+      }) as [RGB, RGB];
+    },
+    [png.toString('base64'), [[q, r], floor]] as const,
+  );
+}
+
+test('a locked lift keeps the marble out with a Tally line, and a boss win opens it, #523', async ({ page }, testInfo) => {
+  await shipAt(page, './?bot=off', [1, -1]);
+  const body = page.locator('body');
+  await expect(body).toHaveAttribute('data-lifts', 'cargo locked');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('#hud .tally')).toHaveText("Lift to Cargo: locked. This deck's boss is still on the books.");
+  await expect(body).toHaveAttribute('data-hub', 'mess 1,-1');
+  const locked = await liftPixels(page, [1, -2], testInfo.outputPath('lift-locked.png'));
+  expect(contrastRatio(...locked)).toBeGreaterThanOrEqual(3);
+
+  // The win as a won fight saves it (progress.ts recordWin), then Ship again.
+  await page.evaluate(() => {
+    const progress = JSON.parse(localStorage.getItem('ab-alone.progress')!);
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ ...progress, beaten: ['echo'] }));
+  });
+  await ship(page);
+  await expect(body).toHaveAttribute('data-lifts', 'cargo open');
+  await expect(page.locator('#hud .tally')).toHaveCount(0);
+  const open = await liftPixels(page, [1, -2], testInfo.outputPath('lift-open.png'));
+  expect(contrastRatio(...open)).toBeGreaterThanOrEqual(3);
+  await page.keyboard.press('ArrowUp');
+  await expect(body).toHaveAttribute('data-hub', 'cargo -1,2');
+  await expect(body).toHaveAttribute('data-lifts', 'furnace locked,mess open');
+  const cargo = await liftPixels(page, [1, -2], testInfo.outputPath('cargo-locked.png')); // in the Cargo's light
+  expect(contrastRatio(...cargo)).toBeGreaterThanOrEqual(3);
 });

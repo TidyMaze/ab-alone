@@ -1,7 +1,7 @@
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board main.ts draws the map with, the cell an
 // arrow key rolls the marble to, and the HUD plate. Pure: no DOM, no three.js.
 import { CELLS, VANISHED, type Axial } from './board';
-import { HUB_CELLS, roomAt, type Door, type Spot } from './hub';
+import { canEnter, HUB_CELLS, neighbours, roomAt, type Door, type Spot } from './hub';
 
 /** The bridge board with a hole on every cell off the hub map: the frame shrinks to the map, the other discs hide. */
 export const HUB_BOARD: readonly number[] = CELLS.map(([q, r]) =>
@@ -34,9 +34,18 @@ const DOORS: Record<Exclude<Door['kind'], 'lift'>, string> = {
   royale: 'Battle royale lobby · closed',
 };
 
-/** The HUD plate in the hub: the deck, and the room the marble stands on. */
-export function hubHtml({ deck, cell }: Spot): string {
+/** The HUD plate in the hub: the deck, the room the marble stands on, and Tally's line when there is one. */
+export function hubHtml({ deck, cell }: Spot, tally = ''): string {
   const door = roomAt(deck, cell);
   const room = !door ? '' : door.kind === 'lift' ? `Lift to ${title(door.to)}` : DOORS[door.kind];
-  return `<div class="turn"><span>Ship · ${title(deck)}</span></div><small>${room}</small>`;
+  const line = tally ? `<div class="tally">${tally}</div>` : '';
+  return `<div class="turn"><span>Ship · ${title(deck)}</span></div><small>${room}</small>${line}`;
+}
+
+/** Tally's line when a roll to `to` bumps a locked lift next to the marble (#523), else ''. */
+export function bumpLine(at: Spot, to: Axial, beaten: readonly string[]): string {
+  const door = roomAt(at.deck, to);
+  const next = neighbours(at.cell).some(([q, r]) => q === to[0] && r === to[1]);
+  if (door?.kind !== 'lift' || !next || canEnter(door, beaten)) return '';
+  return `Lift to ${title(door.to)}: locked. This deck's boss is still on the books.`;
 }
