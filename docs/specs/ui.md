@@ -341,7 +341,11 @@ The canvas fills the window. A window taller than wide keeps the horizontal view
 upright, and the picture moves down by a quarter of the spare height, which leaves the top to the
 plate and the buttons (#227). A fight against The Pulsar opens drawn back, along the same line, just
 far enough that the six pulsars off the corners and the counter above each fit the window too, and
-Reset view goes back there (#691). The chrome adds a rim only: a fixed, non-interactive radial gradient
+Reset view goes back there (#691). None of them lies under the HUD plate either: the picture slides
+sideways, as little as clears the plate (on a phone held sideways, to the right), and draws back only
+when no slide does (#695). A new window size, such as a phone turned upright, fits that view again
+while the player has not moved the camera; once he orbits or zooms, his view stays until Reset view
+(#696). A co-op Pulsar fight opens on the same view. The chrome adds a rim only: a fixed, non-interactive radial gradient
 from transparent at 65 % to near-black (`#0b0d0f` at 75 % opacity) at 100 %, the same in both themes because the 3D deck is dark either way (fog at the rim, never over the cells). No border or
 frame is drawn around the canvas, the 3D deck is the frame. The rim is removed with clear-board
 mode once that toggle exists (#32), and it has no motion.

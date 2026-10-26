@@ -260,6 +260,9 @@ export class SceneRenderer {
 
     this.camera.position.set(p.x, p.y, p.z);
     this.camera.lookAt(x, y, z);
+    // The picture slides right by the aside of the view (#695), never while reading: the reader centres the screen.
+    const { fullWidth, fullHeight, offsetY } = this.camera.view!;
+    this.camera.setViewOffset(fullWidth, fullHeight, reading ? 0 : (-view.aside * fullWidth) / 2, offsetY, fullWidth, fullHeight);
     this.camera.updateMatrixWorld();
     this.updateFog(context.tier, context.clear, view, this.fogRadius, context.deck);
   }
