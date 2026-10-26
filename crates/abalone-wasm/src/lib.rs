@@ -1586,7 +1586,39 @@ mod tests {
         assert_eq!(lit("chaplain"), vec![6, 0], "14 boss marbles, P2 at 8");
         assert_eq!(lit("choir"), vec![4, 0], "P2 once an army of four is wiped");
         assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");
-        assert_eq!(lit("alien"), vec![3, 0], "8 boss marbles, P2 at 5");
+        assert_eq!(lit("alien"), vec![2, 0], "P2 after 2 ejections");
+    }
+
+    #[test]
+    fn the_alien_phases_and_notches_count_the_ejections_not_its_marbles() {
+        // The Alien start with 2 hatched marbles, `n` ejections already credited to the player.
+        let alien = |n: u8| {
+            let mut board = alien_start(1).game().board().clone();
+            board.set(-1, -3, Cell::White);
+            board.set(0, -3, Cell::White);
+            let game = Game::from_position(board, Player::Black, [n, 0]);
+            Encounter {
+                fight: Fight::Plain(CoreEncounter::new(game, alien_boss(), 1)),
+                entry: boss_entry("alien").unwrap(),
+            }
+        };
+        let seen: Vec<(u8, u8, Vec<u8>)> = (0..=5)
+            .map(|n| {
+                let f = alien(n);
+                (f.phase(), f.phases(), f.phase_notches())
+            })
+            .collect();
+        assert_eq!(
+            seen,
+            vec![
+                (0, 3, vec![2, 0]),
+                (0, 3, vec![1, 1]),
+                (1, 3, vec![2, 0]),
+                (1, 3, vec![1, 1]),
+                (2, 3, vec![]),
+                (2, 3, vec![]),
+            ]
+        );
     }
 
     #[test]

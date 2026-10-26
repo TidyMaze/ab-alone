@@ -394,6 +394,30 @@ mod tests {
         fight(&[(2, 2)], &left[..n], &[], Player::Black, seed)
     }
 
+    /// A fight where eggs hatched: the 8 start marbles and 5 hatched ones, `ejected` of them
+    /// already credited to the player.
+    fn brood_after(ejected: u8) -> Encounter {
+        let hatched = [(-4, 0), (-4, 1), (-4, 2), (-4, 3), (-4, 4)];
+        let white: Vec<P> = ALIEN_START.iter().chain(&hatched).copied().collect();
+        let game = Game::from_position(board(&[(2, 2)], &white, &[]), Player::Black, [ejected, 0]);
+        Encounter::new(game, alien_boss(), 1)
+    }
+
+    #[test]
+    fn the_phase_follows_the_ejections_credited_to_the_player_not_the_brood() {
+        let phases: Vec<usize> = (0..=5).map(|n| brood_after(n).phase()).collect();
+        assert_eq!(
+            phases,
+            vec![0, 0, 1, 1, 2, 2],
+            "P2 after 2 ejections, P3 after 4"
+        );
+        assert_eq!(
+            with_alien_marbles(3, 1).phase(),
+            0,
+            "few marbles left, none ejected"
+        );
+    }
+
     #[test]
     fn p2_lays_every_boss_turn_up_to_the_cap() {
         let mut enc = with_alien_marbles(5, 1);
