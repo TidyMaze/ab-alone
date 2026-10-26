@@ -91,9 +91,9 @@ export async function loadSpaceshipBay(
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([
       gltfLoader.loadAsync(`${basePath}spaceship-bay.glb`),
-      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0.04, 8),
-      loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 4),
-      loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 4),
+      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0.04, 0.5),
+      loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1),
+      loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1),
     ]);
 
     const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x333b42, roughness: 0.8 });

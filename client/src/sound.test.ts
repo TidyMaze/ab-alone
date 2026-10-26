@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { EJECT_MS, PUSH_MS, VOID_MS } from './eject';
 import { FakeBufferSource, FakeContext, FakeFilter, FakeGain, FakeNode, FakeOscillator } from './test/audio';
 import {
+  AMBIENCE_TRACKS,
   BUSES,
   CROSSFADE_TAU,
   CUE_AT,
@@ -10,6 +11,7 @@ import {
   DUCK_TAU,
   HUM,
   MASTER_LEVEL,
+  MUSIC_TRACK,
   ROUTE,
   SILENT,
   Sfx,
@@ -422,6 +424,31 @@ describe('Sfx.unlock, on a user gesture', () => {
       expect(level.gain.value).toBe(tone.gain);
       expect(next(level)).toBe(bus(ctx, ROUTE.hum));
     });
+  });
+
+  it('starts the reactor room ambience tracks and the hauler music track looped on their buses', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    expect(AMBIENCE_TRACKS.map((t) => t.url)).toEqual([
+      'audio/reactor-room-tone-1.mp3',
+      'audio/reactor-room-tone-2.mp3',
+    ]);
+    expect(MUSIC_TRACK.url).toBe('audio/dead-ore-hauler.mp3');
+    expect(ctx.tracks).toHaveLength(AMBIENCE_TRACKS.length + 1);
+    AMBIENCE_TRACKS.forEach((track, i) => {
+      const node = ctx.tracks[i]!;
+      expect(node.media.src).toBe(track.url);
+      expect(node.media.loop).toBe(true);
+      expect(node.media.volume).toBe(track.gain);
+      expect(node.media.played).toBe(1);
+      expect(next(node)).toBe(bus(ctx, ROUTE.hum));
+    });
+    const musicNode = ctx.tracks.at(-1)!;
+    expect(musicNode.media.src).toBe(MUSIC_TRACK.url);
+    expect(musicNode.media.loop).toBe(true);
+    expect(musicNode.media.volume).toBe(MUSIC_TRACK.gain);
+    expect(musicNode.media.played).toBe(1);
+    expect(next(musicNode)).toBe(bus(ctx, ROUTE.tension));
   });
 
   it('starts the tension drones with the context, each layer through its own gain into the music bus, silent while calm', () => {
