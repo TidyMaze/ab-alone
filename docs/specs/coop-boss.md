@@ -26,6 +26,8 @@ go **player A, boss, player B, boss, player A...**:
   refused as `not-their-turn`, like a move out of turn in versus.
 - Either player may move any Black marble. Nobody owns a group of marbles.
 - The HUD says **Your turn** or **Partner's turn** on the human plies, and the boss turn as in solo.
+- The rotation lives in `client/src/coop.ts`: the judge of a co-op room tells the session which seat
+  is to move (`Judge.mover`, #527).
 
 ## 3. The boss move never goes on the wire
 

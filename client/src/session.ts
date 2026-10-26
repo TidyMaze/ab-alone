@@ -1,3 +1,4 @@
+import { COOP_SIDE } from './coop';
 import { Coordination } from './coordinator';
 import { MoveLog } from './movelog';
 import {
@@ -34,6 +35,9 @@ export interface Judge {
   play(mv: Int32Array, live: boolean): void;
   status(): number; // 0 while the game runs
   restart(): void; // a new game from the start position: the rematch
+  /** Co-op only (docs/specs/coop-boss.md section 2): the seat whose human ply it is, see `seatOfPly`.
+   * With it every seat plays Black, without it a seat moves when its colour is to move. */
+  mover?(): number;
 }
 
 const CREATOR = 1; // the room creator holds seat 1 (Black) and decides who gets the others
@@ -163,7 +167,7 @@ export class OnlineSession {
 
   /** The colour we play in this game, 1 Black or 2 White. */
   get side(): number {
-    return colourOf(this.o.side, this.games.length - 1, this.seats.count);
+    return this.o.judge.mover ? COOP_SIDE : colourOf(this.o.side, this.games.length - 1, this.seats.count);
   }
 
   /** Whether the key that plays `side` in this game is connected. A free seat is `waiting`. */
@@ -184,7 +188,7 @@ export class OnlineSession {
   /** We are a seated player, our turn, the transport is open and the key of every other seat is
    * connected: a move now would reach the opponents, not just any peer such as a spectator (#143). */
   canPlay(): boolean {
-    return this.reachesOpponents() && this.o.judge.to_move() === this.side;
+    return this.reachesOpponents() && this.toMove(this.o.side);
   }
 
   /** Same as canPlay, for a rematch ask: the game is over and we did not ask yet. */
@@ -216,6 +220,12 @@ export class OnlineSession {
 
   private newGame(id: string): Game {
     return { id, log: new MoveLog(id, this.o.keys.pub), asks: new Map() };
+  }
+
+  /** Whether room seat `seat` is to move now. */
+  private toMove(seat: number): boolean {
+    const { judge } = this.o;
+    return judge.mover ? judge.mover() === seat : judge.to_move() === colourOf(seat, this.games.length - 1, this.seats.count);
   }
 
   private known(game: string): boolean {
@@ -281,7 +291,7 @@ export class OnlineSession {
     }
     const seat = this.seats.seatOf(r.pub);
     if (seat === 0) return this.o.onRefuse('wrong-key');
-    if (colourOf(seat, this.games.length - 1, this.seats.count) !== this.o.judge.to_move()) return this.o.onRefuse('not-their-turn');
+    if (!this.toMove(seat)) return this.o.onRefuse('not-their-turn');
     try {
       this.o.judge.play(Int32Array.from(r.move), live);
     } catch {
