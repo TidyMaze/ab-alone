@@ -567,16 +567,15 @@ mod tests {
         assert_eq!(enc.game().board().pulsar(), Some((E, 2)));
     }
 
-    /// The pulsars and boards after each ply of first legal moves from `seed`, up to 40 plies or
-    /// the end of the fight.
+    /// The pulsars and boards after each of 40 plies of first legal moves from `seed`.
     fn run(seed: u64) -> Vec<(Option<(u8, u8)>, Board)> {
         let mut enc = pulsar_start(seed);
         (0..40)
-            .map_while(|_| {
+            .map(|_| {
                 let game = enc.game();
                 let m = legal_moves(game.board(), game.to_move()).swap_remove(0);
-                enc.play(&m).ok()?;
-                Some((enc.game().board().pulsar(), enc.game().board().clone()))
+                enc.play(&m).unwrap();
+                (enc.game().board().pulsar(), enc.game().board().clone())
             })
             .collect()
     }
@@ -584,7 +583,11 @@ mod tests {
     #[test]
     fn the_same_seed_and_moves_give_the_same_pulses_and_the_seed_matters() {
         assert_eq!(run(11), run(11));
-        assert!(run(11).len() > 16, "past the second pulsar");
+        assert_ne!(
+            run(11)[39].0.unwrap().0,
+            run(11)[0].0.unwrap().0,
+            "past the second pulsar"
+        );
         let runs: Vec<_> = (0..8).map(run).collect();
         assert!(
             runs.iter().any(|r| *r != runs[0]),
