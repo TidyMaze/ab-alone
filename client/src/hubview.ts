@@ -31,6 +31,7 @@ const DOORS: Record<Exclude<Door['kind'], 'lift'>, string> = {
   hotseat: 'Hot-seat table',
   bot: 'Bot table',
   online: 'Online table',
+  royale: 'Battle royale lobby · closed',
 };
 
 /** The HUD plate in the hub: the deck, and the room the marble stands on. */

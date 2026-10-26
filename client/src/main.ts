@@ -29,6 +29,7 @@ import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { inviteUrl, newRoomId, roomFromHash } from './invite';
 import { hookTransport, p2pTransport } from './p2p';
+import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
 import { generateKeys } from './moverecord';
@@ -103,7 +104,7 @@ import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
 import { loadProgress, recordWin, saveProgress } from './progress';
-import { roomsOf, step, type Spot as HubSpot } from './hub';
+import { roomAt, roomsOf, step, type Spot as HubSpot } from './hub';
 import { arrowCell, HUB_BOARD, hubHtml } from './hubview';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
@@ -887,6 +888,7 @@ const tickMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // glass, half ridged, 3:1 on the shell (#326).
 const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
+const barGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
 const shellCapGeometry = new THREE.SphereGeometry(0.37, 32, 8, 0, Math.PI * 2, 0, Math.PI * 0.35);
 let exposed = 0; // marbles the hovered move would expose, for the HUD
@@ -1171,13 +1173,16 @@ function applyPalette(): void {
 applyPalette();
 let hover: Axial | null = null;
 let hubAt: HubSpot | null = null; // where the marble stands while the hub is shown (#521), else null
+let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
+const backButton = document.getElementById('ship-back') as HTMLButtonElement;
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
 // (the rules e2e tests drive both sides by hand).
-const worker =
+const botWorker =
   new URLSearchParams(location.search).get('bot') === 'off'
     ? null
     : new Worker(new URL('./bot.worker.ts', import.meta.url), { type: 'module' });
+let worker = botWorker; // the bot of this game: none at the hub's hot-seat table either (#522)
 const history: number[][] = [];
 let thinking = false;
 
@@ -1453,6 +1458,7 @@ let ringed: Axial[] = []; // the marbles drawn with the selection ring, read by 
 let targets: ReturnType<typeof groupTargets> = []; // the cells drawn with a target arrow, read by the e2e tests
 
 function hud(extra = ''): void {
+  backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
   if (hubAt) {
     delete document.body.dataset.over; // no end light over the hub
     document.getElementById('hud')!.innerHTML = hubHtml(hubAt);
@@ -1639,12 +1645,17 @@ function drawHub(at: HubSpot): void {
   marbles.clear();
   marbleAt.clear();
   ghosts.clear();
-  for (const { cell } of roomsOf(at.deck)) {
+  for (const { cell, door } of roomsOf(at.deck)) {
     const p = axialTo3D(...cell);
     const glyph = new THREE.Mesh(outlineGeometry, paleMaterial);
     glyph.rotation.x = Math.PI / 2;
     glyph.position.set(p.x, 0.02, p.z);
     marbles.add(glyph);
+    if (door.kind !== 'royale') continue;
+    const bar = new THREE.Mesh(barGeometry, paleMaterial); // a bar across the ring: the lobby is closed (#522)
+    bar.rotation.y = Math.PI / 4;
+    bar.position.set(p.x, 0.02, p.z);
+    marbles.add(bar);
   }
   const p = axialTo3D(...at.cell);
   const marble = marbleMesh(glassOf());
@@ -2016,7 +2027,9 @@ function askNewGame(confirm: Confirm): void {
 newGameButton.addEventListener('click', () => {
   const press = pressNewGame(confirmNew, performance.now(), history.length);
   askNewGame(press.confirm);
-  if (!press.start) return;
+  if (press.start) newGame();
+});
+function newGame(): void {
   if (hubAt) {
     leaveHub();
     applyDeck(deckOf('local'));
@@ -2028,7 +2041,7 @@ newGameButton.addEventListener('click', () => {
   void saves.clear();
   refresh();
   analyse(); // the bar follows the new game, an answer for the old one is dropped
-});
+}
 newGameButton.disabled = false; // listener ready (#146)
 
 // Boss fight: the menu lists the bosses of the bridge, picking one switches the page to encounter
@@ -2038,6 +2051,7 @@ const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }): void {
   leaveHub();
+  worker = botWorker; // the boss answers, after the hub's hot-seat table too (#522)
   stopAnalysis();
   fight = { id, seed, daily };
   goalOpen = false;
@@ -2095,24 +2109,53 @@ retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : start
 
 // The hub (#521, game-design.md section 3.5): Ship draws the map of the saved deck, in that deck's look, with the
 // player's glass marble on the saved cell. A click on a neighbour cell or an arrow key rolls it one cell (hub.ts step),
-// and the spot is saved (progress.ts). A new game, a boss fight or Play online leaves it; the doors open nothing yet.
+// and the spot is saved (progress.ts). A new game, a boss fight or Play online leaves it.
 const shipButton = document.getElementById('ship') as HTMLButtonElement;
 shipButton.addEventListener('click', () => {
   if (online) return;
   moveModes('pick');
   leaveRoyale();
-  hubAt = loadProgress(store).at;
-  applyDeck(hubAt.deck);
-  refresh();
+  enterHub(loadProgress(store).at);
 });
 shipButton.disabled = false; // listener ready (#146)
+function enterHub(at: HubSpot): void {
+  roomOf = null;
+  hubAt = at;
+  applyDeck(at.deck);
+  refresh();
+}
 function walk(to: Axial): void {
   const progress = loadProgress(store);
-  hubAt = step(hubAt!, to, progress.beaten);
+  const from = hubAt!;
+  hubAt = step(from, to, progress.beaten);
+  if (hubAt === from) return; // not a neighbour, or a locked lift
   saveProgress(store, { ...progress, at: hubAt });
   if (hubAt.deck !== deck) applyDeck(hubAt.deck);
   refresh();
+  enterRoom(hubAt);
 }
+// The doors (#522): rolling onto a boss door or a table starts the same game as its mode menu entry, and the room is
+// kept for Back to the ship. A terminal (#524), a lift and the closed battle royale lobby start nothing here.
+function enterRoom(at: HubSpot): void {
+  const door = roomAt(at.deck, at.cell);
+  if (door?.kind === 'boss') startBoss(door.boss, crypto.getRandomValues(new Uint32Array(1))[0]!);
+  else if (door?.kind === 'hotseat' || door?.kind === 'bot') startLocal(door.kind === 'bot');
+  else if (door?.kind === 'online' && !playOnlineButton.disabled) playOnline();
+  else return;
+  roomOf = at;
+}
+function startLocal(bot: boolean): void {
+  worker = bot ? botWorker : null;
+  fight = null; // a boss fight the hub was opened from
+  delete document.body.dataset.boss;
+  retryButton.hidden = true;
+  newGameButton.hidden = false;
+  newGame();
+}
+backButton.addEventListener('click', () => {
+  leaveOnline();
+  enterHub(roomOf!);
+});
 function leaveHub(): void {
   hubAt = null;
   delete document.body.dataset.hub;
@@ -2195,6 +2238,7 @@ let onlineNote = '';
 let offlineNotice = ''; // no connection: Play online is disabled, a game in progress keeps its own status (#194)
 let playReady = false;
 let onlineLine: OnlineStatus | undefined;
+let link: Transport | null = null; // the transport of the online room, closed by Back to the ship (#522)
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
 const inviteLabel = document.getElementById('invite-label')!;
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
@@ -2216,6 +2260,7 @@ async function goOnline(room: string, side: number): Promise<void> {
     new URLSearchParams(location.search).get('net') === 'hook'
       ? hookTransport()
       : p2pTransport(room, (message) => diag.joinError(message));
+  link = net;
   // The creator waits for an opponent as long as it takes, a joiner should find the creator's room at once.
   if (side !== 1) setTimeout(() => diag.timeout(), SIGNALING_TIMEOUT_MS);
   let netState = '';
@@ -2223,7 +2268,8 @@ async function goOnline(room: string, side: number): Promise<void> {
   // The status line shows our color and whether the key bound to the other seat is connected (#121).
   // Our color is the session's: it swaps at each rematch.
   const note = (): void => {
-    const session = online!; // set before the session calls back, and below before the first note
+    const session = online; // set before the session calls back, and below before the first note
+    if (!session) return; // the room was left for the ship (#522)
     const role = session.role;
     const mine = session.side;
     const opponent = session.presenceOf(3 - mine);
@@ -2279,7 +2325,7 @@ async function goOnline(room: string, side: number): Promise<void> {
   note();
   refresh();
 }
-document.getElementById('play-online')!.addEventListener('click', () => {
+function playOnline(): void {
   moveModes('pick');
   const room = newRoomId((b) => crypto.getRandomValues(b));
   location.hash = `room=${room}`;
@@ -2287,7 +2333,20 @@ document.getElementById('play-online')!.addEventListener('click', () => {
   inviteBox.hidden = false;
   inviteLabel.hidden = false;
   void goOnline(room, 1);
-});
+}
+document.getElementById('play-online')!.addEventListener('click', playOnline);
+// Back to the ship from an online table (#522): the room is closed and the page is a local one again.
+function leaveOnline(): void {
+  if (!online) return;
+  online = null;
+  link!.close();
+  onlineNote = '';
+  onlineLine = undefined;
+  for (const key of ['online', 'seat', 'opponent', 'coordinator', 'handover']) delete document.body.dataset[key];
+  inviteBox.hidden = inviteLabel.hidden = rematchButton.hidden = true;
+  newGameButton.hidden = false;
+  window.history.replaceState(null, '', location.pathname + location.search); // no room in the address
+}
 const playOnlineButton = document.getElementById('play-online') as HTMLButtonElement;
 setButton(playOnlineButton, 'Play online', icon('online'));
 
