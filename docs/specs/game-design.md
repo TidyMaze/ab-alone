@@ -384,9 +384,13 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Calibrate**: knobs = starting marbles (8), lay interval (2), hatch time (4), egg cap (3), phase
   ejections (2, 4), AI depth (3). Fail if the median fight ends with fewer than 2 eggs crushed (nobody learns the
   counter) or the Alien's marble count only ever goes up (the brood outruns the player).
-  Measured in #646 (`alien_sim`, `boss-balance.md` section 3): the rule holds against the ladder
-  player at 10x and 1x the boss budget (median 2 eggs crushed, the count drops in every fight), so
-  no knob changed.
+  Measured in #646 and #667 (`alien_sim`, 50 seeds, `boss-balance.md` section 3): the rule holds
+  against the ladder player at 10x and 1x the boss budget (median 2 eggs crushed, the count drops in
+  every fight), but the ladder player wins every fight, 50 of 50 at both budgets, against the 7 to 9
+  of 10 at 10x of the other bosses. No single knob above brings it inside: with more start
+  marbles, up to the 14 of the standard layout, the player still wins every fight at 10x, and a
+  faster or bigger brood or a bigger boss budget wins it no fight even at 1x. Owner decision on #667: the Alien stays as it is, the bot ladder cannot
+  calibrate this boss, and humans judge its difficulty.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). It has no hub door: each deck keeps its one boss.
 

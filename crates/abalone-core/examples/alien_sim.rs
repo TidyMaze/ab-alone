@@ -4,8 +4,9 @@
 //! then each game is replayed through the encounter to count the eggs and follow the Alien's
 //! marbles. The Calibrate rule fails when the median fight ends with fewer than 2 eggs crushed, or
 //! when the Alien's marble count only ever goes up (it never drops in the fight).
-//! Set `ALIEN_SEEDS=<n>` to play n seeds (default 20) and `ALIEN_X=<x>` for another player budget,
-//! x times the boss budget. The seeds run on all cores.
+//! Set `ALIEN_SEEDS=<n>` to play n seeds (default 50, the seed count of the numbers in
+//! `boss-balance.md`, #667) and `ALIEN_X=<x>` for another player budget, x times the boss budget.
+//! The seeds run on all cores.
 
 use abalone_core::board::Cell;
 use abalone_core::encounter::alien::{alien_start, ALIEN_NODE_BUDGET};
@@ -80,7 +81,7 @@ fn median(mut xs: Vec<f64>) -> f64 {
 }
 
 fn main() {
-    let seeds = env("ALIEN_SEEDS", 20.0) as u64;
+    let seeds = env("ALIEN_SEEDS", 50.0) as u64;
     let budget = (env("ALIEN_X", 10.0) * f64::from(ALIEN_NODE_BUDGET)) as u32;
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get() as u64);
     let mut fights: Vec<(u64, Fight)> = std::thread::scope(|scope| {
