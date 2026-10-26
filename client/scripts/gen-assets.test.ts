@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain Node script, no type declarations
 import { ASSET_NAMES, SEED, generateAssets } from './gen-assets.mjs';
 import { relativeLuminance } from '../src/contrast';
@@ -11,6 +11,7 @@ import { DECK_NAMES } from '../src/deck';
 const sha = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 const hashAll = (assets: Map<string, Buffer>): string =>
   sha(Buffer.concat([...assets.entries()].map(([n, b]) => Buffer.concat([Buffer.from(n), b]))));
+const hashes = (assets: Map<string, Buffer>): Map<string, string> => new Map([...assets].map(([n, b]) => [n, sha(b)]));
 
 // docs/specs/tech.md section 9: the initial load stays under 5 MB gzipped. Textures get a fifth of it.
 const BUDGET_BYTES = 1_000_000;
@@ -24,42 +25,46 @@ function decode(buf: Buffer, channels = 3): { w: number; h: number; rows: Buffer
   return { w, h, rows: Array.from({ length: h }, (_, y) => raw.subarray(y * stride + 1, (y + 1) * stride)) };
 }
 
-// Each run generates every asset, the five deck sets of #401 included: a few hundred ms alone, seconds when the whole
-// suite runs in parallel with coverage, over vitest's 5 s default on a loaded machine.
+// A run generates every asset, the deck sets of #401 and #440 included: a few hundred ms alone, seconds when the whole
+// suite runs in parallel with coverage on a loaded machine. So the tests share one run, and only the tests about runs
+// themselves draw again (bug #609).
 describe('gen-assets', { timeout: 20_000 }, () => {
+  let assets: Map<string, Buffer>;
+  beforeAll(() => {
+    assets = generateAssets(SEED);
+  });
+
   it('is deterministic: two runs with the same seed give the same hash', () => {
-    expect(hashAll(generateAssets(SEED))).toBe(hashAll(generateAssets(SEED)));
+    expect(hashAll(generateAssets(SEED))).toBe(hashAll(assets));
   });
 
   it('changes when the seed changes', () => {
-    expect(hashAll(generateAssets(SEED + 1))).not.toBe(hashAll(generateAssets(SEED)));
+    expect(hashAll(generateAssets(SEED + 1))).not.toBe(hashAll(assets));
   });
 
   it('produces valid PNG files for every expected asset', () => {
-    const assets = generateAssets(SEED);
     expect([...assets.keys()].sort()).toEqual([...ASSET_NAMES].sort());
     for (const buf of assets.values()) {
       expect(buf.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     }
   });
 
-  // Bug #609: it took 20 s on a loaded machine. Comparing the files is cheap, it must stay well under a second.
-  it('keeps the committed files identical to the generator output', () => {
-    for (const [name, buf] of generateAssets(SEED)) {
-      expect(readFileSync(new URL(`../public/assets/${name}`, import.meta.url))).toEqual(buf);
-    }
+  // Bug #609: it took 20 s on a loaded machine. Comparing the files is cheap, it must stay well under a second: hashes,
+  // not a deep equality over every byte.
+  it.each(ASSET_NAMES as string[])('keeps the committed %s identical to the generator output', (name) => {
+    expect(sha(readFileSync(new URL(`../public/assets/${name}`, import.meta.url)))).toBe(sha(assets.get(name)!));
   }, 1_000);
 
   // docs/specs/art.md section 2: the shell's ridge normal map, 256 px at most, 64 KB at most (#293).
   it('makes a ridge normal map for the shell within 256 px and 64 KB', () => {
-    const buf = generateAssets(SEED).get('shell-normal.png')!;
+    const buf = assets.get('shell-normal.png')!;
     const { w, h } = decode(buf);
     expect(Math.max(w, h)).toBeLessThanOrEqual(256);
     expect(buf.length).toBeLessThanOrEqual(64 * 1024);
   });
 
   it('ridges the shell across its width: the x tilt turns from one side to the other many times on every row', () => {
-    const { w, rows } = decode(generateAssets(SEED).get('shell-normal.png')!);
+    const { w, rows } = decode(assets.get('shell-normal.png')!);
     for (const row of rows) {
       let turns = 0;
       let last = 0; // the last tilt that was not flat
@@ -74,7 +79,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
 
   // docs/specs/art.md section 2: The Hull's crack decal, a grey mask, 128 px, 16 KB at most (#355).
   it('makes a crack decal for The Hull within 128 px and 16 KB', () => {
-    const buf = generateAssets(SEED).get('crack-decal.png')!;
+    const buf = assets.get('crack-decal.png')!;
     const { w, h } = decode(buf, 1);
     expect([w, h]).toEqual([128, 128]);
     expect(buf.length).toBeLessThanOrEqual(16 * 1024);
@@ -83,7 +88,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
   // The decal lies on the whole cell, the marble covers its middle: the crack must show in the ring round the marble
   // (cell radius 0.46, marble 0.36) on every side, and stay a few lines, not a disc.
   it('cracks the decal from the middle out to the rim in every sixth of the turn, inside the disc', () => {
-    const { w, rows } = decode(generateAssets(SEED).get('crack-decal.png')!, 1);
+    const { w, rows } = decode(assets.get('crack-decal.png')!, 1);
     const c = (w - 1) / 2;
     const sixths = new Set<number>();
     let middle = false, inDisc = 0, lit = 0;
@@ -107,7 +112,6 @@ describe('gen-assets', { timeout: 20_000 }, () => {
 
   // Task #401: each deck of docs/specs/world.md section 5 has its own albedo for the cells, with the shared roughness.
   describe('a texture set per deck (#401)', () => {
-    const assets = generateAssets(SEED);
     const albedo = (deck: string) => assets.get(`deck-${deck}.png`)!;
     // Mean relative luminance, its spread, and the mean red minus blue (warmth), over every pixel.
     const stats = (buf: Buffer) => {
@@ -155,7 +159,6 @@ describe('gen-assets', { timeout: 20_000 }, () => {
 
   // Task #440: each deck has its own generated normal map for the cells.
   describe('a normal map per deck (#440)', () => {
-    const assets = generateAssets(SEED);
     const normal = (deck: string) => assets.get(`deck-${deck}-normal.png`)!;
     const normalStats = (buf: Buffer) => {
       const { w, rows } = decode(buf);
@@ -202,7 +205,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
   });
 
   it('keeps the total asset size under the budget', () => {
-    const total = [...generateAssets(SEED).values()].reduce((n, b) => n + b.length, 0);
+    const total = [...assets.values()].reduce((n, b) => n + b.length, 0);
     expect(total).toBeLessThan(BUDGET_BYTES);
   });
 
@@ -226,7 +229,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
       spy.mockRestore();
     }
     const dir = fileURLToPath(new URL('../public/assets/', import.meta.url));
-    expect(written).toEqual(new Map([...generateAssets(SEED)].map(([n, b]) => [dir + n, b])));
+    expect(hashes(written)).toEqual(new Map([...hashes(assets)].map(([n, h]) => [dir + n, h])));
     expect(log).toHaveLength(written.size); // one line per file
-  }, 30_000); // draws every file again, seconds on a loaded machine
+  });
 });
