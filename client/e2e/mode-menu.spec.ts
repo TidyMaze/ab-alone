@@ -109,7 +109,7 @@ for (const viewport of [{ width: 360, height: 780 }, { width: 375, height: 812 }
 
 // Bug #653: on a 1280x720 window the open boss list of 7 bosses scrolled, The Rail Yard and Daily challenge below the
 // fold. On a desktop window every boss and Daily challenge show without a scroll, with room for 2 more bosses than the 7
-// of then: the list gets copies of its last entry up to 9 bosses in all (1 since The Magnetizer, #645).
+// of then: the list gets copies of its last entry up to 9 bosses in all (none since The Pulsar, #675).
 for (const viewport of [{ width: 1280, height: 720 }, { width: 1280, height: 800 }]) {
   test(`every boss and Daily challenge fit without a scroll in a ${viewport.width}x${viewport.height} window, bug #653`, async ({ page }) => {
     await page.setViewportSize(viewport);

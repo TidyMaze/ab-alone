@@ -141,6 +141,19 @@ const CASES: Record<string, () => void> = {
       { kind: 'polarity', cell: `(${q},${r})`, value: magnetizer.polarities()[i] },
     ]);
   },
+
+  pulsar() {
+    // Seed 2: the first pulsar pushes NW, its first pulse after the player's 3rd turn. No marks: a pulsar is off the
+    // board.
+    const pulsar = newEncounter('pulsar', 2);
+    expect(bossState('pulsar', pulsar)).toMatchObject({ name: 'The Pulsar', marks: [] });
+    expect(bossState('pulsar', pulsar).tell).toEqual({
+      kind: 'pulse',
+      cells: [],
+      text: 'a pulse pushes every line NW after 3 of your turns, force 2: groups smaller than the force move one cell, the first group as big resists and shields the rest',
+    });
+    expect(bossState('pulsar', withData(pulsar, { pulsar: [0, 1, 0] })).tell!.text).toMatch(/^a pulse pushes every line E after 1 of your turns, force infinite:/);
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -148,8 +161,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626) and The Magnetizer (#645) are in', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer']);
+  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645) and The Pulsar (#675) are in', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar']);
   });
 
   test('every boss of the engine has its case', () => {
