@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 export interface PbrMaterialSet {
   albedo: THREE.Texture;
@@ -72,10 +73,15 @@ export function applyPbrToMesh(mesh: THREE.Mesh, mat: THREE.Material): void {
   mesh.material = mat;
 }
 
+/** A glTF loader for the models, meshopt-compressed by scripts/pack-models.mjs (#701). */
+export function meshoptLoader(): GLTFLoader {
+  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+}
+
 /** Loads monolithic GLB spaceship bay and attaches PBR materials to meshes. */
 export async function loadSpaceshipBay(
   basePath = '/assets/pbr/',
-  gltfLoader = new GLTFLoader(),
+  gltfLoader = meshoptLoader(),
   texLoader = new THREE.TextureLoader(),
 ): Promise<SpaceshipBayAssets | null> {
   try {
