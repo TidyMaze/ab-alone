@@ -91,7 +91,7 @@ export async function loadSpaceshipBay(
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([
       gltfLoader.loadAsync(`${basePath}spaceship-bay.glb`),
-      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0.04, 0.5),
+      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.5),
       loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1),
       loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1),
     ]);
@@ -107,7 +107,13 @@ export async function loadSpaceshipBay(
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         const name = mesh.name.toLowerCase();
-        if (name.includes('deck') || name.includes('pedestal') || name.includes('tank')) {
+        if (name.includes('pedestal')) {
+          const pos = mesh.geometry.getAttribute('position');
+          const uv = mesh.geometry.getAttribute('uv');
+          for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) * 0.75, pos.getZ(i) * 0.75);
+          uv.needsUpdate = true;
+          applyPbrToMesh(mesh, deckMat);
+        } else if (name.includes('deck') || name.includes('tank')) {
           applyPbrToMesh(mesh, deckMat);
         } else if (name.includes('wall') || name.includes('terminal') || name.includes('console')) {
           applyPbrToMesh(mesh, bulkheadMat);

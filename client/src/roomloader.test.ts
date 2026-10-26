@@ -90,12 +90,14 @@ describe('roomloader PBR pipeline', () => {
     const mockGroup = new THREE.Group();
     const floorMesh = new THREE.Mesh(new THREE.BoxGeometry());
     floorMesh.name = 'Ship_Deck_Floor';
+    const pedestalMesh = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 4));
+    pedestalMesh.name = 'Pedestal_Core';
     const wallMesh = new THREE.Mesh(new THREE.BoxGeometry());
     wallMesh.name = 'Bulkhead_Wall_North';
     const ribMesh = new THREE.Mesh(new THREE.BoxGeometry());
     ribMesh.name = 'Gantry_Arch_Rib_1';
 
-    mockGroup.add(floorMesh, wallMesh, ribMesh);
+    mockGroup.add(floorMesh, pedestalMesh, wallMesh, ribMesh);
 
     const mockGltfLoader = {
       loadAsync: vi.fn(async () => ({
@@ -115,6 +117,8 @@ describe('roomloader PBR pipeline', () => {
     expect(bay).not.toBeNull();
     expect(bay!.scene).toBe(mockGroup);
     expect(floorMesh.material).toBe(bay!.materials.deck);
+    expect(pedestalMesh.material).toBe(bay!.materials.deck);
+    expect(Math.abs(pedestalMesh.geometry.getAttribute('uv').getX(0))).toBeCloseTo(1.5);
     expect(bay!.materials.deck.map?.repeat.x).toBe(0.5);
     expect(wallMesh.material).toBe(bay!.materials.bulkhead);
     expect(ribMesh.material).toBe(bay!.materials.grate);
