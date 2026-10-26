@@ -94,8 +94,8 @@ Boss structure (all five follow it):
 - **Twist**: the added rule, written as a hook (start of turn, end of turn, board mask).
 - **Tell**: shown exactly one ply before the twist fires.
 - **Counter**: a positional answer that exists on the board, not a stat check.
-- **Phases**: triggered by **boss marbles remaining** (The Alien, The Rail Yard and The
-  Magnetizer: by your ejections, sections 7.7 to 7.9),
+- **Phases**: triggered by **boss marbles remaining** (The Alien, The Rail Yard, The
+  Magnetizer and The Pulsar: by your ejections, sections 7.7 to 7.10),
   always shown on the HUD as notches.
 
 ### 3.4 Battle royale (Phase 4, #49)
@@ -253,6 +253,7 @@ also give the player a way to hurt the boss with it.
 | Extra | 2 Cargo | The Alien (proposed by @Varadiell, section 7.7) | #588 | any time, boss menu |
 | Extra | 2 Cargo | The Rail Yard (proposed by @Varadiell, section 7.8) | #626 | any time, boss menu |
 | Extra | 3 Furnace | The Magnetizer (proposed by @Varadiell, section 7.9) | #645 | any time, boss menu |
+| Extra | 5 Bridge | The Pulsar (proposed by @Varadiell, section 7.10) | #675 | any time, boss menu |
 
 Issue numbers keep their original order, play order is the last column. The Echo opens the
 game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
@@ -497,6 +498,67 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Calibrate**: knobs = rhythm (3, 2, 1), phase ejections (3, 5), AI depth (3, the Hull's 3000
   nodes). Fail if most fights end with no boss marble ejected by a repulsion (nobody learns the
   counter) or most losses come from the player's own repulsions in P3.
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
+  the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
+
+### 7.10 The Pulsar: pulses that push the board like a sumito
+
+- **Concept**: the Bridge's navigation beacons came back on by themselves. Six of them stand round
+  the board, and one at a time charges and throws a pulse across it.
+- **Board and sides**: standard radius 4 board, 14 marbles each on the standard layout, Bridge
+  deck look (the ship mind's core). Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
+  The boss plays standard Abalone.
+- **Pulsars**: six pulsars, one off each corner of the hexagon. A push runs along the board's
+  lines, and the six directions of the lines point at the corners, so the pulsar off the corner
+  in direction `-d` pushes in direction `d`, away from itself, along the 9 lines parallel to `d`
+  (the "one per side, pushing straight inward" of #675, set on the lines). A pulsar is named by
+  the direction it pushes, in the move codes: `0` E, `1` W, `2` NE, `3` SW, `4` NW, `5` SE.
+- **A pulse is a simulated sumito of force F** (owner rule): on every line, walk from the
+  pulsar's end; the marbles come in contiguous groups, **both colours mixed**. A group **smaller
+  than F** moves one cell away from the pulsar; the first group of **F or more** resists and
+  **shields everything behind it** on that line, every group further on included. All the moves
+  of a pulse are simultaneous (two groups never collide: a gap stays between them). A group whose
+  head stands on the far rim loses that marble off the board (ejected). Example at F = 2: a lone
+  marble is pushed, two aligned marbles resist and protect the marbles further on.
+- **Force by phase**: **P1** F = 2, **P2** (after **3** ejections credited to you) F = 3, **P3**
+  (after **5**) F infinite: every group moves. A pulse takes the force of the phase at the start
+  of your turn, the one the counter showed, as the other bosses' tells.
+- **Ejection credit**: a boss marble a pulse ejects counts for you, one of yours for the boss, as
+  the Hull's voids and the Rail Yard's trains. If one pulse brings both sides to 6, the boss wins
+  (it is credited first).
+- **Rhythm**, in your turns: the active pulsar fires **3 times, 2 turns apart**, then **2 turns of
+  rest** (owner), so 4 turns from its last pulse to the first pulse of the next one: pulses at
+  the end of your turns 3, 5, 7, then 11, 13, 15, and so on (turn `n` with `n mod 8` = 3, 5 or 7).
+  The first pulsar is drawn at the start of the fight, each next one right after the last pulse
+  of the one before, **at random among the 5 others** (owner).
+- **When** (owner): a pulse fires **right after your move, before the boss replies**, as the Rail
+  Yard's trains. A move that ends the fight fires no pulse.
+- **Deterministic, for P2P** (owner rule): a draw is splitmix64 of the fight seed mixed with the
+  ply (ply 0 for the first pulsar), modulo 6 for the first pulsar, modulo 5 among the others in
+  direction order for the next. No `Math.random`, floats or clock: a Retry, the daily, a replayed
+  game and every peer get the same pulsars. The pulsar and its turn in the cycle live on the board
+  and in the position hash.
+- **Moves never change** (`rules.md` §10): a pulse is a hook between plies; your moves and pushes
+  stay standard Abalone.
+- **Tell**: each pulse is announced **2 turns ahead**: the pulsar charges, a steady glow on its
+  core, its counter (2, then 1) beside it, facing the camera, and an amber chevron one cell out
+  before each of its 9 lines, pointing the way it pushes (3:1 and more, the Rail Yard's chevrons).
+  During a run the pulsar is always charging; the next pulsar starts charging 2 turns before its
+  first pulse, so the rest shows no charge. The HUD line reads "Pulse in 2 turns, force 2" ("force
+  ∞" in P3).
+- **The pulse, drawn**: a low-poly pulsar off each corner, in the Bridge's cold white: a base, a
+  core that spins, and two beam cones along its push axis. On each pulse a **circular shockwave**
+  grows from the pulsar across the board, the pushed marbles slide one cell and the ejected ones
+  fall with the ejection effect, after the move's own slide. Reduced motion: the ring shows at full
+  size and fades (no growth), the marbles jump.
+- **Counter, turn it against the boss** (owner design rule): keep your marbles in groups of F or
+  more facing the charging pulsar, shield your loose marbles behind them, and leave boss marbles
+  alone or in pairs on the far rim: the pulse throws them off for you. The boss search sees the
+  pulses (every player ply of its tree goes through the hook, with seed 0 for the next pulsar
+  draw) and avoids them the same way. Its budget is the Hull's (3000 nodes).
+- **Calibrate**: knobs = forces (2, 3, ∞), rhythm (3 pulses, 2 apart, 2 of rest), phase ejections
+  (3, 5), AI depth. Fail if most fights end with no boss marble ejected by a pulse (nobody learns
+  the counter).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
 

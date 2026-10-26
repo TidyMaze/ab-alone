@@ -110,6 +110,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 |---|---|
 | `Encounter.next_army()` | `tell` with `kind: "next_army"`, the marbles of that army in `cells` and the army in `text` |
 | `Encounter.flips()` | `tell` with `kind: "flip"` and the cells that flip if nothing moves |
+| `Encounter.pulsar()` | `tell` with `kind: "pulse"`, no cells, and the way the next pulse pushes, the player turns left before it and its force in `text` (The Pulsar) |
 | `Encounter.cracks()` | `marks` with `kind: "crack"` and `value` = plies left |
 | `Encounter.eggs()` | `marks` with `kind: "egg"` and `value` = player turns left before it hatches (The Alien) |
 | `Encounter.trains()` | `marks` with `kind: "train"` on every cell of the train's line, from its entry, and `value` = player turns left before it passes (The Rail Yard) |
@@ -120,7 +121,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 
 Rules for the generic shape:
 
-- When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `special`.
+- When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `pulse`, then `special`.
 - An unknown `kind` is not an error: an agent that does not know it ignores it and still plays legally. The tell is information, not a rule.
 - `kind` values are stable once published. A new boss may add kinds, never rename one.
 - The Choir's board has radius 3 and the outer ring shows as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded (Decision #131).
