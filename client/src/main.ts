@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, boss_ids, boss_name, engine_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version } from 'abalone-wasm';
 import {
   CELLS,
   RADIUS,
@@ -106,6 +106,8 @@ import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
+import { ARENA, ARENA_SCALE, YOU, loadRoyale, nextRound, parseLog, roundOrders, royaleHtml, seatAt, type RoyaleFile } from './royale';
+import { SEATS } from './marbles';
 import './ui.css';
 
 // Palette from docs/specs/world.md section 5.
@@ -143,6 +145,9 @@ const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
 let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
+// The offline battle royale (#502) while it is on, else null, and the player's order picked for its round (empty: none).
+let royale: Royale | null = null;
+let order: number[] = [];
 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
@@ -834,6 +839,28 @@ const discs: THREE.Mesh[] = CELLS.map(([q, r], i) => {
   scene.add(disc);
   return disc;
 });
+// The battle royale arena (#502): its own 217 discs at half the spacing, in the room of the radius 4 board, shown in its
+// place while a battle royale is on. Its marbles wear their seat's shell tint (marbles.ts).
+const arena = new THREE.Group();
+arena.scale.setScalar(ARENA_SCALE);
+arena.visible = false;
+const arenaDiscs = ARENA.map(([q, r], i) => {
+  const disc = new THREE.Mesh(discGeometry, steel);
+  disc.receiveShadow = true;
+  disc.rotation.y = cellTurn(i);
+  const bevel = new THREE.Mesh(edgeGeometry, edgeMaterial);
+  bevel.position.y = 0.05;
+  disc.add(bevel);
+  const p = axialTo3D(q, r);
+  disc.position.set(p.x, -0.05, p.z);
+  arena.add(disc);
+  return disc;
+});
+const arenaMarbles = new THREE.Group();
+arena.add(arenaMarbles);
+arena.updateMatrixWorld(true); // picking can run before the first render
+scene.add(arena);
+const seatLooks = SEATS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: SHELL.roughness, metalness: SHELL.metalness }));
 // The steel frame (#292, frame.ts): a plate under the cells and a rim around them, rebuilt when the board's size or
 // its holes change. The rim is two halves, each with its own material: the half at the end of the side to move lights
 // in that side's colour (#300). Picking tests the discs only.
@@ -1345,6 +1372,7 @@ function hud(extra = ''): void {
     document.getElementById('hud')!.innerHTML = hubHtml(hubAt);
     return;
   }
+  if (royale) return royaleHud(royale);
   const status = engine.status();
   const ejected = [engine.ejected(1), engine.ejected(2)] as const;
   const win = [engine.win_ejections(1), engine.win_ejections(2)] as const;
@@ -1417,6 +1445,7 @@ function hud(extra = ''): void {
 
 function refresh(): void {
   if (hubAt) return drawHub(hubAt);
+  if (royale) return drawRoyale(royale);
   const board = engine.board();
   drawFrame(board);
   lightRim();
@@ -1540,6 +1569,7 @@ function drawHub(at: HubSpot): void {
 }
 
 function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
+  if (royale) return; // no ghost over the arena
   const mv = hover ? moveForClick(moves, selected, hover) : null;
   const record = mv ? encodeMove(mv) : hint.shown(here()); // the hovered move, else the hint (#192)
   const list = ghostMarbles(history, record, makeGame);
@@ -1576,6 +1606,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 
 function click(q: number, r: number): void {
   if (hubAt) return walk([q, r]);
+  if (royale) return pickRoyale(q, r);
   if (engine.status() !== 0) return; // over: no move, no selection (#282)
   if (thinking || online?.role === 'spectator') return;
   if (sliding()) return whenSettled(() => click(q, r)); // the next move waits for the slide
@@ -1608,8 +1639,9 @@ function aim(e: PointerEvent | MouseEvent): void {
 }
 function cellAt(e: PointerEvent | MouseEvent): Axial | null {
   aim(e);
-  const hit = raycaster.intersectObjects(discs)[0];
-  return hit ? CELLS[discs.indexOf(hit.object as THREE.Mesh)]! : null;
+  const [shown, cells] = royale ? [arenaDiscs, ARENA] : [discs, CELLS];
+  const hit = raycaster.intersectObjects(shown)[0];
+  return hit ? cells[shown.indexOf(hit.object as THREE.Mesh)]! : null;
 }
 function onConsole(e: PointerEvent): boolean {
   aim(e);
@@ -1694,7 +1726,7 @@ addEventListener('resize', () => {
 
 // Used by the browser checks to click a cell by its axial coordinates.
 (window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number) => {
-  const p = axialTo3D(q, r);
+  const p = axialTo3D(q, r, royale ? ARENA_SCALE : 1);
   camera.updateMatrixWorld();
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
@@ -1922,6 +1954,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   history.length = 0;
   selected = [];
   thinking = false;
+  leaveRoyale();
   bossList.hidden = true;
   bossButton.setAttribute('aria-expanded', 'false');
   moveModes('pick');
@@ -1976,6 +2009,7 @@ const shipButton = document.getElementById('ship') as HTMLButtonElement;
 shipButton.addEventListener('click', () => {
   if (online) return;
   moveModes('pick');
+  leaveRoyale();
   hubAt = loadProgress(store).at;
   applyDeck(hubAt.deck);
   refresh();
@@ -2085,6 +2119,7 @@ async function goOnline(room: string, side: number): Promise<void> {
   engine = new Engine();
   history.length = 0;
   selected = [];
+  leaveRoyale();
   diag.connecting();
   const net =
     new URLSearchParams(location.search).get('net') === 'hook'
@@ -2164,6 +2199,110 @@ document.getElementById('play-online')!.addEventListener('click', () => {
 });
 const playOnlineButton = document.getElementById('play-online') as HTMLButtonElement;
 setButton(playOnlineButton, 'Play online', icon('online'));
+
+// The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8
+// arena, at the Furnace. The player picks an order on the arena, as a move, and locks it, or holds; the bots' orders
+// come from the round-start state, and the round resolves. The HUD plate shows the next round's initiative order
+// before its reveal, and the reveal of the last round. A boss fight, Play online or Ship leaves it, and it leaves Ship.
+const lockButton = document.getElementById('royale-lock') as HTMLButtonElement;
+const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
+function startRoyale(file: RoyaleFile): void {
+  leaveHub();
+  stopAnalysis();
+  fight = null;
+  delete document.body.dataset.boss;
+  delete document.body.dataset.over;
+  engine = new Engine(); // a bot reply to the old game is dropped (botTurn)
+  history.length = 0;
+  thinking = false;
+  selected = [];
+  order = [];
+  royale = loadRoyale(file, (seats, seed) => new Royale(seats, seed));
+  moveModes('pick');
+  for (const control of [newGameButton, retryButton, goalButton, hintButton, exportButton, importButton, resultCard]) control.hidden = true;
+  lockButton.hidden = holdButton.hidden = false;
+  applyDeck(deckOf('royale'));
+  refresh();
+}
+function leaveRoyale(): void {
+  royale = null;
+  arena.visible = false;
+  for (const mesh of [plate, rim.near, rim.far]) mesh.visible = true;
+  lockButton.hidden = holdButton.hidden = true;
+  delete document.body.dataset.royale;
+}
+// The arena in place of the board: the cells left, each seat's marbles, the selection and its targets.
+function drawRoyale(game: Royale): void {
+  for (const mesh of [...discs, plate, rim.near, rim.far]) mesh.visible = false;
+  for (const group of [marbles, ghosts, notches, ...tallies, arenaMarbles]) group.clear();
+  marbleAt.clear();
+  arena.visible = true;
+  const board = game.board();
+  targets = groupTargets(parseMoves(game.legal_orders(YOU)), selected);
+  ringed = [...selected];
+  ARENA.forEach(([q, r], i) => {
+    arenaDiscs[i]!.visible = board[i] !== VANISHED;
+    const p = axialTo3D(q, r);
+    const target = targets.find(({ cell: [tq, tr] }) => tq === q && tr === r);
+    if (target) {
+      const ring = new THREE.Mesh(targetRingGeometry, targetMaterial);
+      const arrow = new THREE.Mesh(arrowGeometry, targetMaterial);
+      ring.rotation.x = -Math.PI / 2;
+      arrow.rotation.set(-Math.PI / 2, arrowYaw(target.dir), 0, 'YXZ');
+      ring.position.set(p.x, 0.005, p.z);
+      arrow.position.set(p.x, 0.005, p.z);
+      arenaMarbles.add(ring, arrow);
+    }
+    const seat = seatAt(board[i]!);
+    if (seat < 0) return;
+    const marble = new THREE.Mesh(marbleGeometry, seatLooks[seat]);
+    marble.castShadow = true;
+    const picked = ringed.some(([sq, sr]) => sq === q && sr === r);
+    marble.position.set(p.x, picked ? 0.5 : 0.36, p.z);
+    arenaMarbles.add(marble);
+    if (!picked) return;
+    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.02, p.z);
+    arenaMarbles.add(ring);
+  });
+  document.body.dataset.royale = String(nextRound(parseLog(game.round_log()))); // read by the e2e tests
+  hud();
+}
+function royaleHud(game: Royale): void {
+  document.getElementById('hud')!.innerHTML = royaleHtml(parseLog(game.round_log()), order);
+  const over = game.placement().length > 0;
+  lockButton.disabled = over || order.length === 0;
+  holdButton.disabled = over;
+}
+// A press on one of the player's marbles selects it, a press on a target picks that move as the order.
+function pickRoyale(q: number, r: number): void {
+  const game = royale!;
+  if (seatAt(game.board()[cellIndex(q, r, ARENA)]!) === YOU) {
+    selected = toggleSelection(selected, [q, r]);
+    order = [];
+  } else {
+    const mv = moveForClick(parseMoves(game.legal_orders(YOU)), selected, [q, r]);
+    if (mv) order = encodeMove(mv);
+  }
+  refresh();
+}
+function playRound(mine: readonly number[]): void {
+  royale!.resolve(roundOrders(royale!, mine));
+  order = [];
+  selected = [];
+  refresh();
+}
+const royaleButton = document.getElementById('battle-royale') as HTMLButtonElement;
+royaleButton.addEventListener('click', () => {
+  if (online) return;
+  startRoyale({ seed: crypto.getRandomValues(new Uint32Array(1))[0]!, rounds: [] });
+});
+lockButton.addEventListener('click', () => playRound(order));
+holdButton.addEventListener('click', () => playRound([]));
+royaleButton.disabled = false; // listener ready (#146)
+// Used by the browser checks to load a royale game file (#502).
+(window as unknown as Record<string, unknown>).__royale = startRoyale;
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
   playOnlineButton.disabled = state.disabled;

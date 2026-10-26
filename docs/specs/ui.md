@@ -87,15 +87,16 @@ name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
-Game modes (#357): the buttons that start a game mode, Play online, Boss fight (with the boss list it opens under it),
-Daily challenge and Ship (the hub, game-design.md section 3.5, #521), live in one menu behind an icon-only button, a
-play triangle of the icon set, labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The
-menu is closed at the start on every screen size; the buttons keep their behaviour and their names. The button is the
-last of the column and the open menu lies under it, so opening or closing it moves no other button. Held upright, the
-menu starts a new row under the buttons, its items side by side, the bosses in line after Boss fight. It closes like
-the settings menu, on Escape, on a press outside and on its button again, and once a mode starts (a boss picked, Daily
-challenge, Play online, Ship). On a phone each item is at least 44 px tall. The controls of a running mode (Rematch,
-Goal, Retry, the invite link) stay in the column, outside the menu.
+Game modes (#357): the buttons that start a game mode, Play online, Battle royale (#502), Boss fight (with the boss
+list it opens under it), Daily challenge and Ship (the hub, game-design.md section 3.5, #521), live in one menu behind
+an icon-only button, a play triangle of the icon set, labelled "Game modes" (`aria-label`, `title`, `aria-expanded`,
+`aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their
+names. The button is the last of the column and the open menu lies under it, so opening or closing it moves no other
+button. Held upright, the menu starts a new row under the buttons, its items side by side, the bosses in line after
+Boss fight. It closes like the settings menu, on Escape, on a press outside and on its button again, and once a mode
+starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at least 44 px
+tall. The controls of a running mode (Rematch, Goal, Retry, Lock order and Hold, the invite link) stay in the column,
+outside the menu.
 
 ```
 +---------------------------------+
@@ -169,6 +170,17 @@ Goal, Retry, the invite link) stay in the column, outside the menu.
   (the UTC date and that day's boss), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
   tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
+- **Battle royale (#502).** An item of the mode menu under Play online. It starts an offline battle royale, the
+  player against 5 bots on the radius 8 arena (rules.md section 10.4), at the Furnace, the arena drawn at half the
+  cell spacing in the room of the board, each seat's marbles in its shell tint. New game, Hint, the evaluation bar and
+  Export game, Import game go away, as in a boss fight. The player selects marbles and presses a target as for a
+  move, which picks the order, then presses Lock order, greyed until an order is picked, or Hold. The bots' orders come
+  from the round-start state, and the round resolves at once. The plate shows "Battle royale · Round 3", the
+  initiative order of that round before its reveal, "Your order: 1 marble NW" (or "none"), then the reveal of the last
+  round in initiative order, one line a seat: "Bot 1: moved, ejected Bot 3", "You: fizzled" (in the hazard colour),
+  "Bot 3: held", "Bot 4: out". The player is "You", the bots "Bot 1" to "Bot 5", each name after a dot of its tint.
+  These strings are kept verbatim for the e2e tests. Once the game is over, Lock order and Hold are greyed. A boss
+  fight, Play online or Ship leaves it. The breach warning, the eliminated seats and the placement banner are #503.
 - **Copy diagnostics.** A button in the bottom-right corner, in every mode, icon only (#297: its name is the tooltip and the accessible name, at least 44 px on a phone), styled like the
   others but kept apart from the play buttons and off the board, even at phone width. It copies
   the diagnostics text (tech.md section 10) and the note line says "diagnostics copied". When the

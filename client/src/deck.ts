@@ -2,7 +2,7 @@
 // light and fog (light.ts) when a mode starts. The deck never changes the rules or the cell size.
 export const DECK_NAMES = ['mess', 'cargo', 'furnace', 'chapel', 'bridge'] as const;
 export type Deck = (typeof DECK_NAMES)[number];
-export type Mode = 'local' | 'bot' | 'online' | 'boss';
+export type Mode = 'local' | 'bot' | 'online' | 'boss' | 'royale';
 
 export interface DeckParticles {
   kind: 'dust' | 'ore' | 'steam' | 'smoke' | 'none';
@@ -21,7 +21,7 @@ export const DECK_PARTICLES: Record<Deck, DeckParticles> = {
   bridge: { kind: 'none', count: 0, drift: [0, 0, 0], color: 0xffffff, size: 0, opacity: 0 },
 };
 
-const MODE_DECK: Record<Exclude<Mode, 'boss'>, Deck> = { local: 'mess', bot: 'mess', online: 'cargo' };
+const MODE_DECK: Record<Exclude<Mode, 'boss'>, Deck> = { local: 'mess', bot: 'mess', online: 'cargo', royale: 'furnace' };
 // One boss per deck (world.md section 3). A daily is a fight against one of them, so it plays on that boss's deck.
 const BOSS_DECK: Record<string, Deck> = { echo: 'mess', hull: 'cargo', choir: 'furnace', chaplain: 'chapel', ballast: 'bridge' };
 

@@ -16,6 +16,10 @@ describe('deckOf (world.md sections 1, 3 and 5)', () => {
     expect(deckOf('online')).toBe('cargo');
   });
 
+  it('the battle royale plays in the Furnace arenas', () => {
+    expect(deckOf('royale')).toBe('furnace');
+  });
+
   it('each boss, and so each daily, plays on its own deck', () => {
     expect(deckOf('boss', 'echo')).toBe('mess');
     expect(deckOf('boss', 'hull')).toBe('cargo');
