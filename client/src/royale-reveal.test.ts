@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { VANISHED, cellIndex, type Axial } from './board';
+import { DIRECTIONS, VANISHED, cellIndex, type Axial } from './board';
 import { EJECT_MS } from './eject';
 import { ARENA, parseLog, roundOrders, seatAt, type RoundLog } from './royale';
 import { BREACH_MS, MARK_MS, STEP_MS, applyOrder, buildReveal, outward, shownAt, sinkAt } from './royale-reveal';
@@ -121,28 +121,40 @@ describe('the reveal of a round', () => {
   });
 });
 
+/** Whether a marble pushed from `cell` along `dir` falls into the hole in the centre (#610): ring 0 or 1. */
+const inHole = ([q, r]: Axial, dir: number): boolean => {
+  const [x, y] = [q + DIRECTIONS[dir]![0], r + DIRECTIONS[dir]![1]];
+  return Math.max(Math.abs(x), Math.abs(y), Math.abs(x + y)) <= 1;
+};
+
 describe('the reveal against the engine', () => {
   it('each turn played out ends on the board the engine gives, ejections and the breach included', () => {
-    // Seed 1, the player holding: the bots eject each other from round 26, the breach takes marbles from round 13.
-    const game = new Royale(6, 1);
+    // The player holding: the bots eject each other from round 19, the breach takes marbles from round 13. In seed 5 a
+    // bot pushes a marble into the hole in the centre at round 30 (#610).
     let ejections = 0;
     let falls = 0;
-    for (let round = 0; !game.placement().length; round++) {
-      const before = Array.from(game.board());
-      const orders = roundOrders(game, []);
-      game.resolve(orders);
-      const after = Array.from(game.board());
-      const log = parseLog(game.round_log())!;
-      const reveal = buildReveal(before, orders, log, after);
-      ejections += reveal.steps.filter((s) => s.ejected).length;
-      falls += reveal.breach.falls.length;
-      expect(reveal.steps.filter((s) => s.ejected).map((s) => s.ejected!.seat)).toEqual(
-        log.turns.filter((t) => t.ejected >= 0).map((t) => t.ejected),
-      );
-      expect(reveal.breach.board.map(seatAt), `round ${round + 1}`).toEqual(after.map(seatAt));
-      expect(reveal.breach.board.map((c) => c === VANISHED)).toEqual(before.map((c) => c === VANISHED));
+    let intoHole = 0;
+    for (const seed of [1, 5]) {
+      const game = new Royale(6, seed);
+      for (let round = 0; !game.placement().length; round++) {
+        const before = Array.from(game.board());
+        const orders = roundOrders(game, []);
+        game.resolve(orders);
+        const after = Array.from(game.board());
+        const log = parseLog(game.round_log())!;
+        const reveal = buildReveal(before, orders, log, after);
+        ejections += reveal.steps.filter((s) => s.ejected).length;
+        intoHole += reveal.steps.filter((s) => s.ejected && inHole(s.ejected.cell, s.ejected.dir)).length;
+        falls += reveal.breach.falls.length;
+        expect(reveal.steps.filter((s) => s.ejected).map((s) => s.ejected!.seat)).toEqual(
+          log.turns.filter((t) => t.ejected >= 0).map((t) => t.ejected),
+        );
+        expect(reveal.breach.board.map(seatAt), `seed ${seed}, round ${round + 1}`).toEqual(after.map(seatAt));
+        expect(reveal.breach.board.map((c) => c === VANISHED)).toEqual(before.map((c) => c === VANISHED));
+      }
     }
     expect(ejections).toBeGreaterThan(0);
+    expect(intoHole).toBeGreaterThan(0);
     expect(falls).toBeGreaterThan(0);
   });
 });

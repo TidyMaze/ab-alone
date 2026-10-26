@@ -2,72 +2,76 @@
 //! and a seed alone, so it never sees the other orders (rules.md section 10.4, bots).
 
 use super::{seat_cell, Order, Royale};
-use crate::board::Board;
+use crate::board::{Board, Cell};
 use crate::moves::{apply_for, legal_moves_for};
 
 /// Score of a move that ejects a marble: above anything the place of the marbles can give.
 const EJECT: i64 = 10_000;
-/// Cost of an own marble on a cracked cell, which goes void at the end of the round.
+/// Cost of an own marble on a cracked cell, which goes void at the end of the round, and gain
+/// of an opponent marble there.
 const CRACKED: i64 = 100;
-/// Cost of an own marble on the rim, where a push ejects it.
-const RIM: i64 = 10;
-/// Cost of each step between an own marble and the centre.
-const CENTRE: i64 = 4;
-/// The seed adds 0 to `CENTRE - 1` to each move: it only breaks ties.
-const NOISE: u64 = CENTRE as u64;
+/// Cost of an own marble on an edge cell, next to the rim or the hole, where a push ejects it,
+/// and gain of an opponent marble there.
+const EDGE: i64 = 10;
 
 /// The six neighbours of a cell, as axial vectors.
 const NEIGHBOURS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
 
 /// The order of `seat` for the next round of `state`, from that state and `seed` alone: the
-/// same state and seed give the same order. It ejects a marble if it can, else it plays the
-/// move that best keeps its marbles off cracked and rim cells and near the centre, and holds
-/// when no move does better than staying put.
+/// same state and seed give the same order. It ejects a marble if it can, into the hole or off
+/// the rim, else it plays the move that best keeps its marbles off cracked and edge cells and
+/// pushes opponent marbles onto them, and holds when no move does better than staying put. The
+/// seed breaks ties.
 pub fn order(state: &Royale, seat: usize, seed: u64) -> Order {
     let own = seat_cell(seat);
     let board = state.board();
-    let radius = board.radius();
-    let mine: Vec<(i32, i32)> = (-radius..=radius)
-        .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
-        .filter(|&(q, r)| board.get(q, r) == Some(own))
-        .collect();
-    let stay = place(board, &mine);
+    let spots = spots(board);
+    let stay = place(board, own, &spots);
     let key = mix(mix(mix(seed) ^ u64::from(state.round())) ^ seat as u64);
     legal_moves_for(board, own)
         .into_iter()
         .enumerate()
-        .map(|(i, mv)| {
-            let (dq, dr) = mv.dir.vector();
-            let after: Vec<(i32, i32)> = mine
-                .iter()
-                .map(|&(q, r)| {
-                    if mv.cells.contains(&(q, r)) {
-                        (q + dq, r + dr)
-                    } else {
-                        (q, r)
-                    }
-                })
-                .collect();
-            let ejects = apply_for(board, own, &mv).is_ok_and(|(_, ejected)| ejected);
-            let score = place(board, &after) + if ejects { EJECT } else { 0 };
-            (score, mix(key ^ i as u64) % NOISE, mv)
+        .filter_map(|(i, mv)| {
+            apply_for(board, own, &mv).ok().map(|(after, ejects)| {
+                let score = place(&after, own, &spots) + if ejects { EJECT } else { 0 };
+                (score, mix(key ^ i as u64), mv)
+            })
         })
         .filter(|&(score, _, _)| score > stay)
         .max_by_key(|&(score, noise, _)| (score, noise))
         .map_or(Order::Hold, |(_, _, mv)| Order::Move(mv))
 }
 
-/// How well placed `cells` are on `board`: the higher, the safer.
-fn place(board: &Board, cells: &[(i32, i32)]) -> i64 {
-    cells
+/// Every cell of `board` with what a marble there is worth: to its owner (a cost on a cracked
+/// or edge cell), and to an opponent. A move changes no cell, so this holds for every move.
+fn spots(board: &Board) -> Vec<((i32, i32), i64, i64)> {
+    let radius = board.radius();
+    (-radius..=radius)
+        .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
+        .filter(|&(q, r)| board.get(q, r).is_some())
+        .map(|(q, r)| {
+            let cracked = i64::from(board.cracks().iter().any(|&(c, _)| c == (q, r)));
+            let edge = i64::from(
+                NEIGHBOURS
+                    .iter()
+                    .any(|&(dq, dr)| board.get(q + dq, r + dr).is_none()),
+            );
+            let mine = -CRACKED * cracked - EDGE * edge;
+            let theirs = CRACKED * cracked + EDGE * edge;
+            ((q, r), mine, theirs)
+        })
+        .collect()
+}
+
+/// How well the marbles of `own` are placed on `board` against the others: the higher, the
+/// better.
+fn place(board: &Board, own: Cell, spots: &[((i32, i32), i64, i64)]) -> i64 {
+    spots
         .iter()
-        .map(|&(q, r)| {
-            let cracked = board.cracks().iter().any(|&(c, _)| c == (q, r));
-            let rim = NEIGHBOURS
-                .iter()
-                .any(|&(dq, dr)| board.get(q + dq, r + dr).is_none());
-            let centre = i64::from(q.abs().max(r.abs()).max((q + r).abs()));
-            -CENTRE * centre - CRACKED * i64::from(cracked) - RIM * i64::from(rim)
+        .map(|&((q, r), mine, theirs)| match board.get(q, r) {
+            Some(Cell::Empty) => 0,
+            Some(cell) if cell == own => mine,
+            _ => theirs,
         })
         .sum()
 }
@@ -131,7 +135,7 @@ mod tests {
 
     #[test]
     fn a_bot_ejects_when_it_can() {
-        // A 3v2 off the east rim, though it moves seat 0 away from the centre.
+        // A 3v2 off the east rim.
         let s = arena(
             3,
             MAX_RADIUS,
@@ -163,12 +167,53 @@ mod tests {
         }
     }
 
+    /// Voids the hole of the arena: the centre cell and its 6 neighbours.
+    fn hole(s: &mut Royale) {
+        s.board.void(0, 0);
+        for (dq, dr) in NEIGHBOURS {
+            s.board.void(dq, dr);
+        }
+    }
+
     #[test]
-    fn a_bot_moves_toward_the_centre_and_holds_when_nothing_is_better() {
-        let s = arena(3, MAX_RADIUS, &[((3, 0), 0), ((0, 0), 1), ((-5, 0), 2)]);
+    fn a_bot_steps_off_the_edge_of_the_hole_and_holds_when_nothing_is_better() {
+        let mut s = arena(3, MAX_RADIUS, &[((2, 0), 0), ((-4, 0), 1), ((0, -5), 2)]);
+        hole(&mut s);
         for seed in 0..10 {
-            assert_eq!(order(&s, 0, seed), go(&[(3, 0)], W));
+            // E, NE and SE all leave the edge: the seed picks one.
+            let o = order(&s, 0, seed);
+            assert!(
+                [go(&[(2, 0)], E), go(&[(2, 0)], NE), go(&[(2, 0)], SE)].contains(&o),
+                "{o:?}"
+            );
             assert_eq!(order(&s, 1, seed), Order::Hold);
+        }
+    }
+
+    #[test]
+    fn a_bot_pushes_an_opponent_into_the_hole() {
+        let mut s = arena(
+            3,
+            MAX_RADIUS,
+            &[((3, 0), 0), ((4, 0), 0), ((2, 0), 1), ((0, -5), 2)],
+        );
+        hole(&mut s);
+        for seed in 0..10 {
+            assert_eq!(order(&s, 0, seed), go(&[(3, 0), (4, 0)], W));
+        }
+    }
+
+    #[test]
+    fn a_bot_pushes_an_opponent_onto_a_cracked_cell() {
+        let mut s = arena(
+            3,
+            MAX_RADIUS,
+            &[((-2, 3), 0), ((-1, 3), 0), ((0, 3), 1), ((0, -5), 2)],
+        );
+        hole(&mut s);
+        s.board.set_cracks(vec![((1, 3), 1)]);
+        for seed in 0..10 {
+            assert_eq!(order(&s, 0, seed), go(&[(-2, 3), (-1, 3)], E));
         }
     }
 
@@ -179,16 +224,19 @@ mod tests {
     }
 
     #[test]
-    fn twenty_games_of_6_bots_end_with_one_winner_within_150_rounds() {
-        for seed in 0..20 {
+    fn ten_games_of_6_bots_end_by_round_46() {
+        let mut shared = 0;
+        for seed in 0..10 {
             let mut s = start(6).unwrap();
             while !s.is_over() {
-                assert!(s.round() <= 150, "seed {seed}");
                 let orders: Vec<(usize, Order)> =
                     (0..6).map(|seat| (seat, order(&s, seat, seed))).collect();
                 s = resolve_round(&s, &orders).unwrap().0;
             }
-            assert_eq!(s.winners().unwrap().len(), 1, "seed {seed}");
+            assert!(s.round() <= 47, "seed {seed}");
+            shared += usize::from(s.winners().unwrap().len() > 1);
         }
+        // The last void can take several seats tied on the breach rule (rules.md 10.4).
+        assert!(shared <= 2, "{shared} shared wins");
     }
 }

@@ -1940,6 +1940,7 @@ function release(e: PointerEvent): void {
   }
   const cell = cellAt(e);
   if (cell) click(cell[0], cell[1]);
+  else if (royale && raycaster.intersectObjects(arenaDiscs).length) return; // the hole (#610): no prop behind it
   else if (onProp(e, consoleScreen)) openReader();
   else if (onProp(e, recorder)) playLog(logOf(deck)); // the deck's recorder prop (#517)
 }

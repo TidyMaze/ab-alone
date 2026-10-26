@@ -1,5 +1,5 @@
-//! Start position of a battle royale: 10 marbles per seat in the rim wedges (rules.md
-//! section 10.4).
+//! Start position of a battle royale: 10 marbles per seat in the rim wedges, and a hole in the
+//! centre (rules.md section 10.4).
 
 use std::collections::BTreeMap;
 
@@ -35,12 +35,15 @@ const WEDGES: [&[usize]; 4] = [
     &[0, 1, 2, 3, 4, 5],
 ];
 
+/// The hole in the middle of the arena: the centre cell and its 6 neighbours, void from round 1.
+const HOLE: [(i32, i32); 7] = [(0, 0), (1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
+
 /// Turns `(q, r)` by 60 degrees about the centre, clockwise on screen (E goes to SE).
 fn rotate((q, r): (i32, i32)) -> (i32, i32) {
     (-r, q + r)
 }
 
-/// The radius 8 arena with 10 marbles per seat, round 1. Fewer than 3 or more than 6 seats is
+/// The radius 8 arena with its hole and 10 marbles per seat, round 1. Fewer than 3 or more than 6 seats is
 /// refused.
 pub fn start(seats: usize) -> Result<Royale, RoyaleError> {
     if !(MIN_SEATS..=MAX_SEATS).contains(&seats) {
@@ -52,6 +55,9 @@ pub fn start(seats: usize) -> Result<Royale, RoyaleError> {
             let (q, r) = (0..wedge).fold(cell, |c, _| rotate(c));
             board.set(q, r, seat_cell(seat));
         }
+    }
+    for (q, r) in HOLE {
+        board.void(q, r);
     }
     Ok(Royale {
         board,
@@ -114,12 +120,12 @@ mod tests {
     ];
 
     #[test]
-    fn the_arena_has_217_cells_and_10_marbles_per_seat() {
+    fn the_arena_has_210_cells_and_10_marbles_per_seat() {
         for seats in MIN_SEATS..=MAX_SEATS {
             let s = start(seats).unwrap();
             assert_eq!(s.seats(), seats);
             assert_eq!(s.board().radius(), 8);
-            assert_eq!(on_board(s.board()).len(), 217);
+            assert_eq!(on_board(s.board()).len(), 210);
             for seat in 0..6 {
                 let expected = if seat < seats { 10 } else { 0 };
                 assert_eq!(s.marbles(seat), expected, "{seats} seats, seat {seat}");
@@ -129,6 +135,24 @@ mod tests {
             assert!(on_board(s.board())
                 .iter()
                 .all(|&(q, r)| s.last_toucher(q, r).is_none()));
+        }
+    }
+
+    #[test]
+    fn the_centre_cell_and_its_6_neighbours_are_a_hole_from_round_1() {
+        for seats in MIN_SEATS..=MAX_SEATS {
+            let s = start(seats).unwrap();
+            let hole: Vec<P> = (-MAX_RADIUS..=MAX_RADIUS)
+                .flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
+                .filter(|&(q, r)| q.abs().max(r.abs()).max((q + r).abs()) <= MAX_RADIUS)
+                .filter(|&(q, r)| s.board().get(q, r).is_none())
+                .collect();
+            assert_eq!(
+                hole,
+                [(-1, 0), (-1, 1), (0, -1), (0, 0), (0, 1), (1, -1), (1, 0)],
+                "{seats} seats"
+            );
+            assert!(s.board().cracks().is_empty());
         }
     }
 

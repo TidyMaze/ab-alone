@@ -1679,14 +1679,15 @@ mod tests {
     }
 
     #[test]
-    fn a_royale_starts_with_217_cells_and_10_marbles_per_seat() {
+    fn a_royale_starts_with_a_hole_and_10_marbles_per_seat() {
         let g = Royale::new(3, 7).unwrap();
         let cells = g.board();
         assert_eq!(cells.len(), 217);
         assert_eq!(count(&cells, 1), 10);
         assert_eq!(count(&cells, 2), 10);
         assert_eq!(count(&cells, 4), 10);
-        assert_eq!(count(&cells, 0), 187);
+        assert_eq!(count(&cells, 0), 180);
+        assert_eq!(count(&cells, VANISHED), 7, "the hole in the centre");
         let cells = Royale::new(6, 7).unwrap().board();
         for code in [1, 2, 4, 5, 6, 7] {
             assert_eq!(count(&cells, code), 10, "seat code {code}");
@@ -1713,7 +1714,7 @@ mod tests {
         assert_eq!(cells[30], 2, "(-3, -5)");
         assert_eq!(cells[68], 4, "(8, -3)");
         assert_eq!(cells[arena_index(-5, 8)], 1);
-        assert_eq!(cells[arena_index(0, 0)], 0);
+        assert_eq!(cells[arena_index(0, 0)], VANISHED);
     }
 
     #[test]
@@ -1730,7 +1731,7 @@ mod tests {
         );
         assert_eq!(cells[arena_index(-4, 8)], 1 | CRACKED);
         assert_eq!(cells[arena_index(0, 8)], CRACKED, "a cracked empty cell");
-        assert_eq!(cells[arena_index(0, 0)], 0);
+        assert_eq!(cells[arena_index(0, 0)], VANISHED);
         let cracks = g.cracks();
         assert_eq!(
             cracks.len(),
@@ -1742,7 +1743,7 @@ mod tests {
         g.resolve(&[]).unwrap();
         let cells = g.board();
         assert_eq!(cells.len(), 217, "a void cell keeps its slot");
-        assert_eq!(count(&cells, VANISHED), 48);
+        assert_eq!(count(&cells, VANISHED), 48 + 7);
         assert_eq!(cells[arena_index(-5, 8)], VANISHED);
         assert_eq!(count(&cells, 1), 7, "the 3 rim marbles went with the rim");
         assert!(g.cracks().is_empty());
