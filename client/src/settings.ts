@@ -1,5 +1,6 @@
 // The settings menu (#277, docs/specs/ui.md section 4): a list of items behind a cog button: the toggles Clear board,
-// Reduced motion (#379) and Flat HUD (#391), Sound (#284, which opens the four volume sliders of #438), Safe mode (#380),
+// Reduced motion (#379) and Flat HUD (#391), Sound (#284, which opens the four volume sliders of #438), the audio log
+// Transcript (#516), Safe mode (#380),
 // the Theme choice (#317), the Shell skin and Glass skin choices (#377), the UI scale (#382), then the actions Export game and Import
 // game (#287). Pure functions only: main.ts feeds them the clicks and builds the DOM.
 import type { IconName } from './icons';
@@ -44,7 +45,7 @@ export const motionReduced = (system: boolean, saved: boolean | null): boolean =
 
 /** The items the menu lists, in order, with their icon and the toggles' current state. The Theme row shows the UI scale
  *  and holds Safe mode as its pressed state, so the menu keeps eight rows with Reduced motion and Flat HUD. Sound is
- *  no toggle: it opens the sliders. */
+ *  no toggle: it opens the sliders; Transcript (#516) shares its row. */
 export const settingsList = (
   clear: boolean,
   theme: Theme,
@@ -55,11 +56,13 @@ export const settingsList = (
   reduced: boolean,
   flat: boolean,
   palette: Palette,
+  transcript: boolean,
 ): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: reduced },
   { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: flat },
   { id: 'sound', label: 'Sound', icon: 'sound' },
+  { id: 'transcript', label: 'Transcript', icon: 'transcript', on: transcript },
   { id: 'theme', label: `Theme: ${THEME_NAMES[theme]}`, icon: 'theme', on: safe },
   { id: 'palette', label: `Palette: ${PALETTE_NAMES[palette]}`, icon: 'palette' },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },

@@ -94,8 +94,8 @@ describe('the mix: four buses into one master (world.md section 7, Mix; #438)', 
     expect(BUSES).toEqual(['music', 'ambience', 'effects', 'voice']);
   });
 
-  it('routes the hum to ambience, the drones to music, the knock, the ejection and the tells to effects', () => {
-    expect(ROUTE).toEqual({ hum: 'ambience', tension: 'music', knock: 'effects', ejection: 'effects', tell: 'effects' });
+  it('routes the hum to ambience, the drones to music, the knock, the ejection and the tells to effects, the audio logs to voice', () => {
+    expect(ROUTE).toEqual({ hum: 'ambience', tension: 'music', knock: 'effects', ejection: 'effects', tell: 'effects', log: 'voice' });
   });
 
   it('turns a slider percentage into a gain: 0 silent, 100 full', () => {
@@ -683,5 +683,70 @@ describe('Sfx.duck, an audio log lowers music and ambience (#514)', () => {
       expect(duck(ctx, b).gain.value).toBe(duckGains(true)[0]);
       expect(duck(ctx, b).gain.events).toEqual([]);
     }
+  });
+});
+
+describe('Sfx.playLog and Sfx.stopLog, an audio log on the voice bus (#516)', () => {
+  const voices = knockVoices(330);
+  /** The sources and their gains made since `from`, in order: each voice makes one of each. */
+  const since = (ctx: FakeContext, sources: number, gains: number) => ({
+    sources: ctx.sources.slice(sources),
+    gains: ctx.gains.slice(gains),
+  });
+
+  it('plays every voice of the log from now through the voice bus, music and ambience ducked under it', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    const [s0, g0] = [ctx.sources.length, ctx.gains.length];
+    expect(sfx.playLog(voices)).toBe(true);
+    const made = since(ctx, s0, g0);
+    expect(made.sources).toHaveLength(voices.length);
+    for (const gain of made.gains) expect(next(gain)).toBe(bus(ctx, ROUTE.log));
+    expect(made.sources.map((s) => s.times[0])).toEqual(voices.map((v) => 5 + v.env[0]![0]));
+    expect(sfx.ducking).toBe(true);
+    expect(DUCKED.map((b) => duck(ctx, b).gain.events)).toEqual(DUCKED.map(() => [['target', duckGains(true)[0], 5]]));
+  });
+
+  it('stopLog stops every source of the log at once and brings music and ambience back', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    const s0 = ctx.sources.length;
+    sfx.playLog(voices);
+    ctx.currentTime = 7;
+    sfx.stopLog();
+    for (const source of ctx.sources.slice(s0)) expect(source.times.at(-1)).toBe(7);
+    expect(sfx.ducking).toBe(false);
+    expect(DUCKED.map((b) => duck(ctx, b).gain.events.at(-1))).toEqual(DUCKED.map(() => ['target', 1, 7]));
+    sfx.stopLog(); // nothing plays: nothing to stop
+    for (const source of ctx.sources.slice(s0)) expect(source.times).toHaveLength(3);
+  });
+
+  it('a log started while another plays stops the first', () => {
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    const s0 = ctx.sources.length;
+    sfx.playLog(voices);
+    ctx.currentTime = 6;
+    sfx.playLog(voices);
+    const [first, second] = [ctx.sources.slice(s0, s0 + voices.length), ctx.sources.slice(s0 + voices.length)];
+    for (const source of first) expect(source.times.at(-1)).toBe(6);
+    for (const source of second) expect(source.times).toHaveLength(2); // started and scheduled to end, not stopped
+    expect(sfx.ducking).toBe(true);
+  });
+
+  it('is silent with the voice slider at 0 or before a gesture, and ducks all the same until stopLog', () => {
+    const early = setup();
+    expect(early.sfx.playLog(voices)).toBe(false);
+    expect(early.make).not.toHaveBeenCalled();
+    expect(early.sfx.ducking).toBe(true);
+    const { ctx, sfx } = setup();
+    sfx.unlock();
+    sfx.setVolume('voice', 0);
+    const before = ctx.sources.length;
+    expect(sfx.playLog(voices)).toBe(false);
+    expect(ctx.sources.length).toBe(before);
+    expect(sfx.ducking).toBe(true);
+    sfx.stopLog();
+    expect(sfx.ducking).toBe(false);
   });
 });

@@ -325,6 +325,7 @@ describe('the settings toggles', () => {
       'setting-reduced-motion',
       'setting-flat-hud',
       'setting-sound',
+      'setting-transcript',
       'setting-theme',
       'setting-palette',
       'setting-shell-skin',

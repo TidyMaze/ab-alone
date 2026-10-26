@@ -74,7 +74,8 @@ choice), then Flat HUD (#391, off by default: the flat HUD fallback of world.md 
 item below), then Sound (#284, no longer a button of the column; a press shows the four volume sliders of #438, Music, Ambience,
 Effects and Voice, each its name over a range of 0 to 100 %, in place of the items, so the menu never grows taller and
 covers no cell; the menu opens on its items again once closed; opening the menu and moving a slider count as the first
-gesture that starts audio), then Theme (#317, System, Dark or Light: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column). Each
+gesture that starts audio; the Transcript toggle of the audio logs, #516, shares its item, on by default and saved
+locally), then Theme (#317, System, Dark or Light: a press cycles them, see section 2), then Export game and Import game (#287, no longer buttons of the column). Each
 item shows an icon of the repo's icon set (`client/src/icons.ts`: inline SVG line icons, thin `currentColor`
 strokes, one size) then its label: a fog for Clear board, a ball with speed lines for Reduced motion, lines in a box for Flat HUD, a speaker for Sound, an arrow out
 of a tray for Export game, an arrow into it for Import game. The open menu floats over the other buttons, so opening
@@ -146,6 +147,13 @@ outside the menu.
   when the player leaves. The page shown is copied into `#reader` (`aria-live="polite"`, labelled
   "Terminal"): its title, its text and "Page 1 of 2", read by screen readers only, and with the Flat HUD on
   shown as a plate at the bottom of the window, in the UI face at the UI scale.
+- **Audio log player (#516, world.md section 4).** `#log` (labelled "Audio log"), the last of the page chrome
+  but shown in the reader too: a Play log button while the reader is open, Skip log while a log plays, and
+  above it the transcript line shown (`#transcript`, `aria-live="polite"`) unless the Transcript toggle is off.
+  Wider than tall it lies bottom left, in the band left of the board, over the evaluation plate (at the top
+  with the Flat HUD on in the reader); held upright it is the last row of the column, under the buttons and
+  over the board. Like the evaluation plate it covers no cell and no control, and the line lets every press
+  through to the board.
 - **Online status.** Online games add one line under the turn: the player's own color and
   whether the opponent is connected, updated live (#121). Strings, kept verbatim for the e2e
   tests: "You are Black. Waiting for an opponent..." (room creator alone), "Joining as White..."

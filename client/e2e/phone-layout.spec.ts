@@ -3,13 +3,14 @@ import { BLACK_WINS } from './end-games';
 import { loseByRepetition, startDaily } from './fight-end';
 import { maxUiScale } from '../src/uiscale';
 import { openModes } from './modes';
+import { logOf } from '../src/audiologs';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
 // cell, every control is on screen or can be scrolled into view, and a tap on any of the 61 cells reaches
 // the board. Bug #234: held sideways the plate hid the board's top-left marbles, so the plate covers no
 // cell either. The evaluation plate (#191) is checked like a control: it lets taps through, so it would
-// hide a cell without missing a tap.
+// hide a cell without missing a tap. So is the transcript of an audio log (#516).
 
 // What is wrong on the page right now, as readable lines: an empty list is a good layout.
 const problems = (page: Page) =>
@@ -31,22 +32,25 @@ const problems = (page: Page) =>
     const hud = document.getElementById('hud')!.getBoundingClientRect();
     const found: string[] = [];
     for (const c of cells) if (meets(hud, c.disc)) found.push(`the HUD covers ${c.name}`);
-    for (const el of document.querySelectorAll('button, input, label, textarea, select, #eval')) {
+    const plates: Record<string, string> = { eval: 'the evaluation plate', transcript: 'the transcript' };
+    for (const el of document.querySelectorAll('button, input, label, textarea, select, #eval, #transcript')) {
       if (el.getClientRects().length === 0) continue; // hidden
-      const name = el.id === 'eval' ? 'the evaluation plate' : el.textContent || el.getAttribute('aria-label')!;
+      const name = plates[el.id] ?? (el.textContent || el.getAttribute('aria-label')!);
       el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // a scrolling column brings it into view
       const box = el.getBoundingClientRect();
       if (meets(box, hud)) found.push(`${name} covers the HUD`);
       if (!onScreen(box)) found.push(`${name} is off screen`);
       for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
     }
-    // The evaluation plate lets taps through, so it must not lie over a control either, or it hides it.
-    const plate = document.getElementById('eval')!;
-    if (plate.getClientRects().length > 0) {
-      for (const el of document.querySelectorAll('button, input, label, textarea, select')) {
-        if (el.getClientRects().length === 0) continue; // hidden
+    // The plates let taps through, so they must not lie over a control either, or they hide it.
+    for (const [id, name] of Object.entries(plates)) {
+      const plate = document.getElementById(id)!;
+      if (plate.getClientRects().length === 0) continue; // hidden
+      for (const el of document.querySelectorAll('button, input, label, textarea, select, #eval')) {
+        if (el === plate || el.getClientRects().length === 0) continue; // itself, or hidden
+        if (el.closest('#settings-menu')) continue; // the open settings menu floats over the plates too (#277)
         if (meets(plate.getBoundingClientRect(), el.getBoundingClientRect())) {
-          found.push(`the evaluation plate covers ${el.textContent || el.getAttribute('aria-label')}`);
+          found.push(`${name} covers ${plates[el.id] ?? (el.textContent || el.getAttribute('aria-label'))}`);
         }
       }
     }
@@ -195,6 +199,18 @@ for (const { name, viewport, mobile } of sizes) {
       await check(page, testInfo, 'with the mode menu and the boss list open');
     });
 
+    // The audio log player (#516): its transcript line and Skip log cover no cell, no control and not the HUD.
+    test('nothing covers the board or the HUD while an audio log plays, #516', async ({ page }, testInfo) => {
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await expect(page.locator('body')).toHaveAttribute('data-console', /^mess-house-rule /);
+      await page.keyboard.press('t');
+      await page.getByRole('button', { name: 'Play log' }).click();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#transcript')).toHaveText(logOf('mess').lines[1]!.text, { timeout: 7000 });
+      await check(page, testInfo, 'while an audio log plays');
+    });
+
     test('nothing covers the board or the HUD in a boss fight, bugs #227 #234', async ({ page }, testInfo) => {
       const hud = page.locator('#hud');
       await page.goto('./?bot=off&net=hook');
@@ -291,7 +307,7 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(11); // the glass skin shares the shell skin's row (#377), Palette is row 6 (#381)
+    await expect(page.locator('#settings-menu button')).toHaveCount(12); // the glass skin shares the shell skin's row (#377), Palette is row 6 (#381), Transcript shares Sound's (#516)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {
         const r = el.getBoundingClientRect();

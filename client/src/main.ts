@@ -51,6 +51,7 @@ import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
+import { lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
 import { markRead } from './lorestore';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
@@ -72,6 +73,7 @@ import {
   readPalette,
   readTheme,
   readTier,
+  readTranscript,
   readUiScale,
   hasReflections,
   meshDetail,
@@ -86,6 +88,7 @@ import {
   writeSkin,
   writeVolume,
   writeTheme,
+  writeTranscript,
   writeUiScale,
 } from './quality';
 import { nextPalette, paletteById, type Palette } from './palettes';
@@ -217,6 +220,7 @@ const store = (() => {
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
 let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
+let transcriptOn = readTranscript(store); // the audio log transcript (#516), on by default
 const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
 const tier = readTier(store, {
   width: innerWidth,
@@ -387,6 +391,11 @@ const toggles: Record<string, () => void> = {
     menu.dataset.page = 'volume';
     sliderAt('music').focus();
   },
+  transcript: () => {
+    transcriptOn = !transcriptOn;
+    writeTranscript(store, transcriptOn);
+    paintLog();
+  },
   theme: () => {
     const next = nextDisplay(theme, uiScale, safe, maxUiScale(innerWidth, innerHeight));
     theme = next.theme;
@@ -431,7 +440,7 @@ const toggles: Record<string, () => void> = {
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     row.setAttribute('aria-label', label); // held upright only the icon shows (#414): the name stays for screen readers
@@ -439,7 +448,7 @@ const paintMenu = (): void => {
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette)) {
+for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -479,6 +488,12 @@ const themeGroup = document.createElement('div');
 themeGroup.className = 'setting-group skin-pair';
 themeRow.replaceWith(themeGroup);
 themeGroup.append(themeRow, document.getElementById('setting-palette')!);
+// The audio log Transcript toggle (#516) is a second button in the Sound item, as Palette is in the Theme item.
+const soundRow = document.getElementById('setting-sound')!;
+const soundGroup = document.createElement('div');
+soundGroup.className = 'setting-group skin-pair';
+soundRow.replaceWith(soundGroup);
+soundGroup.append(soundRow, document.getElementById('setting-transcript')!);
 fpsBox.hidden = !fpsOn;
 // The four volume sliders (#438), the page Sound opens: 0 to 100 %, each saved on its own.
 for (const bus of BUSES) {
@@ -611,6 +626,7 @@ function openReader(): void {
   markRead(store, consoleEntry);
   showConsole(0);
   applyView();
+  paintLog();
 }
 function leaveReader(): void {
   view = reading!;
@@ -619,6 +635,7 @@ function leaveReader(): void {
   delete document.body.dataset.reading;
   consoleSince = performance.now() - consolePage * TERMINAL.pageMs; // the screen turns on from the page left
   applyView();
+  paintLog();
 }
 function turnReader(step: number): void {
   const page = Math.max(0, consolePage + step);
@@ -632,6 +649,41 @@ addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowRight') turnReader(1);
   else if (e.key === 'ArrowLeft') turnReader(-1);
 });
+// The audio log player (#516, world.md section 4): while the player reads the deck console, Play log plays the deck's
+// audio log on the voice bus, music and ambience ducked under it. Skip log stops it at any time, on the console or off
+// it; the game goes on meanwhile. Its transcript shows line by line unless the Transcript toggle is off.
+const logButton = document.getElementById('log-button') as HTMLButtonElement;
+const transcript = document.getElementById('transcript')!;
+let playing: { log: AudioLog; since: number } | null = null;
+function paintLog(): void {
+  logButton.hidden = !reading && !playing;
+  logButton.textContent = playing ? 'Skip log' : 'Play log';
+  const line = (playing && transcriptOn && lineAt(playing.log, (performance.now() - playing.since) / 1000)) || '';
+  if (transcript.textContent !== line) transcript.textContent = line; // aria-live: a line is read once
+  transcript.hidden = !line;
+}
+function stopLog(): void {
+  sfx.stopLog();
+  playing = null;
+  delete document.body.dataset.log;
+  paintLog();
+}
+logButton.addEventListener('click', () => {
+  if (playing) {
+    stopLog();
+    return;
+  }
+  playing = { log: logOf(deck), since: performance.now() };
+  document.body.dataset.logSound = sfx.playLog(playing.log.voices) ? 'voice' : 'none'; // read by the tests
+  document.body.dataset.log = playing.log.id; // read by the e2e tests
+  paintLog();
+});
+// Called every frame: the next transcript line, and the end of the log.
+function tickLog(now: number): void {
+  if (!playing) return;
+  if (now - playing.since >= playing.log.seconds * 1000) stopLog();
+  else paintLog();
+}
 void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fonts.load(font))).then(() => {
   consoleFonts = true;
   layoutConsole();
@@ -1873,6 +1925,8 @@ addEventListener('resize', () => {
 (window as unknown as Record<string, unknown>).__tension = () => ({ level: sfx.tension, layers: sfx.layers });
 // The sound twins of the boss tells played so far (#358).
 (window as unknown as Record<string, unknown>).__tellCues = () => tellCues;
+// Whether music and ambience are ducked under an audio log (#516).
+(window as unknown as Record<string, unknown>).__ducked = () => sfx.ducking;
 (window as unknown as Record<string, unknown>).__palette = () => palette;
 
 // Used by the browser checks to count the plies played, bot replies included, and to compare them.
@@ -2474,6 +2528,7 @@ renderer.setAnimationLoop((now) => {
   animateEjections(now);
   animateParticles(now);
   turnConsole(now);
+  tickLog(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   renderer.render(scene, camera);
   draws++;
