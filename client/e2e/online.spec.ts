@@ -17,8 +17,11 @@ const play = (page: Page, q: number, r: number) => page.evaluate(([cq, cr]) => (
 // Reduced motion on pages whose test checks no animation: slides and ejection effects take no time.
 const calm = (...pages: Page[]) => Promise.all(pages.map((p) => p.emulateMedia({ reducedMotion: 'reduce' })));
 const plies =(page: Page) => page.evaluate(() => (window as any).__plies());
-// Seating is a Hello round trip after the connection opens: wait for it before the first move.
-const seat = (page: Page, role: 'player' | 'spectator') => expect(page.locator('body')).toHaveAttribute('data-seat', role);
+// Seating is a Hello round trip after the connection opens: wait for it before the first move. A page that just
+// loaded can block its main thread for seconds on a loaded machine (one long task of 4 to 10 s seen, bug #554),
+// and the Hello waits for it: the seat is waited for up to the test timeout, not the 5 s expect default.
+const seat = (page: Page, role: 'player' | 'spectator') =>
+  expect(page.locator('body')).toHaveAttribute('data-seat', role, { timeout: 15_000 });
 // Every page relays its records to the others with its own name as the sender, like a Trystero room,
 // or to the one page `to` names (a catch-up answer, #226). Whatever goes to or from a page named in
 // `lost` is lost, as on a connection that broke before anyone noticed.
