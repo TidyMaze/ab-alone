@@ -276,12 +276,31 @@ answer: only a `Sync` does.
    integers, an empty one is `hold`. `Commit {game, round, hash, pub, sig}` with
    `hash = SHA-256(JSON [order, nonce])` and a random 32-byte nonce, then
    `Reveal {game, round, order, nonce, pub, sig}`, both signed like a move record whose game names
-   the kind (`commit:<id>`, `reveal:<id>`), so neither can pass for a move. A peer keeps one commit
-   per live seat, for its game and round, until the reveal starts. The round has a second, reveal
-   deadline: a committed seat that has not revealed by then holds and is flagged. A reveal that
-   cannot be pinned on a committed seat (bad signature, no commit) is refused and flags nobody;
-   the first signed reveal of a seat is final. Not handled yet: a seat that sends other commits or
-   reveals to other peers can split the honest peers (#532).
+   the kind (`commit:<id>`, `reveal:<id>`), so neither can pass for a move. A peer keeps the first
+   commit of each live seat, for its game and round, until the reveal starts. The round has a
+   second, reveal deadline: a committed seat without a matching reveal by then holds and is
+   flagged. A reveal that cannot be pinned on a committed seat (bad signature, no commit) is
+   refused and flags nobody; a signed one that does not match flags its sender.
+   **Equivocation (#532): forwarding, not a hash comparison.** A seat may send other commits or
+   reveals to other peers. Comparing a hash of the round before resolving would only show that the
+   peers differ, and agreeing on a fix would need one more exchange; forwarding makes them hold the
+   same set. Each peer forwards to every other peer each commit and reveal it keeps, the moment it
+   keeps it, and sends its own reveal once its reveal starts. Channels are reliable and ordered,
+   so whatever a seat forwarded before its reveal reaches every peer before that reveal. Rules:
+   - Two different signed commits of one key are the proof it equivocated: the seat holds and is
+     flagged, whatever it reveals. A second commit counts before this peer's reveal starts, or
+     later only when another seat forwards it before that seat's reveal reached this peer. One
+     that comes later (from its author, or after the forwarder's reveal) is refused: some peers
+     may have resolved already.
+   - A matching reveal fixes the order, whoever forwarded it (the commit binds it, so there is
+     only one), and a bad reveal does not stop a matching one coming later.
+   - A peer gives the orders early only once every committed seat sent it its own matching reveal
+     (or is proven to equivocate), otherwise at the reveal deadline.
+
+   So when every message arrives before the deadlines, every honest peer gives the same orders.
+   Left: a message that misses a deadline on some peers only, and two colluding seats (one forwards
+   the other's second commit to some peers), can still split them; the state hash check then shows
+   the desync.
 4. **Resolve:** every peer runs `resolve_round(state, orders)` locally. It applies the orders
    one by one in a rotating initiative order (derived from round number and seat list), each
    validated at its turn, an invalid order becomes a pass (game design #53, option C). Pure, so
