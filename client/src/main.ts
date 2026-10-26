@@ -2975,8 +2975,14 @@ royaleButton.disabled = false; // listener ready (#146)
 // seats empty then are bots, played alike on every peer. Each round a target press or Hold commits the order, the
 // round resolves once every seat revealed or its deadline passed (royale-net.ts), and the arena plays it out.
 const ONLINE_SEATS = 6;
-const me = (): number => (royaleNet ? royaleNet.you : YOU);
-const canOrder = (): boolean => !royaleNet || royaleNet.phase === 'choosing';
+/** Our seat on the arena: the player's offline, ours in the room online (-1 for a spectator). */
+function me(): number {
+  return royaleNet ? royaleNet.you : YOU;
+}
+/** Whether an order can be given now: always offline, while the open round takes ours online. */
+function canOrder(): boolean {
+  return !royaleNet || royaleNet.phase === 'choosing';
+}
 function royaleStatus(net: RoyaleNet<Royale>): OnlineStatus {
   const session = online!;
   document.body.dataset.online = 'royale'; // read by the e2e tests, as data-seat, data-net and data-desync
@@ -2986,7 +2992,9 @@ function royaleStatus(net: RoyaleNet<Royale>): OnlineStatus {
   startButton.hidden = net.phase !== 'lobby' || !session.isCoordinator;
   return netStatus(net.phase, session.isCoordinator, net.players, net.desync);
 }
+// The keys first: from the arena on, every order goes to the room.
 async function goRoyale(room: string, side: number): Promise<void> {
+  const keys = await generateKeys();
   leaveRoyale();
   startRoyale({ seed: seedOf(room), rounds: [] });
   const game = royale!;
@@ -2994,7 +3002,6 @@ async function goRoyale(room: string, side: number): Promise<void> {
   const net = roomTransport(room);
   link = net;
   signalingTimeout(side);
-  const keys = await generateKeys();
   const session: OnlineSession = new OnlineSession({
     game: room,
     side,

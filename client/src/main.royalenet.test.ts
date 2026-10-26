@@ -101,12 +101,12 @@ describe('Battle royale online (#504)', () => {
     game.openModes();
     button('royale-online').click();
     expect(byId('mode-menu').hidden).toBe(true);
+    await until(game, () => data().seat === 'player'); // once its keys are made, the page is in the room
     const room = game.room()!;
     expect(location.hash).toBe(`#royale=${room}`);
     expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(`#royale=${room}`);
     expect(byId('invite').hidden).toBe(false);
     expect(byId('invite-label').textContent).toBe('Invite link: send it to the other players');
-    await until(game, () => data().seat === 'player');
     expect(data().online).toBe('royale');
     expect(data().royale).toBe('1');
     expect(data().net).toBe('lobby');
