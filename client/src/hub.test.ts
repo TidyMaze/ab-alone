@@ -70,6 +70,10 @@ describe('hub map (game-design.md section 3.5)', () => {
     }
   });
 
+  it('every deck has the battle royale lobby at the south-west corner, next to the online table (#522)', () => {
+    for (const deck of DECK_NAMES) expect(roomAt(deck, [-2, 2])).toEqual({ kind: 'royale' });
+  });
+
   it('each lore entry has one terminal room, on its own deck', () => {
     const terminals = DECK_NAMES.flatMap((deck) =>
       roomsOf(deck).flatMap(({ door }) => (door.kind === 'terminal' ? [`${deck} ${door.lore}`] : [])),

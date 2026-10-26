@@ -1,13 +1,27 @@
 import { expect, test, type Page } from '@playwright/test';
+import { loseByRepetition } from './fight-end';
 import { openModes } from './modes';
 
 // #521: the Ship entry of the mode menu draws the deck's hub map (docs/specs/game-design.md section 3.5) and the glass
 // marble, which rolls one cell at a time by a click on a neighbour or an arrow key. body[data-hub] names its deck and
-// cell. The spot is saved: after a reload, Ship lands in the same room.
+// cell. The spot is saved: after a reload, Ship lands on the same cell.
+// #522: rolling onto a boss door or a table starts its game, and once that game is over Back to the ship puts the
+// marble back on the door. The battle royale lobby is shown closed.
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
   await page.getByRole('button', { name: 'Ship' }).click();
+}
+
+/** Opens `url`, then Ship with the marble saved on `cell` of the Mess. */
+async function shipAt(page: Page, url: string, cell: [number, number]): Promise<void> {
+  await page.goto(url);
+  await page.locator('canvas').waitFor();
+  await page.evaluate((cell) => {
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell, beaten: [] }));
+  }, cell);
+  await ship(page);
+  await expect(page.locator('body')).toHaveAttribute('data-hub', `mess ${cell[0]},${cell[1]}`);
 }
 
 /** A mouse click on a cell, through the page's raycast. */
@@ -16,7 +30,12 @@ async function clickCell(page: Page, q: number, r: number): Promise<void> {
   await page.mouse.click(x, y);
 }
 
-test('the marble walks through 6 rooms of the Mess, and a reload lands it in the same room, #521', async ({ page }) => {
+/** The same click without the raycast and the frames of a mouse click, to stay fast. */
+async function hookClick(page: Page, q: number, r: number): Promise<void> {
+  await page.evaluate(([q, r]) => (window as any).__click(q, r), [q, r]);
+}
+
+test('the marble walks the Mess past its rooms, and a reload lands it on the same cell, #521', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
@@ -27,30 +46,76 @@ test('the marble walks through 6 rooms of the Mess, and a reload lands it in the
 
   const rooms: [number, number, string][] = [
     [2, -1, 'Terminal'],
-    [2, 0, 'Boss door'],
     [1, 1, 'Terminal'],
-    [-2, 1, 'Online table'],
+    [-2, 2, 'Battle royale lobby · closed'],
   ];
-  // One mouse click, then the same click without the raycast and the frames of a mouse click (__click), to stay fast.
   await clickCell(page, 1, 0);
   await expect(body).toHaveAttribute('data-hub', 'mess 1,0');
-  const path: [number, number][] = [[2, -1], [2, 0], [1, 1], [0, 2], [-1, 2], [-2, 2], [-2, 1]];
+  const path: [number, number][] = [[2, -1], [1, 0], [1, 1], [0, 2], [-1, 2], [-2, 2]];
   for (const [q, r] of path) {
-    await page.evaluate(([q, r]) => (window as any).__click(q, r), [q, r]);
+    await hookClick(page, q, r);
     await expect(body).toHaveAttribute('data-hub', `mess ${q},${r}`);
     const room = rooms.find(([rq, rr]) => rq === q && rr === r);
     if (room) await expect(hud).toContainText(room[2]);
   }
+  await page.keyboard.press('ArrowRight');
+  await expect(body).toHaveAttribute('data-hub', 'mess -1,2');
   await page.keyboard.press('ArrowUp');
-  await expect(body).toHaveAttribute('data-hub', 'mess -2,0');
-  await expect(hud).toContainText('Bot table');
-  await page.keyboard.press('ArrowUp');
-  await expect(body).toHaveAttribute('data-hub', 'mess -1,-1');
-  await expect(hud).toContainText('Hot-seat table');
+  await expect(body).toHaveAttribute('data-hub', 'mess 0,1');
 
   await page.reload();
   await page.locator('canvas').waitFor();
   await ship(page);
-  await expect(body).toHaveAttribute('data-hub', 'mess -1,-1');
-  await expect(hud).toContainText('Hot-seat table');
+  await expect(body).toHaveAttribute('data-hub', 'mess 0,1');
+});
+
+test('the boss door starts the Echo, and Back to the ship after the defeat lands on the door, #522', async ({ page }, testInfo) => {
+  await shipAt(page, './?bot=off', [1, 0]);
+  await page.screenshot({ path: testInfo.outputPath('hub-before-door.png') });
+  await hookClick(page, 2, 0);
+  const body = page.locator('body');
+  await expect(body).toHaveAttribute('data-boss', 'echo');
+  await expect(body).not.toHaveAttribute('data-hub');
+  await loseByRepetition(page); // ?bot=off: the test plays both sides
+  const back = page.getByRole('button', { name: 'Back to the ship' });
+  await expect(back).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('back-to-the-ship.png') });
+  await back.click();
+  await expect(body).toHaveAttribute('data-hub', 'mess 2,0');
+  await expect(page.locator('#hud')).toContainText('Boss door');
+  await expect(back).toBeHidden();
+});
+
+test('the hot-seat table starts a game for two at one table, #522', async ({ page }) => {
+  await shipAt(page, './', [-1, 0]);
+  await hookClick(page, -1, -1);
+  await expect(page.locator('body')).not.toHaveAttribute('data-hub');
+  await expect(page.locator('#hud')).toContainText('Mess: two crews, one table.');
+});
+
+test('the bot table starts a game against the bot, and Back to the ship after the loss lands on it, #522', async ({ page }) => {
+  await shipAt(page, './?nodes=100', [-1, 0]);
+  await hookClick(page, -2, 0);
+  const body = page.locator('body');
+  await expect(page.locator('#hud')).toContainText('Mess: one seat filled.');
+  await page.evaluate(() => (window as any).__playTurns(30, [4])); // the player marches one way, the bot pushes six off
+  await expect(body).toHaveAttribute('data-over', 'loss');
+  await page.getByRole('button', { name: 'Back to the ship' }).click();
+  await expect(body).toHaveAttribute('data-hub', 'mess -2,0');
+});
+
+test('the online table opens a room with its invite link, as Play online does, #522', async ({ page }) => {
+  await shipAt(page, './?bot=off&net=hook', [-1, 1]);
+  await hookClick(page, -2, 1);
+  await expect(page.locator('#invite')).toBeVisible();
+  expect(await page.locator('#invite').inputValue()).toMatch(/#room=[\w-]+$/);
+  await expect(page.locator('#hud')).toContainText('You are Black');
+});
+
+test('the battle royale lobby is shown closed and opens nothing, #522', async ({ page }, testInfo) => {
+  await shipAt(page, './?bot=off', [-1, 1]);
+  await hookClick(page, -2, 2);
+  await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess -2,2');
+  await expect(page.locator('#hud')).toContainText('Battle royale lobby · closed');
+  await page.screenshot({ path: testInfo.outputPath('royale-closed.png') });
 });

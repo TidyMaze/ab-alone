@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { axialTo3D } from './board';
+import { axialTo3D, encodeMove, moveForClick, parseMoves } from './board';
+import { generateKeys } from './moverecord';
+import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
+import type { Transport } from './transport';
 
 // Walking the hub (docs/specs/game-design.md section 3.5, #521): the Ship entry of the mode menu draws the deck's map
 // with the board's cells and the player's glass marble, which rolls one cell by a click on a neighbour or an arrow key.
@@ -33,6 +36,7 @@ function drawn(scene: THREE.Scene) {
     glass: marbles.filter((m) => m.material instanceof THREE.MeshPhysicalMaterial),
     shells: marbles.filter((m) => m.geometry instanceof THREE.SphereGeometry && !(m.material instanceof THREE.MeshPhysicalMaterial)),
     glyphs: marbles.filter((m) => m.geometry instanceof THREE.TorusGeometry).length,
+    bars: marbles.filter((m) => m.geometry instanceof THREE.BoxGeometry), // the bar across a closed room (#522)
   };
 }
 
@@ -47,6 +51,57 @@ const press = (key: string, target: EventTarget = window): KeyboardEvent => {
 function ship(game: Game): void {
   game.openModes();
   byId('ship').click();
+}
+/** Ship, with the marble saved on `cell` of the Mess. */
+function shipAt(game: Game, cell: [number, number]): void {
+  localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'mess', cell, beaten: [] }));
+  ship(game);
+}
+/** Settles until `ok` holds: the bot replies, the signatures of an online game. */
+async function until(game: Game, ok: () => boolean): Promise<void> {
+  for (let i = 0; i < 50 && !ok(); i++) await game.settle();
+  expect(ok()).toBe(true);
+}
+// One marble each, there and back twice: the start position a third time at ply 8, a draw by repetition (a defeat
+// against a boss). `play` plays White's half, the page's own clicks play Black.
+const THERE_AND_BACK: [number, number, number, number][] = [
+  [0, 2, 0, 1],
+  [0, -2, 0, -1],
+  [0, 1, 0, 2],
+  [0, -1, 0, -2],
+];
+type Play = (q: number, r: number, tq: number, tr: number) => Promise<void>;
+async function repeat(game: Game, white?: Play): Promise<void> {
+  for (const [ply, [q, r, tq, tr]] of [...THERE_AND_BACK, ...THERE_AND_BACK].entries()) {
+    if (white && ply % 2 === 1) await white(q, r, tq, tr);
+    else {
+      game.click(q, r);
+      game.click(tq, tr);
+      game.frame(5000); // the slide ends
+    }
+    await until(game, () => game.hook('__plies') === ply + 1);
+  }
+}
+/** The White player of an online room: a session with its own engine on `transport`. */
+async function opponent(transport: Transport, room: string) {
+  const { Engine, engine_version } = await import('abalone-wasm');
+  const engine = new Engine();
+  const session = new OnlineSession({
+    game: room,
+    side: 2,
+    engine: engine_version(),
+    keys: await generateKeys(),
+    transport,
+    judge: { to_move: () => engine.to_move(), play: (mv) => engine.play(mv), status: () => engine.status(), restart: () => {} },
+    onMove: () => {},
+    onRefuse: () => {},
+    beat: { ms: 5000, now: Date.now, every: () => {} },
+  });
+  return async (q: number, r: number, tq: number, tr: number): Promise<void> => {
+    const record = encodeMove(moveForClick(parseMoves(engine.legal_moves()), [[q, r]], [tq, tr])!);
+    engine.play(Int32Array.from(record));
+    await session.send(record);
+  };
 }
 
 describe('main.ts, walking the hub (#521)', () => {
@@ -66,7 +121,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(shells).toHaveLength(0);
     expect(glass).toHaveLength(1);
     expect(glass[0]!.position.toArray()).toEqual([0, 0.36, 0]);
-    expect(glyphs).toBe(7); // six rooms and the lift up: the Mess has no lift down
+    expect(glyphs).toBe(8); // seven rooms and the lift up: the Mess has no lift down
     expect(game.hud()).toBe('Ship · Mess');
   });
 
@@ -81,9 +136,9 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(drawn(scene()).glass[0]!.position.toArray()).toEqual([p.x, 0.36, p.z]);
     game.click(-2, 0);
     expect(hub()).toBe('mess 1,0');
-    game.click(2, 0);
-    expect(hub()).toBe('mess 2,0');
-    expect(game.hud()).toBe('Ship · MessBoss door');
+    game.click(2, -1);
+    expect(hub()).toBe('mess 2,-1');
+    expect(game.hud()).toBe('Ship · MessTerminal');
   });
 
   it('rolls the marble by the arrow keys in the hub only, never from a text field', async () => {
@@ -126,7 +181,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(hub()).toBe('cargo -1,2');
     expect(document.body.dataset.deck).toBe('cargo');
     expect(saved()).toEqual({ version: 1, deck: 'cargo', cell: [-1, 2], beaten: ['echo'] });
-    expect(drawn(scene()).glyphs).toBe(8); // the two lifts
+    expect(drawn(scene()).glyphs).toBe(9); // the two lifts
     expect(game.hud()).toBe('Ship · CargoLift to Mess');
     press('ArrowRight');
     expect(hub()).toBe('cargo 0,2');
@@ -178,5 +233,140 @@ describe('main.ts, walking the hub (#521)', () => {
     ship(game);
     expect(document.body.dataset.over).toBeUndefined();
     expect(game.hud()).toBe('Ship · Mess');
+  });
+});
+
+// The doors (#522, game-design.md section 3.5): rolling onto a boss door or a table starts the same game as its mode
+// menu entry. Once that game is over, Back to the ship puts the marble back on the door's cell, in the hub. The battle
+// royale lobby is shown closed, a terminal opens nothing yet (#524).
+describe('main.ts, the hub doors (#522)', () => {
+  const back = (): HTMLButtonElement => byId('ship-back');
+  const data = (): DOMStringMap => document.body.dataset;
+
+  it('the boss door starts the deck boss; once the fight is lost, Back to the ship lands on the door', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    shipAt(game, [1, 0]);
+    expect(back().hidden).toBe(true);
+    game.click(2, 0);
+    expect(hub()).toBeUndefined();
+    expect(data().boss).toBe('echo');
+    expect(data().deck).toBe('mess');
+    expect(game.hud()).toContain('The Echo');
+    expect(back().hidden).toBe(true); // the fight is on
+    await repeat(game);
+    expect(game.hud()).toContain('Defeat');
+    expect(back().hidden).toBe(false);
+    expect(back().textContent).toBe('Back to the ship');
+    back().click();
+    expect(hub()).toBe('mess 2,0');
+    expect(game.hud()).toBe('Ship · MessBoss door');
+    expect(back().hidden).toBe(true);
+    game.click(-2, 0); // not a neighbour: the marble stays on the door, and the door starts nothing again
+    expect(hub()).toBe('mess 2,0');
+  });
+
+  it('a table after a boss fight is a plain game again: no boss, no Retry, New game back', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    shipAt(game, [1, 0]);
+    game.click(2, 0);
+    ship(game);
+    expect(byId('boss-retry').hidden).toBe(false);
+    for (const [q, r] of [[1, 0], [0, 0], [-1, 0], [-2, 0]] as const) game.click(q, r);
+    expect(hub()).toBeUndefined();
+    expect(data().boss).toBeUndefined();
+    expect(game.hook('__fight')).toBeNull();
+    expect(byId('boss-retry').hidden).toBe(true);
+    expect(byId('new-game').hidden).toBe(false);
+    expect(game.hud()).toContain('Black to move');
+  });
+
+  it('the hot-seat table starts a game the bot never answers, Back to the ship after its draw', async () => {
+    const game = await boot('?nodes=100');
+    shipAt(game, [-1, 0]);
+    game.click(-1, -1);
+    expect(hub()).toBeUndefined();
+    expect(game.hud()).toContain('Mess: two crews, one table.');
+    await repeat(game); // the page plays both sides: no bot
+    expect(game.turn()).toBe('Draw');
+    back().click();
+    expect(hub()).toBe('mess -1,-1');
+    expect(game.hud()).toBe('Ship · MessHot-seat table');
+  });
+
+  it('the bot table brings the bot back after the hot-seat one; Back to the ship after its loss', async () => {
+    const game = await boot('?nodes=100');
+    shipAt(game, [-1, 0]);
+    game.click(-1, -1); // hot-seat
+    ship(game);
+    game.click(-2, 0); // the bot table, next to the hot-seat one
+    expect(hub()).toBeUndefined();
+    expect(game.hud()).toContain('Mess: one seat filled.');
+    await game.hook<Promise<number>>('__playTurns', 30, [4]); // the player marches one way, the bot pushes six off
+    expect(data().over).toBe('loss');
+    back().click();
+    expect(hub()).toBe('mess -2,0');
+    expect(game.hud()).toBe('Ship · MessBot table');
+  });
+
+  it('the online table opens a room as Play online does; Back to the ship after the game leaves it', async () => {
+    const game = await boot('?bot=off');
+    shipAt(game, [-1, 1]);
+    game.click(-2, 1);
+    expect(hub()).toBeUndefined();
+    expect(byId('invite').hidden).toBe(false);
+    expect(location.hash).toBe(`#room=${game.room()}`);
+    await until(game, () => data().seat === 'player');
+    const white = await opponent(game.peer()!, game.room()!);
+    await until(game, () => data().opponent === 'here');
+    await repeat(game, white);
+    expect(game.turn()).toBe('Draw');
+    expect(byId('rematch').hidden).toBe(false);
+    back().click();
+    await game.settle(); // the closed room calls back: the hub stays
+    expect(hub()).toBe('mess -2,1');
+    expect(game.hud()).toBe('Ship · MessOnline table');
+    expect(location.hash).toBe('');
+    expect(byId('invite').hidden).toBe(true);
+    expect(byId('invite-label').hidden).toBe(true);
+    expect(byId('rematch').hidden).toBe(true);
+    expect(byId('new-game').hidden).toBe(false);
+    expect(data().online).toBeUndefined();
+    expect(data().seat).toBeUndefined();
+    ship(game); // a local page again: Ship opens
+    expect(hub()).toBe('mess -2,1');
+  });
+
+  it('the online table opens nothing while the browser is offline', async () => {
+    const game = await boot('?bot=off');
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    onTestFinished(() => Reflect.deleteProperty(navigator, 'onLine'));
+    window.dispatchEvent(new Event('offline'));
+    shipAt(game, [-1, 1]);
+    game.click(-2, 1);
+    expect(hub()).toBe('mess -2,1');
+    expect(game.room()).toBeNull();
+  });
+
+  it('the battle royale lobby is shown closed and opens nothing, nor does a terminal yet', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    shipAt(game, [-1, 1]);
+    const [bar] = drawn(scene()).bars;
+    const p = axialTo3D(-2, 2);
+    expect(bar!.position.x).toBeCloseTo(p.x);
+    expect(bar!.position.z).toBeCloseTo(p.z);
+    game.click(-2, 2);
+    expect(hub()).toBe('mess -2,2');
+    expect(game.hud()).toBe('Ship · MessBattle royale lobby · closed');
+    shipAt(game, [1, -1]);
+    game.click(2, -1);
+    expect(hub()).toBe('mess 2,-1');
+  });
+
+  it('Back to the ship never shows after a game no room started', async () => {
+    const game = await boot('?nodes=100');
+    await game.hook<Promise<number>>('__playTurns', 30, [4]);
+    expect(data().over).toBe('loss');
+    expect(back().hidden).toBe(true);
   });
 });
