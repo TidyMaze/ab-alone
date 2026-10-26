@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellIndex } from './board';
+import { cellIndex, cellsFor } from './board';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 
 describe('parseCracks', () => {
@@ -21,6 +21,13 @@ describe('crackLeft', () => {
     const left = crackLeft([{ cell: [4, -1], left: 2 }]);
     expect(left.get(cellIndex(4, -1))).toBe(2);
     expect(left.size).toBe(1);
+  });
+
+  it('indexes the cells of another board, the battle royale arena (#503)', () => {
+    const arena = cellsFor(8);
+    const left = crackLeft([{ cell: [0, 8], left: 1 }], arena);
+    expect(left.get(cellIndex(0, 8, arena))).toBe(1);
+    expect(left.get(216)).toBe(1);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endBanner, type EndMode } from './endbanner';
+import { endBanner, ordinal, royaleBanner, type EndMode } from './endbanner';
 
 const input = (mode: EndMode, side: number, status: number, reason = 0, win = 6, glass = 2) => ({ mode, side, status, reason, win, glass });
 const REPEAT = 1;
@@ -56,5 +56,26 @@ describe('endBanner', () => {
     expect(endBanner(input('bot', 1, 3, STALL))!.line).toBe('100 plies, nothing ejected. Tally calls it even.');
     expect(endBanner(input('boss', 1, 3, REPEAT))!.line).toBe('Repeated 3 times: a defeat.');
     expect(endBanner(input('boss', 1, 3, STALL))!.line).toBe('100 plies idle: a defeat.');
+  });
+});
+
+describe('royaleBanner (#503)', () => {
+  const at = (place: number, points: number, seat = 0) => ({ seat, place, points });
+
+  it('shows nothing while the battle royale runs', () => {
+    expect(royaleBanner([], 0)).toBeNull();
+  });
+
+  it('first place wins, a shared first place too, with the points scored', () => {
+    expect(royaleBanner([at(1, 12), at(2, 6, 1)], 0)).toEqual({ title: 'You win', line: '12 points. The books balance.', anim: 'win' });
+    expect(royaleBanner([at(1, 10, 1), at(1, 10)], 0)!.title).toBe('You win');
+  });
+
+  it('any other place names it, a loss', () => {
+    expect(royaleBanner([at(1, 10, 1), at(3, 5)], 0)).toEqual({ title: 'You place 3rd', line: '5 points. Tally strikes your name.', anim: 'loss' });
+  });
+
+  it('names the places 1st to 6th', () => {
+    expect([1, 2, 3, 4, 5, 6].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '5th', '6th']);
   });
 });

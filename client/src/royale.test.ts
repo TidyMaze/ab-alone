@@ -4,15 +4,18 @@ import { cellIndex } from './board';
 import {
   ARENA,
   BOTS,
+  breachText,
   initiative,
   loadRoyale,
   nextRound,
   orderText,
+  outSeats,
   parseLog,
   roundOrders,
   royaleHtml,
   seatAt,
   seatName,
+  standings,
   YOU,
 } from './royale';
 
@@ -153,5 +156,60 @@ describe('the HUD plate', () => {
     ]);
     expect(items.map((li) => li.className)).toEqual(['moved', 'fizzled', 'held', 'out', 'held', 'fizzled']);
     expect((items[5]!.querySelector('.seat') as HTMLElement).style.background).toBe('rgb(230, 159, 0)');
+  });
+});
+
+describe('the breach, the seats out and the placement (#503)', () => {
+  it('warns of the cracked cells and the rounds before they go void, nothing without cracks', () => {
+    expect(breachText([])).toBe('');
+    expect(breachText([{ cell: [0, 0], left: 1 }])).toBe('Breach: 1 cell void in 1 round');
+    expect(breachText([{ cell: [0, 8], left: 2 }, { cell: [1, 7], left: 2 }])).toBe('Breach: 2 cells void in 2 rounds');
+  });
+
+  it('a seat with no marble left on the arena is out', () => {
+    const board = Array.from(make(6, 7).board());
+    expect(outSeats(board)).toEqual([]);
+    const gone = board.map((code) => (seatAt(code) === 2 || seatAt(code) === 4 ? 0 : code));
+    expect(outSeats(gone)).toEqual([2, 4]);
+  });
+
+  it('the wasm placement gives each seat its place and points, best place first, seat order in a shared place', () => {
+    expect(standings([])).toEqual([]);
+    expect(standings([2, 6, 1, 12, 2, 6])).toEqual([
+      { seat: 1, place: 1, points: 12 },
+      { seat: 0, place: 2, points: 6 },
+      { seat: 2, place: 2, points: 6 },
+    ]);
+  });
+
+  it('the plate warns of the breach in the hazard line, and greys out the seats out', () => {
+    document.body.innerHTML = royaleHtml(null, [], { out: [2, 4], cracks: [{ cell: [0, 8], left: 1 }] });
+    expect(document.querySelector('.breach')!.textContent).toBe('Breach: 1 cell void in 1 round');
+    const items = [...document.querySelectorAll('.initiative li')];
+    expect(items.map((li) => li.className)).toEqual(['', '', 'out', '', 'out', '']);
+    expect(items.map((li) => li.textContent)).toEqual(['You', 'Bot 1', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5']);
+    document.body.innerHTML = royaleHtml(null, []);
+    expect(document.querySelector('.breach')).toBeNull();
+    expect(document.querySelectorAll('.initiative li.out')).toHaveLength(0);
+  });
+
+  it('once over, the plate is the end banner and the places with their points', () => {
+    const placed = standings([1, 10, 2, 6, 2, 6, 2, 6, 2, 6, 2, 6]);
+    document.body.innerHTML = royaleHtml(parseLog([25, 0, 2, -1])!, [], { standings: placed, out: [1, 2, 3, 4, 5] });
+    expect(document.querySelector('.turn')!.textContent).toBe('You win');
+    const end = document.querySelector('.end')!;
+    expect(end.textContent).toBe('10 points. The books balance.');
+    expect(end.getAttribute('data-anim')).toBe('win');
+    expect(document.querySelector('.placement')!.getAttribute('aria-label')).toBe('Placement');
+    expect([...document.querySelectorAll('.placement li')].map((li) => li.textContent)).toEqual([
+      '1st You · 10 points',
+      '2nd Bot 1 · 6 points',
+      '2nd Bot 2 · 6 points',
+      '2nd Bot 3 · 6 points',
+      '2nd Bot 4 · 6 points',
+      '2nd Bot 5 · 6 points',
+    ]);
+    for (const gone of ['.initiative', '.reveal', '.breach']) expect(document.querySelector(gone), gone).toBeNull();
+    expect(document.body.textContent).not.toContain('Your order');
   });
 });
