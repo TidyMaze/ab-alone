@@ -5,6 +5,7 @@ import { seatAfter } from './coop';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
+import type { Wire } from './moverecord';
 import type { Transport } from './transport';
 
 // Co-op boss fights online on the harness (docs/specs/coop-boss.md, #529): the encounter is the judge of the room.
@@ -71,6 +72,23 @@ async function partner(transport: Transport, room: string, side: number, fight =
   return { session, history, legal: () => parseMoves(encounter.legal_moves()), send };
 }
 
+/** The page as a joiner on `?net=hook`, and the other end of its hook transport: the partner made on that end is the
+ * creator, and the page's Hello goes out only once `open` runs, after the partner listens (as in main.online.test.ts). */
+async function invited(hash: string) {
+  const game = await boot(`?bot=off&net=hook${hash}`, calm);
+  const w = window as unknown as Record<string, (...args: unknown[]) => void>;
+  const end: Transport & { leave(): void } = {
+    state: 'open',
+    send: (message) => w.__netIn!(message, 'creator'),
+    onRecord: (cb) => (w.__netOut = (message) => cb(message as Wire, 'page')),
+    onState: () => {},
+    onLeave: () => {},
+    close: () => {},
+    leave: () => w.__netLeave!('creator'),
+  };
+  return { game, end, open: () => w.__netOpen!() };
+}
+
 /** Opens a co-op room against The Echo with the __coop hook and seats the partner once the page's session exists. */
 async function hosted() {
   const game = await boot('?bot=off', calm);
@@ -90,9 +108,9 @@ describe('co-op: the encounter judges the room', () => {
     expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(location.hash);
     expect(byId('invite').hidden).toBe(false);
     expect(game.hook('__fight')).toEqual({ id: 'echo', seed: 7 });
-    expect(game.hud()).toContain('The Echo');
     await until(game, () => data().seat === 'player');
     expect(data().online).toBe('Black');
+    expect(game.hud()).toContain('The Echo');
   });
 
   it('plays the boss reply to our move at once, then the partner plays its ply and gets its own reply', async () => {
@@ -137,18 +155,14 @@ describe('co-op: the encounter judges the room', () => {
   });
 
   it('refuses the move of a partner whose engine disagrees, and the fight waits for that partner', async () => {
-    const game = await boot('?bot=off', calm);
-    game.hook('__coop', ECHO.boss, ECHO.seed);
-    await until(game, () => data().seat === 'player');
-    const two = await partner(game.peer()!, game.room()!, 2, { boss: 'chaplain', seed: 7 }); // a link edited by hand
-    await until(game, () => data().opponent === 'here');
-    play(game, forward(game.hook('__legal')));
-    await until(game, () => game.hook('__plies') === 2 && two.history.length === 2);
-    expect(game.hook('__history')).not.toEqual(two.history); // another boss, another reply
+    const { game, end, open } = await invited('#room=R0&boss=echo&seed=7');
+    const one = await partner(end, 'R0', 1, { boss: 'choir', seed: 7 }); // its link was edited by hand
+    open();
+    await until(game, () => data().seat === 'player' && data().opponent === 'here');
     const ours = game.hook<Move[]>('__legal').map((m) => encodeMove(m).join());
-    await two.send(encodeMove(two.legal().find((m) => !ours.includes(encodeMove(m).join()))!));
+    await one.send(encodeMove(one.legal().find((m) => !ours.includes(encodeMove(m).join()))!));
     await until(game, () => game.hud().includes(' · refused move: illegal'));
-    expect(game.hook('__plies')).toBe(2);
+    expect(game.hook('__plies')).toBe(0);
     const [q, r] = forward(game.hook('__legal')).cells[0]!;
     game.click(q, r);
     expect(game.hook('__rings')).toEqual([]); // still the partner's ply
@@ -176,17 +190,17 @@ describe('co-op: the encounter judges the room', () => {
 
 describe('co-op: the invite link', () => {
   it('joins the fight as the second seat: the creator plays first, then us, each move followed by its boss reply', async () => {
-    const game = await boot('?bot=off#room=R0&boss=echo&seed=7', calm);
-    expect(game.room()).toBe('R0');
+    const { game, end, open } = await invited('#room=R0&boss=echo&seed=7');
     expect(game.hook('__fight')).toEqual({ id: 'echo', seed: 7 });
-    const one = await partner(game.peer()!, 'R0', 1);
+    const one = await partner(end, 'R0', 1);
+    open();
     await until(game, () => data().seat === 'player' && data().opponent === 'here');
     await one.send(encodeMove(forward(one.legal())));
     await until(game, () => game.hook('__plies') === 2);
     play(game, forward(game.hook('__legal')));
     await until(game, () => game.hook('__plies') === 4 && one.history.length === 4);
     expect(game.hook('__history')).toEqual(one.history);
-    game.peer()!.close();
+    end.leave();
     await until(game, () => data().opponent === 'gone'); // the partner's presence, not our own seat's
   });
 
