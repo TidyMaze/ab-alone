@@ -76,7 +76,7 @@ A draw against a boss is a loss (rules.md section 10.3).
 
 - `ejected` is `Engine.ejected(side)`: marbles that side has pushed out. `win_ejections` is `Engine.win_ejections(side)`.
 - `ascii` is the board as printed by `render` in `abalone-cli`: header `  1 2 3 4 5 6 7 8 9`, rows `a` to `i`, `B`, `W`, `.`. On a radius 5 board (The Ballast Mind), `ascii` has header `  0 1 2 3 4 5 6 7 8 9 A` and 11 rows `a` to `k` (`r = -5` to `5`).
-- `board` is the cells in `Engine.board()` order, one character per cell: row by row from `r = -4` to `r = 4`, `q` ascending inside a row (61 cells). On a radius 5 board (The Ballast Mind), `board` has 91 characters: the 61 of the standard board first, then ring 5 in board order (rows from `r = -5` to `5`, `q` ascending). `.` empty, `B` Black, `W` White, `x` vanished (`3` in the engine).
+- `board` is the cells in `Engine.board()` order, one character per cell: row by row from `r = -4` to `r = 4`, `q` ascending inside a row (61 cells). On a radius 5 board (The Ballast Mind), `board` has 91 characters: the 61 of the standard board first, then ring 5 in board order (rows from `r = -5` to `5`, `q` ascending). `.` empty, `B` Black, `W` White, `x` vanished (`3` in the engine), `c` a core and `O` the Overseer (The Overseer).
 - `last_moves` is the last 6 plies in the notation of section 3.1, oldest first, boss and bot moves included.
 - `resigned` is `true` after `resign`. It is the only field the engine does not own.
 
@@ -115,13 +115,15 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.eggs()` | `marks` with `kind: "egg"` and `value` = player turns left before it hatches (The Alien) |
 | `Encounter.trains()` | `marks` with `kind: "train"` on every cell of the train's line, from its entry, and `value` = player turns left before it passes (The Rail Yard) |
 | `Encounter.polarities()` | `marks` with `kind: "polarity"` and `value` = `1` for +, `-1` for − (The Magnetizer) |
+| `Encounter.incinerators()` | `marks` with `kind: "incinerator"` (The Overseer); its cores are `c` and the Overseer `O` on the board |
+| `Encounter.turns_left()` (`-1` is no clock) | `tell` with `kind: "neurotoxin"` and the player turns left in `text` (The Overseer) |
 | `Encounter.converted()` | `marks` with `kind: "converted"` |
 | `Encounter.armies()` | `marks` with `kind: "army"` and `value` = `0` Alto, `1` Tenor, `2` Bass |
 | `Encounter.tell()` id (`-1` is none, `0` is an id: the Hull's crack tick) | `tell.kind` = `"special"` when no more specific kind applies, the id in `text` |
 
 Rules for the generic shape:
 
-- When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `pulse`, then `special`.
+- When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `pulse`, then `neurotoxin`, then `special`.
 - An unknown `kind` is not an error: an agent that does not know it ignores it and still plays legally. The tell is information, not a rule.
 - `kind` values are stable once published. A new boss may add kinds, never rename one.
 - The Choir's board has radius 3 and the outer ring shows as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded (Decision #131).

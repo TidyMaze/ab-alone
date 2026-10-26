@@ -159,7 +159,9 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
         let front = if d == v { group[n - 1] } else { group[0] };
         let lead = step(front, d, 1);
         let mut run = 0;
-        while at(board, step(lead, d, run)).is_some_and(|c| c != own && c != Cell::Empty) {
+        while at(board, step(lead, d, run))
+            .is_some_and(|c| c != own && c != Cell::Empty && c != Cell::Overseer)
+        {
             run += 1;
         }
         let behind = at(board, step(lead, d, run));
@@ -176,6 +178,11 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
             match behind {
                 Some(Cell::Empty) => {}
                 Some(_) => return Err(MoveError::PushBlocked),
+                // A core never leaves the board over the rim (The Overseer): only an incinerator
+                // takes it.
+                None if at(board, step(lead, d, run - 1)) == Some(Cell::Core) => {
+                    return Err(MoveError::PushBlocked)
+                }
                 None => ejected = true,
             }
             moved.extend((0..run).map(|i| {

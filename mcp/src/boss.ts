@@ -21,6 +21,10 @@ export interface BossLike {
   /** `[pulsar, player_turns_left, force]` of The Pulsar's next pulse, force `0` for infinite; empty otherwise. */
   pulsar(): Int32Array;
   /** `[q, r]` pairs. */
+  incinerators(): Int32Array;
+  /** Player turns before the boss wins on the clock, `-1` with no clock. */
+  turns_left(): number;
+  /** `[q, r]` pairs. */
   flips(): Int32Array;
   /** `[q, r]` pairs. */
   converted(): Int32Array;
@@ -92,6 +96,7 @@ export function bossState(id: string, boss: BossLike): BossState {
     ...Array.from(boss.polarities()).flatMap((sign, i) =>
       sign === 0 ? [] : [{ kind: 'polarity', cell: cell(BOARD_CELLS[i]!), value: sign }],
     ),
+    ...records(boss.incinerators(), 2).map((record) => ({ kind: 'incinerator', cell: cell(record) })),
     ...records(boss.converted(), 2).map((record) => ({ kind: 'converted', cell: cell(record) })),
     ...armies.map((record) => ({ kind: 'army', cell: cell(record), value: record[2]! })),
   ];
@@ -106,8 +111,8 @@ export function bossState(id: string, boss: BossLike): BossState {
   };
 }
 
-/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the bare special
- * id. */
+/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the clock, then
+ * the bare special id. */
 function tell(boss: BossLike, armies: number[][]): Tell | null {
   const army = boss.next_army();
   if (army >= 0) {
@@ -123,6 +128,10 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   if (pulsar !== undefined) {
     const text = `a pulse pushes every line ${DIRECTIONS[pulsar]} after ${left} of your turns, force ${force || 'infinite'}: groups smaller than the force move one cell, the first group as big resists and shields the rest`;
     return { kind: 'pulse', cells: [], text };
+  }
+  const turns = boss.turns_left();
+  if (turns >= 0) {
+    return { kind: 'neurotoxin', cells: [], text: `the boss wins at the end of your turn in ${turns} turns unless you win first` };
   }
   const special = boss.tell();
   return special < 0 ? null : { kind: 'special', cells: [], text: `board special ${special} fires after the next ply` };

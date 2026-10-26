@@ -154,6 +154,20 @@ const CASES: Record<string, () => void> = {
     });
     expect(bossState('pulsar', withData(pulsar, { pulsar: [0, 1, 0] })).tell!.text).toMatch(/^a pulse pushes every line E after 1 of your turns, force infinite:/);
   },
+
+  overseer() {
+    const overseer = newEncounter('overseer', 0);
+    // The vents are marks; the neurotoxin clock is the tell, before the bare special id of every ply.
+    const vents = ['(-3,-1)', '(4,-1)', '(-4,0)', '(4,0)', '(-4,1)', '(3,1)'];
+    expect(bossState('overseer', overseer)).toMatchObject({
+      name: 'The Overseer',
+      tell: { kind: 'neurotoxin', cells: [], text: 'the boss wins at the end of your turn in 40 turns unless you win first' },
+      marks: vents.map((cell) => ({ kind: 'incinerator', cell })),
+    });
+    playUntil(overseer, () => overseer.turns_left() === 38);
+    expect(bossState('overseer', overseer).tell?.text).toContain('in 38 turns');
+    expect(bossState('overseer', withData(overseer, { incinerators: [] })).marks).toEqual([]);
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -161,8 +175,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645) and The Pulsar (#675) are in', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar']);
+  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675) and The Overseer (#635) are in', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer']);
   });
 
   test('every boss of the engine has its case', () => {

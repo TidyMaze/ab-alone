@@ -23,10 +23,11 @@ for (let r = -5; r <= 5; r++) {
 /** The 91 cells in abalone-wasm board order: the 61 of the standard board, then ring 5 (#572). */
 export const BOARD_CELLS: Cell[] = [...CELLS, ...RING5];
 
-/** Cell values of abalone-wasm: `0` empty, `1` Black, `2` White, `3` vanished. */
-const BOARD_MARKS = '.BWx';
+/** Cell values of abalone-wasm: `0` empty, `1` Black, `2` White, `3` vanished, then `4` to `7` the battle royale
+ * seats (never on a boss board), `8` a core and `9` the Overseer (The Overseer, #635). */
+const BOARD_MARKS = '.BWx????cO';
 /** abalone-cli shows a vanished cell like a cell off the board: blank. */
-const ASCII_MARKS = '.BW ';
+const ASCII_MARKS = '.BW ????cO';
 
 export function boardText(board: ArrayLike<number>): string {
   return Array.from(board, (value) => BOARD_MARKS[value]).join('');

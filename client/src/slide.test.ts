@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIRECTIONS, VANISHED, axialTo3D, cellIndex, cellsFor, type Axial, type Move } from './board';
+import { CORE_CODE, DIRECTIONS, VANISHED, axialTo3D, cellIndex, cellsFor, type Axial, type Move } from './board';
 import { MARBLE_RADIUS, SLIDE_MS, rollAt, slideAt, slideTracks } from './slide';
 
 const empty = (): number[] => new Array<number>(61).fill(0);
@@ -29,6 +29,13 @@ describe('slideTracks', () => {
     const after = put([[-2, 1, 1], [-1, 1, 1], [0, 1, 1], [1, 2, 1]]);
     const tracks = slideTracks(before, after, move(4, [-2, 2], [-1, 2], [0, 2]), false);
     expect(tracks.map((t) => t.cell)).toEqual([[-2, 1], [-1, 1], [0, 1]]);
+  });
+
+  it('slides a pushed core of The Overseer with the pushing line (#635)', () => {
+    const before = put([[-1, 1, 1], [0, 1, 1], [1, 1, CORE_CODE]]);
+    const after = put([[0, 1, 1], [1, 1, 1], [2, 1, CORE_CODE]]);
+    const tracks = slideTracks(before, after, move(0, [-1, 1], [0, 1]), false);
+    expect(tracks).toContainEqual({ cell: [2, 1], from: xz(1, 1), to: xz(2, 1), durationMs: SLIDE_MS });
   });
 
   it('slides the pushed opponent marbles with the pushing line', () => {

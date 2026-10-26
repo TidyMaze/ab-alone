@@ -12,7 +12,8 @@ pub const RADIUS: i32 = 4;
 pub const MAX_RADIUS: i32 = 8;
 
 /// Content of one cell. Black and White are seats 1 and 2, the other marbles seats 3 to 6 of a
-/// battle royale.
+/// battle royale. A core and the Overseer belong to The Overseer's fight: a core is a passive
+/// marble both sides push, the Overseer a marble nothing moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cell {
     Empty,
@@ -22,6 +23,8 @@ pub enum Cell {
     Seat4,
     Seat5,
     Seat6,
+    Core,
+    Overseer,
 }
 
 /// Standard start, Black side (bottom, r > 0): row r=4 (5 cells), row r=3 (6), the three centre cells of r=2.
@@ -88,6 +91,8 @@ pub struct Board {
     /// The Pulsar's active pulsar (the direction code it pushes in) and the player turns played in
     /// its cycle.
     pulsar: Option<(u8, u8)>,
+    /// The Overseer's incinerator cells: a core on one burns.
+    incinerators: Vec<(i32, i32)>,
 }
 
 /// The Magnetizer's announce: the marble's cell (`None` once it left the board) and its sign.
@@ -119,6 +124,7 @@ impl Board {
             polarities: Vec::new(),
             announce: None,
             pulsar: None,
+            incinerators: Vec::new(),
         }
     }
 
@@ -207,6 +213,15 @@ impl Board {
 
     pub fn set_pulsar(&mut self, pulsar: Option<(u8, u8)>) {
         self.pulsar = pulsar;
+    }
+
+    /// The Overseer's incinerator cells.
+    pub fn incinerators(&self) -> &[(i32, i32)] {
+        &self.incinerators
+    }
+
+    pub fn set_incinerators(&mut self, incinerators: Vec<(i32, i32)>) {
+        self.incinerators = incinerators;
     }
 
     /// Standard start layout: 14 marbles per side.

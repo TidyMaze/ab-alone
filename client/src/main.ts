@@ -3,7 +3,9 @@ import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version } 
 import {
   BOARD_CELLS,
   CELLS,
+  CORE_CODE,
   DIRECTIONS,
+  OVERSEER_CODE,
   RADIUS,
   VANISHED,
   arrowYaw,
@@ -43,6 +45,7 @@ import {
   trainText,
   type Train,
 } from './railyard';
+import { burnTrack, parseBurns, toxinText, type Burn } from './overseer';
 import { drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import {
   PULSAR_BOUNDS,
@@ -957,6 +960,41 @@ const armyGlyphs = [
   new THREE.TorusGeometry(0.07, 0.025, 8, 16),
   new THREE.BoxGeometry(0.13, 0.13, 0.13),
 ];
+// The Overseer (#635, game-design.md section 7.11): a dark hexagonal pedestal with a pale eye on the centre cell; a core
+// is a pale marble with a dark eye on top, a shape and not a colour; a vent wears a warm disc crossed by dark slots on
+// its cell. A burning marble sinks into its vent where it stands (overseer.ts).
+const pedestalGeometry = new THREE.CylinderGeometry(0.36, 0.44, 0.72, 6).translate(0, 0.36, 0);
+const pedestalMaterial = new THREE.MeshStandardMaterial({ color: COLORS.base, roughness: 0.4, metalness: 0.6 });
+const eyeGeometry = new THREE.SphereGeometry(0.16, 24, 16);
+const eyeMaterial = new THREE.MeshBasicMaterial({ color: BONE });
+const coreShell = new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.3, emissive: 0x5a4a30 });
+const pupilGeometry = new THREE.CircleGeometry(0.15, 24).rotateX(-Math.PI / 2);
+const pupilMaterial = new THREE.MeshBasicMaterial({ color: COLORS.base });
+const ventGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
+const ventMaterial = new THREE.MeshBasicMaterial({ color: 0xc8501e });
+const slotGeometry = new THREE.PlaneGeometry(0.56, 0.07).rotateX(-Math.PI / 2);
+let overseerDrawn: { overseer: Axial | null; cores: Axial[]; vents: Axial[] } = { overseer: null, cores: [], vents: [] }; // read by the e2e tests
+/** A core of The Overseer: a pale marble, its dark eye on top. */
+function coreMesh(): THREE.Mesh {
+  const core = Object.assign(new THREE.Mesh(marbleGeometry, coreShell), { castShadow: true });
+  const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+  pupil.position.y = 0.37;
+  core.add(pupil);
+  return core;
+}
+/** An incinerator vent on the cell at `p`: the warm disc and its 3 dark slots. */
+function ventAt(p: { x: number; z: number }): THREE.Group {
+  const vent = new THREE.Group();
+  vent.add(new THREE.Mesh(ventGeometry, ventMaterial));
+  for (const dz of [-0.14, 0, 0.14]) {
+    const slot = new THREE.Mesh(slotGeometry, pupilMaterial);
+    slot.position.set(0, 0.002, dz);
+    vent.add(slot);
+  }
+  vent.position.set(p.x, 0.004, p.z);
+  return vent;
+}
+
 // The Alien tell (#588, game-design.md section 7.7): a pale egg on its cell and, above it, a counter of the player turns
 // left before it hatches: a sprite, so it always faces the camera, drawn over the marbles (alien.ts, 3:1 and more). On 1
 // a glow under the egg pulses once a second, held still under reduced motion (the animation loop sets it).
@@ -1469,6 +1507,17 @@ function afterPlay(before: number[], record: number[], live = true): void {
   }
   const ejection = findEjection(before, after, mv);
   if (ejection) eject(ejection, mv.dir, held, reduced);
+  // The Overseer's vents (#635): the push slides first, then each marble they burnt sinks into its vent.
+  delete document.body.dataset.burns;
+  const vented = engine instanceof Encounter && engine.incinerators().length > 0;
+  const burns = vented ? parseBurns((engine as Encounter).removed()) : [];
+  if (burns.length > 0) whenSettled(() => burn(burns, reduced));
+}
+
+/** The burns of a ply: each marble sinks into its vent, or fades with reduced motion. */
+function burn(burns: Burn[], reduced: boolean): void {
+  document.body.dataset.burns = String(burns.length); // read by the e2e tests
+  for (const { cell, side } of burns) startEjection(side === CORE_CODE ? coreMesh() : marbleMesh(side), burnTrack(cell, reduced), scene);
 }
 
 /** The effect and sound of `ejection`, pushed off in direction `dir`, the marble with its turn in `held`. */
@@ -1744,6 +1793,7 @@ function hud(extra = ''): void {
         eggText(parseEggs(boss.eggs())),
         trainText(parseTrains(boss.trains())),
         pulseText(parsePulsar(boss.pulsar())),
+        toxinText(boss.turns_left()),
         fight?.id === 'magnetizer' ? polarityText(boss.phase(), history.length) : '',
         chaplainText(exposed, boss.converted().length / 2),
         choirText(boss.next_army()),
@@ -1804,6 +1854,9 @@ function refresh(): void {
   marbles.clear();
   marbleAt.clear();
   crackDecals = [];
+  const vents = engine instanceof Encounter ? parseCells(engine.incinerators()) : [];
+  overseerDrawn = { overseer: null, cores: [], vents };
+  for (const [q, r] of vents) marbles.add(ventAt(axialTo3D(q, r)));
   discs.forEach((disc, i) => {
     const [q, r] = BOARD_CELLS[i]!;
     const side = board[i] ?? VANISHED; // ring 5 is off a board of 61 cells (#564)
@@ -1834,7 +1887,18 @@ function refresh(): void {
       marbles.add(tick);
     }
     if (side === 0) return;
-    const marble = marbleMesh(side);
+    if (side === OVERSEER_CODE) {
+      const pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+      const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      eye.position.y = 0.86;
+      pedestal.add(eye);
+      pedestal.position.set(p.x, 0, p.z);
+      marbles.add(pedestal);
+      overseerDrawn.overseer = [q, r];
+      return;
+    }
+    if (side === CORE_CODE) overseerDrawn.cores.push([q, r]);
+    const marble = side === CORE_CODE ? coreMesh() : marbleMesh(side);
     if (converted.some(([cq, cr]) => cq === q && cr === r)) convert(marble);
     marble.position.set(p.x, 0.36, p.z);
     turnMarble(marble, turnAt(i));
@@ -2400,6 +2464,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
   shock && { radius: shock.mesh.scale.x, opacity: shockMaterial.opacity, x: shock.mesh.position.x, z: shock.mesh.position.z };
 // Used by the browser checks to find The Magnetizer's polarities as drawn: the cell, the sign and the ring of a fresh one.
 (window as unknown as Record<string, unknown>).__polarities = () => polesDrawn;
+// Used by the browser checks to find The Overseer as drawn: its cell, the cores and the vents.
+(window as unknown as Record<string, unknown>).__overseer = () => overseerDrawn;
 // The announced marble and its coming sign as drawn (#671), and the opacity of the glyphs of a spent pair still fading.
 (window as unknown as Record<string, unknown>).__announce = () => announceDrawn;
 (window as unknown as Record<string, unknown>).__fading = () => fading.map((f) => f.sprite.material.opacity);

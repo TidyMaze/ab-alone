@@ -34,6 +34,13 @@ describe('boardText', () => {
     expect(text.replace(/[WBx]/g, '')).toBe('.'.repeat(58));
   });
 
+  test('The Overseer: c a core, O the Overseer (#635)', () => {
+    const text = boardText(bytes({ '0,0': 9, '1,1': 8 }));
+    expect([text[30], text[40]]).toEqual(['O', 'c']);
+    expect(ascii(bytes({ '0,0': 9, '1,1': 8 })).split('\n')[5]).toBe('e . . . . O . . . .');
+    expect(ascii(bytes({ '0,0': 9, '1,1': 8 })).split('\n')[6]).toBe('f . . . . . c . .');
+  });
+
   test('the standard start from the engine', () => {
     // Rows of 5, 6 and 7 cells, three empty rows of 8, 9 and 8, then the mirror image.
     expect(boardText(newEngine().board())).toBe(`${'W'.repeat(11)}..WWW..${'.'.repeat(25)}..BBB..${'B'.repeat(11)}`);

@@ -1,7 +1,7 @@
 //! Boss encounter mode bridge to WebAssembly.
 
 use crate::convert::{
-    board_bytes, board_cells, cells, decode, draw_reason_code, encode, player, result_code,
+    board_bytes, board_cells, cells, code, decode, draw_reason_code, encode, player, result_code,
     side_code, status_code,
 };
 use abalone_core::board::{Board, Cell};
@@ -14,6 +14,7 @@ use abalone_core::encounter::choir::{
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
+use abalone_core::encounter::overseer::{overseer_boss, overseer_move, overseer_start};
 use abalone_core::encounter::pulsar::{
     last_pulse, pulsar_boss, pulsar_move, pulsar_start, pulsar_tell,
 };
@@ -93,6 +94,11 @@ fn pulsar_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(pulsar_start(seed))
 }
 
+/// The Overseer sets up its cores, its incinerators and its clock.
+fn overseer_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(overseer_start(seed))
+}
+
 fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
     ballast_tell(enc).flips
 }
@@ -118,7 +124,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 9] = [
+const BOSSES: [BossEntry; 10] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -199,6 +205,16 @@ const BOSSES: [BossEntry; 9] = [
         def: pulsar_boss,
         start: pulsar_fight,
         reply: pulsar_move,
+        announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "overseer",
+        goal:
+            "Push its cores onto the vents. Eject 6 to win, cores count; lose 6, draw or 40 turns.",
+        def: overseer_boss,
+        start: overseer_fight,
+        reply: overseer_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -520,6 +536,32 @@ impl Encounter {
         }
     }
 
+    /// The incinerator cells (The Overseer), a cell list. Empty for the other bosses.
+    pub fn incinerators(&self) -> Vec<i32> {
+        cell_list(self.fight.game().board().incinerators())
+    }
+
+    /// The marbles the last ply's hook removed (The Overseer's burns) as `[q, r, code]` records,
+    /// the board code of what burnt.
+    pub fn removed(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        e.removed()
+            .iter()
+            .flat_map(|&((q, r), cell)| [q, r, i32::from(code(Some(cell)))])
+            .collect()
+    }
+
+    /// Player turns left before the boss wins on the clock (The Overseer's neurotoxin), `-1` for
+    /// a fight with no clock.
+    pub fn turns_left(&self) -> i32 {
+        match &self.fight {
+            Fight::Plain(e) => e.turns_left().map_or(-1, |n| n as i32),
+            Fight::Choir(_) => -1,
+        }
+    }
+
     /// Boss marbles that were player marbles (The Chaplain), a cell list.
     pub fn converted(&self) -> Vec<i32> {
         cell_list(self.fight.game().board().converted())
@@ -616,7 +658,8 @@ mod tests {
                 "alien".to_string(),
                 "railyard".to_string(),
                 "magnetizer".to_string(),
-                "pulsar".to_string()
+                "pulsar".to_string(),
+                "overseer".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -628,6 +671,7 @@ mod tests {
         assert_eq!(boss_name("railyard"), Some("The Rail Yard".to_string()));
         assert_eq!(boss_name("magnetizer"), Some("The Magnetizer".to_string()));
         assert_eq!(boss_name("pulsar"), Some("The Pulsar".to_string()));
+        assert_eq!(boss_name("overseer"), Some("The Overseer".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1072,6 +1116,77 @@ mod tests {
         assert!((0..4).any(|seed| magnet_run(seed, 4) != magnet_run(42, 4)));
     }
 
+    /// The fixture of the core tests and client/e2e/overseer.spec.ts: `[n, dir, q0, r0, q1, r1]`.
+    const OVERSEER_FIXTURE: [[i32; 6]; 24] = [
+        [1, 4, 0, 2, 0, 0],
+        [1, 5, 4, -3, 0, 0],
+        [1, 4, -1, 2, 0, 0],
+        [1, 5, 4, -2, 0, 0],
+        [2, 0, -1, 1, 0, 1],
+        [1, 5, 4, -4, 0, 0],
+        [2, 0, 0, 1, 1, 1],
+        [1, 5, 4, -3, 0, 0],
+        [1, 2, -2, 2, 0, 0],
+        [1, 5, 4, -2, 0, 0],
+        [1, 2, -1, 3, 0, 0],
+        [1, 5, 3, -3, 0, 0],
+        [1, 4, 0, 2, 0, 0],
+        [1, 0, 3, -2, 0, 0],
+        [2, 1, -1, 1, 0, 1],
+        [1, 5, 4, -2, 0, 0],
+        [2, 1, -2, 1, -1, 1],
+        [1, 5, 0, -2, 0, 0],
+        [1, 2, -4, 3, 0, 0],
+        [1, 5, 1, -2, 0, 0],
+        [1, 0, -3, 2, 0, 0],
+        [2, 0, 0, -1, 1, -1],
+        [1, 0, -2, 2, 0, 0],
+        [2, 0, 1, -1, 2, -1],
+    ];
+
+    #[test]
+    fn the_overseer_exposes_its_cores_vents_clock_and_burns() {
+        let mut f = Encounter::new("overseer", 153).unwrap();
+        assert_eq!(f.name(), "The Overseer");
+        assert_eq!((f.phase(), f.phases(), f.turns_left()), (0, 3, 40));
+        let board = f.board();
+        assert_eq!(
+            (at(&board, 0, 0), at(&board, 2, -1)),
+            (9, 8),
+            "the Overseer, a core"
+        );
+        assert_eq!(count(&board, 8), 6);
+        assert_eq!(
+            f.incinerators(),
+            vec![-3, -1, 4, -1, -4, 0, 4, 0, -4, 1, 3, 1]
+        );
+        let mut burns = Vec::new();
+        for ply in OVERSEER_FIXTURE {
+            let mut record = [0; MOVE_STRIDE];
+            record[..6].copy_from_slice(&ply);
+            f.play(&record).unwrap();
+            burns.push(f.removed());
+        }
+        assert_eq!(burns[3], vec![4, -1, 2], "a boss marble burns in P1");
+        assert_eq!(burns[6], vec![3, 1, 8], "the core (1, 1)");
+        assert_eq!(burns[23], vec![4, -1, 8], "the boss's own push");
+        assert_eq!((f.ejected(1), f.result(), f.turns_left()), (6, 1, 28));
+        assert_eq!(Encounter::new("echo", 1).unwrap().turns_left(), -1);
+        assert!(Encounter::new("echo", 1).unwrap().incinerators().is_empty());
+        assert_eq!(Encounter::new("choir", 1).unwrap().turns_left(), -1);
+        assert!(Encounter::new("choir", 1).unwrap().removed().is_empty());
+    }
+
+    #[test]
+    fn the_overseer_replies_with_a_legal_move() {
+        let mut f = Encounter::new("overseer", 3).unwrap();
+        ply(&mut f);
+        let mv = f.boss_move();
+        assert_eq!(mv.len(), MOVE_STRIDE);
+        f.play(&mv).unwrap();
+        assert_eq!(f.to_move(), 1);
+    }
+
     #[test]
     fn the_magnetizer_replies_with_a_legal_move() {
         let mut f = Encounter::new("magnetizer", 3).unwrap();
@@ -1270,6 +1385,7 @@ mod tests {
             "railyard",
             "magnetizer",
             "pulsar",
+            "overseer",
         ] {
             assert_eq!(Encounter::new(id, 7).unwrap().board().len(), 61, "{id}");
         }

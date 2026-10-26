@@ -1,4 +1,4 @@
-import { BOARD_CELLS, DIRECTIONS, axialTo3D, cellIndex, isMarble, type Axial, type Move } from './board';
+import { BOARD_CELLS, CORE_CODE, DIRECTIONS, axialTo3D, cellIndex, isMarble, type Axial, type Move } from './board';
 
 /** Length of the slide of a moved marble to its new cell, ease out. */
 export const SLIDE_MS = 200;
@@ -11,8 +11,8 @@ export interface SlideTrack {
   durationMs: number;
 }
 
-/** The cells of the marbles `mv` moves on `before`: the moved group, then the opponent marbles its head pushes, up to
- * an empty cell, the rim or a vanished cell (The Hull). */
+/** The cells of the marbles `mv` moves on `before`: the moved group, then the opponent marbles and the cores (The
+ * Overseer) its head pushes, up to an empty cell, the rim or a vanished cell (The Hull). */
 export function pushedCells(before: ArrayLike<number>, mv: Move, cells: readonly Axial[] = BOARD_CELLS): Axial[] {
   const [dq, dr] = DIRECTIONS[mv.dir]!;
   const inGroup = (q: number, r: number): boolean => mv.cells.some(([gq, gr]) => gq === q && gr === r);
@@ -20,7 +20,7 @@ export function pushedCells(before: ArrayLike<number>, mv: Move, cells: readonly
   for (const [q, r] of mv.cells) {
     if (inGroup(q + dq, r + dr)) continue;
     let [pq, pr] = [q + dq, r + dr];
-    while (isMarble(before[cellIndex(pq, pr, cells)])) {
+    while (isMarble(before[cellIndex(pq, pr, cells)]) || before[cellIndex(pq, pr, cells)] === CORE_CODE) {
       moved.push([pq, pr]);
       [pq, pr] = [pq + dq, pr + dr];
     }

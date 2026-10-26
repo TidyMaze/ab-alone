@@ -109,7 +109,8 @@ for (const viewport of [{ width: 360, height: 780 }, { width: 375, height: 812 }
 
 // Bug #653: on a 1280x720 window the open boss list of 7 bosses scrolled, The Rail Yard and Daily challenge below the
 // fold. On a desktop window every boss and Daily challenge show without a scroll, with room for 2 more bosses than the 7
-// of then: the list gets copies of its last entry up to 9 bosses in all (none since The Pulsar, #675).
+// of then: the list gets copies of its last entry up to 9 bosses in all (none since The Pulsar, #675), or holds the 10
+// of the roster since The Overseer (#635).
 for (const viewport of [{ width: 1280, height: 720 }, { width: 1280, height: 800 }]) {
   test(`every boss and Daily challenge fit without a scroll in a ${viewport.width}x${viewport.height} window, bug #653`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -120,7 +121,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1280, height: 800
     await list.evaluate((el) => {
       while (el.children.length < 9) el.appendChild(el.lastElementChild!.cloneNode(true));
     });
-    await expect(list.getByRole('button')).toHaveCount(9);
+    await expect(list.getByRole('button')).toHaveCount(10);
     const outside = await page.evaluate(() => {
       const column = document.getElementById('online')!;
       const box = column.getBoundingClientRect();

@@ -4,7 +4,8 @@
 //! Encodings, all stable and documented:
 //! - Board: 61 bytes, row by row from `r = -4` to `r = 4`, inside a row by `q` ascending.
 //!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull),
-//!   `4` to `7` a marble of battle royale seats 3 to 6.
+//!   `4` to `7` a marble of battle royale seats 3 to 6, `8` a core and `9` the Overseer (The
+//!   Overseer's fight).
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`. The radius 5 board of The Ballast Mind
 //!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
@@ -18,6 +19,9 @@
 //! - Last pulse (The Pulsar): the pulsar, then the 61 board codes just before the pulse, then the
 //!   cells of the marbles it moved, from where they stood, as `[q, r]` pairs.
 //! - Cell list (The Chaplain, the cells The Magnetizer just polarized): pairs `[q, r]`, back to back.
+//! - Incinerators (The Overseer): a cell list. Removed (its burns): records of 3 integers
+//!   `[q, r, code]`, the board code of each marble the last ply's hook removed, back to back.
+//!   Turns left (its neurotoxin): the player turns before the boss wins, `-1` with no clock.
 //! - Polarities (The Magnetizer): one integer per cell, in the board order: `0` none, `1` +, `-1` −.
 //! - Announce (The Magnetizer): `[q, r, sign]` of the marble that takes `sign` at the start of the
 //!   next assignment turn, empty when none.
