@@ -2206,9 +2206,11 @@ function walk(to: Axial): void {
   enterRoom(hubAt);
 }
 // The doors (#522): rolling onto a boss door or a table starts the same game as its mode menu entry, and the room is
-// kept for Back to the ship. A terminal (#524), a lift and the closed battle royale lobby start nothing here.
+// kept for Back to the ship. A terminal opens its lore entry in the reader, and Esc leaves it to the hub on the same
+// cell (#524). A lift and the closed battle royale lobby start nothing here.
 function enterRoom(at: HubSpot): void {
   const door = roomAt(at.deck, at.cell);
+  if (door?.kind === 'terminal') return openReader(door.lore);
   if (door?.kind === 'boss') startBoss(door.boss, crypto.getRandomValues(new Uint32Array(1))[0]!);
   else if (door?.kind === 'hotseat' || door?.kind === 'bot') startLocal(door.kind === 'bot');
   else if (door?.kind === 'online' && !playOnlineButton.disabled) playOnline();

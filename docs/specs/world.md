@@ -80,7 +80,8 @@ No cutscenes, no forced dialogue, no quest log.
   screen or a click past the last page leaves, back to the view the player had. The ids read are saved
   locally (`client/src/lorestore.ts`), for the log archive (#513): Logs, in the settings menu (ui.md section 4),
   lists the entries read, in ship order, then the audio logs collected, and a press on one reopens it in the reader. The game goes on while the
-  player reads.
+  player reads. Rolling onto a hub terminal room (#524) opens that room's own entry in the reader; leaving it puts
+  the player back on the hub on the same cell.
 - **Audio logs.** Short ambient recordings (max 60 s), collectable, replayable from an archive.
   Optional. One per deck (`client/src/audiologs.ts`, #515): a synthesized recording (room tone,
   footsteps, machinery, the Choir's hum) with a timed transcript. No voice acting (section 11):
