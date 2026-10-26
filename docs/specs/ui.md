@@ -93,7 +93,7 @@ outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
 Game modes (#357): the buttons that start a game mode, Play online, Fight together (with the boss list it opens under
-it, #530), Battle royale (#502), Boss fight (with the boss list it opens under it), Daily challenge and Ship (the hub,
+it, #530), Battle royale (#502), Battle royale online (#504), Boss fight (with the boss list it opens under it), Daily challenge and Ship (the hub,
 game-design.md section 3.5, #521), live in one menu behind an icon-only button, a play triangle of the icon set,
 labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their
 names. The button is the last of the column and the open menu lies under it, so opening or closing it moves no other
@@ -204,6 +204,16 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   fizzled" (in the hazard colour), "Bot 3: held", "Bot 4: out". The player is "You", the bots "Bot 1" to "Bot 5", each
   name after a dot of its tint. These strings are kept verbatim for the e2e tests. Once the game is over, Hold is
   greyed. A boss fight, Play online or Ship leaves it.
+- **Battle royale online (#504).** An item of the mode menu under Battle royale, greyed while offline like Play
+  online. It opens a room of 6 seats (tech.md section 6) and shows its invite link, "Invite link: send it to the
+  other players"; each link opener takes the first free seat. The arena and the plate are those of the offline
+  game, the seats named "You", "Player 2" for another player and "Bot 4" for an empty seat, by seat number. Under the
+  round line a status line: "2 players in. Start: bots take the empty seats" for the creator, who also gets Start in
+  the column, in the accent; "2 players in. Waiting for the start..." for the others; then "Your order: a move or
+  Hold", "Order locked, waiting for the others..." once the order is committed, "Waiting for the round..." past the
+  deadline or for a spectator, and "Desync after round 4: a peer's game differs" in the danger colour. Hold and the
+  targets work only while the order can be committed. These strings are kept verbatim for the e2e tests, with
+  body[data-net] (lobby, choosing, locked, waiting, over) and body[data-desync] (the round, 0 for none).
 - **Battle royale breach, seats out and placement (#503).** A ring that cracks at the end of a round (rules.md section
   10.4, ring 8 at the end of round 12) glows in the hazard colour for the whole next round, under the Hull's crack
   decal and one tick per round left, and the plate warns in the hazard colour: "Breach: 48 cells void in 1 round". At

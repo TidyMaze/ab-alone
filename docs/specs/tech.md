@@ -265,8 +265,8 @@ answer: only a `Sync` does.
 
 **Battle royale (recommendation for #13: simultaneous, commit-reveal lockstep).**
 1. Round opens at a deadline all peers compute from the round-start message (no trusted clock,
-   deadlines are relative: "30 s after the previous round resolved on my screen", with the
-   coordinator's start message as reference).
+   deadlines are relative): 15 s to commit from the coordinator's start message as it reached
+   each peer (OPEN-2 FINAL, #504; rules.md section 10.4), then 15 s more to reveal.
 2. **Commit:** each peer broadcasts `H(order || nonce)` signed. Nobody can change their order
    after seeing others.
 3. **Reveal:** once all live peers committed (or the deadline passed: missing = `hold`), each
@@ -325,6 +325,22 @@ answer: only a `Sync` does.
   fall back to their local deadline. This keeps the host from becoming a cheating vector.
 - Topology: full mesh, at most 6 players means 15 connections, which is fine for tiny messages.
 - Conflict rules (two orders on one cell, push versus move) are game design, see #13 and #49.
+- **Built in #504** (`client/src/royale-net.ts`), over the room's session: a room has 6 seats, a
+  joiner asks seat 2 and the creator binds the first free one. The coordinator sends
+  `start {round, seats}`; the first one fixes the keys by arena seat, a seat empty then is a bot.
+  Every peer computes the bots' orders from the round-start state with the room's seed (FNV-1a of
+  the room id) and resolves the round once it has every committed seat's reveal from that seat, or
+  at the reveal deadline (`RoundBook`, #500). It forwards every commit and reveal it keeps. The
+  coordinator starts the next round once the round resolved on its screen. After each round a peer
+  sends `hash {round, hash}`; one that differs from its own is a desync, shown on the plate (the
+  game goes on). A peer whose transport is closed when a deadline passes does not resolve that
+  round. A peer whose connection opens again, or that gets a start beyond its next round (or after
+  such a round), sends `behind {round}`; a peer that has more answers it alone with `played`: the
+  signed commits and reveals it kept of every round from there and of the round open now. The late
+  peer replays each round through a fresh book past its deadlines and takes what it lacks of the
+  open one, so a peer back after a drop of any length catches up (two rounds of grace,
+  Reconnection below, are not enforced: the seat simply holds meanwhile). Not done: the deadline is not shown, a dropped seat
+  never becomes a bot, and nothing stops a peer that ignores the deadline of a coordinator who lies.
 
 **Host / coordinator migration.** State is fully replicated, so the host holds no unique data.
 When the coordinator's channel drops (heartbeat 5 s, three misses), the live peer with the
