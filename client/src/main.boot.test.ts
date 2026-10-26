@@ -679,3 +679,12 @@ it('honors query quality param and allows setting tier live (#655)', async () =>
   game.hook('__setTier', 'high');
   expect(document.body.dataset.tier).toBe('high');
 });
+
+it('marks the page once the spaceship bay is in the scene, never while it is missing (#661)', async () => {
+  let game = await boot('?bot=off', { missing: ['spaceship-bay.glb'] });
+  await game.settle();
+  expect(document.body.dataset.bay).toBeUndefined();
+  game = await boot('?bot=off');
+  await game.settle();
+  expect(document.body.dataset.bay).toBe('ready');
+});

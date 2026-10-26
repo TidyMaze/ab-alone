@@ -6,6 +6,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
   await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move');
+  await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
   expect(loaded.sort()).toEqual([
     '200 backdrop.png',
     '200 bulkhead-albedo.jpg',
