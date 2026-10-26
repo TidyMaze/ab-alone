@@ -224,7 +224,7 @@ Input:
 { "room": "string, a room code or an invite link" }
 ```
 
-Output: same shape as `create_room`, with `you` set to the seat the room gave (`white` if Black is taken). The call returns once the creator's `Hello` gave the agent its seat. A failed join keeps the game in progress. Errors: `already_in_room`, `room_full` (both seats taken, the agent would be a spectator and the server does not support spectating), `room_not_found` (no peer answered within the connect timeout, or only a creator on another engine version, tech.md section 9, `SIGNALING_TIMEOUT_MS` of `client/src/netcounters.ts`, 30 s, or the input holds no room code), `transport_failed`.
+Output: same shape as `create_room`, with `you` set to the seat the room gave (`white` if Black is taken). The call returns once the creator's `Hello` gave the agent its seat. A failed join keeps the game in progress. Errors: `already_in_room`, `room_full` (both seats taken, the agent would be a spectator and the server does not support spectating), `room_not_found` (no peer answered within the connect timeout, `SIGNALING_TIMEOUT_MS` of `client/src/netcounters.ts`, 30 s, the only creator runs another engine version (tech.md section 9), or the input holds no room code), `transport_failed`.
 
 ### `wait_for_opponent_move`
 
