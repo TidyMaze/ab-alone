@@ -59,6 +59,7 @@ pub fn start(seats: usize) -> Result<Royale, RoyaleError> {
         round: 1,
         ejections: vec![0; seats],
         touched: BTreeMap::new(),
+        last_void: vec![0; seats],
     })
 }
 

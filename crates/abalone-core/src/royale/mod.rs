@@ -1,5 +1,6 @@
 //! Battle royale: 3 to 6 seats on the radius 8 arena, simultaneous orders resolved in rotating
-//! initiative (docs/specs/rules.md section 10.4).
+//! initiative, on an arena the hull breach shrinks ring by ring (docs/specs/rules.md section
+//! 10.4).
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
@@ -7,6 +8,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::board::{Board, Cell};
 
+mod breach;
 mod round;
 mod setup;
 
@@ -32,6 +34,8 @@ pub enum RoyaleError {
     UnknownSeat(usize),
     /// Two orders name the same seat.
     DuplicateSeat(usize),
+    /// The game is over: no round is left to resolve.
+    Over,
 }
 
 /// A battle royale between rounds.
@@ -45,6 +49,8 @@ pub struct Royale {
     ejections: Vec<u32>,
     /// Seat whose order last moved the marble now on each cell.
     touched: BTreeMap<(i32, i32), usize>,
+    /// Marbles each seat lost to the latest void, for the tie rule when it ends the game.
+    last_void: Vec<usize>,
 }
 
 /// Marble colour of `seat`.
@@ -109,6 +115,8 @@ impl Royale {
         self.round.hash(&mut hasher);
         self.ejections.hash(&mut hasher);
         self.touched.hash(&mut hasher);
+        self.board.cracks().hash(&mut hasher);
+        self.last_void.hash(&mut hasher);
         hasher.finish()
     }
 }
@@ -141,6 +149,12 @@ mod tests {
         let mut touched = s.clone();
         touched.touched.insert((-4, 6), 0);
         assert_ne!(s.hash(), touched.hash());
+        let mut cracked = s.clone();
+        cracked.board.set_cracks(vec![((8, 0), 1)]);
+        assert_ne!(s.hash(), cracked.hash());
+        let mut voided = s.clone();
+        voided.last_void[2] = 3;
+        assert_ne!(s.hash(), voided.hash());
     }
 
     #[test]

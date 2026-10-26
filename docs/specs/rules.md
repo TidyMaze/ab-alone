@@ -255,19 +255,23 @@ Hooks, from game-design section 7 (starting values):
 | 5 | 30 | 31 |
 | 4 | 36 | 37 |
 | 3 | 42 | 43 |
+| 2 | 45 | 46 |
+| 1 | 48 | 49 |
+| 0 (centre cell) | 51 | 52 |
 
 - Rounds 1 to 11: safe.
+- **FINAL (OPEN-6, lead decision on #496).** After radius 3, a ring cracks every 3 rounds down to the centre cell, which also goes void, so every game ends by round 52 with no round cap.
+- **FINAL (`royale::resolve_round`, #496).** The breach runs at the end of a round, after every order. First the cracked cells go void (`Board::void`) with their marbles, then the ring the table schedules for that round cracks. The cracked cells are in `board().cracks()`, each with 1 round left, for the whole next round: the warning. A void cell is off the board, so a push onto it ejects.
 - A marble on a cracked cell is not safe. It is removed when the ring goes void.
 - Cracks glow and show a countdown.
-- Rings smaller than radius 3: the schedule is not defined (**OPEN-6**, game-design says "a ring every 3 rounds until one group is left in the core").
 
 **Elimination.** **FINAL.** At 0 marbles a player is out. Its marbles vanish at once. Eliminated players spectate.
 
-**Win.** **FINAL.** The last player with marbles wins. If the breach ends the game, the most marbles wins, then the most ejections. A tie still standing is **OPEN-7**.
+**Win.** **FINAL.** The game is over when at most one player has marbles; `resolve_round` then refuses any further round. The last player with marbles wins. **FINAL (OPEN-7 tie, lead decision on #496):** when a void takes the last marbles of every player left, they are ranked by the marbles each held before it, then by ejections credited (the void's own credits included); a tie still standing shares the place (`Royale::winners`).
 
 **Placement points (TUNE):** 6 players: 10, 6, 4, 2, 1, 0 for places 1 to 6, plus 1 point per ejection caused. Tables for 3 to 5 players are **OPEN-7**.
 
-**Credit rule (FINAL).** The last player whose move touched a marble gets the ejection. Whether a breach removal earns credit is **OPEN-8** (proposal: credit the last toucher if there is one, otherwise nobody).
+**Credit rule (FINAL).** The last player whose move touched a marble gets the ejection. **FINAL (OPEN-8, #496):** a marble removed by the breach is credited to its last toucher, and to nobody when no move touched it or its last toucher is its owner.
 
 **Sumito (FINAL).** Section 5 applies against any opponent. The opponent run may mix colours: every marble that is not the mover's counts toward `m`, and only a marble of the mover blocks the push (lead decision on #493, literal reading of section 5 rule 2). So 3 marbles push a White marble then a seat 3 marble (3v2), and 2 cannot (2v2).
 
@@ -476,7 +480,7 @@ Each example below is a numbered block with a precondition, an action and an exp
 **Example 39 (battle royale: a marble on the outer ring is removed).**
 **Given** battle royale. The radius 8 ring cracked at round 12. P1 has a marble at `(8,0)`.
 **When** round 13 resolves.
-**Then** the ring is void. The marble at `(8,0)` is removed. Whether this earns credit is OPEN-8. TUNE for the round numbers.
+**Then** the ring is void. The marble at `(8,0)` is removed. Its last toucher gets the credit, unless it is P1 or nobody touched it (OPEN-8, FINAL). TUNE for the round numbers.
 
 **Example 40 (battle royale: credit goes to the last toucher).**
 **Given** battle royale, P1 `(0,0)(1,0)(2,0)`, P2 `(3,0)(4,0)`, P3 elsewhere. Round 1, P1 orders `(0,0)(1,0)(2,0)>E`, P2 holds.
@@ -492,9 +496,9 @@ These are raised in the PR body. Owners decide. Nothing here was picked silently
 - **OPEN-3. Who moves first.** No source. PROPOSAL: Black.
 - **OPEN-4. Belgian daisy coordinates.** Resolved in #69: checked against three diagrams, section 2.2 is FINAL.
 - **OPEN-5. Battle royale wedge coordinates.** Resolved in #494: section 10.4 is FINAL.
-- **OPEN-6. Battle royale rings below radius 3.** game-design.md is ambiguous.
-- **OPEN-7. Battle royale ties and placement tables.** Points are defined for 6 players only. The tie at breach end is not defined.
-- **OPEN-8. Credit for breach ejections.** PROPOSAL: last toucher if any, else nobody.
+- **OPEN-6. Battle royale rings below radius 3.** Resolved in #496: a ring every 3 rounds down to the centre cell (section 10.4, FINAL).
+- **OPEN-7. Battle royale ties and placement tables.** Points are defined for 6 players only. The tie at breach end is resolved in #496 (section 10.4, FINAL); the tables are still open.
+- **OPEN-8. Credit for breach ejections.** Resolved in #496: last toucher if any and not the owner, else nobody (section 10.4, FINAL).
 - **OPEN-9. Same-cell conflict in battle royale.** Resolved in #495: first in initiative wins, the second fizzles (section 10.4, FINAL).
 - **OPEN-10. Initiative formula.** Resolved in #495: rotate by round (section 10.4, FINAL).
 - **OPEN-11. Online 1v1 after the 60 s grace.** Forfeit or wait? Not defined.
