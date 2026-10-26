@@ -9,7 +9,6 @@ import {
   initiative,
   loadRoyale,
   nextRound,
-  orderText,
   outSeats,
   parseLog,
   roundOrders,
@@ -117,14 +116,8 @@ describe('a royale game file', () => {
 });
 
 describe('the HUD plate', () => {
-  it('names the order to lock, or none', () => {
-    expect(orderText([])).toBe('none');
-    expect(orderText([1, 4, -2, 6, 0, 0, 0, 0])).toBe('1 marble NW');
-    expect(orderText([3, 0, -4, 6, -3, 6, -2, 6])).toBe('3 marbles E');
-  });
-
   it('shows the round and its initiative order before the reveal, and no log before round 1', () => {
-    const html = royaleHtml(null, []);
+    const html = royaleHtml(null);
     document.body.innerHTML = html;
     expect(document.querySelector('.turn')!.textContent).toBe('Battle royale · Round 1');
     expect([...document.querySelectorAll('.initiative li')].map((li) => li.textContent)).toEqual([
@@ -135,16 +128,15 @@ describe('the HUD plate', () => {
       'Bot 4',
       'Bot 5',
     ]);
-    expect(document.body.textContent).toContain('Your order: none');
+    expect(document.body.textContent).not.toContain('Your order'); // a target press locks it at once (#611)
     expect(document.querySelector('.reveal')).toBeNull();
   });
 
   it('marks a fizzled order in the reveal log, in initiative order, each seat with its tint', () => {
     const log = parseLog([2, 1, 0, 3, 2, 1, -1, 3, 2, -1, 4, 3, -1, 5, 2, -1, 0, 1, -1])!;
-    document.body.innerHTML = royaleHtml(log, [1, 4, -2, 6, 0, 0, 0, 0]);
+    document.body.innerHTML = royaleHtml(log);
     expect(document.querySelector('.turn')!.textContent).toBe('Battle royale · Round 3');
     expect(document.querySelector('.initiative li')!.textContent).toBe('Bot 2');
-    expect(document.body.textContent).toContain('Your order: 1 marble NW');
     expect(document.querySelector('.reveal')!.getAttribute('aria-label')).toBe('Round 2 reveal');
     const items = [...document.querySelectorAll('.reveal li')];
     expect(items.map((li) => li.textContent)).toEqual([
@@ -163,7 +155,7 @@ describe('the HUD plate', () => {
 describe('the seat glyphs on the plate (#558)', () => {
   it('each seat name wears its glyph in the ink on its tint, in the initiative row and the reveal log', () => {
     const log = parseLog([1, 0, 0, -1, 1, 2, -1, 2, 2, -1, 3, 2, -1, 4, 2, -1, 5, 2, -1])!;
-    document.body.innerHTML = royaleHtml(log, []);
+    document.body.innerHTML = royaleHtml(log);
     const glyphs = (list: string): (string | null)[] =>
       [...document.querySelectorAll(`.${list} .seat`)].map((s) => s.getAttribute('data-glyph'));
     expect(glyphs('initiative')).toEqual(initiative(2).map((s) => SEAT_GLYPHS[s]!.name));
@@ -190,7 +182,7 @@ describe('the breach, the seats out and the placement (#503)', () => {
 
   it('the wasm placement gives each seat its place and points, best place first, seat order in a shared place', () => {
     expect(standings([])).toEqual([]);
-    document.body.innerHTML = royaleHtml(null, [], { standings: standings([2, 1, 1, 10]) });
+    document.body.innerHTML = royaleHtml(null, { standings: standings([2, 1, 1, 10]) });
     expect(document.querySelector('.placement li')!.textContent).toBe('1st Bot 1 · 10 points');
     expect(document.querySelectorAll('.placement li')[1]!.textContent).toBe('2nd You · 1 point');
     expect(standings([2, 6, 1, 12, 2, 6])).toEqual([
@@ -201,19 +193,19 @@ describe('the breach, the seats out and the placement (#503)', () => {
   });
 
   it('the plate warns of the breach in the hazard line, and greys out the seats out', () => {
-    document.body.innerHTML = royaleHtml(null, [], { out: [2, 4], cracks: [{ cell: [0, 8], left: 1 }] });
+    document.body.innerHTML = royaleHtml(null, { out: [2, 4], cracks: [{ cell: [0, 8], left: 1 }] });
     expect(document.querySelector('.breach')!.textContent).toBe('Breach: 1 cell void in 1 round');
     const items = [...document.querySelectorAll('.initiative li')];
     expect(items.map((li) => li.className)).toEqual(['', '', 'out', '', 'out', '']);
     expect(items.map((li) => li.textContent)).toEqual(['You', 'Bot 1', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5']);
-    document.body.innerHTML = royaleHtml(null, []);
+    document.body.innerHTML = royaleHtml(null);
     expect(document.querySelector('.breach')).toBeNull();
     expect(document.querySelectorAll('.initiative li.out')).toHaveLength(0);
   });
 
   it('once over, the plate is the end banner and the places with their points', () => {
     const placed = standings([1, 10, 2, 6, 2, 6, 2, 6, 2, 6, 2, 6]);
-    document.body.innerHTML = royaleHtml(parseLog([25, 0, 2, -1])!, [], { standings: placed, out: [1, 2, 3, 4, 5] });
+    document.body.innerHTML = royaleHtml(parseLog([25, 0, 2, -1])!, { standings: placed, out: [1, 2, 3, 4, 5] });
     expect(document.querySelector('.turn')!.textContent).toBe('You win');
     const end = document.querySelector('.end')!;
     expect(end.textContent).toBe('10 points. The books balance.');
@@ -228,6 +220,5 @@ describe('the breach, the seats out and the placement (#503)', () => {
       '2nd Bot 5 · 6 points',
     ]);
     for (const gone of ['.initiative', '.reveal', '.breach']) expect(document.querySelector(gone), gone).toBeNull();
-    expect(document.body.textContent).not.toContain('Your order');
   });
 });

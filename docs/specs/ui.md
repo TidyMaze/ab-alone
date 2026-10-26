@@ -100,7 +100,7 @@ names. The button is the last of the column and the open menu lies under it, so 
 button. Held upright, the menu starts a new row under the buttons, its items side by side, the bosses in line after
 Boss fight or Fight together. It closes like the settings menu, on Escape, on a press outside and on its button again,
 and once a mode starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at
-least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Lock order and Hold, the invite link)
+least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Hold, the invite link)
 stay in the column, outside the menu.
 
 ```
@@ -198,13 +198,12 @@ stay in the column, outside the menu.
   player against 5 bots on the radius 8 arena (rules.md section 10.4), at the Furnace, the arena drawn at half the
   cell spacing in the room of the board, each seat's marbles in its shell tint. New game, Hint, the evaluation bar and
   Export game, Import game go away, as in a boss fight. The player selects marbles and presses a target as for a
-  move, which picks the order, then presses Lock order, greyed until an order is picked, or Hold. The bots' orders come
-  from the round-start state, and the round resolves at once. The plate shows "Battle royale · Round 3", the
-  initiative order of that round before its reveal, "Your order: 1 marble NW" (or "none"), then the reveal of the last
-  round in initiative order, one line a seat: "Bot 1: moved, ejected Bot 3", "You: fizzled" (in the hazard colour),
-  "Bot 3: held", "Bot 4: out". The player is "You", the bots "Bot 1" to "Bot 5", each name after a dot of its tint.
-  These strings are kept verbatim for the e2e tests. Once the game is over, Lock order and Hold are greyed. A boss
-  fight, Play online or Ship leaves it.
+  move, which locks the order, or presses Hold (#611). The bots' orders come from the round-start state, and the round
+  resolves at once. The plate shows "Battle royale · Round 3", the initiative order of that round before its reveal,
+  then the reveal of the last round in initiative order, one line a seat: "Bot 1: moved, ejected Bot 3", "You:
+  fizzled" (in the hazard colour), "Bot 3: held", "Bot 4: out". The player is "You", the bots "Bot 1" to "Bot 5", each
+  name after a dot of its tint. These strings are kept verbatim for the e2e tests. Once the game is over, Hold is
+  greyed. A boss fight, Play online or Ship leaves it.
 - **Battle royale breach, seats out and placement (#503).** A ring that cracks at the end of a round (rules.md section
   10.4, ring 8 at the end of round 12) glows in the hazard colour for the whole next round, under the Hull's crack
   decal and one tick per round left, and the plate warns in the hazard colour: "Breach: 48 cells void in 1 round". At
