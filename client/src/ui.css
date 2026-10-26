@@ -241,13 +241,15 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
      lower than the rows when the plate is tall (#284, #287). */
   #settings-menu { top: 0; left: calc(100% + 0.5rem); right: auto; flex-flow: row wrap; max-width: calc(100vw - 32px - 100% - 0.5rem); }
   #settings-menu :is(.setting-volume, .setting-archive) { flex: 1 0 100%; box-sizing: border-box; }
-  /* The open mode menu starts a new row, the bosses in line after Boss fight (or Fight together): three rows of touch
+  /* The open mode menu starts a new row, the bosses in line after Boss fight (or Fight together): four rows of touch
      targets at most. */
   #mode-menu { flex: 1 0 100%; flex-flow: row wrap; gap: 0.5rem; }
   #boss-list:not([hidden]), #coop-list:not([hidden]) { display: contents; }
 }
 /* Bug #575: on a phone held upright the boss name of the Daily challenge label takes a second line of the 44 px tall
-   button, so a long boss name makes the label no wider and pushes no item onto a row over the board. */
+   button, so a long boss name makes the label no wider and pushes no item onto a row over the board. Bugs #603, #606:
+   since Fight together and The Alien, the items are a little narrower and closer, so they keep to four rows with the
+   web fonts and with the fallback fonts. */
 @media (orientation: portrait) and (max-width: 600px), (orientation: portrait) and (pointer: coarse) {
   #mode-menu { gap: 0.35rem; }
   #mode-menu button { padding-inline: 0.5rem; }
