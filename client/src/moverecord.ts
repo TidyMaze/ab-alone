@@ -36,6 +36,7 @@ export interface Hello {
   roster: string[];
   agent?: true; // an agent player (docs/specs/mcp.md section 8): signed, absent means a human
   order?: string[]; // the creator's: every key in the order its Hello was first seen, so join_seq is the same everywhere (#359)
+  engine?: number; // `engine_version()` of the sender's wasm (#526), absent from a peer older than it
   pub: string;
   sig: string;
 }
@@ -88,9 +89,9 @@ type Unsigned = Omit<MoveRecord, 'sig'>;
 const payload = (r: Unsigned): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify([r.game, r.seq, r.prev, r.move, r.pub]));
 
-// The agent entry is added only when set, so a human Hello keeps the bytes older peers verify.
+// The agent, order and engine entries are added only when set, so a Hello without them keeps the bytes older peers verify.
 const helloPayload = (h: Omit<Hello, 'sig'>): Uint8Array<ArrayBuffer> =>
-  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub, ...(h.agent ? ['agent'] : []), ...(h.order ? ['order', h.order] : [])]));
+  new TextEncoder().encode(JSON.stringify(['hello', h.game, h.seat, h.roster, h.pub, ...(h.agent ? ['agent'] : []), ...(h.order ? ['order', h.order] : []), ...(h.engine === undefined ? [] : ['engine', h.engine])]));
 const coordinatorPayload = (c: Omit<Coordinator, 'sig'>): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify(['coordinator', c.game, c.coordinator, c.pub]));
 
@@ -126,7 +127,10 @@ export async function signMove(
   return { ...unsigned, sig: b64(sig) };
 }
 
-export async function signHello(keys: Keys, fields: { game: string; seat: number; roster: string[]; agent?: true; order?: string[] }): Promise<Hello> {
+export async function signHello(
+  keys: Keys,
+  fields: { game: string; seat: number; roster: string[]; agent?: true; order?: string[]; engine?: number },
+): Promise<Hello> {
   const unsigned = { kind: 'hello' as const, ...fields, pub: keys.pub };
   return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, helloPayload(unsigned))) };
 }
@@ -194,6 +198,7 @@ export function parseHello(x: unknown): Hello | null {
     h.roster.every((k) => typeof k === 'string') &&
     (h.agent === undefined || h.agent === true) &&
     (h.order === undefined || (Array.isArray(h.order) && h.order.every((k) => typeof k === 'string'))) &&
+    (h.engine === undefined || Number.isInteger(h.engine)) &&
     typeof h.pub === 'string' &&
     typeof h.sig === 'string';
   if (!ok) return null;
@@ -204,6 +209,7 @@ export function parseHello(x: unknown): Hello | null {
     roster: h.roster as string[],
     ...(h.agent ? { agent: true as const } : {}),
     ...(h.order ? { order: h.order as string[] } : {}),
+    ...(h.engine === undefined ? {} : { engine: h.engine as number }),
     pub: h.pub as string,
     sig: h.sig as string,
   };

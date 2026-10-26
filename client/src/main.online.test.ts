@@ -21,14 +21,16 @@ async function until(game: Game, ok: () => boolean): Promise<void> {
   expect(ok()).toBe(true);
 }
 
-/** The other player: a session with its own engine on `transport`, which plays a move by its cells. */
-async function opponent(transport: Transport, room: string, side: number) {
-  const { Engine } = await import('abalone-wasm');
+/** The other player: a session with its own engine on `transport`, which plays a move by its cells. `version` is
+ * added to the engine version its Hello carries, so it can run another one (#526). */
+async function opponent(transport: Transport, room: string, side: number, version = 0) {
+  const { Engine, engine_version } = await import('abalone-wasm');
   let engine = new Engine();
   const keys = await generateKeys();
   const session = new OnlineSession({
     game: room,
     side,
+    engine: engine_version() + version,
     keys,
     transport,
     judge: {
@@ -143,6 +145,17 @@ describe('Play online', () => {
     await until(game, () => game.hud().includes(' · refused move: malformed'));
     expect(game.hook('__plies')).toBe(0);
   });
+
+  it('refuses an opponent on another engine version with a note, and keeps waiting for one, #526', async () => {
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('play-online').click();
+    await until(game, () => data().seat === 'player');
+    await opponent(game.peer()!, game.room()!, 2, 1);
+    await until(game, () => game.hud().includes(' · refused move: engine-version'));
+    expect(data().opponent).toBe('waiting');
+    expect(presence()).toBe('You are Black. Waiting for an opponent...');
+  });
 });
 
 describe('Rematch', () => {
@@ -225,7 +238,7 @@ describe('The invite link', () => {
     const game = await boot('?net=hook#room=full-room');
     await until(game, () => data().seat === 'pending');
     const [creator, other] = [await generateKeys(), await generateKeys()];
-    const hello = await signHello(creator, { game: 'full-room', seat: 1, roster: [creator.pub, other.pub] });
+    const hello = await signHello(creator, { game: 'full-room', seat: 1, roster: [creator.pub, other.pub], engine: (await import('abalone-wasm')).engine_version() });
     (window as unknown as Record<string, (m: Wire, peer: string) => void>).__netIn!(hello, 'creator');
     await until(game, () => data().seat === 'spectator');
     expect(data().online).toBe('Spectator');

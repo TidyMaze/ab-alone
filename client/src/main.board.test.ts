@@ -388,11 +388,12 @@ describe('main.ts board and HUD', () => {
     await until(game, () => document.body.dataset.seat === 'player');
     expect(game.hud()).toContain('Link: two crews, one ledger. Both counted.');
     // The opponent: a second session on the other end of the room, with its own engine.
-    const { Engine } = await import('abalone-wasm');
+    const { Engine, engine_version } = await import('abalone-wasm');
     const theirs = new Engine();
     const them = new OnlineSession({
       game: game.room()!,
       side: 2,
+      engine: engine_version(),
       keys: await generateKeys(),
       transport: game.peer()!,
       judge: {

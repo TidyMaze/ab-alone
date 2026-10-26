@@ -17,6 +17,11 @@ export function newEncounter(boss: string, seed: number): EncounterLike {
   return new wasm.Encounter(boss, seed);
 }
 
+/** The engine version a room's Hello carries: peers on another one refuse to play (docs/specs/tech.md section 9). */
+export function engineVersion(): number {
+  return wasm.engine_version();
+}
+
 /** The boss ids of the engine, in play order. */
 export function bossIds(): string[] {
   return wasm.boss_ids();

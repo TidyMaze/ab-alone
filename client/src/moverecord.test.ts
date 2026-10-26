@@ -141,6 +141,23 @@ describe('Hello', () => {
     expect(parseHello({ ...agent, agent: 'yes' })).toBeNull();
   });
 
+  it('signs the engine version, parses it back, and refuses a changed or removed one, #526', async () => {
+    const keys = await generateKeys();
+    const h = await signHello(keys, { game: 'g', seat: 2, roster: [], engine: 3 });
+    expect(h).toMatchObject({ engine: 3 });
+    expect(await verifyHello(h)).toBe(true);
+    expect(parseHello(h)).toEqual(h);
+    expect(await verifyHello({ ...h, engine: 4 })).toBe(false);
+    expect(await verifyHello({ ...h, engine: undefined })).toBe(false);
+    expect(parseHello({ ...h, engine: 1.5 })).toBeNull();
+    expect(parseHello({ ...h, engine: '3' })).toBeNull();
+    // An older peer sends no version: its Hello still parses and verifies, the session refuses it.
+    const old = await signHello(keys, { game: 'g', seat: 2, roster: [] });
+    expect(parseHello(old)).toEqual(old);
+    expect(parseHello(old)!.engine).toBeUndefined();
+    expect(await verifyHello(old)).toBe(true);
+  });
+
   it('is not a move record: its signature does not verify as one', async () => {
     const keys = await generateKeys();
     const h = await signHello(keys, { game: 'g', seat: 1, roster: [] });

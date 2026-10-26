@@ -7,7 +7,7 @@ import { inviteUrl } from '../../client/src/invite';
 import { generateKeys, signHello, type Wire } from '../../client/src/moverecord';
 import { OnlineSession } from '../../client/src/session';
 import { localPair, type Transport } from '../../client/src/transport';
-import { newEncounter, newEngine } from './engine';
+import { engineVersion, newEncounter, newEngine } from './engine';
 import { Session, type EngineLike, type Result, type ToolError } from './game';
 import { formatMove, fromRecord, parseMove, toRecord } from './notation';
 
@@ -62,6 +62,7 @@ async function peer(transport: Transport, game: string, side: number) {
   const session = new OnlineSession({
     game,
     side,
+    engine: engineVersion(),
     keys: await generateKeys(),
     transport,
     judge: {
@@ -293,7 +294,7 @@ describe('join_room', () => {
     const other = await generateKeys();
     theirs.onRecord((message: Wire) => {
       if ((message as { kind?: string }).kind !== 'hello') return;
-      void signHello(creator, { game: 'full', seat: 1, roster: [creator.pub, other.pub] }).then((h) => theirs.send(h));
+      void signHello(creator, { game: 'full', seat: 1, roster: [creator.pub, other.pub], engine: engineVersion() }).then((h) => theirs.send(h));
     });
     expect(failure(await session.joinRoom({ room: 'full' })).code).toBe('room_full');
     expect(mine.state).toBe('closed');

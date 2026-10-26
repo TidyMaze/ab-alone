@@ -21,6 +21,7 @@ const M1 = [1, 0, 0, 2, 0, 0, 0, 0];
 const M2 = [2, 0, 0, 3, 0, 0, 0, 0];
 const M3 = [1, 0, 1, 2, 0, 0, 0, 0];
 const WIN = [7, 0, 0, 0, 0, 0, 0, 0]; // the FakeJudge ends the game: the mover wins
+const ENGINE = 1; // the engine version every session of these tests runs, unless a test says otherwise (#526)
 
 // Stands in for the wasm engine: alternates Black then White, refuses any move starting with 9 and
 // any move once the game is over.
@@ -65,7 +66,7 @@ async function settle(): Promise<void> {
   }
 }
 
-async function player(transport: Transport, side: number, seatCount = 2) {
+async function player(transport: Transport, side: number, seatCount = 2, engine = ENGINE) {
   const judge = new FakeJudge();
   const moves: number[][] = [];
   const refused: string[] = [];
@@ -79,6 +80,7 @@ async function player(transport: Transport, side: number, seatCount = 2) {
     game: 'g',
     side,
     seatCount,
+    engine,
     keys,
     transport,
     judge,
@@ -147,7 +149,7 @@ function room() {
 }
 
 // A raw peer on the other end of a pair, for hand made messages.
-const hello = (keys: Keys, seat: number, roster: string[] = []) => signHello(keys, { game: 'g', seat, roster });
+const hello = (keys: Keys, seat: number, roster: string[] = []) => signHello(keys, { game: 'g', seat, roster, engine: ENGINE });
 const sync = (seq: number, game = 'g', asked: string[] = []): Sync => ({ kind: 'sync', game, seq, asked });
 const missed = (of: MoveRecord | Rematch): Missed => ({ kind: 'missed', of });
 const kindOf = (m: Wire) => (m as { kind?: string }).kind;
@@ -400,6 +402,30 @@ describe('OnlineSession', () => {
     expect(black.session.seats.roster()).toEqual([black.keys.pub, '']);
   });
 
+  it('refuses a Hello from another engine version, or from an older peer that sends none: no seat, no presence, #526', async () => {
+    const [x, y] = localPair();
+    const black = await player(y, 1);
+    const peer = await generateKeys();
+    x.send(await signHello(peer, { game: 'g', seat: 2, roster: [], engine: ENGINE + 1 }));
+    x.send(await signHello(peer, { game: 'g', seat: 2, roster: [] }));
+    await settle();
+    expect(black.refused).toEqual(['engine-version', 'engine-version']);
+    expect(black.session.seats.roster()).toEqual([black.keys.pub, '']);
+    expect(black.session.presenceOf(2)).toBe('waiting');
+  });
+
+  it('two peers on different engine versions refuse each other: the joiner is never seated, #526', async () => {
+    const [ta, tb] = localPair();
+    const black = await player(ta, 1, 2, ENGINE);
+    const white = await player(tb, 2, 2, ENGINE + 1);
+    await settle();
+    expect(black.refused).toContain('engine-version');
+    expect(white.refused).toContain('engine-version');
+    expect(white.session.role).toBe('pending');
+    expect(black.session.presenceOf(2)).toBe('waiting');
+    expect(black.session.canPlay()).toBe(false);
+  });
+
   it('keeps the same key on its seat when it says Hello again', async () => {
     const [x, y] = localPair();
     const black = await player(y, 1);
@@ -516,7 +542,7 @@ describe('OnlineSession', () => {
     const black = await player(r.transport, 1);
     const agent = await generateKeys();
     expect(black.session.isAgent(2)).toBe(false);
-    r.from('b', await signHello(agent, { game: 'g', seat: 2, roster: [], agent: true }));
+    r.from('b', await signHello(agent, { game: 'g', seat: 2, roster: [], agent: true, engine: ENGINE }));
     await settle();
     expect(black.session.isAgent(2)).toBe(true);
     expect(black.session.isAgent(1)).toBe(false);
@@ -526,7 +552,7 @@ describe('OnlineSession', () => {
     const [ta, tb] = localPair();
     const black = await player(ta, 1);
     const judge = new FakeJudge();
-    new WatchedSession({ game: 'g', side: 2, agent: true, keys: await generateKeys(), transport: tb, judge, onMove: () => {}, onRefuse: () => {} });
+    new WatchedSession({ game: 'g', side: 2, engine: ENGINE, agent: true, keys: await generateKeys(), transport: tb, judge, onMove: () => {}, onRefuse: () => {} });
     await settle();
     expect(black.session.isAgent(2)).toBe(true);
     expect(black.refused).toEqual([]);
@@ -536,7 +562,7 @@ describe('OnlineSession', () => {
     const [x, y] = localPair();
     const judge = new FakeJudge();
     const keys = await generateKeys();
-    const session = new WatchedSession({ game: 'g', side: 2, keys, transport: y, judge, onMove: () => {}, onRefuse: () => {} });
+    const session = new WatchedSession({ game: 'g', side: 2, engine: ENGINE, keys, transport: y, judge, onMove: () => {}, onRefuse: () => {} });
     const creator = await generateKeys();
     x.send(await hello(creator, 1, [creator.pub, 'x']));
     x.close();
@@ -732,7 +758,7 @@ describe('OnlineSession rematch, #186', { timeout: 30_000 }, () => {
     const r = room();
     const judge = new FakeJudge();
     const keys = await generateKeys();
-    const session = new OnlineSession({ game: 'g', side: 1, keys, transport: r.transport, judge, onMove: () => {}, onRefuse: () => {} });
+    const session = new OnlineSession({ game: 'g', side: 1, engine: ENGINE, keys, transport: r.transport, judge, onMove: () => {}, onRefuse: () => {} });
     const white = await generateKeys();
     r.from('b', await hello(white, 2));
     await until(() => expect(session.presenceOf(2)).toBe('here'));
