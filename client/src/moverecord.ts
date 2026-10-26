@@ -1,6 +1,7 @@
 // A move record is one signed link of the game log: {game, seq, prev, move, pub, sig}. `prev` is the
 // SHA-256 of the previous record, so the log is tamper evident (docs/specs/tech.md section 6).
 // Signatures are Ed25519 from Web Crypto. Keys and signatures travel as base64url strings.
+import type { RoyaleMessage } from './royale-net';
 
 export interface MoveRecord {
   game: string;
@@ -80,8 +81,8 @@ export interface Coordinator {
   sig: string;
 }
 
-/** Anything a transport carries. */
-export type Wire = MoveRecord | Hello | Rematch | Sync | Missed | Beat | Coordinator;
+/** Anything a transport carries: the messages of the battle royale rounds too (royale-net.ts, #504). */
+export type Wire = MoveRecord | Hello | Rematch | Sync | Missed | Beat | Coordinator | RoyaleMessage;
 
 type Unsigned = Omit<MoveRecord, 'sig'>;
 
