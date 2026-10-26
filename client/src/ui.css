@@ -125,9 +125,12 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #boss-list, #coop-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
 /* Bug #653: in a desktop window an open boss list holds two bosses a row, each row compact, so every boss and Daily
    challenge fit the window without a scroll, with room for more bosses. A touch screen keeps its 44 px items. #635:
-   with 10 bosses the rows are closer still, so the list keeps off a scroll in a 1280x720 window. */
+   with 10 bosses the rows are closer still, so the list keeps off a scroll in a 1280x720 window. #699: the items of the
+   mode menu sit side by side when they fit and an open boss list takes a row of its own as wide as the column, so 12
+   bosses and more fit a 1280x720 window. */
 @media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
-  #boss-list, #coop-list { display: grid; grid-template-columns: 1fr 1fr; }
+  #mode-menu { flex-flow: row wrap; justify-content: flex-end; }
+  #boss-list, #coop-list { display: grid; grid-template-columns: 1fr 1fr; flex: 1 0 100%; }
   #boss-list button, #coop-list button { padding-block: 0.125rem; }
 }
 #boss-list[hidden], #coop-list[hidden], #boss-retry[hidden], #ship-back[hidden], #boss-goal[hidden], #rematch[hidden], #update[hidden], #hint[hidden], #new-game[hidden] { display: none; }
