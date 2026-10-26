@@ -40,12 +40,14 @@ function fightAlien(game: Game): void {
 }
 
 const eggs = (game: Game): Egg[] => game.hook<Egg[]>('__eggs');
-const to = ({ cells: [[q, r]], dir }: Move): Axial => [q! + DIRS[dir]![0], r! + DIRS[dir]![1]];
+const to = ({ cells, dir }: Move): Axial => [cells[0]![0] + DIRS[dir]![0], cells[0]![1] + DIRS[dir]![1]];
 
-/** Plays `mv` by two clicks: its marble, then the cell it goes to. */
+/** Plays `mv` by two clicks: its marble, then the cell it goes to, and lets its slide end. */
 function play(game: Game, mv: Move): void {
-  game.click(...mv.cells[0]!);
+  const [q, r] = mv.cells[0]!;
+  game.click(q, r);
   game.click(...to(mv));
+  game.frame(1000);
 }
 
 /** One quiet ply: the first one-marble move forward of the side to move (NW or NE for Black, SE or SW for the Alien)

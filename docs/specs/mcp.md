@@ -111,6 +111,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.next_army()` | `tell` with `kind: "next_army"`, the marbles of that army in `cells` and the army in `text` |
 | `Encounter.flips()` | `tell` with `kind: "flip"` and the cells that flip if nothing moves |
 | `Encounter.cracks()` | `marks` with `kind: "crack"` and `value` = plies left |
+| `Encounter.eggs()` | `marks` with `kind: "egg"` and `value` = player turns left before it hatches (The Alien) |
 | `Encounter.converted()` | `marks` with `kind: "converted"` |
 | `Encounter.armies()` | `marks` with `kind: "army"` and `value` = `0` Alto, `1` Tenor, `2` Bass |
 | `Encounter.tell()` id (`-1` is none, `0` is an id: the Hull's crack tick) | `tell.kind` = `"special"` when no more specific kind applies, the id in `text` |

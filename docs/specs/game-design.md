@@ -337,13 +337,16 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Concept**: something came up with the ore. It nests in the Cargo hold and lays eggs between
   the crates. It is weak at first and gets stronger the longer you let it breed.
 - **Board and side**: standard radius 4 board, Cargo deck look. You have 14 marbles on the
-  standard layout. The Alien starts with **8** marbles: its two back rows (11 cells), minus the 3
-  outer marbles of its second row. Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
+  standard layout. The Alien starts with **8** marbles: its back row (5), the 2 middle cells of its
+  second row and the centre cell of its third row, a wedge symmetric about the board's middle line
+  (a row of 6 has no 3 outer cells, #588). Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
 - **Twist, the eggs**: every **2nd** boss turn (its 2nd, 4th, 6th... move), after its move, the
   Alien lays **1 egg** on an empty cell picked at random. The pick is deterministic, for P2P: a
   seeded integer PRNG of the fight's seed and the ply, in the engine, never `Math.random`, floats or
   the clock, so a Retry, the daily, a replayed game file and every co-op peer get the same eggs. At most **3** eggs
-  are on the board at once; a lay with 3 eggs out is skipped.
+  are on the board at once; a lay with 3 eggs out is skipped. The pick: splitmix64 of the fight seed
+  mixed with the ply (as the Hull's cracks), modulo the empty cells without an egg, in `q` then `r`
+  order. The phase of the lay is the one before the boss move.
 - **Hatching**: an egg hatches after **4 of your turns**. The count runs down by 1 after each of
   your moves; when it reaches 0, at the start of the boss turn, a new Alien marble appears on the
   egg's cell and the egg is gone, then the boss plays. From the lay to the hatch, 8 plies go by (your 4 turns and the Alien's 4
@@ -352,14 +355,19 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **An egg is not a marble**: it is a mark on an empty cell, like the Hull's crack, so it never
   blocks or changes a move or a push (`rules.md` §10: a mode adds rules, never changes a move).
   A marble that ends a move on an egg's cell, yours or the Alien's, pushed or not, **crushes**
-  it: the egg is gone, no marble appears. The Alien avoids its own eggs.
+  it: the egg is gone, no marble appears. At the end of each ply the crush comes first, then the
+  count down and the hatch (your ply) or the lay (the Alien's ply), so a crushed egg never hatches.
+  The Alien avoids its own eggs: its search keeps to the moves that leave every egg empty, unless
+  every move lands on one.
 - **Tell**: each egg shows a counter above it, the number of your turns left before it hatches
-  (4, 3, 2, 1), facing the camera and readable at 3:1. On 1 the egg pulses (a steady glow, off
-  under reduced motion): it hatches after your next move.
+  (4, 3, 2, 1), facing the camera and readable at 3:1 (the pale digit on a near-black plate, drawn
+  over the marbles). On 1 a pale glow under the egg pulses once a second, held still under reduced
+  motion: it hatches after your next move. The HUD line reads "Eggs hatch: 1 in 1 turn · 2 in 4 turns".
 - **Counter**: walk or push a marble onto an egg to crush it before it hatches, and press the
   Alien early, while it has few marbles. Every turn spent on eggs is a turn not spent pushing.
 - **Phases**: P1 above. P2 when the Alien has **5** marbles left: it lays an egg every boss turn.
-  P3 at **3**: eggs hatch after **3** of your turns (the counter starts at 3).
+  P3 at **3**: eggs hatch after **3** of your turns (the counter starts at 3). The phase follows the
+  marble count, so a hatch can bring an earlier phase back; an egg keeps the counter it was laid with.
 - **Calibrate**: knobs = starting marbles (8), lay interval (2), hatch time (4), egg cap (3), AI
   depth (3). Fail if the median fight ends with fewer than 2 eggs crushed (nobody learns the
   counter) or the Alien's marble count only ever goes up (the brood outruns the player).

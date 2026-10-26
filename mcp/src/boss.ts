@@ -67,6 +67,7 @@ export function bossState(id: string, boss: BossLike): BossState {
   const armies = records(boss.armies(), 3);
   const marks: Mark[] = [
     ...records(boss.cracks(), 3).map((record) => ({ kind: 'crack', cell: cell(record), value: record[2]! })),
+    ...records(boss.eggs(), 3).map((record) => ({ kind: 'egg', cell: cell(record), value: record[2]! })),
     ...records(boss.converted(), 2).map((record) => ({ kind: 'converted', cell: cell(record) })),
     ...armies.map((record) => ({ kind: 'army', cell: cell(record), value: record[2]! })),
   ];
