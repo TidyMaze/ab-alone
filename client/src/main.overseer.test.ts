@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
-import { toxinText } from './overseer';
+import { TAUNTS, VENT_NOTE, toxinText } from './overseer';
+import { CHAR_MS, angryLine } from './speech';
 import { boot, type Game } from './test/harness';
 
 // The Overseer on the harness (#635, game-design.md section 7.11): the Overseer, its 6 cores and 6 vents drawn, the
@@ -43,6 +44,102 @@ function plies(game: Game, from: number, to: number): void {
     for (let n = 0; n < 4; n++) game.frame(1000);
   }
 }
+
+// The speech bubble, the angry bubble and the haze of the vents (#741, docs/specs/ui.md).
+const bubble = (): HTMLElement => byId('bubble');
+const bubbleText = (): string => byId('bubble-text').textContent!;
+const cues = (game: Game): string[] => game.hook<string[]>('__tellCues');
+const gesture = (): boolean => dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
+
+describe('main.ts The Overseer speaks (#741)', () => {
+  it('types the taunt in a bubble above its marble with a blip per new character, holds it 3 s, then fades it', async () => {
+    const game = await boot('?bot=off', { audio: true });
+    gesture();
+    expect(bubble().hidden).toBe(true); // no fight
+    fightOverseer(game);
+    game.frame(0);
+    expect(bubble().hidden).toBe(false);
+    expect(bubble().classList.contains('angry')).toBe(false);
+    expect(bubbleText()).toBe('T');
+    expect(bubble().classList.contains('glitch')).toBe(true); // the flicker of a new character
+    expect(parseFloat(bubble().style.left)).toBeGreaterThan(0); // over the Overseer's marble, on the window
+    expect(parseFloat(bubble().style.top)).toBeGreaterThan(0);
+    game.frame(500);
+    expect(bubbleText()).toBe(TAUNTS[0]!.slice(0, 9));
+    expect(cues(game).filter((c) => c === 'blip')).toHaveLength(2); // one per frame that typed
+    game.frame(2000); // 40 characters take 2.4 s
+    expect(bubbleText()).toBe(TAUNTS[0]);
+    expect(bubble().style.opacity).toBe('1');
+    expect(TAUNTS[0]!.length * CHAR_MS).toBeLessThan(2500);
+    game.frame(3000); // the 3 s hold is over, the fade runs
+    expect(Number(bubble().style.opacity)).toBeLessThan(1);
+    game.frame(1000);
+    expect(bubble().hidden).toBe(true);
+    game.frame(1000); // nothing left to draw
+    expect(bubble().hidden).toBe(true);
+  });
+
+  it('says the next taunt at each 20 % of the neurotoxin, and a new fight starts its bubble again', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightOverseer(game);
+    expect(bubbleText()).toBe('');
+    game.frame(0);
+    expect(bubbleText()).toBe(TAUNTS[0]); // reduced motion: the whole text at once
+    expect(bubble().classList.contains('glitch')).toBe(false);
+    plies(game, 0, 2);
+    expect(bubble().hidden).toBe(true); // same taunt, not said again
+    plies(game, 2, 16); // 8 turns: 20 %
+    expect(bubbleText()).toBe(TAUNTS[1]);
+    byId('boss-retry').click();
+    game.frame(0);
+    expect(bubbleText()).toBe(TAUNTS[0]);
+  });
+
+  it('a core burnt on a vent makes it angry, red and shaking, with the line of the seed and the ply, held 1 s; P2 starts the haze and the vents note', async () => {
+    const game = await boot('?bot=off');
+    fightOverseer(game);
+    plies(game, 0, 6);
+    expect(body().haze).toBe('0'); // P1: the vents burn the boss's marbles only
+    expect(tell()).not.toContain(VENT_NOTE);
+    for (const [q, r] of FIXTURE[6]!) game.click(q, r);
+    game.frame(1000); // the slide ends: the core sinks into its vent
+    expect(body().burns).toBe('1');
+    expect(bubble().classList.contains('angry')).toBe(true);
+    expect(bubble().classList.contains('still')).toBe(false); // it shakes
+    const line = angryLine(153, 7);
+    game.frame(line.length * CHAR_MS + 10);
+    expect(bubbleText()).toBe(line);
+    game.frame(900);
+    expect(Number(bubble().style.opacity)).toBe(1); // 1 s hold after the last character
+    game.frame(200);
+    expect(Number(bubble().style.opacity)).toBeLessThan(1);
+    game.frame(1000);
+    expect(bubble().hidden).toBe(true);
+    expect(tell()).toContain(VENT_NOTE); // P2: the vents burn yours too
+    expect(tell()).toContain('Neurotoxin');
+    expect(body().haze).toBe('18'); // 3 puffs over each of the 6 vents
+    game.frame(0);
+    const before = body().hazeY;
+    game.frame(700);
+    expect(body().hazeY).not.toBe(before); // the haze rises
+    plies(game, 7, 9);
+    expect(tell()).not.toContain(VENT_NOTE); // the note lasts 2 plies
+    expect(body().haze).toBe('18');
+  });
+
+  it('under reduced motion the angry bubble holds still and shows its whole line, and the haze holds still', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightOverseer(game);
+    plies(game, 0, 7);
+    expect(bubble().classList.contains('angry')).toBe(true);
+    expect(bubble().classList.contains('still')).toBe(true);
+    expect(bubbleText()).toBe(angryLine(153, 7));
+    expect(body().haze).toBe('18');
+    const before = body().hazeY;
+    game.frame(700);
+    expect(body().hazeY).toBe(before);
+  });
+});
 
 describe('main.ts The Overseer (#635)', () => {
   it('plays in the Chapel with its Tally line, draws the Overseer, its cores and vents, and the neurotoxin', async () => {
