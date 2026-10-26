@@ -47,6 +47,17 @@ class FakeJudge implements Judge {
   }
 }
 
+// Stands in for the encounter of a co-op room (#529): the boss replies inside play, so Black is always
+// to move, and the human plies go to the two player seats in turn.
+class CoopJudge extends FakeJudge {
+  override to_move(): number {
+    return 1;
+  }
+  mover(): number {
+    return (this.played.length % 2) + 1;
+  }
+}
+
 // Every session the tests make, for settle. Those of earlier tests are idle: waiting on them is free.
 const live: OnlineSession[] = [];
 class WatchedSession extends OnlineSession {
@@ -66,8 +77,7 @@ async function settle(): Promise<void> {
   }
 }
 
-async function player(transport: Transport, side: number, seatCount = 2, engine = ENGINE) {
-  const judge = new FakeJudge();
+async function player(transport: Transport, side: number, seatCount = 2, engine = ENGINE, judge = new FakeJudge()) {
   const moves: number[][] = [];
   const refused: string[] = [];
   const states: string[] = [];
@@ -269,6 +279,37 @@ describe('OnlineSession', () => {
     await settle();
     expect(black.refused).toEqual(['not-their-turn']);
     expect(black.judge.played).toEqual([]);
+  });
+
+  it('co-op: the two seats take turns on the shared Black army, the creator first (#527)', async () => {
+    const [ta, tb] = localPair();
+    const one = await player(ta, 1, 2, ENGINE, new CoopJudge());
+    const two = await player(tb, 2, 2, ENGINE, new CoopJudge());
+    await settle();
+    expect([one.session.side, two.session.side]).toEqual([1, 1]);
+    expect([one.session.canPlay(), two.session.canPlay()]).toEqual([true, false]);
+    await play(one, M1);
+    expect([one.session.canPlay(), two.session.canPlay()]).toEqual([false, true]);
+    await play(two, M2);
+    expect([one.session.canPlay(), two.session.canPlay()]).toEqual([true, false]);
+    expect(one.moves).toEqual([M2]);
+    expect(two.moves).toEqual([M1]);
+    expect([...one.refused, ...two.refused]).toEqual([]);
+  });
+
+  it('co-op: refuses a second move in a row from one seat, though Black is still to move (#527)', async () => {
+    const [x, y] = localPair();
+    const two = await player(y, 2, 2, ENGINE, new CoopJudge());
+    const creator = await generateKeys();
+    x.send(await hello(creator, 1, [creator.pub, '']));
+    await settle();
+    const r0 = await signMove(creator, { game: 'g', seq: 0, prev: GENESIS, move: M1 });
+    x.send(r0);
+    await settle();
+    x.send(await signMove(creator, { game: 'g', seq: 1, prev: await hashRecord(r0), move: M2 }));
+    await settle();
+    expect(two.refused).toEqual(['not-their-turn']);
+    expect(two.judge.played).toEqual([M1]);
   });
 
   it('refuses something that is not a record', async () => {
