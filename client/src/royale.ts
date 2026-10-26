@@ -108,14 +108,6 @@ export function loadRoyale<G extends RoyaleGame>(file: RoyaleFile, make: (seats:
   return game;
 }
 
-const DIRECTION_NAMES = ['E', 'W', 'NE', 'SW', 'NW', 'SE'];
-
-/** The order picked, in words: its marble count and direction. */
-export function orderText(order: readonly number[]): string {
-  if (order.length === 0) return 'none';
-  return `${order[0]} marble${order[0] === 1 ? '' : 's'} ${DIRECTION_NAMES[order[1]!]}`;
-}
-
 const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
 // The seat's tint and glyph beside its name, as on its marbles (#558): the name carries the seat, the mark repeats it.
 const seat = (s: number): string => {
@@ -138,10 +130,9 @@ export interface RoyaleView {
   standings?: readonly Standing[];
 }
 
-/** The HUD plate: the round, its initiative order before the reveal (the seats out greyed), the order picked, the
- * breach warning, and the reveal of the last round in initiative order, each order's outcome named, a fizzle marked.
+/** The HUD plate: the round, its initiative order before the reveal (the seats out greyed), the breach warning, and the reveal of the last round in initiative order, each order's outcome named, a fizzle marked.
  * Once the game is over: the end banner and each seat's place and points. */
-export function royaleHtml(log: RoundLog | null, order: readonly number[], { out = [], cracks = [], standings = [] }: RoyaleView = {}): string {
+export function royaleHtml(log: RoundLog | null, { out = [], cracks = [], standings = [] }: RoyaleView = {}): string {
   const round = nextRound(log);
   const items = (list: string[], cls: string[] = []): string => list.map((t, i) => `<li${cls[i] ? ` class="${cls[i]}"` : ''}>${t}</li>`).join('');
   const end = royaleBanner(standings, YOU);
@@ -158,7 +149,6 @@ export function royaleHtml(log: RoundLog | null, order: readonly number[], { out
   return (
     `<div class="turn"><span>Battle royale · Round ${round}</span></div>` +
     `<ol class="initiative" aria-label="Initiative">${items(seats.map(seat), seats.map((s) => (out.includes(s) ? 'out' : '')))}</ol>` +
-    `<small>Your order: ${orderText(order)}</small>` +
     (breach ? `<small class="breach">${breach}</small>` : '') +
     (log
       ? `<ol class="reveal" aria-label="Round ${log.round} reveal">${items(log.turns.map(turnText), log.turns.map((t) => t.outcome))}</ol>`

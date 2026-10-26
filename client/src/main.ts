@@ -153,9 +153,8 @@ let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
-// The offline battle royale (#502) while it is on, else null, and the player's order picked for its round (empty: none).
+// The offline battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
-let order: number[] = [];
 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
@@ -2562,10 +2561,9 @@ const playOnlineButton = document.getElementById('play-online') as HTMLButtonEle
 setButton(playOnlineButton, 'Play online', icon('online'));
 
 // The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8
-// arena, at the Furnace. The player picks an order on the arena, as a move, and locks it, or holds; the bots' orders
-// come from the round-start state, and the round resolves. The HUD plate shows the next round's initiative order
-// before its reveal, and the reveal of the last round. A boss fight, Play online or Ship leaves it, and it leaves Ship.
-const lockButton = document.getElementById('royale-lock') as HTMLButtonElement;
+// arena, at the Furnace. The player presses a target on the arena, as a move, which locks the order (#611), or holds;
+// the bots' orders come from the round-start state, and the round resolves. The HUD plate shows the next round's
+// initiative order before its reveal, and the reveal of the last round. A boss fight, Play online or Ship leaves it, and it leaves Ship.
 const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
 function startRoyale(file: RoyaleFile): void {
   leaveHub();
@@ -2577,11 +2575,10 @@ function startRoyale(file: RoyaleFile): void {
   history.length = 0;
   thinking = false;
   selected = [];
-  order = [];
   royale = loadRoyale(file, (seats, seed) => new Royale(seats, seed));
   moveModes('pick');
   for (const control of [newGameButton, retryButton, goalButton, hintButton, exportButton, importButton, resultCard]) control.hidden = true;
-  lockButton.hidden = holdButton.hidden = false;
+  holdButton.hidden = false;
   fogRadius = 4.2;
   applyDeck(deckOf('royale'));
   refresh();
@@ -2591,7 +2588,7 @@ function leaveRoyale(): void {
   arena.visible = false;
   fogRadius = frame?.radius ?? RADIUS;
   for (const mesh of [plate, rim.near, rim.far]) mesh.visible = true;
-  lockButton.hidden = holdButton.hidden = true;
+  holdButton.hidden = true;
   delete document.body.dataset.royale;
 }
 // The arena in place of the board: the cells left, each seat's marbles, the selection and its targets.
@@ -2665,26 +2662,24 @@ function royaleHud(game: Royale): void {
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
   const view = { out: outSeats(game.board()), cracks: parseCracks(game.cracks()), standings: placed };
-  document.getElementById('hud')!.innerHTML = royaleHtml(parseLog(game.round_log()), order, view);
-  lockButton.disabled = end !== null || order.length === 0;
+  document.getElementById('hud')!.innerHTML = royaleHtml(parseLog(game.round_log()), view);
   holdButton.disabled = end !== null;
   backButton.hidden = !roomOf || end === null;
 }
-// A press on one of the player's marbles selects it, a press on a target picks that move as the order.
+// A press on one of the player's marbles selects it, a press on a target locks that move as the order and plays the
+// round (#611). Once the game is over a press does nothing.
 function pickRoyale(q: number, r: number): void {
   const game = royale!;
+  if (game.placement().length) return;
   if (seatAt(game.board()[cellIndex(q, r, ARENA)]!) === YOU) {
     selected = toggleSelection(selected, [q, r]);
-    order = [];
-  } else {
-    const mv = moveForClick(parseMoves(game.legal_orders(YOU)), selected, [q, r]);
-    if (mv) order = encodeMove(mv);
+    return refresh();
   }
-  refresh();
+  const mv = moveForClick(parseMoves(game.legal_orders(YOU)), selected, [q, r]);
+  if (mv) playRound(encodeMove(mv));
 }
 function playRound(mine: readonly number[]): void {
   royale!.resolve(roundOrders(royale!, mine));
-  order = [];
   selected = [];
   refresh();
 }
@@ -2693,7 +2688,6 @@ royaleButton.addEventListener('click', () => {
   if (online) return;
   startRoyale({ seed: crypto.getRandomValues(new Uint32Array(1))[0]!, rounds: [] });
 });
-lockButton.addEventListener('click', () => playRound(order));
 holdButton.addEventListener('click', () => playRound([]));
 royaleButton.disabled = false; // listener ready (#146)
 // Used by the browser checks to load a royale game file (#502).
