@@ -284,7 +284,7 @@ Hooks, from game-design section 7 (starting values):
 
 **Bots (FINAL).** A bot's order is a pure function of the round-start state and the seed, computed before the reveal. A bot cannot see human orders. Built in #498 (`royale::bot::order(state, seat, seed)`): it ejects a marble if it can, else it plays the move that best keeps its marbles off cracked and rim cells and near the centre, the seed breaking ties, and holds when no move beats staying put.
 
-**Anti-kingmaking check (TUNE).** In 1000 bot games, the final-two leader loses to a dying third player in under 1 game in 5, measured against option A as a baseline. `cargo run --release --example royale_sim` measures it (#498).
+**Anti-kingmaking check (TUNE).** In 10 000 bot games, the final-two leader loses to a dying third player in under 1 game in 5, measured against option A as a baseline. `cargo run --release --example royale_sim` measures it (#498). The dying third is the seat of the last three with the worst place, so two of them going out in the same void are ranked by the breach tie rule (#547).
 
 ## 11. Numbers index
 
