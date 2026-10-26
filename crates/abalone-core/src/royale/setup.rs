@@ -60,6 +60,7 @@ pub fn start(seats: usize) -> Result<Royale, RoyaleError> {
         ejections: vec![0; seats],
         touched: BTreeMap::new(),
         last_void: vec![0; seats],
+        eliminated: Vec::new(),
     })
 }
 

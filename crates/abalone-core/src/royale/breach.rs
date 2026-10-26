@@ -27,8 +27,8 @@ fn cracking_ring(round: u32) -> Option<i32> {
 
 impl Royale {
     /// End of a round: the cracked cells go void with their marbles, each credited to its last
-    /// toucher unless that is its owner, then the scheduled ring cracks, readable in
-    /// `board().cracks()` one round before it voids.
+    /// toucher unless that is its owner, and the seats left with none go out. Then the
+    /// scheduled ring cracks, readable in `board().cracks()` one round before it voids.
     pub(super) fn breach(&mut self) {
         let cracked = self.board.cracks().to_vec();
         if !cracked.is_empty() {
@@ -42,6 +42,15 @@ impl Royale {
                 }
                 self.touched.remove(&(q, r));
                 self.board.void(q, r);
+            }
+            // The seats this void puts out, worst first: a tie on the breach rule shares a place.
+            let key = |s: usize| (lost[s], self.ejections[s]);
+            let mut out: Vec<usize> = (0..self.seats)
+                .filter(|&s| lost[s] > 0 && self.is_out(s))
+                .collect();
+            out.sort_by_key(|&s| key(s));
+            for group in out.chunk_by(|&a, &b| key(a) == key(b)) {
+                self.eliminated.push(group.to_vec());
             }
             self.last_void = lost;
         }
@@ -103,6 +112,7 @@ mod tests {
             ejections: vec![0; seats],
             touched: BTreeMap::new(),
             last_void: vec![0; seats],
+            eliminated: Vec::new(),
         }
     }
 

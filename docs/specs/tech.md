@@ -291,7 +291,8 @@ answer: only a `Sync` does.
    `royale::start(seats)` gives the start position, `resolve_round(state, orders)` takes one
    `(seat, Move | Hold)` per seat in any order and returns the next state and the round log;
    `Royale::hash` is the state hash the peers compare. Since #496 each round ends with the hull
-   breach, and `Royale::winners` gives the winners once the game is over.
+   breach, and `Royale::winners` gives the winners once the game is over. Since #497
+   `Royale::standings` gives each seat its place and points (`royale/score.rs`).
 - **Who arbitrates?** Nobody has authority over the outcome, the pure function does. A
   **coordinator** (the host peer) exists only for liveness: it announces round start, collects
   the timeout decision and drives membership. If the coordinator lies about a deadline, peers

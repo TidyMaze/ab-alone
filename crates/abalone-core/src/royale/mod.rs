@@ -10,9 +10,11 @@ use crate::board::{Board, Cell};
 
 mod breach;
 mod round;
+mod score;
 mod setup;
 
 pub use round::{initiative, resolve_round, Order, Outcome, RoundLog, Turn};
+pub use score::Standing;
 pub use setup::{start, MAX_SEATS, MIN_SEATS};
 
 /// Marble colour of each seat, in seat order.
@@ -51,6 +53,8 @@ pub struct Royale {
     touched: BTreeMap<(i32, i32), usize>,
     /// Marbles each seat lost to the latest void, for the tie rule when it ends the game.
     last_void: Vec<usize>,
+    /// Seats out of the game in the order they went out, each entry the seats sharing a place.
+    eliminated: Vec<Vec<usize>>,
 }
 
 /// Marble colour of `seat`.
@@ -117,6 +121,7 @@ impl Royale {
         self.touched.hash(&mut hasher);
         self.board.cracks().hash(&mut hasher);
         self.last_void.hash(&mut hasher);
+        self.eliminated.hash(&mut hasher);
         hasher.finish()
     }
 }
@@ -155,6 +160,9 @@ mod tests {
         let mut voided = s.clone();
         voided.last_void[2] = 3;
         assert_ne!(s.hash(), voided.hash());
+        let mut out = s.clone();
+        out.eliminated.push(vec![1]);
+        assert_ne!(s.hash(), out.hash());
     }
 
     #[test]
