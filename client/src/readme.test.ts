@@ -18,4 +18,9 @@ describe('README.md', () => {
   it.each(boss_ids())('names the boss %s in "The game"', (id) => {
     expect(theGame).toContain(boss_name(id)!);
   });
+
+  it('marks Ranked as playable in "The game" (#711)', () => {
+    const rankedRow = theGame.split('\n').find((line) => line.includes('**Ranked**'));
+    expect(rankedRow).toContain('✅ playable');
+  });
 });

@@ -88,6 +88,9 @@ import { drawSkin, type Look } from './skinart';
 import { nextSkin, skinById } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
+import { DEFAULT_RATING } from './elo';
+import { findMatch, toleranceWindow } from './matchmaking';
+import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
@@ -1843,6 +1846,15 @@ function hud(extra = ''): void {
       .getElementById('hud')!
       .insertAdjacentHTML('beforeend', flatHudHtml({ side: engine.to_move(), status, glass: glassOf(), ejected, win, boss: boss ? flat : undefined }));
   }
+  if (rankedMode === '1v1') {
+    if (status !== 0 && !rankedDone) {
+      rankedDelta = settleRanked1v1(store, online!.side, status, Array.from(engine.board()).join(','), rankedOpponentRating).delta;
+      rankedDone = true;
+    }
+    const waiting = online?.presenceOf(3 - online.side) === 'waiting';
+    const queueWindow = waiting ? toleranceWindow(Date.now() - rankedQueuedAt) : undefined;
+    document.getElementById('hud')!.insertAdjacentHTML('beforeend', rankedHudHtml(loadRankedProfile(store).rating1v1, { queueWindow, delta: rankedDelta }));
+  }
   showResultCard();
 }
 
@@ -2780,6 +2792,11 @@ let offlineNotice = ''; // no connection: Play online is disabled, a game in pro
 let playReady = false;
 let onlineLine: OnlineStatus | undefined;
 let link: Transport | null = null; // the transport of the online room, closed by Back to the ship (#522)
+let rankedMode: RankedMode | null = null;
+let rankedQueuedAt = 0;
+let rankedDelta: number | undefined;
+let rankedDone = false;
+let rankedOpponentRating = DEFAULT_RATING;
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
 const inviteLabel = document.getElementById('invite-label')!;
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
@@ -2902,6 +2919,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
 }
 /** Opens a new room as its creator and shows its invite link: a co-op room with `coop` (#529), a versus room without. */
 function playOnline(coop?: CoopFight): void {
+  rankedMode = null;
   moveModes('pick');
   const room = newRoomId((b) => crypto.getRandomValues(b));
   inviteBox.value = inviteUrl(location.href, room, coop);
@@ -2912,6 +2930,28 @@ function playOnline(coop?: CoopFight): void {
   void goOnline(room, 1, coop);
 }
 document.getElementById('play-online')!.addEventListener('click', () => playOnline());
+const rankedButton = document.getElementById('ranked') as HTMLButtonElement;
+rankedButton.addEventListener('click', () => {
+  rankedDelta = undefined;
+  rankedDone = false;
+  rankedQueuedAt = Date.now();
+  if (royale) {
+    rankedMode = 'royale';
+    moveModes('pick');
+    hud();
+    return;
+  }
+  const rating = loadRankedProfile(store).rating1v1;
+  const matched = findMatch(
+    { peerId: 'self', rating, queuedAt: rankedQueuedAt },
+    [{ peerId: 'peer', rating: DEFAULT_RATING, queuedAt: rankedQueuedAt }],
+    rankedQueuedAt,
+  );
+  rankedOpponentRating = matched!.rating;
+  playOnline();
+  rankedMode = '1v1';
+  hud();
+});
 // Fight together (#530): the mode menu lists the bosses again, under it; picking one opens a co-op room against that
 // boss with a random seed, the creator in seat 1.
 const coopButton = document.getElementById('fight-together') as HTMLButtonElement;
@@ -3098,6 +3138,13 @@ function royaleHud(game: Royale): void {
   const shown = log && reveal ? { ...log, turns: log.turns.slice(0, shownAt(reveal.plan, reveal.ms)) } : log;
   const room = royaleNet && { names: royaleNet.names, you: me(), status: royaleStatus(royaleNet), left: royaleNet.left };
   document.getElementById('hud')!.innerHTML = royaleHtml(shown, { out: outSeats(board), cracks, standings: placed, ...room });
+  if (rankedMode === 'royale') {
+    if (placed.length > 0 && !rankedDone) {
+      rankedDelta = settleRankedRoyale(store, placed, me()).delta;
+      rankedDone = true;
+    }
+    document.getElementById('hud')!.insertAdjacentHTML('beforeend', rankedHudHtml(loadRankedProfile(store).ratingRoyale, { delta: rankedDelta }));
+  }
   holdButton.disabled = end !== null || !canOrder();
   royaleInviteButton.hidden = royaleNet !== null;
   backButton.hidden = !roomOf || end === null;
@@ -3286,7 +3333,7 @@ royaleInviteButton.addEventListener('click', () => {
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
-  playOnlineButton.disabled = coopButton.disabled = royaleInviteButton.disabled = state.disabled;
+  playOnlineButton.disabled = coopButton.disabled = rankedButton.disabled = royaleInviteButton.disabled = state.disabled;
   offlineNotice = state.notice;
   hud();
 }

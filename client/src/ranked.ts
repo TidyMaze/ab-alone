@@ -1,9 +1,11 @@
-import { DEFAULT_RATING, formatRating, getRankTier } from './elo';
+import { DEFAULT_RATING, formatRating, getRankTier, update1v1Elo, updateBattleRoyaleElo } from './elo';
+import { verifyMatchOutcome, type MatchWinner } from './matchmaking';
 
 export const RANKED_STORAGE_KEY = 'ab-alone.ranked';
 export const MAX_MATCH_HISTORY = 50;
 
 export type RankedMode = '1v1' | 'royale';
+export type RankedStore = Pick<Storage, 'getItem' | 'setItem'> | null;
 
 export interface RankedMatchRecord {
   readonly id: string;
@@ -31,11 +33,11 @@ export function defaultRankedProfile(): RankedProfile {
   };
 }
 
-export function loadRankedProfile(store: Storage): RankedProfile {
-  const raw = store.getItem(RANKED_STORAGE_KEY);
-  if (!raw) return defaultRankedProfile();
-
+export function loadRankedProfile(store: RankedStore): RankedProfile {
   try {
+    const raw = store?.getItem(RANKED_STORAGE_KEY);
+    if (!raw) return defaultRankedProfile();
+
     const parsed = JSON.parse(raw) as Partial<RankedProfile>;
     if (parsed && parsed.version === 1) {
       return {
@@ -46,14 +48,16 @@ export function loadRankedProfile(store: Storage): RankedProfile {
       };
     }
   } catch {
-    // Malformed JSON: fall through to default profile
+    // Malformed JSON or blocked storage: fall through to default profile
   }
 
   return defaultRankedProfile();
 }
 
-export function saveRankedProfile(store: Storage, profile: RankedProfile): void {
-  store.setItem(RANKED_STORAGE_KEY, JSON.stringify(profile));
+export function saveRankedProfile(store: RankedStore, profile: RankedProfile): void {
+  try {
+    store?.setItem(RANKED_STORAGE_KEY, JSON.stringify(profile));
+  } catch {}
 }
 
 export interface NewMatchInput {
@@ -66,7 +70,7 @@ export interface NewMatchInput {
   readonly opponentsCount: number;
 }
 
-export function recordRankedMatch(store: Storage, match: NewMatchInput): RankedProfile {
+export function recordRankedMatch(store: RankedStore, match: NewMatchInput): RankedProfile {
   const current = loadRankedProfile(store);
   const matchRecord: RankedMatchRecord = {
     id: match.id ?? `match_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -97,4 +101,71 @@ export function renderRankBadge(rating: number, compact = false): string {
   const cls = compact ? 'rank-badge rank-badge-compact' : 'rank-badge';
 
   return `<span class="${cls}" data-tier="${tier.name}" style="--tier-color: ${tier.badgeColor}" title="${tier.label} (${score})"><span class="rank-tier">${tier.label}</span><span class="rank-score">${score}</span></span>`;
+}
+
+/** Formats an Elo rating change with explicit sign (#711). */
+export function formatDelta(delta: number): string {
+  return `${delta >= 0 ? `+${delta}` : delta} Elo`;
+}
+
+/** Renders the ranked HUD line: rank badge, optional queue window, and optional post-match Elo delta (#711). */
+export function rankedHudHtml(rating: number, options: { queueWindow?: number; delta?: number } = {}): string {
+  const queue = options.queueWindow !== undefined ? ` <span class="rank-queue">Queue ±${options.queueWindow}</span>` : '';
+  const delta =
+    options.delta !== undefined
+      ? ` <span class="rank-delta" data-sign="${options.delta >= 0 ? 'up' : 'down'}">${formatDelta(options.delta)}</span>`
+      : '';
+  return `<div class="ranked">${renderRankBadge(rating)}${queue}${delta}</div>`;
+}
+
+/** Settles a finished 1v1 ranked match after verifying outcome reports and updates stored 1v1 Elo (#711). */
+export function settleRanked1v1(
+  store: RankedStore,
+  side: number,
+  status: number,
+  stateHash: string,
+  opponentRating = DEFAULT_RATING,
+): { profile: RankedProfile; delta: number } {
+  const current = loadRankedProfile(store);
+  const ourWinner: MatchWinner = status === 3 ? 'draw' : status === side ? 'reporter' : 'opponent';
+  const theirWinner: MatchWinner = status === 3 ? 'draw' : status === side ? 'opponent' : 'reporter';
+  verifyMatchOutcome(
+    { matchId: stateHash, reporterPeerId: 'self', opponentPeerId: 'peer', stateHash, winner: ourWinner },
+    { matchId: stateHash, reporterPeerId: 'peer', opponentPeerId: 'self', stateHash, winner: theirWinner },
+  );
+  const actualScore = status === 3 ? 0.5 : status === side ? 1 : 0;
+  const elo = update1v1Elo(current.rating1v1, opponentRating, actualScore);
+  const profile = recordRankedMatch(store, {
+    mode: '1v1',
+    delta: elo.deltaA,
+    newRating: elo.ratingA,
+    opponentsCount: 1,
+  });
+  return { profile, delta: elo.deltaA };
+}
+
+/** Settles a finished Battle Royale ranked match from final standings and updates stored Royale Elo (#711). */
+export function settleRankedRoyale(
+  store: RankedStore,
+  standings: readonly { seat: number; place: number }[],
+  you: number,
+  botRating = DEFAULT_RATING,
+): { profile: RankedProfile; delta: number } {
+  const current = loadRankedProfile(store);
+  const placements = standings.map((s) => ({
+    id: String(s.seat),
+    rating: s.seat === you ? current.ratingRoyale : botRating,
+    rank: s.place,
+  }));
+  const deltas = updateBattleRoyaleElo(placements);
+  const ours = deltas.get(String(you))!;
+  const myPlace = standings.find((s) => s.seat === you)!.place;
+  const profile = recordRankedMatch(store, {
+    mode: 'royale',
+    delta: ours.delta,
+    newRating: ours.newRating,
+    placement: myPlace,
+    opponentsCount: standings.length - 1,
+  });
+  return { profile, delta: ours.delta };
 }

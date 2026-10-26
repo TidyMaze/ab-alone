@@ -2,10 +2,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   defaultRankedProfile,
+  formatDelta,
   loadRankedProfile,
+  rankedHudHtml,
   recordRankedMatch,
   renderRankBadge,
   saveRankedProfile,
+  settleRanked1v1,
+  settleRankedRoyale,
   type RankedProfile,
 } from './ranked';
 
@@ -142,6 +146,66 @@ describe('ranked profile and badges (#687)', () => {
       expect(html).toContain('data-tier="diamond"');
       expect(html).toContain('1650');
       expect(html).toContain('Diamond');
+    });
+
+    it('handles null or throwing storage gracefully', () => {
+      expect(loadRankedProfile(null)).toEqual(defaultRankedProfile());
+      expect(() => saveRankedProfile(null, defaultRankedProfile())).not.toThrow();
+      const bad = {
+        getItem: () => {
+          throw new Error('blocked');
+        },
+        setItem: () => {
+          throw new Error('blocked');
+        },
+      };
+      expect(loadRankedProfile(bad)).toEqual(defaultRankedProfile());
+      expect(() => saveRankedProfile(bad, defaultRankedProfile())).not.toThrow();
+    });
+  });
+
+  describe('rankedHudHtml and match settlement (#711)', () => {
+    it('formats positive, zero and negative rating deltas', () => {
+      expect(formatDelta(16)).toBe('+16 Elo');
+      expect(formatDelta(0)).toBe('+0 Elo');
+      expect(formatDelta(-16)).toBe('-16 Elo');
+    });
+
+    it('renders the HUD line with badge, optional queue window and optional rating delta', () => {
+      expect(rankedHudHtml(1200)).toContain('class="ranked"');
+      expect(rankedHudHtml(1200, { queueWindow: 150 })).toContain('<span class="rank-queue">Queue ±150</span>');
+      expect(rankedHudHtml(1216, { delta: 16 })).toContain('<span class="rank-delta" data-sign="up">+16 Elo</span>');
+      expect(rankedHudHtml(1184, { delta: -16 })).toContain('<span class="rank-delta" data-sign="down">-16 Elo</span>');
+    });
+
+    it('settles a 1v1 ranked match (win, loss, draw) once state hashes agree', () => {
+      const win = settleRanked1v1(store, 1, 1, 'hash_1');
+      expect(win.delta).toBe(16);
+      expect(win.profile.rating1v1).toBe(1216);
+
+      const loss = settleRanked1v1(store, 1, 2, 'hash_2');
+      expect(loss.delta).toBeLessThan(0);
+      expect(loss.profile.rating1v1).toBe(1216 + loss.delta);
+
+      const beforeDraw = loss.profile.rating1v1;
+      const draw = settleRanked1v1(store, 2, 3, 'hash_3', beforeDraw);
+      expect(draw.delta).toBe(0);
+      expect(draw.profile.rating1v1).toBe(beforeDraw);
+    });
+
+    it('settles a Battle Royale ranked match from final standings', () => {
+      const standings = [
+        { seat: 0, place: 1 },
+        { seat: 1, place: 2 },
+        { seat: 2, place: 3 },
+        { seat: 3, place: 4 },
+        { seat: 4, place: 5 },
+        { seat: 5, place: 6 },
+      ];
+      const res = settleRankedRoyale(store, standings, 0);
+      expect(res.delta).toBeGreaterThan(0);
+      expect(res.profile.ratingRoyale).toBe(1200 + res.delta);
+      expect(res.profile.matches.at(-1)?.placement).toBe(1);
     });
   });
 });

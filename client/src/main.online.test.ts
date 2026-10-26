@@ -156,6 +156,55 @@ describe('Play online', () => {
     expect(data().opponent).toBe('waiting');
     expect(presence()).toBe('You are Black. Waiting for an opponent...');
   });
+
+  it('Ranked queues 1v1 with rank badge and tolerance window, and updates Elo rating on game end (#711)', async () => {
+    const game = await boot('?bot=off');
+    game.openModes();
+    const rankedBtn = byId<HTMLButtonElement>('ranked');
+    expect(rankedBtn.disabled).toBe(false);
+    rankedBtn.click();
+    expect(byId('mode-menu').hidden).toBe(true);
+    await until(game, () => data().seat === 'player');
+    expect(byId('hud').querySelector('.rank-badge')?.textContent).toContain('Silver');
+    expect(byId('hud').querySelector('.rank-queue')?.textContent).toBe('Queue ±100');
+
+    const white = await opponent(game.peer()!, game.room()!, 2);
+    await until(game, () => data().opponent === 'here');
+    expect(byId('hud').querySelector('.rank-queue')).toBeNull();
+
+    // End the game by threefold repetition (draw -> +0 Elo recorded in ranked profile)
+    const there: Axial[][] = [[[0, 2], [0, 1]], [[0, -2], [0, -1]], [[0, 1], [0, 2]], [[0, -1], [0, -2]]];
+    for (let ply = 0; ply < 8; ply += 2) {
+      const [mine, theirs] = [there[ply % 4]!, there[(ply + 1) % 4]!];
+      click(game, mine[0]!, mine[1]!);
+      await until(game, () => white.session.signedLog.length === ply + 1);
+      await white.play(theirs[0]!, theirs[1]!);
+      await until(game, () => game.hook('__plies') === ply + 2);
+      game.frame(5000);
+    }
+    expect(byId('hud').querySelector('.rank-delta')?.textContent).toBe('+0 Elo');
+    expect(JSON.parse(localStorage.getItem('ab-alone.ranked')!).matches).toHaveLength(1);
+  });
+
+  it('Ranked in Battle royale shows rank badge and updates Battle Royale Elo on placement (#711)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    game.openModes();
+    byId('battle-royale').click();
+    game.openModes();
+    byId('ranked').click();
+    expect(byId('hud').querySelector('.rank-badge')?.textContent).toContain('Silver');
+    // Load a finished royale state via __royale hook while in ranked royale mode
+    const { Royale } = await import('abalone-wasm');
+    const r = new Royale(6, 7);
+    const rounds: number[][] = [];
+    while (r.placement().length === 0) {
+      r.resolve(new Int32Array());
+      rounds.push([]);
+    }
+    (window as unknown as { __royale(f: { seed: number; rounds: number[][] }): void }).__royale({ seed: 7, rounds });
+    expect(byId('hud').querySelector('.rank-delta')?.textContent).toMatch(/^[+-]\d+ Elo$/);
+    expect(JSON.parse(localStorage.getItem('ab-alone.ranked')!).matches[0].mode).toBe('royale');
+  });
 });
 
 describe('Rematch', () => {
