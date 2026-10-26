@@ -72,7 +72,7 @@ test('The Rail Yard: an announced train counts down, passes, sweeps both sides o
   await quiet(page, 1); // the player's 7th move: the train passes
   await expect(body).toHaveAttribute('data-trains', '0');
   await expect(body).toHaveAttribute('data-passing', '0');
-  expect(await outPips(page)).toEqual([3, 3]); // 3 boss marbles for the player, 3 of the player's for the boss
+  expect(await outPips(page)).toEqual([3, 2]); // 3 boss marbles for the player, 2 of the player's for the boss (the first quiet move left the line)
   await expect(page.locator('#hud .notch.active')).toHaveText('P2'); // after 3 ejections
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('railyard-swept.png') });
