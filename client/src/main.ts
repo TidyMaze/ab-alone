@@ -127,9 +127,8 @@ import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
 import { loadProgress, recordWin, saveProgress } from './progress';
-import { canEnter, roomAt, roomsOf, step, type Spot as HubSpot } from './hub';
-import { arrowCell, bumpLine, HUB_BOARD, hubHtml } from './hubview';
-import { createDoorGlyph } from './hubart';
+import { roomAt, type Spot as HubSpot } from './hub';
+import { HubController } from './controller';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
@@ -1158,7 +1157,7 @@ function drawFrame(board: ArrayLike<number>): void {
 }
 // The turn on the rim, at once, no fade (world.md section 8). Clear board keeps it: it is game information.
 function lightRim(): void {
-  const light = hubAt ? null : rimLight(engine.status(), engine.to_move(), glassOf()); // no game on in the hub (#521)
+  const light = hub ? null : rimLight(engine.status(), engine.to_move(), glassOf()); // no game on in the hub (#521)
   sceneRenderer.lightRim(light);
   document.body.dataset.rim = light?.end ?? 'off';
 }
@@ -1226,10 +1225,8 @@ function applyPalette(): void {
 }
 applyPalette();
 let hover: Axial | null = null;
-let hubAt: HubSpot | null = null; // where the marble stands while the hub is shown (#521), else null
-let hubHover: Axial | null = null; // cell hovered in the hub (#628), else null
+let hub: HubController | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
-let bumped = ''; // Tally's line after the marble bumped a locked lift, until the next roll (#523)
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
@@ -1563,9 +1560,9 @@ let targets: ReturnType<typeof groupTargets> = []; // the cells drawn with a tar
 
 function hud(extra = ''): void {
   backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
-  if (hubAt) {
+  if (hub) {
     delete document.body.dataset.over; // no end light over the hub
-    document.getElementById('hud')!.innerHTML = hubHtml(hubAt, bumped, hubHover);
+    document.getElementById('hud')!.innerHTML = hub.hud();
     return;
   }
   if (royale) return royaleHud(royale);
@@ -1652,7 +1649,11 @@ function hud(extra = ''): void {
 }
 
 function refresh(): void {
-  if (hubAt) return drawHub(hubAt);
+  if (hub) {
+    hub.draw(sceneRenderer, discs, sfx, loadProgress(store).beaten, marbleMesh(glassOf()), drawFrame, lightRim);
+    hud();
+    return;
+  }
   if (royale) return drawRoyale(royale);
   const board = showing()?.board ?? engine.board();
   drawFrame(board);
@@ -1860,37 +1861,6 @@ function animatePasses(now: number): void {
   }
 }
 
-// The hub map (#521): the board's discs on the map cells only, in a frame shrunk to the map, a pale ring on each room
-// and the glass marble on its cell. No rim light, phase notch or tally mark: no game is on. A lift wears a near-black
-// arrow toward its deck, as a target arrow reads 3:1 on the lit cell, with a bar across while it is locked (#523).
-function drawHub(at: HubSpot): void {
-  const { beaten } = loadProgress(store);
-  const lifts: string[] = [];
-  drawFrame(HUB_BOARD);
-  lightRim();
-  notches.clear();
-  for (const group of tallies) group.clear();
-  discs.forEach((disc, i) => (disc.visible = (HUB_BOARD[i] ?? VANISHED) !== VANISHED));
-  marbles.clear();
-  marbleAt.clear();
-  ghosts.clear();
-  sfx.setTension(0);
-  for (const { cell, door } of roomsOf(at.deck)) {
-    const p = axialTo3D(...cell);
-    const open = door.kind === 'lift' && canEnter(door, beaten);
-    const glyph = createDoorGlyph(door, { open, cell });
-    glyph.position.set(p.x, 0.02, p.z);
-    marbles.add(glyph);
-    if (door.kind === 'lift') lifts.push(`${door.to} ${open ? 'open' : 'locked'}`);
-  }
-  document.body.dataset.lifts = lifts.join(','); // read by the e2e tests
-  const p = axialTo3D(...at.cell);
-  const marble = marbleMesh(glassOf());
-  marble.position.set(p.x, 0.36, p.z);
-  marbles.add(marble);
-  document.body.dataset.hub = `${at.deck} ${at.cell[0]},${at.cell[1]}`; // read by the e2e tests
-  hud();
-}
 
 function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   if (royale) return; // no ghost over the arena
@@ -1929,7 +1899,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 }
 
 function click(q: number, r: number): void {
-  if (hubAt) return walk([q, r]);
+  if (hub) return walk([q, r]);
   if (royale) return pickRoyale(q, r);
   if (engine.status() !== 0) return; // over: no move, no selection (#282)
   if (thinking || online?.role === 'spectator') return;
@@ -2002,13 +1972,8 @@ canvas.addEventListener('pointermove', (e) => {
     applyView();
     return;
   }
-  if (hubAt) {
-    const next = cellAt(e);
-    if (next === hubHover) return;
-    hubHover = next;
-    if (hubHover) document.body.dataset.hubHover = `${hubHover[0]},${hubHover[1]}`;
-    else delete document.body.dataset.hubHover;
-    hud();
+  if (hub) {
+    if (hub.onPointerMove(cellAt(e))) hud();
     return;
   }
   const next = cellAt(e);
@@ -2036,9 +2001,7 @@ function release(e: PointerEvent): void {
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
 canvas.addEventListener('pointerleave', () => {
-  if (hubAt && hubHover) {
-    hubHover = null;
-    delete document.body.dataset.hubHover;
+  if (hub && hub.onPointerLeave()) {
     hud();
   }
 });
@@ -2298,7 +2261,7 @@ newGameButton.addEventListener('click', () => {
   if (press.start) newGame();
 });
 function newGame(): void {
-  if (hubAt) {
+  if (hub) {
     leaveHub();
     applyDeck(deckOf('local'));
   }
@@ -2395,27 +2358,22 @@ shipButton.addEventListener('click', () => {
 shipButton.disabled = false; // listener ready (#146)
 function enterHub(at: HubSpot): void {
   roomOf = null;
-  bumped = '';
-  hubHover = null;
-  delete document.body.dataset.hubHover;
-  hubAt = at;
+  hub = new HubController(at);
+  hub.enter(at);
   evalBar.hidden = hintButton.hidden = exportButton.hidden = importButton.hidden = true; // no game on in the hub: a new game shows them again (#583, #589)
   analyst.stop();
   applyDeck(at.deck);
   refresh();
 }
 function walk(to: Axial): void {
-  hubHover = null;
-  delete document.body.dataset.hubHover;
   const progress = loadProgress(store);
-  const from = hubAt!;
-  hubAt = step(from, to, progress.beaten);
-  bumped = bumpLine(from, to, progress.beaten);
-  if (hubAt === from) return hud(); // not a neighbour, or a locked lift
-  saveProgress(store, { ...progress, at: hubAt });
-  if (hubAt.deck !== deck) applyDeck(hubAt.deck);
+  const deck = hub!.at.deck;
+  const { stepped, at } = hub!.onCellClick(to, progress.beaten);
+  if (!stepped) return hud();
+  saveProgress(store, { ...progress, at });
+  if (at.deck !== deck) applyDeck(at.deck);
   refresh();
-  enterRoom(hubAt);
+  enterRoom(at);
 }
 // The doors (#522): rolling onto a boss door or a table starts the same game as its mode menu entry, and the room is
 // kept for Back to the ship. A terminal opens its lore entry in the reader, and Esc leaves it to the hub on the same
@@ -2444,15 +2402,12 @@ backButton.addEventListener('click', () => {
   enterHub(roomOf!);
 });
 function leaveHub(): void {
-  hubAt = null;
-  hubHover = null;
-  delete document.body.dataset.hubHover;
-  delete document.body.dataset.hub;
-  delete document.body.dataset.lifts;
+  hub?.exit();
+  hub = null;
 }
 addEventListener('keydown', (e) => {
   // An open terminal reader pages by them, a text field moves its caret.
-  const to = hubAt && !reading && !(e.target instanceof HTMLInputElement) ? arrowCell(hubAt.cell, e.key) : null;
+  const to = hub && !(e.target instanceof HTMLInputElement) ? hub.onKeyDown(e.key, Boolean(reading)) : null;
   if (!to) return;
   e.preventDefault(); // no page scroll
   walk(to);
@@ -2505,7 +2460,7 @@ importFile.addEventListener('change', async () => {
   importFile.value = ''; // so picking the same file again is a change too
   if (!file) return;
   const read = await readGameFile(file, () => new Engine());
-  if (online || fight || hubAt) return; // the player left for another game, or the hub, while the file was read
+  if (online || fight || hub) return; // the player left for another game, or the hub, while the file was read
   if ('refused' in read) return hud(` · ${read.refused}`);
   engine = read.engine;
   history.length = 0;
@@ -3084,7 +3039,7 @@ refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 document.body.appendChild(renderer.domElement);
-if (!hubAt) void botTurn(); // a resumed game saved while the bot was thinking
+if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw = { start: -Infinity, cost: 0 };
 let draws = 0;
 let drawAsked = false;
