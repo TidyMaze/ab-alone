@@ -10,6 +10,7 @@ async function ship(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Ship' }).click();
 }
 
+/** A mouse click on a cell, through the page's raycast. */
 async function clickCell(page: Page, q: number, r: number): Promise<void> {
   const { x, y } = await page.evaluate(([q, r]) => (window as any).__cellToScreen(q, r), [q, r]);
   await page.mouse.click(x, y);
@@ -30,9 +31,12 @@ test('the marble walks through 6 rooms of the Mess, and a reload lands it in the
     [1, 1, 'Terminal'],
     [-2, 1, 'Online table'],
   ];
-  const path: [number, number][] = [[1, 0], [2, -1], [2, 0], [1, 1], [0, 2], [-1, 2], [-2, 2], [-2, 1]];
+  // One mouse click, then the same click without the raycast and the frames of a mouse click (__click), to stay fast.
+  await clickCell(page, 1, 0);
+  await expect(body).toHaveAttribute('data-hub', 'mess 1,0');
+  const path: [number, number][] = [[2, -1], [2, 0], [1, 1], [0, 2], [-1, 2], [-2, 2], [-2, 1]];
   for (const [q, r] of path) {
-    await clickCell(page, q, r);
+    await page.evaluate(([q, r]) => (window as any).__click(q, r), [q, r]);
     await expect(body).toHaveAttribute('data-hub', `mess ${q},${r}`);
     const room = rooms.find(([rq, rr]) => rq === q && rr === r);
     if (room) await expect(hud).toContainText(room[2]);
