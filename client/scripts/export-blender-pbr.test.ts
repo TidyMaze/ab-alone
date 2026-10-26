@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const PBR_DIR = join(__dirname, '../public/assets/pbr');
+const PBR_DIR = join(__dirname, '../textures/pbr');
 
 const EXPECTED_PBR_MAPS = [
   // Bulkhead
@@ -25,7 +25,7 @@ const EXPECTED_PBR_MAPS = [
 ];
 
 describe('PBR textures for spaceship bay', () => {
-  it('has all 12 generated PBR maps in public/assets/pbr', () => {
+  it('has all 12 generated PBR maps in textures/pbr, the sources of their KTX2 (#700)', () => {
     for (const { name, minKb, maxKb } of EXPECTED_PBR_MAPS) {
       const filePath = join(PBR_DIR, name);
       expect(existsSync(filePath)).toBe(true);

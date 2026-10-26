@@ -52,7 +52,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
   // Bug #609: it took 20 s on a loaded machine. Comparing the files is cheap, it must stay well under a second: hashes,
   // not a deep equality over every byte.
   it.each(ASSET_NAMES as string[])('keeps the committed %s identical to the generator output', (name) => {
-    expect(sha(readFileSync(new URL(`../public/assets/${name}`, import.meta.url)))).toBe(sha(assets.get(name)!));
+    expect(sha(readFileSync(new URL(`../textures/${name}`, import.meta.url)))).toBe(sha(assets.get(name)!));
   }, 1_000);
 
   // docs/specs/art.md section 2: the shell's ridge normal map, 256 px at most, 64 KB at most (#293).
@@ -209,7 +209,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     expect(total).toBeLessThan(BUDGET_BYTES);
   });
 
-  it('writes every asset file to public/assets/ when run as a script', async () => {
+  it('writes every asset file to textures/ when run as a script', async () => {
     const written = new Map<string, Buffer>();
     vi.doMock('node:fs', async (importOriginal) => ({
       ...(await importOriginal<typeof import('node:fs')>()),
@@ -228,7 +228,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
       vi.doUnmock('node:fs');
       spy.mockRestore();
     }
-    const dir = fileURLToPath(new URL('../public/assets/', import.meta.url));
+    const dir = fileURLToPath(new URL('../textures/', import.meta.url));
     expect(hashes(written)).toEqual(new Map([...hashes(assets)].map(([n, h]) => [dir + n, h])));
     expect(log).toHaveLength(written.size); // one line per file
   });

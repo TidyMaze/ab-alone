@@ -16,15 +16,18 @@ const BUILD: Record<string, number> = {
   'assets/index-CJ7x67H-.css': 4,
   'assets/abalone_wasm_bg-eZ6LyWCB.wasm': 8,
   'icons/icon-192.png': 16,
-  'assets/backdrop.png': 32, // shared texture
-  'assets/deck-albedo.png': 64, // shared texture, not a deck
-  'assets/deck-mess.png': 128,
-  'assets/deck-mess-normal.png': 256,
-  'assets/deck-cargo.png': 512,
-  'assets/deck-cargo-normal.png': 1024,
+  'assets/backdrop.ktx2': 32, // shared texture
+  'assets/deck-albedo.ktx2': 64, // shared texture, not a deck
+  'assets/deck-mess.ktx2': 128,
+  'assets/deck-mess-normal.ktx2': 256,
+  'assets/deck-cargo.ktx2': 512,
+  'assets/deck-cargo-normal.ktx2': 1024,
   'assets/bot.worker-Bd2o7-m7.js': 2048, // loads with the first bot move, not on the first screen
   'manifest.webmanifest': 4096,
   'sw.js': 8192,
+  'assets/basis_transcoder-o4Hde_L7.js': 16384, // the KTX2 transcoder, for the first textures
+  'assets/basis_transcoder-VXdx5NbI.wasm': 32768,
+  'assets/pbr/grate-normal.ktx2': 65536, // the bay loads after the page (#661)
 };
 
 describe('measure', () => {
@@ -32,13 +35,13 @@ describe('measure', () => {
     const { parts, sources } = measure(BUILD);
     expect(sources).toEqual([]);
     expect(parts).toEqual([
-      { name: 'First screen', bytes: 1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256, budget: 5 * MB },
+      { name: 'First screen', bytes: 1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 16384 + 32768, budget: 5 * MB },
       { name: 'Deck mess', bytes: 128 + 256, budget: 15 * MB },
       { name: 'Deck cargo', bytes: 512 + 1024, budget: 15 * MB },
       { name: 'Deck furnace', bytes: 0, budget: 15 * MB },
       { name: 'Deck chapel', bytes: 0, budget: 15 * MB },
       { name: 'Deck bridge', bytes: 0, budget: 15 * MB },
-      { name: 'Site', bytes: 16383, budget: 250 * MB },
+      { name: 'Site', bytes: 131071, budget: 250 * MB },
     ]);
     expect(BUDGETS).toEqual({ firstScreen: 5 * MB, deck: 15 * MB, site: 250 * MB });
   });
@@ -98,12 +101,12 @@ describe('main', () => {
 
   it('prints the table of the gzipped sizes and passes under budget', () => {
     const page = 'a'.repeat(1000);
-    const { out, errors, exit } = build({ 'index.html': page, 'assets/deck-mess.png': 'mess' });
+    const { out, errors, exit } = build({ 'index.html': page, 'assets/deck-mess.ktx2': 'mess' });
     main(dir);
     const html = gzipSync(page).length;
     const mess = gzipSync('mess').length;
     expect(out).toEqual([
-      toMarkdown(measure({ 'index.html': html, 'assets/deck-mess.png': mess }).parts, []),
+      toMarkdown(measure({ 'index.html': html, 'assets/deck-mess.ktx2': mess }).parts, []),
     ]);
     expect(errors).toEqual([]);
     expect(exit).not.toHaveBeenCalled();

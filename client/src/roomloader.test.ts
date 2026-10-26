@@ -65,11 +65,13 @@ describe('roomloader PBR pipeline', () => {
     expect(pbr!.albedo.wrapS).toBe(THREE.RepeatWrapping);
     expect(pbr!.albedo.repeat.x).toBe(3);
     expect(pbr!.normal.wrapS).toBe(THREE.RepeatWrapping);
-    expect(mockLoader.loadAsync).toHaveBeenCalledTimes(4);
-
-    // Test non-standard prefix with png albedo fallback
-    const pbrCustom = await loadPbrMaterial(mockLoader, '/assets/pbr/', 'custom-hull');
-    expect(pbrCustom).not.toBeNull();
+    // Every map ships as KTX2 (#700).
+    expect(vi.mocked(mockLoader.loadAsync).mock.calls.map(([url]) => url)).toEqual([
+      '/assets/pbr/bulkhead-albedo.ktx2',
+      '/assets/pbr/bulkhead-normal.ktx2',
+      '/assets/pbr/bulkhead-roughness.ktx2',
+      '/assets/pbr/bulkhead-displacement.ktx2',
+    ]);
   });
 
   it('returns null if any texture fails to load in loadPbrMaterial', async () => {

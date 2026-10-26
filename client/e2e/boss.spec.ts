@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
 import { openModes } from './modes';
@@ -49,6 +50,9 @@ const topContrasts = async (page: Page, cells: [number, number][], path?: string
 // played so far. The clicks that open the fight are the gesture that starts the audio.
 const tellCues = (page: Page) => page.evaluate(() => (window as any).__tellCues()) as Promise<string[]>;
 
+// The source of the decal: the page loads it as KTX2 (#700), which no canvas reads.
+const CRACK_DECAL = readFileSync(new URL('../textures/crack-decal.png', import.meta.url)).toString('base64');
+
 // #355: The Hull's crack decal reads 3:1 on its cell (world.md section 5, Tell marks). Two screenshots, the decal shown
 // then hidden: at each texel of crack-decal.png inside a crack line, in the ring round the marble, the contrast (WCAG 2)
 // of the drawn crack against the steel under it. A point whose pixel does not change is hidden (by a shell, a tick, the
@@ -71,7 +75,7 @@ const crackContrast = async (
     hidden = await page.screenshot();
   }
   const pairs: [RGB, RGB][] = await page.evaluate(
-    async ([a, b, cq, cr]) => {
+    async ([a, b, cq, cr, decalPng]) => {
       (window as any).__crackDecalShown(true); // shown again, in the same call to the page (#431)
       const pixels = async (src: string) => {
         const img = new Image();
@@ -89,7 +93,7 @@ const crackContrast = async (
         return { w: img.width, at };
       };
       const [shownPx, hiddenPx] = await Promise.all([a, b].map((png) => pixels(`data:image/png;base64,${png}`)));
-      const decal = await pixels('assets/crack-decal.png');
+      const decal = await pixels(`data:image/png;base64,${decalPng}`);
       const size = decal.w, CELL = 0.46; // the decal covers the disc, image x and y along the world x and z
       const line = (x: number, y: number) => {
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (decal.at(x + dx, y + dy)[0]! < 250) return false;
@@ -110,7 +114,7 @@ const crackContrast = async (
       }
       return out;
     },
-    [shown.toString('base64'), hidden.toString('base64'), q, r] as const,
+    [shown.toString('base64'), hidden.toString('base64'), q, r, CRACK_DECAL] as const,
   );
   const ratios = pairs.map(([crack, steel]) => contrastRatio(crack, steel));
   return { shown: ratios.length, reading: ratios.filter((ratio) => ratio >= 3).length };
