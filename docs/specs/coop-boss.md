@@ -25,7 +25,8 @@ go **player A, boss, player B, boss, player A...**:
 - A seat may move only on its own human ply. A move from the other seat, or from a spectator, is
   refused as `not-their-turn`, like a move out of turn in versus.
 - Either player may move any Black marble. Nobody owns a group of marbles.
-- The HUD says **Your turn** or **Partner's turn** on the human plies, and the boss turn as in solo.
+- The HUD says **Your turn** or **Partner's turn** on the human plies, and the boss turn as in solo. The status line
+  names the partner, never a colour, and the result reads Victory or Defeat as in solo (ui.md section 4, #530).
 - The rotation lives in `client/src/coop.ts`: the judge of a co-op room tells the session which seat
   is to move (`Judge.mover`, #527).
 
@@ -54,8 +55,8 @@ Peers on different engine versions would compute different boss replies, so they
 
 ## 4. Invite link
 
-The creator picks the boss and a random unsigned 32-bit seed when it opens the room. The link
-carries them next to the room id, in this order:
+The creator picks the boss with Fight together in the mode menu (ui.md section 4, #530), and the page draws a random
+unsigned 32-bit seed when it opens the room. The link carries them next to the room id, in this order:
 
 ```
 <page>#room=<room>&boss=<boss id>&seed=<seed>

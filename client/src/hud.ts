@@ -16,14 +16,15 @@ export interface HudState {
   end?: EndBanner; // once over: the end banner (#282), replaces the turn line text
   rematch?: string; // online games only, once over: who asked for a rematch (rematchText)
   tally?: string; // Tally's line at the start of a match, '' or absent once the first move is made (#294)
+  turn?: string; // co-op, a human ply: Your turn or Partner's turn (coopTurn) in place of "Black to move" (#530)
 }
 
 const pips = (out: number, slots: number): string =>
   Array.from({ length: slots }, (_, i) => `<span class="pip${i < out ? ' out' : ''}"></span>`).join('');
 
-export function hudHtml({ side, status, glass, score, ejected, win, note, online, rematch, end, tally = '' }: HudState): string {
+export function hudHtml({ side, status, glass, score, ejected, win, note, online, rematch, end, tally = '', turn: ply }: HudState): string {
   const over = status !== 0;
-  const turn = end ? end.title : over ? (status === 3 ? 'Draw' : `${sideName(status, glass)} wins`) : `${sideName(side, glass)} to move`;
+  const turn = end ? end.title : over ? (status === 3 ? 'Draw' : `${sideName(status, glass)} wins`) : (ply ?? `${sideName(side, glass)} to move`);
   const marker = `<span class="marker ${over ? 'over' : side === 1 ? 'black' : 'white'}" aria-hidden="true"></span>`;
   return (
     `<div class="turn">${marker}<span>${turn}</span></div>` +

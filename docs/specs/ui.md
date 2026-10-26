@@ -92,15 +92,15 @@ name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
-Game modes (#357): the buttons that start a game mode, Play online, Battle royale (#502), Boss fight (with the boss
-list it opens under it), Daily challenge and Ship (the hub, game-design.md section 3.5, #521), live in one menu behind
-an icon-only button, a play triangle of the icon set, labelled "Game modes" (`aria-label`, `title`, `aria-expanded`,
-`aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their
+Game modes (#357): the buttons that start a game mode, Play online, Fight together (with the boss list it opens under
+it, #530), Battle royale (#502), Boss fight (with the boss list it opens under it), Daily challenge and Ship (the hub,
+game-design.md section 3.5, #521), live in one menu behind an icon-only button, a play triangle of the icon set,
+labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their
 names. The button is the last of the column and the open menu lies under it, so opening or closing it moves no other
 button. Held upright, the menu starts a new row under the buttons, its items side by side, the bosses in line after
-Boss fight. It closes like the settings menu, on Escape, on a press outside and on its button again, and once a mode
-starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at least 44 px
-tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Lock order and Hold, the invite link)
+Boss fight or Fight together. It closes like the settings menu, on Escape, on a press outside and on its button again,
+and once a mode starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at
+least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Lock order and Hold, the invite link)
 stay in the column, outside the menu.
 
 ```
@@ -128,8 +128,8 @@ stay in the column, outside the menu.
   it in a boss fight too, where the banner replaces the boss block's own Victory or Defeat line). The
   result is read from the viewer's side: "You win" / "You lose" against the bot and online, "Black
   wins" / "White wins" in hot-seat and for a spectator, "Draw", and "Victory" / "Defeat" in a boss or
-  daily fight, where a draw is a "Defeat" (rules.md section 10.3). The reason line is in TALLY's tone,
-  built by `client/src/endbanner.ts`: "6 out. The books balance.", "6 out. Tally strikes your name.",
+  daily fight, a co-op one included (#530), where a draw is a "Defeat" (rules.md section 10.3). The reason line is in
+  TALLY's tone, built by `client/src/endbanner.ts`: "6 out. The books balance.", "6 out. Tally strikes your name.",
   "6 out. The seat is empty." (10 against the Choir), "6 out. The seat holds.", "Same position three
   times. Tally closes the page.", "100 plies, nothing ejected. Tally calls it even.", and against a boss
   "Repeated 3 times: a defeat." or "100 plies idle: a defeat.". The one action offered is the button
@@ -167,6 +167,13 @@ stay in the column, outside the menu.
   not any peer. A dot before the text repeats the state (accent here, hazard waiting, danger
   disconnected, muted watching); the words alone carry it. While the creator waits, the invite
   link below the buttons has a caption and the accent border.
+- **Fight together (#530).** An item of the mode menu under Play online. It opens the list of the bosses of Boss
+  fight under it; picking one opens a co-op room against that boss with a random seed (coop-boss.md), and the invite
+  link's caption reads "Invite link: send it to your partner". Both seats play Black, so the HUD names the partner,
+  never a colour. On a seated player's human ply the turn line reads "Your turn" or "Partner's turn", on the boss
+  turn "White to move" as in solo. The status line reads "Waiting for a partner...", "Joining the fight...", "Your
+  partner is here.", "Your partner is disconnected." or "Room is full, watching". Strings kept verbatim for the e2e
+  tests. It is greyed offline, like Play online.
 - **Rematch.** When an online game is over, each seated player sees a Rematch button under
   Reset view, spectators do not. It is greyed once pressed, or while the opponent is
   disconnected. One more line under the status line says who asked, kept verbatim for the e2e
@@ -184,7 +191,7 @@ stay in the column, outside the menu.
   no item over the board, #575), starts the daily fight (game-design.md section 7.6). During
   it, the boss block shows one muted line under the phase notches, kept verbatim for the e2e
   tests: "Daily challenge 2026-10-24 · attempt 3" (#195).
-- **Battle royale (#502).** An item of the mode menu under Play online. It starts an offline battle royale, the
+- **Battle royale (#502).** An item of the mode menu under Fight together. It starts an offline battle royale, the
   player against 5 bots on the radius 8 arena (rules.md section 10.4), at the Furnace, the arena drawn at half the
   cell spacing in the room of the board, each seat's marbles in its shell tint. New game, Hint, the evaluation bar and
   Export game, Import game go away, as in a boss fight. The player selects marbles and presses a target as for a
