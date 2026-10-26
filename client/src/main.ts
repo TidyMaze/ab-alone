@@ -1249,6 +1249,7 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
+    document.body.dataset.bay = 'ready'; // the room is complete: the browser checks of a still scene wait for it (#661)
   }
 };
 (window as unknown as Record<string, unknown>).__mountBay = mountBay;
