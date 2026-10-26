@@ -1,6 +1,85 @@
 //! Hull breach: from round 12, a ring of the arena cracks at the end of a round and goes void
 //! at the end of the next one, with the marbles on it (rules.md section 10.4).
 
+use super::{seat_of, Royale};
+
+/// Round at the end of which each ring (radius) cracks: every 6 rounds from round 12 down to
+/// radius 3, then every 3 rounds down to the centre cell, so every game ends by round 52.
+const SCHEDULE: [(u32, i32); 9] = [
+    (12, 8),
+    (18, 7),
+    (24, 6),
+    (30, 5),
+    (36, 4),
+    (42, 3),
+    (45, 2),
+    (48, 1),
+    (51, 0),
+];
+
+/// Ring that cracks at the end of `round`, if any.
+fn cracking_ring(round: u32) -> Option<i32> {
+    SCHEDULE
+        .iter()
+        .find(|&&(at, _)| at == round)
+        .map(|&(_, ring)| ring)
+}
+
+impl Royale {
+    /// End of a round: the cracked cells go void with their marbles, each credited to its last
+    /// toucher unless that is its owner, then the scheduled ring cracks, readable in
+    /// `board().cracks()` one round before it voids.
+    pub(super) fn breach(&mut self) {
+        let cracked = self.board.cracks().to_vec();
+        if !cracked.is_empty() {
+            let mut lost = vec![0; self.seats];
+            for ((q, r), _) in cracked {
+                if let Some(owner) = self.board.get(q, r).and_then(seat_of) {
+                    lost[owner] += 1;
+                    if let Some(toucher) = self.touched.get(&(q, r)).filter(|&&t| t != owner) {
+                        self.ejections[*toucher] += 1;
+                    }
+                }
+                self.touched.remove(&(q, r));
+                self.board.void(q, r);
+            }
+            self.last_void = lost;
+        }
+        let radius = self.board.radius();
+        let cracks = cracking_ring(self.round).map_or(Vec::new(), |ring| {
+            (-radius..=radius)
+                .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
+                .filter(|&(q, r)| q.abs().max(r.abs()).max((q + r).abs()) == ring)
+                .filter(|&(q, r)| self.board.get(q, r).is_some())
+                .map(|c| (c, 1))
+                .collect()
+        });
+        self.board.set_cracks(cracks);
+    }
+
+    /// Seats sharing first place once the game is over, `None` while two seats or more have
+    /// marbles. The last seat with marbles wins. When a void takes the last marbles of every
+    /// seat left, the most marbles held before it wins, then the most ejections credited; a tie
+    /// still standing shares the place.
+    pub fn winners(&self) -> Option<Vec<usize>> {
+        let left: Vec<usize> = (0..self.seats).filter(|&s| !self.is_out(s)).collect();
+        if left.len() > 1 {
+            return None;
+        }
+        if !left.is_empty() {
+            return Some(left);
+        }
+        let key = |s: usize| (self.last_void[s], self.ejections[s]);
+        let best = (0..self.seats).map(key).max();
+        Some((0..self.seats).filter(|&s| Some(key(s)) == best).collect())
+    }
+
+    /// The game is over: at most one seat has marbles. No round can be resolved any more.
+    pub fn is_over(&self) -> bool {
+        self.winners().is_some()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -120,8 +199,8 @@ mod tests {
         }
         let mut cracks = Vec::new();
         let mut left = Vec::new();
-        for _ in 42..=49 {
-            assert_eq!(s.winners(), None, "round {}", s.round());
+        for round in 42..=49 {
+            assert_eq!(s.winners(), None, "round {round}");
             s = hold(&s);
             cracks.push(s.board().cracks().to_vec());
             left.push(cells(&s).len());

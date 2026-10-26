@@ -51,11 +51,15 @@ pub fn initiative(round: u32, seats: usize) -> Vec<usize> {
 /// Plays one round. `orders` holds at most one order per seat, in any order: the orders are
 /// applied one by one in initiative order, each validated against the state the orders before
 /// it produced. An illegal order fizzles, a seat with no order holds, and a seat with no marble
-/// left at its turn is out, its order ignored.
+/// left at its turn is out, its order ignored. Then the hull breach runs. A finished game is
+/// refused.
 pub fn resolve_round(
     state: &Royale,
     orders: &[(usize, Order)],
 ) -> Result<(Royale, RoundLog), RoyaleError> {
+    if state.is_over() {
+        return Err(RoyaleError::Over);
+    }
     let mut by_seat: Vec<Option<&Order>> = vec![None; state.seats];
     for (seat, order) in orders {
         let slot = by_seat
@@ -85,6 +89,7 @@ pub fn resolve_round(
             ejected,
         });
     }
+    next.breach();
     next.round += 1;
     let log = RoundLog {
         round: state.round,
