@@ -6,8 +6,8 @@ import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
 import type { Transport } from './transport';
 
-// The online battle royale on the harness (#504, docs/specs/tech.md section 6): Battle royale online opens a room of 6
-// seats with its invite link, the creator starts the game, each round a target press or Hold commits the order and the
+// The online battle royale on the harness (#504, docs/specs/tech.md section 6): Invite, in an offline battle royale,
+// opens a room of 6 seats with its invite link, the creator starts the game, each round a target press or Hold commits the order and the
 // round resolves on every peer once each seat revealed or the deadline passed. The other player is a real session and
 // RoyaleNet on the other end of the room, with its own engine. `?round=300` shortens the round deadline, for the test
 // of a silent player alone: on a loaded machine a page may take longer than that to press a button.
@@ -76,11 +76,17 @@ function hookEnd(heard: Wire[] = []): Transport {
   };
 }
 
-/** Boots and presses Battle royale online in the mode menu; a second player joins once the page's session exists. */
+/** Starts a battle royale from the mode menu and presses Invite. */
+function invite(game: Game): void {
+  game.openModes();
+  button('battle-royale').click();
+  button('royale-invite').click();
+}
+
+/** Boots and opens a room; a second player joins once the page's session exists. */
 async function hosted(url = '?bot=off', reducedMotion = true) {
   const game = await boot(url, { reducedMotion });
-  game.openModes();
-  button('royale-online').click();
+  invite(game);
   await until(game, () => data().seat === 'player');
   const other = await player(game.peer()!, game.room()!, 2);
   await until(game, () => presence().startsWith('2 players in'));
@@ -96,11 +102,12 @@ async function started(url?: string, reducedMotion?: boolean) {
 }
 
 describe('Battle royale online (#504)', () => {
-  it('opens a room of 6 seats: its invite link, the arena in the lobby, Start for the creator alone', async () => {
+  it('Invite opens a room of 6 seats: its invite link, the arena in the lobby, Start for the creator alone', async () => {
     const game = await boot('?bot=off');
     game.openModes();
-    button('royale-online').click();
-    expect(byId('mode-menu').hidden).toBe(true);
+    button('battle-royale').click();
+    expect(button('royale-invite').hidden).toBe(false); // in the offline game
+    button('royale-invite').click();
     await until(game, () => data().seat === 'player'); // once its keys are made, the page is in the room
     const room = game.room()!;
     expect(location.hash).toBe(`#royale=${room}`);
@@ -115,6 +122,7 @@ describe('Battle royale online (#504)', () => {
     expect(items('.initiative li')).toEqual(['You', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5', 'Bot 6']);
     expect(button('royale-start').hidden).toBe(false);
     expect(button('royale-hold').disabled).toBe(true);
+    expect(button('royale-invite').hidden).toBe(true); // in the room already
     game.click(-4, 8); // no order before the start
     expect(game.hook('__rings')).toEqual([]);
     expect(game.hook('__targets')).toEqual([]);
@@ -192,6 +200,7 @@ describe('Battle royale online (#504)', () => {
     expect(data().royale).toBeUndefined();
     expect(button('royale-start').hidden).toBe(true);
     expect(button('royale-hold').hidden).toBe(true);
+    expect(button('royale-invite').hidden).toBe(true);
     await until(game, () => data().online === 'Black');
   });
 });
