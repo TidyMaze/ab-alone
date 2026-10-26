@@ -10,6 +10,8 @@ export interface BossLike {
   tell(): number;
   /** `[q, r, plies_left]` records. */
   cracks(): Int32Array;
+  /** `[q, r, player_turns_left]` records. */
+  eggs(): Int32Array;
   /** `[q, r]` pairs. */
   flips(): Int32Array;
   /** `[q, r]` pairs. */
