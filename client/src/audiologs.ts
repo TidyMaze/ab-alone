@@ -1,7 +1,8 @@
 // The audio logs (docs/specs/world.md section 4): short recordings left on the decks, one per deck, 60 s at most,
 // written from the facts of sections 2 and 3 and the lore terminals (lore.ts). There is no voice acting (section
 // 11): a log is a synthesized recording (room tone, footsteps, machinery, the Choir's hum) made of the same voices
-// as the other sounds (sound.ts), and its words exist only in the transcript. Data only.
+// as the other sounds (sound.ts), and its words exist only in the transcript. Data, and the two lookups of the player
+// (#516).
 import type { Deck } from './deck';
 import { knockVoices, tellVoices, type Envelope, type Voice } from './sound';
 
@@ -232,3 +233,10 @@ export const AUDIO_LOGS: readonly AudioLog[] = [
     ],
   },
 ];
+
+/** The audio log of `deck`: every deck has one (audiologs.test.ts). */
+export const logOf = (deck: Deck): AudioLog => AUDIO_LOGS.find((log) => log.deck === deck)!;
+
+/** The transcript line shown `seconds` after `log` started: the last line reached, null before the first. */
+export const lineAt = (log: AudioLog, seconds: number): string | null =>
+  log.lines.filter((line) => line.at <= seconds).at(-1)?.text ?? null;

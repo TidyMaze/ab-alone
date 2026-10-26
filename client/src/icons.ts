@@ -16,6 +16,7 @@ export const ICONS = {
   palette: 'M12 3a9 9 0 0 0 0 18c.8 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16c3.3 0 6-2.7 6-6 0-4.4-4-8-10-8z',
   motion: 'M17 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M3 9h7M2 12h8M3 15h7',
   flat: 'M4 5h16v14H4zM7 9h10M7 12h10M7 15h6',
+  transcript: 'M3 6h18v12H3zM6 11h5M13 11h5M6 14h9',
 } as const;
 
 export type IconName = keyof typeof ICONS;

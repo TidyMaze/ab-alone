@@ -2,7 +2,7 @@
 // nothing fetched. The design is data (the cue per side, the voices and their envelopes, the steady tones of
 // the hum and the tension drones), played by a thin wrapper through four bus gains, music, ambience, effects
 // and voice, into one master gain (#438), music and ambience through a duck node that lowers them under an audio
-// log (#514). The ejection follows the ejection effect of eject.ts: a sharp inhale on the push over the rim, a
+// log (#514), the audio logs through the voice bus (#516). The ejection follows the ejection effect of eject.ts: a sharp inhale on the push over the rim, a
 // muffled thud as the void takes the marble, vacuum silence while it falls, then, once it is gone, a low toll for a
 // lost player marble or a dry clack for an enemy one. The boss tells have their sound twins too (#358).
 
@@ -150,13 +150,14 @@ export const BUSES: readonly Bus[] = ['music', 'ambience', 'effects', 'voice'];
 /** The volume of each bus, 0 to 100 %, as its slider shows it. */
 export type Mix = Record<Bus, number>;
 /** The bus each sound goes through: the hum is ambience, the tension drones music, the knock, the ejection and the
- * tells effects. Nothing uses the voice bus yet (the tally and the crew logs). */
+ * tells effects, the audio logs voice (#516). */
 export const ROUTE = {
   hum: 'ambience',
   tension: 'music',
   knock: 'effects',
   ejection: 'effects',
   tell: 'effects',
+  log: 'voice',
 } as const satisfies Record<string, Bus>;
 /** The gain of a bus at `percent` of its slider. */
 export const busGain = (percent: number): number => percent / 100;
@@ -217,6 +218,7 @@ export class Sfx {
   private graph: Graph | null = null;
   private level: Tension = 0;
   private ducked = false;
+  private log: AudioScheduledSourceNode[] = []; // the sources of the audio log playing
 
   constructor(
     private readonly create: () => AudioContext | null,
@@ -308,6 +310,34 @@ export class Sfx {
     graph.ducks.forEach((duck, i) => duck.gain.setTargetAtTime(gains[i]!, graph.ctx.currentTime, DUCK_TAU));
   }
 
+  /** Whether music and ambience are ducked under an audio log. */
+  get ducking(): boolean {
+    return this.ducked;
+  }
+
+  /** Plays an audio log from now on the voice bus, music and ambience ducked under it (#516); a log playing stops
+   * first. False when silent (the voice at 0, or no gesture yet): the duck holds all the same, until stopLog. */
+  playLog(voices: readonly Voice[]): boolean {
+    this.endLog();
+    this.duck(true);
+    const graph = this.graph;
+    if (this.mix[ROUTE.log] === 0 || !graph) return false;
+    const now = graph.ctx.currentTime;
+    this.log = voices.map((voice) => this.play(graph, graph.buses[ROUTE.log], voice, now));
+    return true;
+  }
+
+  /** Stops the audio log at once, a skip or its end, and brings music and ambience back. */
+  stopLog(): void {
+    this.endLog();
+    this.duck(false);
+  }
+
+  private endLog(): void {
+    for (const source of this.log) source.stop(this.graph!.ctx.currentTime); // a log only sounds with a context
+    this.log = [];
+  }
+
   /** Plays the ejection of a marble of `side` from now. Its cue, or null when silent (effects at 0, or no gesture
    * yet). */
   ejection(side: number, glass = 2): Cue | null {
@@ -335,7 +365,7 @@ export class Sfx {
     return true;
   }
 
-  private play({ ctx, noise }: Graph, bus: GainNode, voice: Voice, now: number): void {
+  private play({ ctx, noise }: Graph, bus: GainNode, voice: Voice, now: number): AudioScheduledSourceNode {
     const from = now + voice.env[0]![0];
     const to = now + voice.env.at(-1)![0];
     let source: AudioScheduledSourceNode;
@@ -365,6 +395,7 @@ export class Sfx {
     out.connect(gain).connect(bus);
     source.start(from);
     source.stop(to);
+    return source;
   }
 }
 

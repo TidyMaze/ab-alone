@@ -392,3 +392,28 @@ body[data-over='draw']::before {
 @keyframes end-draw { 0%, 50% { opacity: 0; } 100% { opacity: 1; } }
 @keyframes end-dim { from { filter: brightness(1) saturate(1); } to { filter: brightness(0.7) saturate(0.65); } }
 :root[data-motion='reduced'] body[data-over]::before { display: none; }
+/* The audio log player (#516): the transcript line over its Play log or Skip log button, bottom left. Wider than tall it
+   keeps to the band left of the board, like the evaluation plate, and stands on it while the plate shows; held upright it
+   stands on the bottom-right corner's rows; in the reader it lies under the console screen. The line lets every press
+   through to the board. */
+#log {
+  position: fixed; left: 16px; bottom: 16px; z-index: 1; display: flex; flex-direction: column; align-items: flex-start;
+  gap: 0.5rem; max-width: min(22rem, calc(100vw - 32px)); pointer-events: none; font: calc(0.875rem * var(--ui-scale))/1.4 var(--ui);
+}
+@media (orientation: landscape) {
+  #log { max-width: min(22rem, max(8rem, 50vw - 45vh - 1.5rem)); }
+  body:not([data-reading]):has(#eval:not([hidden])) #log { bottom: calc(16px + 3.5rem); }
+}
+@media (orientation: portrait) {
+  body:not([data-reading]) #log { bottom: calc(16px + 3.25rem); } /* over Copy diagnostics */
+  body:not([data-reading]):has(#eval:not([hidden])) #log { bottom: calc(16px + 5.75rem); } /* and the evaluation row */
+}
+body[data-reading]:has(#reader.flat) #log { top: 16px; bottom: auto; } /* the reader's plate holds the bottom */
+#transcript { margin: 0; padding: 0.5rem 0.75rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; }
+#log-button {
+  pointer-events: auto; padding: 0.5rem 0.75rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge);
+  border-radius: 2px; font: inherit; line-height: 1.2; cursor: pointer;
+}
+#log-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (pointer: coarse) { #log-button { min-height: 2.75rem; } }
+#log [hidden] { display: none; }
