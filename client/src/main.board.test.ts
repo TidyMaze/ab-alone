@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { IDBFactory } from 'fake-indexeddb';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { encodeMove, groupTargets, moveForClick, parseMoves, type Axial } from './board';
@@ -240,6 +241,33 @@ describe('main.ts board and HUD', () => {
     for (let i = 0; i < 4; i++) setting('glass-skin'); // round to Smoked glass
     expect(white().material).toBe(smoked);
     expect(core()).toBe(cyan);
+  });
+
+  it('dims the cyan core a step per marble lost, the same after a reload, never dark, full on a new game (#506)', async () => {
+    const indexedDB = new IDBFactory();
+    const scene = catchScene();
+    const game = await boot('?nodes=100', { indexedDB });
+    const core = (): THREE.Material => (drawn(scene()).glass[0]!.children[0] as Mesh).material;
+    expect(document.body.dataset.core).toBe('1.00');
+    expect(core().opacity).toBe(1);
+    await game.hook<Promise<number>>('__playTurns', 20, [4]); // the player marches one way, the bot pushes two off
+    expect(game.hud()).toContain('Black ejected 2/6');
+    expect(document.body.dataset.core).toBe('0.80');
+    expect(core().opacity).toBeCloseTo(0.8, 10);
+    step(game); // a move of the player's own, saved with the hook's plies before it
+    await game.settle();
+    const again = await boot('?nodes=100', { indexedDB });
+    expect(again.hook('__plies')).toBe(42);
+    expect(again.hud()).toContain('Black ejected 3/6'); // the bot's reply pushed one more off
+    expect(document.body.dataset.core).toBe('0.70');
+    expect(core().opacity).toBeCloseTo(0.7, 10);
+    await again.hook<Promise<number>>('__playTurns', 10, [4]); // three more off: the game is lost
+    expect(again.hud()).toContain('Black ejected 6/6');
+    expect(document.body.dataset.core).toBe('0.40');
+    document.getElementById('new-game')!.click();
+    document.getElementById('new-game')!.click(); // confirmed
+    expect(document.body.dataset.core).toBe('1.00');
+    expect(core().opacity).toBe(1);
   });
 
   it('draws the frame round the board and lights the rim at the end of the side to move', async () => {

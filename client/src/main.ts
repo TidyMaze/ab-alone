@@ -94,7 +94,7 @@ import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale
 import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
-import { CORE, GLASS, SHELL } from './marbles';
+import { CORE, coreLevel, GLASS, SHELL } from './marbles';
 import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
@@ -1497,6 +1497,9 @@ function refresh(): void {
   document.body.dataset.converted = String(converted.length); // read by the e2e tests
   document.body.dataset.cracks = String(cracks.length);
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
+  const enemy = 3 - glassOf(); // the core dims a step per player marble the enemy ejected (#506)
+  coreMaterial.opacity = coreLevel(engine.ejected(enemy), engine.win_ejections(enemy));
+  document.body.dataset.core = coreMaterial.opacity.toFixed(2); // read by the e2e tests
   hud();
   refreshGhosts(moves);
 }
