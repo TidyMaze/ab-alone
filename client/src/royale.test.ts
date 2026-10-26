@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { cellIndex } from './board';
+import { SEAT_GLYPHS, SEAT_INK } from './marbles';
 import {
   ARENA,
   BOTS,
@@ -156,6 +157,20 @@ describe('the HUD plate', () => {
     ]);
     expect(items.map((li) => li.className)).toEqual(['moved', 'fizzled', 'held', 'out', 'held', 'fizzled']);
     expect((items[5]!.querySelector('.seat') as HTMLElement).style.background).toBe('rgb(230, 159, 0)');
+  });
+});
+
+describe('the seat glyphs on the plate (#558)', () => {
+  it('each seat name wears its glyph in the ink on its tint, in the initiative row and the reveal log', () => {
+    const log = parseLog([1, 0, 0, -1, 1, 2, -1, 2, 2, -1, 3, 2, -1, 4, 2, -1, 5, 2, -1])!;
+    document.body.innerHTML = royaleHtml(log, []);
+    const glyphs = (list: string): (string | null)[] =>
+      [...document.querySelectorAll(`.${list} .seat`)].map((s) => s.getAttribute('data-glyph'));
+    expect(glyphs('initiative')).toEqual(initiative(2).map((s) => SEAT_GLYPHS[s]!.name));
+    expect(glyphs('reveal')).toEqual(SEAT_GLYPHS.map((g) => g.name));
+    const star = document.querySelector('.reveal li:nth-child(5) .seat polygon')!;
+    expect(star.getAttribute('points')).toBe(SEAT_GLYPHS[4]!.points.map(([x, y]) => `${x},${-y}`).join(' '));
+    expect(star.getAttribute('fill')).toBe(`#${SEAT_INK.toString(16).padStart(6, '0')}`);
   });
 });
 
