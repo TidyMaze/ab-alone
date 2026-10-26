@@ -115,6 +115,7 @@ describe('roomloader PBR pipeline', () => {
     expect(bay).not.toBeNull();
     expect(bay!.scene).toBe(mockGroup);
     expect(floorMesh.material).toBe(bay!.materials.deck);
+    expect(bay!.materials.deck.map?.repeat.x).toBe(0.5);
     expect(wallMesh.material).toBe(bay!.materials.bulkhead);
     expect(ribMesh.material).toBe(bay!.materials.grate);
 

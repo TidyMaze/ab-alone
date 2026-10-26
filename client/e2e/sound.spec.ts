@@ -153,10 +153,18 @@ test('Sound is no loose HUD button: it is in the settings menu, its sliders reac
 // The hum (world.md section 7) runs under every game once a gesture has made the audio context, through the
 // ambience bus, and the Ambience slider fades it out.
 test('the hum runs after a gesture, and fades out with the Ambience slider', async ({ page }) => {
+  const tracks = new Set<string>();
+  page.on('request', (r) => r.url().includes('/audio/') && tracks.add(r.url().split('/').pop()!));
   const click = await open(page);
   expect(await gain(page, 'ambience')).toBe(0); // no audio context before a gesture, so no hum
-  await click([0, 2]); // a gesture on the board starts the audio, and with it the hum
+  expect([...tracks]).toEqual([]);
+  await click([0, 2]); // a gesture on the board starts the audio, and with it the hum and tracks
   await expect.poll(() => gain(page, 'ambience')).toBeGreaterThan(0.9);
+  await expect.poll(() => [...tracks].sort()).toEqual([
+    'dead-ore-hauler.mp3',
+    'reactor-room-tone-1.mp3',
+    'reactor-room-tone-2.mp3',
+  ]);
   const ambience = await slider(page, 'Ambience');
   await ambience.focus();
   await page.keyboard.press('Home');

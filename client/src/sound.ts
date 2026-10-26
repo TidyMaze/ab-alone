@@ -183,6 +183,18 @@ export interface HumTone {
   freq: number;
   gain: number;
 }
+/** A looped audio file track routed into a bus at `gain`. */
+export interface Track {
+  url: string;
+  gain: number;
+}
+/** The music track looped under the music bus. */
+export const MUSIC_TRACK: Track = { url: 'audio/dead-ore-hauler.mp3', gain: 0.35 };
+/** The reactor room tones layered and looped under the ambience bus. */
+export const AMBIENCE_TRACKS: readonly Track[] = [
+  { url: 'audio/reactor-room-tone-1.mp3', gain: 0.4 },
+  { url: 'audio/reactor-room-tone-2.mp3', gain: 0.35 },
+];
 /** The hum under every game (world.md section 7): two low sines a fifth apart, no melody, quiet. */
 export const HUM: readonly HumTone[] = [
   { freq: 55, gain: 0.03 },
@@ -273,6 +285,7 @@ export class Sfx {
         return duck;
       });
       startTones(ctx, HUM, buses[ROUTE.hum]);
+      startTracks(ctx, AMBIENCE_TRACKS, buses[ROUTE.hum]);
       const layers = TENSION.map((tones, i) => {
         const layer = ctx.createGain();
         layer.gain.value = layerGains(this.level)[i]!;
@@ -280,6 +293,7 @@ export class Sfx {
         startTones(ctx, tones, layer);
         return layer;
       });
+      startTracks(ctx, [MUSIC_TRACK], buses[ROUTE.tension]);
       this.graph = { ctx, buses, layers, ducks, noise: whiteNoise(ctx) };
     }
     if (this.graph.ctx.state === 'suspended') this.graph.ctx.resume().catch(() => undefined);
@@ -415,6 +429,17 @@ function startTones(ctx: AudioContext, tones: readonly HumTone[], out: AudioNode
     level.gain.value = gain;
     osc.connect(level).connect(out);
     osc.start(ctx.currentTime);
+  }
+}
+
+/** Looped audio tracks, started once with the context, each routed into `out`. */
+function startTracks(ctx: AudioContext, tracks: readonly Track[], out: AudioNode): void {
+  for (const { url, gain } of tracks) {
+    const audio = new Audio(url);
+    audio.loop = true;
+    audio.volume = gain;
+    ctx.createMediaElementSource(audio).connect(out);
+    audio.play().catch(() => undefined);
   }
 }
 

@@ -49,6 +49,28 @@ export class FakeBufferSource extends FakeSource {
   buffer: FakeBuffer | null = null;
   loop = false;
 }
+export class FakeAudio {
+  loop = false;
+  volume = 1;
+  played = 0;
+  fail = false;
+  rejection: Promise<void> | null = null;
+  constructor(public src: string) {}
+  play() {
+    this.played++;
+    if (this.fail) {
+      this.rejection = Promise.reject(new Error('blocked'));
+      vi.spyOn(this.rejection, 'catch');
+      return this.rejection;
+    }
+    return Promise.resolve();
+  }
+}
+export class FakeMediaElementSource extends FakeNode {
+  constructor(public media: FakeAudio) {
+    super();
+  }
+}
 export class FakeBuffer {
   data: Float32Array;
   constructor(
@@ -68,6 +90,7 @@ export class FakeContext {
   sampleRate = 8000;
   destination = new FakeNode();
   sources: FakeSource[] = [];
+  tracks: FakeMediaElementSource[] = [];
   gains: FakeGain[] = [];
   buffers: FakeBuffer[] = [];
   resumed = 0;
@@ -75,7 +98,9 @@ export class FakeContext {
   constructor(
     public state: 'suspended' | 'running' = 'running',
     private failResume = false,
-  ) {}
+  ) {
+    globalThis.Audio = FakeAudio as unknown as typeof Audio;
+  }
   resume() {
     this.resumed++;
     if (this.failResume) {
@@ -108,5 +133,11 @@ export class FakeContext {
     const b = new FakeBuffer(channels, length, rate);
     this.buffers.push(b);
     return b;
+  }
+  createMediaElementSource(media: FakeAudio) {
+    media.fail = this.failResume;
+    const s = new FakeMediaElementSource(media);
+    this.tracks.push(s);
+    return s;
   }
 }
