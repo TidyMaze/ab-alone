@@ -297,8 +297,9 @@ answer: only a `Sync` does.
    can, else keep off cracked and rim cells and move toward the centre), and
    `cargo run --release --example royale_sim` runs the anti-kingmaking check of rules.md 10.4.
    Since #499 the wasm bridge exposes it as `Royale` (`new(seats, seed)`, `board`, `resolve`,
-   `round_log`, `cracks`, `state_hash`, `bot_order`, `placement`), encodings in the module docs
-   of `crates/abalone-wasm/src/lib.rs`.
+   `round_log`, `cracks`, `state_hash`, `bot_order`, `placement`, and since #502 `legal_orders`),
+   encodings in the module docs of `crates/abalone-wasm/src/lib.rs`. The offline battle royale
+   (#502, `client/src/royale.ts`) plays the player against 5 bots on it, with no commit-reveal.
 - **Who arbitrates?** Nobody has authority over the outcome, the pure function does. A
   **coordinator** (the host peer) exists only for liveness: it announces round start, collects
   the timeout decision and drives membership. If the coordinator lies about a deadline, peers

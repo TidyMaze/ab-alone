@@ -118,6 +118,19 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(game.hook<Axial[]>('__rings')).toEqual([[0, 2]]);
   });
 
+  it('Ship leaves it for the hub, and Battle royale leaves the hub', async () => {
+    const game = await royale();
+    game.openModes();
+    button('ship').click();
+    expect(document.body.dataset.royale).toBeUndefined();
+    expect(document.body.dataset.hub).toBeDefined();
+    expect(button('royale-hold').hidden).toBe(true);
+    game.openModes();
+    button('battle-royale').click();
+    expect(document.body.dataset.hub).toBeUndefined();
+    expect(turn()).toBe('Battle royale · Round 1');
+  });
+
   it('Play online leaves it too, and Battle royale does nothing while online', async () => {
     const game = await royale();
     game.openModes();

@@ -27,6 +27,7 @@
 //!     `(q=0, r=8)`. The board codes above: `0` empty, `1` and `2` seats 0 and 1, `4` to `7`
 //!     seats 2 to 5, `3` void. A cracked cell, which goes void at the end of the next round, adds
 //!     `8` to its code: `8` cracked and empty, `9` a cracked cell with a seat 0 marble.
+//!   - Legal orders (`legal_orders(seat)`): the seat's move records, back to back.
 //!   - Orders: records of 9 integers `[seat, n, dir, q0, r0, q1, r1, q2, r2]`, a seat then its
 //!     move record, back to back. A seat with no record holds, like the empty order of the client.
 //!   - Round log: the round number, then one record of 3 integers `[seat, outcome, ejected]` per
@@ -47,7 +48,7 @@ use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::{marbles, BossDef, Encounter as CoreEncounter, PveResult};
 use abalone_core::game::{DrawReason, Game, Outcome};
-use abalone_core::moves::{legal_moves, Direction, Move, Player};
+use abalone_core::moves::{legal_moves, legal_moves_for, Direction, Move, Player};
 use abalone_core::royale::{
     self, Order as RoyaleOrder, Outcome as RoyaleOutcome, RoundLog, Turn as RoyaleTurn,
 };
@@ -712,6 +713,18 @@ impl Royale {
             return Vec::new();
         }
         order_record(&royale::bot::order(&self.state, seat, self.seed))
+    }
+
+    /// Every legal move of `seat`'s marbles on the arena, records back to back like
+    /// `legal_moves`, empty for a seat the game does not have or with no marble left.
+    pub fn legal_orders(&self, seat: usize) -> Vec<i32> {
+        if seat >= self.state.seats() {
+            return Vec::new();
+        }
+        legal_moves_for(self.state.board(), royale::seat_cell(seat))
+            .iter()
+            .flat_map(encode)
+            .collect()
     }
 
     /// Each seat's `[place, points]` in seat order once the game is over, empty before.
