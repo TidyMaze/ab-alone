@@ -50,6 +50,12 @@ const press = (key: string, target: EventTarget = window): KeyboardEvent => {
   target.dispatchEvent(e);
   return e;
 };
+/** Picks a file of `text` in the import input, as the file dialog does. */
+function pickFile(text: Promise<string>): void {
+  const input = byId<HTMLInputElement>('import-file');
+  Object.defineProperty(input, 'files', { value: [{ size: 100, text: () => text }], configurable: true });
+  input.dispatchEvent(new Event('change'));
+}
 function ship(game: Game): void {
   game.openModes();
   byId('ship').click();
@@ -249,6 +255,26 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(bar.hidden).toBe(false);
     expect(bar.dataset.ply).toBe('0');
     expect(byId('hint').hidden).toBe(false);
+  });
+
+  it('hides Export game and Import game in the hub, and a file read in flight is dropped there; a new game brings them back (#589)', async () => {
+    const game = await boot('?bot=off');
+    expect(byId('setting-export-game').hidden).toBe(false);
+    expect(byId('setting-import-game').hidden).toBe(false);
+    let read: (text: string) => void = () => {};
+    pickFile(new Promise<string>((resolve) => (read = resolve)));
+    ship(game);
+    expect(byId('setting-export-game').hidden).toBe(true);
+    expect(byId('setting-import-game').hidden).toBe(true);
+    read(JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: false, moves: [] }));
+    await game.settle();
+    expect(hub()).toBe('mess 0,0'); // the hub stays drawn
+    expect(byId<HTMLElement>('eval').hidden).toBe(true);
+    expect(game.hud()).toBe('Ship · Mess');
+    byId('new-game').click();
+    await game.settle();
+    expect(byId('setting-export-game').hidden).toBe(false);
+    expect(byId('setting-import-game').hidden).toBe(false);
   });
 
   it('puts the end light of a finished game out in the hub', async () => {

@@ -11,6 +11,7 @@ import { openModes } from './modes';
 // and Tally says one short line; a boss win opens it. body[data-lifts] lists the lifts of the deck.
 // #524: rolling onto a terminal opens its lore entry in the reader; Esc leaves it to the hub on the same cell.
 // #583: no game is on in the hub: the evaluation bar and Hint are hidden there.
+// #589: Export game and Import game are hidden there too.
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
@@ -114,6 +115,26 @@ test('the evaluation bar and Hint are off in the hub and back once a new game le
   await expect(bar).toBeVisible();
   await expect(bar).toHaveAttribute('data-ply', '0', { timeout: 10_000 });
   await expect(hint).toBeVisible();
+});
+
+test('Export game and Import game are off in the hub and back once a new game leaves it, #589', async ({ page }, testInfo) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const cog = page.getByRole('button', { name: 'Settings' });
+  const menu = page.locator('#settings-menu');
+  await ship(page);
+  await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
+  await cog.click();
+  await expect(menu.getByRole('button', { name: 'Clear board' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: 'Export game' })).toBeHidden();
+  await expect(menu.getByRole('button', { name: 'Import game' })).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath('hub-settings.png') });
+  await page.keyboard.press('Escape');
+  await page.locator('#new-game').click(); // no move played: one press starts over
+  await expect(page.locator('body')).not.toHaveAttribute('data-hub');
+  await cog.click();
+  await expect(menu.getByRole('button', { name: 'Export game' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: 'Import game' })).toBeVisible();
 });
 
 test('the hot-seat table starts a game for two at one table, #522', async ({ page }) => {

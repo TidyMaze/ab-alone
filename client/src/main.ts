@@ -2191,7 +2191,7 @@ function enterHub(at: HubSpot): void {
   roomOf = null;
   bumped = '';
   hubAt = at;
-  evalBar.hidden = hintButton.hidden = true; // no game on in the hub: a new game shows them again (#583)
+  evalBar.hidden = hintButton.hidden = exportButton.hidden = importButton.hidden = true; // no game on in the hub: a new game shows them again (#583, #589)
   analyst.stop();
   applyDeck(at.deck);
   refresh();
@@ -2293,7 +2293,7 @@ importFile.addEventListener('change', async () => {
   importFile.value = ''; // so picking the same file again is a change too
   if (!file) return;
   const read = await readGameFile(file, () => new Engine());
-  if (online || fight) return; // the player left for another game while the file was read
+  if (online || fight || hubAt) return; // the player left for another game, or the hub, while the file was read
   if ('refused' in read) return hud(` · ${read.refused}`);
   engine = read.engine;
   history.length = 0;
