@@ -87,6 +87,7 @@ pub fn hull_boss() -> BossDef {
     BossDef {
         name: "The Hull",
         phase_marbles: HULL_PHASE_MARBLES.to_vec(),
+        phase_ejections: Vec::new(),
         special,
         hook: hull_hook,
         node_budget: HULL_NODE_BUDGET,

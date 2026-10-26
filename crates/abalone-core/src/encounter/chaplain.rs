@@ -156,6 +156,7 @@ pub fn chaplain_boss() -> BossDef {
     BossDef {
         name: "The Chaplain",
         phase_marbles: CHAPLAIN_PHASE_MARBLES.to_vec(),
+        phase_ejections: Vec::new(),
         special,
         hook,
         node_budget: CHAPLAIN_NODE_BUDGET,

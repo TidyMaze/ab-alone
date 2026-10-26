@@ -353,6 +353,7 @@ pub fn choir_boss() -> BossDef {
     BossDef {
         name: "The Choir",
         phase_marbles: Vec::new(),
+        phase_ejections: Vec::new(),
         special: no_special,
         hook: keep_board,
         node_budget: CHOIR_NODE_BUDGET,

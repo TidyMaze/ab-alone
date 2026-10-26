@@ -170,8 +170,8 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
    the rim at its own end (near right for the side that starts near, far right for the other),
    clear of the phase notches: a dark groove per slot, a bone-white mark in it (#389).
 4. Boss phase notches and tell countdown: notches scratched on the arena frame, one per boss
-   marble left until the next phase (lit while remaining, extinguished as they go), a steady
-   glyph marks the next-phase threshold. They sit on the near side of the rim, where no marble
+   marble left until the next phase, one per ejection for The Alien (#621), lit while remaining,
+   extinguished as they go, and a steady glyph marks the next-phase threshold. They sit on the near side of the rim, where no marble
    hides them: a dark groove each, filled bone-white while lit (#356). The tell countdown is a
    count of engraved ticks next to the telegraphed move. Flat fallback exists but is never the
    only copy of this info.

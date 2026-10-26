@@ -425,7 +425,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    1
+    2 // 2: The Alien's phases count the player's ejections (#621)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -487,7 +487,10 @@ impl Encounter {
     /// Number of phases, for the HUD notches.
     pub fn phases(&self) -> u8 {
         let steps = match &self.fight {
-            Fight::Plain(_) => (self.entry.def)().phase_marbles.len(),
+            Fight::Plain(_) => {
+                let def = (self.entry.def)();
+                def.phase_marbles.len() + def.phase_ejections.len()
+            }
             Fight::Choir(_) => PHASE_ARMIES.len(),
         };
         steps as u8 + 1
@@ -496,10 +499,21 @@ impl Encounter {
     /// The phase notches on the arena frame (#356, docs/specs/world.md section 6 rule 4):
     /// `[lit, dark]`, one lit notch per boss marble left until the next phase, one dark notch per
     /// boss marble lost since this phase began. Empty in the last phase. The Choir's next phase
-    /// comes when its smallest army is wiped.
+    /// comes when its smallest army is wiped. The Alien's phases count the ejections credited to
+    /// the player (#621): one lit notch per ejection left until the next phase, one dark notch per
+    /// ejection since this phase began.
     pub fn phase_notches(&self) -> Vec<u8> {
         let phase = self.phase() as usize;
         match &self.fight {
+            Fight::Plain(e) if !(self.entry.def)().phase_ejections.is_empty() => {
+                let done = e.game().ejected(Player::Black);
+                let steps: Vec<u8> = std::iter::once(0)
+                    .chain((self.entry.def)().phase_ejections)
+                    .collect();
+                steps
+                    .get(phase + 1)
+                    .map_or_else(Vec::new, |&to| vec![to - done, done - steps[phase]])
+            }
             Fight::Plain(e) => {
                 let start = (self.entry.start)((self.entry.def)(), 0);
                 let steps: Vec<u8> = std::iter::once(marbles(start.game().board(), Cell::White))
@@ -1016,8 +1030,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_1_until_a_change_makes_the_same_moves_give_another_game() {
-        assert_eq!(engine_version(), 1);
+    fn the_engine_version_is_2_since_the_alien_phases_count_the_ejections() {
+        assert_eq!(engine_version(), 2);
     }
 
     #[test]
