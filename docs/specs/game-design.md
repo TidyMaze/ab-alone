@@ -449,39 +449,52 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Polarity**: only **your** marbles carry a polarity (+, − or none), never the boss's. A polarity
   moves with its marble (moves, pushes, repulsions); an ejected marble loses it. The fight starts
   with none.
-- **Assignment**: a marble picked at random among your marbles on the board, polarized or not,
-  takes the sign that fewer of your **other** marbles hold (on a tie, the PRNG picks), so the
-  signs stay balanced. Its new sign may equal its old one.
+- **Assignment** (owner rules, #671): one marble picked at random among your marbles on the board,
+  polarized or not, gets a polarity: a random sign (a PRNG coin) when it has none, the other sign
+  when it has one (it **flips**). No balance between + and −.
+- **Announce, one turn ahead**: at the start of your turn `t − 1`, when turn `t` is an assignment
+  turn by the phase at that moment, the engine picks the marble and its coming sign and announces
+  both. At the start of turn `t` that marble takes the announced sign (no change if it already
+  holds it). The announce follows its marble (moves, pushes, repulsions) and is kept if the phase
+  changes in between; the following schedule uses the new phase. If the marble leaves the board
+  before turn `t`, turn `t` picks a marble at random with no announce. In P3 the assignment of a
+  turn and the announce of the next happen together.
 - **Repulsion**: two of your marbles of **opposite** polarity on adjacent cells repel: each moves
   **1 cell straight away from the other**, along the line they share. The push ignores sumito
   (owner rule): every marble in front of it on that line, of either side and any number, moves one
   cell too, and the last one goes off the board if the line reaches the rim (ejected). A boss
   marble ejected this way counts for you, one of yours counts for the boss. Same polarity: nothing.
+  After it repels, the pair **loses both polarities** (#671); the marbles it pushed keep theirs, so
+  a pushed polarized marble can still repel in the same settle.
   Your own moves and pushes stay standard Abalone (`rules.md` §10): a repulsion is a hook between plies.
 - **Settle (owner rule)**: after every ply (yours and the boss's) and after every assignment, the
   engine lists every repelling pair (in `q` then `r` order of the pair's first cell), the PRNG
   draws **one pair**, it repels, the list is rebuilt (chain reactions) and so on until no pair is
   left. Safety cap: 64 repulsions per settle; the engine tests show random fights never reach it.
-- **Rhythm**, in completed player turns, after your ply settles and before the boss replies:
-  - **P1** (start): every **2nd** player turn, 1 marble gets a polarity.
-  - **P2** after your **3rd** ejection: every player turn, 1 marble gets a polarity.
-  - **P3** after your **5th** ejection: every player turn, **all** your marbles get a new polarity,
-    half + and half − (an odd count: the PRNG picks the extra sign), shuffled by the PRNG.
-  The phase of a turn is the one before your move, as the other bosses' tells.
-- **Deterministic, for P2P**: every random pick (the marble, the sign on a tie, the pair, the P3
-  shuffle) is splitmix64 of the fight seed mixed with the ply, in the engine, never
+- **Rhythm**, at the **start of your turn** (after the boss's ply settles, before you move, so you
+  see the new polarity first; then the board settles, and a new pair may repel at once). Your
+  turns count from 1:
+  - **P1** (start): turns 3, 6, 9... (every **3rd**).
+  - **P2** after your **3rd** ejection: every **2nd** turn (the even turns).
+  - **P3** after your **5th** ejection: **every** turn.
+  The phase is the one before the boss's ply that ends just before that turn.
+- **Deterministic, for P2P**: every random pick (the marble, the sign of an unpolarized one, the
+  pair) is splitmix64 of the fight seed mixed with the ply, in the engine, never
   `Math.random`, floats or the clock.
 - **Tell**: a polarized marble wears a pale **+** or **−** glyph on top (a shape, not a colour,
   3:1 on both glass skins). A marble whose polarity the last assignment set or changed wears a
-  pale ring until the next ply. Repulsions play in the engine's order: the pair slides apart, the pushed lines slide, an
-  ejected marble falls; reduced motion jumps to the end. The HUD line reads "Polarity in 2 turns"
-  in P1, "Polarity every turn" in P2 and "All polarities every turn" in P3.
+  pale ring until the next ply. The announced marble wears an indicator floating above it: the
+  coming sign on a pale-edged near-black diamond, distinct from the disc on top and from the
+  ring. Repulsions play in the engine's order: the pair slides apart and its glyphs fade out, the
+  pushed lines slide, an ejected marble falls; reduced motion jumps to the end. The HUD line reads
+  "Polarity in 2 turns" (P1, P2), "Polarity next turn" when the next turn assigns, and "Polarity
+  every turn" in P3.
 - **Counter, turn it against the boss**: walk a + marble next to a − marble aimed at a boss line:
   the repulsion shoves 3 or more boss marbles with one marble and can eject the last one, breaking
   a defence sumito never could. Keep opposite marbles apart near your own rim. The boss search sees
   repulsions (every ply of its tree settles, with the seed 0 for the pair draws) and keeps its
   marbles out of your repulsion lines; it cannot foresee an assignment.
-- **Calibrate**: knobs = rhythm (2, 1, all), phase ejections (3, 5), AI depth (3, the Hull's 3000
+- **Calibrate**: knobs = rhythm (3, 2, 1), phase ejections (3, 5), AI depth (3, the Hull's 3000
   nodes). Fail if most fights end with no boss marble ejected by a repulsion (nobody learns the
   counter) or most losses come from the player's own repulsions in P3.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
