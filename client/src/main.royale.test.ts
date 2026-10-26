@@ -224,7 +224,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
     slowKeys();
     game.openModes();
     button('play-online').click();
-    await game.settle();
+    await game.online();
     expect(document.body.dataset.royale).toBeUndefined();
     game.openModes();
     button('battle-royale').click();

@@ -44,6 +44,8 @@ export interface Game {
   frame(ms?: number): void;
   /** Lets the pending tasks run: the bot workers' replies, IndexedDB. */
   settle(): Promise<void>;
+  /** Waits until the page is online: it makes its keys first, which may take any time on a loaded machine (#636). */
+  online(): Promise<void>;
   /** The three.js scenes drawn so far. */
   draws(): number;
   /** The other end of the online room once the page goes online (Play online, an invite link), else null. */
@@ -224,6 +226,9 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     },
     settle: async () => {
       for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
+    },
+    online: async () => {
+      while (document.body.dataset.online === undefined) await new Promise((done) => setTimeout(done));
     },
     draws: () => draws,
     peer: () => peer,

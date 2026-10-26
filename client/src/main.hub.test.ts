@@ -238,7 +238,7 @@ describe('main.ts, walking the hub (#521)', () => {
     slowKeys();
     game.openModes();
     byId('play-online').click();
-    await game.settle();
+    await game.online();
     expect(hub()).toBeUndefined();
     ship(game); // no ship while online
     expect(hub()).toBeUndefined();

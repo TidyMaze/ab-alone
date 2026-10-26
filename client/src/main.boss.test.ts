@@ -234,7 +234,7 @@ describe('main.ts boss fights', () => {
   it('online, Boss fight and Daily challenge start nothing', async () => {
     slowKeys();
     const game = await boot('?bot=off#room=boss-test');
-    await game.settle(); // the invite link joins the room
+    await game.online(); // the invite link joins the room
     expect(game.room()).toBe('boss-test');
     byId('boss-fight').click();
     expect(byId('boss-list').hidden).toBe(true);

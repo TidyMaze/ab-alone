@@ -252,7 +252,7 @@ describe('an ejection', () => {
 async function joinAsWhite(game: Game) {
   slowKeys();
   document.getElementById('play-online')!.click();
-  await game.settle();
+  await game.online();
   const { Engine, engine_version } = await import('abalone-wasm');
   let engine = new Engine();
   const received: number[][] = [];
@@ -308,7 +308,7 @@ describe('a click', () => {
     const game = await boot('?bot=off');
     slowKeys();
     document.getElementById('play-online')!.click();
-    await game.settle();
+    await game.online();
     expect(game.peer()).not.toBeNull();
     const black = legal(game).find((m) => m.cells.length === 1)!.cells[0]!;
     game.click(...black);
@@ -364,7 +364,7 @@ describe('a click', () => {
   it('online as a spectator, never selects', async () => {
     slowKeys();
     const game = await boot('?bot=off#room=spectated');
-    await game.settle();
+    await game.online();
     const [keys, other] = [await generateKeys(), await generateKeys()];
     const creator = new OnlineSession({
       game: game.room()!,
