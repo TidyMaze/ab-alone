@@ -339,6 +339,14 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
     BOSSES.iter().find(|b| b.id == id)
 }
 
+/// The engine version a peer carries in its `Hello` (docs/specs/tech.md section 9): peers on different
+/// versions refuse to play, they would compute different games. Bump it with any change that makes the same
+/// moves give another game: a rule, a boss reply, a layout.
+#[wasm_bindgen]
+pub fn engine_version() -> u32 {
+    1
+}
+
 /// Ids of the bosses the client can start, in play order.
 #[wasm_bindgen]
 pub fn boss_ids() -> Vec<String> {

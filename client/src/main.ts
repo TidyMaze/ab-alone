@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, boss_ids, boss_name } from 'abalone-wasm';
+import init, { Encounter, Engine, boss_ids, boss_name, engine_version } from 'abalone-wasm';
 import {
   CELLS,
   RADIUS,
@@ -1906,6 +1906,7 @@ async function goOnline(room: string, side: number): Promise<void> {
   online = new OnlineSession({
     game: room,
     side,
+    engine: engine_version(),
     keys: await generateKeys(),
     transport: net,
     judge: {

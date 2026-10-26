@@ -441,6 +441,13 @@ No database server. Everything is client-side.
   questions), and procedural or generated assets are preferred for the first decks.
 - Versioning: the wire protocol and the engine carry a version number in `Hello`. Peers on
   different engine versions refuse to play (a desync otherwise). Old tabs are told to reload.
+  **Engine version (#526):** `engine_version()` of the wasm, a number set by hand in
+  `crates/abalone-wasm/src/lib.rs` and bumped with any change that makes the same moves give another
+  game (a rule, a boss reply, a layout). The crate version is not used: it is never bumped. Every
+  `Hello` carries it in a signed `engine` field. A session refuses a `Hello` from another version,
+  or from an older peer that sends none (it predates the check, so its engine may differ): no seat,
+  no presence, and the HUD shows `refused move: engine-version`. The creator still answers with its
+  own `Hello`, so the joiner refuses it in turn, says so, and is never seated.
 - Only third-party runtime dependencies: public STUN, signaling relays. Both degrade to the
   manual flow, single-player never needs them.
 

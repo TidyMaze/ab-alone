@@ -4,6 +4,7 @@ import type { Keys } from '../../client/src/moverecord';
 import { NetCounters } from '../../client/src/netcounters';
 import { OnlineSession, type Judge } from '../../client/src/session';
 import type { Transport } from '../../client/src/transport';
+import { engineVersion } from './engine';
 
 /** What `wait_for_opponent_move` reports. */
 export type RoomEvent = 'opponent_moved' | 'game_over' | 'opponent_left' | 'desync' | 'timeout';
@@ -23,6 +24,7 @@ export class Room {
     this.session = new OnlineSession({
       game: id,
       side,
+      engine: engineVersion(),
       agent: true,
       keys,
       transport,

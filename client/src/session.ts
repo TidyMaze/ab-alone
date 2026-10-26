@@ -46,6 +46,7 @@ export interface SessionOptions {
   side: number; // the seat we are or ask for: 1 Black, 2 White in the first game
   seatCount?: number; // seats of the mode, 2 for 1v1
   agent?: true; // we are an agent player: our Hello carries the signed flag (docs/specs/mcp.md section 8)
+  engine: number; // `engine_version()` of our wasm, in our Hello: a Hello from another version, or with none, is refused (#526)
   keys: Keys;
   transport: Transport;
   judge: Judge;
@@ -237,7 +238,9 @@ export class OnlineSession {
   private async hello(): Promise<void> {
     const roster = this.o.side === CREATOR ? this.seats.roster() : [];
     const order = this.o.beat && this.o.side === CREATOR ? [...this.order] : undefined; // the join order, for the coordinator migration
-    this.o.transport.send(await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster, agent: this.o.agent, order }));
+    this.o.transport.send(
+      await signHello(this.o.keys, { game: this.o.game, seat: this.o.side, roster, agent: this.o.agent, order, engine: this.o.engine }),
+    );
   }
 
   /** On open: our Hello, then our Sync, so that a peer ahead of us sends what we missed (#226). */
@@ -379,6 +382,13 @@ export class OnlineSession {
 
   private async receiveHello(h: Hello | null, peer: string): Promise<void> {
     if (!h || h.game !== this.o.game || !(await verifyHello(h))) return this.o.onRefuse('bad-hello');
+    // Another engine would judge the same moves differently (docs/specs/tech.md section 9): no seat, no presence.
+    // The creator still answers with its own Hello, so the joiner refuses it in turn and says why.
+    if (h.engine !== this.o.engine) {
+      this.o.onRefuse('engine-version');
+      if (this.o.side === CREATOR) await this.hello();
+      return;
+    }
     this.presence.hello(peer, h.pub);
     if (this.o.beat) this.coord.beat(h.pub, this.o.beat.now());
     if (this.o.side === CREATOR && !this.order.includes(h.pub)) this.order.push(h.pub);
