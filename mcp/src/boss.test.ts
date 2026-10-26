@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { bossState, resultName, type BossLike } from './boss';
+import { BOARD_CELLS } from './board';
 import { bossIds, newEncounter } from './engine';
 
 /** Plays the agent's first legal move, then the boss reply, until `done` holds or 30 rounds pass. */
@@ -127,6 +128,19 @@ const CASES: Record<string, () => void> = {
     const row = bossState('railyard', withData(railyard, { trains: [4, 2, 4, 0, -4, 0] }));
     expect(row.marks.map((mark) => mark.cell)).toEqual([4, 3, 2, 1, 0, -1, -2, -3, -4].map((q) => `(${q},0)`));
   },
+
+  magnetizer() {
+    const magnetizer = newEncounter('magnetizer', 0);
+    // No special after the first ply: the first polarity comes after the player's 2nd turn.
+    expect(bossState('magnetizer', magnetizer)).toMatchObject({ name: 'The Magnetizer', tell: null, marks: [] });
+    playUntil(magnetizer, () => magnetizer.polarities().some((s) => s !== 0));
+    const i = magnetizer.polarities().findIndex((s) => s !== 0);
+    const [q, r] = BOARD_CELLS[i]!;
+    // A polarity is a mark on the player marble, 1 for + and -1 for −.
+    expect(bossState('magnetizer', magnetizer).marks).toEqual([
+      { kind: 'polarity', cell: `(${q},${r})`, value: magnetizer.polarities()[i] },
+    ]);
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -134,8 +148,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind joins the boss list (#572), The Alien (#588) and The Rail Yard (#626) are in', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard']);
+  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626) and The Magnetizer (#645) are in', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer']);
   });
 
   test('every boss of the engine has its case', () => {
