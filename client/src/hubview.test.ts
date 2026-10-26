@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CELLS, VANISHED, type Axial } from './board';
 import { frameShape } from './frame';
 import { HUB_CELLS, neighbours, type Spot } from './hub';
-import { arrowCell, bumpLine, HUB_BOARD, hubHtml } from './hubview';
+import { arrowCell, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, reachabilityText } from './hubview';
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
@@ -86,5 +86,87 @@ describe('a locked lift (#523)', () => {
     expect(hubHtml(below, 'Locked.')).toBe(
       '<div class="turn"><span>Ship · Mess</span></div><small></small><div class="tally">Locked.</div>',
     );
+  });
+});
+
+describe('hub target inspection and reachability (#628)', () => {
+  const at: Spot = { deck: 'mess', cell: [0, 0] };
+
+  it('reports reachability for neighbours, current cell, and distant cells', () => {
+    expect(bossTitle('unknown')).toBe('Boss');
+    expect(bossTitle('echo')).toBe('The Echo');
+    expect(reachabilityText([0, 0], [0, 0])).toBe('Current position');
+    expect(reachabilityText([0, 0], [1, 0])).toBe('Click to move');
+    expect(reachabilityText([0, 0], [-1, 1])).toBe('Click to move');
+    expect(reachabilityText([0, 0], [2, 0])).toBe('Out of reach (roll closer)');
+    expect(reachabilityText([0, 0], [-2, 2])).toBe('Out of reach (roll closer)');
+  });
+
+  it('inspects all room kinds with descriptive names and mode subtitles', () => {
+    expect(hubTargetText(at, [-2, 0])).toEqual({
+      name: 'Bot table',
+      desc: 'Practice match against AI',
+      reach: 'Out of reach (roll closer)',
+    });
+    expect(hubTargetText(at, [2, 0])).toEqual({
+      name: 'Boss door',
+      desc: 'The Echo (Mess boss)',
+      reach: 'Out of reach (roll closer)',
+    });
+    expect(hubTargetText({ deck: 'cargo', cell: [1, 0] }, [2, 0])).toEqual({
+      name: 'Boss door',
+      desc: 'The Hull (Cargo boss)',
+      reach: 'Click to move',
+    });
+    expect(hubTargetText(at, [-1, -1])).toEqual({
+      name: 'Hot-seat table',
+      desc: '2 players, one screen',
+      reach: 'Out of reach (roll closer)',
+    });
+    expect(hubTargetText({ deck: 'mess', cell: [0, -1] }, [-1, -1])).toEqual({
+      name: 'Hot-seat table',
+      desc: '2 players, one screen',
+      reach: 'Click to move',
+    });
+    expect(hubTargetText(at, [-2, 1])).toEqual({
+      name: 'Online table',
+      desc: 'Peer-to-peer 1v1 match',
+      reach: 'Out of reach (roll closer)',
+    });
+    expect(hubTargetText(at, [-2, 2])).toEqual({
+      name: 'Battle royale lobby',
+      desc: 'Multi-player battle royale',
+      reach: 'Out of reach (roll closer)',
+    });
+    expect(hubTargetText(at, [2, -1])).toEqual({
+      name: 'Terminal',
+      desc: 'Ship archive and audio log',
+      reach: 'Out of reach (roll closer)',
+    });
+    expect(hubTargetText(at, [1, -2])).toEqual({
+      name: 'Lift to Cargo',
+      desc: 'Transit to Cargo',
+      reach: 'Out of reach (roll closer)',
+    });
+    expect(hubTargetText(at, [1, 0])).toEqual({
+      name: 'Deck floor',
+      desc: 'Open transit corridor',
+      reach: 'Click to move',
+    });
+  });
+
+  it('renders preview in hubHtml when hover is provided', () => {
+    const html = hubHtml(at, '', [-2, 0]);
+    expect(html).toContain('class="hub-preview"');
+    expect(html).toContain('Target: Bot table · Practice match against AI');
+    expect(html).toContain('(Out of reach (roll closer))');
+
+    const near = hubHtml({ deck: 'mess', cell: [-1, 0] }, '', [-2, 0]);
+    expect(near).toContain('Target: Bot table · Practice match against AI');
+    expect(near).toContain('(Click to move)');
+  });
+
+  it('omits preview in hubHtml when hover is null', () => {
+    expect(hubHtml(at, '', null)).not.toContain('class="hub-preview"');
   });
 });

@@ -31,14 +31,17 @@ function catchScene(): () => THREE.Scene {
 function drawn(scene: THREE.Scene) {
   const meshes = scene.children.filter((c): c is Mesh => c instanceof THREE.Mesh);
   const far = meshes.filter((m) => m.geometry instanceof THREE.ExtrudeGeometry)[2]!;
-  const marbles = scene.children[scene.children.indexOf(far) + 4]!.children as Mesh[];
+  const marbleGroup = scene.children[scene.children.indexOf(far) + 4]!;
+  const directMarbles = marbleGroup.children.filter((c): c is Mesh => c instanceof THREE.Mesh);
+  const liftGroups = marbleGroup.children.filter((c) => c.name === 'door-lift');
+  const liftChildren = liftGroups.flatMap((g) => g.children.filter((c): c is Mesh => c instanceof THREE.Mesh));
   return {
     discs: meshes.filter((m) => m.geometry instanceof THREE.CylinderGeometry && m.visible).length,
-    glass: marbles.filter((m) => m.material instanceof THREE.MeshPhysicalMaterial),
-    shells: marbles.filter((m) => m.geometry instanceof THREE.SphereGeometry && !(m.material instanceof THREE.MeshPhysicalMaterial)),
-    glyphs: marbles.filter((m) => m.geometry instanceof THREE.TorusGeometry).length,
-    bars: marbles.filter((m) => m.geometry instanceof THREE.BoxGeometry), // the bar across a closed room (#522)
-    arrows: marbles.filter((m) => m.geometry instanceof THREE.ShapeGeometry), // a lift's arrow (#523)
+    glass: directMarbles.filter((m) => m.material instanceof THREE.MeshPhysicalMaterial),
+    shells: directMarbles.filter((m) => m.geometry instanceof THREE.SphereGeometry && !(m.material instanceof THREE.MeshPhysicalMaterial)),
+    glyphs: marbleGroup.children.filter((c) => c.name.startsWith('door-')).length,
+    bars: liftChildren.filter((m) => m.name === 'locked-bar'), // the bar across a closed room (#522)
+    arrows: liftChildren.filter((m) => m.geometry instanceof THREE.ShapeGeometry), // a lift's arrow (#523)
   };
 }
 
@@ -212,6 +215,42 @@ describe('main.ts, walking the hub (#521)', () => {
     delete document.body.dataset.ghosts; // set by every ghost drawing
     document.querySelector('body > canvas')!.dispatchEvent(new MouseEvent('pointermove', { clientX: x, clientY: y }));
     expect(document.body.dataset.ghosts).toBeUndefined();
+  });
+
+  it('previews room name, mode descriptor and affordance on hover in the hub (#628)', async () => {
+    const game = await boot('?bot=off');
+    const canvas = document.querySelector('body > canvas')!;
+    // Pointer leave outside the hub does nothing
+    canvas.dispatchEvent(new Event('pointerleave'));
+
+    ship(game);
+    // Pointer leave in hub without hover does nothing
+    canvas.dispatchEvent(new Event('pointerleave'));
+
+    // Hover neighbour cell [1, 0] twice to hit next === hubHover early return
+    const p1 = game.hook<{ x: number; y: number }>('__cellToScreen', 1, 0);
+    canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: p1.x, clientY: p1.y }));
+    canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: p1.x, clientY: p1.y }));
+    expect(document.body.dataset.hubHover).toBe('1,0');
+    expect(game.hud()).toContain('Target: Deck floor');
+    expect(game.hud()).toContain('(Click to move)');
+
+    // Pointer leave clears hover preview while active
+    canvas.dispatchEvent(new Event('pointerleave'));
+    expect(document.body.dataset.hubHover).toBeUndefined();
+    expect(game.hud()).not.toContain('hub-preview');
+
+    // Hover distant boss door [2, 0]
+    const p2 = game.hook<{ x: number; y: number }>('__cellToScreen', 2, 0);
+    canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: p2.x, clientY: p2.y }));
+    expect(document.body.dataset.hubHover).toBe('2,0');
+    expect(game.hud()).toContain('The Echo (Mess boss)');
+    expect(game.hud()).toContain('(Out of reach (roll closer))');
+
+    // Move pointer off-board where cellAt is null
+    canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: -999, clientY: -999 }));
+    expect(document.body.dataset.hubHover).toBeUndefined();
+    expect(game.hud()).not.toContain('hub-preview');
   });
 
   it('leaves the hub for the board when a new game, a boss fight or Play online starts', async () => {
@@ -469,7 +508,9 @@ const END_ROYALE = {
     const game = await boot('?bot=off');
     shipAt(game, [-1, 1]);
     expect(drawn(scene()).bars).toHaveLength(1); // the locked lift to Cargo only (#523)
-    expect(drawn(scene()).bars[0]!.position.x).not.toBeCloseTo(axialTo3D(-2, 2).x); // no bar over the lobby
+    const bar = drawn(scene()).bars[0]!;
+    const barX = bar.parent instanceof THREE.Group ? bar.parent.position.x : bar.position.x;
+    expect(barX).not.toBeCloseTo(axialTo3D(-2, 2).x); // no bar over the lobby
     game.click(-2, 2);
     expect(hub()).toBeUndefined();
     expect(data().royale).toBe('1');
@@ -543,9 +584,10 @@ describe('main.ts, the hub terminals (#524)', () => {
 // the deck, read by the e2e tests.
 describe('main.ts, the lift gate (#523)', () => {
   const lifts = (): string | undefined => document.body.dataset.lifts;
-  const on = (mesh: Mesh, [q, r]: [number, number]): boolean => {
+  const on = (mesh: THREE.Object3D, [q, r]: [number, number]): boolean => {
     const p = axialTo3D(q, r);
-    return Math.abs(mesh.position.x - p.x) < 1e-9 && Math.abs(mesh.position.z - p.z) < 1e-9;
+    const pos = mesh.parent instanceof THREE.Group && mesh.parent.name.startsWith('door-') ? mesh.parent.position : mesh.position;
+    return Math.abs(pos.x - p.x) < 1e-9 && Math.abs(pos.z - p.z) < 1e-9;
   };
 
   it('a locked lift wears its arrow with a bar across, keeps the marble out and Tally says why', async () => {

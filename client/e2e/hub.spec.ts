@@ -291,5 +291,28 @@ test('the tension drones calm to 0 over the hub, #586', async ({ page }) => {
   expect(await page.evaluate(() => (window as any).__tension().level)).toBe(0);
 });
 
+test('hovering over a hub cell previews the room name, mode descriptor and affordance, #628', async ({ page }, testInfo) => {
+  await page.goto('./');
+  await page.locator('canvas').waitFor();
+  await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
+
+  // Hover over adjacent cell [1, 0]
+  const p1 = await page.evaluate(() => (window as any).__cellToScreen(1, 0));
+  await page.mouse.move(p1.x, p1.y);
+  await expect(page.locator('body')).toHaveAttribute('data-hub-hover', '1,0');
+  await expect(page.locator('#hud .hub-preview')).toContainText('Target: Deck floor');
+  await expect(page.locator('#hud .hub-preview')).toContainText('(Click to move)');
+
+  // Hover over boss door [2, 0]
+  const p2 = await page.evaluate(() => (window as any).__cellToScreen(2, 0));
+  await page.mouse.move(p2.x, p2.y);
+  await expect(page.locator('body')).toHaveAttribute('data-hub-hover', '2,0');
+  await expect(page.locator('#hud .hub-preview')).toContainText('Target: Boss door · The Echo (Mess boss)');
+  await expect(page.locator('#hud .hub-preview')).toContainText('(Out of reach (roll closer))');
+
+  const shotPath = testInfo.outputPath('628-hub-hover-preview.png');
+  await page.screenshot({ path: shotPath });
+});
+
 
 

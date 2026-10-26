@@ -167,6 +167,16 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   from { opacity: 1; }
   to { opacity: 0; max-height: 0; margin-top: 0; padding: 0; overflow: hidden; }
 }
+/* Hub room target inspection preview (#628) */
+#hud .hub-preview {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--accent);
+}
+#hud .hub-preview .affordance {
+  color: var(--text);
+  font-weight: 500;
+}
 /* The flat HUD fallback (#391): every game-critical value as text, one line each, under the rest of the plate. */
 #hud .flat { margin-top: 0.25rem; padding-top: 0.25rem; border-top: 1px solid var(--edge); font-size: 0.875rem; }
 /* Daily result card (#196), under Retry at the end of a daily fight: the text as it is copied, then Copy. */
