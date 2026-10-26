@@ -53,6 +53,9 @@ test('three players: a round resolves at its deadline, the silent player holds, 
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   expect(hash).toMatch(/^#royale=[\w-]+$/);
   await Promise.all([b, c].map((p) => p.goto(`./?bot=off&net=hook&round=1500${hash}`)));
+  // Every session exists before the first page opens: the hook has no peer join, after which a Trystero page says Hello
+  // again, so a page whose session came later would never hear the Hello of the pages open before it.
+  for (const p of [b, c]) await p.locator('body[data-seat]').waitFor({ state: 'attached' });
   await open(a);
   await open(b);
   await seated(b); // seat 2, then c takes seat 3
