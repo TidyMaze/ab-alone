@@ -250,9 +250,15 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
    button, so a long boss name makes the label no wider and pushes no item onto a row over the board. Bugs #603, #606:
    since Fight together and The Alien, the items are a little narrower and closer, so they keep to four rows with the
    web fonts and with the fallback fonts. Bug #614: on a phone 360 px wide the board sits higher, so the plate, the rows
-   and the items are closer and the items narrower again, each still a 44 px touch target at least. */
+   and the items are closer and the items narrower again, each still a 44 px touch target at least. Bug #618: the open
+   settings menu is as close to the cog, so in a boss fight Sound fits on its first row and it keeps to two rows. Bug
+   #619: Copy result is a 44 px touch target like Copy diagnostics beside it, so the result box above them both can be as
+   wide as the window: its first line no longer wraps and the card stays under the board. */
 @media (orientation: portrait) and (max-width: 600px), (orientation: portrait) and (pointer: coarse) {
   #chrome, #online, #mode-menu { gap: 0.25rem; }
+  #settings-menu { left: calc(100% + 0.25rem); max-width: calc(100vw - 32px - 100% - 0.25rem); }
+  #daily-copy { min-height: 2.75rem; }
+  #daily-result { max-width: calc(100vw - 32px); }
   #mode-menu button { padding-inline: 0.4rem; min-width: 2.75rem; }
   #daily { padding-block: 0.25rem; }
   #daily span { display: block; }
