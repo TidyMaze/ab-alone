@@ -482,7 +482,9 @@ No database server. Everything is client-side.
   wasm threads (not needed). Soft limits of about 1 GB site size and 100 GB per month bandwidth
   (from memory, **unverified**, check GitHub docs): keep wasm and assets small, use compressed
   textures and audio. Cloudflare Pages is an escape hatch if a header ever matters.
-- **Asset pipeline (#61).** Models: glTF with meshopt compression. Textures: KTX2/Basis
+- **Asset pipeline (#61).** Models: glTF with meshopt compression (#701): `client/scripts/pack-models.mjs`
+  (gltfpack, a pinned dev dependency) packs each Blender export of `client/models/`, outside the build, into
+  `client/public/assets/pbr/`, committed; the GLTFLoader decodes it with three's MeshoptDecoder. Textures: KTX2/Basis
   (GPU-compressed, small download). Audio: Opus in WebM or Ogg, with an AAC fallback only if
   Safari needs it. Lazy loading per deck, the hub loads a first deck only. Budget (starting
   values, soft until Phase 1): initial load under 5 MB gzipped (wasm + JS + first scene), each
