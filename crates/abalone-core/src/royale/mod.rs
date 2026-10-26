@@ -10,6 +10,7 @@ use crate::board::{Board, Cell};
 
 mod breach;
 mod round;
+mod score;
 mod setup;
 
 pub use round::{initiative, resolve_round, Order, Outcome, RoundLog, Turn};
@@ -155,6 +156,9 @@ mod tests {
         let mut voided = s.clone();
         voided.last_void[2] = 3;
         assert_ne!(s.hash(), voided.hash());
+        let mut out = s.clone();
+        out.eliminated.push(vec![1]);
+        assert_ne!(s.hash(), out.hash());
     }
 
     #[test]
