@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ACCENTS, CORE, type Accent, coreLevel, GLASS, SEAT_GLYPHS, SEAT_INK, SEATS, SHELL } from './marbles';
-import { PALETTE_DEFS } from './palettes';
+import { ACCENTS, CONVERTED, CORE, type Accent, coreLevel, GLASS, SEAT_GLYPHS, SEAT_INK, SEATS, SHELL } from './marbles';
+import { PALETTE_DEFS, PALETTES } from './palettes';
 import { SKINS } from './skins';
 
 // Relative luminance and contrast ratio (WCAG 2), on 0xrrggbb colours.
@@ -166,5 +166,26 @@ describe('boss accents', () => {
         expect(ratio, `${a.name} on ${shell.toString(16)}`).toBeGreaterThanOrEqual(3);
       }
     }
+  });
+});
+
+// #508: a marble The Chaplain converted is half glass, half ridged shell (world.md section 5): the shell up to its
+// middle, the player's glass above with the core dimmed but still seen. The dimmed core, seen through the glass, reads
+// 3:1 on the deck and on the shell half in every palette, a colour-blind palette under its own simulation.
+describe('the converted look', () => {
+  it('dims the core, never as far as dark', () => {
+    expect(CONVERTED.core).toBeGreaterThan(0);
+    expect(CONVERTED.core).toBeLessThan(1);
+  });
+
+  const deck = channels(0x0b0d0f); // the near-black base, as for the palettes (#381)
+  it.each(PALETTES)('its dimmed core reads 3:1 on the deck and on the shell in the %s palette', (id) => {
+    const { core, glass, shell } = PALETTE_DEFS[id];
+    const m = SIMULATIONS[id];
+    const see = (c: number[]): number[] => (m ? simulate(m, c) : c);
+    const [lit, behind] = [see(channels(core)), see(channels(glass))];
+    const dim = lit.map((v, i) => CONVERTED.core * v + (1 - CONVERTED.core) * behind[i]!);
+    expect(contrast(dim, see(deck))).toBeGreaterThanOrEqual(3);
+    expect(contrast(dim, see(channels(shell)))).toBeGreaterThanOrEqual(3);
   });
 });
