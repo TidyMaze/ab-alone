@@ -771,6 +771,11 @@ mod tests {
     }
 
     #[test]
+    fn the_engine_version_is_1_until_a_change_makes_the_same_moves_give_another_game() {
+        assert_eq!(engine_version(), 1);
+    }
+
+    #[test]
     fn boss_list_is_data_driven_and_starts_with_the_echo() {
         assert_eq!(
             boss_ids(),

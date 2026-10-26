@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import init, { Engine } from 'abalone-wasm';
+import init, { Engine, engine_version } from 'abalone-wasm';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { localPair, type Transport } from './transport';
@@ -72,6 +72,7 @@ async function peer(transport: Transport, side: number) {
   p.session = new OnlineSession({
     game: 'g',
     side,
+    engine: engine_version(),
     keys: await generateKeys(),
     transport,
     judge: {

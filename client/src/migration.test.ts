@@ -69,6 +69,7 @@ async function peer(mesh: Mesh, name: string, side: number, clock: { t: number }
   const s = new OnlineSession({
     game: 'g',
     side,
+    engine: 1,
     keys: await generateKeys(),
     transport: end,
     judge,
