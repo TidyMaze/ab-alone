@@ -1551,6 +1551,33 @@ mod tests {
     }
 
     #[test]
+    fn legal_orders_are_the_move_records_of_one_seat() {
+        let g = Royale::new(3, 7).unwrap();
+        let orders = g.legal_orders(0);
+        assert!(!orders.is_empty());
+        assert_eq!(orders.len() % MOVE_STRIDE, 0);
+        // Each one plays when seat 0 leads round 1.
+        for record in orders.chunks(MOVE_STRIDE) {
+            let mut played = Royale::new(3, 7).unwrap();
+            let mut order = vec![0];
+            order.extend(record);
+            played.resolve(&order).unwrap();
+            assert_eq!(played.round_log()[1..4], [0, APPLIED, -1], "{record:?}");
+        }
+        assert!(
+            orders
+                .chunks(MOVE_STRIDE)
+                .any(|o| o == [1, 4, -2, 6, 0, 0, 0, 0]),
+            "(-2, 6) NW"
+        );
+        assert_ne!(g.legal_orders(1), orders, "seat 1 moves its own marbles");
+        assert!(
+            g.legal_orders(3).is_empty(),
+            "a 3-seat game has seats 0 to 2"
+        );
+    }
+
+    #[test]
     fn the_state_hash_is_16_hex_digits_that_tell_states_apart() {
         let g = Royale::new(3, 7).unwrap();
         let hash = g.state_hash();
