@@ -97,6 +97,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.trains().is_empty() {
         board.trains().hash(&mut hasher);
     }
+    if let Some(pulsar) = board.pulsar() {
+        pulsar.hash(&mut hasher);
+    }
     if !board.polarities().is_empty() {
         board.polarities().hash(&mut hasher);
     }
@@ -682,6 +685,20 @@ mod tests {
         assert_ne!(
             position_hash(&minus, Player::Black),
             position_hash(&plus, Player::Black)
+        );
+    }
+
+    #[test]
+    fn the_pulsar_mark_changes_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut charging = Board::empty();
+        charging.set_pulsar(Some((4, 1)));
+        assert_ne!(position_hash(&charging, Player::Black), plain);
+        let mut later = Board::empty();
+        later.set_pulsar(Some((4, 2)));
+        assert_ne!(
+            position_hash(&later, Player::Black),
+            position_hash(&charging, Player::Black)
         );
     }
 

@@ -85,6 +85,9 @@ pub struct Board {
     /// The Magnetizer's announce: the player marble picked for the next assignment and its coming
     /// sign, the cell `None` once that marble left the board.
     announce: Option<Announce>,
+    /// The Pulsar's active pulsar (the direction code it pushes in) and the player turns played in
+    /// its cycle.
+    pulsar: Option<(u8, u8)>,
 }
 
 /// The Magnetizer's announce: the marble's cell (`None` once it left the board) and its sign.
@@ -115,6 +118,7 @@ impl Board {
             trains: Vec::new(),
             polarities: Vec::new(),
             announce: None,
+            pulsar: None,
         }
     }
 
@@ -193,6 +197,16 @@ impl Board {
 
     pub fn set_announce(&mut self, announce: Option<Announce>) {
         self.announce = announce;
+    }
+
+    /// The Pulsar's active pulsar, as the direction code it pushes in, and the player turns played
+    /// in its cycle.
+    pub fn pulsar(&self) -> Option<(u8, u8)> {
+        self.pulsar
+    }
+
+    pub fn set_pulsar(&mut self, pulsar: Option<(u8, u8)>) {
+        self.pulsar = pulsar;
     }
 
     /// Standard start layout: 14 marbles per side.
@@ -514,6 +528,17 @@ mod tests {
         assert_eq!(board.polarities(), &[((1, 0), 1), ((2, 0), -1)]);
         assert_ne!(board, Board::empty());
         board.set_polarities(vec![]);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn the_pulsar_starts_unset_and_is_replaced_whole() {
+        let mut board = Board::empty();
+        assert_eq!(board.pulsar(), None);
+        board.set_pulsar(Some((4, 1)));
+        assert_eq!(board.pulsar(), Some((4, 1)));
+        assert_ne!(board, Board::empty());
+        board.set_pulsar(None);
         assert_eq!(board, Board::empty());
     }
 }
