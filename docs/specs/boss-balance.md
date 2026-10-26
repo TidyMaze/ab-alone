@@ -224,6 +224,36 @@ shipped is plain Abalone at depth 5 on a pillar board. Measure it again after th
 (section 6), at 10x, on a machine that can spare an hour. Candidate knobs from `game-design.md`
 section 7.5: the boss budget (40000 nodes finishes depth 4) and the boss marbles (16).
 
+### The Alien: the Calibrate rule holds, no change (#646)
+
+The ladder now plays it (`LadderBoss::Alien`, through `alien_move`, so the boss keeps off its own
+eggs). `cargo run --release --example alien_sim` plays the ladder player against it, 20 seeds,
+then replays each game through the encounter to count the eggs crushed (by either side) and
+hatched and to follow the Alien's marbles. `ALIEN_X` sets the player budget in boss budgets
+(default 10, the pro level), `ALIEN_SEEDS` the seed count. The player search does not see the
+eggs (the hooks are not in its tree, like the Hull cracks), so every crush is a side effect of its
+plain Abalone. Boss budget 3000 nodes, rules as on `main` (9d18865):
+
+| Player budget | Wins /20 | Median plies | Median eggs crushed | Median hatched | Median Alien peak | Fights where the count only goes up |
+|---|---|---|---|---|---|---|
+| 30000 (10x) | **20** | 76 | 2 | 17.5 | 21 | 0 |
+| 3000 (1x) | **20** | 95 | 2 | 20.5 | 24.5 | 0 |
+
+The Alien's marbles over time (median of the fights still on; 8 at ply 0):
+
+| Player budget | ply 20 | ply 40 | ply 60 | ply 80 | ply 100 |
+|---|---|---|---|---|---|
+| 30000 (10x) | 11 | 14 | 17.5 (18 on) | 23.5 (6 on) | - |
+| 3000 (1x) | 10.5 | 15 | 18.5 | 23 (16 on) | 27 (7 on) |
+
+Section 7.7 of `game-design.md` fails the Alien when the median fight ends with fewer than 2 eggs
+crushed or when its marble count only ever goes up. Neither happens: the median is 2 crushed at
+both budgets, and every fight has its count drop (each of the 6 ejections). So no knob changes.
+The brood still grows faster than the player ejects (it ends with a median 19.5 marbles at 10x,
+22.5 at 1x, from 8), and every fight is won: the boss is easy for the bot at 10x and at 1x, but
+the Calibrate rule sets no win rate. The single 300-node fight of PR #642 (140 plies, 31 marbles) is the weak end of the same
+curve: the longer the fight, the bigger the brood.
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
