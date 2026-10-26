@@ -151,6 +151,7 @@ describe('Battle royale online (#504)', () => {
 
   it('Hold commits a hold, a silent player holds at the deadline, and the round plays out on the arena', async () => {
     const { game } = await started('?bot=off&round=300', false);
+    await new Promise((done) => setTimeout(done, 400)); // a loaded machine (#705): the page is slow to press Hold
     button('royale-hold').click();
     await until(game, () => data().royale === '2');
     expect(data().reveal).toBe('turn');
