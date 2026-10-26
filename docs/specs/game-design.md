@@ -42,7 +42,9 @@ peer re-validates online moves (see `tech.md`).
    highlights any marble that would be ejected. Sumito pushes show a red arrow chain.
 4. **Confirm.** Second click or Enter plays it. Esc or right click backs out one step.
    Hot-seat can undo the last move before the next player confirms.
-5. **Keyboard.** Tab cycles legal groups, `Q W E A S D` map to the 6 directions, Enter confirms.
+5. **Keyboard.** The board is a tab stop. Tab and Shift+Tab walk the legal groups (past the last or the first the
+   focus moves on, so the board never traps it), `Q W E A S D` pick the direction (NW NE / W E / SW SE, as on the
+   hexagon), Enter confirms, Esc backs out one step. The group and the direction are announced in the HUD.
    Whole game playable without a mouse.
 6. **Touch.** Tap to select, tap arrow, tap again to confirm. No drag required.
 7. **Not now.** Gamepad, voice, haptics.

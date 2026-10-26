@@ -19,6 +19,7 @@ import {
   type Axial,
   type Move,
 } from './board';
+import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { askBot, askEval, botBudget } from './bot';
 import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
@@ -1810,6 +1811,7 @@ addEventListener('pointerdown', skipEjections, { capture: true });
 addEventListener('keydown', skipEjections, { capture: true });
 
 let selected: Axial[] = [];
+let keyDir = -1; // the direction picked with Q W E A S D for the selected group, -1 for none (#738)
 let ringed: Axial[] = []; // the marbles drawn with the selection ring, read by the e2e tests
 let targets: ReturnType<typeof groupTargets> = []; // the cells drawn with a target arrow, read by the e2e tests
 
@@ -2191,7 +2193,7 @@ function animatePasses(now: number): void {
 
 function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   if (royale) return; // no ghost over the arena
-  const mv = hover ? moveForClick(moves, selected, hover) : null;
+  const mv = keyDir >= 0 ? moveFor(moves, selected, keyDir) : hover ? moveForClick(moves, selected, hover) : null;
   const record = mv ? encodeMove(mv) : hint.shown(here()); // the hovered move, else the hint (#192)
   const list = ghostMarbles(history, record, makeGame);
   if (record && engine instanceof Encounter) {
@@ -2225,28 +2227,39 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   }
 }
 
+// The guards of a move input: the game is over, a bot is thinking, a slide is running, or it is not our turn.
+// A click waits for the slide (`retry`), a key is dropped.
+function blocked(retry: () => void): boolean {
+  if (engine.status() !== 0) return true; // over: no move, no selection (#282)
+  if (thinking || online?.role === 'spectator') return true;
+  if (sliding()) return whenSettled(retry), true; // the next move waits for the slide
+  if (online && !online.ourTurn()) return true; // not our turn: our colour in versus, our human ply in co-op
+  if (online && !online.canPlay()) return hud(' · waiting for opponent'), true; // a move would never reach them
+  return false;
+}
+
+function play(mv: Move): void {
+  const record = encodeMove(mv);
+  playMove(record);
+  selected = [];
+  keyDir = -1;
+  void online?.send(record);
+  if (online && fight) void answerBoss(true); // co-op: our move's boss reply
+}
+
 function click(q: number, r: number): void {
   if (hub) return walk([q, r]);
   if (royale) return pickRoyale(q, r);
-  if (engine.status() !== 0) return; // over: no move, no selection (#282)
-  if (thinking || online?.role === 'spectator') return;
-  if (sliding()) return whenSettled(() => click(q, r)); // the next move waits for the slide
-  if (online && !online.ourTurn()) return; // not our turn: our colour in versus, our human ply in co-op
-  if (online && !online.canPlay()) return hud(' · waiting for opponent'); // a move would never reach them
+  if (blocked(() => click(q, r))) return;
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
     selected = toggleSelection(selected, [q, r]);
+    keyDir = -1;
     hint.clear(); // a new selection
   } else {
     // The engine is the only judge: a click that is not a legal move changes nothing.
     const mv = moveForClick(parseMoves(engine.legal_moves()), selected, [q, r]);
-    if (mv) {
-      const record = encodeMove(mv);
-      playMove(record);
-      selected = [];
-      void online?.send(record);
-      if (online && fight) void answerBoss(true); // co-op: our move's boss reply
-    }
+    if (mv) play(mv);
   }
   refresh();
   void botTurn();
@@ -2327,6 +2340,39 @@ function release(e: PointerEvent): void {
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
+
+// Keyboard play (#738), only while the canvas has focus: Tab and Shift+Tab walk the legal groups (past the ends the
+// focus moves on), Q W E A S D pick the direction, Enter plays it, Escape backs out one step.
+canvas.tabIndex = 0;
+canvas.setAttribute('aria-label', 'Abalone board');
+canvas.addEventListener('keydown', (e) => {
+  if (hub || royale || reading || e.altKey || e.ctrlKey || e.metaKey || blocked(() => {})) return;
+  const dir = KEY_DIRS[e.key.toLowerCase()];
+  const moves = parseMoves(engine.legal_moves());
+  if (e.key === 'Tab') {
+    const group = nextGroup(moves, selected, e.shiftKey ? -1 : 1);
+    if (group) e.preventDefault();
+    selected = group ?? [];
+    keyDir = -1;
+    hint.clear();
+  } else if (dir !== undefined) {
+    e.preventDefault();
+    keyDir = dir;
+  } else if (e.key === 'Enter') {
+    const mv = moveFor(moves, selected, keyDir);
+    if (!mv) return;
+    e.preventDefault();
+    play(mv);
+    refresh();
+    return void botTurn();
+  } else if (e.key === 'Escape' && (keyDir >= 0 || selected.length > 0)) {
+    e.preventDefault();
+    if (keyDir >= 0) keyDir = -1;
+    else selected = [];
+  } else return;
+  refresh();
+  hud(` · ${announce(moves, selected, keyDir)}`);
+});
 canvas.addEventListener('pointerleave', () => {
   if (hub && hub.onPointerLeave()) {
     hud();
