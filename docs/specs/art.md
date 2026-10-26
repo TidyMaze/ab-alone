@@ -19,7 +19,9 @@ and no new look: each rule names its source (section numbers), and changes when 
 - **Materials** (world.md 5). Brushed, pitted steel, oil stains, welds, taped cables,
   condensation, dust. Nothing emissive but lights, screens and marbles.
 - **Marbles** (world.md 5, 8). Player: smoked glass, a cyan core that dims with each marble lost.
-  Shell: matte black, ridged like a scarab, a faint heat pulse, no core. Boss: the shell plus one
+  Shell: matte black, ridged like a scarab, a faint heat pulse, no core. The pulse is a slow sodium
+  glow on the Scarab shell, one every 6 s, far fainter than a flash and still 3:1 on every deck at
+  its brightest; off under safe mode, reduced motion and the low tier (#509). Boss: the shell plus one
   accent, a rust crown for The Hull, candle wax for The Chaplain, a wire wrap for The Ballast Mind
   (#507); The Echo and The Choir keep the plain shell, the Choir's army glyphs are its shape cue.
   Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by

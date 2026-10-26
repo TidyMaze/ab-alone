@@ -101,7 +101,7 @@ import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale
 import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
-import { ACCENTS, CONVERTED, CORE, coreLevel, GLASS, SHELL, type Accent } from './marbles';
+import { ACCENTS, CONVERTED, CORE, coreLevel, GLASS, HEAT, pulseAt, SHELL, type Accent } from './marbles';
 import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
@@ -367,6 +367,7 @@ function updateParticles(): void {
 
 // How many times the look was rebuilt: an orbit never rebuilds it (bug #475, e2e/camera.spec.ts).
 let looks = 0;
+let pulsing = false;
 (window as unknown as Record<string, unknown>).__looks = () => looks;
 function applyLook(): void {
   looks++;
@@ -381,6 +382,8 @@ function applyLook(): void {
   updateParticles();
   if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
   else delete document.documentElement.dataset.motion;
+  pulsing = tier === 'high' && !safe && !reducedMotion(); // the shell's heat pulse (#509)
+  document.body.dataset.pulse = pulsing ? 'on' : 'off';
 }
 // The settings menu: one button per item, its icon then its label, opened by the cog only. Escape, a press outside
 // and the cog close it. A toggle shows its state in aria-pressed.
@@ -809,6 +812,8 @@ applyDeck(deck);
 const { ridges, ...shell } = SHELL;
 const scarab = new THREE.MeshStandardMaterial({
   ...shell,
+  emissive: HEAT.color, // the heat pulse (#509), dark until the loop sets its intensity
+  emissiveIntensity: 0,
   envMap: reflections,
   envMapIntensity: LIGHT.environment.intensity,
   ...(shellNormal ? { normalMap: shellNormal, normalScale: new THREE.Vector2(ridges, ridges) } : {}),
@@ -2105,6 +2110,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to find The Alien's eggs as drawn: their cell, counter and glow on 1 (#588), and the glow.
 (window as unknown as Record<string, unknown>).__eggs = () => eggsDrawn;
 (window as unknown as Record<string, unknown>).__eggGlow = () => eggGlowMaterial.opacity;
+// Used by the browser checks to read the shell's heat pulse (#509).
+(window as unknown as Record<string, unknown>).__shellPulse = () => scarab.emissiveIntensity;
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
 (window as unknown as Record<string, unknown>).__converted = () =>
   engine instanceof Encounter ? parseCells(engine.converted()) : [];
@@ -2792,6 +2799,7 @@ renderer.setAnimationLoop((now) => {
   animateEjections(now);
   animateParticles(now);
   eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
+  scarab.emissiveIntensity = pulsing ? pulseAt(now / 1000) : 0;
   turnConsole(now);
   tickLog(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
