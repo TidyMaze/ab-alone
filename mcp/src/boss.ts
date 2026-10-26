@@ -1,6 +1,8 @@
 // The `boss` object of `get_state` (docs/specs/mcp.md section 4.3): one generic shape for every boss. The engine's
 // per-boss getters map into `tell` and `marks` here, as in the spec's mapping table, so an agent never sees a getter.
 
+import { BOARD_CELLS } from './board';
+
 /** What the boss state reads of `Encounter` in abalone-wasm. */
 export interface BossLike {
   name(): string;
@@ -14,6 +16,8 @@ export interface BossLike {
   eggs(): Int32Array;
   /** `[line, player_turns_left, entry_q, entry_r, exit_q, exit_r]` records. */
   trains(): Int32Array;
+  /** One polarity per cell in the board order: `0` none, `1` +, `-1` −. */
+  polarities(): Int32Array;
   /** `[q, r]` pairs. */
   flips(): Int32Array;
   /** `[q, r]` pairs. */
@@ -81,6 +85,9 @@ export function bossState(id: string, boss: BossLike): BossState {
     ...records(boss.cracks(), 3).map((record) => ({ kind: 'crack', cell: cell(record), value: record[2]! })),
     ...records(boss.eggs(), 3).map((record) => ({ kind: 'egg', cell: cell(record), value: record[2]! })),
     ...records(boss.trains(), 6).flatMap(trainMarks),
+    ...Array.from(boss.polarities()).flatMap((sign, i) =>
+      sign === 0 ? [] : [{ kind: 'polarity', cell: cell(BOARD_CELLS[i]!), value: sign }],
+    ),
     ...records(boss.converted(), 2).map((record) => ({ kind: 'converted', cell: cell(record) })),
     ...armies.map((record) => ({ kind: 'army', cell: cell(record), value: record[2]! })),
   ];

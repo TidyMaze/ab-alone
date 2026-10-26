@@ -469,8 +469,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   shuffle) is splitmix64 of the fight seed mixed with the ply, in the engine, never
   `Math.random`, floats or the clock.
 - **Tell**: a polarized marble wears a pale **+** or **−** glyph on top (a shape, not a colour,
-  3:1 on both glass skins). A marble that just got its polarity wears a pale ring until the next
-  ply. Repulsions play in the engine's order: the pair slides apart, the pushed lines slide, an
+  3:1 on both glass skins). A marble whose polarity the last assignment set or changed wears a
+  pale ring until the next ply. Repulsions play in the engine's order: the pair slides apart, the pushed lines slide, an
   ejected marble falls; reduced motion jumps to the end. The HUD line reads "Polarity in 2 turns"
   in P1, "Polarity every turn" in P2 and "All polarities every turn" in P3.
 - **Counter, turn it against the boss**: walk a + marble next to a − marble aimed at a boss line:
