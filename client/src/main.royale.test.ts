@@ -70,7 +70,9 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(game.hook<Axial[]>('__rings')).toEqual([]);
     tap(game, -4, 8); // the player's marble is selected
     expect(game.hook<Axial[]>('__rings')).toEqual([[-4, 8]]);
-    tap(game, 0, 0); // no target there: nothing changes
+    tap(game, 0, 0); // the hole in the centre (#610): no target there, nothing changes, no prop behind opens
+    expect(document.body.dataset.reading).toBeUndefined();
+    expect(game.hook<Axial[]>('__rings')).toEqual([[-4, 8]]);
     expect(turn()).toBe('Battle royale · Round 1');
     game.click(-4, 8);
     expect(game.hook<Axial[]>('__rings')).toEqual([]); // a second press lets it go
@@ -298,14 +300,14 @@ describe('main.ts, a battle royale round plays out (#612)', () => {
   });
 
   it('a move that ejects plays the ejection fall', async () => {
-    // Seed 1, the player holding: Bot 3 ejects a marble of Bot 2 in round 26.
+    // Seed 1, the player holding: Bot 1 ejects a marble of Bot 2 in round 26.
     const game = await seeded(1);
     for (let round = 0; round < 25; round++) button('royale-hold').click();
     game.frame(10_000);
     button('royale-hold').click();
     expect(until(game, () => document.body.dataset.ejecting === 'tumble')).toBe(true);
     expect(reveal()).toBe('turn');
-    expect(items('.reveal li').at(-1)).toBe('Bot 3: moved, ejected Bot 2');
+    expect(items('.reveal li').at(-1)).toBe('Bot 1: moved, ejected Bot 2');
     expect(until(game, () => reveal() === 'done' && !document.body.dataset.ejecting)).toBe(true);
   });
 
@@ -315,11 +317,11 @@ describe('main.ts, a battle royale round plays out (#612)', () => {
     button('royale-hold').click();
     expect(until(game, () => reveal() === 'breach')).toBe(true);
     expect(document.body.dataset.ejecting).toBe('tumble'); // the marbles on the ring fall
-    expect(document.body.dataset.vanished).toBe('0');
+    expect(document.body.dataset.vanished).toBe('7'); // only the hole in the centre (#610)
     expect(items('.reveal li')).toHaveLength(6);
     game.frame(100);
     expect(until(game, () => reveal() === 'done')).toBe(true);
-    expect(document.body.dataset.vanished).toBe('48');
+    expect(document.body.dataset.vanished).toBe('55');
     expect(document.body.dataset.cracks).toBe('0');
   });
 
