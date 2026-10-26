@@ -227,7 +227,7 @@ board). Eliminated players spectate.
    targeting a leader needs a guess.
 5. **Breach pace.** No hiding on the rim, no turtling in a corner for a draw.
 6. **Fast elimination.** Marbles disappear on death, a loser cannot keep pushing for someone.
-Measure it (acceptance): in 1000 bot games, the final-two leader should lose to a dying
+Measure it (acceptance): in 10 000 bot games (`royale_sim`, #547), the final-two leader should lose to a dying
 third player less than 1 time in 5. Compare against option A as a baseline.
 
 ## 7. Boss roster
