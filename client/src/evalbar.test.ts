@@ -56,13 +56,15 @@ describe('evalText', () => {
 describe('Analyst', () => {
   /** An ask whose answers the test gives by hand, in any order. */
   function setup() {
-    const calls: { history: number[][]; answer: (score: number) => void }[] = [];
+    const calls: { history: number[][]; answer: (score: number) => void; fail: (e: Error) => void }[] = [];
     const shown: [number, Position][] = [];
+    let failures = 0;
     const analyst = new Analyst(
-      (history) => new Promise<number>((answer) => calls.push({ history, answer })),
+      (history) => new Promise<number>((answer, fail) => calls.push({ history, answer, fail })),
       (score, position) => shown.push([score, position]),
+      () => failures++,
     );
-    return { calls, shown, analyst };
+    return { calls, shown, analyst, failures: () => failures };
   }
   const flush = () => new Promise((done) => setTimeout(done, 0));
   const ply = (n: number): Position => ({ history: Array.from({ length: n }, () => [1, 0, n, 0, 0, 0, 0, 0]), side: 1 + (n % 2) });
@@ -74,6 +76,21 @@ describe('Analyst', () => {
     calls[0]!.answer(42);
     await flush();
     expect(shown).toEqual([[42, ply(1)]]);
+  });
+
+  it('reports a failed evaluation once, frees the worker for the next position, and stays silent once stopped, #736', async () => {
+    const { calls, shown, analyst, failures } = setup();
+    analyst.request(ply(1));
+    calls[0]!.fail(new Error('worker down'));
+    await flush();
+    expect(failures()).toBe(1);
+    analyst.request(ply(2));
+    expect(calls).toHaveLength(2); // not stuck busy
+    analyst.stop();
+    calls[1]!.fail(new Error('late'));
+    await flush();
+    expect(failures()).toBe(1);
+    expect(shown).toEqual([]);
   });
 
   it('keeps one request in flight, skips the positions played over meanwhile, never shows a stale score', async () => {

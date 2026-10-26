@@ -6,6 +6,7 @@ import {
   BOT_NODES,
   botBudget,
   EVAL_NODES,
+  type BotFailure,
   type BotRequest,
   type BotResponse,
   type EncounterLike,
@@ -92,7 +93,7 @@ describe('askBot', () => {
   /** A worker that answers every request with `answer`, asynchronously, like a real one. */
   function fakeWorker() {
     const worker = {
-      onmessage: null as ((e: MessageEvent<BotResponse>) => void) | null,
+      onmessage: null as ((e: MessageEvent<BotResponse | BotFailure>) => void) | null,
       postMessage(req: BotRequest) {
         const reply = answer(req, () => new FakeEngine(), noEncounter);
         // A reply for another request must be ignored.
@@ -143,6 +144,44 @@ describe('askBot', () => {
     void askBot(worker, [], 10, { id: 'echo', seed: 4 }, 50);
     expect(sent[0]!.boss).toEqual({ id: 'echo', seed: 4 });
     expect(sent[0]!.difficultyPercent).toBe(50);
+  });
+});
+
+describe('askBot failures, #736', () => {
+  const never = () => {
+    const worker = {
+      onmessage: null as ((e: MessageEvent<BotResponse | BotFailure>) => void) | null,
+      onerror: null as ((e: ErrorEvent) => void) | null,
+      sent: [] as BotRequest[],
+      postMessage(req: BotRequest) {
+        worker.sent.push(req);
+      },
+    };
+    return worker;
+  };
+
+  it('rejects the request that gets an error reply, and only that one', async () => {
+    const worker = never();
+    const failed = askBot(worker, [], 10);
+    const fine = askEval(worker, [], 10);
+    worker.onmessage!({ data: { id: worker.sent[0]!.id, error: 'Error: boom' } } as MessageEvent);
+    worker.onmessage!({ data: { id: worker.sent[1]!.id, score: 7 } } as MessageEvent);
+    await expect(failed).rejects.toThrow('Error: boom');
+    await expect(fine).resolves.toBe(7);
+  });
+
+  it('rejects every request in flight when the worker itself fails, and later ones too', async () => {
+    const worker = never();
+    const first = askBot(worker, [], 10);
+    const second = askEval(worker, [], 10);
+    worker.onerror!({ message: 'no wasm' } as ErrorEvent);
+    await expect(first).rejects.toThrow('The bot worker failed');
+    await expect(second).rejects.toThrow('The bot worker failed');
+    // A reply that comes after is ignored, and a fresh request is asked again.
+    worker.onmessage!({ data: { id: worker.sent[0]!.id, move: [] } } as MessageEvent);
+    const third = askEval(worker, [], 10);
+    worker.onmessage!({ data: { id: worker.sent[2]!.id, score: 3 } } as MessageEvent);
+    await expect(third).resolves.toBe(3);
   });
 });
 
