@@ -77,6 +77,9 @@ pub struct Board {
     converted: Vec<(i32, i32)>,
     /// Alien eggs on empty cells, with the player turns left before each hatches.
     eggs: Vec<((i32, i32), u8)>,
+    /// Rail Yard trains: the track of each announced train and the player turns left before it
+    /// passes.
+    trains: Vec<(u8, u8)>,
 }
 
 impl Board {
@@ -101,6 +104,7 @@ impl Board {
             cracks: Vec::new(),
             converted: Vec::new(),
             eggs: Vec::new(),
+            trains: Vec::new(),
         }
     }
 
@@ -152,6 +156,15 @@ impl Board {
 
     pub fn set_eggs(&mut self, eggs: Vec<((i32, i32), u8)>) {
         self.eggs = eggs;
+    }
+
+    /// Rail Yard trains: each announced train's track and the player turns left before it passes.
+    pub fn trains(&self) -> &[(u8, u8)] {
+        &self.trains
+    }
+
+    pub fn set_trains(&mut self, trains: Vec<(u8, u8)>) {
+        self.trains = trains;
     }
 
     /// Standard start layout: 14 marbles per side.
@@ -440,6 +453,17 @@ mod tests {
         assert_eq!(board.eggs(), &[((1, 0), 4)]);
         assert_ne!(board, Board::empty());
         board.set_eggs(vec![]);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn trains_start_empty_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert!(board.trains().is_empty());
+        board.set_trains(vec![(26, 5)]);
+        assert_eq!(board.trains(), &[(26, 5)]);
+        assert_ne!(board, Board::empty());
+        board.set_trains(vec![]);
         assert_eq!(board, Board::empty());
     }
 }
