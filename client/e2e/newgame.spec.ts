@@ -149,16 +149,19 @@ test('New game while the bot thinks: its reply to the old game is dropped, the b
     };
     const Real = window.Worker;
     w.Worker = class extends Real {
+      // The game's workers only: KTX2Loader's transcoder workers (#700) run from a blob URL, and pass.
+      game: boolean;
       constructor(url: string | URL, options?: WorkerOptions) {
         super(url, options);
+        this.game = !String(url).startsWith('blob:');
         // The page handles the reply in the same task. An evaluation answer carries a score, not a move.
         this.addEventListener('message', (e) => {
-          if (!('score' in e.data)) replies++;
+          if (this.game && !('score' in e.data)) replies++;
         });
       }
       postMessage(msg: unknown): void {
         const sent = structuredClone(msg); // what the worker gets is copied now, as postMessage does
-        if (holding && !(msg as { evaluate?: boolean }).evaluate) held.push(() => super.postMessage(sent));
+        if (this.game && holding && !(msg as { evaluate?: boolean }).evaluate) held.push(() => super.postMessage(sent));
         else super.postMessage(sent);
       }
     };
