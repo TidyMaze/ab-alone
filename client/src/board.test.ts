@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BOARD_CELLS,
   CELLS,
   DIRECTIONS,
   MOVE_STRIDE,
@@ -59,10 +60,22 @@ describe('cell order of the bridge', () => {
   });
 
   it('rejects cells off the board', () => {
-    expect(cellIndex(5, 0)).toBe(-1);
-    expect(cellIndex(-4, -1)).toBe(-1);
-    expect(cellIndex(0, 5)).toBe(-1);
-    expect(cellAt(61)).toBeUndefined();
+    expect(cellIndex(6, 0)).toBe(-1);
+    expect(cellIndex(-5, -1)).toBe(-1);
+    expect(cellIndex(0, 6)).toBe(-1);
+    expect(cellIndex(5, 0, CELLS)).toBe(-1);
+    expect(cellAt(91)).toBeUndefined();
+  });
+
+  it('goes on past the 61 with the outer ring of The Ballast Mind\'s radius 5 board (#564), rows from r=-5', () => {
+    expect(BOARD_CELLS).toHaveLength(91);
+    expect(BOARD_CELLS.slice(0, 61)).toEqual(CELLS);
+    const ring = BOARD_CELLS.slice(61);
+    expect(ring.every(([q, r]) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) === 5)).toBe(true);
+    expect(ring).toEqual(cellsFor(5).filter(([q, r]) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) === 5));
+    expect(cellIndex(0, -5)).toBe(61);
+    expect(cellIndex(5, 0)).toBeGreaterThan(61);
+    expect(cellAt(90)).toEqual([0, 5]);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELLS, VANISHED, axialTo3D, cellIndex } from './board';
+import { BOARD_CELLS, CELLS, VANISHED, axialTo3D, cellIndex } from './board';
 import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight } from './frame';
 
 const DISC = 0.46; // the cell disc radius of main.ts
@@ -40,6 +40,16 @@ describe('frameShape (world.md section 6)', () => {
     expect(shape.radius).toBe(3);
     expect(shape.holes).toEqual([]);
     expect(apothem(shape.inner)).toBeCloseTo(3 * (Math.sqrt(3) / 2) + FRAME.margin);
+  });
+
+  it('The Ballast Mind plays on radius 5 (#564): its frame is that size, a hole on each of its six pillars', () => {
+    const pillars = [[1, 1], [-1, 2], [-2, 1], [-1, -1], [1, -2], [2, -1]];
+    const board = BOARD_CELLS.map(([q, r]) => (pillars.some(([pq, pr]) => pq === q && pr === r) ? VANISHED : 0));
+    const shape = frameShape(board);
+    expect(shape.radius).toBe(5);
+    expect(shape.holes).toHaveLength(6);
+    expect(apothem(shape.inner)).toBeCloseTo(5 * (Math.sqrt(3) / 2) + FRAME.margin);
+    for (const [q, r] of BOARD_CELLS) expect(reach(axialTo3D(q, r)) + DISC).toBeLessThan(apothem(shape.inner));
   });
 
   it('a vanished cell of The Hull is a hole in the plate, inside the rim', () => {

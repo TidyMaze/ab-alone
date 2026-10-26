@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { axialTo3D, cellIndex, DIRECTIONS } from './board';
+import { axialTo3D, BOARD_CELLS, cellIndex, DIRECTIONS } from './board';
 import {
   EJECT_MS,
   FADE_MS,
@@ -148,6 +148,18 @@ describe('trackAt', () => {
 });
 
 describe('findEjection', () => {
+  it('finds a marble pushed off ring 5 of The Ballast Mind\'s radius 5 board (#564)', () => {
+    const wide = (cells: Array<[number, number, number]>): number[] => {
+      const b = BOARD_CELLS.map(() => 0);
+      for (const [q, r, side] of cells) b[cellIndex(q, r)] = side;
+      return b;
+    };
+    const mv = { cells: [[0, -3], [0, -4]] as [number, number][], dir: 4 };
+    const before = wide([[0, -3, 1], [0, -4, 1], [0, -5, 2]]);
+    const after = wide([[0, -4, 1], [0, -5, 1]]);
+    expect(findEjection(before, after, mv)).toEqual({ cell: [0, -5], side: 2 });
+  });
+
   // Black trio on the q = -2 column pushes two White marbles NW: the last one leaves the board.
   const move = { cells: [[-2, 0], [-2, 1], [-2, 2]] as [number, number][], dir: 4 };
   const before = put([[-2, 0, 1], [-2, 1, 1], [-2, 2, 1], [-2, -1, 2], [-2, -2, 2]]);

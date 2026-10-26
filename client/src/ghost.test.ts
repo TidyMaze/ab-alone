@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellIndex } from './board';
+import { BOARD_CELLS, cellIndex } from './board';
 import { ghostMarbles, type GhostEngine } from './ghost';
 
 const empty = (): number[] => new Array<number>(61).fill(0);
@@ -65,6 +65,12 @@ describe('ghostMarbles', () => {
     const after = put([[0, 1, 1], [4, -1, 3], [3, -1, 3]]); // a marble cell and an empty cell vanish
     const { make } = fake([before, after]);
     expect(ghostMarbles([], [1, 4, 0, 2, 0, 0, 0, 0], make)).toEqual([{ cell: [0, 1], side: 1 }]);
+  });
+
+  it('shows a landing cell on ring 5 of The Ballast Mind\'s radius 5 board (#564)', () => {
+    const wide = (q: number, r: number): number[] => BOARD_CELLS.map(([cq, cr]) => (cq === q && cr === r ? 1 : 0));
+    const { make } = fake([wide(0, -4), wide(0, -5)]);
+    expect(ghostMarbles([], [1, 4, 0, -4, 0, 0, 0, 0], make)).toEqual([{ cell: [0, -5], side: 1 }]);
   });
 
   it('shows nothing when the engine rejects the move', () => {

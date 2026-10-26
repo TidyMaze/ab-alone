@@ -1,6 +1,6 @@
 // How tense the game is, for the drone tension layers of the music (docs/specs/world.md section 7, Music; #439): the
 // player's marbles in danger and the boss phase. Pure functions only: main.ts feeds them the board.
-import { CELLS, DIRECTIONS, VANISHED, cellIndex } from './board';
+import { BOARD_CELLS, DIRECTIONS, VANISHED, cellIndex } from './board';
 
 /** The tension level: 0 calm, 1 and 2 as each drone layer comes in. */
 export type Tension = 0 | 1 | 2;
@@ -9,11 +9,8 @@ export type Tension = 0 | 1 | 2;
  * vanished cell, The Hull) with a longer line of foe marbles behind it, a sumito of 2 on 1, 3 on 1 or 3 on 2. */
 export function rimDanger(board: ArrayLike<number>, side: number): number {
   const foe = 3 - side;
-  const at = (q: number, r: number): number => {
-    const i = cellIndex(q, r);
-    return i === -1 ? VANISHED : board[i]!; // off the board is the void too
-  };
-  return CELLS.filter(
+  const at = (q: number, r: number): number => board[cellIndex(q, r)] ?? VANISHED; // off the board is the void too
+  return BOARD_CELLS.filter(
     ([q, r]) =>
       at(q, r) === side &&
       DIRECTIONS.some(([dq, dr]) => {

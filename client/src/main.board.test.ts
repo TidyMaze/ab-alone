@@ -120,7 +120,8 @@ describe('main.ts board and HUD', () => {
     const scene = catchScene();
     await boot('?bot=off');
     const { discs, plate, near } = parts(scene());
-    expect(discs).toHaveLength(61);
+    expect(discs).toHaveLength(91); // the 61, then ring 5 for The Ballast Mind (#564)
+    expect(discs.filter((d) => d.visible)).toHaveLength(61);
     expect(discs[0]!.material.map).toBeInstanceOf(THREE.Texture);
     expect(discs[0]!.material.normalMap).toBeInstanceOf(THREE.Texture);
     expect(plate.material.map).toBeInstanceOf(THREE.Texture);
@@ -130,6 +131,24 @@ describe('main.ts board and HUD', () => {
     expect(shells[0]!.material.normalMap).toBeInstanceOf(THREE.Texture); // the scarab ridges
     expect(shells[0]!.children).toHaveLength(0);
     expect(glass[0]!.children).toHaveLength(1); // its cyan core
+  });
+
+  it('draws The Ballast Mind on its radius 5 board (#564): 85 discs round six void pillars, a frame of radius 5', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    const shown = (): number => parts(scene()).discs.filter((d) => d.visible).length;
+    startBoss(game, 'ballast');
+    expect(shown()).toBe(85);
+    expect(game.hook('__frame')).toMatchObject({ radius: 5, holes: 6 });
+    const { shells, glass } = drawn(scene());
+    expect(shells.length + glass.length).toBe(30);
+    // A marble of ring 5 moves by two clicks, like any other.
+    const ring5 = game.hook<{ cells: Axial[] }[]>('__legal').find((m) => m.cells.length === 1 && Math.abs(m.cells[0]![0]) === 5)!;
+    step(game, ring5.cells[0]);
+    expect(game.hook('__plies')).toBe(1);
+    startBoss(game, 'echo'); // back on 61 cells, ring 5 hides again
+    expect(shown()).toBe(61);
+    expect(game.hook('__frame')).toMatchObject({ radius: 4, holes: 0 });
   });
 
   it('swaps the cells normal map with the albedo on a deck change (#440)', async () => {
@@ -406,7 +425,7 @@ describe('main.ts board and HUD', () => {
     const vanished = Number(document.body.dataset.vanished);
     expect(vanished).toBeGreaterThan(0);
     expect(game.hook('__frame')).toMatchObject({ holes: vanished, drawn: true });
-    expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished);
+    expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished + 30); // ring 5 is off this board (#564)
     await game.settle();
   });
 

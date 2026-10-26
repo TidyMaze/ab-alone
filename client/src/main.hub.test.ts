@@ -269,6 +269,19 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(hub()).toBe('mess 2,0');
   });
 
+  it('the boss door of the Bridge starts The Ballast Mind on its radius 5 board (#564)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    const beaten = ['echo', 'hull', 'choir', 'chaplain'];
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck: 'bridge', cell: [1, 0], beaten }));
+    ship(game);
+    game.click(2, 0);
+    expect(hub()).toBeUndefined();
+    expect(data().boss).toBe('ballast');
+    expect(data().deck).toBe('bridge');
+    expect(game.hud()).toContain('The Ballast Mind');
+    expect(game.hook('__frame')).toMatchObject({ radius: 5, holes: 6 });
+  });
+
   it('a table after a boss fight is a plain game again: no boss, no Retry, New game back', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     shipAt(game, [1, 0]);

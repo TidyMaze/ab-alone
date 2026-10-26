@@ -42,6 +42,11 @@ export function cellsFor(radius: number): Axial[] {
 /** The 61 cells of the standard board. */
 export const CELLS: readonly Axial[] = cellsFor(RADIUS);
 
+const ring = ([q, r]: Axial): number => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+/** The cells a board array holds, in the bridge order: the 61, then the outer ring of The Ballast Mind's radius 5
+ * board (#564). A board of 61 values stops before ring 5. */
+export const BOARD_CELLS: readonly Axial[] = [...CELLS, ...cellsFor(5).filter((c) => ring(c) === 5)];
+
 /** Pointy-top layout: E is +x, rows go down the screen with +r (+z). `spacing` is the distance
  * between two neighbour centres. */
 export function axialTo3D(q: number, r: number, spacing = 1): { x: number; y: number; z: number } {
@@ -49,11 +54,11 @@ export function axialTo3D(q: number, r: number, spacing = 1): { x: number; y: nu
 }
 
 /** Index of a cell in the bridge board array, `-1` off the board. */
-export function cellIndex(q: number, r: number, cells: readonly Axial[] = CELLS): number {
+export function cellIndex(q: number, r: number, cells: readonly Axial[] = BOARD_CELLS): number {
   return cells.findIndex(([cq, cr]) => cq === q && cr === r);
 }
 
-export function cellAt(index: number, cells: readonly Axial[] = CELLS): Axial | undefined {
+export function cellAt(index: number, cells: readonly Axial[] = BOARD_CELLS): Axial | undefined {
   return cells[index];
 }
 

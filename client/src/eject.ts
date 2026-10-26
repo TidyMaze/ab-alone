@@ -66,7 +66,7 @@ export function findEjection(
   if (count(before) - count(after) <= voided) return null;
   const [dq, dr] = DIRECTIONS[mv.dir]!;
   let [q, r] = mv.cells[0]!;
-  const open = (i: number): boolean => i !== -1 && before[i] !== VANISHED;
+  const open = (i: number): boolean => (before[i] ?? VANISHED) !== VANISHED; // off the board is the void too
   while (open(cellIndex(q + dq, r + dr))) {
     [q, r] = [q + dq, r + dr];
     if (!isMarble(before[cellIndex(q, r)])) return null;
