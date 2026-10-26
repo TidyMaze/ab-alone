@@ -287,6 +287,10 @@ answer: only a `Sync` does.
    validated at its turn, an invalid order becomes a pass (game design #53, option C). Pure, so
    all peers reach the same state, checked by hash. Bots: orders are a pure function of
    (round-start state, seed), computed before reveal.
+   Built in #494 and #495 (`crates/abalone-core/src/royale/`, not in the wasm bridge yet):
+   `royale::start(seats)` gives the start position, `resolve_round(state, orders)` takes one
+   `(seat, Move | Hold)` per seat in any order and returns the next state and the round log;
+   `Royale::hash` is the state hash the peers compare.
 - **Who arbitrates?** Nobody has authority over the outcome, the pure function does. A
   **coordinator** (the host peer) exists only for liveness: it announces round start, collects
   the timeout decision and drives membership. If the coordinator lies about a deadline, peers

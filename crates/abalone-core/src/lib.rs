@@ -2,6 +2,7 @@ pub mod board;
 pub mod encounter;
 pub mod game;
 pub mod moves;
+pub mod royale;
 pub mod search;
 
 pub fn version() -> &'static str {

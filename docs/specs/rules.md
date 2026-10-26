@@ -218,7 +218,18 @@ Hooks, from game-design section 7 (starting values):
 - **FINAL.** 3 to 6 players. **TUNE** for the default of 6, with bots filling empty seats.
 - **FINAL.** Arena: hex radius 8, 217 cells.
 - **TUNE.** 10 marbles per player (game-design open question Q3).
-- **OPEN-5.** Starting coordinates for the 6 wedges are not defined in any source. Needed before a test.
+- **FINAL (OPEN-5, lead decision on #494).** Start position (`royale::start`): 6 wedges of 10 cells, one centred on each rim side. Wedge 0 sits on the bottom side (r = 8, Black's side as in section 2.1), in rows of 3, 4 and 3 from the rim inwards, symmetric about the middle of the side. Wedge `k` is wedge 0 turned `k` times by 60 degrees about the centre, `(q,r) -> (-r,q+r)` (clockwise on screen, E goes to SE). With 6 seats the start is 6-fold symmetric.
+
+  | Wedge | Cells |
+  |---|---|
+  | 0 (bottom) | (-5,8) (-4,8) (-3,8) (-5,7) (-4,7) (-3,7) (-2,7) (-4,6) (-3,6) (-2,6) |
+  | 1 (bottom left) | (-8,3) (-8,4) (-8,5) (-7,2) (-7,3) (-7,4) (-7,5) (-6,2) (-6,3) (-6,4) |
+  | 2 (top left) | (-3,-5) (-4,-4) (-5,-3) (-2,-5) (-3,-4) (-4,-3) (-5,-2) (-2,-4) (-3,-3) (-4,-2) |
+  | 3 (top) | (5,-8) (4,-8) (3,-8) (5,-7) (4,-7) (3,-7) (2,-7) (4,-6) (3,-6) (2,-6) |
+  | 4 (top right) | (8,-3) (8,-4) (8,-5) (7,-2) (7,-3) (7,-4) (7,-5) (6,-2) (6,-3) (6,-4) |
+  | 5 (bottom right) | (3,5) (4,4) (5,3) (2,5) (3,4) (4,3) (5,2) (2,4) (3,3) (4,2) |
+
+  Seats `s0 ... s(N-1)` take the wedges in this order: 3 seats `0, 2, 4` (alternating), 4 seats `0, 1, 3, 4` (the two empty wedges are opposite), 5 seats `0` to `4`, 6 seats `0` to `5`. Seat colours in seat order: Black, White, then seats 3 to 6. Fewer than 3 or more than 6 seats is refused.
 
 **Round structure (FINAL, game-design option C):** all players commit at once, then reveal, then the round resolves.
 
@@ -228,9 +239,11 @@ Hooks, from game-design section 7 (starting values):
 4. An order that is illegal at its turn **fizzles**: it counts as a pass. The player loses tempo only. **FINAL.**
 5. **Round timer**: 15 s (**TUNE**). **OPEN-2**: tech.md section 6 says 30 s after the previous round. See section 13.
 
-**Initiative order.** Seats in list order `s0 ... s(N-1)`. Round `k` (starting at 1) starts at seat `s((k-1) mod N)` and goes round the list. Every player leads once every N rounds. **PROPOSAL.** game-design says only "derived from round number and seat list" (**OPEN-10**).
+**Initiative order (FINAL, OPEN-10, lead decision on #495).** Seats in list order `s0 ... s(N-1)`. Round `k` (starting at 1) starts at seat `s((k-1) mod N)` and goes round the list. Every player leads once every N rounds.
 
-**Same-cell conflict.** Two orders target one cell. The one resolved first takes it. The second is validated at its turn, so if it is now illegal, it fizzles. **PROPOSAL** (follows from option C; not written in game-design, **OPEN-9**).
+**Same-cell conflict (FINAL, OPEN-9, lead decision on #495).** Two orders target one cell. The one resolved first takes it. The second is validated at its turn, so if it is now illegal, it fizzles.
+
+**Resolution (FINAL, `royale::resolve_round`).** The function is pure: the same state and the same set of orders give the same state, hash and log in whatever order the orders are listed. At most one order per seat; an order for a seat the game does not have, or a second order for one seat, is refused. A seat with no order holds. At its turn, a seat with no marble left is out and its order is ignored, even if it lost its last marble earlier in the same round. Each move makes its seat the last toucher of every marble it shifts (its own group and the run it pushes), and an ejection is credited to that seat. The round log lists every seat in initiative order with its outcome (applied, fizzled with the reason, held, or out) and the seat whose marble its move ejected, if any.
 
 **Hull breach (TUNE for every number):**
 
@@ -478,12 +491,12 @@ These are raised in the PR body. Owners decide. Nothing here was picked silently
 - **OPEN-2. Battle royale round timer.** game-design.md section 6 says 15 s. tech.md section 6 says 30 s. This spec uses 15 s (TUNE).
 - **OPEN-3. Who moves first.** No source. PROPOSAL: Black.
 - **OPEN-4. Belgian daisy coordinates.** Resolved in #69: checked against three diagrams, section 2.2 is FINAL.
-- **OPEN-5. Battle royale wedge coordinates.** Not defined.
+- **OPEN-5. Battle royale wedge coordinates.** Resolved in #494: section 10.4 is FINAL.
 - **OPEN-6. Battle royale rings below radius 3.** game-design.md is ambiguous.
 - **OPEN-7. Battle royale ties and placement tables.** Points are defined for 6 players only. The tie at breach end is not defined.
 - **OPEN-8. Credit for breach ejections.** PROPOSAL: last toucher if any, else nobody.
-- **OPEN-9. Same-cell conflict in battle royale.** PROPOSAL: first in initiative wins, the second fizzles. Not written in game-design.md.
-- **OPEN-10. Initiative formula.** game-design.md says "derived from round number and seat list". PROPOSAL: rotate by round.
+- **OPEN-9. Same-cell conflict in battle royale.** Resolved in #495: first in initiative wins, the second fizzles (section 10.4, FINAL).
+- **OPEN-10. Initiative formula.** Resolved in #495: rotate by round (section 10.4, FINAL).
 - **OPEN-11. Online 1v1 after the 60 s grace.** Forfeit or wait? Not defined.
 - **OPEN-12. Resign.** Not defined.
 - **OPEN-13. Credit for boss-hook removals in PvE.** PROPOSAL: a player marble removed by a hook raises the boss's ejected count, and the reverse.
