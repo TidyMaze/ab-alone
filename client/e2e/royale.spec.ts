@@ -17,6 +17,59 @@ async function click(page: Page, q: number, r: number): Promise<void> {
   await page.mouse.click(p.x, p.y);
 }
 
+// Everyone holds 12 rounds: ring 8, its 48 cells, cracks at the end of round 12 and goes void at the end of round 13.
+const CRACKED = { seed: 7, rounds: Array.from({ length: 12 }, () => []) };
+// The player walks its 4 columns NW to radius 5 or less in 11 rounds while the bots hold on the rim: the void of ring 6
+// at the end of round 25 takes the bots' last marbles together, the player is first (src/main.royale.test.ts too).
+type Cell = [number, number];
+const NW = (...cells: Cell[]): number[] => [0, cells.length, 4, ...[...cells, [0, 0], [0, 0]].slice(0, 3).flat()];
+const column = (cells: Cell[], steps: number): number[][] =>
+  Array.from({ length: steps }, (_, s) => NW(...cells.map(([q, r]): Cell => [q, r - s])));
+const END = {
+  seed: 7,
+  rounds: [
+    ...column([[-4, 8], [-4, 7], [-4, 6]], 3),
+    ...column([[-3, 8], [-3, 7], [-3, 6]], 3),
+    ...column([[-5, 8], [-5, 7]], 3),
+    ...column([[-2, 7], [-2, 6]], 2),
+    ...Array.from({ length: 14 }, () => []),
+  ],
+};
+
+test('the outer ring cracks with a warning a round before it goes void, then it vanishes (#503)', async ({ page }) => {
+  await ready(page);
+  await page.evaluate((file) => (window as any).__royale(file), CRACKED);
+  const hud = page.locator('#hud');
+  const body = page.locator('body');
+  await expect(hud.locator('.turn')).toHaveText('Battle royale · Round 13');
+  await expect(hud.locator('.breach')).toHaveText('Breach: 48 cells void in 1 round');
+  await expect(body).toHaveAttribute('data-cracks', '48');
+  await expect(body).toHaveAttribute('data-vanished', '0');
+  await page.getByRole('button', { name: 'Hold' }).click();
+  await expect(hud.locator('.turn')).toHaveText('Battle royale · Round 14');
+  await expect(body).toHaveAttribute('data-vanished', '48');
+  await expect(body).toHaveAttribute('data-cracks', '0');
+  await expect(hud.locator('.breach')).toHaveCount(0);
+});
+
+test('an end position shows the placement banner: places and points (#503)', async ({ page }) => {
+  await ready(page);
+  await page.evaluate((file) => (window as any).__royale(file), END);
+  const hud = page.locator('#hud');
+  await expect(hud.locator('.turn')).toHaveText('You win');
+  await expect(hud.locator('.end')).toHaveText('10 points. The books balance.');
+  await expect(hud.locator('.placement li')).toHaveText([
+    '1st You · 10 points',
+    '2nd Bot 1 · 6 points',
+    '2nd Bot 2 · 6 points',
+    '2nd Bot 3 · 6 points',
+    '2nd Bot 4 · 6 points',
+    '2nd Bot 5 · 6 points',
+  ]);
+  await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
+  await expect(page.getByRole('button', { name: 'Hold' })).toBeDisabled();
+});
+
 test('a royale game file loads, and the reveal log marks the fizzled order', async ({ page }) => {
   await ready(page);
   // Round 1: the player orders (-6, 3) E, a marble of Bot 1. It fizzles.

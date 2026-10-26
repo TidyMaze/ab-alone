@@ -290,6 +290,13 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .reveal { margin-top: 0.5rem; padding-top: 0.25rem; border-top: 1px solid var(--edge); }
 #hud .reveal .fizzled { color: var(--hazard); }
 #hud .seat { display: inline-block; width: 0.6rem; height: 0.6rem; margin-right: 0.35rem; border-radius: 50%; }
+/* #503: a seat out is greyed out and struck through, its tint dot faded; the breach warning in the hazard colour; once
+   over, the places and points one seat a line under the end banner. */
+#hud .initiative .out, #hud .reveal .out { color: var(--muted); }
+#hud .initiative .out { text-decoration: line-through; }
+#hud .out .seat { opacity: 0.4; }
+#hud .breach { display: block; color: var(--hazard); }
+#hud .placement { margin: 0.25rem 0 0; padding: 0; list-style: none; font-size: 0.875rem; }
 /* A medium landscape window has little room above the board's top-left edge, which runs at about 45 degrees:
    a smaller plate keeps clear of it (#246). Shorter windows have the rule below. */
 @media (orientation: landscape) and (max-width: 1100px) and (min-height: 501px) {

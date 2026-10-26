@@ -26,6 +26,23 @@ async function royale(): Promise<Game> {
 }
 // Seat 0 orders (-6, 3) E, a marble of Bot 1: it fizzles.
 const FIZZLE = [0, 1, 0, -6, 3, 0, 0, 0, 0];
+// Everyone holds 12 rounds: ring 8, its 48 cells, cracks at the end of round 12 and goes void at the end of round 13.
+const CRACKED = { seed: 7, rounds: Array.from({ length: 12 }, () => []) };
+// The player walks its 4 columns NW to radius 5 or less in 11 rounds while the bots hold on the rim: the void of ring 6
+// at the end of round 25 takes the bots' last marbles together, the player is first (the same file as e2e/royale.spec.ts).
+const NW = (...cells: Axial[]): number[] => [0, cells.length, 4, ...[...cells, [0, 0], [0, 0]].slice(0, 3).flat()];
+const column = (cells: Axial[], steps: number): number[][] =>
+  Array.from({ length: steps }, (_, s) => NW(...cells.map(([q, r]): Axial => [q, r - s])));
+const END = {
+  seed: 7,
+  rounds: [
+    ...column([[-4, 8], [-4, 7], [-4, 6]], 3),
+    ...column([[-3, 8], [-3, 7], [-3, 6]], 3),
+    ...column([[-5, 8], [-5, 7]], 3),
+    ...column([[-2, 7], [-2, 6]], 2),
+    ...Array.from({ length: 14 }, () => []),
+  ],
+};
 
 describe('main.ts, the offline battle royale (#502)', () => {
   it('Battle royale starts round 1 on the arena at the Furnace, its initiative shown, Lock off until an order', async () => {
@@ -102,6 +119,66 @@ describe('main.ts, the offline battle royale (#502)', () => {
     for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) button('royale-hold').click();
     expect(button('royale-hold').disabled).toBe(true);
     expect(button('royale-lock').disabled).toBe(true);
+  });
+
+  it('a cracked ring glows with the crack decal and its countdown a round before it goes void, then vanishes (#503)', async () => {
+    const game = await boot('?bot=off');
+    game.hook('__royale', CRACKED);
+    expect(turn()).toBe('Battle royale · Round 13');
+    expect(document.body.dataset.cracks).toBe('48');
+    expect(document.body.dataset.vanished).toBe('0');
+    expect(game.hook<Axial[]>('__crackDecals')).toHaveLength(48);
+    expect(game.hook<Axial[]>('__crackDecals')).toContainEqual([0, 8]);
+    expect(byId('hud').querySelector('.breach')!.textContent).toBe('Breach: 48 cells void in 1 round');
+    button('royale-hold').click();
+    expect(turn()).toBe('Battle royale · Round 14');
+    expect(document.body.dataset.cracks).toBe('0');
+    expect(document.body.dataset.vanished).toBe('48');
+    expect(game.hook<Axial[]>('__crackDecals')).toEqual([]);
+    expect(byId('hud').querySelector('.breach')).toBeNull();
+  });
+
+  it('without the crack decal, the glow, the ticks and the plate line still warn (#503)', async () => {
+    const game = await boot('?bot=off', { missing: ['crack-decal.png'] });
+    game.hook('__royale', CRACKED);
+    expect(document.body.dataset.cracks).toBe('48');
+    expect(game.hook<Axial[]>('__crackDecals')).toEqual([]);
+    expect(byId('hud').querySelector('.breach')!.textContent).toBe('Breach: 48 cells void in 1 round');
+  });
+
+  it('a seat out is greyed out on the plate, and the end shows the places and points, a loss lit as one (#503)', async () => {
+    const game = await boot('?bot=off');
+    game.hook('__royale', { seed: 7, rounds: [] });
+    // The player holds on the rim while the bots play: its last marbles go void at the end of round 25.
+    for (let round = 0; round < 25; round++) button('royale-hold').click();
+    expect(items('.initiative li.out')).toEqual(['You']);
+    expect(document.body.dataset.over).toBeUndefined();
+    for (let round = 0; round < 60 && !button('royale-hold').disabled; round++) button('royale-hold').click();
+    expect(turn()).toBe('You place 6th');
+    expect(document.body.dataset.over).toBe('loss');
+    expect(items('.placement li')).toHaveLength(6);
+    expect(items('.placement li').at(-1)).toBe('6th You · 0 points');
+  });
+
+  it('an end position loads: the banner names the winner, the places and points, Lock and Hold off (#503)', async () => {
+    const game = await boot('?bot=off');
+    game.hook('__royale', END);
+    expect(turn()).toBe('You win');
+    expect(document.body.dataset.over).toBe('win');
+    expect(byId('hud').querySelector('.end')!.textContent).toBe('10 points. The books balance.');
+    expect(items('.placement li')).toEqual([
+      '1st You · 10 points',
+      '2nd Bot 1 · 6 points',
+      '2nd Bot 2 · 6 points',
+      '2nd Bot 3 · 6 points',
+      '2nd Bot 4 · 6 points',
+      '2nd Bot 5 · 6 points',
+    ]);
+    expect(button('royale-lock').disabled).toBe(true);
+    expect(button('royale-hold').disabled).toBe(true);
+    game.openModes();
+    button('ship').click();
+    expect(document.body.dataset.over).toBeUndefined(); // no end light over the hub
   });
 
   it('a boss fight leaves the battle royale: the board and its frame come back', async () => {
