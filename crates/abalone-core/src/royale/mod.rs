@@ -8,6 +8,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::board::{Board, Cell};
 
+pub mod bot;
 mod breach;
 mod round;
 mod score;
