@@ -4,13 +4,15 @@ import { Hint, type Spot } from './hint';
 describe('Hint', () => {
   /** An ask whose answers the test gives by hand, in any order. */
   function setup() {
-    const calls: { history: number[][]; answer: (move: number[]) => void }[] = [];
+    const calls: { history: number[][]; answer: (move: number[]) => void; fail: (e: Error) => void }[] = [];
     let changes = 0;
+    let failures = 0;
     const hint = new Hint(
-      (history) => new Promise<number[]>((answer) => calls.push({ history, answer })),
+      (history) => new Promise<number[]>((answer, fail) => calls.push({ history, answer, fail })),
       () => changes++,
+      () => failures++,
     );
-    return { calls, hint, changes: () => changes };
+    return { calls, hint, changes: () => changes, failures: () => failures };
   }
   const flush = () => new Promise((done) => setTimeout(done, 0));
   const game = { name: 'the game on the board' };
@@ -81,6 +83,20 @@ describe('Hint', () => {
     await flush();
     expect(hint.state(at(game, 1))).toBe('off');
     expect(hint.shown(at(game, 1))).toBeNull();
+  });
+
+  it('turns off and reports once when the engine cannot answer, #736; a failure for an older position is silent', async () => {
+    const { calls, hint, failures } = setup();
+    hint.press(game, moves(2));
+    calls[0]!.fail(new Error('worker down'));
+    await flush();
+    expect(hint.state(at(game, 2))).toBe('off');
+    expect(failures()).toBe(1);
+    hint.press(game, moves(2));
+    hint.clear();
+    calls[1]!.fail(new Error('late'));
+    await flush();
+    expect(failures()).toBe(1);
   });
 
   it('is cleared by clear (a new selection); clearing a hint that is off changes nothing', async () => {

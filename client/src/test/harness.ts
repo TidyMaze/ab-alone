@@ -27,6 +27,8 @@ export interface BootOptions {
   missing?: string[];
   /** document.fonts.load, which jsdom lacks: by default every font is in at once. */
   fonts?: (font: string) => Promise<unknown>;
+  /** What fails: `worker` answers every bot request with an error, `wasm` and `renderer` reject their init (#736, #737). */
+  fails?: 'worker' | 'wasm' | 'renderer';
 }
 
 export interface Game {
@@ -166,7 +168,10 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   let loop: ((now: number) => void) | null = null;
   let draws = 0;
   vi.resetModules();
-  vi.doMock('abalone-wasm', async (importOriginal) => (await import('./wasm')).nodeWasm(importOriginal as never));
+  vi.doMock('abalone-wasm', async (importOriginal) => {
+    const wasm = await (await import('./wasm')).nodeWasm(importOriginal as never);
+    return options.fails === 'wasm' ? { ...wasm, default: () => Promise.reject(new Error('wasm fetch failed')) } : wasm;
+  });
   vi.doMock('three/webgpu', async (importOriginal) => {
     const THREE = await importOriginal<typeof import('three/webgpu')>();
     class WebGPURenderer {
@@ -176,7 +181,10 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       toneMapping = 0;
       toneMappingExposure = 1;
       initialized = false;
-      init = async (): Promise<void> => void (this.initialized = true);
+      init = async (): Promise<void> => {
+        if (options.fails === 'renderer') throw new Error('no GPU');
+        this.initialized = true;
+      };
       setPixelRatio(): void {}
       setSize(): void {}
       getMaxAnisotropy = (): number => 1;
@@ -230,10 +238,15 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   vi.stubGlobal(
     'Worker',
     class {
-      onmessage: ((e: { data: BotResponse }) => void) | null = null;
+      onmessage: ((e: MessageEvent<BotResponse>) => void) | null = null;
       postMessage(req: BotRequest): void {
         setTimeout(() =>
-          this.onmessage?.({ data: answer(req, () => new wasm.Engine(), (id, seed) => new wasm.Encounter(id, seed)) }),
+          this.onmessage?.({
+            data:
+              options.fails === 'worker'
+                ? { id: req.id, error: 'Error: boom' }
+                : answer(req, () => new wasm.Engine(), (id, seed) => new wasm.Encounter(id, seed)),
+          } as MessageEvent<BotResponse>),
         );
       }
       terminate(): void {}

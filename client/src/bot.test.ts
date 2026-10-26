@@ -146,6 +146,44 @@ describe('askBot', () => {
   });
 });
 
+describe('askBot failures, #736', () => {
+  const never = () => {
+    const worker = {
+      onmessage: null as ((e: MessageEvent<BotResponse | { id: number; error: string }>) => void) | null,
+      onerror: null as ((e: unknown) => void) | null,
+      sent: [] as BotRequest[],
+      postMessage(req: BotRequest) {
+        worker.sent.push(req);
+      },
+    };
+    return worker;
+  };
+
+  it('rejects the request that gets an error reply, and only that one', async () => {
+    const worker = never();
+    const failed = askBot(worker, [], 10);
+    const fine = askEval(worker, [], 10);
+    worker.onmessage!({ data: { id: worker.sent[0]!.id, error: 'Error: boom' } } as MessageEvent);
+    worker.onmessage!({ data: { id: worker.sent[1]!.id, score: 7 } } as MessageEvent);
+    await expect(failed).rejects.toThrow('Error: boom');
+    await expect(fine).resolves.toBe(7);
+  });
+
+  it('rejects every request in flight when the worker itself fails, and later ones too', async () => {
+    const worker = never();
+    const first = askBot(worker, [], 10);
+    const second = askEval(worker, [], 10);
+    worker.onerror!({ message: 'no wasm' });
+    await expect(first).rejects.toThrow('The bot worker failed');
+    await expect(second).rejects.toThrow('The bot worker failed');
+    // A reply that comes after is ignored, and a fresh request is asked again.
+    worker.onmessage!({ data: { id: worker.sent[0]!.id, move: [] } } as MessageEvent);
+    const third = askEval(worker, [], 10);
+    worker.onmessage!({ data: { id: worker.sent[2]!.id, score: 3 } } as MessageEvent);
+    await expect(third).resolves.toBe(3);
+  });
+});
+
 describe('botBudget', () => {
   it('uses the test budget of ?nodes under automation, the bot budget otherwise', () => {
     expect(botBudget('?nodes=200', true)).toBe(200);
