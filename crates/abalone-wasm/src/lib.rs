@@ -296,7 +296,7 @@ struct BossEntry {
     /// when over.
     reply: fn(&CoreEncounter) -> Option<Move>,
     /// The reply the boss announces for a player move, drawn by the client as a ghost.
-    announce: fn(&Move) -> Option<Move>,
+    announce: fn(Option<&CoreEncounter>, &Move) -> Option<Move>,
     /// Player marbles of a plain fight that flip at the end of the next boss turn.
     flips: fn(&CoreEncounter) -> Vec<(i32, i32)>,
 }
@@ -320,7 +320,7 @@ fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
     ballast_tell(enc).flips
 }
 
-fn echo_announce(mv: &Move) -> Option<Move> {
+fn echo_announce(_enc: Option<&CoreEncounter>, mv: &Move) -> Option<Move> {
     Some(mirror_move(mv))
 }
 
@@ -329,8 +329,12 @@ fn search_reply(enc: &CoreEncounter) -> Option<Move> {
     enc.boss_search().map(|r| r.mv)
 }
 
-fn no_announce(_mv: &Move) -> Option<Move> {
+fn no_announce(_enc: Option<&CoreEncounter>, _mv: &Move) -> Option<Move> {
     None
+}
+
+fn ballast_announce(enc: Option<&CoreEncounter>, _mv: &Move) -> Option<Move> {
+    enc.and_then(|e| ballast_tell(e).echo)
 }
 
 fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
@@ -381,7 +385,7 @@ const BOSSES: [BossEntry; 5] = [
         def: ballast_boss,
         start: ballast_fight,
         reply: ballast_move,
-        announce: no_announce,
+        announce: ballast_announce,
         flips: ballast_flips,
     },
 ];
@@ -507,9 +511,13 @@ impl Encounter {
     /// The reply the boss announces for the player move `mv`, one move record, empty when the
     /// record is malformed or the boss announces nothing.
     pub fn tell_move(&self, mv: &[i32]) -> Vec<i32> {
+        let enc = match &self.fight {
+            Fight::Plain(e) => Some(e),
+            Fight::Choir(_) => None,
+        };
         decode(mv)
             .ok()
-            .and_then(|m| (self.entry.announce)(&m))
+            .and_then(|m| (self.entry.announce)(enc, &m))
             .map(|m| encode(&m).to_vec())
             .unwrap_or_default()
     }

@@ -480,7 +480,7 @@ describe('main.ts boss tells', () => {
     expect(Number(body().ghosts)).toBe(1);
 
     const { Encounter } = await import('abalone-wasm');
-    const echoRecord = new Int32Array([1, 1, 0, -2, 0, 0, 0, 0]);
+    const echoRecord = new Int32Array([1, 5, 2, -3, 0, 0, 0, 0]);
     vi.spyOn(Encounter.prototype, 'tell_move').mockReturnValue(echoRecord);
     hover(game, null);
     hover(game, [q + dq, r + dr]);

@@ -31,11 +31,11 @@ export function framing(width: number, height: number): { fov: number; shift: nu
 // A pointer that moved farther than the threshold since it went down is dragging, not clicking.
 export const isDrag = (dx: number, dy: number): boolean => Math.hypot(dx, dy) > DRAG_THRESHOLD_PX;
 
-// The default view: the camera at (0, 11, 8) looking at the board centre.
-export const resetView = (): View => ({
+// The default view: the camera at (0, 11, 8) looking at the board centre, scaled with radius.
+export const resetView = (radius = 4): View => ({
   azimuth: 0,
   polar: Math.atan2(8, 11),
-  distance: Math.hypot(11, 8),
+  distance: (radius / 4) * Math.hypot(11, 8),
 });
 
 export const orbit = (v: View, dx: number, dy: number): View => ({
