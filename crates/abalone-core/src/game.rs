@@ -91,6 +91,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.converted().is_empty() {
         board.converted().hash(&mut hasher);
     }
+    if !board.eggs().is_empty() {
+        board.eggs().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -615,6 +618,20 @@ mod tests {
         let mut cracked = Board::empty();
         cracked.set_cracks(vec![((4, 0), 2)]);
         assert_ne!(position_hash(&cracked, Player::Black), plain);
+    }
+
+    #[test]
+    fn egg_marks_change_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut laid = Board::empty();
+        laid.set_eggs(vec![((1, 0), 4)]);
+        assert_ne!(position_hash(&laid, Player::Black), plain);
+        let mut older = Board::empty();
+        older.set_eggs(vec![((1, 0), 3)]);
+        assert_ne!(
+            position_hash(&older, Player::Black),
+            position_hash(&laid, Player::Black)
+        );
     }
 
     #[test]

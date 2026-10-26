@@ -8,6 +8,7 @@
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`. The radius 5 board of The Ballast Mind
 //!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
+//! - Eggs (The Alien): records of 3 integers `[q, r, player_turns_left]`, back to back.
 //! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
 //! - Armies (The Choir): records of 3 integers `[q, r, army]`, back to back. Army `0` Alto,
 //!   `1` Tenor, `2` Bass, the order of the cycle. On the Choir's radius 3 board the outer ring
@@ -41,6 +42,7 @@
 //!   - State hash: 16 lowercase hex digits, the same on every peer for the same state.
 
 use abalone_core::board::{Board, Cell, MAX_RADIUS, RADIUS};
+use abalone_core::encounter::alien::{alien_boss, alien_move, alien_start};
 use abalone_core::encounter::ballast::{ballast_boss, ballast_move, ballast_start, ballast_tell};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use abalone_core::encounter::choir::{
@@ -316,6 +318,11 @@ fn ballast_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(ballast_start(seed))
 }
 
+/// The Alien sets up its own 8 marbles.
+fn alien_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(alien_start(seed))
+}
+
 fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
     ballast_tell(enc).flips
 }
@@ -337,7 +344,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 5] = [
+const BOSSES: [BossEntry; 6] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -383,6 +390,15 @@ const BOSSES: [BossEntry; 5] = [
         reply: ballast_move,
         announce: no_announce,
         flips: ballast_flips,
+    },
+    BossEntry {
+        id: "alien",
+        goal: "Its eggs hatch; land on one to crush it. Eject 6 to win; lose 6 or draw to lose.",
+        def: alien_boss,
+        start: alien_fight,
+        reply: alien_move,
+        announce: no_announce,
+        flips: no_flips,
     },
 ];
 
@@ -560,6 +576,17 @@ impl Encounter {
             .game()
             .board()
             .cracks()
+            .iter()
+            .flat_map(|&((q, r), left)| [q, r, i32::from(left)])
+            .collect()
+    }
+
+    /// Alien eggs as `[q, r, player_turns_left]` records, empty for the other bosses.
+    pub fn eggs(&self) -> Vec<i32> {
+        self.fight
+            .game()
+            .board()
+            .eggs()
             .iter()
             .flat_map(|&((q, r), left)| [q, r, i32::from(left)])
             .collect()
@@ -994,7 +1021,8 @@ mod tests {
                 "hull".to_string(),
                 "choir".to_string(),
                 "chaplain".to_string(),
-                "ballast".to_string()
+                "ballast".to_string(),
+                "alien".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -1002,6 +1030,7 @@ mod tests {
         assert_eq!(boss_name("choir"), Some("The Choir".to_string()));
         assert_eq!(boss_name("chaplain"), Some("The Chaplain".to_string()));
         assert_eq!(boss_name("ballast"), Some("The Ballast Mind".to_string()));
+        assert_eq!(boss_name("alien"), Some("The Alien".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1040,6 +1069,7 @@ mod tests {
         assert_eq!(f.draw_reason(), 0);
         assert_eq!(f.tell(), -1, "the Echo has no board special");
         assert!(f.cracks().is_empty(), "the Echo cracks nothing");
+        assert!(f.eggs().is_empty(), "the Echo lays no egg");
         assert!(f.flips().is_empty(), "the Echo flips nothing");
         assert!(f.converted().is_empty());
         assert!(f.armies().is_empty(), "the Echo has no armies");
@@ -1265,6 +1295,55 @@ mod tests {
         }
     }
 
+    // The Alien (#588): 8 boss marbles, seeded eggs that count down in player turns and hatch.
+
+    /// The eggs and the board after each of `plies` plies: the player's first legal move, the
+    /// boss move on its turn.
+    fn brood(seed: u32, plies: usize) -> Vec<(Vec<i32>, Vec<u8>)> {
+        let mut f = Encounter::new("alien", seed).unwrap();
+        (0..plies)
+            .map(|_| {
+                ply(&mut f);
+                (f.eggs(), f.board())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_alien_starts_with_8_marbles_and_lays_an_egg_at_ply_4_that_counts_down() {
+        let f = Encounter::new("alien", 7).unwrap();
+        assert_eq!(f.name(), "The Alien");
+        assert_eq!((f.phase(), f.phases()), (0, 3));
+        assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (14, 8));
+        assert!(f.eggs().is_empty());
+        let run = brood(7, 5);
+        assert!(run[..3].iter().all(|(eggs, _)| eggs.is_empty()));
+        let laid = &run[3].0;
+        assert_eq!(laid.len(), 3, "one egg as [q, r, player turns left]");
+        assert_eq!(laid[2], 4);
+        assert_eq!(run[3].1[index(laid[0], laid[1])], 0, "on an empty cell");
+        assert_eq!(
+            run[4].0,
+            vec![laid[0], laid[1], 3],
+            "down after the player move"
+        );
+    }
+
+    #[test]
+    fn two_alien_encounters_with_the_same_seed_and_moves_lay_the_same_eggs() {
+        // Every peer of a co-op fight, the daily and a Retry replay the same eggs and hatches (#588).
+        // 12 plies: two lays and the first hatch, at the end of ply 11.
+        let first = brood(2_374_354_862, 12);
+        assert_eq!(brood(2_374_354_862, 12), first);
+        let alien = |board: &[u8]| count(board, 2);
+        assert_eq!((alien(&first[9].1), alien(&first[10].1)), (8, 9), "hatched");
+        let runs: Vec<_> = (0..4).map(|seed| brood(seed, 4)).collect();
+        assert!(
+            runs.iter().any(|r| *r != runs[0]),
+            "the seed picks the cells"
+        );
+    }
+
     // The Ballast Mind (#47, #564): a radius 5 board with six void pillars, 16 boss marbles.
 
     /// Ring of `(q, r)`: its distance from the centre.
@@ -1309,7 +1388,7 @@ mod tests {
 
     #[test]
     fn the_boards_of_the_other_bosses_keep_their_61_cells() {
-        for id in ["echo", "hull", "choir", "chaplain"] {
+        for id in ["echo", "hull", "choir", "chaplain", "alien"] {
             assert_eq!(Encounter::new(id, 7).unwrap().board().len(), 61, "{id}");
         }
         assert_eq!(Engine::new().board().len(), 61);
@@ -1448,6 +1527,7 @@ mod tests {
         assert_eq!(lit("chaplain"), vec![6, 0], "14 boss marbles, P2 at 8");
         assert_eq!(lit("choir"), vec![4, 0], "P2 once an army of four is wiped");
         assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");
+        assert_eq!(lit("alien"), vec![3, 0], "8 boss marbles, P2 at 5");
     }
 
     #[test]

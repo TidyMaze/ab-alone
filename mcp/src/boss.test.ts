@@ -77,6 +77,20 @@ const CASES: Record<string, () => void> = {
     });
     expect(state.marks).toEqual([{ kind: 'converted', cell: '(2,-3)' }]);
   },
+
+  alien() {
+    const alien = newEncounter('alien', 0);
+    // Encounter.tell() is 0, the countdown at the end of the player turn.
+    expect(bossState('alien', alien)).toMatchObject({
+      name: 'The Alien',
+      tell: { kind: 'special', cells: [], text: 'board special 0 fires after the next ply' },
+      marks: [],
+    });
+    playUntil(alien, () => alien.eggs().length > 0);
+    const [q, r, left] = alien.eggs();
+    // An egg is a mark with the player turns left before it hatches.
+    expect(bossState('alien', alien).marks).toEqual([{ kind: 'egg', cell: `(${q},${r})`, value: left }]);
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -84,8 +98,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind stays out of the list until its radius 5 board has a text (#572)', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain']);
+  test('The Ballast Mind stays out of the list until its radius 5 board has a text (#572), The Alien is in (#588)', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'alien']);
   });
 
   test('every boss of the engine has its case', () => {

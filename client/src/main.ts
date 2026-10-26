@@ -25,6 +25,7 @@ import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
+import { COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
@@ -943,6 +944,21 @@ const armyGlyphs = [
   new THREE.TorusGeometry(0.07, 0.025, 8, 16),
   new THREE.BoxGeometry(0.13, 0.13, 0.13),
 ];
+// The Alien tell (#588, game-design.md section 7.7): a pale egg on its cell and, above it, a counter of the player turns
+// left before it hatches: a sprite, so it always faces the camera, drawn over the marbles (alien.ts, 3:1 and more). On 1
+// a glow under the egg pulses once a second, held still under reduced motion (the animation loop sets it).
+const eggGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).translate(0, 0.23, 0);
+const eggMaterial = new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.55 });
+const eggGlowGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
+const eggGlowMaterial = new THREE.MeshBasicMaterial({ color: BONE, transparent: true, depthWrite: false });
+const counterMaterials = Array.from({ length: COUNTER_MAX }, (_, i) => {
+  const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+  drawCounter(canvas.getContext('2d')!, i + 1, 128);
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.SpriteMaterial({ map, depthTest: false });
+});
+let eggsDrawn: { cell: Axial; left: number; glow: boolean }[] = []; // read by the e2e tests
 
 // The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
 // Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
@@ -1556,7 +1572,12 @@ function hud(extra = ''): void {
   goalButton.setAttribute('aria-expanded', String(showGoal));
   const boss = engine instanceof Encounter ? engine : null;
   const tell = boss
-    ? [crackText(parseCracks(boss.cracks())), chaplainText(exposed, boss.converted().length / 2), choirText(boss.next_army())]
+    ? [
+        crackText(parseCracks(boss.cracks())),
+        eggText(parseEggs(boss.eggs())),
+        chaplainText(exposed, boss.converted().length / 2),
+        choirText(boss.next_army()),
+      ]
         .filter((t) => t !== '')
         .join(' · ')
     : '';
@@ -1600,6 +1621,7 @@ function refresh(): void {
   const converted = engine instanceof Encounter ? parseCells(engine.converted()) : [];
   const armies = engine instanceof Encounter ? parseArmies(engine.armies()) : [];
   const next = engine instanceof Encounter ? engine.next_army() : -1;
+  const eggs = engine instanceof Encounter ? parseEggs(engine.eggs()) : [];
   marbles.clear();
   marbleAt.clear();
   crackDecals = [];
@@ -1667,6 +1689,21 @@ function refresh(): void {
     marbles.add(ring);
     onMarble(cellIndex(cell[0], cell[1]), ring);
   }
+  eggsDrawn = eggs.map(({ cell: [q, r], left }) => {
+    const p = axialTo3D(q, r);
+    const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg', castShadow: true });
+    egg.position.set(p.x, 0, p.z);
+    const counter = Object.assign(new THREE.Sprite(counterMaterials[left - 1]), { renderOrder: 2 });
+    counter.position.set(p.x, 0.95, p.z);
+    counter.scale.setScalar(0.42);
+    marbles.add(egg, counter);
+    if (left === 1) {
+      const glow = Object.assign(new THREE.Mesh(eggGlowGeometry, eggGlowMaterial), { name: 'egg-glow' });
+      glow.position.set(p.x, 0.004, p.z);
+      marbles.add(glow);
+    }
+    return { cell: [q, r], left, glow: left === 1 };
+  });
   tellSound('crack', cracks);
   tellSound('choir', ARMY_NAMES[next] ? [next] : []);
   // The drones follow how tense the game is (#439): the player's marbles a push could eject, the boss phase.
@@ -1675,6 +1712,8 @@ function refresh(): void {
   document.body.dataset.nextArmy = ARMY_NAMES[next] ?? '';
   document.body.dataset.converted = String(converted.length); // read by the e2e tests
   document.body.dataset.cracks = String(cracks.length);
+  document.body.dataset.eggs = String(eggs.length);
+  document.body.dataset.eggCounters = eggs.map((e) => e.left).join(',');
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
   const enemy = 3 - glassOf(); // the core dims a step per player marble the enemy ejected (#506)
   coreMaterial.opacity = coreLevel(engine.ejected(enemy), engine.win_ejections(enemy));
@@ -2032,6 +2071,9 @@ function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height
   engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
 (window as unknown as Record<string, unknown>).__crackDecals = () => crackDecals;
 (window as unknown as Record<string, unknown>).__crackDecalShown = (shown: boolean) => (crackMaterial.visible = shown);
+// Used by the browser checks to find The Alien's eggs as drawn: their cell, counter and glow on 1 (#588), and the glow.
+(window as unknown as Record<string, unknown>).__eggs = () => eggsDrawn;
+(window as unknown as Record<string, unknown>).__eggGlow = () => eggGlowMaterial.opacity;
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
 (window as unknown as Record<string, unknown>).__converted = () =>
   engine instanceof Encounter ? parseCells(engine.converted()) : [];
@@ -2693,6 +2735,7 @@ renderer.setAnimationLoop((now) => {
   animateSlides(now);
   animateEjections(now);
   animateParticles(now);
+  eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
   turnConsole(now);
   tickLog(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;

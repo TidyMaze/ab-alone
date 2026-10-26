@@ -1,0 +1,85 @@
+import { describe, expect, it, vi } from 'vitest';
+import { COUNTER, COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
+import { contrastRatio, type RGB } from './contrast';
+
+const rgb = (hex: number): RGB => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+
+describe('parseEggs', () => {
+  it('splits the flat [q, r, player turns left] records of the bridge', () => {
+    expect(parseEggs([-3, 1, 4, 0, 0, 1])).toEqual([
+      { cell: [-3, 1], left: 4 },
+      { cell: [0, 0], left: 1 },
+    ]);
+    expect(parseEggs([])).toEqual([]);
+  });
+
+  it('refuses a length that is not a multiple of 3', () => {
+    expect(() => parseEggs([4, -1])).toThrow('egg array length 2 is not a multiple of 3');
+  });
+});
+
+describe('eggText', () => {
+  it('is empty without eggs', () => {
+    expect(eggText([])).toBe('');
+  });
+
+  it('groups the eggs by player turns left, soonest first', () => {
+    const eggs = [
+      { cell: [0, 0], left: 4 },
+      { cell: [1, 0], left: 1 },
+      { cell: [2, 0], left: 4 },
+    ] as const;
+    expect(eggText(eggs.map((e) => ({ cell: [...e.cell] as [number, number], left: e.left })))).toBe(
+      'Eggs hatch: 1 in 1 turn · 2 in 4 turns',
+    );
+  });
+});
+
+describe('eggGlow', () => {
+  it('pulses once a second between two levels, under the 3 a second flash cap', () => {
+    const levels = [0, 0.25, 0.5, 0.75, 1].map((t) => eggGlow(t, false));
+    expect(levels[0]).toBeCloseTo(levels[4]!); // one period a second
+    expect(levels[2]).toBeGreaterThan(levels[0]! + 0.3); // the peak, half a second in
+    expect(Math.min(...levels)).toBeGreaterThan(0); // never off: a steady glow
+    expect(Math.max(...levels)).toBeLessThanOrEqual(1);
+  });
+
+  it('holds still under reduced motion', () => {
+    expect(new Set([0, 0.3, 0.5, 0.9].map((t) => eggGlow(t, true))).size).toBe(1);
+    expect(eggGlow(0, true)).toBeGreaterThan(0);
+  });
+});
+
+describe('the counter above an egg', () => {
+  it('counts 4 player turns at most', () => {
+    expect(COUNTER_MAX).toBe(4);
+  });
+
+  it('reads 3:1 and more: the pale digit on its near-black plate', () => {
+    expect(contrastRatio(rgb(COUNTER.ink), rgb(COUNTER.plate))).toBeGreaterThanOrEqual(3);
+  });
+
+  it('draws the plate, then the digit in the middle', () => {
+    const calls: string[] = [];
+    const fills: string[] = [];
+    const g = {
+      clearRect: vi.fn(() => calls.push('clear')),
+      beginPath: vi.fn(),
+      arc: vi.fn(() => calls.push('arc')),
+      fill: vi.fn(() => calls.push('fill')),
+      fillText: vi.fn((text: string, x: number, y: number) => calls.push(`text ${text} ${x} ${y}`)),
+      set fillStyle(v: string) {
+        fills.push(v);
+      },
+      font: '',
+      textAlign: '',
+      textBaseline: '',
+    };
+    drawCounter(g as unknown as CanvasRenderingContext2D, 3, 64);
+    expect(calls).toEqual(['clear', 'arc', 'fill', 'text 3 32 32']);
+    expect(fills).toEqual(['#0b0d0f', '#d8d4c8']);
+    expect(g.textAlign).toBe('center');
+    expect(g.textBaseline).toBe('middle');
+    expect(g.font).toBe('bold 44px sans-serif');
+  });
+});
