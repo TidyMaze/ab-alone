@@ -21,8 +21,24 @@
 //! - Score (the evaluation bar): the search score for the side to move, in centi-marbles (one
 //!   marble is 100). A won game scores 1 000 000 minus the plies to the win, a lost one the
 //!   opposite, a draw 0: beyond +/-500 000 the game is decided.
+//! - Battle royale (`Royale`). A seat is a number from `0` to `seats - 1`.
+//!   - Arena: 217 bytes, row by row from `r = -8` to `r = 8`, inside a row by `q` ascending, the
+//!     order of `cellsFor(8)` in `client/src/board.ts`. Index 0 is `(q=0, r=-8)`, index 216 is
+//!     `(q=0, r=8)`. The board codes above: `0` empty, `1` and `2` seats 0 and 1, `4` to `7`
+//!     seats 2 to 5, `3` void. A cracked cell, which goes void at the end of the next round, adds
+//!     `8` to its code: `8` cracked and empty, `9` a cracked cell with a seat 0 marble.
+//!   - Orders: records of 9 integers `[seat, n, dir, q0, r0, q1, r1, q2, r2]`, a seat then its
+//!     move record, back to back. A seat with no record holds, like the empty order of the client.
+//!   - Round log: the round number, then one record of 3 integers `[seat, outcome, ejected]` per
+//!     turn in initiative order. Outcome `0` applied, `1` fizzled (illegal at its turn, a pass),
+//!     `2` held, `3` out (no marble left at its turn). `ejected` is the seat whose marble the
+//!     move ejected, `-1` for none.
+//!   - Cracks: records of 3 integers `[q, r, rounds_left]`, back to back.
+//!   - Placement: one record of 2 integers `[place, points]` per seat in seat order, places from
+//!     `1`, empty while the game runs.
+//!   - State hash: 16 lowercase hex digits, the same on every peer for the same state.
 
-use abalone_core::board::{Board, Cell, RADIUS};
+use abalone_core::board::{Board, Cell, MAX_RADIUS, RADIUS};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use abalone_core::encounter::choir::{
     choir_boss, Army, Choir, ChoirError, ARMY_SIZE, CYCLE, PHASE_ARMIES,
@@ -32,6 +48,9 @@ use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::{marbles, BossDef, Encounter as CoreEncounter, PveResult};
 use abalone_core::game::{DrawReason, Game, Outcome};
 use abalone_core::moves::{legal_moves, Direction, Move, Player};
+use abalone_core::royale::{
+    self, Order as RoyaleOrder, Outcome as RoyaleOutcome, RoundLog, Turn as RoyaleTurn,
+};
 use abalone_core::search::{best_move, position_score};
 use wasm_bindgen::prelude::*;
 
@@ -192,24 +211,35 @@ impl Engine {
 /// Board value of a cell a boss removed.
 const VANISHED: u8 = 3;
 
+/// Added to the code of a cracked cell of the battle royale arena.
+const CRACKED: u8 = 8;
+
+/// The cells of the hexagon of `radius` in board order, see the module docs.
+fn cells_of(radius: i32) -> impl Iterator<Item = (i32, i32)> {
+    (-radius..=radius)
+        .flat_map(move |r| (-radius..=radius).map(move |q| (q, r)))
+        .filter(move |&(q, r)| (q + r).abs() <= radius)
+}
+
 /// The 61 cells of the hexagon in board order, see the module docs.
 fn cells() -> impl Iterator<Item = (i32, i32)> {
-    (-RADIUS..=RADIUS)
-        .flat_map(|r| (-RADIUS..=RADIUS).map(move |q| (q, r)))
-        .filter(|&(q, r)| (q + r).abs() <= RADIUS)
+    cells_of(RADIUS)
+}
+
+/// Board code of `(q, r)`, see the module docs.
+fn cell_code(board: &Board, q: i32, r: i32) -> u8 {
+    match board.get(q, r) {
+        Some(Cell::Empty) => 0,
+        Some(Cell::Black) => 1,
+        Some(Cell::White) => 2,
+        Some(seat) => seat as u8 + 1,
+        None => VANISHED,
+    }
 }
 
 /// The 61 cells of the hexagon, vanished ones included, so the indices never shift.
 fn board_bytes(board: &Board) -> Vec<u8> {
-    cells()
-        .map(|(q, r)| match board.get(q, r) {
-            Some(Cell::Empty) => 0,
-            Some(Cell::Black) => 1,
-            Some(Cell::White) => 2,
-            Some(seat) => seat as u8 + 1,
-            None => VANISHED,
-        })
-        .collect()
+    cells().map(|(q, r)| cell_code(board, q, r)).collect()
 }
 
 /// Result code of an encounter, see the module docs.
@@ -566,6 +596,132 @@ impl Encounter {
             Fight::Choir(c) => c.result(),
         };
         result_code(result)
+    }
+}
+
+/// Integers per battle royale order: the seat, then its move record.
+const ORDER_STRIDE: usize = MOVE_STRIDE + 1;
+
+/// Round log outcome codes, see the module docs.
+const APPLIED: i32 = 0;
+const FIZZLED: i32 = 1;
+const HELD: i32 = 2;
+const OUT: i32 = 3;
+
+/// One turn of a round log as `[seat, outcome, ejected]`, see the module docs.
+fn turn_record(turn: &RoyaleTurn) -> [i32; 3] {
+    let outcome = match turn.outcome {
+        RoyaleOutcome::Applied => APPLIED,
+        RoyaleOutcome::Fizzled(_) => FIZZLED,
+        RoyaleOutcome::Held => HELD,
+        RoyaleOutcome::Out => OUT,
+    };
+    let ejected = turn.ejected.map_or(-1, |seat| seat as i32);
+    [turn.seat as i32, outcome, ejected]
+}
+
+/// A seat's order as its move record, empty for a hold.
+fn order_record(order: &RoyaleOrder) -> Vec<i32> {
+    match order {
+        RoyaleOrder::Move(mv) => encode(mv).to_vec(),
+        RoyaleOrder::Hold => Vec::new(),
+    }
+}
+
+/// A battle royale handed to JavaScript (docs/specs/tech.md section 6): the state between
+/// rounds, the log of the last round and the seed of its bots.
+#[wasm_bindgen]
+pub struct Royale {
+    state: royale::Royale,
+    log: Option<RoundLog>,
+    seed: u64,
+}
+
+#[wasm_bindgen]
+impl Royale {
+    /// A new game of 3 to 6 `seats` on the radius 8 arena, round 1. `seed` drives the bots: the
+    /// same state and seed give the same bot orders.
+    #[wasm_bindgen(constructor)]
+    pub fn new(seats: usize, seed: u32) -> Result<Royale, String> {
+        let state = royale::start(seats).map_err(|e| format!("{e:?}"))?;
+        Ok(Royale {
+            state,
+            log: None,
+            seed: u64::from(seed),
+        })
+    }
+
+    /// The 217 cells of the arena, see the module docs.
+    pub fn board(&self) -> Vec<u8> {
+        let board = self.state.board();
+        cells_of(MAX_RADIUS)
+            .map(|(q, r)| {
+                let cracked = board.cracks().iter().any(|&(c, _)| c == (q, r));
+                cell_code(board, q, r) + if cracked { CRACKED } else { 0 }
+            })
+            .collect()
+    }
+
+    /// Resolves one round from the orders, see the module docs. `Err` carries the reason and
+    /// leaves the game unchanged: a malformed order, an unknown or repeated seat, a game over.
+    pub fn resolve(&mut self, orders: &[i32]) -> Result<(), String> {
+        if !orders.len().is_multiple_of(ORDER_STRIDE) {
+            return Err(format!("an order needs {ORDER_STRIDE} integers"));
+        }
+        let orders = orders
+            .chunks(ORDER_STRIDE)
+            .map(|o| {
+                let seat = usize::try_from(o[0]).map_err(|_| "seat must be 0 or more")?;
+                Ok((seat, RoyaleOrder::Move(decode(&o[1..])?)))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let (state, log) =
+            royale::resolve_round(&self.state, &orders).map_err(|e| format!("{e:?}"))?;
+        self.state = state;
+        self.log = Some(log);
+        Ok(())
+    }
+
+    /// The last round resolved, see the module docs. Empty before the first one.
+    pub fn round_log(&self) -> Vec<i32> {
+        self.log.as_ref().map_or_else(Vec::new, |log| {
+            let turns = log.turns.iter().flat_map(turn_record);
+            std::iter::once(log.round as i32).chain(turns).collect()
+        })
+    }
+
+    /// Cracked cells as `[q, r, rounds_left]` records: they go void at the end of the next round.
+    pub fn cracks(&self) -> Vec<i32> {
+        self.state
+            .board()
+            .cracks()
+            .iter()
+            .flat_map(|&((q, r), left)| [q, r, i32::from(left)])
+            .collect()
+    }
+
+    /// Hash of the whole state, which every peer compares after a round, as 16 hex digits.
+    pub fn state_hash(&self) -> String {
+        format!("{:016x}", self.state.hash())
+    }
+
+    /// The bot order of `seat` for the next round, a move record, empty for a hold or a seat the
+    /// game does not have.
+    pub fn bot_order(&self, seat: usize) -> Vec<i32> {
+        if seat >= self.state.seats() {
+            return Vec::new();
+        }
+        order_record(&royale::bot::order(&self.state, seat, self.seed))
+    }
+
+    /// Each seat's `[place, points]` in seat order once the game is over, empty before.
+    pub fn placement(&self) -> Vec<i32> {
+        self.state.standings().map_or_else(Vec::new, |standings| {
+            standings
+                .iter()
+                .flat_map(|s| [s.place as i32, s.points as i32])
+                .collect()
+        })
     }
 }
 
@@ -1380,7 +1536,12 @@ mod tests {
             orders.extend(&order);
             let mut played = Royale::new(4, 7).unwrap();
             played.resolve(&orders).unwrap();
-            assert_eq!(played.round_log()[1..4], [seat as i32, APPLIED, -1][..]);
+            // Round 1 plays the seats in seat order.
+            let turn = 1 + 3 * seat;
+            assert_eq!(
+                played.round_log()[turn..turn + 3],
+                [seat as i32, APPLIED, -1]
+            );
         }
         assert!(g.bot_order(4).is_empty(), "a 4-seat game has seats 0 to 3");
         assert!(
