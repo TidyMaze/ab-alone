@@ -72,7 +72,9 @@ No cutscenes, no forced dialogue, no quest log.
 
 - **Environment.** Props tell the story: unfinished games left on mess tables, scratch counters
   on walls, shelled marbles frozen mid-push in cargo bays. Each deck has 3 to 5 "scenes".
-- **Lore terminals.** Short text logs on in-world screens (max 120 words). Optional.
+- **Lore terminals.** Short text logs on in-world screens (max 120 words). Optional. Two per deck
+  (`client/src/lore.ts`, #510). The room's console screen shows its deck's first entry, wrapped and paged
+  for the UI scale (`client/src/terminal.ts`, #511): a page turn every 8 s, drawn once the web fonts are in.
 - **Audio logs.** Short ambient recordings (max 60 s), collectable, replayable from an archive.
   Optional. One per deck (`client/src/audiologs.ts`, #515): a synthesized recording (room tone,
   footsteps, machinery, the Choir's hum) with a timed transcript. No voice acting (section 11):

@@ -386,7 +386,9 @@ describe('the settings toggles', () => {
   it('puts the next dark skin on the enemy shells, and saves it', async () => {
     const game = await boot('?bot=off');
     const skinned = async (): Promise<boolean> =>
-      materials((await drawn(game)).scene).some((m) => (m.map as THREE.CanvasTexture | null)?.isCanvasTexture);
+      materials((await drawn(game)).scene).some(
+        (m) => m.isMeshStandardMaterial && (m.map as THREE.CanvasTexture | null)?.isCanvasTexture,
+      ); // the lit materials: the deck console's unlit screen has its own canvas (#511)
     expect(row('shell-skin').textContent).toBe('Scarab ridges');
     expect(await skinned()).toBe(false);
     row('shell-skin').click();

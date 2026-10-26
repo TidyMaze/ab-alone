@@ -1,8 +1,8 @@
 // A harness that runs the whole page, src/main.ts, in vitest under jsdom (decision #445): the test file starts with
-// `// @vitest-environment jsdom`, then `const game = await boot('?bot=off')` loads index.html's body and imports a
-// fresh main.ts on the real wasm engine. What jsdom lacks is stubbed: the three.js renderer (no WebGL or WebGPU, the
-// scene graph stays real), the texture loader, canvas 2D, matchMedia, IndexedDB (fake-indexeddb), the bot workers
-// (the worker's answer() runs in-process), the Trystero transport (one end of a localPair) and the clock of the
+// `// @vitest-environment jsdom`, then `const game = await boot('?bot=off')` loads index.html's body and imports a fresh
+// main.ts on the real wasm engine. What jsdom lacks is stubbed: the three.js renderer (no WebGL or WebGPU, the scene
+// graph stays real), the texture loader, canvas 2D, the web fonts, matchMedia, IndexedDB (fake-indexeddb), the bot
+// workers (the worker's answer() runs in-process), the Trystero transport (one end of a localPair) and the clock of the
 // animation loop (game.frame), and Web Audio on demand (the fake of src/test/audio.ts). Everything is undone when the
 // test ends.
 import { IDBFactory } from 'fake-indexeddb';
@@ -25,6 +25,8 @@ export interface BootOptions {
   /** The texture files under assets/ that fail to load, as a missing file would. The others load, each a texture named
    * after its file. */
   missing?: string[];
+  /** document.fonts.load, which jsdom lacks: by default every font is in at once. */
+  fonts?: (font: string) => Promise<unknown>;
 }
 
 export interface Game {
@@ -55,8 +57,13 @@ const body = /<body>([\s\S]*)<\/body>/.exec(page)![1]!;
 const addListener = window.addEventListener.bind(window);
 const every = setInterval;
 
-// Canvas 2D (the skins, skinart.ts) draws into nothing: every property and call of the context is a no-op.
-const nothing: unknown = new Proxy(() => nothing, { get: () => nothing, set: () => true, apply: () => nothing });
+// Canvas 2D (the skins, skinart.ts) draws into nothing: every property and call of the context is a no-op, but
+// measureText, for the deck console's line wrap (terminal.ts): a character is 20 px wide.
+const nothing: unknown = new Proxy(() => nothing, {
+  get: (_, key) => (key === 'measureText' ? (text: string) => ({ width: text.length * 20 }) : nothing),
+  set: () => true,
+  apply: () => nothing,
+});
 
 /** Loads index.html and a fresh main.ts at `url` (a path, a query and a hash, for example `?bot=off`). */
 export async function boot(url = '/', options: BootOptions = {}): Promise<Game> {
@@ -95,6 +102,8 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   }));
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => nothing as RenderingContext);
   Object.assign(Element.prototype, { setPointerCapture() {}, releasePointerCapture() {} });
+  Object.defineProperty(document, 'fonts', { value: { load: options.fonts ?? (async () => []) }, configurable: true });
+  undo.push(() => Reflect.deleteProperty(document, 'fonts'));
 
   // Window listeners and intervals of this page, removed when the test ends so the next boot starts alone.
   vi.spyOn(window, 'addEventListener').mockImplementation((type: string, listener, opts) => {
