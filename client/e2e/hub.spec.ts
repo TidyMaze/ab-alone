@@ -9,6 +9,7 @@ import { openModes } from './modes';
 // marble back on the door. The battle royale lobby is shown closed.
 // #523: a lift wears an arrow toward its deck, with a bar across while it is locked. A locked lift keeps the marble out
 // and Tally says one short line; a boss win opens it. body[data-lifts] lists the lifts of the deck.
+// #524: rolling onto a terminal opens its lore entry in the reader; Esc leaves it to the hub on the same cell.
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
@@ -179,4 +180,22 @@ test('a locked lift keeps the marble out with a Tally line, and a boss win opens
   await expect(body).toHaveAttribute('data-lifts', 'furnace locked,mess open');
   const cargo = await liftPixels(page, [1, -2], testInfo.outputPath('cargo-locked.png')); // in the Cargo's light
   expect(contrastRatio(...cargo)).toBeGreaterThanOrEqual(3);
+});
+
+test('a terminal room opens its lore entry in the reader, and Esc gives the hub back, #524', async ({ page }, testInfo) => {
+  await shipAt(page, './?bot=off', [0, 1]);
+  const body = page.locator('body');
+  await expect(body).toHaveAttribute('data-console', /^mess-house-rule /); // the console's web fonts are in
+  await page.screenshot({ path: testInfo.outputPath('terminal-before.png') });
+  await hookClick(page, 1, 1);
+  await expect(body).toHaveAttribute('data-reading', 'mess-corner-table');
+  await expect(page.locator('#reader')).toContainText('Galley log, unsigned');
+  await expect(page.getByRole('button', { name: 'Play log' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('terminal-reader.png') });
+  await page.keyboard.press('Escape');
+  await expect(body).not.toHaveAttribute('data-reading');
+  await expect(page.locator('#reader')).toBeHidden();
+  await expect(body).toHaveAttribute('data-hub', 'mess 1,1');
+  await expect(page.locator('#hud')).toContainText('Terminal');
+  await page.screenshot({ path: testInfo.outputPath('terminal-after.png') });
 });

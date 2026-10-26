@@ -384,7 +384,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(game.room()).toBeNull();
   });
 
-  it('the battle royale lobby is shown closed and opens nothing, nor does a terminal yet', async () => {
+  it('the battle royale lobby is shown closed and opens nothing', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     shipAt(game, [-1, 1]);
@@ -395,9 +395,6 @@ describe('main.ts, the hub doors (#522)', () => {
     game.click(-2, 2);
     expect(hub()).toBe('mess -2,2');
     expect(game.hud()).toBe('Ship · MessBattle royale lobby · closed');
-    shipAt(game, [1, -1]);
-    game.click(2, -1);
-    expect(hub()).toBe('mess 2,-1');
   });
 
   it('Back to the ship never shows after a game no room started', async () => {
@@ -405,6 +402,53 @@ describe('main.ts, the hub doors (#522)', () => {
     await game.hook<Promise<number>>('__playTurns', 30, [4]);
     expect(data().over).toBe('loss');
     expect(back().hidden).toBe(true);
+  });
+});
+
+// The terminal rooms (#524, game-design.md section 3.5): rolling onto a terminal opens its lore entry in the reader, Esc
+// leaves it to the hub on the same cell, and the console screen shows its deck's first entry again.
+describe('main.ts, the hub terminals (#524)', () => {
+  const data = (): DOMStringMap => document.body.dataset;
+  const reader = (): HTMLElement => byId('reader');
+
+  it("opens the room's own entry in the reader and saves it read; Esc gives the hub back on the same cell", async () => {
+    const game = await boot('?bot=off');
+    await game.settle(); // the web fonts of the console are in
+    shipAt(game, [0, 1]);
+    const view = game.hook('__cellToScreen', 0, 0);
+    game.click(1, 1);
+    expect(hub()).toBe('mess 1,1');
+    expect(reader().hidden).toBe(false);
+    expect(data().reading).toBe('mess-corner-table');
+    expect(data().console).toBe('mess-corner-table 1/2');
+    expect(reader().textContent).toContain('Page 1 of 2');
+    expect(byId('log-button').hidden).toBe(false); // Play log, as at the console
+    expect(localStorage.getItem('ab-alone.lore-read')).toBe('mess-corner-table');
+    press('ArrowRight'); // the arrows page the entry, the marble stays
+    expect(data().console).toBe('mess-corner-table 2/2');
+    expect(hub()).toBe('mess 1,1');
+    press('Escape');
+    expect(reader().hidden).toBe(true);
+    expect(data().reading).toBeUndefined();
+    expect(hub()).toBe('mess 1,1');
+    expect(game.hud()).toBe('Ship · MessTerminal');
+    expect(game.hook('__cellToScreen', 0, 0)).toEqual(view);
+    expect(byId('ship-back').hidden).toBe(true);
+    game.frame(16);
+    expect(data().console).toBe('mess-house-rule 1/2'); // the console screen shows the deck's first entry again
+  });
+
+  it("the first terminal opens the deck's first entry, the one the console shows", async () => {
+    const game = await boot('?bot=off');
+    await game.settle();
+    shipAt(game, [1, -1]);
+    game.click(2, -1);
+    expect(data().reading).toBe('mess-house-rule');
+    press('ArrowRight');
+    press('Escape');
+    game.frame(16);
+    expect(data().console).toBe('mess-house-rule 2/2'); // the screen goes on from the page left
+    expect(localStorage.getItem('ab-alone.lore-read')).toBe('mess-house-rule');
   });
 });
 
