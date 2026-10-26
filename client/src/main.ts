@@ -184,7 +184,7 @@ let engine: Engine | Encounter = new Engine();
 const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
 let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
-const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
+const activeRadius = (): number => (fight?.id === 'ballast' || fight?.id === 'pulsar' ? 5 : 4);
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 // The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
@@ -2202,7 +2202,7 @@ addEventListener('resize', () => {
 };
 // Used by the browser checks to see the console screen (#512) and the recorder (#517) on the window: the box around its
 // corners, in pixels.
-function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height: number } {
+function rectOf(prop: THREE.Object3D): { x: number; y: number; width: number; height: number } {
   const box = new THREE.Box3().setFromObject(prop);
   const xs: number[] = [];
   const ys: number[] = [];
@@ -2218,6 +2218,10 @@ function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height
 }
 (window as unknown as Record<string, unknown>).__consoleRect = () => rectOf(consoleScreen);
 (window as unknown as Record<string, unknown>).__recorderRect = () => rectOf(recorder);
+(window as unknown as Record<string, unknown>).__pulsarBounds = () =>
+  marbles.children
+    .filter((c) => c.name.startsWith('pulsar') || c.name === 'pulse-counter')
+    .map((obj) => ({ name: obj.name, rect: rectOf(obj) }));
 // Used by the browser checks to play their setup plies: the same click, without the raycast and the frames of a mouse click.
 (window as unknown as Record<string, unknown>).__click = (q: number, r: number) => click(q, r);
 
