@@ -3,7 +3,8 @@
 //!
 //! Encodings, all stable and documented:
 //! - Board: 61 bytes, row by row from `r = -4` to `r = 4`, inside a row by `q` ascending.
-//!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull).
+//!   Value `0` empty, `1` Black, `2` White, `3` vanished (a cell a boss removed, The Hull),
+//!   `4` to `7` a marble of battle royale seats 3 to 6.
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
 //! - Cell list (The Chaplain): pairs `[q, r]`, back to back.
@@ -205,6 +206,7 @@ fn board_bytes(board: &Board) -> Vec<u8> {
             Some(Cell::Empty) => 0,
             Some(Cell::Black) => 1,
             Some(Cell::White) => 2,
+            Some(seat) => seat as u8 + 1,
             None => VANISHED,
         })
         .collect()
@@ -595,6 +597,17 @@ mod tests {
         assert_eq!(count(&cells, 1), 14);
         assert_eq!(count(&cells, 2), 14);
         assert_eq!(count(&cells, 0), 33);
+    }
+
+    #[test]
+    fn board_bytes_give_seats_3_to_6_the_codes_4_to_7() {
+        let mut board = Board::empty();
+        board.set(0, -4, Cell::Seat3);
+        board.set(1, -4, Cell::Seat4);
+        board.set(2, -4, Cell::Seat5);
+        board.set(3, -4, Cell::Seat6);
+        board.void(4, -4);
+        assert_eq!(board_bytes(&board)[..6], [4, 5, 6, 7, VANISHED, 0]);
     }
 
     #[test]

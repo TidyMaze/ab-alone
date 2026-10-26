@@ -6,16 +6,22 @@ use std::collections::HashMap;
 /// `|q|`, `|r|` and `|q + r|` are all `<= n`.
 pub const RADIUS: i32 = 4;
 
-/// Largest board radius the engine supports (The Ballast Mind plays on radius 5). Every scan over
-/// the board runs `-MAX_RADIUS..=MAX_RADIUS` and relies on `get` giving `None` off the board.
-pub const MAX_RADIUS: i32 = 5;
+/// Largest board radius the engine supports: the battle royale arena, 217 cells. The game code
+/// scans only a board's own radius (`-radius..=radius`) and relies on `get` giving `None` off the
+/// board, so a smaller board costs no more than before.
+pub const MAX_RADIUS: i32 = 8;
 
-/// Content of one cell.
+/// Content of one cell. Black and White are seats 1 and 2, the other marbles seats 3 to 6 of a
+/// battle royale.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cell {
     Empty,
     Black,
     White,
+    Seat3,
+    Seat4,
+    Seat5,
+    Seat6,
 }
 
 /// Standard start, Black side (bottom, r > 0): row r=4 (5 cells), row r=3 (6), the three centre cells of r=2.
@@ -63,6 +69,7 @@ const BELGIAN_DAISY_BLACK: [(i32, i32); 14] = [
 /// Hexagonal Abalone board.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
+    radius: i32,
     cells: HashMap<(i32, i32), Cell>,
     /// Cracked cells with the plies left before they vanish, for the Hull boss.
     cracks: Vec<((i32, i32), u8)>,
@@ -87,10 +94,16 @@ impl Board {
             }
         }
         Self {
+            radius,
             cells,
             cracks: Vec::new(),
             converted: Vec::new(),
         }
+    }
+
+    /// Radius the board was built with. Vanished cells do not shrink it.
+    pub fn radius(&self) -> i32 {
+        self.radius
     }
 
     /// Content of `(q, r)`, or `None` when the cell is off the board.
@@ -169,7 +182,7 @@ mod tests {
         match cell {
             Cell::Black => Cell::White,
             Cell::White => Cell::Black,
-            Cell::Empty => Cell::Empty,
+            other => other,
         }
     }
 
@@ -184,13 +197,16 @@ mod tests {
 
     #[test]
     fn with_radius_sizes_the_board() {
-        for (radius, cells) in [(0, 1), (4, 61), (5, 91)] {
+        for (radius, cells) in [(0, 1), (4, 61), (5, 91), (8, 217)] {
             let board = Board::with_radius(radius);
             let on_board = all_coords()
                 .filter(|&(q, r)| board.get(q, r).is_some())
                 .count();
             assert_eq!(on_board, cells, "radius {radius}");
+            assert_eq!(board.radius(), radius);
         }
+        assert_eq!(MAX_RADIUS, 8, "the battle royale arena");
+        assert_eq!(Board::standard().radius(), RADIUS);
         assert_eq!(Board::with_radius(RADIUS), Board::empty());
         assert_eq!(Board::with_radius(5).get(5, -5), Some(Cell::Empty));
         assert_eq!(Board::with_radius(5).get(6, 0), None);
@@ -209,6 +225,19 @@ mod tests {
         let mut board = Board::empty();
         board.set(1, -2, Cell::White);
         assert_eq!(board.get(1, -2), Some(Cell::White));
+    }
+
+    #[test]
+    fn seats_3_to_6_have_their_own_marbles() {
+        let mut board = Board::with_radius(MAX_RADIUS);
+        let seats = [Cell::Seat3, Cell::Seat4, Cell::Seat5, Cell::Seat6];
+        for (i, &seat) in seats.iter().enumerate() {
+            board.set(8 - i as i32, 0, seat);
+        }
+        for (i, &seat) in seats.iter().enumerate() {
+            assert_eq!(board.get(8 - i as i32, 0), Some(seat));
+            assert_eq!(count(&board, seat), 1);
+        }
     }
 
     #[test]

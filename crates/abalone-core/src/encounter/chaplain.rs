@@ -4,7 +4,7 @@
 //! marble count and credit no ejection. P2 counts void cells as boss neighbours, P3 chains one
 //! more wave of flips and pays for each flip with a boss marble lost to the void.
 
-use crate::board::{Board, Cell, MAX_RADIUS};
+use crate::board::{Board, Cell};
 use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
 
@@ -48,8 +48,9 @@ fn marked(
     void_counts: bool,
 ) -> Vec<P> {
     let mut out = Vec::new();
-    for q in -MAX_RADIUS..=MAX_RADIUS {
-        for r in -MAX_RADIUS..=MAX_RADIUS {
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
             if board.get(q, r) != Some(victim) {
                 continue;
             }

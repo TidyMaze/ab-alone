@@ -2,7 +2,7 @@
 //! plies later, and a marble on a vanished cell is removed, either side. The crack timers live on
 //! the board (`Board::cracks`), so the tell is `board.cracks()`: the cells that vanish soon.
 
-use crate::board::{Board, MAX_RADIUS};
+use crate::board::Board;
 use crate::encounter::BossDef;
 
 /// Plies between a crack appearing and the cell vanishing.
@@ -32,8 +32,9 @@ fn special(ply: u32, phase: usize) -> Option<u8> {
 /// On-board cells with a missing neighbour (off the board or vanished), not already cracked.
 fn rim(board: &Board, cracked: &[((i32, i32), u8)]) -> Vec<(i32, i32)> {
     let mut out = Vec::new();
-    for q in -MAX_RADIUS..=MAX_RADIUS {
-        for r in -MAX_RADIUS..=MAX_RADIUS {
+    let radius = board.radius();
+    for q in -radius..=radius {
+        for r in -radius..=radius {
             let open = NEIGHBOURS
                 .iter()
                 .any(|&(dq, dr)| board.get(q + dq, r + dr).is_none());

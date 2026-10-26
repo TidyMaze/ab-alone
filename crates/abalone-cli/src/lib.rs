@@ -71,7 +71,8 @@ fn parse_cells(text: &str) -> Result<Vec<(i32, i32)>, ParseError> {
 }
 
 /// Board as ASCII: a header with columns 1 to 9, then rows a (r = -4) to i (r = 4).
-/// Column n is q = n - 5. `B` Black, `W` White, `.` empty, blank off the board.
+/// Column n is q = n - 5. `B` Black, `W` White, `3` to `6` seats 3 to 6, `.` empty, blank off
+/// the board.
 pub fn render(board: &Board) -> String {
     let mut lines = vec!["  1 2 3 4 5 6 7 8 9".to_string()];
     for (row, letter) in ('a'..='i').enumerate() {
@@ -83,6 +84,7 @@ pub fn render(board: &Board) -> String {
                     Some(Cell::Empty) => '.',
                     Some(Cell::Black) => 'B',
                     Some(Cell::White) => 'W',
+                    Some(seat) => char::from(b'0' + seat as u8),
                 };
                 mark.to_string()
             })
@@ -274,6 +276,16 @@ mod tests {
         ]
         .join("\n");
         assert_eq!(render(&board), expected);
+    }
+
+    #[test]
+    fn renders_seats_3_to_6_by_their_number() {
+        let mut board = Board::empty();
+        board.set(0, 0, Cell::Seat3);
+        board.set(1, 0, Cell::Seat4);
+        board.set(2, 0, Cell::Seat5);
+        board.set(3, 0, Cell::Seat6);
+        assert_eq!(render(&board).lines().nth(5), Some("e . . . . 3 4 5 6 ."));
     }
 
     #[test]
