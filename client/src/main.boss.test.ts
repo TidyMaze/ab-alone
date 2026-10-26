@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
-import { boot, type Game } from './test/harness';
+import { boot, slowKeys, type Game } from './test/harness';
 
 // Boss fights and the daily challenge on the harness (decision #445, task #454): the boss list, Retry, the Goal control,
 // the daily challenge and its result card, the boss block of the HUD, and The Hull, The Chaplain and The Choir drawn on
@@ -232,6 +232,7 @@ describe('main.ts boss fights', () => {
   });
 
   it('online, Boss fight and Daily challenge start nothing', async () => {
+    slowKeys();
     const game = await boot('?bot=off#room=boss-test');
     await game.settle(); // the invite link joins the room
     expect(game.room()).toBe('boss-test');

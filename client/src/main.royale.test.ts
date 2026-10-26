@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { axialTo3D, type Axial } from './board';
 import { MARK_MS, STEP_MS } from './royale-reveal';
 import { SLIDE_MS } from './slide';
-import { boot, type Game } from './test/harness';
+import { boot, slowKeys, type Game } from './test/harness';
 
 // The offline battle royale on the harness (#502): Battle royale in the mode menu starts 1 player against 5 bots on
 // the radius 8 arena, at the Furnace. The player presses a target on the arena, which locks the order, or holds; the
@@ -221,6 +221,7 @@ describe('main.ts, the offline battle royale (#502)', () => {
 
   it('Play online leaves it too, and Battle royale does nothing while online', async () => {
     const game = await royale();
+    slowKeys();
     game.openModes();
     button('play-online').click();
     await game.settle();

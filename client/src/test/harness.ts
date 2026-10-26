@@ -65,6 +65,16 @@ const nothing: unknown = new Proxy(() => nothing, {
   apply: () => nothing,
 });
 
+/** The next WebCrypto key pair comes 20 tasks late, after two settle() calls, as on a loaded machine (#636). Called just
+ * before the page goes online (before boot() for an invite link), it slows the page's keys, not the test's. */
+export function slowKeys(): void {
+  const generate = crypto.subtle.generateKey.bind(crypto.subtle) as (...args: unknown[]) => Promise<CryptoKeyPair>;
+  vi.spyOn(crypto.subtle, 'generateKey').mockImplementationOnce((async (...args: unknown[]) => {
+    for (let i = 0; i < 20; i++) await new Promise((done) => setTimeout(done));
+    return generate(...args);
+  }) as never);
+}
+
 /** Loads index.html and a fresh main.ts at `url` (a path, a query and a hash, for example `?bot=off`). */
 export async function boot(url = '/', options: BootOptions = {}): Promise<Game> {
   const { webdriver = true, reducedMotion = false } = options;
