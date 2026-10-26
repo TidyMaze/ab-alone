@@ -221,6 +221,13 @@ export class RoyaleNet<G extends NetGame> {
     return this.run(() => this.handle(m, from, peer));
   }
 
+  /** Asks the peers for what we may have missed, once the connection is back after a drop. Nothing in the lobby. */
+  resync(): Promise<void> {
+    return this.run(async () => {
+      if (this.seats) this.o.send({ kind: 'behind', game: this.o.game, round: this.round });
+    });
+  }
+
   /** Lets the deadlines pass: our reveal once the reveal starts, the round once its orders are known. */
   tick(): Promise<void> {
     return this.run(() => this.step());
@@ -366,7 +373,8 @@ export class RoyaleNet<G extends NetGame> {
     this.o.send({ kind: 'played', game: this.o.game, seats: this.seats, rounds: this.sealed.slice(m.round - 1), open }, peer);
   }
 
-  /** Replays the rounds we missed, then opens the round open on the peer that answered, with what it kept of it. */
+  /** Replays the rounds we missed, then opens the round open on the peer that answered, if it is not open here yet, and
+   * takes what that peer kept of it. */
   private async catchUp(m: Played): Promise<void> {
     if (m.seats.length !== this.o.roster().length) return;
     this.seats ??= m.seats;
@@ -375,8 +383,8 @@ export class RoyaleNet<G extends NetGame> {
       if (s.round !== this.round || this.phase === 'over') continue;
       this.resolve(await replayed(this.o.game, s, this.humans), s, false);
     }
-    if (m.open?.round === this.round && !this.book) {
-      await this.openBook();
+    if (m.open?.round === this.round) {
+      if (!this.book) await this.openBook();
       for (const c of m.open.commits) await this.order(c, c.pub);
       for (const r of m.open.reveals) await this.order(r, r.pub);
     } else if (this.round > from) await this.replay();

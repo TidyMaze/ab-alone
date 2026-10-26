@@ -3007,6 +3007,7 @@ async function goRoyale(room: string, side: number): Promise<void> {
     onRefuse: (reason) => diag.refused(reason),
     onState: (state) => {
       diag.netState(state);
+      if (state === 'open') void ours.resync(); // back after a drop: what did we miss (#504)
       refresh();
     },
     onRole: refresh,
