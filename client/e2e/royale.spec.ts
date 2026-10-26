@@ -104,3 +104,20 @@ test('Battle royale in the mode menu: the player picks an order on the arena, lo
   await expect(hud.locator('.turn')).toHaveText('Battle royale · Round 3');
   await expect(hud.locator('.reveal li').last()).toHaveText('You: held');
 });
+
+test('each seat wears its own glyph on its marbles and beside its name on the plate (#558)', async ({ page }) => {
+  await ready(page);
+  await page.evaluate(() => (window as any).__royale({ seed: 7, rounds: [] }));
+  await expect(page.locator('#hud .turn')).toHaveText('Battle royale · Round 1');
+  expect(await page.evaluate(() => (window as any).__seatGlyphs())).toEqual([10, 10, 10, 10, 10, 10]);
+  const glyphs = page.locator('#hud .initiative .seat');
+  await expect(glyphs.locator('svg polygon')).toHaveCount(6);
+  expect(await glyphs.evaluateAll((spans) => spans.map((s) => s.getAttribute('data-glyph')))).toEqual([
+    'disc',
+    'triangle',
+    'square',
+    'cross',
+    'star',
+    'diamond',
+  ]);
+});

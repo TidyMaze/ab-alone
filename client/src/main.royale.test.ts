@@ -97,6 +97,14 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(button('royale-lock').disabled).toBe(true);
   });
 
+  it("each seat's marbles on the arena wear the seat's glyph, a picked one too (#558)", async () => {
+    const game = await royale();
+    expect(game.hook<number[]>('__seatGlyphs')).toEqual([10, 10, 10, 10, 10, 10]);
+    expect(byId('hud').querySelectorAll('.initiative .seat svg')).toHaveLength(6);
+    tap(game, -4, 8);
+    expect(game.hook<number[]>('__seatGlyphs')).toEqual([10, 10, 10, 10, 10, 10]);
+  });
+
   it('Hold plays the round with no order of the player', async () => {
     await royale();
     button('royale-hold').click();

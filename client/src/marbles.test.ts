@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACCENTS, CORE, type Accent, coreLevel, GLASS, SEATS, SHELL } from './marbles';
+import { ACCENTS, CORE, type Accent, coreLevel, GLASS, SEAT_GLYPHS, SEAT_INK, SEATS, SHELL } from './marbles';
 import { PALETTE_DEFS } from './palettes';
 import { SKINS } from './skins';
 
@@ -103,6 +103,32 @@ describe('battle royale seat tints', () => {
     seen.forEach((a, i) =>
       seen.slice(i + 1).forEach((b) => expect(Math.hypot(...a.map((v, k) => v - b[k]!))).toBeGreaterThanOrEqual(0.15)),
     );
+  });
+});
+
+// #558: each seat's marbles wear an engraved glyph as well as the tint, so no two seats tell apart by colour alone
+// (world.md section 5): under the Furnace light You, Bot 3 and Bot 4 read close.
+describe('battle royale seat glyphs', () => {
+  const views: Record<string, (c: number[]) => number[]> = {
+    normal: (c) => c,
+    ...Object.fromEntries(Object.entries(SIMULATIONS).map(([name, m]) => [name, (c: number[]) => simulate(m, c)])),
+  };
+
+  it('gives each seat its own glyph, in seat order', () => {
+    expect(SEAT_GLYPHS.map((g) => g.name)).toEqual(['disc', 'triangle', 'square', 'cross', 'star', 'diamond']);
+    expect(new Set(SEAT_GLYPHS.map((g) => JSON.stringify(g.points))).size).toBe(SEATS.length);
+  });
+
+  it('draws each glyph as an outline of at least 3 points inside the unit circle', () => {
+    for (const { name, points } of SEAT_GLYPHS) {
+      expect(points.length, name).toBeGreaterThanOrEqual(3);
+      for (const [x, y] of points) expect(Math.hypot(x, y), name).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it.each(Object.keys(views))('the ink reads 3:1 on every seat tint in %s vision', (name) => {
+    const see = views[name]!;
+    for (const seat of SEATS) expect(contrast(see(channels(seat)), see(channels(SEAT_INK))), seat.toString(16)).toBeGreaterThanOrEqual(3);
   });
 });
 
