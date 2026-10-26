@@ -242,6 +242,7 @@ Player always starts with 14 marbles on the standard layout unless stated.
 | B3 Choir | 3 Furnace | The Choir | #44 | 3rd |
 | B4 Converter | 4 Chapel | The Chaplain (was The Marker, renamed, see #19) | #45 | 4th |
 | B5 Mind | 5 Bridge | The Ballast Mind | #47 | 5th |
+| Extra | 2 Cargo | The Alien (proposed by @Varadiell, section 7.7) | #588 | any time, boss menu |
 
 Issue numbers keep their original order, play order is the last column. The Echo opens the
 game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
@@ -330,6 +331,39 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   marbles left, Decision #482), so all three phases are experienced.
 - **Calibrate**: last. It must be harder than any previous boss, with first win between
   attempt 5 and 10, never a wall.
+
+### 7.7 The Alien: a brood that grows
+
+- **Concept**: something came up with the ore. It nests in the Cargo hold and lays eggs between
+  the crates. It is weak at first and gets stronger the longer you let it breed.
+- **Board and side**: standard radius 4 board, Cargo deck look. You have 14 marbles on the
+  standard layout. The Alien starts with **8** marbles: its two back rows (11 cells), minus the 3
+  outer marbles of its second row. Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
+- **Twist, the eggs**: every **2nd** boss turn (its 2nd, 4th, 6th... move), after its move, the
+  Alien lays **1 egg** on an empty cell picked at random. The pick is seeded by the fight's seed
+  and the ply, so a Retry, the daily and both co-op peers get the same eggs. At most **3** eggs
+  are on the board at once; a lay with 3 eggs out is skipped.
+- **Hatching**: an egg hatches after **4 of your turns**. The count runs down by 1 after each of
+  your moves; when it reaches 0, at the start of the boss turn, a new Alien marble appears on the
+  egg's cell and the egg is gone, then the boss plays. From the lay to the hatch, 8 plies go by (your 4 turns and the Alien's 4
+  turns); with the 2 plies of the lay interval, an egg cycle is the 10 turns of @Varadiell's
+  proposal.
+- **An egg is not a marble**: it is a mark on an empty cell, like the Hull's crack, so it never
+  blocks or changes a move or a push (`rules.md` §10: a mode adds rules, never changes a move).
+  A marble that ends a move on an egg's cell, yours or the Alien's, pushed or not, **crushes**
+  it: the egg is gone, no marble appears. The Alien avoids its own eggs.
+- **Tell**: each egg shows a counter above it, the number of your turns left before it hatches
+  (4, 3, 2, 1), facing the camera and readable at 3:1. On 1 the egg pulses (a steady glow, off
+  under reduced motion): it hatches after your next move.
+- **Counter**: walk or push a marble onto an egg to crush it before it hatches, and press the
+  Alien early, while it has few marbles. Every turn spent on eggs is a turn not spent pushing.
+- **Phases**: P1 above. P2 when the Alien has **5** marbles left: it lays an egg every boss turn.
+  P3 at **3**: eggs hatch after **3** of your turns (the counter starts at 3).
+- **Calibrate**: knobs = starting marbles (8), lay interval (2), hatch time (4), egg cap (3), AI
+  depth (3). Fail if the median fight ends with fewer than 2 eggs crushed (nobody learns the
+  counter) or the Alien's marble count only ever goes up (the brood outruns the player).
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
+  the days after it ships changes, section 7.6). It has no hub door: each deck keeps its one boss.
 
 ### 7.6 Daily challenge (#166)
 
