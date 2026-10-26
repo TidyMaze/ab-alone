@@ -568,20 +568,16 @@ mod tests {
     #[test]
     fn the_alien_lays_its_eggs_and_answers_through_its_own_move() {
         let mut a = Arena::new(LadderBoss::Alien, 3);
-        assert_eq!(a.game().board(), alien_start(3).game().board());
-        for _ in 0..4 {
-            let mv = match a.game().to_move() {
-                Player::Black => legal_moves(a.game().board(), Player::Black)[0].clone(),
-                Player::White => {
-                    let Arena::Plain(enc, _) = &a else {
-                        unreachable!("a plain encounter")
-                    };
-                    let reply = a.boss_move();
-                    assert_eq!(reply, alien_move(enc));
-                    reply.unwrap()
-                }
-            };
+        let mut enc = alien_start(3);
+        assert_eq!(a.game().board(), enc.game().board());
+        for _ in 0..2 {
+            let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
             a.play(&mv).unwrap();
+            enc.play(&mv).unwrap();
+            let reply = a.boss_move();
+            assert_eq!(reply, alien_move(&enc));
+            a.play(&reply.clone().unwrap()).unwrap();
+            enc.play(&reply.unwrap()).unwrap();
         }
         assert_eq!(
             a.game().board().eggs().len(),
