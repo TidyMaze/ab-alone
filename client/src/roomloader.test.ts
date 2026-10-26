@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import {
   applyDeckAtmosphere,
   applyPbrToMesh,
@@ -9,8 +10,13 @@ import {
   type DeckId,
   loadPbrMaterial,
   loadSpaceshipBay,
+  meshoptLoader,
   type PbrMaterialSet,
 } from './roomloader';
+
+// The models are read from disk with node:fs imported untyped, as in antistalling.test.ts: the client has no Node types.
+const fs = 'node:fs/promises';
+const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
 
 describe('roomloader PBR pipeline', () => {
   it('creates MeshStandardMaterial with map, normalMap, roughnessMap, and displacementMap', () => {
@@ -119,6 +125,21 @@ describe('roomloader PBR pipeline', () => {
     const fallbackBay = await loadSpaceshipBay('/assets/pbr/', mockGltfLoader as any, failingTexLoader);
     expect(fallbackBay).not.toBeNull();
     expect((floorMesh.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0x333b42);
+  });
+
+  it('decodes the meshopt-compressed bay with its named meshes and their UVs (#701)', async () => {
+    const loader = meshoptLoader();
+    expect(loader.meshoptDecoder).toBe(MeshoptDecoder);
+    const read = async (path: string): Promise<ArrayBuffer> => new Uint8Array(await readFile(new URL(path, import.meta.url))).buffer;
+    const names = async (glb: ArrayBuffer): Promise<string[]> => {
+      const meshes: THREE.Mesh[] = [];
+      (await loader.parseAsync(glb, '')).scene.traverse((o) => (o as THREE.Mesh).isMesh && meshes.push(o as THREE.Mesh));
+      for (const mesh of meshes) expect(mesh.geometry.getAttribute('uv')).toBeDefined(); // the PBR maps tile on them
+      return meshes.map((mesh) => mesh.name).sort();
+    };
+    const shipped = await names(await read('../public/assets/pbr/spaceship-bay.glb'));
+    expect(shipped).toHaveLength(15);
+    expect(shipped).toEqual(await names(await read('../models/spaceship-bay.glb'))); // the materials are picked by these names
   });
 
   it('returns null if GLB fails to load', async () => {

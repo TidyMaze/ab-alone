@@ -189,6 +189,9 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     const { Group } = await vi.importActual<typeof import('three')>('three');
     return {
       GLTFLoader: class {
+        setMeshoptDecoder(): this {
+          return this; // the model is an empty scene: nothing to decode
+        }
         loadAsync = async (url: string): Promise<{ scene: InstanceType<typeof Group> }> => {
           if (missing(url)) throw new Error(`404 ${url}`);
           return { scene: new Group() };
