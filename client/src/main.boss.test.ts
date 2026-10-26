@@ -206,6 +206,19 @@ describe('main.ts boss fights', () => {
     expect(byId('daily-card').hidden).toBe(true); // a boss fight that is not the daily has no result card
   });
 
+  it('a won fight records the boss as beaten in the hub progress, a lost one does not (#520)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    const beaten = (): unknown => JSON.parse(localStorage.getItem('ab-alone.progress') ?? '{}').beaten;
+    fightBoss(game, 'The Echo');
+    loseByRepetition(game);
+    expect(beaten()).toBeUndefined();
+    const { Encounter } = await import('abalone-wasm');
+    fightBoss(game, 'The Hull');
+    vi.spyOn(Encounter.prototype, 'result').mockReturnValue(1); // a win, without playing six ejections
+    play(game, forward(game));
+    expect(beaten()).toEqual(['hull']);
+  });
+
   it('the flat HUD lists the boss phase and its tell as text', async () => {
     const game = await boot('?bot=off');
     byId('setting-flat-hud').click();
