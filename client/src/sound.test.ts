@@ -512,6 +512,14 @@ describe('Sfx.unlock, on a user gesture', () => {
     expect(sfx.state).toBe('running');
   });
 
+  it('swallows a failed resume when the page is shown again (#728)', async () => {
+    const { ctx, sfx } = setup(FULL, new FakeContext('running', true));
+    sfx.unlock();
+    sfx.visible(true);
+    expect(ctx.resumed).toBe(1);
+    await new Promise((done) => setTimeout(done, 0)); // no unhandled rejection
+  });
+
   it('makes no context when the page is hidden or shown before any gesture (#728)', () => {
     const { make, sfx } = setup();
     sfx.visible(false);
