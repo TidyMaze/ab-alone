@@ -1990,7 +1990,8 @@ function leaveHub(): void {
   delete document.body.dataset.hub;
 }
 addEventListener('keydown', (e) => {
-  const to = hubAt && !(e.target instanceof HTMLInputElement) ? arrowCell(hubAt.cell, e.key) : null;
+  // An open terminal reader pages by them, a text field moves its caret.
+  const to = hubAt && !reading && !(e.target instanceof HTMLInputElement) ? arrowCell(hubAt.cell, e.key) : null;
   if (!to) return;
   e.preventDefault(); // no page scroll
   walk(to);
