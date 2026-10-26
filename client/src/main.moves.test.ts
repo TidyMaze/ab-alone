@@ -8,7 +8,7 @@ import { gameFileText } from './gamefile';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { SLIDE_MS } from './slide';
-import { boot, type Game } from './test/harness';
+import { boot, slowKeys, type Game } from './test/harness';
 
 // The moves, the animation and the input of main.ts on the harness (decision #445, #452): a move and its slide, the
 // ejection effect and its blood, the skip, the click and its guards, the pointer orbit, pinch and wheel, Reset view,
@@ -250,8 +250,9 @@ describe('an ejection', () => {
 
 /** Plays Black online: Play online, then a White opponent on the other end of the room, seated and connected. */
 async function joinAsWhite(game: Game) {
+  slowKeys();
   document.getElementById('play-online')!.click();
-  await game.settle();
+  await game.online();
   const { Engine, engine_version } = await import('abalone-wasm');
   let engine = new Engine();
   const received: number[][] = [];
@@ -305,8 +306,9 @@ describe('a click', () => {
 
   it('waits for the opponent online: a move would reach nobody', async () => {
     const game = await boot('?bot=off');
+    slowKeys();
     document.getElementById('play-online')!.click();
-    await game.settle();
+    await game.online();
     expect(game.peer()).not.toBeNull();
     const black = legal(game).find((m) => m.cells.length === 1)!.cells[0]!;
     game.click(...black);
@@ -360,8 +362,9 @@ describe('a click', () => {
   });
 
   it('online as a spectator, never selects', async () => {
+    slowKeys();
     const game = await boot('?bot=off#room=spectated');
-    await game.settle();
+    await game.online();
     const [keys, other] = [await generateKeys(), await generateKeys()];
     const creator = new OnlineSession({
       game: game.room()!,

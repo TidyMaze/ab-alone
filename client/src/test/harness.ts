@@ -44,6 +44,8 @@ export interface Game {
   frame(ms?: number): void;
   /** Lets the pending tasks run: the bot workers' replies, IndexedDB. */
   settle(): Promise<void>;
+  /** Waits until the page is online: it makes its keys first, which may take any time on a loaded machine (#636). */
+  online(): Promise<void>;
   /** The three.js scenes drawn so far. */
   draws(): number;
   /** The other end of the online room once the page goes online (Play online, an invite link), else null. */
@@ -64,6 +66,16 @@ const nothing: unknown = new Proxy(() => nothing, {
   set: () => true,
   apply: () => nothing,
 });
+
+/** The next WebCrypto key pair comes 20 tasks late, after two settle() calls, as on a loaded machine (#636). Called just
+ * before the page goes online (before boot() for an invite link), it slows the page's keys, not the test's. */
+export function slowKeys(): void {
+  const generate = crypto.subtle.generateKey.bind(crypto.subtle) as (...args: unknown[]) => Promise<CryptoKeyPair>;
+  vi.spyOn(crypto.subtle, 'generateKey').mockImplementationOnce((async (...args: unknown[]) => {
+    for (let i = 0; i < 20; i++) await new Promise((done) => setTimeout(done));
+    return generate(...args);
+  }) as never);
+}
 
 /** Loads index.html and a fresh main.ts at `url` (a path, a query and a hash, for example `?bot=off`). */
 export async function boot(url = '/', options: BootOptions = {}): Promise<Game> {
@@ -214,6 +226,9 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     },
     settle: async () => {
       for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
+    },
+    online: async () => {
+      while (document.body.dataset.online === undefined) await new Promise((done) => setTimeout(done));
     },
     draws: () => draws,
     peer: () => peer,

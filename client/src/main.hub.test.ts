@@ -5,7 +5,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D, encodeMove, moveForClick, parseMoves, type Axial } from './board';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
-import { boot, type Game } from './test/harness';
+import { boot, slowKeys, type Game } from './test/harness';
 import type { Transport } from './transport';
 
 // Walking the hub (docs/specs/game-design.md section 3.5, #521): the Ship entry of the mode menu draws the deck's map
@@ -235,9 +235,10 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(drawn(scene()).discs).toBe(61);
 
     ship(game);
+    slowKeys();
     game.openModes();
     byId('play-online').click();
-    await game.settle();
+    await game.online();
     expect(hub()).toBeUndefined();
     ship(game); // no ship while online
     expect(hub()).toBeUndefined();
