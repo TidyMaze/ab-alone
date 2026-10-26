@@ -2563,7 +2563,8 @@ setButton(playOnlineButton, 'Play online', icon('online'));
 // The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8
 // arena, at the Furnace. The player presses a target on the arena, as a move, which locks the order (#611), or holds;
 // the bots' orders come from the round-start state, and the round resolves. The HUD plate shows the next round's
-// initiative order before its reveal, and the reveal of the last round. A boss fight, Play online or Ship leaves it, and it leaves Ship.
+// initiative order before its reveal, and the reveal of the last round. A boss fight, Play online or Ship leaves it,
+// and it leaves Ship.
 const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
 function startRoyale(file: RoyaleFile): void {
   leaveHub();

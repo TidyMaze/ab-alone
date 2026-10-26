@@ -130,7 +130,8 @@ export interface RoyaleView {
   standings?: readonly Standing[];
 }
 
-/** The HUD plate: the round, its initiative order before the reveal (the seats out greyed), the breach warning, and the reveal of the last round in initiative order, each order's outcome named, a fizzle marked.
+/** The HUD plate: the round, its initiative order before the reveal (the seats out greyed), the breach warning, and
+ * the reveal of the last round in initiative order, each order's outcome named, a fizzle marked.
  * Once the game is over: the end banner and each seat's place and points. */
 export function royaleHtml(log: RoundLog | null, { out = [], cracks = [], standings = [] }: RoyaleView = {}): string {
   const round = nextRound(log);
