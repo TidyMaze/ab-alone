@@ -106,7 +106,7 @@ See section 6.
 |---|---|
 | Entry | A "Ship" entry of the mode menu. The menu itself stays ungated: the daily challenge and the tests need every boss |
 | Space | One small hex map per deck (`client/src/hub.ts`): 19 cells (radius 2), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
-| Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys. A new save starts on the centre cell of the Mess |
+| Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
 | Rooms | Cells with a glyph, at least 6 per deck. Rolling onto a room enters it |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
 | Gate | Only the lifts. A lift onto a deck opens once the boss of the deck below it is beaten (the Mess is always open). A locked lift keeps the marble out and Tally says one short line |

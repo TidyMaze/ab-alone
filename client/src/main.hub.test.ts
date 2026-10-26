@@ -124,6 +124,7 @@ describe('main.ts, walking the hub (#521)', () => {
     const game = await boot('?bot=off');
     ship(game);
     const { x, y } = game.hook<{ x: number; y: number }>('__cellToScreen', 1, 0);
+    delete document.body.dataset.ghosts; // set by every ghost drawing
     document.querySelector('body > canvas')!.dispatchEvent(new MouseEvent('pointermove', { clientX: x, clientY: y }));
     expect(document.body.dataset.ghosts).toBeUndefined();
   });
