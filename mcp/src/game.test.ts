@@ -350,6 +350,9 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
     const before = value(game.newGame({}));
     expect(failure(game.newGame({ boss: 'nope' }))).toEqual({ code: 'unknown_boss', message: 'unknown boss nope' });
     expect(value(game.getState())).toEqual(before);
+    // The engine knows The Ballast Mind, but its radius 5 board has no text yet (#572).
+    expect(failure(game.newGame({ boss: 'ballast' }))).toEqual({ code: 'unknown_boss', message: 'unknown boss ballast' });
+    expect(value(game.getState())).toEqual(before);
   });
 
   test('play_move plays the boss reply (Encounter.boss_move) after the agent move, bot_nodes is ignored', () => {
