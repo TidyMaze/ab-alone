@@ -173,7 +173,10 @@ stay in the column, outside the menu.
   never a colour. On a seated player's human ply the turn line reads "Your turn" or "Partner's turn", on the boss
   turn "White to move" as in solo. The status line reads "Waiting for a partner...", "Joining the fight...", "Your
   partner is here.", "Your partner is disconnected." or "Room is full, watching". Strings kept verbatim for the e2e
-  tests. It is greyed offline, like Play online.
+  tests. It is greyed offline, like Play online. The boss block shows the room's attempt, one muted line under the
+  phase notches as in a daily fight: "Fight together · attempt 2" (#531). The Rematch button reads "Retry" and its
+  line names the partner: "You asked for a retry. Waiting for your partner..." and "Your partner asks for a retry."
+  When both asked, the same fight restarts (coop-boss.md section 5).
 - **Rematch.** When an online game is over, each seated player sees a Rematch button under
   Reset view, spectators do not. It is greyed once pressed, or while the opponent is
   disconnected. One more line under the status line says who asked, kept verbatim for the e2e

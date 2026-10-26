@@ -18,3 +18,12 @@ export function seatAfter(plies: number, seats: number): number {
 export function coopTurn(ours: boolean): string {
   return ours ? 'Your turn' : "Partner's turn";
 }
+
+/** The HUD line of a finished fight that says who asked for a Retry, naming the partner (#531). The e2e tests read it. */
+export function retryText(we: boolean, they: boolean): string {
+  if (we) return 'You asked for a retry. Waiting for your partner...';
+  return they ? 'Your partner asks for a retry.' : '';
+}
+
+/** The boss plate line of the room's attempt, one counter for every seat (#531). */
+export const attemptLine = (attempt: number): string => `Fight together · attempt ${attempt}`;
