@@ -4,6 +4,7 @@ import { BLACK_WINS } from '../e2e/end-games';
 import type { Axial } from './board';
 import { gameFileText } from './gamefile';
 import { KEY_DIRS, legalGroups } from './keyboard';
+import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
 
 // The keyboard play of main.ts on the harness (#738): Tab and Shift+Tab, Q W E A S D, Enter and Escape on the canvas.
@@ -101,6 +102,19 @@ describe('the keyboard on the board', () => {
     const mv = game.hook<Move[]>('__legal').find((m) => m.cells.length === 1)!;
     game.click(...mv.cells[0]!);
     expect(data().ghosts).toBe('0');
+  });
+
+  it('drops a key while the marbles slide, and takes the next one once they stopped', async () => {
+    const game = await boot('?bot=off');
+    press('Tab');
+    press(keyOf(game.hook<Move[]>('__legal').find((m) => m.cells.join() === rings(game).join())!.dir));
+    press('Enter');
+    expect(plies(game)).toBe(1);
+    expect(press('Tab')).toBe(true); // the slide runs: no selection
+    expect(rings(game)).toEqual([]);
+    game.frame(SLIDE_MS);
+    expect(press('Tab')).toBe(false);
+    expect(rings(game).length).toBeGreaterThan(0);
   });
 
   it('ignores other keys and shortcuts', async () => {
