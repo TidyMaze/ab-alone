@@ -397,30 +397,147 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_picked_marble_flips_its_polarity_or_takes_a_coin_with_none() {
-        let b = board(
-            &[(0, 0), (1, 0), (2, 0), (3, 0)],
+    /// The signs of the announces over `n` announce hooks in a row, each applying the last one.
+    fn announced_signs(mut b: Board, n: usize, seed: u64) -> Vec<i8> {
+        (0..n)
+            .map(|k| {
+                b = hook(&b, MAGNETIZER_ANNOUNCE, seed + k as u64);
+                b.announce().unwrap().1
+            })
+            .collect()
+    }
+
+    fn wide_board() -> Board {
+        board(
+            &[(-2, 0), (-1, 0), (0, 0), (1, 0)],
+            &[(-2, 2), (-1, 2), (0, 2), (1, 2)],
             &[],
-            &[((0, 0), 1), ((1, 0), -1)],
+        )
+    }
+
+    #[test]
+    fn the_signs_alternate_plus_then_minus_over_the_whole_fight() {
+        assert_eq!(announced_signs(wide_board(), 4, 0), vec![1, -1, 1, -1]);
+        assert_eq!(announced_signs(wide_board(), 4, 9), vec![1, -1, 1, -1]);
+    }
+
+    #[test]
+    fn the_cycle_goes_on_across_turns_without_an_assignment() {
+        let b = hook(&wide_board(), MAGNETIZER_ANNOUNCE, 3);
+        assert_eq!(b.announce().unwrap().1, 1, "the first is +");
+        let b = hook(&b, MAGNETIZER_TURN, 4);
+        assert_eq!(b.announce(), None);
+        assert_eq!(b.polarities().len(), 1);
+        assert_eq!(b.polarities()[0].1, 1);
+        let b = hook(&b, MAGNETIZER_TURN, 5);
+        let b = hook(&b, MAGNETIZER_ANNOUNCE, 6);
+        assert_eq!(b.announce().unwrap().1, -1, "then −");
+        let b = hook(&b, MAGNETIZER_TURN, 7);
+        let signs: Vec<i8> = b.polarities().iter().map(|p| p.1).collect();
+        assert_eq!(signs.iter().filter(|&&s| s == -1).count(), 1);
+        assert_eq!(signs.len(), 2);
+    }
+
+    #[test]
+    fn the_boss_marbles_can_be_picked_too() {
+        let colour = |seed: u64| {
+            let b = hook(&wide_board(), MAGNETIZER_ANNOUNCE, seed);
+            let (q, r) = b.announce().unwrap().0.unwrap();
+            b.get(q, r).unwrap()
+        };
+        let picked: Vec<Cell> = (0..64).map(colour).collect();
+        assert!(picked.contains(&Cell::White) && picked.contains(&Cell::Black));
+    }
+
+    #[test]
+    fn only_unpolarized_marbles_are_picked_while_there_are_some() {
+        let b = board(
+            &[(0, 0), (1, 0)],
+            &[(0, 2), (1, 2)],
+            &[((0, 0), 1), ((0, 2), -1), ((1, 2), 1)],
         );
-        let mut picks = Vec::new();
-        for seed in 0..64 {
-            let (cell, sign) = pick(&b, mix(seed));
-            match cell {
-                (0, 0) => assert_eq!(sign, -1, "+ flips"),
-                (1, 0) => assert_eq!(sign, 1, "− flips"),
-                _ => {}
-            }
-            picks.push((cell, sign));
+        for seed in 0..32 {
+            let out = hook(&b, MAGNETIZER_ANNOUNCE, seed);
+            assert_eq!(out.announce().unwrap().0, Some((1, 0)), "seed {seed}");
         }
-        picks.sort();
-        picks.dedup();
-        assert_eq!(
-            picks.len(),
-            6,
-            "every marble, both coins for the unpolarized ones: {picks:?}"
+    }
+
+    #[test]
+    fn when_every_marble_is_polarized_any_is_picked_and_takes_the_next_sign() {
+        let b = board(
+            &[(0, 0), (1, 0)],
+            &[(0, 2)],
+            &[((0, 0), 1), ((1, 0), -1), ((0, 2), 1)],
         );
+        let picked: Vec<_> = (0..32)
+            .map(|seed| hook(&b, MAGNETIZER_ANNOUNCE, seed).announce().unwrap())
+            .collect();
+        for cell in [(0, 0), (1, 0), (0, 2)] {
+            assert!(picked.iter().any(|a| a.0 == Some(cell)), "{cell:?}");
+        }
+        assert!(picked.iter().all(|a| a.1 == 1), "the first sign is +");
+        let mut held = b.clone();
+        held.set_announce(Some((Some((0, 0)), 1)));
+        let out = hook(&held, MAGNETIZER_TURN, 0);
+        assert_eq!(sorted(&out), sorted(&b), "+ stays +");
+    }
+
+    #[test]
+    fn a_polarity_follows_a_boss_marble_and_leaves_with_it() {
+        let b = board(
+            &[(3, 0), (4, 0)],
+            &[(0, 0), (1, 0), (2, 0)],
+            &[((0, 0), 1), ((2, 0), -1)],
+        );
+        let mut enc = fight(b, Player::White, [0, 0], 0);
+        enc.play(&mv(&[(0, 0), (1, 0), (2, 0)], E)).unwrap();
+        assert_eq!(
+            sorted(enc.game().board()),
+            vec![((1, 0), 1), ((3, 0), -1)],
+            "both follow the push"
+        );
+        let mut enc = fight(
+            board(&[(-4, 0)], &[(0, 0)], &[((0, 0), -1)]),
+            Player::White,
+            [0, 0],
+            0,
+        );
+        enc.play(&mv(&[(0, 0)], NE)).unwrap();
+        assert_eq!(sorted(enc.game().board()), vec![((1, -1), -1)]);
+    }
+
+    #[test]
+    fn two_boss_marbles_or_a_boss_and_a_player_marble_repel_with_the_usual_credit() {
+        let bosses = board(
+            &[(3, 0), (4, 0)],
+            &[(1, 0), (2, 0)],
+            &[((1, 0), 1), ((2, 0), -1)],
+        );
+        let (out, credits, _) = settled(&bosses, 0);
+        assert_eq!(credits, [0, 1], "a player marble off counts for the boss");
+        assert_eq!(out.get(4, 0), Some(Cell::Black));
+        assert_eq!(marbles(&out, Cell::White), 2);
+        assert!(out.polarities().is_empty());
+        let mixed = board(
+            &[(1, 0)],
+            &[(2, 0), (3, 0), (4, 0)],
+            &[((1, 0), 1), ((2, 0), -1)],
+        );
+        let (out, credits, _) = settled(&mixed, 0);
+        assert_eq!(credits, [1, 0], "a boss marble off counts for the player");
+        assert_eq!(out.get(0, 0), Some(Cell::Black));
+        assert_eq!(marbles(&out, Cell::White), 2);
+    }
+
+    #[test]
+    fn the_boss_search_carries_the_polarity_of_its_own_marble() {
+        let b = board(&[(4, 0)], &[(0, 0)], &[((0, 0), 1)]);
+        let after = {
+            let mut a = board(&[(4, 0)], &[(1, 0)], &[]);
+            a.set_polarities(carried_poles(&b, &mv(&[(0, 0)], E), &a));
+            a
+        };
+        assert_eq!(sorted(&after), vec![((1, 0), 1)]);
     }
 
     #[test]
