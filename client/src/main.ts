@@ -53,9 +53,9 @@ import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
-import { lineAt, logOf, type AudioLog } from './audiologs';
+import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
-import { markRead, readLore } from './lorestore';
+import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
@@ -509,8 +509,8 @@ for (const bus of BUSES) {
   });
 }
 // The log archive (#513): its button, Logs, is a short word beside Import game, as FPS is beside Clear board, so the menu
-// keeps its height. It opens a page of one button per entry read, in place of the items; a press on one closes the menu
-// and reopens the entry in the terminal reader.
+// keeps its height. It opens a page of one button per entry read, then per audio log collected (#517), in place of the
+// items; a press on one closes the menu and reopens the entry in the terminal reader, or replays the log.
 const archiveButton = Object.assign(document.createElement('button'), {
   id: 'setting-log-archive',
   type: 'button',
@@ -527,14 +527,18 @@ const archive = menu.appendChild(document.createElement('div'));
 archive.className = 'setting-archive';
 function openArchive(): void {
   menu.dataset.page = 'archive';
-  const rows = archiveList(readLore(store), LORE).map((entry) => {
-    const row = Object.assign(document.createElement('button'), { type: 'button', textContent: entry.title });
-    row.addEventListener('click', () => {
+  const row = (title: string, open: () => void): HTMLButtonElement => {
+    const button = Object.assign(document.createElement('button'), { type: 'button', textContent: title });
+    button.addEventListener('click', () => {
       moveMenu('pick');
-      openReader(entry.id);
+      open();
     });
-    return row;
-  });
+    return button;
+  };
+  const rows = [
+    ...archiveList(readLore(store), LORE).map((entry) => row(entry.title, () => openReader(entry.id))),
+    ...archiveList(collectedLogs(store), AUDIO_LOGS).map((log) => row(log.title, () => playLog(log))),
+  ];
   archive.replaceChildren(...(rows.length ? rows : ['Nothing read yet.']));
   rows[0]?.focus();
 }
@@ -652,6 +656,7 @@ function turnConsole(now: number): void {
 const reader = document.getElementById('reader')!;
 reader.classList.toggle('flat', flatHud);
 let consoleScreen!: THREE.Mesh; // set by drawProps
+let recorder!: THREE.Mesh; // set by drawProps
 function openReader(id?: string): void {
   if (id) layoutConsole(id); // an entry of the log archive (#513)
   if (!consolePages.length) return; // the fonts are not in yet
@@ -685,8 +690,9 @@ addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowRight') turnReader(1);
   else if (e.key === 'ArrowLeft') turnReader(-1);
 });
-// The audio log player (#516, world.md section 4): while the player reads the deck console, Play log plays the deck's
-// audio log on the voice bus, music and ambience ducked under it. Skip log stops it at any time, on the console or off
+// The audio log player (#516, world.md section 4): while the player reads the deck console, Play log plays the audio log
+// of the deck of the entry shown (an entry of the log archive may be another deck's) on the voice bus, music and
+// ambience ducked under it. Skip log stops it at any time, on the console or off
 // it; the game goes on meanwhile. Its transcript shows line by line unless the Transcript toggle is off.
 const logButton = document.getElementById('log-button') as HTMLButtonElement;
 const transcript = document.getElementById('transcript')!;
@@ -704,16 +710,22 @@ function stopLog(): void {
   delete document.body.dataset.log;
   paintLog();
 }
-logButton.addEventListener('click', () => {
-  if (playing) {
-    stopLog();
-    return;
-  }
-  playing = { log: logOf(deck), since: performance.now() };
-  document.body.dataset.logSound = sfx.playLog(playing.log.voices) ? 'voice' : 'none'; // read by the tests
-  document.body.dataset.log = playing.log.id; // read by the e2e tests
+function playLog(log: AudioLog): void {
+  playing = { log, since: performance.now() };
+  document.body.dataset.logSound = sfx.playLog(log.voices) ? 'voice' : 'none'; // read by the tests
+  document.body.dataset.log = log.id; // read by the e2e tests
   paintLog();
+}
+logButton.addEventListener('click', () => {
+  if (playing) stopLog();
+  else playLog(logOf(LORE.find((e) => e.id === consoleEntry)!.deck));
 });
+// The deck's recorder prop (#517): a click plays the deck's log and collects it for the log archive.
+function pickRecorder(): void {
+  const log = logOf(deck);
+  markCollected(store, log.id);
+  playLog(log);
+}
 // Called every frame: the next transcript line, and the end of the log.
 function tickLog(now: number): void {
   if (!playing) return;
@@ -1079,6 +1091,7 @@ drawProps = (): void => {
 
     const mesh = new THREE.Mesh(geom, mat);
     if (screen) consoleScreen = mesh;
+    if (def.id === 'log-recorder') recorder = mesh;
     mesh.position.set(...def.position);
     mesh.rotation.set(...def.rotation);
     if (def.id.startsWith('pedestal') || def.id.startsWith('conduit')) {
@@ -1793,9 +1806,9 @@ function cellAt(e: PointerEvent | MouseEvent): Axial | null {
   const hit = raycaster.intersectObjects(shown)[0];
   return hit ? cells[shown.indexOf(hit.object as THREE.Mesh)]! : null;
 }
-function onConsole(e: PointerEvent): boolean {
+function onProp(e: PointerEvent, prop: THREE.Mesh): boolean {
   aim(e);
-  return raycaster.intersectObject(consoleScreen).length > 0;
+  return raycaster.intersectObject(prop).length > 0;
 }
 
 // One pointer that stays put is a click, one that moves is an orbit, two pointers are a pinch.
@@ -1840,13 +1853,14 @@ function release(e: PointerEvent): void {
   if (pointers.size === 0) press = null;
   if (!wasClick) return;
   if (reading) {
-    if (onConsole(e)) turnReader(1);
+    if (onProp(e, consoleScreen)) turnReader(1);
     else leaveReader();
     return;
   }
   const cell = cellAt(e);
   if (cell) click(cell[0], cell[1]);
-  else if (onConsole(e)) openReader();
+  else if (onProp(e, consoleScreen)) openReader();
+  else if (onProp(e, recorder)) pickRecorder();
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
@@ -1881,9 +1895,10 @@ addEventListener('resize', () => {
   const v = new THREE.Vector3(p.x, 0, p.z).project(camera);
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
 };
-// Used by the browser checks to see the console screen on the window (#512): the box around its corners, in pixels.
-(window as unknown as Record<string, unknown>).__consoleRect = () => {
-  const box = new THREE.Box3().setFromObject(consoleScreen);
+// Used by the browser checks to see the console screen (#512) and the recorder (#517) on the window: the box around its
+// corners, in pixels.
+function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height: number } {
+  const box = new THREE.Box3().setFromObject(prop);
   const xs: number[] = [];
   const ys: number[] = [];
   for (const x of [box.min.x, box.max.x])
@@ -1895,7 +1910,9 @@ addEventListener('resize', () => {
       }
   const [left, top] = [Math.min(...xs), Math.min(...ys)];
   return { x: left, y: top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
-};
+}
+(window as unknown as Record<string, unknown>).__consoleRect = () => rectOf(consoleScreen);
+(window as unknown as Record<string, unknown>).__recorderRect = () => rectOf(recorder);
 // Used by the browser checks to play their setup plies: the same click, without the raycast and the frames of a mouse click.
 (window as unknown as Record<string, unknown>).__click = (q: number, r: number) => click(q, r);
 

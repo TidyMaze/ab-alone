@@ -79,16 +79,18 @@ No cutscenes, no forced dialogue, no quest log.
   click on the screen or the right arrow turns the page, the left arrow goes back; Esc, a click off the
   screen or a click past the last page leaves, back to the view the player had. The ids read are saved
   locally (`client/src/lorestore.ts`), for the log archive (#513): Logs, in the settings menu (ui.md section 4),
-  lists the entries read, in ship order, and a press on one reopens it in the reader. The game goes on while the
+  lists the entries read, in ship order, then the audio logs collected, and a press on one reopens it in the reader. The game goes on while the
   player reads.
 - **Audio logs.** Short ambient recordings (max 60 s), collectable, replayable from an archive.
   Optional. One per deck (`client/src/audiologs.ts`, #515): a synthesized recording (room tone,
   footsteps, machinery, the Choir's hum) with a timed transcript. No voice acting (section 11):
   the words exist only in the transcript. The player (#516): while reading the deck console, Play log plays
-  the deck's log on the voice bus, music and ambience ducked under it (section 7, Mix); Skip log stops it
+  the log of the deck of the entry shown (an entry reopened from the archive may be another deck's) on the voice bus, music and ambience ducked under it (section 7, Mix); Skip log stops it
   at any time, on the console or off it, and the game goes on meanwhile. The transcript shows line by line,
   over the button (ui.md section 4), on by default; the Transcript toggle beside Sound in the settings menu hides it, saved
-  locally. The collectable recorder prop comes later, and the logs heard then join the log archive (#517).
+  locally. Collectable (#517): a recorder prop lies on the cargo crate of the room (`client/src/room.ts`); a click on it
+  plays the deck's log and saves it collected (`client/src/lorestore.ts`). The log archive lists the logs collected
+  after the entries read, and a press on one replays it.
 - **Tally.** One-line announcements at match start and end. Never explains itself.
 - **Boss arenas.** Each boss board carries one lore object the player can inspect before the
   fight.
