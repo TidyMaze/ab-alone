@@ -104,11 +104,29 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     expect(low.some((e) => e.id.includes('conduit'))).toBe(false);
   });
 
-  it('spaceshipLights provides emergency sodium strip and cold rim backlight', () => {
+  it('overhead structural bulkhead arches frame the ceiling at radius >= 20', () => {
+    for (const tier of ['high', 'low'] as const) {
+      const parts = spaceshipArchitecture(tier);
+      const north = parts.find((p) => p.id === 'bulkhead-arch-north')!;
+      const south = parts.find((p) => p.id === 'bulkhead-arch-south')!;
+      expect(north.type).toBe('box');
+      expect(south.type).toBe('box');
+      expect(north.position[1]).toBe(15.0);
+      expect(south.position[1]).toBe(15.0);
+      expect(Math.hypot(north.position[0], north.position[2])).toBeGreaterThanOrEqual(20);
+      expect(Math.hypot(south.position[0], south.position[2])).toBeGreaterThanOrEqual(20);
+    }
+  });
+
+  it('spaceshipLights provides emergency sodium strip, cold rim, console bounce and pedestal glow', () => {
     const lights = spaceshipLights();
     expect(lights.emergency.color).toBe(0xd9822b);
     expect(lights.rim.color).toBe(0x7fd6e8);
+    expect(lights.consoleBounce.color).toBe(0xd9822b);
+    expect(lights.pedestalGlow.color).toBe(0x7fd6e8);
     expect(lights.emergency.intensity).toBeGreaterThan(0);
     expect(lights.rim.intensity).toBeGreaterThan(0);
+    expect(lights.consoleBounce.intensity).toBeGreaterThan(0);
+    expect(lights.pedestalGlow.intensity).toBeGreaterThan(0);
   });
 });

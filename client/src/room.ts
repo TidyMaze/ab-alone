@@ -366,6 +366,46 @@ export function spaceshipArchitecture(tier: Tier): readonly StructuralPart[] {
       rotation: [0, 0, 0],
     },
 
+    // --- AIRLOCK FLANKING HYDRAULIC RAMS ---
+    {
+      id: 'airlock-ram-left',
+      type: 'cylinder',
+      size: [0.18, 0.18, 5.0, 8],
+      position: [-3.8, 3.2, -23.5],
+      color: 0x2e353c,
+      roughness: 0.75,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'airlock-ram-right',
+      type: 'cylinder',
+      size: [0.18, 0.18, 5.0, 8],
+      position: [3.8, 3.2, -23.5],
+      color: 0x2e353c,
+      roughness: 0.75,
+      rotation: [0, 0, 0],
+    },
+
+    // --- OVERHEAD BULKHEAD ARCH RIBS (Framing ceiling at radius 22.0) ---
+    {
+      id: 'bulkhead-arch-north',
+      type: 'box',
+      size: [20.0, 1.2, 0.8],
+      position: [0, 15.0, -22.0],
+      color: 0x323a42,
+      roughness: 0.8,
+      rotation: [0, 0, 0],
+    },
+    {
+      id: 'bulkhead-arch-south',
+      type: 'box',
+      size: [20.0, 1.2, 0.8],
+      position: [0, 15.0, 22.0],
+      color: 0x323a42,
+      roughness: 0.8,
+      rotation: [0, 0, 0],
+    },
+
     // --- DIEGETIC OBSERVATION / FORWARD BAY (South wall at z = 23.7) ---
     {
       id: 'observation-frame',
@@ -488,6 +528,16 @@ export function spaceshipArchitecture(tier: Tier): readonly StructuralPart[] {
         roughness: 0.88,
         rotation: [0, 0, Math.PI / 2],
       },
+      // Starboard high-pressure conduit distribution manifold
+      {
+        id: 'conduit-manifold-ne',
+        type: 'cylinder',
+        size: [0.28, 0.28, 3.2, 8],
+        position: [14.0, 6.0, -21.0],
+        color: 0x283038,
+        roughness: 0.82,
+        rotation: [Math.PI / 2, 0, 0],
+      },
     );
   }
 
@@ -506,6 +556,18 @@ export interface SpaceshipLights {
     intensity: number;
     position: readonly [number, number, number];
   };
+  consoleBounce: {
+    color: number;
+    intensity: number;
+    position: readonly [number, number, number];
+    distance: number;
+  };
+  pedestalGlow: {
+    color: number;
+    intensity: number;
+    position: readonly [number, number, number];
+    distance: number;
+  };
 }
 
 export function spaceshipLights(): SpaceshipLights {
@@ -522,6 +584,20 @@ export function spaceshipLights(): SpaceshipLights {
       color: 0x7fd6e8,
       intensity: 0.4,
       position: [-18.0, 10.0, 18.0],
+    },
+    // Warm sodium console bounce from the avionics terminal screen desk
+    consoleBounce: {
+      color: 0xd9822b,
+      intensity: 0.35,
+      position: [-5.5, 1.2, -5.5],
+      distance: 8.0,
+    },
+    // Cold cyan under-board ground wash grounding pedestal into floor deck
+    pedestalGlow: {
+      color: 0x7fd6e8,
+      intensity: 0.25,
+      position: [0, -0.2, 0],
+      distance: 6.0,
     },
   };
 }

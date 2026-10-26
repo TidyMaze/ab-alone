@@ -27,7 +27,9 @@ and no new look: each rule names its source (section numbers), and changes when 
   Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
   its own angle, seeded, so the set never lines up and a game always looks the same.
 - **Light** (world.md 5). Low-key: one hard source per deck, a dim cyan fill from the player's
-  marbles, slow and rare flicker. Soft contact shadows ground marbles onto the deck cells and frame
+  marbles, slow and rare flicker. Localized spaceship architectural lights (emergency sodium strip above the airlock,
+  cold rim backlight on forward bay, warm console bounce on the avionics desk, and subtle cyan ground wash grounding the pedestal, #644).
+  Soft contact shadows ground marbles onto the deck cells and frame
   (#459), disabled under low quality tier and automation to save software WebGL. Every cell and
   marble stays legible: cell edge 3:1, each marble 3:1 on the deck (#344). The deck steel is lit to
   a mid-tone so the black shell stands out, the frame's plate stays dark.

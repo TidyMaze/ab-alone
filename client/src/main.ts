@@ -1144,6 +1144,14 @@ drawProps = (): void => {
     }
     propsGroup.add(mesh);
   }
+  const sLights = spaceshipLights();
+  const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
+  emergencyLight.position.set(...sLights.emergency.position);
+  const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
+  consoleBounceLight.position.set(...sLights.consoleBounce.position);
+  const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity, sLights.pedestalGlow.distance);
+  pedestalGlowLight.position.set(...sLights.pedestalGlow.position);
+  propsGroup.add(emergencyLight, consoleBounceLight, pedestalGlowLight);
 };
 drawProps();
 
