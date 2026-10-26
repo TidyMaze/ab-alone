@@ -428,6 +428,7 @@ function applyLook(): void {
   renderer.shadowMap.type = shadowConf.soft ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
+  document.body.dataset.shadows = shadowConf.enabled ? 'on' : 'off'; // read by the e2e tests (#729)
   drawProps();
   updateParticles();
   if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation

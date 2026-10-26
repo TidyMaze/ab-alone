@@ -1,19 +1,17 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
 import { relativeLuminance, type RGB } from '../src/contrast';
 
 test.describe('Background luminance and decor (#432)', () => {
-  test('measure background luminance and capture screenshots', async ({ page }) => {
-    mkdirSync('/tmp/screenshots', { recursive: true });
+  test('the background behind the board is lifted above the baseline', async ({ page }) => {
     await page.setViewportSize({ width: 1470, height: 867 });
     await page.addInitScript(() => {
       localStorage.setItem('ab-alone.theme', 'dark');
     });
     await page.goto('./?bot=off');
     await page.locator('canvas').waitFor();
-    await page.waitForTimeout(500);
+    await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete (#661)
 
-    const png = await page.screenshot({ path: '/tmp/screenshots/432-bg-after-desktop.png' });
+    const png = await page.screenshot();
 
     // Sample points: four corners + behind the board
     const points: [number, number][] = [
@@ -40,25 +38,10 @@ test.describe('Background luminance and decor (#432)', () => {
     }, [png.toString('base64'), points] as const);
 
     const lums = colors.map((c) => ({ rgb: c, lum: relativeLuminance(c) }));
-    console.log('MEASURED_LUMINANCES:', JSON.stringify(lums));
 
     // Behind board is lifted above the 0.0017 baseline, but darker than board steel (0.082)
     const behindBoardLum = lums[4]!.lum;
     expect(behindBoardLum).toBeGreaterThan(0.003);
     expect(behindBoardLum).toBeLessThan(0.082);
-
-    // Also take phone width screenshot
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: '/tmp/screenshots/432-bg-after-phone.png' });
-
-    // Orbit camera to tilt angle showing 360 degree enclosing spaceship walls
-    await page.setViewportSize({ width: 1470, height: 867 });
-    await page.mouse.move(700, 450);
-    await page.mouse.down();
-    await page.mouse.move(850, 600);
-    await page.mouse.up();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: '/tmp/screenshots/spaceship-orbit-angle.png' });
   });
 });
