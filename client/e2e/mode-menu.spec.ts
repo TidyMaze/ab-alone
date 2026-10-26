@@ -75,6 +75,38 @@ test.describe('on a phone', () => {
   });
 });
 
+// #666: on a phone held upright the open boss list has room for 12 bosses (copies of its last entry make 12, as #663
+// does on a desktop): every item stays a 44 px touch target with a label of at least 12
+// px, and the last boss, scrolled into view, is on screen and the element under its centre.
+for (const viewport of [{ width: 360, height: 780 }, { width: 375, height: 812 }]) {
+  test.describe(`on a ${viewport.width} px phone held upright`, () => {
+    test.use({ viewport, hasTouch: true });
+
+    test('12 bosses keep 44 px touch targets and readable labels, the last one reachable, #666', async ({ page }) => {
+      await page.goto('./?bot=off');
+      await page.getByRole('button', { name: 'Game modes' }).click();
+      await page.getByRole('button', { name: 'Boss fight' }).click();
+      const list = page.locator('#boss-list');
+      await list.evaluate((el) => {
+        while (el.children.length < 12) el.appendChild(el.lastElementChild!.cloneNode(true));
+      });
+      await expect(list.getByRole('button')).toHaveCount(12);
+      const found = await page.evaluate(() => {
+        const items = [...document.querySelectorAll('#mode-menu button')].filter((el) => el.getClientRects().length > 0);
+        const last = document.querySelector('#boss-list')!.lastElementChild!;
+        last.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const b = last.getBoundingClientRect();
+        return {
+          small: items.filter((el) => el.getBoundingClientRect().width < 44 || el.getBoundingClientRect().height < 44).map((el) => el.textContent),
+          tiny: items.filter((el) => parseFloat(getComputedStyle(el).fontSize) < 12).map((el) => el.textContent),
+          lastReachable: b.left >= 0 && b.top >= 0 && b.right <= innerWidth && b.bottom <= innerHeight && document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) === last,
+        };
+      });
+      expect(found).toEqual({ small: [], tiny: [], lastReachable: true });
+    });
+  });
+}
+
 // Bug #653: on a 1280x720 window the open boss list of 7 bosses scrolled, The Rail Yard and Daily challenge below the
 // fold. On a desktop window every boss and Daily challenge show without a scroll, with room for 2 more bosses than the 7
 // of then: the list gets copies of its last entry up to 9 bosses in all (1 since The Magnetizer, #645).
