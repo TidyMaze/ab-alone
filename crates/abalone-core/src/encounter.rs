@@ -16,7 +16,7 @@ pub mod railyard;
 pub mod telemetry;
 
 use crate::board::{Board, Cell};
-use crate::encounter::magnetizer::{carried_poles, settle, Repulsion};
+use crate::encounter::magnetizer::{carried_announce, carried_poles, settle, Repulsion};
 use crate::game::{Game, GameError, Outcome};
 use crate::moves::{Move, Player};
 use crate::search::{search, SearchResult};
@@ -191,7 +191,7 @@ impl Encounter {
     }
 
     /// Keeps the converted marks that still sit on a White marble after `mv`, and the polarities
-    /// on a Black one.
+    /// and the announce on a Black one.
     fn carry_marks(&mut self, before: &Board, mv: &Move) {
         let board = self.game.board();
         let kept: Vec<_> = carried_marks(before, mv, before.converted())
@@ -199,10 +199,13 @@ impl Encounter {
             .filter(|&(q, r)| board.get(q, r) == Some(Cell::White))
             .collect();
         let poles = carried_poles(before, mv, board);
-        if kept != board.converted() || poles != board.polarities() {
+        let announce = carried_announce(before, mv, board);
+        if kept != board.converted() || poles != board.polarities() || announce != board.announce()
+        {
             let mut next = board.clone();
             next.set_converted(kept);
             next.set_polarities(poles);
+            next.set_announce(announce);
             self.game.replace_board(next);
         }
     }
