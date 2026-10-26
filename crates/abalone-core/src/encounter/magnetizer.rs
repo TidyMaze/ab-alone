@@ -1,10 +1,12 @@
-//! The Magnetizer (#645, docs/specs/game-design.md section 7.9): the player's marbles get a + or −
-//! polarity, and two adjacent marbles of opposite polarity repel one cell each, pushing every
-//! marble in front of them on their line with no sumito limit, off the board at the rim. The
-//! polarities live on the board (`Board::polarities`) and move with their marbles. Every random
-//! pick is splitmix64 of the fight seed and the ply, so every peer gets the same fight.
+//! The Magnetizer (#645, #671, docs/specs/game-design.md section 7.9): at the start of some of the
+//! player's turns one of their marbles gets a + or − polarity, announced one turn ahead, and two
+//! adjacent marbles of opposite polarity repel one cell each, pushing every marble in front of them
+//! on their line with no sumito limit, off the board at the rim; the pair then loses both
+//! polarities. The polarities and the announce live on the board (`Board::polarities`,
+//! `Board::announce`) and move with their marbles. Every random pick is splitmix64 of the fight
+//! seed and the ply, so every peer gets the same fight.
 
-use crate::board::{Board, Cell};
+use crate::board::{Announce, Board, Cell};
 use crate::encounter::hull::mix;
 use crate::encounter::{carried_marks, BossDef, Encounter};
 use crate::moves::{Move, Player};
@@ -14,18 +16,18 @@ type P = (i32, i32);
 
 /// P2 and P3 start after this many ejections credited to the player. TUNE.
 pub const MAGNETIZER_PHASE_EJECTIONS: [u8; 2] = [3, 5];
-/// Player turns between two assignments, per phase. TUNE.
-pub const MAGNETIZER_ASSIGN_EVERY: [u32; 3] = [2, 1, 1];
-/// The phase (0 based) from which every assignment re-rolls all the player's marbles.
-pub const MAGNETIZER_ALL_PHASE: usize = 2;
+/// Player turns between two assignments, per phase: turns 3, 6, 9... in P1, the even turns in
+/// P2, every turn in P3. TUNE.
+pub const MAGNETIZER_ASSIGN_EVERY: [u32; 3] = [3, 2, 1];
 /// Repulsions per settle at most, a safety bound the fights never reach.
 pub const MAGNETIZER_SETTLE_CAP: usize = 64;
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
 pub const MAGNETIZER_NODE_BUDGET: u32 = 3000;
-/// Special id: one player marble gets a polarity.
-pub const MAGNETIZER_ASSIGN_ONE: u8 = 0;
-/// Special id: every player marble gets a new polarity, half + and half −.
-pub const MAGNETIZER_ASSIGN_ALL: u8 = 1;
+/// Special id at the start of a player turn: the announced marble takes its sign.
+pub const MAGNETIZER_TURN: u8 = 0;
+/// Special id at the start of a player turn before an assignment turn: the same, then the next
+/// marble and its sign are announced.
+pub const MAGNETIZER_ANNOUNCE: u8 = 1;
 
 /// One repulsion of a settle, for the client's animation: the pair, in the order the engine
 /// drew it, and the board just before it.
@@ -35,18 +37,17 @@ pub struct Repulsion {
     pub before: Board,
 }
 
-/// The assignment at the end of ply `ply`: after every `MAGNETIZER_ASSIGN_EVERY[phase]`th player
-/// turn (odd plies, Black moves first), none after a boss ply.
+/// The special at the end of ply `ply`, the start of a player turn when it is a boss ply (Black
+/// moves first, so ply `2t - 2` ends just before turn `t`). It announces when the turn after that
+/// one is an assignment turn of `phase`.
 fn special(ply: u32, phase: usize) -> Option<u8> {
-    let assigns = ply % 2 == 1
-        && ply
-            .div_ceil(2)
-            .is_multiple_of(MAGNETIZER_ASSIGN_EVERY[phase]);
-    assigns.then_some(if phase >= MAGNETIZER_ALL_PHASE {
-        MAGNETIZER_ASSIGN_ALL
-    } else {
-        MAGNETIZER_ASSIGN_ONE
-    })
+    let next = ply / 2 + 2;
+    ply.is_multiple_of(2)
+        .then_some(if next.is_multiple_of(MAGNETIZER_ASSIGN_EVERY[phase]) {
+            MAGNETIZER_ANNOUNCE
+        } else {
+            MAGNETIZER_TURN
+        })
 }
 
 /// Black marbles of `board`, in `q` then `r` order.
@@ -58,39 +59,40 @@ fn player_marbles(board: &Board) -> Vec<P> {
         .collect()
 }
 
-/// The assignment: one marble picked by `seed` takes the sign fewer of the player's other marbles
-/// hold (a tie: the seed picks), or every marble gets a new sign, half and half, shuffled.
-fn hook(board: &Board, id: u8, seed: u64) -> Board {
+/// A player marble picked by `state` and its coming sign: the other sign when it has one, a coin
+/// when it has none.
+fn pick(board: &Board, state: u64) -> (P, i8) {
     let cells = player_marbles(board);
-    let n = cells.len();
-    let mut state = mix(seed);
+    let cell = cells[(state % cells.len() as u64) as usize];
+    let sign = match board.polarities().iter().find(|p| p.0 == cell) {
+        Some(&(_, s)) => -s,
+        None => [1, -1][(mix(state) % 2) as usize],
+    };
+    (cell, sign)
+}
+
+/// The start of a player turn: the announced marble takes its sign (a marble picked by `seed`
+/// when the announced one left the board), then, on `MAGNETIZER_ANNOUNCE`, the next marble and
+/// its sign are announced.
+fn hook(board: &Board, id: u8, seed: u64) -> Board {
     let mut out = board.clone();
-    if id == MAGNETIZER_ASSIGN_ONE {
-        let pick = cells[(state % n as u64) as usize];
+    let state = mix(seed);
+    if let Some((cell, sign)) = board.announce() {
+        let (cell, sign) = cell.map_or_else(|| pick(board, state), |c| (c, sign));
         let mut poles: Vec<_> = board
             .polarities()
             .iter()
             .copied()
-            .filter(|&(c, _)| c != pick)
+            .filter(|p| p.0 != cell)
             .collect();
-        let lean: i32 = poles.iter().map(|&(_, s)| i32::from(s)).sum();
-        let sign = match lean.signum() {
-            0 => [1, -1][(mix(state) % 2) as usize],
-            s => -s as i8,
-        };
-        poles.push((pick, sign));
+        poles.push((cell, sign));
         out.set_polarities(poles);
-    } else {
-        let mut signs = [vec![1; n / 2], vec![-1; n / 2]].concat();
-        if n % 2 == 1 {
-            signs.push([1, -1][(state % 2) as usize]);
-        }
-        for i in (1..n).rev() {
-            state = mix(state);
-            signs.swap(i, (state % (i as u64 + 1)) as usize);
-        }
-        out.set_polarities(cells.into_iter().zip(signs).collect());
     }
+    let next = (id == MAGNETIZER_ANNOUNCE).then(|| {
+        let (cell, sign) = pick(&out, mix(mix(state)));
+        (Some(cell), sign)
+    });
+    out.set_announce(next);
     out
 }
 
@@ -112,8 +114,8 @@ fn pairs(board: &Board) -> Vec<[P; 2]> {
 }
 
 /// `b` moves one cell away from `a`, `a` one cell away from `b`, each pushing every marble in
-/// front of it on the line; the last one leaves the board at the rim. The ejections credited to
-/// Black and to White.
+/// front of it on the line; the last one leaves the board at the rim. The pair loses its
+/// polarities, the pushed marbles keep theirs. The ejections credited to Black and to White.
 fn repel(board: &Board, [a, b]: [P; 2]) -> (Board, [u8; 2]) {
     let d = (b.0 - a.0, b.1 - a.1);
     let mut out = board.clone();
@@ -139,16 +141,21 @@ fn repel(board: &Board, [a, b]: [P; 2]) -> (Board, [u8; 2]) {
         }
         moved.extend(run.into_iter().map(|c| (c, (dq, dr))));
     }
+    let shift = |c: P| -> Option<P> {
+        let to = match moved.iter().find(|m| m.0 == c) {
+            Some(&(_, (dq, dr))) => (c.0 + dq, c.1 + dr),
+            None => c,
+        };
+        board.get(to.0, to.1).map(|_| to)
+    };
     let poles = board
         .polarities()
         .iter()
-        .map(|&(c, s)| match moved.iter().find(|m| m.0 == c) {
-            Some(&(_, (dq, dr))) => ((c.0 + dq, c.1 + dr), s),
-            None => (c, s),
-        })
-        .filter(|&((q, r), _)| board.get(q, r).is_some())
+        .filter(|&&(c, _)| c != a && c != b)
+        .filter_map(|&(c, s)| shift(c).map(|to| (to, s)))
         .collect();
     out.set_polarities(poles);
+    out.set_announce(board.announce().map(|(c, s)| (c.and_then(shift), s)));
     (out, credits)
 }
 
@@ -184,6 +191,16 @@ pub(crate) fn carried_poles(before: &Board, mv: &Move, after: &Board) -> Vec<(P,
         .zip(before.polarities().iter().map(|&(_, s)| s))
         .filter(|&((q, r), _)| after.get(q, r) == Some(Cell::Black))
         .collect()
+}
+
+/// The announce of `before` carried by `mv`: its cell `None` once the marble left the board.
+pub(crate) fn carried_announce(before: &Board, mv: &Move, after: &Board) -> Option<Announce> {
+    before.announce().map(|(cell, sign)| {
+        let cell = cell
+            .map(|c| carried_marks(before, mv, &[c])[0])
+            .filter(|&(q, r)| after.get(q, r) == Some(Cell::Black));
+        (cell, sign)
+    })
 }
 
 /// What a ply does in the boss search: the polarities follow the move, then the board settles.
@@ -227,8 +244,11 @@ mod tests {
     use super::*;
     use crate::encounter::marbles;
     use crate::game::Game;
-    use crate::moves::Direction::{E, NW, SE};
+    use crate::moves::Direction::{E, NE, NW, SE};
     use crate::moves::{legal_moves, Direction};
+
+    /// The fight seed of the e2e fixture (client/e2e/magnetizer.spec.ts).
+    pub(crate) const FIXTURE_SEED: u64 = 42;
 
     fn mv(cells: &[P], dir: Direction) -> Move {
         Move {
@@ -269,11 +289,6 @@ mod tests {
         poles
     }
 
-    fn signs(b: &Board) -> (usize, usize) {
-        let plus = b.polarities().iter().filter(|p| p.1 == 1).count();
-        (plus, b.polarities().len() - plus)
-    }
-
     #[test]
     fn boss_definition_matches_the_spec() {
         let b = magnetizer_boss();
@@ -292,104 +307,204 @@ mod tests {
     }
 
     #[test]
-    fn the_rhythm_follows_the_player_turns_and_the_phase() {
+    fn the_special_fires_at_the_start_of_each_player_turn_and_announces_the_next_assignment() {
+        let (t, a) = (Some(MAGNETIZER_TURN), Some(MAGNETIZER_ANNOUNCE));
         let table = [
             ((1, 0), None),
-            ((2, 0), None),
-            ((3, 0), Some(MAGNETIZER_ASSIGN_ONE)),
-            ((4, 0), None),
-            ((5, 0), None),
-            ((7, 0), Some(MAGNETIZER_ASSIGN_ONE)),
-            ((1, 1), Some(MAGNETIZER_ASSIGN_ONE)),
-            ((2, 1), None),
-            ((5, 1), Some(MAGNETIZER_ASSIGN_ONE)),
-            ((1, 2), Some(MAGNETIZER_ASSIGN_ALL)),
-            ((6, 2), None),
+            ((2, 0), a), // the start of turn 2 announces turn 3
+            ((4, 0), t),
+            ((6, 0), t),
+            ((8, 0), a), // turn 5 announces turn 6
+            ((3, 1), None),
+            ((2, 1), t),
+            ((4, 1), a), // turn 3 announces turn 4
+            ((2, 2), a),
+            ((4, 2), a),
         ];
         for ((ply, phase), id) in table {
             assert_eq!(special(ply, phase), id, "ply {ply}, phase {phase}");
         }
     }
 
-    #[test]
-    fn an_assignment_gives_the_minority_sign_of_the_other_marbles() {
-        let cells = [(-2, 2), (-1, 2), (0, 2), (1, 2), (2, 2)];
-        let leaning = board(&cells, &[], &[((-2, 2), 1), ((-1, 2), 1), ((0, 2), -1)]);
-        let mut picked = Vec::new();
-        for seed in 0..64 {
-            let out = hook(&leaning, MAGNETIZER_ASSIGN_ONE, seed);
-            let new: Vec<_> = sorted(&out)
+    /// Lone marbles far apart, a Black one walking a triangle, White's a segment: no push, no
+    /// repulsion. `ejected` sets the phase.
+    fn quiet_fight(ejected: u8, seed: u64) -> Encounter {
+        let b = board(&[(0, 0), (-4, 4), (-2, 4)], &[(0, -3)], &[]);
+        fight(b, Player::Black, [ejected, 0], seed)
+    }
+
+    /// The player turns that start with a new polarity, over `turns` turns.
+    fn assignment_turns(ejected: u8, turns: u32) -> Vec<u32> {
+        let tri = [(0, 0), (1, 0), (0, 1)];
+        let seg = [(0, -3), (1, -3)];
+        let dir = |from: P, to: P| {
+            [E, Direction::W, NE, Direction::SW, NW, SE]
                 .into_iter()
-                .filter(|p| !leaning.polarities().contains(p))
-                .collect();
-            let changed = out.polarities().len() - leaning.polarities().len();
-            assert!(
-                changed <= 1 && new.len() <= 1,
-                "seed {seed}: one marble at most"
-            );
-            if let [(cell, sign)] = new[..] {
-                let lean: i8 = leaning
-                    .polarities()
-                    .iter()
-                    .filter(|p| p.0 != cell)
-                    .map(|p| p.1)
-                    .sum();
-                assert!(lean == 0 || sign == -lean.signum(), "seed {seed}");
-                picked.push(cell);
+                .find(|d| d.vector() == (to.0 - from.0, to.1 - from.1))
+                .unwrap()
+        };
+        let mut enc = quiet_fight(ejected, 4);
+        let mut out = Vec::new();
+        for turn in 1..=turns {
+            if !enc.assigned().is_empty() {
+                out.push(turn);
             }
+            let k = turn as usize - 1;
+            let (from, to) = (tri[k % 3], tri[(k + 1) % 3]);
+            enc.play(&mv(&[from], dir(from, to))).unwrap();
+            let (from, to) = (seg[k % 2], seg[(k + 1) % 2]);
+            enc.play(&mv(&[from], dir(from, to))).unwrap();
+            assert!(enc.repulsions().is_empty());
         }
-        picked.sort();
-        picked.dedup();
-        assert!(picked.len() >= 4, "the seed spreads the picks: {picked:?}");
-        let unpolarized = board(&[(0, 0)], &[], &[]);
-        let ties: Vec<i8> = (0..32)
-            .map(|seed| hook(&unpolarized, MAGNETIZER_ASSIGN_ONE, seed).polarities()[0].1)
-            .collect();
-        assert!(
-            ties.contains(&1) && ties.contains(&-1),
-            "a tie: the seed picks"
+        out
+    }
+
+    #[test]
+    fn a_polarity_comes_at_the_start_of_turns_3_and_6_in_p1_every_2nd_in_p2_every_one_in_p3() {
+        assert_eq!(assignment_turns(0, 10), vec![3, 6, 9]);
+        assert_eq!(
+            assignment_turns(3, 8),
+            vec![4, 6, 8],
+            "nothing announces turn 2 before turn 1"
+        );
+        assert_eq!(assignment_turns(5, 6), vec![3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn the_announce_comes_one_turn_ahead_and_the_marble_then_takes_its_sign() {
+        let mut enc = quiet_fight(0, 9);
+        enc.play(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(enc.game().board().announce(), None);
+        enc.play(&mv(&[(0, -3)], E)).unwrap(); // the start of turn 2: turn 3 is announced
+        let (cell, sign) = enc.game().board().announce().unwrap();
+        let cell = cell.unwrap();
+        assert!(enc.game().board().polarities().is_empty());
+        assert_eq!(enc.game().board().get(cell.0, cell.1), Some(Cell::Black));
+        enc.play(&mv(&[cell], NE)).unwrap(); // the announced marble itself moves
+        let moved = (cell.0 + 1, cell.1 - 1);
+        assert_eq!(
+            enc.game().board().announce(),
+            Some((Some(moved), sign)),
+            "it follows"
+        );
+        enc.play(&mv(&[(1, -3)], Direction::W)).unwrap(); // the start of turn 3
+        assert_eq!(enc.game().board().polarities(), &[(moved, sign)]);
+        assert_eq!(enc.assigned(), &[moved]);
+        assert_eq!(
+            enc.game().board().announce(),
+            None,
+            "turn 4 assigns nothing in P1"
         );
     }
 
     #[test]
-    fn assignments_keep_the_signs_balanced() {
-        let mut b = Board::standard();
-        for seed in 0..40 {
-            b = hook(&b, MAGNETIZER_ASSIGN_ONE, seed);
-            let (plus, minus) = signs(&b);
-            assert!(
-                plus.abs_diff(minus) <= 1,
-                "after {seed}: {plus} + and {minus} -"
-            );
+    fn a_picked_marble_flips_its_polarity_or_takes_a_coin_with_none() {
+        let b = board(
+            &[(0, 0), (1, 0), (2, 0), (3, 0)],
+            &[],
+            &[((0, 0), 1), ((1, 0), -1)],
+        );
+        let mut picks = Vec::new();
+        for seed in 0..64 {
+            let (cell, sign) = pick(&b, mix(seed));
+            match cell {
+                (0, 0) => assert_eq!(sign, -1, "+ flips"),
+                (1, 0) => assert_eq!(sign, 1, "− flips"),
+                _ => {}
+            }
+            picks.push((cell, sign));
         }
-        assert!(b.polarities().len() > 10, "most marbles got one");
-    }
-
-    #[test]
-    fn a_p3_roll_gives_every_marble_a_sign_half_and_half() {
-        let even = Board::standard();
-        let mut layouts = Vec::new();
-        for seed in 0..16 {
-            let out = hook(&even, MAGNETIZER_ASSIGN_ALL, seed);
-            assert_eq!(signs(&out), (7, 7));
-            layouts.push(sorted(&out));
-        }
-        layouts.dedup();
-        assert!(layouts.len() > 1, "the seed shuffles the signs");
-        let mut odd = Board::standard();
-        odd.set(0, 2, Cell::Empty);
-        let extras: Vec<_> = (0..32)
-            .map(|seed| signs(&hook(&odd, MAGNETIZER_ASSIGN_ALL, seed)))
-            .collect();
-        assert!(extras.iter().all(|&s| s == (7, 6) || s == (6, 7)));
-        assert!(
-            extras.contains(&(7, 6)) && extras.contains(&(6, 7)),
-            "the seed picks the extra"
+        picks.sort();
+        picks.dedup();
+        assert_eq!(
+            picks.len(),
+            6,
+            "every marble, both coins for the unpolarized ones: {picks:?}"
         );
     }
 
     #[test]
-    fn a_minus_next_to_a_plus_pushes_a_boss_line_of_3_and_ejects_the_last() {
+    fn the_hook_applies_the_announce_and_picks_at_random_when_its_marble_left() {
+        let mut b = board(&[(0, 0), (1, 0), (2, 0)], &[], &[((0, 0), 1)]);
+        b.set_announce(Some((Some((0, 0)), -1)));
+        let out = hook(&b, MAGNETIZER_TURN, 3);
+        assert_eq!(out.polarities(), &[((0, 0), -1)]);
+        assert_eq!(out.announce(), None);
+        b.set_announce(Some((Some((0, 0)), 1)));
+        assert_eq!(
+            hook(&b, MAGNETIZER_TURN, 3).polarities(),
+            &[((0, 0), 1)],
+            "kept"
+        );
+        b.set_announce(Some((None, 1)));
+        let polarized: Vec<usize> = (0..16)
+            .map(|seed| hook(&b, MAGNETIZER_TURN, seed).polarities().len())
+            .collect();
+        assert!(
+            polarized.iter().all(|&n| (1..=2).contains(&n)),
+            "one marble picked"
+        );
+        assert!(polarized.contains(&2), "the pick lands elsewhere too");
+        let plain = board(&[(0, 0)], &[], &[]);
+        assert_eq!(
+            hook(&plain, MAGNETIZER_TURN, 3),
+            plain,
+            "nothing announced, nothing to do"
+        );
+        let next = hook(&plain, MAGNETIZER_ANNOUNCE, 3);
+        assert!(next.polarities().is_empty());
+        assert_eq!(next.announce().map(|a| a.0), Some(Some((0, 0))));
+    }
+
+    #[test]
+    fn the_announce_follows_moves_and_pushes_and_is_lost_with_its_marble() {
+        let mut b = board(&[(3, 0), (4, 0)], &[(0, 0), (1, 0), (2, 0)], &[]);
+        b.set_announce(Some((Some((3, 0)), 1)));
+        let mut enc = fight(b.clone(), Player::Black, [0, 0], 0);
+        enc.play(&mv(&[(3, 0)], NW)).unwrap();
+        assert_eq!(enc.game().board().announce(), Some((Some((3, -1)), 1)));
+        let mut enc = fight(b, Player::White, [0, 0], 0);
+        enc.play(&mv(&[(0, 0), (1, 0), (2, 0)], E)).unwrap();
+        assert_eq!(
+            enc.game().board().announce(),
+            Some((Some((4, 0)), 1)),
+            "pushed"
+        );
+        let mut b = board(&[(4, 0)], &[(1, 0), (2, 0), (3, 0)], &[]);
+        b.set_announce(Some((Some((4, 0)), -1)));
+        let mut enc = fight(b, Player::White, [0, 0], 0);
+        enc.play(&mv(&[(1, 0), (2, 0), (3, 0)], E)).unwrap();
+        assert_eq!(enc.game().board().announce(), Some((None, -1)), "ejected");
+    }
+
+    #[test]
+    fn the_announce_follows_a_repulsion() {
+        let mut b = board(
+            &[(0, 0), (1, 0), (2, 0), (-3, 0)],
+            &[],
+            &[((0, 0), 1), ((1, 0), -1)],
+        );
+        b.set_announce(Some((Some((2, 0)), 1)));
+        assert_eq!(settled(&b, 0).0.announce(), Some((Some((3, 0)), 1)));
+        b.set_announce(Some((Some((-3, 0)), 1)));
+        assert_eq!(
+            settled(&b, 0).0.announce(),
+            Some((Some((-3, 0)), 1)),
+            "not pushed"
+        );
+        b.set_announce(Some((None, 1)));
+        assert_eq!(settled(&b, 0).0.announce(), Some((None, 1)));
+        let mut rim = board(
+            &[(-3, 0), (-4, 0), (-2, 0)],
+            &[],
+            &[((-3, 0), 1), ((-2, 0), -1)],
+        );
+        rim.set_announce(Some((Some((-4, 0)), 1)));
+        assert_eq!(settled(&rim, 0).0.announce(), Some((None, 1)), "pushed off");
+    }
+
+    #[test]
+    fn a_minus_next_to_a_plus_pushes_a_boss_line_of_3_ejects_the_last_and_both_lose_their_sign() {
         let b = board(
             &[(0, -1), (0, 0)],
             &[(0, -2), (0, -3), (0, -4)],
@@ -403,11 +518,7 @@ mod tests {
         assert_eq!(out.get(0, 0), Some(Cell::Empty));
         assert_eq!(out.get(0, 1), Some(Cell::Black));
         assert_eq!(marbles(&out, Cell::White), 2);
-        assert_eq!(
-            sorted(&out),
-            vec![((0, -2), -1), ((0, 1), 1)],
-            "the poles move along"
-        );
+        assert!(out.polarities().is_empty(), "the pair is spent");
     }
 
     #[test]
@@ -415,7 +526,7 @@ mod tests {
         let b = board(
             &[(-3, 0), (-2, 0), (-1, 0)],
             &[(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)],
-            &[((-2, 0), 1), ((-1, 0), -1)],
+            &[((-2, 0), 1), ((-1, 0), -1), ((-3, 0), 1)],
         );
         let (out, credits, log) = settled(&b, 1);
         assert_eq!(log, vec![[(-2, 0), (-1, 0)]]);
@@ -423,16 +534,21 @@ mod tests {
         use Cell::{Black as B, Empty as O, White as W};
         let row: Vec<_> = (-4..=4).map(|q| out.get(q, 0).unwrap()).collect();
         assert_eq!(row, vec![B, B, O, O, B, W, W, W, W], "(-3, 0) pushed along");
-        assert_eq!(sorted(&out), vec![((-3, 0), 1), ((0, 0), -1)]);
+        assert_eq!(
+            sorted(&out),
+            vec![((-4, 0), 1)],
+            "the pushed marble keeps its sign"
+        );
     }
 
     #[test]
-    fn a_player_marble_pushed_off_counts_for_the_boss_and_loses_its_polarity() {
+    fn a_player_marble_pushed_off_counts_for_the_boss() {
         let b = board(&[(3, 0), (4, 0), (2, 0)], &[], &[((3, 0), -1), ((2, 0), 1)]);
         let (out, credits, _) = settled(&b, 0);
         assert_eq!(credits, [0, 1]);
         assert_eq!(out.get(4, 0), Some(Cell::Black));
-        assert_eq!(sorted(&out), vec![((1, 0), 1), ((4, 0), -1)]);
+        assert_eq!(out.get(1, 0), Some(Cell::Black));
+        assert!(out.polarities().is_empty());
     }
 
     #[test]
@@ -445,15 +561,20 @@ mod tests {
     }
 
     #[test]
-    fn a_repulsion_can_start_a_chain() {
+    fn a_pushed_polarized_marble_still_repels_in_the_same_settle() {
+        // The pair (-1, 0)+ (0, 0)− pushes the − of (1, 0) next to the + of (3, 0): they repel too.
         let b = board(
-            &[(0, 0), (1, 0), (3, 0)],
+            &[(-1, 0), (0, 0), (1, 0), (3, 0)],
             &[],
-            &[((0, 0), 1), ((1, 0), -1), ((3, 0), 1)],
+            &[((-1, 0), 1), ((0, 0), -1), ((1, 0), -1), ((3, 0), 1)],
         );
         let (out, _, log) = settled(&b, 5);
-        assert_eq!(log, vec![[(0, 0), (1, 0)], [(2, 0), (3, 0)]]);
-        assert_eq!(sorted(&out), vec![((-1, 0), 1), ((1, 0), -1), ((4, 0), 1)]);
+        assert_eq!(log, vec![[(-1, 0), (0, 0)], [(2, 0), (3, 0)]]);
+        assert!(out.polarities().is_empty());
+        let cells: Vec<i32> = (-4..=4)
+            .filter(|&q| out.get(q, 0) == Some(Cell::Black))
+            .collect();
+        assert_eq!(cells, vec![-2, 0, 1, 4]);
     }
 
     #[test]
@@ -521,70 +642,74 @@ mod tests {
         assert_eq!(won.result(), Some(crate::encounter::PveResult::Won));
     }
 
-    /// The e2e fixture (client/e2e/magnetizer.spec.ts): fight seed 153, quiet boss moves on the
-    /// right, the player walks the centre column up. The 2nd and 4th turns polarize the two
-    /// marbles of the column, − and +; the 6th moves the + next to the −, which shoves the boss
-    /// column of 3 off at (0, -4). The + then walks up twice more for the 2nd and 3rd ejection.
+    /// The e2e fixture (client/e2e/magnetizer.spec.ts), fight seed `FIXTURE_SEED`: quiet boss
+    /// moves on the right, the player walks the centre column up. Turns 3 and 6 polarize its two
+    /// marbles, opposite signs; turn 6 moves the second next to the first, which shoves the boss
+    /// column of 3 off at (0, -4), and both lose their sign. Then 3 player marbles in line push the
+    /// rest of the column off, twice: 3 ejections, P2.
     pub(crate) fn fixture() -> Vec<Move> {
         [
-            ((0, 2), NW),
-            ((4, -3), SE),
-            ((0, 1), NW),
-            ((4, -2), SE),
-            ((0, 0), NW),
-            ((4, -1), SE),
-            ((0, 3), NW),
-            ((3, -3), SE),
-            ((0, 2), NW),
-            ((3, -2), SE),
-            ((0, 1), NW),
-            ((4, -4), SE),
-            ((0, 1), NW),
-            ((4, -3), SE),
-            ((0, 0), NW),
-            ((3, -4), SE),
-            ((0, 0), NW),
-            ((3, -3), SE),
-            ((0, -1), NW),
+            (vec![(0, 2)], NW),
+            (vec![(4, -3)], SE),
+            (vec![(0, 1)], NW),
+            (vec![(4, -2)], SE),
+            (vec![(0, 0)], NW),
+            (vec![(4, -1)], SE),
+            (vec![(0, 3)], NW),
+            (vec![(3, -3)], SE),
+            (vec![(0, 2)], NW),
+            (vec![(3, -2)], SE),
+            (vec![(0, 1)], NW),
+            (vec![(4, -4)], SE),
+            (vec![(0, 1)], NW),
+            (vec![(4, -3)], SE),
+            (vec![(0, 0)], NW),
+            (vec![(3, -4)], SE),
+            (vec![(-1, 2)], NE),
+            (vec![(3, -3)], SE),
+            (vec![(0, 1)], NW),
+            (vec![(4, -2)], SE),
+            (vec![(0, -2), (0, -1), (0, 0)], NW),
+            (vec![(4, 0)], Direction::SW),
+            (vec![(0, -3), (0, -2), (0, -1)], NW),
         ]
         .into_iter()
-        .map(|(c, dir)| mv(&[c], dir))
+        .map(|(c, dir)| mv(&c, dir))
         .collect()
     }
 
     #[test]
     fn the_fixture_shoves_a_boss_line_of_3_off_then_reaches_p2() {
-        let mut enc = Encounter::new(Game::new(), magnetizer_boss(), 153);
-        let moves = fixture();
+        let mut enc = Encounter::new(Game::new(), magnetizer_boss(), FIXTURE_SEED);
         let mut ejected = Vec::new();
-        for (i, m) in moves.iter().enumerate() {
+        for (i, m) in fixture().iter().enumerate() {
+            let before = enc.game().board().clone();
             enc.play(m).unwrap();
             ejected.push(enc.game().ejected(Player::Black));
-            if i == 2 {
-                assert_eq!(enc.game().board().polarities().len(), 1, "after turn 2");
-            }
             if i == 10 {
+                let poles = before.polarities();
+                assert_eq!(poles.len(), 2);
+                let sign = |c: P| poles.iter().find(|p| p.0 == c).unwrap().1;
+                assert_eq!(
+                    sign((0, -1)),
+                    -sign((0, 1)),
+                    "opposite signs before the move"
+                );
                 assert_eq!(enc.repulsions().len(), 1);
                 assert_eq!(enc.repulsions()[0].pair, [(0, -1), (0, 0)]);
-                let before = &enc.repulsions()[0].before;
-                let poles = before.polarities();
-                assert!(poles.contains(&((0, -1), -1)) && poles.contains(&((0, 0), 1)));
-                assert!(
-                    enc.assigned()
-                        .iter()
-                        .all(|c| ![(0, -1), (0, 0)].contains(c)),
-                    "moved, not assigned"
-                );
                 assert!([(0, -2), (0, -3), (0, -4)]
                     .iter()
-                    .all(|&(q, r)| before.get(q, r) == Some(Cell::White)));
+                    .all(|&(q, r)| enc.repulsions()[0].before.get(q, r) == Some(Cell::White)));
+                assert!(
+                    enc.game().board().polarities().is_empty(),
+                    "both lose their sign"
+                );
+            } else {
+                assert!(enc.repulsions().is_empty(), "ply {i}");
             }
         }
-        assert_eq!(
-            ejected,
-            [vec![0; 10], vec![1; 4], vec![2; 4], vec![3]].concat(),
-            "each ejection by a repulsion"
-        );
+        let expect = [vec![0; 10], vec![1; 10], vec![2; 2], vec![3]].concat();
+        assert_eq!(ejected, expect);
         assert_eq!(enc.phase(), 1, "P2 after 3 ejections");
         assert_eq!(enc.game().ejected(Player::White), 0);
     }
@@ -610,14 +735,14 @@ mod tests {
     #[test]
     fn random_p3_fights_never_reach_the_settle_cap() {
         let longest = (0..40).map(|seed| longest_settle(seed, 120)).max().unwrap();
-        assert!(longest > 1, "chains happen: {longest}");
+        assert!(longest >= 1, "repulsions happen: {longest}");
         assert!(
             longest < MAGNETIZER_SETTLE_CAP / 2,
             "far from the cap: {longest}"
         );
     }
 
-    /// The board, the polarities and the counts after each ply of the fixture, while it is legal.
+    /// The board and the counts after each ply of the fixture, while it is legal.
     fn run(seed: u64) -> Vec<(Board, [u8; 2])> {
         let mut enc = Encounter::new(Game::new(), magnetizer_boss(), seed);
         fixture()
@@ -635,9 +760,9 @@ mod tests {
 
     #[test]
     fn the_same_seed_and_moves_give_the_same_fight_and_the_seed_matters() {
-        assert_eq!(run(153), run(153));
-        let runs: Vec<_> = (150..158).map(run).collect();
-        assert!(runs.iter().any(|r| *r != runs[3]));
+        assert_eq!(run(FIXTURE_SEED), run(FIXTURE_SEED));
+        let runs: Vec<_> = (0..8).map(run).collect();
+        assert!(runs.iter().any(|r| *r != runs[0]));
     }
 
     #[test]
@@ -655,19 +780,5 @@ mod tests {
         enc.play(&m).unwrap();
         assert_eq!(enc.game().ejected(Player::White), 1);
         assert_eq!(magnetizer_move(&enc), None, "the player's turn");
-    }
-
-    #[test]
-    fn an_assignment_marks_the_cells_it_polarized() {
-        let mut enc = Encounter::new(Game::new(), magnetizer_boss(), 153);
-        for m in &fixture()[..3] {
-            enc.play(m).unwrap();
-            let poles = enc.game().board().polarities();
-            assert_eq!(
-                enc.assigned(),
-                &poles.iter().map(|p| p.0).collect::<Vec<_>>()[..]
-            );
-        }
-        assert_eq!(enc.assigned().len(), 1);
     }
 }

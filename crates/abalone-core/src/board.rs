@@ -82,7 +82,13 @@ pub struct Board {
     trains: Vec<(u8, u8)>,
     /// The Magnetizer's polarities on player marbles: `1` for +, `-1` for −.
     polarities: Vec<((i32, i32), i8)>,
+    /// The Magnetizer's announce: the player marble picked for the next assignment and its coming
+    /// sign, the cell `None` once that marble left the board.
+    announce: Option<Announce>,
 }
+
+/// The Magnetizer's announce: the marble's cell (`None` once it left the board) and its sign.
+pub type Announce = (Option<(i32, i32)>, i8);
 
 impl Board {
     /// Board with all 61 cells empty.
@@ -108,6 +114,7 @@ impl Board {
             eggs: Vec::new(),
             trains: Vec::new(),
             polarities: Vec::new(),
+            announce: None,
         }
     }
 
@@ -177,6 +184,15 @@ impl Board {
 
     pub fn set_polarities(&mut self, polarities: Vec<((i32, i32), i8)>) {
         self.polarities = polarities;
+    }
+
+    /// The marble announced for the next assignment and its coming sign (The Magnetizer).
+    pub fn announce(&self) -> Option<Announce> {
+        self.announce
+    }
+
+    pub fn set_announce(&mut self, announce: Option<Announce>) {
+        self.announce = announce;
     }
 
     /// Standard start layout: 14 marbles per side.
@@ -476,6 +492,17 @@ mod tests {
         assert_eq!(board.trains(), &[(26, 5)]);
         assert_ne!(board, Board::empty());
         board.set_trains(vec![]);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn the_announce_starts_empty_and_is_replaced_whole() {
+        let mut board = Board::empty();
+        assert_eq!(board.announce(), None);
+        board.set_announce(Some((Some((1, 0)), -1)));
+        assert_eq!(board.announce(), Some((Some((1, 0)), -1)));
+        assert_ne!(board, Board::empty());
+        board.set_announce(None);
         assert_eq!(board, Board::empty());
     }
 

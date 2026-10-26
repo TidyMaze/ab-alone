@@ -219,7 +219,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    2 // 2: The Alien's phases count the player's ejections (#621)
+    3 // 3: The Magnetizer's new rhythm, announce, flip and spent pairs (#671)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -457,6 +457,15 @@ impl Encounter {
             .collect()
     }
 
+    /// The marble announced for the next assignment and its coming sign (The Magnetizer) as
+    /// `[q, r, sign]`, empty when none is announced or the marble left the board.
+    pub fn announce(&self) -> Vec<i32> {
+        match self.fight.game().board().announce() {
+            Some((Some((q, r)), sign)) => vec![q, r, i32::from(sign)],
+            _ => Vec::new(),
+        }
+    }
+
     /// The player marbles whose polarity the last ply set (The Magnetizer), a cell list.
     pub fn assigned(&self) -> Vec<i32> {
         match &self.fight {
@@ -544,8 +553,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_2_since_the_alien_phases_count_the_ejections() {
-        assert_eq!(engine_version(), 2);
+    fn the_engine_version_is_3_since_the_magnetizer_s_new_rules() {
+        assert_eq!(engine_version(), 3);
     }
 
     #[test]
@@ -924,53 +933,70 @@ mod tests {
         );
     }
 
-    const MAGNET_FIXTURE: [[i32; 3]; 19] = [
-        [0, 2, 4],
-        [4, -3, 5],
-        [0, 1, 4],
-        [4, -2, 5],
-        [0, 0, 4],
-        [4, -1, 5],
-        [0, 3, 4],
-        [3, -3, 5],
-        [0, 2, 4],
-        [3, -2, 5],
-        [0, 1, 4],
-        [4, -4, 5],
-        [0, 1, 4],
-        [4, -3, 5],
-        [0, 0, 4],
-        [3, -4, 5],
-        [0, 0, 4],
-        [3, -3, 5],
-        [0, -1, 4],
+    /// The e2e fixture of client/e2e/magnetizer.spec.ts (seed 42, core magnetizer tests): move
+    /// records, `[n, dir, q0, r0, q1, r1, q2, r2]`.
+    const MAGNET_FIXTURE: [[i32; 8]; 23] = [
+        [1, 4, 0, 2, 0, 0, 0, 0],
+        [1, 5, 4, -3, 0, 0, 0, 0],
+        [1, 4, 0, 1, 0, 0, 0, 0],
+        [1, 5, 4, -2, 0, 0, 0, 0],
+        [1, 4, 0, 0, 0, 0, 0, 0],
+        [1, 5, 4, -1, 0, 0, 0, 0],
+        [1, 4, 0, 3, 0, 0, 0, 0],
+        [1, 5, 3, -3, 0, 0, 0, 0],
+        [1, 4, 0, 2, 0, 0, 0, 0],
+        [1, 5, 3, -2, 0, 0, 0, 0],
+        [1, 4, 0, 1, 0, 0, 0, 0],
+        [1, 5, 4, -4, 0, 0, 0, 0],
+        [1, 4, 0, 1, 0, 0, 0, 0],
+        [1, 5, 4, -3, 0, 0, 0, 0],
+        [1, 4, 0, 0, 0, 0, 0, 0],
+        [1, 5, 3, -4, 0, 0, 0, 0],
+        [1, 2, -1, 2, 0, 0, 0, 0],
+        [1, 5, 3, -3, 0, 0, 0, 0],
+        [1, 4, 0, 1, 0, 0, 0, 0],
+        [1, 5, 4, -2, 0, 0, 0, 0],
+        [3, 4, 0, -2, 0, -1, 0, 0],
+        [1, 3, 4, 0, 0, 0, 0, 0],
+        [3, 4, 0, -3, 0, -2, 0, -1],
     ];
 
-    type MagnetPly = (Vec<u8>, Vec<i32>, Vec<i32>, Vec<i32>);
+    /// The board, polarities, repulsions, assigned cells and announce after each of the first
+    /// `plies` plies of the fixture.
+    type MagnetPly = (Vec<u8>, Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>);
 
     fn magnet_run(seed: u32, plies: usize) -> Vec<MagnetPly> {
         let mut f = Encounter::new("magnetizer", seed).unwrap();
         MAGNET_FIXTURE[..plies]
             .iter()
-            .map(|&[q, r, dir]| {
-                f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
-                (f.board(), f.polarities(), f.repulsions(), f.assigned())
+            .map(|record| {
+                f.play(record).unwrap();
+                let state = (f.board(), f.polarities(), f.repulsions());
+                (state.0, state.1, state.2, f.assigned(), f.announce())
             })
             .collect()
     }
 
     #[test]
-    fn the_magnetizer_exposes_polarities_per_cell_and_the_repulsions_in_order() {
-        let f = Encounter::new("magnetizer", 153).unwrap();
+    fn the_magnetizer_exposes_polarities_per_cell_the_announce_and_the_repulsions_in_order() {
+        let f = Encounter::new("magnetizer", 42).unwrap();
         assert_eq!(f.name(), "The Magnetizer");
         assert_eq!((f.phase(), f.phases()), (0, 3));
         assert_eq!(f.polarities(), vec![0; 61]);
-        assert!(f.repulsions().is_empty() && f.assigned().is_empty());
-        let run = magnet_run(153, 11);
+        assert!(f.repulsions().is_empty() && f.assigned().is_empty() && f.announce().is_empty());
+        let run = magnet_run(42, 11);
         let polarized = |p: &[i32]| p.iter().filter(|&&s| s != 0).count();
-        assert_eq!(polarized(&run[2].1), 1, "after turn 2");
-        assert_eq!(run[2].3.len(), 2, "one cell assigned");
-        assert_eq!(run[2].1[index(run[2].3[0], run[2].3[1])].abs(), 1);
+        assert!(run[0].4.is_empty());
+        let announce = &run[1].4;
+        assert_eq!(
+            announce.len(),
+            3,
+            "the start of turn 2 announces [q, r, sign] for turn 3"
+        );
+        assert_eq!(polarized(&run[1].1), 0);
+        assert_eq!(polarized(&run[3].1), 1, "the start of turn 3");
+        assert_eq!(run[3].3.len(), 2, "one cell assigned");
+        assert_eq!(run[3].1[index(run[3].3[0], run[3].3[1])], announce[2]);
         let reps = &run[10].2;
         assert_eq!(reps.len(), 126, "one repulsion");
         assert_eq!(reps[..4], [0, -1, 0, 0]);
@@ -980,25 +1006,22 @@ mod tests {
         assert_eq!(poles[index(0, -1)], -poles[index(0, 0)]);
         assert_eq!(run[10].0[index(0, -4)], 2, "(0, -3) pushed onto it");
         assert_eq!(run[10].0[index(0, -1)], 0);
-        assert_eq!(
-            run[10].1[index(0, -2)],
-            poles[index(0, -1)],
-            "the − moved along"
-        );
-        let mut f = Encounter::new("magnetizer", 153).unwrap();
-        for &[q, r, dir] in &MAGNET_FIXTURE {
-            f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
+        assert_eq!(polarized(&run[10].1), 0, "the pair lost its signs");
+        let mut f = Encounter::new("magnetizer", 42).unwrap();
+        for record in &MAGNET_FIXTURE {
+            f.play(record).unwrap();
         }
         assert_eq!((f.ejected(1), f.phase()), (3, 1), "P2 after 3 ejections");
         assert_eq!(Encounter::new("choir", 1).unwrap().repulsions(), vec![]);
         assert_eq!(Encounter::new("choir", 1).unwrap().assigned(), vec![]);
+        assert_eq!(Encounter::new("choir", 1).unwrap().announce(), vec![]);
     }
 
     #[test]
     fn two_magnetizer_encounters_with_the_same_seed_and_moves_give_the_same_fight() {
         // Every peer of a co-op fight, the daily and a Retry replay the same polarities (#645).
-        assert_eq!(magnet_run(153, 19), magnet_run(153, 19));
-        assert!((0..4).any(|seed| magnet_run(seed, 3) != magnet_run(153, 3)));
+        assert_eq!(magnet_run(42, 23), magnet_run(42, 23));
+        assert!((0..4).any(|seed| magnet_run(seed, 4) != magnet_run(42, 4)));
     }
 
     #[test]

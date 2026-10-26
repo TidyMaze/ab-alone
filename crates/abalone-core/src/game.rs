@@ -100,6 +100,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.polarities().is_empty() {
         board.polarities().hash(&mut hasher);
     }
+    if board.announce().is_some() {
+        board.announce().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -651,6 +654,20 @@ mod tests {
         assert_ne!(
             position_hash(&nearer, Player::Black),
             position_hash(&announced, Player::Black)
+        );
+    }
+
+    #[test]
+    fn the_announce_changes_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut plus = Board::empty();
+        plus.set_announce(Some((Some((1, 0)), 1)));
+        assert_ne!(position_hash(&plus, Player::Black), plain);
+        let mut minus = Board::empty();
+        minus.set_announce(Some((Some((1, 0)), -1)));
+        assert_ne!(
+            position_hash(&minus, Player::Black),
+            position_hash(&plus, Player::Black)
         );
     }
 
