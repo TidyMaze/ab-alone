@@ -11,6 +11,9 @@ const click = async (page: Page, q: number, r: number): Promise<void> => {
 };
 
 test('after one visit the game loads offline and the bot answers', async ({ page, context }) => {
+  // The spec passes when Google cannot be reached: the stylesheet holds the load event that page.goto waits for, and
+  // during a network outage of the machine the test timed out in its first step (bug #649).
+  await context.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, () => undefined);
   const url = process.env.E2E_PREVIEW_URL!;
   const withBot = url.includes('?') ? `${url}&bot=on` : `${url}?bot=on`;
   await page.goto(withBot);
