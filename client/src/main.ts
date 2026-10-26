@@ -100,7 +100,7 @@ import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale
 import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
-import { ACCENTS, CORE, coreLevel, GLASS, SHELL, type Accent } from './marbles';
+import { ACCENTS, CONVERTED, CORE, coreLevel, GLASS, SHELL, type Accent } from './marbles';
 import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
@@ -868,10 +868,12 @@ const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
 const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the glass
 coreMaterial.color.set(glassSkinById(glass).core ?? CORE.color);
+const convertedCore = new THREE.MeshBasicMaterial({ color: coreMaterial.color, transparent: true, opacity: CONVERTED.core });
 function setGlassLook(id: string): void {
   marbleMaterials[2] = glassMaterial(id);
   const pal = paletteById(palette);
   coreMaterial.color.set(glassSkinById(id).core ?? pal.core);
+  convertedCore.color.copy(coreMaterial.color);
 }
 // Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. The glass holds
 // its cyan core as a child: the selection lift, the slide and the ejection carry it.
@@ -928,13 +930,35 @@ let crackDecals: Axial[] = []; // the cells drawn with the decal, for the e2e te
 const tickGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.1);
 const tickMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // The Chaplain tell: a steady pale ring and a glyph on each marble a hovered move would expose to a
-// flip, never a halo or colour alone. A converted marble is a shell under a cap of the player's cyan light: half
-// glass, half ridged, 3:1 on the shell (#326).
+// flip, never a halo or colour alone.
 const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
 const barGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
-const shellCapGeometry = new THREE.SphereGeometry(0.37, 32, 8, 0, Math.PI * 2, 0, Math.PI * 0.35);
+// A converted marble (#508, world.md section 5) is half and half, 3:1 on the shell (#326): the ridged shell up to its
+// middle, a bowl closed by a flat floor so its inside never shows, and the player's glass above it with the core dimmed
+// (marbles.ts), resting on the floor. The halves stay upright whatever the marble's turn, under its boss accent; the
+// marble's own sphere is not drawn.
+const half = detail.marbleHeightSegments / 2;
+const shellHalfGeometry = new THREE.LatheGeometry(
+  [
+    ...Array.from({ length: half + 1 }, (_, k) => {
+      const a = ((k / half - 1) * Math.PI) / 2; // from the bottom up to the middle
+      return new THREE.Vector2(MARBLE_RADIUS * Math.cos(a), MARBLE_RADIUS * Math.sin(a));
+    }),
+    new THREE.Vector2(0, 0), // the floor, facing up
+  ],
+  detail.marbleWidthSegments,
+);
+const glassHalfGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidthSegments, half, 0, Math.PI * 2, 0, Math.PI / 2);
+const convertedCoreGeometry = coreGeometry.clone().translate(0, CORE.radius, 0);
+const unseen = new THREE.MeshBasicMaterial({ visible: false });
+function convert(marble: THREE.Mesh): void {
+  marble.material = unseen;
+  const shell = Object.assign(new THREE.Mesh(shellHalfGeometry, marbleMaterials[1]), { name: 'shell', castShadow: true });
+  const glass = Object.assign(new THREE.Mesh(glassHalfGeometry, marbleMaterials[2]), { name: 'glass', castShadow: true });
+  marble.add(shell, glass, Object.assign(new THREE.Mesh(convertedCoreGeometry, convertedCore), { name: 'core', renderOrder: 1 }));
+}
 let exposed = 0; // marbles the hovered move would expose, for the HUD
 // The Choir: each army wears its own glyph in the pale tell colour on top of its marbles, Alto a spike,
 // Tenor a ring, Bass a block, never colour alone. The army that moves next gets the pale ring.
@@ -1177,7 +1201,7 @@ function drawTally(board: ArrayLike<number>): void {
 }
 const marbles = new THREE.Group();
 scene.add(marbles);
-// Cell index to the marble on it, first, and what is drawn on that marble (cap, glyph, tell ring): the
+// Cell index to the marble on it, first, and what is drawn on that marble (glyph, tell ring): the
 // slide moves them together and rolls the marble only.
 const marbleAt = new Map<number, THREE.Object3D[]>();
 // Each marble's own turn (#346), carried and rolled by its slides (#345), for the game it belongs to (orient.ts).
@@ -1214,6 +1238,7 @@ function applyPalette(): void {
   const smoked = glassLooks.get('smoked');
   if (smoked) smoked.color.setHex(pal.glass);
   coreMaterial.color.setHex(glassSkinById(glass).core ?? pal.core);
+  convertedCore.color.copy(coreMaterial.color);
 }
 applyPalette();
 let hover: Axial | null = null;
@@ -1634,6 +1659,7 @@ function refresh(): void {
     }
     if (side === 0) return;
     const marble = marbleMesh(side);
+    if (converted.some(([cq, cr]) => cq === q && cr === r)) convert(marble);
     marble.position.set(p.x, 0.36, p.z);
     turnMarble(marble, turnAt(i));
     marbles.add(marble);
@@ -1646,13 +1672,6 @@ function refresh(): void {
       marble.position.y = 0.5;
     }
   });
-  for (const [q, r] of converted) {
-    const p = axialTo3D(q, r);
-    const cap = new THREE.Mesh(shellCapGeometry, coreMaterial);
-    cap.position.set(p.x, 0.36, p.z);
-    marbles.add(cap);
-    onMarble(cellIndex(q, r), cap);
-  }
   for (const { cell, army } of armies) {
     const p = axialTo3D(cell[0], cell[1]);
     const glyph = new THREE.Mesh(armyGlyphs[army], paleMaterial);
@@ -1917,8 +1936,16 @@ function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height
 (window as unknown as Record<string, unknown>).__marbleTurn = (q: number, r: number) =>
   marbleAt.get(cellIndex(q, r))?.[0]?.quaternion.toArray() ?? null;
 // Used by the browser checks to list the marbles that wear a boss accent (#507): their cell and the accent's name.
+const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not the parts of a converted marble (#508)
 (window as unknown as Record<string, unknown>).__accents = () =>
-  [...marbleAt].flatMap(([i, [marble]]) => marble!.children.filter((c) => c.name).map((c) => ({ cell: BOARD_CELLS[i], accent: c.name })));
+  [...marbleAt].flatMap(([i, [marble]]) =>
+    marble!.children.filter((c) => accentNames.has(c.name)).map((c) => ({ cell: BOARD_CELLS[i], accent: c.name })),
+  );
+// Used by the browser checks to see the look of The Chaplain's converted marbles (#508): the parts each one holds.
+(window as unknown as Record<string, unknown>).__convertedLooks = () =>
+  [...marbleAt]
+    .filter(([, [marble]]) => (marble as THREE.Mesh).material === unseen)
+    .map(([i, [marble]]) => ({ cell: BOARD_CELLS[i], parts: marble!.children.map((c) => c.name) }));
 
 // Used by the browser checks to count the phase notches drawn on the frame and see the threshold glyph (#356).
 (window as unknown as Record<string, unknown>).__notches = () => {

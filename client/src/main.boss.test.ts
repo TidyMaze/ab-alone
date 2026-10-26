@@ -369,7 +369,7 @@ describe('main.ts boss tells', () => {
     expect(byId('hud').querySelector('.boss .tell')).toBeNull();
   }, 60_000);
 
-  it('The Chaplain: a converted marble wears its cap and the HUD counts it', async () => {
+  it('The Chaplain: a converted marble is drawn and the HUD counts it', async () => {
     const game = await boot('?nodes=200', { reducedMotion: true });
     fightBoss(game, 'The Chaplain', 1);
     expect(await game.hook<Promise<number>>('__playTurns', 17, [4, 2])).toBe(17); // the conversion comes on turn 18

@@ -9,6 +9,10 @@ export const CORE = { color: 0x7fd6e8, radius: 0.09, floor: 0.4 };
 export const coreLevel = (lost: number, toWin: number): number =>
   Math.max(CORE.floor, 1 - (lost * (1 - CORE.floor)) / toWin);
 
+/** A marble The Chaplain converted (#508): the ridged shell up to its middle, the player's glass above it with the core
+ * dimmed to this opacity, still 3:1 on the deck and on the shell in every palette (world.md section 5). */
+export const CONVERTED = { core: 0.6 };
+
 /** The player's smoked glass: dark, see-through, smooth, with a clear coat that catches the lamp. */
 export const GLASS = {
   color: 0x2c363d,
