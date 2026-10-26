@@ -107,7 +107,7 @@ import { LocalSaves } from './savegame';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import { ARENA, ARENA_SCALE, YOU, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
-import { SEATS } from './marbles';
+import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
 import './ui.css';
 
 // Palette from docs/specs/world.md section 5.
@@ -885,6 +885,14 @@ arena.add(arenaMarbles);
 arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
 const seatLooks = SEATS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: SHELL.roughness, metalness: SHELL.metalness }));
+// Each seat's glyph (#558), flat in the ink on its marbles, never the tint alone: it touches the shell where the shell
+// faces the default view, turned to face it, so it stays inside the marble's outline.
+const glyphTilt = resetView().polar;
+const glyphLift = new THREE.Vector3(0, Math.cos(glyphTilt), Math.sin(glyphTilt)).multiplyScalar(MARBLE_RADIUS + 0.005);
+const seatGlyphs = SEAT_GLYPHS.map(({ points }) =>
+  new THREE.ShapeGeometry(new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x * 0.2, y * 0.2)))).rotateX(glyphTilt - Math.PI / 2),
+);
+const seatInk = new THREE.MeshBasicMaterial({ color: SEAT_INK });
 // The breach (#503): a cracked arena cell glows in the hazard colour under the Hull's crack decal and ticks.
 const breachGlow = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false });
 // The steel frame (#292, frame.ts): a plate under the cells and a rim around them, rebuilt when the board's size or
@@ -2309,7 +2317,9 @@ function drawRoyale(game: Royale): void {
     marble.castShadow = true;
     const picked = ringed.some(([sq, sr]) => sq === q && sr === r);
     marble.position.set(p.x, picked ? 0.5 : 0.36, p.z);
-    arenaMarbles.add(marble);
+    const glyph = new THREE.Mesh(seatGlyphs[seat], seatInk);
+    glyph.position.copy(marble.position).add(glyphLift);
+    arenaMarbles.add(marble, glyph);
     if (!picked) return;
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
     ring.rotation.x = Math.PI / 2;
@@ -2360,6 +2370,9 @@ holdButton.addEventListener('click', () => playRound([]));
 royaleButton.disabled = false; // listener ready (#146)
 // Used by the browser checks to load a royale game file (#502).
 (window as unknown as Record<string, unknown>).__royale = startRoyale;
+// Used by the browser checks to count each seat's glyphs drawn on the arena, in seat order (#558).
+(window as unknown as Record<string, unknown>).__seatGlyphs = () =>
+  seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
   playOnlineButton.disabled = state.disabled;

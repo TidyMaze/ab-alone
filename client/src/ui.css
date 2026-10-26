@@ -289,7 +289,9 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .initiative { display: flex; flex-wrap: wrap; gap: 0 0.75rem; }
 #hud .reveal { margin-top: 0.5rem; padding-top: 0.25rem; border-top: 1px solid var(--edge); }
 #hud .reveal .fizzled { color: var(--hazard); }
-#hud .seat { display: inline-block; width: 0.6rem; height: 0.6rem; margin-right: 0.35rem; border-radius: 50%; }
+#hud .seat { display: inline-block; width: 0.8rem; height: 0.8rem; margin-right: 0.35rem; border-radius: 50%; vertical-align: -0.1rem; }
+/* #558: the seat's glyph on its tint, as on its marbles. */
+#hud .seat svg { display: block; width: 100%; height: 100%; }
 /* #503: a seat out is greyed out and struck through, its tint dot faded; the breach warning in the hazard colour; once
    over, the places and points one seat a line under the end banner. */
 #hud .initiative .out, #hud .reveal .out { color: var(--muted); }

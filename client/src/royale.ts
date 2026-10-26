@@ -4,7 +4,7 @@
 import { cellsFor, type Axial } from './board';
 import { ordinal, royaleBanner } from './endbanner';
 import type { Crack } from './hull';
-import { SEATS } from './marbles';
+import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
 
 /** The 217 cells of the arena, in the order of the wasm board. */
 export const ARENA: readonly Axial[] = cellsFor(8);
@@ -116,9 +116,16 @@ export function orderText(order: readonly number[]): string {
   return `${order[0]} marble${order[0] === 1 ? '' : 's'} ${DIRECTION_NAMES[order[1]!]}`;
 }
 
-// The seat's tint beside its name: the name carries the seat, the tint repeats it.
-const seat = (s: number): string =>
-  `<span class="seat" style="background: #${SEATS[s]!.toString(16).padStart(6, '0')}" aria-hidden="true"></span>${seatName(s)}`;
+const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
+// The seat's tint and glyph beside its name, as on its marbles (#558): the name carries the seat, the mark repeats it.
+const seat = (s: number): string => {
+  const { name, points } = SEAT_GLYPHS[s]!;
+  const outline = points.map(([x, y]) => `${x},${-y}`).join(' ');
+  return (
+    `<span class="seat" data-glyph="${name}" style="background: ${hex(SEATS[s]!)}" aria-hidden="true">` +
+    `<svg viewBox="-1.3 -1.3 2.6 2.6"><polygon points="${outline}" fill="${hex(SEAT_INK)}"/></svg></span>${seatName(s)}`
+  );
+};
 
 function turnText({ seat: s, outcome, ejected }: Turn): string {
   return `${seat(s)}: ${outcome}${ejected >= 0 ? `, ejected ${seatName(ejected)}` : ''}`;
