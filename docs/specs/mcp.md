@@ -75,8 +75,8 @@ A draw against a boss is a loss (rules.md section 10.3).
 ```
 
 - `ejected` is `Engine.ejected(side)`: marbles that side has pushed out. `win_ejections` is `Engine.win_ejections(side)`.
-- `ascii` is the board as printed by `render` in `abalone-cli`: header `  1 2 3 4 5 6 7 8 9`, rows `a` to `i`, `B`, `W`, `.`.
-- `board` is the 61 cells in `Engine.board()` order, one character per cell: row by row from `r = -4` to `r = 4`, `q` ascending inside a row. `.` empty, `B` Black, `W` White, `x` vanished (`3` in the engine).
+- `ascii` is the board as printed by `render` in `abalone-cli`: header `  1 2 3 4 5 6 7 8 9`, rows `a` to `i`, `B`, `W`, `.`. On a radius 5 board (The Ballast Mind), `ascii` has header `  0 1 2 3 4 5 6 7 8 9 A` and 11 rows `a` to `k` (`r = -5` to `5`).
+- `board` is the cells in `Engine.board()` order, one character per cell: row by row from `r = -4` to `r = 4`, `q` ascending inside a row (61 cells). On a radius 5 board (The Ballast Mind), `board` has 91 characters: the 61 of the standard board first, then ring 5 in board order (rows from `r = -5` to `5`, `q` ascending). `.` empty, `B` Black, `W` White, `x` vanished (`3` in the engine).
 - `last_moves` is the last 6 plies in the notation of section 3.1, oldest first, boss and bot moves included.
 - `resigned` is `true` after `resign`. It is the only field the engine does not own.
 
@@ -143,7 +143,6 @@ Input:
 
 - No `boss`: a game against the bot, mode `bot`. The bot searches at most `bot_nodes` positions per move (`Engine.best_move(nodes)`). 20000 is `BOT_NODES` in `client/src/bot.ts`.
 - With `boss`: mode `boss`, `Encounter.new(boss, seed)`. The same id and seed always give the same fight. `bot_nodes` is ignored, the boss uses its own budget.
-- `boss_ids()` here leaves out `ballast`: The Ballast Mind plays on a radius 5 board, which `board` and `ascii` cannot show yet (#572). It is an `unknown_boss`.
 
 Output: the `get_state` object.
 

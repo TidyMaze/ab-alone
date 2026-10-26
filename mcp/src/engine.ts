@@ -12,9 +12,8 @@ export function newEngine(): EngineLike {
   return new wasm.Engine();
 }
 
-/** A new fight against boss `boss`, the agent is Black. Throws the engine's reason for an id not in `bossIds()`. */
+/** A new fight against boss `boss`, the agent is Black. Throws the engine's reason for an unknown id. */
 export function newEncounter(boss: string, seed: number): EncounterLike {
-  if (!bossIds().includes(boss)) throw `unknown boss ${boss}`; // the engine's words, The Ballast Mind too (#572)
   return new wasm.Encounter(boss, seed);
 }
 
@@ -23,8 +22,7 @@ export function engineVersion(): number {
   return wasm.engine_version();
 }
 
-/** The boss ids of the engine, in play order. The Ballast Mind stays out: the board text knows only the 61 cells of
- * radius 4, not its radius 5 board (#572). */
+/** The boss ids of the engine, in play order. */
 export function bossIds(): string[] {
-  return wasm.boss_ids().filter((id) => id !== 'ballast');
+  return wasm.boss_ids();
 }
