@@ -238,6 +238,22 @@ body[data-reading] :is(#chrome, #support) { visibility: hidden; }
   padding: 0.5rem 0.75rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
   font: calc(0.875rem * var(--ui-scale))/1.4 var(--ui);
 }
+/* The Overseer's speech bubble (#741): over its marble, monospace and robotic while it types, 3:1 and more on its own
+   background on every skin. The angry one is red and shakes; .still (reduced motion) holds it. */
+#bubble {
+  position: fixed; z-index: 1; max-width: min(calc(16rem * var(--ui-scale)), 80vw); padding: 0.4rem 0.6rem; pointer-events: none;
+  transform: translate(-50%, calc(-100% - 14px)); color: #e6edf2; background: #11161a; border: 1px solid #7fd6e8; border-radius: 4px;
+  font: calc(0.8125rem * var(--ui-scale))/1.35 ui-monospace, 'IBM Plex Mono', Menlo, Consolas, monospace;
+}
+#bubble::after {
+  content: ''; position: absolute; left: 50%; top: 100%; width: 10px; height: 10px; margin: -6px 0 0 -5px;
+  background: inherit; border: inherit; border-width: 0 1px 1px 0; transform: rotate(45deg);
+}
+#bubble.angry { color: #fff; background: #8a1c14; border-color: #ffb4a8; }
+#bubble.angry:not(.still) { animation: bubble-shake 0.12s linear infinite; }
+#bubble.glitch #bubble-text { text-shadow: 1px 0 #ff3b6b, -1px 0 #3bf0ff; }
+#bubble-line { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@keyframes bubble-shake { 0%, 100% { translate: 0 0; } 25% { translate: -3px 1px; } 75% { translate: 3px -1px; } }
 #reader p { margin: 0.25rem 0 0; }
 #reader p:first-child { margin: 0; font-family: var(--display); font-weight: 600; }
 #invite-label { padding: 0.25rem 0.5rem; color: var(--text); background: var(--panel); border-radius: 2px; font: 500 0.875rem/1.2 var(--ui); }

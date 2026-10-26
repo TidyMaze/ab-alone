@@ -85,7 +85,7 @@ describe('main.ts The Magnetizer announce blinks (#741)', () => {
     expect(Math.min(...seen)).toBeLessThan(0.5);
     expect(Math.max(...seen)).toBeGreaterThan(0.9);
     expect(Math.min(...seen)).toBeGreaterThanOrEqual(0.3);
-    expect(scene().getObjectByName('announce-ring')).toBeUndefined();
+    expect(scene().getObjectByName('announce-ring')!.visible).toBe(false);
     plies(game, 2, 4); // the start of turn 3: it has its sign
     expect(body().announceBlink).toBeUndefined();
   });
@@ -95,8 +95,8 @@ describe('main.ts The Magnetizer announce blinks (#741)', () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightMagnetizer(game);
     plies(game, 0, 2);
-    expect(scene().getObjectByName('announce-ring')).toBeDefined();
     game.frame(500);
+    expect(scene().getObjectByName('announce-ring')!.visible).toBe(true);
     expect(body().announceBlink).toBe('1.00');
   });
 });
