@@ -171,6 +171,7 @@ describe('Battle royale online (#504)', () => {
     button('royale-start').click();
     await until(lobby.game, () => data().net === 'choosing');
     expect(deadline()).toBe('Order deadline: 2 s');
+    await new Promise((done) => setTimeout(done, 250)); // real ticks of the 100 ms interval on an unchanged second: no redraw
     vi.advanceTimersByTime(600);
     await until(lobby.game, () => deadline() === 'Order deadline: 1 s'); // redrawn as the seconds pass
     expect(byId('hud').querySelector('.deadline')!.className).toBe('deadline short');
