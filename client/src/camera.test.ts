@@ -5,9 +5,11 @@ import {
   DRAG_THRESHOLD_PX,
   FOV,
   POLAR_MAX,
+  FIT_MARGIN,
   POLAR_MIN,
   clampDistance,
   clampPolar,
+  fitView,
   framing,
   isDrag,
   orbit,
@@ -177,5 +179,34 @@ describe('screenView, the terminal reader (#512)', () => {
     const narrow = screenView({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 2.8, 1.4, FOV, 16 / 9);
     expect(seen(narrow.x, FOV, 16 / 9).width).toBeCloseTo(SCREEN_MARGIN * 1.4, 9);
     expect(seen(narrow.x, FOV, 16 / 9).height).toBeGreaterThan(SCREEN_MARGIN * 0.7);
+  });
+});
+
+describe('fitView, bug #691', () => {
+  const origin = { x: 0, y: 0, z: 0 };
+
+  it('keeps the view when every point already fits the window', () => {
+    expect(fitView(resetView(), [origin, { x: 4, y: 0, z: 0 }], 1280, 720)).toEqual(resetView());
+    expect(fitView(resetView(), [], 375, 812)).toEqual(resetView());
+  });
+
+  it('draws the camera back along its line, no farther than needed, until a point near it fits', () => {
+    const near = { x: 0, y: 0, z: 6 }; // under the bottom edge of the default view
+    const fit = fitView(resetView(), [near], 1280, 720);
+    expect(fit.distance).toBeGreaterThan(resetView().distance);
+    expect([fit.azimuth, fit.polar]).toEqual([resetView().azimuth, resetView().polar]);
+    expect(fitView(fit, [near], 1280, 720)).toEqual(fit); // it fits there
+    expect(fitView({ ...fit, distance: fit.distance / 1.02 }, [near], 1280, 720).distance).toBeGreaterThan(fit.distance / 1.02);
+  });
+
+  it('a phone held upright, whose width is the board, draws back farther for a point off the side', () => {
+    const side = { x: 6, y: 0, z: 0 };
+    expect(fitView(resetView(), [side], 1280, 720)).toEqual(resetView());
+    expect(fitView(resetView(), [side], 375, 812).distance).toBeGreaterThan(resetView().distance * 1.2);
+  });
+
+  it('leaves the margin to the edge, and stops at the farthest distance', () => {
+    expect(FIT_MARGIN).toBeGreaterThan(0);
+    expect(fitView(resetView(), [{ x: 40, y: 0, z: 0 }], 1280, 720).distance).toBe(DIST_MAX);
   });
 });

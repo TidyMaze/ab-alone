@@ -339,7 +339,9 @@ until a game leaves it (#583).
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one
 (the vertical field of view grows past 40 degrees), so the whole board fits the width of a phone held
 upright, and the picture moves down by a quarter of the spare height, which leaves the top to the
-plate and the buttons (#227). The chrome adds a rim only: a fixed, non-interactive radial gradient
+plate and the buttons (#227). A fight against The Pulsar opens drawn back, along the same line, just
+far enough that the six pulsars off the corners and the counter above each fit the window too, and
+Reset view goes back there (#691). The chrome adds a rim only: a fixed, non-interactive radial gradient
 from transparent at 65 % to near-black (`#0b0d0f` at 75 % opacity) at 100 %, the same in both themes because the 3D deck is dark either way (fog at the rim, never over the cells). No border or
 frame is drawn around the canvas, the 3D deck is the frame. The rim is removed with clear-board
 mode once that toggle exists (#32), and it has no motion.

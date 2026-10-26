@@ -102,3 +102,35 @@ test('The Pulsar: the shockwave grows from the pulsar across the board, #675', a
   await expect(body).not.toHaveAttribute('data-pulsing', '1');
   await expect(body).toHaveAttribute('data-pulses', '1');
 });
+
+// Bug #691: on a 1280x720 window the two bottom corner pulsars and the counter of the charging one were cut off at the
+// screen edge. In the default view of the fight, every pulsar, its glowing core and the counter it shows when it
+// charges lie inside the window, on desktop windows and on phones held upright and sideways.
+const sizes = [
+  { name: 'a 1280x720 window', viewport: { width: 1280, height: 720 }, mobile: false },
+  { name: 'a 1280x800 window', viewport: { width: 1280, height: 800 }, mobile: false },
+  { name: 'a phone held upright', viewport: { width: 375, height: 812 }, mobile: true },
+  { name: 'a phone 360 px wide held upright', viewport: { width: 360, height: 780 }, mobile: true },
+  { name: 'a phone held sideways', viewport: { width: 812, height: 375 }, mobile: true },
+];
+for (const { name, viewport, mobile } of sizes) {
+  test.describe(name, () => {
+    test.use({ viewport, isMobile: mobile, hasTouch: mobile });
+    test('The Pulsar: every pulsar and its counter are on screen, bug #691', async ({ page }, testInfo) => {
+      await startPulsar(page, true);
+      await plies(page, 0, 1);
+      await expect(page.locator('body')).toHaveAttribute('data-pulse-counter', '2');
+      await freshDraw(page);
+      await page.screenshot({ path: testInfo.outputPath('pulsars-on-screen.png') });
+      type Rect = { x: number; y: number; width: number; height: number };
+      const rects = await page.evaluate(() => (window as any).__pulsarRects() as { pulsar: Rect; counter: Rect }[]);
+      expect(rects).toHaveLength(6);
+      const off = rects.flatMap(({ pulsar, counter }, id) =>
+        Object.entries({ pulsar, counter })
+          .filter(([, r]) => r.x < 0 || r.y < 0 || r.x + r.width > viewport.width || r.y + r.height > viewport.height)
+          .map(([what, r]) => `${what} ${id} at ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`),
+      );
+      expect(off).toEqual([]);
+    });
+  });
+}

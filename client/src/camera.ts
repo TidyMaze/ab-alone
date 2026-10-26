@@ -1,5 +1,7 @@
 // Orbit camera around the board centre: pure view maths, the pointer wiring lives in main.ts.
 
+type Vec3 = { x: number; y: number; z: number };
+
 export interface View {
   azimuth: number; // radians around the vertical axis, 0 looks from +z
   polar: number; // radians from the vertical axis, 0 straight above the board
@@ -38,6 +40,33 @@ export const resetView = (radius = 4): View => ({
   distance: (radius / 4) * Math.hypot(11, 8),
 });
 
+// The view drawn back along its own line, never closer, until every point lies inside a window of this size, within
+// FIT_MARGIN of its half size from the edges (#691): The Pulsar's beacons stand off the board's corners. At most DIST_MAX.
+export const FIT_MARGIN = 0.03;
+export function fitView(view: View, points: readonly Vec3[], width: number, height: number): View {
+  const { fov, shift } = framing(width, height);
+  const tanV = Math.tan((fov * Math.PI) / 360);
+  const tanH = tanV * (width / height);
+  const lift = (2 * shift) / height; // the picture moved down, in half heights
+  const fits = (distance: number): boolean => {
+    const eye = viewPosition({ ...view, distance });
+    const f = { x: -eye.x / distance, y: -eye.y / distance, z: -eye.z / distance }; // to the board centre
+    const across = Math.hypot(f.x, f.z);
+    const right = { x: -f.z / across, z: f.x / across };
+    const up = { x: -right.z * f.y, y: right.z * f.x - right.x * f.z, z: right.x * f.y };
+    return points.every((p) => {
+      const d = { x: p.x - eye.x, y: p.y - eye.y, z: p.z - eye.z };
+      const depth = d.x * f.x + d.y * f.y + d.z * f.z;
+      const sx = (d.x * right.x + d.z * right.z) / (depth * tanH);
+      const sy = (d.x * up.x + d.y * up.y + d.z * up.z) / (depth * tanV) - lift;
+      return Math.max(Math.abs(sx), Math.abs(sy)) <= 1 - FIT_MARGIN;
+    });
+  };
+  let distance = view.distance;
+  while (distance < DIST_MAX && !fits(distance)) distance = Math.min(DIST_MAX, distance * 1.01);
+  return { ...view, distance };
+}
+
 export const orbit = (v: View, dx: number, dy: number): View => ({
   ...v,
   azimuth: v.azimuth - dx * RAD_PER_PX,
@@ -60,7 +89,6 @@ export const viewPosition = (v: View): { x: number; y: number; z: number } => ({
 // The terminal reader (#512): the camera that reads a flat screen stands in front of its centre, along its normal, as
 // close as fits the whole screen and a margin around it, in both the height and the width of the view.
 export const SCREEN_MARGIN = 1.1;
-type Vec3 = { x: number; y: number; z: number };
 export function screenView(centre: Vec3, normal: Vec3, width: number, height: number, fov: number, aspect: number): Vec3 {
   const half = Math.tan((fov * Math.PI) / 360);
   const d = SCREEN_MARGIN * Math.max(height / 2 / half, width / 2 / (half * aspect));

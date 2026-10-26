@@ -19,7 +19,7 @@ import {
 } from './board';
 import { askBot, askEval, botBudget } from './bot';
 import { bossHtml, goalShown } from './bosshud';
-import { FOV, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
+import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -45,10 +45,13 @@ import {
 } from './railyard';
 import { drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import {
+  PULSAR_BOUNDS,
   PULSAR_PARTS,
+  PULSE_COUNTER_SIZE,
   SHOCK_COLOR,
   charging,
   chevronSpots as pulseChevrons,
+  counterSpot,
   fallen,
   parsePulse,
   parsePulsar,
@@ -185,6 +188,10 @@ const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
 let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
+// The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
+// its counter fit the window too (#691).
+const fightView = (): View =>
+  fight?.id === 'pulsar' ? fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight) : resetView(activeRadius());
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 // The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
@@ -1977,8 +1984,9 @@ function drawPulsars(next: Pulsar): THREE.Mesh[] {
     marbles.add(model);
     if (lit) {
       const counter = Object.assign(new THREE.Sprite(counterMaterials[next.left - 1]), { renderOrder: 2, name: 'pulse-counter' });
-      counter.position.set(spot.x, 1.35, spot.z);
-      counter.scale.setScalar(0.5);
+      const at = counterSpot(id);
+      counter.position.set(at.x, at.y, at.z);
+      counter.scale.setScalar(PULSE_COUNTER_SIZE);
       marbles.add(counter);
       for (const c of pulseChevrons(id)) {
         const chevron = Object.assign(new THREE.Mesh(chevronGeometry, chevronMaterial), { name: 'pulse-chevron' });
@@ -2184,7 +2192,7 @@ canvas.addEventListener(
 );
 
 document.getElementById('reset-view')!.addEventListener('click', () => {
-  view = resetView(activeRadius());
+  view = fightView();
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
@@ -2202,22 +2210,49 @@ addEventListener('resize', () => {
 };
 // Used by the browser checks to see the console screen (#512) and the recorder (#517) on the window: the box around its
 // corners, in pixels.
-function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height: number } {
-  const box = new THREE.Box3().setFromObject(prop);
+function rectOfPoints(points: THREE.Vector3[]): { x: number; y: number; width: number; height: number } {
+  camera.updateMatrixWorld();
   const xs: number[] = [];
   const ys: number[] = [];
-  for (const x of [box.min.x, box.max.x])
-    for (const y of [box.min.y, box.max.y])
-      for (const z of [box.min.z, box.max.z]) {
-        const v = new THREE.Vector3(x, y, z).project(camera);
-        xs.push(((v.x + 1) / 2) * innerWidth);
-        ys.push(((1 - v.y) / 2) * innerHeight);
-      }
+  for (const p of points) {
+    const v = p.clone().project(camera);
+    xs.push(((v.x + 1) / 2) * innerWidth);
+    ys.push(((1 - v.y) / 2) * innerHeight);
+  }
   const [left, top] = [Math.min(...xs), Math.min(...ys)];
   return { x: left, y: top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
 }
+function rectOf(prop: THREE.Mesh): { x: number; y: number; width: number; height: number } {
+  const box = new THREE.Box3().setFromObject(prop);
+  const corners: THREE.Vector3[] = [];
+  for (const x of [box.min.x, box.max.x])
+    for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  return rectOfPoints(corners);
+}
 (window as unknown as Record<string, unknown>).__consoleRect = () => rectOf(consoleScreen);
 (window as unknown as Record<string, unknown>).__recorderRect = () => rectOf(recorder);
+// Used by the browser checks to see The Pulsar on the window (#691): the box round the vertices of each of the six
+// pulsars, its glowing core included, and round the counter it shows when it charges, the sprite facing the camera, in
+// pixels.
+(window as unknown as Record<string, unknown>).__pulsarRects = () => {
+  camera.updateMatrixWorld();
+  marbles.updateMatrixWorld(true);
+  const vertices = (model: THREE.Object3D): THREE.Vector3[] =>
+    (model.children as THREE.Mesh[]).flatMap(({ geometry, matrixWorld }) => {
+      const at = geometry.getAttribute('position');
+      return Array.from({ length: at.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(at, i).applyMatrix4(matrixWorld));
+    });
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(PULSE_COUNTER_SIZE / 2);
+  const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).multiplyScalar(PULSE_COUNTER_SIZE / 2);
+  return marbles.children
+    .filter((c) => c.name === 'pulsar' || c.name === 'pulsar-charging')
+    .map((model, id) => {
+      const { x, y, z } = counterSpot(id);
+      const centre = new THREE.Vector3(x, y, z);
+      const square = [1, -1].flatMap((i) => [1, -1].map((j) => centre.clone().addScaledVector(right, i).addScaledVector(up, j)));
+      return { pulsar: rectOfPoints(vertices(model)), counter: rectOfPoints(square) };
+    });
+};
 // Used by the browser checks to play their setup plies: the same click, without the raycast and the frames of a mouse click.
 (window as unknown as Record<string, unknown>).__click = (q: number, r: number) => click(q, r);
 
@@ -2474,7 +2509,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   newGameButton.hidden = true;
   document.body.dataset.boss = id;
   applyDeck(deckOf('boss', id));
-  view = resetView(activeRadius());
+  view = fightView();
   applyView();
   refresh();
 }
