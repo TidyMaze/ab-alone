@@ -4,6 +4,7 @@
 //! seed, so the same seed and the same player moves give the same boss moves.
 
 pub mod alien;
+pub mod assembly;
 pub mod ballast;
 pub mod chaplain;
 pub mod choir;
@@ -303,11 +304,11 @@ impl Encounter {
     }
 
     /// A marble a hook removed counts for the opponent of its colour, a core for the player (The
-    /// Overseer). A pulse (The Pulsar) moves marbles and flips none, so its losses are counted by
-    /// colour.
+    /// Overseer). A pulse (The Pulsar) or a belt (The Assembly Line) moves marbles and flips none, so
+    /// their losses are counted by colour.
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
-        let [lost_black, lost_white] = if before.pulsar().is_some() {
+        let [lost_black, lost_white] = if before.pulsar().is_some() || before.belts().is_some() {
             losses(before, after)
         } else {
             self.removed = removed(before, after);
