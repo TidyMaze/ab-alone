@@ -193,6 +193,20 @@ describe('main.ts, the offline battle royale (#502)', () => {
     expect(document.body.dataset.over).toBeUndefined(); // no end light over the hub
   });
 
+  it('a game everyone holds ends in one tie on the last void: You lead round 25 and win, the bots share 2nd (#641)', async () => {
+    const game = await boot('?bot=off');
+    game.hook('__royale', { seed: 7, rounds: Array.from({ length: 25 }, () => []) });
+    expect(turn()).toBe('You win');
+    expect(items('.placement li')).toEqual([
+      '1st You · 10 points',
+      '2nd Bot 1 · 6 points',
+      '2nd Bot 2 · 6 points',
+      '2nd Bot 3 · 6 points',
+      '2nd Bot 4 · 6 points',
+      '2nd Bot 5 · 6 points',
+    ]);
+  });
+
   it('a boss fight leaves the battle royale: the board and its frame come back', async () => {
     const game = await royale();
     game.openModes();

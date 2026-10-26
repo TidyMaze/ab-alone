@@ -279,11 +279,11 @@ mod tests {
         let s = last_void();
         assert_eq!(s.winners(), None);
         assert!(!s.is_over());
-        // A tie on marbles and ejections shares the place.
+        // A tie on marbles and ejections goes to the first of round 13's initiative: 0, 1, 2.
         let end = hold(&hold(&s));
         assert!((0..3).all(|seat| end.is_out(seat)));
         assert_eq!(end.last_void, [2, 2, 1]);
-        assert_eq!(end.winners(), Some(vec![0, 1]));
+        assert_eq!(end.winners(), Some(vec![0]));
         assert!(end.is_over());
         assert_eq!(resolve_round(&end, &[]), Err(RoyaleError::Over));
         // More ejections break the tie on marbles.
@@ -299,6 +299,29 @@ mod tests {
         // Seat 2 has the most ejections but the fewest marbles held.
         let mut s2 = s;
         s2.ejections[2] = 5;
-        assert_eq!(hold(&hold(&s2)).winners(), Some(vec![0, 1]));
+        assert_eq!(hold(&hold(&s2)).winners(), Some(vec![0]));
+    }
+
+    #[test]
+    fn a_tie_still_standing_goes_to_the_first_in_the_last_rounds_initiative() {
+        // 5 seats: seats 0 and 2 have 2 marbles on the radius 8 ring, the others 1. Round 13's
+        // initiative is 2, 3, 4, 0, 1: seat 2 wins the tie with seat 0.
+        let s = arena(
+            5,
+            12,
+            &[
+                ((8, 0), 0),
+                ((8, -1), 0),
+                ((0, 8), 1),
+                ((-8, 0), 2),
+                ((-8, 1), 2),
+                ((0, -8), 3),
+                ((-1, -7), 4),
+            ],
+        );
+        let end = hold(&hold(&s));
+        assert!((0..5).all(|seat| end.is_out(seat)));
+        assert_eq!(end.last_void, [2, 1, 2, 1, 1]);
+        assert_eq!(end.winners(), Some(vec![2]));
     }
 }

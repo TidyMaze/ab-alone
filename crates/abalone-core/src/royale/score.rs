@@ -203,8 +203,9 @@ mod tests {
     }
 
     #[test]
-    fn a_void_that_takes_everyone_shares_first_place_on_a_tie() {
-        // The same ring without seat 3, in a 3 seat game.
+    fn a_void_that_takes_everyone_breaks_a_first_place_tie_by_initiative() {
+        // The same ring without seat 3, in a 3 seat game: seats 0 and 1 tie, seat 0 is first in
+        // round 13's initiative and wins, seat 1 is second.
         let s = arena(
             3,
             12,
@@ -217,24 +218,28 @@ mod tests {
             ],
         );
         let end = hold(&hold(&s));
-        assert_eq!(end.winners(), Some(vec![0, 1]));
+        assert_eq!(end.winners(), Some(vec![0]));
         assert_eq!(
             end.standings(),
-            Some(vec![standing(1, 10), standing(1, 10), standing(3, 0)])
+            Some(vec![standing(1, 10), standing(2, 6), standing(3, 0)])
         );
     }
 
     #[test]
-    fn a_held_game_ends_with_every_seat_sharing_first_place() {
+    fn a_held_game_ends_with_one_winner_and_every_other_seat_sharing_second_place() {
         // Every wedge loses 3, 4, then its last 3 marbles to the voids of rounds 13, 19, 25.
-        for seats in 3..=6 {
+        // The seat first in round 25's initiative wins: seat 0, but seat 4 of 5.
+        for (seats, winner) in [(3, 0), (4, 0), (5, 4), (6, 0)] {
             let mut s = start(seats).unwrap();
             while !s.is_over() {
                 s = hold(&s);
             }
             assert_eq!(s.round(), 26);
             assert_eq!(s.eliminated, [(0..seats).collect::<Vec<_>>()]);
-            assert_eq!(s.standings(), Some(vec![standing(1, 10); seats]));
+            assert_eq!(s.winners(), Some(vec![winner]));
+            let mut places = vec![standing(2, 6); seats];
+            places[winner] = standing(1, 10);
+            assert_eq!(s.standings(), Some(places), "{seats} seats");
         }
     }
 }
