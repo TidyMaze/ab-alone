@@ -1,3 +1,5 @@
 /target
 /crates/abalone-wasm/pkg
 .playwright-mcp/
+*.blend
+*.blend1

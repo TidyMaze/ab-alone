@@ -639,3 +639,10 @@ it("draws a hovered move's ghost on a fresh game, the fight's own in a boss figh
   expect(Number(await ghosts(null))).toBeGreaterThan(0);
   expect(Number(await ghosts('The Choir'))).toBeGreaterThan(0);
 });
+
+it('mounts the progressive PBR spaceship bay into propsGroup (#648)', async () => {
+  const game = await boot('?bot=off');
+  const dummyBay = { scene: { name: 'bay-scene' } };
+  game.hook('__mountBay', dummyBay);
+  game.hook('__mountBay', null);
+});

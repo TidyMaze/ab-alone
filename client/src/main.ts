@@ -54,6 +54,7 @@ import { fpsOf, keepWindow } from './fps';
 import { DECKS, DECOR, LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
+import { loadSpaceshipBay } from './roomloader';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
@@ -1154,6 +1155,10 @@ drawProps = (): void => {
   propsGroup.add(emergencyLight, consoleBounceLight, pedestalGlowLight);
 };
 drawProps();
+const mountBay = (bay: { scene: THREE.Object3D } | null): void => {
+  if (bay) propsGroup.add(bay.scene);
+};
+void loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`).then(mountBay);
 
 scene.add(roomDeck, propsGroup, plate, rim.near, rim.far);
 let frame: FrameShape | null = null;
@@ -2031,6 +2036,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
   drawn: [plate, rim.near, rim.far].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
   lit: { near: rim.near.material.emissive.getHex(), far: rim.far.material.emissive.getHex() }, // #300
 });
+// Used by the browser checks and tests to mount the high-fidelity PBR spaceship bay (#648).
+(window as unknown as Record<string, unknown>).__mountBay = mountBay;
 
 // Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
 // frame draws them at the real time again).
