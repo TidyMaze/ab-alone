@@ -238,7 +238,7 @@ Hooks, from game-design section 7 (starting values):
 2. **Reveal**: each peer broadcasts order and nonce. A missing or bad reveal counts as a hold, and the sender is flagged.
 3. **Resolve**: orders are applied one by one in the initiative order. Each order is validated at its turn, against the state produced by the orders before it.
 4. An order that is illegal at its turn **fizzles**: it counts as a pass. The player loses tempo only. **FINAL.**
-5. **Round timer**: 15 s (**TUNE**). **OPEN-2**: tech.md section 6 says 30 s after the previous round. See section 13.
+5. **Round timer**: 15 s (**TUNE**) to commit, counted on each peer from the coordinator's round-start message as it reached that peer (**FINAL**, OPEN-2 resolved in #504, tech.md section 6).
 
 **Initiative order (FINAL, OPEN-10, lead decision on #495).** Seats in list order `s0 ... s(N-1)`. Round `k` (starting at 1) starts at seat `s((k-1) mod N)` and goes round the list. Every player leads once every N rounds.
 
@@ -498,7 +498,7 @@ Each example below is a numbered block with a precondition, an action and an exp
 These are raised in the PR body. Owners decide. Nothing here was picked silently.
 
 - **OPEN-1. Draw at 100 plies.** The task decision says draw. game-design.md section 5.2 says the 100-ply end is decided by ejections, then centrality, then draw. Pick one, then update the other doc.
-- **OPEN-2. Battle royale round timer.** game-design.md section 6 says 15 s. tech.md section 6 says 30 s. This spec uses 15 s (TUNE).
+- **OPEN-2. Battle royale round timer.** Resolved in #504: 15 s (TUNE) from the coordinator's round-start message, section 10.4 is FINAL.
 - **OPEN-3. Who moves first.** No source. PROPOSAL: Black.
 - **OPEN-4. Belgian daisy coordinates.** Resolved in #69: checked against three diagrams, section 2.2 is FINAL.
 - **OPEN-5. Battle royale wedge coordinates.** Resolved in #494: section 10.4 is FINAL.

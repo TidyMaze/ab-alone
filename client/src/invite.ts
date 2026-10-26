@@ -30,3 +30,16 @@ export function coopFromHash(hash: string): ({ room: string } & CoopFight) | nul
   const seed = Number(m?.[3]);
   return m && seed <= 0xffffffff ? { room: m[1]!, boss: m[2]!, seed } : null;
 }
+
+/** The invite link of an online battle royale room (#504). */
+export function royaleUrl(page: string, room: string): string {
+  const url = new URL(page);
+  url.hash = `royale=${room}`;
+  return url.toString();
+}
+
+/** The room of a battle royale invite, null for anything else. */
+export function royaleFromHash(hash: string): string | null {
+  const m = /^#royale=([\w-]+)$/.exec(hash);
+  return m ? m[1]! : null;
+}

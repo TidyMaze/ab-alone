@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coopFromHash, inviteUrl, newRoomId, roomFromHash } from './invite';
+import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl } from './invite';
 
 describe('invite links', () => {
   it('makes a url safe room id from random bytes', () => {
@@ -42,5 +42,13 @@ describe('invite links', () => {
     expect(coopFromHash('#room=r&boss=echo&seed=07')).toBeNull();
     expect(coopFromHash('#room=r&boss=echo&seed=1.5')).toBeNull();
     expect(coopFromHash('#room=r&boss=echo&seed=4294967296')).toBeNull();
+  });
+
+  it('puts a battle royale room in its own hash and reads it back, apart from the other invites (#504)', () => {
+    const url = royaleUrl('https://x.github.io/ab-alone/#old', 'abc_DEF-123');
+    expect(url).toBe('https://x.github.io/ab-alone/#royale=abc_DEF-123');
+    expect(royaleFromHash(new URL(url).hash)).toBe('abc_DEF-123');
+    expect(roomFromHash(new URL(url).hash)).toBeNull();
+    for (const hash of ['', '#royale=', '#royale=a b', '#room=r']) expect(royaleFromHash(hash)).toBeNull();
   });
 });

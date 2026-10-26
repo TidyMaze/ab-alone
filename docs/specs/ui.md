@@ -204,6 +204,17 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   fizzled" (in the hazard colour), "Bot 3: held", "Bot 4: out". The player is "You", the bots "Bot 1" to "Bot 5", each
   name after a dot of its tint. These strings are kept verbatim for the e2e tests. Once the game is over, Hold is
   greyed. A boss fight, Play online or Ship leaves it.
+- **Battle royale online (#504).** Invite, in the column of an offline battle royale (not a seventh item of the mode
+  menu: on a phone held upright its row would cover the board), greyed while offline like Play online. It opens a
+  room of 6 seats (tech.md section 6) and shows its invite link, "Invite link: send it to the other players"; each
+  link opener takes the first free seat. The arena and the plate are those of the offline
+  game, the seats named "You", "Player 2" for another player and "Bot 4" for an empty seat, by seat number. Under the
+  round line a status line: "2 players in. Start: bots take the empty seats" for the creator, who also gets Start in
+  the column, in the accent; "2 players in. Waiting for the start..." for the others; then "Your order: a move or
+  Hold", "Order locked, waiting for the others..." once the order is committed, "Waiting for the round..." past the
+  deadline or for a spectator, and "Desync after round 4: a peer's game differs" in the danger colour. Hold and the
+  targets work only while the order can be committed. These strings are kept verbatim for the e2e tests, with
+  body[data-net] (lobby, choosing, locked, waiting, over) and body[data-desync] (the round, 0 for none).
 - **Battle royale breach, seats out and placement (#503).** A ring that cracks at the end of a round (rules.md section
   10.4, ring 8 at the end of round 12) glows in the hazard colour for the whole next round, under the Hull's crack
   decal and one tick per round left, and the plate warns in the hazard colour: "Breach: 48 cells void in 1 round". At

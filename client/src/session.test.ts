@@ -1411,3 +1411,63 @@ describe('OnlineSession catch-up of what a peer missed, #226', () => {
     expect(white.session.askedRematch(1)).toBe(true);
   });
 });
+
+describe('OnlineSession in a battle royale room, #504', () => {
+  // A peer of a room of 3 seats over a mesh, which hands the messages the session does not know to `other`.
+  async function peer(m: ReturnType<typeof mesh>, name: string, side: number, other: unknown[][]) {
+    const keys = await generateKeys();
+    const refused: string[] = [];
+    const transport = m.end(name);
+    const session = new WatchedSession({
+      game: 'g',
+      side,
+      seatCount: 3,
+      engine: ENGINE,
+      keys,
+      transport,
+      judge: new FakeJudge(),
+      onMove: () => {},
+      onRefuse: (r) => refused.push(r),
+      beat: { ms: 5000, now: Date.now, every: () => {} },
+      onOther: (message, key, from) => void other.push([name, message, key, from]),
+    });
+    return { keys, session, refused, transport };
+  }
+
+  it('seats a joiner on the first free seat when the one it asks is taken, and it asks for its own seat again', async () => {
+    const m = mesh();
+    const a = await peer(m, 'a', 1, []);
+    const b = await peer(m, 'b', 2, []);
+    await settle();
+    const c = await peer(m, 'c', 2, []); // asks seat 2 as every joiner does, which b holds
+    await settle();
+    expect(a.session.seats.roster()).toEqual([a.keys.pub, b.keys.pub, c.keys.pub]);
+    expect(c.session.role).toBe('player');
+    expect(c.session.seats.seatOf(c.keys.pub)).toBe(3);
+    m.back('c'); // its Hello again, for seat 3 now
+    await settle();
+    expect([a.refused, b.refused, c.refused]).toEqual([[], [], []]);
+  });
+
+  it('hands a message of a kind it does not know to onOther, with the key of its sender, and names the coordinator', async () => {
+    const m = mesh();
+    const other: unknown[][] = [];
+    const a = await peer(m, 'a', 1, other);
+    const b = await peer(m, 'b', 2, other);
+    await settle();
+    const start = { kind: 'start', game: 'g', round: 1, seats: [] } as unknown as Wire;
+    b.transport.send(start);
+    m.end('x').send(start); // a peer that never said Hello: no key
+    await settle();
+    expect(other).toHaveLength(3); // the two sessions run their queues side by side: in any order
+    expect(other).toEqual(
+      expect.arrayContaining([
+        ['a', start, b.keys.pub, 'b'],
+        ['a', start, '', 'x'],
+        ['b', start, '', 'x'],
+      ]),
+    );
+    expect(a.refused).toEqual([]);
+    expect([a.session.coordinator, b.session.coordinator]).toEqual([a.keys.pub, a.keys.pub]);
+  });
+});

@@ -87,7 +87,7 @@ test('Battle royale in the mode menu: a target press on the arena locks the orde
 }) => {
   await ready(page);
   await openModes(page);
-  await page.getByRole('button', { name: 'Battle royale' }).click();
+  await page.getByRole('button', { name: 'Battle royale', exact: true }).click();
   const hud = page.locator('#hud');
   await expect(hud.locator('.turn')).toHaveText('Battle royale · Round 1');
   await expect(hud.locator('.initiative li')).toHaveText(['You', 'Bot 1', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5']);
@@ -127,7 +127,7 @@ test('battle royale arena is fully visible with fog at arena rim (#503)', async 
   await expect(page.locator('body')).toHaveAttribute('data-hub');
   // Then enter battle royale
   await openModes(page);
-  await page.getByRole('button', { name: 'Battle royale' }).click();
+  await page.getByRole('button', { name: 'Battle royale', exact: true }).click();
   await expect(page.locator('#hud .turn')).toHaveText('Battle royale · Round 1');
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
   // Check that the top rim cells are within viewport and rendered
