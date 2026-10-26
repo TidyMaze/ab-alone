@@ -94,7 +94,7 @@ import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale
 import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
-import { CORE, coreLevel, GLASS, SHELL } from './marbles';
+import { ACCENTS, CORE, coreLevel, GLASS, SHELL, type Accent } from './marbles';
 import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
@@ -779,12 +779,36 @@ function setGlassLook(id: string): void {
 // Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. The glass holds
 // its cyan core as a child: the selection lift, the slide and the ejection carry it.
 const glassOf = (): number => glassSide({ online: online !== null, bot: worker !== null, fight: fight !== null });
+// The boss accents (#507, marbles.ts): one mesh per boss, that each shell of its side holds as a child in boss mode.
+function accentGeometry(a: Accent): THREE.BufferGeometry {
+  if (a.shape === 'torus') return new THREE.TorusGeometry(...a.args).rotateX(a.tilt);
+  const geometry = new THREE.CylinderGeometry(...a.args);
+  const rim = geometry.attributes.position!; // a cylinder's first row of vertices is its top rim
+  for (let v = 1; v < a.args[3]; v += 2) rim.setY(v, rim.getY(v) - a.points);
+  return geometry.translate(0, a.y, 0);
+}
+const accents = new Map(
+  Object.entries(ACCENTS).map(([boss, a]) => {
+    const { name, color, roughness, metalness } = a;
+    const envMapIntensity = LIGHT.environment.intensity;
+    const side = THREE.DoubleSide; // the inside of the open crown shows
+    const look = new THREE.MeshStandardMaterial({ color, roughness, metalness, envMap: reflections, envMapIntensity, side });
+    return [boss, Object.assign(new THREE.Mesh(accentGeometry(a), look), { name, castShadow: true })];
+  }),
+);
 function marbleMesh(side: number, looks = marbleMaterials, core = coreMaterial): THREE.Mesh {
   const glass = side === glassOf();
   const mesh = new THREE.Mesh(marbleGeometry, looks[glass ? 2 : 1]);
   mesh.castShadow = looks === marbleMaterials;
   if (glass) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
+  const accent = !glass && looks === marbleMaterials ? accents.get(fight?.id ?? '') : undefined; // the boss side (#507)
+  if (accent) mesh.add(accent.clone());
   return mesh;
+}
+/** Turns a marble (#346): the shell takes the turn, what it holds stays upright (its boss accent, #507). */
+function turnMarble(marble: THREE.Object3D, turn: Quat): void {
+  marble.quaternion.fromArray(turn);
+  for (const child of marble.children) child.quaternion.copy(marble.quaternion).invert();
 }
 // A legal target (#390): a ring and an arrow glyph flat on the cell, pointing the way the group goes (world.md 6, rule
 // 5). Near-black like the shell, so it reads 3:1 on the lit deck in every mode; the shape carries it, not a colour.
@@ -1201,7 +1225,7 @@ function animateSlides(now: number): void {
       obj.position.x = p.x;
       obj.position.z = p.z;
     }
-    on[0]?.quaternion.fromArray(rolledTurn(track, elapsed, turnAt(i)));
+    if (on[0]) turnMarble(on[0], rolledTurn(track, elapsed, turnAt(i)));
   }
   if (!stale && elapsed < SLIDE_MS) return;
   slide = null;
@@ -1258,7 +1282,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
     material.userData.opacity = material.opacity; // the glass is see-through before it fades
     (o as THREE.Mesh).material = material;
   });
-  mesh.quaternion.fromArray(inHolder(turnOf(held, fight?.seed ?? 0, cellIndex(...ejection.cell)), trackAt(track, 0).yaw));
+  turnMarble(mesh, inHolder(turnOf(held, fight?.seed ?? 0, cellIndex(...ejection.cell)), trackAt(track, 0).yaw));
   const tumble = new THREE.Group();
   tumble.add(mesh);
   const holder = new THREE.Group();
@@ -1494,7 +1518,7 @@ function refresh(): void {
     if (side === 0) return;
     const marble = marbleMesh(side);
     marble.position.set(p.x, 0.36, p.z);
-    marble.quaternion.fromArray(turnAt(i));
+    turnMarble(marble, turnAt(i));
     marbles.add(marble);
     onMarble(i, marble);
     if (ringed.some(([sq, sr]) => sq === q && sr === r)) {
@@ -1752,6 +1776,9 @@ addEventListener('resize', () => {
 // Used by the browser checks to read the turn of the marble on a cell (#345, #346), null when it has none.
 (window as unknown as Record<string, unknown>).__marbleTurn = (q: number, r: number) =>
   marbleAt.get(cellIndex(q, r))?.[0]?.quaternion.toArray() ?? null;
+// Used by the browser checks to list the marbles that wear a boss accent (#507): their cell and the accent's name.
+(window as unknown as Record<string, unknown>).__accents = () =>
+  [...marbleAt].flatMap(([i, [marble]]) => marble!.children.filter((c) => c.name).map((c) => ({ cell: CELLS[i], accent: c.name })));
 
 // Used by the browser checks to count the phase notches drawn on the frame and see the threshold glyph (#356).
 (window as unknown as Record<string, unknown>).__notches = () => {

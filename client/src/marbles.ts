@@ -27,3 +27,21 @@ export const SHELL = { color: 0x101214, roughness: 0.6, metalness: 0.1, ridges: 
 /** Battle royale shell tints, one per seat (#49): the Okabe-Ito colours a colour-blind eye still tells apart, without
  * its blue and black, too dark on the deck. An engraved glyph marks the seat as well, never the tint alone. */
 export const SEATS: readonly number[] = [0xe69f00, 0x56b4e9, 0x009e73, 0xf0e442, 0xd55e00, 0xcc79a7];
+
+/** A boss accent (#507): the one shape a boss adds to the shells of its side, in boss mode only (world.md section 5).
+ * Its geometry as data, in marble units round the shell's centre (radius 0.36), kept upright whatever the shell's turn:
+ * a three.js cylinder (`args` as CylinderGeometry takes them) lifted by `y`, every other vertex of its top rim lowered by
+ * `points`, or a torus (`args` as TorusGeometry takes them) tilted by `tilt` about x. Its colour reads 3:1 on every
+ * palette's and skin's shell. */
+export type Accent = { name: string; color: number; roughness: number; metalness: number } & (
+  | { shape: 'cylinder'; args: [number, number, number, number, number, boolean]; y: number; points: number }
+  | { shape: 'torus'; args: [number, number, number, number]; tilt: number }
+);
+
+/** The accent of each boss, by boss id. The Echo and The Choir keep the plain shell: the Choir's army glyphs are its
+ * shape cue. The crown is a lighter rust than the palette's (#7a3b1d), which reads under 3:1 on the shell. */
+export const ACCENTS: Readonly<Record<string, Accent>> = {
+  hull: { name: 'crown', color: 0xc8824e, roughness: 0.8, metalness: 0, shape: 'cylinder', args: [0.2, 0.16, 0.14, 12, 1, true], y: 0.37, points: 0.07 },
+  chaplain: { name: 'wax', color: 0xc4b89a, roughness: 0.5, metalness: 0, shape: 'cylinder', args: [0.06, 0.07, 0.14, 12, 1, false], y: 0.41, points: 0 },
+  ballast: { name: 'wire', color: 0x8f989e, roughness: 0.35, metalness: 0.6, shape: 'torus', args: [0.365, 0.016, 6, 48], tilt: 1 },
+};

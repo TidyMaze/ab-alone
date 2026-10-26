@@ -20,8 +20,9 @@ and no new look: each rule names its source (section numbers), and changes when 
   condensation, dust. Nothing emissive but lights, screens and marbles.
 - **Marbles** (world.md 5, 8). Player: smoked glass, a cyan core that dims with each marble lost.
   Shell: matte black, ridged like a scarab, a faint heat pulse, no core. Boss: the shell plus one
-  accent (rust crown, candle wax, wire wrap). Flipped by The Chaplain: ridges creep up the glass.
-  Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
+  accent, a rust crown for The Hull, candle wax for The Chaplain, a wire wrap for The Ballast Mind
+  (#507); The Echo and The Choir keep the plain shell, the Choir's army glyphs are its shape cue.
+  Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
   its own angle, seeded, so the set never lines up and a game always looks the same.
 - **Light** (world.md 5). Low-key: one hard source per deck, a dim cyan fill from the player's
   marbles, slow and rare flicker. Soft contact shadows ground marbles onto the deck cells and frame
@@ -66,7 +67,7 @@ source kept out of the Pages artifact). All under the repo's MIT licence; the fo
 
 | Assets | Format and budget | Made | Today, issues |
 |---|---|---|---|
-| Marbles: glass and core, ridged shell, boss accents, flipped look | Materials, geometry; a ridge normal map, 256 px, 64 KB | Procedural, generated | Smoked glass with a cyan core (#291), opacity 0.8 so it reads 3:1 on the deck with no fog (#344, #417), ridged shell `shell-normal.png` 256 px, 10 KB (#293); the core dims an even step per marble lost, down to opacity 0.4 at the losing marble, still 3:1 on the shell (#506); boss accents: #26 |
+| Marbles: glass and core, ridged shell, boss accents, flipped look | Materials, geometry; a ridge normal map, 256 px, 64 KB | Procedural, generated | Smoked glass with a cyan core (#291), opacity 0.8 so it reads 3:1 on the deck with no fog (#344, #417), ridged shell `shell-normal.png` 256 px, 10 KB (#293); the core dims an even step per marble lost, down to opacity 0.4 at the losing marble, still 3:1 on the shell (#506); boss accents as data in `marbles.ts`, a child mesh kept upright on each boss-side shell in boss mode, each colour 3:1 on every palette's and skin's shell (#507; the wire wrap waits for The Ballast Mind in the boss list, #564) |
 | Board: light and textures per deck, frame, rim, backdrop | Data, geometry; textures 512 px, 300 KB a deck; backdrop 30 KB | Procedural, generated | A light preset and a fog density per deck, each mode and boss on its deck (`deck.ts`, #400), a 256 px cell albedo per deck, 13 to 127 KB (`deck-<deck>.png`, #401: worn laminate, ore-dusted steel, sooted steel, wood and wire, polished panel), a 256 px cell normal map per deck, 20 to 107 KB (`deck-<deck>-normal.png`, #440: laminate scratches, ore grit, soot-pitted steel, wood grain, panel seams), with one shared roughness map, and one steel albedo on the frame (lightened x1.9 for marble contrast, #344); a hexagonal steel frame built in code, plate and rim (#292), the rim lights for the side to move (#300): #290, #28 |
 | Props, one lore object per boss arena | glTF, 150 KB each, 1 MB a deck | Procedural, then hand-made | Hauler mess table deck surface and props (canister, slate, conduit) ground board in room setting (#470): #28, #20 |
 | Tells, phase notches, tally marks | Geometry; a crack decal, 128 px, 16 KB | Procedural, generated | Chaplain and Choir done, phase notches and tally marks on the rim (#356, #389), Hull crack `crack-decal.png` 128 px, 2 KB, near-black fissures (bone-white reads under 3:1 on the deck of #344) (#355): #62, #22 |
