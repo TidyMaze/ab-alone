@@ -24,6 +24,8 @@ import { askBot, askEval, botBudget } from './bot';
 import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
+import { FreeCameraController } from './freecam';
+import { WireframeManager } from './wireframe';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -399,8 +401,55 @@ function updateFog(): void {
 }
 
 function applyView(): void {
+  if (freeCam.active) {
+    updateFreeCamCamera();
+    return;
+  }
   sceneRenderer.fogRadius = fogRadius;
   sceneRenderer.applyView(view, reading, { tier, clear, deck, consoleDef });
+}
+
+const freeCam = new FreeCameraController();
+const wireframeManager = new WireframeManager();
+
+function updateFreeCamCamera(): void {
+  sceneRenderer.camera.position.set(freeCam.position.x, freeCam.position.y, freeCam.position.z);
+  const target = freeCam.getLookTarget();
+  sceneRenderer.camera.lookAt(target.x, target.y, target.z);
+  sceneRenderer.camera.updateMatrixWorld();
+  drawAsked = true;
+}
+
+function toggleFreeCam(enabled?: boolean): void {
+  const shouldEnable = enabled !== undefined ? enabled : !freeCam.active;
+  if (shouldEnable) {
+    const curPos = sceneRenderer.camera.position;
+    const forwardX = -curPos.x;
+    const forwardY = -curPos.y;
+    const forwardZ = -curPos.z;
+    const horizDist = Math.hypot(forwardX, forwardZ);
+    const yaw = Math.atan2(-forwardX, -forwardZ);
+    const pitch = Math.atan2(forwardY, Math.max(0.001, horizDist));
+    freeCam.enable(curPos, yaw, pitch);
+    updateFreeCamCamera();
+  } else {
+    freeCam.disable();
+    applyView();
+  }
+  const btn = document.getElementById('free-cam') as HTMLButtonElement | null;
+  if (btn) btn.setAttribute('aria-pressed', String(freeCam.active));
+}
+
+function toggleWireframe(enabled?: boolean): void {
+  const shouldEnable = enabled !== undefined ? enabled : !wireframeManager.active;
+  if (shouldEnable) {
+    wireframeManager.enable(sceneRenderer.scene);
+  } else {
+    wireframeManager.disable(sceneRenderer.scene);
+  }
+  const btn = document.getElementById('wireframe') as HTMLButtonElement | null;
+  if (btn) btn.setAttribute('aria-pressed', String(wireframeManager.active));
+  drawAsked = true;
 }
 let clear = readClearBoard(store);
 const forceShadows =
@@ -790,11 +839,38 @@ function turnReader(step: number): void {
   else showConsole(page);
 }
 addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+  if (e.key.toLowerCase() === 'c' && !reading) {
+    toggleFreeCam();
+    return;
+  }
+  if (e.key.toLowerCase() === 'x' && !reading) {
+    toggleWireframe();
+    return;
+  }
+  if (freeCam.active) {
+    if (e.key === 'Escape') {
+      toggleFreeCam(false);
+      return;
+    }
+    if (freeCam.onKeyDown(e.code)) {
+      e.preventDefault();
+      drawAsked = true;
+      return;
+    }
+  }
+
   if (!reading) {
     if (e.key.toLowerCase() === 't') openReader();
   } else if (e.key === 'Escape') leaveReader();
   else if (e.key === 'ArrowRight') turnReader(1);
   else if (e.key === 'ArrowLeft') turnReader(-1);
+});
+addEventListener('keyup', (e) => {
+  if (freeCam.active) {
+    freeCam.onKeyUp(e.code);
+  }
 });
 // The audio log player (#516, world.md section 4): while the player reads the deck console, Play log plays the audio log
 // of the deck of the entry shown (an entry of the log archive may be another deck's) on the voice bus, music and
@@ -2860,6 +2936,12 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   const last = pointers.get(e.pointerId);
   if (last && press) {
+    if (freeCam.active) {
+      freeCam.onPointerMove(e.clientX - last.x, e.clientY - last.y);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      updateFreeCamCamera();
+      return;
+    }
     const prevSpan = pointers.size === 2 ? span() : 0;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 2) view = zoom(view, pinchScale(prevSpan, span()));
@@ -2948,10 +3030,22 @@ canvas.addEventListener(
 );
 
 document.getElementById('reset-view')!.addEventListener('click', () => {
+  if (freeCam.active) toggleFreeCam(false);
   view = fitted = fightView();
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
+
+const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement | null;
+if (freeCamBtn) {
+  freeCamBtn.addEventListener('click', () => toggleFreeCam());
+  freeCamBtn.disabled = false;
+}
+const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement | null;
+if (wireframeBtn) {
+  wireframeBtn.addEventListener('click', () => toggleWireframe());
+  wireframeBtn.disabled = false;
+}
 
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
@@ -3049,6 +3143,10 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 });
 // Used by the browser checks and tests to mount the high-fidelity PBR spaceship bay (#648).
 (window as unknown as Record<string, unknown>).__mountBay = mountBay;
+(window as unknown as Record<string, unknown>).__toggleFreeCam = (enabled?: boolean) => toggleFreeCam(enabled);
+(window as unknown as Record<string, unknown>).__freeCamActive = () => freeCam.active;
+(window as unknown as Record<string, unknown>).__toggleWireframe = (enabled?: boolean) => toggleWireframe(enabled);
+(window as unknown as Record<string, unknown>).__wireframeActive = () => wireframeManager.active;
 
 // Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
 // frame draws them at the real time again).
@@ -4124,6 +4222,12 @@ renderer.setAnimationLoop((now) => {
   scarab.emissiveIntensity = pulsing ? pulseAt(pulseHeld ?? now / 1000) : 0;
   turnConsole(now);
   tickLog(now);
+  if (freeCam.active) {
+    const dt = Math.min(0.05, Math.max(0.001, (now - (lastDraw.start > 0 ? lastDraw.start : now)) / 1000));
+    if (freeCam.update(dt)) {
+      updateFreeCamCamera();
+    }
+  }
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   sceneRenderer.render();
   draws++;
