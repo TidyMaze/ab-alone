@@ -24,6 +24,8 @@ import { askBot, askEval, botBudget } from './bot';
 import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
+import { FreeCameraController } from './freecam';
+import { WireframeManager } from './wireframe';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -399,8 +401,53 @@ function updateFog(): void {
 }
 
 function applyView(): void {
+  if (freeCam.active) {
+    updateFreeCamCamera();
+    return;
+  }
   sceneRenderer.fogRadius = fogRadius;
   sceneRenderer.applyView(view, reading, { tier, clear, deck, consoleDef });
+}
+
+const freeCam = new FreeCameraController();
+const wireframeManager = new WireframeManager();
+
+function updateFreeCamCamera(): void {
+  sceneRenderer.camera.position.set(freeCam.position.x, freeCam.position.y, freeCam.position.z);
+  const target = freeCam.getLookTarget();
+  sceneRenderer.camera.lookAt(target.x, target.y, target.z);
+  sceneRenderer.camera.updateMatrixWorld();
+  drawAsked = true;
+}
+
+function toggleFreeCam(enabled?: boolean): void {
+  const shouldEnable = enabled !== undefined ? enabled : !freeCam.active;
+  if (shouldEnable) {
+    const curPos = sceneRenderer.camera.position;
+    const forwardX = -curPos.x;
+    const forwardY = -curPos.y;
+    const forwardZ = -curPos.z;
+    const horizDist = Math.hypot(forwardX, forwardZ);
+    const yaw = Math.atan2(-forwardX, -forwardZ);
+    const pitch = Math.atan2(forwardY, Math.max(0.001, horizDist));
+    freeCam.enable(curPos, yaw, pitch);
+    updateFreeCamCamera();
+  } else {
+    freeCam.disable();
+    applyView();
+  }
+  document.getElementById('free-cam')!.setAttribute('aria-pressed', String(freeCam.active));
+}
+
+function toggleWireframe(enabled?: boolean): void {
+  const shouldEnable = enabled !== undefined ? enabled : !wireframeManager.active;
+  if (shouldEnable) {
+    wireframeManager.enable(sceneRenderer.scene);
+  } else {
+    wireframeManager.disable(sceneRenderer.scene);
+  }
+  document.getElementById('wireframe')!.setAttribute('aria-pressed', String(wireframeManager.active));
+  drawAsked = true;
 }
 let clear = readClearBoard(store);
 const forceShadows =
@@ -790,11 +837,38 @@ function turnReader(step: number): void {
   else showConsole(page);
 }
 addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+  if (e.key.toLowerCase() === 'c' && !reading) {
+    toggleFreeCam();
+    return;
+  }
+  if (e.key.toLowerCase() === 'x' && !reading) {
+    toggleWireframe();
+    return;
+  }
+  if (freeCam.active) {
+    if (e.key === 'Escape') {
+      toggleFreeCam(false);
+      return;
+    }
+    if (freeCam.onKeyDown(e.code)) {
+      e.preventDefault();
+      drawAsked = true;
+      return;
+    }
+  }
+
   if (!reading) {
     if (e.key.toLowerCase() === 't') openReader();
   } else if (e.key === 'Escape') leaveReader();
   else if (e.key === 'ArrowRight') turnReader(1);
   else if (e.key === 'ArrowLeft') turnReader(-1);
+});
+addEventListener('keyup', (e) => {
+  if (freeCam.active) {
+    freeCam.onKeyUp(e.code);
+  }
 });
 // The audio log player (#516, world.md section 4): while the player reads the deck console, Play log plays the audio log
 // of the deck of the entry shown (an entry of the log archive may be another deck's) on the voice bus, music and
@@ -1431,10 +1505,50 @@ drawProps = (): void => {
     const mesh = new THREE.Mesh(geom, mat);
     if (screen) consoleScreen = mesh;
     if (def.id === 'log-recorder') recorder = mesh;
-    if (!screen && def.id !== 'log-recorder' && !def.id.includes('neon') && !def.id.startsWith('bulkhead-column-')) {
+    if (!screen && def.id !== 'log-recorder' && !def.id.includes('neon')) {
       mesh.visible = !currentBay;
     }
-    mesh.position.set(...def.position);
+    if (def.id.includes('neon') && currentBay) {
+      if (def.id === 'corner-neon-nw') {
+        mesh.position.set(-8.4, 5.2, -17.35);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'corner-neon-ne') {
+        mesh.position.set(8.4, 5.2, -17.35);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'corner-neon-sw') {
+        mesh.position.set(-8.4, 5.2, 17.35);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'corner-neon-se') {
+        mesh.position.set(8.4, 5.2, 17.35);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-column-wn') {
+        mesh.position.set(-17.35, 5.2, -8.4);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-column-ws') {
+        mesh.position.set(-17.35, 5.2, 8.4);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-column-en') {
+        mesh.position.set(17.35, 5.2, -8.4);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-column-es') {
+        mesh.position.set(17.35, 5.2, 8.4);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-airlock-top') {
+        mesh.position.set(0, 8.35, -17.65);
+        mesh.scale.set(1.1, 1.8, 1.8);
+      } else if (def.id === 'neon-observation-top') {
+        mesh.position.set(0, 7.2, 17.65);
+        mesh.scale.set(1.1, 1.8, 1.8);
+      } else if (def.id === 'neon-gantry-north') {
+        mesh.position.set(0, 13.05, -8.4);
+        mesh.scale.set(1.05, 1.4, 1.4);
+      } else if (def.id === 'neon-gantry-south') {
+        mesh.position.set(0, 13.05, 8.4);
+        mesh.scale.set(1.05, 1.4, 1.4);
+      } else mesh.position.set(...def.position);
+    } else {
+      mesh.position.set(...def.position);
+    }
     mesh.rotation.set(...def.rotation);
     if (def.id.startsWith('pedestal') || def.id.startsWith('conduit')) {
       mesh.receiveShadow = true;
@@ -1448,15 +1562,33 @@ drawProps = (): void => {
   consoleBounceLight.position.set(...sLights.consoleBounce.position);
   const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity, sLights.pedestalGlow.distance);
   pedestalGlowLight.position.set(...sLights.pedestalGlow.position);
-  const neonWestLight = new THREE.PointLight(sLights.rim.color, 1.4, 12.0);
+  const neonWestLight = new THREE.PointLight(sLights.rim.color, 0.2, 6.0);
   neonWestLight.position.set(-5.5, 0.35, -1.0);
-  const neonEastLight = new THREE.PointLight(sLights.emergency.color, 1.4, 12.0);
+  const neonEastLight = new THREE.PointLight(sLights.emergency.color, 0.2, 6.0);
   neonEastLight.position.set(5.5, 0.35, -1.0);
-  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 3.0, 18.0);
-  neonWallNwLight.position.set(-9.8, 2.5, -20.0);
-  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 18.0);
-  neonWallNeLight.position.set(9.8, 2.5, -20.0);
-  propsGroup.add(emergencyLight, consoleBounceLight, pedestalGlowLight, neonWestLight, neonEastLight, neonWallNwLight, neonWallNeLight);
+  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 3.0, 10.0);
+  neonWallNwLight.position.set(-8.4, 5.2, -16.8);
+  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 10.0);
+  neonWallNeLight.position.set(8.4, 5.2, -16.8);
+  const neonWallSwLight = new THREE.PointLight(sLights.rim.color, 3.0, 10.0);
+  neonWallSwLight.position.set(-8.4, 5.2, 16.8);
+  const neonWallSeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 10.0);
+  neonWallSeLight.position.set(8.4, 5.2, 16.8);
+  const airlockSodiumLight = new THREE.PointLight(sLights.emergency.color, 3.5, 11.0);
+  airlockSodiumLight.position.set(0, 8.2, -17.0);
+  const viewportRimLight = new THREE.PointLight(sLights.rim.color, 3.0, 11.0);
+  viewportRimLight.position.set(17.0, 4.6, 0);
+  const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.5, 6.0);
+  kioskGreenLight.position.set(-10.2, 2.5, -5.8);
+  propsGroup.add(
+    emergencyLight,
+    consoleBounceLight,
+    pedestalGlowLight,
+    neonWestLight,
+    neonEastLight,
+    neonWallNwLight,
+    neonWallNeLight,
+  );
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
@@ -2800,6 +2932,12 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   const last = pointers.get(e.pointerId);
   if (last && press) {
+    if (freeCam.active) {
+      freeCam.onPointerMove(e.clientX - last.x, e.clientY - last.y);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      updateFreeCamCamera();
+      return;
+    }
     const prevSpan = pointers.size === 2 ? span() : 0;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 2) view = zoom(view, pinchScale(prevSpan, span()));
@@ -2888,10 +3026,19 @@ canvas.addEventListener(
 );
 
 document.getElementById('reset-view')!.addEventListener('click', () => {
+  if (freeCam.active) toggleFreeCam(false);
   view = fitted = fightView();
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
+
+const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement;
+freeCamBtn.addEventListener('click', () => toggleFreeCam());
+freeCamBtn.disabled = false;
+
+const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement;
+wireframeBtn.addEventListener('click', () => toggleWireframe());
+wireframeBtn.disabled = false;
 
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
@@ -2989,6 +3136,10 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 });
 // Used by the browser checks and tests to mount the high-fidelity PBR spaceship bay (#648).
 (window as unknown as Record<string, unknown>).__mountBay = mountBay;
+(window as unknown as Record<string, unknown>).__toggleFreeCam = (enabled?: boolean) => toggleFreeCam(enabled);
+(window as unknown as Record<string, unknown>).__freeCamActive = () => freeCam.active;
+(window as unknown as Record<string, unknown>).__toggleWireframe = (enabled?: boolean) => toggleWireframe(enabled);
+(window as unknown as Record<string, unknown>).__wireframeActive = () => wireframeManager.active;
 
 // Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
 // frame draws them at the real time again).
@@ -4064,6 +4215,12 @@ renderer.setAnimationLoop((now) => {
   scarab.emissiveIntensity = pulsing ? pulseAt(pulseHeld ?? now / 1000) : 0;
   turnConsole(now);
   tickLog(now);
+  if (freeCam.active) {
+    const dt = Math.min(0.05, Math.max(0.001, (now - (lastDraw.start > 0 ? lastDraw.start : now)) / 1000));
+    if (freeCam.update(dt)) {
+      updateFreeCamCamera();
+    }
+  }
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   sceneRenderer.render();
   draws++;

@@ -384,8 +384,11 @@ export class SceneRenderer {
   mountBay(bay: SpaceshipBayAssets | null, deck: Deck): void {
     this.currentBay = bay;
     if (this.currentBay) {
+      this.roomDeck.visible = false;
       applyDeckAtmosphere(this.currentBay, deck as DeckId);
       this.propsGroup.add(this.currentBay.scene);
+    } else {
+      this.roomDeck.visible = true;
     }
   }
 

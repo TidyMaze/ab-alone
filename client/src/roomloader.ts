@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { createCanvasTexture, drawHollowMoon } from './roomart';
 
 export interface PbrMaterialSet {
   albedo: THREE.Texture;
@@ -100,6 +101,26 @@ export async function loadSpaceshipBay(
     const deckMat = pbrDeck ? createPbrStandardMaterial(pbrDeck) : fallbackMat;
     const bulkheadMat = pbrBulkhead ? createPbrStandardMaterial(pbrBulkhead) : fallbackMat;
     const grateMat = pbrGrate ? createPbrStandardMaterial(pbrGrate) : fallbackMat;
+    const hazardMat = new THREE.MeshStandardMaterial({
+      color: 0xd9822b,
+      roughness: 0.45,
+      metalness: 0.35,
+      emissive: 0xd9822b,
+      emissiveIntensity: 0.25,
+    });
+    const moonCanvas = createCanvasTexture(1024, 1024, drawHollowMoon);
+    const moonTex = new THREE.CanvasTexture(moonCanvas);
+    moonTex.colorSpace = THREE.SRGBColorSpace;
+    const moonMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: moonTex,
+      roughness: 0.85,
+      metalness: 0.1,
+      emissive: 0x9cb0c2,
+      emissiveIntensity: 0.85,
+      emissiveMap: moonTex,
+      fog: false,
+    });
 
     const sceneGroup = gltf.scene;
 
@@ -108,17 +129,22 @@ export async function loadSpaceshipBay(
         const mesh = child as THREE.Mesh;
         const name = mesh.name.toLowerCase();
         if (name.includes('pedestal')) {
-          const pos = mesh.geometry.getAttribute('position');
-          const uv = mesh.geometry.getAttribute('uv');
-          for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) * 0.75, pos.getZ(i) * 0.75);
-          uv.needsUpdate = true;
+          if (name === 'pedestal_core') {
+            const pos = mesh.geometry.getAttribute('position');
+            const uv = mesh.geometry.getAttribute('uv');
+            for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) * 0.75, pos.getZ(i) * 0.75);
+            uv.needsUpdate = true;
+          }
           applyPbrToMesh(mesh, deckMat);
-        } else if (name.includes('terminal') || name.includes('tank')) {
+        } else if (name.includes('hazard')) {
+          applyPbrToMesh(mesh, hazardMat);
+        } else if (name.includes('moon')) {
+          applyPbrToMesh(mesh, moonMat);
+        } else if (name === 'console_screen' || name.includes('terminal') || name.includes('tank')) {
           mesh.visible = false;
-          applyPbrToMesh(mesh, bulkheadMat);
         } else if (name.includes('deck')) {
           applyPbrToMesh(mesh, deckMat);
-        } else if (name.includes('wall') || name.includes('console')) {
+        } else if (name.includes('wall') || name.includes('console') || (name.includes('bulkhead') && !name.includes('column'))) {
           applyPbrToMesh(mesh, bulkheadMat);
         } else {
           applyPbrToMesh(mesh, grateMat);
@@ -215,19 +241,26 @@ export function applyDeckAtmosphere(
 export function createBayLights(deck: DeckId): THREE.Group {
   const conf = DECK_ATMOSPHERES[deck];
   const group = new THREE.Group();
+  group.name = 'bay_lights';
 
   const overhead = new THREE.PointLight(conf.lightColor, 0.45, 36.0);
   overhead.position.set(0, 14.0, 0);
 
   const airlock = new THREE.PointLight(conf.accentLightColor, 0.55, 26.0);
-  airlock.position.set(0, 7.5, -22.0);
+  airlock.position.set(0, 8.0, -17.5);
 
-  const consoleBounce = new THREE.PointLight(conf.lightColor, 0.35, 12.0);
-  consoleBounce.position.set(-10.0, 2.5, 12.0);
+  const consoleBounce = new THREE.PointLight(conf.lightColor, 0.35, 16.0);
+  consoleBounce.position.set(-10.2, 2.5, -6.0);
+
+  const viewportLight = new THREE.PointLight(0x7fd6e8, 0.5, 24.0);
+  viewportLight.position.set(17.0, 4.8, 0);
+
+  const observationLight = new THREE.PointLight(conf.accentLightColor, 0.15, 16.0);
+  observationLight.position.set(0, 7.0, 17.5);
 
   const pedestalWash = new THREE.PointLight(0x7fd6e8, 0.25, 8.0);
   pedestalWash.position.set(0, -0.1, 0);
 
-  group.add(overhead, airlock, consoleBounce, pedestalWash);
+  group.add(overhead, airlock, consoleBounce, viewportLight, observationLight, pedestalWash);
   return group;
 }
