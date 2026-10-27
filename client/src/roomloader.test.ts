@@ -137,7 +137,7 @@ describe('roomloader PBR pipeline', () => {
     expect(pedestalMesh.material).toBe(bay!.materials.deck);
     expect(pedestalBase.material).toBe(bay!.materials.deck);
     expect(Math.abs(pedestalMesh.geometry.getAttribute('uv').getX(0))).toBeCloseTo(1.5);
-    expect(bay!.materials.deck.map?.repeat.x).toBe(0.5);
+    expect(bay!.materials.deck.map?.repeat.x).toBe(8);
     expect(wallMesh.material).toBe(bay!.materials.bulkhead);
     expect(columnMesh.material).toBe(bay!.materials.grate);
     expect(pedestalMesh.visible).toBe(false);
@@ -238,6 +238,17 @@ describe('roomloader PBR pipeline', () => {
 
     // Also covers fallback when trench/conduit are omitted
     applyDeckAtmosphere({ materials: { deck: deckMat, bulkhead: bulkheadMat, grate: grateMat } }, 'mess');
+
+    // With maps attached, preserve full albedo luminance
+    deckMat.map = new THREE.Texture();
+    bulkheadMat.map = new THREE.Texture();
+    grateMat.map = new THREE.Texture();
+    trenchMat.map = new THREE.Texture();
+    applyDeckAtmosphere(bay, 'cargo');
+    expect(deckMat.color.getHex()).toBe(0xffffff);
+    expect(bulkheadMat.color.getHex()).toBe(0xffffff);
+    expect(grateMat.color.getHex()).toBe(0xffffff);
+    expect(trenchMat.color.getHex()).toBe(0xffffff);
   });
 
   it('creates atmospheric bay lights matching deck specifications (#660)', () => {

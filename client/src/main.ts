@@ -309,6 +309,9 @@ const [
   plateAlbedo,
   plateRoughness,
   plateNormal,
+  rimAlbedo,
+  rimRoughness,
+  rimNormal,
 ] = await Promise.all([
   loadTexture('deck-albedo.ktx2', true, true),
   loadTexture('deck-roughness.ktx2', false, true),
@@ -317,10 +320,19 @@ const [
   loadTexture('crack-decal.ktx2', false, false),
   deckMap(deckOf('local')), // a page opens at the Mess
   deckNormalMap(deckOf('local')),
+  loadTexture('pbr/deck-pbr-albedo.ktx2', true, true),
+  loadTexture('pbr/deck-pbr-roughness.ktx2', false, true),
+  loadTexture('pbr/deck-pbr-normal.ktx2', false, true),
   loadTexture('pbr/plate-albedo.ktx2', true, true),
   loadTexture('pbr/plate-roughness.ktx2', false, true),
   loadTexture('pbr/plate-normal.ktx2', false, true),
 ]);
+
+if (plateAlbedo) {
+  plateAlbedo.repeat.set(2, 2);
+  if (plateRoughness) plateRoughness.repeat.set(2, 2);
+  if (plateNormal) plateNormal.repeat.set(2, 2);
+}
 
 const sceneRenderer = new SceneRenderer({
   renderer,
@@ -332,6 +344,9 @@ const sceneRenderer = new SceneRenderer({
   plateAlbedo,
   plateRoughness,
   plateNormal,
+  rimAlbedo,
+  rimRoughness,
+  rimNormal,
 });
 await sceneRenderer.init().catch(bootFailed);
 const {
@@ -966,6 +981,9 @@ const steel = new THREE.MeshStandardMaterial(
         map: firstDeckMap ?? deckAlbedo,
         roughnessMap: deckRoughness,
         ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
+        color: 0x22282e,
+        metalness: 0.6,
+        roughness: 0.5,
       }
     : { color: COLORS.steel, roughness: 0.8 },
 );
