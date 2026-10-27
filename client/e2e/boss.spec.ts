@@ -344,10 +344,10 @@ test('The Chaplain: a martyr is announced, then explodes and counts as the 5th e
   await playRecorded(page, ANNOUNCED_AT, EXPLODED_AT);
   await expect(body).toHaveAttribute('data-martyr', '');
   await expect(body).toHaveAttribute('data-explosions', '1');
+  await page.screenshot({ path: testInfo.outputPath('chaplain-explosion.png') }); // the flash and the shards
+  await expect(body).toHaveAttribute('data-martyr', '');
   await expect(page.locator('#hud')).toContainText('White ejected 5/6');
   expect(await page.evaluate(() => (window as any).__blast()?.shards)).toBe(8);
-  await page.waitForTimeout(250); // the shards are out
-  await page.screenshot({ path: testInfo.outputPath('chaplain-explosion.png') });
   await expect(body).not.toHaveAttribute('data-exploding', '1', { timeout: 5_000 }); // and gone
   expect(errors).toEqual([]);
 });
