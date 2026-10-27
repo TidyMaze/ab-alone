@@ -4,6 +4,8 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
 import { CONVERTED } from './marbles';
 import { PALETTE_DEFS } from './palettes';
+import { CONVERTED_AT, SEED } from './test/chaplain-game';
+import { recordedGame } from './test/chaplain-fixture';
 import { boot, type Game } from './test/harness';
 
 // The converted look of main.ts (#508, world.md section 5): a marble The Chaplain converted is the ridged shell up to its
@@ -27,16 +29,16 @@ function catchScene(): () => THREE.Scene {
   return () => scene!;
 }
 
-/** Starts The Chaplain (fight seed 1) and plays NE moves until a marble is converted: on the 5th boss turn (#429). */
+/** Starts The Chaplain on the fight seed of the recorded game and plays it to the ply that converts the first marble. */
 async function convertOne(game: Game): Promise<Axial[]> {
   vi.spyOn(crypto, 'getRandomValues').mockImplementation((a) => {
-    (a as Uint32Array).fill(1);
+    (a as Uint32Array).fill(SEED);
     return a;
   });
   game.openModes();
   byId('boss-fight').click();
   [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Chaplain')!.click();
-  expect(await game.hook<Promise<number>>('__playTurns', 5, [2])).toBe(5);
+  expect(game.hook<number>('__playMoves', recordedGame().slice(0, CONVERTED_AT))).toBe(CONVERTED_AT);
   const cells = game.hook<Axial[]>('__converted');
   expect(cells.length).toBeGreaterThan(0);
   return cells;

@@ -1799,7 +1799,7 @@ function sink(marbles: Burn[], reduced: boolean): void {
 /** The explosion of the martyr at `cell`: a flash and a ring of shards, a static flash with reduced motion. */
 function explode(cell: Axial, reduced: boolean): void {
   const p = axialTo3D(cell[0], cell[1]);
-  const group = new THREE.Group();
+  const group = Object.assign(new THREE.Group(), { name: 'martyr-blast' });
   group.position.set(p.x, 0.36, p.z);
   const flash = new THREE.Mesh(blastFlashGeometry, blastFlashMaterial);
   const shards = reduced ? [] : Array.from({ length: BLAST_SHARDS }, () => new THREE.Mesh(blastShardGeometry, blastShardMaterial));
@@ -2424,10 +2424,10 @@ function refresh(): void {
   }
   if (martyr) {
     const p = axialTo3D(martyr[0], martyr[1]);
-    const ring = new THREE.Mesh(outlineGeometry, emberMaterial);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, emberMaterial), { name: 'martyr-ring' });
     ring.rotation.x = Math.PI / 2;
     ring.position.set(p.x, 0.36, p.z);
-    const glyph = new THREE.Mesh(martyrGlyphGeometry, emberMaterial);
+    const glyph = Object.assign(new THREE.Mesh(martyrGlyphGeometry, emberMaterial), { name: 'martyr-glyph' });
     glyph.position.set(p.x, 0.85, p.z);
     marbles.add(ring, glyph);
     onMarble(cellIndex(martyr[0], martyr[1]), ring);

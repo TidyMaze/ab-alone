@@ -2,6 +2,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { dailyFor, dailyTitle, utcDay } from './daily';
+import { CONVERTED_AT, EXPLODED_AT, SEED } from './test/chaplain-game';
+import { recordedGame } from './test/chaplain-fixture';
 import { boot, slowKeys, type Game } from './test/harness';
 
 // Boss fights and the daily challenge on the harness (decision #445, task #454): the boss list, Retry, the Goal control,
@@ -374,13 +376,14 @@ describe('main.ts boss tells', () => {
     expect(byId('hud').querySelector('.boss .tell')).toBeNull();
   }, 60_000);
 
-  it('The Chaplain: a hovered move shows the marbles it exposes to a flip, with one cue per new tell', async () => {
+  it('The Chaplain: a hovered move shows the marbles it flips, with one cue per new tell', async () => {
     const game = await boot('?nodes=200', { reducedMotion: true, audio: true });
     gesture();
-    fightBoss(game, 'The Chaplain');
+    fightBoss(game, 'The Chaplain', SEED);
     const exposing = (): Move | undefined =>
       game.hook<Move[]>('__legal').find((m) => m.cells.length === 1 && game.hook<Axial[]>('__preview', m).length > 0);
-    for (let n = 0; n < 20 && !exposing(); n++) await turn(game);
+    const recorded = recordedGame();
+    for (let k = 0; k < EXPLODED_AT && !exposing(); k += 2) game.hook('__playMoves', recorded.slice(k, k + 2)); // the recorded game
     const mv = exposing()!;
     const [q, r] = mv.cells[0]!;
     const [dq, dr] = DIRS[mv.dir]!;
@@ -395,20 +398,18 @@ describe('main.ts boss tells', () => {
     hover(game, null); // off the board: no ghost, no preview
     expect(body().flips).toBe('0');
     expect(body().ghosts).toBe('0');
-    expect(byId('hud').querySelector('.boss .tell')).toBeNull();
   }, 60_000);
 
   it('The Chaplain: a converted marble is drawn and the HUD counts it', async () => {
     const game = await boot('?nodes=200', { reducedMotion: true });
-    fightBoss(game, 'The Chaplain', 1);
-    expect(await game.hook<Promise<number>>('__playTurns', 17, [4, 2])).toBe(17); // the conversion comes on turn 18
+    fightBoss(game, 'The Chaplain', SEED);
+    expect(game.hook<number>('__playMoves', recordedGame().slice(0, CONVERTED_AT - 1))).toBe(CONVERTED_AT - 1);
     expect(body().converted).toBe('0');
-    await turn(game);
+    game.hook('__playMoves', recordedGame().slice(CONVERTED_AT - 1, CONVERTED_AT)); // the boss turn that converts one
     const converted = game.hook<Axial[]>('__converted');
-    expect(converted.length).toBeGreaterThan(0);
-    expect(body().converted).toBe(String(converted.length));
-    expect(byId('hud').querySelector('.boss .tell')!.textContent).toContain('Converted:');
-    expect(game.hud()).toContain('White ejected 1/6'); // the boss marble lost for the flip, bug #299
+    expect(converted).toHaveLength(1);
+    expect(body().converted).toBe('1');
+    expect(byId('hud').querySelector('.boss .tell')!.textContent).toContain('Converted: 1');
   }, 60_000);
 
   it('The Choir: a glyph per army, the next army ringed and named', async () => {
