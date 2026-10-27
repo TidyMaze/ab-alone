@@ -24,6 +24,9 @@ use abalone_core::encounter::pulsar::{
 use abalone_core::encounter::railyard::{
     railyard_boss, railyard_move, railyard_start, track_cells,
 };
+use abalone_core::encounter::unstable::{
+    last_events, unstable_boss, unstable_move, unstable_start, unstable_tell,
+};
 use abalone_core::encounter::{marbles, BossDef, Encounter as CoreEncounter};
 use abalone_core::game::Game;
 use abalone_core::moves::{legal_moves, Move, Player};
@@ -107,6 +110,11 @@ fn overseer_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(overseer_start(seed))
 }
 
+/// The Unstable Core starts with no charge on the board.
+fn unstable_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(unstable_start(seed))
+}
+
 fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
     ballast_tell(enc).flips
 }
@@ -132,7 +140,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 11] = [
+const BOSSES: [BossEntry; 12] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -232,6 +240,15 @@ const BOSSES: [BossEntry; 11] = [
         def: assembly_boss,
         start: assembly_fight,
         reply: assembly_move,
+        announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "core",
+        goal: "Centre cells charge marbles, a charged marble weighs more in a push, 4 blow it off. Eject 6 to win; lose 6 or draw to lose.",
+        def: unstable_boss,
+        start: unstable_fight,
+        reply: unstable_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -569,6 +586,27 @@ impl Encounter {
             .collect()
     }
 
+    /// The charged marbles (The Unstable Core) as `[q, r, charges]` records, empty for the other
+    /// bosses.
+    pub fn charges(&self) -> Vec<i32> {
+        Vec::new() // red: stub
+    }
+
+    /// The Unstable Core's next events as `[core, collapsing, wedge, shock_in]`: the core stands (`1`
+    /// or `0`), it collapses at the end of your next turn, the wedge the next shockwave hits (`-1`
+    /// until announced), and the turns before it (`-1` before P3). Empty for the other bosses.
+    pub fn unstable(&self) -> Vec<i32> {
+        Vec::new() // red: stub
+    }
+
+    /// What the last ply's hook did to the board (The Unstable Core): the
+    /// overload count, `1` when the core collapsed, the shockwave's wedge (`-1` none), the shove
+    /// count, the 61 board codes just before the hook, the overloaded cells, then the shoved
+    /// marbles as `[from_q, from_r, to_q, to_r]`. Empty when nothing happened.
+    pub fn last_unstable(&self) -> Vec<i32> {
+        Vec::new() // red: stub
+    }
+
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
     /// a cell list. Empty for the other bosses.
     pub fn flips(&self) -> Vec<i32> {
@@ -743,7 +781,8 @@ mod tests {
                 "magnetizer".to_string(),
                 "pulsar".to_string(),
                 "overseer".to_string(),
-                "assembly".to_string()
+                "assembly".to_string(),
+                "core".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -757,6 +796,7 @@ mod tests {
         assert_eq!(boss_name("pulsar"), Some("The Pulsar".to_string()));
         assert_eq!(boss_name("overseer"), Some("The Overseer".to_string()));
         assert_eq!(boss_name("assembly"), Some("The Assembly Line".to_string()));
+        assert_eq!(boss_name("core"), Some("The Unstable Core".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1379,6 +1419,128 @@ mod tests {
         assert_eq!(f.to_move(), 1);
     }
 
+    // The Unstable Core (#751): charged marbles weigh more in a push.
+
+    /// The fixtures of the core tests and client/e2e/unstable.spec.ts: one marble per ply
+    /// `[q, r, dir]`, the pair pushing three (7 plies) and the 25-ply fight to the shockwave.
+    const CORE_PUSH: [&[[i32; 2]]; 7] = [
+        &[[0, 2], [0, 3]],
+        &[[-1, -3]],
+        &[[0, 1], [0, 2]],
+        &[[-2, -2]],
+        &[[0, 0], [0, 1]],
+        &[[-1, -3]],
+        &[[0, -1], [0, 0]],
+    ];
+    const CORE_PUSH_DIRS: [i32; 7] = [4, 3, 4, 2, 4, 3, 4];
+
+    fn record(cells: &[[i32; 2]], dir: i32) -> Vec<i32> {
+        let mut rec = vec![cells.len() as i32, dir];
+        rec.extend(cells.iter().flatten());
+        rec.resize(8, 0);
+        rec
+    }
+
+    #[test]
+    fn the_core_follows_the_weighted_rule_in_its_legal_moves() {
+        let mut f = Encounter::new("core", 1).unwrap();
+        assert_eq!(f.charges(), Vec::<i32>::new());
+        assert_eq!(f.unstable(), vec![1, 0, -1, -1], "core up, nothing announced, before P3");
+        let push = record(CORE_PUSH[6], CORE_PUSH_DIRS[6]);
+        for i in 0..6 {
+            f.play(&record(CORE_PUSH[i], CORE_PUSH_DIRS[i])).unwrap();
+        }
+        assert_eq!(f.charges(), vec![0, -1, 3, 0, 0, 2]);
+        assert!(f.legal_moves().chunks(MOVE_STRIDE).any(|m| m == push.as_slice()));
+        f.play(&push).unwrap();
+        assert_eq!(f.ejected(1), 1);
+        assert_eq!(f.charges(), vec![0, -2, 2, 0, -1, 3]);
+        assert!(f.last_unstable().is_empty(), "nothing to show");
+        let plain = Encounter::new("echo", 1).unwrap();
+        assert!(plain.charges().is_empty() && plain.unstable().is_empty());
+        assert!(plain.last_unstable().is_empty() && choir().charges().is_empty());
+        assert!(choir().unstable().is_empty() && choir().last_unstable().is_empty());
+    }
+
+    const CORE_FULL: [[i32; 3]; 25] = [
+        [1, 3, 2],
+        [0, -2, 5],
+        [2, 2, 3],
+        [2, -2, 3],
+        [1, 3, 2],
+        [0, -3, 5],
+        [2, 2, 3],
+        [3, -3, 3],
+        [1, 3, 2],
+        [1, -2, 3],
+        [2, 2, 3],
+        [2, -2, 3],
+        [1, 3, 2],
+        [1, -3, 5],
+        [2, 2, 3],
+        [4, -3, 3],
+        [1, 3, 2],
+        [0, -2, 5],
+        [2, 2, 3],
+        [3, -2, 2],
+        [1, 3, 2],
+        [4, -3, 3],
+        [2, 2, 3],
+        [3, -2, 2],
+        [1, 3, 2],
+    ];
+
+    fn core_run(seed: u32) -> Vec<(Vec<u8>, Vec<i32>, Vec<i32>, Vec<i32>)> {
+        let mut f = Encounter::new("core", seed).unwrap();
+        CORE_FULL
+            .iter()
+            .map(|&[q, r, dir]| {
+                f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
+                (f.board(), f.unstable(), f.last_unstable(), f.charges())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_core_exposes_overloads_the_collapse_and_the_shockwave() {
+        let run = core_run(1);
+        let over = &run[7].2; // ply 8: the boss marble on (0, -1) overloads
+        assert_eq!(over[..4], [1, 0, -1, 0]);
+        assert_eq!(over[4 + index(0, -1)], 2, "the board before the hook");
+        assert_eq!(over[4 + 61..], [0, -1]);
+        assert!(run[8].2.is_empty());
+        assert_eq!(run[17].1[..2], [1, 1], "the boss ply of P2 announces the collapse");
+        let collapse = &run[18].2;
+        assert_eq!(collapse[..4], [0, 1, -1, 0]);
+        assert_eq!(run[18].1[..2], [0, 0], "the core is gone");
+        assert_eq!(run[18].0[index(0, 0)], 3, "a vanished cell");
+        assert_eq!(run[19].1, vec![0, 0, -1, 3], "P3: 3 turns to the first shockwave");
+        assert_eq!(run[20].1[3], 2);
+        assert!(run[22].1[2] >= 0 && run[22].1[3] == 1, "the wedge is announced");
+        let shock = &run[24].2;
+        assert_eq!(shock[0], 0);
+        assert!(shock[2] >= 0 && shock[3] > 0, "a wedge and the marbles it shoved");
+        assert_eq!(shock.len(), 4 + 61 + 4 * shock[3] as usize);
+        assert_eq!(run[24].1, vec![0, 0, -1, 3], "the clock restarts");
+    }
+
+    #[test]
+    fn two_core_encounters_with_the_same_seed_and_moves_give_the_same_fight() {
+        assert_eq!(core_run(1), core_run(1));
+        assert!((0..8).any(|seed| core_run(seed)[24] != core_run(1)[24]));
+    }
+
+    #[test]
+    fn the_core_replies_with_a_legal_move() {
+        let mut f = Encounter::new("core", 3).unwrap();
+        f.scale_node_budget(10);
+        ply(&mut f);
+        let mv = f.boss_move();
+        assert_eq!(mv.len(), MOVE_STRIDE);
+        f.play(&mv).unwrap();
+        assert_eq!(f.to_move(), 1);
+    }
+
     fn ring((q, r): (i32, i32)) -> i32 {
         q.abs().max(r.abs()).max((q + r).abs())
     }
@@ -1481,6 +1643,7 @@ mod tests {
             "pulsar",
             "overseer",
             "assembly",
+            "core",
         ] {
             assert_eq!(Encounter::new(id, 7).unwrap().board().len(), 61, "{id}");
         }
@@ -1608,6 +1771,7 @@ mod tests {
         assert_eq!(lit("railyard"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("pulsar"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("assembly"), vec![3, 0], "P2 after 3 ejections");
+        assert_eq!(lit("core"), vec![3, 0], "P2 after 3 ejections");
     }
 
     #[test]
