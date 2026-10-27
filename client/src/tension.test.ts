@@ -64,6 +64,28 @@ describe('rimDanger, own marbles on the rim that one push could eject (world.md 
   });
 });
 
+describe('rimDanger in The Unstable Core, a marble weighs 1 + its charges like in the push (#761)', () => {
+  const two = board([[0, -4], 2], [[0, -3], 2], [[0, -2], 1], [[0, -1], 1]);
+
+  it('counts a charged foe pair that outweighs a plain pair the plain 2 against 2 misses', () => {
+    expect(rimDanger(two, 2)).toBe(0);
+    expect(rimDanger(two, 2, [{ cell: [0, -2], n: 1 }])).toBe(1); // 3 against 2
+  });
+
+  it('misses a push a charged own marble now stops: 2 against 1 plain, 2 against 2 charged', () => {
+    const one = board([[0, -4], 2], [[0, -3], 1], [[0, -2], 1]);
+    expect(rimDanger(one, 2)).toBe(1);
+    expect(rimDanger(one, 2, [{ cell: [0, -4], n: 1 }])).toBe(0);
+  });
+
+  it('weighs the whole line of own marbles in front of the pushers, past 3', () => {
+    const line = board([[0, -4], 2], [[0, -3], 2], [[0, -2], 2], [[0, -1], 2], [[0, 0], 1], [[0, 1], 1], [[0, 2], 1]);
+    const charged = [{ cell: [0, 0], n: 2 }, { cell: [0, 1], n: 2 }, { cell: [0, 2], n: 2 }] as const;
+    expect(rimDanger(line, 2)).toBe(0);
+    expect(rimDanger(line, 2, charged)).toBe(1); // 9 against 4
+  });
+});
+
 describe('tensionLevel, 0 to 2 from the marbles in danger and the boss phase', () => {
   it('is 0 when nothing is in danger outside a fight or in the first boss phase', () => {
     expect(tensionLevel(0, 0)).toBe(0);

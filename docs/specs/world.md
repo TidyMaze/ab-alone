@@ -198,7 +198,8 @@ Rules never change with the look: cell size, contrast and edge clarity stay cons
 - **Music.** No melodic loops. Drone and texture layers, 2 to 3 tension layers driven by game
   state (marbles in danger, boss phase). Boss themes are a slow pulse that speeds up per phase.
   Today two drone layers of steady low sines under the hum (#439), through the music bus: the
-  tension level is one step per player marble on the rim that one push could eject and per boss
+  tension level is one step per player marble on the rim that one push could eject (by the weighted
+  rule in The Unstable Core, #761) and per boss
   phase after the first, at most 2; level 1 brings in the first layer, level 2 both, each
   crossfading over about a second.
 - **Voice.** Tally and a few crew logs only. Flat, tired, human.
