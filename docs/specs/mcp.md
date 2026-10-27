@@ -117,6 +117,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.polarities()` | `marks` with `kind: "polarity"` and `value` = `1` for +, `-1` for − (The Magnetizer) |
 | `Encounter.incinerators()` | `marks` with `kind: "incinerator"` (The Overseer); its cores are `c` and the Overseer `O` on the board |
 | `Encounter.turns_left()` (`-1` is no clock) | `tell` with `kind: "neurotoxin"` and the player turns left in `text` (The Overseer) |
+| `Encounter.belts()` | `marks` with `kind: "belt"` on every cell of a running belt and `value` = `1` toward +q, `-1` toward -q; `kind: "strike"` on the cell of an announced strike slot; and `tell` with `kind: "belt_reverse"` and the player turns left before the centre belt reverses in `text` (The Assembly Line) |
 | `Encounter.converted()` | `marks` with `kind: "converted"` |
 | `Encounter.armies()` | `marks` with `kind: "army"` and `value` = `0` Alto, `1` Tenor, `2` Bass |
 | `Encounter.tell()` id (`-1` is none, `0` is an id: the Hull's crack tick) | `tell.kind` = `"special"` when no more specific kind applies, the id in `text` |

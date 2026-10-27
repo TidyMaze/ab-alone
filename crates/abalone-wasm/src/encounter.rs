@@ -6,6 +6,9 @@ use crate::convert::{
 };
 use abalone_core::board::{Board, Cell};
 use abalone_core::encounter::alien::{alien_boss, alien_move, alien_start};
+use abalone_core::encounter::assembly::{
+    assembly_boss, assembly_move, assembly_start, assembly_tell, belt_cells, last_belts, Fate,
+};
 use abalone_core::encounter::ballast::{ballast_boss, ballast_move, ballast_start, ballast_tell};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use abalone_core::encounter::choir::{
@@ -94,6 +97,11 @@ fn pulsar_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(pulsar_start(seed))
 }
 
+/// The Assembly Line draws the first way of its centre belt at the start.
+fn assembly_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(assembly_start(seed))
+}
+
 /// The Overseer sets up its cores, its incinerators and its clock.
 fn overseer_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(overseer_start(seed))
@@ -124,7 +132,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 10] = [
+const BOSSES: [BossEntry; 11] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -215,6 +223,15 @@ const BOSSES: [BossEntry; 10] = [
         def: overseer_boss,
         start: overseer_fight,
         reply: overseer_move,
+        announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "assembly",
+        goal: "Belts carry every marble off the board; later, presses strike. Eject 6 to win; lose 6 or draw to lose.",
+        def: assembly_boss,
+        start: assembly_fight,
+        reply: assembly_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -494,6 +511,64 @@ impl Encounter {
         })
     }
 
+    /// The Assembly Line's belts as `[turns_left, then one record of 6 per belt]`, the centre belt
+    /// first: `[row, q0, len, dir, shift, strike]`, see the module docs. Empty for the other bosses.
+    pub fn belts(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        assembly_tell(e).map_or_else(Vec::new, |(left, tell)| {
+            std::iter::once(i32::from(left))
+                .chain(tell.iter().enumerate().flat_map(|(belt, t)| {
+                    let cells = belt_cells(belt);
+                    let dir = match (t.running, t.forward) {
+                        (false, _) => 0,
+                        (true, true) => 1,
+                        (true, false) => -1,
+                    };
+                    let strike = t.strike.map_or(-1, |s| {
+                        (usize::from(s) + usize::from(t.shift)) as i32 % cells.len() as i32
+                    });
+                    [
+                        cells[0].1,
+                        cells[0].0,
+                        cells.len() as i32,
+                        dir,
+                        i32::from(t.shift),
+                        strike,
+                    ]
+                }))
+                .collect()
+        })
+    }
+
+    /// What the belts and presses did to the marbles on the last ply, records of 6 integers
+    /// `[q, r, to_q, to_r, fate, board_code]`: fate `0` carried, `1` fell off the end (the target
+    /// is the cell past it), `2` struck. Empty when the last ply fired no belt.
+    pub fn last_belts(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        last_belts(e)
+            .iter()
+            .flat_map(|c| {
+                let fate = match c.fate {
+                    Fate::Moved => 0,
+                    Fate::Fell => 1,
+                    Fate::Struck => 2,
+                };
+                [
+                    c.from.0,
+                    c.from.1,
+                    c.to.0,
+                    c.to.1,
+                    fate,
+                    i32::from(code(Some(c.cell))),
+                ]
+            })
+            .collect()
+    }
+
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
     /// a cell list. Empty for the other bosses.
     pub fn flips(&self) -> Vec<i32> {
@@ -667,7 +742,8 @@ mod tests {
                 "railyard".to_string(),
                 "magnetizer".to_string(),
                 "pulsar".to_string(),
-                "overseer".to_string()
+                "overseer".to_string(),
+                "assembly".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -680,6 +756,7 @@ mod tests {
         assert_eq!(boss_name("magnetizer"), Some("The Magnetizer".to_string()));
         assert_eq!(boss_name("pulsar"), Some("The Pulsar".to_string()));
         assert_eq!(boss_name("overseer"), Some("The Overseer".to_string()));
+        assert_eq!(boss_name("assembly"), Some("The Assembly Line".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1403,6 +1480,7 @@ mod tests {
             "magnetizer",
             "pulsar",
             "overseer",
+            "assembly",
         ] {
             assert_eq!(Encounter::new(id, 7).unwrap().board().len(), 61, "{id}");
         }
@@ -1529,6 +1607,7 @@ mod tests {
         assert_eq!(lit("alien"), vec![2, 0], "P2 after 2 ejections");
         assert_eq!(lit("railyard"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("pulsar"), vec![3, 0], "P2 after 3 ejections");
+        assert_eq!(lit("assembly"), vec![3, 0], "P2 after 3 ejections");
     }
 
     #[test]
@@ -1580,5 +1659,127 @@ mod tests {
         }
         assert_eq!(f.ejected(1), 1);
         assert_eq!(f.phase_notches(), vec![3, 1]);
+    }
+
+    // The Assembly Line (#744): belts carry every marble off the board, and presses strike.
+
+    /// The fixture of the core assembly tests and client/e2e/assembly.spec.ts (seed 1, the centre
+    /// belt first runs toward +q): one marble per move, `[q, r, dir]`.
+    const ASSEMBLY_FIXTURE: [[i32; 3]; 33] = [
+        [-4, 3, 2],
+        [2, -2, 5],
+        [-4, 4, 4],
+        [2, -1, 5],
+        [-4, 3, 4],
+        [3, 0, 0],
+        [-4, 2, 5],
+        [0, -2, 3],
+        [-4, 3, 4],
+        [-1, -1, 3],
+        [-4, 2, 5],
+        [-3, 0, 1],
+        [-4, 3, 4],
+        [-1, -3, 3],
+        [-4, 2, 5],
+        [-2, -2, 3],
+        [-4, 3, 4],
+        [-3, -1, 3],
+        [-4, 2, 5],
+        [1, -2, 3],
+        [-4, 3, 4],
+        [-1, -1, 1],
+        [-4, 2, 5],
+        [0, -3, 3],
+        [-4, 3, 4],
+        [-1, -2, 3],
+        [-4, 2, 5],
+        [1, -3, 3],
+        [-4, 3, 4],
+        [0, -4, 3],
+        [-4, 2, 2],
+        [-1, -3, 0],
+        [-3, 2, 4],
+    ];
+
+    /// The board, the belts and the last belts after each of the first `plies` plies of the fixture.
+    fn assembly_run(seed: u32, plies: usize) -> Vec<(Vec<u8>, Vec<i32>, Vec<i32>)> {
+        let mut f = Encounter::new("assembly", seed).unwrap();
+        ASSEMBLY_FIXTURE[..plies]
+            .iter()
+            .map(|&[q, r, dir]| {
+                f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
+                (f.board(), f.belts(), f.last_belts())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_assembly_line_exposes_the_belts_and_what_they_did_to_the_marbles() {
+        let f = Encounter::new("assembly", 1).unwrap();
+        assert_eq!(f.name(), "The Assembly Line");
+        assert_eq!((f.phase(), f.phases()), (0, 3));
+        assert_eq!(
+            f.belts(),
+            vec![5, 0, -4, 9, 1, 0, -1, -1, -3, 8, 0, 0, -1, 1, -4, 8, 0, 0, -1],
+            "5 turns to the reversal; only the centre belt runs, toward +q"
+        );
+        assert!(f.last_belts().is_empty());
+        let run = assembly_run(1, 33);
+        assert!(run[0].2.is_empty(), "nothing on the belts");
+        assert_eq!(
+            run[6].2,
+            vec![4, 0, 5, 0, 1, 2],
+            "a boss marble fell off the east end"
+        );
+        assert_eq!(
+            run[6].1[..7],
+            [1, 0, -4, 9, 1, 4, -1],
+            "the next move is the last toward +q"
+        );
+        assert_eq!(
+            run[9].1[..7],
+            [5, 0, -4, 9, -1, 5, -1],
+            "reversed after turn 5"
+        );
+        assert_eq!(
+            run[20].1[7..13],
+            [-1, -3, 8, -1, 7, -1],
+            "P2: the side belts run against it"
+        );
+        assert_eq!(
+            run[30].1[6], 0,
+            "the centre slot 5 is on cell (5 + 4) % 9 = 0 of its belt, announced"
+        );
+        assert_eq!(run[30].1[12], 7, "upper belt slot 3 on cell (3 + 4) % 8");
+        assert_eq!(run[30].1[18], 1, "lower belt slot 5 on cell (5 + 4) % 8");
+        assert!(run[31].2.is_empty(), "the boss ply moves no belt");
+        assert_eq!(
+            run[32].2,
+            vec![-3, 1, -2, 1, 0, 1, -2, 1, -1, 1, 0, 1, -2, 1, -2, 1, 2, 1],
+            "your two marbles on the lower belt carried, the one now on (-2, 1) struck"
+        );
+        let mut f = Encounter::new("assembly", 1).unwrap();
+        for &[q, r, dir] in &ASSEMBLY_FIXTURE {
+            f.play(&[1, dir, q, r, 0, 0, 0, 0]).unwrap();
+        }
+        assert_eq!((f.ejected(1), f.ejected(2), f.phase()), (5, 1, 2));
+        assert!(choir().belts().is_empty() && choir().last_belts().is_empty());
+        assert!(Encounter::new("echo", 1).unwrap().belts().is_empty());
+    }
+
+    #[test]
+    fn two_assembly_encounters_with_the_same_seed_and_moves_give_the_same_belts() {
+        assert_eq!(assembly_run(1, 33), assembly_run(1, 33));
+        assert!((0..8).any(|seed| assembly_run(seed, 1)[0].1 != assembly_run(1, 1)[0].1));
+    }
+
+    #[test]
+    fn the_assembly_line_replies_with_a_legal_move() {
+        let mut f = Encounter::new("assembly", 3).unwrap();
+        ply(&mut f);
+        let mv = f.boss_move();
+        assert_eq!(mv.len(), MOVE_STRIDE);
+        f.play(&mv).unwrap();
+        assert_eq!(f.to_move(), 1);
     }
 }

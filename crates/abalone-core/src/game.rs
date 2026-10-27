@@ -100,6 +100,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if let Some(pulsar) = board.pulsar() {
         pulsar.hash(&mut hasher);
     }
+    if let Some(belts) = board.belts() {
+        belts.hash(&mut hasher);
+    }
     if !board.polarities().is_empty() {
         board.polarities().hash(&mut hasher);
     }
@@ -705,6 +708,27 @@ mod tests {
         assert_ne!(
             position_hash(&later, Player::Black),
             position_hash(&charging, Player::Black)
+        );
+    }
+
+    #[test]
+    fn the_belts_change_the_position_hash() {
+        use crate::board::Belts;
+        let belts = Belts {
+            first: true,
+            turns: 0,
+            shift: [0; 3],
+            strike: [None; 3],
+        };
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut running = Board::empty();
+        running.set_belts(Some(belts));
+        assert_ne!(position_hash(&running, Player::Black), plain);
+        let mut later = Board::empty();
+        later.set_belts(Some(Belts { turns: 1, ..belts }));
+        assert_ne!(
+            position_hash(&later, Player::Black),
+            position_hash(&running, Player::Black)
         );
     }
 

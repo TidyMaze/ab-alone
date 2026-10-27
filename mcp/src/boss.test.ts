@@ -170,6 +170,27 @@ const CASES: Record<string, () => void> = {
     expect(bossState('overseer', overseer).tell?.text).toContain('in 38 turns');
     expect(bossState('overseer', withData(overseer, { incinerators: [] })).marks).toEqual([]);
   },
+
+  assembly() {
+    // Seed 1: the centre belt first runs toward +q. In P1 only it runs; its 9 cells are marks with the direction.
+    const assembly = newEncounter('assembly', 1);
+    const row = (r: number, qs: number[], value: number) => qs.map((q) => ({ kind: 'belt', cell: `(${q},${r})`, value }));
+    const centre = row(0, [-4, -3, -2, -1, 0, 1, 2, 3, 4], 1);
+    expect(bossState('assembly', assembly)).toMatchObject({
+      name: 'The Assembly Line',
+      tell: { kind: 'belt_reverse', cells: [], text: 'the centre belt reverses after 5 of your turns' },
+      marks: centre,
+    });
+    // A made-up state: the centre belt runs toward -q, the upper one toward +q, and announced slots are marks on their cells.
+    const p3 = withData(assembly, { belts: [3, 0, -4, 9, -1, 2, 6, -1, -3, 8, 1, 0, -1, 1, -4, 8, 0, 0, 7] });
+    expect(bossState('assembly', p3).tell!.text).toBe('the centre belt reverses after 3 of your turns');
+    expect(bossState('assembly', p3).marks).toEqual([
+      ...row(0, [-4, -3, -2, -1, 0, 1, 2, 3, 4], -1),
+      { kind: 'strike', cell: '(2,0)' },
+      ...row(-1, [-3, -2, -1, 0, 1, 2, 3, 4], 1),
+      { kind: 'strike', cell: '(3,1)' },
+    ]);
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -177,8 +198,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675) and The Overseer (#635) are in', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer']);
+  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675), The Overseer (#635) and The Assembly Line (#744) are in', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly']);
   });
 
   test('every boss of the engine has its case', () => {

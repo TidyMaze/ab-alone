@@ -94,8 +94,24 @@ pub struct Board {
     /// The Pulsar's active pulsar (the direction code it pushes in) and the player turns played in
     /// its cycle.
     pulsar: Option<(u8, u8)>,
+    /// The Assembly Line's three belts.
+    belts: Option<Belts>,
     /// The Overseer's incinerator cells: a core on one burns.
     incinerators: Vec<(i32, i32)>,
+}
+
+/// The Assembly Line's belts (#744), the three middle rows: the centre belt, then the rows
+/// `r = -1` and `r = 1`. The pattern slots of a belt alternate plain and strike and scroll with it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Belts {
+    /// Whether the centre belt first runs toward +q.
+    pub first: bool,
+    /// Player turns played.
+    pub turns: u16,
+    /// How far each belt's pattern has scrolled toward +q, modulo the belt's length.
+    pub shift: [u8; 3],
+    /// The strike slot announced on each belt, which the press strikes on the next player turn.
+    pub strike: [Option<u8>; 3],
 }
 
 /// The Magnetizer's announce: the marble's cell (`None` once it left the board) and its sign.
@@ -128,6 +144,7 @@ impl Board {
             announce: None,
             last_sign: 0,
             pulsar: None,
+            belts: None,
             incinerators: Vec::new(),
         }
     }
@@ -226,6 +243,15 @@ impl Board {
 
     pub fn set_pulsar(&mut self, pulsar: Option<(u8, u8)>) {
         self.pulsar = pulsar;
+    }
+
+    /// The Assembly Line's belts.
+    pub fn belts(&self) -> Option<Belts> {
+        self.belts
+    }
+
+    pub fn set_belts(&mut self, belts: Option<Belts>) {
+        self.belts = belts;
     }
 
     /// The Overseer's incinerator cells.
@@ -575,6 +601,23 @@ mod tests {
         assert_eq!(board.pulsar(), Some((4, 1)));
         assert_ne!(board, Board::empty());
         board.set_pulsar(None);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn the_belts_start_unset_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert_eq!(board.belts(), None);
+        let belts = Belts {
+            first: true,
+            turns: 2,
+            shift: [1, 0, 3],
+            strike: [None, Some(5), None],
+        };
+        board.set_belts(Some(belts));
+        assert_eq!(board.belts(), Some(belts));
+        assert_ne!(board, Board::empty());
+        board.set_belts(None);
         assert_eq!(board, Board::empty());
     }
 }

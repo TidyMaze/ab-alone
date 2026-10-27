@@ -18,6 +18,15 @@
 //!   before it fires and its force, `0` for infinite (docs/specs/game-design.md section 7.10).
 //! - Last pulse (The Pulsar): the pulsar, then the 61 board codes just before the pulse, then the
 //!   cells of the marbles it moved, from where they stood, as `[q, r]` pairs.
+//! - Belts (The Assembly Line): `[turns_left, ...]`, the player turns left before the centre belt
+//!   reverses, then one record of 6 integers per belt, the centre belt first: `[row, q0, len, dir,
+//!   shift, strike]`. The belt is the `len` cells of row `row` from `q0`; `dir` is `1` toward +q, `-1`
+//!   toward -q, `0` when it does not run; slot `s` of its pattern shows on cell index
+//!   `(s + shift) % len`, the strike slots being the odd ones; `strike` is the cell index of the slot
+//!   the press strikes after the next player move, `-1` for none (docs/specs/game-design.md section 7.12).
+//! - Last belts (The Assembly Line): records of 6 integers `[q, r, to_q, to_r, fate, code]`, back to
+//!   back: a marble the last ply's belts touched, `fate` `0` carried to the target cell, `1` fell off
+//!   the end (the target is the cell past it), `2` struck by a press; `code` the board code.
 //! - Cell list (The Chaplain, the cells The Magnetizer just polarized): pairs `[q, r]`, back to back.
 //! - Incinerators (The Overseer): a cell list. Removed (its burns): records of 3 integers
 //!   `[q, r, code]`, the board code of each marble the last ply's hook removed, back to back.

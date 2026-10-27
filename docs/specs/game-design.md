@@ -97,7 +97,8 @@ Boss structure (all five follow it):
 - **Tell**: shown exactly one ply before the twist fires.
 - **Counter**: a positional answer that exists on the board, not a stat check.
 - **Phases**: triggered by **boss marbles remaining** (The Alien, The Rail Yard, The
-  Magnetizer, The Pulsar and The Overseer: by your ejections, sections 7.7 to 7.11),
+  Magnetizer, The Pulsar, The Overseer and The Assembly Line: by your ejections, sections 7.7 to
+  7.12),
   always shown on the HUD as notches.
 
 ### 3.4 Battle royale (Phase 4, #49)
@@ -257,6 +258,7 @@ also give the player a way to hurt the boss with it.
 | Extra | 3 Furnace | The Magnetizer (proposed by @Varadiell, section 7.9) | #645 | any time, boss menu |
 | Extra | 5 Bridge | The Pulsar (proposed by @Varadiell, section 7.10) | #675 | any time, boss menu |
 | Extra | 4 Chapel | The Overseer (proposed by @TidyMaze, section 7.11) | #635 | any time, boss menu |
+| Extra | 2 Cargo | The Assembly Line (proposed by @Varadiell, section 7.12) | #744 | any time, boss menu |
 
 Issue numbers keep their original order, play order is the last column. The Echo opens the
 game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
@@ -638,6 +640,69 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   example fails when it wins none.
 - **Calibrate**: knobs = the clock (40), phase ejections (2, 4), AI depth (the Hull's 3000 nodes).
   Fail if most fights end with fewer than 2 cores burnt (nobody learns the counter).
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
+  the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
+
+### 7.12 The Assembly Line: conveyor belts between the armies
+
+- **Concept**: the ore hauler's cargo assembly line. Three conveyor belts still run across the
+  Cargo hold, and what stands on them is carried to the edge and dropped. Later their presses
+  start stamping.
+- **Board and sides**: standard radius 4 board, 14 marbles each on the standard layout, Cargo deck
+  look (the factory-floor machinery fits the Cargo hold best, `world.md`). Win at **6** ejections,
+  lose at 6 as usual (`rules.md` §10.3). The boss plays standard Abalone.
+- **Belts** (owner): the three middle rows, which separate the two armies: the **centre belt**
+  (`r = 0`, 9 cells, `q` from -4 to 4) and the two rows beside it (`r = -1`, `q` from -3 to 4, and
+  `r = 1`, `q` from -4 to 3, 8 cells each). A belt runs toward +q or toward -q.
+- **Pattern** (owner): the slots of a belt alternate **plain, strike, plain, strike**, from the
+  slot on its lowest-`q` cell at the start. The pattern scrolls with the belt and loops (a slot
+  leaving one end comes back at the other), so a marble stays on its slot while the belt carries
+  it. The loop of the 9-cell belt has two plain slots side by side where it closes.
+- **Moving** (owner): a running belt shifts every marble on it, of either side, **one cell** in
+  its direction, **all at once and ignoring sumito** (a marble never pushes another): the marble on
+  the downstream end **falls off the board**. It counts as an ejection for the other side: a boss
+  marble for you, one of yours for the boss. If one turn brings both sides to 6, the boss wins (it
+  is credited first), as the Hull's voids.
+- **When** (owner): once per turn, **right after your move, before the boss replies**, as the Rail
+  Yard's trains. A move that ends the fight moves no belt. At the end of your move the order is:
+  the belts move, then the presses strike, then a strike is announced, then the boss plays.
+- **P1** (start): only the **centre belt** runs, in a direction drawn at the start of the fight.
+  It **reverses after every 5 of your turns**: turns 1 to 5 run one way, 6 to 10 the other, and so
+  on, to the end of the fight.
+- **P2** (after **3** ejections credited to you): the two 8-cell belts run too, always in the
+  **opposite direction** of the centre belt: they reverse with it. The phase counts at the start
+  of your turn, as the other bosses' tells.
+- **P3** (after **5**): every **2 turns** (at the end of your turns 2, 4, 6...) each belt draws one
+  **strike slot** at random among its 4 strike slots. It **blinks red for one turn**, then at the
+  end of your next turn, after the belts moved, the press strikes the cell that slot is on: a
+  marble there, of either side, is **destroyed** and counts as an ejection for the other side. The
+  announced slot is the pattern slot, not a cell: it moves with the belt and the blink follows it.
+- **Deterministic, for P2P** (owner rule): the first direction is splitmix64 of the fight seed
+  (ply 0), the strike slots splitmix64 of the seed mixed with the ply, modulo 4 among the strike
+  slots in order. No `Math.random`, floats or clock: a Retry, the daily, a replayed game and every
+  peer get the same belts. The belts, their scroll and the announced slots live on the board and in
+  the position hash.
+- **Moves never change** (`rules.md` §10): a belt turn is a hook between plies; your moves and
+  pushes stay standard Abalone.
+- **Tell**: a **chevron** on every cell of a running belt points the way it runs; at the end of
+  the centre belt a **counter** shows the turns left before it reverses (5 right after a reversal,
+  down to 1 for the last turn in that direction); an announced strike slot **blinks red** during
+  the turn before it strikes. The HUD line reads "Belts reverse in 3 turns" (P1, P2) and "Belts
+  reverse in 3 turns - press strikes next turn" in P3 while a strike is announced.
+- **Drawn**: modelled belts: a roller at each end, a belt surface that scrolls the way it runs
+  (steel, with the strike slots drawn as dark press plates), a press hanging over each strike
+  slot. A marble slides one cell with its belt, and the one on the end falls off with the ejection
+  effect. On a strike the press **slams** down on its plate, and the marble under it is crushed.
+  Reduced motion: the marbles jump, the belt surface does not scroll, no slam.
+- **Turn it against the boss** (owner design rule): push boss marbles onto a belt that runs toward
+  the rim, or onto an announced strike slot, and let the belt and the press eject them for you;
+  keep your own marbles off the belts' ends, and off a blinking slot. The boss search sees the
+  belts and the presses (every player ply of its tree goes through the hook, with seed 0 for the
+  strike draws, so it does not see announcements still to come) and avoids them the same way. Its
+  budget is the Hull's (3000 nodes).
+- **Calibrate**: knobs = the reversal (5 turns), the strike rhythm (2 turns), phase ejections (3,
+  5), AI depth. Fail if most fights end with no boss marble ejected by a belt or a press (nobody
+  learns the counter).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
 
