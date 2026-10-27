@@ -136,6 +136,8 @@ describe('roomloader PBR pipeline', () => {
     expect(bay!.materials.deck.map?.repeat.x).toBe(0.5);
     expect(wallMesh.material).toBe(bay!.materials.bulkhead);
     expect(columnMesh.material).toBe(bay!.materials.grate);
+    expect(pedestalMesh.visible).toBe(false);
+    expect(pedestalMesh.position.y).toBeLessThanOrEqual(-0.3);
     expect(terminalMesh.visible).toBe(false);
     expect(screenMesh.visible).toBe(false);
     expect(ribMesh.material).toBe(bay!.materials.grate);

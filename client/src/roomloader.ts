@@ -134,6 +134,8 @@ export async function loadSpaceshipBay(
             const uv = mesh.geometry.getAttribute('uv');
             for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) * 0.75, pos.getZ(i) * 0.75);
             uv.needsUpdate = true;
+            mesh.position.y = -0.45;
+            mesh.visible = false;
           }
           applyPbrToMesh(mesh, deckMat);
         } else if (name.includes('hazard')) {

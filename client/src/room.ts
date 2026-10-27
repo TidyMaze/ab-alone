@@ -40,7 +40,7 @@ export function pedestalParts(): readonly StructuralPart[] {
       id: 'pedestal-core',
       type: 'cylinder',
       size: [3.9, 3.95, 0.22, 24], // radiusTop, radiusBottom, height, radialSegments
-      position: [0, -0.20, 0],
+      position: [0, -0.42, 0],
       rotation: [0, 0, 0],
       color: 0x262c32,
       roughness: 0.8,
