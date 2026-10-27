@@ -298,7 +298,18 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
   if (!deckNormalMaps.has(name)) deckNormalMaps.set(name, loadTexture(`deck-${name}-normal.ktx2`, false, true));
   return deckNormalMaps.get(name)!;
 };
-const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, firstDeckMap, firstDeckNormal] = await Promise.all([
+const [
+  deckAlbedo,
+  deckRoughness,
+  shellNormal,
+  backdrop,
+  crackDecal,
+  firstDeckMap,
+  firstDeckNormal,
+  plateAlbedo,
+  plateRoughness,
+  plateNormal,
+] = await Promise.all([
   loadTexture('deck-albedo.ktx2', true, true),
   loadTexture('deck-roughness.ktx2', false, true),
   loadTexture('shell-normal.ktx2', false, true),
@@ -306,6 +317,9 @@ const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, firstDeckMa
   loadTexture('crack-decal.ktx2', false, false),
   deckMap(deckOf('local')), // a page opens at the Mess
   deckNormalMap(deckOf('local')),
+  loadTexture('pbr/plate-albedo.ktx2', true, true),
+  loadTexture('pbr/plate-roughness.ktx2', false, true),
+  loadTexture('pbr/plate-normal.ktx2', false, true),
 ]);
 
 const sceneRenderer = new SceneRenderer({
@@ -315,6 +329,9 @@ const sceneRenderer = new SceneRenderer({
   deckRoughness,
   firstDeckMap,
   firstDeckNormal,
+  plateAlbedo,
+  plateRoughness,
+  plateNormal,
 });
 await sceneRenderer.init().catch(bootFailed);
 const {

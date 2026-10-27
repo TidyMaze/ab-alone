@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { BOARD_CELLS, RADIUS } from './board';
+import { BOARD_CELLS, RADIUS, VANISHED, cellIndex } from './board';
 import { resetView, type View } from './camera';
 import { SceneRenderer, type NotchRow } from './scene';
 
@@ -63,6 +63,32 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.ghosts).toBeInstanceOf(THREE.Group);
     expect(sr.arenaMarbles).toBeInstanceOf(THREE.Group);
     expect(sr.particles).toBeInstanceOf(THREE.Points);
+  });
+
+  it('binds alien plate PBR textures to plate and rim when provided (#771)', () => {
+    const renderer = createMockRenderer();
+    const plateAlbedo = new THREE.Texture();
+    const plateRoughness = new THREE.Texture();
+    const plateNormal = new THREE.Texture();
+    const sr = new SceneRenderer({
+      renderer,
+      plateAlbedo,
+      plateRoughness,
+      plateNormal,
+    });
+    expect(sr.plate.material.map).toBe(plateAlbedo);
+    expect(sr.plate.material.roughnessMap).toBe(plateRoughness);
+    expect(sr.plate.material.normalMap).toBe(plateNormal);
+    expect(sr.rim.near.material.metalness).toBe(0.65);
+
+    const srNoNormal = new SceneRenderer({
+      renderer,
+      plateAlbedo,
+      plateRoughness: null,
+      plateNormal: null,
+    });
+    expect(srNoNormal.plate.material.normalMap).toBeNull();
+    expect(srNoNormal.plate.material.roughnessMap).toBeNull();
   });
 
   it('handles WebGPU backend detection', () => {
@@ -185,6 +211,12 @@ describe('SceneRenderer (#632)', () => {
     // Same board returns cached null
     const frame2 = sr.drawFrame(board);
     expect(frame2).toBeNull();
+
+    // Board with vanished cell (hole)
+    const hullBoard = new Uint8Array(BOARD_CELLS.length);
+    hullBoard[cellIndex(4, -1)] = VANISHED;
+    const holeFrame = sr.drawFrame(hullBoard);
+    expect(holeFrame?.holes.length).toBeGreaterThan(0);
   });
 
   it('lights rim near or far half with emissive color', () => {

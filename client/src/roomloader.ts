@@ -20,6 +20,8 @@ export interface SpaceshipBayAssets {
     deck: THREE.MeshStandardMaterial;
     bulkhead: THREE.MeshStandardMaterial;
     grate: THREE.MeshStandardMaterial;
+    trench?: THREE.MeshStandardMaterial;
+    conduit?: THREE.MeshStandardMaterial;
   };
 }
 
@@ -101,6 +103,21 @@ export async function loadSpaceshipBay(
     const deckMat = pbrDeck ? createPbrStandardMaterial(pbrDeck) : fallbackMat;
     const bulkheadMat = pbrBulkhead ? createPbrStandardMaterial(pbrBulkhead) : fallbackMat;
     const grateMat = pbrGrate ? createPbrStandardMaterial(pbrGrate) : fallbackMat;
+    const trenchMat = new THREE.MeshStandardMaterial({
+      color: 0x48525b,
+      roughness: 0.3,
+      metalness: 0.85,
+      ...(grateMat.map ? { map: grateMat.map } : {}),
+      ...(grateMat.normalMap ? { normalMap: grateMat.normalMap } : {}),
+      ...(grateMat.roughnessMap ? { roughnessMap: grateMat.roughnessMap } : {}),
+    });
+    const conduitMat = new THREE.MeshStandardMaterial({
+      color: 0x2b3238,
+      roughness: 0.25,
+      metalness: 0.9,
+      emissive: 0x288899,
+      emissiveIntensity: 0.65,
+    });
     const hazardMat = new THREE.MeshStandardMaterial({
       color: 0xd9822b,
       roughness: 0.45,
@@ -128,7 +145,11 @@ export async function loadSpaceshipBay(
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         const name = mesh.name.toLowerCase();
-        if (name.includes('pedestal')) {
+        if (name.includes('grate_trench') || name.includes('trench')) {
+          applyPbrToMesh(mesh, trenchMat);
+        } else if (name.includes('conduit')) {
+          applyPbrToMesh(mesh, conduitMat);
+        } else if (name.includes('pedestal')) {
           if (name === 'pedestal_core') {
             const pos = mesh.geometry.getAttribute('position');
             const uv = mesh.geometry.getAttribute('uv');
@@ -160,6 +181,8 @@ export async function loadSpaceshipBay(
         deck: deckMat,
         bulkhead: bulkheadMat,
         grate: grateMat,
+        trench: trenchMat,
+        conduit: conduitMat,
       },
     };
   } catch {
@@ -228,7 +251,15 @@ export const DECK_ATMOSPHERES: Record<DeckId, DeckAtmosphereConfig> = {
 };
 
 export function applyDeckAtmosphere(
-  bay: { materials: { deck: THREE.MeshStandardMaterial; bulkhead: THREE.MeshStandardMaterial; grate: THREE.MeshStandardMaterial } },
+  bay: {
+    materials: {
+      deck: THREE.MeshStandardMaterial;
+      bulkhead: THREE.MeshStandardMaterial;
+      grate: THREE.MeshStandardMaterial;
+      trench?: THREE.MeshStandardMaterial;
+      conduit?: THREE.MeshStandardMaterial;
+    };
+  },
   deck: DeckId,
 ): void {
   const conf = DECK_ATMOSPHERES[deck];
@@ -238,6 +269,13 @@ export function applyDeckAtmosphere(
   bay.materials.bulkhead.roughness = conf.roughness;
   bay.materials.grate.color.setHex(conf.grateColor);
   bay.materials.grate.roughness = conf.roughness;
+  if (bay.materials.trench) {
+    bay.materials.trench.color.setHex(conf.grateColor);
+    bay.materials.trench.roughness = Math.min(conf.roughness, 0.4);
+  }
+  if (bay.materials.conduit) {
+    bay.materials.conduit.emissive.setHex(conf.accentLightColor);
+  }
 }
 
 export function createBayLights(deck: DeckId): THREE.Group {
