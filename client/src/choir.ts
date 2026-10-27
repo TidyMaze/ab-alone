@@ -24,8 +24,16 @@ export function parseArmies(flat: ArrayLike<number>): Member[] {
   return members;
 }
 
-/** HUD fallback of the tell, '' when no army is in turn (another boss, or the fight is over). */
-export function choirText(next: number): string {
+/** The armies that still have a marble, from the bridge's `armies()` records. */
+export function armiesLeft(members: readonly Member[]): number {
+  return new Set(members.map((m) => m.army)).size;
+}
+
+/** HUD fallback of the tell, '' when no army is in turn (another boss, or the fight is over). `left` armies are
+ * still singing: two after the first removal, and the last one plays two moves a boss turn. */
+export function choirText(next: number, left: number): string {
   const name = ARMY_NAMES[next];
-  return name ? `Next army: ${name}` : '';
+  if (!name) return '';
+  if (left === 1) return `Last army: ${name}, two moves a turn`;
+  return left === 2 ? `Next army: ${name} · 2 armies left` : `Next army: ${name}`;
 }

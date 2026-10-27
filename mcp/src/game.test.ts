@@ -340,9 +340,9 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
     const state = value(session().newGame({ boss: 'choir', seed: 3 }));
     expect(state).toMatchObject({ mode: 'boss', you: 'black', to_move: 'black', status: 'running', last_moves: [] });
     expect(state.boss).toMatchObject({ id: 'choir', name: 'The Choir', phase: 0, phases: 3, result: 'playing' });
-    // The Choir plays on a radius 3 board, the outer ring shows as x, and the player needs 10 ejections (#131).
-    expect(state.board.split('').filter((cell) => cell === 'x')).toHaveLength(24);
-    expect(state.win_ejections).toEqual({ black: 10, white: 6 });
+    // The Choir plays on the standard board (no x cell) and is won at 6 ejections like any boss (#747).
+    expect(state.board.split('').filter((cell) => cell === 'x')).toHaveLength(0);
+    expect(state.win_ejections).toEqual({ black: 6, white: 6 });
   });
 
   test('unknown_boss carries the engine reason, the game in progress is kept', () => {

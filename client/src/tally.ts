@@ -16,7 +16,7 @@ const MODE_LINES: Record<'local' | 'bot' | 'online', string> = {
 const BOSS_LINES: Record<(typeof BOSS_IDS)[number], string> = {
   echo: 'Echo: mirror logged. Six out to balance the books.',
   hull: 'Hull: rim on file. Six out to balance the books.',
-  choir: 'Choir: ten out to balance. Six of yours and the books close.',
+  choir: 'Choir: six out to balance the books.',
   chaplain: 'Chaplain: conversions on file. Six out to balance.',
   ballast: 'Bridge: the ledger plays itself. Twelve out to balance.',
   alien: 'Alien: brood on file. Six out to balance the books.',

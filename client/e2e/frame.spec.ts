@@ -41,16 +41,6 @@ test('clear board and the low tier keep the frame, #292', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-rim', 'near'); // the turn is game information (#300)
 });
 
-test("The Choir's radius 3 board gets a frame of its size, #292", async ({ page }) => {
-  await page.goto('./');
-  await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.getByRole('button', { name: 'Boss fight' }).click();
-  await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
-  await expect(page.locator('#hud')).toContainText('The Choir');
-  expect(await frame(page)).toMatchObject({ radius: 3, holes: 0, drawn: true });
-});
-
 const SODIUM = 0xd9822b;
 const CYAN = 0x7fd6e8;
 // The middle of the rim's top on its left side at each end, clear of any marble: the side facing 150 degrees for the

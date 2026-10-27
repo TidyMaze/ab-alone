@@ -15,7 +15,7 @@ describe('formatScore', () => {
     expect(formatScore([2, 6], [6, 6], 2, 0, 2)).toBe('Black ejected 2/6 · White ejected 6/6');
   });
 
-  it('counts each side against its own threshold: the Choir is won at 10 (Decision #131)', () => {
+  it('counts each side against its own threshold: a threshold other than 6 is shown as is', () => {
     expect(formatScore([3, 1], [10, 6], 0, 0, 2)).toBe('Black ejected 3/10 · White ejected 1/6');
     expect(formatScore([10, 2], [10, 6], 1, 0, 2)).toBe('Black ejected 10/10 · White ejected 2/6');
   });

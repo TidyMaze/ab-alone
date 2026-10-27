@@ -33,12 +33,12 @@ test('an ejection scratches one mark on the frame at the losing side, with clear
   await expect(hud.locator('.pip.out')).toHaveCount(1); // the flat fallback stays
 });
 
-test('The Choir shows the marbles left as lit notches, #389', async ({ page }) => {
+test('The Choir scratches six slots a side like every boss, #389', async ({ page }) => {
   await page.goto('./');
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
   await expect(page.locator('#hud')).toContainText('The Choir');
-  expect(await tally(page)).toEqual([{ marked: 10, slots: 10 }, { marked: 12, slots: 12 }]); // the player's 10, the boss's 3 armies of 4
+  expect(await tally(page)).toEqual([{ marked: 0, slots: 6 }, { marked: 0, slots: 6 }]);
 });

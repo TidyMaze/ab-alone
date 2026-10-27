@@ -9,7 +9,7 @@ export type EndAnim = 'win' | 'loss' | 'draw';
 export interface EndInput {
   status: number; // 0 running, 1 Black wins, 2 White wins, 3 draw
   reason: number; // draw reason: 1 threefold repetition, 2 anti-stalling (engine draw_reason)
-  win: number; // ejections the winner needed (6, 10 for the player against the Choir)
+  win: number; // ejections the winner needed (6)
   mode: EndMode;
   side: number; // the viewer's side: 1 Black, 2 White, 0 both or none (hot-seat, spectator)
   glass: number; // the side wearing the pale glass, named White (sideName)

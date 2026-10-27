@@ -127,7 +127,7 @@ Rules for the generic shape:
 - When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `pulse`, then `neurotoxin`, then `special`.
 - An unknown `kind` is not an error: an agent that does not know it ignores it and still plays legally. The tell is information, not a rule.
 - `kind` values are stable once published. A new boss may add kinds, never rename one.
-- The Choir's board has radius 3 and the outer ring shows as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded (Decision #131).
+- The Ballast Mind's pillars show as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded.
 
 ## 5. Tools
 

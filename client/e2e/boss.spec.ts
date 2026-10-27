@@ -386,7 +386,7 @@ test('The Chaplain: a boss marble lost for a flip counts for the player and the 
   expect(errors).toEqual([]);
 });
 
-// The Choir (#183): a radius 3 board, a glyph per army on the boss marbles, only the army in turn
+// The Choir (#183, #747): the standard board, a glyph per army on the boss marbles, only the army in turn
 // moves and the next one wears a ring.
 test('start The Choir: the boss moves the army in turn, the next army is marked, #183', async ({ page }, testInfo) => {
   await page.goto('./');
@@ -407,11 +407,11 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
   await expect(hud).toContainText('The Choir');
-  await expect(hud).toContainText('White ejected 0/10 · Black ejected 0/6');
+  await expect(hud).toContainText('White ejected 0/6 · Black ejected 0/6');
   await expect(hud).toContainText('Next army: Alto');
   await expect(page.locator('#hud .notch')).toHaveCount(3);
-  await expect(body).toHaveAttribute('data-vanished', '24'); // the outer ring is a hole
-  await expect(body).toHaveAttribute('data-armies', '12');
+  await expect(body).toHaveAttribute('data-vanished', '0'); // the standard board
+  await expect(body).toHaveAttribute('data-armies', '18');
   await expect(body).toHaveAttribute('data-next-army', 'Alto');
   expect(await tellCues(page)).toEqual(['choir']); // the next-army tell appears
   await page.screenshot({ path: testInfo.outputPath('choir-start.png') });
