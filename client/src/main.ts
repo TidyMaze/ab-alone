@@ -436,8 +436,7 @@ function toggleFreeCam(enabled?: boolean): void {
     freeCam.disable();
     applyView();
   }
-  const btn = document.getElementById('free-cam') as HTMLButtonElement | null;
-  if (btn) btn.setAttribute('aria-pressed', String(freeCam.active));
+  document.getElementById('free-cam')!.setAttribute('aria-pressed', String(freeCam.active));
 }
 
 function toggleWireframe(enabled?: boolean): void {
@@ -447,8 +446,7 @@ function toggleWireframe(enabled?: boolean): void {
   } else {
     wireframeManager.disable(sceneRenderer.scene);
   }
-  const btn = document.getElementById('wireframe') as HTMLButtonElement | null;
-  if (btn) btn.setAttribute('aria-pressed', String(wireframeManager.active));
+  document.getElementById('wireframe')!.setAttribute('aria-pressed', String(wireframeManager.active));
   drawAsked = true;
 }
 let clear = readClearBoard(store);
@@ -3034,16 +3032,13 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
 
-const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement | null;
-if (freeCamBtn) {
-  freeCamBtn.addEventListener('click', () => toggleFreeCam());
-  freeCamBtn.disabled = false;
-}
-const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement | null;
-if (wireframeBtn) {
-  wireframeBtn.addEventListener('click', () => toggleWireframe());
-  wireframeBtn.disabled = false;
-}
+const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement;
+freeCamBtn.addEventListener('click', () => toggleFreeCam());
+freeCamBtn.disabled = false;
+
+const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement;
+wireframeBtn.addEventListener('click', () => toggleWireframe());
+wireframeBtn.disabled = false;
 
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();

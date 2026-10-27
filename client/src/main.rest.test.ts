@@ -99,8 +99,8 @@ describe('main.ts, free camera and wireframe modes', () => {
 
   it('toggles free camera and wireframe with keyboard and HUD buttons, and updates camera on pointer and frame', async () => {
     const game = await boot('?bot=off');
-    const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement | null;
-    const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement | null;
+    const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement;
+    const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement;
     const resetViewBtn = document.getElementById('reset-view') as HTMLButtonElement;
 
     expect(game.hook('__freeCamActive')).toBe(false);
@@ -118,18 +118,29 @@ describe('main.ts, free camera and wireframe modes', () => {
     // Key movement updates camera on frame
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', bubbles: true }));
     game.frame(16);
+    // Unhandled key while freecam active
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyJ', key: 'j', bubbles: true }));
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', key: 'w', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyJ', key: 'j', bubbles: true }));
+    // Frame without movement keys (freeCam.update returns false)
+    game.frame(16);
 
     // Escape exits freeCam
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(game.hook('__freeCamActive')).toBe(false);
 
     // Toggle freeCam via button
-    freeCamBtn?.click();
+    freeCamBtn.click();
     expect(game.hook('__freeCamActive')).toBe(true);
 
     // Reset view turns off freeCam
     resetViewBtn.click();
+    expect(game.hook('__freeCamActive')).toBe(false);
+
+    // Toggle freeCam off via button
+    freeCamBtn.click();
+    expect(game.hook('__freeCamActive')).toBe(true);
+    freeCamBtn.click();
     expect(game.hook('__freeCamActive')).toBe(false);
 
     // Toggle wireframe on with 'x' key
@@ -137,7 +148,13 @@ describe('main.ts, free camera and wireframe modes', () => {
     expect(game.hook('__wireframeActive')).toBe(true);
 
     // Toggle wireframe off with button or hook
-    wireframeBtn?.click();
+    wireframeBtn.click();
+    expect(game.hook('__wireframeActive')).toBe(false);
+
+    // Toggle wireframe on with button
+    wireframeBtn.click();
+    expect(game.hook('__wireframeActive')).toBe(true);
+    wireframeBtn.click();
     expect(game.hook('__wireframeActive')).toBe(false);
 
     // Toggle via hooks
