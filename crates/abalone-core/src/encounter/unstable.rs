@@ -717,7 +717,9 @@ mod tests {
         let picked: Vec<u8> = (0..16).map(|state| busiest(&tied, state)).collect();
         assert!(picked.contains(&0) && picked.contains(&2));
         assert!(picked.iter().all(|w| [0, 2].contains(w)));
-        assert_eq!(busiest(&board(&[(2, 0), (3, 0)], &[(0, -2)], &[]), 5), 0);
+        // A marble on the centre belongs to no wedge.
+        let centre = board(&[(0, 0), (2, 0), (3, 0)], &[(0, -2)], &[]);
+        assert_eq!(busiest(&centre, 5), 0);
     }
 
     #[test]
