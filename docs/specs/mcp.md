@@ -111,6 +111,8 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.next_army()` | `tell` with `kind: "next_army"`, the marbles of that army in `cells` and the army in `text` |
 | `Encounter.flips()` | `tell` with `kind: "flip"` and the cells that flip if nothing moves |
 | `Encounter.pulsar()` | `tell` with `kind: "pulse"`, no cells, and the way the next pulse pushes, the player turns left before it and its force in `text` (The Pulsar) |
+| `Encounter.charges()` | `marks` with `kind: "charge"` and `value` = the marble's charges (The Unstable Core: a marble weighs 1 + its charges in a push) |
+| `Encounter.unstable()` | `tell` with `kind: "core"`, no cells, and the next event (collapse, shockwave) in `text` (The Unstable Core) |
 | `Encounter.cracks()` | `marks` with `kind: "crack"` and `value` = plies left |
 | `Encounter.eggs()` | `marks` with `kind: "egg"` and `value` = player turns left before it hatches (The Alien) |
 | `Encounter.trains()` | `marks` with `kind: "train"` on every cell of the train's line, from its entry, and `value` = player turns left before it passes (The Rail Yard) |
