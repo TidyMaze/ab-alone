@@ -117,11 +117,11 @@ const CASES: Record<string, () => void> = {
   railyard() {
     // No train at the start: the first one is announced at the end of the player's turn 1, seen on turn 2.
     const railyard = newEncounter('railyard', 3);
-    // Each cell of the line is a mark with the player turns left before the train passes; Encounter.tell() is 0, the
-    // count down at the end of the player turn.
+    // Each cell of the line is a mark with the player turns left before the train passes; Encounter.tell() is 1, the
+    // first announce at the end of the player's turn 1.
     expect(bossState('railyard', railyard)).toMatchObject({
       name: 'The Rail Yard',
-      tell: { kind: 'special', cells: [], text: 'board special 0 fires after the next ply' },
+      tell: { kind: 'special', cells: [], text: 'board special 1 fires after the next ply' },
       marks: [],
     });
     // A train on the diagonal q + r = 0, from (4, -4) to (-4, 4), announced 5 turns ahead.
