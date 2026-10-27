@@ -378,7 +378,7 @@ mod tests {
     use super::*;
     use crate::board::MAX_RADIUS;
     use crate::game::Outcome;
-    use crate::moves::Direction::{E, SE, SW, W};
+    use crate::moves::Direction::{E, W};
     use crate::moves::{legal_moves, Direction, MoveError};
     use Army::{Alto, Bass, Tenor};
 
@@ -389,6 +389,21 @@ mod tests {
         }
     }
 
+    fn all_cells() -> impl Iterator<Item = P> {
+        (-MAX_RADIUS..=MAX_RADIUS).flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
+    }
+
+    fn cells_of(board: &Board, color: Cell) -> Vec<P> {
+        all_cells()
+            .filter(|&(q, r)| board.get(q, r) == Some(color))
+            .collect()
+    }
+
+    fn distance(a: P, b: P) -> i32 {
+        let (dq, dr) = (a.0 - b.0, a.1 - b.1);
+        dq.abs().max(dr.abs()).max((dq + dr).abs())
+    }
+
     /// A position: `armies` are the boss marbles by army, `cycle_pos` the army in turn.
     fn choir_from(
         black: &[P],
@@ -397,7 +412,7 @@ mod tests {
         ejected: [u8; 2],
         cycle_pos: usize,
     ) -> Choir {
-        let mut board = arena();
+        let mut board = Board::empty();
         for &(q, r) in black {
             board.set(q, r, Cell::Black);
         }
@@ -410,27 +425,19 @@ mod tests {
         }
         Choir {
             enc: Encounter::new(
-                Game::from_position(board, to_move, ejected)
-                    .with_win([CHOIR_WIN_EJECTIONS, WIN_EJECTIONS]),
+                Game::from_position(board, to_move, ejected),
                 choir_boss(),
-                CHOIR_SEED,
+                0,
             ),
             members,
             cycle_pos,
-            boss_turns: 0,
-            free_move: false,
+            second_move: false,
+            last_removal: None,
         }
     }
 
-    /// Alto and Tenor at their start, Bass wiped.
-    fn bass_wiped() -> Choir {
-        choir_from(
-            &PLAYER_START,
-            &[(Alto, &ALTO_START), (Tenor, &TENOR_START)],
-            Player::Black,
-            [0, 0],
-            0,
-        )
+    fn standard_black() -> Vec<P> {
+        cells_of(&Board::standard(), Cell::Black)
     }
 
     fn black_move(c: &mut Choir) {
@@ -452,53 +459,83 @@ mod tests {
         movers
     }
 
-    fn count(board: &Board, cell: Cell) -> usize {
-        (-MAX_RADIUS..=MAX_RADIUS)
-            .flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
-            .filter(|&(q, r)| board.get(q, r) == Some(cell))
-            .count()
+    /// The player ejects the Alto marble on (4, 0) with its two marbles: the third ejection when
+    /// `ejected` is 2. Alto 5 marbles, Tenor `tenor`, Bass `bass`.
+    fn ejecting(ejected: u8, tenor: &[P], bass: &[P]) -> Choir {
+        let mut alto = vec![(4, 0), (0, -3), (1, -3), (2, -3)];
+        if ejected == 2 {
+            alto.push((3, -3));
+        }
+        let mut armies = vec![(Alto, alto.as_slice())];
+        armies.push((Tenor, tenor));
+        armies.push((Bass, bass));
+        choir_from(
+            &[(2, 0), (3, 0), (-4, 4)],
+            &armies,
+            Player::Black,
+            [ejected, 0],
+            0,
+        )
     }
 
-    fn on_board(board: &Board) -> usize {
-        (-MAX_RADIUS..=MAX_RADIUS)
-            .flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
-            .filter(|&(q, r)| board.get(q, r).is_some())
-            .count()
-    }
+    const EJECT: fn() -> Move = || mv(&[(2, 0), (3, 0)], E);
 
     #[test]
-    fn layout_has_a_radius_3_board_and_the_right_counts() {
-        let c = Choir::start();
+    fn layout_is_the_standard_board_with_14_player_and_18_boss_marbles() {
+        let c = Choir::start(0);
         let board = c.game().board();
-        assert_eq!(on_board(board), 37, "radius 3 board");
-        assert_eq!(board.get(3, 0), Some(Cell::Empty));
-        assert_eq!(board.get(4, 0), None, "outer ring is void");
-        assert_eq!(count(board, Cell::Black), PLAYER_MARBLES);
-        assert_eq!(count(board, Cell::White), 3 * ARMY_SIZE);
-        assert_eq!(PLAYER_MARBLES, 10);
-        assert_eq!(ARMY_SIZE, 4);
+        assert_eq!(all_cells().filter(|&(q, r)| board.get(q, r).is_some()).count(), 61);
+        assert_eq!(cells_of(board, Cell::Black), standard_black());
+        assert_eq!(cells_of(board, Cell::White).len(), 18);
+        assert_eq!(ARMY_SIZE, 6);
         for army in CYCLE {
-            assert_eq!(c.army_marbles(army), 4);
+            assert_eq!(c.army_marbles(army), 6);
             for cell in army.start() {
                 assert_eq!(board.get(cell.0, cell.1), Some(Cell::White));
                 assert_eq!(c.army_at(cell), Some(army));
             }
         }
-        for cell in PLAYER_START {
-            assert_eq!(board.get(cell.0, cell.1), Some(Cell::Black));
-            assert_eq!(c.army_at(cell), None);
-        }
-        assert_eq!(c.army_at((4, 0)), None);
+        assert_eq!(c.army_at((0, 0)), None);
         assert_eq!(c.game().to_move(), Player::Black);
         assert_eq!(c.phase(), 0);
         assert_eq!(c.result(), None);
+        assert_eq!(c.game().win_ejections(Player::Black), 6);
+        assert_eq!(c.game().win_ejections(Player::White), 6);
     }
 
     #[test]
-    fn the_boss_definition_has_no_marble_phases() {
+    fn the_armies_are_triangles_left_up_middle_down_right_up_one_cell_apart() {
+        let rows = |a: Army| {
+            let mut counts = Vec::new();
+            for r in -4..=-1 {
+                let n = a.start().iter().filter(|c| c.1 == r).count();
+                if n > 0 {
+                    counts.push((r, n));
+                }
+            }
+            counts
+        };
+        assert_eq!(rows(Alto), [(-3, 1), (-2, 2), (-1, 3)], "left, pointing up");
+        assert_eq!(rows(Tenor), [(-4, 3), (-3, 2), (-2, 1)], "middle, pointing down");
+        assert_eq!(rows(Bass), [(-3, 1), (-2, 2), (-1, 3)], "right, pointing up");
+        let x = |a: Army| a.start().iter().map(|c| 2 * c.0 + c.1).sum::<i32>();
+        assert!(x(Alto) < x(Tenor) && x(Tenor) < x(Bass), "left to right");
+        for a in CYCLE {
+            for b in CYCLE.into_iter().filter(|&b| b != a) {
+                for (ca, cb) in a.start().into_iter().flat_map(|ca| b.start().map(|cb| (ca, cb))) {
+                    assert!(distance(ca, cb) >= 2, "{ca:?} touches {cb:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_boss_definition_phases_come_from_the_ejections() {
         let b = choir_boss();
         assert_eq!(b.name, "The Choir");
         assert!(b.phase_marbles.is_empty());
+        assert_eq!(b.phase_ejections, PHASE_EJECTIONS);
+        assert_eq!(PHASE_EJECTIONS, [3, 5]);
         assert_eq!(b.node_budget, CHOIR_NODE_BUDGET);
         assert_eq!((b.special)(1, 0), None);
         let board = Board::standard();
@@ -511,10 +548,7 @@ mod tests {
         assert_ne!(a, t);
         assert_ne!(t, b);
         assert_ne!(a, b);
-        assert!(
-            a.ejected > t.ejected && a.ejected > b.ejected,
-            "Alto pushes"
-        );
+        assert!(a.ejected > t.ejected && a.ejected > b.ejected, "Alto pushes");
         assert!(t.centre > a.centre && t.centre > b.centre, "Tenor edges");
         assert!(
             b.cohesion > a.cohesion && b.cohesion > t.cohesion,
@@ -523,8 +557,8 @@ mod tests {
     }
 
     #[test]
-    fn the_cycle_is_alto_tenor_bass_and_only_the_army_in_turn_moves() {
-        let mut c = Choir::start();
+    fn p1_one_army_moves_per_boss_turn_alto_tenor_bass_alto() {
+        let mut c = Choir::start(0);
         let mut told = Vec::new();
         let mut moved = Vec::new();
         for _ in 0..6 {
@@ -536,18 +570,20 @@ mod tests {
         assert_eq!(told, order);
         assert_eq!(moved, order);
         assert_eq!(c.game().outcome(), None);
+        assert_eq!(c.last_removal(), None);
     }
 
     #[test]
     fn a_move_of_an_army_out_of_turn_is_refused_and_changes_nothing() {
-        let mut c = Choir::start();
+        let mut c = Choir::start(0);
         black_move(&mut c);
         assert_eq!(c.tell(), Some(Alto));
         let history = c.game().history().len();
-        let tenor = mv(&[(-1, -2)], SW);
+        let tenor = legal_moves(c.game().board(), Player::White)
+            .into_iter()
+            .find(|m| m.cells.iter().all(|&x| c.army_at(x) == Some(Tenor)))
+            .unwrap();
         assert_eq!(c.play(&tenor), Err(ChoirError::WrongArmy));
-        let mixed = mv(&[(1, -2), (2, -3)], SE);
-        assert_eq!(c.play(&mixed), Err(ChoirError::WrongArmy), "two armies");
         assert_eq!(c.game().history().len(), history);
         assert_eq!(c.tell(), Some(Alto));
         let alto = c.boss_move().unwrap();
@@ -557,7 +593,7 @@ mod tests {
 
     #[test]
     fn the_player_moves_through_the_game_rules() {
-        let mut c = Choir::start();
+        let mut c = Choir::start(0);
         let bad = mv(&[(0, 0)], E);
         assert_eq!(
             c.play(&bad),
@@ -568,9 +604,8 @@ mod tests {
 
     #[test]
     fn a_wiped_army_skips_its_turn_and_the_cycle_shortens() {
-        // Alto and Bass only: Tenor (index 1) is skipped, then the cycle wraps to Alto.
         let mut c = choir_from(
-            &PLAYER_START,
+            &standard_black(),
             &[(Alto, &ALTO_START), (Bass, &BASS_START)],
             Player::Black,
             [0, 0],
@@ -585,26 +620,14 @@ mod tests {
         assert_eq!(told, [Bass, Alto, Bass]);
     }
 
-    /// The position of ladder seed 9 at player budget 1500 (#172), Alto to move in the cycle:
-    /// Alto has two marbles left, boxed in by Tenor, a Black marble and Bass.
+    /// Alto is one marble in the corner, boxed in by three Tenor marbles.
     fn boxed_in_alto() -> Choir {
         choir_from(
+            &[(-4, 4)],
             &[
-                (-3, 2),
-                (-3, 3),
-                (-2, 2),
-                (-1, 2),
-                (0, 0),
-                (0, 1),
-                (0, 2),
-                (1, 0),
-                (2, -3),
-                (2, -2),
-            ],
-            &[
-                (Alto, &[(0, -3), (1, -3)]),
-                (Tenor, &[(-1, -2), (0, -2), (1, -2), (2, 0)]),
-                (Bass, &[(-1, -1), (0, -1), (1, -1), (3, -3)]),
+                (Alto, &[(4, -4)]),
+                (Tenor, &[(3, -4), (4, -3), (3, -3)]),
+                (Bass, &[(-3, 0)]),
             ],
             Player::White,
             [0, 0],
@@ -615,65 +638,42 @@ mod tests {
     #[test]
     fn an_army_with_no_legal_move_is_skipped_for_the_next_army_that_has_one() {
         let mut c = boxed_in_alto();
-        assert_eq!(c.phase(), 0);
         assert_eq!(c.tell(), Some(Tenor), "Alto is boxed in, the tell skips it");
         let m = c.boss_move().expect("the boss is never stuck (#172)");
         assert!(m.cells.iter().all(|&cell| c.army_at(cell) == Some(Tenor)));
         c.play(&m).unwrap();
-        assert_eq!(
-            c.tell(),
-            Some(Bass),
-            "the cycle goes on after the army that moved"
-        );
-    }
-
-    #[test]
-    fn a_free_extra_move_stays_with_the_army_that_just_moved_even_after_a_skip() {
-        // P2 with Alto boxed in: Tenor plays on turn 4 and plays again, never Alto.
-        let mut c = boxed_in_alto();
-        c.members.retain(|m| m.1 != Bass);
-        c.members.push(((3, -3), Army::Tenor));
-        c.boss_turns = FREE_MOVE_EVERY - 1;
-        assert_eq!(c.phase(), 1);
-        let first = c.boss_move().unwrap();
-        c.play(&first).unwrap();
-        assert_eq!(c.game().to_move(), Player::White, "free extra move");
-        assert_eq!(c.tell(), Some(Tenor));
+        assert_eq!(c.tell(), Some(Bass), "the cycle goes on after the army that moved");
     }
 
     #[test]
     fn a_boss_with_no_legal_move_at_all_passes_and_the_player_moves_again() {
         // Alto is one marble in the corner, walled in by three Black marbles it cannot push.
         let mut c = choir_from(
-            &[(2, -3), (3, -2), (2, -2), (-3, 3)],
-            &[(Alto, &[(3, -3)])],
+            &[(3, -4), (4, -3), (3, -3), (-4, 4)],
+            &[(Alto, &[(4, -4)])],
             Player::Black,
             [0, 0],
             0,
         );
-        c.play(&mv(&[(-3, 3)], E)).unwrap();
+        c.play(&mv(&[(-4, 4)], E)).unwrap();
         assert_eq!(c.game().to_move(), Player::Black, "the boss passed");
         assert_eq!(c.result(), None);
         assert_eq!(c.boss_move(), None, "player's turn");
-        c.play(&mv(&[(-2, 3)], E)).unwrap();
+        c.play(&mv(&[(-3, 4)], E)).unwrap();
         assert_eq!(c.game().to_move(), Player::Black);
     }
 
     #[test]
     fn membership_follows_boss_moves_and_player_pushes() {
-        let mut c = Choir::start();
+        let mut c = Choir::start(0);
         black_move(&mut c);
         let m = c.boss_move().unwrap();
         c.play(&m).unwrap();
         let (dq, dr) = m.dir.vector();
         for &(q, r) in &m.cells {
-            assert_eq!(
-                c.army_at((q + dq, r + dr)),
-                Some(Alto),
-                "moved with the army"
-            );
+            assert_eq!(c.army_at((q + dq, r + dr)), Some(Alto), "moved with the army");
         }
-        assert_eq!(c.army_marbles(Alto), 4);
+        assert_eq!(c.army_marbles(Alto), 6);
         // A player push shifts a Bass marble to (3, 0).
         let mut c = choir_from(
             &[(0, 0), (1, 0)],
@@ -689,102 +689,80 @@ mod tests {
     }
 
     #[test]
-    fn p2_starts_when_an_army_is_wiped_by_a_player_ejection() {
-        let mut c = choir_from(
-            &[(1, 0), (2, 0), (-3, 3)],
-            &[(Bass, &[(3, 0)]), (Alto, &[(0, -3)]), (Tenor, &[(-3, 0)])],
-            Player::Black,
-            [0, 0],
-            0,
-        );
+    fn p2_the_weakest_army_is_removed_at_the_third_ejection_and_is_not_an_ejection() {
+        let mut c = ejecting(2, &[(-3, 0), (-2, -2), (-1, -2)], &[(-4, 1), (-4, 2)]);
         assert_eq!(c.phase(), 0);
-        c.play(&mv(&[(1, 0), (2, 0)], E)).unwrap();
-        assert_eq!(c.army_marbles(Bass), 0);
+        c.play(&EJECT()).unwrap();
+        assert_eq!(c.game().ejected(Player::Black), 3, "the removal is not counted");
         assert_eq!(c.phase(), 1);
-        assert_eq!(c.tell(), Some(Alto));
+        assert_eq!(c.army_marbles(Bass), 0, "Bass had the fewest");
+        assert_eq!((c.army_marbles(Alto), c.army_marbles(Tenor)), (4, 3));
+        assert_eq!(c.game().board().get(-4, 1), Some(Cell::Empty));
+        assert_eq!(c.game().board().get(-4, 2), Some(Cell::Empty));
+        assert_eq!(c.last_removal(), Some(&(Bass, vec![(-4, 1), (-4, 2)])));
+        assert_eq!(c.result(), None);
+        // The two others alternate; the removal is shown for that ply only.
+        assert_eq!(boss_turn(&mut c), [Alto]);
+        assert_eq!(c.last_removal(), None);
+        black_move(&mut c);
+        assert_eq!(boss_turn(&mut c), [Tenor]);
+        black_move(&mut c);
+        assert_eq!(boss_turn(&mut c), [Alto]);
     }
 
     #[test]
-    fn p2_gives_the_army_in_turn_a_free_extra_move_every_4th_turn() {
-        let mut c = bass_wiped();
-        assert_eq!(c.phase(), 1);
-        let mut turns = Vec::new();
-        for _ in 0..8 {
-            black_move(&mut c);
-            turns.push(boss_turn(&mut c));
-        }
-        assert_eq!(
-            turns,
-            [
-                vec![Alto],
-                vec![Tenor],
-                vec![Alto],
-                vec![Tenor, Tenor],
-                vec![Alto],
-                vec![Tenor],
-                vec![Alto],
-                vec![Tenor, Tenor],
-            ]
-        );
-        assert_eq!(c.game().outcome(), None);
-    }
-
-    /// Alto alone, three marbles in line next to a lone Black marble they can push.
-    fn p3_push_position(black_ejected: [u8; 2]) -> Choir {
-        choir_from(
-            &[(2, 0), (-3, 3), (-2, 3)],
-            &[(Alto, &[(-1, 0), (0, 0), (1, 0), (3, -3)])],
-            Player::White,
-            black_ejected,
-            0,
-        )
-    }
-
-    #[test]
-    fn p3_the_last_army_cannot_push_but_plays_every_turn() {
-        let mut c = p3_push_position([0, 0]);
-        assert_eq!(c.phase(), 2);
-        let push = mv(&[(-1, 0), (0, 0), (1, 0)], E);
-        assert_eq!(c.play(&push), Err(ChoirError::NoPush));
-        assert_eq!(c.game().history().len(), 0);
-        for _ in 0..6 {
-            assert_eq!(c.tell(), Some(Alto));
-            let m = c.boss_move().unwrap();
-            assert!(!pushes(c.game().board(), &m), "{m:?}");
-            c.play(&m).unwrap();
-            assert_eq!(
-                c.game().to_move(),
-                Player::Black,
-                "no free extra move in P3"
-            );
-            black_move(&mut c);
-        }
-    }
-
-    #[test]
-    fn p3_never_takes_the_winning_push_but_p2_does() {
-        let alto: &[P] = &[(0, 0), (1, 0), (2, 0), (3, -3)];
-        let setup = |armies: &[(Army, &[P])]| {
-            choir_from(&[(3, 0), (-3, 3)], armies, Player::White, [0, 5], 0)
+    fn a_tie_for_the_weakest_is_broken_by_the_seed_and_is_repeatable() {
+        let removed = |seed: u64| {
+            let mut c = ejecting(2, &[(-3, 0), (-2, -2)], &[(-4, 1), (-4, 2)]);
+            c.enc.seed = seed;
+            c.play(&EJECT()).unwrap();
+            c.last_removal().unwrap().0
         };
-        let p3 = setup(&[(Alto, alto)]);
-        let m = p3.boss_move().unwrap();
-        assert!(!pushes(p3.game().board(), &m));
-        let mut p2 = setup(&[(Alto, alto), (Tenor, &[(-3, 0)])]);
-        assert_eq!(p2.phase(), 1);
-        let m = p2.boss_move().unwrap();
-        assert!(pushes(p2.game().board(), &m));
-        p2.play(&m).unwrap();
-        assert_eq!(p2.result(), Some(PveResult::Lost));
+        let all: Vec<Army> = (0..16).map(removed).collect();
+        assert!(all.contains(&Tenor) && all.contains(&Bass));
+        assert!(!all.contains(&Alto));
+        assert_eq!(all, (0..16).map(removed).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn p3_the_weakest_of_two_is_removed_at_the_fifth_ejection_and_the_last_plays_twice() {
+        let mut c = ejecting(4, &[(-3, 0), (-2, -2)], &[]);
+        assert_eq!(c.phase(), 1);
+        c.play(&EJECT()).unwrap();
+        assert_eq!(c.game().ejected(Player::Black), 5);
+        assert_eq!(c.phase(), 2);
+        assert_eq!(c.army_marbles(Tenor), 0);
+        assert_eq!(c.army_marbles(Alto), 4);
+        assert_eq!(c.last_removal().map(|r| r.0), Some(Tenor));
+        assert_eq!(c.result(), None);
+        for _ in 0..3 {
+            assert_eq!(boss_turn(&mut c), [Alto, Alto]);
+            assert_eq!(c.game().to_move(), Player::Black);
+            black_move(&mut c);
+        }
+    }
+
+    #[test]
+    fn the_player_still_wins_at_6_ejections_and_loses_at_6() {
+        let mut c = choir_from(
+            &[(2, 0), (3, 0), (-4, 4)],
+            &[(Alto, &[(4, 0), (0, -3), (1, -3)])],
+            Player::Black,
+            [5, 0],
+            0,
+        );
+        c.play(&EJECT()).unwrap();
+        assert_eq!(c.game().ejected(Player::Black), 6);
+        assert_eq!(c.result(), Some(PveResult::Won));
+        assert_eq!(c.tell(), None);
+        let lost = choir_from(&[(0, 0)], &[(Alto, &[(3, -3)])], Player::White, [0, 6], 0);
+        assert_eq!(lost.result(), Some(PveResult::Lost));
     }
 
     #[test]
     fn legal_moves_are_all_the_players_and_only_the_army_in_turn_for_the_boss() {
-        let mut c = Choir::start();
-        assert_eq!(
-            c.legal_moves(),
-            legal_moves(c.game().board(), Player::Black)
-        );
+        let mut c = Choir::start(0);
+        assert_eq!(c.legal_moves(), legal_moves(c.game().board(), Player::Black));
         black_move(&mut c);
         let boss = c.legal_moves();
         assert!(!boss.is_empty());
@@ -793,19 +771,14 @@ mod tests {
             assert!(m.cells.iter().all(|&cell| c.army_at(cell) == Some(Alto)));
         }
         assert!(boss.contains(&c.boss_move().unwrap()));
-        let p3 = p3_push_position([0, 0]);
-        assert!(!p3.legal_moves().is_empty());
-        for m in &p3.legal_moves() {
-            assert!(!pushes(p3.game().board(), m), "no push in P3: {m:?}");
-        }
-        let over = choir_from(&[(0, 0)], &[(Alto, &[(3, -3)])], Player::White, [10, 0], 0);
+        let over = choir_from(&[(0, 0)], &[(Alto, &[(3, -3)])], Player::White, [6, 0], 0);
         assert!(over.legal_moves().is_empty());
     }
 
     #[test]
     fn the_same_play_gives_the_same_game() {
         let run = || {
-            let mut c = Choir::start();
+            let mut c = Choir::start(3);
             let mut log = Vec::new();
             for _ in 0..6 {
                 black_move(&mut c);
@@ -814,42 +787,14 @@ mod tests {
             (c.game().board().clone(), log, c.boss_move())
         };
         assert_eq!(run(), run());
-        let c = Choir::start();
-        let mut c = c;
+        let mut c = Choir::start(3);
         black_move(&mut c);
         assert_eq!(c.boss_move(), c.boss_move());
     }
 
     #[test]
-    fn the_choir_is_won_at_10_ejections_so_p3_is_played() {
-        assert_eq!(CHOIR_WIN_EJECTIONS, 10);
-        let start = Choir::start();
-        assert_eq!(
-            start.game().win_ejections(Player::Black),
-            CHOIR_WIN_EJECTIONS
-        );
-        assert_eq!(start.game().win_ejections(Player::White), WIN_EJECTIONS);
-        // Two armies wiped, 8 boss marbles ejected: the fight goes on, in P3 (Decision #131).
-        let p3 = p3_push_position([8, 0]);
-        assert_eq!(p3.result(), None);
-        assert_eq!(p3.phase(), 2);
-        let alto: &[P] = &[(3, 0), (-3, 0), (0, -3), (3, -3)];
-        let mut c = choir_from(
-            &[(1, 0), (2, 0), (-3, 3)],
-            &[(Alto, alto)],
-            Player::Black,
-            [9, 0],
-            0,
-        );
-        assert_eq!(c.result(), None);
-        c.play(&mv(&[(1, 0), (2, 0)], E)).unwrap(); // pushes the Alto marble on (3, 0) off the board
-        assert_eq!(c.game().ejected(Player::Black), 10);
-        assert_eq!(c.result(), Some(PveResult::Won));
-    }
-
-    #[test]
     fn a_finished_game_has_no_tell_and_refuses_moves() {
-        let mut c = choir_from(&[(0, 0)], &[(Alto, &[(3, -3)])], Player::White, [10, 0], 0);
+        let mut c = choir_from(&[(0, 0)], &[(Alto, &[(3, -3)])], Player::White, [6, 0], 0);
         assert_eq!(c.result(), Some(PveResult::Won));
         assert_eq!(c.game().outcome(), Some(Outcome::Win(Player::Black)));
         assert_eq!(c.tell(), None);
