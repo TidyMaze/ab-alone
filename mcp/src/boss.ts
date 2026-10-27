@@ -38,6 +38,8 @@ export interface BossLike {
   armies(): Int32Array;
   /** Army code, `-1` when none. */
   next_army(): number;
+  /** The effect The Ballast Mind borrows at the end of this turn: `0` crack, `1` pulse, `2` polarity, `3` conversion; `-1` when none. */
+  ballast_next(): number;
   result(): number;
 }
 
@@ -70,6 +72,7 @@ const RESULTS: BossResult[] = ['playing', 'won', 'lost'];
 const DIRECTIONS = ['E', 'W', 'NE', 'SW', 'NW', 'SE'];
 /** Army codes of the Choir, the order of its cycle. */
 const ARMIES = ['Alto', 'Tenor', 'Bass'];
+const BORROWED = ["the Hull's crack", "the Pulsar's pulse", "the Magnetizer's polarity", "the Chaplain's conversion check"];
 
 export function resultName(code: number): BossResult {
   return RESULTS[code]!;
@@ -129,7 +132,7 @@ export function bossState(id: string, boss: BossLike): BossState {
 }
 
 /** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the belts, then the core's next event, then the clock, then
- * the bare special id. */
+ * the effect The Ballast Mind borrows, then the bare special id. */
 function tell(boss: BossLike, armies: number[][]): Tell | null {
   const army = boss.next_army();
   if (army >= 0) {
@@ -163,6 +166,10 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   const turns = boss.turns_left();
   if (turns >= 0) {
     return { kind: 'neurotoxin', cells: [], text: `the boss wins at the end of your turn in ${turns} turns unless you win first` };
+  }
+  const borrowed = boss.ballast_next();
+  if (borrowed >= 0) {
+    return { kind: 'borrowed', cells: [], text: `the boss borrows ${BORROWED[borrowed]} at the end of this turn, seen on your next turn` };
   }
   const special = boss.tell();
   return special < 0 ? null : { kind: 'special', cells: [], text: `board special ${special} fires after the next ply` };

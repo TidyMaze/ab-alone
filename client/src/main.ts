@@ -117,6 +117,7 @@ import {
   type Core,
   type UnstableEvents,
 } from './unstable';
+import { ballastText } from './ballast';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
@@ -1863,7 +1864,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
   // The Magnetizer's repulsions (#645): the move slides to the board before the first one, then each plays in turn.
   const repulsions = live && !reduced && engine instanceof Encounter ? parseRepulsions(engine.repulsions()) : [];
   // The Pulsar's pulse (#675): the move slides to the board before the pulse, then the pulse plays.
-  const pulse = live && engine instanceof Encounter ? parsePulse(engine.last_pulse()) : null;
+  const pulse = live && engine instanceof Encounter ? parsePulse(engine.last_pulse(), engine.board().length) : null;
   // The Assembly Line's belts: the move slides to the board before them, then they carry the marbles.
   const carries = live && engine instanceof Encounter ? parseCarries(engine.last_belts()) : [];
   const beltBoard = carries.length > 0 ? beforeBelts(engine.board(), carries) : null;
@@ -2395,6 +2396,7 @@ function hud(extra = ''): void {
         trainText(parseTrains(boss.trains())),
         beltText(parseBelts(boss.belts())),
         pulseText(parsePulsar(boss.pulsar())),
+        ballastText(boss.ballast_next()),
         coreText(parseCore(boss.unstable())),
         toxinText(boss.turns_left()),
         ventNote(phaseSeen.since, history.length),

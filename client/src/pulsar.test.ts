@@ -64,6 +64,19 @@ describe('parsePulse', () => {
   });
 });
 
+describe('parsePulse on The Ballast Mind (#749)', () => {
+  it('reads the 91 cells of its radius 5 board before the cells the pulse moved', () => {
+    const before = Array.from({ length: 91 }, (_, i) => i % 3);
+    const p = parsePulse([NW, ...before, 5, -5, 4, -5], 91)!;
+    expect(p.id).toBe(NW);
+    expect(p.board).toEqual(before);
+    expect(p.moved).toEqual([
+      [5, -5],
+      [4, -5],
+    ]);
+  });
+});
+
 describe('the pulse as slides and falls', () => {
   // The first pulse of the fixture (seed 2, pulsar NW): the lone (1, 3) goes up a cell, (4, -4) goes off the top.
   const before = board([[1, 3], [-4, 4], [-4, 3]], [[4, -4]]);

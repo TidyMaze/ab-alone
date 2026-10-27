@@ -6,7 +6,7 @@
 
 use crate::board::{Board, Cell};
 use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
-use crate::encounter::ballast::{ballast_move, ballast_start, ballast_tell, BALLAST_NODE_BUDGET};
+use crate::encounter::ballast::{ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use crate::encounter::choir::Choir;
 use crate::encounter::echo::{echo_boss, echo_move, mirror_move};
@@ -132,7 +132,6 @@ impl Arena {
     fn boss_move(&self) -> Option<Move> {
         match self {
             Arena::Plain(enc, LadderBoss::Echo) => echo_move(enc),
-            Arena::Plain(enc, LadderBoss::Ballast) => ballast_move(enc),
             Arena::Plain(enc, LadderBoss::Alien) => alien_move(enc),
             Arena::Plain(enc, _) => enc.boss_search().map(|r| r.mv),
             Arena::Choir(choir) => choir.boss_move(),
@@ -140,8 +139,7 @@ impl Arena {
     }
 
     /// `true` when no player marble flips after `mv` if the boss then passes: the conversion tell
-    /// of the Chaplain and the Ballast Mind, which the player reads on hover. Other bosses have
-    /// no such tell.
+    /// of the Chaplain, which the player reads on hover. Other bosses have no such tell.
     fn flip_free(&self, mv: &Move) -> bool {
         let Arena::Plain(enc, boss) = self else {
             return true;
@@ -151,9 +149,6 @@ impl Arena {
             LadderBoss::Chaplain => after
                 .play(mv)
                 .is_ok_and(|()| chaplain_tell(&after).is_empty()),
-            LadderBoss::Ballast => after
-                .play(mv)
-                .is_ok_and(|()| ballast_tell(&after).flips.is_empty()),
             _ => true,
         }
     }
@@ -366,11 +361,10 @@ pub fn run_ladder(boss: LadderBoss, player_budget: u32, seeds: u32, ply_cap: u32
 mod tests {
     use super::*;
     use crate::board::{Board, Cell};
-    use crate::encounter::ballast::{ballast_boss, ballast_start};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::echo_boss;
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
-    use crate::encounter::{BossDef, Encounter};
+    use crate::encounter::Encounter;
     use crate::game::Game;
     use crate::moves::Player;
 
@@ -540,23 +534,6 @@ mod tests {
             let r = play_attempt(boss, 1, 2, 30, 2);
             assert_eq!(r.plies, 2, "{boss:?}");
         }
-    }
-
-    #[test]
-    fn the_ballast_mind_answers_through_its_own_move() {
-        let mut enc = ballast_start(0);
-        let first = legal_moves(enc.game().board(), Player::Black)[0].clone();
-        enc.play(&first).unwrap();
-        let small = BossDef {
-            node_budget: 30,
-            ..ballast_boss()
-        };
-        let a = Arena::Plain(
-            Encounter::new(enc.game().clone(), small, 0),
-            LadderBoss::Ballast,
-        );
-        let reply = a.boss_move().expect("the boss has a move");
-        assert!(legal_moves(a.game().board(), Player::White).contains(&reply));
     }
 
     #[test]

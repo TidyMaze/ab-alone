@@ -81,23 +81,26 @@ const CASES: Record<string, () => void> = {
 
   ballast() {
     const ballast = newEncounter('ballast', 0);
-    expect(bossState('ballast', ballast)).toEqual({
-      id: 'ballast',
+    // Encounter.tell() is 0, the Hull tick at the end of the player turn.
+    expect(bossState('ballast', ballast)).toMatchObject({
       name: 'The Ballast Mind',
       phase: 0,
       phases: 3,
-      tell: null,
+      tell: { kind: 'special', cells: [], text: 'board special 0 fires after the next ply' },
       marks: [],
-      result: 'playing',
     });
-    // In P2/P3 it reuses cracks and flips
-    const state = bossState('ballast', withData(ballast, { cracks: [0, -5, 8], flips: [1, 2] }));
+    // Every 3 turns it borrows an effect of another boss, announced during the turn before it shows.
+    // Both sides play their first legal move: the boss search of this deck is far too slow for a test.
+    while (ballast.ballast_next() < 0) ballast.play(ballast.legal_moves().slice(0, 8));
+    const borrowed = ["the Hull's crack", "the Pulsar's pulse", "the Magnetizer's polarity", "the Chaplain's conversion check"];
+    expect(bossState('ballast', ballast).tell).toEqual({
+      kind: 'borrowed',
+      cells: [],
+      text: `the boss borrows ${borrowed[ballast.ballast_next()]} at the end of this turn, seen on your next turn`,
+    });
+    // The effects keep the tell of their boss: cracks are marks.
+    const state = bossState('ballast', withData(ballast, { cracks: [0, -5, 8] }));
     expect(state.marks).toEqual([{ kind: 'crack', cell: '(0,-5)', value: 8 }]);
-    expect(state.tell).toEqual({
-      kind: 'flip',
-      cells: ['(1,2)'],
-      text: 'these marbles of yours become boss marbles after the boss turn unless they move',
-    });
   },
 
   alien() {

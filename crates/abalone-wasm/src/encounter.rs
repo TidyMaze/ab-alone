@@ -9,7 +9,9 @@ use abalone_core::encounter::alien::{alien_boss, alien_move, alien_start};
 use abalone_core::encounter::assembly::{
     assembly_boss, assembly_move, assembly_start, assembly_tell, belt_cells, last_belts, Fate,
 };
-use abalone_core::encounter::ballast::{ballast_boss, ballast_move, ballast_start, ballast_tell};
+use abalone_core::encounter::ballast::{
+    ballast_boss, ballast_last_pulse, ballast_next, ballast_start, Borrowed,
+};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
@@ -25,7 +27,7 @@ use abalone_core::encounter::railyard::{
 use abalone_core::encounter::unstable::{
     last_events, unstable_boss, unstable_move, unstable_start, unstable_tell,
 };
-use abalone_core::encounter::{marbles, BossDef, Encounter as CoreEncounter};
+use abalone_core::encounter::{BossDef, Encounter as CoreEncounter};
 use abalone_core::game::Game;
 use abalone_core::moves::{legal_moves, Move, Player};
 use wasm_bindgen::prelude::*;
@@ -126,10 +128,6 @@ fn unstable_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(unstable_start(seed))
 }
 
-fn ballast_flips(enc: &CoreEncounter) -> Vec<(i32, i32)> {
-    ballast_tell(enc).flips
-}
-
 fn echo_announce(_enc: Option<&CoreEncounter>, mv: &Move) -> Option<Move> {
     Some(mirror_move(mv))
 }
@@ -141,10 +139,6 @@ fn search_reply(enc: &CoreEncounter) -> Option<Move> {
 
 fn no_announce(_enc: Option<&CoreEncounter>, _mv: &Move) -> Option<Move> {
     None
-}
-
-fn ballast_announce(enc: Option<&CoreEncounter>, _mv: &Move) -> Option<Move> {
-    enc.and_then(|e| ballast_tell(e).echo)
 }
 
 fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
@@ -192,12 +186,12 @@ const BOSSES: [BossEntry; 12] = [
     BossEntry {
         id: "ballast",
         goal:
-            "Void pillars; later cracks, flips and echoes. Eject 12 to win; lose 6 or draw to lose.",
+            "Void pillars; every 3 turns it borrows a crack, a pulse, a polarity or a conversion. Eject 12 to win; lose 6 or draw to lose.",
         def: ballast_boss,
         start: ballast_fight,
-        reply: ballast_move,
-        announce: ballast_announce,
-        flips: ballast_flips,
+        reply: search_reply,
+        announce: no_announce,
+        flips: no_flips,
     },
     BossEntry {
         id: "alien",
@@ -266,12 +260,6 @@ const BOSSES: [BossEntry; 12] = [
     },
 ];
 
-/// `[lit, dark]` notches for `left` boss marbles in a phase that began at `from` and ends at `to`,
-/// none when there is no next phase. A converted marble (The Chaplain) adds a lit notch.
-fn notches(left: u8, from: u8, to: Option<u8>) -> Vec<u8> {
-    to.map_or_else(Vec::new, |to| vec![left - to, from.saturating_sub(left)])
-}
-
 /// The polarity of every cell of `board`, in the board order: `0` none, `1` +, `-1` −.
 fn polarity_cells(board: &Board) -> Vec<i32> {
     board_cells(board.radius())
@@ -306,7 +294,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    7 // 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    8 // 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -378,23 +366,14 @@ impl Encounter {
     }
 
     /// The phase notches on the arena frame (#356, docs/specs/world.md section 6 rule 4):
-    /// `[lit, dark]`, one lit notch per boss marble left until the next phase, one dark notch per
-    /// boss marble lost since this phase began. Empty in the last phase. The phases of the Alien
-    /// (#621) and of the Choir count the ejections credited to the player: one lit notch per
-    /// ejection left until the next phase, one dark notch per ejection since this phase began.
+    /// `[lit, dark]`, one lit notch per ejection credited to the player left until the next phase,
+    /// one dark notch per ejection since this phase began. Empty in the last phase. Every boss
+    /// has its phases by the ejections (#749 was the last by boss marbles).
     pub fn phase_notches(&self) -> Vec<u8> {
         let phase = self.phase() as usize;
         match &self.fight {
-            Fight::Plain(e) if !(self.entry.def)().phase_ejections.is_empty() => {
-                ejection_notches(e.game(), &(self.entry.def)().phase_ejections, phase)
-            }
             Fight::Plain(e) => {
-                let start = (self.entry.start)((self.entry.def)(), 0);
-                let steps: Vec<u8> = std::iter::once(marbles(start.game().board(), Cell::White))
-                    .chain((self.entry.def)().phase_marbles)
-                    .collect();
-                let left = marbles(e.game().board(), Cell::White);
-                notches(left, steps[phase], steps.get(phase + 1).copied())
+                ejection_notches(e.game(), &(self.entry.def)().phase_ejections, phase)
             }
             Fight::Choir(c) => ejection_notches(c.game(), &PHASE_EJECTIONS, phase),
         }
@@ -529,12 +508,37 @@ impl Encounter {
         let Fight::Plain(e) = &self.fight else {
             return Vec::new();
         };
-        last_pulse(e).map_or_else(Vec::new, |(pulsar, before, moved)| {
-            std::iter::once(i32::from(pulsar))
-                .chain(board_bytes(&before).into_iter().map(i32::from))
-                .chain(cell_list(&moved))
-                .collect()
-        })
+        last_pulse(e)
+            .or_else(|| {
+                (self.entry.id == "ballast")
+                    .then(|| ballast_last_pulse(e))
+                    .flatten()
+            })
+            .map_or_else(Vec::new, |(pulsar, before, moved)| {
+                std::iter::once(i32::from(pulsar))
+                    .chain(board_bytes(&before).into_iter().map(i32::from))
+                    .chain(cell_list(&moved))
+                    .collect()
+            })
+    }
+
+    /// The effect The Ballast Mind announces for its next borrowing turn: `0` the Hull's crack,
+    /// `1` the Pulsar's pulse, `2` the Magnetizer's polarity, `3` the Chaplain's conversion; `-1`
+    /// when none is due next turn, for the other bosses too.
+    pub fn ballast_next(&self) -> i32 {
+        let Fight::Plain(e) = &self.fight else {
+            return -1;
+        };
+        if self.entry.id != "ballast" {
+            return -1;
+        }
+        match ballast_next(e) {
+            None => -1,
+            Some(Borrowed::HullCrack) => 0,
+            Some(Borrowed::PulsarPulse(_)) => 1,
+            Some(Borrowed::MagnetizerPolarity) => 2,
+            Some(Borrowed::ChaplainConversion) => 3,
+        }
     }
 
     /// The Assembly Line's belts as `[turns_left, then one record of 6 per belt]`, the centre belt
@@ -804,7 +808,6 @@ mod tests {
     };
     use abalone_core::encounter::choir::{ALTO_START, BASS_START, TENOR_START};
     use abalone_core::encounter::fixture::Fixture;
-    use abalone_core::moves::Direction;
 
     fn count(cells: &[u8], value: u8) -> usize {
         cells.iter().filter(|&&c| c == value).count()
@@ -819,8 +822,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_7_since_the_chaplain_rework() {
-        assert_eq!(engine_version(), 7);
+    fn the_engine_version_is_8_since_the_ballast_mind_borrows_effects() {
+        assert_eq!(engine_version(), 8);
     }
 
     #[test]
@@ -1635,54 +1638,34 @@ mod tests {
         q.abs().max(r.abs()).max((q + r).abs())
     }
 
+    fn play_plies(f: &mut Encounter, plies: usize) {
+        for _ in 0..plies {
+            let mv = first_move(f);
+            f.play(&mv).unwrap();
+        }
+    }
+
     #[test]
-    fn the_ballast_mind_announces_echo_in_phase_3() {
-        let entry = boss_entry("ballast").unwrap();
-        let f1 = Encounter::new("ballast", 1).unwrap();
-        assert!(f1.tell_move(&first_move(&f1)).is_empty(), "no echo in P1");
-
-        let mut board = abalone_core::encounter::ballast::ballast_board();
-        for (q, r) in [(-2, 3), (-2, 4), (-3, 4)] {
-            board.set(q, r, Cell::Black);
+    fn the_ballast_mind_announces_its_borrowed_effect_a_turn_ahead_and_shows_its_pulse() {
+        let mut codes = Vec::new();
+        for seed in 0..400 {
+            let mut f = Encounter::new("ballast", seed).unwrap();
+            play_plies(&mut f, 3);
+            assert_eq!(f.ballast_next(), -1, "seed {seed}");
+            play_plies(&mut f, 1);
+            let next = f.ballast_next();
+            codes.push(next);
+            play_plies(&mut f, 2);
+            assert_eq!(f.last_pulse().is_empty(), next != 1, "seed {seed}");
         }
-        for &(q, r) in &[(2, -3), (2, -4), (3, -4), (3, -5), (4, -5)] {
-            board.set(q, r, Cell::White);
+        for code in 0..4 {
+            assert!(codes.contains(&code), "code {code}");
         }
-        let mut enc = CoreEncounter::new(
-            Game::from_position(board, Player::Black, [0, 0]),
-            abalone_core::encounter::ballast::ballast_boss(),
-            0,
-        );
-        let m1 = Move {
-            cells: vec![(-2, 3)],
-            dir: Direction::E,
-        };
-        enc.play(&m1).unwrap();
-        enc.play(&Move {
-            cells: vec![(4, -5)],
-            dir: Direction::SE,
-        })
-        .unwrap();
-        let m2 = Move {
-            cells: vec![(-1, 3)],
-            dir: Direction::E,
-        };
-        enc.play(&m2).unwrap();
-        enc.play(&abalone_core::encounter::ballast::ballast_move(&enc).unwrap())
-            .unwrap();
-        assert_eq!(enc.game().to_move(), Player::Black);
-
-        let f_p3 = Encounter {
-            fight: Fight::Plain(enc),
-            entry,
-        };
-        let hovered = first_move(&f_p3);
-        let announced = f_p3.tell_move(&hovered);
-        assert_eq!(
-            decode(&announced).unwrap(),
-            mirror_move(&m2),
-            "P3 announces mirror of previous player move"
-        );
+        for id in ["hull", "choir"] {
+            let mut other = Encounter::new(id, 1).unwrap();
+            play_plies(&mut other, 4);
+            assert_eq!(other.ballast_next(), -1, "{id}");
+        }
     }
 
     #[test]
@@ -1692,7 +1675,7 @@ mod tests {
         assert_eq!(f.to_move(), 1);
         assert_eq!((f.phase(), f.phases()), (0, 3));
         assert_eq!((f.win_ejections(1), f.win_ejections(2)), (12, 6));
-        assert_eq!(f.tell(), -1, "no hook in P1");
+        assert_eq!(f.tell(), 0, "the Hull tick");
         assert!(f.cracks().is_empty() && f.flips().is_empty());
         assert!(f.tell_move(&first_move(&f)).is_empty());
         let order: Vec<(i32, i32)> = cells()
@@ -1863,29 +1846,13 @@ mod tests {
     }
 
     #[test]
-    fn notches_count_the_marbles_left_until_the_next_phase() {
-        assert_eq!(notches(14, 14, Some(10)), vec![4, 0]);
-        assert_eq!(notches(12, 14, Some(10)), vec![2, 2]);
-        assert_eq!(
-            notches(16, 14, Some(8)),
-            vec![8, 0],
-            "a converted marble adds a lit notch"
-        );
-        assert_eq!(
-            notches(3, 5, None),
-            Vec::<u8>::new(),
-            "the last phase has no next one"
-        );
-    }
-
-    #[test]
     fn every_boss_starts_with_its_first_phase_notches_lit() {
         let lit = |id: &str| Encounter::new(id, 1).unwrap().phase_notches();
         assert_eq!(lit("echo"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("hull"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("chaplain"), vec![4, 0], "P2 after 4 ejections");
         assert_eq!(lit("choir"), vec![3, 0], "P2 after 3 ejections");
-        assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");
+        assert_eq!(lit("ballast"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("alien"), vec![2, 0], "P2 after 2 ejections");
         assert_eq!(lit("railyard"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("pulsar"), vec![3, 0], "P2 after 3 ejections");

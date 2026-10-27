@@ -357,17 +357,37 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Calibrate**: knob = AI depth on free moves, delay. Fail if win rate on attempt 1 to 3
   exceeds 40 percent (too readable) or the median is over 12 attempts.
 
-### 7.5 The Ballast Mind (#47): final exam
+### 7.5 The Ballast Mind (#47, #749): final exam
 
 - **Concept**: the ship's mind, the thing that kept the game running.
 - **Twist**: a radius 5 board with 6 fixed void pillars (symmetric). Boss has 16 marbles, you
-  have 14. P1 is plain Abalone at depth 5. It reuses the hooks of earlier bosses (no new
-  rule code).
-- **Tell**: each twist keeps its original visual language, so the player recognizes it.
-- **Counter**: those of the Hull, the Chaplain and the Echo.
-- **Phases**: P1 at **16**, plain. P2 at **10**: Hull rim crack (every 4 turns) plus Chaplain
-  (threshold 3). P3 at **5**: adds Echo of your previous move. Win at **12** ejections (4 boss
-  marbles left, Decision #482), so all three phases are experienced.
+  have 14. It has no rule code of its own: every **3** turns, at the end of the boss turn (turns 3,
+  6, 9...), it **borrows one effect of another boss**, picked by the engine PRNG (splitmix64 of the
+  fight seed and the ply, so a Retry, the daily, a replay and every co-op peer get the same
+  picks) among four one-shot effects that run that boss's own engine code (no copy):
+  - **the Hull's crack**: one cell cracks and vanishes 2 player turns later, with its marble (P1 a
+    rim cell, P2 an inner cell, P3 any cell). The Hull's timers tick at the end of every player
+    turn, as for the Hull.
+  - **the Pulsar's pulse**: one pulse from a random direction, force 2 in P1, 3 in P2, infinite in
+    P3 (a group as big as the force resists), as for the Pulsar. Marbles it pushes off the rim are
+    ejections of the side that loses them.
+  - **the Magnetizer's polarity**: one marble of either side takes the next sign (+ then −), then
+    the board settles: opposite neighbours repel, as for the Magnetizer.
+  - **the Chaplain's conversion check**: every marble touching 4 or more marbles of the other
+    side flips, both sides (threshold 4, no martyr), as for the Chaplain.
+  Left out, not simple on this board: the trains, belts, eggs, armies, the martyr, the cores and
+  the echo. The old mix (Hull rim crack, Chaplain threshold 3, Echo of the previous move) is gone.
+- **Announce**: the HUD names the effect one turn ahead, during the turn before it lands
+  ("Next turn: the Hull's crack"). The Hull's crack needs no longer lead, it is its own 2-turn
+  warning once cracked. The effect then shows with the tell of its boss: the crack and its timer,
+  the pulse shockwave and the sliding marbles, the polarity sign on the marble and the repulsions,
+  the converted marks.
+- **Counter**: those of the Hull, the Pulsar, the Magnetizer and the Chaplain, one at a time, with
+  the turn of warning.
+- **Phases**: by ejections, as the bosses it borrows from: P1 at 0, P2 after **3** ejections, P3
+  after **5**, shown as notches and in the HUD. A phase changes the strength of the effects (the
+  crack, the force of the pulse), never the list. Win at **12** ejections (4 boss marbles left,
+  Decision #482), so all three phases are experienced.
 - **Calibrate**: last. It must be harder than any previous boss, with first win between
   attempt 5 and 10, never a wall.
 
