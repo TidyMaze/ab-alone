@@ -1628,19 +1628,19 @@ drawProps = (): void => {
   neonWestLight.position.set(-5.5, 0.35, -1.0);
   const neonEastLight = new THREE.PointLight(sLights.emergency.color, 0.2, 6.0);
   neonEastLight.position.set(5.5, 0.35, -1.0);
-  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 3.0, 10.0);
+  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 2.7, 10.0);
   neonWallNwLight.position.set(-8.4, 5.2, -16.8);
-  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 10.0);
+  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 2.7, 10.0);
   neonWallNeLight.position.set(8.4, 5.2, -16.8);
-  const neonWallSwLight = new THREE.PointLight(sLights.rim.color, 3.0, 10.0);
+  const neonWallSwLight = new THREE.PointLight(sLights.rim.color, 2.7, 10.0);
   neonWallSwLight.position.set(-8.4, 5.2, 16.8);
-  const neonWallSeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 10.0);
+  const neonWallSeLight = new THREE.PointLight(sLights.emergency.color, 2.7, 10.0);
   neonWallSeLight.position.set(8.4, 5.2, 16.8);
-  const airlockSodiumLight = new THREE.PointLight(sLights.emergency.color, 3.5, 11.0);
+  const airlockSodiumLight = new THREE.PointLight(sLights.emergency.color, 3.15, 11.0);
   airlockSodiumLight.position.set(0, 8.2, -17.0);
-  const viewportRimLight = new THREE.PointLight(sLights.rim.color, 3.0, 11.0);
+  const viewportRimLight = new THREE.PointLight(sLights.rim.color, 2.7, 11.0);
   viewportRimLight.position.set(17.0, 4.6, 0);
-  const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.5, 6.0);
+  const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.25, 6.0);
   kioskGreenLight.position.set(-10.2, 2.5, -5.8);
   propsGroup.add(
     emergencyLight,
