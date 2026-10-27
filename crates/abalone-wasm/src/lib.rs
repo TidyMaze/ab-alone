@@ -86,8 +86,8 @@ mod tests {
     fn re_exports_and_submodules_are_accessible() {
         assert_eq!(MOVE_STRIDE, 8);
         assert_eq!(convert::MOVE_STRIDE, 8);
-        assert_eq!(engine_version(), 7);
-        assert_eq!(encounter::engine_version(), 7);
+        assert_eq!(engine_version(), 8);
+        assert_eq!(encounter::engine_version(), 8);
         let engine = Engine::new();
         assert_eq!(engine.to_move(), 1);
         let encounter = Encounter::new("echo", 1).unwrap();

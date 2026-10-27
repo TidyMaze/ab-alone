@@ -34,14 +34,14 @@ export function parsePulsar(flat: ArrayLike<number>): Pulsar | null {
   return { id: flat[0]!, left: flat[1]!, force: flat[2]! };
 }
 
-/** The pulse of the last ply from `Encounter.last_pulse()`: the pulsar, 61 board codes, then `[q, r]` pairs. `null`
- * when the last ply fired none. */
-export function parsePulse(flat: ArrayLike<number>): Pulse | null {
+/** The pulse of the last ply from `Encounter.last_pulse()`: the pulsar, the `cells` board codes (61, or 91 on The Ballast
+ * Mind's radius 5 board), then `[q, r]` pairs. `null` when the last ply fired none. */
+export function parsePulse(flat: ArrayLike<number>, cells = 61): Pulse | null {
   if (flat.length === 0) return null;
   const all = Array.from(flat);
   const moved: Axial[] = [];
-  for (let i = 62; i < all.length; i += 2) moved.push([all[i]!, all[i + 1]!]);
-  return { id: all[0]!, board: all.slice(1, 62), moved };
+  for (let i = cells + 1; i < all.length; i += 2) moved.push([all[i]!, all[i + 1]!]);
+  return { id: all[0]!, board: all.slice(1, cells + 1), moved };
 }
 
 const turns = (n: number): string => `${n} ${n === 1 ? 'turn' : 'turns'}`;

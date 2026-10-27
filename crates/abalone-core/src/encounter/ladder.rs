@@ -364,7 +364,7 @@ mod tests {
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::echo_boss;
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
-    use crate::encounter::{BossDef, Encounter};
+    use crate::encounter::Encounter;
     use crate::game::Game;
     use crate::moves::Player;
 

@@ -1,0 +1,50 @@
+import { expect, test, type Page } from '@playwright/test';
+import { openModes } from './modes';
+
+// The Ballast Mind (#749, game-design.md section 7.5): every 3 turns it borrows an effect of another boss, named in the
+// HUD during the turn before. Fight seed 3 borrows the Pulsar's pulse at the end of turn 3. ?bot=off plays both sides
+// through the click hook, one-marble moves, so no boss search runs. The screenshots are kept for the report.
+
+const freshDraw = async (page: Page) => {
+  const asked = await page.evaluate(() => (window as any).__drawNext() as number);
+  await page.waitForFunction((n) => (window as any).__draws() > n, asked);
+};
+
+/** Plays `n` plies, the first one-marble move of the side to move each time, after the slides of the one before. */
+async function plies(page: Page, n: number): Promise<void> {
+  for (let k = 0; k < n; k++) {
+    await expect(page.locator('body')).not.toHaveAttribute('data-sliding', '1');
+    await page.evaluate(() => {
+      const mv = ((window as any).__legal() as { cells: [number, number][]; dir: number }[]).find((m) => m.cells.length === 1)!;
+      const step = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]][mv.dir]!;
+      (window as any).__click(...mv.cells[0]!);
+      (window as any).__click(mv.cells[0]![0] + step[0]!, mv.cells[0]![1] + step[1]!);
+    });
+  }
+}
+
+test('The Ballast Mind names its borrowed effect a turn ahead, then plays the Pulsar pulse, #749', async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    crypto.getRandomValues = ((a: Uint32Array) => a.fill(3)) as typeof crypto.getRandomValues; // the fight seed
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await page.locator('#boss-list').getByRole('button', { name: 'The Ballast Mind' }).click();
+  await expect(page.locator('#hud')).toContainText('The Ballast Mind');
+  await page.mouse.move(2, 2); // no hover ghost
+  const tell = page.locator('#hud .boss .tell');
+  await plies(page, 3);
+  await expect(tell).toHaveCount(0);
+  await plies(page, 1); // the player's 3rd move is next
+  await expect(tell).toHaveText("Next turn: the Pulsar's pulse");
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('ballast-announce.png') });
+  await plies(page, 2); // the player's 3rd move, the boss reply: the pulse
+  await expect(page.locator('body')).toHaveAttribute('data-pulses', '1');
+  await expect(tell).toHaveCount(0);
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('ballast-pulse.png') });
+});

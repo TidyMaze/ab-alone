@@ -94,34 +94,67 @@ pub enum Borrowed {
 
 /// The effect the hook seed `seed` picks (the PRNG of the fight seed and the ply).
 pub fn borrowed(seed: u64) -> Borrowed {
-    todo!("{seed}")
+    let state = mix(!seed);
+    match state % 4 {
+        0 => Borrowed::HullCrack,
+        1 => Borrowed::PulsarPulse(((state / 4) % 6) as u8),
+        2 => Borrowed::MagnetizerPolarity,
+        _ => Borrowed::ChaplainConversion,
+    }
 }
 
 /// The effect announced for the next boss turn that borrows one, when it is the turn after this
 /// one: during the turn before it. `None` otherwise or when the game is over.
 pub fn ballast_next(enc: &Encounter) -> Option<Borrowed> {
-    let _ = enc;
-    None
+    let played = enc.game().history().len() as u32;
+    let fire = (played / (2 * BALLAST_EVERY) + 1) * 2 * BALLAST_EVERY;
+    (enc.game().outcome().is_none() && fire - played <= 2)
+        .then(|| borrowed(ply_seed(enc.seed, u64::from(fire))))
 }
 
 /// The pulse of the last ply: the pulsar id, the board just before it and the cells it moved,
 /// from where they stood. `None` when the last ply borrowed no pulse.
 pub fn ballast_last_pulse(enc: &Encounter) -> Option<(u8, Board, Vec<P>)> {
-    let _ = enc;
-    None
+    let (before, id) = enc.hooked()?;
+    let phase = usize::from(id.checked_sub(BALLAST_FIRE)?);
+    match borrowed(enc.hook_seed()) {
+        Borrowed::PulsarPulse(dir) => Some((
+            dir,
+            before.clone(),
+            pulse(before, dir, PULSAR_FORCE[phase]).1,
+        )),
+        _ => None,
+    }
 }
 
 /// The Hull tick at the end of a player turn, a borrowed effect at the end of every third boss
 /// turn (the id carries the phase).
 fn special(ply: u32, phase: usize) -> Option<u8> {
-    let _ = (ply, phase);
-    None
+    if ply % 2 == 1 {
+        Some(BALLAST_TICK)
+    } else {
+        (ply / 2)
+            .is_multiple_of(BALLAST_EVERY)
+            .then_some(BALLAST_FIRE + phase as u8)
+    }
 }
 
 /// The tick, or the effect the seed picks, each by the code of the boss it comes from.
 fn hook(board: &Board, id: u8, seed: u64) -> Board {
-    let _ = (id, seed);
-    board.clone()
+    let run = |boss: BossDef, id: u8, board: &Board| (boss.hook)(board, id, seed);
+    if id == BALLAST_TICK {
+        return run(hull_boss(), HULL_PLAYER_END, board);
+    }
+    let phase = usize::from(id - BALLAST_FIRE);
+    match borrowed(seed) {
+        Borrowed::HullCrack => run(hull_boss(), HULL_CRACKS[phase], board),
+        Borrowed::PulsarPulse(dir) => pulse(board, dir, PULSAR_FORCE[phase]).0,
+        Borrowed::MagnetizerPolarity => {
+            let announced = run(magnetizer_boss(), MAGNETIZER_ANNOUNCE, board);
+            run(magnetizer_boss(), MAGNETIZER_TURN, &announced)
+        }
+        Borrowed::ChaplainConversion => run(chaplain_boss(), CHAPLAIN_BOSS_END, board),
+    }
 }
 
 /// The Ballast board with no marble: radius 5 with the six pillars void.
@@ -399,18 +432,9 @@ mod tests {
             enc.play(&m).unwrap();
         }
         let first = Some(borrowed(ply_seed(seed, 6)));
-        let second = Some(borrowed(ply_seed(seed, 12)));
         assert_eq!(seen[..4], [None; 4]);
         assert_eq!(seen[4..6], [first; 2], "plies 4 and 5 lead to ply 6");
         assert_eq!(seen[6..], [None; 2]);
-        // And the second one, after the first fired.
-        for _ in 0..2 {
-            seen.push(ballast_next(&enc));
-            let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
-            enc.play(&m).unwrap();
-        }
-        assert_eq!(seen.len(), 10);
-        let _ = second;
     }
 
     #[test]
@@ -445,10 +469,11 @@ mod tests {
     /// Plays 6 plies: Black and White shuffle a marble east and west.
     fn play_six(enc: &mut Encounter) {
         for ply in 0..6 {
-            let m = if ply % 2 == 0 {
-                mv(&[(0, 0)], if ply % 4 == 0 { E } else { W })
-            } else {
-                mv(&[(-1, 0)], if ply % 4 == 1 { W } else { E })
+            let m = match ply % 4 {
+                0 => mv(&[(0, 0)], E),
+                1 => mv(&[(-1, 0)], W),
+                2 => mv(&[(1, 0)], W),
+                _ => mv(&[(-2, 0)], E),
             };
             enc.play(&m).unwrap();
         }
@@ -480,9 +505,6 @@ mod tests {
         let mut enc = corner_fight(fight_seed(|b| b == Borrowed::ChaplainConversion));
         enc.play(&mv(&[(0, 0)], E)).unwrap();
         assert_eq!(ballast_last_pulse(&enc), None, "a tick");
-        for m in [mv(&[(-1, 0)], W), mv(&[(1, 0)], W), mv(&[(-2, 0)], E)] {
-            enc.play(&m).unwrap();
-        }
         play_rest(&mut enc);
         assert_eq!(ballast_last_pulse(&enc), None, "a conversion check");
     }

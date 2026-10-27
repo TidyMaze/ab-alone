@@ -119,6 +119,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.polarities()` | `marks` with `kind: "polarity"` and `value` = `1` for +, `-1` for − (The Magnetizer) |
 | `Encounter.incinerators()` | `marks` with `kind: "incinerator"` (The Overseer); its cores are `c` and the Overseer `O` on the board |
 | `Encounter.turns_left()` (`-1` is no clock) | `tell` with `kind: "neurotoxin"` and the player turns left in `text` (The Overseer) |
+| `Encounter.ballast_next()` (`-1` is none) | `tell` with `kind: "borrowed"` and the effect The Ballast Mind borrows at the end of this turn in `text` (the Hull's crack, the Pulsar's pulse, the Magnetizer's polarity, the Chaplain's conversion check) |
 | `Encounter.belts()` | `marks` with `kind: "belt"` on every cell of a running belt and `value` = `1` toward +q, `-1` toward -q; `kind: "strike"` on the cell of an announced strike slot; and `tell` with `kind: "belt_reverse"` and the player turns left before the centre belt reverses in `text` (The Assembly Line) |
 | `Encounter.converted()` | `marks` with `kind: "converted"` |
 | `Encounter.armies()` | `marks` with `kind: "army"` and `value` = `0` Alto, `1` Tenor, `2` Bass |
@@ -126,7 +127,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 
 Rules for the generic shape:
 
-- When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `pulse`, then `neurotoxin`, then `special`.
+- When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `pulse`, then `neurotoxin`, then `borrowed`, then `special`.
 - An unknown `kind` is not an error: an agent that does not know it ignores it and still plays legally. The tell is information, not a rule.
 - `kind` values are stable once published. A new boss may add kinds, never rename one.
 - The Ballast Mind's pillars show as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded.

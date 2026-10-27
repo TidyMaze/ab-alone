@@ -121,6 +121,13 @@ pub(crate) fn losses(before: &Board, after: &Board) -> [u8; 2] {
     [Cell::Black, Cell::White].map(|c| marbles(before, c) - marbles(after, c))
 }
 
+/// `true` when neither side has more marbles on `after` than on `before`: no flip, no hatch.
+fn no_gain(before: &Board, after: &Board) -> bool {
+    [Cell::Black, Cell::White]
+        .into_iter()
+        .all(|c| marbles(after, c) <= marbles(before, c))
+}
+
 /// Where `marks` sit after `mv`: marks on moved or pushed marbles shift one step, in order.
 pub(crate) fn carried_marks(board: &Board, mv: &Move, marks: &[(i32, i32)]) -> Vec<(i32, i32)> {
     let (dq, dr) = mv.dir.vector();
@@ -364,8 +371,10 @@ impl Encounter {
     /// shockwaves.
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
-        let colour =
-            before.pulsar().is_some() || before.belts().is_some() || before.unstable().is_some();
+        let colour = before.pulsar().is_some()
+            || before.belts().is_some()
+            || before.unstable().is_some()
+            || (self.by_colour && no_gain(before, after));
         let [lost_black, lost_white] = if colour {
             losses(before, after)
         } else {

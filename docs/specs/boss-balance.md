@@ -303,8 +303,8 @@ the Ballast Mind) unless conversions made it grow. The phase thresholds of secti
 - The Echo P3 (5 left) and the Hull P3 (5 left): never played. The highest phase in the table is P2.
 - The Chaplain P2 (8 left): starts at the moment of the sixth ejection, so it is never fought.
 - The Choir was reworked in #747 (standard board, 6 ejections, armies removed at 3 and 5): re-measured at 10x, 10 of 10 won, median 118 plies, P3 reached. The text above about Decision #131 (10 ejections) is history.
-- The Ballast Mind is fixed by Decision #482 (win at 12 ejections, 4 boss marbles left): P2 (10
-  left) and P3 (5 left) are reached and fought.
+- The Ballast Mind is fixed by Decision #482 (win at 12 ejections, 4 boss marbles left); since #749 its
+  phases come from the ejections (3 and 5), so P2 and P3 are reached and fought.
 
 ## 6. Follow-ups
 
