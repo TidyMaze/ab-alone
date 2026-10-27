@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -92,8 +93,12 @@ describe('roomloader PBR pipeline', () => {
     floorMesh.name = 'Ship_Deck_Floor';
     const pedestalMesh = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 4));
     pedestalMesh.name = 'Pedestal_Core';
+    const pedestalBase = new THREE.Mesh(new THREE.BoxGeometry());
+    pedestalBase.name = 'Pedestal_Base';
     const wallMesh = new THREE.Mesh(new THREE.BoxGeometry());
     wallMesh.name = 'Bulkhead_Wall_North';
+    const columnMesh = new THREE.Mesh(new THREE.BoxGeometry());
+    columnMesh.name = 'Bulkhead_Column_East';
     const terminalMesh = new THREE.Mesh(new THREE.BoxGeometry());
     terminalMesh.name = 'CRT_Terminal_Bank';
     const ribMesh = new THREE.Mesh(new THREE.BoxGeometry());
@@ -105,7 +110,7 @@ describe('roomloader PBR pipeline', () => {
     const screenMesh = new THREE.Mesh(new THREE.BoxGeometry());
     screenMesh.name = 'Console_Screen';
 
-    mockGroup.add(floorMesh, pedestalMesh, wallMesh, terminalMesh, ribMesh, hazardMesh, moonMesh, screenMesh);
+    mockGroup.add(floorMesh, pedestalMesh, pedestalBase, wallMesh, columnMesh, terminalMesh, ribMesh, hazardMesh, moonMesh, screenMesh);
 
     const mockGltfLoader = {
       loadAsync: vi.fn(async () => ({
@@ -126,9 +131,11 @@ describe('roomloader PBR pipeline', () => {
     expect(bay!.scene).toBe(mockGroup);
     expect(floorMesh.material).toBe(bay!.materials.deck);
     expect(pedestalMesh.material).toBe(bay!.materials.deck);
+    expect(pedestalBase.material).toBe(bay!.materials.deck);
     expect(Math.abs(pedestalMesh.geometry.getAttribute('uv').getX(0))).toBeCloseTo(1.5);
     expect(bay!.materials.deck.map?.repeat.x).toBe(0.5);
     expect(wallMesh.material).toBe(bay!.materials.bulkhead);
+    expect(columnMesh.material).toBe(bay!.materials.grate);
     expect(terminalMesh.visible).toBe(false);
     expect(screenMesh.visible).toBe(false);
     expect(ribMesh.material).toBe(bay!.materials.grate);

@@ -90,3 +90,65 @@ describe('main.ts, the airborne particles', () => {
     expect(pos.version).toBeGreaterThan(0); // sent to the GPU again
   });
 });
+
+describe('main.ts, free camera and wireframe modes', () => {
+  const canvas = (): HTMLCanvasElement => document.querySelector('canvas')!;
+  const pointer = (type: string, x: number, y: number, pointerId = 1): void => {
+    canvas().dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId, bubbles: true }));
+  };
+
+  it('toggles free camera and wireframe with keyboard and HUD buttons, and updates camera on pointer and frame', async () => {
+    const game = await boot('?bot=off');
+    const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement | null;
+    const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement | null;
+    const resetViewBtn = document.getElementById('reset-view') as HTMLButtonElement;
+
+    expect(game.hook('__freeCamActive')).toBe(false);
+    expect(game.hook('__wireframeActive')).toBe(false);
+
+    // Toggle freeCam on with 'c' key
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+    expect(game.hook('__freeCamActive')).toBe(true);
+
+    // Pointer move updates freeCam
+    pointer('pointerdown', 100, 100);
+    pointer('pointermove', 110, 120);
+    pointer('pointerup', 110, 120);
+
+    // Key movement updates camera on frame
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', key: 'w', bubbles: true }));
+    game.frame(16);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', key: 'w', bubbles: true }));
+
+    // Escape exits freeCam
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(game.hook('__freeCamActive')).toBe(false);
+
+    // Toggle freeCam via button
+    freeCamBtn?.click();
+    expect(game.hook('__freeCamActive')).toBe(true);
+
+    // Reset view turns off freeCam
+    resetViewBtn.click();
+    expect(game.hook('__freeCamActive')).toBe(false);
+
+    // Toggle wireframe on with 'x' key
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+    expect(game.hook('__wireframeActive')).toBe(true);
+
+    // Toggle wireframe off with button or hook
+    wireframeBtn?.click();
+    expect(game.hook('__wireframeActive')).toBe(false);
+
+    // Toggle via hooks
+    game.hook('__toggleFreeCam', true);
+    expect(game.hook('__freeCamActive')).toBe(true);
+    game.hook('__toggleFreeCam', false);
+    expect(game.hook('__freeCamActive')).toBe(false);
+
+    game.hook('__toggleWireframe', true);
+    expect(game.hook('__wireframeActive')).toBe(true);
+    game.hook('__toggleWireframe', false);
+    expect(game.hook('__wireframeActive')).toBe(false);
+  });
+});

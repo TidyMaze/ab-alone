@@ -108,16 +108,9 @@ export async function loadSpaceshipBay(
       emissive: 0xd9822b,
       emissiveIntensity: 0.25,
     });
-    let moonTex: THREE.Texture | null = null;
-    try {
-      const moonCanvas = typeof document !== 'undefined' ? createCanvasTexture(1024, 1024, drawHollowMoon) : null;
-      if (moonCanvas) {
-        moonTex = new THREE.CanvasTexture(moonCanvas);
-        moonTex.colorSpace = THREE.SRGBColorSpace;
-      }
-    } catch {
-      // headless / mock environments without canvas
-    }
+    const moonCanvas = createCanvasTexture(1024, 1024, drawHollowMoon);
+    const moonTex = new THREE.CanvasTexture(moonCanvas);
+    moonTex.colorSpace = THREE.SRGBColorSpace;
     const moonMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       map: moonTex,
