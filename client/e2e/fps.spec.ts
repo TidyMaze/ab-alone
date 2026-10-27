@@ -24,3 +24,39 @@ test('the FPS readout is off by default, shows a rate once switched on, and surv
   const diagnostics = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(diagnostics.environment.fps).toBeGreaterThan(0);
 });
+
+test('marble selection preserves framerate and causes no frame time spikes, bug #777', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await page.waitForTimeout(500);
+
+  const maxFrameDelta = await page.evaluate(async () => {
+    let maxDelta = 0;
+    let last = performance.now();
+    let tracking = true;
+    const measure = (now: number) => {
+      if (!tracking) return;
+      const delta = now - last;
+      if (delta > maxDelta) maxDelta = delta;
+      last = now;
+      requestAnimationFrame(measure);
+    };
+    requestAnimationFrame(measure);
+
+    // Warm up 3 frames
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+    // Select marble (0, 4)
+    (window as any).__click(0, 4);
+
+    // Track 10 frames post-click
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    tracking = false;
+    return maxDelta;
+  });
+
+  console.log('Max frame delta during selection:', maxFrameDelta.toFixed(1), 'ms');
+  expect(maxFrameDelta).toBeLessThan(60);
+});
