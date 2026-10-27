@@ -19,11 +19,13 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     expect(relativeLuminance(hex(ROOM_SURFACE.color))).toBeLessThan(relativeLuminance(hex(0x4a5258)));
   });
 
-  it('pedestal sits under the board without exceeding board elevation', () => {
+  it('pedestal sits under the board without exceeding board elevation (#769)', () => {
     const parts = pedestalParts();
     expect(parts.length).toBeGreaterThan(0);
     for (const p of parts) {
       expect(p.position[1]).toBeLessThanOrEqual(-0.05);
+      const halfHeight = p.type === 'cylinder' ? (p.size[2] as number) / 2 : (p.size[1] as number) / 2;
+      expect(p.position[1] + halfHeight).toBeLessThanOrEqual(-0.1);
     }
   });
 
