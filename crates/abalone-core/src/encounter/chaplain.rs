@@ -3,7 +3,7 @@
 //! sides. A flip keeps the marble count and credits no ejection. P2 comes at 4 player ejections.
 
 use crate::board::{Board, Cell};
-use crate::encounter::hull::NEIGHBOURS;
+use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
 
 /// Opposing marbles that flip a marble, for both sides. TUNE.
@@ -78,8 +78,66 @@ fn keep_white_marks(mut board: Board) -> Board {
     board
 }
 
-fn hook(board: &Board, _id: u8, _seed: u64) -> Board {
-    convert(board).1
+/// Player marbles touching the cell `(q, r)`.
+fn adjacent_players(board: &Board, (q, r): P) -> Vec<P> {
+    NEIGHBOURS
+        .iter()
+        .map(|&(dq, dr)| (q + dq, r + dr))
+        .filter(|&(nq, nr)| board.get(nq, nr) == Some(Cell::Black))
+        .collect()
+}
+
+/// The martyr announced on the boss marble whose explosion converts the most player marbles, the
+/// `seed` breaking a tie. Nothing when no boss marble touches a player marble.
+fn announce_martyr(board: &Board, seed: u64) -> Board {
+    let radius = board.radius();
+    let scored: Vec<(P, usize)> = (-radius..=radius)
+        .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
+        .filter(|&c| board.get(c.0, c.1) == Some(Cell::White))
+        .map(|c| (c, adjacent_players(board, c).len()))
+        .collect();
+    let best = scored.iter().map(|&(_, n)| n).max().unwrap_or(0);
+    let tied: Vec<P> = scored
+        .iter()
+        .filter(|&&(_, n)| n == best && n > 0)
+        .map(|&(c, _)| c)
+        .collect();
+    let mut out = board.clone();
+    if !tied.is_empty() {
+        out.set_martyr(Some(Some(tied[(mix(seed) % tied.len() as u64) as usize])));
+    }
+    out
+}
+
+/// The martyr explodes when it is still a boss marble: every player marble touching it converts
+/// and it is removed, the player's ejection. It happens once.
+fn explode_martyr(board: &Board, (q, r): P) -> Board {
+    let mut out = board.clone();
+    out.set_martyr(Some(None));
+    if board.get(q, r) != Some(Cell::White) {
+        return out;
+    }
+    let hit = adjacent_players(board, (q, r));
+    for &(hq, hr) in &hit {
+        out.set(hq, hr, Cell::White);
+    }
+    out.set(q, r, Cell::Empty);
+    out.set_converted([board.converted(), &hit].concat());
+    keep_white_marks(out)
+}
+
+/// Every ply flips the marbles touching 4 foes. From P2 the boss turn then announces the martyr,
+/// and the next boss turn explodes it.
+fn hook(board: &Board, id: u8, seed: u64) -> Board {
+    let converted = convert(board).1;
+    if id <= CHAPLAIN_BOSS_END {
+        return converted;
+    }
+    match converted.martyr() {
+        None => announce_martyr(&converted, seed),
+        Some(Some(cell)) => explode_martyr(&converted, cell),
+        Some(None) => converted,
+    }
 }
 
 /// The Black marbles of `before` that are White on `now`.

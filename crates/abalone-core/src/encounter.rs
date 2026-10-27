@@ -143,6 +143,15 @@ pub(crate) fn carried_marks(board: &Board, mv: &Move, marks: &[(i32, i32)]) -> V
         .collect()
 }
 
+/// The Chaplain's martyr after `mv`: its cell follows a move or a push, and it is spent once that
+/// cell holds no boss marble any more (pushed off the board).
+fn carried_martyr(before: &Board, mv: &Move, board: &Board) -> Option<Option<(i32, i32)>> {
+    before.martyr().map(|cell| {
+        let (q, r) = carried_marks(before, mv, &[cell?])[0];
+        (board.get(q, r) == Some(Cell::White)).then_some((q, r))
+    })
+}
+
 fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
     None
 }
@@ -283,12 +292,15 @@ impl Encounter {
         let poles = carried_poles(before, mv, board);
         let announce = carried_announce(before, mv, board);
         let unstable = carried_unstable(before, mv, board);
+        let martyr = carried_martyr(before, mv, board);
         if kept != board.converted()
             || poles != board.polarities()
             || announce != board.announce()
             || unstable.as_ref() != board.unstable()
+            || martyr != board.martyr()
         {
             let mut next = board.clone();
+            next.set_martyr(martyr);
             next.set_converted(kept);
             next.set_polarities(poles);
             next.set_announce(announce);
