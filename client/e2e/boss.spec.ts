@@ -419,16 +419,7 @@ for (const skin of ['hex', 'riveted']) {
   test(`The Chaplain's converted marble reads 3:1 on the ${skin} shell, task #377`, async ({ page }, testInfo) => {
     await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
     await startChaplain(page);
-    // NE moves only: the conversion on the 5th boss turn, as in the default skin's test (#429).
-    expect(await page.evaluate(() => (window as any).__playTurns(4, [2]))).toBe(4);
-    await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(8);
-    const points: { x: number; y: number }[] = await page.evaluate(() => {
-      const w = window as any;
-      const [q, r] = w.__legal().find((m: any) => m.cells.length === 1 && m.dir === 2).cells[0];
-      return [w.__cellToScreen(q, r), w.__cellToScreen(q + 1, r - 1)];
-    });
-    for (const p of points) await page.mouse.click(p.x, p.y);
-    await expect.poll(() => page.evaluate(() => (window as any).__plies()), { timeout: 30_000 }).toBe(10);
+    await playRecorded(page, 0, CONVERTED_AT); // the recorded game converts its first marble at ply 42
     await expect(page.locator('body')).not.toHaveAttribute('data-converted', '0');
     const cells = await page.evaluate(() => (window as any).__converted());
     const contrasts = await topContrasts(page, cells, testInfo.outputPath(`chaplain-${skin}.png`));

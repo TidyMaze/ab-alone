@@ -1013,7 +1013,7 @@ const martyrGlyphGeometry = new THREE.OctahedronGeometry(0.11).scale(1, 2, 1);
 // Its explosion: a flash disc and a ring of shards, moved by the animation loop.
 const blastFlashGeometry = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2);
 const blastFlashMaterial = new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, depthWrite: false, side: THREE.DoubleSide });
-const blastShardGeometry = new THREE.TetrahedronGeometry(0.09);
+const blastShardGeometry = new THREE.TetrahedronGeometry(0.15);
 const blastShardMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d, transparent: true, depthWrite: false });
 let blast: { group: THREE.Group; flash: THREE.Mesh; shards: THREE.Mesh[]; start: number; reduced: boolean } | null = null;
 // A converted marble (#508, world.md section 5) is half and half, 3:1 on the shell (#326): the ridged shell up to its
