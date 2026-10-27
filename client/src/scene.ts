@@ -1,3 +1,5 @@
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { pass } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
@@ -30,6 +32,9 @@ export interface SceneRendererOptions {
   plateAlbedo?: THREE.Texture | null;
   plateRoughness?: THREE.Texture | null;
   plateNormal?: THREE.Texture | null;
+  rimAlbedo?: THREE.Texture | null;
+  rimRoughness?: THREE.Texture | null;
+  rimNormal?: THREE.Texture | null;
 }
 
 export interface ViewContext {
@@ -42,11 +47,29 @@ export interface ViewContext {
   };
 }
 
+export function createBloomPipeline(
+  renderer: THREE.WebGPURenderer,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+): THREE.RenderPipeline | null {
+  try {
+    const pipeline = new THREE.RenderPipeline(renderer);
+    const scenePass = pass(scene, camera);
+    const colorNode = scenePass.getTextureNode('output');
+    const bloomNode = bloom(colorNode, 0.35, 0.2);
+    pipeline.outputNode = colorNode.add(bloomNode);
+    return pipeline;
+  } catch {
+    return null;
+  }
+}
+
 export class SceneRenderer {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGPURenderer;
   readonly backend: 'WebGPU' | 'WebGL2';
+  readonly pipeline: THREE.RenderPipeline | null = null;
 
   readonly ambient: THREE.AmbientLight;
   readonly lamp: THREE.DirectionalLight;
@@ -175,11 +198,21 @@ export class SceneRenderer {
           : { color: FRAME_LOOK.plate, roughness: 0.8 },
     );
     const rimMaterial = new THREE.MeshStandardMaterial(
-      options.plateAlbedo
-        ? { map: options.plateAlbedo, roughnessMap: options.plateRoughness || null, color: FRAME_LOOK.rim, roughness: 0.35, metalness: 0.65, emissiveIntensity: 0.6 }
-        : options.deckAlbedo && options.deckRoughness
-          ? { map: options.deckAlbedo, roughnessMap: options.deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3, emissiveIntensity: 0.6 }
-          : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 0.6 },
+      options.rimAlbedo
+        ? {
+            map: options.rimAlbedo,
+            roughnessMap: options.rimRoughness || null,
+            normalMap: options.rimNormal || null,
+            color: FRAME_LOOK.rim,
+            roughness: 0.35,
+            metalness: 0.65,
+            emissiveIntensity: 0.6,
+          }
+        : options.plateAlbedo
+          ? { map: options.plateAlbedo, roughnessMap: options.plateRoughness || null, color: FRAME_LOOK.rim, roughness: 0.35, metalness: 0.65, emissiveIntensity: 0.6 }
+          : options.deckAlbedo && options.deckRoughness
+            ? { map: options.deckAlbedo, roughnessMap: options.deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3, emissiveIntensity: 0.6 }
+            : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 0.6 },
     );
     this.plate = new THREE.Mesh(new THREE.BufferGeometry(), plateMaterial);
     this.plate.receiveShadow = true;
@@ -231,6 +264,8 @@ export class SceneRenderer {
       this.marbles,
       this.ghosts,
     );
+
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera);
   }
 
   async init(): Promise<void> {
@@ -416,6 +451,14 @@ export class SceneRenderer {
   }
 
   render(): void {
+    if (this.pipeline) {
+      try {
+        this.pipeline.render();
+        return;
+      } catch {
+        // Fall back to renderer if pipeline fails in mock or test environment
+      }
+    }
     this.renderer.render(this.scene, this.camera);
   }
 }

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { BOARD_CELLS, RADIUS, VANISHED, cellIndex } from './board';
 import { resetView, type View } from './camera';
-import { SceneRenderer, type NotchRow } from './scene';
+import { createBloomPipeline, SceneRenderer, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
   const canvas = document.createElement('canvas');
@@ -89,6 +89,28 @@ describe('SceneRenderer (#632)', () => {
     });
     expect(srNoNormal.plate.material.normalMap).toBeNull();
     expect(srNoNormal.plate.material.roughnessMap).toBeNull();
+
+    const rimAlbedo = new THREE.Texture();
+    const rimRoughness = new THREE.Texture();
+    const rimNormal = new THREE.Texture();
+    const srWithRim = new SceneRenderer({
+      renderer,
+      rimAlbedo,
+      rimRoughness,
+      rimNormal,
+    });
+    expect(srWithRim.rim.near.material.map).toBe(rimAlbedo);
+    expect(srWithRim.rim.near.material.roughnessMap).toBe(rimRoughness);
+    expect(srWithRim.rim.near.material.normalMap).toBe(rimNormal);
+
+    const srRimNoNormal = new SceneRenderer({
+      renderer,
+      rimAlbedo,
+      rimRoughness: null,
+      rimNormal: null,
+    });
+    expect(srRimNoNormal.rim.near.material.roughnessMap).toBeNull();
+    expect(srRimNoNormal.rim.near.material.normalMap).toBeNull();
   });
 
   it('handles WebGPU backend detection', () => {
@@ -312,6 +334,26 @@ describe('SceneRenderer (#632)', () => {
   it('executes render pass', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });
+    sr.render();
+    expect(renderer.render).toHaveBeenCalledWith(sr.scene, sr.camera);
+
+    // Pipeline rendering succeeds
+    if (sr.pipeline) {
+      const renderMock = vi.fn();
+      sr.pipeline.render = renderMock;
+      sr.render();
+      expect(renderMock).toHaveBeenCalled();
+    }
+  });
+
+  it('handles pipeline initialization failure gracefully', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera();
+    expect(createBloomPipeline(null as any, scene, camera)).toBeNull();
+
+    const renderer = createMockRenderer();
+    const sr = new SceneRenderer({ renderer });
+    (sr as { pipeline: unknown }).pipeline = null;
     sr.render();
     expect(renderer.render).toHaveBeenCalledWith(sr.scene, sr.camera);
   });

@@ -94,7 +94,7 @@ export async function loadSpaceshipBay(
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([
       gltfLoader.loadAsync(`${basePath}spaceship-bay.glb`),
-      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.5),
+      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 8),
       loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1),
       loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1),
     ]);
@@ -115,8 +115,8 @@ export async function loadSpaceshipBay(
       color: 0x2b3238,
       roughness: 0.25,
       metalness: 0.9,
-      emissive: 0x288899,
-      emissiveIntensity: 0.65,
+      emissive: 0x38e8ff,
+      emissiveIntensity: 0.85,
     });
     const hazardMat = new THREE.MeshStandardMaterial({
       color: 0xd9822b,
@@ -263,14 +263,14 @@ export function applyDeckAtmosphere(
   deck: DeckId,
 ): void {
   const conf = DECK_ATMOSPHERES[deck];
-  bay.materials.deck.color.setHex(conf.deckColor);
+  bay.materials.deck.color.setHex(bay.materials.deck.map ? 0xffffff : conf.deckColor);
   bay.materials.deck.roughness = conf.roughness;
-  bay.materials.bulkhead.color.setHex(conf.bulkheadColor);
+  bay.materials.bulkhead.color.setHex(bay.materials.bulkhead.map ? 0xffffff : conf.bulkheadColor);
   bay.materials.bulkhead.roughness = conf.roughness;
-  bay.materials.grate.color.setHex(conf.grateColor);
+  bay.materials.grate.color.setHex(bay.materials.grate.map ? 0xffffff : conf.grateColor);
   bay.materials.grate.roughness = conf.roughness;
   if (bay.materials.trench) {
-    bay.materials.trench.color.setHex(conf.grateColor);
+    bay.materials.trench.color.setHex(bay.materials.trench.map ? 0xffffff : conf.grateColor);
     bay.materials.trench.roughness = Math.min(conf.roughness, 0.4);
   }
   if (bay.materials.conduit) {
@@ -283,22 +283,28 @@ export function createBayLights(deck: DeckId): THREE.Group {
   const group = new THREE.Group();
   group.name = 'bay_lights';
 
-  const overhead = new THREE.PointLight(conf.lightColor, 0.45, 36.0);
-  overhead.position.set(0, 14.0, 0);
+  for (const x of [-15, -5.5, 5.5, 15]) {
+    const wallNeonLight = new THREE.PointLight(0x38e8ff, 1.8, 25.0);
+    wallNeonLight.position.set(x, 14.2, -22.5);
+    group.add(wallNeonLight);
+  }
 
-  const airlock = new THREE.PointLight(conf.accentLightColor, 0.55, 26.0);
-  airlock.position.set(0, 8.0, -17.5);
+  const overhead = new THREE.PointLight(conf.lightColor, 2.2, 40.0);
+  overhead.position.set(0, 13.0, 0);
 
-  const consoleBounce = new THREE.PointLight(conf.lightColor, 0.35, 16.0);
+  const airlock = new THREE.PointLight(conf.accentLightColor, 2.8, 35.0);
+  airlock.position.set(0, 7.5, -18.0);
+
+  const consoleBounce = new THREE.PointLight(conf.lightColor, 1.8, 22.0);
   consoleBounce.position.set(-10.2, 2.5, -6.0);
 
-  const viewportLight = new THREE.PointLight(0x7fd6e8, 0.5, 24.0);
+  const viewportLight = new THREE.PointLight(0x7fd6e8, 2.2, 32.0);
   viewportLight.position.set(17.0, 4.8, 0);
 
-  const observationLight = new THREE.PointLight(conf.accentLightColor, 0.15, 16.0);
-  observationLight.position.set(0, 7.0, 17.5);
+  const observationLight = new THREE.PointLight(conf.accentLightColor, 1.4, 24.0);
+  observationLight.position.set(0, 6.0, 17.5);
 
-  const pedestalWash = new THREE.PointLight(0x7fd6e8, 0.25, 8.0);
+  const pedestalWash = new THREE.PointLight(0x38e8ff, 2.0, 10.0);
   pedestalWash.position.set(0, -0.1, 0);
 
   group.add(overhead, airlock, consoleBounce, viewportLight, observationLight, pedestalWash);
