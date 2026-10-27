@@ -57,6 +57,7 @@ export function createBloomPipeline(
     const scenePass = pass(scene, camera);
     const colorNode = scenePass.getTextureNode('output');
     const bloomNode = bloom(colorNode, 0.175, 0.15);
+    bloomNode.setResolutionScale(0.5);
     pipeline.outputNode = colorNode.add(bloomNode);
     return pipeline;
   } catch {

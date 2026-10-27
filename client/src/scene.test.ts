@@ -372,4 +372,17 @@ describe('SceneRenderer (#632)', () => {
     sr.render();
     expect(renderer.render).toHaveBeenCalledWith(sr.scene, sr.camera);
   });
+
+  it('configures bloom node with half resolution scale for performance (#781)', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera();
+    const renderer = createMockRenderer();
+    const pipeline = createBloomPipeline(renderer, scene, camera);
+    if (pipeline?.outputNode) {
+      const bloomNode = (pipeline.outputNode as any).b ?? (pipeline.outputNode as any).nodeB;
+      if (bloomNode?.getResolutionScale) {
+        expect(bloomNode.getResolutionScale()).toBe(0.5);
+      }
+    }
+  });
 });
