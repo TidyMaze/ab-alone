@@ -29,7 +29,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 |---|---|---|---|---|---|---|
 | The Echo | 400 | 4000 (10x) | **8** | 108 | P2 | draw 2 |
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
-| The Choir | 1500 | 15000 (10x) | **10** | 57.5 | P3 | none |
+| The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **0** | 148 | P1 | conversion 5, draw 5 |
 | The Ballast Mind | 150000 | 150000 (1x only) | **0** | 100 | P1 | draw 10 |
 
@@ -283,7 +283,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 |---|---|---|---|
 | echo | 0 | 4000 | 126 |
 | hull | 0 | 30000 | 90 |
-| choir | 0 | 15000 | 50 |
+| choir | 0 | 15000 | 93 |
 | chaplain | 0 | 20000 | 92 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
@@ -300,7 +300,7 @@ the Ballast Mind) unless conversions made it grow. The phase thresholds of secti
 
 - The Echo P3 (5 left) and the Hull P3 (5 left): never played. The highest phase in the table is P2.
 - The Chaplain P2 (8 left): starts at the moment of the sixth ejection, so it is never fought.
-- The Choir was reworked in #747 (standard board, 6 ejections, armies removed at 3 and 5): its row above measures the old rules.
+- The Choir was reworked in #747 (standard board, 6 ejections, armies removed at 3 and 5): re-measured at 10x, 10 of 10 won, median 118 plies, P3 reached. The text above about Decision #131 (10 ejections) is history.
 - The Ballast Mind is fixed by Decision #482 (win at 12 ejections, 4 boss marbles left): P2 (10
   left) and P3 (5 left) are reached and fought.
 

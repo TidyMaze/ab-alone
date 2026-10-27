@@ -164,7 +164,7 @@ const BOSSES: [BossEntry; 11] = [
     },
     BossEntry {
         id: "choir",
-        goal: "One army moves per turn. Eject 10 to win; lose 6 or draw to lose.",
+        goal: "One army moves per turn; the weakest army leaves after 3 and 5 ejections. Eject 6 to win; lose 6 or draw to lose.",
         def: choir_boss,
         start: choir_fight,
         reply: search_reply,
@@ -1555,6 +1555,9 @@ mod tests {
             ((-4, 4), Cell::Black, None),
             ((4, 0), Cell::White, Some(Army::Alto)),
             ((0, -3), Cell::White, Some(Army::Alto)),
+            ((1, -3), Cell::White, Some(Army::Alto)),
+            ((-3, 0), Cell::White, Some(Army::Tenor)),
+            ((-2, -2), Cell::White, Some(Army::Tenor)),
             ((-4, 1), Cell::White, Some(Army::Bass)),
         ] {
             board.set(cell.0, cell.1, color);
@@ -1586,10 +1589,7 @@ mod tests {
             "Move(NotOwnMarble)"
         );
         f.play(&forward(&f)).unwrap();
-        assert_eq!(
-            f.play(&[1, 3, -2, -1, 0, 0, 0, 0]).unwrap_err(),
-            "WrongArmy"
-        );
+        assert_eq!(f.play(&[1, 3, 1, -2, 0, 0, 0, 0]).unwrap_err(), "WrongArmy");
         assert_eq!(f.to_move(), 2);
     }
 
