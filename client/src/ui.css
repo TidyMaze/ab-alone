@@ -130,12 +130,12 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #mode-menu[hidden] { display: none; }
 #modes[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 600px), (pointer: coarse) { #mode-menu button { min-height: 2.75rem; } }
-#update, #reset-view, #hint, #new-game, #modes, #play-online, #fight-together, #ranked, #rematch, #boss-fight, #daily, #ship, #boss-retry, #ship-back, #boss-goal, #boss-list button, #coop-list button, #copy-diagnostics {
+#update, #reset-view, #hint, #new-game, #modes, #play-online, #fight-together, #ranked, #stalker-mode, #rematch, #boss-fight, #daily, #ship, #boss-retry, #ship-back, #boss-goal, #boss-list button, #coop-list button, #stalker-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#update:focus-visible, #reset-view:focus-visible, #hint:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#boss-list, #coop-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
+#update:focus-visible, #reset-view:focus-visible, #hint:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #ranked:focus-visible, #stalker-mode:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #stalker-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#boss-list, #coop-list, #stalker-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
 /* Bug #653: in a desktop window an open boss list holds two bosses a row, each row compact, so every boss and Daily
    challenge fit the window without a scroll, with room for more bosses. A touch screen keeps its 44 px items. #635:
    with 10 bosses the rows are closer still, so the list keeps off a scroll in a 1280x720 window. #699: the items of the
@@ -143,10 +143,10 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
    bosses and more fit a 1280x720 window. */
 @media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
   #mode-menu { flex-flow: row wrap; justify-content: flex-end; }
-  #boss-list, #coop-list { display: grid; grid-template-columns: 1fr 1fr; flex: 1 0 100%; }
-  #boss-list button, #coop-list button { padding-block: 0.125rem; }
+  #boss-list, #coop-list, #stalker-list { display: grid; grid-template-columns: 1fr 1fr; flex: 1 0 100%; }
+  #boss-list button, #coop-list button, #stalker-list button { padding-block: 0.125rem; }
 }
-#boss-list[hidden], #coop-list[hidden], #boss-retry[hidden], #ship-back[hidden], #boss-goal[hidden], #rematch[hidden], #update[hidden], #hint[hidden], #new-game[hidden] { display: none; }
+#boss-list[hidden], #coop-list[hidden], #stalker-list[hidden], #boss-retry[hidden], #ship-back[hidden], #boss-goal[hidden], #rematch[hidden], #update[hidden], #hint[hidden], #new-game[hidden] { display: none; }
 /* Goal (#248): open, it is lit like Hint; a phone-sized touch target on a small or touch screen. */
 #boss-goal[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 #boss-goal:disabled { cursor: default; }
@@ -294,8 +294,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
      together) that scrolls sideways, so a new boss adds no row over the board: the menu is no wider than the
      window (min-width), the padding keeps the focus outlines inside the scroll box. */
   #mode-menu { flex: 1 0 100%; min-width: 0; flex-flow: row wrap; gap: 0.5rem; }
-  #boss-list:not([hidden]), #coop-list:not([hidden]) { flex: 1 0 100%; flex-flow: row nowrap; overflow-x: auto; margin: -4px; padding: 4px; }
-  #boss-list button, #coop-list button { flex: none; }
+  #boss-list:not([hidden]), #coop-list:not([hidden]), #stalker-list:not([hidden]) { flex: 1 0 100%; flex-flow: row nowrap; overflow-x: auto; margin: -4px; padding: 4px; }
+  #boss-list button, #coop-list button, #stalker-list button { flex: none; }
   #ranked { order: 1; }
   #mode-menu:has(#coop-list:not([hidden])) #ranked { order: -1; }
 }

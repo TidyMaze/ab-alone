@@ -11,17 +11,22 @@ export interface CoopFight {
   seed: number;
 }
 
-/** The invite link of a room; a co-op room also carries its boss and seed. */
-export function inviteUrl(page: string, room: string, fight?: CoopFight): string {
+/** The invite link of a room; a co-op room also carries its boss and seed. A stalker room carries &mode=stalker */
+export function inviteUrl(page: string, room: string, fight?: CoopFight, stalker = false): string {
   const url = new URL(page);
-  url.hash = `room=${room}` + (fight ? `&boss=${fight.boss}&seed=${fight.seed}` : '');
+  url.hash = `room=${room}` + (fight ? `&boss=${fight.boss}&seed=${fight.seed}` : '') + (stalker ? '&mode=stalker' : '');
   return url.toString();
 }
 
 /** The room of a versus invite, null for anything else (a co-op invite included). */
 export function roomFromHash(hash: string): string | null {
-  const m = /^#room=([\w-]+)$/.exec(hash);
+  const m = /^#room=([\w-]+)(?:&mode=stalker)?$/.exec(hash);
   return m ? m[1]! : null;
+}
+
+/** Returns true if the hash specifies stalker fog-of-war mode (#784). */
+export function stalkerFromHash(hash: string): boolean {
+  return /&mode=stalker\b/.test(hash);
 }
 
 /** The room, boss and seed of a co-op invite, null for anything else. The seed is an unsigned 32-bit number. */

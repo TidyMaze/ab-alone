@@ -3,7 +3,7 @@ import { BOSS_IDS, tallyLine } from './tally';
 
 describe('tallyLine', () => {
   it('has a non-empty line for every mode', () => {
-    for (const mode of ['local', 'bot', 'online'] as const) {
+    for (const mode of ['local', 'bot', 'online', 'stalker'] as const) {
       expect(tallyLine({ mode })).not.toBe('');
     }
   });

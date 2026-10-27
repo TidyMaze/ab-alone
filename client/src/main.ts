@@ -122,7 +122,8 @@ import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
-import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
+import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, stalkerFromHash, type CoopFight } from './invite';
+import { visibleCells } from './stalker';
 import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
 import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
@@ -266,6 +267,8 @@ let royale: Royale | null = null;
 // Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
 let royaleNet: RoyaleNet<Royale> | null = null;
 let ticking = 0;
+// Stalker combat mode with fog of war (#784).
+let stalkerMode = false;
 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
@@ -2429,7 +2432,7 @@ function hud(extra = ''): void {
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
-    tally: history.length === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
+    tally: history.length === 0 && status === 0 ? tallyLine({ mode: stalkerMode ? 'stalker' : fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
     // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).
     rematch:
       online?.role !== 'player' || status === 0
@@ -2553,11 +2556,14 @@ function refresh(): void {
     });
   });
   document.body.dataset.haze = String(hazes.length); // read by the e2e tests
+  const viewerSide = online ? (online.role === 'player' ? online.side : 1) : 1;
+  const visible = stalkerMode ? visibleCells(board, viewerSide) : null;
   discs.forEach((disc, i) => {
     const [q, r] = BOARD_CELLS[i]!;
+    const isVis = !visible || visible.has(i);
     const side = board[i] ?? VANISHED; // ring 5 is off a board of 61 cells (#564)
-    disc.visible = side !== VANISHED; // a vanished cell is a hole: no disc, no marble
-    if (side === VANISHED) return;
+    disc.visible = side !== VANISHED && isVis; // a vanished or fog-hidden cell is a hole: no disc, no marble
+    if (side === VANISHED || !isVis) return;
     const p = axialTo3D(q, r);
     const plies = left.get(i) ?? 0;
     disc.material = steel;
@@ -3344,6 +3350,8 @@ let pulseHeld: number | null = null;
   blast && { shards: blast.shards.length, flash: blastFlashMaterial.opacity, shard: blastShardMaterial.opacity, reduced: blast.reduced };
 (window as unknown as Record<string, unknown>).__converted = () =>
   engine instanceof Encounter ? parseCells(engine.converted()) : [];
+(window as unknown as Record<string, unknown>).__stalker = () => stalkerMode;
+(window as unknown as Record<string, unknown>).__startStalker = startStalker;
 // Used by the e2e tests to play `turns` boss turns in one call (#349): each player move is the first legal single-marble
 // move in `dirs`, the boss replies as botTurn does, and each ply is applied as a catch-up is (afterPlay, not live): no
 // slide, ejection or frame per ply, one refresh at the end.
@@ -3416,6 +3424,8 @@ newGameButton.addEventListener('click', () => {
   if (press.start) newGame();
 });
 function newGame(): void {
+  stalkerMode = false;
+  delete document.body.dataset.stalker;
   if (hub) {
     leaveHub();
     applyDeck(deckOf('local'));
@@ -3443,6 +3453,9 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   stopAnalysis();
   fight = { id, seed, daily };
   goalOpen = false;
+  stalkerMode = false;
+  delete document.body.dataset.stalker;
+  showStalkerList(false);
   engine = new Encounter(id, seed);
   history.length = 0;
   selected = [];
@@ -3470,7 +3483,10 @@ bossButton.addEventListener('click', () => {
   if (online) return;
   bossList.hidden = !bossList.hidden;
   bossButton.setAttribute('aria-expanded', String(!bossList.hidden));
-  if (!bossList.hidden) showCoopList(false); // one boss list open at a time (#615)
+  if (!bossList.hidden) {
+    showCoopList(false); // one boss list open at a time (#615)
+    showStalkerList(false);
+  }
 });
 (bossButton as HTMLButtonElement).disabled = false; // engine, boss list and listener ready (#144)
 
@@ -3765,11 +3781,16 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   }
 }
 /** Opens a new room as its creator and shows its invite link: a co-op room with `coop` (#529), a versus room without. */
-function playOnline(coop?: CoopFight): void {
+function playOnline(coop?: CoopFight, isStalker = false): void {
   rankedMode = null;
   moveModes('pick');
+  if (isStalker) {
+    stalkerMode = true;
+    document.body.dataset.stalker = '1';
+    applyDeck('cargo');
+  }
   const room = newRoomId((b) => crypto.getRandomValues(b));
-  inviteBox.value = inviteUrl(location.href, room, coop);
+  inviteBox.value = inviteUrl(location.href, room, coop, stalkerMode);
   location.hash = new URL(inviteBox.value).hash;
   inviteBox.hidden = false;
   inviteLabel.hidden = false;
@@ -3821,6 +3842,7 @@ coopButton.addEventListener('click', () => {
   if (coopList.hidden) {
     bossList.hidden = true; // one boss list open at a time (#615)
     bossButton.setAttribute('aria-expanded', 'false');
+    showStalkerList(false);
   }
   showCoopList(!!coopList.hidden); // hidden: open it
 });
@@ -3831,11 +3853,63 @@ function leaveOnline(): void {
   link!.close();
   onlineNote = '';
   onlineLine = undefined;
+  stalkerMode = false;
+  delete document.body.dataset.stalker;
   for (const key of ['online', 'seat', 'opponent', 'coordinator', 'handover']) delete document.body.dataset[key];
   inviteBox.hidden = inviteLabel.hidden = rematchButton.hidden = true;
   newGameButton.hidden = false;
   window.history.replaceState(null, '', location.pathname + location.search); // no room in the address
 }
+
+// Stalker combat mode with fog of war (#784): vision <= 2 hexes.
+const stalkerButton = document.getElementById('stalker-mode') as HTMLButtonElement;
+const stalkerList = document.getElementById('stalker-list')!;
+const stalkerBot = document.getElementById('stalker-bot') as HTMLButtonElement;
+const stalkerOnline = document.getElementById('stalker-online') as HTMLButtonElement;
+
+function showStalkerList(shown: boolean): void {
+  stalkerList.hidden = !shown;
+  stalkerButton.setAttribute('aria-expanded', String(shown));
+}
+
+stalkerButton.addEventListener('click', () => {
+  if (stalkerList.hidden) {
+    bossList.hidden = true;
+    bossButton.setAttribute('aria-expanded', 'false');
+    coopList.hidden = true;
+    coopButton.setAttribute('aria-expanded', 'false');
+  }
+  showStalkerList(!!stalkerList.hidden);
+});
+
+function startStalker(isOnline = false): void {
+  leaveHub();
+  leaveRoyale();
+  stalkerMode = true;
+  document.body.dataset.stalker = '1';
+  showStalkerList(false);
+  moveModes('pick');
+  applyDeck('cargo'); // Ambiance rôdeur
+  if (isOnline) {
+    playOnline(undefined, true);
+  } else {
+    leaveOnline();
+    fight = null;
+    worker = botWorker;
+    engine = new Engine();
+    history.length = 0;
+    selected = [];
+    hint.clear();
+    refresh();
+    void botTurn();
+  }
+}
+
+stalkerBot.addEventListener('click', () => startStalker(false));
+stalkerOnline.addEventListener('click', () => startStalker(true));
+stalkerButton.disabled = false;
+stalkerBot.disabled = false;
+stalkerOnline.disabled = false;
 const playOnlineButton = document.getElementById('play-online') as HTMLButtonElement;
 setButton(playOnlineButton, 'Play online', icon('online'));
 
@@ -3853,6 +3927,9 @@ function startRoyale(file: RoyaleFile): void {
   fight = null;
   delete document.body.dataset.boss;
   delete document.body.dataset.over;
+  stalkerMode = false;
+  delete document.body.dataset.stalker;
+  showStalkerList(false);
   engine = new Engine(); // a bot reply to the old game is dropped (botTurn)
   history.length = 0;
   thinking = false;
@@ -4180,7 +4257,7 @@ royaleInviteButton.addEventListener('click', () => {
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
-  playOnlineButton.disabled = coopButton.disabled = rankedButton.disabled = royaleInviteButton.disabled = state.disabled;
+  playOnlineButton.disabled = coopButton.disabled = rankedButton.disabled = stalkerOnline.disabled = royaleInviteButton.disabled = state.disabled;
   offlineNotice = state.notice;
   hud();
 }
@@ -4191,6 +4268,17 @@ syncConnectivity();
 const invited = roomFromHash(location.hash);
 const coopInvite = coopFromHash(location.hash);
 const royaleInvite = royaleFromHash(location.hash);
+const stalkerInvite = stalkerFromHash(location.hash);
+const stalkerParam =
+  new URLSearchParams(location.search).get('mode') === 'stalker' ||
+  new URLSearchParams(location.search).get('stalker') === '1' ||
+  new URLSearchParams(location.search).get('stalker') === 'on';
+
+if (stalkerInvite || stalkerParam) {
+  stalkerMode = true;
+  document.body.dataset.stalker = '1';
+  applyDeck('cargo');
+}
 if (invited) void goOnline(invited, 2);
 else if (royaleInvite) void goRoyale(royaleInvite, 2);
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite); // an unknown boss starts nothing

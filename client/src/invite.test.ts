@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl } from './invite';
+import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, stalkerFromHash } from './invite';
 
 describe('invite links', () => {
   it('makes a url safe room id from random bytes', () => {
@@ -50,5 +50,14 @@ describe('invite links', () => {
     expect(royaleFromHash(new URL(url).hash)).toBe('abc_DEF-123');
     expect(roomFromHash(new URL(url).hash)).toBeNull();
     for (const hash of ['', '#royale=', '#royale=a b', '#room=r']) expect(royaleFromHash(hash)).toBeNull();
+  });
+
+  it('puts a stalker mode invite in the url hash and reads it back (#784)', () => {
+    const url = inviteUrl('https://x.github.io/ab-alone/#old', 'abc_DEF-123', undefined, true);
+    expect(url).toBe('https://x.github.io/ab-alone/#room=abc_DEF-123&mode=stalker');
+    expect(roomFromHash(new URL(url).hash)).toBe('abc_DEF-123');
+    expect(stalkerFromHash(new URL(url).hash)).toBe(true);
+    expect(stalkerFromHash('#room=abc_DEF-123')).toBe(false);
+    expect(stalkerFromHash('')).toBe(false);
   });
 });
