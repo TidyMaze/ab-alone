@@ -141,9 +141,9 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
     const text = `a pulse pushes every line ${DIRECTIONS[pulsar]} after ${left} of your turns, force ${force || 'infinite'}: groups smaller than the force move one cell, the first group as big resists and shields the rest`;
     return { kind: 'pulse', cells: [], text };
   }
-  const left = boss.belts()[0];
-  if (left !== undefined) {
-    return { kind: 'belt_reverse', cells: [], text: `the centre belt reverses after ${left} of your turns` };
+  const reverse = boss.belts()[0];
+  if (reverse !== undefined) {
+    return { kind: 'belt_reverse', cells: [], text: `the centre belt reverses after ${reverse} of your turns` };
   }
   const turns = boss.turns_left();
   if (turns >= 0) {

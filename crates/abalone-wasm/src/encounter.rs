@@ -1741,8 +1741,8 @@ mod tests {
             "reversed after turn 5"
         );
         assert_eq!(
-            run[20].1[7..14],
-            [-1, -3, 8, 1, 7, -1],
+            run[20].1[7..13],
+            [-1, -3, 8, -1, 7, -1],
             "P2: the side belts run against it"
         );
         assert_eq!(
@@ -1754,8 +1754,8 @@ mod tests {
         assert!(run[31].2.is_empty(), "the boss ply moves no belt");
         assert_eq!(
             run[32].2,
-            vec![-2, 1, -2, 1, 2, 1],
-            "your marble struck on the lower belt"
+            vec![-3, 1, -2, 1, 0, 1, -2, 1, -1, 1, 0, 1, -2, 1, -2, 1, 2, 1],
+            "your two marbles on the lower belt carried, the one now on (-2, 1) struck"
         );
         let mut f = Encounter::new("assembly", 1).unwrap();
         for &[q, r, dir] in &ASSEMBLY_FIXTURE {

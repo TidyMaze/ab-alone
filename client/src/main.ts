@@ -1707,10 +1707,6 @@ function afterPlay(before: number[], record: number[], live = true): void {
     shown = { game: engine, board: pulse.board, poles: [] };
     whenSettled(() => firePulse(pulse, reduced));
   }
-  if (beltBoard) {
-    shown = { game: engine, board: beltBoard, poles: [] };
-    whenSettled(() => fireBelts(carries, beltBoard, reduced));
-  }
   const ejection = findEjection(before, after, mv);
   if (ejection) eject(ejection, mv.dir, held, reduced);
   // The Overseer's vents (#635): the push slides first, then each marble they burnt sinks into its vent.
@@ -1718,6 +1714,10 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const vented = engine instanceof Encounter && engine.incinerators().length > 0;
   const burns = vented ? parseBurns((engine as Encounter).removed()) : [];
   if (burns.length > 0) whenSettled(() => burn(burns, reduced, history.length));
+  if (beltBoard) {
+    shown = { game: engine, board: beltBoard, poles: [] };
+    whenSettled(() => fireBelts(carries, beltBoard, reduced));
+  }
 }
 
 /** The burns of a ply at `ply`: each marble sinks into its vent, or fades with reduced motion; a burnt core angers the Overseer. */
