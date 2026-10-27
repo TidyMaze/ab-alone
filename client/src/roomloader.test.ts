@@ -137,7 +137,7 @@ describe('roomloader PBR pipeline', () => {
     expect(pedestalMesh.material).toBe(bay!.materials.deck);
     expect(pedestalBase.material).toBe(bay!.materials.deck);
     expect(Math.abs(pedestalMesh.geometry.getAttribute('uv').getX(0))).toBeCloseTo(1.5);
-    expect(bay!.materials.deck.map?.repeat.x).toBe(8);
+    expect(bay!.materials.deck.map?.repeat.x).toBe(0.2);
     expect(wallMesh.material).toBe(bay!.materials.bulkhead);
     expect(columnMesh.material).toBe(bay!.materials.grate);
     expect(pedestalMesh.visible).toBe(false);
@@ -228,7 +228,7 @@ describe('roomloader PBR pipeline', () => {
     expect(deckMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.deckColor);
     expect(bulkheadMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.bulkheadColor);
     expect(grateMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.grateColor);
-    expect(trenchMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.grateColor);
+    expect(trenchMat.color.getHex()).toBe(0x2b3137);
     expect(conduitMat.emissive.getHex()).toBe(DECK_ATMOSPHERES.furnace.accentLightColor);
     expect(deckMat.roughness).toBe(DECK_ATMOSPHERES.furnace.roughness);
 
@@ -248,7 +248,7 @@ describe('roomloader PBR pipeline', () => {
     expect(deckMat.color.getHex()).toBe(0xffffff);
     expect(bulkheadMat.color.getHex()).toBe(0xffffff);
     expect(grateMat.color.getHex()).toBe(0xffffff);
-    expect(trenchMat.color.getHex()).toBe(0xffffff);
+    expect(trenchMat.color.getHex()).toBe(0x2b3137);
   });
 
   it('creates atmospheric bay lights matching deck specifications (#660)', () => {

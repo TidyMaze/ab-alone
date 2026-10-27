@@ -128,6 +128,19 @@ describe('Play online', () => {
     expect(game.hud()).toContain(' · closed');
   });
 
+  it('returns to the Ship hub at any time via the Ship button, tearing down online session (#773)', async () => {
+    const { game } = await hosted();
+    expect(presence()).toBe('You are Black. White is here.');
+    expect(data().online).toBe('Black');
+    game.openModes();
+    byId('ship').click();
+    expect(data().online).toBeUndefined();
+    expect(data().seat).toBeUndefined();
+    expect(data().opponent).toBeUndefined();
+    expect(byId('invite').hidden).toBe(true);
+    expect(byId('new-game').hidden).toBe(false);
+  });
+
   it('sends our moves to the opponent and replays its moves through the engine', async () => {
     const { game, white } = await hosted();
     click(game, [0, 2], [0, 1]);
