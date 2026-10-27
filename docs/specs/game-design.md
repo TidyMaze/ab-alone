@@ -259,6 +259,7 @@ also give the player a way to hurt the boss with it.
 | Extra | 5 Bridge | The Pulsar (proposed by @Varadiell, section 7.10) | #675 | any time, boss menu |
 | Extra | 4 Chapel | The Overseer (proposed by @TidyMaze, section 7.11) | #635 | any time, boss menu |
 | Extra | 2 Cargo | The Assembly Line (proposed by @Varadiell, section 7.12) | #744 | any time, boss menu |
+| Extra | 3 Furnace | The Unstable Core (proposed by @Varadiell, section 7.13) | #751 | any time, boss menu |
 
 Issue numbers keep their original order, play order is the last column. The Echo opens the
 game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
@@ -723,6 +724,56 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   learns the counter).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.
+
+### 7.13 The Unstable Core: charge your marbles, weigh more, do not overload
+
+- **Concept**: the Furnace's reactor core went unstable. The cells at its heart charge whatever
+  stands on them, and a charged marble weighs more in a push, for both sides, until it blows.
+- **Board and sides**: standard radius 4 board, 14 marbles each on the standard layout, Furnace
+  deck look (the reactor). Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3). The
+  rules below apply **inside this fight only**: every other mode and boss keeps `rules.md`
+  unchanged, and the boss search uses them.
+- **Energy cells**: the 7 centre cells (the centre and its 6 neighbours).
+- **Charging** (owner): at the end of each turn of a marble's own side (your marbles at the end
+  of your turn, the boss's at the end of its turn), a marble standing on an energy cell gains
+  **+1 charge**; a charged marble off the energy cells loses **1**, down to 0. A charge belongs to
+  its marble: it follows its moves and pushes.
+- **Weight** (owner): in a push, each marble weighs **1 + its charges**, on **both** sides, the
+  pushing line and the pushed line. A move still moves at most **3** of your marbles (`rules.md`
+  §4), and a push succeeds when the pushing weight is **greater** than the pushed weight, as plain
+  sumito (every marble weighs 1 out of this fight). Example: two marbles, one charged twice, weigh
+  4 and push 3 plain marbles. **A single charged marble can push**: weight 2 pushes a plain
+  marble. A charged marble in the pushed line resists more. The other rules stay: no push into
+  your own marble, and the pushed line must end on an empty cell or off the board.
+- **Overload**: a marble that reaches **4** charges is **ejected at once**, counted for the other
+  side, like a Hull void.
+- **P2** (after **3** ejections credited to you): the core **vanishes**. After the boss's next
+  turn it is announced (the core flickers, the HUD says so), and at the end of your next turn the
+  7 cells vanish for good (void, as the Hull's): marbles standing on them are ejected, counted
+  for the other side, and a push into the hole ejects. Charges then only decay.
+- **P3** (after **5** ejections): every **3** of your turns a **wedge shockwave** hits, right
+  after your move. It is announced 1 turn ahead: the wedge glows. The board has 6 wedges around
+  the centre, 10 cells each (the centre belongs to none): the cells `a·c(i) + b·c(i+1)` with
+  `a ≥ 1`, `b ≥ 0`, where `c(0..5)` are E, NE, NW, W, SW, SE. The wedge holding the **most marbles**
+  (both colours) at the announce is hit, a tie drawn by the PRNG. Every marble in it moves **1 cell
+  toward the nearest rim** (the neighbour one ring further out, a tie drawn by the PRNG), outermost
+  first, ignoring sumito; a marble whose cell ahead is taken stays, and one pushed past the rim is
+  ejected, counted for the other side.
+- **Deterministic, for P2P**: every pick is splitmix64 of the fight seed and the ply. The charges
+  and the wedge clock live on the board and in the position hash. No `Math.random`, no clock.
+- **Tell**: a charge indicator above every charged marble (1 to 3 pips, a shape and not a colour
+  only, 3:1; 3 pips glow and flash as a warning), the core glows (pulsing energy), the flicker
+  before P2's collapse, the glowing wedge before a shockwave. The HUD line says the next event.
+  The collapse is a crackle and a fall, the shockwave a pie slice of light sweeping outward;
+  reduced motion: no sweep, a flash.
+- **Turn it against the boss** (owner design rule): charge your own marbles to break its lines
+  with fewer marbles; push a boss marble that sits at 3 charges back onto the core so it
+  overloads; crowd the boss into the busiest wedge in P3. The boss search plays the weighted
+  rule and the hooks of both sides (budget 3000 nodes, the Hull's).
+- **Calibrate**: knobs = charge per turn, overload at 4, phase ejections (3, 5), the wedge rhythm
+  (3 turns), AI depth. Fail if most fights end with no overload.
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
+  the days after it ships changes, section 7.6). No hub door.
 
 ### 7.6 Daily challenge (#166)
 

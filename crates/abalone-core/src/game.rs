@@ -103,6 +103,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if let Some(belts) = board.belts() {
         belts.hash(&mut hasher);
     }
+    if let Some(unstable) = board.unstable() {
+        unstable.hash(&mut hasher);
+    }
     if !board.polarities().is_empty() {
         board.polarities().hash(&mut hasher);
     }
@@ -729,6 +732,23 @@ mod tests {
         assert_ne!(
             position_hash(&later, Player::Black),
             position_hash(&running, Player::Black)
+        );
+    }
+
+    #[test]
+    fn the_unstable_marks_change_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut charged = Board::empty();
+        charged.set_unstable(Some(crate::board::Unstable::default()));
+        assert_ne!(position_hash(&charged, Player::Black), plain);
+        let mut more = Board::empty();
+        more.set_unstable(Some(crate::board::Unstable {
+            charges: vec![((1, 0), 1)],
+            ..Default::default()
+        }));
+        assert_ne!(
+            position_hash(&more, Player::Black),
+            position_hash(&charged, Player::Black)
         );
     }
 

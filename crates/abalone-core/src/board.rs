@@ -98,6 +98,30 @@ pub struct Board {
     belts: Option<Belts>,
     /// The Overseer's incinerator cells: a core on one burns.
     incinerators: Vec<(i32, i32)>,
+    /// The Unstable Core's marks. `Some` also turns on its weighted push rule.
+    unstable: Option<Unstable>,
+}
+
+/// The Unstable Core's state on the board (docs/specs/game-design.md section 7.13): the charges of
+/// the marbles, which weigh `1 + charges` in a push, the announce of the core's collapse and the
+/// wedge shockwave clock.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Unstable {
+    /// Charged marbles, in `q` then `r` order, with their charges (1 to 3).
+    pub charges: Vec<((i32, i32), u8)>,
+    /// The core collapses at the end of the player's next turn.
+    pub collapsing: bool,
+    /// Player turns played in P3 since the last shockwave, 0 to 2.
+    pub clock: u8,
+    /// The wedge the next shockwave hits, picked when it is announced.
+    pub wedge: Option<u8>,
+}
+
+impl Unstable {
+    /// Charges of the marble on `cell`, 0 when it has none.
+    pub fn charge(&self, cell: (i32, i32)) -> u8 {
+        self.charges.iter().find(|c| c.0 == cell).map_or(0, |c| c.1)
+    }
 }
 
 /// The Assembly Line's belts (#744), the three middle rows: the centre belt, then the rows
@@ -146,6 +170,7 @@ impl Board {
             pulsar: None,
             belts: None,
             incinerators: Vec::new(),
+            unstable: None,
         }
     }
 
@@ -261,6 +286,15 @@ impl Board {
 
     pub fn set_incinerators(&mut self, incinerators: Vec<(i32, i32)>) {
         self.incinerators = incinerators;
+    }
+
+    /// The Unstable Core's marks, `None` outside its fight.
+    pub fn unstable(&self) -> Option<&Unstable> {
+        self.unstable.as_ref()
+    }
+
+    pub fn set_unstable(&mut self, unstable: Option<Unstable>) {
+        self.unstable = unstable;
     }
 
     /// Standard start layout: 14 marbles per side.
@@ -618,6 +652,21 @@ mod tests {
         assert_eq!(board.belts(), Some(belts));
         assert_ne!(board, Board::empty());
         board.set_belts(None);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn the_unstable_marks_start_unset_and_give_the_charge_of_a_marble() {
+        let mut board = Board::empty();
+        assert_eq!(board.unstable(), None);
+        let marks = Unstable {
+            charges: vec![((1, 0), 2)],
+            ..Unstable::default()
+        };
+        assert_eq!((marks.charge((1, 0)), marks.charge((0, 0))), (2, 0));
+        board.set_unstable(Some(marks));
+        assert_ne!(board, Board::empty());
+        board.set_unstable(None);
         assert_eq!(board, Board::empty());
     }
 }

@@ -64,6 +64,7 @@ Die, read the tell, retry with the same seed.
 | Bridge | **The Pulsar** | six beacons pulse, pushing every line like a sumito |
 | Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; it talks back in typed bubbles and its vents turn toxic |
 | Cargo | **The Assembly Line** | three conveyor belts between the armies carry every marble off the board, then their presses strike |
+| Furnace | **The Unstable Core** | the centre cells charge your marbles, a charged marble weighs more in a push and four charges blow it off; later the core collapses and shockwaves shove the busiest wedge |
 
 ## What it looks like
 
