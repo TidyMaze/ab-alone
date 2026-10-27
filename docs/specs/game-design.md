@@ -351,16 +351,18 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Concept**: something came up with the ore. It nests in the Cargo hold and lays eggs between
   the crates. It is weak at first and gets stronger the longer you let it breed.
 - **Board and side**: standard radius 4 board, Cargo deck look. You have 14 marbles on the
-  standard layout. The Alien starts with **8** marbles: its back row (5), the 2 middle cells of its
-  second row and the centre cell of its third row, a wedge symmetric about the board's middle line
-  (a row of 6 has no 3 outer cells, #588). Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
+  standard layout. The Alien starts with **7** marbles (owner rule, #740): its back row (5) and the
+  2 middle cells of its second row, a wedge symmetric about the board's middle line (a row of 6 has
+  no 3 outer cells, #588). Its former front marble, the centre cell of its third row, the one
+  nearest the board centre, is dropped. Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
 - **Twist, the eggs**: every **2nd** boss turn (its 2nd, 4th, 6th... move), after its move, the
-  Alien lays **1 egg** on an empty cell picked at random. The pick is deterministic, for P2P: a
+  Alien lays **1 egg** on an empty cell picked at random, **within 3 cells (hex distance) of one of
+  your marbles** when such a cell is free, else on any empty cell (owner rule, #740). The pick is deterministic, for P2P: a
   seeded integer PRNG of the fight's seed and the ply, in the engine, never `Math.random`, floats or
   the clock, so a Retry, the daily, a replayed game file and every co-op peer get the same eggs. At most **3** eggs
   are on the board at once; a lay with 3 eggs out is skipped. The pick: splitmix64 of the fight seed
-  mixed with the ply (as the Hull's cracks), modulo the empty cells without an egg, in `q` then `r`
-  order. The phase of the lay is the one before the boss move.
+  mixed with the ply (as the Hull's cracks), modulo the empty cells without an egg (the ones
+  within 3 cells of your marbles when there are some), in `q` then `r` order. The phase of the lay is the one before the boss move.
 - **Hatching**: an egg hatches after **4 of your turns**. The count runs down by 1 after each of
   your moves; when it reaches 0, at the start of the boss turn, a new Alien marble appears on the
   egg's cell and the egg is gone, then the boss plays. From the lay to the hatch, 8 plies go by (your 4 turns and the Alien's 4
@@ -385,7 +387,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   add marbles and the fight ends at 6 ejections, so a marble count would never be reached (#621).
   A hatch never brings an earlier phase back; an egg keeps the counter it was laid with. The rim
   notches count the ejections left until the next phase.
-- **Calibrate**: knobs = starting marbles (8), lay interval (2), hatch time (4), egg cap (3), phase
+- **Calibrate**: knobs = starting marbles (7), lay interval (2), hatch time (4), egg cap (3), phase
   ejections (2, 4), AI depth (3). Fail if the median fight ends with fewer than 2 eggs crushed (nobody learns the
   counter) or the Alien's marble count only ever goes up (the brood outruns the player).
   Measured in #646 and #667 (`alien_sim`, 50 seeds, `boss-balance.md` section 3): the rule holds
@@ -418,14 +420,15 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   goes down by 1 after each of your moves; after your 5th move from the announce it passes,
   before the boss replies. At the end of your move the order is: the counters go down, the
   trains at 0 pass, then a new train may be announced.
-- **Rhythm**: the first train is announced at the start of the fight. Then a new one is
+- **Rhythm**: the first train is announced at the end of your **turn 1** (owner rule, #740), so you
+  see it during turn 2: there is none at the start. Then a new one is
   announced at the end of your turn `n` (your moves so far) when `n` is a multiple of **10** in
   P1, **5** in P2, **3** in P3, with the phase at the start of that turn.
 - **No overlap**: a new train takes a line that no announced train holds (lines may cross).
-  At most 2 trains are announced at once, and their passing turns always differ, as they were
-  announced on different turns.
+  At most 2 trains are announced at once, and their passing
+  turns always differ, as they were announced on different turns.
 - **Deterministic, for P2P**: the track is splitmix64 of the fight seed mixed with the ply (the
-  Hull's cracks; ply 0 for the train of the start), modulo the free tracks, in track order. No
+  Hull's cracks), modulo the free tracks, in track order. No
   `Math.random`, floats or clock: a Retry, the daily, a replayed game file and every peer get the
   same trains.
 - **Moves never change** (`rules.md` §10): a train is a hook between plies, like the Hull's
@@ -451,15 +454,18 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 ### 7.9 The Magnetizer: polarities that repel
 
 - **Concept**: the smelter's lifting magnets came back on by themselves. Whatever runs the Furnace
-  now charges your marbles, and two opposite charges side by side throw each other apart.
+  now charges the marbles, yours and its own, and two opposite charges side by side throw each
+  other apart.
 - **Board and sides**: standard radius 4 board, Furnace deck look (its magnet cranes). 14 marbles
   each on the standard layout. Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
-- **Polarity**: only **your** marbles carry a polarity (+, − or none), never the boss's. A polarity
-  moves with its marble (moves, pushes, repulsions); an ejected marble loses it. The fight starts
-  with none.
-- **Assignment** (owner rules, #671): one marble picked at random among your marbles on the board,
-  polarized or not, gets a polarity: a random sign (a PRNG coin) when it has none, the other sign
-  when it has one (it **flips**). No balance between + and −.
+- **Polarity**: any marble, **yours or the boss's**, can carry a polarity (+, − or none, owner rule
+  #740). A polarity moves with its marble (moves, pushes, repulsions); an ejected marble loses it.
+  The fight starts with none.
+- **Assignment** (owner rules, #671, #740): one marble picked at random among **every marble on the
+  board, both sides**, gets a polarity. The pool holds only the marbles with **no polarity**; the
+  polarized ones join it only when every marble is polarized. The signs **alternate over the whole
+  fight**, not per side: the first polarity is +, the next −, then + and so on. The picked marble
+  takes the next sign of the cycle (no change if it already holds it). No coin, no flip.
 - **Announce, one turn ahead**: at the start of your turn `t − 1`, when turn `t` is an assignment
   turn by the phase at that moment, the engine picks the marble and its coming sign and announces
   both. At the start of turn `t` that marble takes the announced sign (no change if it already
@@ -467,7 +473,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   changes in between; the following schedule uses the new phase. If the marble leaves the board
   before turn `t`, turn `t` picks a marble at random with no announce. In P3 the assignment of a
   turn and the announce of the next happen together.
-- **Repulsion**: two of your marbles of **opposite** polarity on adjacent cells repel: each moves
+- **Repulsion**: two marbles of **opposite** polarity on adjacent cells, of either side, repel: each moves
   **1 cell straight away from the other**, along the line they share. The push ignores sumito
   (owner rule): every marble in front of it on that line, of either side and any number, moves one
   cell too, and the last one goes off the board if the line reaches the rim (ejected). A boss
@@ -486,9 +492,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   - **P2** after your **3rd** ejection: every **2nd** turn (the even turns).
   - **P3** after your **5th** ejection: **every** turn.
   The phase is the one before the boss's ply that ends just before that turn.
-- **Deterministic, for P2P**: every random pick (the marble, the sign of an unpolarized one, the
-  pair) is splitmix64 of the fight seed mixed with the ply, in the engine, never
-  `Math.random`, floats or the clock.
+- **Deterministic, for P2P**: every random pick (the marble, the pair) is splitmix64 of the fight
+  seed mixed with the ply, in the engine, never `Math.random`, floats or the clock; the sign cycle
+  has no randomness.
 - **Tell**: a polarized marble wears a pale **+** or **−** glyph on top (a shape, not a colour,
   3:1 on both glass skins). A marble whose polarity the last assignment set or changed wears a
   pale ring until the next ply. The announced marble wears an indicator floating above it: the

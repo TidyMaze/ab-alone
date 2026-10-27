@@ -115,16 +115,18 @@ const CASES: Record<string, () => void> = {
   },
 
   railyard() {
-    // Fight seed 3 announces its first train at the start on the diagonal q + r = 0, from (4, -4) to (-4, 4).
+    // No train at the start: the first one is announced at the end of the player's turn 1, seen on turn 2.
     const railyard = newEncounter('railyard', 3);
-    const diagonal = [4, 3, 2, 1, 0, -1, -2, -3, -4].map((q) => ({ kind: 'train', cell: `(${q},${-q})`, value: 5 }));
     // Each cell of the line is a mark with the player turns left before the train passes; Encounter.tell() is 0, the
     // count down at the end of the player turn.
     expect(bossState('railyard', railyard)).toMatchObject({
       name: 'The Rail Yard',
       tell: { kind: 'special', cells: [], text: 'board special 0 fires after the next ply' },
-      marks: diagonal,
+      marks: [],
     });
+    // A train on the diagonal q + r = 0, from (4, -4) to (-4, 4), announced 5 turns ahead.
+    const diagonal = [4, 3, 2, 1, 0, -1, -2, -3, -4].map((q) => ({ kind: 'train', cell: `(${q},${-q})`, value: 5 }));
+    expect(bossState('railyard', withData(railyard, { trains: [22, 5, 4, -4, -4, 4] })).marks).toEqual(diagonal);
     const row = bossState('railyard', withData(railyard, { trains: [4, 2, 4, 0, -4, 0] }));
     expect(row.marks.map((mark) => mark.cell)).toEqual([4, 3, 2, 1, 0, -1, -2, -3, -4].map((q) => `(${q},0)`));
   },

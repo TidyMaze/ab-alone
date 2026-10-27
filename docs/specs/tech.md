@@ -514,6 +514,8 @@ No database server. Everything is client-side.
   or from an older peer that sends none (it predates the check, so its engine may differ): no seat,
   no presence, and the HUD shows `refused move: engine-version`. The creator still answers with its
   own `Hello`, so the joiner refuses it in turn, says so, and is never seated.
+  Version 4 (#740): the Magnetizer's alternating signs on both sides, the Rail Yard's first train
+  on turn 2, the Alien's 7 start marbles and near eggs.
 - Only third-party runtime dependencies: public STUN, signaling relays. Both degrade to the
   manual flow, single-player never needs them.
 

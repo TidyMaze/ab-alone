@@ -1,5 +1,6 @@
-//! The Alien (#588, docs/specs/game-design.md section 7.7): a brood that grows. It starts with 8
-//! marbles and lays an egg on an empty cell every 2nd boss turn. An egg is a mark on the board
+//! The Alien (#588, docs/specs/game-design.md section 7.7): a brood that grows. It starts with 7
+//! marbles and lays an egg on an empty cell every 2nd boss turn, within `ALIEN_EGG_REACH` cells
+//! of a player marble when it can. An egg is a mark on the board
 //! (`Board::eggs`), never a marble, so it changes no move or push. A marble that ends a ply on it
 //! crushes it; otherwise it hatches into a new Alien marble after 4 player turns. The egg cell is
 //! picked by a seeded integer PRNG of the fight seed and the ply, so every peer gets the same eggs.
@@ -13,9 +14,10 @@ use crate::search::{search_with, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
-/// The Alien's 8 start marbles: its back row (5), the 2 middle cells of its second row and the
-/// centre cell of its third row, a wedge symmetric about the board's middle line.
-pub const ALIEN_START: [P; 8] = [
+/// The Alien's 7 start marbles: its back row (5) and the 2 middle cells of its second row, a
+/// wedge symmetric about the board's middle line (its front marble, the one nearest the board
+/// centre, is dropped, #740).
+pub const ALIEN_START: [P; 7] = [
     (0, -4),
     (1, -4),
     (2, -4),
@@ -23,8 +25,10 @@ pub const ALIEN_START: [P; 8] = [
     (4, -4),
     (1, -3),
     (2, -3),
-    (1, -2),
 ];
+/// A new egg goes on a free cell at most this many cells (hex distance) from a player marble,
+/// when there is one. TUNE.
+pub const ALIEN_EGG_REACH: i32 = 3;
 /// Boss turns between two lays, per phase. TUNE.
 pub const ALIEN_LAY_EVERY: [u32; 3] = [2, 1, 1];
 /// Player turns before a new egg hatches, per phase. TUNE.
@@ -57,9 +61,16 @@ fn special(ply: u32, phase: usize) -> Option<u8> {
     })
 }
 
+/// Hex distance between two cells.
+fn distance(a: P, b: P) -> i32 {
+    let (dq, dr) = (a.0 - b.0, a.1 - b.1);
+    dq.abs().max(dr.abs()).max((dq + dr).abs())
+}
+
 /// End of a ply: an egg under a marble is crushed. Then a player turn counts the eggs down and
 /// hatches the ones at zero into Alien marbles, and a lay puts one egg on an empty cell picked by
-/// `seed`, unless `ALIEN_EGG_CAP` eggs are out.
+/// `seed` (within `ALIEN_EGG_REACH` of a player marble when such a cell is free), unless
+/// `ALIEN_EGG_CAP` eggs are out.
 fn hook(board: &Board, id: u8, seed: u64) -> Board {
     let mut out = board.clone();
     let mut eggs: Vec<_> = board
@@ -78,11 +89,27 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
         eggs.retain(|&(_, left)| left > 0);
     } else if id != ALIEN_BOSS_END && eggs.len() < ALIEN_EGG_CAP {
         let radius = board.radius();
-        let free: Vec<P> = (-radius..=radius)
+        let cells: Vec<P> = (-radius..=radius)
             .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
+            .collect();
+        let mut free: Vec<P> = cells
+            .iter()
+            .copied()
             .filter(|&(q, r)| board.get(q, r) == Some(Cell::Empty))
             .filter(|&c| eggs.iter().all(|&(e, _)| e != c))
             .collect();
+        let player: Vec<P> = cells
+            .into_iter()
+            .filter(|&(q, r)| board.get(q, r) == Some(Cell::Black))
+            .collect();
+        let near: Vec<P> = free
+            .iter()
+            .copied()
+            .filter(|&c| player.iter().any(|&p| distance(c, p) <= ALIEN_EGG_REACH))
+            .collect();
+        if !near.is_empty() {
+            free = near;
+        }
         if !free.is_empty() {
             eggs.push((free[(mix(seed) % free.len() as u64) as usize], id));
         }
@@ -224,11 +251,16 @@ mod tests {
     }
 
     #[test]
-    fn the_fight_starts_with_8_alien_marbles_against_14_and_no_egg() {
+    fn the_fight_starts_with_7_alien_marbles_against_14_and_no_egg() {
         let enc = alien_start(0);
         let b = enc.game().board();
         assert_eq!(marbles(b, Cell::Black), 14);
-        assert_eq!(marbles(b, Cell::White), 8);
+        assert_eq!(marbles(b, Cell::White), 7);
+        assert_eq!(
+            b.get(1, -2),
+            Some(Cell::Empty),
+            "the front marble is dropped"
+        );
         assert!(ALIEN_START
             .iter()
             .all(|&(q, r)| b.get(q, r) == Some(Cell::White)));
@@ -285,6 +317,45 @@ mod tests {
         picked.sort();
         picked.dedup();
         assert!(picked.len() > 10, "the seed spreads the eggs");
+    }
+
+    #[test]
+    fn an_egg_goes_within_3_cells_of_a_player_marble_when_such_a_cell_is_free() {
+        let (a, b) = ((-4, 0), (4, -4));
+        let start = board(&[a, b], &[(0, 0)], &[]);
+        let mut picked = Vec::new();
+        for seed in 0..64 {
+            let out = hook(&start, 4, seed);
+            let cell = out.eggs()[0].0;
+            assert!(
+                distance(cell, a).min(distance(cell, b)) <= 3,
+                "seed {seed}: {cell:?}"
+            );
+            picked.push(cell);
+        }
+        picked.sort();
+        picked.dedup();
+        assert!(picked.len() > 10, "the seed spreads the eggs");
+    }
+
+    #[test]
+    fn an_egg_goes_on_any_free_cell_when_none_is_near_a_player_marble() {
+        let start = board(&[], &[(0, 0)], &[]);
+        let far = (0..64)
+            .map(|seed| hook(&start, 4, seed).eggs()[0].0)
+            .any(|c| distance(c, (-4, 0)) > 3 && distance(c, (4, 0)) > 3);
+        assert!(far, "with no player marble the whole board is free");
+        let mut walled = board(&[(0, 0)], &[], &[]);
+        let near: Vec<P> = cells()
+            .filter(|&c| walled.get(c.0, c.1).is_some() && distance(c, (0, 0)) <= 3)
+            .collect();
+        for (q, r) in near.into_iter().filter(|&c| c != (0, 0)) {
+            walled.set(q, r, Cell::White);
+        }
+        for seed in 0..16 {
+            let cell = hook(&walled, 4, seed).eggs()[0].0;
+            assert_eq!(distance(cell, (0, 0)), 4, "the only free cells are far");
+        }
     }
 
     #[test]
@@ -384,11 +455,11 @@ mod tests {
             "down after each player turn"
         );
         assert_eq!(eggs(&enc).len(), 2, "the second egg after ply 8");
-        assert_eq!(whites(&enc), 8);
+        assert_eq!(whites(&enc), 7);
         quiet(&mut enc);
         assert_eq!(enc.game().board().get(cell.0, cell.1), Some(Cell::White));
         assert!(eggs(&enc).iter().all(|&(c, _)| c != cell));
-        assert_eq!(whites(&enc), 9, "hatched after ply 11");
+        assert_eq!(whites(&enc), 8, "hatched after ply 11");
         assert_eq!(
             enc.game().ejected(Player::Black),
             0,

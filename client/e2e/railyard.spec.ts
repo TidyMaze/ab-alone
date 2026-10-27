@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
 
-// The Rail Yard (#626, game-design.md section 7.8) from a fixture: fight seed 3 and ?bot=off, so the test plays both
-// sides with quiet moves through the click hook. The first train is announced at the start on the diagonal q + r = 0,
+// The Rail Yard (#626, game-design.md section 7.8) from a fixture: fight seed 77 and ?bot=off, so the test plays both
+// sides with quiet moves through the click hook. The first train is announced at the end of the player's turn 1 on the diagonal q + r = 0,
 // from (4, -4) to (-4, 4), where 3 marbles of each side sit. The screenshots are kept for the report.
 
 type Axial = [number, number];
@@ -16,7 +16,7 @@ const freshDraw = async (page: Page) => {
 
 async function startRailYard(page: Page, reducedMotion: boolean): Promise<void> {
   await page.addInitScript(() => {
-    crypto.getRandomValues = ((a: Uint32Array) => a.fill(3)) as typeof crypto.getRandomValues; // the fight seed
+    crypto.getRandomValues = ((a: Uint32Array) => a.fill(77)) as typeof crypto.getRandomValues; // the fight seed
   });
   await page.emulateMedia({ reducedMotion: reducedMotion ? 'reduce' : 'no-preference' });
   await page.goto('./?bot=off');
@@ -50,6 +50,8 @@ const outPips = (page: Page) => page.locator('#hud .pips > span').evaluateAll((s
 test('The Rail Yard: an announced train counts down, passes, sweeps both sides off its line, then P2, #626', async ({ page }, testInfo) => {
   const body = page.locator('body');
   await startRailYard(page, true);
+  await expect(body).toHaveAttribute('data-trains', '0'); // none at the start
+  await quiet(page, 1); // the end of the player's turn 1
   await expect(body).toHaveAttribute('data-trains', '1');
   await expect(body).toHaveAttribute('data-train-counters', '5');
   await expect(page.locator('#hud .boss .tell')).toHaveText('Trains pass: 1 in 5 turns');
@@ -58,16 +60,16 @@ test('The Rail Yard: an announced train counts down, passes, sweeps both sides o
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('railyard-announced.png') });
   await quiet(page, 1);
-  await expect(body).toHaveAttribute('data-train-counters', '4'); // down after the player move
+  await expect(body).toHaveAttribute('data-train-counters', '5'); // not after the boss move
   await quiet(page, 1);
-  await expect(body).toHaveAttribute('data-train-counters', '4'); // not after the boss move
-  await quiet(page, 6);
+  await expect(body).toHaveAttribute('data-train-counters', '4'); // down after the player move
+  await quiet(page, 7);
   await expect(body).toHaveAttribute('data-train-counters', '1');
   await expect(page.locator('#hud .notch.active')).toHaveText('P1');
   expect(await outPips(page)).toEqual([0, 0]);
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('railyard-on-1.png') });
-  await quiet(page, 1); // the player's 5th move: the train passes
+  await quiet(page, 1); // the player's 6th move: the train passes
   await expect(body).toHaveAttribute('data-trains', '0');
   await expect(body).toHaveAttribute('data-passing', '0');
   expect(await outPips(page)).toEqual([3, 3]); // 3 boss marbles for the player, 3 of the player's for the boss
@@ -80,7 +82,7 @@ test('The Rail Yard: the freight train runs the line and knocks the marbles off,
   const body = page.locator('body');
   await startRailYard(page, false);
   await page.mouse.move(2, 2); // no hover ghost
-  for (let ply = 1; ply <= 9; ply++) {
+  for (let ply = 1; ply <= 11; ply++) {
     await page.waitForFunction(() => document.body.dataset.sliding === undefined); // a move waits for the last slide
     await quiet(page, 1);
   }

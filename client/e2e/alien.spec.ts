@@ -2,13 +2,14 @@ import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
 
 // The Alien (#588, game-design.md section 7.7) from a fixture: fight seed 7 and ?bot=off, so the test plays both sides
-// with quiet forward moves through the click hook. They lay the first egg on (-3, 1) at ply 4, next to a Black
+// with quiet forward moves through the click hook. They lay the first egg on (2, 1) at ply 4, within 3 cells of a Black
 // marble. The screenshots are kept for the report.
 
 type Axial = [number, number];
 type Move = { cells: Axial[]; dir: number };
 type Egg = { cell: Axial; left: number; glow: boolean };
-const FIRST_EGG: Axial = [-3, 1];
+const FIRST_EGG: Axial = [2, 1];
+const CRUSH_SEED = 10; // a seed whose first egg a single Black marble can reach
 
 const eggs = (page: Page) => page.evaluate(() => (window as any).__eggs()) as Promise<Egg[]>;
 
@@ -18,10 +19,10 @@ const freshDraw = async (page: Page) => {
   await page.waitForFunction((n) => (window as any).__draws() > n, asked);
 };
 
-async function startAlien(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    crypto.getRandomValues = ((a: Uint32Array) => a.fill(7)) as typeof crypto.getRandomValues; // the fight seed
-  });
+async function startAlien(page: Page, seed = 7): Promise<void> {
+  await page.addInitScript((fill) => {
+    crypto.getRandomValues = ((a: Uint32Array) => a.fill(fill)) as typeof crypto.getRandomValues; // the fight seed
+  }, seed);
   await page.emulateMedia({ reducedMotion: 'reduce' }); // slides take no time
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
@@ -81,14 +82,17 @@ test('The Alien lays an egg whose counter goes down, then it hatches into an Ali
 
 test('The Alien: a marble that ends its move on an egg crushes it, #588', async ({ page }, testInfo) => {
   const body = page.locator('body');
-  await startAlien(page);
+  await startAlien(page, CRUSH_SEED);
   await quiet(page, 4);
-  expect((await eggs(page)).map((e) => e.cell)).toEqual([FIRST_EGG]);
-  await page.evaluate(() => {
+  const [{ cell: egg }] = (await eggs(page)) as [Egg];
+  await page.evaluate((target) => {
     const w = window as any;
-    w.__click(-3, 2); // Black (-3, 2) NW onto the egg
-    w.__click(-3, 1);
-  });
+    const DIRS = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
+    const onto = (m: Move) => [m.cells[0]![0] + DIRS[m.dir]![0]!, m.cells[0]![1] + DIRS[m.dir]![1]!];
+    const mv = w.__legal().find((m: Move) => m.cells.length === 1 && String(onto(m)) === String(target));
+    w.__click(...mv.cells[0]); // a Black marble onto the egg
+    w.__click(...target);
+  }, egg);
   await expect(body).toHaveAttribute('data-eggs', '0');
   await expect(page.locator('#hud .boss .tell')).toHaveCount(0);
   await page.mouse.move(2, 2);

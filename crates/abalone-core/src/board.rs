@@ -88,6 +88,9 @@ pub struct Board {
     /// The Magnetizer's announce: the player marble picked for the next assignment and its coming
     /// sign, the cell `None` once that marble left the board.
     announce: Option<Announce>,
+    /// The sign of the last polarity The Magnetizer assigned this fight, `0` before the first: the
+    /// next one is the other sign, + first.
+    last_sign: i8,
     /// The Pulsar's active pulsar (the direction code it pushes in) and the player turns played in
     /// its cycle.
     pulsar: Option<(u8, u8)>,
@@ -123,6 +126,7 @@ impl Board {
             trains: Vec::new(),
             polarities: Vec::new(),
             announce: None,
+            last_sign: 0,
             pulsar: None,
             incinerators: Vec::new(),
         }
@@ -203,6 +207,15 @@ impl Board {
 
     pub fn set_announce(&mut self, announce: Option<Announce>) {
         self.announce = announce;
+    }
+
+    /// The sign of the last polarity assigned (The Magnetizer), `0` before the first.
+    pub fn last_sign(&self) -> i8 {
+        self.last_sign
+    }
+
+    pub fn set_last_sign(&mut self, sign: i8) {
+        self.last_sign = sign;
     }
 
     /// The Pulsar's active pulsar, as the direction code it pushes in, and the player turns played
@@ -533,6 +546,14 @@ mod tests {
         assert_ne!(board, Board::empty());
         board.set_announce(None);
         assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn the_last_sign_starts_at_zero_and_is_replaced() {
+        let mut board = Board::empty();
+        assert_eq!(board.last_sign(), 0);
+        board.set_last_sign(-1);
+        assert_eq!(board.last_sign(), -1);
     }
 
     #[test]
