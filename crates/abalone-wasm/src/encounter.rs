@@ -11,9 +11,7 @@ use abalone_core::encounter::assembly::{
 };
 use abalone_core::encounter::ballast::{ballast_boss, ballast_move, ballast_start, ballast_tell};
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
-use abalone_core::encounter::choir::{
-    choir_boss, Army, Choir, ChoirError, ARMY_SIZE, CYCLE, PHASE_ARMIES,
-};
+use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
@@ -50,6 +48,19 @@ impl Fight {
     }
 }
 
+/// Notches of a boss whose phases come from the player's ejections: `[lit, dark]`, one lit notch
+/// per ejection left until the next phase, one dark notch per ejection since this phase began.
+/// Empty in the last phase.
+fn ejection_notches(game: &Game, thresholds: &[u8], phase: usize) -> Vec<u8> {
+    let done = game.ejected(Player::Black);
+    let steps: Vec<u8> = std::iter::once(0)
+        .chain(thresholds.iter().copied())
+        .collect();
+    steps
+        .get(phase + 1)
+        .map_or_else(Vec::new, |&to| vec![to - done, done - steps[phase]])
+}
+
 /// One boss of the roster. Adding a boss is one line in [`BOSSES`].
 struct BossEntry {
     id: &'static str,
@@ -72,9 +83,9 @@ fn plain_fight(def: BossDef, seed: u64) -> Fight {
     Fight::Plain(CoreEncounter::new(Game::new(), def, seed))
 }
 
-/// The Choir sets up its own board, and its play does not depend on a seed.
-fn choir_fight(_def: BossDef, _seed: u64) -> Fight {
-    Fight::Choir(Choir::start())
+/// The Choir sets up its own board and armies; the seed breaks the ties of the army removals.
+fn choir_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Choir(Choir::start(seed))
 }
 
 /// The Ballast Mind sets up its own radius 5 board.
@@ -269,7 +280,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    4 // 4: Magnetizer signs alternate on both sides, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    5 // 5: The Choir's rework, standard board, three armies of 6 (#747); 4: Magnetizer signs alternate on both sides, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -335,28 +346,21 @@ impl Encounter {
                 let def = (self.entry.def)();
                 def.phase_marbles.len() + def.phase_ejections.len()
             }
-            Fight::Choir(_) => PHASE_ARMIES.len(),
+            Fight::Choir(_) => PHASE_EJECTIONS.len(),
         };
         steps as u8 + 1
     }
 
     /// The phase notches on the arena frame (#356, docs/specs/world.md section 6 rule 4):
     /// `[lit, dark]`, one lit notch per boss marble left until the next phase, one dark notch per
-    /// boss marble lost since this phase began. Empty in the last phase. The Choir's next phase
-    /// comes when its smallest army is wiped. The Alien's phases count the ejections credited to
-    /// the player (#621): one lit notch per ejection left until the next phase, one dark notch per
-    /// ejection since this phase began.
+    /// boss marble lost since this phase began. Empty in the last phase. The phases of the Alien
+    /// (#621) and of the Choir count the ejections credited to the player: one lit notch per
+    /// ejection left until the next phase, one dark notch per ejection since this phase began.
     pub fn phase_notches(&self) -> Vec<u8> {
         let phase = self.phase() as usize;
         match &self.fight {
             Fight::Plain(e) if !(self.entry.def)().phase_ejections.is_empty() => {
-                let done = e.game().ejected(Player::Black);
-                let steps: Vec<u8> = std::iter::once(0)
-                    .chain((self.entry.def)().phase_ejections)
-                    .collect();
-                steps
-                    .get(phase + 1)
-                    .map_or_else(Vec::new, |&to| vec![to - done, done - steps[phase]])
+                ejection_notches(e.game(), &(self.entry.def)().phase_ejections, phase)
             }
             Fight::Plain(e) => {
                 let start = (self.entry.start)((self.entry.def)(), 0);
@@ -366,11 +370,7 @@ impl Encounter {
                 let left = marbles(e.game().board(), Cell::White);
                 notches(left, steps[phase], steps.get(phase + 1).copied())
             }
-            Fight::Choir(c) => {
-                let army = CYCLE.iter().map(|&a| c.army_marbles(a)).filter(|&n| n > 0);
-                let next = (phase < PHASE_ARMIES.len()).then_some(0);
-                notches(army.min().unwrap_or(0), ARMY_SIZE as u8, next)
-            }
+            Fight::Choir(c) => ejection_notches(c.game(), &PHASE_EJECTIONS, phase),
         }
     }
 
@@ -439,7 +439,7 @@ impl Encounter {
         }
     }
 
-    /// The 61 cells, board specials included. On the Choir's radius 3 board the outer ring is `3`.
+    /// The 61 cells, board specials included.
     pub fn board(&self) -> Vec<u8> {
         board_bytes(self.fight.game().board())
     }
@@ -624,13 +624,16 @@ impl Encounter {
         cell_list(self.fight.game().board().incinerators())
     }
 
-    /// The marbles the last ply's hook removed (The Overseer's burns) as `[q, r, code]` records,
-    /// the board code of what burnt.
+    /// The marbles the last ply removed as `[q, r, code]` records, the board code of what was
+    /// removed: The Overseer's burns, or the army The Choir removed (White marbles).
     pub fn removed(&self) -> Vec<i32> {
-        let Fight::Plain(e) = &self.fight else {
-            return Vec::new();
+        let removed: Vec<_> = match &self.fight {
+            Fight::Plain(e) => e.removed().to_vec(),
+            Fight::Choir(c) => c.last_removal().map_or_else(Vec::new, |(_, cells)| {
+                cells.iter().map(|&cell| (cell, Cell::White)).collect()
+            }),
         };
-        e.removed()
+        removed
             .iter()
             .flat_map(|&((q, r), cell)| [q, r, i32::from(code(Some(cell)))])
             .collect()
@@ -675,8 +678,7 @@ impl Encounter {
         self.fight.game().ejected(player(side))
     }
 
-    /// Ejections a side needs to win: `1` Black, `2` White. 6, but 10 for the player against the
-    /// Choir (Decision #131).
+    /// Ejections a side needs to win: `1` Black, `2` White.
     pub fn win_ejections(&self, side: u8) -> u8 {
         self.fight.game().win_ejections(player(side))
     }
@@ -724,8 +726,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_4_since_the_boss_rule_tweaks() {
-        assert_eq!(engine_version(), 4);
+    fn the_engine_version_is_5_since_the_choir_rework() {
+        assert_eq!(engine_version(), 5);
     }
 
     #[test]
@@ -1499,7 +1501,7 @@ mod tests {
     }
 
     #[test]
-    fn the_choir_starts_on_a_radius_3_board_with_three_armies_of_four() {
+    fn the_choir_starts_on_the_standard_board_with_three_armies_of_six() {
         let f = choir();
         assert_eq!(f.name(), "The Choir");
         assert_eq!(
@@ -1508,18 +1510,14 @@ mod tests {
         );
         let cells = f.board();
         assert_eq!(cells.len(), 61, "the board keeps its 61 slots");
-        assert_eq!(count(&cells, 3), 24, "the outer ring is a hole");
-        assert_eq!((count(&cells, 1), count(&cells, 2)), (10, 12));
-        assert_eq!(f.armies().len(), 12 * 3);
+        assert_eq!(count(&cells, 3), 0, "no hole: the standard board");
+        assert_eq!((count(&cells, 1), count(&cells, 2)), (14, 18));
+        assert_eq!(f.armies().len(), 18 * 3);
         assert_eq!(army_cells(&f, 0), ALTO_START.to_vec());
         assert_eq!(army_cells(&f, 1), TENOR_START.to_vec());
         assert_eq!(army_cells(&f, 2), BASS_START.to_vec());
         assert_eq!(f.next_army(), 0, "Alto moves first");
-        assert_eq!(
-            (f.win_ejections(1), f.win_ejections(2)),
-            (10, 6),
-            "Decision #131"
-        );
+        assert_eq!((f.win_ejections(1), f.win_ejections(2)), (6, 6));
         assert_eq!(f.tell(), -1, "no board special");
         assert!(f.cracks().is_empty() && f.flips().is_empty() && f.converted().is_empty());
         assert!(
@@ -1545,6 +1543,39 @@ mod tests {
         assert_eq!(f.to_move(), 1);
         assert_eq!(f.next_army(), 1, "Tenor next");
         assert!(f.boss_move().is_empty(), "the player's turn");
+    }
+
+    #[test]
+    fn the_choir_reports_the_army_it_removed_at_the_third_ejection() {
+        let mut board = Board::empty();
+        let mut members = Vec::new();
+        for (cell, color, army) in [
+            ((2, 0), Cell::Black, None),
+            ((3, 0), Cell::Black, None),
+            ((-4, 4), Cell::Black, None),
+            ((4, 0), Cell::White, Some(Army::Alto)),
+            ((0, -3), Cell::White, Some(Army::Alto)),
+            ((-4, 1), Cell::White, Some(Army::Bass)),
+        ] {
+            board.set(cell.0, cell.1, color);
+            members.extend(army.map(|a| (cell, a)));
+        }
+        let game = Game::from_position(board, Player::Black, [2, 0]);
+        let mut f = Encounter {
+            fight: Fight::Choir(Choir::from_position(game, members, 7)),
+            entry: boss_entry("choir").unwrap(),
+        };
+        assert!(f.removed().is_empty());
+        assert_eq!(f.phase_notches(), vec![1, 2]);
+        f.play(&[2, 0, 2, 0, 3, 0, 0, 0]).unwrap();
+        assert_eq!(
+            (f.phase(), f.ejected(1)),
+            (1, 3),
+            "the removal is no ejection"
+        );
+        assert_eq!(f.removed(), vec![-4, 1, 2], "the Bass marble, a White one");
+        assert_eq!(army_cells(&f, 2), vec![]);
+        assert_eq!(f.phase_notches(), vec![2, 0]);
     }
 
     #[test]
@@ -1602,7 +1633,7 @@ mod tests {
         assert_eq!(lit("echo"), vec![4, 0], "14 boss marbles, P2 at 10");
         assert_eq!(lit("hull"), vec![4, 0], "14 boss marbles, P2 at 10");
         assert_eq!(lit("chaplain"), vec![6, 0], "14 boss marbles, P2 at 8");
-        assert_eq!(lit("choir"), vec![4, 0], "P2 once an army of four is wiped");
+        assert_eq!(lit("choir"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");
         assert_eq!(lit("alien"), vec![2, 0], "P2 after 2 ejections");
         assert_eq!(lit("railyard"), vec![3, 0], "P2 after 3 ejections");

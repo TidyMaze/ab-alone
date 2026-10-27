@@ -97,7 +97,7 @@ impl Arena {
             LadderBoss::Echo => plain(echo_boss()),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
-            LadderBoss::Choir => Arena::Choir(Choir::start()),
+            LadderBoss::Choir => Arena::Choir(Choir::start(seed)),
         }
     }
 

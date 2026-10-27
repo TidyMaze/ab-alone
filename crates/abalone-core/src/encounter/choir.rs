@@ -1,60 +1,35 @@
-//! The Choir (#44, docs/specs/game-design.md section 7.2): three boss armies of four marbles,
-//! Alto, Tenor and Bass, on a radius 3 board. Only one army moves per boss turn, in a fixed
-//! cycle, and the army that moves next is the tell. Which army owns which boss marble lives in
-//! [`Choir`], next to the encounter, and follows every move and push.
+//! The Choir (#44, #747, docs/specs/game-design.md section 7.2): three boss armies of six marbles,
+//! Alto, Tenor and Bass, in triangles on the standard board. Only one army moves per boss turn, in
+//! a fixed cycle, and the army that moves next is the tell. Which army owns which boss marble
+//! lives in [`Choir`], next to the encounter, and follows every move and push.
 //!
-//! P1: three armies. P2: one army is wiped, the two others alternate and the army in turn plays
-//! a free extra move on every fourth boss turn. P3: one army is left, it plays every turn and
-//! cannot push (no sumito).
+//! P1: three armies. P2 (3 ejections) and P3 (5 ejections): the army with the fewest marbles left
+//! is removed at once, not counted as an ejection (a tie is broken by the fight seed). In P3 the
+//! last army plays two moves each boss turn.
 
 use crate::board::{Board, Cell};
+use crate::encounter::hull::mix;
 use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
-use crate::game::{Game, GameError, WIN_EJECTIONS};
-use crate::moves::{apply, legal_moves, Move, Player};
+use crate::game::{Game, GameError};
+use crate::moves::{legal_moves, Move, Player};
 use crate::search::{search_with, Weights};
 
 type P = (i32, i32);
 
-/// Radius of the Choir board: the outer ring of the standard board is void.
-pub const CHOIR_RADIUS: i32 = 3;
 /// Marbles per boss army.
-pub const ARMY_SIZE: usize = 4;
-/// Player marbles at the start.
-pub const PLAYER_MARBLES: usize = 10;
-/// Boss marbles the player must eject to win (Decision #131): P3 starts at 8, when two armies are
-/// wiped, so the last army is fought for two more. The boss still wins at 6.
-pub const CHOIR_WIN_EJECTIONS: u8 = 10;
-/// Alto start, the back row. Boss side is the top of the board (r < 0).
-pub const ALTO_START: [P; ARMY_SIZE] = [(0, -3), (1, -3), (2, -3), (3, -3)];
-/// Tenor start, the middle row.
-pub const TENOR_START: [P; ARMY_SIZE] = [(-1, -2), (0, -2), (1, -2), (2, -2)];
-/// Bass start, the front row, closest to the player: the intended opener.
-pub const BASS_START: [P; ARMY_SIZE] = [(-2, -1), (-1, -1), (0, -1), (1, -1)];
-/// Player start: the two bottom rows and one marble ahead of them.
-pub const PLAYER_START: [P; PLAYER_MARBLES] = [
-    (-3, 3),
-    (-2, 3),
-    (-1, 3),
-    (0, 3),
-    (-3, 2),
-    (-2, 2),
-    (-1, 2),
-    (0, 2),
-    (1, 2),
-    (0, 1),
-];
-/// Boss turns between two free extra moves in P2. TUNE.
-pub const FREE_MOVE_EVERY: u32 = 4;
-/// Phase (0 based) where the free extra move exists.
-pub const FREE_MOVE_PHASE: usize = 1;
-/// Last phase (0 based): the army left cannot push.
+pub const ARMY_SIZE: usize = 6;
+/// Alto start: the left triangle, pointing up (one marble at the top, three at the bottom).
+pub const ALTO_START: [P; ARMY_SIZE] = [(-1, -3), (-2, -2), (-1, -2), (-3, -1), (-2, -1), (-1, -1)];
+/// Tenor start: the middle triangle, pointing down.
+pub const TENOR_START: [P; ARMY_SIZE] = [(1, -4), (2, -4), (3, -4), (1, -3), (2, -3), (1, -2)];
+/// Bass start: the right triangle, pointing up.
+pub const BASS_START: [P; ARMY_SIZE] = [(4, -3), (3, -2), (4, -2), (2, -1), (3, -1), (4, -1)];
+/// Ejections that start P2 and P3: the weakest army is removed at each. TUNE.
+pub const PHASE_EJECTIONS: [u8; 2] = [3, 5];
+/// The phase (0 based) where the last army plays twice each boss turn.
 pub const LAST_PHASE: usize = 2;
-/// P2 starts with this many armies left or fewer, P3 with this many. TUNE.
-pub const PHASE_ARMIES: [usize; 2] = [2, 1];
 /// Positions the boss search may visit per move. TUNE.
 pub const CHOIR_NODE_BUDGET: u32 = 1500;
-/// Seed of the encounter: the Choir has no seeded hook.
-pub const CHOIR_SEED: u64 = 0;
 
 /// Alto pushes: ejections count triple. TUNE.
 pub const ALTO_WEIGHTS: Weights = Weights {
@@ -120,8 +95,6 @@ pub enum ChoirError {
     Game(GameError),
     /// A boss move that uses a marble of an army that is not in turn.
     WrongArmy,
-    /// A boss move that pushes a player marble, in P3.
-    NoPush,
 }
 
 /// A game against the Choir. The player is Black and moves first, the boss is White.
@@ -132,57 +105,23 @@ pub struct Choir {
     members: Vec<(P, Army)>,
     /// Index in [`CYCLE`] of the army that moves next, before wiped armies are skipped.
     cycle_pos: usize,
-    /// Boss turns finished.
-    boss_turns: u32,
-    /// The army in turn has a free extra move to play now.
-    free_move: bool,
-}
-
-/// Distance of a cell from the centre, in steps.
-fn centre_distance((q, r): P) -> i32 {
-    q.abs().max(r.abs()).max((q + r).abs())
-}
-
-/// The Choir board with no marble: the standard board with its outer ring void.
-fn arena() -> Board {
-    let mut board = Board::empty();
-    let radius = board.radius();
-    for q in -radius..=radius {
-        for r in -radius..=radius {
-            if board.get(q, r).is_some() && centre_distance((q, r)) > CHOIR_RADIUS {
-                board.void(q, r);
-            }
-        }
-    }
-    board
-}
-
-/// Cells of the Black marbles on `board`.
-fn black_cells(board: &Board) -> Vec<P> {
-    let mut out = Vec::new();
-    let radius = board.radius();
-    for q in -radius..=radius {
-        for r in -radius..=radius {
-            if board.get(q, r) == Some(Cell::Black) {
-                out.push((q, r));
-            }
-        }
-    }
-    out
-}
-
-/// `true` when `mv` changes the Black marbles: a push or an ejection.
-fn pushes(board: &Board, mv: &Move) -> bool {
-    apply(board, Player::White, mv)
-        .is_ok_and(|(after, _)| black_cells(&after) != black_cells(board))
+    /// The last army has played the first of its two moves this boss turn.
+    second_move: bool,
+    /// The army the last ply removed and the cells it stood on (the sinking animation).
+    last_removal: Option<(Army, Vec<P>)>,
 }
 
 impl Choir {
-    /// The start layout: 12 boss marbles in three armies, 10 player marbles.
-    pub fn start() -> Self {
-        let mut board = arena();
-        for (q, r) in PLAYER_START {
-            board.set(q, r, Cell::Black);
+    /// The start layout: the standard board with 14 player marbles and 18 boss marbles in three
+    /// armies. The `seed` breaks the ties between armies for the removal.
+    pub fn start(seed: u64) -> Self {
+        let mut board = Board::standard();
+        for q in -4..=4 {
+            for r in -4..=4 {
+                if board.get(q, r) == Some(Cell::White) {
+                    board.set(q, r, Cell::Empty);
+                }
+            }
         }
         let mut members = Vec::new();
         for army in CYCLE {
@@ -191,14 +130,21 @@ impl Choir {
                 members.push((cell, army));
             }
         }
-        let game = Game::from_position(board, Player::Black, [0, 0])
-            .with_win([CHOIR_WIN_EJECTIONS, WIN_EJECTIONS]);
+        Self::from_position(
+            Game::from_position(board, Player::Black, [0, 0]),
+            members,
+            seed,
+        )
+    }
+
+    /// A fight resumed from a position: `members` are the boss marbles with their army.
+    pub fn from_position(game: Game, members: Vec<(P, Army)>, seed: u64) -> Self {
         Self {
-            enc: Encounter::new(game, choir_boss(), CHOIR_SEED),
+            enc: Encounter::new(game, choir_boss(), seed),
             members,
             cycle_pos: 0,
-            boss_turns: 0,
-            free_move: false,
+            second_move: false,
+            last_removal: None,
         }
     }
 
@@ -221,24 +167,22 @@ impl Choir {
         self.members.iter().filter(|m| m.1 == army).count() as u8
     }
 
-    /// `true` when `mv` is allowed for `army`: its marbles only, and no push in P3.
-    fn allows(&self, army: Army, mv: &Move) -> bool {
-        mv.cells.iter().all(|&c| self.army_at(c) == Some(army))
-            && !(self.phase() == LAST_PHASE && pushes(self.game().board(), mv))
+    /// The army the last ply removed and the cells it stood on, `None` when it removed none.
+    pub fn last_removal(&self) -> Option<&(Army, Vec<P>)> {
+        self.last_removal.as_ref()
     }
 
-    /// `true` when `army` has at least one move it is allowed to play.
+    /// `true` when `army` has at least one move it may play.
     fn can_move(&self, army: Army) -> bool {
         legal_moves(self.game().board(), Player::White)
             .iter()
-            .any(|mv| self.allows(army, mv))
+            .any(|mv| mv.cells.iter().all(|&c| self.army_at(c) == Some(army)))
     }
 
     /// The army in turn: the next of the cycle that has marbles and a move it may play (#172).
-    /// An army boxed in, or left with pushes only in P3, is skipped like a wiped one. When no
-    /// army can move, the next one with marbles: the boss then passes (see [`Choir::play`]).
-    /// On the player's turn this reads the board as it is, so the tell can change with the
-    /// player's move.
+    /// An army boxed in is skipped like a removed one. When no army can move, the next one with
+    /// marbles: the boss then passes (see [`Choir::play`]). On the player's turn this reads the
+    /// board as it is, so the tell can change with the player's move.
     fn army_in_turn(&self) -> Army {
         let from = |i: usize| CYCLE[(self.cycle_pos + i) % CYCLE.len()];
         (0..CYCLE.len())
@@ -257,26 +201,22 @@ impl Choir {
         self.game().outcome().is_none().then(|| self.army_in_turn())
     }
 
-    /// Current phase, 0 at the start: one more for each step of [`PHASE_ARMIES`] reached.
+    /// Current phase, 0 at the start: one more for each step of [`PHASE_EJECTIONS`] reached.
     pub fn phase(&self) -> usize {
-        let alive = CYCLE.iter().filter(|&&a| self.army_marbles(a) > 0).count();
-        PHASE_ARMIES.iter().filter(|&&n| alive <= n).count()
+        self.enc.phase()
     }
 
-    /// Refuses a boss move that uses a marble outside the army in turn, or pushes in P3.
+    /// Refuses a boss move that uses a marble outside the army in turn.
     fn check(&self, mv: &Move) -> Result<(), ChoirError> {
         let army = self.army_in_turn();
         if mv.cells.iter().any(|&c| self.army_at(c) != Some(army)) {
             return Err(ChoirError::WrongArmy);
         }
-        if !self.allows(army, mv) {
-            return Err(ChoirError::NoPush);
-        }
         Ok(())
     }
 
     /// Moves the side to move may play: every legal move for the player, for the boss the moves of
-    /// the army in turn that [`Choir::play`] accepts (no push in P3). Empty once the game is over.
+    /// the army in turn. Empty once the game is over.
     pub fn legal_moves(&self) -> Vec<Move> {
         let game = self.game();
         if game.outcome().is_some() {
@@ -310,27 +250,65 @@ impl Choir {
             .filter(|(c, _)| board.get(c.0, c.1) == Some(Cell::White))
             .map(|(c, m)| (c, m.1))
             .collect();
+        self.last_removal = None;
         if boss_turn {
             self.end_boss_move(mover);
-        } else if self.enc.game.outcome().is_none() && !self.can_move(self.army_in_turn()) {
-            // No army can move: the boss passes (rules.md section 7) and the player goes again.
-            self.enc.game.pass();
+        } else {
+            while self.alive() > CYCLE.len() - self.phase() {
+                self.remove_weakest();
+            }
+            if self.enc.game.outcome().is_none() && !self.can_move(self.army_in_turn()) {
+                // No army can move: the boss passes (rules.md section 7) and the player goes again.
+                self.enc.game.pass();
+            }
         }
         Ok(())
     }
 
-    /// After a boss move: grants the free extra move on every [`FREE_MOVE_EVERY`]th boss turn of
-    /// P2 (the same army plays again, the player passes), else ends the boss turn.
+    /// Armies with marbles left.
+    fn alive(&self) -> usize {
+        CYCLE.iter().filter(|&&a| self.army_marbles(a) > 0).count()
+    }
+
+    /// Removes the army with the fewest marbles left, a tie broken by the fight seed and the ply.
+    /// Its marbles leave the board and count for nobody.
+    fn remove_weakest(&mut self) {
+        let alive: Vec<Army> = CYCLE
+            .into_iter()
+            .filter(|&a| self.army_marbles(a) > 0)
+            .collect();
+        let fewest = alive.iter().map(|&a| self.army_marbles(a)).min();
+        let weakest: Vec<Army> = alive
+            .into_iter()
+            .filter(|&a| Some(self.army_marbles(a)) == fewest)
+            .collect();
+        let ply = self.game().history().len() as u64;
+        let army = weakest[(mix(self.enc.seed ^ ply) % weakest.len() as u64) as usize];
+        let cells: Vec<P> = self
+            .members
+            .iter()
+            .filter(|m| m.1 == army)
+            .map(|m| m.0)
+            .collect();
+        let mut board = self.game().board().clone();
+        for &(q, r) in &cells {
+            board.set(q, r, Cell::Empty);
+        }
+        self.enc.game.replace_board(board);
+        self.members.retain(|m| m.1 != army);
+        self.last_removal = Some((army, cells));
+    }
+
+    /// After a boss move: in P3 the last army plays again (the player passes), else ends the
+    /// boss turn.
     fn end_boss_move(&mut self, mover: Army) {
-        let free_turn = (self.boss_turns + 1).is_multiple_of(FREE_MOVE_EVERY);
-        if !self.free_move && self.phase() == FREE_MOVE_PHASE && free_turn {
-            self.free_move = true;
+        if self.phase() == LAST_PHASE && !self.second_move {
+            self.second_move = true;
             self.cycle_pos = mover.index();
             self.enc.game.pass();
         } else {
-            self.free_move = false;
+            self.second_move = false;
             self.cycle_pos = (mover.index() + 1) % CYCLE.len();
-            self.boss_turns += 1;
         }
     }
 
@@ -352,13 +330,13 @@ impl Choir {
     }
 }
 
-/// The Choir boss definition. Its phases come from the armies left, not from a marble count, so
-/// `phase_marbles` is empty and [`Choir::phase`] is the phase.
+/// The Choir boss definition. Its phases come from the player's ejections, and each phase
+/// removes an army (see [`Choir::play`]).
 pub fn choir_boss() -> BossDef {
     BossDef {
         name: "The Choir",
         phase_marbles: Vec::new(),
-        phase_ejections: Vec::new(),
+        phase_ejections: PHASE_EJECTIONS.to_vec(),
         special: no_special,
         hook: keep_board,
         node_budget: CHOIR_NODE_BUDGET,
@@ -423,17 +401,18 @@ mod tests {
                 members.push((c, army));
             }
         }
-        Choir {
-            enc: Encounter::new(
-                Game::from_position(board, to_move, ejected),
-                choir_boss(),
-                0,
-            ),
-            members,
-            cycle_pos,
-            second_move: false,
-            last_removal: None,
-        }
+        let mut choir =
+            Choir::from_position(Game::from_position(board, to_move, ejected), members, 0);
+        choir.cycle_pos = cycle_pos;
+        choir.scale_node_budget(5);
+        choir
+    }
+
+    /// The start layout with a small search budget: the debug build is slow.
+    fn fast_start(seed: u64) -> Choir {
+        let mut c = Choir::start(seed);
+        c.scale_node_budget(5);
+        c
     }
 
     fn standard_black() -> Vec<P> {
@@ -482,9 +461,14 @@ mod tests {
 
     #[test]
     fn layout_is_the_standard_board_with_14_player_and_18_boss_marbles() {
-        let c = Choir::start(0);
+        let c = fast_start(0);
         let board = c.game().board();
-        assert_eq!(all_cells().filter(|&(q, r)| board.get(q, r).is_some()).count(), 61);
+        assert_eq!(
+            all_cells()
+                .filter(|&(q, r)| board.get(q, r).is_some())
+                .count(),
+            61
+        );
         assert_eq!(cells_of(board, Cell::Black), standard_black());
         assert_eq!(cells_of(board, Cell::White).len(), 18);
         assert_eq!(ARMY_SIZE, 6);
@@ -516,13 +500,25 @@ mod tests {
             counts
         };
         assert_eq!(rows(Alto), [(-3, 1), (-2, 2), (-1, 3)], "left, pointing up");
-        assert_eq!(rows(Tenor), [(-4, 3), (-3, 2), (-2, 1)], "middle, pointing down");
-        assert_eq!(rows(Bass), [(-3, 1), (-2, 2), (-1, 3)], "right, pointing up");
+        assert_eq!(
+            rows(Tenor),
+            [(-4, 3), (-3, 2), (-2, 1)],
+            "middle, pointing down"
+        );
+        assert_eq!(
+            rows(Bass),
+            [(-3, 1), (-2, 2), (-1, 3)],
+            "right, pointing up"
+        );
         let x = |a: Army| a.start().iter().map(|c| 2 * c.0 + c.1).sum::<i32>();
         assert!(x(Alto) < x(Tenor) && x(Tenor) < x(Bass), "left to right");
         for a in CYCLE {
             for b in CYCLE.into_iter().filter(|&b| b != a) {
-                for (ca, cb) in a.start().into_iter().flat_map(|ca| b.start().map(|cb| (ca, cb))) {
+                for (ca, cb) in a
+                    .start()
+                    .into_iter()
+                    .flat_map(|ca| b.start().map(|cb| (ca, cb)))
+                {
                     assert!(distance(ca, cb) >= 2, "{ca:?} touches {cb:?}");
                 }
             }
@@ -548,7 +544,10 @@ mod tests {
         assert_ne!(a, t);
         assert_ne!(t, b);
         assert_ne!(a, b);
-        assert!(a.ejected > t.ejected && a.ejected > b.ejected, "Alto pushes");
+        assert!(
+            a.ejected > t.ejected && a.ejected > b.ejected,
+            "Alto pushes"
+        );
         assert!(t.centre > a.centre && t.centre > b.centre, "Tenor edges");
         assert!(
             b.cohesion > a.cohesion && b.cohesion > t.cohesion,
@@ -558,7 +557,7 @@ mod tests {
 
     #[test]
     fn p1_one_army_moves_per_boss_turn_alto_tenor_bass_alto() {
-        let mut c = Choir::start(0);
+        let mut c = fast_start(0);
         let mut told = Vec::new();
         let mut moved = Vec::new();
         for _ in 0..6 {
@@ -575,7 +574,7 @@ mod tests {
 
     #[test]
     fn a_move_of_an_army_out_of_turn_is_refused_and_changes_nothing() {
-        let mut c = Choir::start(0);
+        let mut c = fast_start(0);
         black_move(&mut c);
         assert_eq!(c.tell(), Some(Alto));
         let history = c.game().history().len();
@@ -593,7 +592,7 @@ mod tests {
 
     #[test]
     fn the_player_moves_through_the_game_rules() {
-        let mut c = Choir::start(0);
+        let mut c = fast_start(0);
         let bad = mv(&[(0, 0)], E);
         assert_eq!(
             c.play(&bad),
@@ -642,7 +641,11 @@ mod tests {
         let m = c.boss_move().expect("the boss is never stuck (#172)");
         assert!(m.cells.iter().all(|&cell| c.army_at(cell) == Some(Tenor)));
         c.play(&m).unwrap();
-        assert_eq!(c.tell(), Some(Bass), "the cycle goes on after the army that moved");
+        assert_eq!(
+            c.tell(),
+            Some(Bass),
+            "the cycle goes on after the army that moved"
+        );
     }
 
     #[test]
@@ -665,13 +668,17 @@ mod tests {
 
     #[test]
     fn membership_follows_boss_moves_and_player_pushes() {
-        let mut c = Choir::start(0);
+        let mut c = fast_start(0);
         black_move(&mut c);
         let m = c.boss_move().unwrap();
         c.play(&m).unwrap();
         let (dq, dr) = m.dir.vector();
         for &(q, r) in &m.cells {
-            assert_eq!(c.army_at((q + dq, r + dr)), Some(Alto), "moved with the army");
+            assert_eq!(
+                c.army_at((q + dq, r + dr)),
+                Some(Alto),
+                "moved with the army"
+            );
         }
         assert_eq!(c.army_marbles(Alto), 6);
         // A player push shifts a Bass marble to (3, 0).
@@ -693,7 +700,11 @@ mod tests {
         let mut c = ejecting(2, &[(-3, 0), (-2, -2), (-1, -2)], &[(-4, 1), (-4, 2)]);
         assert_eq!(c.phase(), 0);
         c.play(&EJECT()).unwrap();
-        assert_eq!(c.game().ejected(Player::Black), 3, "the removal is not counted");
+        assert_eq!(
+            c.game().ejected(Player::Black),
+            3,
+            "the removal is not counted"
+        );
         assert_eq!(c.phase(), 1);
         assert_eq!(c.army_marbles(Bass), 0, "Bass had the fewest");
         assert_eq!((c.army_marbles(Alto), c.army_marbles(Tenor)), (4, 3));
@@ -732,7 +743,7 @@ mod tests {
         assert_eq!(c.game().ejected(Player::Black), 5);
         assert_eq!(c.phase(), 2);
         assert_eq!(c.army_marbles(Tenor), 0);
-        assert_eq!(c.army_marbles(Alto), 4);
+        assert_eq!(c.army_marbles(Alto), 3);
         assert_eq!(c.last_removal().map(|r| r.0), Some(Tenor));
         assert_eq!(c.result(), None);
         for _ in 0..3 {
@@ -761,8 +772,11 @@ mod tests {
 
     #[test]
     fn legal_moves_are_all_the_players_and_only_the_army_in_turn_for_the_boss() {
-        let mut c = Choir::start(0);
-        assert_eq!(c.legal_moves(), legal_moves(c.game().board(), Player::Black));
+        let mut c = fast_start(0);
+        assert_eq!(
+            c.legal_moves(),
+            legal_moves(c.game().board(), Player::Black)
+        );
         black_move(&mut c);
         let boss = c.legal_moves();
         assert!(!boss.is_empty());
@@ -778,7 +792,7 @@ mod tests {
     #[test]
     fn the_same_play_gives_the_same_game() {
         let run = || {
-            let mut c = Choir::start(3);
+            let mut c = fast_start(3);
             let mut log = Vec::new();
             for _ in 0..6 {
                 black_move(&mut c);
@@ -787,7 +801,7 @@ mod tests {
             (c.game().board().clone(), log, c.boss_move())
         };
         assert_eq!(run(), run());
-        let mut c = Choir::start(3);
+        let mut c = fast_start(3);
         black_move(&mut c);
         assert_eq!(c.boss_move(), c.boss_move());
     }
