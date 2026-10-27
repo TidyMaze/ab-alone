@@ -191,6 +191,24 @@ const CASES: Record<string, () => void> = {
       { kind: 'strike', cell: '(3,1)' },
     ]);
   },
+
+  core() {
+    const core = newEncounter('core', 0);
+    // No charge and no event ahead in P1: no marks, and the bare special id of every ply.
+    expect(bossState('core', core)).toMatchObject({
+      name: 'The Unstable Core',
+      tell: { kind: 'special', cells: [], text: 'board special 0 fires after the next ply' },
+      marks: [],
+    });
+    // A marble on a centre cell is charged at the end of its turn: a mark with its charges.
+    core.play(Int32Array.from([1, 4, 0, 2, 0, 0, 0, 0])); // (0, 2) to (0, 1)
+    expect(bossState('core', core).marks).toEqual([{ kind: 'charge', cell: '(0,1)', value: 1 }]);
+    const state = (unstable: number[]) => bossState('core', withData(core, { unstable })).tell;
+    expect(state([1, 1, -1, -1])).toEqual({ kind: 'core', cells: [], text: 'the core collapses after your move: the marbles on the 7 centre cells are ejected' });
+    expect(state([0, 0, 2, 1])!.text).toBe('a shockwave shoves every marble of wedge 2 one cell outward after your move');
+    expect(state([0, 0, -1, 2])!.text).toBe('a shockwave hits the busiest wedge after 2 of your turns');
+    expect(state([0, 0, -1, -1])!.kind).toBe('special');
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -198,8 +216,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675), The Overseer (#635) and The Assembly Line (#744) are in', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly']);
+  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675), The Overseer (#635) The Assembly Line (#744) and The Unstable Core (#751) are in', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core']);
   });
 
   test('every boss of the engine has its case', () => {

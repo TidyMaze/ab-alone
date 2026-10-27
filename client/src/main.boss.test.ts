@@ -71,8 +71,8 @@ function loseByRepetition(game: Game): void {
   }
   expect(game.hook('__plies')).toBe(8);
 }
-const DAY = Date.parse('2027-01-21T08:00:00Z'); // its daily boss is The Echo, with 11 bosses (#744)
-const NEXT_DAY = Date.parse('2027-01-22T08:00:00Z');
+const DAY = Date.parse('2027-01-26T08:00:00Z'); // its daily boss is The Echo, with 12 bosses (#751)
+const NEXT_DAY = Date.parse('2027-01-27T08:00:00Z');
 
 describe('main.ts boss fights', () => {
   it('lists the bosses behind Boss fight, the button opens and closes the list', async () => {
@@ -92,6 +92,7 @@ describe('main.ts boss fights', () => {
       'The Pulsar',
       'The Overseer',
       'The Assembly Line',
+      'The Unstable Core',
     ]);
     expect(list.hidden).toBe(true);
     button.click();
@@ -256,20 +257,20 @@ describe('main.ts daily challenge', () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     const daily = byId<HTMLButtonElement>('daily');
     expect(daily.disabled).toBe(false);
-    expect(daily.textContent).toBe('Daily challenge 2027-01-21: The Echo');
+    expect(daily.textContent).toBe('Daily challenge 2027-01-26: The Echo');
     expect(daily.querySelector('span')!.textContent).toBe('The Echo'); // held upright it takes a line of its own (#575)
     game.openModes();
     daily.click();
     expect(byId('mode-menu').hidden).toBe(true);
-    expect(game.hook('__fight')).toMatchObject({ id: 'echo', daily: { day: '2027-01-21', attempt: 1 } });
-    expect(byId('hud').querySelector('.boss .daily')!.textContent).toBe('Daily challenge 2027-01-21 · attempt 1');
-    expect(localStorage.getItem('ab-alone.daily')).toBe('2027-01-21 1');
+    expect(game.hook('__fight')).toMatchObject({ id: 'echo', daily: { day: '2027-01-26', attempt: 1 } });
+    expect(byId('hud').querySelector('.boss .daily')!.textContent).toBe('Daily challenge 2027-01-26 · attempt 1');
+    expect(localStorage.getItem('ab-alone.daily')).toBe('2027-01-26 1');
     const seed = game.hook<{ seed: number }>('__fight').seed;
     play(game, forward(game));
     byId('boss-retry').click();
     expect(game.hook('__plies')).toBe(0);
-    expect(game.hook('__fight')).toEqual({ id: 'echo', seed, daily: { day: '2027-01-21', attempt: 2 } });
-    expect(byId('hud').querySelector('.boss .daily')!.textContent).toBe('Daily challenge 2027-01-21 · attempt 2');
+    expect(game.hook('__fight')).toEqual({ id: 'echo', seed, daily: { day: '2027-01-26', attempt: 2 } });
+    expect(byId('hud').querySelector('.boss .daily')!.textContent).toBe('Daily challenge 2027-01-26 · attempt 2');
   });
 
   // Bug #715: each boss of the list, on a day it is the daily boss, is named on the button (the e2e layout check takes
@@ -297,10 +298,10 @@ describe('main.ts daily challenge', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NEXT_DAY);
     byId('boss-retry').click();
     const next = game.hook<{ seed: number; daily: unknown }>('__fight');
-    expect(next.daily).toEqual({ day: '2027-01-22', attempt: 1 });
+    expect(next.daily).toEqual({ day: '2027-01-27', attempt: 1 });
     expect(next.seed).not.toBe(first.seed);
-    expect(byId('daily').textContent).toMatch(/^Daily challenge 2027-01-22: The /);
-    expect(localStorage.getItem('ab-alone.daily')).toBe('2027-01-22 1');
+    expect(byId('daily').textContent).toMatch(/^Daily challenge 2027-01-27: The /);
+    expect(localStorage.getItem('ab-alone.daily')).toBe('2027-01-27 1');
   });
 
   it('a finished daily shows its result card, and Copy puts the text on the clipboard', async () => {
@@ -314,7 +315,7 @@ describe('main.ts daily challenge', () => {
     loseByRepetition(game);
     expect(card.hidden).toBe(false);
     expect(text.value).toBe(
-      'AB-ALONE daily 2027-01-21: The Echo\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
+      'AB-ALONE daily 2027-01-26: The Echo\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
     );
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
