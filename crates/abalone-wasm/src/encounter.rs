@@ -589,14 +589,32 @@ impl Encounter {
     /// The charged marbles (The Unstable Core) as `[q, r, charges]` records, empty for the other
     /// bosses.
     pub fn charges(&self) -> Vec<i32> {
-        Vec::new() // red: stub
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        e.game().board().unstable().map_or_else(Vec::new, |u| {
+            u.charges
+                .iter()
+                .flat_map(|&((q, r), n)| [q, r, i32::from(n)])
+                .collect()
+        })
     }
 
     /// The Unstable Core's next events as `[core, collapsing, wedge, shock_in]`: the core stands (`1`
     /// or `0`), it collapses at the end of your next turn, the wedge the next shockwave hits (`-1`
     /// until announced), and the turns before it (`-1` before P3). Empty for the other bosses.
     pub fn unstable(&self) -> Vec<i32> {
-        Vec::new() // red: stub
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        unstable_tell(e).map_or_else(Vec::new, |t| {
+            vec![
+                i32::from(t.core),
+                i32::from(t.collapsing),
+                t.wedge.map_or(-1, i32::from),
+                t.shock_in.map_or(-1, i32::from),
+            ]
+        })
     }
 
     /// What the last ply's hook did to the board (The Unstable Core): the
@@ -604,7 +622,29 @@ impl Encounter {
     /// count, the 61 board codes just before the hook, the overloaded cells, then the shoved
     /// marbles as `[from_q, from_r, to_q, to_r]`. Empty when nothing happened.
     pub fn last_unstable(&self) -> Vec<i32> {
-        Vec::new() // red: stub
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        last_events(e).map_or_else(Vec::new, |(before, events)| {
+            let (wedge, moves) = events
+                .shock
+                .map_or((-1, Vec::new()), |(w, m)| (i32::from(w), m));
+            [
+                events.overloaded.len() as i32,
+                i32::from(events.collapsed),
+                wedge,
+                moves.len() as i32,
+            ]
+            .into_iter()
+            .chain(board_bytes(&before).into_iter().map(i32::from))
+            .chain(cell_list(&events.overloaded))
+            .chain(
+                moves
+                    .iter()
+                    .flat_map(|&((fq, fr), (tq, tr))| [fq, fr, tq, tr]),
+            )
+            .collect()
+        })
     }
 
     /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
@@ -1445,13 +1485,20 @@ mod tests {
     fn the_core_follows_the_weighted_rule_in_its_legal_moves() {
         let mut f = Encounter::new("core", 1).unwrap();
         assert_eq!(f.charges(), Vec::<i32>::new());
-        assert_eq!(f.unstable(), vec![1, 0, -1, -1], "core up, nothing announced, before P3");
+        assert_eq!(
+            f.unstable(),
+            vec![1, 0, -1, -1],
+            "core up, nothing announced, before P3"
+        );
         let push = record(CORE_PUSH[6], CORE_PUSH_DIRS[6]);
         for i in 0..6 {
             f.play(&record(CORE_PUSH[i], CORE_PUSH_DIRS[i])).unwrap();
         }
         assert_eq!(f.charges(), vec![0, -1, 3, 0, 0, 2]);
-        assert!(f.legal_moves().chunks(MOVE_STRIDE).any(|m| m == push.as_slice()));
+        assert!(f
+            .legal_moves()
+            .chunks(MOVE_STRIDE)
+            .any(|m| m == push.as_slice()));
         f.play(&push).unwrap();
         assert_eq!(f.ejected(1), 1);
         assert_eq!(f.charges(), vec![0, -2, 2, 0, -1, 3]);
@@ -1509,17 +1556,31 @@ mod tests {
         assert_eq!(over[4 + index(0, -1)], 2, "the board before the hook");
         assert_eq!(over[4 + 61..], [0, -1]);
         assert!(run[8].2.is_empty());
-        assert_eq!(run[17].1[..2], [1, 1], "the boss ply of P2 announces the collapse");
+        assert_eq!(
+            run[17].1[..2],
+            [1, 1],
+            "the boss ply of P2 announces the collapse"
+        );
         let collapse = &run[18].2;
         assert_eq!(collapse[..4], [0, 1, -1, 0]);
         assert_eq!(run[18].1[..2], [0, 0], "the core is gone");
         assert_eq!(run[18].0[index(0, 0)], 3, "a vanished cell");
-        assert_eq!(run[19].1, vec![0, 0, -1, 3], "P3: 3 turns to the first shockwave");
+        assert_eq!(
+            run[19].1,
+            vec![0, 0, -1, 3],
+            "P3: 3 turns to the first shockwave"
+        );
         assert_eq!(run[20].1[3], 2);
-        assert!(run[22].1[2] >= 0 && run[22].1[3] == 1, "the wedge is announced");
+        assert!(
+            run[22].1[2] >= 0 && run[22].1[3] == 1,
+            "the wedge is announced"
+        );
         let shock = &run[24].2;
         assert_eq!(shock[0], 0);
-        assert!(shock[2] >= 0 && shock[3] > 0, "a wedge and the marbles it shoved");
+        assert!(
+            shock[2] >= 0 && shock[3] > 0,
+            "a wedge and the marbles it shoved"
+        );
         assert_eq!(shock.len(), 4 + 61 + 4 * shock[3] as usize);
         assert_eq!(run[24].1, vec![0, 0, -1, 3], "the clock restarts");
     }
