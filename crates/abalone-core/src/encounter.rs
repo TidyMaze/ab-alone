@@ -143,6 +143,15 @@ pub(crate) fn carried_marks(board: &Board, mv: &Move, marks: &[(i32, i32)]) -> V
         .collect()
 }
 
+/// The Chaplain's martyr after `mv`: its cell follows a move or a push, and it is spent once that
+/// cell holds no boss marble any more (pushed off the board).
+fn carried_martyr(before: &Board, mv: &Move, board: &Board) -> Option<Option<(i32, i32)>> {
+    before.martyr().map(|cell| {
+        let (q, r) = carried_marks(before, mv, &[cell?])[0];
+        (board.get(q, r) == Some(Cell::White)).then_some((q, r))
+    })
+}
+
 fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
     None
 }
@@ -269,7 +278,19 @@ impl Encounter {
         if self.turns_left() == Some(0) && self.game.to_move() == Player::White {
             self.game.end(Player::White);
         }
+        self.end_when_wiped();
         Ok(())
+    }
+
+    /// A side with no marble left has no move and loses (a conversion can wipe either side).
+    fn end_when_wiped(&mut self) {
+        let (cell, winner) = match self.game.to_move() {
+            Player::Black => (Cell::Black, Player::White),
+            Player::White => (Cell::White, Player::Black),
+        };
+        if marbles(self.game.board(), cell) == 0 {
+            self.game.end(winner);
+        }
     }
 
     /// Keeps the converted marks that still sit on a White marble after `mv`, and the polarities
@@ -283,12 +304,15 @@ impl Encounter {
         let poles = carried_poles(before, mv, board);
         let announce = carried_announce(before, mv, board);
         let unstable = carried_unstable(before, mv, board);
+        let martyr = carried_martyr(before, mv, board);
         if kept != board.converted()
             || poles != board.polarities()
             || announce != board.announce()
             || unstable.as_ref() != board.unstable()
+            || martyr != board.martyr()
         {
             let mut next = board.clone();
+            next.set_martyr(martyr);
             next.set_converted(kept);
             next.set_polarities(poles);
             next.set_announce(announce);
@@ -653,5 +677,28 @@ mod tests {
         let mut enc = Encounter::new(game, boss_with(clear_white), 0);
         enc.play(&mv(&[(0, 0)], E)).unwrap();
         assert_eq!(enc.result(), Some(PveResult::Won));
+    }
+    #[test]
+    fn a_side_with_no_marble_left_loses() {
+        // Black's pair pushes the lone White marble off the rim: White has none left.
+        let game = position(&[(2, 0), (3, 0)], &[(4, 0)], Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, boss(no_special), 0);
+        enc.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!(enc.result(), Some(PveResult::Won));
+        // White's pair pushes the lone Black marble off: Black has none left.
+        let game = position(&[(4, 0)], &[(2, 0), (3, 0)], Player::White, [0, 0]);
+        let mut enc = Encounter::new(game, boss(no_special), 0);
+        enc.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!(enc.result(), Some(PveResult::Lost));
+        // A side that still has a marble plays on.
+        let game = position(
+            &[(2, 0), (3, 0), (0, 3)],
+            &[(4, 0), (0, -3)],
+            Player::Black,
+            [0, 0],
+        );
+        let mut enc = Encounter::new(game, boss(no_special), 0);
+        enc.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!(enc.result(), None);
     }
 }

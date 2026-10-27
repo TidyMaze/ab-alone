@@ -91,6 +91,9 @@ pub struct Board {
     /// The sign of the last polarity The Magnetizer assigned this fight, `0` before the first: the
     /// next one is the other sign, + first.
     last_sign: i8,
+    /// The Chaplain's martyr: `None` before it is announced, then the announced marble's cell,
+    /// `Some(None)` once it exploded or left (it happens once).
+    martyr: Option<Option<(i32, i32)>>,
     /// The Pulsar's active pulsar (the direction code it pushes in) and the player turns played in
     /// its cycle.
     pulsar: Option<(u8, u8)>,
@@ -167,6 +170,7 @@ impl Board {
             polarities: Vec::new(),
             announce: None,
             last_sign: 0,
+            martyr: None,
             pulsar: None,
             belts: None,
             incinerators: Vec::new(),
@@ -258,6 +262,16 @@ impl Board {
 
     pub fn set_last_sign(&mut self, sign: i8) {
         self.last_sign = sign;
+    }
+
+    /// The Chaplain's martyr: `None` before it is announced, `Some(Some(cell))` while it waits,
+    /// `Some(None)` once it exploded or left.
+    pub fn martyr(&self) -> Option<Option<(i32, i32)>> {
+        self.martyr
+    }
+
+    pub fn set_martyr(&mut self, martyr: Option<Option<(i32, i32)>>) {
+        self.martyr = martyr;
     }
 
     /// The Pulsar's active pulsar, as the direction code it pushes in, and the player turns played
@@ -595,6 +609,16 @@ mod tests {
         assert_ne!(board, Board::empty());
         board.set_trains(vec![]);
         assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn the_martyr_starts_unannounced_and_is_replaced_whole() {
+        let mut board = Board::empty();
+        assert_eq!(board.martyr(), None);
+        board.set_martyr(Some(Some((1, 0))));
+        assert_eq!(board.martyr(), Some(Some((1, 0))));
+        board.set_martyr(Some(None));
+        assert_eq!(board.martyr(), Some(None));
     }
 
     #[test]

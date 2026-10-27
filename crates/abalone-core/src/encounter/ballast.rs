@@ -4,12 +4,12 @@
 //!
 //! - P1 (16 to 11 boss marbles): plain Abalone, search depth 5, no hook, no tell.
 //! - P2 (10 to 6): the Hull rim crack every 4 turns (`hull_boss` hook, tell `board.cracks()`)
-//!   and the Chaplain conversion at threshold 3 (`chaplain_boss` hook, tell `chaplain_tell`).
+//!   and the Chaplain conversion at threshold 4 (`chaplain_boss` hook, tell `chaplain_tell`).
 //! - P3 (5 or fewer): P2 plus the Echo of the player's previous move (`mirror_move`, tell
 //!   [`BallastTell::echo`]).
 
 use crate::board::{Board, Cell, MAX_RADIUS};
-use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
+use crate::encounter::chaplain::{chaplain_boss, chaplain_tell};
 use crate::encounter::echo::mirror_move;
 use crate::encounter::hull::hull_boss;
 use crate::encounter::{BossDef, Encounter};
@@ -76,7 +76,7 @@ pub const BALLAST_NODE_BUDGET: u32 = 150_000;
 pub const BALLAST_RIM_PHASE: usize = 1;
 /// First phase (0 based) where the boss echoes the player's previous move.
 pub const BALLAST_ECHO_PHASE: usize = 2;
-/// The Hull and Chaplain hooks run at their own first phase: a crack every 4 turns, threshold 3, no extras.
+/// The Hull and Chaplain hooks run at their own first phase: a crack every 4 turns, threshold 4, no extras.
 pub const BALLAST_REUSED_PHASE: usize = 0;
 /// Bits of a special id holding the Hull id, the Chaplain id sits above them.
 pub const BALLAST_HULL_BITS: u32 = 3;
@@ -149,20 +149,6 @@ pub fn ballast_start(seed: u64) -> Encounter {
     Encounter::new(game, ballast_boss(), seed)
 }
 
-/// Player marbles the Chaplain flips at the end of the next boss turn if nothing moves, read off
-/// the Chaplain hook itself at its own first phase.
-fn flips(board: &Board) -> Vec<P> {
-    let id = CHAPLAIN_BOSS_END + BALLAST_REUSED_PHASE as u8;
-    let after = (chaplain_boss().hook)(board, id, 0);
-    let radius = board.radius();
-    (-radius..=radius)
-        .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
-        .filter(|&(q, r)| {
-            board.get(q, r) == Some(Cell::Black) && after.get(q, r) == Some(Cell::White)
-        })
-        .collect()
-}
-
 /// The mirror of the player move the boss echoes next: the one before the latest, as in the
 /// Echo's P2. Known one ply early, on the player's turn too. `None` before P3 or too early.
 fn echo_target(enc: &Encounter) -> Option<Move> {
@@ -189,7 +175,7 @@ pub fn ballast_tell(enc: &Encounter) -> BallastTell {
         } else {
             Vec::new()
         },
-        flips: if rim { flips(board) } else { Vec::new() },
+        flips: if rim { chaplain_tell(enc) } else { Vec::new() },
         echo: echo_target(enc),
     }
 }
@@ -325,7 +311,7 @@ mod tests {
         let id = (boss.special)(8, 1).unwrap();
         let mut board = ballast_board();
         board.set(0, 0, Cell::Black);
-        for (q, r) in [(1, 0), (-1, 0), (0, 1)] {
+        for (q, r) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
             board.set(q, r, Cell::White);
         }
         let out = (boss.hook)(&board, id, 7);
@@ -437,10 +423,12 @@ mod tests {
     fn tell_shows_cracks_and_flips_in_phase_2() {
         let mut board = ballast_board();
         board.set(0, 0, Cell::Black);
+        board.set(-4, 4, Cell::Black);
         for (q, r) in [
             (1, 0),
             (-1, 0),
             (0, 1),
+            (0, -1),
             (5, -5),
             (4, -5),
             (3, -5),
@@ -451,10 +439,15 @@ mod tests {
         }
         board.set_cracks(vec![((5, 0), 1)]);
         let game = Game::from_position(board, Player::Black, [0, 0]);
-        let enc = Encounter::new(game, small_boss(), 0);
+        let mut enc = Encounter::new(game, small_boss(), 0);
         assert_eq!(enc.phase(), 1);
+        enc.play(&Move {
+            cells: vec![(-4, 4)],
+            dir: Direction::E,
+        })
+        .unwrap();
         let tell = ballast_tell(&enc);
-        assert_eq!(tell.cracks, vec![((5, 0), 1)]);
+        assert_eq!(tell.cracks, enc.game().board().cracks().to_vec());
         assert_eq!(tell.flips, vec![(0, 0)]);
         assert_eq!(tell.echo, None);
     }

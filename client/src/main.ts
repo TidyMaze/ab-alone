@@ -117,6 +117,7 @@ import {
 } from './unstable';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
+import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
 import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
@@ -1006,6 +1007,15 @@ const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
 const barGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
+// The Chaplain's martyr tell (#748): a steady ember ring and a tall glyph on the marble that explodes next boss turn.
+const emberMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
+const martyrGlyphGeometry = new THREE.OctahedronGeometry(0.11).scale(1, 2, 1);
+// Its explosion: a flash disc and a ring of shards, moved by the animation loop.
+const blastFlashGeometry = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2);
+const blastFlashMaterial = new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+const blastShardGeometry = new THREE.TetrahedronGeometry(0.15);
+const blastShardMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d, transparent: true, depthWrite: false });
+let blast: { group: THREE.Group; flash: THREE.Mesh; shards: THREE.Mesh[]; start: number; reduced: boolean } | null = null;
 // A converted marble (#508, world.md section 5) is half and half, 3:1 on the shell (#326): the ridged shell up to its
 // middle, a bowl closed by a flat floor so its inside never shows, and the player's glass above it with the core dimmed
 // (marbles.ts), resting on the floor. The halves stay upright whatever the marble's turn, under its boss accent; the
@@ -1775,12 +1785,47 @@ function afterPlay(before: number[], record: number[], live = true): void {
   delete document.body.dataset.sunk;
   const sunk = fight?.id === 'choir' ? parseBurns((engine as Encounter).removed()) : [];
   if (sunk.length > 0) whenSettled(() => sink(sunk, reduced));
+  // The Chaplain's martyr (#748): the board shows the converted marbles at once, the flash and shards play over them.
+  const boom = fight?.id === 'chaplain' && engine instanceof Encounter ? parseBlast(engine.removed()) : null;
+  if (boom) whenSettled(() => explode(boom, reduced));
 }
 
 /** The removed army: each marble sinks into its cell, or fades with reduced motion. */
 function sink(marbles: Burn[], reduced: boolean): void {
   document.body.dataset.sunk = String(marbles.length); // read by the e2e tests
   for (const { cell, side } of marbles) startEjection(marbleMesh(side), burnTrack(cell, reduced), scene);
+}
+
+/** The explosion of the martyr at `cell`: a flash and a ring of shards, a static flash with reduced motion. */
+function explode(cell: Axial, reduced: boolean): void {
+  const p = axialTo3D(cell[0], cell[1]);
+  const group = Object.assign(new THREE.Group(), { name: 'martyr-blast' });
+  group.position.set(p.x, 0.36, p.z);
+  const flash = new THREE.Mesh(blastFlashGeometry, blastFlashMaterial);
+  const shards = reduced ? [] : Array.from({ length: BLAST_SHARDS }, () => new THREE.Mesh(blastShardGeometry, blastShardMaterial));
+  group.add(flash, ...shards);
+  scene.add(group);
+  blast = { group, flash, shards, start: performance.now(), reduced };
+  drawBlast(0);
+  document.body.dataset.explosions = String(Number(document.body.dataset.explosions ?? 0) + 1); // read by the e2e tests
+  document.body.dataset.exploding = '1';
+}
+
+/** Draws the explosion `elapsedMs` in, and takes it away once it is over. */
+function drawBlast(elapsedMs: number): void {
+  const at = blastAt(elapsedMs, blast!.reduced);
+  blast!.flash.scale.setScalar(at.flashRadius);
+  blastFlashMaterial.opacity = at.flashOpacity;
+  blastShardMaterial.opacity = at.shardOpacity;
+  blast!.shards.forEach((shard, k) => {
+    const angle = (2 * Math.PI * k) / BLAST_SHARDS;
+    shard.position.set(Math.cos(angle) * at.shardRadius, at.shardLift, Math.sin(angle) * at.shardRadius);
+    shard.rotation.set(elapsedMs / 150 + k, elapsedMs / 200, 0);
+  });
+  if (!at.done) return;
+  scene.remove(blast!.group);
+  blast = null;
+  delete document.body.dataset.exploding;
 }
 
 /** The burns of a ply at `ply`: each marble sinks into its vent, or fades with reduced motion; a burnt core angers the Overseer. */
@@ -2223,6 +2268,7 @@ function hud(extra = ''): void {
         ventNote(phaseSeen.since, history.length),
         fight?.id === 'magnetizer' ? polarityText(boss.phase(), history.length) : '',
         chaplainText(exposed, boss.converted().length / 2),
+        martyrText(parseMartyr(boss.martyr())),
         choirText(boss.next_army(), armiesLeft(parseArmies(boss.armies()))),
       ]
         .filter((t) => t !== '')
@@ -2280,6 +2326,7 @@ function refresh(): void {
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
   const converted = engine instanceof Encounter ? parseCells(engine.converted()) : [];
+  const martyr = engine instanceof Encounter ? parseMartyr(engine.martyr()) : null;
   const armies = engine instanceof Encounter ? parseArmies(engine.armies()) : [];
   const next = engine instanceof Encounter ? engine.next_army() : -1;
   const eggs = engine instanceof Encounter ? parseEggs(engine.eggs()) : [];
@@ -2375,6 +2422,18 @@ function refresh(): void {
     marbles.add(ring);
     onMarble(cellIndex(cell[0], cell[1]), ring);
   }
+  if (martyr) {
+    const p = axialTo3D(martyr[0], martyr[1]);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, emberMaterial), { name: 'martyr-ring' });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    const glyph = Object.assign(new THREE.Mesh(martyrGlyphGeometry, emberMaterial), { name: 'martyr-glyph' });
+    glyph.position.set(p.x, 0.85, p.z);
+    marbles.add(ring, glyph);
+    onMarble(cellIndex(martyr[0], martyr[1]), ring);
+    onMarble(cellIndex(martyr[0], martyr[1]), glyph);
+  }
+  document.body.dataset.martyr = martyr ? martyr.join(',') : ''; // read by the e2e tests
   polesDrawn = poles.flatMap((sign, i) => {
     if (sign === 0) return [];
     const [q, r] = BOARD_CELLS[i]!;
@@ -3058,6 +3117,8 @@ let pulseHeld: number | null = null;
   pulseHeld = t;
 };
 // Used by the browser checks to find The Chaplain's converted marbles (#326).
+(window as unknown as Record<string, unknown>).__blast = () =>
+  blast && { shards: blast.shards.length, flash: blastFlashMaterial.opacity, shard: blastShardMaterial.opacity, reduced: blast.reduced };
 (window as unknown as Record<string, unknown>).__converted = () =>
   engine instanceof Encounter ? parseCells(engine.converted()) : [];
 // Used by the e2e tests to play `turns` boss turns in one call (#349): each player move is the first legal single-marble
@@ -3092,6 +3153,16 @@ if (navigator.webdriver) {
       refresh();
     }
     return played;
+  };
+  // Plays the recorded plies of both sides, like a fixture of the core tests: the last one shows its effects (#748).
+  (window as unknown as Record<string, unknown>).__playMoves = (records: number[][]): number => {
+    records.forEach((record, k) => {
+      const before = Array.from(engine.board());
+      engine.play(Int32Array.from(record));
+      afterPlay(before, record, k === records.length - 1);
+    });
+    refresh();
+    return records.length;
   };
 }
 
@@ -3978,6 +4049,7 @@ renderer.setAnimationLoop((now) => {
   animateBelts(now);
   if (shock) drawShock(now - shock.start);
   animateUnstable(now);
+  if (blast) drawBlast(now - blast.start);
   animateSpeech(now);
   animateHaze(now);
   animateAnnounce(now);

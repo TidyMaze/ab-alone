@@ -182,7 +182,9 @@ not know the roll (it passes seed 0), so it plays as if the boss always or never
 player is slightly blind to this rule, a human sees the outcome. One seed list of 10 is small:
 7 of 10 is a point estimate, not a rate.
 
-Recorded win: `tests/fixtures/chaplain.txt` (seed 0, 92 moves).
+Recorded win: `tests/fixtures/chaplain.txt` (seed 10001, 187 moves, see section 4).
+
+**Rework #748:** every Chaplain row above measures the old rules (threshold 3, a flip costs the boss a marble, three phases). The new Chaplain (threshold 4 for both sides, a martyr at 4 ejections, no cost per flip) is not measured yet (#753): the pro player of the ladder now wipes the boss by conversion in most attempts (#752).
 
 ### The Ballast Mind: NOT measured at pro level, 0 of 10 at 1x
 
@@ -284,7 +286,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | echo | 0 | 4000 | 126 |
 | hull | 0 | 30000 | 89 |
 | choir | 0 | 15000 | 93 |
-| chaplain | 0 | 20000 | 92 |
+| chaplain | 10001 | 0 (a random player ejecting when it can, a random boss; the ladder finds no win, #753) | 187 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
 

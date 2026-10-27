@@ -320,26 +320,27 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 ### 7.3 The Chaplain (#45): conversion by encirclement
 
 - **Concept**: it marks the crew, then keeps them.
-- **Twist**: at the end of the boss turn, a player marble with **3 or more adjacent boss
-  marbles** flips to the boss. The marble count is conserved (conversion is not a loss for 6
-  ejections, but it is a loss of material). **A flip costs the boss (#207):** on a boss turn
-  that flips marbles, with a 3 in 4 chance (seeded per ply), the boss loses one marble to the
-  void per flip, picked among its marbles that did not flip, and each one counts as an ejection
-  for the player. Why: with free flips a 10x search never beat the boss (0 of 10), and with a
-  sure cost it always did (10 of 10); encirclement is now a risk for the boss too.
-- **Tell**: when you hover a move, each of your marbles that would flip at the end of the boss
-  turn after it shows a steady glyph and outline (the check runs on the position after the
-  hovered move, Decision #154: on the current position nothing is left to flip, the boss turn
-  already flipped it). Not a black halo: it would vanish against a black shell. A flipped
-  marble shows shell growing over the glass.
-- **Counter**: break contact (move or push), or **surround a flipped marble with 3 of your
-  marbles to flip it back**.
-- **Phases**: P1 above. P2 when the boss has **8** left: void cells count as boss neighbours,
-  so rim marbles flip at 2 contacts. P3 at **4**: a flip chains once (the flipped marble can
-  flip another in the same turn), but the boss loses 1 marble to the void per flip (it
-  pushes its own shell out), and from P3 that cost is certain, not 3 in 4.
-- **Calibrate**: knob = threshold (3), flip-back threshold, AI aggression weight. Fail if the
-  median attempt ends with fewer than 3 conversions seen (nobody learns the tell).
+- **Twist (#748)**: at the end of **every** turn (yours and the boss's), any marble that touches
+  **4 or more** marbles of the other side **changes side**, for **both sides** (a native boss
+  marble flips to you just like a flipped one). The marble count is conserved: a flip is a loss
+  of material, not an ejection, and costs the boss nothing (the old threshold 3 and the loss of
+  a boss marble per flip, #207, are gone). Void and off-board cells are not neighbours.
+- **Tell**: when you hover a move, each of your marbles that the move would flip (the check runs
+  right after your own move) shows a steady glyph and outline. Not a black halo: it would vanish
+  against a black shell. A flipped marble shows shell growing over the glass.
+- **Counter**: break contact (move or push), or surround a boss marble with 4 of yours.
+- **Phases**: P1 above. **P2 once you have ejected 4 marbles**, one time only: at the end of the
+  next boss turn the Chaplain picks the marble whose explosion would convert the **most** of your
+  adjacent marbles (a tie is broken by the seed) and announces it as the **martyr** (a steady
+  marked ring and glyph on it, and a HUD line). At the end of the following boss turn the martyr
+  explodes: every player marble adjacent to it converts, it is removed, and it counts as your
+  **5th ejection**. If you push it off the board, or surround it with 4 of your marbles so it
+  flips to you, before then, nothing explodes. A second martyr would hand you the 6th ejection,
+  so there is none. There is no P3: the phase notches show two phases.
+- **Explosion**: a flash and a ring of shards at the martyr's cell (reduced motion: a static
+  flash), then the converted marbles take the flipped look.
+- **Calibrate**: knob = threshold (4), the ejection count of P2 (4), AI aggression weight. Fail if
+  the median attempt ends with fewer than 3 conversions seen (nobody learns the tell).
 
 ### 7.4 The Echo (#46): mirrors your moves
 
