@@ -8,6 +8,10 @@
     "wasm": "wasm-pack build ../crates/abalone-wasm --target web",
     "dev": "bun run wasm && vite",
     "test": "vitest run --coverage",
+    "test:unit": "vitest run",
+    "test:scoped": "bun run scripts/test-scoped.ts",
+    "layout:check": "bun run scripts/check-layout-bounds.ts",
+    "e2e:layout": "playwright test e2e/phone-layout.spec.ts --project=chromium",
     "e2e": "playwright test --project=chromium",
     "e2e:all": "playwright test",
     "build": "bun run wasm && tsc --noEmit && vite build"
