@@ -93,6 +93,28 @@ import {
   type Pulse,
   type Pulsar,
 } from './pulsar';
+import {
+  CORE_COLOR,
+  ENERGY,
+  WARN_CHARGES,
+  WARN_COLOR,
+  burstAt,
+  coreText,
+  energyGlow,
+  fallen as shoved,
+  lostCells,
+  parseCharges,
+  parseCore,
+  parseEvents,
+  pipOffsets,
+  shoveTracks,
+  sweepAt,
+  wedgeCorners,
+  wedgeGlow,
+  type Charge,
+  type Core,
+  type UnstableEvents,
+} from './unstable';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
@@ -1243,6 +1265,32 @@ const rippleMaterials = Array.from({ length: RIPPLES }, () => new THREE.MeshBasi
 let ripples: THREE.Mesh[] = []; // moved by the animation loop
 let pulsarCores: THREE.Mesh[] = []; // spun by the animation loop
 let shock: { mesh: THREE.Mesh; id: number; start: number; reduced: boolean; skipped: boolean } | null = null;
+// The Unstable Core (#751, game-design.md section 7.13): a glowing hexagon on each of the 7 energy cells while the core
+// stands (it pulses, flickers the turn before it collapses), 1 to 3 diamond pips over every charged marble (red at 3),
+// the announced wedge glowing, a ring bursting where a marble overloads or falls with the core, and the shockwave: the
+// wedge's slice of light sweeping outward from the centre. Reduced motion: steady glows, the ring and the slice show
+// whole and fade.
+const energyGeometry = new THREE.RingGeometry(0.3, 0.42, 6).rotateX(-Math.PI / 2);
+const energyMaterial = new THREE.MeshBasicMaterial({ color: CORE_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+const pipGeometry = new THREE.OctahedronGeometry(0.09);
+const pipMaterial = new THREE.MeshStandardMaterial({ color: CORE_COLOR, emissive: CORE_COLOR, emissiveIntensity: 1.2 });
+const warnMaterial = new THREE.MeshStandardMaterial({ color: WARN_COLOR, emissive: WARN_COLOR, emissiveIntensity: 2 });
+const wedgeGlowMaterial = new THREE.MeshBasicMaterial({ color: CORE_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+const sweepMaterial = new THREE.MeshBasicMaterial({ color: CORE_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+const wedgeSlices = new Map<number, THREE.ShapeGeometry>();
+/** The slice of the board a wedge covers, flat on the board plane, apex at the centre. */
+function wedgeSlice(wedge: number): THREE.ShapeGeometry {
+  if (!wedgeSlices.has(wedge)) {
+    const [a, b, c] = wedgeCorners(wedge);
+    const shape = new THREE.Shape([new THREE.Vector2(a.x, -a.z), new THREE.Vector2(b.x, -b.z), new THREE.Vector2(c.x, -c.z)]);
+    wedgeSlices.set(wedge, new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2));
+  }
+  return wedgeSlices.get(wedge)!;
+}
+type Fx = { mesh: THREE.Mesh; start: number; reduced: boolean; skipped: boolean };
+let unstableShown: (Core & { pips: Charge[] }) | null = null; // the next events and the charges of the last refresh
+let bursts: Fx[] = [];
+let sweep: Fx | null = null;
 
 // The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
 // Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
@@ -1678,7 +1726,9 @@ function afterPlay(before: number[], record: number[], live = true): void {
   // The Assembly Line's belts: the move slides to the board before them, then they carry the marbles.
   const carries = live && engine instanceof Encounter ? parseCarries(engine.last_belts()) : [];
   const beltBoard = carries.length > 0 ? beforeBelts(engine.board(), carries) : null;
-  const after = repulsions[0]?.board ?? pulse?.board ?? beltBoard ?? engine.board();
+  // The Unstable Core's overloads, collapse and shockwave (#751): the move slides to the board before them first.
+  const unstable = live && engine instanceof Encounter ? parseEvents(engine.last_unstable()) : null;
+  const after = repulsions[0]?.board ?? pulse?.board ?? beltBoard ?? unstable?.board ?? engine.board();
   const tracks = slideTracks(before, after, mv, reduced);
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
@@ -1706,6 +1756,10 @@ function afterPlay(before: number[], record: number[], live = true): void {
   if (pulse) {
     shown = { game: engine, board: pulse.board, poles: [] };
     whenSettled(() => firePulse(pulse, reduced));
+  }
+  if (unstable) {
+    shown = { game: engine, board: unstable.board, poles: [] };
+    whenSettled(() => fireUnstable(unstable, reduced));
   }
   const ejection = findEjection(before, after, mv);
   if (ejection) eject(ejection, mv.dir, held, reduced);
@@ -1807,6 +1861,93 @@ function firePulse(pulse: Pulse, reduced: boolean): void {
   drawShock(0);
   document.body.dataset.pulses = String(Number(document.body.dataset.pulses ?? 0) + 1); // read by the e2e tests
   document.body.dataset.pulsing = '1';
+}
+
+/** Plays what the last ply's hook did (#751): a ring bursts where a marble overloaded or fell with the core, the
+ * shoved marbles slide a cell and the ones past the rim fall, the wedge's slice sweeps outward; then the engine's board
+ * shows. It waits for the move's slide, so a replaced game drops it. */
+function fireUnstable(events: UnstableEvents, reduced: boolean): void {
+  const held = gameTurns();
+  const tracks = shoveTracks(events, reduced);
+  for (const track of tracks) turns.map = carryTurns(turns.map, fight!.seed, [track], track.dir);
+  for (const { cell, side, dir } of shoved(events)) eject({ cell, side }, dir, held, reduced);
+  const lost = lostCells(events);
+  for (const cell of lost) {
+    const p = axialTo3D(...cell);
+    const material = new THREE.MeshBasicMaterial({ color: WARN_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    const mesh = Object.assign(new THREE.Mesh(shockGeometry, material), { name: 'burst' });
+    mesh.position.set(p.x, 0.3, p.z);
+    scene.add(mesh);
+    bursts.push({ mesh, start: performance.now(), reduced, skipped: false });
+  }
+  document.body.dataset.bursts = String(Number(document.body.dataset.bursts ?? 0) + lost.length); // read by the e2e tests
+  shown = null;
+  refresh();
+  if (tracks.some((t) => t.durationMs > 0)) {
+    slide = { game: engine, tracks, start: performance.now() };
+    document.body.dataset.sliding = '1';
+  }
+  if (events.wedge >= 0) {
+    sweep = { mesh: new THREE.Mesh(wedgeSlice(events.wedge), sweepMaterial), start: performance.now(), reduced, skipped: false };
+    sweep.mesh.position.y = 0.02;
+    scene.add(sweep.mesh);
+    drawSweep(0);
+    document.body.dataset.shockwaves = String(Number(document.body.dataset.shockwaves ?? 0) + 1); // read by the e2e tests
+  }
+}
+
+/** Draws the bursts and the sweep `elapsedMs` into their effects, and takes them away once they are over. */
+function animateUnstable(now: number): void {
+  for (const b of bursts.slice()) {
+    const at = burstAt(b.skipped ? Infinity : now - b.start, b.reduced);
+    b.mesh.scale.setScalar(at.radius);
+    (b.mesh.material as THREE.MeshBasicMaterial).opacity = at.opacity;
+    if (!at.done) continue;
+    scene.remove(b.mesh);
+    (b.mesh.material as THREE.Material).dispose();
+    bursts.splice(bursts.indexOf(b), 1);
+  }
+  if (sweep) drawSweep(now - sweep.start);
+  if (unstableShown?.core) energyMaterial.opacity = energyGlow(now / 1000, unstableShown.collapsing, reducedMotion());
+  if (unstableShown && unstableShown.wedge >= 0) wedgeGlowMaterial.opacity = wedgeGlow(now / 1000, reducedMotion());
+}
+
+function drawSweep(elapsedMs: number): void {
+  const at = sweepAt(sweep!.skipped ? Infinity : elapsedMs, sweep!.reduced);
+  sweep!.mesh.scale.setScalar(at.scale);
+  sweepMaterial.opacity = at.opacity;
+  if (!at.done) return;
+  scene.remove(sweep!.mesh);
+  sweep = null;
+}
+
+/** Draws the Unstable Core's marks (#751): the energy cells while the core stands, the pips over the charged marbles and
+ * the announced wedge. Nothing in the other fights. */
+function drawUnstable(core: Core | null, charges: Charge[]): void {
+  unstableShown = core && { ...core, pips: charges };
+  if (!core) return;
+  if (core.core) {
+    for (const cell of ENERGY) {
+      const p = axialTo3D(...cell);
+      const hex = Object.assign(new THREE.Mesh(energyGeometry, energyMaterial), { name: 'energy-cell' });
+      hex.position.set(p.x, 0.006, p.z);
+      marbles.add(hex);
+    }
+  }
+  for (const { cell, n } of charges) {
+    const p = axialTo3D(...cell);
+    for (const dx of pipOffsets(n)) {
+      const pip = Object.assign(new THREE.Mesh(pipGeometry, n >= WARN_CHARGES ? warnMaterial : pipMaterial), { name: 'charge-pip' });
+      pip.position.set(p.x + dx, 0.9, p.z);
+      marbles.add(pip);
+      onMarble(cellIndex(...cell), pip);
+    }
+  }
+  if (core.wedge >= 0) {
+    const glow = Object.assign(new THREE.Mesh(wedgeSlice(core.wedge), wedgeGlowMaterial), { name: 'wedge-glow' });
+    glow.position.y = 0.012;
+    marbles.add(glow);
+  }
 }
 
 /** Draws the shockwave `elapsedMs` into the pulse, and takes it away once it is over. */
@@ -1984,10 +2125,13 @@ function skipEjections(): void {
   for (const p of passing) p.skipped = true;
   for (const s of slams) s.skipped = true;
   if (shock) shock.skipped = true;
+  for (const b of bursts) b.skipped = true;
+  if (sweep) sweep.skipped = true;
   animateEjections(performance.now());
   animatePasses(performance.now());
   animateSlams(performance.now());
   if (shock) drawShock(0);
+  animateUnstable(performance.now());
 }
 addEventListener('pointerdown', skipEjections, { capture: true });
 addEventListener('keydown', skipEjections, { capture: true });
@@ -2065,6 +2209,7 @@ function hud(extra = ''): void {
         trainText(parseTrains(boss.trains())),
         beltText(parseBelts(boss.belts())),
         pulseText(parsePulsar(boss.pulsar())),
+        coreText(parseCore(boss.unstable())),
         toxinText(boss.turns_left()),
         ventNote(phaseSeen.since, history.length),
         fight?.id === 'magnetizer' ? polarityText(boss.phase(), history.length) : '',
@@ -2283,6 +2428,8 @@ function refresh(): void {
     return ring;
   }) : [];
   document.body.dataset.ripples = String(ripples.length); // read by the e2e tests
+  // The charges belong to the board after the hook: while a move slides to the board before it, none is drawn.
+  drawUnstable(engine instanceof Encounter ? parseCore(engine.unstable()) : null, showing() || !(engine instanceof Encounter) ? [] : parseCharges(engine.charges()));
   const taunt = engine instanceof Encounter ? tauntIndex(engine.turns_left()) : -1; // the Overseer's line of this 20 %
   if (tauntSaid.game !== engine || tauntSaid.index !== taunt) {
     tauntSaid = { game: engine, index: taunt };
@@ -2883,6 +3030,10 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__pulsar = () => pulsarShown && { ...pulsarShown, charging: charging(pulsarShown) };
 (window as unknown as Record<string, unknown>).__shock = () =>
   shock && { radius: shock.mesh.scale.x, opacity: shockMaterial.opacity, x: shock.mesh.position.x, z: shock.mesh.position.z };
+// Used by the browser checks to find The Unstable Core's marks as drawn (#751): the next events and the charges, and the
+// shockwave's slice now.
+(window as unknown as Record<string, unknown>).__unstable = () => unstableShown;
+(window as unknown as Record<string, unknown>).__sweep = () => sweep && { scale: sweep.mesh.scale.x, opacity: sweepMaterial.opacity };
 // Used by the browser checks to find The Magnetizer's polarities as drawn: the cell, the sign and the ring of a fresh one.
 (window as unknown as Record<string, unknown>).__polarities = () => polesDrawn;
 // Used by the browser checks to find The Overseer as drawn: its cell, the cores and the vents.
@@ -3817,6 +3968,7 @@ renderer.setAnimationLoop((now) => {
   animateSlams(now);
   animateBelts(now);
   if (shock) drawShock(now - shock.start);
+  animateUnstable(now);
   animateSpeech(now);
   animateHaze(now);
   animateAnnounce(now);

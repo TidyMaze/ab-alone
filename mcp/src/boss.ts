@@ -18,6 +18,10 @@ export interface BossLike {
   trains(): Int32Array;
   /** One polarity per cell in the board order: `0` none, `1` +, `-1` −. */
   polarities(): Int32Array;
+  /** `[q, r, charges]` records of The Unstable Core's charged marbles. */
+  charges(): Int32Array;
+  /** `[core, collapsing, wedge, shock_in]` of The Unstable Core's next events, `-1` for none; empty otherwise. */
+  unstable(): Int32Array;
   /** `[pulsar, player_turns_left, force]` of The Pulsar's next pulse, force `0` for infinite; empty otherwise. */
   pulsar(): Int32Array;
   /** `[turns_left, ...]` then `[row, q0, len, dir, shift, strike]` per belt of The Assembly Line; empty otherwise. */
@@ -108,6 +112,7 @@ export function bossState(id: string, boss: BossLike): BossState {
     ...Array.from(boss.polarities()).flatMap((sign, i) =>
       sign === 0 ? [] : [{ kind: 'polarity', cell: cell(BOARD_CELLS[i]!), value: sign }],
     ),
+    ...records(boss.charges(), 3).map((record) => ({ kind: 'charge', cell: cell(record), value: record[2]! })),
     ...records(boss.incinerators(), 2).map((record) => ({ kind: 'incinerator', cell: cell(record) })),
     ...records(boss.converted(), 2).map((record) => ({ kind: 'converted', cell: cell(record) })),
     ...armies.map((record) => ({ kind: 'army', cell: cell(record), value: record[2]! })),
@@ -123,7 +128,7 @@ export function bossState(id: string, boss: BossLike): BossState {
   };
 }
 
-/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the belts, then the clock, then
+/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the belts, then the core's next event, then the clock, then
  * the bare special id. */
 function tell(boss: BossLike, armies: number[][]): Tell | null {
   const army = boss.next_army();
@@ -144,6 +149,16 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   const reverse = boss.belts()[0];
   if (reverse !== undefined) {
     return { kind: 'belt_reverse', cells: [], text: `the centre belt reverses after ${reverse} of your turns` };
+  }
+  const [, collapsing, wedge, shockIn] = Array.from(boss.unstable());
+  if (collapsing === 1) {
+    return { kind: 'core', cells: [], text: 'the core collapses after your move: the marbles on the 7 centre cells are ejected' };
+  }
+  if (wedge !== undefined && wedge >= 0) {
+    return { kind: 'core', cells: [], text: `a shockwave shoves every marble of wedge ${wedge} one cell outward after your move` };
+  }
+  if (shockIn !== undefined && shockIn >= 0) {
+    return { kind: 'core', cells: [], text: `a shockwave hits the busiest wedge after ${shockIn} of your turns` };
   }
   const turns = boss.turns_left();
   if (turns >= 0) {

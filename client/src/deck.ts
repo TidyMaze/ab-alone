@@ -39,6 +39,7 @@ const BOSS_DECK: Record<string, Deck> = {
   pulsar: 'bridge',
   overseer: 'chapel',
   assembly: 'cargo',
+  core: 'furnace',
 };
 
 /** The deck of a mode, or of a boss fight: the Mess for a boss the client does not know. */
