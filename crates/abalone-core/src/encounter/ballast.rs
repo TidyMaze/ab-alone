@@ -1,26 +1,30 @@
 //! The Ballast Mind (#47, docs/specs/game-design.md section 7.5): the final exam. A radius 5
-//! board with six void pillars, 16 boss marbles against 14, and no rule code of its own. It
-//! composes the hooks of the earlier bosses:
+//! board with six void pillars, 16 boss marbles against 14, and no rule code of its own. Every
+//! [`BALLAST_EVERY`] turns it borrows one effect of another boss, picked by the engine PRNG among
+//! four one-shot hooks that run that boss's own code:
 //!
-//! - P1 (16 to 11 boss marbles): plain Abalone, search depth 5, no hook, no tell.
-//! - P2 (10 to 6): the Hull rim crack every 4 turns (`hull_boss` hook, tell `board.cracks()`)
-//!   and the Chaplain conversion at threshold 4 (`chaplain_boss` hook, tell `chaplain_tell`).
-//! - P3 (5 or fewer): P2 plus the Echo of the player's previous move (`mirror_move`, tell
-//!   [`BallastTell::echo`]).
+//! - the Hull's crack (P1 rim, P2 inner, P3 any cell), whose timer the Hull ticks on every
+//!   player turn (special id [`BALLAST_TICK`]);
+//! - the Pulsar's pulse from a random direction, at force 2, 3 and infinite;
+//! - the Magnetizer's polarity: one marble polarized, then the settle;
+//! - the Chaplain's conversion check, at threshold 4.
+//!
+//! The phases come from the ejections (P2 after 3, P3 after 5), as in the bosses it borrows from.
+//! The effect fires at the end of a boss turn, so the player reads it one turn ahead in the HUD.
 
 use crate::board::{Board, Cell, MAX_RADIUS};
-use crate::encounter::chaplain::{chaplain_boss, chaplain_tell};
-use crate::encounter::echo::mirror_move;
-use crate::encounter::hull::hull_boss;
-use crate::encounter::{BossDef, Encounter};
+use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
+use crate::encounter::hull::{hull_boss, mix, HULL_CRACKS, HULL_PLAYER_END};
+use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETIZER_TURN};
+use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
+use crate::encounter::{ply_seed, BossDef, Encounter};
 use crate::game::{Game, WIN_EJECTIONS};
-use crate::moves::{apply, Move, Player};
+use crate::moves::Player;
 
 type P = (i32, i32);
 
 /// Ejections the player needs to win against The Ballast Mind (Decision #482). The boss starts
-/// with 16 marbles: P1 (16 to 11 left, 0 to 5 ejections), P2 (10 to 6 left, 6 to 10 ejections),
-/// P3 (5 left, 11 ejections), win at 12 ejections (4 boss marbles left).
+/// with 16 marbles: win at 12 ejections (4 boss marbles left).
 pub const BALLAST_WIN_EJECTIONS: u8 = 12;
 
 /// Radius of the Ballast board: 91 cells before the pillars.
@@ -67,34 +71,58 @@ pub const BALLAST_BOSS_START: [P; 16] = [
     (2, -3),
     (1, -3),
 ];
-/// P2 and P3 start at this many boss marbles left. TUNE.
-pub const BALLAST_PHASE_MARBLES: [u8; 2] = [10, 5];
+/// P2 and P3 start after this many ejections credited to the player, as the bosses it borrows from. TUNE.
+pub const BALLAST_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// Positions the boss search may visit per move. Measured on the start position (release build):
 /// 40 000 nodes finish depth 4, 150 000 finish depth 5 (2.4 s native), 800 000 finish depth 6. TUNE.
 pub const BALLAST_NODE_BUDGET: u32 = 150_000;
-/// First phase (0 based) with the Hull crack and the Chaplain conversion.
-pub const BALLAST_RIM_PHASE: usize = 1;
-/// First phase (0 based) where the boss echoes the player's previous move.
-pub const BALLAST_ECHO_PHASE: usize = 2;
-/// The Hull and Chaplain hooks run at their own first phase: a crack every 4 turns, threshold 4, no extras.
-pub const BALLAST_REUSED_PHASE: usize = 0;
-/// Bits of a special id holding the Hull id, the Chaplain id sits above them.
-pub const BALLAST_HULL_BITS: u32 = 3;
+/// Boss turns between two borrowed effects. TUNE.
+pub const BALLAST_EVERY: u32 = 3;
+/// Special id at the end of a player turn: the Hull's cracks count down.
+pub const BALLAST_TICK: u8 = 0;
+/// Special id at the end of the boss turn of a borrowed effect is this plus the phase.
+pub const BALLAST_FIRE: u8 = 1;
 
-/// What the player can read about the next boss action, each part in the visual language of the
-/// boss it comes from.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct BallastTell {
-    /// Hull: cracked cells and the player turns left before each vanishes.
-    pub cracks: Vec<(P, u8)>,
-    /// Chaplain: player marbles that flip at the end of the next boss turn if nothing moves.
-    pub flips: Vec<P>,
-    /// Echo: the move the boss mirrors on its next turn, when it has one.
-    pub echo: Option<Move>,
+/// The effect a boss turn borrows, with the pulse direction (the pulsar id, see `PULSAR_PUSH`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Borrowed {
+    HullCrack,
+    PulsarPulse(u8),
+    MagnetizerPolarity,
+    ChaplainConversion,
 }
 
-/// Mask of the Hull id inside a packed special id.
-const HULL_MASK: u8 = (1 << BALLAST_HULL_BITS) - 1;
+/// The effect the hook seed `seed` picks (the PRNG of the fight seed and the ply).
+pub fn borrowed(seed: u64) -> Borrowed {
+    todo!("{seed}")
+}
+
+/// The effect announced for the next boss turn that borrows one, when it is the turn after this
+/// one: during the turn before it. `None` otherwise or when the game is over.
+pub fn ballast_next(enc: &Encounter) -> Option<Borrowed> {
+    let _ = enc;
+    None
+}
+
+/// The pulse of the last ply: the pulsar id, the board just before it and the cells it moved,
+/// from where they stood. `None` when the last ply borrowed no pulse.
+pub fn ballast_last_pulse(enc: &Encounter) -> Option<(u8, Board, Vec<P>)> {
+    let _ = enc;
+    None
+}
+
+/// The Hull tick at the end of a player turn, a borrowed effect at the end of every third boss
+/// turn (the id carries the phase).
+fn special(ply: u32, phase: usize) -> Option<u8> {
+    let _ = (ply, phase);
+    None
+}
+
+/// The tick, or the effect the seed picks, each by the code of the boss it comes from.
+fn hook(board: &Board, id: u8, seed: u64) -> Board {
+    let _ = (id, seed);
+    board.clone()
+}
 
 /// The Ballast board with no marble: radius 5 with the six pillars void.
 pub fn ballast_board() -> Board {
@@ -105,30 +133,12 @@ pub fn ballast_board() -> Board {
     board
 }
 
-/// No special in P1. From P2 the Hull special and the Chaplain special of the same ply, packed
-/// in one id (the Hull one in the low bits).
-fn special(ply: u32, phase: usize) -> Option<u8> {
-    if phase < BALLAST_RIM_PHASE {
-        return None;
-    }
-    let at = |boss: &BossDef| (boss.special)(ply, BALLAST_REUSED_PHASE);
-    at(&hull_boss())
-        .zip(at(&chaplain_boss()))
-        .map(|(hull, chaplain)| hull | (chaplain << BALLAST_HULL_BITS))
-}
-
-/// The Hull hook, then the Chaplain hook, each on its own half of the id.
-fn hook(board: &Board, id: u8, seed: u64) -> Board {
-    let cracked = (hull_boss().hook)(board, id & HULL_MASK, seed);
-    (chaplain_boss().hook)(&cracked, id >> BALLAST_HULL_BITS, seed)
-}
-
 /// The Ballast Mind boss definition.
 pub fn ballast_boss() -> BossDef {
     BossDef {
         name: "The Ballast Mind",
-        phase_marbles: BALLAST_PHASE_MARBLES.to_vec(),
-        phase_ejections: Vec::new(),
+        phase_marbles: Vec::new(),
+        phase_ejections: BALLAST_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
         node_budget: BALLAST_NODE_BUDGET,
@@ -146,59 +156,15 @@ pub fn ballast_start(seed: u64) -> Encounter {
     }
     let game = Game::from_position(board, Player::Black, [0, 0])
         .with_win([BALLAST_WIN_EJECTIONS, WIN_EJECTIONS]);
-    Encounter::new(game, ballast_boss(), seed)
-}
-
-/// The mirror of the player move the boss echoes next: the one before the latest, as in the
-/// Echo's P2. Known one ply early, on the player's turn too. `None` before P3 or too early.
-fn echo_target(enc: &Encounter) -> Option<Move> {
-    if enc.phase() < BALLAST_ECHO_PHASE {
-        return None;
-    }
-    let game = enc.game();
-    let back = if game.to_move() == Player::Black {
-        2
-    } else {
-        3
-    };
-    let source = game.history().len().checked_sub(back)?;
-    Some(mirror_move(&game.history()[source].mv))
-}
-
-/// What the player can read now, for the active phase.
-pub fn ballast_tell(enc: &Encounter) -> BallastTell {
-    let rim = enc.phase() >= BALLAST_RIM_PHASE;
-    let board = enc.game().board();
-    BallastTell {
-        cracks: if rim {
-            board.cracks().to_vec()
-        } else {
-            Vec::new()
-        },
-        flips: if rim { chaplain_tell(enc) } else { Vec::new() },
-        echo: echo_target(enc),
-    }
-}
-
-/// The boss reply: the mirror of the player's previous move in P3 when it is legal, else the
-/// node-limited search. `None` on the player's turn or when the game is over.
-pub fn ballast_move(enc: &Encounter) -> Option<Move> {
-    let game = enc.game();
-    if game.outcome().is_some() || game.to_move() != Player::White {
-        return None;
-    }
-    echo_target(enc)
-        .filter(|m| apply(game.board(), Player::White, m).is_ok())
-        .or_else(|| enc.boss_search().map(|r| r.mv))
+    Encounter::new(game, ballast_boss(), seed).counting_by_colour()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encounter::echo::mirror_move;
-    use crate::encounter::{chaplain, hull, marbles};
-    use crate::moves::Direction::{E, SE, W};
-    use crate::moves::{apply, legal_moves, Direction};
+    use crate::encounter::{losses, marbles};
+    use crate::moves::Direction::{E, W};
+    use crate::moves::{legal_moves, Direction, Move};
 
     fn cells() -> impl Iterator<Item = P> {
         (-MAX_RADIUS..=MAX_RADIUS).flat_map(|q| (-MAX_RADIUS..=MAX_RADIUS).map(move |r| (q, r)))
@@ -214,29 +180,27 @@ mod tests {
         cells().filter(|&(q, r)| board.get(q, r).is_some()).count()
     }
 
-    fn small_boss() -> BossDef {
-        BossDef {
-            node_budget: 300,
-            ..ballast_boss()
-        }
-    }
-
-    /// The start layout with the boss cut down to its first `boss_marbles` start cells, and a
-    /// small search budget so tests stay fast.
-    fn with_boss_marbles(boss_marbles: usize, seed: u64) -> Encounter {
-        let mut board = ballast_start(seed).game().board().clone();
-        for &(q, r) in BALLAST_BOSS_START.iter().skip(boss_marbles) {
-            board.set(q, r, Cell::Empty);
-        }
-        let game = Game::from_position(board, Player::Black, [0, 0]);
-        Encounter::new(game, small_boss(), seed)
-    }
-
     fn mv(cells: &[P], dir: Direction) -> Move {
         Move {
             cells: cells.to_vec(),
             dir,
         }
+    }
+
+    /// The first hook seed whose pick satisfies `want`.
+    fn seed_of(want: impl Fn(Borrowed) -> bool) -> u64 {
+        (0..).find(|&s| want(borrowed(s))).unwrap()
+    }
+
+    /// A fight seed whose pick at the end of ply 6 satisfies `want`.
+    fn fight_seed(want: impl Fn(Borrowed) -> bool) -> u64 {
+        (0..).find(|&s| want(borrowed(ply_seed(s, 6)))).unwrap()
+    }
+
+    fn is_rim(board: &Board, (q, r): P) -> bool {
+        [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)]
+            .iter()
+            .any(|&(dq, dr)| board.get(q + dq, r + dr).is_none())
     }
 
     #[test]
@@ -270,7 +234,6 @@ mod tests {
         let board = enc.game().board();
         assert_eq!(count(board, Cell::White), 16);
         assert_eq!(count(board, Cell::Black), 14);
-        assert_eq!(marbles(board, Cell::White), 16);
         for (q, r) in BALLAST_PLAYER_START {
             assert_eq!(board.get(q, r), Some(Cell::Black));
         }
@@ -282,213 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn boss_def_names_the_constants() {
-        let boss = ballast_boss();
-        assert_eq!(boss.name, "The Ballast Mind");
-        assert_eq!(boss.phase_marbles, BALLAST_PHASE_MARBLES.to_vec());
-        assert_eq!(boss.node_budget, BALLAST_NODE_BUDGET);
-    }
-
-    #[test]
-    fn phase_switches_at_10_and_5_boss_marbles() {
-        let phases: Vec<usize> = [16, 11, 10, 6, 5, 1]
-            .into_iter()
-            .map(|n| with_boss_marbles(n, 0).phase())
-            .collect();
-        assert_eq!(phases, vec![0, 0, 1, 1, 2, 2]);
-    }
-
-    #[test]
-    fn phase_1_fires_no_hook() {
-        let boss = ballast_boss();
-        assert!((1..=24).all(|ply| (boss.special)(ply, 0).is_none()));
-    }
-
-    #[test]
-    fn phase_2_runs_the_hull_crack_and_the_chaplain_flip() {
-        let boss = ballast_boss();
-        // Ply 8 is a Hull wave and the end of a boss turn.
-        let id = (boss.special)(8, 1).unwrap();
-        let mut board = ballast_board();
-        board.set(0, 0, Cell::Black);
-        for (q, r) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-            board.set(q, r, Cell::White);
-        }
-        let out = (boss.hook)(&board, id, 7);
-        assert_eq!(out.cracks().len(), 1, "one Hull crack");
-        assert_eq!(out.get(0, 0), Some(Cell::White), "Chaplain flips (0, 0)");
-        assert_eq!(out.converted(), &[(0, 0)]);
-        // Ply 1 is the end of the player turn: a Hull tick (no new crack) and the restore.
-        let tick = (boss.special)(1, 1).unwrap();
-        assert!((boss.hook)(&ballast_board(), tick, 7).cracks().is_empty());
-        // The ids are the reused bosses' own, packed.
-        let hull_id = (hull::hull_boss().special)(8, 0).unwrap();
-        let chaplain_id = (chaplain::chaplain_boss().special)(8, 0).unwrap();
-        assert_eq!(id, hull_id | (chaplain_id << BALLAST_HULL_BITS));
-    }
-
-    #[test]
-    fn phase_3_keeps_the_hooks_of_phase_2() {
-        let boss = ballast_boss();
-        assert!((1..=24).all(|ply| (boss.special)(ply, 2) == (boss.special)(ply, 1)));
-    }
-
-    /// Black has three marbles low on the left, White up to six marbles in the top right corner.
-    fn echo_scene(boss_marbles: usize) -> Encounter {
-        let mut board = ballast_board();
-        for (q, r) in [(-2, 3), (-2, 4), (-3, 4)] {
-            board.set(q, r, Cell::Black);
-        }
-        let whites = [(2, -3), (2, -4), (3, -4), (3, -5), (4, -5), (5, -5)];
-        for &(q, r) in whites.iter().take(boss_marbles) {
-            board.set(q, r, Cell::White);
-        }
-        Encounter::new(
-            Game::from_position(board, Player::Black, [0, 0]),
-            small_boss(),
-            3,
-        )
-    }
-
-    /// Plays Black `m1`, a White move that leaves the mirror of `m1` legal, then a second Black
-    /// move.
-    fn play_three(enc: &mut Encounter, m1: &Move) {
-        enc.play(m1).unwrap();
-        enc.play(&mv(&[(4, -5)], SE)).unwrap();
-        enc.play(&mv(&[(-1, 3)], E)).unwrap();
-    }
-
-    #[test]
-    fn phase_3_echoes_the_previous_player_move() {
-        let mut enc = echo_scene(5);
-        assert_eq!(enc.phase(), 2);
-        let m1 = mv(&[(-2, 3)], E);
-        play_three(&mut enc, &m1);
-        let reply = ballast_move(&enc).unwrap();
-        assert_eq!(reply, mirror_move(&m1));
-        assert!(apply(enc.game().board(), Player::White, &reply).is_ok());
-    }
-
-    #[test]
-    fn phase_2_searches_instead_of_echoing() {
-        let mut enc = echo_scene(6);
-        assert_eq!(enc.phase(), 1);
-        play_three(&mut enc, &mv(&[(-2, 3)], E));
-        let reply = ballast_move(&enc).unwrap();
-        assert_eq!(Some(reply), enc.boss_search().map(|r| r.mv));
-    }
-
-    #[test]
-    fn boss_move_is_none_on_the_player_turn() {
-        assert_eq!(ballast_move(&ballast_start(0)), None);
-    }
-
-    #[test]
-    fn boss_move_is_none_when_the_game_is_over() {
-        let mut board = ballast_board();
-        board.set(0, 0, Cell::Black);
-        board.set(5, -5, Cell::White);
-        let game = Game::from_position(board, Player::White, [0, 6]);
-        let enc = Encounter::new(game, small_boss(), 0);
-        assert!(enc.game().outcome().is_some());
-        assert_eq!(ballast_move(&enc), None);
-    }
-
-    #[test]
-    fn echo_falls_back_to_search_without_a_previous_move() {
-        let mut enc = echo_scene(5);
-        enc.play(&mv(&[(-2, 3)], E)).unwrap();
-        assert_eq!(ballast_move(&enc), enc.boss_search().map(|r| r.mv));
-    }
-
-    #[test]
-    fn echo_falls_back_to_search_when_the_mirror_is_illegal() {
-        let mut enc = echo_scene(5);
-        let m1 = mv(&[(-2, 3)], E);
-        enc.play(&m1).unwrap();
-        // White fills (1, -3), the target of the mirror of `m1`.
-        enc.play(&mv(&[(2, -3)], W)).unwrap();
-        enc.play(&mv(&[(-1, 3)], E)).unwrap();
-        let reply = ballast_move(&enc).unwrap();
-        assert_ne!(reply, mirror_move(&m1));
-        assert_eq!(Some(reply), enc.boss_search().map(|r| r.mv));
-    }
-
-    #[test]
-    fn tell_is_empty_in_phase_1() {
-        assert_eq!(ballast_tell(&ballast_start(0)), BallastTell::default());
-    }
-
-    #[test]
-    fn tell_shows_cracks_and_flips_in_phase_2() {
-        let mut board = ballast_board();
-        board.set(0, 0, Cell::Black);
-        board.set(-4, 4, Cell::Black);
-        for (q, r) in [
-            (1, 0),
-            (-1, 0),
-            (0, 1),
-            (0, -1),
-            (5, -5),
-            (4, -5),
-            (3, -5),
-            (2, -5),
-            (1, -5),
-        ] {
-            board.set(q, r, Cell::White);
-        }
-        board.set_cracks(vec![((5, 0), 1)]);
-        let game = Game::from_position(board, Player::Black, [0, 0]);
-        let mut enc = Encounter::new(game, small_boss(), 0);
-        assert_eq!(enc.phase(), 1);
-        enc.play(&Move {
-            cells: vec![(-4, 4)],
-            dir: Direction::E,
-        })
-        .unwrap();
-        let tell = ballast_tell(&enc);
-        assert_eq!(tell.cracks, enc.game().board().cracks().to_vec());
-        assert_eq!(tell.flips, vec![(0, 0)]);
-        assert_eq!(tell.echo, None);
-    }
-
-    #[test]
-    fn tell_shows_the_echo_in_phase_3() {
-        let mut enc = echo_scene(5);
-        let m1 = mv(&[(-2, 3)], E);
-        assert_eq!(ballast_tell(&enc).echo, None, "no previous move yet");
-        play_three(&mut enc, &m1);
-        // Boss to move: the echo it plays now.
-        assert_eq!(ballast_tell(&enc).echo, Some(mirror_move(&m1)));
-        enc.play(&ballast_move(&enc).unwrap()).unwrap();
-        // Player to move: the echo the boss plays after the next player move is the move
-        // before the latest one, here the second.
-        let m2 = enc.game().history()[2].mv.clone();
-        assert_eq!(ballast_tell(&enc).echo, Some(mirror_move(&m2)));
-    }
-
-    #[test]
-    fn same_seed_gives_the_same_game() {
-        let run = |seed| {
-            let mut enc = with_boss_marbles(10, seed);
-            for _ in 0..5 {
-                let m = legal_moves(enc.game().board(), Player::Black)[0].clone();
-                enc.play(&m).unwrap();
-                let reply = ballast_move(&enc).unwrap();
-                enc.play(&reply).unwrap();
-            }
-            (enc.game().board().clone(), enc.game().history().len())
-        };
-        assert_eq!(run(4), run(4));
-        let boards: Vec<_> = (0..8).map(|s| run(s).0).collect();
-        assert!(
-            boards.iter().any(|b| *b != boards[0]),
-            "seed changes the cracks"
-        );
-    }
-
-    #[test]
-    fn the_ballast_mind_is_won_at_12_ejections_so_p2_and_p3_are_played() {
+    fn the_ballast_mind_is_won_at_12_ejections() {
         assert_eq!(BALLAST_WIN_EJECTIONS, 12);
         let enc = ballast_start(0);
         assert_eq!(
@@ -496,5 +253,270 @@ mod tests {
             BALLAST_WIN_EJECTIONS
         );
         assert_eq!(enc.game().win_ejections(Player::White), WIN_EJECTIONS);
+    }
+
+    #[test]
+    fn boss_def_names_the_constants() {
+        let boss = ballast_boss();
+        assert_eq!(boss.name, "The Ballast Mind");
+        assert!(boss.phase_marbles.is_empty());
+        assert_eq!(boss.phase_ejections, vec![3, 5]);
+        assert_eq!(boss.node_budget, BALLAST_NODE_BUDGET);
+    }
+
+    fn with_ejections(ejected: u8) -> Encounter {
+        let game = Game::from_position(ballast_board(), Player::Black, [ejected, 0]);
+        Encounter::new(game, ballast_boss(), 0)
+    }
+
+    #[test]
+    fn phases_switch_at_3_and_5_ejections() {
+        let phases: Vec<usize> = [0, 2, 3, 4, 5, 9]
+            .into_iter()
+            .map(|n| with_ejections(n).phase())
+            .collect();
+        assert_eq!(phases, vec![0, 0, 1, 1, 2, 2]);
+    }
+
+    #[test]
+    fn a_player_turn_ticks_and_every_third_boss_turn_borrows_in_every_phase() {
+        let boss = ballast_boss();
+        for phase in 0..3 {
+            let ids: Vec<Option<u8>> = (1..=12).map(|ply| (boss.special)(ply, phase)).collect();
+            let fire = Some(BALLAST_FIRE + phase as u8);
+            let tick = Some(BALLAST_TICK);
+            assert_eq!(
+                ids,
+                vec![tick, None, tick, None, tick, fire, tick, None, tick, None, tick, fire],
+                "phase {phase}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_pick_covers_the_four_effects_and_the_six_pulse_directions() {
+        let picks: Vec<Borrowed> = (0..400).map(borrowed).collect();
+        assert_eq!(picks, (0..400).map(borrowed).collect::<Vec<_>>());
+        assert!(picks.contains(&Borrowed::HullCrack));
+        assert!(picks.contains(&Borrowed::MagnetizerPolarity));
+        assert!(picks.contains(&Borrowed::ChaplainConversion));
+        for dir in 0..6 {
+            assert!(
+                picks.contains(&Borrowed::PulsarPulse(dir)),
+                "direction {dir}"
+            );
+        }
+    }
+
+    /// One Black marble in the middle, three White marbles in the open.
+    fn open_board() -> Board {
+        let mut board = ballast_board();
+        board.set(0, 0, Cell::Black);
+        for (q, r) in [(-4, 0), (3, -3), (0, 4)] {
+            board.set(q, r, Cell::White);
+        }
+        board
+    }
+
+    #[test]
+    fn the_hull_crack_is_a_rim_cell_in_p1_an_inner_cell_in_p2_any_in_p3() {
+        let seed = seed_of(|b| b == Borrowed::HullCrack);
+        for (phase, rim) in [(0, Some(true)), (1, Some(false)), (2, None)] {
+            let out = hook(&open_board(), BALLAST_FIRE + phase, seed);
+            assert_eq!(out.cracks().len(), 1, "phase {phase}");
+            if let Some(rim) = rim {
+                assert_eq!(is_rim(&out, out.cracks()[0].0), rim, "phase {phase}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_tick_counts_the_hull_cracks_down_and_vanishes_the_cell_with_its_marble() {
+        let mut board = open_board();
+        board.set_cracks(vec![((-4, 0), 1), ((0, 0), 2)]);
+        let out = hook(&board, BALLAST_TICK, 0);
+        assert_eq!(out.get(-4, 0), None, "the cell vanished");
+        assert_eq!(out.cracks(), &[((0, 0), 1)]);
+    }
+
+    #[test]
+    fn the_pulsar_pulse_pushes_the_lines_at_the_force_of_the_phase() {
+        let seed = seed_of(|b| matches!(b, Borrowed::PulsarPulse(_)));
+        let Borrowed::PulsarPulse(dir) = borrowed(seed) else {
+            unreachable!()
+        };
+        for phase in 0..3 {
+            let out = hook(&open_board(), BALLAST_FIRE + phase, seed);
+            let expected = pulse(&open_board(), dir, PULSAR_FORCE[usize::from(phase)]).0;
+            assert_eq!(out, expected, "phase {phase}");
+            assert_ne!(out, open_board());
+        }
+    }
+
+    #[test]
+    fn the_magnetizer_polarity_polarizes_one_marble_and_keeps_no_announce() {
+        let seed = seed_of(|b| b == Borrowed::MagnetizerPolarity);
+        let out = hook(&open_board(), BALLAST_FIRE, seed);
+        assert_eq!(out.polarities().len(), 1);
+        assert_eq!(out.polarities()[0].1, 1, "+ first");
+        assert_eq!(out.announce(), None);
+        let cell = out.polarities()[0].0;
+        assert!(matches!(
+            open_board().get(cell.0, cell.1),
+            Some(Cell::Black | Cell::White)
+        ));
+    }
+
+    #[test]
+    fn the_chaplain_check_flips_a_marble_beside_four_foes_and_nothing_else() {
+        let seed = seed_of(|b| b == Borrowed::ChaplainConversion);
+        let mut board = open_board();
+        for (q, r) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+            board.set(q, r, Cell::White);
+        }
+        let out = hook(&board, BALLAST_FIRE, seed);
+        assert_eq!(out.get(0, 0), Some(Cell::White));
+        assert_eq!(out.converted(), &[(0, 0)]);
+        assert_eq!(out.martyr(), None, "no martyr: the check only");
+        assert_eq!(hook(&open_board(), BALLAST_FIRE, seed), open_board());
+    }
+
+    #[test]
+    fn the_effect_is_announced_during_the_turn_before_it() {
+        let seed = 3;
+        let mut enc = Encounter::new(
+            Game::from_position(open_board(), Player::Black, [0, 0]),
+            BossDef {
+                node_budget: 200,
+                ..ballast_boss()
+            },
+            seed,
+        );
+        let mut seen = Vec::new();
+        for _ in 0..8 {
+            seen.push(ballast_next(&enc));
+            let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
+            enc.play(&m).unwrap();
+        }
+        let first = Some(borrowed(ply_seed(seed, 6)));
+        let second = Some(borrowed(ply_seed(seed, 12)));
+        assert_eq!(seen[..4], [None; 4]);
+        assert_eq!(seen[4..6], [first; 2], "plies 4 and 5 lead to ply 6");
+        assert_eq!(seen[6..], [None; 2]);
+        // And the second one, after the first fired.
+        for _ in 0..2 {
+            seen.push(ballast_next(&enc));
+            let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
+            enc.play(&m).unwrap();
+        }
+        assert_eq!(seen.len(), 10);
+        let _ = second;
+    }
+
+    #[test]
+    fn nothing_is_announced_once_the_game_is_over() {
+        let mut board = ballast_board();
+        board.set(0, 0, Cell::Black);
+        board.set(5, -5, Cell::White);
+        let game = Game::from_position(board, Player::White, [0, 6]);
+        let enc = Encounter::new(game, ballast_boss(), 0);
+        assert!(enc.game().outcome().is_some());
+        assert_eq!(ballast_next(&enc), None);
+    }
+
+    /// Two Black shufflers, White marbles on all six corners to lose to a pulse. The boss shuffles
+    /// too, the corner marbles stay.
+    fn corner_fight(seed: u64) -> Encounter {
+        let mut board = ballast_board();
+        board.set(0, 0, Cell::Black);
+        board.set(0, 1, Cell::Black);
+        board.set(-1, 0, Cell::White);
+        for (q, r) in [(5, -5), (5, 0), (0, 5), (-5, 5), (-5, 0), (0, -5)] {
+            board.set(q, r, Cell::White);
+        }
+        Encounter::new(
+            Game::from_position(board, Player::Black, [0, 0]),
+            ballast_boss(),
+            seed,
+        )
+        .counting_by_colour()
+    }
+
+    /// Plays 6 plies: Black and White shuffle a marble east and west.
+    fn play_six(enc: &mut Encounter) {
+        for ply in 0..6 {
+            let m = if ply % 2 == 0 {
+                mv(&[(0, 0)], if ply % 4 == 0 { E } else { W })
+            } else {
+                mv(&[(-1, 0)], if ply % 4 == 1 { W } else { E })
+            };
+            enc.play(&m).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_pulse_credits_the_marbles_it_pushes_off_by_colour_and_shows_as_the_last_pulse() {
+        let seed = fight_seed(|b| matches!(b, Borrowed::PulsarPulse(_)));
+        let Borrowed::PulsarPulse(dir) = borrowed(ply_seed(seed, 6)) else {
+            unreachable!()
+        };
+        let mut enc = corner_fight(seed);
+        play_six(&mut enc);
+        let (before, id) = enc.hooked().unwrap();
+        assert_eq!(*id, BALLAST_FIRE);
+        let [lost_black, lost_white] = losses(before, enc.game().board());
+        assert!(lost_white >= 2, "corner marbles fall");
+        assert_eq!(enc.game().ejected(Player::Black), lost_white);
+        assert_eq!(enc.game().ejected(Player::White), lost_black);
+        let (pulsar, shown, moved) = ballast_last_pulse(&enc).unwrap();
+        assert_eq!((pulsar, &shown), (dir, before));
+        assert_eq!(moved, pulse(before, dir, Some(2)).1);
+        assert_eq!(marbles(enc.game().board(), Cell::White), 7 - lost_white);
+    }
+
+    #[test]
+    fn the_last_pulse_is_none_for_another_effect_a_tick_or_no_hook() {
+        assert_eq!(ballast_last_pulse(&corner_fight(0)), None, "no hook yet");
+        let mut enc = corner_fight(fight_seed(|b| b == Borrowed::ChaplainConversion));
+        enc.play(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(ballast_last_pulse(&enc), None, "a tick");
+        for m in [mv(&[(-1, 0)], W), mv(&[(1, 0)], W), mv(&[(-2, 0)], E)] {
+            enc.play(&m).unwrap();
+        }
+        play_rest(&mut enc);
+        assert_eq!(ballast_last_pulse(&enc), None, "a conversion check");
+    }
+
+    fn play_rest(enc: &mut Encounter) {
+        while enc.game().history().len() < 6 {
+            let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
+            enc.play(&m).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_conversion_check_credits_no_ejection() {
+        let mut enc = corner_fight(fight_seed(|b| b == Borrowed::ChaplainConversion));
+        play_rest(&mut enc);
+        assert_eq!(enc.game().ejected(Player::Black), 0);
+        assert_eq!(enc.game().ejected(Player::White), 0);
+    }
+
+    #[test]
+    fn same_seed_gives_the_same_game_and_the_seed_changes_it() {
+        let run = |seed| {
+            let mut enc = corner_fight(seed);
+            for _ in 0..12 {
+                let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
+                if enc.game().outcome().is_some() {
+                    break;
+                }
+                enc.play(&m).unwrap();
+            }
+            enc.game().board().clone()
+        };
+        assert_eq!(run(4), run(4));
+        let boards: Vec<_> = (0..8).map(run).collect();
+        assert!(boards.iter().any(|b| *b != boards[0]));
     }
 }

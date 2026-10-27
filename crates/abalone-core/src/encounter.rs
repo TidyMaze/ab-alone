@@ -74,6 +74,9 @@ pub struct Encounter {
     removed: Vec<((i32, i32), Cell)>,
     /// Player turns before the boss wins, for a fight on a clock (The Overseer's neurotoxin).
     turn_limit: Option<u32>,
+    /// Count the marbles a hook removes by colour, when it flips none (The Ballast Mind borrows
+    /// the Pulsar's pulse, which moves marbles).
+    by_colour: bool,
 }
 
 /// Marbles of `color` on `board`.
@@ -152,6 +155,11 @@ fn carried_martyr(before: &Board, mv: &Move, board: &Board) -> Option<Option<(i3
     })
 }
 
+/// The seed of the hooks that run at the end of ply `ply` of the fight `seed`.
+pub(crate) fn ply_seed(seed: u64, ply: u64) -> u64 {
+    seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
+
 fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
     None
 }
@@ -184,7 +192,14 @@ impl Encounter {
             hook_seed: 0,
             removed: Vec::new(),
             turn_limit: None,
+            by_colour: false,
         }
+    }
+
+    /// The same fight, whose hooks' losses count by colour as long as no marble flips.
+    pub fn counting_by_colour(mut self) -> Self {
+        self.by_colour = true;
+        self
     }
 
     /// The board just before the last ply's hook and the special id it fired with, `None` when the
@@ -258,7 +273,7 @@ impl Encounter {
         self.hooked = None;
         self.removed.clear();
         let ply = self.game.history().len() as u64;
-        let seed = self.seed ^ ply.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        let seed = ply_seed(self.seed, ply);
         self.settle(seed);
         if let (Some(id), None) = (told, self.game.outcome()) {
             let board = (self.boss.hook)(self.game.board(), id, seed);
@@ -450,6 +465,67 @@ mod tests {
             hook: clear_white,
             node_budget: 200,
         }
+    }
+
+    /// Moves the first White marble one cell east and removes the second one.
+    fn shift_and_drop(board: &Board, _id: u8, _seed: u64) -> Board {
+        let whites = cells_of(board, Cell::White);
+        let mut out = board.clone();
+        out.set(whites[0].0, whites[0].1, Cell::Empty);
+        out.set(whites[0].0 + 1, whites[0].1, Cell::White);
+        out.set(whites[1].0, whites[1].1, Cell::Empty);
+        out
+    }
+
+    /// Flips the first Black marble to White.
+    fn flip_black(board: &Board, _id: u8, _seed: u64) -> Board {
+        let (q, r) = cells_of(board, Cell::Black)[0];
+        let mut out = board.clone();
+        out.set(q, r, Cell::White);
+        out
+    }
+
+    fn counting_encounter(hook: HookFn, by_colour: bool) -> Encounter {
+        let game = position(&[(0, 3), (0, 2)], &[(-3, 0), (3, 0)], Player::Black, [0, 0]);
+        let mut boss = boss(every_ply);
+        boss.hook = hook;
+        let enc = Encounter::new(game, boss, 0);
+        if by_colour {
+            enc.counting_by_colour()
+        } else {
+            enc
+        }
+    }
+
+    #[test]
+    fn a_hook_that_moves_marbles_counts_its_losses_by_colour_when_asked() {
+        let mut plain = counting_encounter(shift_and_drop, false);
+        plain.play(&mv(&[(0, 3)], E)).unwrap();
+        assert_eq!(
+            plain.game().ejected(Player::Black),
+            2,
+            "the moved marble counts"
+        );
+        let mut coloured = counting_encounter(shift_and_drop, true);
+        coloured.play(&mv(&[(0, 3)], E)).unwrap();
+        assert_eq!(coloured.game().ejected(Player::Black), 1);
+        assert_eq!(coloured.game().ejected(Player::White), 0);
+    }
+
+    #[test]
+    fn a_flip_credits_nothing_even_when_counting_by_colour() {
+        let mut enc = counting_encounter(flip_black, true);
+        enc.play(&mv(&[(0, 3)], E)).unwrap();
+        assert_eq!(marbles(enc.game().board(), Cell::White), 3);
+        assert_eq!(enc.game().ejected(Player::Black), 0);
+        assert_eq!(enc.game().ejected(Player::White), 0);
+    }
+
+    #[test]
+    fn ply_seed_is_the_fight_seed_mixed_with_the_ply() {
+        assert_eq!(ply_seed(5, 0), 5);
+        assert_ne!(ply_seed(5, 1), ply_seed(5, 2));
+        assert_ne!(ply_seed(5, 1), ply_seed(6, 1));
     }
 
     fn step(enc: &mut Encounter) {

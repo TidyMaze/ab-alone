@@ -25,7 +25,7 @@ pub const HULL_CRACK_INNER: u8 = 3;
 /// Special id of a new crack on any cell (P3).
 pub const HULL_CRACK_ANY: u8 = 4;
 /// The kind of new crack, per phase.
-const HULL_CRACKS: [u8; 3] = [HULL_CRACK_RIM, HULL_CRACK_INNER, HULL_CRACK_ANY];
+pub(crate) const HULL_CRACKS: [u8; 3] = [HULL_CRACK_RIM, HULL_CRACK_INNER, HULL_CRACK_ANY];
 
 pub(crate) const NEIGHBOURS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
 
