@@ -66,6 +66,42 @@ function plies(game: Game, from: number, to: number): void {
 
 const named = (scene: THREE.Scene, name: string): THREE.Object3D[] => scene.getObjectsByProperty('name', name);
 
+describe('main.ts The Pulsar ripples (#741)', () => {
+  it('the pulsar that fires next turn loops two small faint rings while the player thinks', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    fightPulsar(game);
+    plies(game, 0, 2);
+    expect(body().ripples).toBe('0'); // 2 turns away
+    plies(game, 2, 3);
+    expect(body().ripples).toBe('2');
+    const rings = named(scene(), 'pulsar-ripple') as THREE.Mesh[];
+    expect(rings).toHaveLength(2);
+    const [lit] = named(scene(), 'pulsar-charging');
+    expect([rings[0]!.position.x, rings[0]!.position.z]).toEqual([lit!.position.x, lit!.position.z]); // on that pulsar
+    game.frame(0);
+    const before = rings[0]!.scale.x;
+    game.frame(400);
+    expect(rings[0]!.scale.x).toBeGreaterThan(before);
+    expect(rings[0]!.scale.x).toBeLessThan(SHOCK_RADIUS / 3);
+    plies(game, 3, 5); // the pulse fires: the ripples stop
+    expect(body().ripples).toBe('0');
+    expect(named(scene(), 'pulsar-ripple')).toHaveLength(0);
+  });
+
+  it('with reduced motion it is one static faint ring', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightPulsar(game);
+    plies(game, 0, 3);
+    expect(body().ripples).toBe('1');
+    const [ring] = named(scene(), 'pulsar-ripple') as THREE.Mesh[];
+    const before = ring!.scale.x;
+    game.frame(400);
+    expect(ring!.scale.x).toBe(before);
+  });
+});
+
 describe('main.ts The Pulsar (#675)', () => {
   it('plays on the Bridge with its Tally line, six pulsars, the one 2 turns from its pulse charging', async () => {
     const scene = catchScene();

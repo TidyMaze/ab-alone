@@ -70,6 +70,37 @@ function plies(game: Game, from: number, to: number): void {
 
 const marbleAt = (game: Game, q: number, r: number): unknown => game.hook('__marbleTurn', q, r);
 
+describe('main.ts The Magnetizer announce blinks (#741)', () => {
+  it('the announced marble blinks in opacity about once a second until it gets its sign', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    fightMagnetizer(game);
+    expect(body().announceBlink).toBeUndefined(); // nothing announced yet
+    plies(game, 0, 2);
+    const seen: number[] = [];
+    for (let n = 0; n < 10; n++) {
+      game.frame(100);
+      seen.push(Number(body().announceBlink));
+    }
+    expect(Math.min(...seen)).toBeLessThan(0.5);
+    expect(Math.max(...seen)).toBeGreaterThan(0.9);
+    expect(Math.min(...seen)).toBeGreaterThanOrEqual(0.3);
+    expect(scene().getObjectByName('announce-ring')!.visible).toBe(false);
+    plies(game, 2, 4); // the start of turn 3: it has its sign
+    expect(body().announceBlink).toBeUndefined();
+  });
+
+  it('with reduced motion it wears a steady outline instead', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightMagnetizer(game);
+    plies(game, 0, 2);
+    game.frame(500);
+    expect(scene().getObjectByName('announce-ring')!.visible).toBe(true);
+    expect(body().announceBlink).toBe('1.00');
+  });
+});
+
 describe('main.ts The Magnetizer (#645, #671)', () => {
   it('announces the marble a turn ahead with an indicator over it, then draws its glyph with the ring', async () => {
     const scene = catchScene();

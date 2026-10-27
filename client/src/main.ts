@@ -47,10 +47,12 @@ import {
   trainText,
   type Train,
 } from './railyard';
-import { burnTrack, parseBurns, toxinText, type Burn } from './overseer';
-import { drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
+import { BUBBLE_SPOT, HAZE_PER_VENT, TAUNTS, burnTrack, burnsPlayer, hazeAt, parseBurns, startsBurningPlayer, tauntIndex, toxinText, ventNote, type Burn } from './overseer';
+import { ANGRY_HOLD_MS, TAUNT_HOLD_MS, angryLine, speechAt, type Speech } from './speech';
+import { blinkAt, drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import {
   PULSAR_BOUNDS,
+  RIPPLES,
   PULSAR_PARTS,
   PULSE_COUNTER_SIZE,
   SHOCK_COLOR,
@@ -60,6 +62,8 @@ import {
   fallen,
   parsePulse,
   parsePulsar,
+  rippleAt,
+  rippling,
   pulseMove,
   pulseText,
   pulsarSpot,
@@ -1003,6 +1007,74 @@ const pupilMaterial = new THREE.MeshBasicMaterial({ color: COLORS.base });
 const ventGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
 const ventMaterial = new THREE.MeshBasicMaterial({ color: 0xc8501e });
 const slotGeometry = new THREE.PlaneGeometry(0.56, 0.07).rotateX(-Math.PI / 2);
+// A toxic green haze rises from the vents once they burn the player's marbles too (P2, #741): 3 soft puffs a vent,
+// looping, one faint puff held still under reduced motion (overseer.ts hazeAt).
+const hazeMap = (() => {
+  const canvas = Object.assign(document.createElement('canvas'), { width: 64, height: 64 });
+  const g = canvas.getContext('2d')!;
+  const glow = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  glow.addColorStop(0, 'rgba(120, 220, 60, 1)');
+  glow.addColorStop(1, 'rgba(120, 220, 60, 0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, 64, 64);
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  return map;
+})();
+let hazes: { sprite: THREE.Sprite; k: number }[] = []; // moved by the animation loop
+// The Overseer's speech bubble (#741): a DOM element over its marble, typed at reading speed (speech.ts). The taunt of
+// each 20 % of the neurotoxin, and an angry shaking red line when a core burns on a vent.
+const bubbleBox = document.getElementById('bubble')!;
+const bubbleText = document.getElementById('bubble-text')!;
+const bubbleLine = document.getElementById('bubble-line')!; // the whole line for screen readers
+let speech: { spec: Speech; start: number; chars: number } | null = null;
+let tauntSaid: { game: Engine | Encounter | null; index: number } = { game: null, index: -1 };
+let phaseSeen: { game: Engine | Encounter | null; phase: number; since: number } = { game: null, phase: 0, since: -1 }; // since: the ply the vents began to burn the player's marbles
+/** The Overseer starts saying `spec`; `animateSpeech` types it. */
+function say(spec: Speech): void {
+  speech = { spec, start: performance.now(), chars: 0 };
+  bubbleLine.textContent = spec.text;
+  bubbleBox.hidden = false;
+  bubbleBox.classList.toggle('angry', spec.angry);
+  bubbleBox.classList.toggle('still', reducedMotion()); // no shake
+}
+/** Types the bubble up to now, with the flicker and a blip per new character, and puts it over the Overseer. */
+function animateSpeech(now: number): void {
+  if (!speech) return;
+  const at = speechAt(speech.spec, now - speech.start, reducedMotion());
+  if (at.done) {
+    speech = null;
+    bubbleBox.hidden = true;
+    return;
+  }
+  if (at.text.length > speech.chars && sfx.tell('blip')) tellCues.push('blip');
+  speech.chars = at.text.length;
+  bubbleText.textContent = at.text;
+  bubbleBox.classList.toggle('glitch', at.glitch);
+  bubbleBox.style.opacity = String(at.opacity);
+  camera.updateMatrixWorld();
+  const spot = new THREE.Vector3(BUBBLE_SPOT.x, BUBBLE_SPOT.y, BUBBLE_SPOT.z).project(camera);
+  bubbleBox.style.left = `${(spot.x * 0.5 + 0.5) * innerWidth}px`;
+  bubbleBox.style.top = `${(0.5 - spot.y * 0.5) * innerHeight}px`;
+}
+/** Blinks the announced marble, or shows its steady outline with reduced motion. */
+function animateAnnounce(now: number): void {
+  if (!blinking) return;
+  const [reduced, blink] = [reducedMotion(), blinkAt(now, reducedMotion())];
+  for (const material of blinking.materials) material.opacity = (material.userData.opacity as number) * blink;
+  blinking.ring.visible = reduced;
+  document.body.dataset.announceBlink = blink.toFixed(2); // read by the e2e tests
+}
+/** Moves the haze puffs of the vents. */
+function animateHaze(now: number): void {
+  for (const { sprite, k } of hazes) {
+    const at = hazeAt(now, k, reducedMotion());
+    sprite.position.y = at.y;
+    sprite.scale.setScalar(1.3 * at.scale);
+    sprite.material.opacity = at.opacity;
+  }
+  if (hazes[0]) document.body.dataset.hazeY = hazes[0].sprite.position.y.toFixed(3); // read by the e2e tests
+}
 let overseerDrawn: { overseer: Axial | null; cores: Axial[]; vents: Axial[] } = { overseer: null, cores: [], vents: [] }; // read by the e2e tests
 /** A core of The Overseer: a pale marble, its dark eye on top. */
 function coreMesh(): THREE.Mesh {
@@ -1101,6 +1173,9 @@ let announceDrawn: { cell: Axial; sign: number } | null = null; // read by the e
 const fading: { sprite: THREE.Sprite; start: number }[] = [];
 let shown: { game: Engine | Encounter; board: number[]; poles: number[] } | null = null;
 const showing = (): { board: number[]; poles: number[] } | null => (shown?.game === engine ? shown : null);
+// The announced marble blinks in opacity (#741, magnetizer.ts blinkAt); with reduced motion it wears a steady outline.
+const announceRingMaterial = new THREE.MeshBasicMaterial({ color: BONE });
+let blinking: { materials: THREE.Material[]; ring: THREE.Mesh } | null = null; // moved by the animation loop
 let polesDrawn: { cell: Axial; sign: number; fresh: boolean }[] = []; // read by the e2e tests
 // The Pulsar (#675, game-design.md section 7.10): six low-poly beacons off the corners of the board, a steel base, a
 // pale core that spins and two beam cones along the way it pushes. The one that charges glows steady, its counter (2,
@@ -1122,6 +1197,10 @@ const chargeMaterial = new THREE.MeshStandardMaterial({ color: PULSAR_PARTS[1]!.
 const shockGeometry = new THREE.RingGeometry(0.96, 1, 96).rotateX(-Math.PI / 2);
 const shockMaterial = new THREE.MeshBasicMaterial({ color: SHOCK_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide });
 let pulsarShown: Pulsar | null = null; // the next pulse of the last refresh
+// The pulsar that fires next turn loops small faint rings while the player thinks (#741, pulsar.ts rippleAt).
+const rippleGeometry = new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2);
+const rippleMaterials = Array.from({ length: RIPPLES }, () => new THREE.MeshBasicMaterial({ color: SHOCK_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+let ripples: THREE.Mesh[] = []; // moved by the animation loop
 let pulsarCores: THREE.Mesh[] = []; // spun by the animation loop
 let shock: { mesh: THREE.Mesh; id: number; start: number; reduced: boolean; skipped: boolean } | null = null;
 
@@ -1591,12 +1670,13 @@ function afterPlay(before: number[], record: number[], live = true): void {
   delete document.body.dataset.burns;
   const vented = engine instanceof Encounter && engine.incinerators().length > 0;
   const burns = vented ? parseBurns((engine as Encounter).removed()) : [];
-  if (burns.length > 0) whenSettled(() => burn(burns, reduced));
+  if (burns.length > 0) whenSettled(() => burn(burns, reduced, history.length));
 }
 
-/** The burns of a ply: each marble sinks into its vent, or fades with reduced motion. */
-function burn(burns: Burn[], reduced: boolean): void {
+/** The burns of a ply at `ply`: each marble sinks into its vent, or fades with reduced motion; a burnt core angers the Overseer. */
+function burn(burns: Burn[], reduced: boolean, ply: number): void {
   document.body.dataset.burns = String(burns.length); // read by the e2e tests
+  if (burns.some((b) => b.side === CORE_CODE)) say({ text: angryLine(fight!.seed, ply), hold: ANGRY_HOLD_MS, angry: true }); // #741
   for (const { cell, side } of burns) startEjection(side === CORE_CODE ? coreMesh() : marbleMesh(side), burnTrack(cell, reduced), scene);
 }
 
@@ -1694,16 +1774,25 @@ function drawShock(elapsedMs: number): void {
   delete document.body.dataset.pulsing;
 }
 
+/** Gives `mesh` and its parts materials of their own, to fade: transparent, the opacity they had kept in `userData.opacity`
+ * (the glass is see-through before it fades). */
+function fadable(mesh: THREE.Object3D): THREE.Material[] {
+  const own: THREE.Material[] = [];
+  mesh.traverse((o) => {
+    const material = ((o as THREE.Mesh).material as THREE.Material).clone();
+    material.transparent = true;
+    material.depthWrite = false; // the core stays seen through the fading glass
+    material.userData.opacity = material.opacity;
+    (o as THREE.Mesh).material = material;
+    own.push(material);
+  });
+  return own;
+}
+
 /** Starts the effect of the ejected marble `mesh` along `track`, in `parent`: the scene, or the battle royale arena at
  * its own scale (#612). */
 function startEjection(mesh: THREE.Mesh, track: EjectTrack, parent: THREE.Object3D, delayMs = 0): void {
-  mesh.traverse((o) => {
-    const material = ((o as THREE.Mesh).material as THREE.Material).clone(); // its own, to fade
-    material.transparent = true;
-    material.depthWrite = false; // the core stays seen through the fading glass
-    material.userData.opacity = material.opacity; // the glass is see-through before it fades
-    (o as THREE.Mesh).material = material;
-  });
+  fadable(mesh);
   const tumble = new THREE.Group();
   tumble.add(mesh);
   const holder = new THREE.Group();
@@ -1868,6 +1957,14 @@ function hud(extra = ''): void {
   goalButton.disabled = history.length === 0; // the goal is on the plate until the first move
   goalButton.setAttribute('aria-expanded', String(showGoal));
   const boss = engine instanceof Encounter ? engine : null;
+  if (boss) {
+    // The vents note (#741): the change that starts burning the player's marbles, shown for 2 plies.
+    const phase = boss.phase();
+    if (phaseSeen.game !== engine) phaseSeen = { game: engine, phase, since: -1 };
+    else if (phaseSeen.phase !== phase) {
+      phaseSeen = { game: engine, phase, since: boss.incinerators().length > 0 && startsBurningPlayer(phaseSeen.phase, phase) ? history.length : -1 };
+    }
+  }
   const tell = boss
     ? [
         crackText(parseCracks(boss.cracks())),
@@ -1875,6 +1972,7 @@ function hud(extra = ''): void {
         trainText(parseTrains(boss.trains())),
         pulseText(parsePulsar(boss.pulsar())),
         toxinText(boss.turns_left()),
+        ventNote(phaseSeen.since, history.length),
         fight?.id === 'magnetizer' ? polarityText(boss.phase(), history.length) : '',
         chaplainText(exposed, boss.converted().length / 2),
         choirText(boss.next_army()),
@@ -1941,12 +2039,25 @@ function refresh(): void {
   const poles = showing()?.poles ?? (engine instanceof Encounter ? Array.from(engine.polarities()) : []);
   const fresh = showing() || !(engine instanceof Encounter) ? [] : parseCells(engine.assigned());
   announceDrawn = showing() || !(engine instanceof Encounter) ? null : parseAnnounce(engine.announce());
+  blinking = null;
+  delete document.body.dataset.announceBlink;
   marbles.clear();
   marbleAt.clear();
   crackDecals = [];
   const vents = engine instanceof Encounter ? parseCells(engine.incinerators()) : [];
   overseerDrawn = { overseer: null, cores: [], vents };
   for (const [q, r] of vents) marbles.add(ventAt(axialTo3D(q, r)));
+  hazes = !burnsPlayer(engine instanceof Encounter ? engine.phase() : 0) ? [] : vents.flatMap(([q, r], v) => {
+    const p = axialTo3D(q, r);
+    return Array.from({ length: HAZE_PER_VENT }, (_, j) => {
+      const material = new THREE.SpriteMaterial({ map: hazeMap, transparent: true, depthWrite: false, opacity: 0 });
+      const sprite = Object.assign(new THREE.Sprite(material), { name: 'vent-haze' });
+      sprite.position.set(p.x, 0.5, p.z);
+      marbles.add(sprite);
+      return { sprite, k: j / HAZE_PER_VENT + v * 0.17 };
+    });
+  });
+  document.body.dataset.haze = String(hazes.length); // read by the e2e tests
   discs.forEach((disc, i) => {
     const [q, r] = BOARD_CELLS[i]!;
     const side = board[i] ?? VANISHED; // ring 5 is off a board of 61 cells (#564)
@@ -2043,6 +2154,12 @@ function refresh(): void {
     indicator.scale.setScalar(0.5);
     marbles.add(indicator);
     onMarble(cellIndex(...cell), indicator);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, announceRingMaterial), { name: 'announce-ring' });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    marbles.add(ring);
+    onMarble(cellIndex(...cell), ring);
+    blinking = { materials: fadable(marbleAt.get(cellIndex(...cell))![0]!), ring };
   }
   eggsDrawn = eggs.map(({ cell: [q, r], left }) => {
     const p = axialTo3D(q, r);
@@ -2062,6 +2179,23 @@ function refresh(): void {
   for (const train of trainsShown) drawTrack(train);
   pulsarShown = engine instanceof Encounter ? parsePulsar(engine.pulsar()) : null;
   pulsarCores = pulsarShown ? drawPulsars(pulsarShown) : [];
+  ripples = pulsarShown && rippling(pulsarShown) ? Array.from({ length: reducedMotion() ? 1 : RIPPLES }, (_, k) => {
+    const { x, z } = pulsarSpot(pulsarShown!.id);
+    const ring = Object.assign(new THREE.Mesh(rippleGeometry, rippleMaterials[k]), { name: 'pulsar-ripple' });
+    ring.position.set(x, 0.05, z);
+    marbles.add(ring);
+    return ring;
+  }) : [];
+  document.body.dataset.ripples = String(ripples.length); // read by the e2e tests
+  const taunt = engine instanceof Encounter ? tauntIndex(engine.turns_left()) : -1; // the Overseer's line of this 20 %
+  if (tauntSaid.game !== engine || tauntSaid.index !== taunt) {
+    tauntSaid = { game: engine, index: taunt };
+    if (taunt >= 0) say({ text: TAUNTS[taunt]!, hold: TAUNT_HOLD_MS, angry: false });
+    else {
+      speech = null;
+      bubbleBox.hidden = true;
+    }
+  }
   tellSound('crack', cracks);
   tellSound('choir', ARMY_NAMES[next] ? [next] : []);
   // The drones follow how tense the game is (#439): the player's marbles a push could eject, the boss phase.
@@ -3529,6 +3663,14 @@ renderer.setAnimationLoop((now) => {
   animateEjections(now);
   animatePasses(now);
   if (shock) drawShock(now - shock.start);
+  animateSpeech(now);
+  animateHaze(now);
+  animateAnnounce(now);
+  ripples.forEach((ring, k) => {
+    const at = rippleAt(now, k, reducedMotion());
+    ring.scale.setScalar(Math.max(at.radius, 0.01));
+    rippleMaterials[k]!.opacity = at.opacity;
+  });
   if (!reducedMotion()) for (const core of pulsarCores) core.rotation.y = now / 600;
   animateParticles(now);
   eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());

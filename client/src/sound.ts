@@ -93,7 +93,7 @@ export function knockVoices(pitch: number): Voice[] {
 
 /** A boss tell with a sound twin (world.md sections 3 and 8, #358): The Hull's crack countdown, The Chaplain's
  * flip tell, The Choir's next army. */
-export type Tell = 'crack' | 'flip' | 'choir';
+export type Tell = 'crack' | 'flip' | 'choir' | 'blip';
 
 const TELLS: Record<Tell, Voice[]> = {
   // The frame groans as a rim cell cracks or ticks down: a low falling creak and a splinter of noise.
@@ -114,6 +114,8 @@ const TELLS: Record<Tell, Voice[]> = {
     { source: 'sine', freq: [1320, 1320], env: strike(0, 0.25, 0.6) },
     { source: 'sine', freq: [3640, 3640], env: strike(0, 0.08, 0.25) },
   ],
+  // The Overseer typing a letter (#741): a soft short synth blip.
+  blip: [{ source: 'triangle', freq: [880, 660], env: strike(0, 0.12, 0.06) }],
   // The next army takes the note: two hummed voices a fifth apart that swell, then fade.
   choir: [220, 330].map(
     (hz, i): Voice => ({

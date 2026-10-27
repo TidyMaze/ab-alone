@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTER } from './alien';
 import { contrastRatio, type RGB } from './contrast';
-import { drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, REPULSION_STRIDE, repulsionMoves } from './magnetizer';
+import { BLINK_MS, blinkAt, drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, REPULSION_STRIDE, repulsionMoves } from './magnetizer';
 
 const rgb = (hex: number): RGB => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
 
@@ -113,5 +113,18 @@ describe('drawAnnounce', () => {
     expect(calls).toEqual(['clear', 'move 32 4', 'line 60 32', 'line 32 60', 'line 4 32', 'fill', 'stroke', 'bar 19 28 26 8', 'bar 28 19 8 26']);
     expect(styles).toEqual(['#0b0d0f', 'edge #d8d4c8', '#d8d4c8']);
     expect(g.lineWidth).toBe(4);
+  });
+});
+
+describe('blinkAt, the announced marble (#741)', () => {
+  it('pulses in opacity about once a second, never fully out', () => {
+    expect(BLINK_MS).toBe(1000);
+    expect(blinkAt(0, false)).toBeCloseTo(1);
+    expect(blinkAt(BLINK_MS / 2, false)).toBeCloseTo(0.3);
+    expect(blinkAt(BLINK_MS, false)).toBeCloseTo(1);
+  });
+
+  it('stays steady with reduced motion', () => {
+    expect(blinkAt(BLINK_MS / 2, true)).toBe(1);
   });
 });

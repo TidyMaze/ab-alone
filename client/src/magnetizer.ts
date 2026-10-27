@@ -38,6 +38,12 @@ export function parseAnnounce(flat: ArrayLike<number>): { cell: Axial; sign: num
   return flat.length === 3 ? { cell: [flat[0]!, flat[1]!], sign: flat[2]! } : null;
 }
 
+/** The blink of the announced marble: one cycle takes a second. */
+export const BLINK_MS = 1000;
+
+/** The opacity of the announced marble `nowMs` into the page, 1 down to 0.3 and back; steady with reduced motion. */
+export const blinkAt = (nowMs: number, reduced: boolean): number => (reduced ? 1 : 0.65 + 0.35 * Math.cos((2 * Math.PI * nowMs) / BLINK_MS));
+
 /** Player turns between two polarities, per phase: turns 3, 6, 9... in P1, the even turns in P2, every turn in P3. */
 const EVERY = [3, 2, 1];
 
