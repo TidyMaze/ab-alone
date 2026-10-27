@@ -445,7 +445,7 @@ for (const skin of ['hex', 'riveted']) {
     await openModes(page);
     await page.getByRole('button', { name: 'Boss fight' }).click();
     await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
-    await expect(page.locator('body')).toHaveAttribute('data-armies', '12');
+    await expect(page.locator('body')).toHaveAttribute('data-armies', '18');
     const armies = (await page.evaluate(() => (window as any).__armies())) as { cell: [number, number] }[];
     for (const c of await topContrasts(page, armies.map((m) => m.cell))) expect(c).toBeGreaterThanOrEqual(3);
   });
