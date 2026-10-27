@@ -168,7 +168,7 @@ test('Boss fight is disabled or works when clicked right after load, bug #144', 
   await expect(page.locator('#boss-fight')).toBeEnabled(); // and it works once the page is ready
 });
 
-// The Hull (#149): a rim cell cracks at ply 8, shows its ticks for 2 plies, then it is a hole. The cracked cell wears
+// The Hull (#149): a rim cell cracks at ply 8, shows its ticks for 2 player turns, then it is a hole. The cracked cell wears
 // the crack decal in both quality tiers, with Clear board off and on (#355, world.md section 8), 3:1 on the cell with
 // Clear board on: the fog dims the far rim cells under 3:1 (bug #399). The crack's course and the decal's contrast are
 // two tests: together they took over 15 s on CI (#431).
@@ -213,17 +213,21 @@ for (const tier of ['high', 'low']) {
     expect(await page.evaluate(() => (window as any).__playTurns(3, [4, 2]))).toBe(3);
     await expect.poll(plies, { timeout: 30_000 }).toBe(8);
     await expect(body).toHaveAttribute('data-cracks', '1');
-    await expect(hud).toContainText('Rim cracks: 1 cell in 2 plies');
+    await expect(hud).toContainText('Cracks: 1 cell in 2 turns');
     expect(await tellCues(page)).toEqual(['crack']); // the crack appears
     await page.screenshot({ path: testInfo.outputPath('hull-cracked.png') });
 
     await advance(false);
     await expect.poll(plies, { timeout: 30_000 }).toBe(10);
-    expect(await tellCues(page)).toEqual(['crack', 'crack']); // it ticked down on ply 9, then vanished: no cue for a gone tell
+    expect(await tellCues(page)).toEqual(['crack', 'crack']); // it ticked down on ply 9
+    await expect(body).toHaveAttribute('data-cracks', '1');
+    await advance(false);
+    await expect.poll(plies, { timeout: 30_000 }).toBe(12);
+    expect(await tellCues(page)).toEqual(['crack', 'crack']); // then vanished on ply 11: no cue for a gone tell
     await expect(body).toHaveAttribute('data-vanished', '1');
     expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
     await expect(body).toHaveAttribute('data-cracks', '0');
-    await expect(hud).not.toContainText('Rim cracks');
+    await expect(hud).not.toContainText('Cracks:');
     expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath('hull-vanished.png') });
   });

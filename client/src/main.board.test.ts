@@ -419,7 +419,7 @@ describe('main.ts board and HUD', () => {
     const scene = catchScene();
     const game = await boot('?nodes=1');
     startBoss(game, 'hull');
-    await game.hook<Promise<number>>('__playTurns', 5, [0, 1, 2, 3, 4, 5]); // a crack at ply 8, its cell gone at ply 10
+    await game.hook<Promise<number>>('__playTurns', 6, [0, 1, 2, 3, 4, 5]); // a crack at ply 8, its cell gone at ply 11
     const vanished = Number(document.body.dataset.vanished);
     expect(vanished).toBeGreaterThan(0);
     expect(game.hook('__frame')).toMatchObject({ holes: vanished, drawn: true });

@@ -5,8 +5,9 @@ use crate::board::Board;
 use crate::encounter::{BossDef, Encounter};
 use crate::moves::{apply, Direction, Move, Player};
 
-/// P2 starts at 10 boss marbles, P3 at 5.
-pub const ECHO_PHASE_MARBLES: [u8; 2] = [10, 5];
+/// P2 and P3 start after this many ejections credited to the player: notches only, the Echo
+/// plays the same in every phase.
+pub const ECHO_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// Positions the free-move search may visit. Starting value, to tune (calibration knob).
 pub const ECHO_NODE_BUDGET: u32 = 400;
 
@@ -22,8 +23,8 @@ fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
 pub fn echo_boss() -> BossDef {
     BossDef {
         name: "The Echo",
-        phase_marbles: ECHO_PHASE_MARBLES.to_vec(),
-        phase_ejections: Vec::new(),
+        phase_marbles: Vec::new(),
+        phase_ejections: ECHO_PHASE_EJECTIONS.to_vec(),
         special: no_special,
         hook: keep_board,
         node_budget: ECHO_NODE_BUDGET,
@@ -51,25 +52,17 @@ pub fn mirror_move(mv: &Move) -> Move {
 }
 
 /// The boss reply for the current position, `None` on the player's turn or when the game is over.
-/// P1 mirrors the last player move, P2 the one before it, P3 tries the last then the previous.
-/// The first mirror the normal validator accepts is played, else the boss search picks.
+/// It is the mirror of the last player move in every phase when the normal validator accepts it,
+/// else the boss search picks.
 pub fn echo_move(enc: &Encounter) -> Option<Move> {
     let game = enc.game();
     if game.outcome().is_some() || game.to_move() != Player::White {
         return None;
     }
-    let history = game.history();
-    let last = history.last().map(|p| &p.mv);
-    let previous = history.len().checked_sub(3).map(|i| &history[i].mv);
-    let echoed: Vec<&Move> = match enc.phase() {
-        0 => last.into_iter().collect(),
-        1 => previous.into_iter().collect(),
-        _ => last.into_iter().chain(previous).collect(),
-    };
-    echoed
-        .into_iter()
-        .map(mirror_move)
-        .find(|m| apply(game.board(), Player::White, m).is_ok())
+    game.history()
+        .last()
+        .map(|p| mirror_move(&p.mv))
+        .filter(|m| apply(game.board(), Player::White, m).is_ok())
         .or_else(|| enc.boss_search().map(|r| r.mv))
 }
 
@@ -105,6 +98,11 @@ mod tests {
     }
 
     fn enc(black: &[P], white: &[P]) -> Encounter {
+        enc_at(black, white, 0)
+    }
+
+    /// The player has ejected `ejected` marbles: 0 is P1, 3 is P2, 5 is P3.
+    fn enc_at(black: &[P], white: &[P], ejected: u8) -> Encounter {
         let mut board = Board::empty();
         for &(q, r) in black {
             board.set(q, r, Cell::Black);
@@ -112,7 +110,7 @@ mod tests {
         for &(q, r) in white {
             board.set(q, r, Cell::White);
         }
-        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let game = Game::from_position(board, Player::Black, [ejected, 0]);
         Encounter::new(game, echo_boss(), 7)
     }
 
@@ -136,16 +134,16 @@ mod tests {
     }
 
     #[test]
-    fn echo_boss_phases_change_at_10_and_5() {
-        assert_eq!(ECHO_PHASE_MARBLES, [10, 5]);
+    fn echo_boss_phases_follow_the_ejections_3_and_5() {
         let boss = echo_boss();
-        assert_eq!(boss.phase_marbles, vec![10, 5]);
+        assert!(boss.phase_marbles.is_empty());
+        assert_eq!(boss.phase_ejections, vec![3, 5], "P2 after 3, P3 after 5");
         assert_eq!(boss.node_budget, ECHO_NODE_BUDGET);
         assert_eq!((boss.special)(1, 0), None);
         let board = Board::standard();
         assert_eq!((boss.hook)(&board, 0, 0), board);
-        for (n, phase) in [(11, 0), (10, 1), (6, 1), (5, 2)] {
-            assert_eq!(enc(&[(0, 3)], &WHITES[..n]).phase(), phase, "{n} marbles");
+        for (ejected, phase) in [(0, 0), (2, 0), (3, 1), (4, 1), (5, 2)] {
+            assert_eq!(enc_at(&[(0, 3)], &WHITES, ejected).phase(), phase);
         }
     }
 
@@ -185,51 +183,33 @@ mod tests {
     }
 
     #[test]
-    fn p2_echoes_the_previous_move_one_move_late() {
-        let mut e = enc(&[(0, 3)], &WHITES[..10]);
-        assert_eq!(e.phase(), 1);
-        let a = mv(&[(0, 3)], E);
-        let b = mv(&[(1, 3)], NE);
-        two_black_moves(&mut e, &a, &b);
-        assert_eq!(echo_move(&e), Some(mirror_move(&a)));
+    fn every_phase_mirrors_the_last_move() {
+        for (ejected, phase) in [(0, 0), (3, 1), (5, 2)] {
+            let mut e = enc_at(&[(0, 3), (-2, 3)], &[(0, -3), (2, -3), (4, -2)], ejected);
+            assert_eq!(e.phase(), phase);
+            let a = mv(&[(-2, 3)], E);
+            let b = mv(&[(0, 3)], E);
+            two_black_moves(&mut e, &a, &b);
+            assert_eq!(echo_move(&e), Some(mirror_move(&b)), "{ejected} ejected");
+        }
     }
 
     #[test]
-    fn p2_without_a_previous_move_uses_the_search() {
-        let mut e = enc(&[(0, 3)], &WHITES[..10]);
-        e.play(&mv(&[(0, 3)], E)).unwrap();
-        assert_eq!(echo_move(&e), e.boss_search().map(|r| r.mv));
-    }
-
-    const P3_WHITES: [P; 5] = [(0, -3), (2, -3), (1, -3), (4, -1), (4, -2)];
-
-    #[test]
-    fn p3_falls_back_to_the_previous_mirror() {
-        let mut e = enc(&[(0, 3), (-2, 3)], &P3_WHITES);
-        assert_eq!(e.phase(), 2);
-        let a = mv(&[(0, 3)], E);
-        let b = mv(&[(-2, 3)], E);
-        two_black_moves(&mut e, &a, &b);
-        // The mirror of b (2,-3)>W is blocked by the own marble at (1,-3): falls to a.
-        assert_eq!(echo_move(&e), Some(mirror_move(&a)));
-    }
-
-    #[test]
-    fn p3_prefers_the_last_mirror_when_legal() {
-        let mut e = enc(&[(0, 3), (-2, 3)], &P3_WHITES);
-        let a = mv(&[(-2, 3)], E);
-        let b = mv(&[(0, 3)], E);
-        two_black_moves(&mut e, &a, &b);
-        assert_eq!(echo_move(&e), Some(mirror_move(&b)));
-    }
-
-    #[test]
-    fn p3_uses_the_search_when_both_mirrors_are_illegal() {
-        let mut e = enc(&[(-2, 3)], &P3_WHITES);
-        let a = mv(&[(-2, 3)], E);
-        let b = mv(&[(-1, 3)], E);
-        two_black_moves(&mut e, &a, &b);
-        assert_eq!(echo_move(&e), e.boss_search().map(|r| r.mv));
+    fn every_phase_uses_the_search_when_the_mirror_is_illegal() {
+        for ejected in [0, 3, 5] {
+            let mut e = enc_at(
+                &[(0, 3), (-2, 3)],
+                &[(0, -3), (2, -3), (1, -3), (4, -2)],
+                ejected,
+            );
+            // The mirror of the last move, (2,-3)>W, is blocked by the own marble at (1,-3), and
+            // the earlier mirror is no fallback any more.
+            let a = mv(&[(0, 3)], E);
+            let b = mv(&[(-2, 3)], E);
+            two_black_moves(&mut e, &a, &b);
+            assert!(apply(e.game().board(), Player::White, &mirror_move(&b)).is_err());
+            assert_eq!(echo_move(&e), e.boss_search().map(|r| r.mv), "{ejected}");
+        }
     }
 
     #[test]
