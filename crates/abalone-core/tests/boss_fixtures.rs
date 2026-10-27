@@ -6,8 +6,8 @@
 use abalone_core::encounter::fixture::Fixture;
 use abalone_core::encounter::PveResult;
 
-fn fixture(id: &str) -> Fixture {
-    let path = format!("{}/tests/fixtures/{id}.txt", env!("CARGO_MANIFEST_DIR"));
+fn fixture(file: &str, id: &str) -> Fixture {
+    let path = format!("{}/tests/fixtures/{file}.txt", env!("CARGO_MANIFEST_DIR"));
     let text = std::fs::read_to_string(&path).expect("the fixture file exists");
     let fixture = Fixture::parse(&text).expect("the fixture parses");
     assert_eq!(fixture.boss.id(), id, "{path} holds another boss");
@@ -15,7 +15,11 @@ fn fixture(id: &str) -> Fixture {
 }
 
 fn assert_win(id: &str) {
-    let fixture = fixture(id);
+    assert_win_file(id, id);
+}
+
+fn assert_win_file(file: &str, id: &str) {
+    let fixture = fixture(file, id);
     assert_eq!(fixture.replay(), Ok(Some(PveResult::Won)), "{id}");
     assert_eq!(
         fixture.replay(),
@@ -42,4 +46,12 @@ fn the_choir_win_replays() {
 #[test]
 fn the_chaplain_win_replays() {
     assert_win("chaplain");
+}
+
+/// The Chaplain game of the ladder pro player (#753): it wipes the boss by conversion in phase 1.
+/// `chaplain.txt` stays the random game that reaches phase 2 and the martyr, which the wasm and
+/// e2e tests need.
+#[test]
+fn the_chaplain_ladder_win_replays() {
+    assert_win_file("chaplain-ladder", "chaplain");
 }
