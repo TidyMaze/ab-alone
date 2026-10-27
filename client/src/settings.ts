@@ -8,6 +8,7 @@ import type { Bus } from './sound';
 import { DIFFICULTY_LABELS, type Difficulty } from './difficulty';
 import { glassSkinById } from './glassskins';
 import { PALETTE_NAMES, type Palette } from './palettes';
+import { RENDER_MODE_NAMES, type RenderMode } from './rendermode';
 import { skinById } from './skins';
 import { nextUiScale, type UiScale } from './uiscale';
 
@@ -59,6 +60,7 @@ export const settingsList = (
   palette: Palette,
   transcript: boolean,
   difficulty: Difficulty = 'normal',
+  renderMode: RenderMode = 'normal',
 ): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: reduced },
@@ -69,6 +71,7 @@ export const settingsList = (
   { id: 'palette', label: `Palette: ${PALETTE_NAMES[palette]}`, icon: 'palette' },
   { id: 'shell-skin', label: skinById(skin).name, icon: 'skin' },
   { id: 'glass-skin', label: glassSkinById(glass).name, icon: 'skin' },
+  { id: 'render-mode', label: `Render: ${RENDER_MODE_NAMES[renderMode]}`, icon: 'render' },
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'difficulty', label: DIFFICULTY_LABELS[difficulty], icon: 'scale' },
   { id: 'import-game', label: 'Import game', icon: 'import' },

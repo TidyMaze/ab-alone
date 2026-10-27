@@ -369,6 +369,7 @@ describe('the settings toggles', () => {
       'setting-palette',
       'setting-shell-skin',
       'setting-glass-skin',
+      'setting-render-mode',
       'setting-export-game',
       'setting-difficulty',
       'setting-import-game',

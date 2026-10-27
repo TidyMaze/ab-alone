@@ -18,11 +18,12 @@ describe('settingsList', () => {
       { id: 'palette', label: 'Palette: Default', icon: 'palette' },
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'glass-skin', label: glassSkinById('smoked').name, icon: 'skin' },
+      { id: 'render-mode', label: 'Render: Normal', icon: 'render' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'difficulty', label: '100%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
-    expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true, 'protan', false, 'hard')).toEqual([
+    expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true, 'protan', false, 'hard', 'clay')).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: true },
       { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: true },
@@ -32,14 +33,15 @@ describe('settingsList', () => {
       { id: 'palette', label: 'Palette: Protan', icon: 'palette' },
       { id: 'shell-skin', label: skinById('scarab').name, icon: 'skin' },
       { id: 'glass-skin', label: glassSkinById('frost').name, icon: 'skin' },
+      { id: 'render-mode', label: 'Render: Clay', icon: 'render' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'difficulty', label: '200%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
   });
 
-  it('keeps the menu at twelve items, including difficulty setting', () => {
-    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toHaveLength(12);
+  it('keeps the menu at thirteen items, including difficulty setting and render mode', () => {
+    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toHaveLength(13);
   });
 
   it('names the four volume sliders, one per bus (#438)', () => {

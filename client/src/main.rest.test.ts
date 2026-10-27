@@ -97,13 +97,15 @@ describe('main.ts, free camera and wireframe modes', () => {
     canvas().dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId, bubbles: true }));
   };
 
-  it('toggles free camera and wireframe with keyboard and HUD buttons, and updates camera on pointer and frame', async () => {
+  it('toggles free camera and cycles render modes in settings and via keyboard', async () => {
     const game = await boot('?bot=off');
     const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement;
-    const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement;
+    const renderModeBtn = document.getElementById('setting-render-mode') as HTMLButtonElement;
     const resetViewBtn = document.getElementById('reset-view') as HTMLButtonElement;
 
     expect(game.hook('__freeCamActive')).toBe(false);
+    expect(game.hook('__renderMode')).toBe('normal');
+    expect(game.hook('__clayActive')).toBe(false);
     expect(game.hook('__wireframeActive')).toBe(false);
 
     // Toggle freeCam on with 'c' key
@@ -152,29 +154,49 @@ describe('main.ts, free camera and wireframe modes', () => {
     freeCamBtn.click();
     expect(game.hook('__freeCamActive')).toBe(false);
 
-    // Toggle wireframe on with 'x' key
+    // Cycle render modes with 'x' key: normal -> clay -> wireframe -> normal
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
-    expect(game.hook('__wireframeActive')).toBe(true);
-
-    // Toggle wireframe off with button or hook
-    wireframeBtn.click();
+    expect(game.hook('__renderMode')).toBe('clay');
+    expect(game.hook('__clayActive')).toBe(true);
     expect(game.hook('__wireframeActive')).toBe(false);
 
-    // Toggle wireframe on with button
-    wireframeBtn.click();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+    expect(game.hook('__renderMode')).toBe('wireframe');
     expect(game.hook('__wireframeActive')).toBe(true);
-    wireframeBtn.click();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+    expect(game.hook('__renderMode')).toBe('normal');
     expect(game.hook('__wireframeActive')).toBe(false);
 
-    // Toggle via hooks
+    // Cycle render modes via settings cyclic button
+    renderModeBtn.click();
+    expect(game.hook('__renderMode')).toBe('clay');
+
+    renderModeBtn.click();
+    expect(game.hook('__renderMode')).toBe('wireframe');
+
+    renderModeBtn.click();
+    expect(game.hook('__renderMode')).toBe('normal');
+
+    // Toggle and cycle via hooks
+    game.hook('__setRenderMode', 'clay');
+    expect(game.hook('__renderMode')).toBe('clay');
+
+    game.hook('__cycleRenderMode');
+    expect(game.hook('__renderMode')).toBe('wireframe');
+
+    game.hook('__toggleWireframe', false);
+    expect(game.hook('__renderMode')).toBe('normal');
+
+    game.hook('__toggleWireframe', true);
+    expect(game.hook('__renderMode')).toBe('wireframe');
+
+    game.hook('__toggleWireframe');
+    expect(game.hook('__renderMode')).toBe('normal');
+
     game.hook('__toggleFreeCam', true);
     expect(game.hook('__freeCamActive')).toBe(true);
     game.hook('__toggleFreeCam', false);
     expect(game.hook('__freeCamActive')).toBe(false);
-
-    game.hook('__toggleWireframe', true);
-    expect(game.hook('__wireframeActive')).toBe(true);
-    game.hook('__toggleWireframe', false);
-    expect(game.hook('__wireframeActive')).toBe(false);
   });
 });
