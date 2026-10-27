@@ -2571,13 +2571,11 @@ function refresh(): void {
     if (target) {
       const ring = new THREE.Mesh(targetRingGeometry, ringMaterial);
       const arrow = new THREE.Mesh(arrowGeometry, targetMaterial);
-      const targetLight = new THREE.PointLight(0x38e8ff, 0.7, 2.0, 1.4);
       ring.rotation.x = -Math.PI / 2; // flat on the cell, facing up
       arrow.rotation.set(-Math.PI / 2, arrowYaw(target.dir), 0, 'YXZ');
       ring.position.set(p.x, 0.005, p.z);
       arrow.position.set(p.x, 0.005, p.z);
-      targetLight.position.set(p.x, 0.12, p.z);
-      marbles.add(ring, arrow, targetLight);
+      marbles.add(ring, arrow);
     }
     for (const dx of tickOffsets(plies)) {
       const tick = new THREE.Mesh(tickGeometry, tickMaterial); // on the front edge, clear of the marble
@@ -3293,6 +3291,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__rings = () => ringed;
 // Used by the browser checks to read the target cells and the direction of their arrow (#390).
 (window as unknown as Record<string, unknown>).__targets = () => targets;
+(window as unknown as Record<string, unknown>).__marbles = () => marbles;
 
 // Used by the browser checks to pick a legal move (the boss tests play forward), and to find one that
 // exposes a marble to The Chaplain.
@@ -3946,13 +3945,11 @@ function drawRoyale(game: Royale): void {
     if (target) {
       const ring = new THREE.Mesh(targetRingGeometry, ringMaterial);
       const arrow = new THREE.Mesh(arrowGeometry, targetMaterial);
-      const targetLight = new THREE.PointLight(0x38e8ff, 0.7, 2.0, 1.4);
       ring.rotation.x = -Math.PI / 2;
       arrow.rotation.set(-Math.PI / 2, arrowYaw(target.dir), 0, 'YXZ');
       ring.position.set(p.x, 0.005, p.z);
       arrow.position.set(p.x, 0.005, p.z);
-      targetLight.position.set(p.x, 0.12, p.z);
-      arenaMarbles.add(ring, arrow, targetLight);
+      arenaMarbles.add(ring, arrow);
     }
     const seat = seatAt(board[i]!);
     if (seat < 0) return;

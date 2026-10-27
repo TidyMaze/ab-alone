@@ -483,4 +483,16 @@ describe('main.ts board and HUD', () => {
     expect(game.room()).toBe('abcdefgh');
     expect(game.hud()).toContain('Link: two crews, one ledger. Both counted.');
   });
+
+  it('draws target arrows without adding dynamic PointLights to avoid shader recompilation stalls (#777)', async () => {
+    const game = await boot('?bot=off');
+    const legal = game.hook<{ cells: Axial[] }[]>('__legal');
+    const marble = legal.find((m) => m.cells.length === 1)!.cells[0]!;
+    game.click(...marble);
+    const targets = game.hook<{ cell: Axial }[]>('__targets');
+    expect(targets.length).toBeGreaterThan(0);
+    const marbles = game.hook<THREE.Group>('__marbles');
+    const lights = marbles.children.filter((child) => child instanceof THREE.PointLight);
+    expect(lights.length).toBe(0);
+  });
 });
