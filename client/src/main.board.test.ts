@@ -332,18 +332,16 @@ describe('main.ts board and HUD', () => {
     expect(notches.lit + notches.dark).toBeGreaterThan(0);
   });
 
-  it('scratches six tally slots per side in a 1v1, and a lit mark per marble left in The Choir', async () => {
-    const scene = catchScene();
+  it('scratches six tally slots per side in a 1v1 and in The Choir', async () => {
     const game = await boot('?bot=off');
     expect(game.hook('__tally')).toEqual([
       { marked: 0, slots: 6 },
       { marked: 0, slots: 6 },
     ]);
     startBoss(game, 'choir');
-    const { shells, glass } = drawn(scene()); // the player, side 1, wears the glass in a fight
     expect(game.hook('__tally')).toEqual([
-      { marked: glass.length, slots: glass.length },
-      { marked: shells.length, slots: shells.length },
+      { marked: 0, slots: 6 },
+      { marked: 0, slots: 6 },
     ]);
   });
 

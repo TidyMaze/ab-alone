@@ -11,18 +11,10 @@ export interface Mark {
   marked: boolean;
 }
 
-/** The slots of each side, side 1 first, `true` for a bone-white mark. `lost` (1v1 and bosses): 6 slots, one marked
- * for each marble the side lost. `left` (The Choir): one notch per marble the side had, lit while on the board.
- * `lost` and `marbles` are per side: the marbles it lost, the marbles it has on the board. */
-export function tallySlots(
-  lost: readonly [number, number],
-  marbles: readonly [number, number],
-  mode: 'lost' | 'left',
-): [boolean[], boolean[]] {
-  const side = (s: 0 | 1): boolean[] =>
-    mode === 'lost'
-      ? Array.from({ length: MARK.slots }, (_, i) => i < lost[s])
-      : Array.from({ length: marbles[s] + lost[s] }, (_, i) => i < marbles[s]);
+/** The slots of each side, side 1 first, `true` for a bone-white mark: 6 slots, one marked for each marble the side
+ * lost (`lost`, per side). */
+export function tallySlots(lost: readonly [number, number]): [boolean[], boolean[]] {
+  const side = (s: 0 | 1): boolean[] => Array.from({ length: MARK.slots }, (_, i) => i < lost[s]);
   return [side(0), side(1)];
 }
 

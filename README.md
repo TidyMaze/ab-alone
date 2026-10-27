@@ -55,7 +55,7 @@ Die, read the tell, retry with the same seed.
 |---|---|---|
 | Mess | **The Echo** | mirrors your every move through the centre of the board |
 | Cargo | **The Hull** | the rim cracks, then falls away under both sides |
-| Furnace | **The Choir** | three armies of four, one sings (moves) per turn, in a fixed cycle |
+| Furnace | **The Choir** | three armies of six in triangles, one sings (moves) per turn; the weakest army is removed after 3 and 5 ejections, and the last one sings twice |
 | Chapel | **The Chaplain** | three of its shells around one of yours convert it |
 | Bridge | **The Ballast Mind** | the final exam: a bigger board, void pillars, the Hull, Chaplain and Echo rules at once |
 | Cargo | **The Alien** | lays eggs near your marbles that hatch into new marbles unless you crush them |

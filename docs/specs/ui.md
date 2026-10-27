@@ -131,7 +131,7 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   wins" / "White wins" in hot-seat and for a spectator, "Draw", and "Victory" / "Defeat" in a boss or
   daily fight, a co-op one included (#530), where a draw is a "Defeat" (rules.md section 10.3). The reason line is in
   TALLY's tone, built by `client/src/endbanner.ts`: "6 out. The books balance.", "6 out. Tally strikes your name.",
-  "6 out. The seat is empty." (10 against the Choir), "6 out. The seat holds.", "Same position three
+  "6 out. The seat is empty.", "6 out. The seat holds.", "Same position three
   times. Tally closes the page.", "100 plies, nothing ejected. Tally calls it even.", and against a boss
   "Repeated 3 times: a defeat." or "100 plies idle: a defeat.". The one action offered is the button
   already in the column: New game (local, bot), Retry (boss, daily), Rematch (online players), and Back to the

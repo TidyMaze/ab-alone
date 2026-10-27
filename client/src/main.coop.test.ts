@@ -240,8 +240,8 @@ describe('co-op: the encounter judges the room', () => {
   });
 
   it('refuses the move of a partner whose engine disagrees, and the fight waits for that partner', async () => {
-    const { game, end, open } = await invited('#room=R0&boss=echo&seed=7');
-    const one = await partner(end, 'R0', 1, { boss: 'choir', seed: 7 }); // its link was edited by hand
+    const { game, end, open } = await invited('#room=R0&boss=overseer&seed=7');
+    const one = await partner(end, 'R0', 1, { boss: 'echo', seed: 7 }); // its link was edited by hand: another board
     open();
     await until(game, () => data().seat === 'player' && data().opponent === 'here');
     const ours = game.hook<Move[]>('__legal').map((m) => encodeMove(m).join());

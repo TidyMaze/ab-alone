@@ -56,8 +56,8 @@ const CASES: Record<string, () => void> = {
     const state = bossState('choir', newEncounter('choir', 0));
     expect(state.name).toBe('The Choir');
     // The Alto moves first. Each army mark carries its code: 0 Alto, 1 Tenor, 2 Bass.
-    expect(state.marks.map((mark) => mark.kind)).toEqual(Array(12).fill('army'));
-    expect(state.marks.map((mark) => mark.value).sort()).toEqual([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2]);
+    expect(state.marks.map((mark) => mark.kind)).toEqual(Array(18).fill('army'));
+    expect(state.marks.map((mark) => mark.value).sort()).toEqual([...Array(6).fill(0), ...Array(6).fill(1), ...Array(6).fill(2)]);
     const alto = state.marks.filter((mark) => mark.value === 0).map((mark) => mark.cell);
     expect(state.tell).toEqual({ kind: 'next_army', cells: alto, text: 'the Alto army moves next' });
   },

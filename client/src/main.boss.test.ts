@@ -407,23 +407,18 @@ describe('main.ts boss tells', () => {
     expect(game.hud()).toContain('White ejected 1/6'); // the boss marble lost for the flip, bug #299
   }, 60_000);
 
-  it('The Choir: a glyph per army, the next army ringed and named, the tally counts the marbles left', async () => {
+  it('The Choir: a glyph per army, the next army ringed and named', async () => {
     const game = await boot('?nodes=200', { reducedMotion: true, audio: true });
     gesture();
     fightBoss(game, 'The Choir');
-    expect(game.hud()).toContain('White ejected 0/10 · Black ejected 0/6');
+    expect(game.hud()).toContain('White ejected 0/6 · Black ejected 0/6');
     expect(byId('hud').querySelectorAll('.boss .notch')).toHaveLength(3);
     expect(byId('hud').querySelector('.boss .tell')!.textContent).toBe('Next army: Alto');
-    expect(body().vanished).toBe('24'); // the outer ring is a hole
-    expect(body().armies).toBe('12');
+    expect(body().vanished).toBe('0'); // the standard board
+    expect(body().armies).toBe('18');
     expect(body().nextArmy).toBe('Alto');
-    expect(game.hook('__frame')).toMatchObject({ radius: 3 });
+    expect(game.hook('__frame')).toMatchObject({ radius: 4 });
     expect(cues(game)).toEqual(['choir']);
-    // The Choir counts the marbles left, not the ones lost (#389): every slot is marked at the start.
-    for (const side of game.hook<{ marked: number; slots: number }[]>('__tally')) {
-      expect(side.marked).toBeGreaterThan(0);
-      expect(side.marked).toBe(side.slots);
-    }
     type Member = { cell: Axial; army: number };
     const cellsOf = (army: number): string[] =>
       game
@@ -441,31 +436,19 @@ describe('main.ts boss tells', () => {
     expect(cues(game)).toEqual(['choir', 'choir']); // once more for Tenor, not for the human move
   }, 60_000);
 
-  it('a boss marble pushed off darkens a phase notch and counts on the tally', async () => {
-    const game = await boot('?bot=off', { reducedMotion: true });
+  it('The Choir sinks the army it removed after the push, a marble at a time (#747)', async () => {
+    const game = await boot('?bot=off');
+    const { Encounter } = await import('abalone-wasm');
     fightBoss(game, 'The Choir');
-    // Nine plies found by a greedy search, both sides by hand: the ninth pushes a Choir marble off.
-    const plies = [
-      [3, 4, -3, 2, -2, 2, -1, 2],
-      [1, 5, 3, -3],
-      [3, 2, -3, 1, -2, 1, -1, 1],
-      [1, 5, 2, -2],
-      [3, 4, -3, 3, -2, 3, -1, 3],
-      [1, 5, 1, -1],
-      [3, 4, -3, 2, -2, 2, -1, 2],
-      [1, 5, 3, -2],
-      [2, 4, -2, 0, -2, 1],
-    ];
-    for (const [n, dir, ...cells] of plies) {
-      for (let i = 0; i < n!; i++) game.click(cells[2 * i]!, cells[2 * i + 1]!);
-      const target = game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === dir)!;
-      game.click(...target.cell);
-    }
-    expect(game.hook('__plies')).toBe(9);
-    expect(game.hud()).toContain('White ejected 1/10');
-    expect(game.hook('__notches')).toEqual({ lit: 3, dark: 1, glyph: true });
-    const [, boss] = game.hook<{ marked: number; slots: number }[]>('__tally');
-    expect(boss!.slots - boss!.marked).toBe(1); // one slot empty: the marble lost
+    const single = (): Move => game.hook<Move[]>('__legal').find((m) => m.cells.length === 1)!;
+    play(game, single()); // the player's move removes no army
+    game.frame(1000);
+    expect(body().sunk).toBeUndefined();
+    vi.spyOn(Encounter.prototype, 'removed').mockReturnValue(Int32Array.from([-4, 1, 2, -4, 2, 2]));
+    play(game, single()); // the move that, say, ejected the third marble: the weakest army is removed
+    expect(body().sunk).toBeUndefined(); // the slide goes first
+    game.frame(1000);
+    expect(body().sunk).toBe('2');
   });
 
   it('the boss hooks of the browser checks read nothing outside a fight', async () => {

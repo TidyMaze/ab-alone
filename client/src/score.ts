@@ -1,6 +1,6 @@
 // Score line of the HUD, built from the engine's ejected counts, win thresholds, status and draw
 // reason (see the header of crates/abalone-wasm/src/lib.rs). The win rule is the engine's: 6
-// ejections, 10 for the player against the Choir (Decision #131).
+// ejections.
 
 import { sideName } from './glass';
 

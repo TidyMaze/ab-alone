@@ -94,7 +94,7 @@ import {
   type Pulsar,
 } from './pulsar';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
-import { ARMY_NAMES, choirText, parseArmies } from './choir';
+import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { countAttempt, dailyCard, dailyFor, dailyLine, dailyTitle, utcDay, type Daily } from './daily';
 import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl, type CoopFight } from './invite';
 import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
@@ -431,7 +431,7 @@ function tellSound(tell: Tell, marks: readonly unknown[]): void {
   const cue = sfx.tell(tell);
   if (cue) tellCues.push(cue);
 }
-// The frame's radius, for the fog that starts at its edge (#399): drawFrame sets it, The Choir plays on radius 3.
+// The frame's radius, for the fog that starts at its edge (#399): drawFrame sets it.
 let fogRadius = RADIUS;
 let drawProps: () => void = () => {};
 
@@ -1439,11 +1439,10 @@ function drawNotches(): void {
   sceneRenderer.drawNotches(row);
 }
 // The ejected count scratched on the rim as tally marks (#389, tallymarks.ts), drawn as the phase notches: a groove per
-// slot, a bone-white mark in it for each marble lost (lit while left, in The Choir). The HUD pips stay as the fallback.
-function drawTally(board: ArrayLike<number>): void {
-  const onBoard = (s: number): number => Array.from(board).filter((v) => v === s).length;
+// slot, a bone-white mark in it for each marble lost. The HUD pips stay as the fallback.
+function drawTally(): void {
   const lost = [engine.ejected(2), engine.ejected(1)] as const; // a side loses what the other ejects
-  const slots = tallySlots(lost, [onBoard(1), onBoard(2)], fight?.id === 'choir' ? 'left' : 'lost');
+  const slots = tallySlots(lost);
   tallies.forEach((group, s) => {
     group.clear();
     for (const m of tallyRow(frame!, s === 0 ? 1 : 2, slots[s]!)) {
@@ -1718,6 +1717,16 @@ function afterPlay(before: number[], record: number[], live = true): void {
     shown = { game: engine, board: beltBoard, poles: [] };
     whenSettled(() => fireBelts(carries, beltBoard, reduced));
   }
+  // The Choir removes its weakest army (#747): the push slides first, then the army's marbles sink where they stood.
+  delete document.body.dataset.sunk;
+  const sunk = fight?.id === 'choir' ? parseBurns((engine as Encounter).removed()) : [];
+  if (sunk.length > 0) whenSettled(() => sink(sunk, reduced));
+}
+
+/** The removed army: each marble sinks into its cell, or fades with reduced motion. */
+function sink(marbles: Burn[], reduced: boolean): void {
+  document.body.dataset.sunk = String(marbles.length); // read by the e2e tests
+  for (const { cell, side } of marbles) startEjection(marbleMesh(side), burnTrack(cell, reduced), scene);
 }
 
 /** The burns of a ply at `ply`: each marble sinks into its vent, or fades with reduced motion; a burnt core angers the Overseer. */
@@ -2069,7 +2078,7 @@ function hud(extra = ''): void {
         ventNote(phaseSeen.since, history.length),
         fight?.id === 'magnetizer' ? polarityText(boss.phase(), history.length) : '',
         chaplainText(exposed, boss.converted().length / 2),
-        choirText(boss.next_army()),
+        choirText(boss.next_army(), armiesLeft(parseArmies(boss.armies()))),
       ]
         .filter((t) => t !== '')
         .join(' · ')
@@ -2119,7 +2128,7 @@ function refresh(): void {
   drawFrame(board);
   lightRim();
   drawNotches();
-  drawTally(board);
+  drawTally();
   const moves = parseMoves(engine.legal_moves());
   targets = groupTargets(moves, selected);
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)

@@ -276,23 +276,41 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Calibrate**: knob = crack interval and AI depth. Fail if P1 deaths are over 50 percent of
   all deaths (the first environment boss must not kill early).
 
-### 7.2 The Choir (#44): three armies
+### 7.2 The Choir (#44, reworked in #747): three armies
 
 - **Concept**: three groups of the crew, still singing in turn.
-- **Twist**: the boss has 3 armies of 4 marbles (Alto, Tenor, Bass) on a radius 3 board. Each
-  boss turn only **one army** may move, in a fixed cycle. Alto is aggressive (push weights),
-  Tenor flanks (edge weights), Bass anchors (cluster weights). You have 10 marbles. Win by
-  ejecting **10** (Decision #131: P3 starts at 8, so the last army is fought for two more), lose
-  at 6 as usual.
+- **Twist**: the Choir plays on the **standard board** (radius 4). You have the standard 14
+  marbles, the boss has **18** in 3 armies of **6** (Alto, Tenor, Bass), each a triangle: Alto on
+  the left pointing up, Tenor in the middle pointing down, Bass on the right pointing up, with
+  one empty cell between two groups where the rows allow it. Each boss turn only **one army**
+  may move, in a fixed cycle (Alto, Tenor, Bass, Alto...). Alto is aggressive (push weights),
+  Tenor flanks (edge weights), Bass anchors (cluster weights). Win at 6 ejections, lose at 6,
+  as every boss.
+- **Start cells** (`A` Alto, `T` Tenor, `B` Bass, `.` empty; the boss side is the top, rows
+  `r = -4` to `r = -1`; the bottom row has two empty cells in the middle, a full gap does not
+  fit there):
+
+  ```
+  r=-4      . T T T .
+  r=-3     A . T T . B
+  r=-2    A A . T . B B
+  r=-1   A A A . . B B B
+  ```
+
+  In axial `(q, r)`: Alto `(-1,-3) (-2,-2) (-1,-2) (-3,-1) (-2,-1) (-1,-1)`, Tenor
+  `(1,-4) (2,-4) (3,-4) (1,-3) (2,-3) (1,-2)`, Bass `(4,-3) (3,-2) (4,-2) (2,-1) (3,-1) (4,-1)`.
 - **Tell**: the army that moves next wears a steady pale ring, from the end of your previous turn,
   and each army has its own glyph on its marbles (world.md section 5: never a halo or colour alone).
-- **Counter**: you know who moves next, so set a trap for that army. Wiping an army removes
-  it from the cycle.
-- **Phases**: P1 three armies. P2 when one army is wiped: the two others alternate and each
-  gets **a free extra move every 4th turn** (they cover for the lost voice). P3 when one
-  army is left (**4** marbles): it plays every turn but cannot push (no sumito).
-- **Calibrate**: knob = player marbles (10), extra move frequency. Fail if nobody ever wipes
-  the Bass first (the intended opener).
+  The HUD line names the next army and how many are left.
+- **Counter**: you know who moves next, so set a trap for that army. An army with no legal move
+  is skipped.
+- **Phases**: P1 three armies, one moves per boss turn. P2 after **3** ejections: the army with
+  the **fewest marbles left** is removed at once (a tie is broken by the engine splitmix64 of the
+  fight seed and the ply), the two others alternate. P3 after **5** ejections: the weakest
+  remaining army is removed the same way, and the last army plays **two moves** each boss turn.
+  The marbles of a removed army sink (reduced motion: they vanish) and are **not** ejections:
+  you still win at 6 ejections.
+- **Calibrate**: knob = the ejection counts of the two removals (3, 5), the army search weights.
 
 ### 7.3 The Chaplain (#45): conversion by encirclement
 

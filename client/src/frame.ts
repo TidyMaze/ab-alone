@@ -30,7 +30,7 @@ const hexagon = (apothem: number): Point[] =>
     return { x: corner * Math.cos(a), z: corner * Math.sin(a) };
   });
 
-/** The frame of a board: as big as its cells (The Choir plays on radius 3, The Ballast Mind on 5), with a hole for each
+/** The frame of a board: as big as its cells (The Ballast Mind plays on radius 5), with a hole for each
  * vanished cell. */
 export function frameShape(board: ArrayLike<number>): FrameShape {
   const cells = BOARD_CELLS.slice(0, board.length);
