@@ -17,9 +17,11 @@ pub mod overseer;
 pub mod pulsar;
 pub mod railyard;
 pub mod telemetry;
+pub mod unstable;
 
 use crate::board::{Board, Cell};
 use crate::encounter::magnetizer::{carried_announce, carried_poles, settle, Repulsion};
+use crate::encounter::unstable::carried_unstable;
 use crate::game::{Game, GameError, Outcome};
 use crate::moves::{Move, Player};
 use crate::search::{search, SearchResult};
@@ -66,6 +68,8 @@ pub struct Encounter {
     assigned: Vec<(i32, i32)>,
     /// The board just before the last ply's hook and the special id it fired with.
     hooked: Option<(Board, u8)>,
+    /// The seed the last ply's hook ran with.
+    hook_seed: u64,
     /// The marbles the last ply's hook removed, with what they were (The Overseer's burns).
     removed: Vec<((i32, i32), Cell)>,
     /// Player turns before the boss wins, for a fight on a clock (The Overseer's neurotoxin).
@@ -168,6 +172,7 @@ impl Encounter {
             repulsions: Vec::new(),
             assigned: Vec::new(),
             hooked: None,
+            hook_seed: 0,
             removed: Vec::new(),
             turn_limit: None,
         }
@@ -177,6 +182,11 @@ impl Encounter {
     /// last ply fired no hook (The Pulsar draws its pulse from it).
     pub fn hooked(&self) -> Option<&(Board, u8)> {
         self.hooked.as_ref()
+    }
+
+    /// The seed the last ply's hook ran with, to replay its picks (The Unstable Core's shockwave).
+    pub fn hook_seed(&self) -> u64 {
+        self.hook_seed
     }
 
     /// The same fight, lost by the player at the end of its `turns`-th turn when it has not won.
@@ -252,6 +262,7 @@ impl Encounter {
                 .collect();
             self.credit_removals(&board);
             self.hooked = Some((self.game.board().clone(), id));
+            self.hook_seed = seed;
             self.game.replace_board(board);
             self.settle(!seed);
         }
@@ -271,12 +282,17 @@ impl Encounter {
             .collect();
         let poles = carried_poles(before, mv, board);
         let announce = carried_announce(before, mv, board);
-        if kept != board.converted() || poles != board.polarities() || announce != board.announce()
+        let unstable = carried_unstable(before, mv, board);
+        if kept != board.converted()
+            || poles != board.polarities()
+            || announce != board.announce()
+            || unstable.as_ref() != board.unstable()
         {
             let mut next = board.clone();
             next.set_converted(kept);
             next.set_polarities(poles);
             next.set_announce(announce);
+            next.set_unstable(unstable);
             self.game.replace_board(next);
         }
     }
@@ -305,10 +321,13 @@ impl Encounter {
 
     /// A marble a hook removed counts for the opponent of its colour, a core for the player (The
     /// Overseer). A pulse (The Pulsar) or a belt (The Assembly Line) moves marbles and flips none, so
-    /// their losses are counted by colour.
+    /// their losses are counted by colour, and so are The Unstable Core's overloads, collapse and
+    /// shockwaves.
     fn credit_removals(&mut self, after: &Board) {
         let before = self.game.board();
-        let [lost_black, lost_white] = if before.pulsar().is_some() || before.belts().is_some() {
+        let colour =
+            before.pulsar().is_some() || before.belts().is_some() || before.unstable().is_some();
+        let [lost_black, lost_white] = if colour {
             losses(before, after)
         } else {
             self.removed = removed(before, after);

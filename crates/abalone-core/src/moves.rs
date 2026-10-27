@@ -79,6 +79,14 @@ fn at(board: &Board, (q, r): (i32, i32)) -> Option<Cell> {
     board.get(q, r)
 }
 
+/// What `cells` weigh in a push: 1 per marble, plus its charges in The Unstable Core's fight
+/// (`Board::unstable`), where a charged marble weighs more on both sides.
+fn weight(_board: &Board, cells: impl Iterator<Item = (i32, i32)>) -> u32 {
+    cells
+        .map(|_| 1) // red: stub
+        .sum()
+}
+
 /// Every legal move of `player` on `board`.
 pub fn legal_moves(board: &Board, player: Player) -> Vec<Move> {
     legal_moves_for(board, player.cell())
@@ -172,7 +180,9 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
                 None => return Err(MoveError::OffBoard),
             }
         } else {
-            if n as i32 <= run {
+            if weight(board, group.iter().copied())
+                <= weight(board, (0..run).map(|i| step(lead, d, i)))
+            {
                 return Err(MoveError::NotStrongEnough);
             }
             match behind {
