@@ -63,6 +63,7 @@ Die, read the tell, retry with the same seed.
 | Furnace | **The Magnetizer** | charges your marbles, and opposite charges side by side throw each other apart |
 | Bridge | **The Pulsar** | six beacons pulse, pushing every line like a sumito |
 | Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; it talks back in typed bubbles and its vents turn toxic |
+| Cargo | **The Assembly Line** | three conveyor belts between the armies carry every marble off the board, then their presses strike |
 
 ## What it looks like
 

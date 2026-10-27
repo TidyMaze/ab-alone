@@ -51,6 +51,28 @@ import { BUBBLE_SPOT, HAZE_PER_VENT, TAUNTS, burnTrack, burnsPlayer, hazeAt, par
 import { ANGRY_HOLD_MS, TAUNT_HOLD_MS, angryLine, speechAt, type Speech } from './speech';
 import { blinkAt, drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import {
+  RIB_SPACING,
+  STRIKE_COLOR,
+  beforeBelts,
+  beltMoves,
+  beltSpan,
+  beltText,
+  blinkAt as strikeBlink,
+  chevronSpots as beltChevrons,
+  counterSpot as beltCounterSpot,
+  fellOff,
+  parseBelts,
+  parseCarries,
+  plateSpots,
+  ribOffsets,
+  rollerSpots,
+  slamAt,
+  struckBy,
+  type Belt,
+  type Belts,
+  type Carry,
+} from './assembly';
+import {
   PULSAR_BOUNDS,
   RIPPLES,
   PULSAR_PARTS,
@@ -1151,6 +1173,24 @@ interface Passing {
   skipped: boolean;
 }
 const passing: Passing[] = [];
+// The Assembly Line (#744, game-design.md section 7.12): each belt is a near-black strip with a steel roller at each end,
+// ribs that scroll the way it runs, a steel plate on every strike slot (red under a press hanging over it when the strike
+// is announced), an amber chevron on every cell of a running belt, and the centre belt's counter of the turns left
+// before it reverses (assembly.ts). A press slams on the cell it strikes; under reduced motion the ribs hold still and
+// nothing slams.
+const beltGeometry = new THREE.BoxGeometry(1, 0.04, 0.6);
+const beltMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2024, roughness: 0.95 });
+const ribGeometry = new THREE.BoxGeometry(0.05, 0.012, 0.56);
+const ribMaterial = new THREE.MeshStandardMaterial({ color: 0x3c4249, roughness: 0.8 });
+const rollerGeometry = new THREE.CylinderGeometry(0.17, 0.17, 0.64, 12).rotateX(Math.PI / 2);
+const plateGeometry = new THREE.BoxGeometry(0.62, 0.02, 0.5);
+const plateMaterial = new THREE.MeshStandardMaterial({ color: 0x6b7178, metalness: 0.5, roughness: 0.5 });
+const strikeMaterial = new THREE.MeshStandardMaterial({ color: STRIKE_COLOR, emissive: STRIKE_COLOR, emissiveIntensity: 0.8 });
+const pressGeometry = new THREE.BoxGeometry(0.55, 0.28, 0.46);
+const pressMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4f55, metalness: 0.6, roughness: 0.4 });
+let beltsShown: Belts | null = null; // the belts of the last refresh, read by the e2e tests
+let beltRibs: { belt: Belt; ribs: THREE.Mesh[] }[] = []; // scrolled by the animation loop
+const slams: { mesh: THREE.Mesh; start: number; skipped: boolean }[] = [];
 // The Magnetizer tell (#645, game-design.md section 7.9): a pale + or − on a near-black disc over each polarized
 // marble, a sprite that faces the camera and slides with it (magnetizer.ts, 3:1 and more). A marble that just got its
 // polarity wears a pale ring until the next ply. During the repulsions of a ply the board drawn is the engine's board
@@ -1635,7 +1675,10 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const repulsions = live && !reduced && engine instanceof Encounter ? parseRepulsions(engine.repulsions()) : [];
   // The Pulsar's pulse (#675): the move slides to the board before the pulse, then the pulse plays.
   const pulse = live && engine instanceof Encounter ? parsePulse(engine.last_pulse()) : null;
-  const after = repulsions[0]?.board ?? pulse?.board ?? engine.board();
+  // The Assembly Line's belts: the move slides to the board before them, then they carry the marbles.
+  const carries = live && engine instanceof Encounter ? parseCarries(engine.last_belts()) : [];
+  const beltBoard = carries.length > 0 ? beforeBelts(engine.board(), carries) : null;
+  const after = repulsions[0]?.board ?? pulse?.board ?? beltBoard ?? engine.board();
   const tracks = slideTracks(before, after, mv, reduced);
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
@@ -1663,6 +1706,10 @@ function afterPlay(before: number[], record: number[], live = true): void {
   if (pulse) {
     shown = { game: engine, board: pulse.board, poles: [] };
     whenSettled(() => firePulse(pulse, reduced));
+  }
+  if (beltBoard) {
+    shown = { game: engine, board: beltBoard, poles: [] };
+    whenSettled(() => fireBelts(carries, beltBoard, reduced));
   }
   const ejection = findEjection(before, after, mv);
   if (ejection) eject(ejection, mv.dir, held, reduced);
@@ -1789,6 +1836,50 @@ function fadable(mesh: THREE.Object3D): THREE.Material[] {
   return own;
 }
 
+/** Plays the belts of the last ply (#744): the marbles they carry slide a cell, the ones that reach the end roll off and
+ * fall, the ones a press struck sink under it. It waits for the move's slide, so a replaced game drops it. */
+function fireBelts(carries: Carry[], before: number[], reduced: boolean): void {
+  const after = Array.from(engine.board());
+  const held = gameTurns();
+  const tracks: SlideTrack[] = [];
+  for (const mv of beltMoves(carries)) {
+    const moved = slideTracks(before, after, mv, reduced);
+    turns.map = carryTurns(turns.map, fight!.seed, moved, mv.dir);
+    tracks.push(...moved);
+  }
+  for (const { cell, side, dir } of fellOff(carries)) eject({ cell, side }, dir, held, reduced);
+  const struck = struckBy(carries);
+  shown = null;
+  refresh();
+  if (tracks.some((t) => t.durationMs > 0)) {
+    slide = { game: engine, tracks, start: performance.now() };
+    document.body.dataset.sliding = '1';
+  }
+  if (struck.length > 0) burn(struck, reduced, history.length);
+  if (!reduced) for (const { cell } of struck) pressOn(cell);
+  document.body.dataset.beltTurns = String(Number(document.body.dataset.beltTurns ?? 0) + 1); // read by the e2e tests
+}
+
+/** The press comes down on `cell`. */
+function pressOn(cell: Axial): void {
+  const p = axialTo3D(...cell);
+  const mesh = Object.assign(new THREE.Mesh(pressGeometry, pressMaterial), { name: 'belt-slam', castShadow: true });
+  mesh.position.set(p.x, slamAt(0, false).y, p.z);
+  scene.add(mesh);
+  slams.push({ mesh, start: performance.now(), skipped: false });
+  document.body.dataset.slams = String(Number(document.body.dataset.slams ?? 0) + 1); // read by the e2e tests
+}
+
+function animateSlams(now: number): void {
+  for (const s of slams.slice()) {
+    const at = slamAt(s.skipped ? Infinity : now - s.start, false);
+    s.mesh.position.y = at.y;
+    if (!at.done) continue;
+    scene.remove(s.mesh);
+    slams.splice(slams.indexOf(s), 1);
+  }
+}
+
 /** Starts the effect of the ejected marble `mesh` along `track`, in `parent`: the scene, or the battle royale arena at
  * its own scale (#612). */
 function startEjection(mesh: THREE.Mesh, track: EjectTrack, parent: THREE.Object3D, delayMs = 0): void {
@@ -1891,9 +1982,11 @@ function skipEjections(): void {
   for (const e of ejecting) e.skipped = true;
   for (const b of bleeding) b.skipped = true;
   for (const p of passing) p.skipped = true;
+  for (const s of slams) s.skipped = true;
   if (shock) shock.skipped = true;
   animateEjections(performance.now());
   animatePasses(performance.now());
+  animateSlams(performance.now());
   if (shock) drawShock(0);
 }
 addEventListener('pointerdown', skipEjections, { capture: true });
@@ -1970,6 +2063,7 @@ function hud(extra = ''): void {
         crackText(parseCracks(boss.cracks())),
         eggText(parseEggs(boss.eggs())),
         trainText(parseTrains(boss.trains())),
+        beltText(parseBelts(boss.belts())),
         pulseText(parsePulsar(boss.pulsar())),
         toxinText(boss.turns_left()),
         ventNote(phaseSeen.since, history.length),
@@ -2177,6 +2271,8 @@ function refresh(): void {
     return { cell: [q, r], left, glow: left === 1 };
   });
   for (const train of trainsShown) drawTrack(train);
+  beltsShown = engine instanceof Encounter ? parseBelts(engine.belts()) : null;
+  beltRibs = beltsShown ? drawBelts(beltsShown) : [];
   pulsarShown = engine instanceof Encounter ? parsePulsar(engine.pulsar()) : null;
   pulsarCores = pulsarShown ? drawPulsars(pulsarShown) : [];
   ripples = pulsarShown && rippling(pulsarShown) ? Array.from({ length: reducedMotion() ? 1 : RIPPLES }, (_, k) => {
@@ -2208,6 +2304,9 @@ function refresh(): void {
   document.body.dataset.eggCounters = eggs.map((e) => e.left).join(',');
   document.body.dataset.trains = String(trainsShown.length);
   document.body.dataset.trainCounters = trainsShown.map((t) => t.left).join(',');
+  document.body.dataset.beltCounter = beltsShown ? String(beltsShown.left) : '';
+  document.body.dataset.beltDirs = beltsShown ? beltsShown.belts.map((b) => b.dir).join(',') : '';
+  document.body.dataset.beltStrikes = beltsShown ? beltsShown.belts.map((b) => b.strike).join(',') : '';
   document.body.dataset.pulseCounter = pulsarShown && charging(pulsarShown) ? String(pulsarShown.left) : '';
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
   const enemy = 3 - glassOf(); // the core dims a step per player marble the enemy ejected (#506)
@@ -2252,6 +2351,56 @@ function drawTrack(train: Train): void {
   counter.position.set(entry.x, 0.75, entry.z);
   counter.scale.setScalar(0.5);
   marbles.add(counter);
+}
+
+/** The belts of an Assembly Line fight: a strip, two rollers, the plates of the strike slots (the announced one red under
+ * its press), the chevrons of a running belt and the centre belt's counter. Returns the ribs to scroll. */
+function drawBelts(b: Belts): { belt: Belt; ribs: THREE.Mesh[] }[] {
+  const counter = Object.assign(new THREE.Sprite(counterMaterials[b.left - 1]), { renderOrder: 2, name: 'belt-counter' });
+  const at = beltCounterSpot(b.belts[0]!);
+  counter.position.set(at.x, at.y, at.z);
+  counter.scale.setScalar(0.5);
+  marbles.add(counter);
+  return b.belts.map((belt) => {
+    const span = beltSpan(belt);
+    const strip = Object.assign(new THREE.Mesh(beltGeometry, beltMaterial), { name: 'belt' });
+    strip.scale.x = span.length;
+    strip.position.set(span.x, 0.02, span.z);
+    marbles.add(strip);
+    for (const { x, z } of rollerSpots(belt)) {
+      const roller = Object.assign(new THREE.Mesh(rollerGeometry, railMaterial), { name: 'belt-roller' });
+      roller.position.set(x, 0.12, z);
+      marbles.add(roller);
+    }
+    const ribs = Array.from({ length: span.length / RIB_SPACING }, () => Object.assign(new THREE.Mesh(ribGeometry, ribMaterial), { name: 'belt-rib' }));
+    marbles.add(...ribs);
+    for (const { x, z, strike } of plateSpots(belt)) {
+      const plate = Object.assign(new THREE.Mesh(plateGeometry, strike ? strikeMaterial : plateMaterial), { name: strike ? 'belt-strike' : 'belt-plate' });
+      plate.position.set(x, 0.06, z);
+      marbles.add(plate);
+      if (!strike) continue;
+      const press = Object.assign(new THREE.Mesh(pressGeometry, pressMaterial), { name: 'belt-press', castShadow: true });
+      press.position.set(x, slamAt(0, false).y, z);
+      marbles.add(press);
+    }
+    for (const { x, z, dir } of beltChevrons(belt)) {
+      const chevron = Object.assign(new THREE.Mesh(chevronGeometry, chevronMaterial), { name: 'belt-chevron' });
+      chevron.rotation.y = arrowYaw(dir);
+      chevron.position.set(x, 0.08, z);
+      marbles.add(chevron);
+    }
+    return { belt, ribs };
+  });
+}
+
+/** Scrolls the ribs of the running belts and swells the red of the announced slot. */
+function animateBelts(now: number): void {
+  const reduced = reducedMotion();
+  for (const { belt, ribs } of beltRibs) {
+    const { x, z } = beltSpan(belt);
+    ribOffsets(belt, now, reduced).forEach((offset, k) => ribs[k]!.position.set(x + offset, 0.048, z));
+  }
+  strikeMaterial.emissiveIntensity = 0.8 * strikeBlink(now, reduced);
 }
 
 /** The six pulsars of a Pulsar fight, and the charge of the one whose pulse is 2 turns or less away: its core glows,
@@ -2727,6 +2876,9 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__trains = () => trainsShown;
 (window as unknown as Record<string, unknown>).__passes = () =>
   passing.map((p) => ({ line: p.train.line, x: p.model.position.x, z: p.model.position.z }));
+// Used by the browser checks to find The Assembly Line's belts as drawn (#744): each belt's cells, direction, pattern
+// scroll and announced strike cell, and the turns left before the centre belt reverses.
+(window as unknown as Record<string, unknown>).__belts = () => beltsShown;
 // Used by the browser checks to find The Pulsar's next pulse as drawn (#675), and the shockwave of a pulse now.
 (window as unknown as Record<string, unknown>).__pulsar = () => pulsarShown && { ...pulsarShown, charging: charging(pulsarShown) };
 (window as unknown as Record<string, unknown>).__shock = () =>
@@ -3662,6 +3814,8 @@ renderer.setAnimationLoop((now) => {
   animateReveal(now);
   animateEjections(now);
   animatePasses(now);
+  animateSlams(now);
+  animateBelts(now);
   if (shock) drawShock(now - shock.start);
   animateSpeech(now);
   animateHaze(now);

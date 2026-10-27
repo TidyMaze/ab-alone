@@ -31,6 +31,7 @@ describe('deckOf (world.md sections 1, 3 and 5)', () => {
     expect(deckOf('boss', 'magnetizer')).toBe('furnace'); // an extra boss, by the Furnace's magnet cranes (7.9)
     expect(deckOf('boss', 'pulsar')).toBe('bridge'); // an extra boss, by the Bridge's navigation beacons (7.10)
     expect(deckOf('boss', 'overseer')).toBe('chapel'); // an extra boss, the Chapel's test supervisor (7.11)
+    expect(deckOf('boss', 'assembly')).toBe('cargo'); // an extra boss, the Cargo hold's conveyor belts (7.12)
   });
 
   it('a boss the client does not know yet plays at the Mess', () => {

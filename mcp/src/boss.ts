@@ -20,6 +20,8 @@ export interface BossLike {
   polarities(): Int32Array;
   /** `[pulsar, player_turns_left, force]` of The Pulsar's next pulse, force `0` for infinite; empty otherwise. */
   pulsar(): Int32Array;
+  /** `[turns_left, ...]` then `[row, q0, len, dir, shift, strike]` per belt of The Assembly Line; empty otherwise. */
+  belts(): Int32Array;
   /** `[q, r]` pairs. */
   incinerators(): Int32Array;
   /** Player turns before the boss wins on the clock, `-1` with no clock. */
@@ -87,12 +89,22 @@ function trainMarks([, left, q, r, toQ, toR]: number[]): Mark[] {
   }));
 }
 
+/** The marks of the belts: a mark on every cell of a running belt with its direction (1 toward +q), and one on the cell
+ * of an announced strike slot. */
+function beltMarks(belts: Int32Array): Mark[] {
+  return records(belts.subarray(1), 6).flatMap(([row, q0, len, dir, , strike]) => [
+    ...(dir === 0 ? [] : Array.from({ length: len! }, (_, i) => ({ kind: 'belt', cell: cell([q0! + i, row!]), value: dir! }))),
+    ...(strike! < 0 ? [] : [{ kind: 'strike', cell: cell([q0! + strike!, row!]) }]),
+  ]);
+}
+
 export function bossState(id: string, boss: BossLike): BossState {
   const armies = records(boss.armies(), 3);
   const marks: Mark[] = [
     ...records(boss.cracks(), 3).map((record) => ({ kind: 'crack', cell: cell(record), value: record[2]! })),
     ...records(boss.eggs(), 3).map((record) => ({ kind: 'egg', cell: cell(record), value: record[2]! })),
     ...records(boss.trains(), 6).flatMap(trainMarks),
+    ...beltMarks(boss.belts()),
     ...Array.from(boss.polarities()).flatMap((sign, i) =>
       sign === 0 ? [] : [{ kind: 'polarity', cell: cell(BOARD_CELLS[i]!), value: sign }],
     ),
@@ -111,7 +123,7 @@ export function bossState(id: string, boss: BossLike): BossState {
   };
 }
 
-/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the clock, then
+/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the belts, then the clock, then
  * the bare special id. */
 function tell(boss: BossLike, armies: number[][]): Tell | null {
   const army = boss.next_army();
@@ -128,6 +140,10 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   if (pulsar !== undefined) {
     const text = `a pulse pushes every line ${DIRECTIONS[pulsar]} after ${left} of your turns, force ${force || 'infinite'}: groups smaller than the force move one cell, the first group as big resists and shields the rest`;
     return { kind: 'pulse', cells: [], text };
+  }
+  const left = boss.belts()[0];
+  if (left !== undefined) {
+    return { kind: 'belt_reverse', cells: [], text: `the centre belt reverses after ${left} of your turns` };
   }
   const turns = boss.turns_left();
   if (turns >= 0) {
