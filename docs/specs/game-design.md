@@ -340,7 +340,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Explosion**: a flash and a ring of shards at the martyr's cell (reduced motion: a static
   flash), then the converted marbles take the flipped look.
 - **Calibrate**: knob = threshold (4), the ejection count of P2 (4), AI aggression weight. Fail if
-  the median attempt ends with fewer than 3 conversions seen (nobody learns the tell).
+  the median attempt ends with fewer than 3 conversions seen (nobody learns the tell). Measured
+  (#753, boss-balance.md section 3): the ladder pro player wins 16 of 20 at 1x and 19 of 20 at
+  10x, above the 7 to 9 of 10 target, always by wiping the boss in P1.
 
 ### 7.4 The Echo (#46): mirrors your moves
 
