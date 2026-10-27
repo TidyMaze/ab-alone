@@ -605,4 +605,28 @@ mod tests {
         assert_eq!(at(&e, (1, 0)), Some(Cell::Black));
         assert_eq!(martyr_of(&e), Some(None));
     }
+
+    #[test]
+    fn no_martyr_is_announced_on_a_board_without_boss_marbles() {
+        let out = hook(&Board::empty(), CHAPLAIN_BOSS_END + 1, 0);
+        assert_eq!(out.martyr(), None);
+    }
+
+    #[test]
+    fn a_martyr_that_the_boss_turn_end_converts_explodes_nothing() {
+        let mut board = Board::empty();
+        board.set(0, 0, Cell::White);
+        for (q, r) in FOUR_AROUND {
+            board.set(q, r, Cell::Black);
+        }
+        board.set_martyr(Some(Some((0, 0))));
+        let out = hook(&board, CHAPLAIN_BOSS_END + 1, 0);
+        assert_eq!(out.get(0, 0), Some(Cell::Black), "converted first");
+        assert_eq!(out.martyr(), Some(None));
+        assert_eq!(
+            cells_of(&out, Cell::Black).len(),
+            5,
+            "nothing flipped to the boss"
+        );
+    }
 }
