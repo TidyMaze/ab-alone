@@ -81,9 +81,9 @@ fn at(board: &Board, (q, r): (i32, i32)) -> Option<Cell> {
 
 /// What `cells` weigh in a push: 1 per marble, plus its charges in The Unstable Core's fight
 /// (`Board::unstable`), where a charged marble weighs more on both sides.
-fn weight(_board: &Board, cells: impl Iterator<Item = (i32, i32)>) -> u32 {
+fn weight(board: &Board, cells: impl Iterator<Item = (i32, i32)>) -> u32 {
     cells
-        .map(|_| 1) // red: stub
+        .map(|c| 1 + board.unstable().map_or(0, |u| u32::from(u.charge(c))))
         .sum()
 }
 

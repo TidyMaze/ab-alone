@@ -91,8 +91,6 @@ fn marbles_of(board: &Board, color: Cell) -> Vec<P> {
 /// The marks of `before` carried by `mv` onto `after`: each charge follows its marble, and a
 /// marble pushed off the board loses its charges. `None` outside the Unstable Core's fight.
 pub(crate) fn carried_unstable(before: &Board, mv: &Move, after: &Board) -> Option<Unstable> {
-    return before.unstable().cloned(); // red: stub
-    #[allow(unreachable_code)]
     let marks = before.unstable()?;
     let cells: Vec<P> = marks.charges.iter().map(|&(c, _)| c).collect();
     let mut charges: Vec<(P, u8)> = carried_marks(before, mv, &cells)
@@ -166,8 +164,6 @@ fn run(board: &Board, id: u8, seed: u64) -> (Board, UnstableEvents) {
     let Some(marks) = board.unstable() else {
         return (board.clone(), UnstableEvents::default());
     };
-    return (board.clone(), UnstableEvents::default()); // red: stub
-    #[allow(unreachable_code)]
     let (phase, boss_ply) = (id / 2, id % 2 == 1);
     let own = if boss_ply { Cell::White } else { Cell::Black };
     let mut out = board.clone();
