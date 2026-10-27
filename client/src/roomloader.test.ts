@@ -98,8 +98,14 @@ describe('roomloader PBR pipeline', () => {
     terminalMesh.name = 'CRT_Terminal_Bank';
     const ribMesh = new THREE.Mesh(new THREE.BoxGeometry());
     ribMesh.name = 'Gantry_Arch_Rib_1';
+    const hazardMesh = new THREE.Mesh(new THREE.BoxGeometry());
+    hazardMesh.name = 'Airlock_Hazard_Chevrons';
+    const moonMesh = new THREE.Mesh(new THREE.BoxGeometry());
+    moonMesh.name = 'Hollow_Moon_Disc';
+    const screenMesh = new THREE.Mesh(new THREE.BoxGeometry());
+    screenMesh.name = 'Console_Screen';
 
-    mockGroup.add(floorMesh, pedestalMesh, wallMesh, terminalMesh, ribMesh);
+    mockGroup.add(floorMesh, pedestalMesh, wallMesh, terminalMesh, ribMesh, hazardMesh, moonMesh, screenMesh);
 
     const mockGltfLoader = {
       loadAsync: vi.fn(async () => ({
@@ -124,7 +130,11 @@ describe('roomloader PBR pipeline', () => {
     expect(bay!.materials.deck.map?.repeat.x).toBe(0.5);
     expect(wallMesh.material).toBe(bay!.materials.bulkhead);
     expect(terminalMesh.visible).toBe(false);
+    expect(screenMesh.visible).toBe(false);
     expect(ribMesh.material).toBe(bay!.materials.grate);
+    expect((hazardMesh.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0xd9822b);
+    expect((moonMesh.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0xffffff);
+    expect((moonMesh.material as THREE.MeshStandardMaterial).fog).toBe(false);
 
     // Test with textures failing: falls back to fallbackMat
     const failingTexLoader = {
@@ -148,7 +158,7 @@ describe('roomloader PBR pipeline', () => {
       return meshes.map((mesh) => mesh.name).sort();
     };
     const shipped = await names(await read('../public/assets/pbr/spaceship-bay.glb'));
-    expect(shipped).toHaveLength(15);
+    expect(shipped).toHaveLength(28);
     expect(shipped).toEqual(await names(await read('../models/spaceship-bay.glb'))); // the materials are picked by these names
   });
 

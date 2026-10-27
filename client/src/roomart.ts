@@ -127,6 +127,109 @@ export function drawDeckGrating(g: Ctx, w: number, h: number): void {
 }
 
 /**
+ * Hollow moon celestial disc: airless dead moon regolith (#1c2128), dark basaltic
+ * maria basins, layered impact craters with illuminated rims, and silicate glass veins (#478).
+ */
+export function drawHollowMoon(g: Ctx, w: number, h: number): void {
+  // Base cold lunar regolith
+  g.fillStyle = '#1c2128';
+  g.fillRect(0, 0, w, h);
+
+  // Basaltic maria basins (dark volcanic plains)
+  const maria: readonly [number, number, number, number][] = [
+    [w * 0.35, h * 0.38, w * 0.28, h * 0.22],
+    [w * 0.65, h * 0.32, w * 0.22, h * 0.18],
+    [w * 0.48, h * 0.68, w * 0.32, h * 0.25],
+    [w * 0.22, h * 0.62, w * 0.18, h * 0.16],
+    [w * 0.78, h * 0.58, w * 0.16, h * 0.20],
+  ];
+
+  g.fillStyle = '#101317';
+  for (const [mx, my, rx, ry] of maria) {
+    g.beginPath();
+    g.ellipse(mx, my, rx, ry, 0.2, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // Radial ejecta ray systems from major impacts
+  g.strokeStyle = '#2d3742';
+  g.lineWidth = 1.2;
+  const rayOrigins: readonly [number, number][] = [
+    [w * 0.32, h * 0.35],
+    [w * 0.68, h * 0.72],
+  ];
+  for (const [ox, oy] of rayOrigins) {
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+      g.beginPath();
+      g.moveTo(ox, oy);
+      g.lineTo(ox + Math.cos(a) * w * 0.4, oy + Math.sin(a) * h * 0.4);
+      g.stroke();
+    }
+  }
+
+  // Impact craters (position, radius, hasCentralPeak)
+  const craters: readonly [number, number, number, boolean][] = [
+    [w * 0.32, h * 0.35, w * 0.08, true],
+    [w * 0.68, h * 0.72, w * 0.07, true],
+    [w * 0.52, h * 0.22, w * 0.05, false],
+    [w * 0.20, h * 0.42, w * 0.045, false],
+    [w * 0.75, h * 0.38, w * 0.04, false],
+    [w * 0.42, h * 0.55, w * 0.035, false],
+    [w * 0.60, h * 0.48, w * 0.03, false],
+    [w * 0.36, h * 0.78, w * 0.04, false],
+    [w * 0.82, h * 0.70, w * 0.03, false],
+    [w * 0.15, h * 0.75, w * 0.035, false],
+  ];
+
+  for (const [cx, cy, r, peak] of craters) {
+    // Sunlit elevated rim
+    g.strokeStyle = '#b8c6d4';
+    g.lineWidth = Math.max(1.5, r * 0.18);
+    g.beginPath();
+    g.arc(cx, cy, r, -Math.PI * 0.8, Math.PI * 0.2);
+    g.stroke();
+
+    // Dark shadow basin floor
+    g.fillStyle = '#0a0d10';
+    g.beginPath();
+    g.arc(cx + r * 0.12, cy + r * 0.12, r * 0.88, 0, Math.PI * 2);
+    g.fill();
+
+    // Shadow rim opposite to sunlight
+    g.strokeStyle = '#050709';
+    g.lineWidth = Math.max(1.5, r * 0.2);
+    g.beginPath();
+    g.arc(cx, cy, r, Math.PI * 0.2, -Math.PI * 0.8);
+    g.stroke();
+
+    // Central rebound peak in major craters
+    if (peak) {
+      g.fillStyle = '#c5d3e0';
+      g.beginPath();
+      g.arc(cx - r * 0.05, cy - r * 0.05, r * 0.18, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  // Hollow silicate glass fracture veins (lore: "The new vein on Hollow is not slag. It is glass...")
+  g.strokeStyle = '#7fd6e8';
+  g.lineWidth = 1.5;
+  const veins: readonly [number, number, number, number, number, number][] = [
+    [w * 0.28, h * 0.30, w * 0.38, h * 0.42, w * 0.48, h * 0.40],
+    [w * 0.48, h * 0.40, w * 0.55, h * 0.52, w * 0.68, h * 0.56],
+    [w * 0.65, h * 0.68, w * 0.58, h * 0.76, w * 0.50, h * 0.85],
+    [w * 0.22, h * 0.50, w * 0.30, h * 0.58, w * 0.35, h * 0.68],
+  ];
+  for (const [x1, y1, x2, y2, x3, y3] of veins) {
+    g.beginPath();
+    g.moveTo(x1, y1);
+    g.lineTo(x2, y2);
+    g.lineTo(x3, y3);
+    g.stroke();
+  }
+}
+
+/**
  * Helper to allocate an HTMLCanvasElement and paint it with a drawer.
  */
 export function createCanvasTexture(

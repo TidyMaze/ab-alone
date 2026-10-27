@@ -3,3 +3,4 @@
 .playwright-mcp/
 *.blend
 *.blend1
+.vite/

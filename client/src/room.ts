@@ -465,12 +465,12 @@ export function spaceshipArchitecture(tier: Tier): readonly StructuralPart[] {
       rotation: [0, 0, 0],
     },
 
-    // --- DIEGETIC TERMINAL CONSOLE (West wall at x = -23.4) ---
+    // --- DIEGETIC TERMINAL CONSOLE (Module 3B Bolted Kiosk Stand & Screen) ---
     {
       id: 'console-desk',
       type: 'box',
-      size: [0.8, 2.4, 4.0],
-      position: [-23.4, 1.2, 0],
+      size: [1.6, 2.4, 2.4],
+      position: [-11.8, 1.2, -6.2],
       color: 0x30373e,
       roughness: 0.75,
       rotation: [0, 0, 0],
@@ -479,7 +479,7 @@ export function spaceshipArchitecture(tier: Tier): readonly StructuralPart[] {
       id: 'console-screen',
       type: 'box',
       size: [0.1, 1.4, 2.8],
-      position: [-22.95, 2.2, 0],
+      position: [-11.36, 2.32, -6.2],
       color: 0x182e28, // Phosphor screen hue
       roughness: 0.5,
       rotation: [0, 0, 0],

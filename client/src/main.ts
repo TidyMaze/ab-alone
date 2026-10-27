@@ -1394,12 +1394,9 @@ drawProps = (): void => {
         def.id.includes('airlock')
           ? sLights.emergency.color
           : sLights.rim.color;
-      mat = new THREE.MeshStandardMaterial({
+      mat = new THREE.MeshBasicMaterial({
         color: neonColor,
-        emissive: neonColor,
-        emissiveIntensity: 2.2,
-        roughness: 0.15,
-        fog: true,
+        fog: false,
       });
     } else if (def.id.includes('wall') && wallTexture) {
       mat = new THREE.MeshStandardMaterial({
@@ -1431,10 +1428,50 @@ drawProps = (): void => {
     const mesh = new THREE.Mesh(geom, mat);
     if (screen) consoleScreen = mesh;
     if (def.id === 'log-recorder') recorder = mesh;
-    if (!screen && def.id !== 'log-recorder' && !def.id.includes('neon') && !def.id.startsWith('bulkhead-column-')) {
+    if (!screen && def.id !== 'log-recorder' && !def.id.includes('neon')) {
       mesh.visible = !currentBay;
     }
-    mesh.position.set(...def.position);
+    if (def.id.includes('neon') && currentBay) {
+      if (def.id === 'corner-neon-nw') {
+        mesh.position.set(-8.4, 5.2, -17.35);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'corner-neon-ne') {
+        mesh.position.set(8.4, 5.2, -17.35);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'corner-neon-sw') {
+        mesh.position.set(-8.4, 5.2, 17.35);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'corner-neon-se') {
+        mesh.position.set(8.4, 5.2, 17.35);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-column-wn') {
+        mesh.position.set(-17.35, 5.2, -8.4);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-column-ws') {
+        mesh.position.set(-17.35, 5.2, 8.4);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-column-en') {
+        mesh.position.set(17.35, 5.2, -8.4);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-column-es') {
+        mesh.position.set(17.35, 5.2, 8.4);
+        mesh.scale.set(1.4, 1.0, 1.4);
+      } else if (def.id === 'neon-airlock-top') {
+        mesh.position.set(0, 8.35, -17.65);
+        mesh.scale.set(1.1, 1.8, 1.8);
+      } else if (def.id === 'neon-observation-top') {
+        mesh.position.set(0, 7.2, 17.65);
+        mesh.scale.set(1.1, 1.8, 1.8);
+      } else if (def.id === 'neon-gantry-north') {
+        mesh.position.set(0, 13.05, -8.4);
+        mesh.scale.set(1.05, 1.4, 1.4);
+      } else if (def.id === 'neon-gantry-south') {
+        mesh.position.set(0, 13.05, 8.4);
+        mesh.scale.set(1.05, 1.4, 1.4);
+      } else mesh.position.set(...def.position);
+    } else {
+      mesh.position.set(...def.position);
+    }
     mesh.rotation.set(...def.rotation);
     if (def.id.startsWith('pedestal') || def.id.startsWith('conduit')) {
       mesh.receiveShadow = true;
@@ -1442,21 +1479,44 @@ drawProps = (): void => {
     }
     propsGroup.add(mesh);
   }
-  const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
+  const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity * 2.5, sLights.emergency.distance * 1.5);
   emergencyLight.position.set(...sLights.emergency.position);
-  const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
+  const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity * 2.5, sLights.consoleBounce.distance * 1.5);
   consoleBounceLight.position.set(...sLights.consoleBounce.position);
-  const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity, sLights.pedestalGlow.distance);
+  const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity * 2.5, sLights.pedestalGlow.distance * 1.5);
   pedestalGlowLight.position.set(...sLights.pedestalGlow.position);
-  const neonWestLight = new THREE.PointLight(sLights.rim.color, 1.4, 12.0);
+  const neonWestLight = new THREE.PointLight(sLights.rim.color, 2.8, 18.0);
   neonWestLight.position.set(-5.5, 0.35, -1.0);
-  const neonEastLight = new THREE.PointLight(sLights.emergency.color, 1.4, 12.0);
+  const neonEastLight = new THREE.PointLight(sLights.emergency.color, 2.8, 18.0);
   neonEastLight.position.set(5.5, 0.35, -1.0);
-  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 3.0, 18.0);
-  neonWallNwLight.position.set(-9.8, 2.5, -20.0);
-  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 18.0);
-  neonWallNeLight.position.set(9.8, 2.5, -20.0);
-  propsGroup.add(emergencyLight, consoleBounceLight, pedestalGlowLight, neonWestLight, neonEastLight, neonWallNwLight, neonWallNeLight);
+  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 14.0, 50.0);
+  neonWallNwLight.position.set(-8.4, 5.2, -16.8);
+  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 14.0, 50.0);
+  neonWallNeLight.position.set(8.4, 5.2, -16.8);
+  const neonWallSwLight = new THREE.PointLight(sLights.rim.color, 13.0, 48.0);
+  neonWallSwLight.position.set(-8.4, 5.2, 16.8);
+  const neonWallSeLight = new THREE.PointLight(sLights.emergency.color, 13.0, 48.0);
+  neonWallSeLight.position.set(8.4, 5.2, 16.8);
+  const airlockSodiumLight = new THREE.PointLight(sLights.emergency.color, 16.0, 52.0);
+  airlockSodiumLight.position.set(0, 8.2, -17.0);
+  const viewportRimLight = new THREE.PointLight(sLights.rim.color, 15.0, 50.0);
+  viewportRimLight.position.set(17.0, 4.6, 0);
+  const kioskGreenLight = new THREE.PointLight(0x55efc4, 10.0, 30.0);
+  kioskGreenLight.position.set(-10.2, 2.5, -5.8);
+  propsGroup.add(
+    emergencyLight,
+    consoleBounceLight,
+    pedestalGlowLight,
+    neonWestLight,
+    neonEastLight,
+    neonWallNwLight,
+    neonWallNeLight,
+    neonWallSwLight,
+    neonWallSeLight,
+    airlockSodiumLight,
+    viewportRimLight,
+    kioskGreenLight,
+  );
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);

@@ -4,6 +4,7 @@ import {
   createCanvasTexture,
   drawDeckGrating,
   drawHazardStripes,
+  drawHollowMoon,
   drawWallPanel,
 } from './roomart';
 
@@ -37,6 +38,15 @@ describe('roomart procedural spaceship textures (#478)', () => {
     drawDeckGrating(g, 512, 512);
     expect(calls[0]).toBe('fillRect');
     expect(calls).toContain('stroke');
+  });
+
+  it('drawHollowMoon paints celestial disc with dark maria, impact craters and glass veins', () => {
+    const { g, calls } = fakeContext();
+    drawHollowMoon(g, 512, 512);
+    expect(calls[0]).toBe('fillRect');
+    expect(calls).toContain('arc');
+    expect(calls).toContain('stroke');
+    expect(calls).toContain('fill');
   });
 
   it('createCanvasTexture renders the drawer onto an HTMLCanvasElement', () => {
