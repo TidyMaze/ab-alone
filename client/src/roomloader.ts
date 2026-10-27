@@ -94,7 +94,7 @@ export async function loadSpaceshipBay(
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([
       gltfLoader.loadAsync(`${basePath}spaceship-bay.glb`),
-      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 8),
+      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.2),
       loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1),
       loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1),
     ]);
@@ -116,14 +116,14 @@ export async function loadSpaceshipBay(
       roughness: 0.25,
       metalness: 0.9,
       emissive: 0x38e8ff,
-      emissiveIntensity: 0.85,
+      emissiveIntensity: 2.5,
     });
     const hazardMat = new THREE.MeshStandardMaterial({
       color: 0xd9822b,
       roughness: 0.45,
       metalness: 0.35,
       emissive: 0xd9822b,
-      emissiveIntensity: 0.25,
+      emissiveIntensity: 1.2,
     });
     const moonCanvas = createCanvasTexture(1024, 1024, drawHollowMoon);
     const moonTex = new THREE.CanvasTexture(moonCanvas);
@@ -270,8 +270,9 @@ export function applyDeckAtmosphere(
   bay.materials.grate.color.setHex(bay.materials.grate.map ? 0xffffff : conf.grateColor);
   bay.materials.grate.roughness = conf.roughness;
   if (bay.materials.trench) {
-    bay.materials.trench.color.setHex(bay.materials.trench.map ? 0xffffff : conf.grateColor);
-    bay.materials.trench.roughness = Math.min(conf.roughness, 0.4);
+    bay.materials.trench.color.setHex(0x2b3137);
+    bay.materials.trench.roughness = 0.35;
+    bay.materials.trench.metalness = 0.85;
   }
   if (bay.materials.conduit) {
     bay.materials.conduit.emissive.setHex(conf.accentLightColor);
@@ -283,30 +284,54 @@ export function createBayLights(deck: DeckId): THREE.Group {
   const group = new THREE.Group();
   group.name = 'bay_lights';
 
-  for (const x of [-15, -5.5, 5.5, 15]) {
-    const wallNeonLight = new THREE.PointLight(0x38e8ff, 1.8, 25.0);
-    wallNeonLight.position.set(x, 14.2, -22.5);
-    group.add(wallNeonLight);
+  // 1. North Wall (Bulkhead) - wall-mounted neons & floodlights
+  for (const x of [-13, -4.5, 4.5, 13]) {
+    const wallNeon = new THREE.PointLight(0x38e8ff, 2.5, 28.0);
+    wallNeon.position.set(x, 11.0, -17.5);
+    group.add(wallNeon);
+
+    const midWallLamp = new THREE.PointLight(conf.lightColor, 2.0, 25.0);
+    midWallLamp.position.set(x, 4.0, -17.5);
+    group.add(midWallLamp);
   }
 
-  const overhead = new THREE.PointLight(conf.lightColor, 2.2, 40.0);
-  overhead.position.set(0, 13.0, 0);
+  // Airlock gate lamp on North wall
+  const airlockWallLight = new THREE.PointLight(conf.accentLightColor, 3.0, 30.0);
+  airlockWallLight.position.set(0, 7.0, -17.5);
+  group.add(airlockWallLight);
 
-  const airlock = new THREE.PointLight(conf.accentLightColor, 2.8, 35.0);
-  airlock.position.set(0, 7.5, -18.0);
+  // 2. South Wall (Observation) - wall-mounted stadium floodlights shining into the bay
+  for (const x of [-10, -3.5, 3.5, 10]) {
+    const southWallFlood = new THREE.PointLight(conf.accentLightColor, 3.0, 30.0);
+    southWallFlood.position.set(x, 11.5, 17.5);
+    group.add(southWallFlood);
 
-  const consoleBounce = new THREE.PointLight(conf.lightColor, 1.8, 22.0);
-  consoleBounce.position.set(-10.2, 2.5, -6.0);
+    const southWallLamp = new THREE.PointLight(conf.accentLightColor, 1.8, 22.0);
+    southWallLamp.position.set(x, 4.0, 17.5);
+    group.add(southWallLamp);
+  }
 
-  const viewportLight = new THREE.PointLight(0x7fd6e8, 2.2, 32.0);
-  viewportLight.position.set(17.0, 4.8, 0);
+  // 3. West Wall - wall-mounted floodlights
+  for (const z of [-9, 0, 9]) {
+    const westWallFlood = new THREE.PointLight(conf.lightColor, 2.5, 28.0);
+    westWallFlood.position.set(-17.5, 11.0, z);
+    group.add(westWallFlood);
 
-  const observationLight = new THREE.PointLight(conf.accentLightColor, 1.4, 24.0);
-  observationLight.position.set(0, 6.0, 17.5);
+    const westWallLamp = new THREE.PointLight(conf.lightColor, 1.8, 22.0);
+    westWallLamp.position.set(-17.5, 4.0, z);
+    group.add(westWallLamp);
+  }
 
-  const pedestalWash = new THREE.PointLight(0x38e8ff, 2.0, 10.0);
-  pedestalWash.position.set(0, -0.1, 0);
+  // 4. East Wall (Viewport) - wall-mounted floodlights & viewport fixture
+  for (const z of [-9, 0, 9]) {
+    const eastWallFlood = new THREE.PointLight(0x7fd6e8, 2.5, 28.0);
+    eastWallFlood.position.set(17.5, 11.0, z);
+    group.add(eastWallFlood);
+  }
 
-  group.add(overhead, airlock, consoleBounce, viewportLight, observationLight, pedestalWash);
+  const viewportCenter = new THREE.PointLight(0x7fd6e8, 2.5, 28.0);
+  viewportCenter.position.set(17.5, 5.0, 0);
+  group.add(viewportCenter);
+
   return group;
 }

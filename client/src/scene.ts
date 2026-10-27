@@ -8,7 +8,7 @@ import { DECK_PARTICLES, type Deck } from './deck';
 import { fogSettings, hasParticles, renderPixelRatio, type Tier } from './quality';
 import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
-import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
+import { applyDeckAtmosphere, createBayLights, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
 
 export const BONE = 0xd8d4c8;
@@ -56,7 +56,7 @@ export function createBloomPipeline(
     const pipeline = new THREE.RenderPipeline(renderer);
     const scenePass = pass(scene, camera);
     const colorNode = scenePass.getTextureNode('output');
-    const bloomNode = bloom(colorNode, 0.35, 0.2);
+    const bloomNode = bloom(colorNode, 0.175, 0.15);
     pipeline.outputNode = colorNode.add(bloomNode);
     return pipeline;
   } catch {
@@ -109,6 +109,7 @@ export class SceneRenderer {
   frame: FrameShape | null = null;
   fogRadius = 4;
   currentBay: SpaceshipBayAssets | null = null;
+  private bayLights: THREE.Group | null = null;
   private lastParticleNow = 0;
 
   constructor(options: SceneRendererOptions) {
@@ -121,6 +122,7 @@ export class SceneRenderer {
     this.renderer.setPixelRatio(renderPixelRatio(dpr, webdriver));
     this.renderer.setSize(width, height);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
 
     const b = (this.renderer.backend as { isWebGPUBackend?: boolean } | undefined)?.isWebGPUBackend;
     this.backend = b ? 'WebGPU' : 'WebGL2';
@@ -155,12 +157,12 @@ export class SceneRenderer {
     this.decorMaterial = new THREE.MeshStandardMaterial({
       color: DECOR.color,
       emissive: 0x38e8ff,
-      emissiveIntensity: 2.2,
+      emissiveIntensity: 5.5,
       roughness: 0.2,
       fog: true,
     });
     this.decor = new THREE.Group();
-    for (const x of [-15, -5.5, 5.5, 15]) {
+    for (const x of [-13, -4.5, 4.5, 13]) {
       const neon = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.14, 0.14), this.decorMaterial);
       neon.position.set(x, 14.8, -23.2);
       this.decor.add(neon);
@@ -183,6 +185,19 @@ export class SceneRenderer {
     });
     this.particles = new THREE.Points(this.particleGeometry, this.particleMaterial);
     this.particles.visible = false;
+
+    if (options.plateAlbedo) {
+      options.plateAlbedo.wrapS = options.plateAlbedo.wrapT = THREE.RepeatWrapping;
+      options.plateAlbedo.repeat.set(0.5, 0.5);
+    }
+    if (options.plateRoughness) {
+      options.plateRoughness.wrapS = options.plateRoughness.wrapT = THREE.RepeatWrapping;
+      options.plateRoughness.repeat.set(0.5, 0.5);
+    }
+    if (options.plateNormal) {
+      options.plateNormal.wrapS = options.plateNormal.wrapT = THREE.RepeatWrapping;
+      options.plateNormal.repeat.set(0.5, 0.5);
+    }
 
     const plateMaterial = new THREE.MeshStandardMaterial(
       options.plateAlbedo
@@ -361,6 +376,12 @@ export class SceneRenderer {
     this.lamp.intensity = light.key.intensity;
     this.lamp.position.set(...light.key.position);
     this.renderer.toneMappingExposure = light.exposure;
+    if (this.currentBay) {
+      applyDeckAtmosphere(this.currentBay, next as DeckId);
+      if (this.bayLights) this.propsGroup.remove(this.bayLights);
+      this.bayLights = createBayLights(next as DeckId);
+      this.propsGroup.add(this.bayLights);
+    }
   }
 
   drawFrame(board: ArrayLike<number>): FrameShape | null {
@@ -430,11 +451,17 @@ export class SceneRenderer {
   }
 
   mountBay(bay: SpaceshipBayAssets | null, deck: Deck): void {
+    if (this.bayLights) {
+      this.propsGroup.remove(this.bayLights);
+      this.bayLights = null;
+    }
     this.currentBay = bay;
     if (this.currentBay) {
       this.roomDeck.visible = false;
       applyDeckAtmosphere(this.currentBay, deck as DeckId);
       this.propsGroup.add(this.currentBay.scene);
+      this.bayLights = createBayLights(deck as DeckId);
+      this.propsGroup.add(this.bayLights);
     } else {
       this.roomDeck.visible = true;
     }

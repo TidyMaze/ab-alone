@@ -215,6 +215,21 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.renderer.toneMappingExposure).toBeGreaterThan(0);
     expect(sr.lamp.color.getHex()).toBeGreaterThan(0);
     expect(sr.ambient.color.getHex()).toBeGreaterThan(0);
+
+    const mockBay = {
+      scene: new THREE.Group(),
+      materials: {
+        deck: new THREE.MeshStandardMaterial(),
+        bulkhead: new THREE.MeshStandardMaterial(),
+        grate: new THREE.MeshStandardMaterial(),
+      },
+    };
+    sr.mountBay(mockBay, 'mess');
+    (sr as unknown as { bayLights: THREE.Group | null }).bayLights = null;
+    sr.applyDeck('bridge');
+    expect(sr.currentBay).toBe(mockBay);
+    expect((sr as unknown as { bayLights: THREE.Group | null }).bayLights).toBeDefined();
+    sr.applyDeck('furnace');
   });
 
   it('draws frame geometry and caches unchanged shapes', () => {

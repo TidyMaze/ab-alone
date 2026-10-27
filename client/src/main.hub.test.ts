@@ -279,8 +279,28 @@ describe('main.ts, walking the hub (#521)', () => {
     byId('play-online').click();
     await game.online();
     expect(hub()).toBeUndefined();
-    ship(game); // no ship while online
+    expect(document.body.dataset.online).toBeDefined();
+    ship(game); // returns to the hub from online (#773)
+    expect(hub()).toBe('cargo 0,0');
+    expect(document.body.dataset.online).toBeUndefined();
+  });
+
+  it('returns to the Ship hub at any time from battle royale and daily challenge (#773)', async () => {
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('battle-royale').click();
     expect(hub()).toBeUndefined();
+    expect(document.body.dataset.royale).toBeDefined();
+    ship(game);
+    expect(hub()).toBeDefined();
+    expect(document.body.dataset.royale).toBeUndefined();
+
+    game.openModes();
+    byId('daily').click();
+    expect(hub()).toBeUndefined();
+    expect(document.body.dataset.boss).toBeDefined();
+    ship(game);
+    expect(hub()).toBeDefined();
   });
 
   it('hides the evaluation bar and Hint in the hub, and drops the evaluation in flight; a new game brings them back (#583)', async () => {

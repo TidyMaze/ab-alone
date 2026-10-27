@@ -328,6 +328,19 @@ const [
   loadTexture('pbr/plate-normal.ktx2', false, true),
 ]);
 
+if (plateAlbedo) {
+  plateAlbedo.wrapS = plateAlbedo.wrapT = THREE.RepeatWrapping;
+  plateAlbedo.repeat.set(0.5, 0.5);
+}
+if (plateRoughness) {
+  plateRoughness.wrapS = plateRoughness.wrapT = THREE.RepeatWrapping;
+  plateRoughness.repeat.set(0.5, 0.5);
+}
+if (plateNormal) {
+  plateNormal.wrapS = plateNormal.wrapT = THREE.RepeatWrapping;
+  plateNormal.repeat.set(0.5, 0.5);
+}
+
 const sceneRenderer = new SceneRenderer({
   renderer,
   backdrop,
@@ -1101,8 +1114,20 @@ const arrowShape = new THREE.Shape(
   ),
 );
 const arrowGeometry = new THREE.ShapeGeometry(arrowShape);
-const targetMaterial = new THREE.MeshBasicMaterial({ color: COLORS.base });
-const ringMaterial = new THREE.MeshBasicMaterial({ color: COLORS.cyan });
+const targetMaterial = new THREE.MeshStandardMaterial({
+  color: 0x38e8ff,
+  emissive: 0x38e8ff,
+  emissiveIntensity: 2.0,
+  roughness: 0.2,
+  metalness: 0.1,
+});
+const ringMaterial = new THREE.MeshStandardMaterial({
+  color: 0x38e8ff,
+  emissive: 0x38e8ff,
+  emissiveIntensity: 1.25,
+  roughness: 0.2,
+  metalness: 0.1,
+});
 // The Hull tell: a cracked cell wears the crack decal on its steel (crack-decal.png, a steady shape), near-black fissures
 // that read 3:1 on the light deck, with one pale tick per ply left. Without the texture, the ticks and the HUD line
 // carry the tell.
@@ -1508,7 +1533,7 @@ drawProps = (): void => {
       mat = new THREE.MeshStandardMaterial({
         color: neonColor,
         emissive: neonColor,
-        emissiveIntensity: 2.2,
+        emissiveIntensity: 5.5,
         roughness: 0.15,
         fog: true,
       });
@@ -1625,6 +1650,11 @@ drawProps = (): void => {
     neonEastLight,
     neonWallNwLight,
     neonWallNeLight,
+    neonWallSwLight,
+    neonWallSeLight,
+    airlockSodiumLight,
+    viewportRimLight,
+    kioskGreenLight,
   );
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
@@ -2539,13 +2569,15 @@ function refresh(): void {
     }
     const target = targets.find(({ cell: [tq, tr] }) => tq === q && tr === r);
     if (target) {
-      const ring = new THREE.Mesh(targetRingGeometry, targetMaterial);
+      const ring = new THREE.Mesh(targetRingGeometry, ringMaterial);
       const arrow = new THREE.Mesh(arrowGeometry, targetMaterial);
+      const targetLight = new THREE.PointLight(0x38e8ff, 0.7, 2.0, 1.4);
       ring.rotation.x = -Math.PI / 2; // flat on the cell, facing up
       arrow.rotation.set(-Math.PI / 2, arrowYaw(target.dir), 0, 'YXZ');
       ring.position.set(p.x, 0.005, p.z);
       arrow.position.set(p.x, 0.005, p.z);
-      marbles.add(ring, arrow);
+      targetLight.position.set(p.x, 0.12, p.z);
+      marbles.add(ring, arrow, targetLight);
     }
     for (const dx of tickOffsets(plies)) {
       const tick = new THREE.Mesh(tickGeometry, tickMaterial); // on the front edge, clear of the marble
@@ -3474,8 +3506,8 @@ retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : start
 // and the spot is saved (progress.ts). A new game, a boss fight or Play online leaves it.
 const shipButton = document.getElementById('ship') as HTMLButtonElement;
 shipButton.addEventListener('click', () => {
-  if (online) return;
   moveModes('pick');
+  leaveOnline();
   leaveRoyale();
   enterHub(loadProgress(store).at);
 });
@@ -3912,13 +3944,15 @@ function drawRoyale(game: Royale): void {
     }
     const target = targets.find(({ cell: [tq, tr] }) => tq === q && tr === r);
     if (target) {
-      const ring = new THREE.Mesh(targetRingGeometry, targetMaterial);
+      const ring = new THREE.Mesh(targetRingGeometry, ringMaterial);
       const arrow = new THREE.Mesh(arrowGeometry, targetMaterial);
+      const targetLight = new THREE.PointLight(0x38e8ff, 0.7, 2.0, 1.4);
       ring.rotation.x = -Math.PI / 2;
       arrow.rotation.set(-Math.PI / 2, arrowYaw(target.dir), 0, 'YXZ');
       ring.position.set(p.x, 0.005, p.z);
       arrow.position.set(p.x, 0.005, p.z);
-      arenaMarbles.add(ring, arrow);
+      targetLight.position.set(p.x, 0.12, p.z);
+      arenaMarbles.add(ring, arrow, targetLight);
     }
     const seat = seatAt(board[i]!);
     if (seat < 0) return;
