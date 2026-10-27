@@ -689,15 +689,15 @@ mod tests {
         );
     }
 
-    /// The belts and the board after each ply of first legal moves from `seed`, up to 40.
+    /// The belts and the board after each of 30 plies of first legal moves from `seed`.
     fn line(seed: u64) -> Vec<(Option<Belts>, Board)> {
         let mut enc = assembly_start(seed);
-        (0..40)
-            .map_while(|_| {
+        (0..30)
+            .map(|_| {
                 let game = enc.game();
                 let m = legal_moves(game.board(), game.to_move()).swap_remove(0);
-                enc.play(&m).ok()?;
-                Some((enc.game().board().belts(), enc.game().board().clone()))
+                enc.play(&m).unwrap();
+                (enc.game().board().belts(), enc.game().board().clone())
             })
             .collect()
     }
@@ -705,7 +705,6 @@ mod tests {
     #[test]
     fn the_same_seed_and_moves_run_the_same_belts_and_the_seed_matters() {
         assert_eq!(line(11), line(11));
-        assert!(line(11).len() > 12);
         let runs: Vec<_> = (0..8).map(line).collect();
         assert!(
             runs.iter().any(|r| *r != runs[0]),
