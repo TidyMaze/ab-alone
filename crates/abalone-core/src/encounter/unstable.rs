@@ -76,7 +76,7 @@ pub fn wedge_of((q, r): P) -> Option<u8> {
 /// Special id of the ply that just ended: twice the phase at its start, plus one for a boss ply
 /// (Black moves first, so the player's plies are odd).
 fn special(ply: u32, phase: usize) -> Option<u8> {
-    Some(phase as u8 * 2 + u8::from(ply % 2 == 0))
+    Some(phase as u8 * 2 + u8::from(ply.is_multiple_of(2)))
 }
 
 /// Black and White marbles of `board`, in `q` then `r` order.
@@ -614,7 +614,7 @@ mod tests {
     #[test]
     fn the_core_is_announced_after_a_boss_turn_of_p2_then_collapses_after_your_turn() {
         let mut enc = collapsing_fight();
-        assert_eq!(unstable_tell(&enc).unwrap().collapsing, false);
+        assert!(!unstable_tell(&enc).unwrap().collapsing);
         enc.play(&mv(&[(-4, 4)], E)).unwrap();
         let tell = unstable_tell(&enc).unwrap();
         assert!(tell.core && tell.collapsing, "announced, still standing");
@@ -840,5 +840,113 @@ mod tests {
         let first = legal_moves(enc.game().board(), Player::Black)[0].clone();
         enc.play(&first).unwrap();
         assert_ne!(enc.hook_seed(), 0);
+    }
+
+    use crate::moves::Direction::{NE, NW, SW};
+
+    /// The fixture shared with the wasm bridge, the client harness and client/e2e/unstable.spec.ts:
+    /// the plies of one fight, `(q, r, direction)`, one marble each unless the cells are listed
+    /// (`PUSH`). `PUSH`: a pair walks up the centre column, charging, and pushes the boss column of
+    /// three at ply 7 (a plain pair could not).
+    const PUSH: [(&[P], Direction); 7] = [
+        (&[(0, 2), (0, 3)], NW),
+        (&[(-1, -3)], SW),
+        (&[(0, 1), (0, 2)], NW),
+        (&[(-2, -2)], NE),
+        (&[(0, 0), (0, 1)], NW),
+        (&[(-1, -3)], SW),
+        (&[(0, -1), (0, 0)], NW),
+    ];
+
+    /// `FULL`: the boss walks 5 marbles onto the core one after another and they overload (plies
+    /// 8, 10 and 16, 18), the 5th stands on it when it collapses (ply 19), then P3's shockwave hits
+    /// at the end of the player's 3rd turn of it (ply 25).
+    const FULL: [(P, Direction); 25] = [
+        ((1, 3), NE),
+        ((0, -2), SE),
+        ((2, 2), SW),
+        ((2, -2), SW),
+        ((1, 3), NE),
+        ((0, -3), SE),
+        ((2, 2), SW),
+        ((3, -3), SW),
+        ((1, 3), NE),
+        ((1, -2), SW),
+        ((2, 2), SW),
+        ((2, -2), SW),
+        ((1, 3), NE),
+        ((1, -3), SE),
+        ((2, 2), SW),
+        ((4, -3), SW),
+        ((1, 3), NE),
+        ((0, -2), SE),
+        ((2, 2), SW),
+        ((3, -2), NE),
+        ((1, 3), NE),
+        ((4, -3), SW),
+        ((2, 2), SW),
+        ((3, -2), NE),
+        ((1, 3), NE),
+    ];
+
+    #[test]
+    fn a_charged_pair_pushes_three_boss_marbles_in_the_fixture() {
+        let mut enc = unstable_start(0);
+        for (cells, dir) in &PUSH[..6] {
+            enc.play(&mv(cells, *dir)).unwrap();
+        }
+        let push = mv(PUSH[6].0, PUSH[6].1);
+        assert!(legal_moves(enc.game().board(), Player::Black).contains(&push));
+        let plain = Board::standard();
+        let trio_in_line = |b: &Board| (0..3).all(|i| b.get(0, -2 - i) == Some(Cell::White));
+        assert!(trio_in_line(enc.game().board()));
+        assert!(
+            !legal_moves(&plain, Player::Black).contains(&push),
+            "not on a plain board"
+        );
+        enc.play(&push).unwrap();
+        assert_eq!(enc.game().ejected(Player::Black), 1);
+        let board = enc.game().board();
+        assert_eq!(board.get(0, -3), Some(Cell::White));
+        assert_eq!(board.get(0, -4), Some(Cell::White));
+        assert_eq!(board.get(0, -2), Some(Cell::Black));
+        assert_eq!(marks(&enc).charges, vec![((0, -2), 2), ((0, -1), 3)]);
+    }
+
+    #[test]
+    fn the_fixture_overloads_three_boss_marbles_collapses_the_core_and_shoves_a_wedge() {
+        let mut enc = unstable_start(0);
+        let mut ejected = Vec::new();
+        for (ply, &((q, r), dir)) in FULL.iter().enumerate() {
+            enc.play(&mv(&[(q, r)], dir)).unwrap();
+            ejected.push(enc.game().ejected(Player::Black));
+            let at = ply + 1;
+            let events = last_events(&enc).map(|e| e.1);
+            let overloaded = events.as_ref().map_or(0, |e| e.overloaded.len());
+            assert_eq!(
+                overloaded,
+                usize::from([8, 10, 16, 18].contains(&at)),
+                "ply {at}"
+            );
+            assert_eq!(
+                events.as_ref().is_some_and(|e| e.collapsed),
+                at == 19,
+                "ply {at}"
+            );
+            assert_eq!(
+                events.is_some_and(|e| e.shock.is_some()),
+                at == 25,
+                "ply {at}"
+            );
+        }
+        assert_eq!(ejected[7], 1);
+        assert_eq!(ejected[9], 2);
+        assert_eq!(ejected[15], 3, "P2 from here");
+        assert_eq!(ejected[17], 4);
+        assert_eq!(ejected[18], 5, "the 5th fell with the core, P3 from here");
+        assert_eq!(enc.phase(), 2);
+        assert!(!unstable_tell(&enc).unwrap().core);
+        let (_, events) = last_events(&enc).unwrap();
+        assert!(events.shock.unwrap().1.len() > 3);
     }
 }
