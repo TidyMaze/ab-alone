@@ -30,7 +30,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Echo | 400 | 4000 (10x) | **8** | 108 | P2 | draw 2 |
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
-| The Chaplain | 2000 | 20000 (10x) | **0** | 148 | P1 | conversion 5, draw 5 |
+| The Chaplain | 2000 | 20000 (10x) | **19 of 20** (reworked #748, #753, see section 3) | 55 | P1 | boss_stuck 1 |
 | The Ballast Mind | 150000 | 150000 (1x only) | **0** | 100 | P1 | draw 10 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
@@ -184,7 +184,26 @@ player is slightly blind to this rule, a human sees the outcome. One seed list o
 
 Recorded win: `tests/fixtures/chaplain.txt` (seed 10001, 187 moves, see section 4).
 
-**Rework #748:** every Chaplain row above measures the old rules (threshold 3, a flip costs the boss a marble, three phases). The new Chaplain (threshold 4 for both sides, a martyr at 4 ejections, no cost per flip) is not measured yet (#753): the pro player of the ladder now wipes the boss by conversion in most attempts (#752).
+**Rework #748:** the Chaplain rows of section 3 before "Reworked Chaplain" measure the old rules (threshold 3, a flip costs the boss a marble, three phases). The new Chaplain (threshold 4 for both sides, a martyr at 4 ejections, a wiped side loses, no cost per flip) is measured in the last subsection of section 3 (#753): the pro player wins 19 of 20 at 10x, far above the 7 to 9 of 10 target.
+
+### Reworked Chaplain (#748), measured in #753: too easy
+
+Command: `LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder -- chaplain` (and
+`LADDER_X=1` for the boss budget), seeds 0 to 19, 300 plies at most, the hook-aware pro player of
+section 1, no rule or knob changed.
+
+| Player budget | Wins /20 | Median plies | Highest phase | Deaths |
+|---|---|---|---|---|
+| 2000 (1x) | 16 | 79 | P1 | draw 4 |
+| 20000 (10x) | **19** | 55 | P1 | boss_stuck 1 |
+
+Result: 95 % at 10x, **outside the 7 to 9 of 10 target** (too easy). Every win wipes the boss
+(0 boss marbles left, the player holds 22 to 27 of the 28 marbles) in phase 1: P2 and the
+martyr are never reached.
+Nothing was tuned here, the owner decides (knobs of game-design.md section 7.3). The pro player
+still simulates only phase 1 in its search (`chaplain_step` ignores P2 and the martyr); since the
+games end in phase 1 it does not change these numbers, but a harder boss that reaches P2 would
+need it first.
 
 ### The Ballast Mind: NOT measured at pro level, 0 of 10 at 1x
 
@@ -286,7 +305,8 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | echo | 0 | 4000 | 126 |
 | hull | 0 | 30000 | 89 |
 | choir | 0 | 15000 | 93 |
-| chaplain | 10001 | 0 (a random player ejecting when it can, a random boss; the ladder finds no win, #753) | 187 |
+| chaplain | 10001 | 0 (a random player ejecting when it can, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read) | 187 |
+| chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753; wipes the boss in phase 1) | 55 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
 
@@ -301,7 +321,7 @@ the Ballast Mind) unless conversions made it grow. The phase thresholds of secti
 `game-design.md` then read:
 
 - The Echo P3 (5 left) and the Hull P3 (5 left): never played. The highest phase in the table is P2.
-- The Chaplain P2 (8 left): starts at the moment of the sixth ejection, so it is never fought.
+- The Chaplain (#748) has P2 at the 4th ejection, but the pro player wipes the boss by conversion before it (section 3).
 - The Choir was reworked in #747 (standard board, 6 ejections, armies removed at 3 and 5): re-measured at 10x, 10 of 10 won, median 118 plies, P3 reached. The text above about Decision #131 (10 ejections) is history.
 - The Ballast Mind is fixed by Decision #482 (win at 12 ejections, 4 boss marbles left); since #749 its
   phases come from the ejections (3 and 5), so P2 and P3 are reached and fought.
@@ -309,7 +329,7 @@ the Ballast Mind) unless conversions made it grow. The phase thresholds of secti
 ## 6. Follow-ups
 
 - Decision: unreachable phases for Echo and Hull (win threshold per boss, or thresholds moved).
-- The Chaplain wins 7 of 10 after the flip cost of #207 (section 3). The
+- The Chaplain wins 19 of 20 at 10x after the rework (section 3, #753): too easy, an owner decision. The
   Hull cracks and the Ballast Mind hooks are not in the player tree yet.
 - The Hull (7 of 10 at 10x, 9 with the plain search) and the Choir (10 of 10) may be too easy for
   a strong human: tuning them is out of scope of #170.
