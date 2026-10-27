@@ -2644,7 +2644,8 @@ function refresh(): void {
   tellSound('crack', cracks);
   tellSound('choir', ARMY_NAMES[next] ? [next] : []);
   // The drones follow how tense the game is (#439): the player's marbles a push could eject, the boss phase.
-  sfx.setTension(tensionLevel(rimDanger(board, glassOf()), engine instanceof Encounter ? engine.phase() : 0));
+  const weights = engine instanceof Encounter && !showing() ? parseCharges(engine.charges()) : []; // the Core's weighted push
+  sfx.setTension(tensionLevel(rimDanger(board, glassOf(), weights), engine instanceof Encounter ? engine.phase() : 0));
   document.body.dataset.armies = String(armies.length); // read by the e2e tests
   document.body.dataset.nextArmy = ARMY_NAMES[next] ?? '';
   document.body.dataset.converted = String(converted.length); // read by the e2e tests
