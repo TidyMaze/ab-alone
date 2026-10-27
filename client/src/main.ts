@@ -3156,20 +3156,13 @@ if (navigator.webdriver) {
   };
   // Plays the recorded plies of both sides, like a fixture of the core tests: the last one shows its effects (#748).
   (window as unknown as Record<string, unknown>).__playMoves = (records: number[][]): number => {
-    if (online || thinking) return 0;
-    let played = 0;
-    try {
-      for (const record of records) {
-        if (engine.status() !== 0) break;
-        const before = Array.from(engine.board());
-        engine.play(Int32Array.from(record));
-        afterPlay(before, record, played === records.length - 1);
-        played++;
-      }
-    } finally {
-      refresh();
-    }
-    return played;
+    records.forEach((record, k) => {
+      const before = Array.from(engine.board());
+      engine.play(Int32Array.from(record));
+      afterPlay(before, record, k === records.length - 1);
+    });
+    refresh();
+    return records.length;
   };
 }
 
