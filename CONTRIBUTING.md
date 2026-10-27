@@ -492,8 +492,8 @@ export LLVM_PROFDATA="$(brew --prefix llvm)/bin/llvm-profdata"
 ```
 
 **While developing, run the smallest check that proves the change** (save CPU and time):
-only the unit test file you touch (`bunx vitest run src/<file>.test.ts`), only the e2e spec you
-touch (`bunx playwright test e2e/<spec>.spec.ts`, one worker, `-g "<title>"` for one test),
+only the unit test file you touch with scoped coverage (`bun run test:scoped <file>` for instant 100 % coverage check, or `bun run test:unit src/<file>.test.ts` without coverage), instant layout geometry check (`bun run layout:check`), only the e2e spec you
+touch (`bun run e2e:layout` for UI layout, or `bunx playwright test e2e/<spec>.spec.ts`, one worker, `-g "<title>"` for one test),
 `bunx tsc --noEmit` when you change client types, `cargo test -p <crate> <name>` for one Rust test.
 **When:** while developing, run only the unit file you touch. Run the **full e2e suite once, at the
 moment the draft PR is ready to become ready** (just before `gh pr ready`), not after every edit,

@@ -28,7 +28,7 @@ The short version:
 6. Talk only through issue comments and PR reviews. Sub-agents never merge, never triage, never
    close a `Decision`. The lead agent (driven by an owner) may triage when an owner delegates and
    merge a PR once the CI check `rust` is green; no human review is needed (CONTRIBUTING.md section 0).
-7. At most 4 tasks in progress at once. While developing, run only the smallest scoped checks (the touched unit file and e2e spec, CONTRIBUTING 13).
+7. At most 4 tasks in progress at once. While developing, run only the smallest scoped checks (the touched unit file via `bun run test:scoped <file>`, instant `bun run layout:check`, or single e2e spec via `bun run e2e:layout`, CONTRIBUTING 13).
    CI runs e2e only on a manual dispatch (decision #445): run the full e2e suite locally once (`bun run e2e`, random
    port), when the draft is ready to become ready, and write "Full e2e suite run locally: N passed" in the PR body.
    It can also run on CI by hand: `gh workflow run ci.yml --ref <branch>`.
