@@ -110,6 +110,9 @@ describe('main.ts, free camera and wireframe modes', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
     expect(game.hook('__freeCamActive')).toBe(true);
 
+    // Resize event while freeCam active routes to updateFreeCamCamera
+    window.dispatchEvent(new Event('resize'));
+
     // Pointer move updates freeCam
     pointer('pointerdown', 100, 100);
     pointer('pointermove', 110, 120);
