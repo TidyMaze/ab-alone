@@ -278,7 +278,19 @@ impl Encounter {
         if self.turns_left() == Some(0) && self.game.to_move() == Player::White {
             self.game.end(Player::White);
         }
+        self.end_when_wiped();
         Ok(())
+    }
+
+    /// A side with no marble left has no move and loses (a conversion can wipe either side).
+    fn end_when_wiped(&mut self) {
+        let (cell, winner) = match self.game.to_move() {
+            Player::Black => (Cell::Black, Player::White),
+            Player::White => (Cell::White, Player::Black),
+        };
+        if marbles(self.game.board(), cell) == 0 {
+            self.game.end(winner);
+        }
     }
 
     /// Keeps the converted marks that still sit on a White marble after `mv`, and the polarities
@@ -665,5 +677,28 @@ mod tests {
         let mut enc = Encounter::new(game, boss_with(clear_white), 0);
         enc.play(&mv(&[(0, 0)], E)).unwrap();
         assert_eq!(enc.result(), Some(PveResult::Won));
+    }
+    #[test]
+    fn a_side_with_no_marble_left_loses() {
+        // Black's pair pushes the lone White marble off the rim: White has none left.
+        let game = position(&[(2, 0), (3, 0)], &[(4, 0)], Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, boss(no_special), 0);
+        enc.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!(enc.result(), Some(PveResult::Won));
+        // White's pair pushes the lone Black marble off: Black has none left.
+        let game = position(&[(4, 0)], &[(2, 0), (3, 0)], Player::White, [0, 0]);
+        let mut enc = Encounter::new(game, boss(no_special), 0);
+        enc.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!(enc.result(), Some(PveResult::Lost));
+        // A side that still has a marble plays on.
+        let game = position(
+            &[(2, 0), (3, 0), (0, 3)],
+            &[(4, 0), (0, -3)],
+            Player::Black,
+            [0, 0],
+        );
+        let mut enc = Encounter::new(game, boss(no_special), 0);
+        enc.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!(enc.result(), None);
     }
 }

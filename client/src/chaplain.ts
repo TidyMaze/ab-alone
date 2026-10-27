@@ -1,5 +1,5 @@
-// The Chaplain tell (docs/specs/game-design.md section 7.3, Decision #154): hovering a move shows the
-// player marbles it would leave with enough boss neighbours to flip at the end of the boss turn.
+// The Chaplain tell (docs/specs/game-design.md section 7.3, #748): hovering a move shows the
+// player marbles it would flip to the boss at the end of the turn it plays.
 // Pure helpers over the bridge's cell lists, the board drawing lives in main.ts.
 import type { Axial } from './board';
 
@@ -16,8 +16,8 @@ export function parseCells(flat: ArrayLike<number>): Axial[] {
   return cells;
 }
 
-/** The marbles `record` would expose, on the position reached by `history`: replayed in a fresh
- * fight, the move played, then the boss's `flips()`. A move the engine rejects exposes nothing. */
+/** The marbles `record` would flip, on the position reached by `history`: replayed in a fresh
+ * fight, the move played, then the boss's `flips()`. A move the engine rejects flips nothing. */
 export function previewFlips(history: number[][], record: number[] | null, make: () => PreviewEngine): Axial[] {
   if (!record) return [];
   const fight = make();
@@ -35,7 +35,7 @@ const plural = (n: number, one: string, many: string): string => `${n} ${n === 1
 /** HUD fallback of the tell, '' when nothing is exposed or converted. */
 export function chaplainText(exposed: number, converted: number): string {
   const parts = [];
-  if (exposed > 0) parts.push(`Flips next boss turn: ${plural(exposed, 'marble', 'marbles')}`);
+  if (exposed > 0) parts.push(`Flips this turn: ${plural(exposed, 'marble', 'marbles')}`);
   if (converted > 0) parts.push(`Converted: ${converted}`);
   return parts.join(' · ');
 }

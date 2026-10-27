@@ -388,7 +388,7 @@ describe('main.ts boss tells', () => {
     hover(game, [q + dq, r + dr]); // the move is hovered: its ghost and the flip preview
     const flips = game.hook<Axial[]>('__preview', mv).length;
     expect(body().flips).toBe(String(flips));
-    expect(byId('hud').querySelector('.boss .tell')!.textContent).toContain('Flips next boss turn');
+    expect(byId('hud').querySelector('.boss .tell')!.textContent).toContain('Flips this turn');
     expect(cues(game).filter((c) => c === 'flip')).toHaveLength(1);
     hover(game, [q + dq, r + dr]); // the same cell again: nothing changes
     expect(cues(game).filter((c) => c === 'flip')).toHaveLength(1);

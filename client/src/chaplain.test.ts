@@ -53,9 +53,9 @@ describe('chaplainText', () => {
   });
 
   it('counts the exposed and the converted marbles', () => {
-    expect(chaplainText(1, 0)).toBe('Flips next boss turn: 1 marble');
-    expect(chaplainText(2, 0)).toBe('Flips next boss turn: 2 marbles');
+    expect(chaplainText(1, 0)).toBe('Flips this turn: 1 marble');
+    expect(chaplainText(2, 0)).toBe('Flips this turn: 2 marbles');
     expect(chaplainText(0, 1)).toBe('Converted: 1');
-    expect(chaplainText(2, 3)).toBe('Flips next boss turn: 2 marbles · Converted: 3');
+    expect(chaplainText(2, 3)).toBe('Flips this turn: 2 marbles · Converted: 3');
   });
 });

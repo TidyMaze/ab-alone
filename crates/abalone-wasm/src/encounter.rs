@@ -182,7 +182,7 @@ const BOSSES: [BossEntry; 12] = [
     },
     BossEntry {
         id: "chaplain",
-        goal: "Marbles beside 3 of its flip to it. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "A marble beside 4 foes switches sides; at 4 ejections a martyr explodes. Eject 6 to win; lose 6 or draw to lose.",
         def: chaplain_boss,
         start: plain_fight,
         reply: search_reply,
@@ -285,6 +285,14 @@ fn polarity_cells(board: &Board) -> Vec<i32> {
         .collect()
 }
 
+/// The announced martyr of `board` as `[q, r]`, empty when none waits.
+fn martyr_cell(board: &Board) -> Vec<i32> {
+    match board.martyr() {
+        Some(Some((q, r))) => vec![q, r],
+        _ => Vec::new(),
+    }
+}
+
 fn cell_list(cells: &[(i32, i32)]) -> Vec<i32> {
     cells.iter().flat_map(|&(q, r)| [q, r]).collect()
 }
@@ -298,7 +306,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    6 // 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    7 // 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -648,8 +656,8 @@ impl Encounter {
         })
     }
 
-    /// Player marbles that flip at the end of the next boss turn if nothing moves (The Chaplain),
-    /// a cell list. Empty for the other bosses.
+    /// Player marbles the last ply flipped to the boss (The Chaplain), a cell list: the preview of
+    /// a hovered move. Empty for the other bosses.
     pub fn flips(&self) -> Vec<i32> {
         match &self.fight {
             Fight::Plain(e) => cell_list(&(self.entry.flips)(e)),
@@ -690,7 +698,12 @@ impl Encounter {
         }
     }
 
-    /// The marbles of either side whose polarity the last ply set (The Magnetizer), a cell list.
+    /// The Chaplain's announced martyr as `[q, r]`, empty when none waits to explode.
+    pub fn martyr(&self) -> Vec<i32> {
+        martyr_cell(self.fight.game().board())
+    }
+
+        /// The marbles of either side whose polarity the last ply set (The Magnetizer), a cell list.
     pub fn assigned(&self) -> Vec<i32> {
         match &self.fight {
             Fight::Plain(e) => cell_list(e.assigned()),
@@ -785,11 +798,12 @@ impl Encounter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::convert::{cells_of, MOVE_STRIDE};
+    use crate::convert::{cells_of, encode, MOVE_STRIDE};
     use abalone_core::encounter::ballast::{
         BALLAST_BOSS_START, BALLAST_PILLARS, BALLAST_PLAYER_START,
     };
     use abalone_core::encounter::choir::{ALTO_START, BASS_START, TENOR_START};
+    use abalone_core::encounter::fixture::Fixture;
     use abalone_core::moves::Direction;
 
     fn count(cells: &[u8], value: u8) -> usize {
@@ -805,8 +819,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_6_since_the_hull_cracks_by_turns() {
-        assert_eq!(engine_version(), 6);
+    fn the_engine_version_is_7_since_the_chaplain_rework() {
+        assert_eq!(engine_version(), 7);
     }
 
     #[test]
@@ -1009,10 +1023,24 @@ mod tests {
         cells[index(q, r)]
     }
 
-    /// The Chaplain replayed from `history`, the way the client previews a hovered move.
-    fn chaplain(history: &[Vec<i32>]) -> Encounter {
-        let mut f = Encounter::new("chaplain", 7).unwrap();
-        for mv in history {
+    /// The plies of the recorded Chaplain win (the core fixture), the way the client replays a game.
+    fn recorded() -> Vec<Vec<i32>> {
+        let text = include_str!("../../abalone-core/tests/fixtures/chaplain.txt");
+        let fixture = Fixture::parse(text).unwrap();
+        assert_eq!(fixture.seed, RECORDED_SEED);
+        fixture.moves.iter().map(|m| encode(m).to_vec()).collect()
+    }
+
+    /// The seed of the recorded game.
+    const RECORDED_SEED: u64 = 10001;
+    /// The plies after which the martyr is announced, and after which it exploded.
+    const ANNOUNCED_AT: usize = 148;
+    const EXPLODED_AT: usize = 150;
+
+    /// The Chaplain after the first `plies` plies of the recorded game.
+    fn chaplain(plies: usize) -> Encounter {
+        let mut f = Encounter::new("chaplain", RECORDED_SEED as u32).unwrap();
+        for mv in &recorded()[..plies] {
             f.play(mv).unwrap();
         }
         f
@@ -1033,52 +1061,45 @@ mod tests {
     }
 
     #[test]
-    fn the_chaplain_flips_lists_the_player_marbles_a_move_exposes() {
-        let mut history: Vec<Vec<i32>> = Vec::new();
-        let mut f = chaplain(&history);
-        assert!(f.flips().is_empty(), "nothing to flip at the start");
-        let after = loop {
-            assert!(
-                history.len() < 24,
-                "no move exposed a marble in 12 player turns"
-            );
-            let exposing = f.legal_moves().chunks(MOVE_STRIDE).find_map(|m| {
-                let after = chaplain(&[history.clone(), vec![m.to_vec()]].concat());
-                (!after.flips().is_empty()).then_some(after)
-            });
-            if let Some(after) = exposing {
-                break after;
-            }
-            let mv = forward(&f);
-            f.play(&mv).unwrap();
-            history.push(mv);
-            let reply = f.boss_move();
-            f.play(&reply).unwrap();
-            history.push(reply);
-        };
-        assert_eq!(
-            after.to_move(),
-            2,
-            "the preview is the position after the move"
+    fn the_chaplain_flips_lists_the_player_marbles_a_move_flips() {
+        assert!(
+            chaplain(0).flips().is_empty(),
+            "nothing to flip at the start"
         );
-        let cells = after.board();
+        let flipped = (1..=EXPLODED_AT).find(|&k| !chaplain(k).flips().is_empty());
+        let k = flipped.expect("a recorded ply flips a player marble");
+        let (before, after) = (chaplain(k - 1), chaplain(k));
         for (q, r) in pairs(&after.flips()) {
-            assert_eq!(at(&cells, q, r), 1, "only player marbles flip");
+            assert_eq!(at(&after.board(), q, r), 2, "now a boss marble");
+            assert_eq!(at(&before.board(), q, r), 1, "it was a player marble");
         }
     }
 
     #[test]
+    fn the_martyr_is_listed_while_it_waits_then_explodes_and_counts_for_the_player() {
+        assert!(chaplain(ANNOUNCED_AT - 1).martyr().is_empty());
+        let waiting = chaplain(ANNOUNCED_AT);
+        let cell = pairs(&waiting.martyr())[0];
+        assert_eq!(at(&waiting.board(), cell.0, cell.1), 2, "a boss marble");
+        assert_eq!((waiting.phase(), waiting.phases()), (1, 2), "P2 of two");
+        assert_eq!(waiting.ejected(1), 4);
+        let boom = chaplain(EXPLODED_AT);
+        assert!(boom.martyr().is_empty());
+        assert_eq!(
+            boom.removed(),
+            vec![cell.0, cell.1, 2],
+            "the martyr is the boss marble removed"
+        );
+        assert_eq!(boom.ejected(1), 5, "the 5th ejection");
+        assert_eq!(boom.phase_notches(), Vec::<u8>::new(), "no P3");
+    }
+
+    #[test]
     fn the_chaplain_lists_its_converted_marbles() {
-        let mut f = chaplain(&[]);
-        while f.converted().is_empty() {
-            assert_eq!(f.result(), 0, "the fight ended before any conversion");
-            let mv = if f.to_move() == 1 {
-                forward(&f)
-            } else {
-                f.boss_move()
-            };
-            f.play(&mv).unwrap();
-        }
+        let k = (1..EXPLODED_AT)
+            .find(|&k| !chaplain(k).converted().is_empty())
+            .expect("a marble is converted in the recorded game");
+        let f = chaplain(k);
         let cells = f.board();
         for (q, r) in pairs(&f.converted()) {
             assert_eq!(at(&cells, q, r), 2, "a converted marble is a boss marble");
@@ -1862,7 +1883,7 @@ mod tests {
         let lit = |id: &str| Encounter::new(id, 1).unwrap().phase_notches();
         assert_eq!(lit("echo"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("hull"), vec![3, 0], "P2 after 3 ejections");
-        assert_eq!(lit("chaplain"), vec![6, 0], "14 boss marbles, P2 at 8");
+        assert_eq!(lit("chaplain"), vec![4, 0], "P2 after 4 ejections");
         assert_eq!(lit("choir"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");
         assert_eq!(lit("alien"), vec![2, 0], "P2 after 2 ejections");

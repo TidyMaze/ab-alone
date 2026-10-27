@@ -314,7 +314,7 @@ test('start The Chaplain: a hovered move shows the marbles it exposes, #150', as
       const t = await cellScreen(page, q + dq!, r + dr!);
       await page.mouse.move(t.x, t.y); // hover the move: ghost and flip preview
       await expect(body).not.toHaveAttribute('data-flips', '0');
-      await expect(hud).toContainText('Flips next boss turn');
+      await expect(hud).toContainText('Flips this turn');
       await page.mouse.move(t.x + 2, t.y + 2); // the same move still hovered: the same tell, no second cue
       expect(await flipCues()).toBe(heard + 1);
       await page.screenshot({ path: testInfo.outputPath('chaplain-preview.png') });
