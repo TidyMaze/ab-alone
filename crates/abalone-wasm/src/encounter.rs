@@ -27,7 +27,7 @@ use abalone_core::encounter::railyard::{
 use abalone_core::encounter::unstable::{
     last_events, unstable_boss, unstable_move, unstable_start, unstable_tell,
 };
-use abalone_core::encounter::{marbles, BossDef, Encounter as CoreEncounter};
+use abalone_core::encounter::{BossDef, Encounter as CoreEncounter};
 use abalone_core::game::Game;
 use abalone_core::moves::{legal_moves, Move, Player};
 use wasm_bindgen::prelude::*;
@@ -260,12 +260,6 @@ const BOSSES: [BossEntry; 12] = [
     },
 ];
 
-/// `[lit, dark]` notches for `left` boss marbles in a phase that began at `from` and ends at `to`,
-/// none when there is no next phase. A converted marble (The Chaplain) adds a lit notch.
-fn notches(left: u8, from: u8, to: Option<u8>) -> Vec<u8> {
-    to.map_or_else(Vec::new, |to| vec![left - to, from.saturating_sub(left)])
-}
-
 /// The polarity of every cell of `board`, in the board order: `0` none, `1` +, `-1` −.
 fn polarity_cells(board: &Board) -> Vec<i32> {
     board_cells(board.radius())
@@ -372,23 +366,14 @@ impl Encounter {
     }
 
     /// The phase notches on the arena frame (#356, docs/specs/world.md section 6 rule 4):
-    /// `[lit, dark]`, one lit notch per boss marble left until the next phase, one dark notch per
-    /// boss marble lost since this phase began. Empty in the last phase. The phases of the Alien
-    /// (#621) and of the Choir count the ejections credited to the player: one lit notch per
-    /// ejection left until the next phase, one dark notch per ejection since this phase began.
+    /// `[lit, dark]`, one lit notch per ejection credited to the player left until the next phase,
+    /// one dark notch per ejection since this phase began. Empty in the last phase. Every boss
+    /// has its phases by the ejections (#749 was the last by boss marbles).
     pub fn phase_notches(&self) -> Vec<u8> {
         let phase = self.phase() as usize;
         match &self.fight {
-            Fight::Plain(e) if !(self.entry.def)().phase_ejections.is_empty() => {
-                ejection_notches(e.game(), &(self.entry.def)().phase_ejections, phase)
-            }
             Fight::Plain(e) => {
-                let start = (self.entry.start)((self.entry.def)(), 0);
-                let steps: Vec<u8> = std::iter::once(marbles(start.game().board(), Cell::White))
-                    .chain((self.entry.def)().phase_marbles)
-                    .collect();
-                let left = marbles(e.game().board(), Cell::White);
-                notches(left, steps[phase], steps.get(phase + 1).copied())
+                ejection_notches(e.game(), &(self.entry.def)().phase_ejections, phase)
             }
             Fight::Choir(c) => ejection_notches(c.game(), &PHASE_EJECTIONS, phase),
         }
@@ -1858,22 +1843,6 @@ mod tests {
         assert!(f.legal_moves().is_empty());
         assert!(f.boss_move().is_empty());
         assert!(f.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
-    }
-
-    #[test]
-    fn notches_count_the_marbles_left_until_the_next_phase() {
-        assert_eq!(notches(14, 14, Some(10)), vec![4, 0]);
-        assert_eq!(notches(12, 14, Some(10)), vec![2, 2]);
-        assert_eq!(
-            notches(16, 14, Some(8)),
-            vec![8, 0],
-            "a converted marble adds a lit notch"
-        );
-        assert_eq!(
-            notches(3, 5, None),
-            Vec::<u8>::new(),
-            "the last phase has no next one"
-        );
     }
 
     #[test]

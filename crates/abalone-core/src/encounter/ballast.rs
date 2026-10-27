@@ -230,6 +230,26 @@ mod tests {
         (0..).find(|&s| want(borrowed(ply_seed(s, 6)))).unwrap()
     }
 
+    /// A hook seed that picks a pulse, and its direction.
+    fn pulse_seed() -> (u64, u8) {
+        (0..)
+            .find_map(|s| match borrowed(s) {
+                Borrowed::PulsarPulse(dir) => Some((s, dir)),
+                _ => None,
+            })
+            .unwrap()
+    }
+
+    /// A fight seed whose pick at the end of ply 6 is a pulse, and its direction.
+    fn fight_pulse_seed() -> (u64, u8) {
+        (0..)
+            .find_map(|s| match borrowed(ply_seed(s, 6)) {
+                Borrowed::PulsarPulse(dir) => Some((s, dir)),
+                _ => None,
+            })
+            .unwrap()
+    }
+
     fn is_rim(board: &Board, (q, r): P) -> bool {
         [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)]
             .iter()
@@ -374,10 +394,7 @@ mod tests {
 
     #[test]
     fn the_pulsar_pulse_pushes_the_lines_at_the_force_of_the_phase() {
-        let seed = seed_of(|b| matches!(b, Borrowed::PulsarPulse(_)));
-        let Borrowed::PulsarPulse(dir) = borrowed(seed) else {
-            unreachable!()
-        };
+        let (seed, dir) = pulse_seed();
         for phase in 0..3 {
             let out = hook(&open_board(), BALLAST_FIRE + phase, seed);
             let expected = pulse(&open_board(), dir, PULSAR_FORCE[usize::from(phase)]).0;
@@ -394,10 +411,7 @@ mod tests {
         assert_eq!(out.polarities()[0].1, 1, "+ first");
         assert_eq!(out.announce(), None);
         let cell = out.polarities()[0].0;
-        assert!(matches!(
-            open_board().get(cell.0, cell.1),
-            Some(Cell::Black | Cell::White)
-        ));
+        assert_ne!(open_board().get(cell.0, cell.1), Some(Cell::Empty));
     }
 
     #[test]
@@ -481,10 +495,7 @@ mod tests {
 
     #[test]
     fn a_pulse_credits_the_marbles_it_pushes_off_by_colour_and_shows_as_the_last_pulse() {
-        let seed = fight_seed(|b| matches!(b, Borrowed::PulsarPulse(_)));
-        let Borrowed::PulsarPulse(dir) = borrowed(ply_seed(seed, 6)) else {
-            unreachable!()
-        };
+        let (seed, dir) = fight_pulse_seed();
         let mut enc = corner_fight(seed);
         play_six(&mut enc);
         let (before, id) = enc.hooked().unwrap();
@@ -530,9 +541,6 @@ mod tests {
             let mut enc = corner_fight(seed);
             for _ in 0..12 {
                 let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
-                if enc.game().outcome().is_some() {
-                    break;
-                }
                 enc.play(&m).unwrap();
             }
             enc.game().board().clone()
