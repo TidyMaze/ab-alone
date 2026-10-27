@@ -3,7 +3,7 @@
 //! composes the hooks of the earlier bosses:
 //!
 //! - P1 (16 to 11 boss marbles): plain Abalone, search depth 5, no hook, no tell.
-//! - P2 (10 to 6): the Hull rim crack at its P1 interval (`hull_boss` hook, tell `board.cracks()`)
+//! - P2 (10 to 6): the Hull rim crack every 4 turns (`hull_boss` hook, tell `board.cracks()`)
 //!   and the Chaplain conversion at threshold 3 (`chaplain_boss` hook, tell `chaplain_tell`).
 //! - P3 (5 or fewer): P2 plus the Echo of the player's previous move (`mirror_move`, tell
 //!   [`BallastTell::echo`]).
@@ -76,16 +76,16 @@ pub const BALLAST_NODE_BUDGET: u32 = 150_000;
 pub const BALLAST_RIM_PHASE: usize = 1;
 /// First phase (0 based) where the boss echoes the player's previous move.
 pub const BALLAST_ECHO_PHASE: usize = 2;
-/// The Hull and Chaplain hooks run at their own first phase: interval 8, threshold 3, no extras.
+/// The Hull and Chaplain hooks run at their own first phase: a crack every 4 turns, threshold 3, no extras.
 pub const BALLAST_REUSED_PHASE: usize = 0;
 /// Bits of a special id holding the Hull id, the Chaplain id sits above them.
-pub const BALLAST_HULL_BITS: u32 = 2;
+pub const BALLAST_HULL_BITS: u32 = 3;
 
 /// What the player can read about the next boss action, each part in the visual language of the
 /// boss it comes from.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BallastTell {
-    /// Hull: cracked cells and the plies left before each vanishes.
+    /// Hull: cracked cells and the player turns left before each vanishes.
     pub cracks: Vec<(P, u8)>,
     /// Chaplain: player marbles that flip at the end of the next boss turn if nothing moves.
     pub flips: Vec<P>,

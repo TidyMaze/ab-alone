@@ -203,15 +203,15 @@ Player (Black, 14 marbles on the standard layout unless the boss says otherwise)
 
 Boss rule hooks run inside `apply`, so the AI search sees them. A hook removing a marble counts toward the ejected count of the side that loses the marble's opponent. For example, a player marble removed by a hook raises the boss's ejected count. **PROPOSAL, OPEN-13.**
 
-Phases trigger when the boss's marble count reaches a threshold (The Alien: when the player's ejections reach one, game-design section 7.7), shown on the HUD as notches. **TUNE** for every threshold below.
+Phases trigger when the boss's marble count reaches a threshold (The Hull, The Echo, The Alien: when the player's ejections reach one, game-design section 7.7), shown on the HUD as notches. **TUNE** for every threshold below.
 
 Hooks, from game-design section 7 (starting values):
 
-- **Hull** (#43): rim cells crack every 8 plies. A cracked cell vanishes 2 plies later, and a marble on it is removed. Boss search depth 3. Phase at 10 boss marbles: interval 6, two cells crack at once. Phase at 5: interval 4.
+- **Hull** (#43): one cell cracks at a time, picked by the seeded PRNG, and vanishes 2 player turns later; a marble on it is removed. Boss search depth 3. Phases by the player's ejections: P1 a rim cell every 4 turns, P2 (3 ejections) a cell off the rim every 4 turns, P3 (5 ejections) any cell every 2 turns.
 - **Choir** (#44, #747): the standard board. The boss has 3 armies of 6 marbles (Alto, Tenor, Bass) in triangles, the player the standard 14. Each boss turn only one army moves, in a fixed cycle. Phase: after 3 ejections the army with the fewest marbles is removed (a tie by the fight seed), the other two alternate. Phase: after 5 ejections the weakest of the two is removed too and the last army moves twice each boss turn. Removed marbles are not ejections; the player wins at 6 ejections, the boss at 6.
 - **Chaplain** (#45): at the end of the boss turn, a player marble with 3 or more adjacent boss marbles flips to the boss. The flip is not an ejection. A flipped marble flips back when 3 of the player's marbles surround it. Each boss turn that flips marbles costs the boss one marble per flip, removed from the board and credited as an ejection to the player (same rule as the chain phase), with a 3 in 4 chance per turn (seeded, so a replay is the same); on the other 1 in 4 the flips are free (#207). Phase at 8 boss marbles: void cells count as boss neighbours. Phase at 4: a flip can chain once, and the boss loses one marble to the void per flip.
-- **Echo** (#46): after each player move, the boss plays the point reflection of that move if it is legal, otherwise its AI picks a move. Mirrored moves go through the normal validator. Phase at 10: the boss echoes the player's previous move. Phase at 5: the boss echoes with two groups, and the free move happens on every illegal mirror.
-- **Ballast Mind** (#47): radius 5 board, 6 symmetric void pillars. Boss 16 marbles, player 14. Boss search depth 5. Phase at 16: plain Abalone. Phase at 10: Hull rim crack (interval 8) and Chaplain (threshold 3). Phase at 5: adds Echo.
+- **Echo** (#46): after each player move, the boss plays the point reflection of that move if it is legal, otherwise its AI picks a move. Mirrored moves go through the normal validator. The phases (3 and 5 ejections) change nothing of this rule.
+- **Ballast Mind** (#47): radius 5 board, 6 symmetric void pillars. Boss 16 marbles, player 14. Boss search depth 5. Phase at 16: plain Abalone. Phase at 10: Hull rim crack (every 4 turns) and Chaplain (threshold 3). Phase at 5: adds Echo.
 
 ### 10.4 Battle royale
 

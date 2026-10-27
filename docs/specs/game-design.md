@@ -96,8 +96,8 @@ Boss structure (all five follow it):
 - **Twist**: the added rule, written as a hook (start of turn, end of turn, board mask).
 - **Tell**: shown exactly one ply before the twist fires.
 - **Counter**: a positional answer that exists on the board, not a stat check.
-- **Phases**: triggered by **boss marbles remaining** (The Alien, The Rail Yard, The
-  Magnetizer, The Pulsar, The Overseer and The Assembly Line: by your ejections, sections 7.7 to
+- **Phases**: triggered by **boss marbles remaining** (The Hull, The Echo, The Alien, The Rail Yard, The
+  Magnetizer, The Pulsar, The Overseer and The Assembly Line: by your ejections, sections 7.1, 7.4 and 7.7 to
   7.12),
   always shown on the HUD as notches.
 
@@ -268,12 +268,16 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 ### 7.1 The Hull (#43): first environment boss
 
 - **Concept**: the ship itself, rusted, falling apart under you.
-- **Twist**: every 8 plies, rim cells crack, 2 plies later they vanish. A marble on a vanished
-  cell is ejected, either side. Boss plays standard Abalone, depth 3.
-- **Tell**: cracked cells wear a dark crack and tick for 2 plies.
-- **Counter**: keep marbles off the rim, and **push boss marbles onto cracked cells**.
-- **Phases**: P1 above. P2 when the boss has **10** marbles left: timer drops to 6 plies, two
-  cells crack at once. P3 at **5**: timer 4, but the board is small and the boss is cornered.
+- **Twist**: one cell at a time cracks, picked by the engine's seeded PRNG (the same for every
+  peer). Two player turns later it vanishes. A marble on a vanished cell is ejected, either
+  side. Boss plays standard Abalone, depth 3.
+- **Tell**: a cracked cell wears a dark crack and ticks for 2 turns (it is announced 2 turns
+  ahead; a turn is one player move and the boss reply).
+- **Counter**: keep marbles off the cell that cracks, and **push boss marbles onto cracked
+  cells**.
+- **Phases**: by your ejections (P2 after **3**, P3 after **5**). P1: every
+  **4** turns one **rim** cell cracks. P2: every **4** turns one cell **off the rim** cracks (a
+  rim cell only if no other is left). P3: every **2** turns **any** cell cracks.
 - **Calibrate**: knob = crack interval and AI depth. Fail if P1 deaths are over 50 percent of
   all deaths (the first environment boss must not kill early).
 
@@ -347,9 +351,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   both sides). Nothing is hidden.
 - **Counter**: play moves whose mirror is bad for the boss (asymmetric pushes, edges), or
   force illegal mirrors so it uses its weaker free move.
-- **Phases**: P1 above. P2 when the boss has **10** left: it echoes your **previous** move
-  (one move late). P3 at **5**: it echoes with two groups, and the free move happens on
-  every illegal mirror.
+- **Phases**: P2 after **3** ejections, P3 after **5**, shown as notches and in the HUD only:
+  the Echo plays the **same effect** in every phase.
 - **Calibrate**: knob = AI depth on free moves, delay. Fail if win rate on attempt 1 to 3
   exceeds 40 percent (too readable) or the median is over 12 attempts.
 
@@ -361,7 +364,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   rule code).
 - **Tell**: each twist keeps its original visual language, so the player recognizes it.
 - **Counter**: those of the Hull, the Chaplain and the Echo.
-- **Phases**: P1 at **16**, plain. P2 at **10**: Hull rim crack (interval 8) plus Chaplain
+- **Phases**: P1 at **16**, plain. P2 at **10**: Hull rim crack (every 4 turns) plus Chaplain
   (threshold 3). P3 at **5**: adds Echo of your previous move. Win at **12** ejections (4 boss
   marbles left, Decision #482), so all three phases are experienced.
 - **Calibrate**: last. It must be harder than any previous boss, with first win between

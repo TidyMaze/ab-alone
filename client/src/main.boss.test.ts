@@ -348,22 +348,25 @@ describe('main.ts daily challenge', () => {
 });
 
 describe('main.ts boss tells', () => {
-  it('The Hull: a cracked rim cell wears the decal and its line, ticks down, then is a hole in the frame', async () => {
+  it('The Hull: a cracked cell wears the decal and its line, ticks down, then is a hole in the frame', async () => {
     const game = await boot('?nodes=200', { reducedMotion: true, audio: true });
     gesture();
     fightBoss(game, 'The Hull');
     expect(body().cracks).toBe('0');
     expect(game.hook('__crackDecals')).toEqual([]);
-    for (let n = 0; n < 4; n++) await turn(game); // the rim cracks at ply 8
+    for (let n = 0; n < 4; n++) await turn(game); // the first rim cell cracks at ply 8
     expect(body().cracks).toBe('1');
-    expect(byId('hud').querySelector('.boss .tell')!.textContent).toBe('Rim cracks: 1 cell in 2 plies');
+    expect(byId('hud').querySelector('.boss .tell')!.textContent).toBe('Cracks: 1 cell in 2 turns');
     const cracks = game.hook<{ cell: Axial }[]>('__cracks');
     expect(game.hook('__crackDecals')).toEqual(cracks.map((c) => c.cell));
     expect(cues(game)).toEqual(['crack']); // the crack appears
     expect(game.hook('__crackDecalShown', false)).toBe(false); // the e2e contrast check hides the decal
     expect(game.hook('__crackDecalShown', true)).toBe(true);
     await turn(game);
-    expect(cues(game)).toEqual(['crack', 'crack']); // it ticked down on ply 9, then vanished: no cue for a gone tell
+    expect(cues(game)).toEqual(['crack', 'crack']); // it ticked down on ply 9
+    expect(body().cracks).toBe('1');
+    await turn(game); // it vanishes at the end of the second player turn: no cue for a gone tell
+    expect(cues(game)).toEqual(['crack', 'crack']);
     expect(body().cracks).toBe('0');
     expect(body().vanished).toBe('1');
     expect(game.hook('__crackDecals')).toEqual([]);

@@ -163,7 +163,7 @@ const BOSSES: [BossEntry; 12] = [
     },
     BossEntry {
         id: "hull",
-        goal: "Rim cells crack and eject marbles. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "One cell cracks at a time and ejects marbles. Eject 6 to win; lose 6 or draw to lose.",
         def: hull_boss,
         start: plain_fight,
         reply: search_reply,
@@ -297,7 +297,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    5 // 5: The Choir's rework, standard board, three armies of 6 (#747); 4: Magnetizer signs alternate on both sides, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    6 // 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -461,7 +461,7 @@ impl Encounter {
         board_bytes(self.fight.game().board())
     }
 
-    /// Cracked cells (The Hull) as `[q, r, plies_left]` records, empty for the other bosses.
+    /// Cracked cells (The Hull) as `[q, r, player_turns_left]` records, empty for the other bosses.
     pub fn cracks(&self) -> Vec<i32> {
         self.fight
             .game()
@@ -972,7 +972,7 @@ mod tests {
     }
 
     #[test]
-    fn the_hull_cracks_a_rim_cell_at_ply_8_and_it_vanishes_two_plies_later() {
+    fn the_hull_cracks_a_rim_cell_at_ply_8_and_it_vanishes_after_two_more_player_turns() {
         let mut f = Encounter::new("hull", 7).unwrap();
         assert_eq!(f.name(), "The Hull");
         for _ in 0..7 {
@@ -981,12 +981,14 @@ mod tests {
         assert!(f.cracks().is_empty(), "no wave before ply 8");
         ply(&mut f);
         let cracks = f.cracks();
-        assert_eq!(cracks.len(), 3, "one cell in P1, as [q, r, plies left]");
+        assert_eq!(cracks.len(), 3, "one cell in P1, as [q, r, turns left]");
         let (q, r) = (cracks[0], cracks[1]);
         assert_eq!(cracks[2], 2);
         assert_ne!(f.board()[index(q, r)], 3, "cracked, not gone yet");
         ply(&mut f);
-        assert_eq!(f.cracks(), vec![q, r, 1]);
+        assert_eq!(f.cracks(), vec![q, r, 1], "ticks at the player's move");
+        ply(&mut f);
+        assert_eq!(f.cracks(), vec![q, r, 1], "not at the boss reply");
         ply(&mut f);
         assert!(f.cracks().is_empty());
         let cells = f.board();
@@ -1857,8 +1859,8 @@ mod tests {
     #[test]
     fn every_boss_starts_with_its_first_phase_notches_lit() {
         let lit = |id: &str| Encounter::new(id, 1).unwrap().phase_notches();
-        assert_eq!(lit("echo"), vec![4, 0], "14 boss marbles, P2 at 10");
-        assert_eq!(lit("hull"), vec![4, 0], "14 boss marbles, P2 at 10");
+        assert_eq!(lit("echo"), vec![3, 0], "P2 after 3 ejections");
+        assert_eq!(lit("hull"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("chaplain"), vec![6, 0], "14 boss marbles, P2 at 8");
         assert_eq!(lit("choir"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("ballast"), vec![6, 0], "16 boss marbles, P2 at 10");

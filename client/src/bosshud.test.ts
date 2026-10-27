@@ -26,8 +26,8 @@ describe('bossHtml', () => {
   });
 
   it('shows the boss tell line when there is one, nothing otherwise', () => {
-    expect(bossHtml({ ...base, tell: 'Rim cracks: 1 cell in 2 plies' })).toContain(
-      '<div class="tell">Rim cracks: 1 cell in 2 plies</div>',
+    expect(bossHtml({ ...base, tell: 'Cracks: 1 cell in 2 turns' })).toContain(
+      '<div class="tell">Cracks: 1 cell in 2 turns</div>',
     );
     expect(bossHtml(base)).not.toContain('class="tell"');
     expect(bossHtml({ ...base, tell: '' })).not.toContain('class="tell"');

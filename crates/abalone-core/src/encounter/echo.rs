@@ -5,8 +5,9 @@ use crate::board::Board;
 use crate::encounter::{BossDef, Encounter};
 use crate::moves::{apply, Direction, Move, Player};
 
-/// P2 starts at 10 boss marbles, P3 at 5.
-pub const ECHO_PHASE_MARBLES: [u8; 2] = [10, 5];
+/// P2 and P3 start after this many ejections credited to the player: notches only, the Echo
+/// plays the same in every phase.
+pub const ECHO_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// Positions the free-move search may visit. Starting value, to tune (calibration knob).
 pub const ECHO_NODE_BUDGET: u32 = 400;
 
@@ -22,8 +23,8 @@ fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
 pub fn echo_boss() -> BossDef {
     BossDef {
         name: "The Echo",
-        phase_marbles: ECHO_PHASE_MARBLES.to_vec(),
-        phase_ejections: Vec::new(),
+        phase_marbles: Vec::new(),
+        phase_ejections: ECHO_PHASE_EJECTIONS.to_vec(),
         special: no_special,
         hook: keep_board,
         node_budget: ECHO_NODE_BUDGET,
@@ -51,25 +52,17 @@ pub fn mirror_move(mv: &Move) -> Move {
 }
 
 /// The boss reply for the current position, `None` on the player's turn or when the game is over.
-/// P1 mirrors the last player move, P2 the one before it, P3 tries the last then the previous.
-/// The first mirror the normal validator accepts is played, else the boss search picks.
+/// It is the mirror of the last player move in every phase when the normal validator accepts it,
+/// else the boss search picks.
 pub fn echo_move(enc: &Encounter) -> Option<Move> {
     let game = enc.game();
     if game.outcome().is_some() || game.to_move() != Player::White {
         return None;
     }
-    let history = game.history();
-    let last = history.last().map(|p| &p.mv);
-    let previous = history.len().checked_sub(3).map(|i| &history[i].mv);
-    let echoed: Vec<&Move> = match enc.phase() {
-        0 => last.into_iter().collect(),
-        1 => previous.into_iter().collect(),
-        _ => last.into_iter().chain(previous).collect(),
-    };
-    echoed
-        .into_iter()
-        .map(mirror_move)
-        .find(|m| apply(game.board(), Player::White, m).is_ok())
+    game.history()
+        .last()
+        .map(|p| mirror_move(&p.mv))
+        .filter(|m| apply(game.board(), Player::White, m).is_ok())
         .or_else(|| enc.boss_search().map(|r| r.mv))
 }
 
