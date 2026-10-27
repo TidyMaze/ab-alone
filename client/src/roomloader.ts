@@ -135,11 +135,13 @@ export async function loadSpaceshipBay(
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         const name = mesh.name.toLowerCase();
-        if (name === 'pedestal_core') {
-          const pos = mesh.geometry.getAttribute('position');
-          const uv = mesh.geometry.getAttribute('uv');
-          for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) * 0.75, pos.getZ(i) * 0.75);
-          uv.needsUpdate = true;
+        if (name.includes('pedestal')) {
+          if (name === 'pedestal_core') {
+            const pos = mesh.geometry.getAttribute('position');
+            const uv = mesh.geometry.getAttribute('uv');
+            for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) * 0.75, pos.getZ(i) * 0.75);
+            uv.needsUpdate = true;
+          }
           applyPbrToMesh(mesh, deckMat);
         } else if (name.includes('hazard')) {
           applyPbrToMesh(mesh, hazardMat);
@@ -184,57 +186,54 @@ export interface DeckAtmosphereConfig {
 
 export const DECK_ATMOSPHERES: Record<DeckId, DeckAtmosphereConfig> = {
   mess: {
-    deckColor: 0x484037,
-    bulkheadColor: 0x4e545a,
-    grateColor: 0x56473b,
+    deckColor: 0x3d352e,
+    bulkheadColor: 0x22262a,
+    grateColor: 0x4a3a2d,
     lightColor: 0xd9822b,
-    roughness: 0.75,
+    roughness: 0.8,
     accentLightColor: 0xd9822b,
     fogColor: 0x1c1612,
   },
   cargo: {
-    deckColor: 0x384048,
-    bulkheadColor: 0x464e56,
-    grateColor: 0x444d56,
+    deckColor: 0x2a2f34,
+    bulkheadColor: 0x181c20,
+    grateColor: 0x333b42,
     lightColor: 0x7fd6e8,
-    roughness: 0.8,
+    roughness: 0.85,
     accentLightColor: 0x7fd6e8,
     fogColor: 0x12161a,
   },
   furnace: {
-    deckColor: 0x4a342c,
-    bulkheadColor: 0x54463d,
-    grateColor: 0x6e3825,
+    deckColor: 0x38221c,
+    bulkheadColor: 0x1f1412,
+    grateColor: 0x5a2d1d,
     lightColor: 0xe86a33,
-    roughness: 0.72,
+    roughness: 0.75,
     accentLightColor: 0xff4d00,
     fogColor: 0x20120d,
   },
   chapel: {
-    deckColor: 0x3d3945,
-    bulkheadColor: 0x48424b,
-    grateColor: 0x4d4758,
+    deckColor: 0x323038,
+    bulkheadColor: 0x1c1b22,
+    grateColor: 0x3d3a48,
     lightColor: 0xa29bfe,
-    roughness: 0.8,
+    roughness: 0.9,
     accentLightColor: 0x6c5ce7,
     fogColor: 0x181620,
   },
   bridge: {
-    deckColor: 0x364850,
-    bulkheadColor: 0x505c65,
-    grateColor: 0x3d5a68,
+    deckColor: 0x243238,
+    bulkheadColor: 0x141f24,
+    grateColor: 0x2d434d,
     lightColor: 0x55efc4,
-    roughness: 0.68,
+    roughness: 0.7,
     accentLightColor: 0x00cec9,
     fogColor: 0x0f191d,
   },
 };
 
 export function applyDeckAtmosphere(
-  bay: {
-    scene?: THREE.Group;
-    materials: { deck: THREE.MeshStandardMaterial; bulkhead: THREE.MeshStandardMaterial; grate: THREE.MeshStandardMaterial };
-  },
+  bay: { materials: { deck: THREE.MeshStandardMaterial; bulkhead: THREE.MeshStandardMaterial; grate: THREE.MeshStandardMaterial } },
   deck: DeckId,
 ): void {
   const conf = DECK_ATMOSPHERES[deck];
@@ -244,13 +243,6 @@ export function applyDeckAtmosphere(
   bay.materials.bulkhead.roughness = conf.roughness;
   bay.materials.grate.color.setHex(conf.grateColor);
   bay.materials.grate.roughness = conf.roughness;
-  if (bay.scene) {
-    const existing = bay.scene.getObjectByName('bay_lights');
-    if (existing) bay.scene.remove(existing);
-    const newLights = createBayLights(deck);
-    newLights.name = 'bay_lights';
-    bay.scene.add(newLights);
-  }
 }
 
 export function createBayLights(deck: DeckId): THREE.Group {
@@ -258,26 +250,24 @@ export function createBayLights(deck: DeckId): THREE.Group {
   const group = new THREE.Group();
   group.name = 'bay_lights';
 
-  const bayFill = new THREE.AmbientLight(conf.lightColor, 0.4);
-
-  const overhead = new THREE.PointLight(conf.lightColor, 1.2, 50.0);
+  const overhead = new THREE.PointLight(conf.lightColor, 0.45, 36.0);
   overhead.position.set(0, 14.0, 0);
 
-  const airlock = new THREE.PointLight(conf.accentLightColor, 4.0, 36.0);
+  const airlock = new THREE.PointLight(conf.accentLightColor, 0.55, 26.0);
   airlock.position.set(0, 8.0, -17.5);
 
-  const consoleBounce = new THREE.PointLight(conf.lightColor, 2.6, 26.0);
+  const consoleBounce = new THREE.PointLight(conf.lightColor, 0.35, 16.0);
   consoleBounce.position.set(-10.2, 2.5, -6.0);
 
-  const viewportLight = new THREE.PointLight(0x7fd6e8, 2.8, 32.0);
+  const viewportLight = new THREE.PointLight(0x7fd6e8, 0.5, 24.0);
   viewportLight.position.set(17.0, 4.8, 0);
 
-  const observationLight = new THREE.PointLight(conf.accentLightColor, 2.4, 30.0);
+  const observationLight = new THREE.PointLight(conf.accentLightColor, 0.15, 16.0);
   observationLight.position.set(0, 7.0, 17.5);
 
-  const pedestalWash = new THREE.PointLight(0x7fd6e8, 0.6, 14.0);
+  const pedestalWash = new THREE.PointLight(0x7fd6e8, 0.25, 8.0);
   pedestalWash.position.set(0, -0.1, 0);
 
-  group.add(bayFill, overhead, airlock, consoleBounce, viewportLight, observationLight, pedestalWash);
+  group.add(overhead, airlock, consoleBounce, viewportLight, observationLight, pedestalWash);
   return group;
 }

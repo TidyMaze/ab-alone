@@ -1470,9 +1470,12 @@ drawProps = (): void => {
         def.id.includes('airlock')
           ? sLights.emergency.color
           : sLights.rim.color;
-      mat = new THREE.MeshBasicMaterial({
+      mat = new THREE.MeshStandardMaterial({
         color: neonColor,
-        fog: false,
+        emissive: neonColor,
+        emissiveIntensity: 2.2,
+        roughness: 0.15,
+        fog: true,
       });
     } else if (def.id.includes('wall') && wallTexture) {
       mat = new THREE.MeshStandardMaterial({
@@ -1555,29 +1558,29 @@ drawProps = (): void => {
     }
     propsGroup.add(mesh);
   }
-  const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity * 2.5, sLights.emergency.distance * 1.5);
+  const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
   emergencyLight.position.set(...sLights.emergency.position);
-  const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity * 2.5, sLights.consoleBounce.distance * 1.5);
+  const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
   consoleBounceLight.position.set(...sLights.consoleBounce.position);
-  const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity * 2.5, sLights.pedestalGlow.distance * 1.5);
+  const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity, sLights.pedestalGlow.distance);
   pedestalGlowLight.position.set(...sLights.pedestalGlow.position);
-  const neonWestLight = new THREE.PointLight(sLights.rim.color, 2.8, 18.0);
+  const neonWestLight = new THREE.PointLight(sLights.rim.color, 0.2, 6.0);
   neonWestLight.position.set(-5.5, 0.35, -1.0);
-  const neonEastLight = new THREE.PointLight(sLights.emergency.color, 2.8, 18.0);
+  const neonEastLight = new THREE.PointLight(sLights.emergency.color, 0.2, 6.0);
   neonEastLight.position.set(5.5, 0.35, -1.0);
-  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 14.0, 50.0);
+  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 3.0, 10.0);
   neonWallNwLight.position.set(-8.4, 5.2, -16.8);
-  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 14.0, 50.0);
+  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 10.0);
   neonWallNeLight.position.set(8.4, 5.2, -16.8);
-  const neonWallSwLight = new THREE.PointLight(sLights.rim.color, 13.0, 48.0);
+  const neonWallSwLight = new THREE.PointLight(sLights.rim.color, 3.0, 10.0);
   neonWallSwLight.position.set(-8.4, 5.2, 16.8);
-  const neonWallSeLight = new THREE.PointLight(sLights.emergency.color, 13.0, 48.0);
+  const neonWallSeLight = new THREE.PointLight(sLights.emergency.color, 3.0, 10.0);
   neonWallSeLight.position.set(8.4, 5.2, 16.8);
-  const airlockSodiumLight = new THREE.PointLight(sLights.emergency.color, 16.0, 52.0);
+  const airlockSodiumLight = new THREE.PointLight(sLights.emergency.color, 3.5, 11.0);
   airlockSodiumLight.position.set(0, 8.2, -17.0);
-  const viewportRimLight = new THREE.PointLight(sLights.rim.color, 15.0, 50.0);
+  const viewportRimLight = new THREE.PointLight(sLights.rim.color, 3.0, 11.0);
   viewportRimLight.position.set(17.0, 4.6, 0);
-  const kioskGreenLight = new THREE.PointLight(0x55efc4, 10.0, 30.0);
+  const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.5, 6.0);
   kioskGreenLight.position.set(-10.2, 2.5, -5.8);
   propsGroup.add(
     emergencyLight,
@@ -1587,11 +1590,6 @@ drawProps = (): void => {
     neonEastLight,
     neonWallNwLight,
     neonWallNeLight,
-    neonWallSwLight,
-    neonWallSeLight,
-    airlockSodiumLight,
-    viewportRimLight,
-    kioskGreenLight,
   );
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
