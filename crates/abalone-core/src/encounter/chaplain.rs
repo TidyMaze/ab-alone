@@ -406,4 +406,145 @@ mod tests {
             usize::from(b)
         );
     }
+
+    /// A white marble at (0, 0) with 3 black neighbours, just under the flip threshold.
+    const MARTYR_SCENE: [P; 3] = [(1, 0), (1, -1), (0, -1)];
+
+    fn martyr_of(e: &Encounter) -> Option<Option<P>> {
+        e.game().board().martyr()
+    }
+
+    #[test]
+    fn the_martyr_is_announced_at_the_end_of_the_first_boss_turn_from_4_ejections() {
+        let mut e = build(&MARTYR_SCENE, &[(0, 0)], &[], 4, 0);
+        step(&mut e);
+        assert_eq!(martyr_of(&e), None, "not at the end of the player turn");
+        step(&mut e);
+        assert_eq!(martyr_of(&e), Some(Some((0, 0))));
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White), "still there, announced");
+        let mut early = build(&MARTYR_SCENE, &[(0, 0)], &[], 3, 0);
+        turns(&mut early, 4);
+        assert_eq!(martyr_of(&early), None, "not before 4 ejections");
+        let mut alone = build(&[], &[(0, 0)], &[], 4, 0);
+        turns(&mut alone, 4);
+        assert_eq!(
+            martyr_of(&alone),
+            None,
+            "no boss marble touches a player marble"
+        );
+    }
+
+    #[test]
+    fn the_martyr_is_the_marble_converting_the_most_player_marbles() {
+        let blacks = [(1, 0), (1, -1), (0, -1), (-3, 0)];
+        let mut e = build(&blacks, &[(0, 0), (-3, 1), (-4, 1)], &[], 4, 0);
+        // (0, 0) touches 3 black marbles, (-3, 1) touches 1, (-4, 1) touches 1.
+        turns(&mut e, 2);
+        assert_eq!(martyr_of(&e), Some(Some((0, 0))));
+    }
+
+    #[test]
+    fn a_tie_is_broken_by_the_seed() {
+        let pick = |seed| {
+            let mut e = build(&[(1, 0), (-3, 0)], &[(0, 0), (-4, 1)], &[], 4, seed);
+            turns(&mut e, 2);
+            martyr_of(&e).unwrap().unwrap()
+        };
+        assert_eq!(pick(3), pick(3));
+        let picks: Vec<P> = (0..16).map(pick).collect();
+        assert!(
+            picks.contains(&(0, 0)) && picks.contains(&(-4, 1)),
+            "{picks:?}"
+        );
+    }
+
+    #[test]
+    fn the_martyr_explodes_at_the_end_of_the_next_boss_turn() {
+        let mut e = build(&MARTYR_SCENE, &[(0, 0), (3, 0)], &[], 4, 0);
+        turns(&mut e, 2);
+        let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
+        step(&mut e);
+        assert_eq!(
+            at(&e, (0, 0)),
+            Some(Cell::White),
+            "not at the end of the player turn"
+        );
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::Empty), "the martyr is gone");
+        for c in MARTYR_SCENE {
+            assert_eq!(at(&e, c), Some(Cell::White), "{c:?} converted");
+        }
+        assert_eq!(count(&e, Cell::Black), b - 3);
+        assert_eq!(count(&e, Cell::White), w + 3 - 1);
+        assert_eq!(e.game().ejected(Player::Black), 5, "the 5th ejection");
+        assert_eq!(e.game().ejected(Player::White), 0);
+        assert_eq!(martyr_of(&e), Some(None));
+        assert_eq!(e.removed(), &[((0, 0), Cell::White)]);
+        let mut marks = e.game().board().converted().to_vec();
+        marks.sort_unstable();
+        assert_eq!(marks, vec![(0, -1), (1, -1), (1, 0)]);
+    }
+
+    #[test]
+    fn it_happens_once() {
+        let mut e = build(&MARTYR_SCENE, &[(0, 0), (3, 0), (4, -1)], &[], 4, 0);
+        turns(&mut e, 4);
+        assert_eq!(e.game().ejected(Player::Black), 5);
+        turns(&mut e, 8);
+        assert_eq!(martyr_of(&e), Some(None), "no second martyr");
+        assert_eq!(e.game().ejected(Player::Black), 5);
+    }
+
+    #[test]
+    fn a_martyr_pushed_off_the_board_explodes_nothing() {
+        let mut e = build(&[(2, 0), (3, 0)], &[(4, 0)], &[], 4, 0);
+        turns(&mut e, 2);
+        assert_eq!(martyr_of(&e), Some(Some((4, 0))));
+        e.play(&Move {
+            cells: vec![(2, 0), (3, 0)],
+            dir: E,
+        })
+        .unwrap();
+        assert_eq!(e.game().ejected(Player::Black), 5, "the push");
+        assert_eq!(martyr_of(&e), Some(None));
+        step(&mut e);
+        assert_eq!(e.game().ejected(Player::Black), 5, "nothing explodes");
+    }
+
+    #[test]
+    fn a_martyr_that_moved_with_a_push_is_still_the_martyr() {
+        let mut e = build(&[(-2, 0), (-1, 0)], &[(0, 0)], &[], 4, 0);
+        turns(&mut e, 2);
+        assert_eq!(martyr_of(&e), Some(Some((0, 0))));
+        e.play(&Move {
+            cells: vec![(-2, 0), (-1, 0)],
+            dir: E,
+        })
+        .unwrap();
+        assert_eq!(martyr_of(&e), Some(Some((1, 0))));
+    }
+
+    #[test]
+    fn a_martyr_converted_before_it_explodes_explodes_nothing() {
+        let mut board = build(&[(1, 0), (1, -1), (0, -1), (-1, 0)], &[(0, 0)], &[], 4, 0)
+            .game()
+            .board()
+            .clone();
+        board.set_martyr(Some(Some((0, 0))));
+        let mut e = Encounter::new(
+            Game::from_position(board, Player::Black, [4, 0]),
+            chaplain_boss(),
+            0,
+        );
+        step(&mut e);
+        assert_eq!(
+            at(&e, (0, 0)),
+            Some(Cell::Black),
+            "converted by 4 neighbours"
+        );
+        step(&mut e);
+        assert_eq!(e.game().ejected(Player::Black), 4, "nothing exploded");
+        assert_eq!(at(&e, (1, 0)), Some(Cell::Black));
+        assert_eq!(martyr_of(&e), Some(None));
+    }
 }
