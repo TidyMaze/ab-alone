@@ -420,12 +420,12 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   goes down by 1 after each of your moves; after your 5th move from the announce it passes,
   before the boss replies. At the end of your move the order is: the counters go down, the
   trains at 0 pass, then a new train may be announced.
-- **Rhythm**: the first train is announced at the end of your **turn 2** (owner rule, #740): there
-  is none at the start, so the first two turns are free. Then a new one is
+- **Rhythm**: the first train is announced at the end of your **turn 1** (owner rule, #740), so you
+  see it during turn 2: there is none at the start. Then a new one is
   announced at the end of your turn `n` (your moves so far) when `n` is a multiple of **10** in
   P1, **5** in P2, **3** in P3, with the phase at the start of that turn.
 - **No overlap**: a new train takes a line that no announced train holds (lines may cross).
-  At most 2 trains are announced at once in a fight that follows its phases, and their passing
+  At most 2 trains are announced at once, and their passing
   turns always differ, as they were announced on different turns.
 - **Deterministic, for P2P**: the track is splitmix64 of the fight seed mixed with the ply (the
   Hull's cracks), modulo the free tracks, in track order. No

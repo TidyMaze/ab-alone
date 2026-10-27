@@ -19,8 +19,8 @@ pub const RAILYARD_LINES: u8 = 27;
 pub const RAILYARD_LEAD: u8 = 5;
 /// A new train is announced every this many player turns, per phase. TUNE.
 pub const RAILYARD_EVERY: [u32; 3] = [10, 5, 3];
-/// The ply that ends the player's turn 2, where the first train is announced. TUNE.
-pub const RAILYARD_FIRST_PLY: u32 = 3;
+/// The ply that ends the player's turn 1, so that the first train shows on turn 2, where the first train is announced. TUNE.
+pub const RAILYARD_FIRST_PLY: u32 = 1;
 /// P2 and P3 start after this many ejections credited to the player. TUNE.
 pub const RAILYARD_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
@@ -57,7 +57,7 @@ pub fn track_cells(track: u8) -> Vec<P> {
 }
 
 /// Special id of the ply that just ended: none for a boss turn (Black moves first, so the
-/// player's plies are odd), an announce at the end of the player's turn 2 (the first train, #740)
+/// player's plies are odd), an announce at the end of the player's turn 1 (the first train, seen on turn 2, #740)
 /// and of the player's turn `n` when `n` is a multiple of the phase's rhythm, else the count down.
 fn special(ply: u32, phase: usize) -> Option<u8> {
     (ply % 2 == 1).then(|| {
@@ -117,7 +117,7 @@ pub fn railyard_boss() -> BossDef {
 }
 
 /// A new encounter: the standard layout, the player is Black and moves first, and no train is
-/// announced before the end of the player's turn 2.
+/// announced before the end of the player's turn 1.
 pub fn railyard_start(seed: u64) -> Encounter {
     Encounter::new(
         Game::from_position(Board::standard(), Player::Black, [0, 0]),
@@ -196,6 +196,14 @@ mod tests {
 
     fn trains(enc: &Encounter) -> Vec<Train> {
         enc.game().board().trains().to_vec()
+    }
+
+    /// The trains of a fight that began with a train in the position, without the first train the
+    /// engine announces at the end of the player's turn 1 (the last one).
+    fn set_trains(enc: &Encounter) -> Vec<Train> {
+        let mut out = trains(enc);
+        out.pop();
+        out
     }
 
     fn whites(enc: &Encounter) -> u8 {
@@ -319,7 +327,10 @@ mod tests {
         let enc = railyard_start(0);
         let b = enc.game().board();
         assert_eq!(*b, Board::standard());
-        assert!(b.trains().is_empty(), "the first train comes on turn 2");
+        assert!(
+            b.trains().is_empty(),
+            "the first train is announced on turn 2"
+        );
         assert_eq!(enc.game().to_move(), Player::Black);
         assert_eq!(enc.phase(), 0);
         assert_eq!(enc.game().win_ejections(Player::Black), 6);
@@ -329,10 +340,10 @@ mod tests {
     #[test]
     fn special_schedule_follows_the_player_turn_and_the_phase() {
         let table = [
-            ((1, 0), Some(RAILYARD_COUNT)),
-            ((3, 0), Some(RAILYARD_ANNOUNCE)),
-            ((3, 1), Some(RAILYARD_ANNOUNCE)),
-            ((3, 2), Some(RAILYARD_ANNOUNCE)),
+            ((1, 0), Some(RAILYARD_ANNOUNCE)),
+            ((1, 1), Some(RAILYARD_ANNOUNCE)),
+            ((1, 2), Some(RAILYARD_ANNOUNCE)),
+            ((3, 0), Some(RAILYARD_COUNT)),
             ((2, 0), None),
             ((9, 0), Some(RAILYARD_COUNT)),
             ((19, 0), Some(RAILYARD_ANNOUNCE)),
@@ -373,23 +384,20 @@ mod tests {
     #[test]
     fn the_first_train_is_announced_on_turn_2_then_every_10_5_or_3_turns() {
         let (announced, passed, most) = schedule(0);
-        assert_eq!(announced, vec![2, 10, 20, 30]);
-        assert_eq!(passed, vec![7, 15, 25]);
+        assert_eq!(announced, vec![1, 10, 20, 30]);
+        assert_eq!(passed, vec![6, 15, 25]);
         assert_eq!(most, 1);
         let (announced, passed, most) = schedule(1);
-        assert_eq!(announced, vec![2, 5, 10, 15, 20, 25, 30]);
-        assert_eq!(passed, vec![7, 10, 15, 20, 25, 30]);
-        assert_eq!(most, 2, "the turn 2 train and the turn 5 one");
+        assert_eq!(announced, vec![1, 5, 10, 15, 20, 25, 30]);
+        assert_eq!(passed, vec![6, 10, 15, 20, 25, 30]);
+        assert_eq!(most, 2, "the first train and the turn 5 one");
         let (announced, passed, most) = schedule(2);
         assert_eq!(
             announced,
-            [vec![2], (1..=10).map(|k| 3 * k).collect()].concat()
+            [vec![1], (1..=10).map(|k| 3 * k).collect()].concat()
         );
-        assert_eq!(passed, vec![7, 8, 11, 14, 17, 20, 23, 26, 29]);
-        assert_eq!(
-            most, 3,
-            "a fight cannot be in P3 by turn 2: only a test gets 3"
-        );
+        assert_eq!(passed, vec![6, 8, 11, 14, 17, 20, 23, 26, 29]);
+        assert_eq!(most, 2, "two trains, never passing on the same turn");
     }
 
     #[test]
@@ -436,7 +444,7 @@ mod tests {
             .all(|&(q, r)| b.get(q, r) == Some(Cell::Empty)));
         assert_eq!(b.get(2, 2), Some(Cell::Black), "off the line");
         assert_eq!(b.get(-1, -1), Some(Cell::White), "off the line");
-        assert_eq!(trains(&enc), vec![(2 * ROW, 2)]);
+        assert_eq!(set_trains(&enc), vec![(2 * ROW, 2)]);
         assert_eq!(
             enc.game().ejected(Player::Black),
             3,
@@ -467,9 +475,9 @@ mod tests {
         let start = board(&[(2, 2)], &[(0, 0), (-3, -1)], &[(2 * ROW, 2)]);
         let mut enc = fight(start, Player::Black, [0, 0]);
         enc.play(&mv(&[(2, 2)], Direction::NW)).unwrap();
-        assert_eq!(trains(&enc), vec![(2 * ROW, 1)]);
+        assert_eq!(set_trains(&enc), vec![(2 * ROW, 1)]);
         enc.play(&mv(&[(-3, -1)], Direction::E)).unwrap();
-        assert_eq!(trains(&enc), vec![(2 * ROW, 1)], "the boss turn");
+        assert_eq!(set_trains(&enc), vec![(2 * ROW, 1)], "the boss turn");
         assert_eq!(whites(&enc), 2);
     }
 
@@ -482,7 +490,7 @@ mod tests {
         );
         let mut enc = fight(start, Player::Black, [0, 0]);
         enc.play(&mv(&[(2, 2)], Direction::NW)).unwrap();
-        assert_eq!(trains(&enc), vec![(2 * COLUMN, 2)]);
+        assert_eq!(set_trains(&enc), vec![(2 * COLUMN, 2)]);
         let b = enc.game().board();
         assert_eq!(
             (b.get(0, 0), b.get(2, 0)),
@@ -496,13 +504,9 @@ mod tests {
         enc.play(&mv(&[(-3, -1)], Direction::E)).unwrap();
         enc.play(&mv(&[(2, 1)], Direction::NW)).unwrap();
         enc.play(&mv(&[(-2, -1)], Direction::E)).unwrap();
-        assert_eq!(trains(&enc)[0], (2 * COLUMN, 1));
+        assert_eq!(set_trains(&enc)[0], (2 * COLUMN, 1));
         enc.play(&mv(&[(2, 0)], Direction::SE)).unwrap();
-        assert_eq!(
-            trains(&enc).len(),
-            1,
-            "passed, only the turn 2 train is left"
-        );
+        assert!(set_trains(&enc).is_empty(), "passed");
         assert_eq!(enc.game().board().get(0, 2), Some(Cell::Empty));
         assert_eq!(enc.game().ejected(Player::White), 1);
     }

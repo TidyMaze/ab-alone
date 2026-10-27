@@ -84,7 +84,7 @@ fn alien_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(alien_start(seed))
 }
 
-/// The Rail Yard announces its first train at the end of the player's turn 2.
+/// The Rail Yard announces its first train at the end of the player's turn 1, seen on turn 2.
 fn railyard_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(railyard_start(seed))
 }
@@ -1014,21 +1014,20 @@ mod tests {
 
     #[test]
     fn the_rail_yard_announces_its_first_train_on_turn_2_that_passes_after_5_player_turns() {
-        // Seed 5: the first train runs the diagonal q + r = 0 from (4, -4), 3 marbles a side on it.
-        let f = Encounter::new("railyard", 5).unwrap();
+        // Seed 77: the first train runs the diagonal q + r = 0 from (4, -4), 3 marbles a side on it.
+        let f = Encounter::new("railyard", 77).unwrap();
         assert_eq!(f.name(), "The Rail Yard");
         assert_eq!((f.phase(), f.phases()), (0, 3));
         assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (14, 14));
         assert!(f.trains().is_empty(), "no train at the start");
-        let run = yard(5, 13);
-        assert!(run[..2].iter().all(|(trains, _)| trains.is_empty()));
-        assert_eq!(run[2].0, vec![22, 5, 4, -4, -4, 4], "the end of turn 2");
-        assert_eq!(run[3].0[1], 5, "not after the boss move");
-        assert_eq!(run[4].0[1], 4, "down after the player move");
-        assert_eq!(run[10].0, vec![22, 1, 4, -4, -4, 4]);
-        assert!(run[12].0.is_empty(), "passed after the player's 7th move");
+        let run = yard(77, 11);
+        assert_eq!(run[0].0, vec![22, 5, 4, -4, -4, 4], "the end of turn 1");
+        assert_eq!(run[1].0[1], 5, "not after the boss move");
+        assert_eq!(run[2].0[1], 4, "down after the player move");
+        assert_eq!(run[8].0, vec![22, 1, 4, -4, -4, 4]);
+        assert!(run[10].0.is_empty(), "passed after the player's 6th move");
         let on_line = |board: &[u8]| (-4..=4).filter(|&q| board[index(q, -q)] != 0).count();
-        assert_eq!(on_line(&run[12].1), 0, "the diagonal is swept");
+        assert_eq!(on_line(&run[10].1), 0, "the diagonal is swept");
     }
 
     #[test]

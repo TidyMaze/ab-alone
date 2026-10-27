@@ -115,7 +115,7 @@ const CASES: Record<string, () => void> = {
   },
 
   railyard() {
-    // No train at the start: the first one is announced at the end of the player's turn 2.
+    // No train at the start: the first one is announced at the end of the player's turn 1, seen on turn 2.
     const railyard = newEncounter('railyard', 3);
     // Each cell of the line is a mark with the player turns left before the train passes; Encounter.tell() is 0, the
     // count down at the end of the player turn.

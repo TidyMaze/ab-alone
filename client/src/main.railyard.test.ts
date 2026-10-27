@@ -7,14 +7,14 @@ import { boot, type Game } from './test/harness';
 
 // The Rail Yard on the harness (#626, game-design.md section 7.8): the announced train's rails, chevrons and counter,
 // the count down after each player move, the pass that knocks both sides' marbles off its line, and the phase after 3
-// ejections. ?bot=off plays both sides from a fixture: fight seed 5 announces the first train, at the end of the player's turn 2, on the diagonal
+// ejections. ?bot=off plays both sides from a fixture: fight seed 77 announces the first train, at the end of the player's turn 1, on the diagonal
 // q + r = 0, from (4, -4) to (-4, 4), with 3 marbles of each side on it.
 
 type Move = { cells: Axial[]; dir: number };
 const DIRS: Axial[] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const body = (): DOMStringMap => document.body.dataset;
-const SEED = 5;
+const SEED = 77;
 
 /** Catches the scene main.ts builds: call before boot. */
 function catchScene(): () => THREE.Scene {
@@ -71,7 +71,7 @@ describe('main.ts The Rail Yard (#626)', () => {
     expect(game.hud()).toContain('Rail Yard: freight on schedule. Six out to balance the books.');
     expect(trains(game)).toEqual([]); // none at the start
     expect(body().trains).toBe('0');
-    plies(game, 3); // the end of the player's turn 2
+    plies(game, 1); // the end of the player's turn 1
     expect(trains(game)).toEqual([expect.objectContaining({ line: 22, left: 5, dir: 3 })]);
     expect(trains(game)[0]!.cells[0]).toEqual([4, -4]);
     expect(body().trains).toBe('1');
@@ -91,15 +91,15 @@ describe('main.ts The Rail Yard (#626)', () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     fightRailYard(game);
-    plies(game, 3);
+    plies(game, 1);
     const counts: string[] = [body().trainCounters!];
-    for (let ply = 4; ply <= 12; ply++) {
+    for (let ply = 2; ply <= 10; ply++) {
       quiet(game);
       counts.push(body().trainCounters!);
     }
     expect(counts).toEqual(['5', '5', '4', '4', '3', '3', '2', '2', '1', '1']); // a boss turn does not count
     expect(activePhase()).toBe('P1');
-    quiet(game); // the player's 7th move: the train passes before the boss replies
+    quiet(game); // the player's 6th move: the train passes before the boss replies
     expect(body().trains).toBe('0');
     expect(body().passing).toBe('1');
     expect(game.hook('__passes')).toEqual([expect.objectContaining({ line: 22 })]);
@@ -125,7 +125,7 @@ describe('main.ts The Rail Yard (#626)', () => {
     const scene = catchScene();
     const game = await boot('?bot=off', { reducedMotion: true });
     fightRailYard(game);
-    plies(game, 13);
+    plies(game, 11);
     const [train] = named(scene(), 'train');
     const start = train!.position.clone();
     game.frame(JUMP_MS / 4);
@@ -138,7 +138,7 @@ describe('main.ts The Rail Yard (#626)', () => {
 
     const again = await boot('?bot=off');
     fightRailYard(again);
-    plies(again, 13);
+    plies(again, 11);
     expect(body().passing).toBe('1');
     dispatchEvent(new PointerEvent('pointerdown')); // a click skips the effect
     expect(body().passing).toBe('0');
