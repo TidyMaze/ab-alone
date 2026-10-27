@@ -25,7 +25,7 @@ import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
-import { WireframeManager } from './wireframe';
+import { RenderModeManager, type RenderMode } from './rendermode';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -410,7 +410,8 @@ function applyView(): void {
 }
 
 const freeCam = new FreeCameraController();
-const wireframeManager = new WireframeManager();
+const renderModeManager = new RenderModeManager();
+let renderMode: RenderMode = 'normal';
 
 function updateFreeCamCamera(): void {
   sceneRenderer.camera.position.set(freeCam.position.x, freeCam.position.y, freeCam.position.z);
@@ -439,15 +440,18 @@ function toggleFreeCam(enabled?: boolean): void {
   document.getElementById('free-cam')!.setAttribute('aria-pressed', String(freeCam.active));
 }
 
-function toggleWireframe(enabled?: boolean): void {
-  const shouldEnable = enabled !== undefined ? enabled : !wireframeManager.active;
-  if (shouldEnable) {
-    wireframeManager.enable(sceneRenderer.scene);
-  } else {
-    wireframeManager.disable(sceneRenderer.scene);
-  }
-  document.getElementById('wireframe')!.setAttribute('aria-pressed', String(wireframeManager.active));
+function setRenderMode(mode: RenderMode): void {
+  renderMode = mode;
+  renderModeManager.setMode(sceneRenderer.scene, mode);
+  paintMenu();
   drawAsked = true;
+}
+
+function cycleRenderMode(): RenderMode {
+  renderMode = renderModeManager.cycle(sceneRenderer.scene);
+  paintMenu();
+  drawAsked = true;
+  return renderMode;
 }
 let clear = readClearBoard(store);
 const forceShadows =
@@ -599,10 +603,13 @@ const toggles: Record<string, () => void> = {
     difficulty = nextDifficulty(difficulty);
     writeDifficulty(store, difficulty);
   },
+  'render-mode': () => {
+    cycleRenderMode();
+  },
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     const full = id === 'difficulty' ? `Difficulty: ${difficulty} (${DIFFICULTY_PERCENT[difficulty]}%)` : label;
@@ -611,7 +618,7 @@ const paintMenu = (): void => {
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty)) {
+for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -844,7 +851,7 @@ addEventListener('keydown', (e) => {
     return;
   }
   if (e.key.toLowerCase() === 'x' && !reading) {
-    toggleWireframe();
+    cycleRenderMode();
     return;
   }
   if (freeCam.active) {
@@ -3036,10 +3043,6 @@ const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement;
 freeCamBtn.addEventListener('click', () => toggleFreeCam());
 freeCamBtn.disabled = false;
 
-const wireframeBtn = document.getElementById('wireframe') as HTMLButtonElement;
-wireframeBtn.addEventListener('click', () => toggleWireframe());
-wireframeBtn.disabled = false;
-
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
   frameCamera();
@@ -3138,8 +3141,15 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__mountBay = mountBay;
 (window as unknown as Record<string, unknown>).__toggleFreeCam = (enabled?: boolean) => toggleFreeCam(enabled);
 (window as unknown as Record<string, unknown>).__freeCamActive = () => freeCam.active;
-(window as unknown as Record<string, unknown>).__toggleWireframe = (enabled?: boolean) => toggleWireframe(enabled);
-(window as unknown as Record<string, unknown>).__wireframeActive = () => wireframeManager.active;
+(window as unknown as Record<string, unknown>).__renderMode = () => renderMode;
+(window as unknown as Record<string, unknown>).__setRenderMode = (mode: RenderMode) => setRenderMode(mode);
+(window as unknown as Record<string, unknown>).__cycleRenderMode = () => cycleRenderMode();
+(window as unknown as Record<string, unknown>).__clayActive = () => renderMode === 'clay';
+(window as unknown as Record<string, unknown>).__wireframeActive = () => renderMode === 'wireframe';
+(window as unknown as Record<string, unknown>).__toggleWireframe = (enabled?: boolean) => {
+  const next = enabled ?? renderMode !== 'wireframe';
+  setRenderMode(next ? 'wireframe' : 'normal');
+};
 
 // Used by the browser checks to see the ejected marbles as drawn `ms` into their effect (the next
 // frame draws them at the real time again).
