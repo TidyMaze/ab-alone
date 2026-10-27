@@ -328,12 +328,6 @@ const [
   loadTexture('pbr/plate-normal.ktx2', false, true),
 ]);
 
-if (plateAlbedo) {
-  plateAlbedo.repeat.set(2, 2);
-  if (plateRoughness) plateRoughness.repeat.set(2, 2);
-  if (plateNormal) plateNormal.repeat.set(2, 2);
-}
-
 const sceneRenderer = new SceneRenderer({
   renderer,
   backdrop,
