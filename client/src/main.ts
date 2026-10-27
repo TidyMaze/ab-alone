@@ -309,9 +309,6 @@ const [
   plateAlbedo,
   plateRoughness,
   plateNormal,
-  cellsAlbedo,
-  cellsRoughness,
-  cellsNormal,
 ] = await Promise.all([
   loadTexture('deck-albedo.ktx2', true, true),
   loadTexture('deck-roughness.ktx2', false, true),
@@ -323,9 +320,6 @@ const [
   loadTexture('pbr/plate-albedo.ktx2', true, true),
   loadTexture('pbr/plate-roughness.ktx2', false, true),
   loadTexture('pbr/plate-normal.ktx2', false, true),
-  loadTexture('pbr/cells-albedo.ktx2', true, true),
-  loadTexture('pbr/cells-roughness.ktx2', false, true),
-  loadTexture('pbr/cells-normal.ktx2', false, true),
 ]);
 
 const sceneRenderer = new SceneRenderer({
@@ -955,8 +949,8 @@ function applyDeck(next: Deck): void {
   // Only on the textured look: a map added to the flat look would rebuild its pipeline. body[data-deck-set] is read by the e2e.
   void Promise.all([deckMap(next), deckNormalMap(next)]).then(([map, normal]) => {
     if (deck !== next || !steel.map) return; // another deck started meanwhile, or the flat look
-    steel.map = map ?? cellsAlbedo ?? deckAlbedo;
-    if (steel.normalMap && (normal || cellsNormal)) steel.normalMap = normal ?? cellsNormal;
+    steel.map = map ?? deckAlbedo;
+    if (steel.normalMap && normal) steel.normalMap = normal;
     document.body.dataset.deckSet = map ? next : 'steel';
   });
 }
@@ -967,19 +961,13 @@ const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, detail.discSegm
 const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidthSegments, detail.marbleHeightSegments);
 const ringGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32);
 const steel = new THREE.MeshStandardMaterial(
-  cellsAlbedo && cellsRoughness
+  deckAlbedo && deckRoughness
     ? {
-        map: firstDeckMap ?? cellsAlbedo,
-        roughnessMap: cellsRoughness,
-        ...(cellsNormal ? { normalMap: cellsNormal } : {}),
+        map: firstDeckMap ?? deckAlbedo,
+        roughnessMap: deckRoughness,
+        ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
       }
-    : deckAlbedo && deckRoughness
-      ? {
-          map: firstDeckMap ?? deckAlbedo,
-          roughnessMap: deckRoughness,
-          ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
-        }
-      : { color: COLORS.steel, roughness: 0.8 },
+    : { color: COLORS.steel, roughness: 0.8 },
 );
 applyDeck(deck);
 // Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
