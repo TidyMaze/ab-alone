@@ -175,44 +175,32 @@ mod tests {
     /// Black's shuffle marble walks this pair, White's walks the other: far from every test cell.
     const BLACK_SHUFFLE: [P; 2] = [(0, 3), (-1, 3)];
     const WHITE_SHUFFLE: [P; 2] = [(0, -3), (1, -3)];
-    /// Extra boss marbles on the far left, to push the boss count into a chosen phase.
-    const FILLER: [P; 9] = [
-        (-4, 0),
-        (-4, 1),
-        (-4, 2),
-        (-3, -1),
-        (-3, 0),
-        (-3, 1),
-        (-3, 2),
-        (-4, 3),
-        (-4, 4),
-    ];
-    /// The six neighbours of (0, 0) in ring order, then the whites and the black used by the
-    /// chain scenario.
-    const RING_WHITES: [P; 3] = [(1, 0), (0, -1), (-1, 1)];
+    /// Four of the six neighbours of (0, 0).
+    const FOUR_AROUND: [P; 4] = [(1, 0), (1, -1), (0, -1), (-1, 1)];
 
-    fn build(black: &[P], white: &[P], fillers: usize, voids: &[P], seed: u64) -> Encounter {
+    /// Black to move, `ejected` marbles already ejected by the player.
+    fn build(black: &[P], white: &[P], voids: &[P], ejected: u8, seed: u64) -> Encounter {
         let mut board = Board::empty();
         board.set(BLACK_SHUFFLE[0].0, BLACK_SHUFFLE[0].1, Cell::Black);
         board.set(WHITE_SHUFFLE[0].0, WHITE_SHUFFLE[0].1, Cell::White);
         for &(q, r) in black {
             board.set(q, r, Cell::Black);
         }
-        for &(q, r) in white.iter().chain(&FILLER[..fillers]) {
+        for &(q, r) in white {
             board.set(q, r, Cell::White);
         }
         for &(q, r) in voids {
             board.void(q, r);
         }
         Encounter::new(
-            Game::from_position(board, Player::Black, [0, 0]),
+            Game::from_position(board, Player::Black, [ejected, 0]),
             chaplain_boss(),
             seed,
         )
     }
 
-    fn enc(black: &[P], white: &[P], fillers: usize) -> Encounter {
-        build(black, white, fillers, &[], 0)
+    fn enc(black: &[P], white: &[P]) -> Encounter {
+        build(black, white, &[], 0, 0)
     }
 
     /// One harmless shuffle ply for the side to move.
@@ -258,95 +246,103 @@ mod tests {
         out
     }
 
-    /// The tell, then two plies: the tell must be exactly the Black cells that became White.
-    fn assert_tell_is_what_flips(mut e: Encounter) -> Vec<P> {
-        let told = chaplain_tell(&e);
-        let before = e.game().board().clone();
-        turns(&mut e, 2);
-        let after = e.game().board();
-        let flipped: Vec<P> = cells_of(&before, Cell::Black)
-            .into_iter()
-            .filter(|&(q, r)| after.get(q, r) == Some(Cell::White))
-            .collect();
-        assert_eq!(told, flipped);
-        told
-    }
-
     #[test]
     fn boss_definition_matches_the_spec() {
         let b = chaplain_boss();
         assert_eq!(b.name, "The Chaplain");
-        assert_eq!(b.phase_marbles, vec![8, 4]);
+        assert!(b.phase_marbles.is_empty());
+        assert_eq!(b.phase_ejections, vec![4], "P2 at 4 ejections, no P3");
         assert_eq!(b.node_budget, CHAPLAIN_NODE_BUDGET);
-        assert_eq!(CHAPLAIN_FLIP_THRESHOLD, 3);
-        assert_eq!(CHAPLAIN_RESTORE_THRESHOLD, 3);
+        assert_eq!(CHAPLAIN_FLIP_THRESHOLD, 4);
     }
 
     #[test]
     fn special_fires_after_every_ply_with_the_turn_and_the_phase() {
         assert_eq!(special(1, 0), Some(CHAPLAIN_PLAYER_END));
-        assert_eq!(special(3, 2), Some(CHAPLAIN_PLAYER_END));
+        assert_eq!(special(3, 1), Some(CHAPLAIN_PLAYER_END));
         assert_eq!(special(2, 0), Some(CHAPLAIN_BOSS_END));
         assert_eq!(special(4, 1), Some(CHAPLAIN_BOSS_END + 1));
-        assert_eq!(special(6, 2), Some(CHAPLAIN_BOSS_END + 2));
     }
 
     #[test]
-    fn three_boss_neighbours_flip_a_marble_at_the_end_of_the_boss_turn() {
-        let seed = free_seed();
-        let mut e = build(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8, &[], seed);
-        assert_eq!(e.phase(), 0);
+    fn the_phase_follows_the_player_ejections() {
+        assert_eq!(build(&[], &[], &[], 3, 0).phase(), 0);
+        assert_eq!(build(&[], &[], &[], 4, 0).phase(), 1);
+        assert_eq!(build(&[], &[], &[], 5, 0).phase(), 1);
+    }
+
+    #[test]
+    fn four_boss_neighbours_flip_a_marble_at_the_end_of_each_turn() {
+        let mut e = enc(&[(0, 0)], &FOUR_AROUND);
+        let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
+        step(&mut e);
+        assert_eq!(
+            at(&e, (0, 0)),
+            Some(Cell::White),
+            "at the end of the player turn"
+        );
+        assert_eq!(count(&e, Cell::Black), b - 1);
+        assert_eq!(count(&e, Cell::White), w + 1);
+        assert_eq!(
+            e.game().ejected(Player::Black),
+            0,
+            "no marble lost to the void"
+        );
+        assert_eq!(e.game().ejected(Player::White), 0);
+        assert_eq!(e.game().board().converted(), &[(0, 0)]);
+    }
+
+    #[test]
+    fn a_boss_move_that_brings_the_fourth_neighbour_flips_at_the_end_of_the_boss_turn() {
+        let mut e = enc(&[(0, 0)], &[(1, 0), (1, -1), (0, -1), (-2, 1)]);
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::Black), "3 neighbours only");
+        e.play(&Move {
+            cells: vec![(-2, 1)],
+            dir: E,
+        })
+        .unwrap();
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+    }
+
+    #[test]
+    fn three_boss_neighbours_do_not_flip() {
+        let mut e = enc(&[(0, 0)], &FOUR_AROUND[..3]);
+        turns(&mut e, 4);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::Black));
+    }
+
+    #[test]
+    fn four_player_neighbours_flip_a_boss_marble_to_the_player_at_the_end_of_each_turn() {
+        let mut e = enc(&FOUR_AROUND, &[(0, 0)]);
         let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
         step(&mut e);
         assert_eq!(
             at(&e, (0, 0)),
             Some(Cell::Black),
-            "not at the end of the player turn"
+            "a native boss marble flips too"
         );
-        step(&mut e);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
-        assert_eq!(count(&e, Cell::Black), b - 1);
-        assert_eq!(count(&e, Cell::White), w + 1);
-        assert_eq!(e.game().ejected(Player::Black), 0);
-        assert_eq!(e.game().ejected(Player::White), 0);
-    }
-
-    #[test]
-    fn two_boss_neighbours_do_not_flip_in_phase_one() {
-        let mut e = enc(&[(0, 0)], &[(1, 0), (1, -1)], 8);
-        turns(&mut e, 2);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::Black));
-    }
-
-    /// Like `enc`, with `converted` marked as converted boss marbles.
-    fn with_converted(black: &[P], white: &[P], converted: &[P], fillers: usize) -> Encounter {
-        let e = enc(black, white, fillers);
-        let mut board = e.game().board().clone();
-        board.set_converted(converted.to_vec());
-        Encounter::new(
-            Game::from_position(board, Player::Black, [0, 0]),
-            chaplain_boss(),
-            0,
-        )
-    }
-
-    #[test]
-    fn a_native_boss_marble_never_flips_back() {
-        let mut e = enc(&[(1, 0), (1, -1), (0, -1)], &[(0, 0)], 8);
-        step(&mut e);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
-    }
-
-    #[test]
-    fn three_player_neighbours_flip_a_converted_marble_back_at_the_end_of_the_player_turn() {
-        let mut e = with_converted(&[(1, 0), (1, -1), (0, -1)], &[(0, 0)], &[(0, 0)], 8);
-        let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
-        step(&mut e);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::Black));
         assert_eq!(count(&e, Cell::Black), b + 1);
         assert_eq!(count(&e, Cell::White), w - 1);
         assert_eq!(e.game().ejected(Player::Black), 0);
-        assert_eq!(e.game().ejected(Player::White), 0);
+        assert!(e.game().board().converted().is_empty());
+        let mut three = enc(&FOUR_AROUND[..3], &[(0, 0)]);
+        turns(&mut three, 4);
+        assert_eq!(at(&three, (0, 0)), Some(Cell::White));
+    }
+
+    #[test]
+    fn a_flipped_marble_flips_back_when_it_touches_four_player_marbles() {
+        let mut e = enc(&FOUR_AROUND, &[(0, 0)]);
+        let mut board = e.game().board().clone();
+        board.set_converted(vec![(0, 0)]);
+        e = Encounter::new(
+            Game::from_position(board, Player::Black, [0, 0]),
+            chaplain_boss(),
+            0,
+        );
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::Black));
         assert!(
             e.game().board().converted().is_empty(),
             "no longer converted"
@@ -354,31 +350,40 @@ mod tests {
     }
 
     #[test]
-    fn two_player_neighbours_do_not_flip_a_converted_marble_back() {
-        let mut e = with_converted(&[(1, 0), (1, -1)], &[(0, 0)], &[(0, 0)], 8);
-        step(&mut e);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+    fn voids_and_the_rim_add_no_neighbour() {
+        let voids = [(1, 0), (1, -1)];
+        let e = build(&[(0, 0)], &[(0, -1), (0, 1)], &voids, 4, 0);
+        assert!(chaplain_tell(&e).is_empty(), "2 voids and 2 marbles");
+        let rim = enc(&[(4, -2)], &[(3, -2), (4, -3)]);
+        assert!(
+            chaplain_tell(&rim).is_empty(),
+            "2 marbles and 2 off-board cells"
+        );
     }
 
     #[test]
-    fn a_flipped_marble_is_remembered_and_flips_back_when_surrounded() {
-        let mut e = enc(
-            &[(0, 0), (-1, 0), (-1, 1), (0, 1)],
-            &[(1, 0), (1, -1), (0, -1)],
-            8,
+    fn the_tell_lists_the_marbles_that_flip_next() {
+        let e = enc(&[(0, 0), (1, 2)], &FOUR_AROUND);
+        assert_eq!(chaplain_tell(&e), vec![(0, 0)]);
+        let moved = enc(&[(-1, 0)], &FOUR_AROUND);
+        assert!(
+            chaplain_tell(&moved).is_empty(),
+            "breaking contact saves it"
         );
-        turns(&mut e, 2);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
-        assert_eq!(e.game().board().converted(), &[(0, 0)]);
-        step(&mut e);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::Black), "three Black neighbours");
-        assert!(e.game().board().converted().is_empty());
+        assert!(chaplain_tell(&enc(&[(0, 0)], &FOUR_AROUND[..3])).is_empty());
     }
 
     #[test]
     fn a_converted_marble_keeps_its_mark_when_it_moves() {
-        let blacks = [(-2, 0), (-2, 1), (-1, 1)];
-        let mut e = with_converted(&blacks, &[(0, 0), (1, 0), (1, -1), (0, -1)], &[(0, 0)], 4);
+        let mut e = enc(&[(-2, 0), (-2, 1), (-1, 1)], &FOUR_AROUND[..3]);
+        let mut board = e.game().board().clone();
+        board.set(0, 0, Cell::White);
+        board.set_converted(vec![(0, 0)]);
+        e = Encounter::new(
+            Game::from_position(board, Player::Black, [0, 0]),
+            chaplain_boss(),
+            0,
+        );
         step(&mut e);
         e.play(&Move {
             cells: vec![(0, 0)],
@@ -386,38 +391,39 @@ mod tests {
         })
         .unwrap();
         assert_eq!(e.game().board().converted(), &[(-1, 0)]);
-        step(&mut e);
-        assert_eq!(
-            at(&e, (-1, 0)),
-            Some(Cell::Black),
-            "surrounded after it moved"
-        );
     }
 
     #[test]
-    fn a_converted_marble_pushed_by_a_sumito_keeps_its_mark() {
-        let mut e = with_converted(
-            &[(-2, 0), (-1, 0), (2, -1), (1, 1)],
-            &[(0, 0)],
-            &[(0, 0)],
-            8,
+    fn a_converted_marble_pushed_by_a_sumito_keeps_its_mark_and_off_the_board_loses_it() {
+        let mut board = Board::empty();
+        for &(q, r) in &[(-2, 0), (-1, 0), (3, -3), (2, 2)] {
+            board.set(q, r, Cell::Black);
+        }
+        for &(q, r) in &[(0, 0), (4, -4)] {
+            board.set(q, r, Cell::White);
+        }
+        board.set_converted(vec![(0, 0)]);
+        let mut e = Encounter::new(
+            Game::from_position(board, Player::Black, [0, 0]),
+            chaplain_boss(),
+            0,
         );
         e.play(&Move {
             cells: vec![(-2, 0), (-1, 0)],
             dir: E,
         })
         .unwrap();
-        assert_eq!(
-            at(&e, (1, 0)),
-            Some(Cell::Black),
-            "pushed to (1, 0), then flipped back"
+        assert_eq!(e.game().board().converted(), &[(1, 0)]);
+        let mut board = Board::empty();
+        board.set(2, 0, Cell::Black);
+        board.set(3, 0, Cell::Black);
+        board.set(4, 0, Cell::White);
+        board.set_converted(vec![(4, 0)]);
+        let mut e = Encounter::new(
+            Game::from_position(board, Player::Black, [0, 0]),
+            chaplain_boss(),
+            0,
         );
-        assert!(e.game().board().converted().is_empty());
-    }
-
-    #[test]
-    fn a_converted_marble_pushed_off_the_board_loses_its_mark() {
-        let mut e = with_converted(&[(2, 0), (3, 0)], &[(4, 0)], &[(4, 0)], 8);
         e.play(&Move {
             cells: vec![(2, 0), (3, 0)],
             dir: E,
@@ -434,159 +440,14 @@ mod tests {
     }
 
     #[test]
-    fn the_tell_lists_the_marbles_that_flip_next_and_matches_what_flips() {
-        let doomed = enc(&[(0, 0), (1, 2)], &[(1, 0), (1, -1), (0, -1)], 8);
-        assert_eq!(chaplain_tell(&doomed), vec![(0, 0)]);
-        assert_eq!(assert_tell_is_what_flips(doomed), vec![(0, 0)]);
-        let safe = enc(&[(0, 0)], &[(1, 0), (1, -1)], 8);
-        assert_eq!(assert_tell_is_what_flips(safe), Vec::<P>::new());
-    }
-
-    #[test]
-    fn breaking_contact_saves_a_told_marble() {
-        let e = enc(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8);
-        assert_eq!(chaplain_tell(&e), vec![(0, 0)]);
-        let moved = enc(&[(-1, 0)], &[(1, 0), (1, -1), (0, -1)], 8);
-        assert!(chaplain_tell(&moved).is_empty());
-    }
-
-    #[test]
-    fn rim_marbles_flip_at_two_contacts_in_phase_two_only() {
-        let rim = [(3, -2), (4, -3)];
-        let p1 = enc(&[(4, -2)], &rim, 8);
-        assert_eq!(p1.phase(), 0);
-        assert!(chaplain_tell(&p1).is_empty());
-        let mut p2 = enc(&[(4, -2)], &rim, 3);
-        assert_eq!(p2.phase(), 1);
-        assert_eq!(chaplain_tell(&p2), vec![(4, -2)]);
-        turns(&mut p2, 2);
-        assert_eq!(at(&p2, (4, -2)), Some(Cell::White));
-        assert_eq!(p2.game().ejected(Player::White), 0);
-    }
-
-    #[test]
-    fn off_board_cells_add_one_boss_contact_however_many_there_are() {
-        // (4, -2) has two off-board neighbours, (4, -4) has three: both add 1, so 1 contact
-        // is not enough and 2 are.
-        for (rim, contacts) in [((4, -2), [(3, -2), (4, -3)]), ((4, -4), [(3, -3), (4, -3)])] {
-            let one = enc(&[rim], &contacts[..1], 3);
-            assert_eq!(one.phase(), 1);
-            assert!(chaplain_tell(&one).is_empty(), "{rim:?} with 1 contact");
-            let two = enc(&[rim], &contacts, 3);
-            assert_eq!(chaplain_tell(&two), vec![rim], "{rim:?} with 2 contacts");
-        }
-        let none = enc(&[(4, -4)], &[], 3);
-        assert!(chaplain_tell(&none).is_empty());
-    }
-
-    #[test]
-    fn vanished_cells_count_as_boss_neighbours_in_phase_two() {
-        let voids = [(1, 0), (1, -1)];
-        let p2 = build(&[(0, 0)], &[(0, -1), (0, 1)], 3, &voids, 0);
-        assert_eq!(p2.phase(), 1);
-        assert_eq!(assert_tell_is_what_flips(p2), vec![(0, 0)]);
-        let one = build(&[(0, 0)], &[(0, -1)], 3, &voids, 0);
-        assert!(chaplain_tell(&one).is_empty(), "two voids still add 1");
-        let p1 = build(&[(0, 0)], &[(0, -1), (0, 1)], 8, &voids, 0);
-        assert!(chaplain_tell(&p1).is_empty());
-    }
-
-    /// One flip in phase one with this encounter seed, two plies played: the boss marble count
-    /// afterwards and the player's ejected count.
-    fn one_flip(seed: u64) -> (u8, u8) {
-        let mut e = build(&[(0, 0)], &[(1, 0), (1, -1), (0, -1)], 8, &[], seed);
-        turns(&mut e, 2);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
-        (count(&e, Cell::White), e.game().ejected(Player::Black))
-    }
-
-    /// A seed whose flip is free (the boss keeps the marble it gained).
-    fn free_seed() -> u64 {
-        (0..64).find(|&s| one_flip(s).1 == 0).unwrap()
-    }
-
-    #[test]
-    fn a_flip_costs_the_boss_a_marble_three_times_in_four() {
-        let paid = (0..64).filter(|&s| one_flip(s).1 == 1).count();
-        assert!((40..=56).contains(&paid), "paid {paid} of 64");
-        let w = 13;
-        assert_eq!(one_flip(free_seed()), (w, 0), "free: the flip is a gain");
-        let seed = (0..64).find(|&s| one_flip(s).1 == 1).unwrap();
-        assert_eq!(one_flip(seed), (w - 1, 1), "paid: one lost, credited");
-    }
-
-    /// (0, 0) flips from its three white neighbours, then (1, -1) from two whites plus the
-    /// freshly flipped (0, 0).
-    fn chain(fillers: usize, seed: u64) -> Encounter {
-        build(&[(0, 0), (1, -1)], &RING_WHITES, fillers, &[], seed)
-    }
-
-    #[test]
-    fn phase_three_chains_one_flip_and_the_boss_pays_a_marble_per_flip() {
-        let mut e = chain(0, 1);
-        assert_eq!(e.phase(), 2);
-        assert_eq!(count(&e, Cell::White), 4);
-        assert_eq!(count(&e, Cell::Black), 3);
-        assert_eq!(chaplain_tell(&e), vec![(0, 0), (1, -1)]);
-        turns(&mut e, 2);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
-        assert_eq!(at(&e, (1, -1)), Some(Cell::White));
-        assert_eq!(count(&e, Cell::Black), 1, "two marbles converted");
+    fn nothing_flips_without_contact() {
+        let mut e = enc(&[(0, 0)], &[]);
+        let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
+        turns(&mut e, 4);
+        assert_eq!((count(&e, Cell::Black), count(&e, Cell::White)), (b, w));
         assert_eq!(
-            count(&e, Cell::White),
-            4,
-            "two gained, two lost to the void"
-        );
-        assert_eq!(
-            e.game().ejected(Player::Black),
-            2,
-            "player credited per loss"
-        );
-        assert_eq!(e.game().ejected(Player::White), 0);
-    }
-
-    #[test]
-    fn phase_three_tell_matches_the_chain() {
-        assert_eq!(
-            assert_tell_is_what_flips(chain(0, 1)),
-            vec![(0, 0), (1, -1)]
-        );
-    }
-
-    #[test]
-    fn nothing_flips_without_contact_in_any_phase() {
-        for fillers in [8, 3, 0] {
-            let mut e = enc(&[(0, 0)], &[], fillers);
-            let (b, w) = (count(&e, Cell::Black), count(&e, Cell::White));
-            turns(&mut e, 4);
-            assert_eq!((count(&e, Cell::Black), count(&e, Cell::White)), (b, w));
-            assert_eq!(e.game().ejected(Player::Black), 0);
-        }
-    }
-
-    #[test]
-    fn phase_two_does_not_chain_and_a_free_flip_costs_nothing() {
-        let mut e = chain(1, free_seed());
-        assert_eq!(e.phase(), 1);
-        turns(&mut e, 2);
-        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
-        assert_eq!(at(&e, (1, -1)), Some(Cell::Black));
-        assert_eq!(count(&e, Cell::White), 6);
-        assert_eq!(e.game().ejected(Player::Black), 0);
-    }
-
-    #[test]
-    fn same_seed_same_game_and_the_seed_picks_the_lost_marbles() {
-        let run = |seed| {
-            let mut e = chain(0, seed);
-            turns(&mut e, 2);
-            e.game().board().clone()
-        };
-        assert_eq!(run(3), run(3));
-        let boards: Vec<Board> = (0..16).map(run).collect();
-        assert!(
-            boards.iter().any(|b| *b != boards[0]),
-            "seed changes the loss"
+            cells_of(e.game().board(), Cell::Black).len(),
+            usize::from(b)
         );
     }
 }
