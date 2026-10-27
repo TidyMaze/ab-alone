@@ -197,7 +197,11 @@ mod tests {
     #[test]
     fn every_phase_uses_the_search_when_the_mirror_is_illegal() {
         for ejected in [0, 3, 5] {
-            let mut e = enc_at(&[(0, 3), (-2, 3)], &[(0, -3), (2, -3), (1, -3), (4, -2)], ejected);
+            let mut e = enc_at(
+                &[(0, 3), (-2, 3)],
+                &[(0, -3), (2, -3), (1, -3), (4, -2)],
+                ejected,
+            );
             // The mirror of the last move, (2,-3)>W, is blocked by the own marble at (1,-3), and
             // the earlier mirror is no fallback any more.
             let a = mv(&[(0, 3)], E);

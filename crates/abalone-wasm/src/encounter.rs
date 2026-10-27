@@ -163,7 +163,8 @@ const BOSSES: [BossEntry; 12] = [
     },
     BossEntry {
         id: "hull",
-        goal: "One cell cracks at a time and ejects marbles. Eject 6 to win; lose 6 or draw to lose.",
+        goal:
+            "One cell cracks at a time and ejects marbles. Eject 6 to win; lose 6 or draw to lose.",
         def: hull_boss,
         start: plain_fight,
         reply: search_reply,
@@ -804,8 +805,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_5_since_the_choir_rework() {
-        assert_eq!(engine_version(), 5);
+    fn the_engine_version_is_6_since_the_hull_cracks_by_turns() {
+        assert_eq!(engine_version(), 6);
     }
 
     #[test]
@@ -1919,7 +1920,7 @@ mod tests {
             f.play(&mv).unwrap();
         }
         assert_eq!(f.ejected(1), 1);
-        assert_eq!(f.phase_notches(), vec![3, 1]);
+        assert_eq!(f.phase_notches(), vec![2, 1], "P2 after 3 ejections");
     }
 
     // The Assembly Line (#744): belts carry every marble off the board, and presses strike.

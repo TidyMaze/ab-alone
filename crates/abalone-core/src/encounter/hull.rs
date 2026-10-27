@@ -83,7 +83,11 @@ fn hull_hook(board: &Board, id: u8, seed: u64) -> Board {
     }
     if id >= HULL_CRACK_RIM {
         let free = free_cells(&out, &cracked);
-        let of_kind = |rim: bool| free.iter().filter(move |&&(_, r)| r == rim).map(|&(c, _)| c);
+        let of_kind = |rim: bool| {
+            free.iter()
+                .filter(move |&&(_, r)| r == rim)
+                .map(|&(c, _)| c)
+        };
         let mut candidates: Vec<_> = match id {
             HULL_CRACK_RIM => of_kind(true).collect(),
             HULL_CRACK_INNER => of_kind(false).collect(),
@@ -246,7 +250,11 @@ mod tests {
         for (ejected, phase) in [(0, 0), (2, 0), (3, 1), (4, 1), (5, 2)] {
             assert_eq!(with_ejections(ejected, 0).phase(), phase, "{ejected}");
         }
-        assert_eq!(encounter(&[], &block(5), 0).phase(), 0, "marbles do not count");
+        assert_eq!(
+            encounter(&[], &block(5), 0).phase(),
+            0,
+            "marbles do not count"
+        );
     }
 
     #[test]
@@ -268,7 +276,10 @@ mod tests {
         let mut enc = with_ejections(0, 3);
         for _ in 0..7 {
             step(&mut enc);
-            assert!(cracked(&enc).is_empty(), "no crack before the 4th boss turn");
+            assert!(
+                cracked(&enc).is_empty(),
+                "no crack before the 4th boss turn"
+            );
         }
         step(&mut enc);
         let cells = cracked(&enc);
@@ -287,11 +298,19 @@ mod tests {
         play(&mut enc, 4);
         let (q, r) = cracked(&enc)[0];
         step(&mut enc);
-        assert_eq!(enc.game().board().cracks()[0].1, 1, "ticks at the player's move");
+        assert_eq!(
+            enc.game().board().cracks()[0].1,
+            1,
+            "ticks at the player's move"
+        );
         step(&mut enc);
         assert_eq!(enc.game().board().cracks()[0].1, 1, "not at the boss reply");
         step(&mut enc);
-        assert_eq!(enc.game().board().get(q, r), None, "vanished after the 2nd move");
+        assert_eq!(
+            enc.game().board().get(q, r),
+            None,
+            "vanished after the 2nd move"
+        );
         assert!(cracked(&enc).is_empty());
     }
 
