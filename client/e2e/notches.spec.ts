@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { openModes } from './modes';
 
 // Boss phase notches scratched on the arena frame (#356, world.md section 6 rule 4): one lit notch per boss marble left
-// until the next phase, dark as they go, and a glyph at the threshold. Clear board and the low tier keep them (section 8).
+// (per ejection for The Echo) until the next phase, dark as they go, and a glyph at the threshold. Clear board and the low tier keep them (section 8).
 // With ?bot=off both sides are played by hand: a White marble walks down to the rim at (2, 2) and Black pushes it off.
 const PLIES: [number, number][][] = [
   [[1, 3], [1, 2]],
@@ -33,10 +33,10 @@ test('an ejected boss marble puts a phase notch out on the frame, with clear boa
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   const hud = page.locator('#hud');
   await expect(hud).toContainText('The Echo');
-  expect(await notches()).toEqual({ lit: 4, dark: 0, glyph: true }); // 14 boss marbles, P2 at 10
+  expect(await notches()).toEqual({ lit: 3, dark: 0, glyph: true }); // P2 after 3 ejections
   await expect(page.locator('#hud .notch')).toHaveCount(3); // the flat P1 P2 P3 fallback stays
 
   for (const ply of PLIES) for (const [q, r] of ply) await page.evaluate(([x, y]) => (window as any).__click(x, y), [q, r]);
   await expect(hud).toContainText('White ejected 1/6');
-  expect(await notches()).toEqual({ lit: 3, dark: 1, glyph: true });
+  expect(await notches()).toEqual({ lit: 2, dark: 1, glyph: true });
 });
