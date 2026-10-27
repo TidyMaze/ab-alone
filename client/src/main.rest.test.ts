@@ -132,6 +132,12 @@ describe('main.ts, free camera and wireframe modes', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(game.hook('__freeCamActive')).toBe(false);
 
+    // Keyup when freeCam is inactive
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', key: 'w', bubbles: true }));
+
+    // Reset view when freeCam is already inactive
+    resetViewBtn.click();
+
     // Toggle freeCam via button
     freeCamBtn.click();
     expect(game.hook('__freeCamActive')).toBe(true);
