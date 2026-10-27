@@ -103,6 +103,10 @@ describe('roomloader PBR pipeline', () => {
     terminalMesh.name = 'CRT_Terminal_Bank';
     const ribMesh = new THREE.Mesh(new THREE.BoxGeometry());
     ribMesh.name = 'Gantry_Arch_Rib_1';
+    const trenchMesh = new THREE.Mesh(new THREE.BoxGeometry());
+    trenchMesh.name = 'Pedestal_Grate_Trench';
+    const conduitMesh = new THREE.Mesh(new THREE.BoxGeometry());
+    conduitMesh.name = 'Radial_Floor_Conduits';
     const hazardMesh = new THREE.Mesh(new THREE.BoxGeometry());
     hazardMesh.name = 'Airlock_Hazard_Chevrons';
     const moonMesh = new THREE.Mesh(new THREE.BoxGeometry());
@@ -110,7 +114,7 @@ describe('roomloader PBR pipeline', () => {
     const screenMesh = new THREE.Mesh(new THREE.BoxGeometry());
     screenMesh.name = 'Console_Screen';
 
-    mockGroup.add(floorMesh, pedestalMesh, pedestalBase, wallMesh, columnMesh, terminalMesh, ribMesh, hazardMesh, moonMesh, screenMesh);
+    mockGroup.add(floorMesh, pedestalMesh, pedestalBase, wallMesh, columnMesh, terminalMesh, ribMesh, trenchMesh, conduitMesh, hazardMesh, moonMesh, screenMesh);
 
     const mockGltfLoader = {
       loadAsync: vi.fn(async () => ({
@@ -138,6 +142,8 @@ describe('roomloader PBR pipeline', () => {
     expect(columnMesh.material).toBe(bay!.materials.grate);
     expect(pedestalMesh.visible).toBe(false);
     expect(pedestalMesh.position.y).toBeLessThanOrEqual(-0.3);
+    expect(trenchMesh.material).toBe(bay!.materials.trench);
+    expect(conduitMesh.material).toBe(bay!.materials.conduit);
     expect(terminalMesh.visible).toBe(false);
     expect(screenMesh.visible).toBe(false);
     expect(ribMesh.material).toBe(bay!.materials.grate);
@@ -211,20 +217,27 @@ describe('roomloader PBR pipeline', () => {
     const deckMat = new THREE.MeshStandardMaterial();
     const bulkheadMat = new THREE.MeshStandardMaterial();
     const grateMat = new THREE.MeshStandardMaterial();
+    const trenchMat = new THREE.MeshStandardMaterial();
+    const conduitMat = new THREE.MeshStandardMaterial();
     const bay = {
       scene: new THREE.Group(),
-      materials: { deck: deckMat, bulkhead: bulkheadMat, grate: grateMat },
+      materials: { deck: deckMat, bulkhead: bulkheadMat, grate: grateMat, trench: trenchMat, conduit: conduitMat },
     };
 
     applyDeckAtmosphere(bay, 'furnace');
     expect(deckMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.deckColor);
     expect(bulkheadMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.bulkheadColor);
     expect(grateMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.grateColor);
+    expect(trenchMat.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.grateColor);
+    expect(conduitMat.emissive.getHex()).toBe(DECK_ATMOSPHERES.furnace.accentLightColor);
     expect(deckMat.roughness).toBe(DECK_ATMOSPHERES.furnace.roughness);
 
     applyDeckAtmosphere(bay, 'bridge');
     expect(deckMat.color.getHex()).toBe(DECK_ATMOSPHERES.bridge.deckColor);
     expect(bulkheadMat.color.getHex()).toBe(DECK_ATMOSPHERES.bridge.bulkheadColor);
+
+    // Also covers fallback when trench/conduit are omitted
+    applyDeckAtmosphere({ materials: { deck: deckMat, bulkhead: bulkheadMat, grate: grateMat } }, 'mess');
   });
 
   it('creates atmospheric bay lights matching deck specifications (#660)', () => {

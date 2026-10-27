@@ -298,7 +298,21 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
   if (!deckNormalMaps.has(name)) deckNormalMaps.set(name, loadTexture(`deck-${name}-normal.ktx2`, false, true));
   return deckNormalMaps.get(name)!;
 };
-const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, firstDeckMap, firstDeckNormal] = await Promise.all([
+const [
+  deckAlbedo,
+  deckRoughness,
+  shellNormal,
+  backdrop,
+  crackDecal,
+  firstDeckMap,
+  firstDeckNormal,
+  plateAlbedo,
+  plateRoughness,
+  plateNormal,
+  cellsAlbedo,
+  cellsRoughness,
+  cellsNormal,
+] = await Promise.all([
   loadTexture('deck-albedo.ktx2', true, true),
   loadTexture('deck-roughness.ktx2', false, true),
   loadTexture('shell-normal.ktx2', false, true),
@@ -306,6 +320,12 @@ const [deckAlbedo, deckRoughness, shellNormal, backdrop, crackDecal, firstDeckMa
   loadTexture('crack-decal.ktx2', false, false),
   deckMap(deckOf('local')), // a page opens at the Mess
   deckNormalMap(deckOf('local')),
+  loadTexture('pbr/plate-albedo.ktx2', true, true),
+  loadTexture('pbr/plate-roughness.ktx2', false, true),
+  loadTexture('pbr/plate-normal.ktx2', false, true),
+  loadTexture('pbr/cells-albedo.ktx2', true, true),
+  loadTexture('pbr/cells-roughness.ktx2', false, true),
+  loadTexture('pbr/cells-normal.ktx2', false, true),
 ]);
 
 const sceneRenderer = new SceneRenderer({
@@ -315,6 +335,9 @@ const sceneRenderer = new SceneRenderer({
   deckRoughness,
   firstDeckMap,
   firstDeckNormal,
+  plateAlbedo,
+  plateRoughness,
+  plateNormal,
 });
 await sceneRenderer.init().catch(bootFailed);
 const {
@@ -932,8 +955,8 @@ function applyDeck(next: Deck): void {
   // Only on the textured look: a map added to the flat look would rebuild its pipeline. body[data-deck-set] is read by the e2e.
   void Promise.all([deckMap(next), deckNormalMap(next)]).then(([map, normal]) => {
     if (deck !== next || !steel.map) return; // another deck started meanwhile, or the flat look
-    steel.map = map ?? deckAlbedo;
-    if (steel.normalMap && normal) steel.normalMap = normal;
+    steel.map = map ?? cellsAlbedo ?? deckAlbedo;
+    if (steel.normalMap && (normal || cellsNormal)) steel.normalMap = normal ?? cellsNormal;
     document.body.dataset.deckSet = map ? next : 'steel';
   });
 }
@@ -944,13 +967,19 @@ const discGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, detail.discSegm
 const marbleGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidthSegments, detail.marbleHeightSegments);
 const ringGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32);
 const steel = new THREE.MeshStandardMaterial(
-  deckAlbedo && deckRoughness
+  cellsAlbedo && cellsRoughness
     ? {
-        map: firstDeckMap ?? deckAlbedo,
-        roughnessMap: deckRoughness,
-        ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
+        map: firstDeckMap ?? cellsAlbedo,
+        roughnessMap: cellsRoughness,
+        ...(cellsNormal ? { normalMap: cellsNormal } : {}),
       }
-    : { color: COLORS.steel, roughness: 0.8 },
+    : deckAlbedo && deckRoughness
+      ? {
+          map: firstDeckMap ?? deckAlbedo,
+          roughnessMap: deckRoughness,
+          ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
+        }
+      : { color: COLORS.steel, roughness: 0.8 },
 );
 applyDeck(deck);
 // Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.

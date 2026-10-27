@@ -27,6 +27,9 @@ export interface SceneRendererOptions {
   deckRoughness?: THREE.Texture | null;
   firstDeckMap?: THREE.Texture | null;
   firstDeckNormal?: THREE.Texture | null;
+  plateAlbedo?: THREE.Texture | null;
+  plateRoughness?: THREE.Texture | null;
+  plateNormal?: THREE.Texture | null;
 }
 
 export interface ViewContext {
@@ -159,14 +162,24 @@ export class SceneRenderer {
     this.particles.visible = false;
 
     const plateMaterial = new THREE.MeshStandardMaterial(
-      options.deckAlbedo && options.deckRoughness
-        ? { map: options.deckAlbedo, roughnessMap: options.deckRoughness, color: FRAME_LOOK.plate }
-        : { color: FRAME_LOOK.plate, roughness: 0.8 },
+      options.plateAlbedo
+        ? {
+            map: options.plateAlbedo,
+            roughnessMap: options.plateRoughness || null,
+            normalMap: options.plateNormal || null,
+            color: 0xffffff,
+            roughness: 0.4,
+          }
+        : options.deckAlbedo && options.deckRoughness
+          ? { map: options.deckAlbedo, roughnessMap: options.deckRoughness, color: FRAME_LOOK.plate }
+          : { color: FRAME_LOOK.plate, roughness: 0.8 },
     );
     const rimMaterial = new THREE.MeshStandardMaterial(
-      options.deckAlbedo && options.deckRoughness
-        ? { map: options.deckAlbedo, roughnessMap: options.deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3, emissiveIntensity: 0.6 }
-        : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 0.6 },
+      options.plateAlbedo
+        ? { map: options.plateAlbedo, roughnessMap: options.plateRoughness || null, color: FRAME_LOOK.rim, roughness: 0.35, metalness: 0.65, emissiveIntensity: 0.6 }
+        : options.deckAlbedo && options.deckRoughness
+          ? { map: options.deckAlbedo, roughnessMap: options.deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3, emissiveIntensity: 0.6 }
+          : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 0.6 },
     );
     this.plate = new THREE.Mesh(new THREE.BufferGeometry(), plateMaterial);
     this.plate.receiveShadow = true;
