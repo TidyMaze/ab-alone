@@ -286,50 +286,50 @@ export function createBayLights(deck: DeckId): THREE.Group {
 
   // 1. North Wall (Bulkhead) - wall-mounted neons & floodlights
   for (const x of [-13, -4.5, 4.5, 13]) {
-    const wallNeon = new THREE.PointLight(0x38e8ff, 2.5, 28.0);
+    const wallNeon = new THREE.PointLight(0x38e8ff, 2.25, 28.0);
     wallNeon.position.set(x, 11.0, -17.5);
     group.add(wallNeon);
 
-    const midWallLamp = new THREE.PointLight(conf.lightColor, 2.0, 25.0);
+    const midWallLamp = new THREE.PointLight(conf.lightColor, 1.8, 25.0);
     midWallLamp.position.set(x, 4.0, -17.5);
     group.add(midWallLamp);
   }
 
   // Airlock gate lamp on North wall
-  const airlockWallLight = new THREE.PointLight(conf.accentLightColor, 3.0, 30.0);
+  const airlockWallLight = new THREE.PointLight(conf.accentLightColor, 2.7, 30.0);
   airlockWallLight.position.set(0, 7.0, -17.5);
   group.add(airlockWallLight);
 
   // 2. South Wall (Observation) - wall-mounted stadium floodlights shining into the bay
   for (const x of [-10, -3.5, 3.5, 10]) {
-    const southWallFlood = new THREE.PointLight(conf.accentLightColor, 3.0, 30.0);
+    const southWallFlood = new THREE.PointLight(conf.accentLightColor, 2.7, 30.0);
     southWallFlood.position.set(x, 11.5, 17.5);
     group.add(southWallFlood);
 
-    const southWallLamp = new THREE.PointLight(conf.accentLightColor, 1.8, 22.0);
+    const southWallLamp = new THREE.PointLight(conf.accentLightColor, 1.62, 22.0);
     southWallLamp.position.set(x, 4.0, 17.5);
     group.add(southWallLamp);
   }
 
   // 3. West Wall - wall-mounted floodlights
   for (const z of [-9, 0, 9]) {
-    const westWallFlood = new THREE.PointLight(conf.lightColor, 2.5, 28.0);
+    const westWallFlood = new THREE.PointLight(conf.lightColor, 2.25, 28.0);
     westWallFlood.position.set(-17.5, 11.0, z);
     group.add(westWallFlood);
 
-    const westWallLamp = new THREE.PointLight(conf.lightColor, 1.8, 22.0);
+    const westWallLamp = new THREE.PointLight(conf.lightColor, 1.62, 22.0);
     westWallLamp.position.set(-17.5, 4.0, z);
     group.add(westWallLamp);
   }
 
   // 4. East Wall (Viewport) - wall-mounted floodlights & viewport fixture
   for (const z of [-9, 0, 9]) {
-    const eastWallFlood = new THREE.PointLight(0x7fd6e8, 2.5, 28.0);
+    const eastWallFlood = new THREE.PointLight(0x7fd6e8, 2.25, 28.0);
     eastWallFlood.position.set(17.5, 11.0, z);
     group.add(eastWallFlood);
   }
 
-  const viewportCenter = new THREE.PointLight(0x7fd6e8, 2.5, 28.0);
+  const viewportCenter = new THREE.PointLight(0x7fd6e8, 2.25, 28.0);
   viewportCenter.position.set(17.5, 5.0, 0);
   group.add(viewportCenter);
 
