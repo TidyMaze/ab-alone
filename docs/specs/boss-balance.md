@@ -282,7 +282,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | Boss | Seed | Player budget | Moves |
 |---|---|---|---|
 | echo | 0 | 4000 | 126 |
-| hull | 0 | 30000 | 90 |
+| hull | 0 | 30000 | 89 |
 | choir | 0 | 15000 | 93 |
 | chaplain | 0 | 20000 | 92 |
 
