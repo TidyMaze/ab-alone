@@ -1537,7 +1537,10 @@ mod tests {
         [1, 3, 2],
     ];
 
-    fn core_run(seed: u32) -> Vec<(Vec<u8>, Vec<i32>, Vec<i32>, Vec<i32>)> {
+    /// The board, the next events, the last ply's events and the charges after each ply.
+    type CoreStep = (Vec<u8>, Vec<i32>, Vec<i32>, Vec<i32>);
+
+    fn core_run(seed: u32) -> Vec<CoreStep> {
         let mut f = Encounter::new("core", seed).unwrap();
         CORE_FULL
             .iter()
