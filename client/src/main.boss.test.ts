@@ -26,7 +26,7 @@ function fightBoss(game: Game, name: string, seed = 1): void {
   drawSeed(seed);
   game.openModes();
   byId('boss-fight').click();
-  [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === name)!.click();
+  [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent!.startsWith(name))!.click(); // a beaten boss carries its medal (#791)
 }
 /** Plays `mv` by two clicks: its marble, then the cell it goes to. */
 function play(game: Game, mv: Move): void {
@@ -236,8 +236,9 @@ describe('main.ts boss fights', () => {
     async function winHull(game: Game): Promise<void> {
       const { Encounter } = await import('abalone-wasm');
       fightBoss(game, 'The Hull');
-      vi.spyOn(Encounter.prototype, 'result').mockReturnValue(1);
-      vi.spyOn(Encounter.prototype, 'status').mockReturnValue(1);
+      const won = (): number => (game.hook<number>('__plies') > 0 ? 1 : 0); // won once the first move is played
+      vi.spyOn(Encounter.prototype, 'result').mockImplementation(won);
+      vi.spyOn(Encounter.prototype, 'status').mockImplementation(won);
       play(game, forward(game));
     }
     const menuEntry = (name: string): string =>
@@ -249,8 +250,10 @@ describe('main.ts boss fights', () => {
       await winHull(game);
       expect(medals()).toEqual({ hull: 1 });
       expect(game.hud()).toContain('Medal earned: 1 turn.');
+      byId('boss-goal').click(); // the HUD draws again: the fight earns its medal once, the line stays
+      expect(game.hud()).toContain('Medal earned: 1 turn.');
       byId('boss-fight').click();
-      expect(menuEntry('The Hull')).toBe('The HullMedal: 1 turn');
+      expect(menuEntry('The Hull')).toBe('The Hull Medal: 1 turn');
       expect(menuEntry('The Echo')).toBe('The Echo'); // an unbeaten boss has no medal
     });
 

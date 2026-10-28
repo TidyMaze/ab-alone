@@ -207,6 +207,7 @@ import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } f
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
+import { bestTurns, medalLabel, medalLine, playerTurns, recordMedal, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
 import { roomAt, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
@@ -2417,6 +2418,18 @@ let keyDir = -1; // the direction picked with Q W E A S D for the selected group
 let ringed: Axial[] = []; // the marbles drawn with the selection ring, read by the e2e tests
 let targets: ReturnType<typeof groupTargets> = []; // the cells drawn with a target arrow, read by the e2e tests
 
+// The medal of a won boss fight (#791), earned once per fight: hud() runs again on every refresh. Solo, daily and co-op
+// fights all come here, so every peer of a co-op win gets the medal.
+let medalSeen: { game: unknown; note: string } = { game: null, note: '' };
+function medalNote(boss: { id: string }): string {
+  if (medalSeen.game !== engine) {
+    const turns = playerTurns(history.length);
+    const result: MedalResult = recordMedal(store, boss.id, turns);
+    medalSeen = { game: engine, note: medalLine(result, result === 'kept' ? bestTurns(store, boss.id)! : turns) };
+  }
+  return medalSeen.note;
+}
+
 function hud(extra = ''): void {
   backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
   if (hub) {
@@ -2437,6 +2450,7 @@ function hud(extra = ''): void {
     side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
     glass: glassOf(),
   });
+  if (end?.anim === 'win' && fight) end.line = `${end.line} ${medalNote(fight)}`; // a won fight: Black is the player's side
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
   document.getElementById('hud')!.innerHTML = hudHtml({
@@ -3485,15 +3499,26 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   view = fitted = fightView();
   applyView();
 }
+const bossEntries = new Map<string, HTMLButtonElement>();
 for (const id of boss_ids()) {
   const entry = document.createElement('button');
   entry.type = 'button';
   entry.textContent = boss_name(id)!;
   entry.addEventListener('click', () => startBoss(id, crypto.getRandomValues(new Uint32Array(1))[0]!));
   bossList.appendChild(entry);
+  bossEntries.set(id, entry);
+}
+/** The medal and its best turn count next to each beaten boss (#791), read from the storage when the menu opens. */
+function showMedals(): void {
+  for (const [id, entry] of bossEntries) {
+    const turns = bestTurns(store, id);
+    entry.replaceChildren(boss_name(id)!);
+    if (turns !== null) entry.append(' ', Object.assign(document.createElement('span'), { className: 'medal', textContent: medalLabel(turns) }));
+  }
 }
 bossButton.addEventListener('click', () => {
   if (online) return;
+  if (bossList.hidden) showMedals();
   bossList.hidden = !bossList.hidden;
   bossButton.setAttribute('aria-expanded', String(!bossList.hidden));
   if (!bossList.hidden) showCoopList(false); // one boss list open at a time (#615)
