@@ -1,3 +1,12 @@
+---
+id: art
+type: architecture-design
+status: draft
+title: "Art direction"
+parent: world
+references: [ui]
+---
+
 # Art direction
 
 Status: v0, for issue #283. The art and sound direction of [world.md](world.md) and [ui.md](ui.md)

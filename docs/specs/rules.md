@@ -1,3 +1,12 @@
+---
+id: rules
+type: architecture-design
+status: draft
+title: "AB-ALONE rules spec"
+parent: goal
+references: [game-design, architecture]
+---
+
 # AB-ALONE rules spec
 
 Status: draft v1, for issue #59. Spec only, no code. Companion to `SPEC.md` section 2, `game-design.md` and `tech.md`.

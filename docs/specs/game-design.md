@@ -1,3 +1,12 @@
+---
+id: game-design
+type: architecture-design
+status: draft
+title: "Game design"
+parent: goal
+references: [rules, architecture]
+---
+
 # Game design
 
 Status: draft v0, for issue #18. Spec only, no code. Companion to `SPEC.md`.

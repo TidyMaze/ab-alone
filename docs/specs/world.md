@@ -1,3 +1,11 @@
+---
+id: world
+type: architecture-design
+status: draft
+title: "World, lore, art and audio"
+parent: goal
+---
+
 # World, lore, art and audio
 
 Status: draft v0, for issue #19. Spec only, no code. Everything here is original work inspired by
