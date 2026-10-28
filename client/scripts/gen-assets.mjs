@@ -218,8 +218,9 @@ function backdrop(w, h, rand) {
 // The crack decal of The Hull and The Ballast Mind (world.md section 3: the board crumbles as the hull fails), a grey
 // mask, white where the steel is split; main.ts draws it near-black on the cracked cell. A crisp fracture in a hull
 // plate (#838): six fractures run from near the middle out to the rim, one in every sixth of the turn so they show round
-// the marble, each a straight-edged jagged line that tapers to a point and forks once or twice at a sharp angle. The
-// middle is a little wider, the fractures never fatter than 9 px of the 128, still 3:1 when the cell is small on screen.
+// the marble, each a straight-edged jagged line that ends in a point and forks once or twice at a sharp angle. The
+// middle is hidden by the marble, so a fracture is narrow there and widest in the ring round the marble, never fatter
+// than 8.5 px of the 128: still 3:1 when the cell is small on screen.
 const CRACKS = 6;
 function crackDecal(size, rand) {
   const mask = new Float32Array(size * size);
@@ -238,22 +239,24 @@ function crackDecal(size, rand) {
       }
     }
   };
-  // A fracture heading out along `toward` in straight runs of 10 to 16 px with small kinks, narrowing a step at a time
-  // to 2.5 px at its tip, which stops at the rim or after `steps` runs. A fork leaves at about 35 degrees.
-  const crack = (x, y, toward, width, steps, forks) => {
+  // The marble hides the middle, so a fracture is narrow there and widest in the ring round the marble, where it is
+  // seen: `scale` times 3 px at the middle to 8.5 px at four fifths of the way to the rim.
+  const widthAt = (x, y, scale) => scale * (3 + 5.5 * Math.min(1, Math.hypot(x - c, y - c) / (0.8 * rim)));
+  // A fracture heading out along `toward` in straight runs of 10 to 16 px with small kinks; its last run narrows to a
+  // 3 px point at the rim or after `steps` runs. A fork leaves at about 35 degrees at 0.6 of its parent's width.
+  const crack = (x, y, toward, scale, steps, forks) => {
     for (let n = 0; n < steps; n++) {
       const angle = toward + (rand() - 0.5) * 0.5, run = 10 + rand() * 6;
       const nx = x + Math.cos(angle) * run, ny = y + Math.sin(angle) * run;
       const outside = Math.hypot(nx - c, ny - c) > rim;
-      const next = outside ? 2.5 : Math.max(2.5, width - 1);
-      segment(x, y, nx, ny, width, next);
+      segment(x, y, nx, ny, widthAt(x, y, scale), outside ? 3 : widthAt(nx, ny, scale));
       if (outside) return;
-      [x, y, width] = [nx, ny, next];
-      if (forks > 0 && n > 0 && rand() < 0.45) crack(x, y, angle + (rand() < 0.5 ? -1 : 1) * (0.55 + rand() * 0.15), width * 0.7, 2 + Math.floor(rand() * 2), forks - 1);
+      [x, y] = [nx, ny];
+      if (forks > 0 && n > 0 && rand() < 0.45) crack(x, y, angle + (rand() < 0.5 ? -1 : 1) * (0.55 + rand() * 0.15), scale * 0.6, 2 + Math.floor(rand() * 2), forks - 1);
     }
   };
   const x0 = c + (rand() - 0.5) * 6, y0 = c + (rand() - 0.5) * 6;
-  for (let k = 0; k < CRACKS; k++) crack(x0, y0, (k * 2 * Math.PI) / CRACKS + (rand() - 0.5) * 0.3, 9, Infinity, 1);
+  for (let k = 0; k < CRACKS; k++) crack(x0, y0, (k * 2 * Math.PI) / CRACKS + (rand() - 0.5) * 0.3, 1, Infinity, 1);
   // Nothing outside the cell's disc: a tip that runs past the rim is cut there.
   const inside = (i) => Math.hypot((i % size) - c, Math.floor(i / size) - c) <= size / 2 - 1;
   return png(size, size, 1, Uint8Array.from(mask, (v, i) => (inside(i) ? clamp(v * 255) : 0)));
