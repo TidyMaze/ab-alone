@@ -61,3 +61,48 @@ describe('main.ts The Ballast Mind announce (#749)', () => {
     expect(document.body.dataset.pulses).toBe('1');
   });
 });
+
+describe('main.ts The Ballast Mind marks (#838)', () => {
+  type Fired = { effect: number; cells: Axial[] } | null;
+
+  it('shows the announced pulse on its pulsar, rippling, one turn ahead', async () => {
+    const game = await boot('?bot=off');
+    fightBallast(game, 3);
+    plies(game, 3);
+    expect(game.hook('__pulsar')).toBeNull();
+    expect(document.body.dataset.ripples).toBe('0');
+    plies(game, 1);
+    expect(game.hook('__pulsar')).toMatchObject({ left: 1, charging: true });
+    expect(Number(document.body.dataset.ripples)).toBeGreaterThan(0);
+    expect(document.body.dataset.pulseCounter).toBe('1');
+    expect(game.hook<unknown[]>('__pulsarRects')).toHaveLength(1); // only the pulsar that fires, no chevrons of the radius 4 board
+    plies(game, 2);
+    expect(game.hook('__pulsar')).toBeNull();
+    expect(document.body.dataset.ripples).toBe('0');
+  });
+
+  it.each([
+    [3, 1, "Fired: the Pulsar's pulse"],
+    [2, 0, "Fired: the Hull's crack"],
+    [4, 3, "Fired: the Chaplain's conversion check"],
+    [0, 2, "Fired: the Magnetizer's polarity"],
+  ])('fight seed %i fires effect %i, named in the HUD with a mark on each cell it touched', async (seed, effect, text) => {
+    const game = await boot('?bot=off');
+    fightBallast(game, seed);
+    plies(game, 5);
+    expect(game.hook<Fired>('__fired')).toBeNull();
+    expect(tell()).not.toContain('Fired');
+    plies(game, 1);
+    const fired = game.hook<Fired>('__fired')!;
+    expect(fired.effect).toBe(effect);
+    expect(tell()).toContain(text);
+    expect(document.body.dataset.fired).toBe(String(fired.cells.length));
+    if (effect === 0) expect(fired.cells).toEqual(game.hook<{ cell: Axial }[]>('__cracks').map((c) => c.cell));
+    if (effect === 3) expect(fired.cells).toEqual([]); // a check that flipped nothing: no mark
+    else expect(fired.cells.length).toBeGreaterThan(0);
+    plies(game, 1);
+    expect(game.hook<Fired>('__fired')).toBeNull();
+    expect(document.body.dataset.fired).toBe('0');
+    expect(tell()).not.toContain('Fired');
+  });
+});
