@@ -394,6 +394,15 @@ impl Encounter {
         search(&self.game, self.boss.node_budget)
     }
 
+    /// The same search for the player's turn (auto-play, #792): `None` on the boss's turn or when
+    /// the game is over.
+    pub fn player_search(&self) -> Option<SearchResult> {
+        if self.game.to_move() != Player::Black {
+            return None;
+        }
+        search(&self.game, self.boss.node_budget)
+    }
+
     /// Scales the boss node budget by a percentage (e.g. 50, 100, 200). Minimum is 1.
     pub fn scale_node_budget(&mut self, percent: u32) {
         self.boss.node_budget = (self.boss.node_budget as u64 * percent as u64 / 100).max(1) as u32;

@@ -445,6 +445,16 @@ impl Encounter {
         mv.map(|m| encode(&m).to_vec()).unwrap_or_default()
     }
 
+    /// The player's move for auto-play (#792), one record, searched with the boss node budget (so the
+    /// difficulty scales it too). Empty on the boss's turn or when the fight is over. It is not played.
+    pub fn player_move(&self) -> Vec<i32> {
+        let mv = match &self.fight {
+            Fight::Plain(e) => e.player_search().map(|r| r.mv),
+            Fight::Choir(c) => c.player_move(),
+        };
+        mv.map(|m| encode(&m).to_vec()).unwrap_or_default()
+    }
+
     /// Scales the boss search node budget by a percentage relative to baseline (e.g. 50, 100, 200).
     pub fn scale_node_budget(&mut self, percent: u32) {
         match &mut self.fight {

@@ -324,6 +324,12 @@ impl Choir {
         search_with(self.game(), self.enc.boss.node_budget, weights, &allow).map(|r| r.mv)
     }
 
+    /// The player's move for auto-play (#792): node-limited like the boss's. `None` on the boss's
+    /// turn or when the game is over.
+    pub fn player_move(&self) -> Option<Move> {
+        self.enc.player_search().map(|r| r.mv)
+    }
+
     /// Scales the Choir node budget by a percentage relative to baseline.
     pub fn scale_node_budget(&mut self, percent: u32) {
         self.enc.scale_node_budget(percent);
