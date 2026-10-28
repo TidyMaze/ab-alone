@@ -306,7 +306,8 @@ impl Encounter {
             self.credit_removals(&board);
             if let Some(conversions) = self.boss.conversions {
                 let [to_player, to_boss] = conversions(self.game.board());
-                self.game.credit_conversions(Player::Black, to_player, to_boss);
+                self.game
+                    .credit_conversions(Player::Black, to_player, to_boss);
             }
             self.hooked = Some((self.game.board().clone(), id));
             self.hook_seed = seed;
