@@ -324,6 +324,12 @@ impl Choir {
         search_with(self.game(), self.enc.boss.node_budget, weights, &allow).map(|r| r.mv)
     }
 
+    /// The player's move for auto-play (#792): node-limited like the boss's. `None` on the boss's
+    /// turn or when the game is over.
+    pub fn player_move(&self) -> Option<Move> {
+        self.enc.player_search().map(|r| r.mv)
+    }
+
     /// Scales the Choir node budget by a percentage relative to baseline.
     pub fn scale_node_budget(&mut self, percent: u32) {
         self.enc.scale_node_budget(percent);
@@ -588,6 +594,15 @@ mod tests {
         let alto = c.boss_move().unwrap();
         c.play(&alto).unwrap();
         assert_eq!(c.tell(), Some(Tenor));
+    }
+
+    #[test]
+    fn the_player_move_is_legal_on_the_players_turn_only() {
+        let mut c = Choir::start(7);
+        let legal = c.legal_moves();
+        assert!(legal.contains(&c.player_move().unwrap()));
+        c.play(&legal[0]).unwrap();
+        assert_eq!(c.player_move(), None, "boss's turn");
     }
 
     #[test]

@@ -394,6 +394,15 @@ impl Encounter {
         search(&self.game, self.boss.node_budget)
     }
 
+    /// The same search for the player's turn (auto-play, #792): `None` on the boss's turn or when
+    /// the game is over.
+    pub fn player_search(&self) -> Option<SearchResult> {
+        if self.game.to_move() != Player::Black {
+            return None;
+        }
+        search(&self.game, self.boss.node_budget)
+    }
+
     /// Scales the boss node budget by a percentage (e.g. 50, 100, 200). Minimum is 1.
     pub fn scale_node_budget(&mut self, percent: u32) {
         self.boss.node_budget = (self.boss.node_budget as u64 * percent as u64 / 100).max(1) as u32;
@@ -682,6 +691,20 @@ mod tests {
             let legal = legal_moves(enc.game().board(), Player::White);
             assert!(legal.contains(&found.mv));
             assert_eq!(enc.boss_search(), Some(found), "same position, same move");
+        }
+    }
+
+    #[test]
+    fn player_move_is_legal_and_uses_the_node_budget() {
+        for budget in [30, 300] {
+            let mut b = trivial_boss();
+            b.node_budget = budget;
+            let mut enc = Encounter::new(Game::new(), b, 0);
+            let found = enc.player_search().unwrap();
+            assert!(found.nodes > 0 && found.nodes <= budget);
+            assert!(legal_moves(enc.game().board(), Player::Black).contains(&found.mv));
+            step(&mut enc);
+            assert!(enc.player_search().is_none(), "boss's turn");
         }
     }
 

@@ -130,11 +130,11 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #mode-menu[hidden] { display: none; }
 #modes[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 600px), (pointer: coarse) { #mode-menu button { min-height: 2.75rem; } }
-#update, #reset-view, #hint, #new-game, #modes, #play-online, #fight-together, #ranked, #rematch, #boss-fight, #daily, #ship, #boss-retry, #ship-back, #boss-goal, #boss-list button, #coop-list button, #copy-diagnostics {
+#update, #reset-view, #hint, #auto-play, #new-game, #modes, #play-online, #fight-together, #ranked, #rematch, #boss-fight, #daily, #ship, #boss-retry, #ship-back, #boss-goal, #boss-list button, #coop-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#update:focus-visible, #reset-view:focus-visible, #hint:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#update:focus-visible, #reset-view:focus-visible, #hint:focus-visible, #auto-play:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #boss-list, #coop-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
 #boss-list .medal { display: block; font-size: 0.7em; font-weight: 700; line-height: 1; white-space: nowrap; }
 /* Bug #653: in a desktop window an open boss list holds two bosses a row, each row compact, so every boss and Daily
@@ -147,7 +147,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   #boss-list, #coop-list { display: grid; grid-template-columns: 1fr 1fr; flex: 1 0 100%; }
   #boss-list button, #coop-list button { padding-block: 0.125rem; }
 }
-#boss-list[hidden], #coop-list[hidden], #boss-retry[hidden], #ship-back[hidden], #boss-goal[hidden], #rematch[hidden], #update[hidden], #hint[hidden], #new-game[hidden] { display: none; }
+#boss-list[hidden], #coop-list[hidden], #boss-retry[hidden], #ship-back[hidden], #boss-goal[hidden], #rematch[hidden], #update[hidden], #hint[hidden], #auto-play[hidden], #auto-reason[hidden], #new-game[hidden] { display: none; }
 /* Goal (#248): open, it is lit like Hint; a phone-sized touch target on a small or touch screen. */
 #boss-goal[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 #boss-goal:disabled { cursor: default; }
@@ -156,8 +156,13 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   #boss-goal { min-height: 44px; min-width: 44px; margin: -0.3rem 0; }
 }
 /* Hint (#192): lit while its ghost is asked or shown (aria-pressed), greyed while the bot thinks or the game is over. */
-#hint[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
-#hint:disabled { cursor: default; color: var(--muted); border-color: var(--edge); }
+#hint[aria-pressed='true'], #auto-play[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
+#hint:disabled, #auto-play:disabled { cursor: default; color: var(--muted); border-color: var(--edge); }
+/* Hint and Auto-play share a row, so the second adds no row to the column (#792); held upright the rows are the column's. */
+#tools { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; }
+#tools:not(:has(> :not([hidden]))) { display: none; }
+@media (orientation: portrait) { #tools { display: contents; } }
+#auto-reason { font: 0.75rem/1.2 var(--ui); color: var(--text); text-align: right; }
 /* New game asking for its confirmation: the words carry it, the hazard colour repeats it. */
 #new-game.confirm { border-color: var(--hazard); color: var(--hazard); padding: 0.5rem 0.75rem; }
 /* New game, Game modes, Play online and Copy diagnostics show their icon only, the name is their aria-label (#297,

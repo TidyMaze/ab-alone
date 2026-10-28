@@ -44,6 +44,9 @@ class FakeEncounter implements EncounterLike {
   boss_move(): Int32Array {
     return Int32Array.from([1, this.seed, 0, 0, 0, 0, 0, 0]);
   }
+  player_move(): Int32Array {
+    return Int32Array.from([2, this.seed, 0, 0, 0, 0, 0, 0]);
+  }
   scale_node_budget(percent: number): void {
     this.scaledPercent = percent;
   }
@@ -58,6 +61,14 @@ describe('answer', () => {
     expect(made!.played).toEqual([[1, 0, 0, 2, 0, 0, 0, 0]]);
     expect(made!.scaledPercent).toBeNull();
     expect(reply).toEqual({ id: 3, move: [1, 9, 0, 0, 0, 0, 0, 0] });
+  });
+
+  it('asks a boss encounter for the player move when the request is for the player, #792', () => {
+    let made: FakeEncounter | null = null;
+    const req = { id: 5, history: [], nodes: 5, boss: { id: 'echo', seed: 9 }, player: true };
+    const reply = answer(req, () => new FakeEngine(), (id, seed) => (made = new FakeEncounter(id, seed)));
+    expect(made!.boss).toBe('echo');
+    expect(reply).toEqual({ id: 5, move: [2, 9, 0, 0, 0, 0, 0, 0] });
   });
 
   it('scales the boss encounter node budget when difficultyPercent is set', () => {
@@ -144,6 +155,14 @@ describe('askBot', () => {
     void askBot(worker, [], 10, { id: 'echo', seed: 4 }, 50);
     expect(sent[0]!.boss).toEqual({ id: 'echo', seed: 4 });
     expect(sent[0]!.difficultyPercent).toBe(50);
+    expect(sent[0]!.player).toBeUndefined();
+  });
+
+  it('asks for the player move of a boss fight when told to, #792', () => {
+    const sent: BotRequest[] = [];
+    const worker = { onmessage: null, postMessage: (r: BotRequest) => void sent.push(r) };
+    void askBot(worker, [], 10, { id: 'echo', seed: 4 }, 50, true);
+    expect(sent[0]!.player).toBe(true);
   });
 });
 
