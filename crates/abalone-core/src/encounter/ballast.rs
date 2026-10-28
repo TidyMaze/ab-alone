@@ -19,7 +19,7 @@ use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETI
 use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
 use crate::encounter::{ply_seed, BossDef, Encounter};
 use crate::game::{Game, WIN_EJECTIONS};
-use crate::moves::Player;
+use crate::moves::{Move, Player};
 
 type P = (i32, i32);
 
@@ -155,6 +155,11 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
         }
         Borrowed::ChaplainConversion => run(chaplain_boss(), CHAPLAIN_BOSS_END, board),
     }
+}
+
+/// The boss reply (stub).
+pub fn ballast_move(enc: &Encounter) -> Option<Move> {
+    enc.boss_search().map(|r| r.mv)
 }
 
 /// The Ballast board with no marble: radius 5 with the six pillars void.
@@ -509,6 +514,54 @@ mod tests {
         assert_eq!((pulsar, &shown), (dir, before));
         assert_eq!(moved, pulse(before, dir, Some(2)).1);
         assert_eq!(marbles(enc.game().board(), Cell::White), 7 - lost_white);
+    }
+
+    /// A Black shuffler on the bottom row, a White shuffler on the west rim and a lone White marble
+    /// on the east rim, where a pulse from the west pushes it off.
+    fn rim_fight(seed: u64) -> Encounter {
+        let mut board = ballast_board();
+        board.set(-4, 5, Cell::Black);
+        board.set(-5, 0, Cell::White);
+        board.set(5, 0, Cell::White);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, ballast_boss(), seed).counting_by_colour();
+        enc.boss.node_budget = 300;
+        enc
+    }
+
+    /// Five plies of `rim_fight`: the boss is to play the ply that fires the effect.
+    fn play_rim(enc: &mut Encounter) {
+        for m in [
+            mv(&[(-4, 5)], E),
+            mv(&[(-5, 0)], E),
+            mv(&[(-3, 5)], W),
+            mv(&[(-4, 0)], W),
+            mv(&[(-4, 5)], E),
+        ] {
+            enc.play(&m).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_search_sees_the_pulse_due_this_turn_and_the_plain_one_does_not() {
+        let (seed, dir) = fight_pulse_seed();
+        assert_eq!(dir, 0, "from the west: the east rim marble falls");
+        let mut enc = rim_fight(seed);
+        play_rim(&mut enc);
+        let lost_by = |mv: &Move| {
+            let mut after = enc.clone();
+            after.play(mv).unwrap();
+            after.game().ejected(Player::Black)
+        };
+        let plain = enc.boss_search().unwrap().mv;
+        let hooked = ballast_move(&enc).unwrap();
+        assert_eq!(lost_by(&hooked), 0, "{hooked:?} steps off the rim");
+        assert_eq!(lost_by(&plain), 1, "{plain:?} stays under the pulse");
+    }
+
+    #[test]
+    fn the_search_is_for_the_boss_turn_only() {
+        assert_eq!(ballast_move(&ballast_start(0)), None);
     }
 
     #[test]
