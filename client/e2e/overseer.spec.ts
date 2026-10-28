@@ -103,22 +103,27 @@ const LINES = [
 ];
 const bubbleText = (page: Page) => page.locator('#bubble-text').textContent() as Promise<string>;
 
+// The bubble runs on the page clock (page.clock): the 3 s hold and the fade are jumped over, not waited for (#836).
 test('The Overseer: its taunt is typed in a bubble over its marble, with a flicker, then fades, #741', async ({ page }, testInfo) => {
+  await page.clock.install();
   await startOverseer(page);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.evaluate(() => document.getElementById('boss-retry')!.click()); // the same fight again: the taunt types in
   const bubble = page.locator('#bubble');
   await expect(bubble).toBeVisible();
+  await freshDraw(page); // the old line is gone from the bubble: the new one starts typing
   const lengths: number[] = [];
   for (let n = 0; n < 3; n++) {
     lengths.push((await bubbleText(page)).length);
-    await page.waitForTimeout(300);
+    await page.clock.fastForward(300);
+    await freshDraw(page);
   }
   expect(lengths[0]).toBeLessThan(lengths[2]!);
   expect(lengths[2]).toBeLessThan('Take your time. The neurotoxin will wait.'.length);
   await page.mouse.move(2, 2);
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('overseer-typing.png') });
+  await page.clock.fastForward(2500); // the rest of the line is typed
   await expect(page.locator('#bubble-text')).toHaveText('Take your time. The neurotoxin will wait.');
   const box = (await bubble.boundingBox())!;
   const view = page.viewportSize()!;
@@ -127,10 +132,12 @@ test('The Overseer: its taunt is typed in a bubble over its marble, with a flick
   expect(box.y).toBeGreaterThan(0);
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('overseer-taunt.png') });
-  await expect(bubble).toBeHidden({ timeout: 8000 }); // 3 s after the last character, then the fade
+  await page.clock.fastForward(3500); // 3 s after the last character, then the fade
+  await expect(bubble).toBeHidden();
 });
 
 test('The Overseer: a burnt core makes the bubble angry and shaking, and the vents turn toxic in P2, #741', async ({ page }, testInfo) => {
+  await page.clock.install();
   await startOverseer(page);
   await plies(page, 0, 6);
   await expect(page.locator('body')).toHaveAttribute('data-haze', '0'); // P1: the vents burn the boss's marbles only
@@ -146,7 +153,8 @@ test('The Overseer: a burnt core makes the bubble angry and shaking, and the ven
   await expect(page.locator('#hud .boss .tell')).toContainText('The vents now burn your marbles too.');
   await expect(page.locator('#hud .notch.active')).toHaveText('P2');
   await expect(page.locator('body')).toHaveAttribute('data-haze', '18');
-  await expect(bubble).toBeHidden({ timeout: 8000 }); // 1 s after the last character, then the fade
+  await page.clock.fastForward(5000); // the line is typed, held 1 s, then faded
+  await expect(bubble).toBeHidden();
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('overseer-haze.png') });
 });
