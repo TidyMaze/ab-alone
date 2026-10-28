@@ -19,11 +19,11 @@ const fight = async (page: Page, boss: string, seed = 0) => {
 };
 
 // What the bar covers: the cells (disc as in phone-layout.spec.ts), the HUD plate and every visible button.
-const covered = (page: Page) =>
-  page.evaluate(() => {
+const covered = (page: Page, selector = '#boss-bar') =>
+  page.evaluate((sel) => {
     type Box = { left: number; top: number; right: number; bottom: number };
     const meets = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-    const bar = document.getElementById('boss-bar')!.getBoundingClientRect();
+    const bar = document.querySelector(sel)!.getBoundingClientRect();
     const found: string[] = [];
     const toScreen = (q: number, r: number) => (window as any).__cellToScreen(q, r) as { x: number; y: number };
     for (let r = -4; r <= 4; r++) {
@@ -39,7 +39,7 @@ const covered = (page: Page) =>
       if (el.getClientRects().length > 0 && meets(bar, el.getBoundingClientRect())) found.push(el.textContent || el.getAttribute('aria-label')!);
     }
     return found;
-  });
+  }, selector);
 
 const sizes = [
   { name: 'a desktop window', viewport: { width: 1280, height: 720 }, mobile: false },
@@ -109,4 +109,53 @@ test('a player marble converted to the Chaplain fills a fragment back, #810', as
   expect(await empty.count()).toBe(before - 1);
   expect(await page.evaluate(() => (window as any).__refilled)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('refill-after.png') });
+});
+
+// The Choir's army chips (#816), from the recorded Choir win (crates/abalone-core/tests/fixtures/choir.txt): the chips in play
+// order with the marbles left, the next army highlighted, a removed army gone, the last one reading "×2".
+const choirPlies = () => parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/choir.txt', import.meta.url), 'utf8'));
+const chipTexts = (page: Page) => page.locator('#boss-bar .chip').allInnerTexts();
+const choirFight = async (page: Page) => {
+  await fight(page, 'The Choir');
+  await page.evaluate((r) => ((window as any).__records = r), choirPlies());
+};
+const playTo = (page: Page, from: number, to: number) =>
+  page.evaluate(([a, b]) => (window as any).__playMoves((window as any).__records.slice(a, b)), [from, to]);
+
+for (const { name, viewport, mobile } of sizes) {
+  test.describe(`${name}, the Choir`, () => {
+    test.use({ viewport, isMobile: mobile, hasTouch: mobile });
+    test('the chips cover no cell, no plate and no button, #816', async ({ page }, testInfo) => {
+      await choirFight(page);
+      await expect(page.locator('#boss-bar .chip')).toHaveCount(3);
+      await page.screenshot({ path: testInfo.outputPath('choir-chips.png') });
+      expect(await covered(page, '#boss-bar .chips')).toEqual([]);
+    });
+  });
+}
+
+test('the chips list the armies, the next one highlighted, removed ones gone, #816', async ({ page }) => {
+  await choirFight(page);
+  expect(await chipTexts(page)).toEqual(['▲ Alto 6', '○ Tenor 6', '■ Bass 6']);
+  await expect(page.locator('#boss-bar .chip.next')).toHaveText('▲ Alto 6');
+  await playTo(page, 0, 2); // a player move, then Alto's reply
+  await expect(page.locator('#boss-bar .chip.next')).toHaveText('○ Tenor 6');
+  await playTo(page, 2, 41); // the first removal (P2): Alto is gone
+  expect(await chipTexts(page)).toEqual(['○ Tenor 5', '■ Bass 5']);
+  await expect(page.locator('#boss-bar .arrow')).toHaveCount(1);
+  await playTo(page, 41, 69); // the second (P3): the last army plays twice
+  expect(await chipTexts(page)).toEqual(['○ Tenor 5 ×2']);
+  await expect(page.locator('#boss-bar .arrow')).toHaveCount(0);
+});
+
+test.describe('a 200 % UI scale, the Choir', () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+  test('the chips cover no cell and no plate at the largest scale, #816', async ({ page }, testInfo) => {
+    await page.addInitScript(() => localStorage.setItem('ab-alone.ui-scale', '200'));
+    await choirFight(page);
+    const box = (await page.locator('#boss-bar .chips').boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(1280); // all on screen
+    await page.screenshot({ path: testInfo.outputPath('choir-chips-200.png') });
+    expect(await covered(page, '#boss-bar .chips')).toEqual([]);
+  });
 });

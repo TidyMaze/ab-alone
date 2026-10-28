@@ -312,6 +312,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Tell**: the army that moves next wears a steady pale ring, from the end of your previous turn,
   and each army has its own glyph on its marbles (world.md section 5: never a halo or colour alone).
   The HUD line names the next army and how many are left.
+  Next to the boss bar, one chip per army left (glyph, name, marbles left) shows the play order, the next army highlighted and "×2" on the last one (#816).
 - **Counter**: you know who moves next, so set a trap for that army. An army with no legal move
   is skipped.
 - **Phases**: P1 three armies, one moves per boss turn. P2 after **3** ejections: the army with
