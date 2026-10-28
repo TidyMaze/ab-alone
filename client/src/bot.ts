@@ -10,6 +10,8 @@ export interface BotRequest {
   boss?: BossRef;
   /** Search budget scaling percentage for boss encounter (e.g. 50, 100, 200). */
   difficultyPercent?: number;
+  /** With a boss: asks the move of the player's side instead of the boss's (auto-play, #792). */
+  player?: boolean;
   /** Set to ask for the search score of the position instead of a move (never with a boss). */
   evaluate?: boolean;
 }
@@ -47,6 +49,7 @@ export interface EngineLike {
 export interface EncounterLike {
   play(mv: Int32Array): void;
   boss_move(): Int32Array | number[];
+  player_move(): Int32Array | number[];
   scale_node_budget?(percent: number): void;
 }
 
@@ -81,7 +84,7 @@ export function answer(
       fight.scale_node_budget(req.difficultyPercent);
     }
     for (const mv of req.history) fight.play(Int32Array.from(mv));
-    return { id: req.id, move: Array.from(fight.boss_move()) };
+    return { id: req.id, move: Array.from(req.player ? fight.player_move() : fight.boss_move()) };
   }
   const engine = makeEngine();
   for (const mv of req.history) engine.play(Int32Array.from(mv));
@@ -131,8 +134,9 @@ export async function askBot(
   nodes = BOT_NODES,
   boss?: BossRef,
   difficultyPercent?: number,
+  player?: boolean,
 ): Promise<number[]> {
-  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent })).move;
+  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player })).move;
 }
 
 /** Page side: the search score of the position after `history`, for the side to move. */
