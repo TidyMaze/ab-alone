@@ -57,6 +57,7 @@
         </div>
         <div id="tools">
           <button id="hint" type="button" aria-pressed="false" disabled>Hint</button>
+          <button id="replay" type="button" disabled>Replay</button>
           <button id="auto-play" type="button" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
         </div>
         <span id="auto-reason" hidden></span>
@@ -82,6 +83,17 @@
       </div>
     </div>
     <div id="support">
+      <div id="replay-bar" role="group" aria-label="Replay" hidden>
+        <input id="replay-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Position in the move log" />
+        <div id="replay-label" aria-live="polite"></div>
+        <div class="steps">
+          <button id="replay-first" type="button" aria-label="First position" title="First position">&#9198;</button>
+          <button id="replay-prev" type="button" aria-label="Previous move (Left)" title="Previous move (Left)">&#9664;</button>
+          <button id="replay-next" type="button" aria-label="Next move (Right)" title="Next move (Right)">&#9654;</button>
+          <button id="replay-last" type="button" aria-label="Last position" title="Last position">&#9197;</button>
+          <button id="replay-live" type="button" title="Back to the live game (Esc)">Live</button>
+        </div>
+      </div>
       <div id="eval" hidden>
         <div class="track" role="meter" aria-label="Evaluation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="Even">
           <div class="black"></div>

@@ -217,6 +217,7 @@ import { roomAt, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
 import { indexedDbStore } from './idb';
 import { LocalSaves } from './savegame';
+import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import { ARENA, ARENA_SCALE, YOU, deadlineText, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
@@ -249,6 +250,9 @@ if (serviceWorker) {
 document.getElementById('boot-reload')!.addEventListener('click', () => location.reload());
 await init().catch(bootFailed);
 let engine: Engine | Encounter = new Engine();
+// Replay (#793): while set, `engine` is the position after `ply` moves of the move log, rebuilt by replaying the log on a
+// new engine, and `live` is the game itself, put back in place by Live or by any move that arrives.
+let replaying: { live: Engine | Encounter; ply: number } | null = null;
 // Encounter mode: the boss and seed of the running fight, kept so Retry restarts the same one. A daily
 // fight also keeps its UTC day and its attempt of that day (#195).
 // The Goal control (#248): the HUD shows the boss goal before the first move, then only while it is open.
@@ -1841,7 +1845,7 @@ const hint = new Hint(
 function syncHint(): void {
   const state = hint.state(here());
   hintButton.hidden = !analysing; // online and boss games turn it off for good, with the bar (fair play, #164)
-  hintButton.disabled = thinking || engine.status() !== 0;
+  hintButton.disabled = thinking || engine.status() !== 0 || replaying !== null;
   hintButton.setAttribute('aria-pressed', String(state !== 'off'));
   document.body.dataset.hint = state; // read by the e2e tests
 }
@@ -1891,6 +1895,59 @@ autoButton.addEventListener('click', () => {
   refresh();
 });
 
+// The replay bar (#793): first, previous, next, last, a slider and Live step through every position of the move log,
+// view only (blocked() refuses every move meanwhile). Left and Right step, Left also opens it, Escape is Live.
+const replayButton = document.getElementById('replay') as HTMLButtonElement;
+const replayBar = document.getElementById('replay-bar')!;
+const replaySlider = document.getElementById('replay-slider') as HTMLInputElement;
+const liveGame = (): Engine | Encounter => replaying?.live ?? engine;
+const shownPly = (): number => replaying?.ply ?? history.length;
+function showPly(ply: number): void {
+  stopAuto(); // the bot does not play on while the player looks back (#792)
+  replaying ??= { live: engine, ply };
+  replaying.ply = ply;
+  engine = ply === history.length ? replaying.live : engineAt(history, ply, makeGame);
+  selected = [];
+  keyDir = -1;
+  hint.clear();
+  skipEjections();
+  refresh();
+}
+function leaveReplay(): void {
+  if (replaying) engine = replaying.live;
+  replaying = null;
+}
+function liveAgain(): void {
+  leaveReplay();
+  refresh();
+}
+function stepReplay(step: ReplayStep): void {
+  showPly(stepPly(shownPly(), step, history.length));
+}
+function syncReplay(): void {
+  if (hub || royale) leaveReplay();
+  replayButton.hidden = Boolean(hub || royale);
+  replayButton.disabled = history.length === 0;
+  replayBar.hidden = replaying === null;
+  replaySlider.max = String(history.length);
+  replaySlider.value = String(shownPly());
+  document.getElementById('replay-label')!.textContent = replayLabel(shownPly(), history.length);
+}
+replayButton.addEventListener('click', () => showPly(history.length));
+for (const step of ['first', 'prev', 'next', 'last'] as const) {
+  document.getElementById(`replay-${step}`)!.addEventListener('click', () => stepReplay(step));
+}
+document.getElementById('replay-live')!.addEventListener('click', liveAgain);
+replaySlider.addEventListener('input', () => showPly(Number(replaySlider.value)));
+addEventListener('keydown', (e) => {
+  const step = replayKey(e.key, replaying !== null, history.length > 0);
+  const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement; // the slider steps by itself
+  if (!step || typing || hub || royale || reading || freeCam.active || e.altKey || e.ctrlKey || e.metaKey) return;
+  e.preventDefault();
+  if (step === 'live') liveAgain();
+  else stepReplay(step);
+});
+
 // The bot, the boss, the evaluation bar or the hint got no answer from its worker (#736): the game must not wait for it.
 function botFailed(): void {
   hud(` · The bot could not answer: press New game`);
@@ -1898,7 +1955,7 @@ function botFailed(): void {
 }
 
 async function botTurn(): Promise<void> {
-  if (online || thinking || engine.status() !== 0) return;
+  if (online || replaying || thinking || engine.status() !== 0) return;
   const bots = worker !== null && engine.to_move() === BOT_SIDE;
   const auto = autoPlay && !bots; // the player's side, played by the bot (#792)
   const mover = worker ?? botWorker;
@@ -1906,7 +1963,7 @@ async function botTurn(): Promise<void> {
   thinking = true;
   syncHint(); // no hint while the bot thinks
   const current = fight;
-  const game = engine;
+  const game = liveGame();
   const started = performance.now();
   const searchBudget = scaleBudget(budget, difficulty);
   const diffPercent = DIFFICULTY_PERCENT[difficulty];
@@ -1918,14 +1975,14 @@ async function botTurn(): Promise<void> {
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
-    if (engine === game) {
+    if (liveGame() === game) {
       thinking = false; // the worker cannot answer (#736); a replaced game has nothing to say
       botFailed();
     }
     return;
   }
   diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: searchBudget });
-  if (engine !== game) return; // Retry, a new fight, New game or an import replaced the game while the bot was thinking
+  if (liveGame() !== game) return; // Retry, a new fight, New game or an import replaced the game while the bot was thinking
   if (!auto) thinking = false;
   whenSettled(() => {
     if (auto) {
@@ -1983,6 +2040,7 @@ interface Ejecting {
 }
 const ejecting: Ejecting[] = [];
 function playMove(record: number[]): void {
+  leaveReplay(); // a bot reply or a peer's move shows the live game
   const before = Array.from(engine.board());
   engine.play(Int32Array.from(record));
   afterPlay(before, record);
@@ -2488,6 +2546,7 @@ function medalNote(boss: { id: string }): string {
 }
 
 function hud(extra = ''): void {
+  syncReplay();
   backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
   if (hub) {
     delete document.body.dataset.over; // no end light over the hub
@@ -2523,7 +2582,7 @@ function hud(extra = ''): void {
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
     // Tally's line at the start of a match, the same mode as the end banner (#294).
-    tally: history.length === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
+    tally: shownPly() === 0 && status === 0 ? tallyLine({ mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', boss: fight?.id }) : '',
     // Who asked for a rematch, for the seated players of a finished online game (#186), a Retry in co-op (#531).
     rematch:
       online?.role !== 'player' || status === 0
@@ -2536,9 +2595,9 @@ function hud(extra = ''): void {
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   exportButton.hidden = importButton.hidden = online !== null || fight !== null; // local games only (#219)
   syncHint();
-  const showGoal = goalShown(history.length, goalOpen);
+  const showGoal = goalShown(shownPly(), goalOpen);
   goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
-  goalButton.disabled = history.length === 0; // the goal is on the plate until the first move
+  goalButton.disabled = shownPly() === 0; // the goal is on the plate until the first move
   goalButton.setAttribute('aria-expanded', String(showGoal));
   const boss = engine instanceof Encounter ? engine : null;
   if (boss) {
@@ -2546,7 +2605,7 @@ function hud(extra = ''): void {
     const phase = boss.phase();
     if (phaseSeen.game !== engine) phaseSeen = { game: engine, phase, since: -1 };
     else if (phaseSeen.phase !== phase) {
-      phaseSeen = { game: engine, phase, since: boss.incinerators().length > 0 && startsBurningPlayer(phaseSeen.phase, phase) ? history.length : -1 };
+      phaseSeen = { game: engine, phase, since: boss.incinerators().length > 0 && startsBurningPlayer(phaseSeen.phase, phase) ? shownPly() : -1 };
     }
   }
   const tell = boss
@@ -2559,8 +2618,8 @@ function hud(extra = ''): void {
         ballastText(boss.ballast_next()),
         coreText(parseCore(boss.unstable())),
         toxinText(boss.turns_left()),
-        ventNote(phaseSeen.since, history.length),
-        fight?.id === 'magnetizer' ? polarityText(boss.phase(), history.length) : '',
+        ventNote(phaseSeen.since, shownPly()),
+        fight?.id === 'magnetizer' ? polarityText(boss.phase(), shownPly()) : '',
         chaplainText(exposed, boss.converted().length / 2),
         martyrText(parseMartyr(boss.martyr())),
         choirText(boss.next_army(), armiesLeft(parseArmies(boss.armies()))),
@@ -3030,6 +3089,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
 // The guards of a move input: the game is over, a bot is thinking, a slide is running, or it is not our turn.
 // A click waits for the slide (`retry`), a key is dropped.
 function blocked(retry: () => void): boolean {
+  if (replaying) return true; // view only (#793)
   if (engine.status() !== 0) return true; // over: no move, no selection (#282)
   if (thinking || online?.role === 'spectator') return true;
   if (sliding()) return whenSettled(retry), true; // the next move waits for the slide
@@ -3562,6 +3622,7 @@ function newGame(): void {
   }
   engine = new Engine();
   history.length = 0;
+  replaying = null;
   selected = [];
   thinking = false; // the bot's reply to the old game is dropped (botTurn)
   void saves.clear();
@@ -3585,6 +3646,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   goalOpen = false;
   engine = new Encounter(id, seed);
   history.length = 0;
+  replaying = null;
   selected = [];
   thinking = false;
   leaveRoyale();
@@ -3770,6 +3832,7 @@ importFile.addEventListener('change', async () => {
   if ('refused' in read) return hud(` · ${read.refused}`);
   engine = read.engine;
   history.length = 0;
+  replaying = null;
   history.push(...read.moves);
   selected = [];
   thinking = false;
@@ -3815,6 +3878,7 @@ function answerBoss(live: boolean): Promise<void> {
   return bossReply;
 }
 function replay(mv: ArrayLike<number>, live: boolean): void {
+  leaveReplay();
   const before = Array.from(engine.board());
   engine.play(Int32Array.from(mv));
   afterPlay(before, Array.from(mv), live);
@@ -3839,6 +3903,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   newGameButton.hidden = true;
   engine = makeGame();
   history.length = 0;
+  replaying = null;
   selected = [];
   leaveRoyale();
   diag.connecting();
@@ -3884,6 +3949,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
       restart: () => {
         engine = makeGame();
         history.length = 0;
+        replaying = null;
       },
       ...(coop && { mover: () => seatAfter(history.length, 2) }),
     },
@@ -4007,6 +4073,7 @@ function startRoyale(file: RoyaleFile): void {
   delete document.body.dataset.over;
   engine = new Engine(); // a bot reply to the old game is dropped (botTurn)
   history.length = 0;
+  replaying = null;
   thinking = false;
   selected = [];
   reveal = null;
