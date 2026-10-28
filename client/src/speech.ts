@@ -22,6 +22,9 @@ export const ANGRY_LINES: readonly string[] = [
   'That was mine. Everything here is mine.',
 ];
 
+/** What the Overseer says once the player has beaten it (#789), after its marble explodes. */
+export const FAREWELL = 'Well done. You broke the last thing that cared about you.';
+
 const ANGRY_SEED = 741;
 
 /** The angry line of the burn at `ply` of the fight with `seed`: the same on every peer. */
