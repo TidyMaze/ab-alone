@@ -230,6 +230,55 @@ describe('main.ts boss fights', () => {
     expect(beaten()).toEqual(['hull']);
   });
 
+  describe('medals (#791)', () => {
+    const medals = (): unknown => JSON.parse(localStorage.getItem('ab-alone.medals') ?? '{}');
+    /** Wins a fight against The Hull in one player turn: the engine says Black won, without six ejections. */
+    async function winHull(game: Game): Promise<void> {
+      const { Encounter } = await import('abalone-wasm');
+      fightBoss(game, 'The Hull');
+      vi.spyOn(Encounter.prototype, 'result').mockReturnValue(1);
+      vi.spyOn(Encounter.prototype, 'status').mockReturnValue(1);
+      play(game, forward(game));
+    }
+    const menuEntry = (name: string): string =>
+      [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent!.startsWith(name))!.textContent!;
+
+    it('the first win earns the medal, the banner says so and the boss menu shows it', async () => {
+      const game = await boot('?bot=off', { reducedMotion: true });
+      expect(menuEntry('The Hull')).toBe('The Hull');
+      await winHull(game);
+      expect(medals()).toEqual({ hull: 1 });
+      expect(game.hud()).toContain('Medal earned: 1 turn.');
+      byId('boss-fight').click();
+      expect(menuEntry('The Hull')).toBe('The HullMedal: 1 turn');
+      expect(menuEntry('The Echo')).toBe('The Echo'); // an unbeaten boss has no medal
+    });
+
+    it('a faster win is called out as a new record, a slower one keeps the best', async () => {
+      const game = await boot('?bot=off', { reducedMotion: true });
+      localStorage.setItem('ab-alone.medals', JSON.stringify({ hull: 5 }));
+      await winHull(game);
+      expect(medals()).toEqual({ hull: 1 });
+      expect(game.hud()).toContain('New record: 1 turn.');
+    });
+
+    it('a win that is not faster keeps the best count', async () => {
+      const game = await boot('?bot=off', { reducedMotion: true });
+      localStorage.setItem('ab-alone.medals', JSON.stringify({ hull: 1 }));
+      await winHull(game);
+      expect(medals()).toEqual({ hull: 1 });
+      expect(game.hud()).toContain('Medal best: 1 turn.');
+    });
+
+    it('a lost fight earns no medal', async () => {
+      const game = await boot('?bot=off', { reducedMotion: true });
+      fightBoss(game, 'The Echo');
+      loseByRepetition(game);
+      expect(medals()).toEqual({});
+      expect(game.hud()).not.toContain('Medal');
+    });
+  });
+
   it('the flat HUD lists the boss phase and its tell as text', async () => {
     const game = await boot('?bot=off');
     byId('setting-flat-hud').click();
