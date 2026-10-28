@@ -94,10 +94,12 @@ describe('main.ts, auto-play, #792', () => {
     expect(auto().hidden).toBe(true);
   });
 
-  it('is hidden in the hub', async () => {
+  it('is hidden in the hub, and with ?bot=off: no bot to play', async () => {
     const game = await boot('?nodes=50');
     game.openModes();
     byId('ship').click();
+    expect(auto().hidden).toBe(true);
+    await boot('?bot=off');
     expect(auto().hidden).toBe(true);
   });
 
@@ -120,7 +122,7 @@ describe('main.ts, auto-play, #792', () => {
   });
 
   it('plays the player rounds of the offline battle royale', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?nodes=50');
     game.openModes();
     byId('battle-royale').click();
     expect(auto().disabled).toBe(false);

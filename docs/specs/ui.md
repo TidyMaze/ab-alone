@@ -359,6 +359,25 @@ until a game leaves it (#583).
   The hint state of a position lives in `client/src/hint.ts`.
 - The label "Hint" is kept verbatim for the e2e tests.
 
+### 4.3 Auto-play
+
+An Auto-play toggle in the fight HUD, next to Hint, lets the bot play the player's side (#792). It is on offer in
+a bot game, at the hot-seat table (the bot plays whichever side is to move), in the offline battle royale and in a boss
+fight, never online (a versus room, a co-op fight, an online battle royale: the button is hidden), not in the hub and not with
+`?bot=off`, the test flag that takes the bot away.
+
+- **Play.** With it on, the bot (Web Worker, the current difficulty, `answer` with `player` for a boss fight) plays the
+  player's move no sooner than 700 ms after the last (`AUTO_DELAY_MS`), through the same path as the bot's own reply, so
+  the thinking guard shuts the board to clicks meanwhile. The bot's own side plays as ever. In the battle royale it
+  commits the royale bot's order for the player's seat, once the reveal of the last round has ended.
+- **Stop.** Any time: a second press turns it off, and a move being searched is dropped. It turns itself off when the game
+  is over, replaced (New game, Retry, an import, another mode) or left for the hub.
+- **Boss.** A boss fight needs that boss's medal (the medals, #791): without it the button is greyed
+  and the reason is written next to it: "Beat The Echo once to unlock Auto-play against it".
+- **Source.** The rule of availability lives in `client/src/autoplay.ts`. The boss move for the player's side is
+  `Encounter.player_move` (the search of the boss budget, so the difficulty scales it), a plain game asks `best_move`.
+- The label "Auto-play" is kept verbatim for the e2e tests.
+
 ## 5. Board framing
 
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one

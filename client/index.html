@@ -55,8 +55,10 @@
           <textarea id="daily-result" readonly rows="3" aria-label="Daily challenge result"></textarea>
           <button id="daily-copy" type="button">Copy result</button>
         </div>
-        <button id="hint" type="button" aria-pressed="false" disabled>Hint</button>
-        <button id="auto-play" type="button" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
+        <div id="tools">
+          <button id="hint" type="button" aria-pressed="false" disabled>Hint</button>
+          <button id="auto-play" type="button" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
+        </div>
         <span id="auto-reason" hidden></span>
         <button id="modes" type="button" aria-label="Game modes" title="Game modes" aria-haspopup="true" aria-expanded="false" aria-controls="mode-menu" disabled></button>
         <div id="mode-menu" role="group" aria-label="Game modes" hidden>

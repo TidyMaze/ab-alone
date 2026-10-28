@@ -1852,7 +1852,7 @@ hintButton.addEventListener('click', () => {
 
 // Auto-play (#792, docs/specs/ui.md section 4.3): a toggle in the fight HUD lets the bot play the player's side, one move
 // per AUTO_DELAY_MS, until it is turned off, the game is over or replaced. The bot's own side is played as ever. Against
-// a boss it needs that boss's medal (#791); online it is not there. The battle royale asks the royale bot for the order.
+// a boss it needs that boss's medal (#791); online, in the hub and with ?bot=off (no bot) it is not there. The battle royale asks the royale bot for the order.
 const autoButton = document.getElementById('auto-play') as HTMLButtonElement;
 const autoReason = document.getElementById('auto-reason')!;
 let autoPlay = false;
@@ -1864,7 +1864,7 @@ function stopAuto(): void {
 }
 function syncAuto(): void {
   const boss = engine instanceof Encounter ? engine.name() : null;
-  const state = autoPlayState({ online: Boolean(hub) || online !== null, boss }, fight !== null && hasMedal(store, fight.id));
+  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss }, fight !== null && hasMedal(store, fight.id));
   const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
   const reason = state.shown ? state.reason : null;
   const usable = state.shown && reason === null && !over;
