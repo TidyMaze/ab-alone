@@ -218,6 +218,52 @@ describe('the renderer and its textures', () => {
       await booting;
       expect(options).toEqual([{ antialias: true, forceWebGL: true }]);
     });
+
+    it('drops MSAA on a screen of device ratio 1.5 or more (#844)', async () => {
+      vi.stubGlobal('devicePixelRatio', 2);
+      const booting = boot('?bot=off');
+      const { options } = renderer();
+      await booting;
+      expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
+    });
+  });
+});
+
+describe('the adaptive resolution (#843)', () => {
+  const ratio = (): string | undefined => document.body.dataset.ratio;
+  const frames = (game: Game, ms: number): void => {
+    for (let i = 0; i < 30; i++) game.frame(ms);
+  };
+
+  it('starts a high-tier player at 1.5 on a Retina screen, then steps down to 1 while the frames are slow', async () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    const game = await boot('?bot=off&quality=high', { webdriver: false });
+    expect(ratio()).toBe('1.5');
+    frames(game, 16);
+    expect(ratio()).toBe('1.5');
+    frames(game, 40);
+    expect(ratio()).toBe('1.25');
+    frames(game, 40);
+    expect(ratio()).toBe('1');
+    frames(game, 40);
+    expect(ratio()).toBe('1');
+  });
+
+  it('starts again from the top when the window changes size', async () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    const game = await boot('?bot=off&quality=high', { webdriver: false });
+    frames(game, 40);
+    expect(ratio()).toBe('1.25');
+    dispatchEvent(new Event('resize'));
+    expect(ratio()).toBe('1.5');
+  });
+
+  it('keeps half the pixels under automation, however slow the frames', async () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    const game = await boot('?bot=off');
+    expect(ratio()).toBe('0.5');
+    frames(game, 200);
+    expect(ratio()).toBe('0.5');
   });
 });
 

@@ -11,6 +11,8 @@ import {
   hasReflections,
   meshDetail,
   renderPixelRatio,
+  nextPixelRatio,
+  antialiased,
   readFlatHud,
   readTranscript,
   readReducedMotion,
@@ -437,10 +439,10 @@ describe('renderPixelRatio (#424)', () => {
     expect(renderPixelRatio(3, false, 'low')).toBe(1);
     expect(renderPixelRatio(0.8, false, 'low')).toBe(0.8);
   });
-  it('gives high-tier players up to 2.0 DPR, capping 3x/4x retina waste', () => {
+  it('gives high-tier players up to 1.5 DPR: a full-screen Retina window at 2 drew 10 FPS (#843)', () => {
     expect(renderPixelRatio(1, false, 'high')).toBe(1);
-    expect(renderPixelRatio(2, false, 'high')).toBe(2);
-    expect(renderPixelRatio(3, false, 'high')).toBe(2);
+    expect(renderPixelRatio(2, false, 'high')).toBe(1.5);
+    expect(renderPixelRatio(3, false, 'high')).toBe(1.5);
   });
   it('renders at half the pixels under automation, so software WebGL costs less per frame', () => {
     expect(renderPixelRatio(1, true)).toBe(0.5);
@@ -448,6 +450,36 @@ describe('renderPixelRatio (#424)', () => {
   });
   it('never renders above the device ratio under automation', () => {
     expect(renderPixelRatio(0.5, true)).toBe(0.5);
+  });
+});
+
+describe('nextPixelRatio, the adaptive resolution (#843)', () => {
+  const frames = (ms: number, n = 30): number[] => Array.from({ length: n }, () => ms);
+  it('steps down by a quarter while the frames take more than 20 ms', () => {
+    expect(nextPixelRatio(1.5, frames(40), 1)).toBe(1.25);
+    expect(nextPixelRatio(1.25, frames(21), 1)).toBe(1);
+  });
+  it('keeps the ratio while the frames are fast enough', () => {
+    expect(nextPixelRatio(1.5, frames(16.7), 1)).toBe(1.5);
+    expect(nextPixelRatio(1.5, frames(20), 1)).toBe(1.5);
+  });
+  it('never goes under the floor', () => {
+    expect(nextPixelRatio(1, frames(50), 1)).toBe(1);
+    expect(nextPixelRatio(1.1, frames(50), 1)).toBe(1);
+  });
+  it('reads the median: one long frame (a shader compile, a texture load) changes nothing', () => {
+    expect(nextPixelRatio(1.5, [...frames(16, 29), 8000], 1)).toBe(1.5);
+  });
+});
+
+describe('antialiased, MSAA by screen (#844)', () => {
+  it('keeps MSAA under a device ratio of 1.5, where jagged edges show', () => {
+    expect(antialiased(1)).toBe(true);
+    expect(antialiased(1.25)).toBe(true);
+  });
+  it('drops it from 1.5 up: the pixels are too small to show the edges, and 4 samples a pixel cost the most there', () => {
+    expect(antialiased(1.5)).toBe(false);
+    expect(antialiased(2)).toBe(false);
   });
 });
 
