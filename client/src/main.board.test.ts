@@ -124,6 +124,10 @@ describe('main.ts board and HUD', () => {
     expect(discs.filter((d) => d.visible)).toHaveLength(61);
     expect(discs[0]!.material.map).toBeInstanceOf(THREE.Texture);
     expect(discs[0]!.material.normalMap).toBeInstanceOf(THREE.Texture);
+    // The cell beds keep the deck texture's own colour and stay matte: a dark metal tint turned them black, and the
+    // marbles no longer read 3:1 against them (#787).
+    expect(discs[0]!.material.color.getHex()).toBe(0xffffff);
+    expect(discs[0]!.material.metalness).toBe(0);
     expect(plate.material.map).toBeInstanceOf(THREE.Texture);
     expect(near.material.map).toBeInstanceOf(THREE.Texture);
     const { shells, glass } = drawn(scene());
@@ -494,5 +498,15 @@ describe('main.ts board and HUD', () => {
     const marbles = game.hook<THREE.Group>('__marbles');
     const lights = marbles.children.filter((child) => child instanceof THREE.PointLight);
     expect(lights.length).toBe(0);
+  });
+
+  it('draws the target arrows dark on their luminous ring, so they read 3:1 on the lit cells (#787)', async () => {
+    const game = await boot('?bot=off');
+    const legal = game.hook<{ cells: Axial[] }[]>('__legal');
+    game.click(...legal.find((m) => m.cells.length === 1)!.cells[0]!);
+    const arrow = game.hook<THREE.Group>('__marbles').children.find(
+      (child) => child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial,
+    ) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
+    expect(arrow!.material.color.getHex()).toBe(0x0b0d0f);
   });
 });

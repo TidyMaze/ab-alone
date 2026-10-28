@@ -997,9 +997,6 @@ const steel = new THREE.MeshStandardMaterial(
         map: firstDeckMap ?? deckAlbedo,
         roughnessMap: deckRoughness,
         ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
-        color: 0x22282e,
-        metalness: 0.6,
-        roughness: 0.5,
       }
     : { color: COLORS.steel, roughness: 0.8 },
 );
@@ -1123,13 +1120,8 @@ const arrowShape = new THREE.Shape(
   ),
 );
 const arrowGeometry = new THREE.ShapeGeometry(arrowShape);
-const targetMaterial = new THREE.MeshStandardMaterial({
-  color: 0x38e8ff,
-  emissive: 0x38e8ff,
-  emissiveIntensity: 2.0,
-  roughness: 0.2,
-  metalness: 0.1,
-});
+// The arrow is dark on the lit cell, inside its luminous ring: a cyan one could not reach 3:1 on it (#390, #787).
+const targetMaterial = new THREE.MeshBasicMaterial({ color: COLORS.base });
 const ringMaterial = new THREE.MeshStandardMaterial({
   color: 0x38e8ff,
   emissive: 0x38e8ff,
@@ -1678,6 +1670,7 @@ drawProps = (): void => {
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
+    if (sceneRenderer.bayLights) propsGroup.add(sceneRenderer.bayLights); // propsGroup.clear() took them out (#787)
   }
 };
 let currentBay: SpaceshipBayAssets | null = null;

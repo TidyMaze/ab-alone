@@ -13,7 +13,7 @@ import { ROOM_SURFACE, type StructuralPart } from './room';
 
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
-export const FRAME_LOOK = { plate: 0x1f1f1f, rim: 0x5d5d5d } as const;
+export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
 
 export type NotchRow = NonNullable<ReturnType<typeof notchRow>>;
 
@@ -56,7 +56,7 @@ export function createBloomPipeline(
     const pipeline = new THREE.RenderPipeline(renderer);
     const scenePass = pass(scene, camera);
     const colorNode = scenePass.getTextureNode('output');
-    const bloomNode = bloom(colorNode, 0.175, 0.15);
+    const bloomNode = bloom(colorNode, 0.175, 0.15, 1);
     bloomNode.setResolutionScale(0.5);
     pipeline.outputNode = colorNode.add(bloomNode);
     return pipeline;
@@ -110,7 +110,7 @@ export class SceneRenderer {
   frame: FrameShape | null = null;
   fogRadius = 4;
   currentBay: SpaceshipBayAssets | null = null;
-  private bayLights: THREE.Group | null = null;
+  bayLights: THREE.Group | null = null; // the bay's lamps (#776), put back by main.ts when it redraws the props (#787)
   private lastParticleNow = 0;
 
   constructor(options: SceneRendererOptions) {
@@ -206,7 +206,7 @@ export class SceneRenderer {
             map: options.plateAlbedo,
             roughnessMap: options.plateRoughness || null,
             normalMap: options.plateNormal || null,
-            color: 0xffffff,
+            color: FRAME_LOOK.plateTiles,
             roughness: 0.4,
           }
         : options.deckAlbedo && options.deckRoughness
