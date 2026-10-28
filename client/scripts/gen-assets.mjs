@@ -254,7 +254,9 @@ function crackDecal(size, rand) {
   };
   const x0 = c + (rand() - 0.5) * 6, y0 = c + (rand() - 0.5) * 6;
   for (let k = 0; k < CRACKS; k++) crack(x0, y0, (k * 2 * Math.PI) / CRACKS + (rand() - 0.5) * 0.3, 7, Infinity, 1);
-  return png(size, size, 1, Uint8Array.from(mask, (v) => clamp(v * 255)));
+  // Nothing outside the cell's disc: a tip that runs past the rim is cut there.
+  const inside = (i) => Math.hypot((i % size) - c, Math.floor(i / size) - c) <= size / 2 - 1;
+  return png(size, size, 1, Uint8Array.from(mask, (v, i) => (inside(i) ? clamp(v * 255) : 0)));
 }
 
 // The cells' albedo of each deck (world.md section 5, #401), each a mid-tone like the steel above, so both marbles read
