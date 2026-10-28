@@ -997,9 +997,6 @@ const steel = new THREE.MeshStandardMaterial(
         map: firstDeckMap ?? deckAlbedo,
         roughnessMap: deckRoughness,
         ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
-        color: 0x22282e,
-        metalness: 0.6,
-        roughness: 0.5,
       }
     : { color: COLORS.steel, roughness: 0.8 },
 );
@@ -1678,6 +1675,7 @@ drawProps = (): void => {
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
+    if (sceneRenderer.bayLights) propsGroup.add(sceneRenderer.bayLights); // propsGroup.clear() took them out (#787)
   }
 };
 let currentBay: SpaceshipBayAssets | null = null;
