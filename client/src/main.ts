@@ -19,6 +19,7 @@ import {
   type Axial,
   type Move,
 } from './board';
+import { extendPath, releaseDir } from './drag';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { askBot, askEval, botBudget } from './bot';
 import { bootFailed } from './bootfail';
@@ -3021,6 +3022,13 @@ function cellAt(e: PointerEvent | MouseEvent): Axial | null {
   const hit = raycaster.intersectObjects(shown.filter((disc) => disc.visible))[0]; // no cell where no disc is drawn
   return hit ? cells[shown.indexOf(hit.object as THREE.Mesh)]! : null;
 }
+const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+// The point of the board plane under the pointer, null when the ray never meets it (the horizon).
+function groundAt(e: PointerEvent): THREE.Vector3 | null {
+  aim(e);
+  return raycaster.ray.intersectPlane(ground, new THREE.Vector3());
+}
+const ours = (cell: Axial | null): cell is Axial => !!cell && engine.board()[cellIndex(cell[0], cell[1])] === engine.to_move();
 function onProp(e: PointerEvent, prop: THREE.Mesh): boolean {
   aim(e);
   return raycaster.intersectObject(prop).length > 0;
@@ -3030,6 +3038,7 @@ function onProp(e: PointerEvent, prop: THREE.Mesh): boolean {
 const canvas = renderer.domElement;
 const pointers = new Map<number, { x: number; y: number }>();
 let press: { x: number; y: number; drag: boolean } | null = null;
+let marbleDrag: Axial[] | null = null; // the marbles a drag that began on one of ours has passed over (#794)
 const span = (): number => {
   const [a, b] = [...pointers.values()];
   return Math.hypot(a!.x - b!.x, a!.y - b!.y);
@@ -3038,8 +3047,15 @@ const span = (): number => {
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (pointers.size === 1) press = { x: e.clientX, y: e.clientY, drag: false };
-  else press!.drag = true; // a second finger never selects (press is set while any pointer is down)
+  if (pointers.size === 1) {
+    press = { x: e.clientX, y: e.clientY, drag: false };
+    // A press on one of our marbles starts a selection by drag, anywhere else it is the orbit (#794).
+    const cell = hub || royale || reading || freeCam.active ? null : cellAt(e);
+    marbleDrag = ours(cell) && !blocked(() => {}) ? [cell] : null;
+  } else {
+    press!.drag = true; // a second finger never selects (press is set while any pointer is down)
+    marbleDrag = null;
+  }
 });
 
 canvas.addEventListener('pointermove', (e) => {
@@ -3054,7 +3070,18 @@ canvas.addEventListener('pointermove', (e) => {
     const prevSpan = pointers.size === 2 ? span() : 0;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 2) view = zoom(view, pinchScale(prevSpan, span()));
-    else if (press.drag || isDrag(e.clientX - press.x, e.clientY - press.y)) {
+    else if (marbleDrag && (press.drag || isDrag(e.clientX - press.x, e.clientY - press.y))) {
+      press.drag = true;
+      const cell = cellAt(e);
+      const path = ours(cell) ? extendPath(marbleDrag, cell) : marbleDrag;
+      if (path !== selected) {
+        selected = marbleDrag = path;
+        keyDir = -1;
+        hint.clear(); // a new selection
+        refresh();
+      }
+      return;
+    } else if (press.drag || isDrag(e.clientX - press.x, e.clientY - press.y)) {
       press.drag = true;
       view = orbit(view, e.clientX - last.x, e.clientY - last.y);
     }
@@ -3073,8 +3100,10 @@ canvas.addEventListener('pointermove', (e) => {
 
 function release(e: PointerEvent): void {
   const wasClick = e.type === 'pointerup' && press && !press.drag && pointers.size === 1;
+  const dropped = e.type === 'pointerup' && marbleDrag && press!.drag && pointers.size === 1;
   pointers.delete(e.pointerId);
-  if (pointers.size === 0) press = null;
+  if (pointers.size === 0) press = marbleDrag = null;
+  if (dropped) return dropMarbles(e);
   if (!wasClick) return;
   if (reading) {
     if (onProp(e, consoleScreen)) turnReader(1);
@@ -3086,6 +3115,16 @@ function release(e: PointerEvent): void {
   else if (royale && raycaster.intersectObjects(arenaDiscs).length) return; // the hole (#610): no prop behind it
   else if (onProp(e, consoleScreen)) openReader();
   else if (onProp(e, recorder)) playLog(logOf(deck)); // the deck's recorder prop (#517)
+}
+// The release of a drag over our marbles plays the move of the group toward the nearest direction; no legal move: nothing.
+function dropMarbles(e: PointerEvent): void {
+  const at = groundAt(e);
+  const dir = at ? releaseDir(selected, at.x, at.z) : null;
+  const mv = dir === null ? null : moveFor(parseMoves(engine.legal_moves()), selected, dir);
+  if (!mv) return;
+  play(mv);
+  refresh();
+  void botTurn();
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);

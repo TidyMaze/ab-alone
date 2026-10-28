@@ -34,8 +34,12 @@ Input is the same in every mode. The client asks the WASM engine for legal moves
 peer re-validates online moves (see `tech.md`).
 
 1. **Select.** Click or tap an own marble. Click an adjacent aligned own marble to extend the
-   group, up to 3, contiguous, on one line. Dragging along a line selects the span. Clicking a
-   selected end marble removes it.
+   group, up to 3, contiguous, on one line. Clicking a selected end marble removes it.
+   **Drag (#794).** Press on an own marble and pass over in-line own neighbours (up to 3, one line) to select
+   them, then release past the group: the move toward the nearest of the 6 directions from the group's centre
+   to the pointer is played, as a click on its target would. A release with no legal move there, or still on
+   the group, plays nothing and keeps the selection. A drag that starts anywhere else, or while a move is
+   blocked, orbits the camera. Mouse and touch alike.
 2. **Direction ring.** Once a group is selected, a ring of up to 6 arrows appears around it.
    Only legal directions are drawn. Inline arrows show push power (1v1, 2v1, 3v2...).
 3. **Preview.** Hovering (or focusing) an arrow draws ghost marbles at the result and
@@ -46,7 +50,7 @@ peer re-validates online moves (see `tech.md`).
    focus moves on, so the board never traps it), `Q W E A S D` pick the direction (NW NE / W E / SW SE, as on the
    hexagon), Enter confirms, Esc backs out one step. The group and the direction are announced in the HUD.
    Whole game playable without a mouse.
-6. **Touch.** Tap to select, tap arrow, tap again to confirm. No drag required.
+6. **Touch.** Tap to select, tap arrow, tap again to confirm. A drag works too (item 1).
 7. **Not now.** Gamepad, voice, haptics.
 
 Accessibility: legal-move highlight can be forced on, colorblind-safe palette, the "clear board"
