@@ -176,7 +176,7 @@ const BOSSES: [BossEntry; 12] = [
     },
     BossEntry {
         id: "chaplain",
-        goal: "A marble beside 4 foes switches sides; at 4 ejections a martyr explodes. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "A marble beside 4 foes switches sides: a boss marble that joins you counts as an ejection, one that joins it takes one back. At 4 ejections a martyr explodes. Eject 6 to win; lose 6 or draw to lose.",
         def: chaplain_boss,
         start: plain_fight,
         reply: search_reply,
@@ -294,7 +294,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    8 // 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    9 // 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -841,8 +841,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_8_since_the_ballast_mind_borrows_effects() {
-        assert_eq!(engine_version(), 8);
+    fn the_engine_version_is_9_since_the_chaplain_conversions_move_its_health() {
+        assert_eq!(engine_version(), 9);
     }
 
     #[test]
@@ -1069,10 +1069,10 @@ mod tests {
     }
 
     /// The seed of the recorded game.
-    const RECORDED_SEED: u64 = 10001;
+    const RECORDED_SEED: u64 = 10040;
     /// The plies after which the martyr is announced, and after which it exploded.
-    const ANNOUNCED_AT: usize = 148;
-    const EXPLODED_AT: usize = 150;
+    const ANNOUNCED_AT: usize = 52;
+    const EXPLODED_AT: usize = 54;
 
     /// The Chaplain after the first `plies` plies of the recorded game.
     fn chaplain(plies: usize) -> Encounter {
@@ -1129,6 +1129,29 @@ mod tests {
         );
         assert_eq!(boom.ejected(1), 5, "the 5th ejection");
         assert_eq!(boom.phase_notches(), Vec::<u8>::new(), "no P3");
+    }
+
+    /// The credit and the phase after each ply of the recorded game, played once.
+    fn credit_track() -> Vec<(u8, u8)> {
+        let mut f = Encounter::new("chaplain", RECORDED_SEED as u32).unwrap();
+        recorded()
+            .iter()
+            .map(|mv| {
+                f.play(mv).unwrap();
+                (f.ejected(1), f.phase())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_conversion_to_the_boss_heals_it_and_the_phase_never_goes_back() {
+        let track = credit_track();
+        assert_eq!(track, credit_track(), "deterministic");
+        assert!(
+            track.windows(2).any(|w| w[1].0 < w[0].0),
+            "the recorded game heals the boss"
+        );
+        assert!(track.windows(2).all(|w| w[1].1 >= w[0].1));
     }
 
     #[test]

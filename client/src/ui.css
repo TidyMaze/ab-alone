@@ -449,6 +449,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #boss-bar .frags { display: flex; gap: 3px; margin-top: 0.25rem; }
 #boss-bar .frag { position: relative; flex: 1; height: 0.75rem; background: var(--danger); border: 1px solid var(--danger); box-sizing: border-box; transition: background-color 400ms ease-out; }
 #boss-bar .frag.empty { background: transparent; border-color: var(--muted); }
+@keyframes frag-refill { from { transform: scaleY(1.9); filter: brightness(1.8); } to { transform: none; filter: none; } }
+#boss-bar .frag.refill { animation: frag-refill 450ms ease-out; }
 #boss-bar .frag.step::before { content: ''; position: absolute; top: -4px; bottom: -4px; left: -4px; width: 2px; background: var(--text); }
 
 /* Evaluation bar (#191): Black's share on the left, White's on the right, and its words. The segments

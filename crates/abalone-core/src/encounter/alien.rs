@@ -126,6 +126,7 @@ pub fn alien_boss() -> BossDef {
         phase_ejections: ALIEN_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: None,
         node_budget: ALIEN_NODE_BUDGET,
     }
 }

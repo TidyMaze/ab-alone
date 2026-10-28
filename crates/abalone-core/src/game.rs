@@ -245,6 +245,19 @@ impl Game {
         }
     }
 
+    /// Moves the credit of `by` by `gained` and `lost` conversions at once, never below 0 (The
+    /// Chaplain's health).
+    pub(crate) fn credit_conversions(&mut self, by: Player, gained: u8, lost: u8) {
+        let i = index(by);
+        self.ejected[i] = (self.ejected[i] + gained).saturating_sub(lost);
+        if gained > 0 {
+            self.no_ejection_plies = 0;
+        }
+        if self.ejected[i] >= self.win[i] {
+            self.outcome.get_or_insert(Outcome::Win(by));
+        }
+    }
+
     /// Ends a running game with `winner`, for a boss rule that ends the fight (The Overseer's
     /// neurotoxin). A finished game keeps its outcome.
     pub(crate) fn end(&mut self, winner: Player) {

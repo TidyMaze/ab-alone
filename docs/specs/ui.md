@@ -163,7 +163,7 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   row of the board lies below it, also at 812 by 375); held upright it is the first row of the column, above the
   plate, one slim row (the name, then the bar) and the plate's own boss name is hidden, so the column is no taller and
   covers no cell. It grows with the UI scale like the plate and lets every press through. A fragment drains with a 400 ms
-  fade; under Reduced motion (section 6) it changes at once. It replaces nothing: the plate keeps the boss block with
+  fade; under Reduced motion (section 6) it changes at once. When the boss heals (The Chaplain, a player marble converted to it, #810) a fragment fills back with a 450 ms refill, a brief swell and brightening; the phase read by the screen reader comes from the engine and does not go back. It replaces nothing: the plate keeps the boss block with
   its P1 P2 P3 notches and the tell, and the phase notches and tally marks scratched on the frame stay (the bar is the
   quick read at the top, the frame marks the exact count), decided in #788. Outside a boss fight it is hidden.
 - **Terminal reader (#512, world.md section 4).** While the camera frames the deck console, the HUD, the

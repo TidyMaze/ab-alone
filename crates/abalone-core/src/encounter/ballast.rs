@@ -174,6 +174,7 @@ pub fn ballast_boss() -> BossDef {
         phase_ejections: BALLAST_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: None,
         node_budget: BALLAST_NODE_BUDGET,
     }
 }

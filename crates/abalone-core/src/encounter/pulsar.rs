@@ -115,6 +115,7 @@ pub fn pulsar_boss() -> BossDef {
         phase_ejections: PULSAR_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: None,
         node_budget: PULSAR_NODE_BUDGET,
     }
 }

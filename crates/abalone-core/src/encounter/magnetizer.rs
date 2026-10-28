@@ -227,6 +227,7 @@ pub fn magnetizer_boss() -> BossDef {
         phase_ejections: MAGNETIZER_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: None,
         node_budget: MAGNETIZER_NODE_BUDGET,
     }
 }

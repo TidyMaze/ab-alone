@@ -112,6 +112,7 @@ pub fn railyard_boss() -> BossDef {
         phase_ejections: RAILYARD_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: None,
         node_budget: RAILYARD_NODE_BUDGET,
     }
 }

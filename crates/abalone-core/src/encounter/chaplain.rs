@@ -1,6 +1,8 @@
 //! The Chaplain (#45, docs/specs/game-design.md section 7.3): conversion by encirclement. At the
 //! end of every turn a marble touching 4 or more marbles of the other side changes side, for both
-//! sides. A flip keeps the marble count and credits no ejection. P2 comes at 4 player ejections.
+//! sides. A flip keeps the marble count and moves the player's ejection credit, the boss's health:
+//! +1 per boss marble that joins the player, -1 per player marble that joins the boss, never below
+//! 0. P2 comes the first time that credit reaches 4 and stays.
 
 use crate::board::{Board, Cell};
 use crate::encounter::hull::{mix, NEIGHBOURS};
@@ -140,6 +142,16 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
     }
 }
 
+/// The marbles that change side at the end of a turn on `board`, `[to the player, to the boss]`:
+/// +1 and -1 on the player's ejection credit, which is the boss's health (6 minus the credit).
+/// The martyr's blast is not one of them, it counts its own +1.
+fn conversions(board: &Board) -> [u8; 2] {
+    [
+        marked(board, Cell::White, Cell::Black).len() as u8,
+        marked(board, Cell::Black, Cell::White).len() as u8,
+    ]
+}
+
 /// The Black marbles of `before` that are White on `now`.
 pub(crate) fn flipped(before: &Board, now: &Board) -> Vec<P> {
     let radius = before.radius();
@@ -166,6 +178,7 @@ pub fn chaplain_boss() -> BossDef {
         phase_ejections: CHAPLAIN_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: Some(conversions),
         node_budget: CHAPLAIN_NODE_BUDGET,
     }
 }
@@ -331,7 +344,7 @@ mod tests {
         );
         assert_eq!(count(&e, Cell::Black), b + 1);
         assert_eq!(count(&e, Cell::White), w - 1);
-        assert_eq!(e.game().ejected(Player::Black), 0);
+        assert_eq!(e.game().ejected(Player::Black), 1);
         assert!(e.game().board().converted().is_empty());
         let mut three = enc(&FOUR_AROUND[..3], &[(0, 0)]);
         turns(&mut three, 4);
@@ -668,7 +681,11 @@ mod tests {
             "converted by 4 neighbours"
         );
         step(&mut e);
-        assert_eq!(e.game().ejected(Player::Black), 4, "nothing exploded");
+        assert_eq!(
+            e.game().ejected(Player::Black),
+            5,
+            "only the conversion of the martyr, nothing exploded"
+        );
         assert_eq!(at(&e, (1, 0)), Some(Cell::Black));
         assert_eq!(martyr_of(&e), Some(None));
     }

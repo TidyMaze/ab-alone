@@ -2645,7 +2645,7 @@ function hud(extra = ''): void {
   }
   drawBossBar(
     document.getElementById('boss-bar')!,
-    boss ? { name: boss.name(), ejected: engine.ejected(1), win: engine.win_ejections(1), steps: Array.from(boss.phase_ejections()) } : null,
+    boss ? { name: boss.name(), ejected: engine.ejected(1), win: engine.win_ejections(1), steps: Array.from(boss.phase_ejections()), phase: boss.phase() } : null,
   );
   if (flatHud) {
     const flat = { phase: boss?.phase() ?? 0, phases: boss?.phases() ?? 0, tell };

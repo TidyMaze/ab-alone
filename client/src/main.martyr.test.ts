@@ -9,7 +9,7 @@ import { boot, type Game } from './test/harness';
 // The Chaplain's martyr on the harness (#748, game-design.md section 7.3): after 4 ejections one boss marble wears a
 // steady ember ring and a tall glyph and the HUD says it explodes next boss turn; then it explodes, a flash and a ring
 // of shards (reduced motion: a static flash) over the marbles it converted. The recorded game of the core tests is
-// played by the __playMoves hook, the martyr is announced after ply 148 and explodes at ply 150.
+// played by the __playMoves hook, the martyr is announced after ply 52 and explodes at ply 54.
 
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const body = (): DOMStringMap => document.body.dataset;

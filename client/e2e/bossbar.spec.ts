@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { parseRecorded } from '../src/test/chaplain-game';
+import { CONVERTED_AT, SEED, parseRecorded } from '../src/test/chaplain-game';
 import { openModes } from './modes';
 
 // The boss health bar (#788): at the top centre of a boss fight, the name over one red fragment per ejection needed, one
@@ -86,4 +86,27 @@ test('the fragments empty as the player ejects, all gone at the win, #788', asyn
   expect(half).toBeGreaterThan(0);
   await page.evaluate((r) => (window as any).__playMoves(r), records.slice(70));
   await expect(empty).toHaveCount(6);
+});
+
+// The recorded Chaplain win (crates/abalone-core/tests/fixtures/chaplain.txt): at ply CONVERTED_AT the boss converts a player
+// marble, which heals it by one fragment (#810).
+test('a player marble converted to the Chaplain fills a fragment back, #810', async ({ page }, testInfo) => {
+  await fight(page, 'The Chaplain', SEED);
+  const records = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/chaplain.txt', import.meta.url), 'utf8'));
+  const play = (from: number, to: number) => page.evaluate((r) => (window as any).__playMoves(r), records.slice(from, to));
+  const empty = page.locator('#boss-bar .frag.empty');
+  await play(0, CONVERTED_AT - 1);
+  const before = await empty.count();
+  expect(before).toBeGreaterThan(0);
+  await page.screenshot({ path: testInfo.outputPath('refill-before.png') });
+  await page.evaluate(() => {
+    (window as any).__refilled = false;
+    new MutationObserver(() => {
+      if (document.querySelector('#boss-bar .frag.refill')) (window as any).__refilled = true;
+    }).observe(document.getElementById('boss-bar')!, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  });
+  await play(CONVERTED_AT - 1, CONVERTED_AT);
+  expect(await empty.count()).toBe(before - 1);
+  expect(await page.evaluate(() => (window as any).__refilled)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('refill-after.png') });
 });
