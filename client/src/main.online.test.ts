@@ -355,7 +355,7 @@ describe('Copy on the invite link (#839)', () => {
     const game = await invited();
     const link = byId<HTMLInputElement>('invite').value;
     byId('invite-copy').click();
-    await until(game, () => byId('invite').hidden);
+    await until(game, () => byId('invite').hidden === true);
     expect(calls()).toBe(1);
     expect(copied()).toBe(link);
     expect(link).toContain(`#room=${game.room()}`);
