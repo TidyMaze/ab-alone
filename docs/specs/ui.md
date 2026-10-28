@@ -148,6 +148,18 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   `flatHudHtml` (`client/src/hud.ts`): "Turn: Black" ("Turn: game over" once over), "Ejected: Black 1/6, White 4/6",
   and in a boss fight "Boss phase: 2 of 3" and "Tell: " with the tell text and its countdown ("none" without a tell).
   Off, the block is gone. Strings kept verbatim for the e2e tests.
+- **Boss health bar (#788).** In every boss fight (solo, daily, co-op) `#boss-bar` sits at the top centre: the boss's
+  name in the display font, a red bar under it. The bar is cut into one fragment per ejection the player needs to win,
+  read from the engine (`win_ejections`: 6 for most bosses, 12 for The Ballast Mind), and one fragment empties from the
+  right per ejection, to an outline in `--muted` while the filled ones are `--danger` (3:1 against the plate in both
+  themes). The fragment where a phase begins (`phase_ejections`) has a light tick on its left edge, so the phase steps
+  read without colour. It is one `role="meter"` for a screen reader ("2 of 6 ejected, phase 1 of 3"). Wider than tall it
+  is centred in the top band between the plate and the button column, at most 24 rem wide and at least 10 rem (the top
+  row of the board lies below it, also at 812 by 375); held upright it is the first row of the column, above the
+  plate. It grows with the UI scale like the plate and lets every press through. A fragment drains with a 400 ms
+  fade; under Reduced motion (section 6) it changes at once. It replaces nothing: the plate keeps the boss block with
+  its P1 P2 P3 notches and the tell, and the phase notches and tally marks scratched on the frame stay (the bar is the
+  quick read at the top, the frame marks the exact count), decided in #788. Outside a boss fight it is hidden.
 - **Terminal reader (#512, world.md section 4).** While the camera frames the deck console, the HUD, the
   buttons and the support corner hide, so nothing covers the screen's text at any UI scale; they come back
   when the player leaves. The page shown is copied into `#reader` (`aria-live="polite"`, labelled

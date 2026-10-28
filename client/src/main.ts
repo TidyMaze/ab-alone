@@ -23,6 +23,7 @@ import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { askBot, askEval, botBudget } from './bot';
 import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
+import { drawBossBar } from './bossbar';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
@@ -2490,6 +2491,10 @@ function hud(extra = ''): void {
       }),
     );
   }
+  drawBossBar(
+    document.getElementById('boss-bar')!,
+    boss ? { name: boss.name(), ejected: engine.ejected(1), win: engine.win_ejections(1), steps: Array.from(boss.phase_ejections()) } : null,
+  );
   if (flatHud) {
     const flat = { phase: boss?.phase() ?? 0, phases: boss?.phases() ?? 0, tell };
     document

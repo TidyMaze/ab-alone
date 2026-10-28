@@ -70,6 +70,6 @@ describe('drawBossBar', () => {
     expect(meter.getAttribute('aria-valuetext')).toBe('2 of 6 ejected, phase 1 of 3');
     expect(el.querySelector('.name b')).toBeNull();
     drawBossBar(el, { name: 'The Hull', ejected: 5, win: 6, steps: [3, 5] });
-    expect(meter.getAttribute('aria-valuetext')).toBe('5 of 6 ejected, phase 3 of 3');
+    expect(el.querySelector('[role="meter"]')!.getAttribute('aria-valuetext')).toBe('5 of 6 ejected, phase 3 of 3');
   });
 });

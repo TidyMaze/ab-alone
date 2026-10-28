@@ -379,6 +379,15 @@ impl Encounter {
         }
     }
 
+    /// The ejections that begin each phase after the first, in order (the boss health bar of the
+    /// HUD marks them, #788).
+    pub fn phase_ejections(&self) -> Vec<u8> {
+        match &self.fight {
+            Fight::Plain(_) => (self.entry.def)().phase_ejections,
+            Fight::Choir(_) => PHASE_EJECTIONS.to_vec(),
+        }
+    }
+
     /// Id of the board special that fires after the next ply, `-1` when none.
     pub fn tell(&self) -> i32 {
         match &self.fight {
