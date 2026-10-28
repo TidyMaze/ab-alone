@@ -702,6 +702,27 @@ it('mounts the progressive PBR spaceship bay into propsGroup (#648, #660)', asyn
   game.hook('__mountBay', null);
 });
 
+it('keeps the bay lights when a setting redraws the props (#787)', async () => {
+  const game = await boot('?bot=off');
+  const dummyBay = {
+    scene: new THREE.Group(),
+    materials: {
+      deck: new THREE.MeshStandardMaterial(),
+      bulkhead: new THREE.MeshStandardMaterial(),
+      grate: new THREE.MeshStandardMaterial(),
+    },
+  };
+  game.hook('__mountBay', dummyBay);
+  const lights = () => {
+    let n = 0;
+    dummyBay.scene.parent!.traverse((o) => void (o instanceof THREE.PointLight && n++));
+    return n;
+  };
+  const before = lights();
+  game.hook('__setTier', 'low'); // applyLook() clears and redraws the props
+  expect(lights()).toBe(before);
+});
+
 it('honors query quality param and allows setting tier live (#655)', async () => {
   const game = await boot('?bot=off&quality=high');
   expect(document.body.dataset.tier).toBe('high');
