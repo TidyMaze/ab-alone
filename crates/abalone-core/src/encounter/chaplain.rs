@@ -827,14 +827,7 @@ mod tests {
     fn the_boss_takes_a_conversion() {
         // A player marble has 3 boss neighbours and a boss marble one step from the 4th.
         let mut e = boss_turn(&[(0, 0)], &[(1, 0), (1, -1), (0, -1), (-2, 0)], 2);
-        let plain = e.boss_search().unwrap().mv;
-        let mut other = e.clone();
-        other.play(&plain).unwrap();
-        assert_eq!(
-            count(&other, Cell::Black),
-            2,
-            "the plain search converts nothing"
-        );
+        // At 300 nodes the plain search finds this conversion too (it missed it at 2000, #821).
         let mv = chaplain_move(&e).unwrap();
         e.play(&mv).unwrap();
         assert_eq!(count(&e, Cell::Black), 1, "the player marble converted");
