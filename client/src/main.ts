@@ -1424,9 +1424,9 @@ let pulsarShown: Pulsar | null = null; // the next pulse of the last refresh
 const rippleGeometry = new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2);
 const rippleMaterials = Array.from({ length: RIPPLES }, () => new THREE.MeshBasicMaterial({ color: SHOCK_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
 let ripples: THREE.Mesh[] = []; // moved by the animation loop
-// The Ballast Mind's last borrowed effect (#838): a steady ring in the tell colour on each cell it touched, until the next ply.
-const firedGeometry = new THREE.RingGeometry(0.44, 0.5, 40).rotateX(-Math.PI / 2);
-const firedMaterial = new THREE.MeshBasicMaterial({ color: BONE, depthWrite: false });
+// The Ballast Mind's last borrowed effect (#838): a steady ring in the hazard colour (the orange of its HUD line) on each cell it touched, until the next ply.
+const firedGeometry = new THREE.RingGeometry(0.4, 0.5, 40).rotateX(-Math.PI / 2);
+const firedMaterial = new THREE.MeshBasicMaterial({ color: 0xe8812a, transparent: true, depthWrite: false }) // transparent: drawn after the discs;
 let firedShown: Fired | null = null; // read by the e2e tests
 let pulsarCores: THREE.Mesh[] = []; // spun by the animation loop
 let shock: { mesh: THREE.Mesh; id: number; start: number; reduced: boolean; skipped: boolean } | null = null;
@@ -1762,7 +1762,7 @@ function applyPalette(): void {
   tickMaterial.color.setHex(pal.tell);
   scratchMaterial.color.setHex(pal.tell);
   paleMaterial.color.setHex(pal.tell);
-  firedMaterial.color.setHex(pal.tell);
+  firedMaterial.color.set(pal.hazard);
   ghostCore.color.setHex(pal.core);
   scarab.color.setHex(pal.shell);
   const smoked = glassLooks.get('smoked');
@@ -2865,7 +2865,7 @@ function refresh(): void {
   for (const [q, r] of firedShown?.cells ?? []) {
     const { x, z } = axialTo3D(q, r);
     const ring = Object.assign(new THREE.Mesh(firedGeometry, firedMaterial), { name: 'ballast-fired' });
-    ring.position.set(x, 0.04, z);
+    ring.position.set(x, 0.06, z);
     marbles.add(ring);
   }
   document.body.dataset.fired = String(firedShown?.cells.length ?? 0); // read by the e2e tests
