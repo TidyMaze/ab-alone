@@ -31,7 +31,8 @@ import { choirChips, drawChoirChips } from './choirchips';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
-import { lightPanel } from './lightpanel';
+import { applyTuning, lightPanel } from './lightpanel';
+import { LIGHT_TUNING } from './lighttuning';
 import { TUBE_SPACING, tubeLights } from './neonlight';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -1542,7 +1543,20 @@ if (deckAlbedo && tier === 'high' && typeof document !== 'undefined') {
 
 // ?lights: a power slider per light and neon tube (lightpanel.ts), rebuilt when the props replace their lights.
 const lightsPanel = new URLSearchParams(location.search).has('lights') ? document.body.appendChild(document.createElement('div')) : null;
-const refreshLights = (): void => void (lightsPanel && lightPanel(sceneRenderer.scene, lightsPanel, (at) => toggleFreeCam(true, at)));
+// The bloom's knobs, tuned and in the panel like the lights.
+const bloomKnobs = ((b) =>
+  b
+    ? [
+        { name: 'bloom strength', uniform: b.strength, max: 3 },
+        { name: 'bloom radius', uniform: b.radius, max: 1 },
+        { name: 'bloom threshold', uniform: b.threshold, max: 3 },
+      ]
+    : [])(sceneRenderer.pipeline?.bloom);
+// The lights as tuned (lighttuning.ts), each time they are made again: here, and on the deck's change and the room.
+const refreshLights = (): void => {
+  applyTuning(sceneRenderer.scene, LIGHT_TUNING, bloomKnobs);
+  if (lightsPanel) lightPanel(sceneRenderer.scene, lightsPanel, (at) => toggleFreeCam(true, at), bloomKnobs);
+};
 drawProps = (): void => {
   propsGroup.clear();
   const sLights = spaceshipLights(deck);

@@ -3,6 +3,7 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { boot } from './test/harness';
+import { LIGHT_TUNING } from './lighttuning';
 
 // What the other main.*.test.ts files leave out of main.ts: a browser check asking for the next draw (#435), and a
 // deck whose own texture set did not load (#401, #440).
@@ -58,9 +59,43 @@ describe('main.ts, ?lights', () => {
     expect(document.getElementById('free-cam')!.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('puts the bloom strength, radius and threshold last', async () => {
+    await boot('?bot=off&lights');
+    const bloom = [...document.querySelectorAll('#light-panel details')].at(-1)!;
+    expect([...bloom.querySelectorAll('label')].map((l) => l.firstChild!.textContent!.trim())).toEqual(['bloom radius', 'bloom strength', 'bloom threshold']);
+  });
+
+  it('has no bloom knobs when the bloom does not build', async () => {
+    vi.doMock('three/addons/tsl/display/BloomNode.js', () => ({
+      bloom: () => {
+        throw new Error('no bloom');
+      },
+    }));
+    await boot('?bot=off&lights');
+    vi.doUnmock('three/addons/tsl/display/BloomNode.js');
+    expect(document.querySelector('#light-panel')!.textContent).not.toContain('bloom');
+  });
+
   it('has no panel without it', async () => {
     await boot('?bot=off');
     expect(document.getElementById('light-panel')).toBeNull();
+  });
+});
+
+describe('main.ts, the tuned lights', () => {
+  it('lights the room as tuned (lighttuning.ts), with or without the panel', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    expect((scene!.getObjectByName('key') as THREE.Light).intensity).toBe(LIGHT_TUNING.key);
+    expect(((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity).toBe(
+      LIGHT_TUNING['corner-neon'],
+    );
+    expect((scene!.getObjectByName('emergencyLight') as THREE.Light).intensity).toBe(LIGHT_TUNING.emergencyLight);
   });
 });
 

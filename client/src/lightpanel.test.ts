@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
-import { lightPanel } from './lightpanel';
+import { applyTuning, lightPanel } from './lightpanel';
 
 describe('lightPanel (?lights)', () => {
   const scene = (): { scene: THREE.Scene; key: THREE.DirectionalLight; lamp: THREE.PointLight; neon: THREE.MeshStandardMaterial } => {
@@ -134,6 +134,35 @@ describe('lightPanel (?lights)', () => {
     aim.click();
     expect(aimed).toEqual([[10, 2, 0]]);
     expect(lightPanel(s).querySelector('button')).toBeNull(); // no camera to point: no button
+  });
+
+  it('sets the tuned power of each family, and leaves the others as they are', () => {
+    const { scene: s, key, lamp, neon } = scene();
+    const twin = new THREE.PointLight(0x38e8ff, 2.25);
+    twin.name = 'corner-neon-ne light';
+    const row = new THREE.PointLight(0x38e8ff, 2.25);
+    row.name = 'corner-neon-nw light';
+    s.add(twin, row);
+    applyTuning(s, { key: 0, 'corner-neon': 110, 'corner-neon light': 100, 'gone lamp': 7 });
+    expect([key.intensity, neon.emissiveIntensity, twin.intensity, row.intensity]).toEqual([0, 110, 100, 100]);
+    expect(lamp.intensity).toBe(2.25); // not tuned
+  });
+
+  it('adds the bloom knobs last, without an aim button, tuned by name like the lights', () => {
+    const { scene: s } = scene();
+    const strength = { value: 0.175 };
+    const knobs = [{ name: 'bloom strength', uniform: strength, max: 2 }];
+    const panel = lightPanel(s, undefined, () => {}, knobs);
+    const bloom = [...panel.querySelectorAll('details')].at(-1)!;
+    expect(bloom.querySelector('summary')!.textContent).toBe('Bloom (1)');
+    expect(bloom.querySelector('button')).toBeNull();
+    const slider = bloom.querySelector('input')!;
+    expect([slider.max, slider.step, slider.value]).toEqual(['2', '0.001', '0.175']);
+    slider.value = '0.5';
+    slider.dispatchEvent(new Event('input'));
+    expect(strength.value).toBe(0.5);
+    applyTuning(s, { 'bloom strength': 0.8 }, knobs);
+    expect(strength.value).toBe(0.8);
   });
 
   it('rebuilds into the same panel, the old sliders gone', () => {

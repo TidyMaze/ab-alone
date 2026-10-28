@@ -53,7 +53,7 @@ export function createBloomPipeline(
   renderer: THREE.WebGPURenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
-): THREE.RenderPipeline | null {
+): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> }) | null {
   try {
     const pipeline = new THREE.RenderPipeline(renderer);
     const scenePass = pass(scene, camera);
@@ -61,7 +61,8 @@ export function createBloomPipeline(
     const bloomNode = bloom(colorNode, 0.175, 0.15, 1);
     bloomNode.setResolutionScale(0.5);
     pipeline.outputNode = colorNode.add(bloomNode);
-    return pipeline;
+    return Object.assign(pipeline, { bloom: bloomNode }); // its strength, radius and threshold tuned with ?lights
+
   } catch {
     return null;
   }
@@ -72,7 +73,7 @@ export class SceneRenderer {
   readonly camera: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGPURenderer;
   readonly backend: 'WebGPU' | 'WebGL2';
-  readonly pipeline: THREE.RenderPipeline | null = null;
+  readonly pipeline: ReturnType<typeof createBloomPipeline> = null;
 
   readonly ambient: THREE.AmbientLight;
   readonly lamp: THREE.DirectionalLight;
