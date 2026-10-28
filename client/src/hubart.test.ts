@@ -94,6 +94,13 @@ describe('hub door 3D glyphs (#628)', () => {
     expect(materials).toContain(GLYPH_COLORS.terminal);
   });
 
+  it('builds a gold ring and core for the Medal room (#812)', () => {
+    const glyph = createDoorGlyph({ kind: 'medals' });
+    expect(glyph.name).toBe('door-medals');
+    const materials = glyph.children.map((c) => ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
+    expect(materials).toContain(GLYPH_COLORS.medals);
+  });
+
   it('builds directional arrow for open lift, oriented towards destination', () => {
     const door: Door = { kind: 'lift', to: 'cargo' };
     const glyphUp = createDoorGlyph(door, { open: true, cell: [1, -2] });
