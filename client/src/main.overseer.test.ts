@@ -202,7 +202,7 @@ describe('main.ts The Overseer (#635)', () => {
     expect(body().explosions).toBe('1');
     expect(body().exploding).toBe('1');
     expect(drawn(game).overseer).toBeNull(); // the pedestal is gone
-    expect(bubble().classList.contains('angry')).toBe(false); // the angry line due on this ply is dropped
+    expect(bubble().hidden).toBe(true); // the angry line due on this ply is dropped: nothing is said while it blows
     game.frame(BLAST_MS);
     expect(body().exploding).toBeUndefined();
     game.frame(0);

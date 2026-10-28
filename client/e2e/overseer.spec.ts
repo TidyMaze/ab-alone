@@ -74,6 +74,22 @@ test('The Overseer: the boss pushing the 6th core in wins the fight for the play
   await page.screenshot({ path: testInfo.outputPath('overseer-victory.png') });
 });
 
+// The defeated Overseer (#789): its marble explodes, then its bubble types the farewell instead of an angry line.
+test('The Overseer: on victory its marble explodes, then the bubble types the farewell, #789', async ({ page }, testInfo) => {
+  await startOverseer(page);
+  await plies(page, 0, 23);
+  await page.emulateMedia({ reducedMotion: 'no-preference' }); // the explosion plays
+  await page.mouse.move(2, 2);
+  await plies(page, 23, 24);
+  await expect(page.locator('body')).toHaveAttribute('data-exploding', '1');
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('overseer-explosion.png') });
+  await expect(page.locator('#bubble-text')).toHaveText('Well done. You broke the last thing that cared about you.');
+  await expect(page.locator('#bubble')).not.toHaveClass(/angry/);
+  await freshDraw(page);
+  await page.screenshot({ path: testInfo.outputPath('overseer-farewell.png') });
+});
+
 // The Overseer speaks and its vents turn toxic (#741, docs/specs/ui.md).
 const LINES = [
   'That core was load-bearing. Like your hopes.',

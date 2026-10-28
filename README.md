@@ -56,13 +56,13 @@ Die, read the tell, retry with the same seed.
 | Mess | **The Echo** | mirrors your every move through the centre of the board |
 | Cargo | **The Hull** | one announced cell at a time cracks, then falls away under both sides |
 | Furnace | **The Choir** | three armies of six in triangles, one sings (moves) per turn; the weakest army is removed after 3 and 5 ejections, and the last one sings twice |
-| Chapel | **The Chaplain** | a marble touching four foes changes side, and at four ejections a martyr explodes and converts its neighbours |
+| Chapel | **The Chaplain** | a marble touching four foes changes side, and at four ejections a martyr explodes and converts its neighbours, who wear its glyph and a cracked shell |
 | Bridge | **The Ballast Mind** | the final exam: a bigger board, void pillars, and every 3 turns an effect borrowed from the Hull, the Pulsar, the Magnetizer or the Chaplain |
 | Cargo | **The Alien** | lays eggs near your marbles that hatch into new marbles unless you crush them |
 | Cargo | **The Rail Yard** | freight trains, the first on turn 2, sweep a whole line, edge to edge, either side |
 | Furnace | **The Magnetizer** | charges marbles of both sides, + then − in turn, and opposite charges side by side throw each other apart |
 | Bridge | **The Pulsar** | six beacons pulse, pushing every line like a sumito |
-| Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; it talks back in typed bubbles and its vents turn toxic |
+| Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; it talks back in typed bubbles, its vents turn toxic, and its marble explodes with a farewell when you win |
 | Cargo | **The Assembly Line** | three conveyor belts between the armies carry every marble off the board, then their presses strike |
 | Furnace | **The Unstable Core** | the centre cells charge your marbles, a charged marble weighs more in a push and four charges blow it off; later the core collapses and shockwaves shove the busiest wedge |
 

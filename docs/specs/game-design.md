@@ -338,7 +338,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   flips to you, before then, nothing explodes. A second martyr would hand you the 6th ejection,
   so there is none. There is no P3: the phase notches show two phases.
 - **Explosion**: a flash and a ring of shards at the martyr's cell (reduced motion: a static
-  flash), then the converted marbles take the flipped look.
+  flash), then the converted marbles take the flipped look: half shell and half glass, the Chaplain's
+  pale glyph over the wax and pale cracks on the shell half (#790), a shape and a texture, never
+  colour alone, 3:1 on every shell and glass skin.
 - **Calibrate**: knob = threshold (4), the ejection count of P2 (4), AI aggression weight. Fail if
   the median attempt ends with fewer than 3 conversions seen (nobody learns the tell). Measured
   (#753, boss-balance.md section 3): the ladder pro player wins 16 of 20 at 1x and 19 of 20 at
@@ -671,6 +673,10 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   load-bearing. Like your hopes.", "Do you know what that cost? No. You can't count.", "Stop
   touching my things.", "I will remember that. I remember everything.", "Congratulations. You
   broke something. Again.", "That was mine. Everything here is mine."
+  **It goes** (#789): when the player wins, its pedestal explodes like the Chaplain's martyr (a flash and
+  a ring of shards, reduced motion: a static flash), then its bubble types "Well done. You broke the
+  last thing that cared about you." (held 3 s). The farewell has priority: the angry line due on the
+  winning ply is dropped.
   The HUD line reads "Neurotoxin 25 % · 30 turns left", then one sarcastic line of the Overseer
   that changes with the level, every 20 %: "Take your time. The neurotoxin will wait.", "The
   neurotoxin is now at a level we call festive.", "You are doing very well. For a corpse.", "Most
