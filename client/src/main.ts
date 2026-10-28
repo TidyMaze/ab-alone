@@ -3860,6 +3860,15 @@ let rankedDone = false;
 let rankedOpponentRating = DEFAULT_RATING;
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
 const inviteLabel = document.getElementById('invite-label')!;
+/** Shows the invite link of a room, its address too. The link makes the button column taller, and a column scrolled down
+ * to the mode menu would keep the buttons above out of its box: it goes back to the top (#839). */
+function showInvite(url: string, caption: string): void {
+  inviteBox.value = url;
+  location.hash = new URL(url).hash;
+  inviteBox.hidden = inviteLabel.hidden = false;
+  inviteLabel.textContent = caption;
+  document.getElementById('online')!.scrollTop = 0;
+}
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
 rematchButton.addEventListener('click', () => void online?.rematch());
 // Co-op (docs/specs/coop-boss.md section 3): every page plays the boss reply to each human move itself, from the same
@@ -3986,11 +3995,7 @@ function playOnline(coop?: CoopFight): void {
   rankedMode = null;
   moveModes('pick');
   const room = newRoomId((b) => crypto.getRandomValues(b));
-  inviteBox.value = inviteUrl(location.href, room, coop);
-  location.hash = new URL(inviteBox.value).hash;
-  inviteBox.hidden = false;
-  inviteLabel.hidden = false;
-  inviteLabel.textContent = `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`;
+  showInvite(inviteUrl(location.href, room, coop), `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`);
   void goOnline(room, 1, coop);
 }
 document.getElementById('play-online')!.addEventListener('click', () => playOnline());
@@ -4382,10 +4387,7 @@ async function goRoyale(room: string, side: number): Promise<void> {
 startButton.addEventListener('click', () => void royaleNet?.start());
 royaleInviteButton.addEventListener('click', () => {
   const room = newRoomId((b) => crypto.getRandomValues(b));
-  inviteBox.value = royaleUrl(location.href, room);
-  location.hash = new URL(inviteBox.value).hash;
-  inviteBox.hidden = inviteLabel.hidden = false;
-  inviteLabel.textContent = 'Invite link: send it to the other players';
+  showInvite(royaleUrl(location.href, room), 'Invite link: send it to the other players');
   void goRoyale(room, 1);
 });
 // Used by the browser checks to load a royale game file (#502).
