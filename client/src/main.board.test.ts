@@ -499,4 +499,14 @@ describe('main.ts board and HUD', () => {
     const lights = marbles.children.filter((child) => child instanceof THREE.PointLight);
     expect(lights.length).toBe(0);
   });
+
+  it('draws the target arrows dark on their luminous ring, so they read 3:1 on the lit cells (#787)', async () => {
+    const game = await boot('?bot=off');
+    const legal = game.hook<{ cells: Axial[] }[]>('__legal');
+    game.click(...legal.find((m) => m.cells.length === 1)!.cells[0]!);
+    const arrow = game.hook<THREE.Group>('__marbles').children.find(
+      (child) => child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial,
+    ) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
+    expect(arrow!.material.color.getHex()).toBe(0x0b0d0f);
+  });
 });
