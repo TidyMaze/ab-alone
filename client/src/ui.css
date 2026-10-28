@@ -432,7 +432,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 /* Held upright it is the first row of the column, one slim row (the name, then the bar), and the plate's own boss name
    gives its line back, so the rows under it keep off the board's top cells (bug #234). */
 @media (orientation: portrait) {
-  #boss-bar { position: static; order: -1; display: flex; align-items: center; gap: 0.5rem; width: auto; padding: 0.25rem 0.5rem; }
+  #boss-bar { position: static; order: -1; align-self: stretch; margin-inline: 0; display: flex; align-items: center; gap: 0.5rem; width: auto; padding: 0.25rem 0.5rem; }
   #boss-bar .name { flex: none; font-size: 0.8125rem; }
   #boss-bar .frags { flex: 1; margin-top: 0; }
   #hud .boss strong { display: none; }

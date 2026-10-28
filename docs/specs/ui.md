@@ -156,7 +156,8 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   read without colour. It is one `role="meter"` for a screen reader ("2 of 6 ejected, phase 1 of 3"). Wider than tall it
   is centred in the top band between the plate and the button column, at most 24 rem wide and at least 10 rem (the top
   row of the board lies below it, also at 812 by 375); held upright it is the first row of the column, above the
-  plate. It grows with the UI scale like the plate and lets every press through. A fragment drains with a 400 ms
+  plate, one slim row (the name, then the bar) and the plate's own boss name is hidden, so the column is no taller and
+  covers no cell. It grows with the UI scale like the plate and lets every press through. A fragment drains with a 400 ms
   fade; under Reduced motion (section 6) it changes at once. It replaces nothing: the plate keeps the boss block with
   its P1 P2 P3 notches and the tell, and the phase notches and tally marks scratched on the frame stay (the bar is the
   quick read at the top, the frame marks the exact count), decided in #788. Outside a boss fight it is hidden.
