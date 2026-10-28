@@ -385,6 +385,7 @@ mod tests {
         assert_eq!(boss.name, "The Ballast Mind");
         assert!(boss.phase_marbles.is_empty());
         assert_eq!(boss.phase_ejections, vec![3, 5]);
+        assert_eq!(BALLAST_NODE_BUDGET, 100, "#833");
         assert_eq!(boss.node_budget, BALLAST_NODE_BUDGET);
     }
 
