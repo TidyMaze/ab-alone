@@ -1875,10 +1875,17 @@ mod tests {
         assert_eq!(steps("hull"), vec![3, 5]);
         assert_eq!(steps("choir"), vec![3, 5], "the Choir has its own table");
         assert_eq!(steps("alien"), vec![2, 4]);
-        for id in ["echo", "hull", "chaplain", "choir", "ballast", "alien", "railyard", "pulsar", "assembly", "core"] {
+        for id in [
+            "echo", "hull", "chaplain", "choir", "ballast", "alien", "railyard", "pulsar",
+            "assembly", "core",
+        ] {
             let f = Encounter::new(id, 1).unwrap();
             assert_eq!(f.phase_ejections().len() + 1, f.phases() as usize, "{id}");
-            assert_eq!(f.phase_ejections()[0], f.phase_notches()[0], "{id}: the first notches count to the first step");
+            assert_eq!(
+                f.phase_ejections()[0],
+                f.phase_notches()[0],
+                "{id}: the first notches count to the first step"
+            );
         }
     }
 
