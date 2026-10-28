@@ -50,7 +50,7 @@ import {
   type Train,
 } from './railyard';
 import { BUBBLE_SPOT, HAZE_PER_VENT, TAUNTS, burnTrack, burnsPlayer, hazeAt, parseBurns, startsBurningPlayer, tauntIndex, toxinText, ventNote, type Burn } from './overseer';
-import { ANGRY_HOLD_MS, TAUNT_HOLD_MS, angryLine, speechAt, type Speech } from './speech';
+import { ANGRY_HOLD_MS, FAREWELL, TAUNT_HOLD_MS, angryLine, speechAt, type Speech } from './speech';
 import { blinkAt, drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import {
   RIB_SPACING,
@@ -1151,7 +1151,7 @@ const blastFlashGeometry = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2)
 const blastFlashMaterial = new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, depthWrite: false, side: THREE.DoubleSide });
 const blastShardGeometry = new THREE.TetrahedronGeometry(0.15);
 const blastShardMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d, transparent: true, depthWrite: false });
-let blast: { group: THREE.Group; flash: THREE.Mesh; shards: THREE.Mesh[]; start: number; reduced: boolean } | null = null;
+let blast: { group: THREE.Group; flash: THREE.Mesh; shards: THREE.Mesh[]; start: number; reduced: boolean; then?: Speech } | null = null;
 // A converted marble (#508, world.md section 5) is half and half, 3:1 on the shell (#326): the ridged shell up to its
 // middle, a bowl closed by a flat floor so its inside never shows, and the player's glass above it with the core dimmed
 // (marbles.ts), resting on the floor. The halves stay upright whatever the marble's turn, under its boss accent; the
@@ -1170,11 +1170,19 @@ const shellHalfGeometry = new THREE.LatheGeometry(
 const glassHalfGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidthSegments, half, 0, Math.PI * 2, 0, Math.PI / 2);
 const convertedCoreGeometry = coreGeometry.clone().translate(0, CORE.radius, 0);
 const unseen = new THREE.MeshBasicMaterial({ visible: false });
+// Beyond the colour (#790): the Chaplain's pale glyph over the wax and pale cracks on the shell half (the crack decal of the
+// Hull), both 3:1 on every shell and glass skin, whatever the deck's light.
+const convertedGlyph = new THREE.MeshBasicMaterial({ color: BONE });
+const convertedGlyphGeometry = glyphGeometry.clone().translate(0, 0.6, 0); // over the wax, and so turned upright with the marble's parts
+const convertedCracks = new THREE.MeshBasicMaterial({ color: BONE, alphaMap: crackDecal, transparent: true, depthWrite: false });
 function convert(marble: THREE.Mesh): void {
   marble.material = unseen;
   const shell = Object.assign(new THREE.Mesh(shellHalfGeometry, marbleMaterials[1]), { name: 'shell', castShadow: true });
   const glass = Object.assign(new THREE.Mesh(glassHalfGeometry, marbleMaterials[2]), { name: 'glass', castShadow: true });
-  marble.add(shell, glass, Object.assign(new THREE.Mesh(convertedCoreGeometry, convertedCore), { name: 'core', renderOrder: 1 }));
+  const cracks = Object.assign(new THREE.Mesh(shellHalfGeometry, convertedCracks), { name: 'cracks' });
+  cracks.scale.setScalar(1.01); // just outside the shell
+  const glyph = Object.assign(new THREE.Mesh(convertedGlyphGeometry, convertedGlyph), { name: 'glyph' });
+  marble.add(shell, glass, Object.assign(new THREE.Mesh(convertedCoreGeometry, convertedCore), { name: 'core', renderOrder: 1 }), cracks, glyph);
 }
 let exposed = 0; // marbles the hovered move would expose, for the HUD
 // The Choir: each army wears its own glyph in the pale tell colour on top of its marbles, Alto a spike,
@@ -1265,6 +1273,8 @@ function animateHaze(now: number): void {
   }
   if (hazes[0]) document.body.dataset.hazeY = hazes[0].sprite.position.y.toFixed(3); // read by the e2e tests
 }
+let overseerBlown: Engine | Encounter | null = null; // the game whose Overseer blew up (#789): its pedestal is not drawn again
+let overseerPedestal: THREE.Mesh | null = null;
 let overseerDrawn: { overseer: Axial | null; cores: Axial[]; vents: Axial[] } = { overseer: null, cores: [], vents: [] }; // read by the e2e tests
 /** A core of The Overseer: a pale marble, its dark eye on top. */
 function coreMesh(): THREE.Mesh {
@@ -1975,7 +1985,17 @@ function afterPlay(before: number[], record: number[], live = true): void {
   delete document.body.dataset.burns;
   const vented = engine instanceof Encounter && engine.incinerators().length > 0;
   const burns = vented ? parseBurns((engine as Encounter).removed()) : [];
-  if (burns.length > 0) whenSettled(() => burn(burns, reduced, history.length));
+  const won = fight?.id === 'overseer' && engine instanceof Encounter && engine.result() === 1;
+  if (burns.length > 0) whenSettled(() => burn(burns, reduced, history.length, won));
+  // The defeated Overseer (#789): after the last burn its pedestal blows up like the martyr, then it says its farewell.
+  if (won && overseerBlown !== engine) {
+    overseerBlown = engine;
+    whenSettled(() => {
+      explode([0, 0], reduced, { text: FAREWELL, hold: TAUNT_HOLD_MS, angry: false });
+      overseerDrawn.overseer = null;
+      overseerPedestal!.visible = false;
+    });
+  }
   if (beltBoard) {
     shown = { game: engine, board: beltBoard, poles: [] };
     whenSettled(() => fireBelts(carries, beltBoard, reduced));
@@ -1995,8 +2015,9 @@ function sink(marbles: Burn[], reduced: boolean): void {
   for (const { cell, side } of marbles) startEjection(marbleMesh(side), burnTrack(cell, reduced), scene);
 }
 
-/** The explosion of the martyr at `cell`: a flash and a ring of shards, a static flash with reduced motion. */
-function explode(cell: Axial, reduced: boolean): void {
+/** The explosion at `cell` (the Chaplain's martyr, the defeated Overseer): a flash and a ring of shards, a static flash with
+ * reduced motion, then the bubble says `then`. */
+function explode(cell: Axial, reduced: boolean, then?: Speech): void {
   const p = axialTo3D(cell[0], cell[1]);
   const group = Object.assign(new THREE.Group(), { name: 'martyr-blast' });
   group.position.set(p.x, 0.36, p.z);
@@ -2004,7 +2025,7 @@ function explode(cell: Axial, reduced: boolean): void {
   const shards = reduced ? [] : Array.from({ length: BLAST_SHARDS }, () => new THREE.Mesh(blastShardGeometry, blastShardMaterial));
   group.add(flash, ...shards);
   scene.add(group);
-  blast = { group, flash, shards, start: performance.now(), reduced };
+  blast = { group, flash, shards, start: performance.now(), reduced, then };
   drawBlast(0);
   document.body.dataset.explosions = String(Number(document.body.dataset.explosions ?? 0) + 1); // read by the e2e tests
   document.body.dataset.exploding = '1';
@@ -2023,14 +2044,16 @@ function drawBlast(elapsedMs: number): void {
   });
   if (!at.done) return;
   scene.remove(blast!.group);
+  const { then } = blast!;
   blast = null;
   delete document.body.dataset.exploding;
+  if (then) say(then); // the Overseer's farewell types once its marble is gone (#789)
 }
 
-/** The burns of a ply at `ply`: each marble sinks into its vent, or fades with reduced motion; a burnt core angers the Overseer. */
-function burn(burns: Burn[], reduced: boolean, ply: number): void {
+/** The burns of a ply at `ply`: each marble sinks into its vent, or fades with reduced motion; a burnt core angers the Overseer, unless it is the last one: its farewell has priority (#789). */
+function burn(burns: Burn[], reduced: boolean, ply: number, won: boolean): void {
   document.body.dataset.burns = String(burns.length); // read by the e2e tests
-  if (burns.some((b) => b.side === CORE_CODE)) say({ text: angryLine(fight!.seed, ply), hold: ANGRY_HOLD_MS, angry: true }); // #741
+  if (!won && burns.some((b) => b.side === CORE_CODE)) say({ text: angryLine(fight!.seed, ply), hold: ANGRY_HOLD_MS, angry: true }); // #741
   for (const { cell, side } of burns) startEjection(side === CORE_CODE ? coreMesh() : marbleMesh(side), burnTrack(cell, reduced), scene);
 }
 
@@ -2249,7 +2272,7 @@ function fireBelts(carries: Carry[], before: number[], reduced: boolean): void {
     slide = { game: engine, tracks, start: performance.now() };
     document.body.dataset.sliding = '1';
   }
-  if (struck.length > 0) burn(struck, reduced, history.length);
+  if (struck.length > 0) burn(struck, reduced, history.length, false);
   if (!reduced) for (const { cell } of struck) pressOn(cell);
   document.body.dataset.beltTurns = String(Number(document.body.dataset.beltTurns ?? 0) + 1); // read by the e2e tests
 }
@@ -2584,7 +2607,9 @@ function refresh(): void {
     }
     if (side === 0) return;
     if (side === OVERSEER_CODE) {
+      if (overseerBlown === engine) return;
       const pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+      overseerPedestal = pedestal;
       const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
       eye.position.y = 0.86;
       pedestal.add(eye);

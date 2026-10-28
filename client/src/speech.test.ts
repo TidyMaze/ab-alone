@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANGRY_HOLD_MS, ANGRY_LINES, BUBBLE_FADE_MS, CHAR_MS, GLITCH_MS, TAUNT_HOLD_MS, TYPE_CPS, angryLine, speechAt } from './speech';
+import { FAREWELL, ANGRY_HOLD_MS, ANGRY_LINES, BUBBLE_FADE_MS, CHAR_MS, GLITCH_MS, TAUNT_HOLD_MS, TYPE_CPS, angryLine, speechAt } from './speech';
 
 // The Overseer's speech bubbles (#741): typed at 17 characters a second, a short flicker per character, held, then faded.
 
@@ -66,5 +66,11 @@ describe('angryLine, the line of a core burnt on a vent', () => {
   it('changes with the fight seed', () => {
     const [a, b] = [1, 2].map((seed) => Array.from({ length: 20 }, (_, ply) => angryLine(seed, ply)).join('|'));
     expect(a).not.toBe(b);
+  });
+});
+
+describe('the farewell of the defeated Overseer (#789)', () => {
+  it('is the one line of the issue', () => {
+    expect(FAREWELL).toBe('Well done. You broke the last thing that cared about you.');
   });
 });

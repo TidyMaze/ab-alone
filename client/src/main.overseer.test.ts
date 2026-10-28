@@ -2,7 +2,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { TAUNTS, VENT_NOTE, toxinText } from './overseer';
-import { CHAR_MS, angryLine } from './speech';
+import { BLAST_MS, FLASH_MS } from './martyr';
+import { CHAR_MS, FAREWELL, angryLine } from './speech';
 import { boot, type Game } from './test/harness';
 
 // The Overseer on the harness (#635, game-design.md section 7.11): the Overseer, its 6 cores and 6 vents drawn, the
@@ -186,6 +187,46 @@ describe('main.ts The Overseer (#635)', () => {
     expect(body().ejecting).toBe('fade');
     expect(game.hud()).toContain('Victory');
     expect(drawn(game).cores).toHaveLength(3);
+  });
+
+  it('on victory the central marble explodes, then the bubble types the farewell, with no angry line (#789)', async () => {
+    const game = await boot('?bot=off');
+    fightOverseer(game);
+    plies(game, 0, 23);
+    expect(drawn(game).overseer).toEqual([0, 0]);
+    for (const [q, r] of FIXTURE[23]!) game.click(q, r);
+    expect(body().explosions).toBeUndefined(); // the push slides first
+    game.frame(1000); // the slide ends: the 6th core burns and the Overseer blows
+    expect(body().burns).toBe('1');
+    expect(game.hud()).toContain('Victory');
+    expect(body().explosions).toBe('1');
+    expect(body().exploding).toBe('1');
+    expect(drawn(game).overseer).toBeNull(); // the pedestal is gone
+    expect(bubble().hidden).toBe(true); // the angry line due on this ply is dropped: nothing is said while it blows
+    game.frame(BLAST_MS);
+    expect(body().exploding).toBeUndefined();
+    game.frame(0);
+    expect(bubbleText()).toBe('W'); // then it types
+    expect(bubble().classList.contains('angry')).toBe(false);
+    game.frame(FAREWELL.length * CHAR_MS + 10);
+    expect(bubbleText()).toBe(FAREWELL);
+    expect(bubble().hidden).toBe(false);
+    game.frame(3000);
+    expect(Number(bubble().style.opacity)).toBeLessThan(1); // the 3 s hold, then it fades
+    game.frame(1000);
+    expect(bubble().hidden).toBe(true);
+  });
+
+  it('under reduced motion the farewell shows whole once the static flash is over', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightOverseer(game);
+    plies(game, 0, 23);
+    for (const [q, r] of FIXTURE[23]!) game.click(q, r);
+    expect(body().explosions).toBe('1');
+    game.frame(FLASH_MS);
+    game.frame(0);
+    expect(bubbleText()).toBe(FAREWELL);
+    expect(bubble().classList.contains('still')).toBe(true);
   });
 
   it('a fight with no clock draws no Overseer and no neurotoxin', async () => {

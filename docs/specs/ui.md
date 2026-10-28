@@ -371,7 +371,8 @@ mode once that toggle exists (#32), and it has no motion.
   the effects bus; it holds 3 s (angry: 1 s) after the last character, fades over 400 ms, and the angry one shakes
   for as long as it shows. Reduced motion shows the whole text at once, with no split and no shake. Screen readers get
   the whole line at once. Strings: "The vents now burn your marbles too." (HUD, 2 plies) and the 6 angry lines
-  (game-design.md section 7.11).
+  (game-design.md section 7.11). On its defeat the bubble types its farewell (typed and held like a taunt) once
+  its marble has exploded, and an angry line due on that ply is dropped (#789).
 - No flash above 3 per second, no full-screen white, ever (photosensitivity, world.md section 8).
 
 ## 7. Contrast targets (WCAG 2.1 AA)

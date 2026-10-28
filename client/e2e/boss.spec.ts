@@ -324,7 +324,7 @@ test('start The Chaplain: a converted marble keeps its look, #150', async ({ pag
   const cells = await page.evaluate(() => (window as any).__converted());
   const looks = await page.evaluate(() => (window as any).__convertedLooks());
   expect(looks).toHaveLength(cells.length);
-  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'core'] }))));
+  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'core', 'cracks', 'glyph'] }))));
   const contrasts = await topContrasts(page, cells, testInfo.outputPath('chaplain-converted.png'));
   for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3); // its glass half reads (#326, #508)
 });
