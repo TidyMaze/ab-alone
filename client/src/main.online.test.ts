@@ -119,6 +119,15 @@ describe('Play online', () => {
     expect(presence()).toBe('You are Black. Waiting for an opponent...');
   });
 
+  it('scrolls the button column back to the top, so no button above the link is left out of reach (#839)', async () => {
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('online').scrollTop = 40; // the player scrolled down to the mode menu
+    byId('play-online').click();
+    expect(byId('online').scrollTop).toBe(0);
+    await until(game, () => data().seat === 'player'); // the room is open before the test ends
+  });
+
   it('shows the opponent here once its Hello is verified, then disconnected once the room closes', async () => {
     const { game } = await hosted();
     expect(presence()).toBe('You are Black. White is here.');
@@ -320,6 +329,68 @@ describe('The invite link', () => {
     expect(JSON.parse(copied()).events).toContainEqual(
       expect.objectContaining({ event: 'net', data: { failure: 'join-error', message: 'ICE failed' } }),
     );
+  });
+});
+
+describe('Copy on the invite link (#839)', () => {
+  /** Boots, presses Play online and waits for the room: the link, its label and Copy show. */
+  async function invited() {
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('play-online').click();
+    await until(game, () => data().seat === 'player'); // the room is open before the test ends
+    return game;
+  }
+  const shown = (): boolean[] => ['invite-label', 'invite', 'invite-copy'].map((id) => !byId(id).hidden);
+
+  it('shows with the link and its label, and Copy is a button named Copy', async () => {
+    await invited();
+    expect(shown()).toEqual([true, true, true]);
+    expect(byId('invite-copy').textContent).toBe('Copy');
+    expect(byId('invite-copy').tagName).toBe('BUTTON');
+  });
+
+  it('writes the link to the clipboard, then closes the link, its label and Copy', async () => {
+    clipboard(async () => {});
+    const game = await invited();
+    const link = byId<HTMLInputElement>('invite').value;
+    byId('invite-copy').click();
+    await until(game, () => byId('invite').hidden === true);
+    expect(calls()).toBe(1);
+    expect(copied()).toBe(link);
+    expect(link).toContain(`#room=${game.room()}`);
+    expect(shown()).toEqual([false, false, false]);
+  });
+
+  it('keeps the link shown, selected, when the browser refuses the clipboard', async () => {
+    clipboard(async () => {
+      throw new Error('denied');
+    });
+    const game = await invited();
+    const link = byId<HTMLInputElement>('invite');
+    byId('invite-copy').click();
+    await until(game, () => game.hud().includes('invite link selected'));
+    expect(shown()).toEqual([true, true, true]);
+    expect(document.activeElement).toBe(link);
+    expect([link.selectionStart, link.selectionEnd]).toEqual([0, link.value.length]);
+  });
+
+  it('keeps the link shown when the page has no clipboard at all', async () => {
+    const game = await invited();
+    byId('invite-copy').click();
+    await until(game, () => game.hud().includes('invite link selected'));
+    expect(shown()).toEqual([true, true, true]);
+  });
+
+  it('closes with the room, and shows again with the next one', async () => {
+    const game = await invited();
+    game.openModes();
+    byId('ship').click(); // Back to the ship
+    expect(shown()).toEqual([false, false, false]);
+    game.openModes();
+    byId('play-online').click();
+    expect(shown()).toEqual([true, true, true]);
+    await until(game, () => data().seat === 'player');
   });
 });
 

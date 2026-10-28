@@ -400,7 +400,7 @@ test('on a desktop the buttons stay in a column at the top right, bug #227', asy
   await expect(page.locator('#hud')).toContainText('Black to move');
   const width = page.viewportSize()!.width;
   const boxes = await Promise.all(
-    ['Settings', 'Reset view', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
+    ['Settings', 'Cam', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()), // Reset view is beside Cam (#839)
   );
   expect(boxes[0]!.y).toBe(16);
   for (const [i, box] of boxes.entries()) {
