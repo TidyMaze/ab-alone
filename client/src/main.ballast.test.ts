@@ -98,7 +98,8 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
     expect(tell()).toContain(text);
     expect(document.body.dataset.fired).toBe(String(fired.cells.length));
     if (effect === 0) expect(fired.cells).toEqual(game.hook<{ cell: Axial }[]>('__cracks').map((c) => c.cell));
-    if (effect === 3) expect(fired.cells).toEqual([]); // a check that flipped nothing: no mark
+    // A check that flipped nothing, a pulse on the packed opening lines that pushes nothing: no mark.
+    if (effect === 3 || effect === 1) expect(fired.cells).toEqual([]);
     else expect(fired.cells.length).toBeGreaterThan(0);
     plies(game, 1);
     expect(game.hook<Fired>('__fired')).toBeNull();
