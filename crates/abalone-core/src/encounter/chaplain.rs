@@ -339,6 +339,7 @@ mod tests {
         assert!(b.phase_marbles.is_empty());
         assert_eq!(b.phase_ejections, vec![4], "P2 at 4 ejections, no P3");
         assert_eq!(b.node_budget, CHAPLAIN_NODE_BUDGET);
+        assert_eq!(CHAPLAIN_NODE_BUDGET, 300, "tuned in #821, boss-balance.md");
         assert_eq!(CHAPLAIN_FLIP_THRESHOLD, 4);
     }
 
