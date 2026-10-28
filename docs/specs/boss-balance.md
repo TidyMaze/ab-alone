@@ -69,6 +69,28 @@ nodes), so it is not a stable knob.
 7 of 10 with the pro-level player, 9 of 10 with the plain search. The rim cracks force contact,
 so the game does not stall. Too easy for a human is out of scope (follow-up, section 6).
 
+### The Hull plays its cracks (#823): same win rate, not tuned
+
+The boss search (`hull_move`) runs the crack timers on every player ply of its tree (the due cells
+vanish with their marbles, each side credited with the other's losses), so it pushes player marbles
+onto announced cracks and keeps its own off them. It does not guess where the next crack falls (the
+seed). Node budget (3000) unchanged, no rule change, `engine_version` unchanged. The pro player is
+the same as before (it does not read the cracks). Command: `LADDER_X=<1|10> LADDER_SEEDS=20 cargo
+run --release --example ladder -- hull`, seeds 0 to 19, 300 plies at most.
+
+| Player budget | Wins /20 before | Wins /20 now | Median plies before | Median plies now | Highest phase now | Deaths now |
+|---|---|---|---|---|---|---|
+| 3000 (1x) | 4 | **6** | 93 | 95 | P3 | push 12, rim_ejection 2 |
+| 30000 (10x) | 14 | **12** | 82 | 99.5 | P3 | push 4, rim_ejection 4 |
+
+Within the noise of 20 seeds: the pro player ignores the cracks and the cracks are few, so the
+boss rarely gains from them. Nothing was tuned, the owner decides.
+
+Reply time through wasm (release build in Node, 6 seeds of 80 plies, boss replies, a loaded
+machine, ms): The Hull 157 average, 232 at the 95th percentile, 442 at most (3000 nodes, was 84 / 118 / 159
+on an idle machine); measured in the same run, the Magnetizer 198 / 385 / 503 and the Pulsar
+641 / 1259 / 2167 on that load.
+
 ### The Choir: winnable, no change
 
 10 of 10, P3 reached in 3 seeds. The win at 10 ejections is already on `main` (#182, #184).
