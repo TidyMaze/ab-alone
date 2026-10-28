@@ -108,7 +108,7 @@ describe('ascii, as printed by render in abalone-cli', () => {
       'h . . . .   . . . .',
       'i . . B B B . . .',
       'j B B B B B B B',
-      'k . B B B B .',
+      'k B B B B B B',
     ].join('\n');
     expect(ascii(newEncounter('ballast', 1).board())).toBe(expected);
   });
