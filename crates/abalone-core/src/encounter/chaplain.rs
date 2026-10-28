@@ -174,7 +174,7 @@ pub fn chaplain_boss() -> BossDef {
 mod tests {
     use super::*;
     use crate::board::{Board, Cell, MAX_RADIUS};
-    use crate::encounter::{marbles, Encounter};
+    use crate::encounter::{marbles, Encounter, PveResult};
     use crate::game::Game;
     use crate::moves::Direction::{E, W};
     use crate::moves::{Move, Player};
@@ -354,6 +354,73 @@ mod tests {
             e.game().board().converted().is_empty(),
             "no longer converted"
         );
+    }
+
+    #[test]
+    fn a_boss_marble_converted_to_the_player_is_an_ejection_credit() {
+        let mut e = enc(&FOUR_AROUND, &[(0, 0)]);
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::Black));
+        assert_eq!(e.game().ejected(Player::Black), 1, "+1 per boss marble");
+        assert_eq!(e.game().ejected(Player::White), 0);
+    }
+
+    #[test]
+    fn a_player_marble_converted_to_the_boss_takes_one_credit_back() {
+        let mut e = build(&[(0, 0)], &FOUR_AROUND, &[], 3, 0);
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+        assert_eq!(e.game().ejected(Player::Black), 2, "-1 per player marble");
+    }
+
+    #[test]
+    fn the_credit_never_goes_below_zero() {
+        let mut e = enc(&[(0, 0)], &FOUR_AROUND);
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White));
+        assert_eq!(e.game().ejected(Player::Black), 0);
+    }
+
+    #[test]
+    fn a_conversion_each_way_in_one_turn_nets_out() {
+        let blacks = [(0, 0), (-2, 1), (-2, 0), (-3, 0), (-4, 1)];
+        let whites = [(1, 0), (1, -1), (0, -1), (-1, 1), (-3, 1)];
+        let mut e = build(&blacks, &whites, &[], 2, 0);
+        step(&mut e);
+        assert_eq!(at(&e, (0, 0)), Some(Cell::White), "player marble lost");
+        assert_eq!(at(&e, (-3, 1)), Some(Cell::Black), "boss marble won");
+        assert_eq!(e.game().ejected(Player::Black), 2, "+1 and -1");
+    }
+
+    #[test]
+    fn the_credit_that_reaches_6_wins_the_fight() {
+        let mut e = build(&FOUR_AROUND, &[(0, 0)], &[], 5, 0);
+        step(&mut e);
+        assert_eq!(e.game().ejected(Player::Black), 6);
+        assert_eq!(e.result(), Some(PveResult::Won));
+    }
+
+    #[test]
+    fn the_phase_stays_when_a_conversion_heals_the_boss_under_4() {
+        let mut e = build(&[(0, 0)], &FOUR_AROUND, &[], 4, 0);
+        assert_eq!(e.phase(), 1);
+        step(&mut e);
+        assert_eq!(e.game().ejected(Player::Black), 3, "healed");
+        assert_eq!(e.phase(), 1, "P2 never goes back");
+        let mut climbing = build(&FOUR_AROUND, &[(0, 0)], &[], 3, 0);
+        assert_eq!(climbing.phase(), 0);
+        step(&mut climbing);
+        assert_eq!(climbing.phase(), 1, "the first time the credit reaches 4");
+        let mut other = build(&[(0, 0)], &FOUR_AROUND, &[], 3, 0);
+        step(&mut other);
+        assert_eq!(other.phase(), 0);
+    }
+
+    #[test]
+    fn the_martyr_blast_converts_without_moving_the_credit_down() {
+        let mut e = build(&MARTYR_SCENE, &[(0, 0), (3, 0)], &[], 4, 0);
+        turns(&mut e, 4);
+        assert_eq!(e.game().ejected(Player::Black), 5, "only the martyr's +1");
     }
 
     #[test]
