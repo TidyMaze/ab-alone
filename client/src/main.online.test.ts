@@ -119,6 +119,15 @@ describe('Play online', () => {
     expect(presence()).toBe('You are Black. Waiting for an opponent...');
   });
 
+  it('scrolls the button column back to the top, so no button above the link is left out of reach (#839)', async () => {
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('online').scrollTop = 40; // the player scrolled down to the mode menu
+    byId('play-online').click();
+    expect(byId('online').scrollTop).toBe(0);
+    await until(game, () => data().seat === 'player'); // the room is open before the test ends
+  });
+
   it('shows the opponent here once its Hello is verified, then disconnected once the room closes', async () => {
     const { game } = await hosted();
     expect(presence()).toBe('You are Black. White is here.');

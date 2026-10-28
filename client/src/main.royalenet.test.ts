@@ -105,6 +105,16 @@ describe('Battle royale online (#504)', () => {
   beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
   afterEach(() => vi.useRealTimers());
 
+  it('Invite scrolls the button column back to the top, so no button above the link is left out of reach (#839)', async () => {
+    const game = await boot('?bot=off');
+    game.openModes();
+    button('battle-royale').click();
+    byId('online').scrollTop = 40;
+    button('royale-invite').click();
+    expect(byId('online').scrollTop).toBe(0);
+    await until(game, () => data().seat === 'player'); // the room is open before the test ends
+  });
+
   it('Invite opens a room of 6 seats: its invite link, the arena in the lobby, Start for the creator alone', async () => {
     const game = await boot('?bot=off');
     game.openModes();
