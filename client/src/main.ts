@@ -2548,6 +2548,7 @@ function medalNote(boss: { id: string }): string {
 function hud(extra = ''): void {
   syncReplay();
   backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
+  if (hub || royale) document.getElementById('boss-bar')!.hidden = true; // no boss there (#814)
   if (hub) {
     delete document.body.dataset.over; // no end light over the hub
     document.getElementById('hud')!.innerHTML = hub.hud();
