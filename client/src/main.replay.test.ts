@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AUTO_DELAY_MS } from './autoplay';
 import { BLACK_WINS } from '../e2e/end-games';
 import type { Axial } from './board';
 import { gameFileText } from './gamefile';
@@ -164,7 +165,7 @@ describe('what the replay covers', () => {
   });
 
   it('the move of a bot that answers while the replay is open closes it on the live position', async () => {
-    const game = await boot('/');
+    const game = await boot('?nodes=1');
     playOne(game);
     byId('replay').click();
     byId('replay-first').click();
@@ -196,4 +197,23 @@ describe('what the replay covers', () => {
     expect(bar()).toBe(false);
     expect(byId('replay').hidden).toBe(true);
   });
+
+  it('turns Auto-play off: the bot plays no move while the player looks back (#792)', async () => {
+    const game = await boot('?nodes=50');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    byId('auto-play').click();
+    await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS);
+    game.frame(1000);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(10); // the bot's reply
+    game.frame(1000);
+    const at = plies(game);
+    expect(at).toBe(2);
+    byId('replay').click();
+    expect(byId('auto-play').getAttribute('aria-pressed')).toBe('false');
+    await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS * 3);
+    game.frame(1000);
+    expect(plies(game)).toBe(at);
+  });
 });
+afterEach(() => vi.useRealTimers());

@@ -378,6 +378,28 @@ fight, never online (a versus room, a co-op fight, an online battle royale: the 
   `Encounter.player_move` (the search of the boss budget, so the difficulty scales it), a plain game asks `best_move`.
 - The label "Auto-play" is kept verbatim for the e2e tests.
 
+### 4.4 Replay
+
+Every game that keeps a move log has a Replay button, beside Hint and Auto-play on their row: a local or bot game, a boss fight, a daily
+fight, an online room (as a view only) and an imported game file (#793). It is greyed until the first move and
+hidden in the hub and in a battle royale.
+
+- **Bar.** Replay opens the replay bar on the live position, in the bottom-right column above the evaluation
+  bar (it covers no cell): a slider over the plies of the log, the label "Move N of M" (with "(live)" at the
+  end), and First, Previous, Next, Last and Live buttons. The keys: Left steps back (and opens the replay of a
+  game with moves), Right steps forward, Escape is Live. Left and Right are the camera while Free Cam is on, and
+  are left to a text field or the slider when one has the focus.
+- **Position.** The board, the side to move, the score, the end banner and, in a boss fight, the boss plate
+  and its tells show the stepped position. It is built by replaying the first N moves of the log on a new engine,
+  so the boss state at each ply is the engine's, deterministic; nothing is stored.
+- **Auto-play.** Opening the replay turns Auto-play off.
+- **View only.** While the bar is open no move can be played, no group is selected and no hint is asked: clicks,
+  drags and the keyboard play do nothing on the board.
+- **Live.** Live (or Escape) closes the bar on the current position, and the game goes on. A move that arrives
+  meanwhile, the bot's reply or a peer's move, does the same: the bar closes on the live position. New game, an
+  import, Retry and any other new game also close it.
+- The buttons keep their labels "Replay" and "Live" for the e2e tests.
+
 ## 5. Board framing
 
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one
