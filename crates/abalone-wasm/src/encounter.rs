@@ -1731,8 +1731,24 @@ mod tests {
             play_plies(&mut f, 1);
             let next = f.ballast_next();
             codes.push(next);
+            let tell = f.pulsar();
+            assert_eq!(tell.is_empty(), next != 1, "seed {seed}");
+            if next == 1 {
+                assert!(tell[0] < 6 && tell[1] == 1 && tell[2] >= 0, "seed {seed}");
+            }
+            assert!(
+                f.ballast_fired().is_empty(),
+                "seed {seed}: nothing fired yet"
+            );
             play_plies(&mut f, 2);
             assert_eq!(f.last_pulse().is_empty(), next != 1, "seed {seed}");
+            let fired = f.ballast_fired();
+            assert_eq!(
+                fired[0], next,
+                "the code of the effect, then cells, seed {seed}"
+            );
+            assert_eq!(fired.len() % 2, 1, "seed {seed}");
+            assert!(f.pulsar().is_empty(), "seed {seed}");
         }
         for code in 0..4 {
             assert!(codes.contains(&code), "code {code}");
@@ -1741,6 +1757,10 @@ mod tests {
             let mut other = Encounter::new(id, 1).unwrap();
             play_plies(&mut other, 4);
             assert_eq!(other.ballast_next(), -1, "{id}");
+            assert!(
+                other.ballast_fired().is_empty() && other.pulsar().is_empty(),
+                "{id}"
+            );
         }
     }
 

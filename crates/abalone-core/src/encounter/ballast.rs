@@ -116,22 +116,48 @@ pub fn ballast_next(enc: &Encounter) -> Option<Borrowed> {
         .then(|| borrowed(ply_seed(enc.seed, u64::from(fire))))
 }
 
+/// The pulse announced for the next boss turn, `(pulsar, force)` with `None` for the infinite force:
+/// `None` when the effect due next is not a pulse. The turn before it, the pulsar ripples.
+pub fn ballast_pulse_tell(enc: &Encounter) -> Option<(u8, Option<u8>)> {
+    match ballast_next(enc)? {
+        Borrowed::PulsarPulse(dir) => Some((dir, PULSAR_FORCE[enc.phase()])),
+        _ => None,
+    }
+}
+
 /// The effect the last ply borrowed and the cells it touched (the marks it left and the cells
-/// whose content changed). `None` when the last ply borrowed nothing.
-pub fn ballast_fired(_enc: &Encounter) -> Option<(Borrowed, Vec<P>)> {
-    todo!()
+/// whose content changed): the player reads where it acted. `None` when the last ply borrowed
+/// nothing.
+pub fn ballast_fired(enc: &Encounter) -> Option<(Borrowed, Vec<P>)> {
+    let (before, id) = enc.hooked()?;
+    id.checked_sub(BALLAST_FIRE)?;
+    Some((
+        borrowed(enc.hook_seed()),
+        touched(before, enc.game().board()),
+    ))
 }
 
 /// The cells an effect touched going from `before` to `after`: those whose content changed and
 /// the new cracks, polarities and converted marbles.
-fn touched(_before: &Board, _after: &Board) -> Vec<P> {
-    todo!()
-}
-
-/// The pulse announced for the next boss turn, `(pulsar, force)` with `None` for the infinite force:
-/// `None` when the effect due next is not a pulse.
-pub fn ballast_pulse_tell(_enc: &Encounter) -> Option<(u8, Option<u8>)> {
-    todo!()
+fn touched(before: &Board, after: &Board) -> Vec<P> {
+    let marks = |board: &Board| -> Vec<P> {
+        let cracks = board.cracks().iter().map(|c| c.0);
+        let polarities = board.polarities().iter().map(|p| p.0);
+        cracks
+            .chain(polarities)
+            .chain(board.converted().iter().copied())
+            .collect()
+    };
+    let old = marks(before);
+    let radius = after.radius();
+    let mut cells: Vec<P> = (-radius..=radius)
+        .flat_map(|q| (-radius..=radius).map(move |r| (q, r)))
+        .filter(|&(q, r)| before.get(q, r) != after.get(q, r))
+        .chain(marks(after).into_iter().filter(|c| !old.contains(c)))
+        .collect();
+    cells.sort_unstable();
+    cells.dedup();
+    cells
 }
 
 /// The pulse of the last ply: the pulsar id, the board just before it and the cells it moved,
