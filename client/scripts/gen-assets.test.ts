@@ -106,8 +106,28 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     });
     expect(middle).toBe(true);
     expect([...sixths].sort()).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(lit / inDisc).toBeGreaterThan(0.03);
-    expect(lit / inDisc).toBeLessThan(0.4);
+    expect(lit / inDisc).toBeGreaterThan(0.04);
+    expect(lit / inDisc).toBeLessThan(0.2); // hairline fractures, not blots (#838)
+  });
+
+  // #838: a crisp crack in a hull plate: it tapers from the impact out to a point at the rim, so the rim ring holds
+  // a smaller share of lit pixels than the ring round the middle.
+  it('tapers the cracks of the decal from the middle out to the rim (#838)', () => {
+    const { w, rows } = decode(assets.get('crack-decal.png')!, 1);
+    const c = (w - 1) / 2;
+    const share = (from: number, to: number): number => {
+      let lit = 0, all = 0;
+      rows.forEach((row, y) => {
+        for (let x = 0; x < w; x++) {
+          const d = Math.hypot(x - c, y - c) / (w / 2);
+          if (d < from || d >= to) continue;
+          all++;
+          if (row[x]! >= 128) lit++;
+        }
+      });
+      return lit / all;
+    };
+    expect(share(0.15, 0.5)).toBeGreaterThan(share(0.75, 1) * 1.3);
   });
 
   // Task #401: each deck of docs/specs/world.md section 5 has its own albedo for the cells, with the shared roughness.
