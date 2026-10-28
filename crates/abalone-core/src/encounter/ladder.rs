@@ -135,8 +135,8 @@ impl Arena {
             Arena::Plain(enc, LadderBoss::Alien) => alien_move(enc),
             Arena::Plain(enc, LadderBoss::Chaplain) => chaplain_move(enc),
             Arena::Plain(enc, LadderBoss::Hull) => hull_move(enc),
-            Arena::Plain(enc, LadderBoss::Ballast) => ballast_move(enc),
-            Arena::Plain(enc, _) => enc.boss_search().map(|r| r.mv),
+            // The Ballast Mind: the Choir is never plain.
+            Arena::Plain(enc, _) => ballast_move(enc),
             Arena::Choir(choir) => choir.boss_move(),
         }
     }

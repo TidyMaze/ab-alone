@@ -966,6 +966,15 @@ mod tests {
     }
 
     #[test]
+    fn the_plain_reply_is_the_boss_search() {
+        let mut enc = CoreEncounter::new(Game::new(), hull_boss(), 0);
+        let first = legal_moves(enc.game().board(), Player::Black)[0].clone();
+        enc.play(&first).unwrap();
+        assert_eq!(search_reply(&enc), enc.boss_search().map(|r| r.mv));
+        assert!(search_reply(&enc).is_some());
+    }
+
+    #[test]
     fn boss_move_is_empty_on_the_players_turn() {
         assert!(fight().boss_move().is_empty());
     }

@@ -14,7 +14,7 @@
 
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
-use crate::encounter::hull::{hull_boss, mix, HULL_CRACKS, HULL_PLAYER_END};
+use crate::encounter::hull::{hull_boss, hull_step, mix, HULL_CRACKS, HULL_PLAYER_END};
 use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETIZER_TURN};
 use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
 use crate::encounter::{losses, no_gain, ply_seed, BossDef, Encounter};
@@ -170,13 +170,17 @@ pub fn ballast_move(enc: &Encounter) -> Option<Move> {
     let root = enc.game().board();
     let ply = enc.game().history().len() as u32 + 1;
     let due = special(ply, enc.phase()).map(|id| (id, ply_seed(enc.seed, u64::from(ply))));
-    let step = |before: &Board, mover: Player, _: &Move, after: Board| {
-        let (id, seed) = match (mover, due) {
-            // The tick does nothing without a crack: skip its board copy.
-            (Player::Black, _) if after.cracks().is_empty() => return (after, [0, 0]),
-            (Player::Black, _) => (BALLAST_TICK, 0),
-            (Player::White, Some(due)) if before == root => due,
-            _ => return (after, [0, 0]),
+    let step = |before: &Board, mover: Player, mv: &Move, after: Board| {
+        if mover == Player::Black {
+            // The Hull's own tick, which does nothing without a crack: skip its board copy.
+            return if after.cracks().is_empty() {
+                (after, [0, 0])
+            } else {
+                hull_step(before, mover, mv, after)
+            };
+        }
+        let Some((id, seed)) = due.filter(|_| before == root) else {
+            return (after, [0, 0]);
         };
         let out = hook(&after, id, seed);
         // A conversion moves marbles to the other side without ejecting any.
