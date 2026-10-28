@@ -215,40 +215,45 @@ function backdrop(w, h, rand) {
   return png(w, h, 3, px);
 }
 
-// The Hull's crack decal (world.md section 3: the board crumbles as the hull fails), a grey mask, white where the steel
-// is split; main.ts draws it near-black on the cracked cell. Jagged cracks run from near the middle out to the rim, one
-// in every sixth of the turn so they show round the marble, each with a few short branches, wide enough to stay 3:1
-// when the cell is small on screen.
+// The crack decal of The Hull and The Ballast Mind (world.md section 3: the board crumbles as the hull fails), a grey
+// mask, white where the steel is split; main.ts draws it near-black on the cracked cell. A crisp fracture in a hull
+// plate (#838): six fractures run from near the middle out to the rim, one in every sixth of the turn so they show round
+// the marble, each a straight-edged jagged line that tapers to a point and forks once or twice at a sharp angle. The
+// middle is a little wider, the fractures never fatter than 7 px of the 128, still 3:1 when the cell is small on screen.
 const CRACKS = 6;
 function crackDecal(size, rand) {
   const mask = new Float32Array(size * size);
-  const c = (size - 1) / 2, rim = size / 2 - 7;
-  // An anti-aliased segment `width` px wide, kept at its brightest where segments cross.
-  const segment = (x0, y0, x1, y1, width) => {
+  const c = (size - 1) / 2, rim = size / 2 - 5;
+  // An anti-aliased segment tapering from `w0` to `w1` px wide, kept at its brightest where segments cross.
+  const segment = (x0, y0, x1, y1, w0, w1) => {
     const dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
-    for (let y = Math.floor(Math.min(y0, y1) - width); y <= Math.ceil(Math.max(y0, y1) + width); y++) {
-      for (let x = Math.floor(Math.min(x0, x1) - width); x <= Math.ceil(Math.max(x0, x1) + width); x++) {
+    const reach = Math.max(w0, w1) + 1;
+    for (let y = Math.floor(Math.min(y0, y1) - reach); y <= Math.ceil(Math.max(y0, y1) + reach); y++) {
+      for (let x = Math.floor(Math.min(x0, x1) - reach); x <= Math.ceil(Math.max(x0, x1) + reach); x++) {
+        if (x < 0 || y < 0 || x >= size || y >= size) continue;
         const t = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / len2));
+        const width = w0 + (w1 - w0) * t;
         const v = Math.max(0, Math.min(1, width / 2 + 0.5 - Math.hypot(x - x0 - t * dx, y - y0 - t * dy)));
         mask[y * size + x] = Math.max(mask[y * size + x], v);
       }
     }
   };
-  // A jagged crack heading out along `toward`, straight 7 px runs at sharp turns, thinner as it goes, until the rim or
-  // `steps` run out.
-  const crack = (x, y, toward, width, steps, branches) => {
+  // A fracture heading out along `toward` in straight runs of 10 to 16 px with small kinks, narrowing a step at a time
+  // to 1.5 px at its tip, which stops at the rim or after `steps` runs. A fork leaves at about 35 degrees.
+  const crack = (x, y, toward, width, steps, forks) => {
     for (let n = 0; n < steps; n++) {
-      const angle = toward + (rand() - 0.5) * 1.4;
-      const nx = x + Math.cos(angle) * 7, ny = y + Math.sin(angle) * 7;
-      if (Math.hypot(nx - c, ny - c) > rim) return;
-      segment(x, y, nx, ny, width);
-      [x, y] = [nx, ny];
-      width = Math.max(9, width * 0.95);
-      if (branches && rand() < 0.3) crack(x, y, toward + (rand() < 0.5 ? -1 : 1) * (0.7 + rand() * 0.4), 6, 1 + rand() * 3, false);
+      const angle = toward + (rand() - 0.5) * 0.5, run = 10 + rand() * 6;
+      const nx = x + Math.cos(angle) * run, ny = y + Math.sin(angle) * run;
+      const outside = Math.hypot(nx - c, ny - c) > rim;
+      const next = outside ? 1.5 : Math.max(1.5, width - 1.1);
+      segment(x, y, nx, ny, width, next);
+      if (outside) return;
+      [x, y, width] = [nx, ny, next];
+      if (forks > 0 && n > 0 && rand() < 0.45) crack(x, y, angle + (rand() < 0.5 ? -1 : 1) * (0.55 + rand() * 0.15), width * 0.7, 2 + Math.floor(rand() * 2), forks - 1);
     }
   };
-  const x0 = c + (rand() - 0.5) * 8, y0 = c + (rand() - 0.5) * 8;
-  for (let k = 0; k < CRACKS; k++) crack(x0, y0, (k * 2 * Math.PI) / CRACKS + (rand() - 0.5) * 0.4, 12, Infinity, true);
+  const x0 = c + (rand() - 0.5) * 6, y0 = c + (rand() - 0.5) * 6;
+  for (let k = 0; k < CRACKS; k++) crack(x0, y0, (k * 2 * Math.PI) / CRACKS + (rand() - 0.5) * 0.3, 7, Infinity, 1);
   return png(size, size, 1, Uint8Array.from(mask, (v) => clamp(v * 255)));
 }
 
