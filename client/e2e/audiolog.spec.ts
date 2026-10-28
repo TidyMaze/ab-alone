@@ -50,6 +50,8 @@ test('collect a log from the recorder, then replay it from the log archive, #517
   await page.locator('canvas').waitFor();
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-console', /^mess-house-rule /);
+  // The bay loads after the page and rebuilds the props, the recorder included: a click on the old one lands on nothing (#839).
+  await expect(body).toHaveAttribute('data-bay', 'ready');
   type Rect = { x: number; y: number; width: number; height: number };
   const r = await page.evaluate(() => (window as unknown as { __recorderRect: () => Rect }).__recorderRect());
   await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
