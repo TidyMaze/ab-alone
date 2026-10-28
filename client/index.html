@@ -41,21 +41,25 @@
           </button>
           <div id="settings-menu" role="group" aria-label="Settings" hidden></div>
         </div>
-        <button id="reset-view" type="button" disabled>Reset view</button>
-        <button id="free-cam" type="button" aria-pressed="false" title="Toggle Free Camera (C)" disabled>Cam</button>
-        <button id="new-game" type="button" disabled>New game</button>
-        <button id="rematch" type="button" hidden>Rematch</button>
-        <button id="boss-goal" type="button" aria-expanded="true" hidden>Goal</button>
-        <button id="boss-retry" type="button" hidden>Retry</button>
-        <button id="royale-hold" type="button" hidden>Hold</button>
-        <button id="royale-start" type="button" hidden>Start</button>
-        <button id="royale-invite" type="button" hidden>Invite</button>
-        <button id="ship-back" type="button" hidden>Back to the ship</button>
+        <div id="group-view" class="group">
+          <button id="reset-view" type="button" disabled>Reset view</button>
+          <button id="free-cam" type="button" aria-pressed="false" title="Toggle Free Camera (C)" disabled>Cam</button>
+        </div>
+        <div id="group-game" class="group">
+          <button id="new-game" type="button" disabled>New game</button>
+          <button id="rematch" type="button" hidden>Rematch</button>
+          <button id="boss-goal" type="button" aria-expanded="true" hidden>Goal</button>
+          <button id="boss-retry" type="button" hidden>Retry</button>
+          <button id="royale-hold" type="button" hidden>Hold</button>
+          <button id="royale-start" type="button" hidden>Start</button>
+          <button id="royale-invite" type="button" hidden>Invite</button>
+          <button id="ship-back" type="button" hidden>Back to the ship</button>
+        </div>
         <div id="daily-card" hidden>
           <textarea id="daily-result" readonly rows="3" aria-label="Daily challenge result"></textarea>
           <button id="daily-copy" type="button">Copy result</button>
         </div>
-        <div id="tools">
+        <div id="tools" class="group">
           <button id="hint" type="button" aria-pressed="false" disabled>Hint</button>
           <button id="replay" type="button" disabled>Replay</button>
           <button id="auto-play" type="button" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>

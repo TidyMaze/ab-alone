@@ -68,6 +68,22 @@ top-right, beside the plate and never over it (#227). Wider than tall, the colum
 right of the board. Held upright, the column becomes rows of buttons under the plate. No button or
 field covers a cell, and the space between them lets every tap through to the board.
 
+HUD buttons, in groups (#839). The column holds the buttons grouped by what they do, in this order, each group a row
+that wraps, so its buttons share a row when they fit and a group with no visible button takes no room: (1) the
+settings cog; (2) the view, Reset view and Cam (Free Cam, `#free-cam`); (3) the game, New game, Rematch, Goal, Retry,
+Hold, Start, Invite and Back to the ship (the controls of the running mode, only the ones the mode shows); the daily
+result card when a daily fight ends; (4) the tools, Hint, Replay and Auto-play; (5) Game modes, last of the column, its
+menu under it; (6) the invite link of an open room: its caption, then the link with its Copy button. Held upright the
+groups give their buttons to the rows of the column, in the same order. Every button of a group has the one button
+style (the panel colour, the edge, the 14 px text, the 2 px radius): Cam is lit, like Hint, while Free Cam is on.
+Only New game, Game modes and Copy diagnostics show an icon alone (#297); every other button shows its name, Play online
+included. While the invite link shows, the button column is back at its top, so no button above the link is
+scrolled out of a short window (#839).
+
+Invite link (#839): the caption, then the link and a Copy button on one row. Copy writes the link to the clipboard,
+then the caption, the link and Copy close for good (a new room shows them again). When the browser refuses the
+clipboard, or the page has none, the link stays, selected, and the plate says "invite link selected: copy it by hand".
+
 Settings (#277): a cog button, first in the column, opens a menu, one button per item: the toggles Clear board,
 then Reduced motion (#379, see section 6: it follows `prefers-reduced-motion` until pressed, then keeps the player's
 choice), then Flat HUD (#391, off by default: the flat HUD fallback of world.md section 6 rule 8, see the Flat HUD
@@ -92,7 +108,7 @@ name as its `aria-label` and as a tooltip (`title`), so a screen reader reads it
 outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `aria-controls`), each toggle is a
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
-Game modes (#357): the buttons that start a game mode, Play online, Fight together (with the boss list it opens under
+Game modes (#357): the buttons that start a game mode, Play online (its name shown, #839), Fight together (with the boss list it opens under
 it, #530), Battle royale (#502), Boss fight (with the boss list it opens under it), Daily challenge and Ship (the hub,
 game-design.md section 3.5, #521), live in one menu behind an icon-only button, a play triangle of the icon set,
 labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their

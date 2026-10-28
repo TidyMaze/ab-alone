@@ -4070,7 +4070,6 @@ function leaveOnline(): void {
   window.history.replaceState(null, '', location.pathname + location.search); // no room in the address
 }
 const playOnlineButton = document.getElementById('play-online') as HTMLButtonElement;
-setButton(playOnlineButton, 'Play online', icon('online'));
 
 // The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8
 // arena, at the Furnace. The player presses a target on the arena, as a move, which locks the order (#611), or holds;
