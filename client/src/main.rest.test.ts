@@ -33,6 +33,30 @@ describe('main.ts, ?lights', () => {
     expect(names).toEqual(expect.arrayContaining(['key', 'fill (ambient)', 'emergencyLight', 'corner-neon-nw', 'corner-neon-nw light']));
   });
 
+  it.each([
+    [true, 3],
+    [false, 1],
+  ])('on WebGPU %s, lights a 7.5 m neon tube with %i lights (a row, culled per pixel; one without culling)', async (webgpu, count) => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off', { webgpu });
+    let lights = 0;
+    scene!.traverse((o) => void (o.name === 'corner-neon-nw light' && lights++));
+    expect(lights).toBe(count);
+  });
+
+  it('points the free camera at a light from its row in the panel', async () => {
+    const game = await boot('?bot=off&lights');
+    expect(game.hook('__freeCamActive')).toBe(false);
+    document.querySelector<HTMLButtonElement>('#light-panel button[aria-label="Point the camera at key"]')!.click();
+    expect(game.hook('__freeCamActive')).toBe(true);
+    expect(document.getElementById('free-cam')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('has no panel without it', async () => {
     await boot('?bot=off');
     expect(document.getElementById('light-panel')).toBeNull();

@@ -29,6 +29,8 @@ export interface BootOptions {
   fonts?: (font: string) => Promise<unknown>;
   /** What fails: `worker` answers every bot request with an error, `wasm` and `renderer` reject their init (#736, #737). */
   fails?: 'worker' | 'wasm' | 'renderer';
+  /** The renderer runs on WebGPU, not its WebGL fallback: compute shaders, so clustered lighting (#neon tubes). */
+  webgpu?: boolean;
 }
 
 export interface Game {
@@ -176,7 +178,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     const THREE = await importOriginal<typeof import('three/webgpu')>();
     class WebGPURenderer {
       domElement = document.createElement('canvas');
-      backend = { isWebGPUBackend: false };
+      backend = { isWebGPUBackend: options.webgpu ?? false };
       shadowMap = { enabled: false, type: 0 };
       toneMapping = 0;
       toneMappingExposure = 1;

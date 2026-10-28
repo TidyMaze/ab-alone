@@ -32,7 +32,8 @@ import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
 import { lightPanel } from './lightpanel';
-import { tubeLight } from './neonlight';
+import { TUBE_SPACING, tubeLights } from './neonlight';
+import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -287,6 +288,11 @@ const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webg
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
 const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL });
 await renderer.init().catch(bootFailed);
+// The neon tubes' rows of short lights (neonlight.ts) cost little when each pixel only adds the lights that reach it:
+// clustered (Forward+) lighting, 4x the frame rate of a rect light per tube. It needs compute shaders, so WebGPU only:
+// on WebGL a tube gets one light.
+const clustered = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
+if (clustered) renderer.lighting = new ClusteredLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {
@@ -474,13 +480,14 @@ function updateFreeCamCamera(): void {
   drawAsked = true;
 }
 
-function toggleFreeCam(enabled?: boolean): void {
+/** The free camera on (from where the camera is, facing `at`: the board's middle, or a light of ?lights) or off. */
+function toggleFreeCam(enabled?: boolean, at: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }): void {
   const shouldEnable = enabled !== undefined ? enabled : !freeCam.active;
   if (shouldEnable) {
     const curPos = sceneRenderer.camera.position;
-    const forwardX = -curPos.x;
-    const forwardY = -curPos.y;
-    const forwardZ = -curPos.z;
+    const forwardX = at.x - curPos.x;
+    const forwardY = at.y - curPos.y;
+    const forwardZ = at.z - curPos.z;
     const horizDist = Math.hypot(forwardX, forwardZ);
     const yaw = Math.atan2(-forwardX, -forwardZ);
     const pitch = Math.atan2(forwardY, Math.max(0.001, horizDist));
@@ -1003,7 +1010,6 @@ const steel = new THREE.MeshStandardMaterial(
     ? {
         map: firstDeckMap ?? deckAlbedo,
         roughnessMap: deckRoughness,
-        metalness: 0.8,
         ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
       }
     : { color: COLORS.steel, roughness: 0.8 },
@@ -1535,7 +1541,7 @@ if (deckAlbedo && tier === 'high' && typeof document !== 'undefined') {
 
 // ?lights: a power slider per light and neon tube (lightpanel.ts), rebuilt when the props replace their lights.
 const lightsPanel = new URLSearchParams(location.search).has('lights') ? document.body.appendChild(document.createElement('div')) : null;
-const refreshLights = (): void => void (lightsPanel && lightPanel(sceneRenderer.scene, lightsPanel));
+const refreshLights = (): void => void (lightsPanel && lightPanel(sceneRenderer.scene, lightsPanel, (at) => toggleFreeCam(true, at)));
 drawProps = (): void => {
   propsGroup.clear();
   const sLights = spaceshipLights(deck);
@@ -1645,8 +1651,9 @@ drawProps = (): void => {
     }
     propsGroup.add(mesh);
   }
-  // Each neon tube lights the room for real: a rect light its shape (neonlight.ts), its slider in ?lights.
-  for (const tube of propsGroup.children.filter((o) => o.name.includes('neon'))) propsGroup.add(tubeLight(tube as THREE.Mesh));
+  // Each neon tube lights the room for real: a row of lights along it (neonlight.ts), one slider in ?lights.
+  for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
+    propsGroup.add(...tubeLights(tube as THREE.Mesh, clustered ? TUBE_SPACING : Infinity));
   const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
   emergencyLight.position.set(...sLights.emergency.position);
   const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
@@ -1704,8 +1711,7 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
     document.body.dataset.bay = 'ready'; // the room is complete: the browser checks of a still scene wait for it (#661)
   }
 };
-(window as unknown as Record<string, unknown>).__mountBay = mountBay;
-drawProps();
+(window as unknown as Record<string, unknown>).__mountBay = mountBay;drawProps();
 void loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader).then(mountBay);
 
 let frame: FrameShape | null = null;

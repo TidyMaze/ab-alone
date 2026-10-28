@@ -1,27 +1,27 @@
 import * as THREE from 'three/webgpu';
-import { RectAreaLightTexturesLib } from 'three/examples/jsm/lights/RectAreaLightTexturesLib.js';
 
-/** The power of a tube's light, tuned live with ?lights. */
-export const TUBE_POWER = 4;
-/** Closer than this to the board's axis, a tube is a bar round the pedestal: it shines outward, on the floor. */
-const PEDESTAL = 6;
-
-let ltc = false; // the rect lights' lookup tables, set once for the renderer
+/** The power and reach of each light of a tube, tuned live with ?lights. */
+export const TUBE_POWER = 1.5;
+export const TUBE_REACH = 8;
+/** One light every this many metres along a tube at most. */
+export const TUBE_SPACING = 2.5;
 
 /**
- * A real light the shape of a glowing tube: a rect light as long and wide as its box, in its colour, at its place. A
- * rect light shines on one side only: a tube on a wall or the gantry faces the board, a bar round the pedestal faces out.
+ * Real light the shape of a glowing tube: a row of short-reach point lights along its length, in its colour, all named
+ * after the tube so ?lights gives the row one slider. A neon tube shines all round, and so do they. A row costs little
+ * once the renderer only adds, at each pixel, the lights that reach it (ClusteredLighting, main.ts): 4x cheaper than a
+ * rect light per tube, which reaches every pixel. Without it (WebGL), `spacing` Infinity gives a tube one light.
  */
-export function tubeLight(tube: THREE.Mesh, intensity = TUBE_POWER): THREE.RectAreaLight {
-  if (!ltc) {
-    THREE.RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
-    ltc = true;
-  }
+export function tubeLights(tube: THREE.Mesh, spacing = TUBE_SPACING): THREE.PointLight[] {
   tube.geometry.computeBoundingBox();
-  const size = tube.geometry.boundingBox!.getSize(new THREE.Vector3()).multiply(tube.scale);
-  const light = new THREE.RectAreaLight((tube.material as THREE.MeshStandardMaterial).emissive, intensity, size.x, size.y);
-  light.name = `${tube.name} light`;
-  const { x, y, z } = light.position.copy(tube.position);
-  light.lookAt(Math.hypot(x, z) < PEDESTAL ? new THREE.Vector3(x * 2, y, z * 2) : new THREE.Vector3(0, 0, 0));
-  return light;
+  const size = tube.geometry.boundingBox!.getSize(new THREE.Vector3()).multiply(tube.scale).toArray();
+  const length = Math.max(...size);
+  const along = new THREE.Vector3().setComponent(size.indexOf(length), 1).applyQuaternion(tube.quaternion);
+  const count = Math.max(1, Math.ceil(length / spacing));
+  return Array.from({ length: count }, (_, i) => {
+    const light = new THREE.PointLight((tube.material as THREE.MeshStandardMaterial).emissive, TUBE_POWER, TUBE_REACH);
+    light.name = `${tube.name} light`;
+    light.position.copy(tube.position).addScaledVector(along, ((i + 0.5) / count - 0.5) * length);
+    return light;
+  });
 }

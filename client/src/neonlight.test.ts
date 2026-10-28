@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
-import { TUBE_POWER, tubeLight } from './neonlight';
+import { TUBE_POWER, TUBE_REACH, tubeLights } from './neonlight';
 
 function tube(name: string, size: [number, number, number], position: [number, number, number], scale = 1, turn = 0): THREE.Mesh {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshStandardMaterial({ emissive: 0x38e8ff, emissiveIntensity: 5.5 }));
@@ -11,28 +11,36 @@ function tube(name: string, size: [number, number, number], position: [number, n
   mesh.rotation.y = turn;
   return mesh;
 }
-/** Where a light shines: three.js turns a light's -Z to what it looks at. */
-const facing = (light: THREE.Object3D): THREE.Vector3 => new THREE.Vector3(0, 0, -1).applyQuaternion(light.quaternion);
 
-describe('tubeLight', () => {
-  it('lights a wall column for real: a rect light its size, place and colour, facing the board', () => {
-    const light = tubeLight(tube('corner-neon-nw', [0.14, 7.5, 0.14], [-8.4, 5.2, -17.35], 1.4));
-    expect(light).toBeInstanceOf(THREE.RectAreaLight);
-    expect(light.name).toBe('corner-neon-nw light');
-    expect([light.width, light.height]).toEqual([expect.closeTo(0.196), expect.closeTo(10.5)]);
-    expect(light.position.toArray()).toEqual([-8.4, 5.2, -17.35]);
-    expect(light.color.getHex()).toBe(0x38e8ff);
-    expect(light.intensity).toBe(TUBE_POWER);
-    expect(facing(light).dot(light.position.clone().negate().normalize())).toBeGreaterThan(0.999);
+describe('tubeLights', () => {
+  it('lights a wall column for real: a row of short point lights along it, in its colour, one name for the row', () => {
+    const lights = tubeLights(tube('corner-neon-nw', [0.14, 7.5, 0.14], [-8.4, 5.2, -17.35], 1.4));
+    expect(lights).toHaveLength(5); // 10.5 m, one light every 2.5 m at most
+    for (const light of lights) {
+      expect(light).toBeInstanceOf(THREE.PointLight);
+      expect(light.name).toBe('corner-neon-nw light');
+      expect(light.color.getHex()).toBe(0x38e8ff);
+      expect([light.intensity, light.distance]).toEqual([TUBE_POWER, TUBE_REACH]);
+      expect([light.position.x, light.position.z]).toEqual([-8.4, -17.35]);
+    }
+    expect(lights.map((l) => l.position.y)).toEqual([1, 3.1, 5.2, 7.3, 9.4].map((y) => expect.closeTo(y)));
   });
 
-  it('turns a bar round the pedestal outward, along its length', () => {
+  it('lays the row along a turned bar, round the pedestal', () => {
     const a = Math.PI / 6;
     const bar = tube('pedestal-neon-0', [3.2, 0.045, 0.07], [Math.cos(a) * 4.3, -0.27, Math.sin(a) * 4.3], 1, Math.PI / 2 - a);
-    const light = tubeLight(bar);
-    expect(light.width).toBeCloseTo(3.2);
-    expect(facing(light).dot(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)))).toBeGreaterThan(0.999);
+    const lights = tubeLights(bar);
+    expect(lights).toHaveLength(2);
     const length = new THREE.Vector3(1, 0, 0).applyQuaternion(bar.quaternion);
-    expect(Math.abs(new THREE.Vector3(1, 0, 0).applyQuaternion(light.quaternion).dot(length))).toBeGreaterThan(0.999);
+    for (const light of lights) {
+      const offset = light.position.clone().sub(bar.position);
+      expect(offset.length()).toBeCloseTo(0.8);
+      expect(Math.abs(offset.normalize().dot(length))).toBeCloseTo(1);
+    }
+  });
+
+  it('gives a tube one light at its middle when lights are not culled (WebGL)', () => {
+    const lights = tubeLights(tube('neon-gantry-north', [16, 0.14, 0.14], [0, 14.2, -12]), Infinity);
+    expect(lights.map((l) => l.position.toArray())).toEqual([[0, 14.2, -12]]);
   });
 });
