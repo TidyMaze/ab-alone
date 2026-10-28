@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { type Axial, DIRECTIONS } from './board';
+import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
 
 // The drag play of main.ts on the harness (#794): press on a marble of the player, pass over in-line neighbours, release
@@ -15,10 +16,10 @@ const canvas = (): HTMLCanvasElement => document.querySelector('canvas')!;
 function pointer(type: string, at: { x: number; y: number }, pointerId = 1): void {
   canvas().dispatchEvent(new PointerEvent(type, { clientX: at.x, clientY: at.y, pointerId, bubbles: true }));
 }
-/** The centre of a group plus 1.5 steps toward a direction, as a point of the window. */
+/** A point one step past the edge of a group, toward a direction, as a point of the window. */
 function past(game: Game, cells: Axial[], dir: number): { x: number; y: number } {
-  const q = cells.reduce((s, c) => s + c[0], 0) / cells.length + 1.5 * DIRECTIONS[dir]![0];
-  const r = cells.reduce((s, c) => s + c[1], 0) / cells.length + 1.5 * DIRECTIONS[dir]![1];
+  const q = cells.reduce((s, c) => s + c[0], 0) / cells.length + (0.5 + cells.length / 2) * DIRECTIONS[dir]![0];
+  const r = cells.reduce((s, c) => s + c[1], 0) / cells.length + (0.5 + cells.length / 2) * DIRECTIONS[dir]![1];
   return screen(game, q, r);
 }
 /** Presses the first marble and passes over the others of the group, the pointer ends on the last one. */
@@ -78,7 +79,7 @@ describe('the drag play', () => {
     pointer('pointermove', screen(game, 0, 0)); // an empty cell
     pointer('pointermove', { x: 1, y: 1 }); // no cell
     expect(rings(game)).toEqual([mv.cells[0]]);
-    pointer('pointerup', { x: 1, y: 1 });
+    pointer('pointerup', screen(game, ...mv.cells[0]!));
     expect(plies(game)).toBe(0);
     expect(rings(game)).toEqual([mv.cells[0]]);
   });
@@ -112,6 +113,8 @@ describe('the drag play', () => {
     pointer('pointermove', { x: at.x + 40, y: at.y });
     pointer('pointerup', { x: at.x + 40, y: at.y });
     expect(screen(game, 4, -4)).not.toEqual(turned);
+    expect(rings(game)).toEqual([]);
+    game.frame(SLIDE_MS); // the press that waited for the slide has nothing to run
     expect(rings(game)).toEqual([]);
   });
 

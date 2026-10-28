@@ -409,8 +409,7 @@ describe('the pointer on the board', () => {
 
   it('orbits the camera on a drag, which never selects', async () => {
     const game = await boot('?bot=off');
-    const black = legal(game).find((m) => m.cells.length === 1)!.cells[0]!;
-    const at = screen(game, ...black);
+    const at = { x: 1, y: 1 }; // off the marbles: a press on one of the player's is the drag play (#794)
     const corner = screen(game, 4, -4);
     pointer('pointerdown', at.x, at.y);
     pointer('pointermove', at.x + 40, at.y);
