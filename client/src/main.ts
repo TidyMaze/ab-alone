@@ -32,6 +32,7 @@ import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
 import { lightPanel } from './lightpanel';
+import { tubeLight } from './neonlight';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -1644,6 +1645,8 @@ drawProps = (): void => {
     }
     propsGroup.add(mesh);
   }
+  // Each neon tube lights the room for real: a rect light its shape (neonlight.ts), its slider in ?lights.
+  for (const tube of propsGroup.children.filter((o) => o.name.includes('neon'))) propsGroup.add(tubeLight(tube as THREE.Mesh));
   const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
   emergencyLight.position.set(...sLights.emergency.position);
   const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
