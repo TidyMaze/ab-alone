@@ -344,6 +344,7 @@ pub fn run_ladder(boss: LadderBoss, player_budget: u32, seeds: u32, ply_cap: u32
 mod tests {
     use super::*;
     use crate::board::{Board, Cell};
+    use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::echo_boss;
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
@@ -400,6 +401,27 @@ mod tests {
         let a = pocket();
         let only = legal_moves(a.game().board(), Player::Black)[0].clone();
         assert_eq!(player_move(&a, 0, 9, 0, 50), Some(only));
+    }
+
+    #[test]
+    fn the_player_reads_the_hull_tick_of_the_ballast_mind() {
+        let mut board = ballast_board();
+        board.set(5, 0, Cell::Black);
+        board.set(-4, 5, Cell::Black);
+        board.set(-5, 0, Cell::White);
+        board.set(0, -5, Cell::White);
+        board.set_cracks(vec![((5, 0), 1)]);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let enc = Encounter::new(game, ballast_boss(), 0).counting_by_colour();
+        let a = Arena::Plain(enc.clone(), LadderBoss::Ballast);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.game().ejected(Player::White),
+            0,
+            "{mv:?} leaves the cracked cell"
+        );
     }
 
     #[test]
