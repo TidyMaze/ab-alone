@@ -27,6 +27,7 @@ import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
 import { drawBossBar } from './bossbar';
+import { choirChips, drawChoirChips } from './choirchips';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
@@ -2644,6 +2645,7 @@ function hud(extra = ''): void {
     document.getElementById('boss-bar')!,
     boss ? { name: boss.name(), ejected: engine.ejected(1), win: engine.win_ejections(1), steps: Array.from(boss.phase_ejections()), phase: boss.phase() } : null,
   );
+  drawChoirChips(document.getElementById('boss-bar')!, boss ? choirChips(parseArmies(boss.armies()), boss.next_army()) : null);
   if (flatHud) {
     const flat = { phase: boss?.phase() ?? 0, phases: boss?.phases() ?? 0, tell };
     document
