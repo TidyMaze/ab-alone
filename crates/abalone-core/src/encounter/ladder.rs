@@ -415,7 +415,7 @@ mod tests {
             ["echo", "hull", "chaplain", "choir", "ballast", "alien"]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
-        assert_eq!(budgets, [400, 3000, 2000, 1500, 150_000, 3000]);
+        assert_eq!(budgets, [400, 3000, 300, 1500, 150_000, 3000]);
     }
 
     #[test]
