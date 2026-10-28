@@ -15,7 +15,7 @@ pub const CHAPLAIN_FLIP_THRESHOLD: usize = 4;
 /// P2 starts at this many player ejections. TUNE.
 pub const CHAPLAIN_PHASE_EJECTIONS: [u8; 1] = [4];
 /// Positions the boss search may visit per move. TUNE.
-pub const CHAPLAIN_NODE_BUDGET: u32 = 2000;
+pub const CHAPLAIN_NODE_BUDGET: u32 = 300;
 /// Evaluation weight of a marble one neighbour short of converting, in centi-marbles. TUNE.
 pub const CHAPLAIN_THREAT_WEIGHT: i32 = 20;
 /// The weights of the boss search: the plain ones plus the threat of the next conversion.
