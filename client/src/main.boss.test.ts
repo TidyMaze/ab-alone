@@ -157,6 +157,17 @@ describe('main.ts boss fights', () => {
     expect(bar.querySelectorAll('.frag')).toHaveLength(12);
   });
 
+  it('the boss bar goes away when the fight is left for the Ship or a battle royale (#814)', async () => {
+    const game = await boot('?bot=off');
+    for (const mode of ['ship', 'battle-royale']) {
+      fightBoss(game, 'The Echo');
+      expect(byId('boss-bar').hidden).toBe(false);
+      game.openModes();
+      byId(mode).click();
+      expect(byId('boss-bar').hidden).toBe(true);
+    }
+  });
+
   it('the boss replies to the player in the worker, at the test budget', async () => {
     const game = await boot('?nodes=200', { reducedMotion: true });
     fightBoss(game, 'The Echo');
