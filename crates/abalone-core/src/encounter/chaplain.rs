@@ -6,8 +6,9 @@
 
 use crate::board::{Board, Cell};
 use crate::encounter::hull::{mix, NEIGHBOURS};
-use crate::encounter::{BossDef, Encounter};
-use crate::moves::Move;
+use crate::encounter::{carried_marks, removals, removed, BossDef, Encounter};
+use crate::moves::{Move, Player};
+use crate::search::{search_signed, Weights, DEFAULT_WEIGHTS};
 
 /// Opposing marbles that flip a marble, for both sides. TUNE.
 pub const CHAPLAIN_FLIP_THRESHOLD: usize = 4;
@@ -15,6 +16,13 @@ pub const CHAPLAIN_FLIP_THRESHOLD: usize = 4;
 pub const CHAPLAIN_PHASE_EJECTIONS: [u8; 1] = [4];
 /// Positions the boss search may visit per move. TUNE.
 pub const CHAPLAIN_NODE_BUDGET: u32 = 2000;
+/// Evaluation weight of a marble one neighbour short of converting, in centi-marbles. TUNE.
+pub const CHAPLAIN_THREAT_WEIGHT: i32 = 20;
+/// The weights of the boss search: the plain ones plus the threat of the next conversion.
+pub const CHAPLAIN_WEIGHTS: Weights = Weights {
+    threat: CHAPLAIN_THREAT_WEIGHT,
+    ..DEFAULT_WEIGHTS
+};
 /// Special id at the end of the player turn.
 pub const CHAPLAIN_PLAYER_END: u8 = 1;
 /// Special id at the end of the boss turn is this plus the phase.
@@ -52,21 +60,27 @@ fn marked(board: &Board, victim: Cell, attacker: Cell) -> Vec<P> {
     out
 }
 
-/// The player marbles that flip at the end of a turn, and the board after the flips of both
-/// sides, all decided on `board`. A marble that flips to the boss is marked converted, one that
-/// flips back to the player loses its mark.
-fn convert(board: &Board) -> (Vec<P>, Board) {
-    let to_boss = marked(board, Cell::Black, Cell::White);
-    let to_player = marked(board, Cell::White, Cell::Black);
+/// The player marbles that flip to the boss and the boss marbles that flip to the player at the
+/// end of a turn, all decided on `board`.
+fn flips(board: &Board) -> (Vec<P>, Vec<P>) {
+    (
+        marked(board, Cell::Black, Cell::White),
+        marked(board, Cell::White, Cell::Black),
+    )
+}
+
+/// The board after the flips of both sides. A marble that flips to the boss is marked converted,
+/// one that flips back to the player loses its mark.
+fn flipped_board(board: &Board, to_boss: &[P], to_player: &[P]) -> Board {
     let mut out = board.clone();
-    for &(q, r) in &to_boss {
+    for &(q, r) in to_boss {
         out.set(q, r, Cell::White);
     }
-    for &(q, r) in &to_player {
+    for &(q, r) in to_player {
         out.set(q, r, Cell::Black);
     }
-    out.set_converted([board.converted(), &to_boss].concat());
-    (to_boss, keep_white_marks(out))
+    out.set_converted([board.converted(), to_boss].concat());
+    keep_white_marks(out)
 }
 
 /// Drops the converted marks that no longer sit on a White marble.
@@ -132,7 +146,13 @@ fn explode_martyr(board: &Board, (q, r): P) -> Board {
 /// Every ply flips the marbles touching 4 foes. From P2 the boss turn then announces the martyr,
 /// and the next boss turn explodes it.
 fn hook(board: &Board, id: u8, seed: u64) -> Board {
-    let converted = convert(board).1;
+    let (to_boss, to_player) = flips(board);
+    martyr_turn(flipped_board(board, &to_boss, &to_player), id, seed)
+}
+
+/// The rest of the hook after the flips: from P2 the boss turn announces the martyr, and the next
+/// boss turn explodes it.
+fn martyr_turn(converted: Board, id: u8, seed: u64) -> Board {
     if id <= CHAPLAIN_BOSS_END {
         return converted;
     }
@@ -147,10 +167,8 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
 /// +1 and -1 on the player's ejection credit, which is the boss's health (6 minus the credit).
 /// The martyr's blast is not one of them, it counts its own +1.
 fn conversions(board: &Board) -> [u8; 2] {
-    [
-        marked(board, Cell::White, Cell::Black).len() as u8,
-        marked(board, Cell::Black, Cell::White).len() as u8,
-    ]
+    let (to_boss, to_player) = flips(board);
+    [to_player.len() as u8, to_boss.len() as u8]
 }
 
 /// The Black marbles of `before` that are White on `now`.
@@ -171,9 +189,52 @@ pub fn chaplain_tell(enc: &Encounter) -> Vec<P> {
         .map_or_else(Vec::new, |(before, _)| flipped(before, enc.game().board()))
 }
 
-/// The Chaplain's reply: its node-limited search (stub).
+/// What the Chaplain's search sees after `mover` played `mv` in `phase`: the converted marks follow
+/// the move, then the hook the encounter would fire, and the health swing it credits (the same
+/// credits as `Encounter::play`, the martyr's removal included). The tree keeps the phase of its
+/// root and a martyr picked with seed 0.
+pub fn chaplain_step(
+    phase: usize,
+    before: &Board,
+    mover: Player,
+    mv: &Move,
+    mut after: Board,
+) -> (Board, [i8; 2]) {
+    let kept = carried_marks(before, mv, before.converted())
+        .into_iter()
+        .filter(|&(q, r)| after.get(q, r) == Some(Cell::White))
+        .collect();
+    after.set_converted(kept);
+    let ply = if mover == Player::Black { 1 } else { 2 };
+    let id = special(ply, phase).expect("the Chaplain fires after every ply");
+    let (to_boss, to_player) = flips(&after);
+    let out = martyr_turn(flipped_board(&after, &to_boss, &to_player), id, 0);
+    // Only the martyr removes a marble, and only from P2.
+    let [lost_black, lost_white] = if phase == 0 {
+        [0, 0]
+    } else {
+        removals(&removed(&after, &out))
+    };
+    let swing = to_player.len() as i16 - to_boss.len() as i16 + i16::from(lost_white);
+    (out, [swing as i8, lost_black as i8])
+}
+
+/// The Chaplain's reply: its search runs the hook on every ply of its tree, both sides, with the
+/// threat of the next conversion in its evaluation. `None` on the player's turn.
 pub fn chaplain_move(enc: &Encounter) -> Option<Move> {
-    enc.boss_search().map(|r| r.mv)
+    if enc.game().to_move() != Player::White {
+        return None;
+    }
+    let phase = enc.phase();
+    let step = |b: &Board, p: Player, m: &Move, a: Board| chaplain_step(phase, b, p, m, a);
+    search_signed(
+        enc.game(),
+        enc.boss.node_budget,
+        CHAPLAIN_WEIGHTS,
+        &|_| true,
+        &step,
+    )
+    .map(|r| r.mv)
 }
 
 /// The Chaplain boss.
@@ -196,7 +257,6 @@ mod tests {
     use crate::encounter::{marbles, Encounter, PveResult};
     use crate::game::Game;
     use crate::moves::Direction::{E, W};
-    use crate::moves::Player;
 
     /// Black's shuffle marble walks this pair, White's walks the other: far from every test cell.
     const BLACK_SHUFFLE: [P; 2] = [(0, 3), (-1, 3)];
@@ -779,9 +839,84 @@ mod tests {
         assert_eq!(count(&e, Cell::Black), 1, "the player marble converted");
         assert_eq!(
             e.game().ejected(Player::Black),
-            0,
+            1,
             "the health swing is taken"
         );
+    }
+
+    #[test]
+    fn the_step_is_what_the_encounter_does_to_the_board() {
+        let mut enc = Encounter::new(Game::new(), chaplain_boss(), 0);
+        let mut flips = 0;
+        for ply in 0..80_u64 {
+            let mover = enc.game().to_move();
+            let moves = crate::moves::legal_moves(enc.game().board(), mover);
+            let mv = moves[(mix(ply) % moves.len() as u64) as usize].clone();
+            let before = enc.game().board().clone();
+            let (after, _) = crate::moves::apply(&before, mover, &mv).unwrap();
+            let (stepped, _) = chaplain_step(0, &before, mover, &mv, after);
+            enc.play(&mv).unwrap();
+            assert_eq!(&stepped, enc.game().board(), "ply {ply}");
+            flips += before.converted().len() + enc.game().board().converted().len();
+            assert!(enc.game().outcome().is_none(), "ply {ply}");
+        }
+        assert!(flips > 0, "the game must reach a flip to prove anything");
+    }
+
+    /// The credits the step gives for black's or white's move `mv` on a boss turn position.
+    fn credits_of(e: &Encounter, mv: &Move) -> [i8; 2] {
+        let mover = e.game().to_move();
+        let (after, _) = crate::moves::apply(e.game().board(), mover, mv).unwrap();
+        chaplain_step(e.phase(), e.game().board(), mover, mv, after).1
+    }
+
+    #[test]
+    fn the_step_credits_the_health_swing_of_both_sides() {
+        let lost = boss_turn(&[(1, 0), (1, -1), (0, -1), (-2, 0)], &[(0, 0)], 0);
+        let reply = Move {
+            cells: vec![(-2, 0)],
+            dir: E,
+        };
+        let mut black = lost.clone();
+        black
+            .play(&Move {
+                cells: vec![(0, -3)],
+                dir: crate::moves::Direction::SE,
+            })
+            .unwrap();
+        assert_eq!(
+            credits_of(&black, &reply),
+            [1, 0],
+            "a boss marble joins the player"
+        );
+        let won = boss_turn(&[(0, 0)], &[(1, 0), (1, -1), (0, -1), (-2, 0)], 2);
+        let converting = chaplain_move(&won).unwrap();
+        assert_eq!(
+            credits_of(&won, &converting),
+            [-1, 0],
+            "a player marble joins the boss"
+        );
+    }
+
+    #[test]
+    fn the_step_credits_the_martyr_it_sees_explode_from_p2() {
+        let mut board = Board::empty();
+        for (q, r) in [(1, 0), (0, 3)] {
+            board.set(q, r, Cell::Black);
+        }
+        for (q, r) in [(0, 0), (0, -3)] {
+            board.set(q, r, Cell::White);
+        }
+        board.set_martyr(Some(Some((0, 0))));
+        let mv = Move {
+            cells: vec![(0, -3)],
+            dir: crate::moves::Direction::SE,
+        };
+        let (after, _) = crate::moves::apply(&board, Player::White, &mv).unwrap();
+        let (out, credits) = chaplain_step(1, &board, Player::White, &mv, after);
+        assert_eq!(out.get(1, 0), Some(Cell::White), "the blast converts");
+        assert_eq!(out.get(0, 0), Some(Cell::Empty), "the martyr is gone");
+        assert_eq!(credits, [1, 0], "the martyr is an ejection for the player");
     }
 
     #[test]

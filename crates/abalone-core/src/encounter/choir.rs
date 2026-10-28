@@ -37,6 +37,7 @@ pub const ALTO_WEIGHTS: Weights = Weights {
     ejected: 150,
     centre: 3,
     cohesion: 2,
+    threat: 0,
 };
 /// Tenor flanks: pressing the opponent towards the edge counts a lot. TUNE.
 pub const TENOR_WEIGHTS: Weights = Weights {
@@ -44,6 +45,7 @@ pub const TENOR_WEIGHTS: Weights = Weights {
     ejected: 50,
     centre: 20,
     cohesion: 2,
+    threat: 0,
 };
 /// Bass anchors: staying in one cluster counts a lot. TUNE.
 pub const BASS_WEIGHTS: Weights = Weights {
@@ -51,6 +53,7 @@ pub const BASS_WEIGHTS: Weights = Weights {
     ejected: 50,
     centre: 3,
     cohesion: 20,
+    threat: 0,
 };
 
 /// One boss army.
