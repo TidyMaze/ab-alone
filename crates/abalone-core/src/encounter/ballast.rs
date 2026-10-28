@@ -116,6 +116,24 @@ pub fn ballast_next(enc: &Encounter) -> Option<Borrowed> {
         .then(|| borrowed(ply_seed(enc.seed, u64::from(fire))))
 }
 
+/// The effect the last ply borrowed and the cells it touched (the marks it left and the cells
+/// whose content changed). `None` when the last ply borrowed nothing.
+pub fn ballast_fired(_enc: &Encounter) -> Option<(Borrowed, Vec<P>)> {
+    todo!()
+}
+
+/// The cells an effect touched going from `before` to `after`: those whose content changed and
+/// the new cracks, polarities and converted marbles.
+fn touched(_before: &Board, _after: &Board) -> Vec<P> {
+    todo!()
+}
+
+/// The pulse announced for the next boss turn, `(pulsar, force)` with `None` for the infinite force:
+/// `None` when the effect due next is not a pulse.
+pub fn ballast_pulse_tell(_enc: &Encounter) -> Option<(u8, Option<u8>)> {
+    todo!()
+}
+
 /// The pulse of the last ply: the pulsar id, the board just before it and the cells it moved,
 /// from where they stood. `None` when the last ply borrowed no pulse.
 pub fn ballast_last_pulse(enc: &Encounter) -> Option<(u8, Board, Vec<P>)> {
@@ -362,7 +380,10 @@ mod tests {
         assert_eq!(count(board, Cell::White), 16);
         assert_eq!(count(board, Cell::Black), 16);
         for (q, r) in BALLAST_BOSS_START {
-            assert!(BALLAST_PLAYER_START.contains(&(-q, -r)), "({q}, {r}) mirrored");
+            assert!(
+                BALLAST_PLAYER_START.contains(&(-q, -r)),
+                "({q}, {r}) mirrored"
+            );
         }
         for (q, r) in BALLAST_PLAYER_START {
             assert_eq!(board.get(q, r), Some(Cell::Black));
@@ -713,6 +734,93 @@ mod tests {
         assert_eq!(ballast_last_pulse(&enc), None, "a tick");
         play_rest(&mut enc);
         assert_eq!(ballast_last_pulse(&enc), None, "a conversion check");
+    }
+
+    #[test]
+    fn the_fired_effect_touches_its_marks_and_the_cells_that_changed() {
+        let crack = seed_of(|b| b == Borrowed::HullCrack);
+        let cracked = hook(&open_board(), BALLAST_FIRE, crack);
+        assert_eq!(
+            touched(&open_board(), &cracked),
+            vec![cracked.cracks()[0].0]
+        );
+        let polar = seed_of(|b| b == Borrowed::MagnetizerPolarity);
+        let polarized = hook(&open_board(), BALLAST_FIRE, polar);
+        assert!(touched(&open_board(), &polarized).contains(&polarized.polarities()[0].0));
+        let (push, dir) = pulse_seed();
+        let pushed = hook(&open_board(), BALLAST_FIRE, push);
+        let moved = pulse(&open_board(), dir, PULSAR_FORCE[0]).1;
+        let cells = touched(&open_board(), &pushed);
+        assert!(!moved.is_empty() && moved.iter().all(|c| cells.contains(c)));
+        let flip = seed_of(|b| b == Borrowed::ChaplainConversion);
+        let mut board = open_board();
+        for (q, r) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+            board.set(q, r, Cell::White);
+        }
+        let flipped = hook(&board, BALLAST_FIRE, flip);
+        assert_eq!(
+            touched(&board, &flipped),
+            vec![(0, 0)],
+            "the flipped marble"
+        );
+        let idle = hook(&open_board(), BALLAST_FIRE, flip);
+        assert_eq!(
+            touched(&open_board(), &idle),
+            Vec::<P>::new(),
+            "a check that flips nothing"
+        );
+    }
+
+    #[test]
+    fn the_last_fired_effect_is_known_after_the_boss_turn_that_borrowed_it_only() {
+        assert_eq!(ballast_fired(&corner_fight(0)), None, "no hook yet");
+        let mut enc = corner_fight(fight_seed(|b| b == Borrowed::ChaplainConversion));
+        enc.play(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(ballast_fired(&enc), None, "a tick");
+        play_rest(&mut enc);
+        assert_eq!(
+            ballast_fired(&enc),
+            Some((Borrowed::ChaplainConversion, Vec::new()))
+        );
+        let (seed, dir) = fight_pulse_seed();
+        let mut enc = corner_fight(seed);
+        play_six(&mut enc);
+        let (effect, cells) = ballast_fired(&enc).unwrap();
+        assert_eq!(effect, Borrowed::PulsarPulse(dir));
+        assert!(cells.contains(&ballast_last_pulse(&enc).unwrap().2[0]));
+    }
+
+    #[test]
+    fn the_pulse_is_announced_with_its_pulsar_and_force_the_turn_before_it_only() {
+        let play_all = |seed: u64| {
+            let mut enc = Encounter::new(
+                Game::from_position(open_board(), Player::Black, [0, 0]),
+                BossDef {
+                    node_budget: 200,
+                    ..ballast_boss()
+                },
+                seed,
+            );
+            (0..8)
+                .map(|_| {
+                    let tell = ballast_pulse_tell(&enc);
+                    let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
+                    enc.play(&m).unwrap();
+                    tell
+                })
+                .collect::<Vec<_>>()
+        };
+        let (seed, dir) = fight_pulse_seed();
+        let seen = play_all(seed);
+        assert_eq!(seen[..4], [None; 4]);
+        assert_eq!(
+            seen[4..6],
+            [Some((dir, PULSAR_FORCE[0])); 2],
+            "plies 4 and 5 lead to ply 6"
+        );
+        assert_eq!(seen[6..], [None; 2]);
+        let other = fight_seed(|b| b == Borrowed::HullCrack);
+        assert_eq!(play_all(other), vec![None; 8], "another effect");
     }
 
     fn play_rest(enc: &mut Encounter) {
