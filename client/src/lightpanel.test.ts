@@ -28,12 +28,12 @@ describe('lightPanel (?lights)', () => {
     expect(panel.id).toBe('light-panel');
     expect([...panel.querySelectorAll('label')].map((l) => l.textContent)).toEqual([
       'key 2',
-      'corner-neon-nw 5.5',
+      'corner-neon 5.5',
       'PointLight 38e8ff (-13, 11, -17.5) 2.25',
     ]);
     const input = panel.querySelector('input')!;
-    expect([input.type, input.min, input.max, input.value]).toEqual(['range', '0', '10', '2']);
-    expect(panel.querySelectorAll('input')[1]!.max).toBe('16.5'); // three times a strong neon
+    expect([input.type, input.min, input.max, input.value]).toEqual(['range', '0', '100', '2']);
+    expect(panel.querySelectorAll('input')[1]!.max).toBe('110'); // 20 times a strong neon
   });
 
   it('groups the sliders by kind, each group open and folding, its lamps by name', () => {
@@ -81,6 +81,41 @@ describe('lightPanel (?lights)', () => {
     expect(row.map((l) => l.intensity)).toEqual([3, 3]);
   });
 
+  it('merges a family of lamps (one per side or number) into one slider, its button going from one to the next', () => {
+    const s = new THREE.Scene();
+    const at = <T extends THREE.Object3D>(o: T, name: string, x: number): T => Object.assign(o, { name }).translateX(x);
+    const tubes = [at(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({ emissiveIntensity: 5.5 })), 'corner-neon-nw', 1),
+      at(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({ emissiveIntensity: 5.5 })), 'corner-neon-ne', 2)];
+    const props = new THREE.Group();
+    const bay = Object.assign(new THREE.Group(), { name: 'bay_lights' });
+    props.add(
+      at(new THREE.PointLight(), 'neonWallNwLight', 3), at(new THREE.PointLight(), 'neonWallNeLight', 4),
+      at(new THREE.PointLight(), 'pedestal-neon-0 light', 5), at(new THREE.PointLight(), 'pedestal-neon-0 light', 7),
+      at(new THREE.PointLight(), 'pedestal-neon-1 light', 9),
+    );
+    bay.add(at(new THREE.PointLight(), 'north wall lamp 1', 11), at(new THREE.PointLight(), 'north wall lamp 2', 12));
+    s.add(...tubes, props, bay);
+    s.updateMatrixWorld();
+    const aimed: number[] = [];
+    const panel = lightPanel(s, undefined, (p) => aimed.push(p.x));
+    expect([...panel.querySelectorAll('label')].map((l) => l.firstChild!.textContent)).toEqual([
+      'corner-neon ×2 ',
+      'neonWallLight ×2 ',
+      'pedestal-neon light ×2 ',
+      'north wall lamp ×2 ',
+    ]);
+    const [corner, , pedestal] = panel.querySelectorAll('label');
+    const slider = corner!.querySelector('input')!;
+    slider.value = '40';
+    slider.dispatchEvent(new Event('input'));
+    expect(tubes.map((t) => (t.material as THREE.MeshStandardMaterial).emissiveIntensity)).toEqual([40, 40]);
+    const aim = pedestal!.querySelector('button')!;
+    aim.click(); // the first bar, the middle of its row
+    aim.click(); // the second bar
+    aim.click(); // the first again
+    expect(aimed).toEqual([6, 9, 6]);
+  });
+
   it('points the camera at a light, at the middle of a row, where it is in the world', () => {
     const s = new THREE.Scene();
     const row = [new THREE.PointLight(), new THREE.PointLight()];
@@ -95,7 +130,7 @@ describe('lightPanel (?lights)', () => {
     const aimed: number[][] = [];
     const panel = lightPanel(s, undefined, (p) => aimed.push(p.toArray()));
     const aim = panel.querySelector('button')!;
-    expect(aim.getAttribute('aria-label')).toBe('Point the camera at neon-column-wn light');
+    expect(aim.getAttribute('aria-label')).toBe('Point the camera at neon-column light');
     aim.click();
     expect(aimed).toEqual([[10, 2, 0]]);
     expect(lightPanel(s).querySelector('button')).toBeNull(); // no camera to point: no button

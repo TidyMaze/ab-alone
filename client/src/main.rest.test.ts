@@ -30,7 +30,7 @@ describe('main.ts, ?lights', () => {
   it('shows a power slider per light and neon tube, the key and the fill among them', async () => {
     await boot('?bot=off&lights');
     const names = [...document.querySelectorAll('#light-panel label')].map((l) => l.firstChild!.textContent!.trim());
-    expect(names).toEqual(expect.arrayContaining(['key', 'fill (ambient)', 'emergencyLight', 'corner-neon-nw', 'corner-neon-nw light']));
+    expect(names).toEqual(expect.arrayContaining(['key', 'fill (ambient)', 'emergencyLight', 'corner-neon ×4', 'corner-neon light ×4']));
   });
 
   it.each([
