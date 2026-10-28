@@ -127,6 +127,7 @@ describe('Battle royale online (#504)', () => {
     expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(`#royale=${room}`);
     expect(byId('invite').hidden).toBe(false);
     expect(byId('invite-label').textContent).toBe('Invite link: send it to the other players');
+    expect(byId('invite-copy').hidden).toBe(false); // Copy closes the link (#839)
     expect(data().online).toBe('royale');
     expect(data().royale).toBe('1');
     expect(data().net).toBe('lobby');

@@ -332,6 +332,68 @@ describe('The invite link', () => {
   });
 });
 
+describe('Copy on the invite link (#839)', () => {
+  /** Boots, presses Play online and waits for the room: the link, its label and Copy show. */
+  async function invited() {
+    const game = await boot('?bot=off');
+    game.openModes();
+    byId('play-online').click();
+    await until(game, () => data().seat === 'player'); // the room is open before the test ends
+    return game;
+  }
+  const shown = (): boolean[] => ['invite-label', 'invite', 'invite-copy'].map((id) => !byId(id).hidden);
+
+  it('shows with the link and its label, and Copy is a button named Copy', async () => {
+    await invited();
+    expect(shown()).toEqual([true, true, true]);
+    expect(byId('invite-copy').textContent).toBe('Copy');
+    expect(byId('invite-copy').tagName).toBe('BUTTON');
+  });
+
+  it('writes the link to the clipboard, then closes the link, its label and Copy', async () => {
+    clipboard(async () => {});
+    const game = await invited();
+    const link = byId<HTMLInputElement>('invite').value;
+    byId('invite-copy').click();
+    await until(game, () => byId('invite').hidden);
+    expect(calls()).toBe(1);
+    expect(copied()).toBe(link);
+    expect(link).toContain(`#room=${game.room()}`);
+    expect(shown()).toEqual([false, false, false]);
+  });
+
+  it('keeps the link shown, selected, when the browser refuses the clipboard', async () => {
+    clipboard(async () => {
+      throw new Error('denied');
+    });
+    const game = await invited();
+    const link = byId<HTMLInputElement>('invite');
+    byId('invite-copy').click();
+    await until(game, () => game.hud().includes('invite link selected'));
+    expect(shown()).toEqual([true, true, true]);
+    expect(document.activeElement).toBe(link);
+    expect([link.selectionStart, link.selectionEnd]).toEqual([0, link.value.length]);
+  });
+
+  it('keeps the link shown when the page has no clipboard at all', async () => {
+    const game = await invited();
+    byId('invite-copy').click();
+    await until(game, () => game.hud().includes('invite link selected'));
+    expect(shown()).toEqual([true, true, true]);
+  });
+
+  it('closes with the room, and shows again with the next one', async () => {
+    const game = await invited();
+    game.openModes();
+    byId('ship').click(); // Back to the ship
+    expect(shown()).toEqual([false, false, false]);
+    game.openModes();
+    byId('play-online').click();
+    expect(shown()).toEqual([true, true, true]);
+    await until(game, () => data().seat === 'player');
+  });
+});
+
 describe('Connectivity', () => {
   it('disables Play online with a HUD notice while the browser is offline, and enables it back online', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
