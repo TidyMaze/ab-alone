@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { boot } from './test/harness';
 
 // What the other main.*.test.ts files leave out of main.ts: a browser check asking for the next draw (#435), and a
@@ -60,6 +61,22 @@ describe('main.ts, ?lights', () => {
   it('has no panel without it', async () => {
     await boot('?bot=off');
     expect(document.getElementById('light-panel')).toBeNull();
+  });
+});
+
+describe('main.ts, the room props', () => {
+  it('rounds the edges of the box props within their size', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    const column = scene!.getObjectByName('corner-neon-nw') as THREE.Mesh;
+    expect(column.geometry).toBeInstanceOf(RoundedBoxGeometry);
+    column.geometry.computeBoundingBox();
+    expect(column.geometry.boundingBox!.getSize(new THREE.Vector3()).toArray()).toEqual([0.14, 7.5, 0.14].map((v) => expect.closeTo(v)));
   });
 });
 

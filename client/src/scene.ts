@@ -14,6 +14,8 @@ import { ROOM_SURFACE, type StructuralPart } from './room';
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
 export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
+/** The radius of the rounded edges of the board's plate and rim. */
+const FRAME_BEVEL = 0.03;
 
 export type NotchRow = NonNullable<ReturnType<typeof notchRow>>;
 
@@ -396,8 +398,19 @@ export class SceneRenderer {
     this.fogRadius = next.radius;
 
     const flat = (points: Point[]): THREE.Vector2[] => points.map((p) => new THREE.Vector2(p.x, -p.z));
+    // Rounded edges catch the light where square ones cut it: the bevel stays inside the slab's outline (offset) and
+    // height (a thinner extrusion), so the cells and the marbles sit where they did.
     const slab = (shape: THREE.Shape, top: number, depth: number): THREE.ExtrudeGeometry =>
-      new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, top - depth, 0);
+      new THREE.ExtrudeGeometry(shape, {
+        depth: depth - 2 * FRAME_BEVEL,
+        bevelEnabled: true,
+        bevelThickness: FRAME_BEVEL,
+        bevelSize: FRAME_BEVEL,
+        bevelOffset: -FRAME_BEVEL,
+        bevelSegments: 2,
+      })
+        .rotateX(-Math.PI / 2)
+        .translate(0, top - depth + FRAME_BEVEL, 0);
 
     const plateShape = new THREE.Shape(flat(next.inner));
     for (const h of next.holes) plateShape.holes.push(new THREE.Path().absarc(h.x, -h.z, FRAME.hole, 0, 2 * Math.PI, true));

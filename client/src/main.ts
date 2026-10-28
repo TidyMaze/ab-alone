@@ -34,6 +34,7 @@ import { RenderModeManager, type RenderMode } from './rendermode';
 import { lightPanel } from './lightpanel';
 import { TUBE_SPACING, tubeLights } from './neonlight';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -1594,7 +1595,8 @@ drawProps = (): void => {
     const geom =
       def.type === 'cylinder'
         ? new THREE.CylinderGeometry(def.size[0], def.size[1], def.size[2], def.size[3])
-        : new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]);
+        : // Rounded edges, within the box: up to 5 cm, a fifth of its thinnest side, so a thin bar stays a bar.
+          new RoundedBoxGeometry(def.size[0], def.size[1], def.size[2], 2, Math.min(0.05, Math.min(...def.size) / 5));
 
     const mesh = new THREE.Mesh(geom, mat);
     if (screen) consoleScreen = mesh;

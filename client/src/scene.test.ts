@@ -245,6 +245,12 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.plate.geometry.attributes.position!.count).toBeGreaterThan(0);
     expect(sr.rim.near.geometry.attributes.position!.count).toBeGreaterThan(0);
     expect(sr.rim.far.geometry.attributes.position!.count).toBeGreaterThan(0);
+    // The plate and the rim have rounded edges, within the same height as square ones: the plate from -0.3 to -0.1,
+    // the rim from -0.3 to 0, so the cells and the marbles sit where they did.
+    const height = (g: THREE.BufferGeometry): number[] => (g.computeBoundingBox(), [g.boundingBox!.min.y, g.boundingBox!.max.y]);
+    for (const g of [sr.plate.geometry, sr.rim.near.geometry]) expect((g as THREE.ExtrudeGeometry).parameters.options.bevelEnabled).toBe(true);
+    expect(height(sr.plate.geometry)).toEqual([expect.closeTo(-0.3), expect.closeTo(-0.1)]);
+    expect(height(sr.rim.near.geometry)).toEqual([expect.closeTo(-0.3), expect.closeTo(0)]);
 
     // Same board returns cached null
     const frame2 = sr.drawFrame(board);
