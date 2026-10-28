@@ -78,10 +78,12 @@ test('The Overseer: the boss pushing the 6th core in wins the fight for the play
 test('The Overseer: on victory its marble explodes, then the bubble types the farewell, #789', async ({ page }, testInfo) => {
   await startOverseer(page);
   await plies(page, 0, 23);
+  await expect(page.locator('#bubble')).toBeHidden(); // the angry line of an earlier burn has faded
   await page.emulateMedia({ reducedMotion: 'no-preference' }); // the explosion plays
   await page.mouse.move(2, 2);
   await plies(page, 23, 24);
   await expect(page.locator('body')).toHaveAttribute('data-exploding', '1');
+  await expect(page.locator('#bubble')).toBeHidden(); // no angry line while it blows
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('overseer-explosion.png') });
   await expect(page.locator('#bubble-text')).toHaveText('Well done. You broke the last thing that cared about you.');

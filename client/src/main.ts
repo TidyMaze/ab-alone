@@ -1173,6 +1173,7 @@ const unseen = new THREE.MeshBasicMaterial({ visible: false });
 // Beyond the colour (#790): the Chaplain's pale glyph over the wax and pale cracks on the shell half (the crack decal of the
 // Hull), both 3:1 on every shell and glass skin, whatever the deck's light.
 const convertedGlyph = new THREE.MeshBasicMaterial({ color: BONE });
+const convertedGlyphGeometry = glyphGeometry.clone().translate(0, 0.6, 0); // over the wax, and so turned upright with the marble's parts
 const convertedCracks = new THREE.MeshBasicMaterial({ color: BONE, alphaMap: crackDecal, transparent: true, depthWrite: false });
 function convert(marble: THREE.Mesh): void {
   marble.material = unseen;
@@ -1180,8 +1181,7 @@ function convert(marble: THREE.Mesh): void {
   const glass = Object.assign(new THREE.Mesh(glassHalfGeometry, marbleMaterials[2]), { name: 'glass', castShadow: true });
   const cracks = Object.assign(new THREE.Mesh(shellHalfGeometry, convertedCracks), { name: 'cracks' });
   cracks.scale.setScalar(1.01); // just outside the shell
-  const glyph = Object.assign(new THREE.Mesh(glyphGeometry, convertedGlyph), { name: 'glyph' });
-  glyph.position.y = 0.6; // over the wax
+  const glyph = Object.assign(new THREE.Mesh(convertedGlyphGeometry, convertedGlyph), { name: 'glyph' });
   marble.add(shell, glass, Object.assign(new THREE.Mesh(convertedCoreGeometry, convertedCore), { name: 'core', renderOrder: 1 }), cracks, glyph);
 }
 let exposed = 0; // marbles the hovered move would expose, for the HUD

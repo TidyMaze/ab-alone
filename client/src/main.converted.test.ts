@@ -107,8 +107,7 @@ describe('main.ts converted look (#508)', () => {
     for (const cell of cells) {
       const marble = marbleOn(scene(), cell);
       const [glyph, cracks, shell] = ['glyph', 'cracks', 'shell'].map((name) => part(marble, name));
-      expect(glyph!.position.y).toBeGreaterThan(0.48); // over the top of the wax
-      expect(box(glyph!).max.y - box(glyph!).min.y).toBeGreaterThan(0); // a shape, not only a colour
+      expect(box(glyph!).min.y).toBeGreaterThan(0.48); // over the top of the wax: a shape, not only a colour
       expect(box(cracks!).max.y).toBeLessThanOrEqual(1e-6); // on the shell half
       expect(cracks!.geometry).toBe(shell!.geometry);
       expect(cracks!.scale.x).toBeGreaterThan(1); // just outside the shell: no z-fight
