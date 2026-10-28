@@ -40,7 +40,7 @@ On top of it, the ship:
 | 🕹️ | **Hot-seat** on one screen | ✅ playable |
 | 🤖 | **Versus TALLY's bot** (alpha-beta, runs in a Web Worker) | ✅ playable |
 | 📡 | **Online 1v1**, peer to peer, invite link, signed move log | ✅ playable |
-| 💀 | **Souls-like bosses**, ten of them (below), from the Boss fight menu | ✅ playable |
+| 💀 | **Souls-like bosses**, ten of them (below), from the Boss fight menu, a medal per beaten boss with your fewest turns | ✅ playable |
 | 📅 | **Daily challenge**: one boss and one seed for everyone each UTC day, a result to share | ✅ playable |
 | 🤝 | **Fight together**: two players share one army against a boss online, turn about | ✅ playable |
 | 🔥 | **Battle royale** on the Furnace deck: up to 6 seats, hidden orders (commit-reveal), the hull breach closes in, bots fill empty seats | ✅ playable, offline vs 5 bots and online |

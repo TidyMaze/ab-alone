@@ -160,3 +160,20 @@ test('The Overseer: reduced motion shows the whole angry line at once and holds 
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('overseer-angry-reduced.png') });
 });
+
+test('A boss win earns a medal: a new record on the banner, the turns next to the boss in the menu, #791', async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('ab-alone.medals')) localStorage.setItem('ab-alone.medals', JSON.stringify({ echo: 14, overseer: 40 }));
+  });
+  await startOverseer(page);
+  await plies(page, 0, 24); // the boss pushes the 6th core in at ply 24: 12 player turns
+  await expect(page.locator('#hud')).toContainText('Victory');
+  await expect(page.locator('#hud .end')).toContainText('New record: 12 turns.');
+  await page.screenshot({ path: testInfo.outputPath('medal-banner.png') });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ab-alone.medals')!))).toEqual({ echo: 14, overseer: 12 });
+  await openModes(page);
+  await page.getByRole('button', { name: 'Boss fight' }).click();
+  await expect(page.locator('#boss-list .medal')).toHaveText(['Medal: 14 turns', 'Medal: 12 turns']);
+  await expect(page.locator('#boss-list button', { hasText: 'The Overseer' })).toContainText('Medal: 12 turns');
+  await page.screenshot({ path: testInfo.outputPath('medal-menu.png') });
+});

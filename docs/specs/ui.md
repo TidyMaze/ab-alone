@@ -136,6 +136,11 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   "Repeated 3 times: a defeat." or "100 plies idle: a defeat.". The one action offered is the button
   already in the column: New game (local, bot), Retry (boss, daily), Rematch (online players), and Back to the
   ship when a hub room started the game (game-design.md section 3.5, #522).
+  A won boss fight (daily and co-op included) adds the medal to the reason line (#791): "Medal earned: 12 turns."
+  the first time, "New record: 9 turns." when the fight took fewer player turns than the medal held, and
+  "Medal best: 9 turns." when it did not. In the boss list, a beaten boss carries "Medal: 9 turns" after its name.
+  A medal is the fewest player turns a win needed, per boss id, in local storage (`client/src/medals.ts`, key
+  `ab-alone.medals`); `hasMedal(store, boss)` is what the auto-play task asks (#792). Every peer of a co-op win gets it.
   `body[data-over]` is `win`, `loss` or `draw` while the game is over (a draw against a boss is `loss`):
   the board dims (filter on the canvas) and one light plays on the rim only, the middle stays clear of
   cells, marbles and targets. Win: a warm sodium rim light rises and pulses once (1.6 s) and stays as a
