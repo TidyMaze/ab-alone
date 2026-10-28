@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { BOARD_CELLS, RADIUS, VANISHED, cellIndex } from './board';
 import { resetView, type View } from './camera';
-import { createBloomPipeline, SceneRenderer, type NotchRow } from './scene';
+import { createBloomPipeline, FRAME_LOOK, SceneRenderer, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
   const canvas = document.createElement('canvas');
@@ -79,6 +79,7 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.plate.material.map).toBe(plateAlbedo);
     expect(sr.plate.material.roughnessMap).toBe(plateRoughness);
     expect(sr.plate.material.normalMap).toBe(plateNormal);
+    expect(sr.plate.material.color.getHex()).toBe(FRAME_LOOK.plateTiles); // dark enough for the cell edges' 3:1 (#787)
     expect(sr.rim.near.material.metalness).toBe(0.65);
 
     const srNoNormal = new SceneRenderer({
@@ -371,6 +372,11 @@ describe('SceneRenderer (#632)', () => {
     (sr as { pipeline: unknown }).pipeline = null;
     sr.render();
     expect(renderer.render).toHaveBeenCalledWith(sr.scene, sr.camera);
+  });
+
+  it('blooms only what is brighter than the lit deck, so the glow is no veil over the board (#787)', () => {
+    const pipeline = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera())!;
+    expect((pipeline.outputNode as any).node.bNode.threshold.value).toBe(1);
   });
 
   it('configures bloom node with half resolution scale for performance (#781)', () => {

@@ -124,6 +124,10 @@ describe('main.ts board and HUD', () => {
     expect(discs.filter((d) => d.visible)).toHaveLength(61);
     expect(discs[0]!.material.map).toBeInstanceOf(THREE.Texture);
     expect(discs[0]!.material.normalMap).toBeInstanceOf(THREE.Texture);
+    // The cell beds keep the deck texture's own colour and stay matte: a dark metal tint turned them black, and the
+    // marbles no longer read 3:1 against them (#787).
+    expect(discs[0]!.material.color.getHex()).toBe(0xffffff);
+    expect(discs[0]!.material.metalness).toBe(0);
     expect(plate.material.map).toBeInstanceOf(THREE.Texture);
     expect(near.material.map).toBeInstanceOf(THREE.Texture);
     const { shells, glass } = drawn(scene());
