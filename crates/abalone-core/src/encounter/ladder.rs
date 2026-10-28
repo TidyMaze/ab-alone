@@ -6,7 +6,7 @@
 
 use crate::board::{Board, Cell};
 use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
-use crate::encounter::ballast::{ballast_start, BALLAST_NODE_BUDGET};
+use crate::encounter::ballast::{ballast_move, ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
 use crate::encounter::echo::{echo_boss, echo_move, mirror_move};
@@ -135,6 +135,7 @@ impl Arena {
             Arena::Plain(enc, LadderBoss::Alien) => alien_move(enc),
             Arena::Plain(enc, LadderBoss::Chaplain) => chaplain_move(enc),
             Arena::Plain(enc, LadderBoss::Hull) => hull_move(enc),
+            Arena::Plain(enc, LadderBoss::Ballast) => ballast_move(enc),
             Arena::Plain(enc, _) => enc.boss_search().map(|r| r.mv),
             Arena::Choir(choir) => choir.boss_move(),
         }
@@ -416,7 +417,7 @@ mod tests {
             ["echo", "hull", "chaplain", "choir", "ballast", "alien"]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
-        assert_eq!(budgets, [400, 3000, 300, 1500, 150_000, 3000]);
+        assert_eq!(budgets, [400, 3000, 300, 1500, 3000, 3000]);
     }
 
     #[test]
@@ -494,6 +495,16 @@ mod tests {
             let r = play_attempt(boss, 1, 2, 30, 2);
             assert_eq!(r.plies, 2, "{boss:?}");
         }
+    }
+
+    #[test]
+    fn the_ballast_mind_answers_through_its_own_move() {
+        let mut a = Arena::new(LadderBoss::Ballast, 3);
+        let mut enc = ballast_start(3);
+        let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
+        a.play(&mv).unwrap();
+        enc.play(&mv).unwrap();
+        assert_eq!(a.boss_move(), ballast_move(&enc));
     }
 
     #[test]

@@ -10,7 +10,7 @@ use abalone_core::encounter::assembly::{
     assembly_boss, assembly_move, assembly_start, assembly_tell, belt_cells, last_belts, Fate,
 };
 use abalone_core::encounter::ballast::{
-    ballast_boss, ballast_last_pulse, ballast_next, ballast_start, Borrowed,
+    ballast_boss, ballast_last_pulse, ballast_move, ballast_next, ballast_start, Borrowed,
 };
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
@@ -189,7 +189,7 @@ const BOSSES: [BossEntry; 12] = [
             "Void pillars; every 3 turns it borrows a crack, a pulse, a polarity or a conversion. Eject 12 to win; lose 6 or draw to lose.",
         def: ballast_boss,
         start: ballast_fight,
-        reply: search_reply,
+        reply: ballast_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -1199,9 +1199,7 @@ mod tests {
     #[test]
     fn the_same_seed_and_moves_give_the_same_boss_replies_for_every_boss() {
         // The daily challenge (#195) gives everyone one seed a day: the fight must replay the same.
-        // The Ballast Mind searches 150 000 nodes a move, minutes in a debug build: ballast.rs
-        // replays it on a small budget (`same_seed_gives_the_same_game`).
-        for id in boss_ids().into_iter().filter(|id| id != "ballast") {
+        for id in boss_ids() {
             let first = replies(&id, 2_374_354_862);
             assert_eq!(first.0.len(), 4);
             assert_eq!(replies(&id, 2_374_354_862), first, "{id} replays the same");
