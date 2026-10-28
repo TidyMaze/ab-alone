@@ -19,7 +19,7 @@ use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETI
 use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
 use crate::encounter::{losses, no_gain, ply_seed, BossDef, Encounter};
 use crate::game::{Game, WIN_EJECTIONS};
-use crate::moves::{Move, Player};
+use crate::moves::{apply, legal_moves, Move, Player};
 use crate::search::{search_hooked, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
@@ -74,9 +74,10 @@ pub const BALLAST_BOSS_START: [P; 16] = [
 ];
 /// P2 and P3 start after this many ejections credited to the player, as the bosses it borrows from. TUNE.
 pub const BALLAST_PHASE_EJECTIONS: [u8; 2] = [3, 5];
-/// Positions the boss search may visit per move: the other bosses' budget, which keeps the reply
-/// near theirs (it was 150 000, 2.4 s native, before the search played the borrowed effects). TUNE.
-pub const BALLAST_NODE_BUDGET: u32 = 3000;
+/// Positions the boss search may visit per move. It was 150 000 (2.4 s native) before the search
+/// played the borrowed effects, 3000 with them (#824), and 100 since #833, the best of the ladder
+/// (docs/specs/boss-balance.md section 3). TUNE.
+pub const BALLAST_NODE_BUDGET: u32 = 100;
 /// Boss turns between two borrowed effects. TUNE.
 pub const BALLAST_EVERY: u32 = 3;
 /// Special id at the end of a player turn: the Hull's cracks count down.
@@ -167,19 +168,52 @@ pub fn ballast_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
+    ballast_search(enc, enc.boss.node_budget, &|_| true)
+}
+
+/// The node-limited search of `enc` with the Ballast hooks of its tree, for the side to move: the
+/// boss reply of [`ballast_move`], or the ladder player. Every Black ply ends with the Hull tick.
+/// The boss ply that fires the effect due this turn is the root one on the boss's turn, and on the
+/// player's turn the reply to the player's move (the player reads the effect one turn ahead).
+pub(crate) fn ballast_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<Move> {
     let root = enc.game().board();
-    let ply = enc.game().history().len() as u32 + 1;
+    let boss_turn = enc.game().to_move() == Player::White;
+    let ply = enc.game().history().len() as u32 + if boss_turn { 1 } else { 2 };
     let due = special(ply, enc.phase()).map(|id| (id, ply_seed(enc.seed, u64::from(ply))));
+    let tick = |before: &Board, mover: Player, mv: &Move, after: Board| {
+        // The Hull's own tick, which does nothing without a crack: skip its board copy.
+        if after.cracks().is_empty() {
+            (after, [0, 0])
+        } else {
+            hull_step(before, mover, mv, after)
+        }
+    };
+    // The positions the due effect fires from: the root, or each position after a player move.
+    let fires: Vec<Board> = match due {
+        None => Vec::new(),
+        Some(_) if boss_turn => vec![root.clone()],
+        Some(_) => legal_moves(root, Player::Black)
+            .iter()
+            .map(|mv| {
+                tick(
+                    root,
+                    Player::Black,
+                    mv,
+                    apply(root, Player::Black, mv).unwrap().0,
+                )
+                .0
+            })
+            .collect(),
+    };
     let step = |before: &Board, mover: Player, mv: &Move, after: Board| {
         if mover == Player::Black {
-            // The Hull's own tick, which does nothing without a crack: skip its board copy.
-            return if after.cracks().is_empty() {
-                (after, [0, 0])
-            } else {
-                hull_step(before, mover, mv, after)
-            };
+            return tick(before, mover, mv, after);
         }
-        let Some((id, seed)) = due.filter(|_| before == root) else {
+        let Some((id, seed)) = due.filter(|_| fires.contains(before)) else {
             return (after, [0, 0]);
         };
         let out = hook(&after, id, seed);
@@ -191,14 +225,7 @@ pub fn ballast_move(enc: &Encounter) -> Option<Move> {
         };
         (out, [lost_white, lost_black])
     };
-    search_hooked(
-        enc.game(),
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-    )
-    .map(|r| r.mv)
+    search_hooked(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
 }
 
 /// The Ballast board with no marble: radius 5 with the six pillars void.
@@ -359,6 +386,7 @@ mod tests {
         assert_eq!(boss.name, "The Ballast Mind");
         assert!(boss.phase_marbles.is_empty());
         assert_eq!(boss.phase_ejections, vec![3, 5]);
+        assert_eq!(BALLAST_NODE_BUDGET, 100, "#833");
         assert_eq!(boss.node_budget, BALLAST_NODE_BUDGET);
     }
 
@@ -596,6 +624,34 @@ mod tests {
         let hooked = ballast_move(&enc).unwrap();
         assert_eq!(lost_by(&hooked), 0, "{hooked:?} steps off the rim");
         assert_eq!(lost_by(&plain), 1, "{plain:?} stays under the pulse");
+    }
+
+    #[test]
+    fn the_player_search_sees_the_pulse_due_on_the_boss_reply() {
+        let (seed, _) = fight_pulse_seed();
+        let mut board = ballast_board();
+        board.set(-4, 5, Cell::Black);
+        board.set(5, 0, Cell::Black);
+        board.set(-5, 0, Cell::White);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, ballast_boss(), seed).counting_by_colour();
+        enc.boss.node_budget = 300;
+        for m in [
+            mv(&[(-4, 5)], E),
+            mv(&[(-5, 0)], E),
+            mv(&[(-3, 5)], W),
+            mv(&[(-4, 0)], W),
+        ] {
+            enc.play(&m).unwrap();
+        }
+        let player = ballast_search(&enc, 300, &|_| true).unwrap();
+        enc.play(&player).unwrap();
+        enc.play(&ballast_move(&enc).unwrap()).unwrap();
+        assert_eq!(
+            enc.game().ejected(Player::White),
+            0,
+            "{player:?} steps off the rim"
+        );
     }
 
     #[test]
