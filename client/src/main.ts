@@ -31,6 +31,7 @@ import { choirChips, drawChoirChips } from './choirchips';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
+import { lightPanel } from './lightpanel';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -330,9 +331,10 @@ const [
   loadTexture('crack-decal.ktx2', false, false),
   deckMap(deckOf('local')), // a page opens at the Mess
   deckNormalMap(deckOf('local')),
-  loadTexture('pbr/deck-pbr-albedo.ktx2', true, true),
-  loadTexture('pbr/deck-pbr-roughness.ktx2', false, true),
-  loadTexture('pbr/deck-pbr-normal.ktx2', false, true),
+  // The board plate: brushed aluminium, ambientCG Metal051A (CC0), large swirls.
+  loadTexture('pbr/board-albedo.ktx2', true, true),
+  loadTexture('pbr/board-roughness.ktx2', false, true),
+  loadTexture('pbr/board-normal.ktx2', false, true),
   loadTexture('pbr/plate-albedo.ktx2', true, true),
   loadTexture('pbr/plate-roughness.ktx2', false, true),
   loadTexture('pbr/plate-normal.ktx2', false, true),
@@ -340,15 +342,15 @@ const [
 
 if (plateAlbedo) {
   plateAlbedo.wrapS = plateAlbedo.wrapT = THREE.RepeatWrapping;
-  plateAlbedo.repeat.set(0.5, 0.5);
+  plateAlbedo.repeat.set(0.15, 0.15);
 }
 if (plateRoughness) {
   plateRoughness.wrapS = plateRoughness.wrapT = THREE.RepeatWrapping;
-  plateRoughness.repeat.set(0.5, 0.5);
+  plateRoughness.repeat.set(0.15, 0.15);
 }
 if (plateNormal) {
   plateNormal.wrapS = plateNormal.wrapT = THREE.RepeatWrapping;
-  plateNormal.repeat.set(0.5, 0.5);
+  plateNormal.repeat.set(0.15, 0.15);
 }
 
 const sceneRenderer = new SceneRenderer({
@@ -1000,6 +1002,7 @@ const steel = new THREE.MeshStandardMaterial(
     ? {
         map: firstDeckMap ?? deckAlbedo,
         roughnessMap: deckRoughness,
+        metalness: 0.8,
         ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
       }
     : { color: COLORS.steel, roughness: 0.8 },
@@ -1529,6 +1532,9 @@ if (deckAlbedo && tier === 'high' && typeof document !== 'undefined') {
   }
 }
 
+// ?lights: a power slider per light and neon tube (lightpanel.ts), rebuilt when the props replace their lights.
+const lightsPanel = new URLSearchParams(location.search).has('lights') ? document.body.appendChild(document.createElement('div')) : null;
+const refreshLights = (): void => void (lightsPanel && lightPanel(sceneRenderer.scene, lightsPanel));
 drawProps = (): void => {
   propsGroup.clear();
   const sLights = spaceshipLights(deck);
@@ -1586,6 +1592,7 @@ drawProps = (): void => {
     const mesh = new THREE.Mesh(geom, mat);
     if (screen) consoleScreen = mesh;
     if (def.id === 'log-recorder') recorder = mesh;
+    mesh.name = def.id; // a neon tube gets its ?lights slider by name
     if (!screen && def.id !== 'log-recorder' && !def.id.includes('neon')) {
       mesh.visible = !currentBay;
     }
@@ -1661,7 +1668,7 @@ drawProps = (): void => {
   viewportRimLight.position.set(17.0, 4.6, 0);
   const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.25, 6.0);
   kioskGreenLight.position.set(-10.2, 2.5, -5.8);
-  propsGroup.add(
+  const lights = {
     emergencyLight,
     consoleBounceLight,
     pedestalGlowLight,
@@ -1674,18 +1681,22 @@ drawProps = (): void => {
     airlockSodiumLight,
     viewportRimLight,
     kioskGreenLight,
-  );
+  };
+  for (const [name, light] of Object.entries(lights)) light.name = name; // the ?lights sliders' names
+  propsGroup.add(...Object.values(lights));
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
     if (sceneRenderer.bayLights) propsGroup.add(sceneRenderer.bayLights); // propsGroup.clear() took them out (#787)
   }
+  refreshLights();
 };
 let currentBay: SpaceshipBayAssets | null = null;
 const mountBay = (bay: SpaceshipBayAssets | null): void => {
   currentBay = bay;
   drawProps();
   sceneRenderer.mountBay(bay, deck);
+  refreshLights(); // the room's lamps came with it
   if (currentBay) {
     document.body.dataset.bay = 'ready'; // the room is complete: the browser checks of a still scene wait for it (#661)
   }

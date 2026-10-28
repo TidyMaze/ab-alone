@@ -12,12 +12,10 @@ export const ASSET_NAMES = [
   'shell-normal.png',
   'backdrop.png',
   'crack-decal.png',
-  'deck-mess.png',
   'deck-cargo.png',
   'deck-furnace.png',
   'deck-chapel.png',
   'deck-bridge.png',
-  'deck-mess-normal.png',
   'deck-cargo-normal.png',
   'deck-furnace-normal.png',
   'deck-chapel-normal.png',
@@ -333,10 +331,12 @@ export function generateAssets(seed) {
     ['backdrop.png', backdrop(256, 256, rand)],
     ['crack-decal.png', crackDecal(128, rand)],
   ]);
-  // Their own stream, so the assets above keep their bytes (#401).
-  for (const [name, buf] of Object.entries(deckSets(256, steel, rng(seed + 401)))) assets.set(`deck-${name}.png`, buf);
+  // Their own stream, so the assets above keep their bytes (#401). The Mess cells are ambientCG Metal051A (CC0),
+  // committed by hand: still drawn here so the other decks keep their bytes, not written.
+  const generated = ([name]) => name !== 'mess';
+  for (const [name, buf] of Object.entries(deckSets(256, steel, rng(seed + 401))).filter(generated)) assets.set(`deck-${name}.png`, buf);
   // Tangent-space normal map per deck (#440).
-  for (const [name, buf] of Object.entries(deckNormals(256, rng(seed + 440)))) assets.set(`deck-${name}-normal.png`, buf);
+  for (const [name, buf] of Object.entries(deckNormals(256, rng(seed + 440))).filter(generated)) assets.set(`deck-${name}-normal.png`, buf);
   return assets;
 }
 

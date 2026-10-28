@@ -137,7 +137,9 @@ export class SceneRenderer {
     this.frameCamera(width, height);
 
     this.ambient = new THREE.AmbientLight();
+    this.ambient.name = 'fill (ambient)';
     this.lamp = new THREE.DirectionalLight();
+    this.lamp.name = 'key';
     this.lamp.castShadow = true;
     this.lamp.shadow.mapSize.set(LIGHT.key.shadow.mapSize, LIGHT.key.shadow.mapSize);
     this.lamp.shadow.camera.near = LIGHT.key.shadow.camera.near;
@@ -152,7 +154,9 @@ export class SceneRenderer {
 
     this.coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
     this.coldRim.position.set(...LIGHT.accents.rim.position);
+    this.coldRim.name = 'cold rim';
     this.warmLight = new THREE.PointLight(LIGHT.accents.warm.color, LIGHT.accents.warm.intensity, LIGHT.accents.warm.distance);
+    this.warmLight.name = 'warm accent';
     this.warmLight.position.set(...LIGHT.accents.warm.position);
 
     this.decorMaterial = new THREE.MeshStandardMaterial({
@@ -189,15 +193,15 @@ export class SceneRenderer {
 
     if (options.plateAlbedo) {
       options.plateAlbedo.wrapS = options.plateAlbedo.wrapT = THREE.RepeatWrapping;
-      options.plateAlbedo.repeat.set(0.5, 0.5);
+      options.plateAlbedo.repeat.set(0.15, 0.15);
     }
     if (options.plateRoughness) {
       options.plateRoughness.wrapS = options.plateRoughness.wrapT = THREE.RepeatWrapping;
-      options.plateRoughness.repeat.set(0.5, 0.5);
+      options.plateRoughness.repeat.set(0.15, 0.15);
     }
     if (options.plateNormal) {
       options.plateNormal.wrapS = options.plateNormal.wrapT = THREE.RepeatWrapping;
-      options.plateNormal.repeat.set(0.5, 0.5);
+      options.plateNormal.repeat.set(0.15, 0.15);
     }
 
     const plateMaterial = new THREE.MeshStandardMaterial(

@@ -26,6 +26,19 @@ describe('main.ts, __drawNext', () => {
   });
 });
 
+describe('main.ts, ?lights', () => {
+  it('shows a power slider per light and neon tube, the key and the fill among them', async () => {
+    await boot('?bot=off&lights');
+    const names = [...document.querySelectorAll('#light-panel label')].map((l) => l.firstChild!.textContent!.trim());
+    expect(names).toEqual(expect.arrayContaining(['key', 'fill (ambient)', 'emergencyLight', 'corner-neon-nw']));
+  });
+
+  it('has no panel without it', async () => {
+    await boot('?bot=off');
+    expect(document.getElementById('light-panel')).toBeNull();
+  });
+});
+
 describe('main.ts, the deck textures', () => {
   type Mesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   /** The material of the cells main.ts draws, caught when it adds them to its scene: call before boot. */
@@ -47,6 +60,24 @@ describe('main.ts, the deck textures', () => {
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
     expect(name(cells().map)).toBe('deck-mess.ktx2');
     expect(name(cells().normalMap)).toBe('deck-mess-normal.ktx2');
+  });
+
+  it('the board plate wears the brushed Metal051A at a large scale, not the small floor tiles', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    const maps: THREE.Texture[] = [];
+    scene!.traverse((o) => {
+      const m = (o as Mesh).material;
+      if (m && !Array.isArray(m) && m.map) maps.push(m.map);
+    });
+    const plate = maps.filter((t) => t.name === 'board-albedo.ktx2');
+    expect(plate.length).toBeGreaterThan(0);
+    expect(plate.every((t) => t.repeat.x === 0.15 && t.repeat.y === 0.15)).toBe(true);
   });
 
   it('without its own set, a deck keeps the shared steel albedo and no normal map', async () => {
