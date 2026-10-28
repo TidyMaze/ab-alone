@@ -2,8 +2,11 @@
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
+import { contrastRatio, type RGB } from './contrast';
+import { GLASS_SKINS } from './glassskins';
 import { CONVERTED } from './marbles';
 import { PALETTE_DEFS } from './palettes';
+import { SKINS } from './skins';
 import { CONVERTED_AT, SEED } from './test/chaplain-game';
 import { recordedGame } from './test/chaplain-fixture';
 import { boot, type Game } from './test/harness';
@@ -75,7 +78,7 @@ describe('main.ts converted look (#508)', () => {
     const cells = await convertOne(game);
     const looks = game.hook<Look[]>('__convertedLooks');
     expect(looks).toHaveLength(cells.length);
-    expect(looks).toEqual(expect.arrayContaining(cells.map((cell) => ({ cell, parts: ['wax', 'shell', 'glass', 'core'] }))));
+    expect(looks).toEqual(expect.arrayContaining(cells.map((cell) => ({ cell, parts: ['wax', 'shell', 'glass', 'core', 'cracks', 'glyph'] }))));
     expect(new Set(game.hook<{ accent: string }[]>('__accents').map((w) => w.accent))).toEqual(new Set(['wax'])); // no part is an accent
     const marbles = boardMarbles(scene());
     const plainShell = marbles.find((m) => m.getObjectByName('wax') && m.material.visible)!.material;
@@ -92,7 +95,27 @@ describe('main.ts converted look (#508)', () => {
       const light = core!.material as THREE.MeshBasicMaterial;
       expect(light.opacity).toBe(CONVERTED.core);
       expect(light.color.getHex()).toBe(PALETTE_DEFS.default.core);
-      for (const p of [shell, glass, core, part(marble, 'wax')]) expect(upright(p!)).toBe(true);
+      for (const p of [shell, glass, core, part(marble, 'wax'), part(marble, 'cracks'), part(marble, 'glyph')]) expect(upright(p!)).toBe(true);
+    }
+  }, 60_000);
+
+  it('wears the Chaplain glyph above the wax and a cracked pale skin on the shell half, 3:1 on every shell and glass skin (#790)', async () => {
+    const scene = catchScene();
+    const game = await boot('?nodes=200', { reducedMotion: true });
+    const cells = await convertOne(game);
+    const rgb = (hex: number): RGB => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+    for (const cell of cells) {
+      const marble = marbleOn(scene(), cell);
+      const [glyph, cracks, shell] = ['glyph', 'cracks', 'shell'].map((name) => part(marble, name));
+      expect(glyph!.position.y).toBeGreaterThan(0.48); // over the top of the wax
+      expect(box(glyph!).max.y - box(glyph!).min.y).toBeGreaterThan(0); // a shape, not only a colour
+      expect(box(cracks!).max.y).toBeLessThanOrEqual(1e-6); // on the shell half
+      expect(cracks!.geometry).toBe(shell!.geometry);
+      expect(cracks!.scale.x).toBeGreaterThan(1); // just outside the shell: no z-fight
+      expect(cracks!.material).not.toBe(shell!.material);
+      for (const m of [glyph!.material, cracks!.material] as THREE.MeshBasicMaterial[]) {
+        for (const skin of [...SKINS, ...GLASS_SKINS]) expect(contrastRatio(rgb(m.color.getHex()), rgb(skin.color)), skin.id).toBeGreaterThanOrEqual(3);
+      }
     }
   }, 60_000);
 
