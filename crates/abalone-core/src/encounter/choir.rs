@@ -345,6 +345,7 @@ pub fn choir_boss() -> BossDef {
         phase_ejections: PHASE_EJECTIONS.to_vec(),
         special: no_special,
         hook: keep_board,
+        conversions: None,
         node_budget: CHOIR_NODE_BUDGET,
     }
 }

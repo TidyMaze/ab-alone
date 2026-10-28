@@ -34,6 +34,10 @@ pub type SpecialFn = fn(u32, usize) -> Option<u8>;
 /// arguments give the same board.
 pub type HookFn = fn(&Board, u8, u64) -> Board;
 
+/// `conversions(board)`: the marbles that change side at the end of a turn, `[to the player, to
+/// the boss]`.
+pub type ConversionsFn = fn(&Board) -> [u8; 2];
+
 /// A boss: data plus pure hook functions.
 #[derive(Clone, Debug)]
 pub struct BossDef {
@@ -45,6 +49,9 @@ pub struct BossDef {
     pub phase_ejections: Vec<u8>,
     pub special: SpecialFn,
     pub hook: HookFn,
+    /// Conversions of the board before the hook, `[to the player, to the boss]`, that move the
+    /// player's ejection credit: +1 each way down to 0 (The Chaplain). `None` for the other bosses.
+    pub conversions: Option<ConversionsFn>,
     /// Positions the boss search may visit per move. Never a clock.
     pub node_budget: u32,
 }
@@ -77,6 +84,8 @@ pub struct Encounter {
     /// Count the marbles a hook removes by colour, when it flips none (The Ballast Mind borrows
     /// the Pulsar's pulse, which moves marbles).
     by_colour: bool,
+    /// The highest phase reached: a boss that converts (The Chaplain) heals, and its phase stays.
+    phase_reached: usize,
 }
 
 /// Marbles of `color` on `board`.
@@ -183,6 +192,7 @@ pub fn trivial_boss() -> BossDef {
         phase_ejections: Vec::new(),
         special: no_special,
         hook: keep_board,
+        conversions: None,
         node_budget: 200,
     }
 }
@@ -200,6 +210,7 @@ impl Encounter {
             removed: Vec::new(),
             turn_limit: None,
             by_colour: false,
+            phase_reached: 0,
         }
     }
 
@@ -257,7 +268,7 @@ impl Encounter {
         let ejected = self.game.ejected(Player::Black);
         let by_marbles = self.boss.phase_marbles.iter().filter(|&&t| left <= t);
         let by_ejections = self.boss.phase_ejections.iter().filter(|&&t| ejected >= t);
-        by_marbles.count() + by_ejections.count()
+        (by_marbles.count() + by_ejections.count()).max(self.phase_reached)
     }
 
     /// The special that fires right after the next ply, visible one ply ahead.
@@ -271,6 +282,7 @@ impl Encounter {
     /// Plays `mv` for the side to move, then settles the polarities, then fires the hook when the
     /// tell announced it and settles again.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
+        self.latch_phase();
         let told = self.tell();
         let before = self.game.board().clone();
         self.game.play(mv)?;
@@ -292,6 +304,11 @@ impl Encounter {
                 .map(|&(c, _)| c)
                 .collect();
             self.credit_removals(&board);
+            if let Some(conversions) = self.boss.conversions {
+                let [to_player, to_boss] = conversions(self.game.board());
+                self.game
+                    .credit_conversions(Player::Black, to_player, to_boss);
+            }
             self.hooked = Some((self.game.board().clone(), id));
             self.hook_seed = seed;
             self.game.replace_board(board);
@@ -301,7 +318,15 @@ impl Encounter {
             self.game.end(Player::White);
         }
         self.end_when_wiped();
+        self.latch_phase();
         Ok(())
+    }
+
+    /// Keeps the highest phase reached, for a boss that heals through conversions.
+    fn latch_phase(&mut self) {
+        if self.boss.conversions.is_some() {
+            self.phase_reached = self.phase();
+        }
     }
 
     /// A side with no marble left has no move and loses (a conversion can wipe either side).
@@ -481,6 +506,7 @@ mod tests {
             phase_ejections: Vec::new(),
             special,
             hook: clear_white,
+            conversions: None,
             node_budget: 200,
         }
     }

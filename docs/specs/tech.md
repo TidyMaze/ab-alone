@@ -516,6 +516,8 @@ No database server. Everything is client-side.
   own `Hello`, so the joiner refuses it in turn, says so, and is never seated.
   Version 4 (#740): the Magnetizer's alternating signs on both sides, the Rail Yard's first train
   on turn 2, the Alien's 7 start marbles and near eggs.
+  Version 9 (#810): the Chaplain's conversions move its health, +1 player credit per boss marble
+  that flips to the player and -1 per player marble that flips to the boss, and its phase never goes back.
 - Only third-party runtime dependencies: public STUN, signaling relays. Both degrade to the
   manual flow, single-player never needs them.
 

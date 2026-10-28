@@ -327,14 +327,20 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Concept**: it marks the crew, then keeps them.
 - **Twist (#748)**: at the end of **every** turn (yours and the boss's), any marble that touches
   **4 or more** marbles of the other side **changes side**, for **both sides** (a native boss
-  marble flips to you just like a flipped one). The marble count is conserved: a flip is a loss
-  of material, not an ejection, and costs the boss nothing (the old threshold 3 and the loss of
-  a boss marble per flip, #207, are gone). Void and off-board cells are not neighbours.
+  marble flips to you just like a flipped one). The marble count is conserved: a flip removes no
+  marble (the old threshold 3 and the loss of a boss marble per flip, #207, are gone), but it moves
+  the boss's health (#810): your ejection credit goes **+1** per boss marble that flips to you and
+  **-1** per player marble that flips to the boss, never below 0, and the boss's health is 6 minus
+  that credit (the health bar, ui.md section 4, fills back one fragment on a heal and drains on a
+  stolen marble). Both sides flipping in one turn net out. The martyr's blast does not move it
+  down, it counts its own +1 (below). You still win at 6 (a credit that reaches 6 by flips wins),
+  and your own count of lost marbles is unchanged by a flip. Void and off-board cells are not
+  neighbours.
 - **Tell**: when you hover a move, each of your marbles that the move would flip (the check runs
   right after your own move) shows a steady glyph and outline. Not a black halo: it would vanish
   against a black shell. A flipped marble shows shell growing over the glass.
 - **Counter**: break contact (move or push), or surround a boss marble with 4 of yours.
-- **Phases**: P1 above. **P2 once you have ejected 4 marbles**, one time only: at the end of the
+- **Phases**: P1 above. **P2 the first time your credit reaches 4** (it never goes back when the boss heals), one time only: at the end of the
   next boss turn the Chaplain picks the marble whose explosion would convert the **most** of your
   adjacent marbles (a tie is broken by the seed) and announces it as the **martyr** (a steady
   marked ring and glyph on it, and a HUD line). At the end of the following boss turn the martyr
@@ -348,8 +354,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   colour alone, 3:1 on every shell and glass skin.
 - **Calibrate**: knob = threshold (4), the ejection count of P2 (4), AI aggression weight. Fail if
   the median attempt ends with fewer than 3 conversions seen (nobody learns the tell). Measured
-  (#753, boss-balance.md section 3): the ladder pro player wins 16 of 20 at 1x and 19 of 20 at
-  10x, above the 7 to 9 of 10 target, always by wiping the boss in P1.
+  (#753, boss-balance.md section 3): the ladder pro player won 16 of 20 at 1x and 19 of 20 at
+  10x, above the 7 to 9 of 10 target. With conversions on the health (#810) it wins 20 of 20 at
+  both, in a median of 42 and 32.5 plies, and reaches P2; not tuned.
 
 ### 7.4 The Echo (#46): mirrors your moves
 

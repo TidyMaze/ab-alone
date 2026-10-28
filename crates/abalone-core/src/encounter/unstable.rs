@@ -224,6 +224,7 @@ pub fn unstable_boss() -> BossDef {
         phase_ejections: UNSTABLE_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: None,
         node_budget: UNSTABLE_NODE_BUDGET,
     }
 }

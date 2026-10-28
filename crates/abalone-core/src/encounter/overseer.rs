@@ -76,6 +76,7 @@ pub fn overseer_boss() -> BossDef {
         phase_ejections: OVERSEER_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: None,
         node_budget: OVERSEER_NODE_BUDGET,
     }
 }

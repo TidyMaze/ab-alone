@@ -30,7 +30,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Echo | 400 | 4000 (10x) | **8** | 108 | P2 | draw 2 |
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
-| The Chaplain | 2000 | 20000 (10x) | **19 of 20** (reworked #748, #753, see section 3) | 55 | P1 | boss_stuck 1 |
+| The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
 | The Ballast Mind | 150000 | 150000 (1x only) | **0** | 100 | P1 | draw 10 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
@@ -182,7 +182,7 @@ not know the roll (it passes seed 0), so it plays as if the boss always or never
 player is slightly blind to this rule, a human sees the outcome. One seed list of 10 is small:
 7 of 10 is a point estimate, not a rate.
 
-Recorded win: `tests/fixtures/chaplain.txt` (seed 10001, 187 moves, see section 4).
+Recorded win: `tests/fixtures/chaplain.txt` (seed 10040, 97 moves, see section 4).
 
 **Rework #748:** the Chaplain rows of section 3 before "Reworked Chaplain" measure the old rules (threshold 3, a flip costs the boss a marble, three phases). The new Chaplain (threshold 4 for both sides, a martyr at 4 ejections, a wiped side loses, no cost per flip) is measured in the last subsection of section 3 (#753): the pro player wins 19 of 20 at 10x, far above the 7 to 9 of 10 target.
 
@@ -204,6 +204,25 @@ Nothing was tuned here, the owner decides (knobs of game-design.md section 7.3).
 still simulates only phase 1 in its search (`chaplain_step` ignores P2 and the martyr); since the
 games end in phase 1 it does not change these numbers, but a harder boss that reaches P2 would
 need it first.
+
+### The Chaplain's conversions move its health (#810): even easier, not tuned
+
+The rule: +1 player credit per boss marble converted to the player, -1 per player marble converted
+to the boss (never below 0), the boss's health is 6 minus the credit, P2 starts the first time the
+credit reaches 4 and never goes back (game-design.md section 7.3). Same command and seeds as the
+subsection above (`LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder -- chaplain`,
+and `LADDER_X=1`), seeds 0 to 19, 300 plies at most, the hook-aware pro player. Nothing was tuned,
+the owner decides.
+
+| Player budget | Wins /20 before | Wins /20 now | Median plies before | Median plies now | Highest phase now | Deaths now |
+|---|---|---|---|---|---|---|
+| 2000 (1x) | 16 | **20** | 79 | 42 | P2 | none |
+| 20000 (10x) | 19 | **20** | 55 | 32.5 | P2 | none |
+
+The pro player still searches without the credit (`chaplain_step` moves the board, not the
+ejection count), so it never plays for the health: the boss's own conversions of its marbles to the
+player now count for it, and it reaches P2 and wins at 6 credit faster. Far above the 7 to 9 of 10
+target.
 
 ### The Ballast Mind: NOT measured at pro level, 0 of 10 at 1x
 
@@ -305,8 +324,8 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | echo | 0 | 4000 | 126 |
 | hull | 0 | 30000 | 89 |
 | choir | 0 | 15000 | 93 |
-| chaplain | 10001 | 0 (a random player ejecting when it can, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read) | 187 |
-| chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753; wipes the boss in phase 1) | 55 |
+| chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
+| chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753, recorded again for #810) | 44 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
 

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { drawBossBar } from './bossbar';
 
 // The boss health bar (#788): the name above, one fragment per ejection the player needs, the phase steps marked.
-const bar = { name: 'The Hull', ejected: 0, win: 6, steps: [3, 5] };
+const bar = { name: 'The Hull', ejected: 0, win: 6, steps: [3, 5], phase: 0 };
 let el: HTMLElement;
 const frags = (): Element[] => [...el.querySelectorAll('.frag')];
 const empty = (): number[] => frags().flatMap((f, i) => (f.classList.contains('empty') ? [i] : []));
@@ -30,7 +30,7 @@ describe('drawBossBar', () => {
   });
 
   it('makes as many fragments as the engine asks, 12 for The Ballast Mind', () => {
-    drawBossBar(el, { name: 'The Ballast Mind', ejected: 0, win: 12, steps: [3, 6] });
+    drawBossBar(el, { name: 'The Ballast Mind', ejected: 0, win: 12, steps: [3, 6], phase: 0 });
     expect(frags()).toHaveLength(12);
   });
 
@@ -56,20 +56,44 @@ describe('drawBossBar', () => {
 
   it('draws a new bar when the boss or its target changes', () => {
     drawBossBar(el, bar);
-    drawBossBar(el, { name: 'The Alien', ejected: 0, win: 6, steps: [2, 4] });
+    drawBossBar(el, { name: 'The Alien', ejected: 0, win: 6, steps: [2, 4], phase: 0 });
     expect(el.querySelector('.name')!.textContent).toBe('The Alien');
     expect(stepped()).toEqual([2, 4]);
   });
 
   it('reads as a meter for a screen reader, the name never as markup', () => {
-    drawBossBar(el, { name: '<b>The Hull</b>', ejected: 2, win: 6, steps: [3, 5] });
+    drawBossBar(el, { ...bar, name: '<b>The Hull</b>', ejected: 2 });
     const meter = el.querySelector('[role="meter"]')!;
     expect(meter.getAttribute('aria-label')).toBe('<b>The Hull</b> health');
     expect(meter.getAttribute('aria-valuemax')).toBe('6');
     expect(meter.getAttribute('aria-valuenow')).toBe('4');
     expect(meter.getAttribute('aria-valuetext')).toBe('2 of 6 ejected, phase 1 of 3');
     expect(el.querySelector('.name b')).toBeNull();
-    drawBossBar(el, { name: 'The Hull', ejected: 5, win: 6, steps: [3, 5] });
+    drawBossBar(el, { ...bar, ejected: 5, phase: 2 });
     expect(el.querySelector('[role="meter"]')!.getAttribute('aria-valuetext')).toBe('5 of 6 ejected, phase 3 of 3');
+  });
+
+  it('reads the phase from the engine: a heal does not take it back (#810)', () => {
+    drawBossBar(el, { ...bar, ejected: 3, phase: 1 });
+    drawBossBar(el, { ...bar, ejected: 2, phase: 1 });
+    expect(el.querySelector('[role="meter"]')!.getAttribute('aria-valuetext')).toBe('2 of 6 ejected, phase 2 of 3');
+  });
+
+  it('refills the fragments of a heal with a short animation that ends by itself (#810)', () => {
+    drawBossBar(el, { ...bar, ejected: 3 });
+    expect(frags().some((f) => f.classList.contains('refill'))).toBe(false);
+    drawBossBar(el, { ...bar, ejected: 2 });
+    const refilled = frags().filter((f) => f.classList.contains('refill'));
+    expect(refilled).toHaveLength(1);
+    expect(empty()).toEqual([4, 5]);
+    refilled[0]!.dispatchEvent(new Event('animationend'));
+    expect(refilled[0]!.classList.contains('refill')).toBe(false);
+  });
+
+  it('refills nothing when the bar drains, stays or is drawn new (#810)', () => {
+    drawBossBar(el, { ...bar, ejected: 2 });
+    drawBossBar(el, { ...bar, ejected: 2 });
+    drawBossBar(el, { ...bar, ejected: 4 });
+    expect(el.querySelector('.refill')).toBeNull();
   });
 });

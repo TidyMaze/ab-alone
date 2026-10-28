@@ -179,6 +179,7 @@ pub fn assembly_boss() -> BossDef {
         phase_ejections: ASSEMBLY_PHASE_EJECTIONS.to_vec(),
         special,
         hook,
+        conversions: None,
         node_budget: ASSEMBLY_NODE_BUDGET,
     }
 }

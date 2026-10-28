@@ -27,6 +27,7 @@ pub fn echo_boss() -> BossDef {
         phase_ejections: ECHO_PHASE_EJECTIONS.to_vec(),
         special: no_special,
         hook: keep_board,
+        conversions: None,
         node_budget: ECHO_NODE_BUDGET,
     }
 }

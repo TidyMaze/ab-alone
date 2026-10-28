@@ -8,6 +8,7 @@ export interface BossBar {
   ejected: number; // ejections the player has made
   win: number; // ejections needed to win: one fragment each
   steps: readonly number[]; // ejections at which P2, P3... begin
+  phase: number; // the engine's phase, 0 for P1: it never goes back when the bar refills (#810)
 }
 
 /** The bar in `el`, hidden without a boss. The fragments of a bar already drawn are emptied in place, so the CSS
@@ -15,7 +16,7 @@ export interface BossBar {
 export function drawBossBar(el: HTMLElement, bar: BossBar | null): void {
   el.hidden = bar === null;
   if (bar === null) return;
-  const { name, ejected, win, steps } = bar;
+  const { name, ejected, win, steps, phase } = bar;
   const key = `${name}|${win}|${steps}`;
   if (el.dataset.key !== key) {
     el.dataset.key = key;
@@ -24,11 +25,17 @@ export function drawBossBar(el: HTMLElement, bar: BossBar | null): void {
     el.innerHTML = `<div class="name"></div><div class="frags" role="meter" aria-valuemin="0">${frags}</div>`;
     el.querySelector('.name')!.textContent = name;
   }
-  el.querySelectorAll('.frag').forEach((f, i) => f.classList.toggle('empty', i >= win - ejected));
+  el.querySelectorAll('.frag').forEach((f, i) => {
+    const empty = i >= win - ejected;
+    if (!empty && f.classList.contains('empty')) {
+      f.classList.add('refill');
+      f.addEventListener('animationend', () => f.classList.remove('refill'), { once: true });
+    }
+    f.classList.toggle('empty', empty);
+  });
   const meter = el.querySelector('.frags')!;
-  const phase = steps.filter((s) => s <= ejected).length + 1;
   meter.setAttribute('aria-label', `${name} health`);
   meter.setAttribute('aria-valuemax', String(win));
   meter.setAttribute('aria-valuenow', String(win - ejected));
-  meter.setAttribute('aria-valuetext', `${ejected} of ${win} ejected, phase ${phase} of ${steps.length + 1}`);
+  meter.setAttribute('aria-valuetext', `${ejected} of ${win} ejected, phase ${phase + 1} of ${steps.length + 1}`);
 }

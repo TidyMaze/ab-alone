@@ -313,7 +313,7 @@ test('start The Chaplain: a hovered move shows the marbles it flips, #150', asyn
 });
 
 // The same fight, a converted marble keeps its own look (#326): half ridged shell, half glass with a dimmed core, under
-// the wax (#508), its glass half 3:1 against its shell. The recorded game converts its first marble at ply 42.
+// the wax (#508), its glass half 3:1 against its shell. The recorded game converts its first marble at ply 24.
 test('start The Chaplain: a converted marble keeps its look, #150', async ({ page }, testInfo) => {
   await startChaplain(page);
   await playRecorded(page, 0, CONVERTED_AT - 1);
@@ -419,7 +419,7 @@ for (const skin of ['hex', 'riveted']) {
   test(`The Chaplain's converted marble reads 3:1 on the ${skin} shell, task #377`, async ({ page }, testInfo) => {
     await page.addInitScript((id) => localStorage.setItem('ab-alone.shell-skin', id), skin);
     await startChaplain(page);
-    await playRecorded(page, 0, CONVERTED_AT); // the recorded game converts its first marble at ply 42
+    await playRecorded(page, 0, CONVERTED_AT); // the recorded game converts its first marble at ply 24
     await expect(page.locator('body')).not.toHaveAttribute('data-converted', '0');
     const cells = await page.evaluate(() => (window as any).__converted());
     const contrasts = await topContrasts(page, cells, testInfo.outputPath(`chaplain-${skin}.png`));

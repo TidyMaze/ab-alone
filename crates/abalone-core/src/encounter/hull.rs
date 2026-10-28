@@ -116,6 +116,7 @@ pub fn hull_boss() -> BossDef {
         phase_ejections: HULL_PHASE_EJECTIONS.to_vec(),
         special,
         hook: hull_hook,
+        conversions: None,
         node_budget: HULL_NODE_BUDGET,
     }
 }
