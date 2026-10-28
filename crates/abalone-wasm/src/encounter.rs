@@ -15,7 +15,7 @@ use abalone_core::encounter::ballast::{
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
-use abalone_core::encounter::hull::hull_boss;
+use abalone_core::encounter::hull::{hull_boss, hull_move};
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
 use abalone_core::encounter::overseer::{overseer_boss, overseer_move, overseer_start};
 use abalone_core::encounter::pulsar::{
@@ -161,7 +161,7 @@ const BOSSES: [BossEntry; 12] = [
             "One cell cracks at a time and ejects marbles. Eject 6 to win; lose 6 or draw to lose.",
         def: hull_boss,
         start: plain_fight,
-        reply: search_reply,
+        reply: hull_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -981,6 +981,18 @@ mod tests {
         assert_eq!(reply, announced, "the tell is the boss reply");
         assert_eq!(f.play(&reply), Ok(()));
         assert_eq!(f.to_move(), 1);
+    }
+
+    #[test]
+    fn the_hull_and_the_ballast_mind_reply_with_a_legal_move() {
+        for id in ["hull", "ballast"] {
+            let mut f = Encounter::new(id, 1).unwrap();
+            let mv = first_move(&f);
+            f.play(&mv).unwrap();
+            let reply = f.boss_move();
+            assert!(!reply.is_empty(), "{id}");
+            assert_eq!(f.play(&reply), Ok(()), "{id}");
+        }
     }
 
     #[test]

@@ -275,7 +275,10 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Concept**: the ship itself, rusted, falling apart under you.
 - **Twist**: one cell at a time cracks, picked by the engine's seeded PRNG (the same for every
   peer). Two player turns later it vanishes. A marble on a vanished cell is ejected, either
-  side. Boss plays standard Abalone, depth 3.
+  side. Boss plays standard Abalone, depth 3, and its search sees the crack timers (#823): on
+  every player ply of its tree the announced cracks tick and the due cells vanish with their
+  marbles, so it pushes your marbles onto them and keeps its own off them. It does not guess
+  where the next crack falls.
 - **Tell**: a cracked cell wears a dark crack and ticks for 2 turns (it is announced 2 turns
   ahead; a turn is one player move and the boss reply).
 - **Counter**: keep marbles off the cell that cracks, and **push boss marbles onto cracked

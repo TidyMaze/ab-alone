@@ -10,7 +10,7 @@ use crate::encounter::ballast::{ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
 use crate::encounter::echo::{echo_boss, echo_move, mirror_move};
-use crate::encounter::hull::hull_boss;
+use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::telemetry::{
     classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
@@ -134,6 +134,7 @@ impl Arena {
             Arena::Plain(enc, LadderBoss::Echo) => echo_move(enc),
             Arena::Plain(enc, LadderBoss::Alien) => alien_move(enc),
             Arena::Plain(enc, LadderBoss::Chaplain) => chaplain_move(enc),
+            Arena::Plain(enc, LadderBoss::Hull) => hull_move(enc),
             Arena::Plain(enc, _) => enc.boss_search().map(|r| r.mv),
             Arena::Choir(choir) => choir.boss_move(),
         }
@@ -488,6 +489,7 @@ mod tests {
             LadderBoss::Hull,
             LadderBoss::Chaplain,
             LadderBoss::Choir,
+            LadderBoss::Ballast,
         ] {
             let r = play_attempt(boss, 1, 2, 30, 2);
             assert_eq!(r.plies, 2, "{boss:?}");
