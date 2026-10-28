@@ -1861,6 +1861,19 @@ mod tests {
     }
 
     #[test]
+    fn phase_ejections_lists_the_ejections_that_begin_each_phase() {
+        let steps = |id: &str| Encounter::new(id, 1).unwrap().phase_ejections();
+        assert_eq!(steps("hull"), vec![3, 5]);
+        assert_eq!(steps("choir"), vec![3, 5], "the Choir has its own table");
+        assert_eq!(steps("alien"), vec![2, 4]);
+        for id in ["echo", "hull", "chaplain", "choir", "ballast", "alien", "railyard", "pulsar", "assembly", "core"] {
+            let f = Encounter::new(id, 1).unwrap();
+            assert_eq!(f.phase_ejections().len() + 1, f.phases() as usize, "{id}");
+            assert_eq!(f.phase_ejections()[0], f.phase_notches()[0], "{id}: the first notches count to the first step");
+        }
+    }
+
+    #[test]
     fn the_alien_phases_and_notches_count_the_ejections_not_its_marbles() {
         let alien = |n: u8| {
             let mut board = alien_start(1).game().board().clone();

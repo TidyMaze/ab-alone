@@ -142,6 +142,21 @@ describe('main.ts boss fights', () => {
     expect(game.hook('__tally')).toEqual([{ marked: 0, slots: 6 }, { marked: 0, slots: 6 }]); // marbles lost
   });
 
+  it('the boss bar at the top shows the name and a fragment per ejection the engine asks, none outside a fight (#788)', async () => {
+    const game = await boot('?bot=off');
+    expect(byId('boss-bar').hidden).toBe(true);
+    fightBoss(game, 'The Echo');
+    const bar = byId('boss-bar');
+    expect(bar.hidden).toBe(false);
+    expect(bar.querySelector('.name')!.textContent).toBe('The Echo');
+    expect(bar.querySelectorAll('.frag')).toHaveLength(6);
+    expect(bar.querySelectorAll('.frag.step')).toHaveLength(2); // P2 and P3 begin at a step
+    expect(bar.querySelectorAll('.frag.empty')).toHaveLength(0);
+    fightBoss(game, 'The Ballast Mind');
+    expect(bar.querySelector('.name')!.textContent).toBe('The Ballast Mind');
+    expect(bar.querySelectorAll('.frag')).toHaveLength(12);
+  });
+
   it('the boss replies to the player in the worker, at the test budget', async () => {
     const game = await boot('?nodes=200', { reducedMotion: true });
     fightBoss(game, 'The Echo');
