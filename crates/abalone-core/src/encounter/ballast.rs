@@ -354,11 +354,14 @@ mod tests {
     }
 
     #[test]
-    fn start_has_16_boss_and_14_player_marbles() {
+    fn start_has_16_marbles_each_the_player_start_mirroring_the_boss_start() {
         let enc = ballast_start(0);
         let board = enc.game().board();
         assert_eq!(count(board, Cell::White), 16);
-        assert_eq!(count(board, Cell::Black), 14);
+        assert_eq!(count(board, Cell::Black), 16);
+        for (q, r) in BALLAST_BOSS_START {
+            assert!(BALLAST_PLAYER_START.contains(&(-q, -r)), "({q}, {r}) mirrored");
+        }
         for (q, r) in BALLAST_PLAYER_START {
             assert_eq!(board.get(q, r), Some(Cell::Black));
         }

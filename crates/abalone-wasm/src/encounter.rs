@@ -841,8 +841,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_9_since_the_chaplain_conversions_move_its_health() {
-        assert_eq!(engine_version(), 9);
+    fn the_engine_version_is_10_since_the_ballast_player_starts_with_16_marbles() {
+        assert_eq!(engine_version(), 10);
     }
 
     #[test]
@@ -1776,7 +1776,7 @@ mod tests {
             };
             assert_eq!(board[i], expected, "({q}, {r})");
         }
-        assert_eq!((count(&board, 1), count(&board, 2)), (14, 16));
+        assert_eq!((count(&board, 1), count(&board, 2)), (16, 16));
     }
 
     #[test]
