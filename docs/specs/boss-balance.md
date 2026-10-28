@@ -224,6 +224,30 @@ ejection count), so it never plays for the health: the boss's own conversions of
 player now count for it, and it reaches P2 and wins at 6 credit faster. Far above the 7 to 9 of 10
 target.
 
+### The Chaplain plays its conversion rule (#811): now too hard, not tuned
+
+The boss search (`chaplain_move`) runs the conversion hook on every ply of its tree, both sides,
+credits the health swing of each flip (+1 / -1, #810) and counts the marbles at 3 foes around them
+(weight 20 centi-marbles, `CHAPLAIN_THREAT_WEIGHT`, a chance for a foe marble, a danger for its
+own). Node budget (2000) and martyr unchanged, no rule change, `engine_version` unchanged. The pro
+player is the same as before (it reads the hooks, not the health swing). Same command and seeds as
+the subsections above (`LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder --
+chaplain`, and `LADDER_X=1`), seeds 0 to 19, 300 plies at most.
+
+| Player budget | Wins /20 before | Wins /20 now | Median plies before | Median plies now | Highest phase now | Deaths now |
+|---|---|---|---|---|---|---|
+| 2000 (1x) | 20 | **0** | 42 | 159 | P2 | draw 15, ply_cap 5 |
+| 20000 (10x) | 20 | **10** | 32.5 | 216 | P2 | conversion 2, draw 2, ply_cap 6 |
+
+The pro player no longer wipes the boss by conversion in a few dozen plies: the boss avoids the
+conversions it can see and takes the ones it can. 10 of 20 at 10x is **below the 7 to 9 of 10
+target** (too hard now, from 20 of 20 too easy), and 1x never wins. Nothing was tuned: the threat
+weight and the budget are the knobs, the owner decides.
+
+Reply time through wasm (release build in Node, 6 seeds of 80 plies, boss replies, an idle-ish
+machine, ms): The Chaplain 196 average, 404 at the 95th percentile, 458 at most (2000 nodes); the
+Hull 84 / 118 / 159 (3000 nodes), the Pulsar 140 / 222 / 455, the Magnetizer 102 / 142 / 183.
+
 ### The Ballast Mind: NOT measured at pro level, 0 of 10 at 1x
 
 #### Attempt to measure it cheaply (#208): no result, the machine was too loaded

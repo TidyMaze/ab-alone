@@ -12,7 +12,7 @@ use abalone_core::encounter::assembly::{
 use abalone_core::encounter::ballast::{
     ballast_boss, ballast_last_pulse, ballast_next, ballast_start, Borrowed,
 };
-use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_tell};
+use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::hull_boss;
@@ -179,7 +179,7 @@ const BOSSES: [BossEntry; 12] = [
         goal: "A marble beside 4 foes switches sides: a boss marble that joins you counts as an ejection, one that joins it takes one back. At 4 ejections a martyr explodes. Eject 6 to win; lose 6 or draw to lose.",
         def: chaplain_boss,
         start: plain_fight,
-        reply: search_reply,
+        reply: chaplain_move,
         announce: no_announce,
         flips: chaplain_tell,
     },

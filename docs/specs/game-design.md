@@ -341,6 +341,11 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   right after your own move) shows a steady glyph and outline. Not a black halo: it would vanish
   against a black shell. A flipped marble shows shell growing over the glass.
 - **Counter**: break contact (move or push), or surround a boss marble with 4 of yours.
+- **Its play (#811)**: the Chaplain's search runs the end-of-turn conversion on every ply of its tree,
+  yours and its own, and scores the health swing of each flip. Its evaluation also counts the marbles
+  one neighbour short of converting (3 foes around them): a chance when they are yours, a danger when
+  they are its. It seeks conversions and does not walk into one. The rules, the martyr and its node
+  budget are unchanged.
 - **Phases**: P1 above. **P2 the first time your credit reaches 4** (it never goes back when the boss heals), one time only: at the end of the
   next boss turn the Chaplain picks the marble whose explosion would convert the **most** of your
   adjacent marbles (a tie is broken by the seed) and announces it as the **martyr** (a steady

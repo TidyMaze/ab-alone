@@ -2,7 +2,8 @@
 
 use std::cmp::Reverse;
 
-use crate::board::{Board, Cell};
+use crate::board::{Board, Cell, MAX_RADIUS};
+use crate::encounter::hull::NEIGHBOURS;
 use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
 
@@ -20,6 +21,9 @@ pub struct Weights {
     pub ejected: i32,
     pub centre: i32,
     pub cohesion: i32,
+    /// Per marble one neighbour short of the Chaplain's conversion (3 foes around it): the foe's
+    /// are a chance, the own are a danger.
+    pub threat: i32,
 }
 
 /// Hand-tuned weights of the plain search.
@@ -28,6 +32,7 @@ pub const DEFAULT_WEIGHTS: Weights = Weights {
     ejected: 50,
     centre: 3,
     cohesion: 2,
+    threat: 0,
 };
 
 /// What a search found.
@@ -108,20 +113,48 @@ fn shape(board: &Board, cell: Cell) -> (i32, i32, i32) {
     (count, distance, pairs)
 }
 
+/// Marbles of Black and of White with exactly 3 neighbours of the other colour: one more and the
+/// Chaplain converts them.
+fn threatened(board: &Board) -> [i32; 2] {
+    let mut out = [0, 0];
+    for q in -MAX_RADIUS..=MAX_RADIUS {
+        for r in -MAX_RADIUS..=MAX_RADIUS {
+            let (side, foe) = match board.get(q, r) {
+                Some(Cell::Black) => (0, Cell::White),
+                Some(Cell::White) => (1, Cell::Black),
+                _ => continue,
+            };
+            let near = NEIGHBOURS
+                .iter()
+                .filter(|&&(dq, dr)| board.get(q + dq, r + dr) == Some(foe))
+                .count();
+            out[side] += i32::from(near == 3);
+        }
+    }
+    out
+}
+
 /// Score of a position for `player`: marble difference, ejections made, centrality (a lower
 /// distance sum is better) and cohesion.
 fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32 {
     let (own_count, own_distance, own_pairs) = shape(board, cell_of(player));
     let (opp_count, opp_distance, opp_pairs) = shape(board, cell_of(other(player)));
     let made = i32::from(ejected[index(player)]) - i32::from(ejected[index(other(player))]);
+    let threat = if w.threat == 0 {
+        0
+    } else {
+        let at = threatened(board);
+        at[index(other(player))] - at[index(player)]
+    };
     w.marbles * (own_count - opp_count)
         + w.ejected * made
         + w.centre * (opp_distance - own_distance)
         + w.cohesion * (own_pairs - opp_pairs)
+        + w.threat * threat
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
-fn children(node: &Node, weights: &Weights, step: Option<Step>) -> Vec<Child> {
+fn children(node: &Node, weights: &Weights, step: Option<SignedStep>) -> Vec<Child> {
     let mover = node.to_move;
     let mut kids: Vec<Child> = legal_moves(&node.board, mover)
         .into_iter()
@@ -132,8 +165,8 @@ fn children(node: &Node, weights: &Weights, step: Option<Step>) -> Vec<Child> {
             let board = match step {
                 Some(step) => {
                     let (board, credits) = step(&node.board, mover, &mv, board);
-                    ejected[0] += credits[0];
-                    ejected[1] += credits[1];
+                    ejected[0] = ejected[0].saturating_add_signed(credits[0]);
+                    ejected[1] = ejected[1].saturating_add_signed(credits[1]);
                     board
                 }
                 None => board,
@@ -159,7 +192,7 @@ fn children(node: &Node, weights: &Weights, step: Option<Step>) -> Vec<Child> {
 
 struct Searcher<'a> {
     weights: Weights,
-    step: Option<Step<'a>>,
+    step: Option<SignedStep<'a>>,
     budget: u32,
     nodes: u32,
     /// Ejections each side needs to win, from the game: Black then White.
@@ -243,7 +276,7 @@ fn run(
     node_budget: u32,
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
-    step: Option<Step>,
+    step: Option<SignedStep>,
 ) -> Option<SearchResult> {
     if game.outcome().is_some() {
         return None;
@@ -289,6 +322,10 @@ fn run(
 /// the move): the board after its hook, and the ejections the hook credits to Black and to White.
 pub type Step<'a> = &'a dyn Fn(&Board, Player, &Move, Board) -> (Board, [u8; 2]);
 
+/// A [`Step`] whose credits can be negative: a hook that takes a credit back (The Chaplain's
+/// health), never below 0 in total.
+pub type SignedStep<'a> = &'a dyn Fn(&Board, Player, &Move, Board) -> (Board, [i8; 2]);
+
 /// [`search_with`] where every ply also goes through `step`, so the tree sees the boss hooks.
 pub fn search_hooked(
     game: &Game,
@@ -296,6 +333,21 @@ pub fn search_hooked(
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
     step: Step,
+) -> Option<SearchResult> {
+    let signed = |board: &Board, mover: Player, mv: &Move, after: Board| {
+        let (after, [black, white]) = step(board, mover, mv, after);
+        (after, [black as i8, white as i8])
+    };
+    run(game, node_budget, weights, allow, Some(&signed))
+}
+
+/// [`search_hooked`] where the credits of a ply can be negative.
+pub fn search_signed(
+    game: &Game,
+    node_budget: u32,
+    weights: Weights,
+    allow: &dyn Fn(&Move) -> bool,
+    step: SignedStep,
 ) -> Option<SearchResult> {
     run(game, node_budget, weights, allow, Some(step))
 }
@@ -377,6 +429,47 @@ mod tests {
             search(&game, 3000).unwrap(),
             "a hook that does nothing"
         );
+    }
+
+    #[test]
+    fn a_signed_credit_takes_a_credit_back_and_stops_at_zero() {
+        let game = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [3, 0]);
+        let back = |_: &Board, _: Player, _: &Move, after: Board| (after, [-1, 1]);
+        let kids = children(&root_of(&game), &DEFAULT_WEIGHTS, Some(&back));
+        assert!(kids.iter().all(|k| k.node.ejected == [2, 1]));
+        let none = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [0, 0]);
+        let kids = children(&root_of(&none), &DEFAULT_WEIGHTS, Some(&back));
+        assert!(
+            kids.iter().all(|k| k.node.ejected == [0, 1]),
+            "never below 0"
+        );
+        let found = search_signed(&game, 300, DEFAULT_WEIGHTS, &|_| true, &back).unwrap();
+        assert_legal(&game, &found.mv);
+    }
+
+    #[test]
+    fn a_marble_with_3_foes_around_it_is_a_threat_to_its_side() {
+        let game = game_from(
+            &[(0, 0)],
+            &[(1, 0), (1, -1), (0, -1)],
+            Player::White,
+            [0, 0],
+        );
+        let only_threat = Weights {
+            marbles: 0,
+            ejected: 0,
+            centre: 0,
+            cohesion: 0,
+            threat: 10,
+        };
+        let board = game.board();
+        assert_eq!(evaluate(board, Player::White, [0, 0], &only_threat), 10);
+        assert_eq!(evaluate(board, Player::Black, [0, 0], &only_threat), -10);
+        let off = Weights {
+            threat: 0,
+            ..only_threat
+        };
+        assert_eq!(evaluate(board, Player::White, [0, 0], &off), 0);
     }
 
     fn game_from(black: &[P], white: &[P], to_move: Player, ejected: [u8; 2]) -> Game {
