@@ -956,7 +956,10 @@ mod tests {
             let mut f = Encounter::new(id, 7).unwrap();
             let mv = f.player_move();
             assert_eq!(mv.len(), MOVE_STRIDE);
-            assert!(f.legal_moves().chunks(MOVE_STRIDE).any(|m| m == mv.as_slice()));
+            assert!(f
+                .legal_moves()
+                .chunks(MOVE_STRIDE)
+                .any(|m| m == mv.as_slice()));
             f.play(&mv).unwrap();
             assert!(f.player_move().is_empty(), "the boss's turn");
         }
