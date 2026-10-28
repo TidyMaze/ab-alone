@@ -686,6 +686,20 @@ mod tests {
     }
 
     #[test]
+    fn player_move_is_legal_and_uses_the_node_budget() {
+        for budget in [30, 300] {
+            let mut b = trivial_boss();
+            b.node_budget = budget;
+            let mut enc = Encounter::new(Game::new(), b, 0);
+            let found = enc.player_search().unwrap();
+            assert!(found.nodes > 0 && found.nodes <= budget);
+            assert!(legal_moves(enc.game().board(), Player::Black).contains(&found.mv));
+            step(&mut enc);
+            assert!(enc.player_search().is_none(), "boss's turn");
+        }
+    }
+
+    #[test]
     fn scale_node_budget_scales_the_budget_proportionally() {
         let mut enc = Encounter::new(Game::new(), trivial_boss(), 0);
         assert_eq!(enc.boss.node_budget, 200);

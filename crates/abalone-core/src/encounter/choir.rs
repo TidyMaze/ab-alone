@@ -591,6 +591,15 @@ mod tests {
     }
 
     #[test]
+    fn the_player_move_is_legal_on_the_players_turn_only() {
+        let mut c = Choir::start(7);
+        let legal = c.legal_moves();
+        assert!(legal.contains(&c.player_move().unwrap()));
+        c.play(&legal[0]).unwrap();
+        assert_eq!(c.player_move(), None, "boss's turn");
+    }
+
+    #[test]
     fn the_player_moves_through_the_game_rules() {
         let mut c = fast_start(0);
         let bad = mv(&[(0, 0)], E);

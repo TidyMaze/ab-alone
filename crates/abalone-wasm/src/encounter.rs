@@ -941,6 +941,18 @@ mod tests {
     }
 
     #[test]
+    fn player_move_is_a_legal_move_on_the_players_turn_only() {
+        for id in ["echo", "choir"] {
+            let mut f = Encounter::new(id, 7).unwrap();
+            let mv = f.player_move();
+            assert_eq!(mv.len(), MOVE_STRIDE);
+            assert!(f.legal_moves().chunks(MOVE_STRIDE).any(|m| m == mv.as_slice()));
+            f.play(&mv).unwrap();
+            assert!(f.player_move().is_empty(), "the boss's turn");
+        }
+    }
+
+    #[test]
     fn boss_move_is_empty_on_the_players_turn() {
         assert!(fight().boss_move().is_empty());
     }
