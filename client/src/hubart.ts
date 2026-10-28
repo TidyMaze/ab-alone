@@ -12,6 +12,7 @@ export const GLYPH_COLORS = {
   online: 0x40c057, // Signal green
   royale: 0xfd7e14, // Industrial orange
   terminal: 0x20c997, // Phosphor CRT green
+  medals: 0xffd43b, // Medal gold
   lift: 0xe9ecef, // Bone white
 } as const;
 
@@ -29,6 +30,7 @@ const materials = {
   online: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.online }),
   royale: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.royale }),
   terminal: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.terminal }),
+  medals: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.medals }),
   lift: new THREE.MeshBasicMaterial({ color: GLYPH_COLORS.lift }),
 };
 
@@ -139,6 +141,16 @@ export function createDoorGlyph(door: Door, options: GlyphOptions = {}): THREE.G
       const inner = new THREE.Mesh(crtInnerGeo, materials.terminal);
       inner.position.y = 0.01;
       group.add(frame, inner);
+      break;
+    }
+
+    case 'medals': {
+      // A gold ring around a gold core: a medal (#812)
+      const ring = new THREE.Mesh(outerRingGeo, materials.medals);
+      ring.rotation.x = Math.PI / 2;
+      const core = new THREE.Mesh(coreOctaGeo, materials.medals);
+      core.position.set(0, 0.04, 0);
+      group.add(ring, core);
       break;
     }
 

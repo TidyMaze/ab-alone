@@ -74,6 +74,11 @@ describe('hub map (game-design.md section 3.5)', () => {
     for (const deck of DECK_NAMES) expect(roomAt(deck, [-2, 2])).toEqual({ kind: 'royale' });
   });
 
+  it('the Mess has the Medal room at the south cell, no other deck has one (#812)', () => {
+    expect(roomAt('mess', [0, 2])).toEqual({ kind: 'medals' });
+    for (const deck of DECK_NAMES.filter((d) => d !== 'mess')) expect(roomAt(deck, [0, 2])).toBeUndefined();
+  });
+
   it('each lore entry has one terminal room, on its own deck', () => {
     const terminals = DECK_NAMES.flatMap((deck) =>
       roomsOf(deck).flatMap(({ door }) => (door.kind === 'terminal' ? [`${deck} ${door.lore}`] : [])),

@@ -8,6 +8,7 @@ export type Door =
   | { kind: 'boss'; boss: string }
   | { kind: 'hotseat' | 'bot' | 'online' | 'royale' }
   | { kind: 'terminal'; lore: string }
+  | { kind: 'medals' } // the Medal room of the Mess (#812)
   | { kind: 'lift'; to: Deck };
 
 export interface Room {
@@ -55,6 +56,7 @@ function roomsFor(deck: Deck, i: number): Room[] {
     { cell: [-2, 1], door: { kind: 'online' } },
     { cell: [-2, 2], door: { kind: 'royale' } }, // the battle royale lobby (#522, #593)
   ];
+  if (deck === 'mess') rooms.push({ cell: [0, 2], door: { kind: 'medals' } });
   const up = DECK_NAMES[i + 1];
   const down = DECK_NAMES[i - 1];
   if (up) rooms.push({ cell: LIFT_UP, door: { kind: 'lift', to: up } });

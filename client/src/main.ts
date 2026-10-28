@@ -211,7 +211,7 @@ import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } f
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
-import { bestTurns, medalLabel, medalLine, playerTurns, recordMedal, type MedalResult } from './medals';
+import { bestTurns, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
 import { roomAt, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
@@ -818,6 +818,9 @@ modeButton.disabled = false; // listener ready (#146)
 
 for (const type of ['pointerdown', 'pointerup', 'keydown']) addEventListener(type, () => sfx.unlock(), { capture: true });
 document.addEventListener('visibilitychange', () => sfx.visible(!document.hidden)); // no sound in a hidden tab (#728)
+// The Medal room (#812) reads like a lore entry; its text is built when it opens, from the saved medals.
+const MEDAL_ROOM = 'medal-room';
+const bossRoster = (): { id: string; name: string }[] => boss_ids().map((id) => ({ id, name: boss_name(id)! }));
 // The deck console (#511): the console-screen prop shows its deck's first lore entry, paged for the UI scale and drawn
 // once the web fonts are in, so no fallback font shows first. Drawn again on a page turn only, never per frame.
 const consoleCanvas = Object.assign(document.createElement('canvas'), { width: TERMINAL.width, height: TERMINAL.height });
@@ -833,7 +836,7 @@ let consoleSince = 0;
 const deckEntry = (): string => LORE.find((e) => e.deck === deck)!.id;
 function layoutConsole(id = deckEntry()): void {
   if (!consoleFonts) return;
-  const entry = LORE.find((e) => e.id === id)!;
+  const entry = id === MEDAL_ROOM ? { ...medalRoom(store, bossRoster()), id } : LORE.find((e) => e.id === id)!;
   consolePages = terminalPages(entry, uiScale, (text, font) => {
     consoleG.font = font;
     return consoleG.measureText(text).width;
@@ -872,7 +875,7 @@ function openReader(id?: string): void {
   reading = view;
   reader.hidden = false;
   document.body.dataset.reading = consoleEntry; // read by the e2e tests
-  markRead(store, consoleEntry);
+  if (consoleEntry !== MEDAL_ROOM) markRead(store, consoleEntry);
   showConsole(0);
   applyView();
   paintLog();
@@ -3743,6 +3746,7 @@ function walk(to: Axial): void {
 function enterRoom(at: HubSpot): void {
   const door = roomAt(at.deck, at.cell);
   if (door?.kind === 'terminal') return openReader(door.lore);
+  if (door?.kind === 'medals') return openReader(MEDAL_ROOM);
   if (door?.kind === 'boss') startBoss(door.boss, crypto.getRandomValues(new Uint32Array(1))[0]!);
   else if (door?.kind === 'hotseat' || door?.kind === 'bot') startLocal(door.kind === 'bot');
   else if (door?.kind === 'online' && !playOnlineButton.disabled) playOnline();

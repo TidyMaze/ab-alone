@@ -141,7 +141,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(shells).toHaveLength(0);
     expect(glass).toHaveLength(1);
     expect(glass[0]!.position.toArray()).toEqual([0, 0.36, 0]);
-    expect(glyphs).toBe(8); // seven rooms and the lift up: the Mess has no lift down
+    expect(glyphs).toBe(9); // eight rooms (with the Medal room) and the lift up: the Mess has no lift down
     expect(game.hud()).toBe('Ship · Mess');
   });
 
@@ -663,5 +663,25 @@ describe('main.ts, the lift gate (#523)', () => {
     for (const [q, r] of [[1, 0], [1, -1], [1, -2]] as const) game.click(q, r);
     expect(hub()).toBe('cargo -1,2');
     expect(lifts()).toBe('furnace locked,mess open');
+  });
+});
+
+// The Medal room (#812): the south cell of the Mess lists every boss with its medal in the reader.
+describe('main.ts, the Medal room (#812)', () => {
+  it('opens every boss with its best turns, or Not beaten, in the reader; Esc gives the hub back', async () => {
+    const game = await boot('?bot=off');
+    await game.settle();
+    localStorage.setItem('ab-alone.medals', JSON.stringify({ echo: 7 }));
+    shipAt(game, [0, 1]);
+    game.click(0, 2);
+    expect(hub()).toBe('mess 0,2');
+    expect(document.body.dataset.reading).toBe('medal-room');
+    expect(byId('reader').textContent).toContain('Medal room');
+    expect(byId('reader').textContent).toMatch(/^Medal room.*The Echo: 7 turns\. .*: Not beaten\./);
+    expect(localStorage.getItem('ab-alone.lore-read')).toBeNull(); // not a lore entry
+    press('Escape');
+    expect(byId('reader').hidden).toBe(true);
+    game.frame(16);
+    expect(document.body.dataset.console).toBe('mess-house-rule 1/2');
   });
 });

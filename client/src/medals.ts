@@ -48,3 +48,11 @@ export const medalLabel = (turns: number): string => `Medal: ${plural(turns)}`;
 /** The medal line of the end banner of a won fight; `turns` is the best count (the record when there is one). */
 export const medalLine = (result: MedalResult, turns: number): string =>
   `${{ first: 'Medal earned', record: 'New record', kept: 'Medal best' }[result]}: ${plural(turns)}.`;
+
+/** The Medal room's screen (#812): every boss in the given order with its best turns, or Not beaten. */
+export const medalRoom = (store: Store, bosses: readonly { id: string; name: string }[]): { title: string; body: string } => {
+  const medals = loadMedals(store);
+  const line = ({ id, name }: { id: string; name: string }): string =>
+    `${name}: ${medals[id] === undefined ? 'Not beaten' : plural(medals[id])}.`;
+  return { title: 'Medal room', body: bosses.map(line).join(' ') };
+};

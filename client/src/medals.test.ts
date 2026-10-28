@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestTurns, hasMedal, loadMedals, medalLabel, medalLine, playerTurns, recordMedal } from './medals';
+import { bestTurns, hasMedal, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal } from './medals';
 
 const KEY = 'ab-alone.medals';
 const memory = (saved?: string): Storage => {
@@ -74,5 +74,17 @@ describe('boss medals', () => {
     expect(medalLine('first', 12)).toBe('Medal earned: 12 turns.');
     expect(medalLine('record', 9)).toBe('New record: 9 turns.');
     expect(medalLine('kept', 14)).toBe('Medal best: 14 turns.');
+  });
+
+  it('lists every boss in the given order with its best turns, or Not beaten (the Medal room, #812)', () => {
+    const bosses = [
+      { id: 'echo', name: 'Echo' },
+      { id: 'hull', name: 'Hull' },
+      { id: 'choir', name: 'Choir' },
+    ];
+    const room = medalRoom(memory(JSON.stringify({ choir: 1, echo: 12 })), bosses);
+    expect(room.title).toBe('Medal room');
+    expect(room.body).toBe('Echo: 12 turns. Hull: Not beaten. Choir: 1 turn.');
+    expect(medalRoom(null, bosses).body).toBe('Echo: Not beaten. Hull: Not beaten. Choir: Not beaten.');
   });
 });
