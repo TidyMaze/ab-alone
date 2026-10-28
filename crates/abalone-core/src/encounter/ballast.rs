@@ -19,7 +19,7 @@ use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETI
 use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
 use crate::encounter::{losses, no_gain, ply_seed, BossDef, Encounter};
 use crate::game::{Game, WIN_EJECTIONS};
-use crate::moves::{Move, Player};
+use crate::moves::{apply, legal_moves, Move, Player};
 use crate::search::{search_hooked, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
@@ -171,26 +171,48 @@ pub fn ballast_move(enc: &Encounter) -> Option<Move> {
 }
 
 /// The node-limited search of `enc` with the Ballast hooks of its tree, for the side to move: the
-/// boss reply of [`ballast_move`], or the ladder player (the effect due is the boss's, so on the
-/// player's turn the tree only ticks).
+/// boss reply of [`ballast_move`], or the ladder player. Every Black ply ends with the Hull tick.
+/// The boss ply that fires the effect due this turn is the root one on the boss's turn, and on the
+/// player's turn the reply to the player's move (the player reads the effect one turn ahead).
 pub(crate) fn ballast_search(
     enc: &Encounter,
     budget: u32,
     allow: &dyn Fn(&Move) -> bool,
 ) -> Option<Move> {
     let root = enc.game().board();
-    let ply = enc.game().history().len() as u32 + 1;
+    let boss_turn = enc.game().to_move() == Player::White;
+    let ply = enc.game().history().len() as u32 + if boss_turn { 1 } else { 2 };
     let due = special(ply, enc.phase()).map(|id| (id, ply_seed(enc.seed, u64::from(ply))));
+    let tick = |before: &Board, mover: Player, mv: &Move, after: Board| {
+        // The Hull's own tick, which does nothing without a crack: skip its board copy.
+        if after.cracks().is_empty() {
+            (after, [0, 0])
+        } else {
+            hull_step(before, mover, mv, after)
+        }
+    };
+    // The positions the due effect fires from: the root, or each position after a player move.
+    let fires: Vec<Board> = match due {
+        None => Vec::new(),
+        Some(_) if boss_turn => vec![root.clone()],
+        Some(_) => legal_moves(root, Player::Black)
+            .iter()
+            .map(|mv| {
+                tick(
+                    root,
+                    Player::Black,
+                    mv,
+                    apply(root, Player::Black, mv).unwrap().0,
+                )
+                .0
+            })
+            .collect(),
+    };
     let step = |before: &Board, mover: Player, mv: &Move, after: Board| {
         if mover == Player::Black {
-            // The Hull's own tick, which does nothing without a crack: skip its board copy.
-            return if after.cracks().is_empty() {
-                (after, [0, 0])
-            } else {
-                hull_step(before, mover, mv, after)
-            };
+            return tick(before, mover, mv, after);
         }
-        let Some((id, seed)) = due.filter(|_| before == root) else {
+        let Some((id, seed)) = due.filter(|_| fires.contains(before)) else {
             return (after, [0, 0]);
         };
         let out = hook(&after, id, seed);
