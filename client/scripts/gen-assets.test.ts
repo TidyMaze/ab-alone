@@ -110,9 +110,10 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     expect(lit / inDisc).toBeLessThan(0.2); // hairline fractures, not blots (#838)
   });
 
-  // #838: a crisp crack in a hull plate: it tapers from the impact out to a point at the rim, so the rim ring holds
-  // a smaller share of lit pixels than the ring round the middle.
-  it('tapers the cracks of the decal from the middle out to the rim (#838)', () => {
+  // #838: a crisp crack in a hull plate, seen in the ring round the marble: the marble hides the middle, so the cracks
+  // are narrow there and carry their width where they show (the contrast check of the e2e spec reads fully drawn
+  // points of that ring, boss.spec.ts), and each ends in a point at the rim.
+  it('keeps the cracks of the decal narrow under the marble and wide in the ring round it (#838)', () => {
     const { w, rows } = decode(assets.get('crack-decal.png')!, 1);
     const c = (w - 1) / 2;
     const share = (from: number, to: number): number => {
@@ -127,7 +128,18 @@ describe('gen-assets', { timeout: 20_000 }, () => {
       });
       return lit / all;
     };
-    expect(share(0.15, 0.5)).toBeGreaterThan(share(0.75, 1) * 1.3);
+    expect(share(0.75, 0.97)).toBeGreaterThan(share(0.15, 0.5) * 1.3);
+    expect(share(0.97, 1)).toBeLessThan(share(0.75, 0.97) * 0.8); // the tips are points
+    // Points of the ring, where the cracks are 3 px wide at least (a 3 x 3 block fully lit): enough for the contrast check.
+    let fat = 0;
+    rows.forEach((row, y) => {
+      for (let x = 1; x < w - 1; x++) {
+        if (Math.hypot(x - c, y - c) / (w / 2) < 0.8) continue;
+        const block = [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => rows[y + dy]?.[x + dx] === 255));
+        if (block) fat++;
+      }
+    });
+    expect(fat).toBeGreaterThan(150);
   });
 
   // Task #401: each deck of docs/specs/world.md section 5 has its own albedo for the cells, with the shared roughness.
