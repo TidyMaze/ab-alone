@@ -219,7 +219,7 @@ function backdrop(w, h, rand) {
 // mask, white where the steel is split; main.ts draws it near-black on the cracked cell. A crisp fracture in a hull
 // plate (#838): six fractures run from near the middle out to the rim, one in every sixth of the turn so they show round
 // the marble, each a straight-edged jagged line that tapers to a point and forks once or twice at a sharp angle. The
-// middle is a little wider, the fractures never fatter than 7 px of the 128, still 3:1 when the cell is small on screen.
+// middle is a little wider, the fractures never fatter than 9 px of the 128, still 3:1 when the cell is small on screen.
 const CRACKS = 6;
 function crackDecal(size, rand) {
   const mask = new Float32Array(size * size);
@@ -239,13 +239,13 @@ function crackDecal(size, rand) {
     }
   };
   // A fracture heading out along `toward` in straight runs of 10 to 16 px with small kinks, narrowing a step at a time
-  // to 1.5 px at its tip, which stops at the rim or after `steps` runs. A fork leaves at about 35 degrees.
+  // to 2.5 px at its tip, which stops at the rim or after `steps` runs. A fork leaves at about 35 degrees.
   const crack = (x, y, toward, width, steps, forks) => {
     for (let n = 0; n < steps; n++) {
       const angle = toward + (rand() - 0.5) * 0.5, run = 10 + rand() * 6;
       const nx = x + Math.cos(angle) * run, ny = y + Math.sin(angle) * run;
       const outside = Math.hypot(nx - c, ny - c) > rim;
-      const next = outside ? 1.5 : Math.max(1.5, width - 1.1);
+      const next = outside ? 2.5 : Math.max(2.5, width - 1);
       segment(x, y, nx, ny, width, next);
       if (outside) return;
       [x, y, width] = [nx, ny, next];
@@ -253,7 +253,7 @@ function crackDecal(size, rand) {
     }
   };
   const x0 = c + (rand() - 0.5) * 6, y0 = c + (rand() - 0.5) * 6;
-  for (let k = 0; k < CRACKS; k++) crack(x0, y0, (k * 2 * Math.PI) / CRACKS + (rand() - 0.5) * 0.3, 7, Infinity, 1);
+  for (let k = 0; k < CRACKS; k++) crack(x0, y0, (k * 2 * Math.PI) / CRACKS + (rand() - 0.5) * 0.3, 9, Infinity, 1);
   // Nothing outside the cell's disc: a tip that runs past the rim is cut there.
   const inside = (i) => Math.hypot((i % size) - c, Math.floor(i / size) - c) <= size / 2 - 1;
   return png(size, size, 1, Uint8Array.from(mask, (v, i) => (inside(i) ? clamp(v * 255) : 0)));
