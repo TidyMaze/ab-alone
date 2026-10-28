@@ -21,7 +21,7 @@ async function move(game: Game): Promise<void> {
 function fightBoss(game: Game, name: string): void {
   game.openModes();
   byId('boss-fight').click();
-  [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === name)!.click();
+  [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent!.startsWith(name))!.click();
 }
 const medal = (id: string): void => localStorage.setItem('ab-alone.medals', JSON.stringify({ [id]: 7 }));
 
@@ -129,8 +129,13 @@ describe('main.ts, auto-play, #792', () => {
     timers();
     auto().click();
     await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS);
-    game.frame(100_000); // the reveal of the round
-    expect(round()).not.toBe(before);
+    const first = round();
+    expect(first).not.toBe(before);
+    await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS); // the reveal of the round is still on: no new order over it
+    expect(round()).toBe(first);
+    game.frame(100_000); // its end
+    await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS);
+    expect(round()).not.toBe(first);
     auto().click(); // off
     const after = round();
     await vi.advanceTimersByTimeAsync(AUTO_DELAY_MS * 3);
