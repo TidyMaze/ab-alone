@@ -107,7 +107,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     expect(middle).toBe(true);
     expect([...sixths].sort()).toEqual([0, 1, 2, 3, 4, 5]);
     expect(lit / inDisc).toBeGreaterThan(0.04);
-    expect(lit / inDisc).toBeLessThan(0.2); // hairline fractures, not blots (#838)
+    expect(lit / inDisc).toBeLessThan(0.26); // fractures, not blots: the old decal was at 0.37 (#838)
   });
 
   // #838: a crisp crack in a hull plate, seen in the ring round the marble: the marble hides the middle, so the cracks
@@ -138,7 +138,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
         if (block) fat++;
       }
     });
-    expect(fat).toBeGreaterThan(150);
+    expect(fat).toBeGreaterThan(300);
   });
 
   // Task #401: each deck of docs/specs/world.md section 5 has its own albedo for the cells, with the shared roughness.

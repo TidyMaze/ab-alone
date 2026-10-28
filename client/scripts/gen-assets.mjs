@@ -220,7 +220,7 @@ function backdrop(w, h, rand) {
 // plate (#838): six fractures run from near the middle out to the rim, one in every sixth of the turn so they show round
 // the marble, each a straight-edged jagged line that ends in a point and forks once or twice at a sharp angle. The
 // middle is hidden by the marble, so a fracture is narrow there and widest in the ring round the marble, never fatter
-// than 8.5 px of the 128: still 3:1 when the cell is small on screen.
+// than 10 px of the 128: still 3:1 when the cell is small on screen.
 const CRACKS = 6;
 function crackDecal(size, rand) {
   const mask = new Float32Array(size * size);
@@ -240,8 +240,8 @@ function crackDecal(size, rand) {
     }
   };
   // The marble hides the middle, so a fracture is narrow there and widest in the ring round the marble, where it is
-  // seen: `scale` times 3 px at the middle to 8.5 px at four fifths of the way to the rim.
-  const widthAt = (x, y, scale) => scale * (3 + 5.5 * Math.min(1, Math.hypot(x - c, y - c) / (0.8 * rim)));
+  // seen: `scale` times 3 px at the middle to 10 px at four fifths of the way to the rim.
+  const widthAt = (x, y, scale) => scale * (3 + 7 * Math.min(1, Math.hypot(x - c, y - c) / (0.8 * rim)));
   // A fracture heading out along `toward` in straight runs of 10 to 16 px with small kinks; its last run narrows to a
   // 3 px point at the rim or after `steps` runs. A fork leaves at about 35 degrees at 0.6 of its parent's width.
   const crack = (x, y, toward, scale, steps, forks) => {
