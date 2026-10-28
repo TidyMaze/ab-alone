@@ -126,7 +126,7 @@ pub fn hull_boss() -> BossDef {
 /// One ply of the boss search tree: a player ply ticks the cracks down and vanishes the due cells
 /// with their marbles, each side credited with the other's losses. A boss ply adds no crack: where
 /// the next one falls is drawn from the seed, which the tree does not know.
-fn hull_step(_: &Board, mover: Player, _: &Move, after: Board) -> (Board, [u8; 2]) {
+pub(crate) fn hull_step(_: &Board, mover: Player, _: &Move, after: Board) -> (Board, [u8; 2]) {
     if mover == Player::White {
         return (after, [0, 0]);
     }

@@ -250,6 +250,7 @@ Five bosses, mapped to the lore slots of `world.md` (PR #51). Numbers (marble co
 Player always starts with 14 marbles on the standard layout unless stated.
 Every boss mechanic can be turned against the boss (owner rule, #645): a new boss's twist must
 also give the player a way to hurt the boss with it.
+Each new boss: add its mechanic to The Ballast Mind's borrowed effects when it fits as a one-shot hook (a crack, a pulse, a polarity, a conversion today).
 
 | Lore slot (`world.md`) | Deck | Our boss | Issue | Play order |
 |---|---|---|---|---|
@@ -409,6 +410,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   warning once cracked. The effect then shows with the tell of its boss: the crack and its timer,
   the pulse shockwave and the sliding marbles, the polarity sign on the marble and the repulsions,
   the converted marks.
+- **New bosses**: each new boss adds its mechanic to the borrowed effects when it fits as a one-shot hook (a crack, a pulse, a polarity, a conversion today).
 - **Counter**: those of the Hull, the Pulsar, the Magnetizer and the Chaplain, one at a time, with
   the turn of warning.
 - **Phases**: by ejections, as the bosses it borrows from: P1 at 0, P2 after **3** ejections, P3

@@ -14,12 +14,13 @@
 
 use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::chaplain::{chaplain_boss, CHAPLAIN_BOSS_END};
-use crate::encounter::hull::{hull_boss, mix, HULL_CRACKS, HULL_PLAYER_END};
+use crate::encounter::hull::{hull_boss, hull_step, mix, HULL_CRACKS, HULL_PLAYER_END};
 use crate::encounter::magnetizer::{magnetizer_boss, MAGNETIZER_ANNOUNCE, MAGNETIZER_TURN};
 use crate::encounter::pulsar::{pulse, PULSAR_FORCE};
-use crate::encounter::{ply_seed, BossDef, Encounter};
+use crate::encounter::{losses, no_gain, ply_seed, BossDef, Encounter};
 use crate::game::{Game, WIN_EJECTIONS};
-use crate::moves::Player;
+use crate::moves::{Move, Player};
+use crate::search::{search_hooked, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -73,9 +74,9 @@ pub const BALLAST_BOSS_START: [P; 16] = [
 ];
 /// P2 and P3 start after this many ejections credited to the player, as the bosses it borrows from. TUNE.
 pub const BALLAST_PHASE_EJECTIONS: [u8; 2] = [3, 5];
-/// Positions the boss search may visit per move. Measured on the start position (release build):
-/// 40 000 nodes finish depth 4, 150 000 finish depth 5 (2.4 s native), 800 000 finish depth 6. TUNE.
-pub const BALLAST_NODE_BUDGET: u32 = 150_000;
+/// Positions the boss search may visit per move: the other bosses' budget, which keeps the reply
+/// near theirs (it was 150 000, 2.4 s native, before the search played the borrowed effects). TUNE.
+pub const BALLAST_NODE_BUDGET: u32 = 3000;
 /// Boss turns between two borrowed effects. TUNE.
 pub const BALLAST_EVERY: u32 = 3;
 /// Special id at the end of a player turn: the Hull's cracks count down.
@@ -155,6 +156,49 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
         }
         Borrowed::ChaplainConversion => run(chaplain_boss(), CHAPLAIN_BOSS_END, board),
     }
+}
+
+/// The boss reply: its node-limited search, where every player ply of the tree ends with the Hull
+/// tick and the boss ply of the root turn with the effect due this turn, if there is one (the
+/// effect of the seed of that ply, as `Encounter::play` fires it). The deeper boss plies of the
+/// tree fire none: the tree does not know which turn they are. `None` on the player's turn or when
+/// the game is over.
+pub fn ballast_move(enc: &Encounter) -> Option<Move> {
+    if enc.game().to_move() != Player::White {
+        return None;
+    }
+    let root = enc.game().board();
+    let ply = enc.game().history().len() as u32 + 1;
+    let due = special(ply, enc.phase()).map(|id| (id, ply_seed(enc.seed, u64::from(ply))));
+    let step = |before: &Board, mover: Player, mv: &Move, after: Board| {
+        if mover == Player::Black {
+            // The Hull's own tick, which does nothing without a crack: skip its board copy.
+            return if after.cracks().is_empty() {
+                (after, [0, 0])
+            } else {
+                hull_step(before, mover, mv, after)
+            };
+        }
+        let Some((id, seed)) = due.filter(|_| before == root) else {
+            return (after, [0, 0]);
+        };
+        let out = hook(&after, id, seed);
+        // A conversion moves marbles to the other side without ejecting any.
+        let [lost_black, lost_white] = if no_gain(&after, &out) {
+            losses(&after, &out)
+        } else {
+            [0, 0]
+        };
+        (out, [lost_white, lost_black])
+    };
+    search_hooked(
+        enc.game(),
+        enc.boss.node_budget,
+        DEFAULT_WEIGHTS,
+        &|_| true,
+        &step,
+    )
+    .map(|r| r.mv)
 }
 
 /// The Ballast board with no marble: radius 5 with the six pillars void.
@@ -509,6 +553,95 @@ mod tests {
         assert_eq!((pulsar, &shown), (dir, before));
         assert_eq!(moved, pulse(before, dir, Some(2)).1);
         assert_eq!(marbles(enc.game().board(), Cell::White), 7 - lost_white);
+    }
+
+    /// A Black shuffler on the bottom row, a White shuffler on the west rim and a lone White marble
+    /// on the east rim, where a pulse from the west pushes it off.
+    fn rim_fight(seed: u64) -> Encounter {
+        let mut board = ballast_board();
+        board.set(-4, 5, Cell::Black);
+        board.set(-5, 0, Cell::White);
+        board.set(5, 0, Cell::White);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, ballast_boss(), seed).counting_by_colour();
+        enc.boss.node_budget = 300;
+        enc
+    }
+
+    /// Five plies of `rim_fight`: the boss is to play the ply that fires the effect.
+    fn play_rim(enc: &mut Encounter) {
+        for m in [
+            mv(&[(-4, 5)], E),
+            mv(&[(-5, 0)], E),
+            mv(&[(-3, 5)], W),
+            mv(&[(-4, 0)], W),
+            mv(&[(-4, 5)], E),
+        ] {
+            enc.play(&m).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_search_sees_the_pulse_due_this_turn_and_the_plain_one_does_not() {
+        let (seed, dir) = fight_pulse_seed();
+        assert_eq!(dir, 0, "from the west: the east rim marble falls");
+        let mut enc = rim_fight(seed);
+        play_rim(&mut enc);
+        let lost_by = |mv: &Move| {
+            let mut after = enc.clone();
+            after.play(mv).unwrap();
+            after.game().ejected(Player::Black)
+        };
+        let plain = enc.boss_search().unwrap().mv;
+        let hooked = ballast_move(&enc).unwrap();
+        assert_eq!(lost_by(&hooked), 0, "{hooked:?} steps off the rim");
+        assert_eq!(lost_by(&plain), 1, "{plain:?} stays under the pulse");
+    }
+
+    #[test]
+    fn the_search_plays_the_conversion_check_due_this_turn() {
+        let mut board = ballast_board();
+        board.set(-4, 5, Cell::Black);
+        board.set(0, 0, Cell::Black);
+        for (q, r) in [(-5, 0), (1, 0), (-1, 0), (0, -1), (0, 2)] {
+            board.set(q, r, Cell::White);
+        }
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let seed = fight_seed(|b| b == Borrowed::ChaplainConversion);
+        let mut enc = Encounter::new(game, ballast_boss(), seed).counting_by_colour();
+        enc.boss.node_budget = 300;
+        play_rim(&mut enc);
+        let hooked = ballast_move(&enc).unwrap();
+        assert_eq!(hooked.cells, vec![(0, 2)], "the fourth foe closes the ring");
+        enc.play(&hooked).unwrap();
+        assert_eq!(enc.game().board().get(0, 0), Some(Cell::White));
+    }
+
+    #[test]
+    fn the_search_sees_the_hull_tick_that_voids_a_cracked_cell_on_the_next_player_ply() {
+        let mut board = ballast_board();
+        board.set(-4, 5, Cell::Black);
+        board.set(-5, 0, Cell::White);
+        board.set(5, 0, Cell::White);
+        board.set_cracks(vec![((5, 0), 3)]);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, ballast_boss(), 0).counting_by_colour();
+        enc.boss.node_budget = 300;
+        for m in [mv(&[(-4, 5)], E), mv(&[(-5, 0)], E), mv(&[(-3, 5)], W)] {
+            enc.play(&m).unwrap();
+        }
+        assert_eq!(enc.game().board().cracks(), &[((5, 0), 1)]);
+        let hooked = ballast_move(&enc).unwrap();
+        assert_eq!(
+            hooked.cells,
+            vec![(5, 0)],
+            "it leaves the cell about to vanish"
+        );
+    }
+
+    #[test]
+    fn the_search_is_for_the_boss_turn_only() {
+        assert_eq!(ballast_move(&ballast_start(0)), None);
     }
 
     #[test]
