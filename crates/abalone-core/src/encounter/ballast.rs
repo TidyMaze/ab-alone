@@ -172,6 +172,8 @@ pub fn ballast_move(enc: &Encounter) -> Option<Move> {
     let due = special(ply, enc.phase()).map(|id| (id, ply_seed(enc.seed, u64::from(ply))));
     let step = |before: &Board, mover: Player, _: &Move, after: Board| {
         let (id, seed) = match (mover, due) {
+            // The tick does nothing without a crack: skip its board copy.
+            (Player::Black, _) if after.cracks().is_empty() => return (after, [0, 0]),
             (Player::Black, _) => (BALLAST_TICK, 0),
             (Player::White, Some(due)) if before == root => due,
             _ => return (after, [0, 0]),
@@ -609,6 +611,28 @@ mod tests {
         assert_eq!(hooked.cells, vec![(0, 2)], "the fourth foe closes the ring");
         enc.play(&hooked).unwrap();
         assert_eq!(enc.game().board().get(0, 0), Some(Cell::White));
+    }
+
+    #[test]
+    fn the_search_sees_the_hull_tick_that_voids_a_cracked_cell_on_the_next_player_ply() {
+        let mut board = ballast_board();
+        board.set(-4, 5, Cell::Black);
+        board.set(-5, 0, Cell::White);
+        board.set(5, 0, Cell::White);
+        board.set_cracks(vec![((5, 0), 3)]);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, ballast_boss(), 0).counting_by_colour();
+        enc.boss.node_budget = 300;
+        for m in [mv(&[(-4, 5)], E), mv(&[(-5, 0)], E), mv(&[(-3, 5)], W)] {
+            enc.play(&m).unwrap();
+        }
+        assert_eq!(enc.game().board().cracks(), &[((5, 0), 1)]);
+        let hooked = ballast_move(&enc).unwrap();
+        assert_eq!(
+            hooked.cells,
+            vec![(5, 0)],
+            "it leaves the cell about to vanish"
+        );
     }
 
     #[test]

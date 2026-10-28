@@ -31,7 +31,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
-| The Ballast Mind | 150000 | 150000 (1x only) | **0** | 100 | P1 | draw 10 |
+| The Ballast Mind | 3000 (#824; was 150000) | 30000 (10x) | **0 of 20** | 101 | P1 | rim ejection 19, draw 1 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
 are per boss, section 3.
@@ -270,7 +270,29 @@ Reply time through wasm (release build in Node, 6 seeds of 80 plies, boss replie
 machine, ms): The Chaplain 196 average, 404 at the 95th percentile, 458 at most (2000 nodes); the
 Hull 84 / 118 / 159 (3000 nodes), the Pulsar 140 / 222 / 455, the Magnetizer 102 / 142 / 183.
 
-### The Ballast Mind: NOT measured at pro level, 0 of 10 at 1x
+### The Ballast Mind: its AI plays the borrowed effects (#824), 0 of 20 at 1x and 10x
+
+Before (main at 66f47f4): the reply was the plain `boss_search` at 150000 nodes (2.4 s native), 0 of
+10 at 1x, every game a draw, no run at 10x. Now `ballast_move` (`search_hooked`) runs the Hull tick on
+every player ply of its tree and, at its own ply, the effect due this turn (the crack, pulse,
+polarity or conversion check the seed of that ply picks, the same code the encounter fires). The
+deeper boss plies of the tree fire none: the tree does not know which turn they are. The budget
+is the other bosses' 3000 nodes. The ladder player is unchanged (plain search, it does not see the
+hooks), `LADDER_SEEDS=20`:
+
+| Player budget | Wins /20 | Median plies | Highest phase | Deaths |
+|---|---|---|---|---|
+| 3000 (1x) | **0** | 96 | P2 | rim ejection 19, draw 1 |
+| 30000 (10x) | **0** | 101 | P1 | rim ejection 19, draw 1 |
+
+The games now end on the boss's side (the pulses and cracks eject player marbles that the ladder
+player does not read), no more draws. Nothing is tuned further here: the budget, the effect period
+and the player tree are the knobs, the owner decides. Reply time through wasm (release build in
+Node, 6 seeds of 80 plies, load average 8, ms, average / 95th percentile / max): The Ballast Mind
+128 / 219 / 408, the Chaplain 204 / 415 / 451, the Hull 89 / 121 / 200, the Pulsar 125 / 167 / 204,
+the Magnetizer 101 / 142 / 178.
+
+#### Earlier: NOT measured at pro level, 0 of 10 at 1x
 
 #### Attempt to measure it cheaply (#208): no result, the machine was too loaded
 
