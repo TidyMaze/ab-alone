@@ -60,6 +60,7 @@ test('the marble walks the Mess past its rooms, and a reload lands it on the sam
 
   const rooms: [number, number, string][] = [
     [1, 1, 'Terminal'],
+    [0, 2, 'Medal room'], // #812
   ];
   // One mouse click, then the same click without the raycast and the frames of a mouse click (__click), to stay fast.
   await clickCell(page, 1, 0);
@@ -274,6 +275,20 @@ test('a terminal room opens its lore entry in the reader, and Esc gives the hub 
   await expect(body).toHaveAttribute('data-hub', 'mess 1,1');
   await expect(page.locator('#hud')).toContainText('Terminal');
   await page.screenshot({ path: testInfo.outputPath('terminal-after.png') });
+});
+
+test('the Medal room lists every boss with its medal in the reader, and Esc gives the hub back, #812', async ({ page }, testInfo) => {
+  await shipAt(page, './?bot=off', [0, 1]);
+  const body = page.locator('body');
+  await expect(body).toHaveAttribute('data-console', /^mess-house-rule /); // the console's web fonts are in
+  await page.evaluate(() => localStorage.setItem('ab-alone.medals', JSON.stringify({ echo: 14 })));
+  await hookClick(page, 0, 2);
+  await expect(body).toHaveAttribute('data-reading', 'medal-room');
+  await expect(page.locator('#reader')).toContainText('The Echo: 14 turns. The Hull: Not beaten.');
+  await page.screenshot({ path: testInfo.outputPath('medal-room.png') });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#reader')).toBeHidden();
+  await expect(body).toHaveAttribute('data-hub', 'mess 0,2');
 });
 
 test('the tension drones calm to 0 over the hub, #586', async ({ page }) => {

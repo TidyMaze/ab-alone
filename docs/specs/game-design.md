@@ -129,6 +129,7 @@ Room kinds:
 | Boss | The deck's boss: the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
+| Medal room | On the Mess only (0, 2), a gold ring and core glyph (#812). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |
 | Lift | The deck above or below. The marble arrives on that deck's lift back. Its glyph holds a near-black arrow up or down the map, toward its deck, with a bar across while it is locked (3:1 on the lit cell, as a target arrow) |
 | BR lobby | Shown closed until battle royale ships (Phase 4): a bar across its glyph, the HUD says closed, the marble may stand on it. Every deck has one |
 
@@ -136,7 +137,7 @@ Layout, the same on every deck so it is learned once: the centre and its 6 neigh
 the rooms sit on the outer ring. Lift up at the top (q 1, r -2), lift down at the bottom (-1, 2),
 boss at the east corner (2, 0) between the two terminals (2, -1) and (1, 1), the tables on the
 west side: hot-seat (-1, -1), bot (-2, 0), online (-2, 1), and the BR lobby on the south-west corner (-2, 2)
-next to them. The Mess has no lift down, the Bridge no lift up, so every deck has 8 or 9 rooms.
+next to them, and the Mess alone has the Medal room at the south cell (0, 2). The Mess has no lift down, the Bridge no lift up, so every deck has 8 or 9 rooms.
 
 Lobbies without a matchmaker: a PvP table or BR lobby is a public peer-to-peer room (Trystero)
 where waiting players are listed and pick each other, plus invite links. Invite-first. With no

@@ -32,6 +32,7 @@ const DOORS: Record<Exclude<Door['kind'], 'lift'>, string> = {
   bot: 'Bot table',
   online: 'Online table',
   royale: 'Battle royale lobby',
+  medals: 'Medal room',
 };
 
 const BOSS_NAMES: Record<string, string> = {
@@ -52,6 +53,7 @@ const DESCRIPTORS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, string> = {
   online: 'Peer-to-peer 1v1 match',
   royale: 'Multi-player battle royale',
   terminal: 'Ship archive and audio log',
+  medals: 'Every boss, its medal and best turns',
 };
 
 /** Reachability hint for a hovered hub cell relative to the marble's position (#628). */

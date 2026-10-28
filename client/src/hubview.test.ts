@@ -138,6 +138,11 @@ describe('hub target inspection and reachability (#628)', () => {
       desc: 'Multi-player battle royale',
       reach: 'Out of reach (roll closer)',
     });
+    expect(hubTargetText(at, [0, 2])).toEqual({
+      name: 'Medal room',
+      desc: 'Every boss, its medal and best turns',
+      reach: 'Out of reach (roll closer)',
+    });
     expect(hubTargetText(at, [2, -1])).toEqual({
       name: 'Terminal',
       desc: 'Ship archive and audio log',

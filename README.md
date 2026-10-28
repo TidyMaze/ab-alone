@@ -44,7 +44,7 @@ On top of it, the ship:
 | 📅 | **Daily challenge**: one boss and one seed for everyone each UTC day, a result to share | ✅ playable |
 | 🤝 | **Fight together**: two players share one army against a boss online, turn about | ✅ playable |
 | 🔥 | **Battle royale** on the Furnace deck: up to 6 seats, hidden orders (commit-reveal), the hull breach closes in, bots fill empty seats | ✅ playable, offline vs 5 bots and online |
-| 🛰️ | **Ship hub**: walk five decks, lifts that open as you beat each deck's boss, game tables, lore terminals, an audio log per deck | ✅ playable, new players land there |
+| 🛰️ | **Ship hub**: walk five decks, lifts that open as you beat each deck's boss, game tables, lore terminals, an audio log per deck, a Medal room on the Mess deck | ✅ playable, new players land there |
 | 🏆 | **Ranked** online, Elo and rank tiers | ✅ playable |
 | 🧠 | **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)) | ✅ runs on your machine |
 
