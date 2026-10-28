@@ -74,9 +74,10 @@ pub const BALLAST_BOSS_START: [P; 16] = [
 ];
 /// P2 and P3 start after this many ejections credited to the player, as the bosses it borrows from. TUNE.
 pub const BALLAST_PHASE_EJECTIONS: [u8; 2] = [3, 5];
-/// Positions the boss search may visit per move: the other bosses' budget, which keeps the reply
-/// near theirs (it was 150 000, 2.4 s native, before the search played the borrowed effects). TUNE.
-pub const BALLAST_NODE_BUDGET: u32 = 3000;
+/// Positions the boss search may visit per move. It was 150 000 (2.4 s native) before the search
+/// played the borrowed effects, 3000 with them (#824), and 100 since #833, the best of the ladder
+/// (docs/specs/boss-balance.md section 3). TUNE.
+pub const BALLAST_NODE_BUDGET: u32 = 100;
 /// Boss turns between two borrowed effects. TUNE.
 pub const BALLAST_EVERY: u32 = 3;
 /// Special id at the end of a player turn: the Hull's cracks count down.
