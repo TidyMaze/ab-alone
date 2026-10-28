@@ -4,7 +4,8 @@
 //! the tell is `board.cracks()`: the cells that vanish soon.
 
 use crate::board::Board;
-use crate::encounter::BossDef;
+use crate::encounter::{BossDef, Encounter};
+use crate::moves::Move;
 
 /// Player turns between a crack appearing and the cell vanishing.
 pub const HULL_CRACK_LEAD: u8 = 2;
@@ -119,6 +120,11 @@ pub fn hull_boss() -> BossDef {
         conversions: None,
         node_budget: HULL_NODE_BUDGET,
     }
+}
+
+/// The boss reply. TODO: plain search until the cracks are in the tree.
+pub fn hull_move(enc: &Encounter) -> Option<Move> {
+    enc.boss_search().map(|r| r.mv)
 }
 
 #[cfg(test)]
@@ -470,5 +476,35 @@ mod tests {
         let out = hull_hook(&board, HULL_CRACK_INNER, 4);
         assert_eq!(out.cracks().len(), 1);
         assert_eq!(radius(out.cracks()[0].0), 4);
+    }
+
+    /// White to move with one White marble on a crack that vanishes after the next player move,
+    /// another White marble elsewhere and one Black marble.
+    fn doomed_white() -> Encounter {
+        let mut board = Board::empty();
+        board.set(0, 0, Cell::White);
+        board.set(-3, 3, Cell::White);
+        board.set(2, 0, Cell::Black);
+        board.set_cracks(vec![((0, 0), 1)]);
+        Encounter::new(
+            Game::from_position(board, Player::White, [0, 0]),
+            hull_boss(),
+            1,
+        )
+    }
+
+    #[test]
+    fn the_hull_moves_its_marble_off_a_crack_about_to_vanish() {
+        let enc = doomed_white();
+        let plain = enc.boss_search().unwrap().mv;
+        assert_ne!(plain.cells, vec![(0, 0)], "the plain search leaves it there");
+        let mv = hull_move(&enc).unwrap();
+        assert_eq!(mv.cells, vec![(0, 0)], "the Hull saves its marble");
+    }
+
+    #[test]
+    fn the_hull_does_not_reply_on_the_player_turn() {
+        let enc = encounter(&[], &block(3), 0);
+        assert_eq!(hull_move(&enc), None);
     }
 }
