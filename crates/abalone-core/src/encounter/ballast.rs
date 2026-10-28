@@ -167,6 +167,17 @@ pub fn ballast_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
+    ballast_search(enc, enc.boss.node_budget, &|_| true)
+}
+
+/// The node-limited search of `enc` with the Ballast hooks of its tree, for the side to move: the
+/// boss reply of [`ballast_move`], or the ladder player (the effect due is the boss's, so on the
+/// player's turn the tree only ticks).
+pub(crate) fn ballast_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<Move> {
     let root = enc.game().board();
     let ply = enc.game().history().len() as u32 + 1;
     let due = special(ply, enc.phase()).map(|id| (id, ply_seed(enc.seed, u64::from(ply))));
@@ -191,14 +202,7 @@ pub fn ballast_move(enc: &Encounter) -> Option<Move> {
         };
         (out, [lost_white, lost_black])
     };
-    search_hooked(
-        enc.game(),
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-    )
-    .map(|r| r.mv)
+    search_hooked(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
 }
 
 /// The Ballast board with no marble: radius 5 with the six pillars void.
