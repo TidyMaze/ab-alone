@@ -603,6 +603,34 @@ mod tests {
     }
 
     #[test]
+    fn the_player_search_sees_the_pulse_due_on_the_boss_reply() {
+        let (seed, _) = fight_pulse_seed();
+        let mut board = ballast_board();
+        board.set(-4, 5, Cell::Black);
+        board.set(5, 0, Cell::Black);
+        board.set(-5, 0, Cell::White);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut enc = Encounter::new(game, ballast_boss(), seed).counting_by_colour();
+        enc.boss.node_budget = 300;
+        for m in [
+            mv(&[(-4, 5)], E),
+            mv(&[(-5, 0)], E),
+            mv(&[(-3, 5)], W),
+            mv(&[(-4, 0)], W),
+        ] {
+            enc.play(&m).unwrap();
+        }
+        let player = ballast_search(&enc, 300, &|_| true).unwrap();
+        enc.play(&player).unwrap();
+        enc.play(&ballast_move(&enc).unwrap()).unwrap();
+        assert_eq!(
+            enc.game().ejected(Player::White),
+            0,
+            "{player:?} steps off the rim"
+        );
+    }
+
+    #[test]
     fn the_search_plays_the_conversion_check_due_this_turn() {
         let mut board = ballast_board();
         board.set(-4, 5, Cell::Black);
