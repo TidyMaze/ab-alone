@@ -7,6 +7,7 @@
 use crate::board::{Board, Cell};
 use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
+use crate::moves::Move;
 
 /// Opposing marbles that flip a marble, for both sides. TUNE.
 pub const CHAPLAIN_FLIP_THRESHOLD: usize = 4;
@@ -170,6 +171,11 @@ pub fn chaplain_tell(enc: &Encounter) -> Vec<P> {
         .map_or_else(Vec::new, |(before, _)| flipped(before, enc.game().board()))
 }
 
+/// The Chaplain's reply: its node-limited search (stub).
+pub fn chaplain_move(enc: &Encounter) -> Option<Move> {
+    enc.boss_search().map(|r| r.mv)
+}
+
 /// The Chaplain boss.
 pub fn chaplain_boss() -> BossDef {
     BossDef {
@@ -190,7 +196,7 @@ mod tests {
     use crate::encounter::{marbles, Encounter, PveResult};
     use crate::game::Game;
     use crate::moves::Direction::{E, W};
-    use crate::moves::{Move, Player};
+    use crate::moves::Player;
 
     /// Black's shuffle marble walks this pair, White's walks the other: far from every test cell.
     const BLACK_SHUFFLE: [P; 2] = [(0, 3), (-1, 3)];
@@ -712,5 +718,74 @@ mod tests {
             5,
             "nothing flipped to the boss"
         );
+    }
+
+    /// The boss to move after the player's shuffle.
+    fn boss_turn(black: &[P], white: &[P], ejected: u8) -> Encounter {
+        let mut e = build(black, white, &[], ejected, 0);
+        step(&mut e);
+        e
+    }
+
+    /// The player replies that change the boss marble count after the boss played `mv`.
+    fn boss_marbles_after_replies(e: &Encounter, mv: &Move) -> Vec<u8> {
+        let mut after = e.clone();
+        after.play(mv).unwrap();
+        crate::moves::legal_moves(after.game().board(), Player::Black)
+            .iter()
+            .map(|reply| {
+                let mut x = after.clone();
+                x.play(reply).unwrap();
+                count(&x, Cell::White)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_boss_does_not_walk_into_a_conversion() {
+        // A boss marble at the centre has 3 player neighbours, a player marble one step from the 4th.
+        let e = boss_turn(&[(1, 0), (1, -1), (0, -1), (-2, 0)], &[(0, 0)], 0);
+        let plain = e.boss_search().unwrap().mv;
+        let kept = count(&e, Cell::White);
+        assert!(
+            boss_marbles_after_replies(&e, &plain)
+                .iter()
+                .any(|&w| w < kept),
+            "the plain search leaves the marble to be converted"
+        );
+        let mv = chaplain_move(&e).unwrap();
+        assert!(
+            boss_marbles_after_replies(&e, &mv)
+                .iter()
+                .all(|&w| w >= kept),
+            "no reply converts a boss marble"
+        );
+    }
+
+    #[test]
+    fn the_boss_takes_a_conversion() {
+        // A player marble has 3 boss neighbours and a boss marble one step from the 4th.
+        let mut e = boss_turn(&[(0, 0)], &[(1, 0), (1, -1), (0, -1), (-2, 0)], 2);
+        let plain = e.boss_search().unwrap().mv;
+        let mut other = e.clone();
+        other.play(&plain).unwrap();
+        assert_eq!(
+            count(&other, Cell::Black),
+            2,
+            "the plain search converts nothing"
+        );
+        let mv = chaplain_move(&e).unwrap();
+        e.play(&mv).unwrap();
+        assert_eq!(count(&e, Cell::Black), 1, "the player marble converted");
+        assert_eq!(
+            e.game().ejected(Player::Black),
+            0,
+            "the health swing is taken"
+        );
+    }
+
+    #[test]
+    fn the_boss_has_no_move_on_the_players_turn() {
+        assert_eq!(chaplain_move(&enc(&[], &[])), None);
     }
 }
