@@ -122,7 +122,7 @@ import {
   type Core,
   type UnstableEvents,
 } from './unstable';
-import { ballastText } from './ballast';
+import { ballastText, firedText, parseFired, type Fired } from './ballast';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
 import { BLAST_SHARDS, blastAt, martyrText, parseBlast, parseMartyr } from './martyr';
@@ -1424,6 +1424,10 @@ let pulsarShown: Pulsar | null = null; // the next pulse of the last refresh
 const rippleGeometry = new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2);
 const rippleMaterials = Array.from({ length: RIPPLES }, () => new THREE.MeshBasicMaterial({ color: SHOCK_COLOR, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
 let ripples: THREE.Mesh[] = []; // moved by the animation loop
+// The Ballast Mind's last borrowed effect (#838): a steady ring in the hazard colour (the orange of its HUD line) on each cell it touched, until the next ply.
+const firedGeometry = new THREE.RingGeometry(0.4, 0.5, 40).rotateX(-Math.PI / 2);
+const firedMaterial = new THREE.MeshBasicMaterial({ color: 0xe8812a, transparent: true, depthWrite: false }) // transparent: drawn after the discs;
+let firedShown: Fired | null = null; // read by the e2e tests
 let pulsarCores: THREE.Mesh[] = []; // spun by the animation loop
 let shock: { mesh: THREE.Mesh; id: number; start: number; reduced: boolean; skipped: boolean } | null = null;
 // The Unstable Core (#751, game-design.md section 7.13): a glowing hexagon on each of the 7 energy cells while the core
@@ -1758,6 +1762,7 @@ function applyPalette(): void {
   tickMaterial.color.setHex(pal.tell);
   scratchMaterial.color.setHex(pal.tell);
   paleMaterial.color.setHex(pal.tell);
+  firedMaterial.color.set(pal.hazard);
   ghostCore.color.setHex(pal.core);
   scarab.color.setHex(pal.shell);
   const smoked = glassLooks.get('smoked');
@@ -2614,6 +2619,7 @@ function hud(extra = ''): void {
         beltText(parseBelts(boss.belts())),
         pulseText(parsePulsar(boss.pulsar())),
         ballastText(boss.ballast_next()),
+        firedText(parseFired(boss.ballast_fired())),
         coreText(parseCore(boss.unstable())),
         toxinText(boss.turns_left()),
         ventNote(phaseSeen.since, shownPly()),
@@ -2855,6 +2861,14 @@ function refresh(): void {
     return ring;
   }) : [];
   document.body.dataset.ripples = String(ripples.length); // read by the e2e tests
+  firedShown = engine instanceof Encounter ? parseFired(engine.ballast_fired()) : null;
+  for (const [q, r] of firedShown?.cells ?? []) {
+    const { x, z } = axialTo3D(q, r);
+    const ring = Object.assign(new THREE.Mesh(firedGeometry, firedMaterial), { name: 'ballast-fired' });
+    ring.position.set(x, 0.06, z);
+    marbles.add(ring);
+  }
+  document.body.dataset.fired = String(firedShown?.cells.length ?? 0); // read by the e2e tests
   // The charges belong to the board after the hook: while a move slides to the board before it, none is drawn.
   drawUnstable(engine instanceof Encounter ? parseCore(engine.unstable()) : null, showing() || !(engine instanceof Encounter) ? [] : parseCharges(engine.charges()));
   const taunt = engine instanceof Encounter ? tauntIndex(engine.turns_left()) : -1; // the Overseer's line of this 20 %
@@ -2981,7 +2995,8 @@ function animateBelts(now: number): void {
 /** The six pulsars of a Pulsar fight, and the charge of the one whose pulse is 2 turns or less away: its core glows,
  * its counter shows beside it and a chevron lies before each of its lines. Returns the cores, which spin. */
 function drawPulsars(next: Pulsar): THREE.Mesh[] {
-  return [0, 1, 2, 3, 4, 5].map((id) => {
+  const ballast = fight?.id === 'ballast'; // only the pulsar of the announced pulse, and none of the radius 4 chevrons (#838)
+  return (ballast ? [next.id] : [0, 1, 2, 3, 4, 5]).map((id) => {
     const spot = pulsarSpot(id);
     const lit = id === next.id && charging(next);
     const model = Object.assign(new THREE.Group(), { name: lit ? 'pulsar-charging' : 'pulsar' });
@@ -3000,7 +3015,7 @@ function drawPulsars(next: Pulsar): THREE.Mesh[] {
       counter.position.set(at.x, at.y, at.z);
       counter.scale.setScalar(PULSE_COUNTER_SIZE);
       marbles.add(counter);
-      for (const c of pulseChevrons(id)) {
+      for (const c of ballast ? [] : pulseChevrons(id)) {
         const chevron = Object.assign(new THREE.Mesh(chevronGeometry, chevronMaterial), { name: 'pulse-chevron' });
         chevron.rotation.y = c.yaw;
         chevron.position.set(c.x, 0.03, c.z);
@@ -3516,6 +3531,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to find The Assembly Line's belts as drawn (#744): each belt's cells, direction, pattern
 // scroll and announced strike cell, and the turns left before the centre belt reverses.
 (window as unknown as Record<string, unknown>).__belts = () => beltsShown;
+// Used by the browser checks to find The Ballast Mind's last borrowed effect as drawn (#838): its code and the ringed cells.
+(window as unknown as Record<string, unknown>).__fired = () => firedShown;
 // Used by the browser checks to find The Pulsar's next pulse as drawn (#675), and the shockwave of a pulse now.
 (window as unknown as Record<string, unknown>).__pulsar = () => pulsarShown && { ...pulsarShown, charging: charging(pulsarShown) };
 (window as unknown as Record<string, unknown>).__shock = () =>

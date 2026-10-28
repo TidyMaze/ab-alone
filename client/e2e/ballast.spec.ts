@@ -39,12 +39,14 @@ test('The Ballast Mind names its borrowed effect a turn ahead, then plays the Pu
   await plies(page, 3);
   await expect(tell).toHaveCount(0);
   await plies(page, 1); // the player's 3rd move is next
-  await expect(tell).toHaveText("Next turn: the Pulsar's pulse");
+  await expect(tell).toHaveText("Pulse in 1 turn, force 2 · Next turn: the Pulsar's pulse");
+  await expect(page.locator('body')).toHaveAttribute('data-ripples', '1'); // the announced pulsar ripples (#838)
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('ballast-announce.png') });
   await plies(page, 2); // the player's 3rd move, the boss reply: the pulse
   await expect(page.locator('body')).toHaveAttribute('data-pulses', '1');
-  await expect(tell).toHaveCount(0);
+  await expect(tell).toHaveText("Fired: the Pulsar's pulse"); // until the next ply (#838)
+  await expect(page.locator('body')).toHaveAttribute('data-ripples', '0');
   await freshDraw(page);
   await page.screenshot({ path: testInfo.outputPath('ballast-pulse.png') });
 });

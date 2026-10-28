@@ -145,7 +145,7 @@ describe('main.ts board and HUD', () => {
     expect(shown()).toBe(85);
     expect(game.hook('__frame')).toMatchObject({ radius: 5, holes: 6 });
     const { shells, glass } = drawn(scene());
-    expect(shells.length + glass.length).toBe(30);
+    expect(shells.length + glass.length).toBe(32); // 16 each (#838)
     // A marble of ring 5 moves by two clicks, like any other.
     const ring5 = game.hook<{ cells: Axial[] }[]>('__legal').find((m) => m.cells.length === 1 && Math.abs(m.cells[0]![0]) === 5)!;
     step(game, ring5.cells[0]);

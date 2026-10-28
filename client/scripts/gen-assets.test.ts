@@ -106,8 +106,39 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     });
     expect(middle).toBe(true);
     expect([...sixths].sort()).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(lit / inDisc).toBeGreaterThan(0.03);
-    expect(lit / inDisc).toBeLessThan(0.4);
+    expect(lit / inDisc).toBeGreaterThan(0.04);
+    expect(lit / inDisc).toBeLessThan(0.26); // fractures, not blots: the old decal was at 0.37 (#838)
+  });
+
+  // #838: a crisp crack in a hull plate, seen in the ring round the marble: the marble hides the middle, so the cracks
+  // carry their width where they show (the contrast check of the e2e spec reads fully drawn
+  // points of that ring, boss.spec.ts), and each ends in a point at the rim.
+  it('carries the width of the cracks in the ring round the marble and ends them in points (#838)', () => {
+    const { w, rows } = decode(assets.get('crack-decal.png')!, 1);
+    const c = (w - 1) / 2;
+    const share = (from: number, to: number): number => {
+      let lit = 0, all = 0;
+      rows.forEach((row, y) => {
+        for (let x = 0; x < w; x++) {
+          const d = Math.hypot(x - c, y - c) / (w / 2);
+          if (d < from || d >= to) continue;
+          all++;
+          if (row[x]! >= 128) lit++;
+        }
+      });
+      return lit / all;
+    };
+    expect(share(0.97, 1)).toBeLessThan(share(0.75, 0.97) * 0.8); // the tips are points
+    // Points of the ring, where the cracks are 3 px wide at least (a 3 x 3 block fully lit): enough for the contrast check.
+    let fat = 0;
+    rows.forEach((row, y) => {
+      for (let x = 1; x < w - 1; x++) {
+        if (Math.hypot(x - c, y - c) / (w / 2) < 0.8) continue;
+        const block = [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => rows[y + dy]?.[x + dx] === 255));
+        if (block) fat++;
+      }
+    });
+    expect(fat).toBeGreaterThan(300);
   });
 
   // Task #401: each deck of docs/specs/world.md section 5 has its own albedo for the cells, with the shared roughness.

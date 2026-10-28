@@ -389,7 +389,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 
 - **Concept**: the ship's mind, the thing that kept the game running.
 - **Twist**: a radius 5 board with 6 fixed void pillars (symmetric). Boss has 16 marbles, you
-  have 14. It has no rule code of its own: every **3** turns, at the end of the boss turn (turns 3,
+  have 16 too (#838): the point reflection of its start, two more marbles than the standard layout. It has no rule code of its own: every **3** turns, at the end of the boss turn (turns 3,
   6, 9...), it **borrows one effect of another boss**, picked by the engine PRNG (splitmix64 of the
   fight seed and the ply, so a Retry, the daily, a replay and every co-op peer get the same
   picks) among four one-shot effects that run that boss's own engine code (no copy):
@@ -407,9 +407,16 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   the echo. The old mix (Hull rim crack, Chaplain threshold 3, Echo of the previous move) is gone.
 - **Announce**: the HUD names the effect one turn ahead, during the turn before it lands
   ("Next turn: the Hull's crack"). The Hull's crack needs no longer lead, it is its own 2-turn
-  warning once cracked. The effect then shows with the tell of its boss: the crack and its timer,
-  the pulse shockwave and the sliding marbles, the polarity sign on the marble and the repulsions,
-  the converted marks.
+  warning once cracked. The pulse is also announced on the board (#838): the pulsar that will fire
+  (the one off the corner the pulse comes from) shows its glowing core and its counter and ripples
+  while the player thinks, as in the Pulsar's fight, with no chevrons. The other three effects
+  pick their marble or cell as they land, so only the HUD line leads.
+- **Fired**: once it has landed, the HUD names it until the next ply ("Fired: the Pulsar's pulse"),
+  and an orange ring marks each cell it touched on the board (the cracked cell, the polarized marble
+  and the marbles it repelled, the marbles a pulse pushed, the marbles the check flipped; none for a
+  check that flips nothing). The effect still shows with the tell of its boss: the crack decal and
+  its timer, the pulse shockwave and the sliding marbles, the polarity sign on the marble and the
+  repulsions, the converted marks.
 - **New bosses**: each new boss adds its mechanic to the borrowed effects when it fits as a one-shot hook (a crack, a pulse, a polarity, a conversion today).
 - **Counter**: those of the Hull, the Pulsar, the Magnetizer and the Chaplain, one at a time, with
   the turn of warning.

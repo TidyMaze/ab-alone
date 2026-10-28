@@ -31,7 +31,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
-| The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **2 of 20** (reading ladder player #834, 1 of 20 at 1x; below the target, no boss-only knob reaches it, see section 3) | 117 | P2 | rim ejection 9, draw 9 |
+| The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **1 of 20** (reading ladder player #834, 0 of 20 at 1x; the player has 16 marbles since #838; below the target, no boss-only knob reaches it, see section 3) | 133 | P2 | rim ejection 14, draw 5 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
 are per boss, section 3.
@@ -360,6 +360,24 @@ and the centre -3 weight) and the simplest single constant: `BALLAST_NODE_BUDGET
 makes the boss reply about 30 times cheaper than the 3000 nodes of the other bosses. The target
 needs a stronger or smarter ladder player (reading effects beyond the next one) or a change of the
 effects themselves (`BALLAST_EVERY`, forces, a rule change, the owner's call), not a boss knob.
+
+### The Ballast Mind: the player starts with 16 marbles (#838), not tuned
+
+The player went from 14 to 16 marbles, as many as the boss (the back-row corners `(-5, 5)` and
+`(0, 5)`, the mirror of the boss start), `engine_version` 10. Win thresholds and the boss unchanged,
+no retune. Same method as above, `LADDER_X=1` and `LADDER_X=10`, `LADDER_SEEDS=20 cargo run --release
+--example ladder -- ballast`, seeds 0 to 19, 300 plies at most:
+
+| Player | Output line, 14 marbles (#833, #834) | Output line, 16 marbles (#838) |
+|---|---|---|
+| 1x | `100 \| 1/20 \| 90 \| 2 \| rim_ejection 15, draw 4` | `100 \| 0/20 \| 112 \| 2 \| rim_ejection 18, draw 2` |
+| 10x | `1000 \| 2/20 \| 117 \| 2 \| rim_ejection 9, draw 9` | `1000 \| 1/20 \| 133 \| 2 \| rim_ejection 14, draw 5` |
+
+Reading: two more marbles for the player did not raise the win rate (0 and 1 of 20, the 14 marble
+figures were 1 and 2 of 20): the differences are noise on 20 seeds, as in the knob table above, and
+the games still end on rim ejections by the borrowed effects the ladder player reads only one turn
+ahead. The target of #833 (14 to 18 of 20 at 10x) still needs a stronger or smarter ladder player or a
+change of the effects, the owner's call.
 
 #### Earlier: NOT measured at pro level, 0 of 10 at 1x
 

@@ -10,7 +10,8 @@ use abalone_core::encounter::assembly::{
     assembly_boss, assembly_move, assembly_start, assembly_tell, belt_cells, last_belts, Fate,
 };
 use abalone_core::encounter::ballast::{
-    ballast_boss, ballast_last_pulse, ballast_move, ballast_next, ballast_start, Borrowed,
+    ballast_boss, ballast_fired, ballast_last_pulse, ballast_move, ballast_next,
+    ballast_pulse_tell, ballast_start, Borrowed,
 };
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
@@ -285,6 +286,16 @@ fn cell_list(cells: &[(i32, i32)]) -> Vec<i32> {
     cells.iter().flat_map(|&(q, r)| [q, r]).collect()
 }
 
+/// The code of a borrowed effect in the bridge, see `Encounter::ballast_next`.
+fn effect_code(effect: Borrowed) -> i32 {
+    match effect {
+        Borrowed::HullCrack => 0,
+        Borrowed::PulsarPulse(_) => 1,
+        Borrowed::MagnetizerPolarity => 2,
+        Borrowed::ChaplainConversion => 3,
+    }
+}
+
 fn boss_entry(id: &str) -> Option<&'static BossEntry> {
     BOSSES.iter().find(|b| b.id == id)
 }
@@ -294,7 +305,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    9 // 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    10 // 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -507,18 +518,26 @@ impl Encounter {
     }
 
     /// The Pulsar's next pulse as `[pulsar, player_turns_left, force]`, force `0` for infinite,
-    /// empty for the other bosses.
+    /// empty for the other bosses. The Ballast Mind gives the pulse it announces for its next turn
+    /// (`player_turns_left` 1), empty otherwise.
     pub fn pulsar(&self) -> Vec<i32> {
         let Fight::Plain(e) = &self.fight else {
             return Vec::new();
         };
-        pulsar_tell(e).map_or_else(Vec::new, |(pulsar, left, force)| {
-            vec![
-                i32::from(pulsar),
-                i32::from(left),
-                i32::from(force.unwrap_or(0)),
-            ]
-        })
+        pulsar_tell(e)
+            .or_else(|| {
+                (self.entry.id == "ballast")
+                    .then(|| ballast_pulse_tell(e))
+                    .flatten()
+                    .map(|(pulsar, force)| (pulsar, 1, force))
+            })
+            .map_or_else(Vec::new, |(pulsar, left, force)| {
+                vec![
+                    i32::from(pulsar),
+                    i32::from(left),
+                    i32::from(force.unwrap_or(0)),
+                ]
+            })
     }
 
     /// The pulse of the last ply (The Pulsar): the pulsar, the 61 board codes just before it, then
@@ -541,8 +560,8 @@ impl Encounter {
             })
     }
 
-    /// The effect The Ballast Mind announces for its next borrowing turn: `0` the Hull's crack,
-    /// `1` the Pulsar's pulse, `2` the Magnetizer's polarity, `3` the Chaplain's conversion; `-1`
+    /// The effect The Ballast Mind announces for its next borrowing turn: `0` the Hull's crack, `1`
+    /// the Pulsar's pulse, `2` the Magnetizer's polarity, `3` the Chaplain's conversion; `-1`
     /// when none is due next turn, for the other bosses too.
     pub fn ballast_next(&self) -> i32 {
         let Fight::Plain(e) = &self.fight else {
@@ -551,13 +570,24 @@ impl Encounter {
         if self.entry.id != "ballast" {
             return -1;
         }
-        match ballast_next(e) {
-            None => -1,
-            Some(Borrowed::HullCrack) => 0,
-            Some(Borrowed::PulsarPulse(_)) => 1,
-            Some(Borrowed::MagnetizerPolarity) => 2,
-            Some(Borrowed::ChaplainConversion) => 3,
-        }
+        ballast_next(e).map_or(-1, effect_code)
+    }
+
+    /// The effect The Ballast Mind borrowed on the last ply, as `[code, q, r, q, r...]`: the code of
+    /// `ballast_next`, then the cells it touched (the marks it left and the cells that changed).
+    /// Empty when the last ply borrowed nothing, for the other bosses too.
+    pub fn ballast_fired(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        (self.entry.id == "ballast")
+            .then(|| ballast_fired(e))
+            .flatten()
+            .map_or_else(Vec::new, |(effect, cells)| {
+                std::iter::once(effect_code(effect))
+                    .chain(cell_list(&cells))
+                    .collect()
+            })
     }
 
     /// The Assembly Line's belts as `[turns_left, then one record of 6 per belt]`, the centre belt
@@ -841,8 +871,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_9_since_the_chaplain_conversions_move_its_health() {
-        assert_eq!(engine_version(), 9);
+    fn the_engine_version_is_10_since_the_ballast_player_starts_with_16_marbles() {
+        assert_eq!(engine_version(), 10);
     }
 
     #[test]
@@ -1731,8 +1761,24 @@ mod tests {
             play_plies(&mut f, 1);
             let next = f.ballast_next();
             codes.push(next);
+            let tell = f.pulsar();
+            assert_eq!(tell.is_empty(), next != 1, "seed {seed}");
+            if next == 1 {
+                assert!(tell[0] < 6 && tell[1] == 1 && tell[2] >= 0, "seed {seed}");
+            }
+            assert!(
+                f.ballast_fired().is_empty(),
+                "seed {seed}: nothing fired yet"
+            );
             play_plies(&mut f, 2);
             assert_eq!(f.last_pulse().is_empty(), next != 1, "seed {seed}");
+            let fired = f.ballast_fired();
+            assert_eq!(
+                fired[0], next,
+                "the code of the effect, then cells, seed {seed}"
+            );
+            assert_eq!(fired.len() % 2, 1, "seed {seed}");
+            assert!(f.pulsar().is_empty(), "seed {seed}");
         }
         for code in 0..4 {
             assert!(codes.contains(&code), "code {code}");
@@ -1741,6 +1787,10 @@ mod tests {
             let mut other = Encounter::new(id, 1).unwrap();
             play_plies(&mut other, 4);
             assert_eq!(other.ballast_next(), -1, "{id}");
+            assert!(
+                other.ballast_fired().is_empty() && other.pulsar().is_empty(),
+                "{id}"
+            );
         }
     }
 
@@ -1776,7 +1826,7 @@ mod tests {
             };
             assert_eq!(board[i], expected, "({q}, {r})");
         }
-        assert_eq!((count(&board, 1), count(&board, 2)), (14, 16));
+        assert_eq!((count(&board, 1), count(&board, 2)), (16, 16));
     }
 
     #[test]
