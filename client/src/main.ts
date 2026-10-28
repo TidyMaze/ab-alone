@@ -21,6 +21,8 @@ import {
 } from './board';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { askBot, askEval, botBudget } from './bot';
+import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
+import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
 import { drawBossBar } from './bossbar';
@@ -1848,6 +1850,46 @@ hintButton.addEventListener('click', () => {
   refresh();
 });
 
+// Auto-play (#792, docs/specs/ui.md section 4.3): a toggle in the fight HUD lets the bot play the player's side, one move
+// per AUTO_DELAY_MS, until it is turned off, the game is over or replaced. The bot's own side is played as ever. Against
+// a boss it needs that boss's medal (#791); online it is not there. The battle royale asks the royale bot for the order.
+const autoButton = document.getElementById('auto-play') as HTMLButtonElement;
+const autoReason = document.getElementById('auto-reason')!;
+let autoPlay = false;
+let autoGame: object | null = null; // the game or royale it was turned on in
+let autoTimer: ReturnType<typeof setTimeout> | undefined;
+function stopAuto(): void {
+  autoPlay = false;
+  clearTimeout(autoTimer);
+}
+function syncAuto(): void {
+  const boss = engine instanceof Encounter ? engine.name() : null;
+  const state = autoPlayState({ online: Boolean(hub) || online !== null, boss }, fight !== null && hasMedal(store, fight.id));
+  const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
+  const reason = state.shown ? state.reason : null;
+  const usable = state.shown && reason === null && !over;
+  if (autoPlay && (!usable || (royale ?? engine) !== autoGame)) stopAuto();
+  autoButton.hidden = !state.shown;
+  autoButton.disabled = !usable;
+  autoButton.setAttribute('aria-pressed', String(autoPlay));
+  autoReason.hidden = reason === null;
+  autoReason.textContent = reason;
+}
+function autoRoyale(): void {
+  autoTimer = setTimeout(() => {
+    autoRoyale(); // first: a round that ends the game stops it (syncAuto)
+    if (!reveal && canOrder()) playRound([...royale!.bot_order(me())]);
+  }, AUTO_DELAY_MS);
+}
+autoButton.addEventListener('click', () => {
+  const on = !autoPlay;
+  stopAuto();
+  autoPlay = on;
+  autoGame = royale ?? engine;
+  if (autoPlay) royale ? autoRoyale() : void botTurn();
+  refresh();
+});
+
 // The bot, the boss, the evaluation bar or the hint got no answer from its worker (#736): the game must not wait for it.
 function botFailed(): void {
   hud(` · The bot could not answer: press New game`);
@@ -1855,7 +1897,11 @@ function botFailed(): void {
 }
 
 async function botTurn(): Promise<void> {
-  if (online || !worker || engine.status() !== 0 || engine.to_move() !== BOT_SIDE) return;
+  if (online || thinking || engine.status() !== 0) return;
+  const bots = worker !== null && engine.to_move() === BOT_SIDE;
+  const auto = autoPlay && !bots; // the player's side, played by the bot (#792)
+  const mover = worker ?? botWorker;
+  if ((!bots && !auto) || !mover) return;
   thinking = true;
   syncHint(); // no hint while the bot thinks
   const current = fight;
@@ -1865,7 +1911,11 @@ async function botTurn(): Promise<void> {
   const diffPercent = DIFFICULTY_PERCENT[difficulty];
   let move: number[];
   try {
-    move = await askBot(worker, history, searchBudget, fight ?? undefined, diffPercent);
+    // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
+    [move] = await Promise.all([
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto),
+      auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
+    ]);
   } catch {
     if (engine === game) {
       thinking = false; // the worker cannot answer (#736); a replaced game has nothing to say
@@ -1875,10 +1925,15 @@ async function botTurn(): Promise<void> {
   }
   diag.botSearch(performance.now() - started, current ? { boss: current.id } : { nodes: searchBudget });
   if (engine !== game) return; // Retry, a new fight, New game or an import replaced the game while the bot was thinking
-  thinking = false;
+  if (!auto) thinking = false;
   whenSettled(() => {
+    if (auto) {
+      thinking = false; // an auto-played move keeps the board shut to clicks until it is played
+      if (!autoPlay) return void refresh(); // turned off while the bot thought
+    }
     playMove(move);
     refresh();
+    void botTurn(); // the other side's reply, or the next auto-played move
   });
 }
 
@@ -2551,6 +2606,7 @@ function hud(extra = ''): void {
 }
 
 function refresh(): void {
+  syncAuto();
   if (hub) {
     hub.draw(sceneRenderer, discs, sfx, loadProgress(store).beaten, marbleMesh(glassOf()), drawFrame, lightRim);
     hud();
@@ -3904,6 +3960,7 @@ const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
 const startButton = document.getElementById('royale-start') as HTMLButtonElement; // the creator's, online (#504)
 const royaleInviteButton = document.getElementById('royale-invite') as HTMLButtonElement; // offline: opens a room (#504)
 function startRoyale(file: RoyaleFile): void {
+  stopAuto();
   leaveHub();
   stopAnalysis();
   fight = null;
@@ -3923,6 +3980,7 @@ function startRoyale(file: RoyaleFile): void {
   refresh();
 }
 function leaveRoyale(): void {
+  stopAuto();
   if (royaleNet) {
     royaleNet = null;
     clearInterval(ticking);
