@@ -376,3 +376,29 @@ the Ballast Mind) unless conversions made it grow. The phase thresholds of secti
   Hull cracks and the Ballast Mind hooks are not in the player tree yet.
 - The Hull (7 of 10 at 10x, 9 with the plain search) and the Choir (10 of 10) may be too easy for
   a strong human: tuning them is out of scope of #170.
+
+### The Chaplain after its AI plays the conversion rule (#811), tuned in #821
+
+#811 made the boss search play the conversion rule (threat weight 20, budget 2000). Measured by
+#811: 0 of 20 at 1x, 10 of 20 at 10x, many draws and ply caps, below the owner target of 14 to 18
+of 20 at 10x. One knob at a time, `LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder
+-- chaplain`, seeds 0 to 19, 300 plies at most, hook-aware pro player (the player budget is 10x the
+boss budget, so it moves with the boss budget). Output lines (`player budget | wins | median plies
+| max phase | deaths`):
+
+| Knob | Output line (10x) |
+|---|---|
+| none: threat 20, nodes 2000 (#811) | `20000 \| 10/20 \| n/a \| n/a \| many draws and ply caps` |
+| threat 10 | `20000 \| 11/20 \| 243.5 \| 1 \| draw 2, ply_cap 7` |
+| threat 5 | `20000 \| 4/20 \| 300 \| 1 \| ply_cap 16` |
+| nodes 1000 | `10000 \| 12/20 \| 156 \| 1 \| push 2, draw 3, ply_cap 3` |
+| nodes 500 | `5000 \| 7/20 \| 235.5 \| 1 \| push 1, conversion 1, draw 7, ply_cap 4` |
+| **nodes 300 (kept)** | `3000 \| 18/20 \| 104 \| 1 \| ply_cap 2` |
+
+Reading: a lower threat weight makes the boss passive (ply caps 7 then 16), so it is not the knob.
+The budget is not monotonic on 20 seeds (7 of 20 at 500, 12 at 1000), so 18 of 20 at 300 is a
+point estimate, not a rate. Kept: `CHAPLAIN_NODE_BUDGET = 300`, threat weight unchanged at 20.
+At 1x (the player has the boss's own 300 nodes) the same command with `LADDER_X=1` gives
+`300 \| 6/20 \| 87.5 \| 1 \| conversion 11, draw 3`, fewer than at 10x as wanted. The boss replies in
+a seventh of the time it did (300 nodes against 2000), within the other bosses'. No rule change,
+`engine_version` unchanged.

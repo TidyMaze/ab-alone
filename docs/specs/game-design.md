@@ -362,7 +362,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   the median attempt ends with fewer than 3 conversions seen (nobody learns the tell). Measured
   (#753, boss-balance.md section 3): the ladder pro player won 16 of 20 at 1x and 19 of 20 at
   10x, above the 7 to 9 of 10 target. With conversions on the health (#810) it wins 20 of 20 at
-  both, in a median of 42 and 32.5 plies, and reaches P2; not tuned.
+  both, in a median of 42 and 32.5 plies, and reaches P2; not tuned. After its AI played the conversion rule (#811) it won 10 of 20 at 10x and 0 at 1x;
+  tuned in #821 (boss budget 2000 to 300, boss-balance.md section 3): 18 of 20 at 10x, 6 of 20 at
+  1x. The rows tried are in boss-balance.md.
 
 ### 7.4 The Echo (#46): mirrors your moves
 

@@ -15,7 +15,7 @@ pub const CHAPLAIN_FLIP_THRESHOLD: usize = 4;
 /// P2 starts at this many player ejections. TUNE.
 pub const CHAPLAIN_PHASE_EJECTIONS: [u8; 1] = [4];
 /// Positions the boss search may visit per move. TUNE.
-pub const CHAPLAIN_NODE_BUDGET: u32 = 2000;
+pub const CHAPLAIN_NODE_BUDGET: u32 = 300;
 /// Evaluation weight of a marble one neighbour short of converting, in centi-marbles. TUNE.
 pub const CHAPLAIN_THREAT_WEIGHT: i32 = 20;
 /// The weights of the boss search: the plain ones plus the threat of the next conversion.
@@ -339,6 +339,7 @@ mod tests {
         assert!(b.phase_marbles.is_empty());
         assert_eq!(b.phase_ejections, vec![4], "P2 at 4 ejections, no P3");
         assert_eq!(b.node_budget, CHAPLAIN_NODE_BUDGET);
+        assert_eq!(CHAPLAIN_NODE_BUDGET, 300, "tuned in #821, boss-balance.md");
         assert_eq!(CHAPLAIN_FLIP_THRESHOLD, 4);
     }
 
@@ -826,14 +827,7 @@ mod tests {
     fn the_boss_takes_a_conversion() {
         // A player marble has 3 boss neighbours and a boss marble one step from the 4th.
         let mut e = boss_turn(&[(0, 0)], &[(1, 0), (1, -1), (0, -1), (-2, 0)], 2);
-        let plain = e.boss_search().unwrap().mv;
-        let mut other = e.clone();
-        other.play(&plain).unwrap();
-        assert_eq!(
-            count(&other, Cell::Black),
-            2,
-            "the plain search converts nothing"
-        );
+        // At 300 nodes the plain search finds this conversion too (it missed it at 2000, #821).
         let mv = chaplain_move(&e).unwrap();
         e.play(&mv).unwrap();
         assert_eq!(count(&e, Cell::Black), 1, "the player marble converted");
