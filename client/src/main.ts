@@ -3860,15 +3860,25 @@ let rankedDone = false;
 let rankedOpponentRating = DEFAULT_RATING;
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
 const inviteLabel = document.getElementById('invite-label')!;
+const inviteCopy = document.getElementById('invite-copy') as HTMLButtonElement;
 /** Shows the invite link of a room, its address too. The link makes the button column taller, and a column scrolled down
  * to the mode menu would keep the buttons above out of its box: it goes back to the top (#839). */
 function showInvite(url: string, caption: string): void {
   inviteBox.value = url;
   location.hash = new URL(url).hash;
-  inviteBox.hidden = inviteLabel.hidden = false;
+  inviteBox.hidden = inviteLabel.hidden = inviteCopy.hidden = false;
   inviteLabel.textContent = caption;
   document.getElementById('online')!.scrollTop = 0;
 }
+const hideInvite = (): void => void (inviteBox.hidden = inviteLabel.hidden = inviteCopy.hidden = true);
+// Copy (#839): the link goes to the clipboard and the link, its label and Copy close. When the browser refuses, the link
+// stays, selected, to copy by hand.
+inviteCopy.addEventListener('click', async () => {
+  if (await copyText(inviteBox.value, navigator.clipboard)) return hideInvite();
+  inviteBox.focus();
+  inviteBox.select();
+  hud(' · invite link selected: copy it by hand');
+});
 const rematchButton = document.getElementById('rematch') as HTMLButtonElement;
 rematchButton.addEventListener('click', () => void online?.rematch());
 // Co-op (docs/specs/coop-boss.md section 3): every page plays the boss reply to each human move itself, from the same
@@ -4054,7 +4064,8 @@ function leaveOnline(): void {
   onlineNote = '';
   onlineLine = undefined;
   for (const key of ['online', 'seat', 'opponent', 'coordinator', 'handover']) delete document.body.dataset[key];
-  inviteBox.hidden = inviteLabel.hidden = rematchButton.hidden = true;
+  hideInvite();
+  rematchButton.hidden = true;
   newGameButton.hidden = false;
   window.history.replaceState(null, '', location.pathname + location.search); // no room in the address
 }

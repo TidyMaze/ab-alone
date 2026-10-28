@@ -75,7 +75,10 @@
         </div>
         <input id="import-file" type="file" accept=".json,application/json" hidden aria-label="Game file" />
         <label id="invite-label" for="invite" hidden>Invite link: send it to your opponent</label>
-        <input id="invite" type="text" readonly hidden aria-label="Invite link" />
+        <div id="invite-row">
+          <input id="invite" type="text" readonly hidden aria-label="Invite link" />
+          <button id="invite-copy" type="button" hidden>Copy</button>
+        </div>
       </div>
       <div id="log" role="region" aria-label="Audio log">
         <p id="transcript" aria-live="polite" hidden></p>
