@@ -418,6 +418,31 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #hud { max-width: min(36rem, 100%); }
 }
 
+/* The boss health bar (#788), top centre in a boss fight: the name over a bar of one red fragment per ejection needed.
+   An emptied fragment is an outline; the fragment that starts a phase has a light tick on its left edge, a mark beside
+   the colour. The bar lets every press through to the board; the fragments drain with a short transition, none under
+   reduced motion (the rule below zeroes every transition). */
+#boss-bar {
+  position: absolute; top: 0; left: 0; right: 0; box-sizing: border-box; margin-inline: auto;
+  width: clamp(10rem, calc(100vw - 2 * (22rem + 32px)), 24rem); padding: 0.25rem 0.75rem 0.5rem;
+  color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
+  font: 600 1rem/1.2 var(--display); letter-spacing: 0.06em; text-align: center; text-transform: uppercase;
+  pointer-events: none; zoom: var(--ui-scale);
+}
+/* Held upright it is the first row of the column, one slim row (the name, then the bar), and the plate's own boss name
+   gives its line back, so the rows under it keep off the board's top cells (bug #234). */
+@media (orientation: portrait) {
+  #boss-bar { position: static; order: -1; align-self: stretch; margin-inline: 0; display: flex; align-items: center; gap: 0.5rem; width: auto; padding: 0.25rem 0.5rem; }
+  #boss-bar .name { flex: none; font-size: 0.8125rem; }
+  #boss-bar .frags { flex: 1; margin-top: 0; }
+  #hud .boss strong { display: none; }
+}
+#boss-bar[hidden] { display: none; }
+#boss-bar .frags { display: flex; gap: 3px; margin-top: 0.25rem; }
+#boss-bar .frag { position: relative; flex: 1; height: 0.75rem; background: var(--danger); border: 1px solid var(--danger); box-sizing: border-box; transition: background-color 400ms ease-out; }
+#boss-bar .frag.empty { background: transparent; border-color: var(--muted); }
+#boss-bar .frag.step::before { content: ''; position: absolute; top: -4px; bottom: -4px; left: -4px; width: 2px; background: var(--text); }
+
 /* Evaluation bar (#191): Black's share on the left, White's on the right, and its words. The segments
    are the marble colours, the same in both themes like the marbles. --fill is set by main.ts. Wider than
    tall, the plate keeps to the band left of the board (the same width as the button column's band),

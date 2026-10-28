@@ -379,6 +379,15 @@ impl Encounter {
         }
     }
 
+    /// The ejections that begin each phase after the first, in order (the boss health bar of the
+    /// HUD marks them, #788).
+    pub fn phase_ejections(&self) -> Vec<u8> {
+        match &self.fight {
+            Fight::Plain(_) => (self.entry.def)().phase_ejections,
+            Fight::Choir(_) => PHASE_EJECTIONS.to_vec(),
+        }
+    }
+
     /// Id of the board special that fires after the next ply, `-1` when none.
     pub fn tell(&self) -> i32 {
         match &self.fight {
@@ -1858,6 +1867,26 @@ mod tests {
         assert_eq!(lit("pulsar"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("assembly"), vec![3, 0], "P2 after 3 ejections");
         assert_eq!(lit("core"), vec![3, 0], "P2 after 3 ejections");
+    }
+
+    #[test]
+    fn phase_ejections_lists_the_ejections_that_begin_each_phase() {
+        let steps = |id: &str| Encounter::new(id, 1).unwrap().phase_ejections();
+        assert_eq!(steps("hull"), vec![3, 5]);
+        assert_eq!(steps("choir"), vec![3, 5], "the Choir has its own table");
+        assert_eq!(steps("alien"), vec![2, 4]);
+        for id in [
+            "echo", "hull", "chaplain", "choir", "ballast", "alien", "railyard", "pulsar",
+            "assembly", "core",
+        ] {
+            let f = Encounter::new(id, 1).unwrap();
+            assert_eq!(f.phase_ejections().len() + 1, f.phases() as usize, "{id}");
+            assert_eq!(
+                f.phase_ejections()[0],
+                f.phase_notches()[0],
+                "{id}: the first notches count to the first step"
+            );
+        }
     }
 
     #[test]
