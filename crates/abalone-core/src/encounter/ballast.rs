@@ -1,5 +1,5 @@
 //! The Ballast Mind (#47, docs/specs/game-design.md section 7.5): the final exam. A radius 5
-//! board with six void pillars, 16 boss marbles against 14, and no rule code of its own. Every
+//! board with six void pillars, 16 marbles each, and no rule code of its own. Every
 //! [`BALLAST_EVERY`] turns it borrows one effect of another boss, picked by the engine PRNG among
 //! four one-shot hooks that run that boss's own code:
 //!
@@ -35,12 +35,15 @@ const _: () = assert!(BALLAST_RADIUS <= MAX_RADIUS);
 /// orbit of `(1, 1)` under the 60 degree rotation `(q, r) -> (-r, q + r)`. Symmetric under the
 /// point reflection of the Echo and the rotation.
 pub const BALLAST_PILLARS: [P; 6] = [(1, 1), (-1, 2), (-2, 1), (-1, -1), (1, -2), (2, -1)];
-/// Player start, Black at the bottom: four cells of row 5, seven of row 4, three of row 3.
-pub const BALLAST_PLAYER_START: [P; 14] = [
+/// Player start, Black at the bottom: the point reflection of the boss start, 16 marbles. Six cells
+/// of row 5, seven of row 4, three of row 3.
+pub const BALLAST_PLAYER_START: [P; 16] = [
+    (-5, 5),
     (-4, 5),
     (-3, 5),
     (-2, 5),
     (-1, 5),
+    (0, 5),
     (-5, 4),
     (-4, 4),
     (-3, 4),
@@ -52,8 +55,7 @@ pub const BALLAST_PLAYER_START: [P; 14] = [
     (-2, 3),
     (-1, 3),
 ];
-/// Boss start, White at the top: the point reflection of the player start plus the reflections
-/// of the two back-row corners the player does not have, `(-5, 5)` and `(0, 5)`: 16 marbles.
+/// Boss start, White at the top: six cells of row -5, seven of row -4, three of row -3, 16 marbles.
 pub const BALLAST_BOSS_START: [P; 16] = [
     (5, -5),
     (4, -5),

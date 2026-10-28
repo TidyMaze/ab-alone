@@ -389,7 +389,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 
 - **Concept**: the ship's mind, the thing that kept the game running.
 - **Twist**: a radius 5 board with 6 fixed void pillars (symmetric). Boss has 16 marbles, you
-  have 14. It has no rule code of its own: every **3** turns, at the end of the boss turn (turns 3,
+  have 16 too (#838): the point reflection of its start, two more marbles than the standard layout. It has no rule code of its own: every **3** turns, at the end of the boss turn (turns 3,
   6, 9...), it **borrows one effect of another boss**, picked by the engine PRNG (splitmix64 of the
   fight seed and the ply, so a Retry, the daily, a replay and every co-op peer get the same
   picks) among four one-shot effects that run that boss's own engine code (no copy):
