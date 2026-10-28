@@ -136,7 +136,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 }
 #update:focus-visible, #reset-view:focus-visible, #hint:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #boss-list, #coop-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
-#boss-list .medal { margin-inline-start: 0.5em; color: var(--accent); font-size: 0.85em; white-space: nowrap; }
+#boss-list .medal { display: block; font-size: 0.7em; font-weight: 700; line-height: 1; white-space: nowrap; }
 /* Bug #653: in a desktop window an open boss list holds two bosses a row, each row compact, so every boss and Daily
    challenge fit the window without a scroll, with room for more bosses. A touch screen keeps its 44 px items. #635:
    with 10 bosses the rows are closer still, so the list keeps off a scroll in a 1280x720 window. #699: the items of the
