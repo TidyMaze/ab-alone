@@ -31,7 +31,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Hull | 3000 | 30000 (10x) | **7** | 93.5 | P2 | push 2, rim 1 |
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
-| The Ballast Mind | 3000 (#824; was 150000) | 30000 (10x) | **0 of 20** | 101 | P1 | rim ejection 19, draw 1 |
+| The Ballast Mind | 3000 (#824; was 150000) | 30000 (10x) | **0 of 20** (#833: no boss-only knob helps, see section 3) | 101 | P1 | rim ejection 19, draw 1 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
 are per boss, section 3.
@@ -291,6 +291,43 @@ and the player tree are the knobs, the owner decides. Reply time through wasm (r
 Node, 6 seeds of 80 plies, load average 8, ms, average / 95th percentile / max): The Ballast Mind
 128 / 219 / 408, the Chaplain 204 / 415 / 451, the Hull 89 / 121 / 200, the Pulsar 125 / 167 / 204,
 the Magnetizer 101 / 142 / 178.
+
+### The Ballast Mind after #824, tuning tried in #833: no boss-only knob works
+
+Target of #833: the pro player (10x, 20 seeds) wins 14 to 18 of 20, the 1x player fewer. Method:
+`LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder -- ballast` (`LADDER_X=1` for
+the 1x line), seeds 0 to 19, 300 plies at most, plain-search ladder player (it does not read the
+hooks, the player budget is the multiple of the boss budget so it moves with it). One knob at a
+time. Output lines (`player budget | wins | median plies | max phase | deaths`):
+
+| Variant | Output line |
+|---|---|
+| main (hooked search, nodes 3000), 1x | `3000 \| 0/20 \| 96 \| 2 \| rim_ejection 19, draw 1` |
+| main, 10x | `30000 \| 0/20 \| 101 \| 1 \| rim_ejection 19, draw 1` |
+| plain search (before #824), nodes 3000, 1x | `3000 \| 3/20 \| 96 \| 2 \| rim_ejection 17` |
+| plain search, nodes 3000, 10x | `30000 \| 0/20 \| 96 \| 2 \| rim_ejection 15, draw 5` |
+| nodes 1000, 10x | `10000 \| 0/20 \| 114 \| 2 \| rim_ejection 15, draw 5` |
+| nodes 300, 10x | `3000 \| 0/20 \| 99 \| 2 \| rim_ejection 16, draw 4` |
+| nodes 100, 10x | `1000 \| 0/20 \| 90 \| 2 \| rim_ejection 16, draw 4` |
+| nodes 30, 10x | `300 \| 1/20 \| 90 \| 2 \| rim_ejection 15, draw 4` |
+| weight `ejected` 0, nodes 3000, 10x | `30000 \| 0/20 \| 101 \| 1 \| rim_ejection 19, draw 1` |
+| no borrowed effect (`BALLAST_EVERY` 100000), 10x | `30000 \| 0/20 \| 100 \| 0 \| draw 20` |
+| `BALLAST_EVERY` 6, 10x | `30000 \| 0/20 \| 127.5 \| 0 \| rim_ejection 6, draw 14` |
+| `BALLAST_EVERY` 12, 10x | `30000 \| 0/20 \| 129.5 \| 0 \| rim_ejection 5, draw 14, ply_cap 1` |
+
+Reading: #824 did not make the boss harder at 10x, it was already 0 of 20 with the plain search at
+3000 nodes (it did make 1x go from 3 of 20 to 0 of 20, the player now dies to effects it does not
+read instead of drawing). The budget is not the knob: from 3000 down to 100 nodes the player
+still wins 0 of 20, and 30 nodes (a boss that barely searches, and a 300 node "pro") wins 1 of 20.
+The weight is not the knob either (same result with `ejected` 0). Without any borrowed effect the
+mirror is all draws and the player never ejects a marble (highest phase 0), and with the effects
+2 and 4 times rarer it is mostly draws too. So the plain-search ladder player cannot make progress
+on this board against this boss, and it dies to pulses and cracks it does not read. That is a
+limit of the measuring player, not of the boss: the Chaplain only became measurable once the ladder
+player read its hooks (#811). Follow-up: #834 (the ladder player reads the Ballast effects), then
+the tuning can start again. Nothing is changed: `BALLAST_NODE_BUDGET` stays 3000, the weights stay
+`DEFAULT_WEIGHTS`, `BALLAST_EVERY` (a rule-like constant, it moves the effects) stays 3,
+`engine_version` unchanged.
 
 #### Earlier: NOT measured at pro level, 0 of 10 at 1x
 
