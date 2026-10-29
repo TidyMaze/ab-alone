@@ -35,7 +35,7 @@ import { applyTuning, LEVELS, lightPanel, scalePower, type Level } from './light
 import { LIGHT_TUNING } from './lighttuning';
 import { tubeLights } from './neonlight';
 import { ringLamp } from './ringlamp';
-import { CELL_LAYER, instanceCells } from './instancedcells';
+import { CELL_LAYER, instanceCells, instanceMarbles } from './instancedcells';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
 import { CulledLighting } from './culledlighting';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -1547,6 +1547,8 @@ instanceCells(arenaDiscs, arena);
 arena.add(arenaMarbles);
 arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
+// The marbles, the board's and the arena's, drawn as one instanced mesh per look, placed before each draw (#885).
+const syncMarbles = [marbles, arenaMarbles].map((group) => instanceMarbles(group, marbleGeometry, scene));
 const seatLooks = SEATS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: SHELL.roughness, metalness: SHELL.metalness }));
 // Each seat's glyph (#558), flat in the ink on its marbles, never the tint alone: it touches the shell where the shell
 // faces the default view, turned to face it, so it stays inside the marble's outline.
@@ -4591,6 +4593,7 @@ renderer.setAnimationLoop((now) => {
   }
   if (!navigator.webdriver) adaptResolution(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
+  for (const sync of syncMarbles) sync();
   sceneRenderer.render();
   draws++;
   drawAsked = false;

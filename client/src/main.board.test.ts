@@ -116,12 +116,24 @@ describe('main.ts board and HUD', () => {
   it('draws the 91 cells and their bevels with 2 instanced meshes, the discs kept for picking only (#885)', async () => {
     const scene = catchScene();
     await boot('?bot=off');
-    const drawn = scene().children.filter((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh);
+    const drawn = scene().children.filter((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh && c.geometry.type !== 'SphereGeometry');
     expect(drawn.map((m) => [m.count, m.geometry.type])).toEqual([[91, 'CylinderGeometry'], [91, 'TorusGeometry']]);
     const { discs } = parts(scene());
     expect(drawn[0]!.material).toBe(discs[0]!.material);
     const camera = new THREE.Camera();
     expect(discs.some((d) => d.layers.test(camera.layers))).toBe(false); // the camera draws the instances, not the discs
+  });
+
+  it('draws the 14 shells and the 14 glass marbles with one instanced mesh each, where the marbles stand (#885)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    game.frame();
+    const { shells, glass } = drawn(scene());
+    const instanced = scene().children.filter((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh && c.visible && c.geometry.type === 'SphereGeometry');
+    expect(instanced.map((m) => [m.material, m.count])).toEqual(expect.arrayContaining([[shells[0]!.material, 14], [glass[0]!.material, 14]]));
+    expect(instanced).toHaveLength(2);
+    const camera = new THREE.Camera();
+    expect([...shells, ...glass].some((m) => m.layers.test(camera.layers))).toBe(false);
   });
 
   it('dresses the cells, the frame and the enemy shells in the loaded textures, and the glass', async () => {
