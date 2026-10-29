@@ -4,6 +4,7 @@ import * as THREE from 'three/webgpu';
 import { BOARD_CELLS, RADIUS, VANISHED, cellIndex } from './board';
 import { resetView, type View } from './camera';
 import { DECKS, LIGHT } from './light';
+import { DECK_ATMOSPHERES } from './roomloader';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
@@ -269,6 +270,18 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.currentBay).toBe(mockBay);
     expect((sr as unknown as { bayLights: THREE.Group | null }).bayLights).toBeDefined();
     sr.applyDeck('furnace');
+  });
+
+  it('recolours the bay lights on a deck change instead of making new ones (#846)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const bay = { scene: new THREE.Group(), materials: { deck: new THREE.MeshStandardMaterial(), bulkhead: new THREE.MeshStandardMaterial(), grate: new THREE.MeshStandardMaterial() } };
+    sr.mountBay(bay, 'mess');
+    const lights = sr.bayLights!;
+    const lamps = [...lights.children];
+    sr.applyDeck('furnace');
+    expect(sr.bayLights).toBe(lights);
+    expect(lights.children).toEqual(lamps);
+    expect((lights.children.find((l) => l.name === 'airlock lamp') as THREE.PointLight).color.getHex()).toBe(DECK_ATMOSPHERES.furnace.accentLightColor);
   });
 
   it('draws frame geometry and caches unchanged shapes', () => {

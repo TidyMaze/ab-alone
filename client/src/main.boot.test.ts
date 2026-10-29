@@ -829,6 +829,23 @@ it('keeps the bay lights when a setting redraws the props (#787)', async () => {
   expect(lights()).toBe(before);
 });
 
+it('disposes the props a setting replaces, so the settings never leak geometries or materials (#846)', async () => {
+  const game = await boot('?bot=off');
+  const { scene } = await drawn(game);
+  const props = scene.getObjectByName('console-screen')!.parent!;
+  const meshes = () => props.children.filter((o): o is THREE.Mesh => (o as THREE.Mesh).isMesh);
+  const old = meshes();
+  const spies = old.flatMap((m) => [vi.spyOn(m.geometry, 'dispose'), vi.spyOn(m.material as THREE.Material, 'dispose')]);
+  for (let i = 0; i < 3; i++) game.hook('__setTier', i % 2 ? 'high' : 'low');
+  expect(old.length).toBeGreaterThan(20);
+  expect(spies.every((spy) => spy.mock.calls.length > 0)).toBe(true); // everything the first look made is disposed
+  const standing = meshes();
+  const live = standing.flatMap((m) => [vi.spyOn(m.geometry, 'dispose'), vi.spyOn(m.material as THREE.Material, 'dispose')]);
+  game.hook('__setTier', 'low'); // the same look again
+  expect(live.every((spy) => spy.mock.calls.length > 0)).toBe(true);
+  expect(meshes()).toHaveLength(standing.length); // leaves the same number of props
+});
+
 it('honors query quality param and allows setting tier live (#655)', async () => {
   const game = await boot('?bot=off&quality=high');
   expect(document.body.dataset.tier).toBe('high');

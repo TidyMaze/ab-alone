@@ -6,6 +6,7 @@ import {
   applyDeckAtmosphere,
   applyPbrToMesh,
   createBayLights,
+  recolourBayLights,
   createPbrStandardMaterial,
   DECK_ATMOSPHERES,
   type DeckId,
@@ -303,5 +304,16 @@ describe('roomloader PBR pipeline', () => {
     // Overrides with deck-specific accent light
     const furnaceLights = createBayLights('furnace');
     expect(furnaceLights.children.length).toBe(lights.children.length);
+  });
+
+  it('recolours the lamps for another deck as a new set would be, keeping the same lights (#846)', () => {
+    const lights = createBayLights('mess');
+    const before = [...lights.children];
+    recolourBayLights(lights, 'furnace');
+    const fresh = createBayLights('furnace');
+    expect(lights.children).toEqual(before);
+    expect(lights.children.map((l) => (l as THREE.PointLight).color.getHex())).toEqual(
+      fresh.children.map((l) => (l as THREE.PointLight).color.getHex()),
+    );
   });
 });

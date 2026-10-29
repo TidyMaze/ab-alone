@@ -291,6 +291,15 @@ export function applyDeckAtmosphere(
   }
 }
 
+/** The deck's colours on the lamps that take them, in place (a deck change keeps the lights): same rule as createBayLights. */
+export function recolourBayLights(group: THREE.Group, deck: DeckId): void {
+  const conf = DECK_ATMOSPHERES[deck];
+  for (const lamp of group.children as THREE.PointLight[]) {
+    if (/^(north wall lamp|west wall)/.test(lamp.name)) lamp.color.set(conf.lightColor);
+    else if (/^(airlock|south wall)/.test(lamp.name)) lamp.color.set(conf.accentLightColor);
+  }
+}
+
 export function createBayLights(deck: DeckId): THREE.Group {
   const conf = DECK_ATMOSPHERES[deck];
   const group = new THREE.Group();
