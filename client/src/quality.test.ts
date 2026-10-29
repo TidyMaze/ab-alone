@@ -12,7 +12,6 @@ import {
   meshDetail,
   renderPixelRatio,
   nextPixelRatio,
-  antialiased,
   readFlatHud,
   readTranscript,
   readReducedMotion,
@@ -468,22 +467,6 @@ describe('nextPixelRatio, the adaptive resolution (#843)', () => {
   });
   it('reads the median: one long frame (a shader compile, a texture load) changes nothing', () => {
     expect(nextPixelRatio(1.5, [...frames(16, 29), 8000], 1)).toBe(1.5);
-  });
-});
-
-describe('antialiased, MSAA by rendered pixel (#844)', () => {
-  it('keeps MSAA while the render is under a ratio of 1.5, where jagged edges show on a 1x screen', () => {
-    expect(antialiased(1, 1)).toBe(true);
-    expect(antialiased(1.25, 1.25)).toBe(true);
-  });
-  it('keeps it when the browser stretches each drawn pixel over 2 screen pixels or more, as on a DPR-3 phone', () => {
-    expect(antialiased(3, 1.5)).toBe(true);
-    expect(antialiased(3, 1)).toBe(true);
-    expect(antialiased(2, 1)).toBe(true);
-  });
-  it('drops it on a Retina screen drawn at 1.5: the pixels are too small to show the edges, and 4 samples a pixel cost the most there', () => {
-    expect(antialiased(1.5, 1.5)).toBe(false);
-    expect(antialiased(2, 1.5)).toBe(false);
   });
 });
 

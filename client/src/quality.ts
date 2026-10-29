@@ -201,12 +201,6 @@ export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor:
   return median > SLOW_FRAME_MS ? Math.max(floor, ratio - RATIO_STEP) : ratio;
 }
 
-// MSAA by drawn pixel (#844): jagged edges show when a drawn pixel is big on the screen, so it takes the ratio the
-// canvas starts at, not the device's. Under 1.5 it is big on a 1x screen; at 2 screen pixels or more per drawn pixel the
-// browser stretches it, as on a DPR-3 phone drawn at 1.5. A Retina screen drawn at 1.5 is too fine to show edges, and 4
-// samples per pixel cost the most there. Fixed when the renderer is made: a later step down of the ratio keeps it.
-export const antialiased = (dpr: number, ratio: number): boolean => ratio < 1.5 || dpr / ratio >= 2;
-
 // Under automation (navigator.webdriver) we skip expensive effects like prefiltering and shadows (#459).
 export const isAutomation = (webdriver: boolean): boolean => webdriver;
 
