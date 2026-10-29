@@ -141,9 +141,16 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     expect(fat).toBeGreaterThan(300);
   });
 
+  // The Mess cells are brushed aluminium, ambientCG Metal051A (CC0), committed by hand: the generator leaves them out.
+  const deckFile = (name: string): Buffer => assets.get(name) ?? readFileSync(new URL(`../textures/${name}`, import.meta.url));
+  it('leaves the Mess cells to the committed Metal051A maps', () => {
+    expect(assets.has('deck-mess.png')).toBe(false);
+    expect(assets.has('deck-mess-normal.png')).toBe(false);
+  });
+
   // Task #401: each deck of docs/specs/world.md section 5 has its own albedo for the cells, with the shared roughness.
   describe('a texture set per deck (#401)', () => {
-    const albedo = (deck: string) => assets.get(`deck-${deck}.png`)!;
+    const albedo = (deck: string) => deckFile(`deck-${deck}.png`);
     // Mean relative luminance, its spread, and the mean red minus blue (warmth), over every pixel.
     const stats = (buf: Buffer) => {
       const { w, rows } = decode(buf);
@@ -180,17 +187,16 @@ describe('gen-assets', { timeout: 20_000 }, () => {
       }
     });
 
-    it('the laminate of the Mess and the wood of the Chapel are warm, the Bridge panel is the smoothest', () => {
-      expect(stats(albedo('mess')).warm).toBeGreaterThan(0);
+    it('the wood of the Chapel is warm, the Bridge panel is the smoothest', () => {
       expect(stats(albedo('chapel')).warm).toBeGreaterThan(0);
-      const spreads = DECK_NAMES.map((deck) => stats(albedo(deck)).spread);
+      const spreads = DECK_NAMES.filter((deck) => deck !== 'mess').map((deck) => stats(albedo(deck)).spread); // of the drawn decks
       expect(stats(albedo('bridge')).spread).toBe(Math.min(...spreads));
     });
   });
 
   // Task #440: each deck has its own generated normal map for the cells.
   describe('a normal map per deck (#440)', () => {
-    const normal = (deck: string) => assets.get(`deck-${deck}-normal.png`)!;
+    const normal = (deck: string) => deckFile(`deck-${deck}-normal.png`);
     const normalStats = (buf: Buffer) => {
       const { w, rows } = decode(buf);
       let sumR = 0, sumG = 0, sumB = 0, n = 0;
@@ -213,7 +219,7 @@ describe('gen-assets', { timeout: 20_000 }, () => {
         expect([w, h], deck).toEqual([256, 256]);
         const deckTotal =
           buf.length +
-          assets.get(`deck-${deck}.png`)!.length +
+          deckFile(`deck-${deck}.png`).length +
           assets.get('deck-roughness.png')!.length;
         expect(deckTotal, deck).toBeLessThanOrEqual(300 * 1024);
       }

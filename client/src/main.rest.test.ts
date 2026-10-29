@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { boot } from './test/harness';
+import { LIGHT_TUNING } from './lighttuning';
 
 // What the other main.*.test.ts files leave out of main.ts: a browser check asking for the next draw (#435), and a
 // deck whose own texture set did not load (#401, #440).
@@ -26,6 +28,93 @@ describe('main.ts, __drawNext', () => {
   });
 });
 
+describe('main.ts, ?lights', () => {
+  it('shows a power slider per light and neon tube, the key and the fill among them', async () => {
+    await boot('?bot=off&lights');
+    const names = [...document.querySelectorAll('#light-panel label')].map((l) => l.firstChild!.textContent!.trim());
+    expect(names).toEqual(expect.arrayContaining(['key', 'fill (ambient)', 'emergencyLight', 'corner-neon ×4', 'corner-neon light ×4']));
+  });
+
+  it.each([
+    [true, 3],
+    [false, 1],
+  ])('on WebGPU %s, lights a 7.5 m neon tube with %i lights (a row, culled per pixel; one without culling)', async (webgpu, count) => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off', { webgpu });
+    let lights = 0;
+    scene!.traverse((o) => void (o.name === 'corner-neon-nw light' && lights++));
+    expect(lights).toBe(count);
+  });
+
+  it('points the free camera at a light from its row in the panel', async () => {
+    const game = await boot('?bot=off&lights');
+    expect(game.hook('__freeCamActive')).toBe(false);
+    document.querySelector<HTMLButtonElement>('#light-panel button[aria-label="Point the camera at key"]')!.click();
+    expect(game.hook('__freeCamActive')).toBe(true);
+    expect(document.getElementById('free-cam')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('puts the bloom strength, radius and threshold last', async () => {
+    await boot('?bot=off&lights');
+    const bloom = [...document.querySelectorAll('#light-panel details')].at(-1)!;
+    expect([...bloom.querySelectorAll('label')].map((l) => l.firstChild!.textContent!.trim())).toEqual(['bloom radius', 'bloom strength', 'bloom threshold']);
+  });
+
+  it('has no bloom knobs when the bloom does not build', async () => {
+    vi.doMock('three/addons/tsl/display/BloomNode.js', () => ({
+      bloom: () => {
+        throw new Error('no bloom');
+      },
+    }));
+    await boot('?bot=off&lights');
+    vi.doUnmock('three/addons/tsl/display/BloomNode.js');
+    expect(document.querySelector('#light-panel')!.textContent).not.toContain('bloom');
+  });
+
+  it('has no panel without it', async () => {
+    await boot('?bot=off');
+    expect(document.getElementById('light-panel')).toBeNull();
+  });
+});
+
+describe('main.ts, the tuned lights', () => {
+  it('lights the room as tuned (lighttuning.ts), with or without the panel', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    expect((scene!.getObjectByName('key') as THREE.Light).intensity).toBe(LIGHT_TUNING.key);
+    expect(((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity).toBe(
+      LIGHT_TUNING['corner-neon'],
+    );
+    expect((scene!.getObjectByName('emergencyLight') as THREE.Light).intensity).toBe(LIGHT_TUNING.emergencyLight);
+  });
+});
+
+describe('main.ts, the room props', () => {
+  it('rounds the edges of the box props within their size', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    const column = scene!.getObjectByName('corner-neon-nw') as THREE.Mesh;
+    expect(column.geometry).toBeInstanceOf(RoundedBoxGeometry);
+    column.geometry.computeBoundingBox();
+    expect(column.geometry.boundingBox!.getSize(new THREE.Vector3()).toArray()).toEqual([0.14, 7.5, 0.14].map((v) => expect.closeTo(v)));
+  });
+});
+
 describe('main.ts, the deck textures', () => {
   type Mesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   /** The material of the cells main.ts draws, caught when it adds them to its scene: call before boot. */
@@ -47,6 +136,24 @@ describe('main.ts, the deck textures', () => {
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
     expect(name(cells().map)).toBe('deck-mess.ktx2');
     expect(name(cells().normalMap)).toBe('deck-mess-normal.ktx2');
+  });
+
+  it('the board plate wears the brushed Metal051A at a large scale, not the small floor tiles', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    const maps: THREE.Texture[] = [];
+    scene!.traverse((o) => {
+      const m = (o as Mesh).material;
+      if (m && !Array.isArray(m) && m.map) maps.push(m.map);
+    });
+    const plate = maps.filter((t) => t.name === 'board-albedo.ktx2');
+    expect(plate.length).toBeGreaterThan(0);
+    expect(plate.every((t) => t.repeat.x === 0.15 && t.repeat.y === 0.15)).toBe(true);
   });
 
   it('without its own set, a deck keeps the shared steel albedo and no normal map', async () => {

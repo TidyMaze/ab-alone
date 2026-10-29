@@ -615,3 +615,14 @@ body[data-reading] #log { visibility: visible; }
 }
 #replay-live { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 600px), (pointer: coarse) { #replay, #replay-bar button { min-height: 2.75rem; } }
+/* ?lights: a power slider per light and neon tube (lightpanel.ts), a tuning tool over the left of the scene. */
+#light-panel {
+  position: fixed; left: 1rem; top: 9rem; bottom: 5rem; z-index: 10; width: 18rem; overflow-y: auto; padding: 0.5rem;
+  display: flex; flex-direction: column; gap: 0.25rem; color: var(--text); background: var(--panel);
+  border: 1px solid var(--edge); font: 0.75rem/1.2 var(--ui);
+}
+#light-panel label { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 0.25rem; }
+#light-panel input { grid-column: 1; width: 100%; }
+#light-panel button { grid-column: 2; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; }
+#light-panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#light-panel summary { cursor: pointer; font-weight: 600; padding-block: 0.25rem; }

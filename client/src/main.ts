@@ -31,6 +31,11 @@ import { choirChips, drawChoirChips } from './choirchips';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
+import { applyTuning, lightPanel } from './lightpanel';
+import { LIGHT_TUNING } from './lighttuning';
+import { TUBE_SPACING, tubeLights } from './neonlight';
+import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
@@ -285,6 +290,11 @@ const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webg
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
 const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL });
 await renderer.init().catch(bootFailed);
+// The neon tubes' rows of short lights (neonlight.ts) cost little when each pixel only adds the lights that reach it:
+// clustered (Forward+) lighting, 4x the frame rate of a rect light per tube. It needs compute shaders, so WebGPU only:
+// on WebGL a tube gets one light.
+const clustered = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
+if (clustered) renderer.lighting = new ClusteredLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {
@@ -330,9 +340,10 @@ const [
   loadTexture('crack-decal.ktx2', false, false),
   deckMap(deckOf('local')), // a page opens at the Mess
   deckNormalMap(deckOf('local')),
-  loadTexture('pbr/deck-pbr-albedo.ktx2', true, true),
-  loadTexture('pbr/deck-pbr-roughness.ktx2', false, true),
-  loadTexture('pbr/deck-pbr-normal.ktx2', false, true),
+  // The board plate: brushed aluminium, ambientCG Metal051A (CC0), large swirls.
+  loadTexture('pbr/board-albedo.ktx2', true, true),
+  loadTexture('pbr/board-roughness.ktx2', false, true),
+  loadTexture('pbr/board-normal.ktx2', false, true),
   loadTexture('pbr/plate-albedo.ktx2', true, true),
   loadTexture('pbr/plate-roughness.ktx2', false, true),
   loadTexture('pbr/plate-normal.ktx2', false, true),
@@ -340,15 +351,15 @@ const [
 
 if (plateAlbedo) {
   plateAlbedo.wrapS = plateAlbedo.wrapT = THREE.RepeatWrapping;
-  plateAlbedo.repeat.set(0.5, 0.5);
+  plateAlbedo.repeat.set(0.15, 0.15);
 }
 if (plateRoughness) {
   plateRoughness.wrapS = plateRoughness.wrapT = THREE.RepeatWrapping;
-  plateRoughness.repeat.set(0.5, 0.5);
+  plateRoughness.repeat.set(0.15, 0.15);
 }
 if (plateNormal) {
   plateNormal.wrapS = plateNormal.wrapT = THREE.RepeatWrapping;
-  plateNormal.repeat.set(0.5, 0.5);
+  plateNormal.repeat.set(0.15, 0.15);
 }
 
 const sceneRenderer = new SceneRenderer({
@@ -471,13 +482,14 @@ function updateFreeCamCamera(): void {
   drawAsked = true;
 }
 
-function toggleFreeCam(enabled?: boolean): void {
+/** The free camera on (from where the camera is, facing `at`: the board's middle, or a light of ?lights) or off. */
+function toggleFreeCam(enabled?: boolean, at: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }): void {
   const shouldEnable = enabled !== undefined ? enabled : !freeCam.active;
   if (shouldEnable) {
     const curPos = sceneRenderer.camera.position;
-    const forwardX = -curPos.x;
-    const forwardY = -curPos.y;
-    const forwardZ = -curPos.z;
+    const forwardX = at.x - curPos.x;
+    const forwardY = at.y - curPos.y;
+    const forwardZ = at.z - curPos.z;
     const horizDist = Math.hypot(forwardX, forwardZ);
     const yaw = Math.atan2(-forwardX, -forwardZ);
     const pitch = Math.atan2(forwardY, Math.max(0.001, horizDist));
@@ -1529,6 +1541,22 @@ if (deckAlbedo && tier === 'high' && typeof document !== 'undefined') {
   }
 }
 
+// ?lights: a power slider per light and neon tube (lightpanel.ts), rebuilt when the props replace their lights.
+const lightsPanel = new URLSearchParams(location.search).has('lights') ? document.body.appendChild(document.createElement('div')) : null;
+// The bloom's knobs, tuned and in the panel like the lights.
+const bloomKnobs = ((b) =>
+  b
+    ? [
+        { name: 'bloom strength', uniform: b.strength, max: 3 },
+        { name: 'bloom radius', uniform: b.radius, max: 1 },
+        { name: 'bloom threshold', uniform: b.threshold, max: 3 },
+      ]
+    : [])(sceneRenderer.pipeline?.bloom);
+// The lights as tuned (lighttuning.ts), each time they are made again: here, and on the deck's change and the room.
+const refreshLights = (): void => {
+  applyTuning(sceneRenderer.scene, LIGHT_TUNING, bloomKnobs);
+  if (lightsPanel) lightPanel(sceneRenderer.scene, lightsPanel, (at) => toggleFreeCam(true, at), bloomKnobs);
+};
 drawProps = (): void => {
   propsGroup.clear();
   const sLights = spaceshipLights(deck);
@@ -1581,11 +1609,13 @@ drawProps = (): void => {
     const geom =
       def.type === 'cylinder'
         ? new THREE.CylinderGeometry(def.size[0], def.size[1], def.size[2], def.size[3])
-        : new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]);
+        : // Rounded edges, within the box: up to 5 cm, a fifth of its thinnest side, so a thin bar stays a bar.
+          new RoundedBoxGeometry(def.size[0], def.size[1], def.size[2], 2, Math.min(0.05, Math.min(...def.size) / 5));
 
     const mesh = new THREE.Mesh(geom, mat);
     if (screen) consoleScreen = mesh;
     if (def.id === 'log-recorder') recorder = mesh;
+    mesh.name = def.id; // a neon tube gets its ?lights slider by name
     if (!screen && def.id !== 'log-recorder' && !def.id.includes('neon')) {
       mesh.visible = !currentBay;
     }
@@ -1637,6 +1667,9 @@ drawProps = (): void => {
     }
     propsGroup.add(mesh);
   }
+  // Each neon tube lights the room for real: a row of lights along it (neonlight.ts), one slider in ?lights.
+  for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
+    propsGroup.add(...tubeLights(tube as THREE.Mesh, clustered ? TUBE_SPACING : Infinity));
   const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
   emergencyLight.position.set(...sLights.emergency.position);
   const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
@@ -1661,7 +1694,7 @@ drawProps = (): void => {
   viewportRimLight.position.set(17.0, 4.6, 0);
   const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.25, 6.0);
   kioskGreenLight.position.set(-10.2, 2.5, -5.8);
-  propsGroup.add(
+  const lights = {
     emergencyLight,
     consoleBounceLight,
     pedestalGlowLight,
@@ -1674,24 +1707,27 @@ drawProps = (): void => {
     airlockSodiumLight,
     viewportRimLight,
     kioskGreenLight,
-  );
+  };
+  for (const [name, light] of Object.entries(lights)) light.name = name; // the ?lights sliders' names
+  propsGroup.add(...Object.values(lights));
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
     if (sceneRenderer.bayLights) propsGroup.add(sceneRenderer.bayLights); // propsGroup.clear() took them out (#787)
   }
+  refreshLights();
 };
 let currentBay: SpaceshipBayAssets | null = null;
 const mountBay = (bay: SpaceshipBayAssets | null): void => {
   currentBay = bay;
   drawProps();
   sceneRenderer.mountBay(bay, deck);
+  refreshLights(); // the room's lamps came with it
   if (currentBay) {
     document.body.dataset.bay = 'ready'; // the room is complete: the browser checks of a still scene wait for it (#661)
   }
 };
-(window as unknown as Record<string, unknown>).__mountBay = mountBay;
-drawProps();
+(window as unknown as Record<string, unknown>).__mountBay = mountBay;drawProps();
 void loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader).then(mountBay);
 
 let frame: FrameShape | null = null;

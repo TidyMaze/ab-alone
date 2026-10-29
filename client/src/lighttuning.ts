@@ -1,0 +1,43 @@
+/**
+ * The lights' power and the bloom as tuned with ?lights (2026-10-29): by family, the panel's names (lightpanel.ts
+ * `family`), over what the code and each deck set. The lamps and the neon tubes light the room; the key, the fill and
+ * the accents are off, the bloom nearly so. Applied when the lights are made again (main.ts), on every deck.
+ */
+export const LIGHT_TUNING: Readonly<Record<string, number>> = {
+  'fill (ambient)': 0,
+  key: 0,
+  'cold rim': 0,
+  'warm accent': 0,
+  'corner-neon': 110,
+  'neon-airlock': 110,
+  'neon-column': 110,
+  'neon-gantry': 110,
+  'neon-observation': 110,
+  'pedestal-neon': 110,
+  'corner-neon light': 100,
+  'neon-airlock light': 100,
+  'neon-column light': 100,
+  'neon-gantry light': 100,
+  'neon-observation light': 100,
+  neonLight: 100,
+  neonWallLight: 100,
+  'north wall neon': 100,
+  'pedestal-neon light': 100,
+  airlockSodiumLight: 100,
+  consoleBounceLight: 0,
+  emergencyLight: 100,
+  kioskGreenLight: 100,
+  pedestalGlowLight: 0,
+  viewportRimLight: 100,
+  'airlock lamp': 100,
+  'east wall flood': 100,
+  'north wall lamp': 100,
+  'south wall flood': 100,
+  'south wall lamp': 100,
+  'viewport lamp': 100,
+  'west wall flood': 100,
+  'west wall lamp': 100,
+  'bloom strength': 0.06,
+  'bloom radius': 0.008,
+  'bloom threshold': 3,
+};

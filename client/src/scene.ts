@@ -14,6 +14,8 @@ import { ROOM_SURFACE, type StructuralPart } from './room';
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
 export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
+/** The radius of the rounded edges of the board's plate and rim. */
+const FRAME_BEVEL = 0.03;
 
 export type NotchRow = NonNullable<ReturnType<typeof notchRow>>;
 
@@ -51,7 +53,7 @@ export function createBloomPipeline(
   renderer: THREE.WebGPURenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
-): THREE.RenderPipeline | null {
+): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> }) | null {
   try {
     const pipeline = new THREE.RenderPipeline(renderer);
     const scenePass = pass(scene, camera);
@@ -59,7 +61,8 @@ export function createBloomPipeline(
     const bloomNode = bloom(colorNode, 0.175, 0.15, 1);
     bloomNode.setResolutionScale(0.5);
     pipeline.outputNode = colorNode.add(bloomNode);
-    return pipeline;
+    return Object.assign(pipeline, { bloom: bloomNode }); // its strength, radius and threshold tuned with ?lights
+
   } catch {
     return null;
   }
@@ -70,7 +73,7 @@ export class SceneRenderer {
   readonly camera: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGPURenderer;
   readonly backend: 'WebGPU' | 'WebGL2';
-  readonly pipeline: THREE.RenderPipeline | null = null;
+  readonly pipeline: ReturnType<typeof createBloomPipeline> = null;
 
   readonly ambient: THREE.AmbientLight;
   readonly lamp: THREE.DirectionalLight;
@@ -137,7 +140,9 @@ export class SceneRenderer {
     this.frameCamera(width, height);
 
     this.ambient = new THREE.AmbientLight();
+    this.ambient.name = 'fill (ambient)';
     this.lamp = new THREE.DirectionalLight();
+    this.lamp.name = 'key';
     this.lamp.castShadow = true;
     this.lamp.shadow.mapSize.set(LIGHT.key.shadow.mapSize, LIGHT.key.shadow.mapSize);
     this.lamp.shadow.camera.near = LIGHT.key.shadow.camera.near;
@@ -152,7 +157,9 @@ export class SceneRenderer {
 
     this.coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
     this.coldRim.position.set(...LIGHT.accents.rim.position);
+    this.coldRim.name = 'cold rim';
     this.warmLight = new THREE.PointLight(LIGHT.accents.warm.color, LIGHT.accents.warm.intensity, LIGHT.accents.warm.distance);
+    this.warmLight.name = 'warm accent';
     this.warmLight.position.set(...LIGHT.accents.warm.position);
 
     this.decorMaterial = new THREE.MeshStandardMaterial({
@@ -189,15 +196,15 @@ export class SceneRenderer {
 
     if (options.plateAlbedo) {
       options.plateAlbedo.wrapS = options.plateAlbedo.wrapT = THREE.RepeatWrapping;
-      options.plateAlbedo.repeat.set(0.5, 0.5);
+      options.plateAlbedo.repeat.set(0.15, 0.15);
     }
     if (options.plateRoughness) {
       options.plateRoughness.wrapS = options.plateRoughness.wrapT = THREE.RepeatWrapping;
-      options.plateRoughness.repeat.set(0.5, 0.5);
+      options.plateRoughness.repeat.set(0.15, 0.15);
     }
     if (options.plateNormal) {
       options.plateNormal.wrapS = options.plateNormal.wrapT = THREE.RepeatWrapping;
-      options.plateNormal.repeat.set(0.5, 0.5);
+      options.plateNormal.repeat.set(0.15, 0.15);
     }
 
     const plateMaterial = new THREE.MeshStandardMaterial(
@@ -392,8 +399,19 @@ export class SceneRenderer {
     this.fogRadius = next.radius;
 
     const flat = (points: Point[]): THREE.Vector2[] => points.map((p) => new THREE.Vector2(p.x, -p.z));
+    // Rounded edges catch the light where square ones cut it: the bevel stays inside the slab's outline (offset) and
+    // height (a thinner extrusion), so the cells and the marbles sit where they did.
     const slab = (shape: THREE.Shape, top: number, depth: number): THREE.ExtrudeGeometry =>
-      new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, top - depth, 0);
+      new THREE.ExtrudeGeometry(shape, {
+        depth: depth - 2 * FRAME_BEVEL,
+        bevelEnabled: true,
+        bevelThickness: FRAME_BEVEL,
+        bevelSize: FRAME_BEVEL,
+        bevelOffset: -FRAME_BEVEL,
+        bevelSegments: 2,
+      })
+        .rotateX(-Math.PI / 2)
+        .translate(0, top - depth + FRAME_BEVEL, 0);
 
     const plateShape = new THREE.Shape(flat(next.inner));
     for (const h of next.holes) plateShape.holes.push(new THREE.Path().absarc(h.x, -h.z, FRAME.hole, 0, 2 * Math.PI, true));
