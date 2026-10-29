@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACCENTS, CONVERTED, CORE, type Accent, coreLevel, GLASS, HEAT, pulseAt, SEAT_GLYPHS, SEAT_INK, SEATS, SHELL } from './marbles';
+import { ACCENTS, CORE, type Accent, GLASS, HEAT, pulseAt, SEAT_GLYPHS, SEAT_INK, SEATS, SHELL } from './marbles';
 import { PALETTE_DEFS, PALETTES } from './palettes';
 import { SAFE_MAX_RATE } from './safe';
 import { SKINS } from './skins';
@@ -49,32 +49,6 @@ describe('marble looks, world.md section 5', () => {
   it.each(Object.keys(SIMULATIONS))('the core stands out from the shell at 3:1 under %s simulation (#26)', (name) => {
     const m = SIMULATIONS[name]!;
     expect(contrast(simulate(m, channels(CORE.color)), simulate(m, channels(SHELL.color)))).toBeGreaterThanOrEqual(3);
-  });
-});
-
-// #506: the cyan core dims one step per marble lost (world.md section 5), never fully dark.
-describe('the dimming core', () => {
-  it('is fully lit while no marble is lost', () => {
-    expect(coreLevel(0, 6)).toBe(1);
-  });
-
-  it('dims one even step per marble lost, down to its floor at the losing marble', () => {
-    const levels = [0, 1, 2, 3, 4, 5, 6].map((lost) => coreLevel(lost, 6));
-    const steps = levels.slice(1).map((level, i) => levels[i]! - level);
-    for (const step of steps) expect(step).toBeCloseTo(steps[0]!, 10);
-    expect(steps[0]).toBeGreaterThan(0);
-    expect(levels[6]).toBe(CORE.floor);
-  });
-
-  it('never goes fully dark', () => {
-    expect(CORE.floor).toBeGreaterThan(0);
-    expect(coreLevel(9, 6)).toBe(CORE.floor);
-  });
-
-  it('the dimmest core, seen through the glass, still stands out from the shell at 3:1 (#344)', () => {
-    const [core, glass] = [channels(CORE.color), channels(GLASS.color)];
-    const dim = core.map((v, i) => CORE.floor * v + (1 - CORE.floor) * glass[i]!);
-    expect(contrast(dim, channels(SHELL.color))).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -166,27 +140,6 @@ describe('boss accents', () => {
         expect(ratio, `${a.name} on ${shell.toString(16)}`).toBeGreaterThanOrEqual(3);
       }
     }
-  });
-});
-
-// #508: a marble The Chaplain converted is half glass, half ridged shell (world.md section 5): the shell up to its
-// middle, the player's glass above with the core dimmed but still seen. The dimmed core, seen through the glass, reads
-// 3:1 on the deck and on the shell half in every palette, a colour-blind palette under its own simulation.
-describe('the converted look', () => {
-  it('dims the core, never as far as dark', () => {
-    expect(CONVERTED.core).toBeGreaterThan(0);
-    expect(CONVERTED.core).toBeLessThan(1);
-  });
-
-  const deck = channels(0x0b0d0f); // the near-black base, as for the palettes (#381)
-  it.each(PALETTES)('its dimmed core reads 3:1 on the deck and on the shell in the %s palette', (id) => {
-    const { core, glass, shell } = PALETTE_DEFS[id];
-    const m = SIMULATIONS[id];
-    const see = (c: number[]): number[] => (m ? simulate(m, c) : c);
-    const [lit, behind] = [see(channels(core)), see(channels(glass))];
-    const dim = lit.map((v, i) => CONVERTED.core * v + (1 - CONVERTED.core) * behind[i]!);
-    expect(contrast(dim, see(deck))).toBeGreaterThanOrEqual(3);
-    expect(contrast(dim, see(channels(shell)))).toBeGreaterThanOrEqual(3);
   });
 });
 

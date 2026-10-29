@@ -36,7 +36,7 @@ function drawn(scene: THREE.Scene) {
   const liftGroups = marbleGroup.children.filter((c) => c.name === 'door-lift');
   const liftChildren = liftGroups.flatMap((g) => g.children.filter((c): c is Mesh => c instanceof THREE.Mesh));
   return {
-    discs: meshes.filter((m) => m.geometry instanceof THREE.CylinderGeometry && m.visible).length,
+    discs: meshes.filter((m) => m.geometry instanceof THREE.CylinderGeometry && !(m instanceof THREE.InstancedMesh) && m.visible).length,
     glass: directMarbles.filter((m) => m.material instanceof THREE.MeshPhysicalMaterial),
     shells: directMarbles.filter((m) => m.geometry instanceof THREE.SphereGeometry && !(m.material instanceof THREE.MeshPhysicalMaterial)),
     glyphs: marbleGroup.children.filter((c) => c.name.startsWith('door-')).length,

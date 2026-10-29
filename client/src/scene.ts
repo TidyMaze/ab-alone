@@ -69,6 +69,19 @@ export function createBloomPipeline(
   }
 }
 
+/**
+ * The game's scene: a hidden child keeps its last matrices until it is shown, since nothing draws it. The hidden battle
+ * royale arena alone is 434 meshes, a fifth of a phone's frame recomputed for nothing (#885).
+ */
+class DrawnScene extends THREE.Scene {
+  override updateMatrixWorld(): void {
+    this.updateMatrix(); // the scene itself never moves
+    this.matrixWorld.copy(this.matrix);
+    this.matrixWorldNeedsUpdate = false;
+    for (const child of this.children) if (child.visible) child.updateMatrixWorld(true);
+  }
+}
+
 export class SceneRenderer {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
@@ -124,7 +137,7 @@ export class SceneRenderer {
     const b = (this.renderer.backend as { isWebGPUBackend?: boolean } | undefined)?.isWebGPUBackend;
     this.backend = b ? 'WebGPU' : 'WebGL2';
 
-    this.scene = new THREE.Scene();
+    this.scene = new DrawnScene();
     this.scene.name = 'abalone-scene';
     this.scene.background = options.backdrop ?? new THREE.Color(COLORS.base);
     this.scene.environmentIntensity = LIGHT.environment.intensity;

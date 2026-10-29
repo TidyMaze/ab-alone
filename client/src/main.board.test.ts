@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { IDBFactory } from 'fake-indexeddb';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { encodeMove, groupTargets, moveForClick, parseMoves, type Axial } from './board';
@@ -37,7 +36,7 @@ function parts(scene: THREE.Scene) {
   const [plate, near, far] = meshes.filter((m) => m.geometry instanceof THREE.ExtrudeGeometry);
   const at = scene.children.indexOf(far!);
   const [notches, tally1, tally2, marbles, ghosts] = scene.children.slice(at + 1, at + 6) as THREE.Group[];
-  const discs = meshes.filter((m) => m.geometry instanceof THREE.CylinderGeometry);
+  const discs = meshes.filter((m) => m.geometry instanceof THREE.CylinderGeometry && !(m instanceof THREE.InstancedMesh));
   const spheres = (group: THREE.Object3D): Mesh[] =>
     group.children.filter((c): c is Mesh => c instanceof THREE.Mesh && c.geometry instanceof THREE.SphereGeometry);
   return {
@@ -114,7 +113,18 @@ describe('main.ts board and HUD', () => {
     expect(scene().children.some((c) => c instanceof THREE.Group && c.children.length > 0 && c.children.every((m) => m.position.z === -23.2))).toBe(false);
   });
 
-  it('dresses the cells, the frame and the enemy shells in the loaded textures, the glass with its core', async () => {
+  it('draws the 91 cells and their bevels with 2 instanced meshes, the discs kept for picking only (#885)', async () => {
+    const scene = catchScene();
+    await boot('?bot=off');
+    const drawn = scene().children.filter((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh);
+    expect(drawn.map((m) => [m.count, m.geometry.type])).toEqual([[91, 'CylinderGeometry'], [91, 'TorusGeometry']]);
+    const { discs } = parts(scene());
+    expect(drawn[0]!.material).toBe(discs[0]!.material);
+    const camera = new THREE.Camera();
+    expect(discs.some((d) => d.layers.test(camera.layers))).toBe(false); // the camera draws the instances, not the discs
+  });
+
+  it('dresses the cells, the frame and the enemy shells in the loaded textures, and the glass', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     await game.settle(); // the skins' maps load after the first frame
@@ -143,7 +153,7 @@ describe('main.ts board and HUD', () => {
     expect(leather.map!.repeat.toArray()).toEqual([tile, tile / 2]);
     expect(glass[0]!.material.map?.name).toBe('skin-Marble025-albedo.ktx2');
     expect(shells[0]!.children).toHaveLength(0);
-    expect(glass[0]!.children).toHaveLength(1); // its cyan core, inside the opaque sphere
+    expect(glass[0]!.children).toHaveLength(0); // no core: the opaque sphere would hide it (#885)
   });
 
   it('wears every map its asset ships on each of the 20 skins, in its own colours, opaque', async () => {
@@ -325,31 +335,12 @@ describe('main.ts board and HUD', () => {
     expect(white().material).toBe(marble);
   });
 
-  it('dims the cyan core a step per marble lost, the same after a reload, never dark, full on a new game (#506)', async () => {
-    const indexedDB = new IDBFactory();
+  it('puts no core in the glass marbles: their opaque skin hides it, and each was a draw call (#885)', async () => {
     const scene = catchScene();
-    const game = await boot('?nodes=100', { indexedDB });
-    const core = (): THREE.Material => (drawn(scene()).glass[0]!.children[0] as Mesh).material;
-    expect(document.body.dataset.core).toBe('1.00');
-    expect(core().opacity).toBe(1);
-    await game.hook<Promise<number>>('__playTurns', 20, [4]); // the player marches one way, the bot pushes two off
-    expect(game.hud()).toContain('Black ejected 2/6');
-    expect(document.body.dataset.core).toBe('0.80');
-    expect(core().opacity).toBeCloseTo(0.8, 10);
-    step(game); // a move of the player's own, saved with the hook's plies before it
-    await game.settle();
-    const again = await boot('?nodes=100', { indexedDB });
-    expect(again.hook('__plies')).toBe(42);
-    expect(again.hud()).toContain('Black ejected 3/6'); // the bot's reply pushed one more off
-    expect(document.body.dataset.core).toBe('0.70');
-    expect(core().opacity).toBeCloseTo(0.7, 10);
-    await again.hook<Promise<number>>('__playTurns', 10, [4]); // three more off: the game is lost
-    expect(again.hud()).toContain('Black ejected 6/6');
-    expect(document.body.dataset.core).toBe('0.40');
-    document.getElementById('new-game')!.click();
-    document.getElementById('new-game')!.click(); // confirmed
-    expect(document.body.dataset.core).toBe('1.00');
-    expect(core().opacity).toBe(1);
+    await boot('?nodes=100');
+    const { glass } = drawn(scene());
+    expect(glass.length).toBeGreaterThan(0);
+    for (const marble of glass) expect(marble.children).toHaveLength(0);
   });
 
   it('draws the frame round the board and lights the rim at the end of the side to move', async () => {
