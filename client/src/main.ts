@@ -191,6 +191,8 @@ import {
   readUiScale,
   hasReflections,
   meshDetail,
+  nextPixelRatio,
+  antialiased,
   renderPixelRatio,
   writeClearBoard,
   writeFlatHud,
@@ -288,7 +290,7 @@ const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webg
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
-const renderer = new THREE.WebGPURenderer({ antialias: true, forceWebGL });
+const renderer = new THREE.WebGPURenderer({ antialias: antialiased(devicePixelRatio), forceWebGL });
 await renderer.init().catch(bootFailed);
 // The neon tubes' rows of short lights (neonlight.ts) cost little when each pixel only adds the lights that reach it:
 // clustered (Forward+) lighting, 4x the frame rate of a rect light per tube. It needs compute shaders, so WebGPU only:
@@ -575,6 +577,27 @@ function updateParticles(): void {
   sceneRenderer.updateParticles(tier, clear, reducedMotion(), navigator.webdriver, forceParticles, deck);
 }
 
+// The adaptive resolution (#843): the look and a new window size set the tier's pixel ratio, then a player's slow
+// frames step it down (quality.ts nextPixelRatio), every RATIO_FRAMES frames. Shown on the page for the tests.
+const RATIO_FRAMES = 30;
+let pixelRatio = 1;
+let frameTimes: number[] = [];
+let lastFrame = performance.now();
+function setPixelRatio(ratio: number): void {
+  pixelRatio = ratio;
+  frameTimes = [];
+  renderer.setPixelRatio(ratio);
+  document.body.dataset.ratio = String(ratio);
+}
+function adaptResolution(now: number): void {
+  frameTimes.push(now - lastFrame);
+  lastFrame = now;
+  if (frameTimes.length < RATIO_FRAMES) return;
+  const next = nextPixelRatio(pixelRatio, frameTimes, Math.min(devicePixelRatio, 1));
+  if (next !== pixelRatio) setPixelRatio(next);
+  else frameTimes = [];
+}
+
 // How many times the look was rebuilt: an orbit never rebuilds it (bug #475, e2e/camera.spec.ts).
 let looks = 0;
 let pulsing = false;
@@ -587,7 +610,7 @@ let pulsing = false;
 function applyLook(): void {
   looks++;
   updateFog();
-  renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
+  setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
   const shadowConf = shadowSettings(tier, isAutomation(navigator.webdriver), forceShadows);
   renderer.shadowMap.enabled = shadowConf.enabled;
   renderer.shadowMap.type = shadowConf.soft ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
@@ -3357,7 +3380,7 @@ freeCamBtn.disabled = false;
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
   frameCamera();
-  renderer.setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
+  setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
   renderer.setSize(innerWidth, innerHeight);
   applyView(); // the reader fits the screen to the new window
 });
@@ -4578,6 +4601,7 @@ renderer.setAnimationLoop((now) => {
       updateFreeCamCamera();
     }
   }
+  if (!navigator.webdriver) adaptResolution(now);
   if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   sceneRenderer.render();
   draws++;

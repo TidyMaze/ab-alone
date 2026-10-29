@@ -184,14 +184,28 @@ export function meshDetail(tier: Tier): MeshDetail {
 }
 
 // On mobile / low tier the canvas renders capped at 1.0 DPR: WebGL2 fills cost by pixels (#424).
-// Even on high tier, DPR is capped at 2.0 to avoid 3x/4x retina waste.
+// The high tier caps at 1.5: a full-screen Retina window at 2 renders 3840×2160 and drew 10 FPS (#843).
 // Under automation the canvas renders at half DPR (#349).
 const AUTOMATED_PIXEL_RATIO = 0.5;
 export const renderPixelRatio = (dpr: number, automated: boolean, tier: Tier = 'high'): number => {
   if (automated) return Math.min(dpr, AUTOMATED_PIXEL_RATIO);
   if (tier === 'low') return Math.min(dpr, 1.0);
-  return Math.min(dpr, 2.0);
+  return Math.min(dpr, 1.5);
 };
+
+// The adaptive resolution (#843): while the median frame of the last ones takes more than 20 ms (under 50 FPS), the
+// pixel ratio steps down a quarter, never under `floor`. The median, so one long frame (a shader compile, a texture
+// load) changes nothing. It never steps back up: with vsync a fast frame and a frame with room to spare look the same.
+const SLOW_FRAME_MS = 20;
+const RATIO_STEP = 0.25;
+export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor: number): number {
+  const median = [...frameMs].sort((a, b) => a - b)[frameMs.length >> 1]!;
+  return median > SLOW_FRAME_MS ? Math.max(floor, ratio - RATIO_STEP) : ratio;
+}
+
+// MSAA by screen (#844): from a device ratio of 1.5 the pixels are too small to show jagged edges, and 4 samples per
+// pixel cost the most on these screens. Fixed when the renderer is made.
+export const antialiased = (dpr: number): boolean => dpr < 1.5;
 
 // Under automation (navigator.webdriver) we skip expensive effects like prefiltering and shadows (#459).
 export const isAutomation = (webdriver: boolean): boolean => webdriver;
