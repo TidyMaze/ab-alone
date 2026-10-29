@@ -221,7 +221,7 @@ describe('the renderer and its textures', () => {
 
     it('drops MSAA on a Retina screen drawn at 1.5 (#844)', async () => {
       vi.stubGlobal('devicePixelRatio', 2);
-      const booting = boot('?bot=off', { webdriver: false });
+      const booting = boot('?bot=off&quality=low', { webdriver: false }); // low: no reflections, the stub has no PMREM
       const { options } = renderer();
       await booting;
       expect(options).toEqual([{ antialias: false, forceWebGL: false }]);

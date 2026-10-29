@@ -183,15 +183,13 @@ export function meshDetail(tier: Tier): MeshDetail {
     : { discSegments: 32, marbleWidthSegments: 32, marbleHeightSegments: 16 };
 }
 
-// On mobile / low tier the canvas renders capped at 1.0 DPR: WebGL2 fills cost by pixels (#424).
-// The high tier caps at 1.5: a full-screen Retina window at 2 renders 3840×2160 and drew 10 FPS (#843).
+// Every tier caps the canvas at 1.5: a full-screen Retina window at 2 renders 3840×2160 and drew 10 FPS (#843), and a
+// phone capped at 1.0 (#424) stretched each drawn pixel 3 times on a DPR-3 screen, a blur. The adaptive resolution
+// below steps down when a phone is too slow for it.
 // Under automation the canvas renders at half DPR (#349).
 const AUTOMATED_PIXEL_RATIO = 0.5;
-export const renderPixelRatio = (dpr: number, automated: boolean, tier: Tier = 'high'): number => {
-  if (automated) return Math.min(dpr, AUTOMATED_PIXEL_RATIO);
-  if (tier === 'low') return Math.min(dpr, 1.0);
-  return Math.min(dpr, 1.5);
-};
+export const renderPixelRatio = (dpr: number, automated: boolean): number =>
+  Math.min(dpr, automated ? AUTOMATED_PIXEL_RATIO : 1.5);
 
 // The adaptive resolution (#843): while the median frame of the last ones takes more than 20 ms (under 50 FPS), the
 // pixel ratio steps down a quarter, never under `floor`. The median, so one long frame (a shader compile, a texture
@@ -203,9 +201,11 @@ export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor:
   return median > SLOW_FRAME_MS ? Math.max(floor, ratio - RATIO_STEP) : ratio;
 }
 
-// MSAA by screen (#844): from a device ratio of 1.5 the pixels are too small to show jagged edges, and 4 samples per
-// pixel cost the most on these screens. Fixed when the renderer is made.
-export const antialiased = (dpr: number): boolean => dpr < 1.5;
+// MSAA by drawn pixel (#844): jagged edges show when a drawn pixel is big on the screen, so it takes the ratio the
+// canvas starts at, not the device's. Under 1.5 it is big on a 1x screen; at 2 screen pixels or more per drawn pixel the
+// browser stretches it, as on a DPR-3 phone drawn at 1.5. A Retina screen drawn at 1.5 is too fine to show edges, and 4
+// samples per pixel cost the most there. Fixed when the renderer is made: a later step down of the ratio keeps it.
+export const antialiased = (dpr: number, ratio: number): boolean => ratio < 1.5 || dpr / ratio >= 2;
 
 // Under automation (navigator.webdriver) we skip expensive effects like prefiltering and shadows (#459).
 export const isAutomation = (webdriver: boolean): boolean => webdriver;

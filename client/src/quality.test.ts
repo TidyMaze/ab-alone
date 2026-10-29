@@ -435,14 +435,13 @@ describe('tier storage', () => {
 
 describe('renderPixelRatio (#424)', () => {
   it('gives a phone up to 1.5 like any player: at 1 a DPR-3 screen stretched every drawn pixel 3 times, a blur', () => {
-    expect(renderPixelRatio(2, false, 'low')).toBe(1.5);
-    expect(renderPixelRatio(3, false, 'low')).toBe(1.5);
-    expect(renderPixelRatio(0.8, false, 'low')).toBe(0.8);
+    expect(renderPixelRatio(3, false)).toBe(1.5);
+    expect(renderPixelRatio(0.8, false)).toBe(0.8);
   });
-  it('gives high-tier players up to 1.5 DPR: a full-screen Retina window at 2 drew 10 FPS (#843)', () => {
-    expect(renderPixelRatio(1, false, 'high')).toBe(1);
-    expect(renderPixelRatio(2, false, 'high')).toBe(1.5);
-    expect(renderPixelRatio(3, false, 'high')).toBe(1.5);
+  it('caps every player at 1.5 DPR: a full-screen Retina window at 2 drew 10 FPS (#843)', () => {
+    expect(renderPixelRatio(1, false)).toBe(1);
+    expect(renderPixelRatio(2, false)).toBe(1.5);
+    expect(renderPixelRatio(3, false)).toBe(1.5);
   });
   it('renders at half the pixels under automation, so software WebGL costs less per frame', () => {
     expect(renderPixelRatio(1, true)).toBe(0.5);

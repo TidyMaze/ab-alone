@@ -125,8 +125,8 @@ deck has a lighting preset (data, not code).
 
 | Tier | Backend | Contents |
 |---|---|---|
-| Full | WebGPU / desktop high tier | Whole chain, PMREM reflections, 32-segment discs & 32x16 spheres, DPR up to 1.5, stepped down a quarter (floor 1.0) while the median frame takes over 20 ms (#843), MSAA only under a device ratio of 1.5, bloom blurred at quarter resolution (#844) |
-| Reduced | WebGL2 fallback, mobile or user choice | Fog, DPR capped at 1.0 (#424), 16-segment discs & 16x12 spheres, no PMREM reflections, fewer dynamic lights |
+| Full | WebGPU / desktop high tier | Whole chain, PMREM reflections, 32-segment discs & 32x16 spheres, DPR up to 1.5, stepped down a quarter (floor 1.0) while the median frame takes over 20 ms (#843), MSAA only when a drawn pixel shows jagged edges: a ratio under 1.5, or each drawn pixel stretched over 2 screen pixels or more as on a phone (#844), bloom blurred at quarter resolution (#844) |
+| Reduced | WebGL2 fallback, mobile or user choice | Fog, DPR up to 1.5 like the full chain, stepped down by the same adaptive resolution (#843), 16-segment discs & 16x12 spheres, no PMREM reflections, fewer dynamic lights |
 | Clear board | any | No fog, no post chain, flat lighting (SPEC section 5 toggle, also the accessibility mode), a setting in the menu behind the settings cog (#277) |
 
 Tier is picked at start from a one-frame benchmark and `prefers-reduced-motion`, always

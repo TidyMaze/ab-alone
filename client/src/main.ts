@@ -290,7 +290,10 @@ const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webg
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
-const renderer = new THREE.WebGPURenderer({ antialias: antialiased(devicePixelRatio), forceWebGL });
+const renderer = new THREE.WebGPURenderer({
+  antialias: antialiased(devicePixelRatio, renderPixelRatio(devicePixelRatio, navigator.webdriver)),
+  forceWebGL,
+});
 await renderer.init().catch(bootFailed);
 // The neon tubes' rows of short lights (neonlight.ts) cost little when each pixel only adds the lights that reach it:
 // clustered (Forward+) lighting, 4x the frame rate of a rect light per tube. It needs compute shaders, so WebGPU only:
@@ -577,7 +580,7 @@ function updateParticles(): void {
   sceneRenderer.updateParticles(tier, clear, reducedMotion(), navigator.webdriver, forceParticles, deck);
 }
 
-// The adaptive resolution (#843): the look and a new window size set the tier's pixel ratio, then a player's slow
+// The adaptive resolution (#843): the look and a new window size set the pixel ratio, then a player's slow
 // frames step it down (quality.ts nextPixelRatio), every RATIO_FRAMES frames. Shown on the page for the tests.
 const RATIO_FRAMES = 30;
 let pixelRatio = 1;
@@ -610,7 +613,7 @@ let pulsing = false;
 function applyLook(): void {
   looks++;
   updateFog();
-  setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
+  setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
   const shadowConf = shadowSettings(tier, isAutomation(navigator.webdriver), forceShadows);
   renderer.shadowMap.enabled = shadowConf.enabled;
   renderer.shadowMap.type = shadowConf.soft ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
@@ -3380,7 +3383,7 @@ freeCamBtn.disabled = false;
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
   frameCamera();
-  setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver, tier));
+  setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
   renderer.setSize(innerWidth, innerHeight);
   applyView(); // the reader fits the screen to the new window
 });
