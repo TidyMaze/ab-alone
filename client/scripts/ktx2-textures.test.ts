@@ -66,7 +66,9 @@ describe('settings', () => {
   });
 
   it('encodes a data map in ETC1S, linear', () => {
-    for (const file of ['deck-roughness.png', 'crack-decal.png', 'pbr/grate-roughness.png', 'pbr/grate-displacement.png']) {
+    // `deck-mess-roughness.png` starts like the Mess albedo `deck-mess.png`, and is not a colour map.
+    const data = ['deck-roughness.png', 'deck-mess-roughness.png', 'crack-decal.png', 'pbr/grate-roughness.png', 'pbr/grate-displacement.png'];
+    for (const file of [...data, 'pbr/board-metalness.jpg', 'pbr/grate-metalness.jpg', 'pbr/deck-pbr-ao.jpg', 'pbr/bulkhead-ao.jpg']) {
       expect(settings(file)).toEqual({ ...common, isUASTC: false, isPerceptual: false, isSetKTX2SRGBTransferFunc: false });
     }
   });

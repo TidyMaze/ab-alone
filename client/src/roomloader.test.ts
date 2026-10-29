@@ -43,6 +43,24 @@ describe('roomloader PBR pipeline', () => {
     expect(mat.displacementScale).toBe(0.08);
   });
 
+  it('adds the AO map, and the metalness map at full metalness, when the set ships them', () => {
+    const ao = new THREE.Texture();
+    const metalness = new THREE.Texture();
+    const base: PbrMaterialSet = {
+      albedo: new THREE.Texture(),
+      normal: new THREE.Texture(),
+      roughness: new THREE.Texture(),
+      displacement: new THREE.Texture(),
+      displacementScale: 0,
+    };
+    const mat = createPbrStandardMaterial({ ...base, ao, metalness });
+    expect(mat.aoMap).toBe(ao);
+    expect(mat.metalnessMap).toBe(metalness);
+    expect(mat.metalness).toBe(1); // the map is the metalness, not a factor on a dielectric
+    const plain = createPbrStandardMaterial(base);
+    expect([plain.aoMap, plain.metalnessMap, plain.metalness]).toEqual([null, null, 0]);
+  });
+
   it('applies material to a mesh', () => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
     const newMat = new THREE.MeshStandardMaterial();
@@ -73,6 +91,22 @@ describe('roomloader PBR pipeline', () => {
       '/assets/pbr/bulkhead-roughness.ktx2',
       '/assets/pbr/bulkhead-displacement.ktx2',
     ]);
+  });
+
+  it('loads the extra maps a set ships, tiled like the others and linear', async () => {
+    const mockLoader = {
+      loadAsync: vi.fn(async (url: string) => Object.assign(new THREE.Texture(), { name: url })),
+    } as unknown as THREE.TextureLoader;
+
+    const pbr = await loadPbrMaterial(mockLoader, '/assets/pbr/', 'grate', 0.05, 3, ['ao', 'metalness']);
+    expect(pbr!.ao!.name).toBe('/assets/pbr/grate-ao.ktx2');
+    expect(pbr!.metalness!.name).toBe('/assets/pbr/grate-metalness.ktx2');
+    for (const map of [pbr!.ao!, pbr!.metalness!]) {
+      expect([map.wrapS, map.repeat.x]).toEqual([THREE.RepeatWrapping, 3]);
+      expect(map.colorSpace).not.toBe(THREE.SRGBColorSpace);
+    }
+    const plain = await loadPbrMaterial(mockLoader, '/assets/pbr/', 'grate');
+    expect([plain!.ao, plain!.metalness]).toEqual([undefined, undefined]);
   });
 
   it('returns null if any texture fails to load in loadPbrMaterial', async () => {
@@ -143,6 +177,12 @@ describe('roomloader PBR pipeline', () => {
     expect(pedestalMesh.visible).toBe(false);
     expect(pedestalMesh.position.y).toBeLessThanOrEqual(-0.3);
     expect(trenchMesh.material).toBe(bay!.materials.trench);
+    // Each set wears every map its source ships: Tiles072 and blue_metal_plate an AO, Metal009 a metalness (no emission in any).
+    const { deck, bulkhead, grate, trench } = bay!.materials;
+    expect([deck.aoMap?.name, bulkhead.aoMap?.name, grate.aoMap]).toEqual(['/assets/pbr/deck-pbr-ao.ktx2', '/assets/pbr/bulkhead-ao.ktx2', null]);
+    expect([deck.metalnessMap, bulkhead.metalnessMap]).toEqual([null, null]);
+    expect(grate.metalnessMap?.name).toBe('/assets/pbr/grate-metalness.ktx2');
+    expect([trench!.metalnessMap, trench!.metalness]).toEqual([grate.metalnessMap, 0.85]); // the trench keeps its gunmetal factor
     expect(conduitMesh.material).toBe(bay!.materials.conduit);
     expect(terminalMesh.visible).toBe(false);
     expect(screenMesh.visible).toBe(false);
@@ -160,6 +200,7 @@ describe('roomloader PBR pipeline', () => {
     const fallbackBay = await loadSpaceshipBay('/assets/pbr/', mockGltfLoader as any, failingTexLoader);
     expect(fallbackBay).not.toBeNull();
     expect((floorMesh.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0x333b42);
+    expect(fallbackBay!.materials.trench!.metalnessMap).toBeNull();
   });
 
   it('decodes the meshopt-compressed bay with its named meshes and their UVs (#701)', async () => {

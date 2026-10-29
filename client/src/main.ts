@@ -341,6 +341,8 @@ const [
   rimAlbedo,
   rimRoughness,
   rimNormal,
+  messRoughness,
+  plateMetalness,
 ] = await Promise.all([
   loadTexture('deck-albedo.ktx2', true, true),
   loadTexture('deck-roughness.ktx2', false, true),
@@ -356,6 +358,9 @@ const [
   loadTexture('pbr/plate-albedo.ktx2', true, true),
   loadTexture('pbr/plate-roughness.ktx2', false, true),
   loadTexture('pbr/plate-normal.ktx2', false, true),
+  // Concrete036's own roughness for the Mess cells (the shared one is rougher), Metal051A's metalness for the plate.
+  loadTexture('deck-mess-roughness.ktx2', false, true),
+  loadTexture('pbr/board-metalness.ktx2', false, true),
 ]);
 
 if (plateAlbedo) {
@@ -381,6 +386,7 @@ const sceneRenderer = new SceneRenderer({
   plateAlbedo,
   plateRoughness,
   plateNormal,
+  plateMetalness,
   rimAlbedo,
   rimRoughness,
   rimNormal,
@@ -1031,9 +1037,12 @@ void Promise.all(Object.values(terminalFonts(uiScale)).map((font) => document.fo
     consoleFonts = true;
     layoutConsole();
   });
+// The Mess cells have their own roughness (Concrete036), every other deck the shared one.
+const cellRoughness = (name: Deck): THREE.Texture | null => (name === 'mess' ? (messRoughness ?? deckRoughness) : deckRoughness);
 function applyDeck(next: Deck): void {
   deck = next;
   sceneRenderer.applyDeck(deck);
+  if (steel.roughnessMap) steel.roughnessMap = cellRoughness(next); // only the textured look has one
   document.body.dataset.deck = deck; // read by the e2e tests
   applyLook();
   layoutConsole();
@@ -1056,7 +1065,7 @@ const steel = new THREE.MeshStandardMaterial(
   deckAlbedo && deckRoughness
     ? {
         map: firstDeckMap ?? deckAlbedo,
-        roughnessMap: deckRoughness,
+        roughnessMap: cellRoughness(deckOf('local')),
         ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
       }
     : { color: COLORS.steel, roughness: 0.8 },

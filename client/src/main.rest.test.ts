@@ -166,6 +166,41 @@ describe('main.ts, the deck textures', () => {
     expect(name(cells().normalMap)).toBe('deck-mess-normal.ktx2');
   });
 
+  it('the Mess cells wear the concrete roughness, the other decks the shared one', async () => {
+    const cells = catchCells();
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
+    expect(name(cells().roughnessMap)).toBe('deck-mess-roughness.ktx2');
+    expect(cells().roughnessMap!.wrapS).toBe(THREE.RepeatWrapping);
+    expect(cells().roughnessMap!.colorSpace).not.toBe('srgb');
+    game.hook('__deck', 'cargo');
+    await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('cargo'));
+    expect(name(cells().roughnessMap)).toBe('deck-roughness.ktx2');
+    game.hook('__deck', 'mess');
+    expect(name(cells().roughnessMap)).toBe('deck-mess-roughness.ktx2');
+  });
+
+  it('the Mess cells keep the shared roughness when the concrete one does not load', async () => {
+    const cells = catchCells();
+    await boot('?bot=off', { missing: ['deck-mess-roughness.ktx2'] });
+    await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
+    expect(name(cells().roughnessMap)).toBe('deck-roughness.ktx2');
+  });
+
+  it('the board plate wears the metalness map of Metal051A, tiled like its albedo', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    const plates: Mesh[] = [];
+    scene!.traverse((o) => (o as Mesh).material?.metalnessMap?.name === 'board-metalness.ktx2' && plates.push(o as Mesh));
+    expect(plates).toHaveLength(1);
+    expect([plates[0]!.material.metalness, plates[0]!.material.metalnessMap!.repeat.x]).toEqual([1, 0.15]);
+  });
+
   it('the board plate wears the brushed Metal051A at a large scale, not the small floor tiles', async () => {
     let scene: THREE.Scene | null = null;
     const add = THREE.Object3D.prototype.add;
@@ -186,7 +221,9 @@ describe('main.ts, the deck textures', () => {
 
   it('without its own set, a deck keeps the shared steel albedo and no normal map', async () => {
     const cells = catchCells();
-    const game = await boot('?bot=off', { missing: ['deck-mess.ktx2', 'deck-mess-normal.ktx2', 'deck-cargo.ktx2'] });
+    const game = await boot('?bot=off', {
+      missing: ['deck-mess.ktx2', 'deck-mess-normal.ktx2', 'deck-mess-roughness.ktx2', 'deck-cargo.ktx2'],
+    });
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('steel'));
     expect(name(cells().map)).toBe('deck-albedo.ktx2');
     expect(cells().normalMap).toBeNull();
