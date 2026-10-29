@@ -2,14 +2,14 @@ import * as THREE from 'three/webgpu';
 import { TUBE_SPACING } from './neonlight';
 
 /** The ring lamp hung over the board (#879): wider than the board, high enough to see the board through its hole. */
-export const RING = { radius: 6.5, y: 12.5, ceiling: 15.5, tube: 0.2, face: 0.3, power: 1.5, reach: 16, fewLights: 4 };
+export const RING = { radius: 6.5, y: 12.5, ceiling: 15.5, tube: 0.2, face: 0.3, power: 1.5, reach: 16 };
 
 /**
  * A suspended ring luminaire: a matte black shell, its lower face glowing white, hung by 3 thin cables. Its light is a
  * ring of point lights on the face, all named `ring-lamp light` so ?lights gives them one slider; the meshes are the
- * caller's to add to the scene and to dispose. `spacing` Infinity (no per-pixel light culling) keeps a few lights only.
+ * caller's to add to the scene and to dispose. One light every TUBE_SPACING round it, on WebGL too (#882).
  */
-export function ringLamp(spacing = TUBE_SPACING): { meshes: THREE.Mesh[]; lights: THREE.PointLight[] } {
+export function ringLamp(): { meshes: THREE.Mesh[]; lights: THREE.PointLight[] } {
   const shell = new THREE.Mesh(
     new THREE.TorusGeometry(RING.radius, RING.tube, 8, 64).rotateX(Math.PI / 2),
     new THREE.MeshStandardMaterial({ color: 0x101010, roughness: 0.8, metalness: 0.2 }),
@@ -31,7 +31,7 @@ export function ringLamp(spacing = TUBE_SPACING): { meshes: THREE.Mesh[]; lights
     cable.position.set(x, RING.y + length / 2, z);
     return cable;
   });
-  const count = spacing === Infinity ? RING.fewLights : Math.ceil((2 * Math.PI * RING.radius) / spacing);
+  const count = Math.ceil((2 * Math.PI * RING.radius) / TUBE_SPACING);
   const lights = Array.from({ length: count }, (_, i) => {
     const light = new THREE.PointLight(0xffffff, RING.power, RING.reach);
     light.name = 'ring-lamp light';

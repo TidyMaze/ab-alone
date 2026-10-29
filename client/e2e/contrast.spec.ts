@@ -57,7 +57,7 @@ for (const deck of DECK_NAMES) {
   test(`${deck}: each cell edge is 3:1 against the surface next to it on at least 6 of 8 ring points, bugs #339 and #400`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.addInitScript(() => {
-      localStorage.setItem('ab-alone.quality', 'high');
+      localStorage.setItem('ab-alone.tier', 'high');
       localStorage.setItem('ab-alone.clear-board', 'off');
     });
     await page.goto('./?bot=off');
@@ -158,7 +158,7 @@ for (const deckName of DECK_NAMES) {
   test(`${deckName}: the shell reads 3:1 against the deck at the heat pulse's brightest, task #509`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.addInitScript(() => {
-      localStorage.setItem('ab-alone.quality', 'high');
+      localStorage.setItem('ab-alone.tier', 'high');
       localStorage.setItem('ab-alone.safe-mode', 'off');
     });
     await page.goto('./?bot=off');

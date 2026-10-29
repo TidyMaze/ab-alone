@@ -41,7 +41,7 @@ import {
   writeUiScale,
 } from './quality';
 
-const big = { width: 1920, cores: 8, memory: 8, reducedMotion: false };
+const big = { cores: 8, memory: 8, reducedMotion: false };
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
@@ -64,19 +64,11 @@ describe('tierFromHints', () => {
   it('is high on a big, capable screen', () => {
     expect(tierFromHints(big)).toBe('high');
   });
-  it('is high on a capable modern phone (6+ cores, 4+ GB RAM) (#655)', () => {
-    expect(tierFromHints({ ...big, width: 390, cores: 6, memory: 4 })).toBe('high');
-    expect(tierFromHints({ ...big, width: 412, cores: 8, memory: 8 })).toBe('high');
-  });
-  it('is low on a budget mobile screen (< 6 cores or < 4 GB RAM) (#655)', () => {
-    expect(tierFromHints({ ...big, width: 600, cores: 4, memory: 2 })).toBe('low');
-    expect(tierFromHints({ ...big, width: 390, cores: 4, memory: 4 })).toBe('low');
-    expect(tierFromHints({ ...big, width: 390, cores: 6, memory: 2 })).toBe('low');
-    expect(tierFromHints({ width: 390, cores: 6, reducedMotion: false })).toBe('low');
-    expect(tierFromHints({ width: 390, memory: 4, reducedMotion: false })).toBe('low');
-  });
-  it('is low on a tiny screen (< 360 px)', () => {
-    expect(tierFromHints({ ...big, width: 320 })).toBe('low');
+  it('judges a phone by the desktop rule, whatever its screen: high on 4 cores and 4 GB (#882)', () => {
+    const phone = { width: 320, cores: 4, memory: 4, reducedMotion: false }; // the screen is no hint any more
+    expect(tierFromHints(phone)).toBe('high');
+    expect(tierFromHints({ cores: 6, reducedMotion: false })).toBe('high');
+    expect(tierFromHints({ memory: 4, reducedMotion: false })).toBe('high');
   });
   it('is low when the user prefers reduced motion', () => {
     expect(tierFromHints({ ...big, reducedMotion: true })).toBe('low');
@@ -86,7 +78,7 @@ describe('tierFromHints', () => {
     expect(tierFromHints({ ...big, memory: 2 })).toBe('low');
   });
   it('ignores hints the browser does not give', () => {
-    expect(tierFromHints({ width: 1920, reducedMotion: false })).toBe('high');
+    expect(tierFromHints({ reducedMotion: false })).toBe('high');
   });
 });
 
@@ -427,26 +419,29 @@ describe('UI scale storage: 100 % unless the player picked a step (#382)', () =>
 });
 
 describe('tier storage', () => {
-  it('uses the device default when nothing is stored, and stores it', () => {
+  it('uses the device default when nothing is stored, without storing it: a later rule applies at once (#882)', () => {
     const s = memoryStorage();
-    expect(readTier(s, { ...big, width: 600, cores: 4 })).toBe('low');
-    expect(s.data.get('ab-alone.quality')).toBe('low');
+    expect(readTier(s, { ...big, cores: 2 })).toBe('low');
+    expect(s.data.size).toBe(0);
+  });
+  it('ignores the tier an earlier version stored on its own under ab-alone.quality (#882)', () => {
+    expect(readTier(memoryStorage({ 'ab-alone.quality': 'low' }), big)).toBe('high');
   });
   it('prefers a stored valid tier over the device default', () => {
-    expect(readTier(memoryStorage({ 'ab-alone.quality': 'low' }), big)).toBe('low');
-    expect(readTier(memoryStorage({ 'ab-alone.quality': 'high' }), { ...big, width: 600, cores: 4 })).toBe('high');
+    expect(readTier(memoryStorage({ 'ab-alone.tier': 'low' }), big)).toBe('low');
+    expect(readTier(memoryStorage({ 'ab-alone.tier': 'high' }), { ...big, cores: 2 })).toBe('high');
   });
   it('ignores a garbage stored value', () => {
-    expect(readTier(memoryStorage({ 'ab-alone.quality': 'ultra' }), big)).toBe('high');
+    expect(readTier(memoryStorage({ 'ab-alone.tier': 'ultra' }), big)).toBe('high');
   });
   it('falls back to the device default when storage throws', () => {
     expect(readTier(throwing, big)).toBe('high');
-    expect(readTier(null, { ...big, width: 600, cores: 4 })).toBe('low');
+    expect(readTier(null, { ...big, cores: 2 })).toBe('low');
   });
   it('writeTier stores and survives a broken storage', () => {
     const s = memoryStorage();
     writeTier(s, 'high');
-    expect(s.data.get('ab-alone.quality')).toBe('high');
+    expect(s.data.get('ab-alone.tier')).toBe('high');
     expect(() => writeTier(throwing, 'low')).not.toThrow();
     expect(() => writeTier(null, 'low')).not.toThrow();
   });

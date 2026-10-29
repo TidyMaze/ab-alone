@@ -7,7 +7,7 @@ import { LIGHT_TUNING } from './lighttuning';
 import { TUBE_SPACING } from './neonlight';
 import { RING } from './ringlamp';
 
-const RING_LIGHTS_CLUSTERED = Math.ceil((2 * Math.PI * RING.radius) / TUBE_SPACING);
+const RING_LIGHTS = Math.ceil((2 * Math.PI * RING.radius) / TUBE_SPACING);
 
 // What the other main.*.test.ts files leave out of main.ts: a browser check asking for the next draw (#435), and a
 // deck whose own texture set did not load (#401, #440).
@@ -41,8 +41,8 @@ describe('main.ts, ?lights', () => {
 
   it.each([
     [true, 3],
-    [false, 1],
-  ])('on WebGPU %s, lights a 7.5 m neon tube with %i lights (a row, culled per pixel; one without culling)', async (webgpu, count) => {
+    [false, 3],
+  ])('on WebGPU %s, lights a 7.5 m neon tube with a row of %i lights: WebGL gets the same light (#882)', async (webgpu, count) => {
     let scene: THREE.Scene | null = null;
     const add = THREE.Object3D.prototype.add;
     vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
@@ -121,8 +121,8 @@ describe('main.ts, the lights of the room (#845)', () => {
 
 describe('main.ts, the ring lamp (#879)', () => {
   it.each([
-    [true, RING_LIGHTS_CLUSTERED],
-    [false, RING.fewLights],
+    [true, RING_LIGHTS],
+    [false, RING_LIGHTS],
   ])('hangs the ring lamp over the board, on WebGPU %s lit by %i point lights tuned with the tubes\' (lighttuning.ts)', async (webgpu, count) => {
     let scene: THREE.Scene | null = null;
     const add = THREE.Object3D.prototype.add;

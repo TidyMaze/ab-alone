@@ -177,7 +177,7 @@ test('Boss fight is disabled or works when clicked right after load, bug #144', 
 // by the Echo test and clear-board.spec.ts, and each real click cost 1.7 to 2.3 s on CI at 1280 x 720 (#429).
 const startHull = async (page: Page, tier: string) => {
   await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
-  await page.addInitScript((t) => localStorage.setItem('ab-alone.quality', t), tier);
+  await page.addInitScript((t) => localStorage.setItem('ab-alone.tier', t), tier);
   await page.goto('./');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-tier', tier);

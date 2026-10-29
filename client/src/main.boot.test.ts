@@ -286,7 +286,7 @@ describe('the adaptive resolution (#843)', () => {
     vi.stubGlobal('devicePixelRatio', 3);
     vi.stubGlobal('innerWidth', 500);
     await boot('?bot=off', { webdriver: false });
-    expect(document.body.dataset.tier).toBe('low');
+    expect(document.body.dataset.tier).toBe('high'); // the desktop's tier (#882)
     expect(ratio()).toBe('1.5');
   });
 
@@ -340,22 +340,22 @@ describe('the view and the fog', () => {
   });
 
   it('starts clear when saved so, and on the saved quality tier', async () => {
-    const game = await bootWith({ 'ab-alone.clear-board': 'on', 'ab-alone.quality': 'low' });
+    const game = await bootWith({ 'ab-alone.clear-board': 'on', 'ab-alone.tier': 'low' });
     expect((await drawn(game)).scene.fog).toBeNull();
     expect(document.body.dataset.clear).toBe('on');
     expect(document.body.dataset.tier).toBe('low');
   });
 
-  it('picks the tier from the device and saves it', async () => {
-    vi.stubGlobal('innerWidth', 500); // a phone: the low tier
+  it('gives a phone the desktop\'s tier, picked from the device and not saved (#882)', async () => {
+    vi.stubGlobal('innerWidth', 500);
     await boot('?bot=off');
-    expect(document.body.dataset.tier).toBe('low');
-    expect(localStorage.getItem('ab-alone.quality')).toBe('low');
+    expect(document.body.dataset.tier).toBe('high');
+    expect(localStorage.getItem('ab-alone.tier')).toBeNull();
   });
 
   it('thins the fog farther on the high tier', async () => {
     const far = async (tier: string): Promise<number> => {
-      const game = await bootWith({ 'ab-alone.quality': tier });
+      const game = await bootWith({ 'ab-alone.tier': tier });
       const fog = (await drawn(game)).scene.fog as THREE.Fog;
       return fog.far - fog.near;
     };

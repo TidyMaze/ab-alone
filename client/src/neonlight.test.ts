@@ -38,9 +38,4 @@ describe('tubeLights', () => {
       expect(Math.abs(offset.normalize().dot(length))).toBeCloseTo(1);
     }
   });
-
-  it('gives a tube one light at its middle when lights are not culled (WebGL)', () => {
-    const lights = tubeLights(tube('neon-gantry-north', [16, 0.14, 0.14], [0, 14.2, -12]), Infinity);
-    expect(lights.map((l) => l.position.toArray())).toEqual([[0, 14.2, -12]]);
-  });
 });

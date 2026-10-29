@@ -20,7 +20,7 @@ const glows = (game: Game): number[] =>
     return game.hook<number>('__shellPulse');
   });
 
-const ON = { 'ab-alone.safe-mode': 'off', 'ab-alone.quality': 'high' };
+const ON = { 'ab-alone.safe-mode': 'off', 'ab-alone.tier': 'high' };
 
 describe('the heat pulse of the shell (#509)', () => {
   it('glows slowly and faintly on the high tier once safe mode is off', async () => {
@@ -44,8 +44,8 @@ describe('the heat pulse of the shell (#509)', () => {
   });
 
   it.each([
-    ['safe mode, on by default', { 'ab-alone.quality': 'high' }, {}],
-    ['the low tier', { ...ON, 'ab-alone.quality': 'low' }, {}],
+    ['safe mode, on by default', { 'ab-alone.tier': 'high' }, {}],
+    ['the low tier', { ...ON, 'ab-alone.tier': 'low' }, {}],
     ['reduced motion', ON, { reducedMotion: true }],
   ])('is off under %s', async (_, stored, options) => {
     const game = await bootWith(stored, options);

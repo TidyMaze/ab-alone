@@ -14,14 +14,14 @@ import { UI_SCALES, type UiScale } from './uiscale';
 
 export type Tier = 'low' | 'high';
 export interface Hints {
-  width: number;
   cores?: number;
   memory?: number;
   reducedMotion: boolean;
 }
 export type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 
-const TIER_KEY = 'ab-alone.quality';
+// Not 'ab-alone.quality': earlier versions stored their own guess there, which kept phones on the low tier (#882).
+const TIER_KEY = 'ab-alone.tier';
 const CLEAR_KEY = 'ab-alone.clear-board';
 const FPS_KEY = 'ab-alone.fps';
 const SOUND_KEY = 'ab-alone.sound';
@@ -35,12 +35,9 @@ const MOTION_KEY = 'ab-alone.reduced-motion';
 const FLAT_KEY = 'ab-alone.flat-hud';
 const TRANSCRIPT_KEY = 'ab-alone.transcript';
 
-export function tierFromHints({ width, cores, memory, reducedMotion }: Hints): Tier {
-  if (reducedMotion || width < 360) return 'low';
-  if (width < 768) {
-    const capable = (cores ?? 0) >= 6 && memory !== undefined && memory >= 4;
-    return capable ? 'high' : 'low';
-  }
+// The same rule on a phone as on a desktop (#882): only a weak device or reduced motion drops to the low tier.
+export function tierFromHints({ cores, memory, reducedMotion }: Hints): Tier {
+  if (reducedMotion) return 'low';
   const weak = (cores ?? Infinity) < 4 || (memory ?? Infinity) < 4;
   return weak ? 'low' : 'high';
 }
@@ -161,12 +158,10 @@ export const readPalette = (store: Store): Palette => {
 };
 export const writePalette = (store: Store, palette: Palette): void => write(store, PALETTE_KEY, palette);
 
+// A tier is stored only when asked for (?quality): the detected one is not, so a later rule applies at once (#882).
 export function readTier(store: Store, hints: Hints): Tier {
   const stored = read(store, TIER_KEY);
-  if (stored === 'low' || stored === 'high') return stored;
-  const tier = tierFromHints(hints);
-  writeTier(store, tier);
-  return tier;
+  return stored === 'low' || stored === 'high' ? stored : tierFromHints(hints);
 }
 export const writeTier = (store: Store, tier: Tier): void => write(store, TIER_KEY, tier);
 
