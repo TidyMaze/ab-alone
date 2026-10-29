@@ -5,8 +5,6 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import {
   applyDeckAtmosphere,
   applyPbrToMesh,
-  createBayLights,
-  recolourBayLights,
   createPbrStandardMaterial,
   DECK_ATMOSPHERES,
   type DeckId,
@@ -291,29 +289,5 @@ describe('roomloader PBR pipeline', () => {
     expect(bulkheadMat.color.getHex()).toBe(0xffffff);
     expect(grateMat.color.getHex()).toBe(0xffffff);
     expect(trenchMat.color.getHex()).toBe(0x2b3137);
-  });
-
-  it('creates atmospheric bay lights matching deck specifications (#660)', () => {
-    const lights = createBayLights('mess');
-    expect(lights).toBeInstanceOf(THREE.Group);
-    expect(lights.children.length).toBeGreaterThanOrEqual(3);
-
-    const pointLights = lights.children.filter((c) => (c as THREE.PointLight).isPointLight) as THREE.PointLight[];
-    expect(pointLights.length).toBeGreaterThanOrEqual(3);
-
-    // Overrides with deck-specific accent light
-    const furnaceLights = createBayLights('furnace');
-    expect(furnaceLights.children.length).toBe(lights.children.length);
-  });
-
-  it('recolours the lamps for another deck as a new set would be, keeping the same lights (#846)', () => {
-    const lights = createBayLights('mess');
-    const before = [...lights.children];
-    recolourBayLights(lights, 'furnace');
-    const fresh = createBayLights('furnace');
-    expect(lights.children).toEqual(before);
-    expect(lights.children.map((l) => (l as THREE.PointLight).color.getHex())).toEqual(
-      fresh.children.map((l) => (l as THREE.PointLight).color.getHex()),
-    );
   });
 });

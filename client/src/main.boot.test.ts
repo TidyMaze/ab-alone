@@ -162,9 +162,8 @@ describe('the renderer and its textures', () => {
     expect(await reflection(true)).toBeNull();
     const env = await reflection(false);
     expect(env?.isTexture).toBe(true);
-    const made = env!.userData as { scene: THREE.Scene; bayLit: boolean; options: { position: THREE.Vector3 } };
+    const made = env!.userData as { scene: THREE.Scene; options: { position: THREE.Vector3 } };
     expect(made.scene.name).toBe('abalone-scene'); // the whole lit room, not a studio
-    expect(made.bayLit).toBe(true); // made once the bay and its lamps are in
     expect(made.options.position.y).toBeGreaterThan(1); // from above the marbles, at the middle of the board
     expect([made.options.position.x, made.options.position.z]).toEqual([0, 0]);
   });

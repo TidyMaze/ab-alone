@@ -9,7 +9,7 @@ import { DECK_PARTICLES, type Deck } from './deck';
 import { fogSettings, hasParticles, renderPixelRatio, type Tier } from './quality';
 import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
-import { applyDeckAtmosphere, createBayLights, recolourBayLights, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
+import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
 
 export const BONE = 0xd8d4c8;
@@ -80,8 +80,6 @@ export class SceneRenderer {
   /** The key and the fill: spotlights under the north and the south gantry, aimed at the board (#864). */
   readonly key: GantryLamp;
   readonly fill: GantryLamp;
-  readonly coldRim: THREE.DirectionalLight;
-  readonly warmLight: THREE.PointLight;
   readonly decor: THREE.Group;
   readonly decorMaterial: THREE.MeshStandardMaterial;
 
@@ -116,7 +114,6 @@ export class SceneRenderer {
   frame: FrameShape | null = null;
   fogRadius = 4;
   currentBay: SpaceshipBayAssets | null = null;
-  bayLights: THREE.Group | null = null; // the bay's lamps (#776), put back by main.ts when it redraws the props (#787)
   private lastParticleNow = 0;
 
   constructor(options: SceneRendererOptions) {
@@ -151,13 +148,6 @@ export class SceneRenderer {
     shadow.bias = LIGHT.key.shadow.bias;
     shadow.normalBias = LIGHT.key.shadow.normalBias;
     this.fill = new GantryLamp('fill', LIGHT.spots.fill);
-
-    this.coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
-    this.coldRim.position.set(...LIGHT.accents.rim.position);
-    this.coldRim.name = 'cold rim';
-    this.warmLight = new THREE.PointLight(LIGHT.accents.warm.color, LIGHT.accents.warm.intensity, LIGHT.accents.warm.distance);
-    this.warmLight.name = 'warm accent';
-    this.warmLight.position.set(...LIGHT.accents.warm.position);
 
     this.decorMaterial = new THREE.MeshStandardMaterial({
       color: DECOR.color,
@@ -267,8 +257,6 @@ export class SceneRenderer {
       this.key.fixture,
       this.fill.light,
       this.fill.fixture,
-      this.coldRim,
-      this.warmLight,
       this.decor,
       this.particles,
       this.roomDeck,
@@ -378,10 +366,7 @@ export class SceneRenderer {
       lamp.light.intensity = intensity;
     }
     this.renderer.toneMappingExposure = light.exposure;
-    if (this.currentBay) {
-      applyDeckAtmosphere(this.currentBay, next as DeckId);
-      if (this.bayLights) recolourBayLights(this.bayLights, next as DeckId);
-    }
+    if (this.currentBay) applyDeckAtmosphere(this.currentBay, next as DeckId);
   }
 
   drawFrame(board: ArrayLike<number>): FrameShape | null {
@@ -462,17 +447,11 @@ export class SceneRenderer {
   }
 
   mountBay(bay: SpaceshipBayAssets | null, deck: Deck): void {
-    if (this.bayLights) {
-      this.propsGroup.remove(this.bayLights);
-      this.bayLights = null;
-    }
     this.currentBay = bay;
     if (this.currentBay) {
       this.roomDeck.visible = false;
       applyDeckAtmosphere(this.currentBay, deck as DeckId);
       this.propsGroup.add(this.currentBay.scene);
-      this.bayLights = createBayLights(deck as DeckId);
-      this.propsGroup.add(this.bayLights);
     } else {
       this.roomDeck.visible = true;
     }

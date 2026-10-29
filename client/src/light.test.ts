@@ -75,23 +75,11 @@ describe('deck light presets (world.md section 5, #400)', () => {
   });
 });
 
-// Reflections and accents (#376): the key stays the base, the accents are small and only add highlights.
-describe('reflections and accent lights (#376)', () => {
+// Reflections (#376): the key stays the base.
+describe('reflections (#376)', () => {
   it('the room reflections are a low share, so the key lamp stays the base', () => {
     expect(LIGHT.environment.intensity).toBeGreaterThan(0);
     expect(LIGHT.environment.intensity).toBeLessThanOrEqual(0.3);
-  });
-
-  it('the cold rim is the player cyan, the warm point is the sodium orange', () => {
-    expect(LIGHT.accents.rim.color).toBe(0x7fd6e8);
-    expect(LIGHT.accents.warm.color).toBe(0xd9822b);
-  });
-
-  it('each accent is weaker than every deck key, so the key is still the one hard source', () => {
-    for (const deck of DECK_NAMES) {
-      expect(LIGHT.accents.rim.intensity).toBeLessThan(DECKS[deck].key.intensity);
-      expect(LIGHT.accents.warm.intensity).toBeLessThan(DECKS[deck].key.intensity);
-    }
   });
 });
 

@@ -393,8 +393,6 @@ const {
   scene,
   camera,
   backend,
-  coldRim,
-  warmLight,
   decor,
   decorMaterial,
   fogObj,
@@ -1643,8 +1641,8 @@ drawProps = (): void => {
         def.id.endsWith('-sw') ||
         def.id.endsWith('-ne') ||
         def.id.includes('airlock')
-          ? sLights.emergency.color
-          : sLights.rim.color;
+          ? sLights.emergency
+          : sLights.rim;
       mat = new THREE.MeshStandardMaterial({
         color: neonColor,
         emissive: neonColor,
@@ -1742,50 +1740,16 @@ drawProps = (): void => {
   // Each neon tube lights the room for real: a row of lights along it (neonlight.ts), one slider in ?lights.
   for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
     propsGroup.add(...tubeLights(tube as THREE.Mesh, clustered ? TUBE_SPACING : Infinity));
-  const emergencyLight = new THREE.PointLight(sLights.emergency.color, sLights.emergency.intensity, sLights.emergency.distance);
-  emergencyLight.position.set(...sLights.emergency.position);
-  const consoleBounceLight = new THREE.PointLight(sLights.consoleBounce.color, sLights.consoleBounce.intensity, sLights.consoleBounce.distance);
-  consoleBounceLight.position.set(...sLights.consoleBounce.position);
-  const pedestalGlowLight = new THREE.PointLight(sLights.pedestalGlow.color, sLights.pedestalGlow.intensity, sLights.pedestalGlow.distance);
-  pedestalGlowLight.position.set(...sLights.pedestalGlow.position);
-  const neonWestLight = new THREE.PointLight(sLights.rim.color, 0.2, 6.0);
-  neonWestLight.position.set(-5.5, 0.35, -1.0);
-  const neonEastLight = new THREE.PointLight(sLights.emergency.color, 0.2, 6.0);
-  neonEastLight.position.set(5.5, 0.35, -1.0);
-  const neonWallNwLight = new THREE.PointLight(sLights.rim.color, 2.7, 10.0);
-  neonWallNwLight.position.set(-8.4, 5.2, -16.8);
-  const neonWallNeLight = new THREE.PointLight(sLights.emergency.color, 2.7, 10.0);
-  neonWallNeLight.position.set(8.4, 5.2, -16.8);
-  const neonWallSwLight = new THREE.PointLight(sLights.rim.color, 2.7, 10.0);
-  neonWallSwLight.position.set(-8.4, 5.2, 16.8);
-  const neonWallSeLight = new THREE.PointLight(sLights.emergency.color, 2.7, 10.0);
-  neonWallSeLight.position.set(8.4, 5.2, 16.8);
-  const airlockSodiumLight = new THREE.PointLight(sLights.emergency.color, 3.15, 11.0);
-  airlockSodiumLight.position.set(0, 8.2, -17.0);
-  const viewportRimLight = new THREE.PointLight(sLights.rim.color, 2.7, 11.0);
+  const viewportRimLight = new THREE.PointLight(sLights.rim, 2.7, 11.0);
   viewportRimLight.position.set(17.0, 4.6, 0);
   const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.25, 6.0);
   kioskGreenLight.position.set(-10.2, 2.5, -5.8);
-  const lights = {
-    emergencyLight,
-    consoleBounceLight,
-    pedestalGlowLight,
-    neonWestLight,
-    neonEastLight,
-    neonWallNwLight,
-    neonWallNeLight,
-    neonWallSwLight,
-    neonWallSeLight,
-    airlockSodiumLight,
-    viewportRimLight,
-    kioskGreenLight,
-  };
+  const lights = { viewportRimLight, kioskGreenLight };
   for (const [name, light] of Object.entries(lights)) light.name = name; // the ?lights sliders' names
   propsGroup.add(...Object.values(lights));
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
-    if (sceneRenderer.bayLights) propsGroup.add(sceneRenderer.bayLights); // propsGroup.clear() took them out (#787)
   }
   refreshLights();
 };
@@ -1865,8 +1829,6 @@ function applyPalette(): void {
   document.documentElement.dataset.palette = palette;
   document.documentElement.style.setProperty('--accent', pal.accent);
   document.documentElement.style.setProperty('--hazard', pal.hazard);
-  coldRim.color.setHex(pal.rim);
-  warmLight.color.setHex(pal.sodium);
   ringMaterial.color.setHex(pal.core);
   tickMaterial.color.setHex(pal.tell);
   scratchMaterial.color.setHex(pal.tell);
