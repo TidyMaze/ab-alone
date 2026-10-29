@@ -1,11 +1,13 @@
 /**
  * The lights' power and the bloom as tuned with ?lights (2026-10-29): by family, the panel's names (lightpanel.ts
- * `family`), over what the code and each deck set. The lamps and the neon tubes light the room; the key, the fill and
- * the accents are off, the bloom nearly so. Applied when the lights are made again (main.ts), on every deck.
+ * `family`), over what the code and each deck set. The lamps and the neon tubes light the room; the key and the fill,
+ * the spotlights on the gantries (#864), give the marbles their shadow and their shading without washing the cells out
+ * (the lights slider scales them: at its default, 215 %, they are 3.2 and 1.1); the accents are off, the bloom nearly so.
+ * Applied when the lights are made again (main.ts), on every deck.
  */
 export const LIGHT_TUNING: Readonly<Record<string, number>> = {
-  'fill (ambient)': 0,
-  key: 0,
+  key: 1.5,
+  fill: 0.5,
   'cold rim': 0,
   'warm accent': 0,
   'corner-neon': 110,

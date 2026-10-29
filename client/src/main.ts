@@ -166,7 +166,6 @@ import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
 import { collectedLogs, markCollected, markRead, readLore } from './lorestore';
 import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type TerminalPage } from './terminal';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import {
   drawDue,
@@ -393,8 +392,6 @@ const {
   scene,
   camera,
   backend,
-  ambient,
-  lamp,
   coldRim,
   warmLight,
   decor,
@@ -422,9 +419,11 @@ const {
   scratchMaterial,
 } = sceneRenderer;
 
-function prefilteredRoom(): THREE.Texture {
+// The room as the marbles see it (#864): the scene once the bay and its lamps are in, taken from above the middle of the
+// board, which the marbles do not hide.
+function prefilteredBay(): THREE.Texture {
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const texture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const texture = pmrem.fromScene(sceneRenderer.scene, 0.04, 0.1, 100, { position: new THREE.Vector3(0, 1.5, 0) }).texture;
   pmrem.dispose();
   return texture;
 }
@@ -455,9 +454,9 @@ if (queryQuality === 'high' || queryQuality === 'low') {
 }
 diag.log.log('info', 'start', { backend, tier });
 
-// Reflections (#376, #424): prefiltered room used for marble materials on high tier only.
+// Reflections (#376, #424): the bay, prefiltered once it has loaded (mountBay), for the marble materials on high tier only.
 // Omitted on low tier / mobile and under automation to save WebGL2 fill rate and PMREM prefilter cost (#416, #424).
-const reflections = hasReflections(tier, navigator.webdriver) ? prefilteredRoom() : null;
+let reflections: THREE.Texture | null = null;
 
 // The whole board fits the window, held upright too, below the HUD and the buttons (#227).
 function frameCamera(): void {
@@ -1158,6 +1157,17 @@ const accents = new Map(
     return [boss, Object.assign(new THREE.Mesh(accentGeometry(a), look), { name, castShadow: true })];
   }),
 );
+// The marbles take the room's reflection once the bay is in (#864): the shells, the glass and the boss accents, then the
+// Lights slider scales it like the lamps'. Skins worn later are made with it.
+function reflect(texture: THREE.Texture): void {
+  reflections = texture;
+  const accentLooks = [...accents.values()].map((a) => a.material as THREE.MeshStandardMaterial);
+  for (const look of [...shellLooks.values(), ...glassLooks.values(), ...accentLooks]) {
+    look.envMap = texture;
+    look.needsUpdate = true;
+  }
+  scaleLights();
+}
 function marbleMesh(side: number, looks = marbleMaterials, core = coreMaterial): THREE.Mesh {
   const glass = side === glassOf();
   const mesh = new THREE.Mesh(marbleGeometry, looks[glass ? 2 : 1]);
@@ -1711,6 +1721,9 @@ drawProps = (): void => {
       mesh.position.set(...def.position);
     }
     mesh.rotation.set(...def.rotation);
+    // The key and the fill hang under the gantries wherever the bay puts them (#864).
+    if (def.id === 'neon-gantry-north') sceneRenderer.key.hang(mesh);
+    if (def.id === 'neon-gantry-south') sceneRenderer.fill.hang(mesh);
     if (def.id.startsWith('pedestal') || def.id.startsWith('conduit')) {
       mesh.receiveShadow = true;
       mesh.castShadow = true;
@@ -1773,6 +1786,7 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
   drawProps();
   sceneRenderer.mountBay(bay, deck);
   refreshLights(); // the room's lamps came with it
+  if (hasReflections(tier, navigator.webdriver)) reflect(prefilteredBay()); // its lamps are tuned: the room is taken once
   if (currentBay) {
     document.body.dataset.bay = 'ready'; // the room is complete: the browser checks of a still scene wait for it (#661)
   }

@@ -3,6 +3,7 @@ import { pass } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
+import { GantryLamp } from './gantrylamp';
 import { DECKS, DECOR, LIGHT } from './light';
 import { DECK_PARTICLES, type Deck } from './deck';
 import { fogSettings, hasParticles, renderPixelRatio, type Tier } from './quality';
@@ -76,8 +77,9 @@ export class SceneRenderer {
   readonly backend: 'WebGPU' | 'WebGL2';
   readonly pipeline: ReturnType<typeof createBloomPipeline> = null;
 
-  readonly ambient: THREE.AmbientLight;
-  readonly lamp: THREE.DirectionalLight;
+  /** The key and the fill: spotlights under the north and the south gantry, aimed at the board (#864). */
+  readonly key: GantryLamp;
+  readonly fill: GantryLamp;
   readonly coldRim: THREE.DirectionalLight;
   readonly warmLight: THREE.PointLight;
   readonly decor: THREE.Group;
@@ -140,21 +142,15 @@ export class SceneRenderer {
     this.camera = new THREE.PerspectiveCamera(FOV, width / height, 0.1, 100);
     this.frameCamera(width, height);
 
-    this.ambient = new THREE.AmbientLight();
-    this.ambient.name = 'fill (ambient)';
-    this.lamp = new THREE.DirectionalLight();
-    this.lamp.name = 'key';
-    this.lamp.castShadow = true;
-    this.lamp.shadow.mapSize.set(LIGHT.key.shadow.mapSize, LIGHT.key.shadow.mapSize);
-    this.lamp.shadow.camera.near = LIGHT.key.shadow.camera.near;
-    this.lamp.shadow.camera.far = LIGHT.key.shadow.camera.far;
-    const shadowBound = LIGHT.key.shadow.camera.bounds;
-    this.lamp.shadow.camera.left = -shadowBound;
-    this.lamp.shadow.camera.right = shadowBound;
-    this.lamp.shadow.camera.top = shadowBound;
-    this.lamp.shadow.camera.bottom = -shadowBound;
-    this.lamp.shadow.bias = LIGHT.key.shadow.bias;
-    this.lamp.shadow.normalBias = LIGHT.key.shadow.normalBias;
+    this.key = new GantryLamp('key', LIGHT.spots.key);
+    const { shadow } = this.key.light;
+    this.key.light.castShadow = true;
+    shadow.mapSize.set(LIGHT.key.shadow.mapSize, LIGHT.key.shadow.mapSize);
+    shadow.camera.near = LIGHT.key.shadow.camera.near;
+    shadow.camera.far = LIGHT.key.shadow.camera.far;
+    shadow.bias = LIGHT.key.shadow.bias;
+    shadow.normalBias = LIGHT.key.shadow.normalBias;
+    this.fill = new GantryLamp('fill', LIGHT.spots.fill);
 
     this.coldRim = new THREE.DirectionalLight(LIGHT.accents.rim.color, LIGHT.accents.rim.intensity);
     this.coldRim.position.set(...LIGHT.accents.rim.position);
@@ -267,8 +263,10 @@ export class SceneRenderer {
     this.scratchMaterial = new THREE.MeshBasicMaterial({ color: BONE, fog: false });
 
     this.scene.add(
-      this.ambient,
-      this.lamp,
+      this.key.light,
+      this.key.fixture,
+      this.fill.light,
+      this.fill.fixture,
       this.coldRim,
       this.warmLight,
       this.decor,
@@ -375,11 +373,10 @@ export class SceneRenderer {
 
   applyDeck(next: Deck): void {
     const light = DECKS[next];
-    this.ambient.color.set(light.ambient.color);
-    this.ambient.intensity = light.ambient.intensity;
-    this.lamp.color.set(light.key.color);
-    this.lamp.intensity = light.key.intensity;
-    this.lamp.position.set(...light.key.position);
+    for (const [lamp, { color, intensity }] of [[this.key, light.key], [this.fill, light.fill]] as const) {
+      lamp.tint(color);
+      lamp.light.intensity = intensity;
+    }
     this.renderer.toneMappingExposure = light.exposure;
     if (this.currentBay) {
       applyDeckAtmosphere(this.currentBay, next as DeckId);

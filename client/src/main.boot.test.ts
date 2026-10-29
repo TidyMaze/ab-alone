@@ -148,14 +148,25 @@ describe('the renderer and its textures', () => {
     expect(game.hook('__draws')).toBe(1);
   });
 
-  it('gives the marbles no reflections under automation (#416), and the prefiltered room to a player (#376)', async () => {
+  it('gives the marbles no reflections under automation (#416), and the bay itself, once it is in, to a player (#864)', async () => {
     const reflection = async (webdriver: boolean): Promise<THREE.Texture | null> => {
       const game = await boot('?bot=off', { webdriver });
-      const glass = materials((await drawn(game)).scene).find((m) => (m as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial)!;
+      await vi.waitFor(() => expect(document.body.dataset.bay).toBe('ready'));
+      const { scene } = await drawn(game);
+      const reflecting = materials(scene).filter((m) => m.envMap);
+      expect(reflecting.every((m) => m.envMap === reflecting[0]!.envMap)).toBe(true); // one capture, shells and glass alike
+      const glass = materials(scene).find((m) => (m as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial)!;
+      if (glass.envMap) expect(reflecting).toContain(glass);
       return glass.envMap;
     };
     expect(await reflection(true)).toBeNull();
-    expect((await reflection(false))?.isTexture).toBe(true);
+    const env = await reflection(false);
+    expect(env?.isTexture).toBe(true);
+    const made = env!.userData as { scene: THREE.Scene; bayLit: boolean; options: { position: THREE.Vector3 } };
+    expect(made.scene.name).toBe('abalone-scene'); // the whole lit room, not a studio
+    expect(made.bayLit).toBe(true); // made once the bay and its lamps are in
+    expect(made.options.position.y).toBeGreaterThan(1); // from above the marbles, at the middle of the board
+    expect([made.options.position.x, made.options.position.z]).toEqual([0, 0]);
   });
 
   it('reports the WebGL2 backend in the diagnostics', async () => {

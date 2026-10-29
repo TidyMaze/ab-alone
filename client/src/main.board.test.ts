@@ -107,11 +107,11 @@ async function until(game: Game, done: () => boolean): Promise<void> {
 }
 
 describe('main.ts board and HUD', () => {
-  it('lights the deck with the key lamp and its accents, and sets the dim bulkhead frame far behind the board', async () => {
+  it('lights the deck with the key and fill spotlights and the accents, and sets the dim bulkhead frame far behind the board', async () => {
     const scene = catchScene();
     await boot('?bot=off');
     const lights = scene().children.filter((c) => c instanceof THREE.Light);
-    expect(lights.map((l) => l.type)).toEqual(['AmbientLight', 'DirectionalLight', 'DirectionalLight', 'PointLight']);
+    expect(lights.map((l) => l.type)).toEqual(['SpotLight', 'SpotLight', 'DirectionalLight', 'PointLight']);
     const decor = scene().children.find(
       (c) => c instanceof THREE.Group && c.children.length > 0 && c.children.every((m) => m instanceof THREE.Mesh && m.geometry instanceof THREE.BoxGeometry),
     )!;
