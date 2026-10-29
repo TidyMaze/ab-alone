@@ -198,6 +198,18 @@ describe('scalePower, the settings light sliders', () => {
     expect(neon.emissiveIntensity).toBe(0);
   });
 
+  it('scales the environment light of what reflects the room with the lights: at 0 a white marble goes dark too', () => {
+    const { s } = scene();
+    const env = new THREE.Texture();
+    const marble = new THREE.MeshPhysicalMaterial({ envMap: env, envMapIntensity: 0.8 });
+    const plain = new THREE.MeshStandardMaterial({ envMapIntensity: 0.8 }); // no envMap: nothing to scale
+    s.add(new THREE.Mesh(new THREE.SphereGeometry(), marble), new THREE.Mesh(new THREE.SphereGeometry(), marble), new THREE.Mesh(new THREE.BoxGeometry(), plain));
+    scalePower(s, { bloom: 100, lamps: 100, lights: 0 });
+    expect([marble.envMapIntensity, plain.envMapIntensity]).toEqual([0, 0.8]);
+    scalePower(s, { bloom: 100, lamps: 100, lights: 150 });
+    expect(marble.envMapIntensity).toBeCloseTo(1.2);
+  });
+
   it('scales from the power it found, again and again, until something else sets it', () => {
     const { s, lamp, neon } = scene();
     scalePower(s, { bloom: 100, lamps: 0, lights: 200 });

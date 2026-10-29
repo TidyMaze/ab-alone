@@ -73,12 +73,14 @@ function scale<K extends string>(o: Record<K, number>, key: K, percent: number):
 }
 
 /** Scales every point and rect area light (the key and the fill stay), every neon tube's glow and the bloom by the
- *  settings' sliders, from the power each had before them: twice the same levels give the same scene. */
+ *  settings' sliders, from the power each had before them: twice the same levels give the same scene. The room's
+ *  reflection (envMap) lights the marbles whatever the lamps, so it follows the lights too: at 0 they go dark. */
 export function scalePower(scene: THREE.Object3D, levels: Readonly<Record<Level, number>>, bloom?: { value: number }): void {
   scene.traverse((o) => {
+    const look = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
     if ((o as THREE.PointLight).isPointLight || (o as THREE.RectAreaLight).isRectAreaLight) scale(o as THREE.Light, 'intensity', levels.lights);
-    else if ((o as THREE.Mesh).isMesh && o.name.includes('neon'))
-      scale((o as THREE.Mesh).material as THREE.MeshStandardMaterial, 'emissiveIntensity', levels.lamps);
+    else if ((o as THREE.Mesh).isMesh && o.name.includes('neon')) scale(look, 'emissiveIntensity', levels.lamps);
+    else if ((o as THREE.Mesh).isMesh && look.envMap) scale(look, 'envMapIntensity', levels.lights);
   });
   if (bloom) scale(bloom, 'value', levels.bloom);
 }
