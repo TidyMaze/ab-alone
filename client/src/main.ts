@@ -148,7 +148,7 @@ import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml } from './hud';
-import { DEFAULT_SKIN, nextSkin, skinById } from './skins';
+import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -685,7 +685,7 @@ const toggles: Record<string, () => void> = {
   'glass-skin': () => {
     glass = nextGlassSkin(glass);
     writeGlassSkin(store, glass);
-    setGlassLook(glass);
+    marbleMaterials[2] = glassMaterial(glass);
     refresh();
   },
   palette: () => {
@@ -1070,27 +1070,33 @@ const steel = new THREE.MeshStandardMaterial(
 applyDeck(deck);
 // Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
 (window as unknown as Record<string, unknown>).__deck = applyDeck;
-// Key 1 is the enemy shell, key 2 the player's glass (marbles.ts): the skins of skins.ts and glassskins.ts, ambientCG
-// PBR materials (CC0). A skin's material is built flat, in its tint, the first time it is worn and dressed in its maps
-// as they load: a press never waits, and a page that keeps the default skins loads two sets of maps, not twenty.
-// The maps are square and turn once round the sphere, whose circumference is twice the way from pole to pole.
-const skinMap = async (asset: string, kind: string, srgb: boolean, tile: number): Promise<THREE.Texture | null> => {
-  const map = await loadTexture(`pbr/skin-${asset}-${kind}.ktx2`, srgb, true);
+// Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of skins.ts and glassskins.ts, ambientCG
+// PBR materials (CC0), opaque and in their own colours. A skin's material is built flat the first time it is worn and
+// dressed in every map its asset ships as they load: a press never waits, and a page that keeps the default skins
+// loads two sets of maps, not twenty. The maps are square and turn once round the sphere, whose circumference is twice
+// the way from pole to pole.
+const SKIN_MAPS = {
+  albedo: ['map', true],
+  normal: ['normalMap', false],
+  roughness: ['roughnessMap', false],
+  metalness: ['metalnessMap', false],
+  ao: ['aoMap', false],
+  emission: ['emissiveMap', true],
+} as const;
+const skinMap = async (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Promise<THREE.Texture | null> => {
+  const map = await loadTexture(`pbr/skin-${asset}-${kind}.ktx2`, SKIN_MAPS[kind][1], true);
   map?.repeat.set(tile, tile / 2);
   return map;
 };
 const dressed = new WeakMap<THREE.Material, Promise<void>>(); // when a skin's maps are on
-function dress(look: THREE.MeshStandardMaterial, { asset, tile }: { asset: string; tile: number }, glows: boolean): void {
+function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset: string; tile: number; extra: readonly Extra[] }): void {
+  const kinds = ['albedo', 'normal', 'roughness', ...extra] as const;
   dressed.set(
     look,
-    Promise.all([
-      skinMap(asset, 'albedo', true, tile),
-      skinMap(asset, 'normal', false, tile),
-      skinMap(asset, 'roughness', false, tile),
-      glows ? skinMap(asset, 'emission', true, tile) : null,
-    ]).then(([map, normalMap, roughnessMap, emissiveMap]) => {
-      Object.assign(look, { map, normalMap, roughnessMap, emissiveMap });
-      if (emissiveMap) look.emissive.set(0xffffff); // black until the map is there: no white flash
+    Promise.all(kinds.map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
+      Object.assign(look, Object.fromEntries(loaded));
+      if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
+      if (extra.includes('emission')) look.emissive.set(0xffffff); // black until the map is there: no white flash
       look.needsUpdate = true;
     }),
   );
@@ -1101,34 +1107,25 @@ function shellMaterial(id: string): THREE.MeshStandardMaterial {
   let look = shellLooks.get(s.id);
   if (!look) {
     look = new THREE.MeshStandardMaterial({
-      color: s.tint,
       roughness: 1, // the roughness map sets it
-      metalness: s.metalness,
+      metalness: 0,
       envMap: reflections,
       envMapIntensity: LIGHT.environment.intensity,
-      emissiveIntensity: s.glow ?? 0,
       // The heat pulse (#509) glows through the default shell, dark until the loop sets its intensity.
-      ...(s.id === DEFAULT_SKIN ? { emissive: HEAT.color } : {}),
+      ...(s.id === DEFAULT_SKIN ? { emissive: HEAT.color, emissiveIntensity: 0 } : {}),
     });
-    dress(look, s, s.glow !== undefined);
+    dress(look, s);
     shellLooks.set(s.id, look);
   }
   return look;
 }
-// The inner light takes the skin's colour when it has one (Warm ivory).
 const glassLooks = new Map<string, THREE.MeshPhysicalMaterial>();
 function glassMaterial(id: string): THREE.MeshPhysicalMaterial {
   const s = glassSkinById(id);
   let look = glassLooks.get(s.id);
   if (!look) {
-    look = new THREE.MeshPhysicalMaterial({
-      ...GLASS,
-      color: s.tint,
-      roughness: 1, // the roughness map sets it, the clear coat keeps the lamp's glint
-      envMap: reflections,
-      envMapIntensity: LIGHT.environment.glass,
-    });
-    dress(look, s, false);
+    look = new THREE.MeshPhysicalMaterial({ roughness: 1, metalness: 0, envMap: reflections, envMapIntensity: LIGHT.environment.intensity });
+    dress(look, s);
     glassLooks.set(s.id, look);
   }
   return look;
@@ -1139,15 +1136,8 @@ const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
 };
 await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m))); // the worn skins are dressed from the first frame
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
-const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the glass
-coreMaterial.color.set(glassSkinById(glass).core ?? CORE.color);
+const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the marble
 const convertedCore = new THREE.MeshBasicMaterial({ color: coreMaterial.color, transparent: true, opacity: CONVERTED.core });
-function setGlassLook(id: string): void {
-  marbleMaterials[2] = glassMaterial(id);
-  const pal = paletteById(palette);
-  coreMaterial.color.set(glassSkinById(id).core ?? pal.core);
-  convertedCore.color.copy(coreMaterial.color);
-}
 // Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. The glass holds
 // its cyan core as a child: the selection lift, the slide and the ejection carry it.
 const glassOf = (): number => glassSide({ online: online !== null, bot: worker !== null, fight: fight !== null });
@@ -1860,7 +1850,7 @@ function applyPalette(): void {
   paleMaterial.color.setHex(pal.tell);
   firedMaterial.color.set(pal.hazard);
   ghostCore.color.setHex(pal.core);
-  coreMaterial.color.setHex(glassSkinById(glass).core ?? pal.core);
+  coreMaterial.color.setHex(pal.core);
   convertedCore.color.copy(coreMaterial.color);
 }
 applyPalette();

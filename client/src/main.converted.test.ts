@@ -119,7 +119,7 @@ describe('main.ts converted look (#508)', () => {
     }
   }, 60_000);
 
-  it('follows the palette and the glass skin', async () => {
+  it('follows the palette and the white skin', async () => {
     const scene = catchScene();
     const game = await boot('?nodes=200', { reducedMotion: true });
     const [cell] = await convertOne(game);
@@ -128,8 +128,8 @@ describe('main.ts converted look (#508)', () => {
     byId('setting-palette').click();
     expect(game.hook('__palette')).toBe('protan');
     expect(light().color.getHex()).toBe(PALETTE_DEFS.protan.core);
-    for (let i = 0; i < 6; i++) byId('setting-glass-skin').click(); // smoked to the Lantern core
-    expect(light().color.getHex()).toBe(0xf2c27a);
+    for (let i = 0; i < 6; i++) byId('setting-glass-skin').click();
+    expect(light().color.getHex()).toBe(PALETTE_DEFS.protan.core); // the white skin does not change the core's colour
     const glass = part(marbleOn(scene(), cell!), 'glass').material;
     expect(glass).toBe(boardMarbles(scene()).find((m) => m.material instanceof THREE.MeshPhysicalMaterial)!.material);
   }, 60_000);

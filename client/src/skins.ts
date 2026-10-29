@@ -1,34 +1,36 @@
 // The dark shell skins (#377): the look of the enemy marble, a choice of the settings menu. Each one is an ambientCG PBR
-// material (CC0, ambientcg.com), its albedo, normal and roughness maps (and an emission map for the lavas) in
-// textures/pbr/skin-<asset>-<map>.jpg. Pure data, no Three.js: main.ts builds one material per skin and loads its maps
-// the first time it is worn.
+// material (CC0, ambientcg.com), opaque and in its own colours: its albedo, normal and roughness maps and every other map
+// its asset ships, in textures/pbr/skin-<asset>-<map>.jpg. Pure data, no Three.js: main.ts builds one material per skin and
+// loads its maps the first time it is worn.
+
+/** The maps an ambientCG asset ships besides colour, normal and roughness, each set on the material. Displacement is
+ * skipped: the normal map carries the relief, a 32-segment sphere cannot displace. */
+export type Extra = 'metalness' | 'ao' | 'emission';
 
 export interface Skin {
   id: string;
   name: string;
-  side: 1; // the shell side of marbles.ts: the skin never reaches the player's glass
+  side: 1; // the shell side of marbles.ts: the skin never reaches the player's marble
   asset: string; // the ambientCG material its maps come from
-  tint: number; // multiplies the albedo: a shell is meant to stay dark, so a pale albedo is darkened here
-  color: number; // the mean colour of the albedo times the tint: what the marks and accents on a shell are checked against
-  metalness: number;
+  extra: readonly Extra[];
   tile: number; // repeats of the maps round the sphere
-  glow?: number; // emissive strength of the emission map, only for the lavas
+  color: number; // the mean colour of the albedo: what the marks and accents on a shell are checked against
 }
 
-const dark = (id: string, name: string, asset: string, color: number, tile: number, rest: Partial<Skin> = {}): Skin =>
-  ({ id, name, side: 1, asset, tint: 0xffffff, color, metalness: 0, tile, ...rest });
+const dark = (id: string, name: string, asset: string, color: number, tile: number, extra: readonly Extra[] = []): Skin =>
+  ({ id, name, side: 1, asset, extra, tile, color });
 
 export const SKINS: readonly Skin[] = [
   dark('scarab', 'Leather', 'Leather027', 0x101010, 4),
   dark('obsidian', 'Black porcelain', 'Porcelain003', 0x000000, 1),
-  dark('slag', 'Lava', 'Lava002', 0x1d161a, 2, { tint: 0x808080, glow: 0.4 }),
-  dark('hex', 'Fabric', 'Fabric004', 0x131214, 4, { tint: 0x808080 }),
+  dark('slag', 'Lava', 'Lava002', 0x44363f, 2, ['emission']),
+  dark('hex', 'Fabric', 'Fabric004', 0x302f32, 4, ['metalness']),
   dark('ash', 'Rubber', 'Rubber001', 0x202122, 4),
-  dark('riveted', 'Steel', 'Metal027', 0x121115, 2, { tint: 0x808080, metalness: 0.5 }),
-  dark('tar', 'Painted steel', 'Metal028', 0x090b0a, 2, { tint: 0x808080, metalness: 0.5 }),
-  dark('ember', 'Lava veins', 'Lava001', 0x28181a, 2, { tint: 0x808080, glow: 0.3 }),
-  dark('copper', 'Black onyx', 'Onyx013', 0x141210, 1, { tint: 0x707070 }),
-  dark('void', 'Terrazzo', 'Terrazzo015', 0x1a2023, 4, { tint: 0x808080 }),
+  dark('riveted', 'Steel', 'Metal027', 0x2e2c35, 2, ['metalness']),
+  dark('tar', 'Painted steel', 'Metal028', 0x1d2120, 2, ['metalness']),
+  dark('ember', 'Lava veins', 'Lava001', 0x583a3d, 2, ['emission']),
+  dark('copper', 'Black onyx', 'Onyx013', 0x3b3631, 1),
+  dark('void', 'Terrazzo', 'Terrazzo015', 0x3e4a4f, 4),
 ];
 
 export const DEFAULT_SKIN = 'scarab';

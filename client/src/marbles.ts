@@ -78,7 +78,7 @@ export type Accent = { name: string; color: number; roughness: number; metalness
 /** The accent of each boss, by boss id. The Echo and The Choir keep the plain shell: the Choir's army glyphs are its
  * shape cue. The crown is a lighter rust than the palette's (#7a3b1d), which reads under 3:1 on the shell. */
 export const ACCENTS: Readonly<Record<string, Accent>> = {
-  hull: { name: 'crown', color: 0xc8824e, roughness: 0.8, metalness: 0, shape: 'cylinder', args: [0.2, 0.16, 0.14, 12, 1, true], y: 0.37, points: 0.07 },
+  hull: { name: 'crown', color: 0xe6a06a, roughness: 0.8, metalness: 0, shape: 'cylinder', args: [0.2, 0.16, 0.14, 12, 1, true], y: 0.37, points: 0.07 },
   chaplain: { name: 'wax', color: 0xc4b89a, roughness: 0.5, metalness: 0, shape: 'cylinder', args: [0.06, 0.07, 0.14, 12, 1, false], y: 0.41, points: 0 },
   ballast: { name: 'wire', color: 0x8f989e, roughness: 0.35, metalness: 0.6, shape: 'torus', args: [0.365, 0.016, 6, 48], tilt: 1 },
 };
