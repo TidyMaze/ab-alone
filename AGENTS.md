@@ -46,5 +46,8 @@ The short version:
     lead agent marks the PR ready, CI runs, and it merges when green, conversations
     resolved. The lead agent marks it ready and merges. Rebase your own PR when main
     moves, never someone else's.
+11. Faster and cheaper (owner decision, 2026-10-29): no builds in parallel, one agent builds and
+    changes the code at a time, so the changes do not conflict. No model above Sonnet, no
+    reasoning effort above medium, for the lead agent and every sub-agent.
 
 Setup, checks and e2e commands: [CONTRIBUTING.md section 13](CONTRIBUTING.md#13-local-setup-and-checks).
