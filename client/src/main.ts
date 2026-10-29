@@ -36,6 +36,7 @@ import { LIGHT_TUNING } from './lighttuning';
 import { tubeLights } from './neonlight';
 import { ringLamp } from './ringlamp';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
+import { CulledLighting } from './culledlighting';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
@@ -301,7 +302,7 @@ await renderer.init().catch(bootFailed);
 // clustered (Forward+) lighting, 4x the frame rate of a rect light per tube. It needs compute shaders, so WebGPU only:
 // WebGL adds every light at every pixel, the same light at a higher cost (#882).
 const clustered = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
-if (clustered) renderer.lighting = new ClusteredLighting();
+renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {

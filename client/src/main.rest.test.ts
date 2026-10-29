@@ -119,6 +119,23 @@ describe('main.ts, the lights of the room (#845)', () => {
   });
 });
 
+describe('main.ts, the lighting system (#882)', () => {
+  it.each([
+    [true, 'clustered'],
+    [false, 'culled'],
+  ])('on WebGPU %s, shades each pixel with only the lights that reach it: %s lighting', async (webgpu, kind) => {
+    const made: string[] = [];
+    vi.doMock('./culledlighting', () => ({ CulledLighting: class { constructor() { made.push('culled'); } } }));
+    vi.doMock('three/examples/jsm/lighting/ClusteredLighting.js', () => ({
+      ClusteredLighting: class { constructor() { made.push('clustered'); } },
+    }));
+    await boot('?bot=off', { webgpu });
+    vi.doUnmock('./culledlighting');
+    vi.doUnmock('three/examples/jsm/lighting/ClusteredLighting.js');
+    expect(made).toEqual([kind]);
+  });
+});
+
 describe('main.ts, the ring lamp (#879)', () => {
   it.each([
     [true, RING_LIGHTS],
