@@ -9,7 +9,7 @@ import { DECK_PARTICLES, type Deck } from './deck';
 import { fogSettings, hasParticles, renderPixelRatio, type Tier } from './quality';
 import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
-import { applyDeckAtmosphere, createBayLights, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
+import { applyDeckAtmosphere, createBayLights, recolourBayLights, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
 
 export const BONE = 0xd8d4c8;
@@ -380,9 +380,7 @@ export class SceneRenderer {
     this.renderer.toneMappingExposure = light.exposure;
     if (this.currentBay) {
       applyDeckAtmosphere(this.currentBay, next as DeckId);
-      if (this.bayLights) this.propsGroup.remove(this.bayLights);
-      this.bayLights = createBayLights(next as DeckId);
-      this.propsGroup.add(this.bayLights);
+      if (this.bayLights) recolourBayLights(this.bayLights, next as DeckId);
     }
   }
 

@@ -1618,7 +1618,14 @@ const refreshLights = (): void => {
   scaleLights();
   if (lightsPanel) lightPanel(sceneRenderer.scene, lightsPanel, (at) => toggleFreeCam(true, at), bloomKnobs);
 };
+// What the last look made, disposed when the next replaces it (#846): a setting is a rebuild, never a leak.
+let propMeshes: THREE.Mesh[] = [];
 drawProps = (): void => {
+  for (const mesh of propMeshes) {
+    mesh.geometry.dispose();
+    (mesh.material as THREE.Material).dispose();
+  }
+  propMeshes = [];
   propsGroup.clear();
   const sLights = spaceshipLights(deck);
   for (const def of spaceshipArchitecture(tier)) {
@@ -1730,6 +1737,7 @@ drawProps = (): void => {
       mesh.castShadow = true;
     }
     propsGroup.add(mesh);
+    propMeshes.push(mesh);
   }
   // Each neon tube lights the room for real: a row of lights along it (neonlight.ts), one slider in ?lights.
   for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
