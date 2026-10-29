@@ -726,22 +726,18 @@ for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, redu
   });
 }
 paintMenu();
-// The FPS switch (#426) is the last row of the Lights page: a button more among the items took a row more on a phone.
+// The FPS switch (#426) is a second button in the Clear board item's group: no row of its own, so the menu keeps its height.
 const fpsBox = document.getElementById('fps') as HTMLDivElement;
 const fpsButton = document.createElement('button');
 fpsButton.id = 'setting-fps';
 fpsButton.type = 'button';
-fpsButton.className = 'setting-lights';
 fpsButton.textContent = 'FPS';
 fpsButton.setAttribute('aria-pressed', String(fpsOn));
-// The light sliders: Lights, a short word in the Clear board item's group, so the menu keeps its height, opens a page of
-// three sliders then the FPS switch, as Sound opens the volumes; 0 to 300 % of the tuned power each (lightpanel.ts scalePower).
-const lightsButton = Object.assign(document.createElement('button'), { id: 'setting-lights', type: 'button', textContent: 'Lights', title: 'Light power' });
 const clearRow = document.getElementById('setting-clear-board')!;
 const clearGroup = document.createElement('div');
 clearGroup.className = 'setting-group';
 clearRow.replaceWith(clearGroup);
-clearGroup.append(clearRow, lightsButton);
+clearGroup.append(clearRow, fpsButton);
 // The glass skin (#377) is a second button in the shell skin's item: no row of its own, so the menu keeps its height.
 const shellSkinRow = document.getElementById('setting-shell-skin')!;
 const skinGroup = document.createElement('div');
@@ -772,11 +768,9 @@ for (const bus of BUSES) {
     writeVolume(store, bus, sfx.volume(bus));
   });
 }
+// The three light sliders, the last rows of the menu with its items: 0 to 300 % of the tuned power each (lightpanel.ts
+// scalePower), each saved on its own.
 const levelAt = (level: Level): HTMLInputElement => document.getElementById(`level-${level}`) as HTMLInputElement;
-lightsButton.addEventListener('click', () => {
-  menu.dataset.page = 'lights';
-  levelAt('bloom').focus();
-});
 const levels = readLevels(store);
 for (const level of LEVELS) {
   const row = menu.appendChild(document.createElement('label'));
@@ -789,14 +783,13 @@ for (const level of LEVELS) {
     scaleLights();
   });
 }
-menu.append(fpsButton);
 // The difficulty setting (#704) is a second button in the Export game item, so the menu keeps its height.
 const exportRow = document.getElementById('setting-export-game')!;
 const exportGroup = document.createElement('div');
 exportGroup.className = 'setting-group';
 exportRow.replaceWith(exportGroup);
 exportGroup.append(exportRow, document.getElementById('setting-difficulty')!);
-// The log archive (#513): its button, Logs, is a short word beside Import game, as Lights is beside Clear board, so the menu
+// The log archive (#513): its button, Logs, is a short word beside Import game, as FPS is beside Clear board, so the menu
 // keeps its height. It opens a page of one button per entry read, then per audio log collected (#517), in place of the
 // items; a press on one closes the menu and reopens the entry in the terminal reader, or replays the log.
 const archiveButton = Object.assign(document.createElement('button'), {

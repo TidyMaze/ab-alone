@@ -84,8 +84,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 /* The volume page (#438): Sound shows the four sliders in place of the items, so the menu is never taller than its items
    and covers no cell. Each slider is its name over a range of 0 to 100 %. */
 #settings-menu[data-page='volume'] > :not(.setting-volume), #settings-menu:not([data-page='volume']) > .setting-volume { display: none; }
-/* The lights page: Lights shows its three sliders the same way, styled as the volumes. */
-#settings-menu[data-page='lights'] > :not(.setting-lights), #settings-menu:not([data-page='lights']) > .setting-lights { display: none; }
+/* The three light sliders are rows of the menu itself, with its items, styled as the volumes. */
 :is(.setting-volume, .setting-lights) {
   box-sizing: border-box; max-width: 100%;
   display: flex; flex-direction: column; justify-content: center; gap: 0.125rem; padding: 0.25rem 0.75rem; min-width: 8rem;
@@ -293,6 +292,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   /* Bug #427, #458: the column scrolls, so a menu inside it is clipped at its bottom edge or left edge once the UI scale grows it or when it is wider than the column. Fixed to the
      viewport and hung from the cog, it leaves that clip on every browser. */
   #settings-menu { position: fixed; top: calc(16px + 2.75rem + 0.25rem); right: 16px; width: max-content; max-width: calc(100vw - 32px); }
+  /* With the light sliders the menu is taller than a phone held sideways: it scrolls, so every row stays reachable. */
+  #settings-menu { max-height: calc((100dvh - 32px) / var(--ui-scale) - 2.75rem - 0.25rem); overflow-y: auto; } /* zoomed (#382) */
   @supports (anchor-name: --cog) {
     #settings-menu { position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
   }
@@ -338,7 +339,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #settings-menu button { justify-content: center; min-width: 2.75rem; min-height: 2.75rem; padding: 0.5rem; }
   #settings-menu button span { display: none; }
   #setting-difficulty svg { display: block; }
-  #settings-menu :is(#setting-difficulty, #setting-log-archive, #setting-lights) { padding-inline: 0.25rem; }
+  #settings-menu :is(#setting-difficulty, #setting-log-archive) { padding-inline: 0.25rem; }
 }
 /* Wider than tall, those icons sit in rows of 3 under the cog, as narrow as the column band. */
 @media (orientation: landscape) and (max-width: 1100px), (orientation: landscape) and (max-height: 500px) {

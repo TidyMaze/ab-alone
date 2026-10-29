@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-// The FPS readout (#426): off by default, switched on in the settings menu's Lights page, kept across a reload, its last value in
+// The FPS readout (#426): off by default, switched on in the settings menu, kept across a reload, its last value in
 // Copy diagnostics.
 test('the FPS readout is off by default, shows a rate once switched on, and survives a reload', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -10,7 +10,6 @@ test('the FPS readout is off by default, shows a rate once switched on, and surv
   await expect(readout).toBeHidden();
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: 'Lights' }).click(); // the FPS switch is on the Lights page
   const fps = page.getByRole('button', { name: 'FPS' });
   await expect(fps).toHaveAttribute('aria-pressed', 'false');
   await fps.click();
