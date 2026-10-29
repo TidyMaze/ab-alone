@@ -18,8 +18,21 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
 
 jobs:
+  # `rust` is the only check branch protection requires (#409): two PRs green alone once broke `tsc` on main together
+  # (#402). It gates the four checks below, which run side by side to halve the wait; it fails unless every one
+  # succeeded, since a skipped or cancelled job would pass a required check.
   rust:
     # No CI on draft PRs: it runs when the PR is ready (ready_for_review) and on pushes to main.
+    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    needs: [cargo, client, build, mcp]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "$RESULTS" = 'success success success success'
+        env:
+          RESULTS: ${{ needs.cargo.result }} ${{ needs.client.result }} ${{ needs.build.result }} ${{ needs.mcp.result }}
+
+  cargo:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -32,8 +45,45 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --all --locked
-      # The client checks run here because `rust` is the only check branch protection requires (#409): two PRs green
-      # alone once broke `tsc` on main together (#402). Both need the wasm package, cached like in the `wasm` job.
+
+  # The client's unit tests, on the wasm package, cached like in the `wasm` job.
+  client:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - id: wasm-cache
+        uses: actions/cache@v4
+        with:
+          path: crates/abalone-wasm/pkg
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: rustup target add wasm32-unknown-unknown
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: wasm-pack build crates/abalone-wasm --target web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: client/package.json
+      - run: bun install --frozen-lockfile
+        working-directory: client
+      - run: bun run test
+        working-directory: client
+
+  # The client's types and production build, on the same cached wasm package.
+  build:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
       - id: wasm-cache
         uses: actions/cache@v4
         with:
@@ -57,8 +107,6 @@ jobs:
         working-directory: client
       - run: bunx tsc --noEmit
         working-directory: client
-      - run: bun run test
-        working-directory: client
       # The KTX2 encodes of the textures (#700), by the hash of each source: only a changed texture is encoded again.
       - uses: actions/cache@v4
         with:
@@ -70,12 +118,26 @@ jobs:
         working-directory: client
       - run: bun run scripts/size-budget.mjs dist
         working-directory: client
-      # The MCP server's tests (#252, #755): they build their own wasm package (nodejs target), so wasm-pack and the
-      # wasm target are always needed here, cached wasm or not.
+
+  # The MCP server's tests (#252, #755): they build their own wasm package (nodejs target), so wasm-pack and the wasm
+  # target are always needed here.
+  mcp:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
       - run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: client/package.json
       - run: bun install --frozen-lockfile
         working-directory: mcp
       - run: bun run test

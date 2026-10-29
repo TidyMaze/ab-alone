@@ -6,3 +6,8 @@ members = ["crates/abalone-core", "crates/abalone-cli", "crates/abalone-wasm"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+
+# The tests run optimised: the search and bot tests play many moves, 130 s unoptimised against 23 s here (cargo test,
+# compile included), and `cargo llvm-cov` keeps 100 % lines and regions. Debug assertions and overflow checks stay on.
+[profile.test]
+opt-level = 2
