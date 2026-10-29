@@ -37,6 +37,7 @@ import { LIGHT_TUNING } from './lighttuning';
 import { tubeLights } from './neonlight';
 import { ringLamp } from './ringlamp';
 import { CELL_LAYER, instanceCells, instanceMarbles } from './instancedcells';
+import sceneOverrides from './sceneoverrides.json';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
 import { CulledLighting } from './culledlighting';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -1606,7 +1607,7 @@ const lightsPanel = new URLSearchParams(location.search).has('lights') ? documen
 const bloomKnobs = ((b) =>
   b
     ? [
-        { name: 'bloom strength', uniform: b.strength, max: 3 },
+        { name: 'bloom strength', uniform: b.strength, max: 3, scaled: true },
         { name: 'bloom radius', uniform: b.radius, max: 1 },
         { name: 'bloom threshold', uniform: b.threshold, max: 10 },
       ]
@@ -1615,9 +1616,19 @@ const bloomKnobs = ((b) =>
 function scaleLights(): void {
   scalePower(sceneRenderer.scene, levels, bloomKnobs[0]?.uniform);
 }
-// The lights as tuned (lighttuning.ts), each time they are made again: here, and on the deck's change and the room.
+// The ?lights panel's Save button, in dev only: the dev server writes the panel's tuning to sceneoverrides.json (#875).
+const saveOverrides = import.meta.env.DEV
+  ? {
+      levels,
+      write: (power: Record<string, number>): void =>
+        void fetch('/__sceneoverrides', { method: 'POST', body: JSON.stringify({ power }) }),
+    }
+  : undefined;
+// The lights as tuned (lighttuning.ts) and as saved from the panel (sceneoverrides.json), each time they are made again:
+// here, and on the deck's change and the room.
 const refreshLights = (): void => {
   applyTuning(sceneRenderer.scene, LIGHT_TUNING, bloomKnobs);
+  applyTuning(sceneRenderer.scene, sceneOverrides.power, bloomKnobs);
   scaleLights();
   if (lightsPanel)
     lightPanel(
@@ -1627,6 +1638,7 @@ const refreshLights = (): void => {
       bloomKnobs,
       // The dev server's endpoint (scripts/editor-scene.mjs): the build drops the button and the exporter with it.
       import.meta.env.DEV ? () => void openInEditor(sceneRenderer.scene, sceneRenderer.camera, renderer).catch(console.error) : undefined,
+      saveOverrides,
     );
 };
 // What the last look made, disposed when the next replaces it (#846): a setting is a rebuild, never a leak.
