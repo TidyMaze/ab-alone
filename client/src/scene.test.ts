@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { BOARD_CELLS, RADIUS, VANISHED, cellIndex } from './board';
 import { resetView, type View } from './camera';
+import { DECK_PARTICLES } from './deck';
 import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, type NotchRow } from './scene';
@@ -57,6 +58,11 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.ghosts).toBeInstanceOf(THREE.Group);
     expect(sr.arenaMarbles).toBeInstanceOf(THREE.Group);
     expect(sr.particles).toBeInstanceOf(THREE.Points);
+  });
+
+  it('holds as many particles as the busiest deck draws (#880)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    expect(sr.particlePositions.length / 3).toBe(Math.max(...Object.values(DECK_PARTICLES).map((p) => p.count)));
   });
 
   it('adds no light of its own: the room\'s tubes light the board, no ambient light (#877)', () => {

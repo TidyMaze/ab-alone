@@ -134,7 +134,7 @@ export class SceneRenderer {
 
     this.fogObj = new THREE.Fog(DECK_ATMOSPHERES.mess.fogColor, 10, 20);
 
-    const maxParticles = 96;
+    const maxParticles = Math.max(...Object.values(DECK_PARTICLES).map((p) => p.count));
     this.particleGeometry = new THREE.BufferGeometry();
     this.particlePositions = new Float32Array(maxParticles * 3);
     for (let i = 0; i < maxParticles; i++) this.resetParticle(i);

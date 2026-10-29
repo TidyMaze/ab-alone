@@ -14,10 +14,10 @@ export interface DeckParticles {
 }
 
 export const DECK_PARTICLES: Record<Deck, DeckParticles> = {
-  mess: { kind: 'dust', count: 48, drift: [0.03, 0.015, 0.01], color: 0xc8bea8, size: 0.07, opacity: 0.35 },
-  cargo: { kind: 'ore', count: 64, drift: [-0.03, -0.04, 0.02], color: 0x9e7c5b, size: 0.08, opacity: 0.4 },
-  furnace: { kind: 'steam', count: 80, drift: [0.02, 0.12, -0.02], color: 0xe08438, size: 0.14, opacity: 0.32 },
-  chapel: { kind: 'smoke', count: 50, drift: [-0.02, 0.07, 0.01], color: 0xd4cebf, size: 0.11, opacity: 0.28 },
+  mess: { kind: 'dust', count: 144, drift: [0.03, 0.015, 0.01], color: 0xc8bea8, size: 0.07, opacity: 0.35 },
+  cargo: { kind: 'ore', count: 192, drift: [-0.03, -0.04, 0.02], color: 0x9e7c5b, size: 0.08, opacity: 0.4 },
+  furnace: { kind: 'steam', count: 240, drift: [0.02, 0.12, -0.02], color: 0xe08438, size: 0.14, opacity: 0.32 },
+  chapel: { kind: 'smoke', count: 150, drift: [-0.02, 0.07, 0.01], color: 0xd4cebf, size: 0.11, opacity: 0.28 },
   bridge: { kind: 'none', count: 0, drift: [0, 0, 0], color: 0xffffff, size: 0, opacity: 0 },
 };
 
