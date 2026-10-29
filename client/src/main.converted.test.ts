@@ -3,8 +3,6 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
 import { contrastRatio, type RGB } from './contrast';
-import { CONVERTED } from './marbles';
-import { PALETTE_DEFS } from './palettes';
 import { SKINS } from './skins';
 import { CONVERTED_AT, SEED } from './test/chaplain-game';
 import { recordedGame } from './test/chaplain-fixture';
@@ -71,13 +69,13 @@ const upright = (mesh: THREE.Object3D): boolean => {
 const box = (mesh: Mesh): THREE.Box3 => (mesh.geometry.computeBoundingBox(), mesh.geometry.boundingBox!);
 
 describe('main.ts converted look (#508)', () => {
-  it('a converted marble is the ridged shell below, the glass above with a dimmed core, under the wax', async () => {
+  it('a converted marble is the ridged shell below, the glass above, under the wax, no core inside the opaque glass (#885)', async () => {
     const scene = catchScene();
     const game = await boot('?nodes=200', { reducedMotion: true });
     const cells = await convertOne(game);
     const looks = game.hook<Look[]>('__convertedLooks');
     expect(looks).toHaveLength(cells.length);
-    expect(looks).toEqual(expect.arrayContaining(cells.map((cell) => ({ cell, parts: ['wax', 'shell', 'glass', 'core', 'cracks', 'glyph'] }))));
+    expect(looks).toEqual(expect.arrayContaining(cells.map((cell) => ({ cell, parts: ['wax', 'shell', 'glass', 'cracks', 'glyph'] }))));
     expect(new Set(game.hook<{ accent: string }[]>('__accents').map((w) => w.accent))).toEqual(new Set(['wax'])); // no part is an accent
     const marbles = boardMarbles(scene());
     const plainShell = marbles.find((m) => m.getObjectByName('wax') && m.material.visible)!.material;
@@ -85,16 +83,13 @@ describe('main.ts converted look (#508)', () => {
     for (const cell of cells) {
       const marble = marbleOn(scene(), cell);
       expect(marble.material.visible).toBe(false); // only its halves are drawn
-      const [shell, glass, core] = ['shell', 'glass', 'core'].map((name) => part(marble, name));
+      const [shell, glass] = ['shell', 'glass'].map((name) => part(marble, name));
       expect(shell!.material).toBe(plainShell); // the ridged shell of the boss side
       expect(glass!.material).toBe(playerGlass); // the player's glass
       expect(box(shell!).max.y).toBeLessThanOrEqual(1e-6); // up to the middle
       expect(box(glass!).min.y).toBeGreaterThanOrEqual(-1e-6); // above it
-      expect(box(core!).min.y).toBeGreaterThanOrEqual(-1e-6); // in the glass half
-      const light = core!.material as THREE.MeshBasicMaterial;
-      expect(light.opacity).toBe(CONVERTED.core);
-      expect(light.color.getHex()).toBe(PALETTE_DEFS.default.core);
-      for (const p of [shell, glass, core, part(marble, 'wax'), part(marble, 'cracks'), part(marble, 'glyph')]) expect(upright(p!)).toBe(true);
+      expect(marble.getObjectByName('core')).toBeUndefined();
+      for (const p of [shell, glass, part(marble, 'wax'), part(marble, 'cracks'), part(marble, 'glyph')]) expect(upright(p!)).toBe(true);
     }
   }, 60_000);
 
@@ -119,17 +114,12 @@ describe('main.ts converted look (#508)', () => {
     }
   }, 60_000);
 
-  it('follows the palette and the white skin', async () => {
+  it('follows the white skin', async () => {
     const scene = catchScene();
     const game = await boot('?nodes=200', { reducedMotion: true });
     const [cell] = await convertOne(game);
-    const light = () => part(marbleOn(scene(), cell!), 'core').material as THREE.MeshBasicMaterial;
     game.openSettings();
-    byId('setting-palette').click();
-    expect(game.hook('__palette')).toBe('protan');
-    expect(light().color.getHex()).toBe(PALETTE_DEFS.protan.core);
     for (let i = 0; i < 6; i++) byId('setting-glass-skin').click();
-    expect(light().color.getHex()).toBe(PALETTE_DEFS.protan.core); // the white skin does not change the core's colour
     const glass = part(marbleOn(scene(), cell!), 'glass').material;
     expect(glass).toBe(boardMarbles(scene()).find((m) => m.material instanceof THREE.MeshPhysicalMaterial)!.material);
   }, 60_000);

@@ -94,7 +94,6 @@ for (const reduced of [false, true]) {
 
 test('an ejected marble tumbles, stretches and fades into the void, then the effect ends', async ({ page }) => {
   const { seen } = await pushOffBoard(page);
-  await expect(page.locator('body')).toHaveAttribute('data-core', '0.90'); // #506: White's core dims a step
   expect(seen.kind).toBe('tumble');
   expect(seen.blood).toBe('spatter'); // #278: the spatter starts with the tumble
   expect(seen.at200).toHaveLength(1);

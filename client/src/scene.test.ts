@@ -28,6 +28,22 @@ describe('SceneRenderer (#632)', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps the last matrices of a hidden object, which nothing draws, until it is shown (#885)', () => {
+    const { scene } = new SceneRenderer({ renderer: createMockRenderer(), innerWidth: 1000, innerHeight: 800 });
+    const [shown, hidden] = [new THREE.Group(), new THREE.Group()];
+    const held = new THREE.Mesh();
+    hidden.add(held);
+    hidden.visible = false;
+    scene.add(shown, hidden);
+    for (const o of [shown, hidden, held]) o.position.x = 1;
+    scene.updateMatrixWorld();
+    expect(shown.matrixWorld.elements[12]).toBe(1);
+    expect([hidden.matrixWorld.elements[12], held.matrixWorld.elements[12]]).toEqual([0, 0]);
+    hidden.visible = true;
+    scene.updateMatrixWorld();
+    expect([hidden.matrixWorld.elements[12], held.matrixWorld.elements[12]]).toEqual([1, 2]);
+  });
+
   it('constructs scene, camera, lights, mesh pools and groups', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({

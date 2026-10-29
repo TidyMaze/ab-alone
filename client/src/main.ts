@@ -35,6 +35,7 @@ import { applyTuning, LEVELS, lightPanel, scalePower, type Level } from './light
 import { LIGHT_TUNING } from './lighttuning';
 import { tubeLights } from './neonlight';
 import { ringLamp } from './ringlamp';
+import { CELL_LAYER, instanceCells } from './instancedcells';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
 import { CulledLighting } from './culledlighting';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -213,7 +214,7 @@ import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale
 import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
-import { ACCENTS, CONVERTED, CORE, coreLevel, GLASS, HEAT, pulseAt, SHELL, type Accent } from './marbles';
+import { ACCENTS, CORE, GLASS, HEAT, pulseAt, SHELL, type Accent } from './marbles';
 import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
@@ -1124,10 +1125,8 @@ const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
 };
 await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m))); // the worn skins are dressed from the first frame
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
-const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the marble
-const convertedCore = new THREE.MeshBasicMaterial({ color: coreMaterial.color, transparent: true, opacity: CONVERTED.core });
-// Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. The glass holds
-// its cyan core as a child: the selection lift, the slide and the ejection carry it.
+// Who wears the glass depends on the mode (glass.ts), so a side maps to a look only at draw time. A ghost's see-through
+// glass holds a cyan core as a child; a marble's opaque skin would hide one, so it has none (#885).
 const glassOf = (): number => glassSide({ online: online !== null, bot: worker !== null, fight: fight !== null });
 // The boss accents (#507, marbles.ts): one mesh per boss, that each shell of its side holds as a child in boss mode.
 function accentGeometry(a: Accent): THREE.BufferGeometry {
@@ -1157,10 +1156,10 @@ function reflect(texture: THREE.Texture): void {
   }
   scaleLights();
 }
-function marbleMesh(side: number, looks = marbleMaterials, core = coreMaterial): THREE.Mesh {
+function marbleMesh(side: number, looks = marbleMaterials, core?: THREE.Material): THREE.Mesh {
   const glass = side === glassOf();
   const mesh = new THREE.Mesh(marbleGeometry, looks[glass ? 2 : 1]);
-  if (glass) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
+  if (glass && core) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
   const accent = !glass && looks === marbleMaterials ? accents.get(fight?.id ?? '') : undefined; // the boss side (#507)
   if (accent) mesh.add(accent.clone());
   return mesh;
@@ -1213,8 +1212,8 @@ const blastShardGeometry = new THREE.TetrahedronGeometry(0.15);
 const blastShardMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d, transparent: true, depthWrite: false });
 let blast: { group: THREE.Group; flash: THREE.Mesh; shards: THREE.Mesh[]; start: number; reduced: boolean; then?: Speech } | null = null;
 // A converted marble (#508, world.md section 5) is half and half, 3:1 on the shell (#326): the ridged shell up to its
-// middle, a bowl closed by a flat floor so its inside never shows, and the player's glass above it with the core dimmed
-// (marbles.ts), resting on the floor. The halves stay upright whatever the marble's turn, under its boss accent; the
+// middle, a bowl closed by a flat floor so its inside never shows, and the player's glass above it, resting on the
+// floor. The halves stay upright whatever the marble's turn, under its boss accent; the
 // marble's own sphere is not drawn.
 const half = detail.marbleHeightSegments / 2;
 const shellHalfGeometry = new THREE.LatheGeometry(
@@ -1228,7 +1227,6 @@ const shellHalfGeometry = new THREE.LatheGeometry(
   detail.marbleWidthSegments,
 );
 const glassHalfGeometry = new THREE.SphereGeometry(MARBLE_RADIUS, detail.marbleWidthSegments, half, 0, Math.PI * 2, 0, Math.PI / 2);
-const convertedCoreGeometry = coreGeometry.clone().translate(0, CORE.radius, 0);
 const unseen = new THREE.MeshBasicMaterial({ visible: false });
 // Beyond the colour (#790): the Chaplain's pale glyph over the wax and pale cracks on the shell half (the crack decal of the
 // Hull), both 3:1 on every shell and glass skin, whatever the deck's light.
@@ -1242,7 +1240,7 @@ function convert(marble: THREE.Mesh): void {
   const cracks = Object.assign(new THREE.Mesh(shellHalfGeometry, convertedCracks), { name: 'cracks' });
   cracks.scale.setScalar(1.01); // just outside the shell
   const glyph = Object.assign(new THREE.Mesh(convertedGlyphGeometry, convertedGlyph), { name: 'glyph' });
-  marble.add(shell, glass, Object.assign(new THREE.Mesh(convertedCoreGeometry, convertedCore), { name: 'core', renderOrder: 1 }), cracks, glyph);
+  marble.add(shell, glass, cracks, glyph);
 }
 let exposed = 0; // marbles the hovered move would expose, for the HUD
 // The Choir: each army wears its own glyph in the pale tell colour on top of its marbles, Alto a spike,
@@ -1528,6 +1526,7 @@ const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   scene.add(disc);
   return disc;
 });
+instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
 // The battle royale arena (#502): its own 217 discs at half the spacing, in the room of the radius 4 board, shown in its
 // place while a battle royale is on. Its marbles wear their seat's shell tint (marbles.ts).
 const arena = new THREE.Group();
@@ -1544,6 +1543,7 @@ const arenaDiscs = ARENA.map(([q, r], i) => {
   arena.add(disc);
   return disc;
 });
+instanceCells(arenaDiscs, arena);
 arena.add(arenaMarbles);
 arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
@@ -1818,8 +1818,6 @@ function applyPalette(): void {
   paleMaterial.color.setHex(pal.tell);
   firedMaterial.color.set(pal.hazard);
   ghostCore.color.setHex(pal.core);
-  coreMaterial.color.setHex(pal.core);
-  convertedCore.color.copy(coreMaterial.color);
 }
 applyPalette();
 let hover: Axial | null = null;
@@ -2949,9 +2947,6 @@ function refresh(): void {
   document.body.dataset.beltStrikes = beltsShown ? beltsShown.belts.map((b) => b.strike).join(',') : '';
   document.body.dataset.pulseCounter = pulsarShown && charging(pulsarShown) ? String(pulsarShown.left) : '';
   document.body.dataset.vanished = String(Array.from(board).filter((v) => v === VANISHED).length);
-  const enemy = 3 - glassOf(); // the core dims a step per player marble the enemy ejected (#506)
-  coreMaterial.opacity = coreLevel(engine.ejected(enemy), engine.win_ejections(enemy));
-  document.body.dataset.core = coreMaterial.opacity.toFixed(2); // read by the e2e tests
   hud();
   refreshGhosts(moves);
 }
@@ -3191,6 +3186,7 @@ function click(q: number, r: number): void {
 }
 
 const raycaster = new THREE.Raycaster();
+raycaster.layers.enable(CELL_LAYER); // the cell discs, drawn by their instances (#885), are what a click hits
 function aim(e: PointerEvent | MouseEvent): void {
   raycaster.setFromCamera(
     new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1),
