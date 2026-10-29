@@ -106,12 +106,14 @@ export const readMix = (store: Store): Mix => {
   return { music: volume('music'), ambience: volume('ambience'), effects: volume('effects'), voice: volume('voice') };
 };
 export const writeVolume = (store: Store, bus: Bus, percent: number): void => write(store, volumeKey(bus), String(percent));
-// The three light sliders (lightpanel.ts scalePower), 0 to 300 % of the tuned power each, 100 % unless the player moved it.
+// The three light sliders (lightpanel.ts scalePower), 0 to 300 % of the tuned power each; until the player moves one,
+// the levels the owner tuned in the game (2026-10-29).
+const DEFAULT_LEVELS: Readonly<Record<Level, number>> = { bloom: 20, lamps: 25, lights: 215 };
 const levelKey = (level: Level): string => `ab-alone.light.${level}`;
 export const readLevels = (store: Store): Record<Level, number> => {
   const level = (l: Level): number => {
     const saved = read(store, levelKey(l)) ?? '';
-    return /^\d+$/.test(saved) && Number(saved) <= 300 ? Number(saved) : 100;
+    return /^\d+$/.test(saved) && Number(saved) <= 300 ? Number(saved) : DEFAULT_LEVELS[l];
   };
   return { bloom: level('bloom'), lamps: level('lamps'), lights: level('lights') };
 };

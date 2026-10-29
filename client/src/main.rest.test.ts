@@ -91,11 +91,12 @@ describe('main.ts, the tuned lights', () => {
       return add.apply(this, objects);
     });
     await boot('?bot=off');
+    // The tuned power, times the sliders' default levels (quality.ts): lamps 25 %, lights 215 %; the key is not scaled.
     expect((scene!.getObjectByName('key') as THREE.Light).intensity).toBe(LIGHT_TUNING.key);
-    expect(((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity).toBe(
-      LIGHT_TUNING['corner-neon'],
+    expect(((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(
+      LIGHT_TUNING['corner-neon']! * 0.25,
     );
-    expect((scene!.getObjectByName('emergencyLight') as THREE.Light).intensity).toBe(LIGHT_TUNING.emergencyLight);
+    expect((scene!.getObjectByName('emergencyLight') as THREE.Light).intensity).toBeCloseTo(LIGHT_TUNING.emergencyLight! * 2.15);
   });
 });
 
@@ -116,7 +117,7 @@ describe('main.ts, the light sliders', () => {
     const scaled = [LIGHT_TUNING.emergencyLight! * 2, LIGHT_TUNING['corner-neon']! / 2];
     expect([emergency(), neon()]).toEqual(scaled);
     const bloom = document.getElementById('level-bloom') as HTMLInputElement;
-    expect(bloom.value).toBe('100');
+    expect(bloom.value).toBe('20'); // its default level (quality.ts)
     bloom.value = '300';
     bloom.dispatchEvent(new Event('input'));
     expect(localStorage.getItem('ab-alone.light.bloom')).toBe('300');
