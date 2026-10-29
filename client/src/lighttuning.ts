@@ -19,7 +19,6 @@ export const LIGHT_TUNING: Readonly<Record<string, number>> = {
   'neon-column light': 100,
   'neon-gantry light': 100,
   'neon-observation light': 100,
-  neonLight: 100,
   'pedestal-neon light': 100,
   kioskGreenLight: 100,
   viewportRimLight: 100,
