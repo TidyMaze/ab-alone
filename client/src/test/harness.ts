@@ -29,8 +29,8 @@ export interface BootOptions {
   missing?: string[];
   /** document.fonts.load, which jsdom lacks: by default every font is in at once. */
   fonts?: (font: string) => Promise<unknown>;
-  /** What fails: `worker` answers every bot request with an error, `wasm` and `renderer` reject their init (#736, #737). */
-  fails?: 'worker' | 'wasm' | 'renderer';
+  /** What fails: `worker` answers every bot request with an error, `wasm` and `renderer` reject their init (#736, #737), `compile` rejects the shader compile (#847). */
+  fails?: 'worker' | 'wasm' | 'renderer' | 'compile';
   /** The renderer runs on WebGPU, not its WebGL fallback: compute shaders, so clustered lighting (#neon tubes). */
   webgpu?: boolean;
 }
@@ -54,6 +54,8 @@ export interface Game {
   online(): Promise<void>;
   /** The three.js scenes drawn so far. */
   draws(): number;
+  /** Whether the canvas was already in the page at each shader compile, `renderer.compileAsync` (#847). */
+  compiles(): boolean[];
   /** The other end of the online room once the page goes online (Play online, an invite link), else null. */
   peer(): Transport | null;
   /** The room the page went online in, else null. */
@@ -171,6 +173,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   // The renderer draws nothing: it keeps the animation loop for frame() and counts the draws.
   let loop: ((now: number) => void) | null = null;
   let draws = 0;
+  const compiles: boolean[] = [];
   vi.resetModules();
   vi.doMock('abalone-wasm', async (importOriginal) => {
     const wasm = await (await import('./wasm')).nodeWasm(importOriginal as never);
@@ -187,6 +190,10 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       init = async (): Promise<void> => {
         if (options.fails === 'renderer') throw new Error('no GPU');
         this.initialized = true;
+      };
+      compileAsync = async (): Promise<void> => {
+        compiles.push(this.domElement.isConnected);
+        if (options.fails === 'compile') throw new Error('shader compile failed');
       };
       setPixelRatio(): void {}
       setSize(): void {}
@@ -284,6 +291,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       while (document.body.dataset.online === undefined) await new Promise((done) => setTimeout(done));
     },
     draws: () => draws,
+    compiles: () => compiles,
     peer: () => peer,
     room: () => room,
   };

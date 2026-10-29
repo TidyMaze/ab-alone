@@ -118,6 +118,13 @@ describe('the service worker (#193)', () => {
 });
 
 describe('the renderer and its textures', () => {
+  // #847: on WebGL the first draw froze 8.3 s compiling the shaders. They compile before the canvas joins the page.
+  it('compiles the shaders once, before the canvas joins the page, #847', async () => {
+    const game = await boot('?bot=off');
+    expect(game.compiles()).toEqual([false]);
+    expect(document.querySelector('canvas')).not.toBeNull();
+  });
+
   // Bug #585: the e2e tests take a canvas in the page for a page that is ready. It joins the page once the HUD is filled,
   // after every listener and page hook, not while the textures and the saved game still load.
   it('puts the canvas in the page only once the page is ready, bug #585', async () => {
@@ -193,6 +200,7 @@ describe('the renderer and its textures', () => {
             this.samples = (o as { antialias: boolean }).antialias ? 4 : 0;
           }
           init = async (): Promise<void> => {};
+          compileAsync = async (): Promise<void> => {};
           setPixelRatio(): void {}
           setSize(): void {}
           getMaxAnisotropy = (): number => 1;

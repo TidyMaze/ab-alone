@@ -5133,6 +5133,8 @@ if (serviceWorker) {
 refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
+// The scene's shaders compile before the canvas shows (#847), not inside the first draw, which froze 8.3 s on WebGL.
+await renderer.compileAsync(scene, camera).catch(bootFailed);
 document.body.appendChild(renderer.domElement);
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw: LastDraw = { start: -Infinity, cost: 0, timed: true };
