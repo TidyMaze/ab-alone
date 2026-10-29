@@ -20,7 +20,7 @@ export const LIGHT_TUNING: Readonly<Record<string, number>> = {
   'ring-lamp light': 42.5,
   kioskGreenLight: 100,
   viewportRimLight: 100,
-  'bloom strength': 0.06,
-  'bloom radius': 0.008,
-  'bloom threshold': 3,
+  'bloom strength': 0.36,
+  'bloom radius': 0.136,
+  'bloom threshold': 5,
 };

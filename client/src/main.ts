@@ -1590,7 +1590,7 @@ const bloomKnobs = ((b) =>
     ? [
         { name: 'bloom strength', uniform: b.strength, max: 3 },
         { name: 'bloom radius', uniform: b.radius, max: 1 },
-        { name: 'bloom threshold', uniform: b.threshold, max: 3 },
+        { name: 'bloom threshold', uniform: b.threshold, max: 10 },
       ]
     : [])(sceneRenderer.pipeline?.bloom);
 // The settings' light sliders over the tuned power; the first knob is the bloom's strength.
