@@ -96,8 +96,12 @@ test('The Unstable Core: a boss marble that stays on the core overloads and is e
   await page.screenshot({ path: testInfo.outputPath('unstable-overload.png') });
 });
 
+// The sweep and the falls play on the page clock (page.clock): the clock is paused before the last ply and stepped by hand,
+// so the frames the test samples do not depend on how fast a loaded machine draws (#854).
 test('The Unstable Core: the core collapses, then the wedge shockwave shoves the busiest sixth outward, #751', async ({ page }, testInfo) => {
   const tell = page.locator('#hud .boss .tell');
+  const body = page.locator('body');
+  await page.clock.install();
   await startCore(page);
   await plies(page, FULL, 0, 17);
   await plies(page, FULL, 17, 18);
@@ -113,21 +117,30 @@ test('The Unstable Core: the core collapses, then the wedge shockwave shoves the
   await page.screenshot({ path: testInfo.outputPath('unstable-wedge.png') });
   await plies(page, FULL, 23, 24);
   await page.emulateMedia({ reducedMotion: 'no-preference' }); // the last ply with the sweep
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
   await plies(page, FULL, 24, 25);
-  await expect(page.locator('body')).toHaveAttribute('data-shockwaves', '1');
+  // The player's slide ends, then the shockwave fires: step the clock until it does, 100 ms at a time.
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(100);
+      return body.getAttribute('data-shockwaves');
+    })
+    .toBe('1');
   const scales: number[] = [];
-  for (let frame = 0; frame < 6; frame++) {
-    await freshDraw(page);
+  for (let frame = 0; frame < 4; frame++) {
     const sweep = await page.evaluate(() => (window as any).__sweep());
-    if (sweep === null) break;
+    expect(sweep).not.toBeNull(); // the sweep lasts 650 ms: 4 steps after it fired it is still out
     scales.push(sweep.scale);
-    await page.screenshot({ path: testInfo.outputPath(`unstable-sweep-${frame}.png`) });
+    await page.clock.runFor(100);
   }
-  expect(scales.length).toBeGreaterThan(0);
   expect(scales).toEqual([...scales].sort((a, b) => a - b)); // it grows
-  await page.waitForFunction(() => (window as any).__sweep() === null);
+  expect(new Set(scales).size).toBe(scales.length);
+  await page.clock.runFor(3000); // the sweep is over and the shoved marbles have fallen
+  expect(await page.evaluate(() => (window as any).__sweep())).toBeNull();
   expect(await outPips(page)).toEqual([5, 4]); // 4 rim marbles of the player fell
   expect(await marbleAt(page, -4, 4)).toBe(false);
-  await freshDraw(page);
+  const asked = await page.evaluate(() => (window as any).__drawNext() as number); // a paused clock draws only when stepped
+  await page.clock.runFor(200);
+  await page.waitForFunction((n) => (window as any).__draws() > n, asked);
   await page.screenshot({ path: testInfo.outputPath('unstable-after.png') });
 });
