@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ICONS } from './icons';
-import { archiveList, menuOpen, motionReduced, nextDisplay, nextTheme, settingsList, themeAttribute, VOLUME_NAMES } from './settings';
+import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, nextTheme, settingsList, themeAttribute, VOLUME_NAMES } from './settings';
 import { BUSES } from './sound';
+import { LEVELS } from './lightpanel';
 import { glassSkinById } from './glassskins';
 import { PALETTE_NAMES } from './palettes';
 import { skinById } from './skins';
@@ -46,6 +47,10 @@ describe('settingsList', () => {
 
   it('names the four volume sliders, one per bus (#438)', () => {
     expect(BUSES.map((bus) => VOLUME_NAMES[bus])).toEqual(['Music', 'Ambience', 'Effects', 'Voice']);
+  });
+
+  it('names the three light sliders, one per level', () => {
+    expect(LEVELS.map((level) => LEVEL_NAMES[level])).toEqual(['Bloom', 'Lamps', 'Lights']);
   });
 
   it('cycles the theme first; once back to System, steps the UI scale up to the cap; then 100 % with Safe mode flipped', () => {

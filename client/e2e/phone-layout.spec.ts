@@ -124,21 +124,28 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
 };
 
 // The volume page of the settings menu (#438): Sound shows the four sliders in place of the items; they cover no cell
-// either, and on a touch screen each is a touch target of at least 44 px.
+// either, and on a touch screen each is a touch target of at least 44 px. The same for the Lights page and its rows.
 const checkVolumes = async (page: Page, state: string) => {
-  await tapCog(page);
-  await page.getByRole('button', { name: 'Sound' }).click();
-  await expect(page.getByRole('slider', { name: 'Music' })).toBeVisible();
-  await frame(page);
-  expect(await problems(page), `${state}, volume sliders open`).toEqual([]);
-  const small = await page.evaluate(() =>
-    [...document.querySelectorAll('#settings-menu .setting-volume')]
-      .filter((el) => navigator.maxTouchPoints > 0 && el.getBoundingClientRect().height < 44)
-      .map((el) => el.textContent),
-  );
-  expect(small, `${state}, volume sliders under 44 px`).toEqual([]);
-  await tapCog(page);
-  await expect(page.getByRole('slider', { name: 'Music' })).toBeHidden();
+  for (const [item, first, rows] of [
+    ['Sound', 'Music', '.setting-volume'],
+    ['Lights', 'Bloom', '.setting-lights'],
+  ] as const) {
+    await tapCog(page);
+    await page.getByRole('button', { name: item }).click();
+    await expect(page.getByRole('slider', { name: first })).toBeVisible();
+    await frame(page);
+    expect(await problems(page), `${state}, ${item} sliders open`).toEqual([]);
+    const small = await page.evaluate(
+      (rows) =>
+        [...document.querySelectorAll(`#settings-menu ${rows}`)]
+          .filter((el) => navigator.maxTouchPoints > 0 && el.getBoundingClientRect().height < 44)
+          .map((el) => el.textContent),
+      rows,
+    );
+    expect(small, `${state}, ${item} sliders under 44 px`).toEqual([]);
+    await tapCog(page);
+    await expect(page.getByRole('slider', { name: first })).toBeHidden();
+  }
 };
 
 // The parts of the daily result card (#196) that meet the Copy diagnostics button (#220), each scrolled into view
@@ -382,9 +389,9 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(15); // Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513)
+    await expect(page.locator('#settings-menu button:visible')).toHaveCount(15); // Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Lights shares Clear board (FPS on its page)
     const rows = await page.evaluate(() =>
-      [...document.querySelectorAll('#settings-menu button')].map((el) => {
+      [...document.querySelectorAll('#settings-menu button')].filter((el) => el.getClientRects().length > 0).map((el) => {
         const r = el.getBoundingClientRect();
         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         const onScreen = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;

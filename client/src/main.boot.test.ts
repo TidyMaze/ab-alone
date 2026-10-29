@@ -430,7 +430,7 @@ describe('the settings toggles', () => {
     const ids = [...byId('settings-menu').querySelectorAll('button')].map((b) => b.id);
     expect(ids).toEqual([
       'setting-clear-board',
-      'setting-fps',
+      'setting-lights',
       'setting-reduced-motion',
       'setting-flat-hud',
       'setting-sound',
@@ -444,6 +444,7 @@ describe('the settings toggles', () => {
       'setting-difficulty',
       'setting-import-game',
       'setting-log-archive',
+      'setting-fps',
     ]);
     const sound = row('sound');
     expect(sound.querySelector('svg')).not.toBeNull();
@@ -624,6 +625,22 @@ describe('the volume sliders (#438)', () => {
   });
 });
 
+describe('the light sliders', () => {
+  it('opens on Lights, beside Clear board, the bloom slider focused, the FPS switch last, until the menu closes', async () => {
+    const game = await boot('?bot=off');
+    game.openSettings();
+    const menu = byId('settings-menu');
+    expect(row('lights').parentElement).toBe(row('clear-board').parentElement);
+    row('lights').click();
+    expect(menu.dataset.page).toBe('lights');
+    expect(document.activeElement).toBe(byId('level-bloom'));
+    expect([...menu.querySelectorAll('.setting-lights')].map((s) => s.textContent)).toEqual(['Bloom', 'Lamps', 'Lights', 'FPS']);
+    game.openSettings(); // closes
+    game.openSettings();
+    expect(menu.dataset.page).toBeUndefined();
+  });
+});
+
 describe('the sound', () => {
   it('starts on the first gesture, a key, a mouse press or a touch', async () => {
     for (const gesture of [() => key('a'), () => press(document.body), () => dispatchEvent(new Event('pointerup'))]) {
@@ -659,8 +676,7 @@ describe('the FPS readout (#426)', () => {
   it('is off by default: the box stays hidden and empty', async () => {
     const game = await boot('?bot=off');
     expect(row('fps').getAttribute('aria-pressed')).toBe('false');
-    expect(row('fps').parentElement!.className).toBe('setting-group'); // beside Clear board
-    expect(row('fps').parentElement!.firstElementChild).toBe(row('clear-board'));
+    expect(row('fps').className).toBe('setting-lights'); // a row of the Lights page
     game.frame(20);
     expect(byId('fps').hidden).toBe(true);
     expect(byId('fps').textContent).toBe('');

@@ -5,6 +5,7 @@
 // game (#287), and the list of the Log archive (#513). Pure functions only: main.ts feeds them the clicks and builds the DOM.
 import type { IconName } from './icons';
 import type { Bus } from './sound';
+import type { Level } from './lightpanel';
 import { DIFFICULTY_LABELS, type Difficulty } from './difficulty';
 import { glassSkinById } from './glassskins';
 import { PALETTE_NAMES, type Palette } from './palettes';
@@ -79,6 +80,8 @@ export const settingsList = (
 
 /** The name of each volume slider, the page Sound opens (#438). */
 export const VOLUME_NAMES: Record<Bus, string> = { music: 'Music', ambience: 'Ambience', effects: 'Effects', voice: 'Voice' };
+/** The names of the light sliders, the page Lights opens. */
+export const LEVEL_NAMES: Record<Level, string> = { bloom: 'Bloom', lamps: 'Lamps', lights: 'Lights' };
 
 /** An entry of the log archive (#513): a lore entry, and an audio log once they are collected (#517). */
 export interface ArchiveEntry {

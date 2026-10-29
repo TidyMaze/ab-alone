@@ -99,6 +99,34 @@ describe('main.ts, the tuned lights', () => {
   });
 });
 
+describe('main.ts, the light sliders', () => {
+  it('scales the tuned lights, lamps and bloom as saved, as a slider moves, and when the lights are made again', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    const booting = boot('?bot=off&lights');
+    localStorage.setItem('ab-alone.light.lights', '200');
+    localStorage.setItem('ab-alone.light.lamps', '50');
+    const game = await booting;
+    const emergency = (): number => (scene!.getObjectByName('emergencyLight') as THREE.Light).intensity;
+    const neon = (): number => ((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity;
+    const scaled = [LIGHT_TUNING.emergencyLight! * 2, LIGHT_TUNING['corner-neon']! / 2];
+    expect([emergency(), neon()]).toEqual(scaled);
+    const bloom = document.getElementById('level-bloom') as HTMLInputElement;
+    expect(bloom.value).toBe('100');
+    bloom.value = '300';
+    bloom.dispatchEvent(new Event('input'));
+    expect(localStorage.getItem('ab-alone.light.bloom')).toBe('300');
+    game.hook('__setTier', 'low'); // the props and their lights made again, the panel with them
+    expect([emergency(), neon()]).toEqual(scaled);
+    const strength = document.querySelector<HTMLInputElement>('#light-panel input[aria-label="bloom strength power"]')!;
+    expect(strength.value).toBe(String((LIGHT_TUNING['bloom strength']! * 300) / 100));
+  });
+});
+
 describe('main.ts, the room props', () => {
   it('rounds the edges of the box props within their size', async () => {
     let scene: THREE.Scene | null = null;

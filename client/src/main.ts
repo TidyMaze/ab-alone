@@ -31,7 +31,7 @@ import { choirChips, drawChoirChips } from './choirchips';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
-import { applyTuning, lightPanel } from './lightpanel';
+import { applyTuning, LEVELS, lightPanel, scalePower, type Level } from './lightpanel';
 import { LIGHT_TUNING } from './lighttuning';
 import { TUBE_SPACING, tubeLights } from './neonlight';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
@@ -155,7 +155,7 @@ import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULT
 import { DEFAULT_RATING } from './elo';
 import { findMatch, toleranceWindow } from './matchmaking';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
-import { archiveList, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
+import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
 import { DECKS, DECOR, LIGHT } from './light';
@@ -183,6 +183,7 @@ import {
   readSafeMode,
   readSkin,
   readMix,
+  readLevels,
   readPalette,
   readTheme,
   readTier,
@@ -202,6 +203,7 @@ import {
   writeSafeMode,
   writeSkin,
   writeVolume,
+  writeLevel,
   writeTheme,
   writeTier,
   writeTranscript,
@@ -724,18 +726,22 @@ for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, redu
   });
 }
 paintMenu();
-// The FPS switch (#426) is a second button in the Clear board item's group: no row of its own, so the menu keeps its height.
+// The FPS switch (#426) is the last row of the Lights page: a button more among the items took a row more on a phone.
 const fpsBox = document.getElementById('fps') as HTMLDivElement;
 const fpsButton = document.createElement('button');
 fpsButton.id = 'setting-fps';
 fpsButton.type = 'button';
+fpsButton.className = 'setting-lights';
 fpsButton.textContent = 'FPS';
 fpsButton.setAttribute('aria-pressed', String(fpsOn));
+// The light sliders: Lights, a short word in the Clear board item's group, so the menu keeps its height, opens a page of
+// three sliders then the FPS switch, as Sound opens the volumes; 0 to 300 % of the tuned power each (lightpanel.ts scalePower).
+const lightsButton = Object.assign(document.createElement('button'), { id: 'setting-lights', type: 'button', textContent: 'Lights', title: 'Light power' });
 const clearRow = document.getElementById('setting-clear-board')!;
 const clearGroup = document.createElement('div');
 clearGroup.className = 'setting-group';
 clearRow.replaceWith(clearGroup);
-clearGroup.append(clearRow, fpsButton);
+clearGroup.append(clearRow, lightsButton);
 // The glass skin (#377) is a second button in the shell skin's item: no row of its own, so the menu keeps its height.
 const shellSkinRow = document.getElementById('setting-shell-skin')!;
 const skinGroup = document.createElement('div');
@@ -766,13 +772,31 @@ for (const bus of BUSES) {
     writeVolume(store, bus, sfx.volume(bus));
   });
 }
+const levelAt = (level: Level): HTMLInputElement => document.getElementById(`level-${level}`) as HTMLInputElement;
+lightsButton.addEventListener('click', () => {
+  menu.dataset.page = 'lights';
+  levelAt('bloom').focus();
+});
+const levels = readLevels(store);
+for (const level of LEVELS) {
+  const row = menu.appendChild(document.createElement('label'));
+  row.className = 'setting-lights';
+  row.innerHTML = `<span>${LEVEL_NAMES[level]}</span><input id="level-${level}" type="range" min="0" max="300" step="5">`;
+  levelAt(level).value = String(levels[level]);
+  levelAt(level).addEventListener('input', () => {
+    levels[level] = Number(levelAt(level).value);
+    writeLevel(store, level, levels[level]);
+    scaleLights();
+  });
+}
+menu.append(fpsButton);
 // The difficulty setting (#704) is a second button in the Export game item, so the menu keeps its height.
 const exportRow = document.getElementById('setting-export-game')!;
 const exportGroup = document.createElement('div');
 exportGroup.className = 'setting-group';
 exportRow.replaceWith(exportGroup);
 exportGroup.append(exportRow, document.getElementById('setting-difficulty')!);
-// The log archive (#513): its button, Logs, is a short word beside Import game, as FPS is beside Clear board, so the menu
+// The log archive (#513): its button, Logs, is a short word beside Import game, as Lights is beside Clear board, so the menu
 // keeps its height. It opens a page of one button per entry read, then per audio log collected (#517), in place of the
 // items; a press on one closes the menu and reopens the entry in the terminal reader, or replays the log.
 const archiveButton = Object.assign(document.createElement('button'), {
@@ -1580,9 +1604,14 @@ const bloomKnobs = ((b) =>
         { name: 'bloom threshold', uniform: b.threshold, max: 3 },
       ]
     : [])(sceneRenderer.pipeline?.bloom);
+// The settings' light sliders over the tuned power; the first knob is the bloom's strength.
+function scaleLights(): void {
+  scalePower(sceneRenderer.scene, levels, bloomKnobs[0]?.uniform);
+}
 // The lights as tuned (lighttuning.ts), each time they are made again: here, and on the deck's change and the room.
 const refreshLights = (): void => {
   applyTuning(sceneRenderer.scene, LIGHT_TUNING, bloomKnobs);
+  scaleLights();
   if (lightsPanel) lightPanel(sceneRenderer.scene, lightsPanel, (at) => toggleFreeCam(true, at), bloomKnobs);
 };
 drawProps = (): void => {

@@ -58,6 +58,31 @@ function dials(scene: THREE.Object3D, knobs: readonly Knob[]): Map<string, Dial>
   return all;
 }
 
+/** The settings menu's light sliders, each in percent of the tuned power: the bloom, the neon tubes' glow, the lights. */
+export type Level = 'bloom' | 'lamps' | 'lights';
+export const LEVELS: readonly Level[] = ['bloom', 'lamps', 'lights'];
+
+// The power each scaled thing had before the sliders, and the power they gave it: a power changed since (the tuning
+// when the lights are made again, ?lights) is the new one to scale.
+const powers = new WeakMap<object, { base: number; set: number }>();
+function scale<K extends string>(o: Record<K, number>, key: K, percent: number): void {
+  const was = powers.get(o);
+  const base = was?.set === o[key] ? was.base : o[key];
+  o[key] = (base * percent) / 100;
+  powers.set(o, { base, set: o[key] });
+}
+
+/** Scales every point and rect area light (the key and the fill stay), every neon tube's glow and the bloom by the
+ *  settings' sliders, from the power each had before them: twice the same levels give the same scene. */
+export function scalePower(scene: THREE.Object3D, levels: Readonly<Record<Level, number>>, bloom?: { value: number }): void {
+  scene.traverse((o) => {
+    if ((o as THREE.PointLight).isPointLight || (o as THREE.RectAreaLight).isRectAreaLight) scale(o as THREE.Light, 'intensity', levels.lights);
+    else if ((o as THREE.Mesh).isMesh && o.name.includes('neon'))
+      scale((o as THREE.Mesh).material as THREE.MeshStandardMaterial, 'emissiveIntensity', levels.lamps);
+  });
+  if (bloom) scale(bloom, 'value', levels.bloom);
+}
+
 /** Sets each family of lights and neon tubes, and each knob, that `tuning` names (lighttuning.ts), as its slider would. */
 export function applyTuning(scene: THREE.Object3D, tuning: Readonly<Record<string, number>>, knobs: readonly Knob[] = []): void {
   for (const [kind, { sets }] of dials(scene, knobs)) if (kind in tuning) for (const set of sets) set(tuning[kind]!);
