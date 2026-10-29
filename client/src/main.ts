@@ -157,7 +157,7 @@ import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, 
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
 import { fpsOf, keepWindow } from './fps';
-import { DECKS, DECOR, LIGHT } from './light';
+import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, type SpaceshipBayAssets } from './roomloader';
@@ -171,8 +171,6 @@ import {
   drawDue,
   fogSettings,
   hasParticles,
-  isAutomation,
-  shadowSettings,
   readClearBoard,
   readFlatHud,
   readFps,
@@ -393,8 +391,6 @@ const {
   scene,
   camera,
   backend,
-  decor,
-  decorMaterial,
   fogObj,
   plate,
   rim,
@@ -526,9 +522,6 @@ function cycleRenderMode(): RenderMode {
   return renderMode;
 }
 let clear = readClearBoard(store);
-const forceShadows =
-  new URLSearchParams(location.search).get('shadows') === 'on' ||
-  new URLSearchParams(location.search).get('shadows') === '1';
 const forceParticles =
   new URLSearchParams(location.search).get('particles') === 'on' ||
   new URLSearchParams(location.search).get('particles') === '1';
@@ -619,12 +612,8 @@ function applyLook(): void {
   looks++;
   updateFog();
   setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
-  const shadowConf = shadowSettings(tier, isAutomation(navigator.webdriver), forceShadows);
-  renderer.shadowMap.enabled = shadowConf.enabled;
-  renderer.shadowMap.type = shadowConf.soft ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
-  document.body.dataset.shadows = shadowConf.enabled ? 'on' : 'off'; // read by the e2e tests (#729)
   drawProps();
   updateParticles();
   if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
@@ -1153,7 +1142,7 @@ const accents = new Map(
     const envMapIntensity = LIGHT.environment.intensity;
     const side = THREE.DoubleSide; // the inside of the open crown shows
     const look = new THREE.MeshStandardMaterial({ color, roughness, metalness, envMap: reflections, envMapIntensity, side });
-    return [boss, Object.assign(new THREE.Mesh(accentGeometry(a), look), { name, castShadow: true })];
+    return [boss, Object.assign(new THREE.Mesh(accentGeometry(a), look), { name })];
   }),
 );
 // The marbles take the room's reflection once the bay is in (#864): the shells, the glass and the boss accents, then the
@@ -1170,7 +1159,6 @@ function reflect(texture: THREE.Texture): void {
 function marbleMesh(side: number, looks = marbleMaterials, core = coreMaterial): THREE.Mesh {
   const glass = side === glassOf();
   const mesh = new THREE.Mesh(marbleGeometry, looks[glass ? 2 : 1]);
-  mesh.castShadow = looks === marbleMaterials;
   if (glass) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
   const accent = !glass && looks === marbleMaterials ? accents.get(fight?.id ?? '') : undefined; // the boss side (#507)
   if (accent) mesh.add(accent.clone());
@@ -1248,8 +1236,8 @@ const convertedGlyphGeometry = glyphGeometry.clone().translate(0, 0.6, 0); // ov
 const convertedCracks = new THREE.MeshBasicMaterial({ color: BONE, alphaMap: crackDecal, transparent: true, depthWrite: false });
 function convert(marble: THREE.Mesh): void {
   marble.material = unseen;
-  const shell = Object.assign(new THREE.Mesh(shellHalfGeometry, marbleMaterials[1]), { name: 'shell', castShadow: true });
-  const glass = Object.assign(new THREE.Mesh(glassHalfGeometry, marbleMaterials[2]), { name: 'glass', castShadow: true });
+  const shell = Object.assign(new THREE.Mesh(shellHalfGeometry, marbleMaterials[1]), { name: 'shell' });
+  const glass = Object.assign(new THREE.Mesh(glassHalfGeometry, marbleMaterials[2]), { name: 'glass' });
   const cracks = Object.assign(new THREE.Mesh(shellHalfGeometry, convertedCracks), { name: 'cracks' });
   cracks.scale.setScalar(1.01); // just outside the shell
   const glyph = Object.assign(new THREE.Mesh(convertedGlyphGeometry, convertedGlyph), { name: 'glyph' });
@@ -1349,7 +1337,7 @@ let overseerPedestal: THREE.Mesh | null = null;
 let overseerDrawn: { overseer: Axial | null; cores: Axial[]; vents: Axial[] } = { overseer: null, cores: [], vents: [] }; // read by the e2e tests
 /** A core of The Overseer: a pale marble, its dark eye on top. */
 function coreMesh(): THREE.Mesh {
-  const core = Object.assign(new THREE.Mesh(marbleGeometry, coreShell), { castShadow: true });
+  const core = new THREE.Mesh(marbleGeometry, coreShell);
   const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
   pupil.position.y = 0.37;
   core.add(pupil);
@@ -1407,7 +1395,7 @@ const trainMaterials = new Map(TRAIN_PARTS.map((p) => [p.color, new THREE.MeshSt
 function trainModel(): THREE.Group {
   const train = Object.assign(new THREE.Group(), { name: 'train' });
   TRAIN_PARTS.forEach((part, i) => {
-    const mesh = Object.assign(new THREE.Mesh(trainGeometries[i], trainMaterials.get(part.color)), { name: part.id, castShadow: true });
+    const mesh = Object.assign(new THREE.Mesh(trainGeometries[i], trainMaterials.get(part.color)), { name: part.id });
     mesh.position.set(...part.position);
     train.add(mesh);
   });
@@ -1529,7 +1517,6 @@ const edgeGeometry = new THREE.TorusGeometry(0.44, 0.03, 8, 32).rotateX(Math.PI 
 const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x25292d });
 const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   const disc = new THREE.Mesh(discGeometry, steel);
-  disc.receiveShadow = true;
   disc.rotation.y = cellTurn(i);
   const bevel = new THREE.Mesh(edgeGeometry, edgeMaterial);
   bevel.position.y = 0.05; // the disc's top face, so the bevel is not buried in the disc
@@ -1547,7 +1534,6 @@ arena.scale.setScalar(ARENA_SCALE);
 arena.visible = false;
 const arenaDiscs = ARENA.map(([q, r], i) => {
   const disc = new THREE.Mesh(discGeometry, steel);
-  disc.receiveShadow = true;
   disc.rotation.y = cellTurn(i);
   const bevel = new THREE.Mesh(edgeGeometry, edgeMaterial);
   bevel.position.y = 0.05;
@@ -1727,13 +1713,6 @@ drawProps = (): void => {
       mesh.position.set(...def.position);
     }
     mesh.rotation.set(...def.rotation);
-    // The key and the fill hang under the gantries wherever the bay puts them (#864).
-    if (def.id === 'neon-gantry-north') sceneRenderer.key.hang(mesh);
-    if (def.id === 'neon-gantry-south') sceneRenderer.fill.hang(mesh);
-    if (def.id.startsWith('pedestal') || def.id.startsWith('conduit')) {
-      mesh.receiveShadow = true;
-      mesh.castShadow = true;
-    }
     propsGroup.add(mesh);
     propMeshes.push(mesh);
   }
@@ -2466,7 +2445,7 @@ function fireBelts(carries: Carry[], before: number[], reduced: boolean): void {
 /** The press comes down on `cell`. */
 function pressOn(cell: Axial): void {
   const p = axialTo3D(...cell);
-  const mesh = Object.assign(new THREE.Mesh(pressGeometry, pressMaterial), { name: 'belt-slam', castShadow: true });
+  const mesh = Object.assign(new THREE.Mesh(pressGeometry, pressMaterial), { name: 'belt-slam' });
   mesh.position.set(p.x, slamAt(0, false).y, p.z);
   scene.add(mesh);
   slams.push({ mesh, start: performance.now(), skipped: false });
@@ -2903,7 +2882,7 @@ function refresh(): void {
   }
   eggsDrawn = eggs.map(({ cell: [q, r], left }) => {
     const p = axialTo3D(q, r);
-    const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg', castShadow: true });
+    const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg' });
     egg.position.set(p.x, 0, p.z);
     const counter = Object.assign(new THREE.Sprite(counterMaterials[left - 1]), { renderOrder: 2 });
     counter.position.set(p.x, 0.95, p.z);
@@ -3036,7 +3015,7 @@ function drawBelts(b: Belts): { belt: Belt; ribs: THREE.Mesh[] }[] {
       plate.position.set(x, 0.06, z);
       marbles.add(plate);
       if (!strike) continue;
-      const press = Object.assign(new THREE.Mesh(pressGeometry, pressMaterial), { name: 'belt-press', castShadow: true });
+      const press = Object.assign(new THREE.Mesh(pressGeometry, pressMaterial), { name: 'belt-press' });
       press.position.set(x, slamAt(0, false).y, z);
       marbles.add(press);
     }
@@ -3070,7 +3049,7 @@ function drawPulsars(next: Pulsar): THREE.Mesh[] {
     const model = Object.assign(new THREE.Group(), { name: lit ? 'pulsar-charging' : 'pulsar' });
     PULSAR_PARTS.forEach((part, i) => {
       const material = lit && part.type === 'core' ? chargeMaterial : pulsarMaterials[i];
-      const mesh = Object.assign(new THREE.Mesh(pulsarGeometries[i], material), { name: part.id, castShadow: true });
+      const mesh = Object.assign(new THREE.Mesh(pulsarGeometries[i], material), { name: part.id });
       mesh.position.set(...part.position);
       model.add(mesh);
     });
@@ -4274,7 +4253,6 @@ function drawRoyale(game: Royale): void {
     const seat = seatAt(board[i]!);
     if (seat < 0) return;
     const marble = new THREE.Mesh(marbleGeometry, seatLooks[seat]);
-    marble.castShadow = true;
     const picked = ringed.some(([sq, sr]) => sq === q && sr === r);
     marble.position.set(p.x, picked ? 0.5 : 0.36, p.z);
     const glyph = new THREE.Mesh(seatGlyphs[seat], seatInk);

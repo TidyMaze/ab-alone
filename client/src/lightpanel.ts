@@ -1,7 +1,7 @@
 import type * as THREE from 'three/webgpu';
 
 /** The panel's groups, in order: the lights of the scene itself, the neon tubes' glow and light, the lamps, the bloom. */
-const GROUPS = ['Key & fill', 'Neon glow', 'Neon tube lights', 'Prop lamps', 'Bloom'] as const;
+const GROUPS = ['Scene lights', 'Neon glow', 'Neon tube lights', 'Prop lamps', 'Bloom'] as const;
 
 /** A lamp's family: its name without the side or number that tells it from its likes (`corner-neon-nw light`, `pedestal-neon-2 light`). */
 export const family = (name: string): string => name.replace(/-(\d+|[nsew]{1,2}|north|south|top)(?=( light)?$)/, '');
@@ -67,13 +67,13 @@ function scale<K extends string>(o: Record<K, number>, key: K, percent: number):
   powers.set(o, { base, set: o[key] });
 }
 
-/** Scales every point, rect area and spot light (the key and the fill are spots), every neon tube's glow and the bloom
+/** Scales every point and rect area light, every neon tube's glow and the bloom
  *  by the settings' sliders, from the power each had before them: twice the same levels give the same scene. The room's
  *  reflection (envMap) lights the marbles whatever the lamps, so it follows the lights too: at 0 they go dark. */
 export function scalePower(scene: THREE.Object3D, levels: Readonly<Record<Level, number>>, bloom?: { value: number }): void {
   scene.traverse((o) => {
     const look = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
-    if ((o as THREE.PointLight).isPointLight || (o as THREE.RectAreaLight).isRectAreaLight || (o as THREE.SpotLight).isSpotLight)
+    if ((o as THREE.PointLight).isPointLight || (o as THREE.RectAreaLight).isRectAreaLight)
       scale(o as THREE.Light, 'intensity', levels.lights);
     else if ((o as THREE.Mesh).isMesh && o.name.includes('neon')) scale(look, 'emissiveIntensity', levels.lamps);
     else if ((o as THREE.Mesh).isMesh && look.envMap) scale(look, 'envMapIntensity', levels.lights);

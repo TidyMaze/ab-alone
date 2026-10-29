@@ -29,10 +29,10 @@ describe('main.ts, __drawNext', () => {
 });
 
 describe('main.ts, ?lights', () => {
-  it('shows a power slider per light and neon tube, the key and the fill among them', async () => {
+  it('shows a power slider per light and neon tube', async () => {
     await boot('?bot=off&lights');
     const names = [...document.querySelectorAll('#light-panel label')].map((l) => l.firstChild!.textContent!.trim());
-    expect(names).toEqual(expect.arrayContaining(['key', 'fill', 'kioskGreenLight', 'corner-neon ×4', 'corner-neon light ×4']));
+    expect(names).toEqual(expect.arrayContaining(['kioskGreenLight', 'corner-neon ×4', 'corner-neon light ×4']));
   });
 
   it.each([
@@ -54,7 +54,7 @@ describe('main.ts, ?lights', () => {
   it('points the free camera at a light from its row in the panel', async () => {
     const game = await boot('?bot=off&lights');
     expect(game.hook('__freeCamActive')).toBe(false);
-    document.querySelector<HTMLButtonElement>('#light-panel button[aria-label="Point the camera at key"]')!.click();
+    document.querySelector<HTMLButtonElement>('#light-panel button[aria-label="Point the camera at kioskGreenLight"]')!.click();
     expect(game.hook('__freeCamActive')).toBe(true);
     expect(document.getElementById('free-cam')!.getAttribute('aria-pressed')).toBe('true');
   });
@@ -91,9 +91,8 @@ describe('main.ts, the tuned lights', () => {
       return add.apply(this, objects);
     });
     await boot('?bot=off');
-    // The tuned power, times the sliders' default levels (quality.ts): lamps 25 %, lights 215 %, the key and the fill with them.
-    expect((scene!.getObjectByName('key') as THREE.Light).intensity).toBeCloseTo(LIGHT_TUNING.key! * 2.15);
-    expect((scene!.getObjectByName('fill') as THREE.Light).intensity).toBeCloseTo(LIGHT_TUNING.fill! * 2.15);
+    // The tuned power, times the sliders' default levels (quality.ts): lamps 25 %, lights 215 %.
+    expect(scene!.getObjectByName('key')).toBeUndefined(); // no spotlight: the room's own lights light the scene (#877)
     expect(((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(
       LIGHT_TUNING['corner-neon']! * 0.25,
     );
@@ -102,7 +101,7 @@ describe('main.ts, the tuned lights', () => {
 });
 
 describe('main.ts, the lights of the room (#845)', () => {
-  it('keeps the key, the fill, the neon tubes\' rows, the console screen and one viewport light, and no other', async () => {
+  it('keeps the neon tubes\' rows, the console screen and one viewport light, and no other', async () => {
     let scene: THREE.Scene | null = null;
     const add = THREE.Object3D.prototype.add;
     vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
@@ -112,7 +111,7 @@ describe('main.ts, the lights of the room (#845)', () => {
     await boot('?bot=off');
     const named: string[] = [];
     scene!.traverse((o) => void ((o as THREE.Light).isLight && !o.name.includes('neon') && named.push(o.name)));
-    expect(named.sort()).toEqual(['fill', 'key', 'kioskGreenLight', 'viewportRimLight']);
+    expect(named.sort()).toEqual(['kioskGreenLight', 'viewportRimLight']);
   });
 });
 
@@ -157,31 +156,6 @@ describe('main.ts, the room props', () => {
     expect(column.geometry).toBeInstanceOf(RoundedBoxGeometry);
     column.geometry.computeBoundingBox();
     expect(column.geometry.boundingBox!.getSize(new THREE.Vector3()).toArray()).toEqual([0.14, 7.5, 0.14].map((v) => expect.closeTo(v)));
-  });
-
-  it.each([
-    ['bare room', ['spaceship-bay.glb'], 14.2],
-    ['bay', [], 13.05],
-  ])('hangs the key spotlight under the north gantry and the fill under the south one, wherever the %s puts them (#864)', async (_, missing, y) => {
-    let scene: THREE.Scene | null = null;
-    const add = THREE.Object3D.prototype.add;
-    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
-      if (this instanceof THREE.Scene) scene ??= this;
-      return add.apply(this, objects);
-    });
-    const game = await boot('?bot=off', { missing });
-    await game.settle();
-    // The light's place against its gantry bar: sideways, along the bay, and how far under it.
-    const hung = (lamp: string, gantry: string): boolean[] => {
-      const light = scene!.getObjectByName(lamp)!.position;
-      const bar = scene!.getObjectByName(gantry)!.position;
-      return [Math.abs(light.x - bar.x) < 1e-6, Math.abs(light.z - bar.z) < 1, bar.y - light.y > 0.2]; // centred, a lens' length off, under the bar
-    };
-    expect(scene!.getObjectByName('neon-gantry-north')!.position.y).toBe(y);
-    expect(hung('key', 'neon-gantry-north')).toEqual([true, true, true]);
-    expect(hung('fill', 'neon-gantry-south')).toEqual([true, true, true]);
-    expect(scene!.getObjectByName('key')!.position.z).toBeLessThan(0);
-    expect(scene!.getObjectByName('fill')!.position.z).toBeGreaterThan(0);
   });
 });
 

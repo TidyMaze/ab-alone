@@ -107,15 +107,11 @@ async function until(game: Game, done: () => boolean): Promise<void> {
 }
 
 describe('main.ts board and HUD', () => {
-  it('lights the deck with the key and fill spotlights alone, and sets the dim bulkhead frame far behind the board', async () => {
+  it('has no light of its own at the scene root: the room\'s tubes and lamps light it, and no bar hangs behind the north wall (#876, #877)', async () => {
     const scene = catchScene();
     await boot('?bot=off');
-    const lights = scene().children.filter((c) => c instanceof THREE.Light);
-    expect(lights.map((l) => l.type)).toEqual(['SpotLight', 'SpotLight']);
-    const decor = scene().children.find(
-      (c) => c instanceof THREE.Group && c.children.length > 0 && c.children.every((m) => m instanceof THREE.Mesh && m.geometry instanceof THREE.BoxGeometry),
-    )!;
-    expect(decor.children.every((part) => part.position.z === -23.2)).toBe(true);
+    expect(scene().children.filter((c) => c instanceof THREE.Light)).toEqual([]);
+    expect(scene().children.some((c) => c instanceof THREE.Group && c.children.length > 0 && c.children.every((m) => m.position.z === -23.2))).toBe(false);
   });
 
   it('dresses the cells, the frame and the enemy shells in the loaded textures, the glass with its core', async () => {

@@ -11,7 +11,6 @@ function createMockRenderer(): THREE.WebGPURenderer {
   return {
     domElement: canvas,
     backend: { isWebGPUBackend: false },
-    shadowMap: { enabled: false, type: 0 },
     toneMapping: 0,
     toneMappingExposure: 1,
     init: async (): Promise<void> => {},

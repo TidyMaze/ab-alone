@@ -18,7 +18,7 @@ test('mobile graphics quality adaptive tier and pixel ratio (#655)', async ({ br
     deviceScaleFactor: 2,
   });
   const highPage = await highContext.newPage();
-  await highPage.goto('./?bot=off&quality=high&shadows=on&particles=on');
+  await highPage.goto('./?bot=off&quality=high&particles=on');
   await highPage.locator('canvas').waitFor();
   expect(await highPage.evaluate(() => document.body.dataset.tier)).toBe('high');
   expect(await highPage.evaluate(() => window.devicePixelRatio)).toBe(2);

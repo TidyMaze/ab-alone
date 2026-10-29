@@ -3,8 +3,7 @@ import { pass } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
-import { GantryLamp } from './gantrylamp';
-import { DECKS, DECOR, LIGHT } from './light';
+import { DECKS, LIGHT } from './light';
 import { DECK_PARTICLES, type Deck } from './deck';
 import { fogSettings, hasParticles, renderPixelRatio, type Tier } from './quality';
 import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './frame';
@@ -77,12 +76,6 @@ export class SceneRenderer {
   readonly backend: 'WebGPU' | 'WebGL2';
   readonly pipeline: ReturnType<typeof createBloomPipeline> = null;
 
-  /** The key and the fill: spotlights under the north and the south gantry, aimed at the board (#864). */
-  readonly key: GantryLamp;
-  readonly fill: GantryLamp;
-  readonly decor: THREE.Group;
-  readonly decorMaterial: THREE.MeshStandardMaterial;
-
   readonly fogObj: THREE.Fog;
   readonly particles: THREE.Points;
   readonly particlePositions: Float32Array;
@@ -138,30 +131,6 @@ export class SceneRenderer {
 
     this.camera = new THREE.PerspectiveCamera(FOV, width / height, 0.1, 100);
     this.frameCamera(width, height);
-
-    this.key = new GantryLamp('key', LIGHT.spots.key);
-    const { shadow } = this.key.light;
-    this.key.light.castShadow = true;
-    shadow.mapSize.set(LIGHT.key.shadow.mapSize, LIGHT.key.shadow.mapSize);
-    shadow.camera.near = LIGHT.key.shadow.camera.near;
-    shadow.camera.far = LIGHT.key.shadow.camera.far;
-    shadow.bias = LIGHT.key.shadow.bias;
-    shadow.normalBias = LIGHT.key.shadow.normalBias;
-    this.fill = new GantryLamp('fill', LIGHT.spots.fill);
-
-    this.decorMaterial = new THREE.MeshStandardMaterial({
-      color: DECOR.color,
-      emissive: 0x38e8ff,
-      emissiveIntensity: 5.5,
-      roughness: 0.2,
-      fog: true,
-    });
-    this.decor = new THREE.Group();
-    for (const x of [-13, -4.5, 4.5, 13]) {
-      const neon = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.14, 0.14), this.decorMaterial);
-      neon.position.set(x, 14.8, -23.2);
-      this.decor.add(neon);
-    }
 
     this.fogObj = new THREE.Fog(DECK_ATMOSPHERES.mess.fogColor, 10, 20);
 
@@ -221,13 +190,10 @@ export class SceneRenderer {
             : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 0.6 },
     );
     this.plate = new THREE.Mesh(new THREE.BufferGeometry(), plateMaterial);
-    this.plate.receiveShadow = true;
     this.rim = {
       near: new THREE.Mesh(new THREE.BufferGeometry(), rimMaterial),
       far: new THREE.Mesh(new THREE.BufferGeometry(), rimMaterial.clone()),
     };
-    this.rim.near.receiveShadow = true;
-    this.rim.far.receiveShadow = true;
 
     const roomMaterial = new THREE.MeshStandardMaterial(
       options.deckAlbedo && options.deckRoughness
@@ -236,7 +202,6 @@ export class SceneRenderer {
     );
     this.roomDeck = new THREE.Mesh(new THREE.BoxGeometry(ROOM_SURFACE.width, 0.4, ROOM_SURFACE.depth), roomMaterial);
     this.roomDeck.position.set(0, ROOM_SURFACE.y - 0.2, 0);
-    this.roomDeck.receiveShadow = true;
     this.propsGroup = new THREE.Group();
 
     this.notches = new THREE.Group();
@@ -253,11 +218,6 @@ export class SceneRenderer {
     this.scratchMaterial = new THREE.MeshBasicMaterial({ color: BONE, fog: false });
 
     this.scene.add(
-      this.key.light,
-      this.key.fixture,
-      this.fill.light,
-      this.fill.fixture,
-      this.decor,
       this.particles,
       this.roomDeck,
       this.propsGroup,
@@ -361,10 +321,6 @@ export class SceneRenderer {
 
   applyDeck(next: Deck): void {
     const light = DECKS[next];
-    for (const [lamp, { color, intensity }] of [[this.key, light.key], [this.fill, light.fill]] as const) {
-      lamp.tint(color);
-      lamp.light.intensity = intensity;
-    }
     this.renderer.toneMappingExposure = light.exposure;
     if (this.currentBay) applyDeckAtmosphere(this.currentBay, next as DeckId);
   }
