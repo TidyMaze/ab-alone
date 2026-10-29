@@ -289,11 +289,12 @@ const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webg
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
-// MSAA only while a drawn pixel is big, a ratio under 1.5 (#844): from 1.5 up the edges are too fine to show, and 4
-// samples a pixel cost the most there (60 down to 22 FPS on a high-tier phone). A phone draws at 1.5 and gets its
-// smoothing from FXAA later (#857). Fixed when the renderer is made.
+// MSAA while a drawn pixel is big, a ratio under 1.5 (#844): from 1.5 up a desktop's edges are too fine to show, and 4
+// samples a pixel cost a desktop GPU the most there (60 down to 22 FPS). A touch screen keeps it (#868): a phone draws
+// 1.5 on a 2.6 to 3x screen, which shows the steps, and its tiled GPU resolves MSAA in tile memory (52 to 56 FPS with
+// or without on the low tier). Fixed when the renderer is made.
 const renderer = new THREE.WebGPURenderer({
-  antialias: renderPixelRatio(devicePixelRatio, navigator.webdriver) < 1.5,
+  antialias: renderPixelRatio(devicePixelRatio, navigator.webdriver) < 1.5 || matchMedia('(pointer: coarse)').matches,
   forceWebGL,
 });
 await renderer.init().catch(bootFailed);
