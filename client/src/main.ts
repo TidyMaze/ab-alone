@@ -34,6 +34,7 @@ import { RenderModeManager, type RenderMode } from './rendermode';
 import { applyTuning, LEVELS, lightPanel, scalePower, type Level } from './lightpanel';
 import { LIGHT_TUNING } from './lighttuning';
 import { TUBE_SPACING, tubeLights } from './neonlight';
+import { ringLamp } from './ringlamp';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
@@ -1719,6 +1720,9 @@ drawProps = (): void => {
   // Each neon tube lights the room for real: a row of lights along it (neonlight.ts), one slider in ?lights.
   for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
     propsGroup.add(...tubeLights(tube as THREE.Mesh, clustered ? TUBE_SPACING : Infinity));
+  const ring = ringLamp(clustered ? TUBE_SPACING : Infinity);
+  propsGroup.add(...ring.meshes, ...ring.lights);
+  propMeshes.push(...ring.meshes);
   const viewportRimLight = new THREE.PointLight(sLights.rim, 2.7, 11.0);
   viewportRimLight.position.set(17.0, 4.6, 0);
   const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.25, 6.0);

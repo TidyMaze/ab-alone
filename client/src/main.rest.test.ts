@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { boot } from './test/harness';
 import { LIGHT_TUNING } from './lighttuning';
+import { TUBE_SPACING } from './neonlight';
+import { RING } from './ringlamp';
+
+const RING_LIGHTS_CLUSTERED = Math.ceil((2 * Math.PI * RING.radius) / TUBE_SPACING);
 
 // What the other main.*.test.ts files leave out of main.ts: a browser check asking for the next draw (#435), and a
 // deck whose own texture set did not load (#401, #440).
@@ -101,7 +105,7 @@ describe('main.ts, the tuned lights', () => {
 });
 
 describe('main.ts, the lights of the room (#845)', () => {
-  it('keeps the neon tubes\' rows, the console screen and one viewport light, and no other', async () => {
+  it('keeps the neon tubes\' rows, the ring lamp\'s, the console screen and one viewport light, and no other', async () => {
     let scene: THREE.Scene | null = null;
     const add = THREE.Object3D.prototype.add;
     vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
@@ -110,8 +114,32 @@ describe('main.ts, the lights of the room (#845)', () => {
     });
     await boot('?bot=off');
     const named: string[] = [];
-    scene!.traverse((o) => void ((o as THREE.Light).isLight && !o.name.includes('neon') && named.push(o.name)));
+    scene!.traverse((o) => void ((o as THREE.Light).isLight && !o.name.includes('neon') && !o.name.startsWith('ring-lamp') && named.push(o.name)));
     expect(named.sort()).toEqual(['kioskGreenLight', 'viewportRimLight']);
+  });
+});
+
+describe('main.ts, the ring lamp (#879)', () => {
+  it.each([
+    [true, RING_LIGHTS_CLUSTERED],
+    [false, RING.fewLights],
+  ])('hangs the ring lamp over the board, on WebGPU %s lit by %i point lights tuned with the tubes\' (lighttuning.ts)', async (webgpu, count) => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off', { webgpu });
+    const named = (name: string): THREE.Object3D[] => {
+      const found: THREE.Object3D[] = [];
+      scene!.traverse((o) => void (o.name === name && found.push(o)));
+      return found;
+    };
+    expect([named('ring-lamp').length, named('ring-lamp face').length, named('ring-lamp cable').length]).toEqual([1, 1, 3]);
+    const lights = named('ring-lamp light') as THREE.PointLight[];
+    expect(lights).toHaveLength(count);
+    expect(lights[0]!.intensity).toBeCloseTo(LIGHT_TUNING['ring-lamp light']! * 2.15); // at the lights' default level
   });
 });
 
