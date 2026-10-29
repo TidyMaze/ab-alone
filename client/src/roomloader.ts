@@ -1,5 +1,6 @@
 // PBR texture loading and monolithic spaceship bay GLB assembly for Three.js.
-// Loads textures (albedo, normal, roughness, displacement) and binds them to room meshes.
+// Loads textures (albedo, normal, roughness, displacement, and the AO or metalness of the sets that ship them) and
+// binds them to room meshes.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -12,7 +13,12 @@ export interface PbrMaterialSet {
   roughness: THREE.Texture;
   displacement: THREE.Texture;
   displacementScale: number;
+  ao?: THREE.Texture;
+  metalness?: THREE.Texture;
 }
+
+/** The maps beyond the four every set has: not every source ships an ambient occlusion or a metalness. */
+export type ExtraMap = 'ao' | 'metalness';
 
 export interface SpaceshipBayAssets {
   scene: THREE.Group;
@@ -36,29 +42,30 @@ export interface TextureSource {
   loadAsync(url: string): Promise<THREE.Texture>;
 }
 
-/** Loads one PBR texture set (albedo, normal, roughness, displacement). */
+/** Loads one PBR texture set (albedo, normal, roughness, displacement, and the extra maps its source ships). */
 export async function loadPbrMaterial(
   loader: TextureSource,
   basePath: string,
   prefix: string,
   displacementScale = 0.05,
   repeat = 4,
+  extras: readonly ExtraMap[] = [],
 ): Promise<PbrMaterialSet | null> {
   try {
-    const [albedo, normal, roughness, displacement] = await Promise.all([
-      loader.loadAsync(`${basePath}${prefix}-albedo.ktx2`),
-      loader.loadAsync(`${basePath}${prefix}-normal.ktx2`),
-      loader.loadAsync(`${basePath}${prefix}-roughness.ktx2`),
-      loader.loadAsync(`${basePath}${prefix}-displacement.ktx2`),
+    const [[albedo, normal, roughness, displacement], more] = await Promise.all([
+      Promise.all([
+        loader.loadAsync(`${basePath}${prefix}-albedo.ktx2`),
+        loader.loadAsync(`${basePath}${prefix}-normal.ktx2`),
+        loader.loadAsync(`${basePath}${prefix}-roughness.ktx2`),
+        loader.loadAsync(`${basePath}${prefix}-displacement.ktx2`),
+      ]),
+      Promise.all(extras.map((name) => loader.loadAsync(`${basePath}${prefix}-${name}.ktx2`))),
     ]);
 
     albedo.colorSpace = THREE.SRGBColorSpace;
-    configureTiling(albedo, repeat);
-    configureTiling(normal, repeat);
-    configureTiling(roughness, repeat);
-    configureTiling(displacement, repeat);
+    for (const map of [albedo, normal, roughness, displacement, ...more]) configureTiling(map, repeat);
 
-    return { albedo, normal, roughness, displacement, displacementScale };
+    return { albedo, normal, roughness, displacement, displacementScale, ...Object.fromEntries(extras.map((name, i) => [name, more[i]])) };
   } catch {
     return null;
   }
@@ -72,6 +79,9 @@ export function createPbrStandardMaterial(pbr: PbrMaterialSet): THREE.MeshStanda
     roughnessMap: pbr.roughness,
     displacementMap: pbr.displacement,
     displacementScale: pbr.displacementScale,
+    ...(pbr.ao ? { aoMap: pbr.ao } : {}),
+    // A metalness map scales `metalness`: 1 leaves the whole value to the map.
+    ...(pbr.metalness ? { metalnessMap: pbr.metalness, metalness: 1 } : {}),
   });
 }
 
@@ -94,9 +104,10 @@ export async function loadSpaceshipBay(
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([
       gltfLoader.loadAsync(`${basePath}spaceship-bay.glb`),
-      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.2),
-      loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1),
-      loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1),
+      // What each source ships: Tiles072 an AO, blue_metal_plate an AO (its metalness is 0), Metal009 a metalness. None has an emission.
+      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.2, ['ao']),
+      loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1, ['ao']),
+      loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1, ['metalness']),
     ]);
 
     const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x333b42, roughness: 0.8 });
@@ -110,6 +121,7 @@ export async function loadSpaceshipBay(
       ...(grateMat.map ? { map: grateMat.map } : {}),
       ...(grateMat.normalMap ? { normalMap: grateMat.normalMap } : {}),
       ...(grateMat.roughnessMap ? { roughnessMap: grateMat.roughnessMap } : {}),
+      ...(grateMat.metalnessMap ? { metalnessMap: grateMat.metalnessMap } : {}),
     });
     const conduitMat = new THREE.MeshStandardMaterial({
       color: 0x2b3238,

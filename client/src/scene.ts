@@ -34,6 +34,7 @@ export interface SceneRendererOptions {
   plateAlbedo?: THREE.Texture | null;
   plateRoughness?: THREE.Texture | null;
   plateNormal?: THREE.Texture | null;
+  plateMetalness?: THREE.Texture | null;
   rimAlbedo?: THREE.Texture | null;
   rimRoughness?: THREE.Texture | null;
   rimNormal?: THREE.Texture | null;
@@ -194,25 +195,21 @@ export class SceneRenderer {
     this.particles = new THREE.Points(this.particleGeometry, this.particleMaterial);
     this.particles.visible = false;
 
-    if (options.plateAlbedo) {
-      options.plateAlbedo.wrapS = options.plateAlbedo.wrapT = THREE.RepeatWrapping;
-      options.plateAlbedo.repeat.set(0.15, 0.15);
-    }
-    if (options.plateRoughness) {
-      options.plateRoughness.wrapS = options.plateRoughness.wrapT = THREE.RepeatWrapping;
-      options.plateRoughness.repeat.set(0.15, 0.15);
-    }
-    if (options.plateNormal) {
-      options.plateNormal.wrapS = options.plateNormal.wrapT = THREE.RepeatWrapping;
-      options.plateNormal.repeat.set(0.15, 0.15);
+    for (const map of [options.plateAlbedo, options.plateRoughness, options.plateNormal, options.plateMetalness]) {
+      if (!map) continue;
+      map.wrapS = map.wrapT = THREE.RepeatWrapping;
+      map.repeat.set(0.15, 0.15);
     }
 
+    // The Metal051A and Onyx013 displacement maps stay out: the plate and the rim are flat slabs whose faces have no
+    // vertex inside their outline to move, and the normal map already carries the relief. Onyx013 is stone, with no metalness map.
     const plateMaterial = new THREE.MeshStandardMaterial(
       options.plateAlbedo
         ? {
             map: options.plateAlbedo,
             roughnessMap: options.plateRoughness || null,
             normalMap: options.plateNormal || null,
+            ...(options.plateMetalness ? { metalnessMap: options.plateMetalness, metalness: 1 } : {}),
             color: FRAME_LOOK.plateTiles,
             roughness: 0.4,
           }

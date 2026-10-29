@@ -141,9 +141,9 @@ describe('gen-assets', { timeout: 20_000 }, () => {
     expect(fat).toBeGreaterThan(300);
   });
 
-  // The Mess cells are brushed aluminium, ambientCG Metal051A (CC0), committed by hand: the generator leaves them out.
+  // The Mess cells are smooth concrete, ambientCG Concrete036 (CC0), committed by hand: the generator leaves them out.
   const deckFile = (name: string): Buffer => assets.get(name) ?? readFileSync(new URL(`../textures/${name}`, import.meta.url));
-  it('leaves the Mess cells to the committed Metal051A maps', () => {
+  it('leaves the Mess cells to the committed Concrete036 maps', () => {
     expect(assets.has('deck-mess.png')).toBe(false);
     expect(assets.has('deck-mess-normal.png')).toBe(false);
   });

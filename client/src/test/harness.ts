@@ -63,7 +63,7 @@ const body = /<body>([\s\S]*)<\/body>/.exec(page)![1]!;
 const addListener = window.addEventListener.bind(window);
 const every = setInterval;
 
-// Canvas 2D (the skins, skinart.ts) draws into nothing: every property and call of the context is a no-op, but
+// Canvas 2D (the room art, the deck console) draws into nothing: every property and call of the context is a no-op, but
 // measureText, for the deck console's line wrap (terminal.ts): a character is 20 px wide.
 const nothing: unknown = new Proxy(() => nothing, {
   get: (_, key) => (key === 'measureText' ? (text: string) => ({ width: text.length * 20 }) : nothing),

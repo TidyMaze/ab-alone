@@ -60,13 +60,16 @@ describe('settings', () => {
   });
 
   it('encodes a colour map in ETC1S, sRGB', () => {
-    for (const file of ['backdrop.png', 'deck-albedo.png', 'deck-mess.png', 'deck-bridge.png', 'pbr/grate-albedo.jpg']) {
+    // An emission map is a colour (the lava's glow), not a data map.
+    for (const file of ['backdrop.png', 'deck-albedo.png', 'deck-mess.png', 'deck-bridge.png', 'pbr/grate-albedo.jpg', 'pbr/skin-Lava002-emission.jpg']) {
       expect(settings(file)).toEqual({ ...common, isUASTC: false, isPerceptual: true, isSetKTX2SRGBTransferFunc: true });
     }
   });
 
   it('encodes a data map in ETC1S, linear', () => {
-    for (const file of ['deck-roughness.png', 'crack-decal.png', 'pbr/grate-roughness.png', 'pbr/grate-displacement.png']) {
+    // `deck-mess-roughness.png` starts like the Mess albedo `deck-mess.png`, and is not a colour map.
+    const data = ['deck-roughness.png', 'deck-mess-roughness.png', 'crack-decal.png', 'pbr/grate-roughness.png', 'pbr/grate-displacement.png'];
+    for (const file of [...data, 'pbr/board-metalness.jpg', 'pbr/grate-metalness.jpg', 'pbr/deck-pbr-ao.jpg', 'pbr/bulkhead-ao.jpg']) {
       expect(settings(file)).toEqual({ ...common, isUASTC: false, isPerceptual: false, isSetKTX2SRGBTransferFunc: false });
     }
   });

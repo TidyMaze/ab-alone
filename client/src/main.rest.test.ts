@@ -91,11 +91,40 @@ describe('main.ts, the tuned lights', () => {
       return add.apply(this, objects);
     });
     await boot('?bot=off');
+    // The tuned power, times the sliders' default levels (quality.ts): lamps 25 %, lights 215 %; the key is not scaled.
     expect((scene!.getObjectByName('key') as THREE.Light).intensity).toBe(LIGHT_TUNING.key);
-    expect(((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity).toBe(
-      LIGHT_TUNING['corner-neon'],
+    expect(((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(
+      LIGHT_TUNING['corner-neon']! * 0.25,
     );
-    expect((scene!.getObjectByName('emergencyLight') as THREE.Light).intensity).toBe(LIGHT_TUNING.emergencyLight);
+    expect((scene!.getObjectByName('emergencyLight') as THREE.Light).intensity).toBeCloseTo(LIGHT_TUNING.emergencyLight! * 2.15);
+  });
+});
+
+describe('main.ts, the light sliders', () => {
+  it('scales the tuned lights, lamps and bloom as saved, as a slider moves, and when the lights are made again', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    const booting = boot('?bot=off&lights');
+    localStorage.setItem('ab-alone.light.lights', '200');
+    localStorage.setItem('ab-alone.light.lamps', '50');
+    const game = await booting;
+    const emergency = (): number => (scene!.getObjectByName('emergencyLight') as THREE.Light).intensity;
+    const neon = (): number => ((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity;
+    const scaled = [LIGHT_TUNING.emergencyLight! * 2, LIGHT_TUNING['corner-neon']! / 2];
+    expect([emergency(), neon()]).toEqual(scaled);
+    const bloom = document.getElementById('level-bloom') as HTMLInputElement;
+    expect(bloom.value).toBe('20'); // its default level (quality.ts)
+    bloom.value = '300';
+    bloom.dispatchEvent(new Event('input'));
+    expect(localStorage.getItem('ab-alone.light.bloom')).toBe('300');
+    game.hook('__setTier', 'low'); // the props and their lights made again, the panel with them
+    expect([emergency(), neon()]).toEqual(scaled);
+    const strength = document.querySelector<HTMLInputElement>('#light-panel input[aria-label="bloom strength power"]')!;
+    expect(strength.value).toBe(String((LIGHT_TUNING['bloom strength']! * 300) / 100));
   });
 });
 
@@ -138,6 +167,41 @@ describe('main.ts, the deck textures', () => {
     expect(name(cells().normalMap)).toBe('deck-mess-normal.ktx2');
   });
 
+  it('the Mess cells wear the concrete roughness, the other decks the shared one', async () => {
+    const cells = catchCells();
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
+    expect(name(cells().roughnessMap)).toBe('deck-mess-roughness.ktx2');
+    expect(cells().roughnessMap!.wrapS).toBe(THREE.RepeatWrapping);
+    expect(cells().roughnessMap!.colorSpace).not.toBe('srgb');
+    game.hook('__deck', 'cargo');
+    await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('cargo'));
+    expect(name(cells().roughnessMap)).toBe('deck-roughness.ktx2');
+    game.hook('__deck', 'mess');
+    expect(name(cells().roughnessMap)).toBe('deck-mess-roughness.ktx2');
+  });
+
+  it('the Mess cells keep the shared roughness when the concrete one does not load', async () => {
+    const cells = catchCells();
+    await boot('?bot=off', { missing: ['deck-mess-roughness.ktx2'] });
+    await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
+    expect(name(cells().roughnessMap)).toBe('deck-roughness.ktx2');
+  });
+
+  it('the board plate wears the metalness map of Metal051A, tiled like its albedo', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    const plates: Mesh[] = [];
+    scene!.traverse((o) => (o as Mesh).material?.metalnessMap?.name === 'board-metalness.ktx2' && plates.push(o as Mesh));
+    expect(plates).toHaveLength(1);
+    expect([plates[0]!.material.metalness, plates[0]!.material.metalnessMap!.repeat.x]).toEqual([1, 0.15]);
+  });
+
   it('the board plate wears the brushed Metal051A at a large scale, not the small floor tiles', async () => {
     let scene: THREE.Scene | null = null;
     const add = THREE.Object3D.prototype.add;
@@ -158,7 +222,9 @@ describe('main.ts, the deck textures', () => {
 
   it('without its own set, a deck keeps the shared steel albedo and no normal map', async () => {
     const cells = catchCells();
-    const game = await boot('?bot=off', { missing: ['deck-mess.ktx2', 'deck-mess-normal.ktx2', 'deck-cargo.ktx2'] });
+    const game = await boot('?bot=off', {
+      missing: ['deck-mess.ktx2', 'deck-mess-normal.ktx2', 'deck-mess-roughness.ktx2', 'deck-cargo.ktx2'],
+    });
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('steel'));
     expect(name(cells().map)).toBe('deck-albedo.ktx2');
     expect(cells().normalMap).toBeNull();

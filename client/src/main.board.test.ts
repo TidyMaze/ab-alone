@@ -4,6 +4,8 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { encodeMove, groupTargets, moveForClick, parseMoves, type Axial } from './board';
 import { RIM_LIGHT } from './frame';
+import { GLASS_SKINS } from './glassskins';
+import { DEFAULT_SKIN, SKINS, skinById } from './skins';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
 import { BOSS_IDS } from './tally';
@@ -118,7 +120,8 @@ describe('main.ts board and HUD', () => {
 
   it('dresses the cells, the frame and the enemy shells in the loaded textures, the glass with its core', async () => {
     const scene = catchScene();
-    await boot('?bot=off');
+    const game = await boot('?bot=off');
+    await game.settle(); // the skins' maps load after the first frame
     const { discs, plate, near } = parts(scene());
     expect(discs).toHaveLength(91); // the 61, then ring 5 for The Ballast Mind (#564)
     expect(discs.filter((d) => d.visible)).toHaveLength(61);
@@ -132,9 +135,70 @@ describe('main.ts board and HUD', () => {
     expect(near.material.map).toBeInstanceOf(THREE.Texture);
     const { shells, glass } = drawn(scene());
     expect([shells.length, glass.length]).toEqual([14, 14]);
-    expect(shells[0]!.material.normalMap).toBeInstanceOf(THREE.Texture); // the scarab ridges
+    // The default skins wear their ambientCG maps, tiled round the sphere, the albedo in sRGB, in their own colours.
+    const leather = shells[0]!.material;
+    expect([leather.map, leather.normalMap, leather.roughnessMap].map((t) => t?.name)).toEqual([
+      'skin-Leather027-albedo.ktx2', 'skin-Leather027-normal.ktx2', 'skin-Leather027-roughness.ktx2',
+    ]);
+    expect(leather.map!.colorSpace).toBe(THREE.SRGBColorSpace);
+    expect(leather.normalMap!.colorSpace).toBe(THREE.NoColorSpace);
+    expect(leather.map!.wrapS).toBe(THREE.RepeatWrapping);
+    const { tile } = skinById(DEFAULT_SKIN);
+    expect(leather.map!.repeat.toArray()).toEqual([tile, tile / 2]);
+    expect(glass[0]!.material.map?.name).toBe('skin-Marble025-albedo.ktx2');
     expect(shells[0]!.children).toHaveLength(0);
-    expect(glass[0]!.children).toHaveLength(1); // its cyan core
+    expect(glass[0]!.children).toHaveLength(1); // its cyan core, inside the opaque sphere
+  });
+
+  it('wears every map its asset ships on each of the 20 skins, in its own colours, opaque', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    game.openSettings();
+    // What each ambientCG zip ships besides colour, normal and roughness (displacement is skipped: the normal map carries the relief).
+    const shipped: Record<string, string[]> = {
+      Lava002: ['emission'], Lava001: ['emission'], Fabric004: ['metalness'], Metal027: ['metalness'], Metal028: ['metalness'],
+      Rock025: ['ao'], Styrofoam004: ['ao'],
+    };
+    const slots = { albedo: 'map', normal: 'normalMap', roughness: 'roughnessMap', metalness: 'metalnessMap', ao: 'aoMap', emission: 'emissiveMap' } as const;
+    for (const [side, skins, mesh] of [
+      ['shell', SKINS, () => drawn(scene()).shells[0]!],
+      ['glass', GLASS_SKINS, () => drawn(scene()).glass[0]!],
+    ] as const) {
+      for (const skin of skins) {
+        await game.settle();
+        const m = mesh().material;
+        const kinds = ['albedo', 'normal', 'roughness', ...shipped[skin.asset] ?? []];
+        expect(kinds, skin.id).toEqual(['albedo', 'normal', 'roughness', ...skin.extra]);
+        for (const [kind, slot] of Object.entries(slots)) {
+          const texture = m[slot as keyof typeof m] as THREE.Texture | null;
+          expect(texture?.name, `${skin.id} ${slot}`).toBe(kinds.includes(kind) ? `skin-${skin.asset}-${kind}.ktx2` : undefined);
+          if (texture) expect(texture.colorSpace, `${skin.id} ${slot}`).toBe(kind === 'albedo' || kind === 'emission' ? THREE.SRGBColorSpace : THREE.NoColorSpace);
+        }
+        expect(m.color.getHex(), skin.id).toBe(0xffffff);
+        expect(m.metalness, skin.id).toBe(kinds.includes('metalness') ? 1 : 0);
+        if (kinds.includes('emission')) expect([m.emissive.getHex(), m.emissiveIntensity], skin.id).toEqual([0xffffff, 1]);
+        expect([m.transparent, m.opacity, m.depthWrite], skin.id).toEqual([false, 1, true]);
+        setting(`${side}-skin`);
+      }
+    }
+  });
+
+  it('keeps the flat colour where a skin map is missing, the maps that loaded still on', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { missing: ['skin-Leather027-normal.ktx2'] });
+    await game.settle();
+    const { material } = drawn(scene()).shells[0]!;
+    expect(material.normalMap).toBeNull();
+    expect(material.map?.name).toBe('skin-Leather027-albedo.ktx2');
+  });
+
+  it('leaves the skins their own colours under a colour-blind palette', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    game.openSettings();
+    setting('palette'); // Protan
+    const { shells, glass } = drawn(scene());
+    expect([shells[0]!.material.color.getHex(), glass[0]!.material.color.getHex()]).toEqual([0xffffff, 0xffffff]);
   });
 
   it('draws The Ballast Mind on its radius 5 board (#564): 85 discs round six void pillars, a frame of radius 5', async () => {
@@ -225,20 +289,23 @@ describe('main.ts board and HUD', () => {
     expect(game.hook('__frame')).toMatchObject({ drawn: true });
   });
 
-  it('dresses the Black shells in the next skin at each press, glowing skins lit, a seen skin reused', async () => {
+  it('dresses the Black shells in the next skin at each press, its maps loaded when worn, a lava lit, a seen skin reused', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     const black = (): Mesh => drawn(scene()).shells[0]!;
     const scarab = black().material;
     game.openSettings();
-    setting('shell-skin'); // Obsidian
+    setting('shell-skin'); // Black porcelain
     expect(black().material).not.toBe(scarab);
-    expect(black().material.map).toBeInstanceOf(THREE.CanvasTexture);
+    expect(black().material.map).toBeNull(); // flat until its maps arrive
+    await game.settle();
+    expect(black().material.map?.name).toBe('skin-Porcelain003-albedo.ktx2');
     expect(black().material.emissiveMap).toBeNull();
-    setting('shell-skin'); // Slag crust glows
-    expect(black().material.emissiveMap).toBe(black().material.map);
-    expect(black().material.emissiveIntensity).toBe(0.4);
-    for (let i = 0; i < 8; i++) setting('shell-skin'); // round to Scarab ridges
+    setting('shell-skin'); // Lava is lit by its emission map
+    await game.settle();
+    expect(black().material.emissiveMap?.name).toBe('skin-Lava002-emission.ktx2');
+    expect(black().material.emissive.getHex()).toBe(0xffffff);
+    for (let i = 0; i < 8; i++) setting('shell-skin'); // round to Leather
     expect(black().material).toBe(scarab);
     setting('shell-skin');
     const obsidian = black().material;
@@ -246,24 +313,20 @@ describe('main.ts board and HUD', () => {
     expect(black().material).toBe(obsidian);
   });
 
-  it('dresses the glass in the next glass skin at each press, its pattern and its own core light', async () => {
+  it('dresses the White marbles in the next white skin at each press, its maps loaded when worn, a seen skin reused', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     const white = (): Mesh => drawn(scene()).glass[0]!; // local play: White wears the glass
-    const core = (): number => (white().children[0] as Mesh).material.color.getHex();
-    const smoked = white().material;
-    const cyan = core();
-    expect(smoked.map).toBeNull();
+    const marble = white().material;
     game.openSettings();
-    setting('glass-skin'); // Frost: its pattern on a white base
-    expect(white().material.map).toBeInstanceOf(THREE.CanvasTexture);
-    expect(white().material.color.getHex()).toBe(0xffffff);
-    expect(core()).toBe(cyan);
-    for (let i = 0; i < 5; i++) setting('glass-skin'); // Lantern core lights its own core
-    expect(core()).toBe(0xf2c27a);
-    for (let i = 0; i < 4; i++) setting('glass-skin'); // round to Smoked glass
-    expect(white().material).toBe(smoked);
-    expect(core()).toBe(cyan);
+    setting('glass-skin'); // Terracotta
+    expect(white().material).not.toBe(marble);
+    expect(white().material.map).toBeNull(); // flat until its maps arrive
+    await game.settle();
+    expect(white().material.map?.name).toBe('skin-GlazedTerracotta003-albedo.ktx2');
+    expect(white().material.normalMap?.name).toBe('skin-GlazedTerracotta003-normal.ktx2');
+    for (let i = 0; i < 9; i++) setting('glass-skin'); // round to Marble
+    expect(white().material).toBe(marble);
   });
 
   it('dims the cyan core a step per marble lost, the same after a reload, never dark, full on a new game (#506)', async () => {

@@ -12,13 +12,14 @@ import {
   meshDetail,
   renderPixelRatio,
   nextPixelRatio,
-  antialiased,
   readFlatHud,
   readTranscript,
   readReducedMotion,
   readGlassSkin,
   readSafeMode,
   readMix,
+  readLevels,
+  writeLevel,
   readSkin,
   readPalette,
   readTheme,
@@ -332,6 +333,26 @@ describe('clear-board storage', () => {
   });
 });
 
+describe('the three light sliders: bloom, lamps, lights', () => {
+  it('defaults to the levels the owner tuned (bloom 20, lamps 25, lights 215 %), and reads back a saved slider under its own key', () => {
+    const s = memoryStorage();
+    expect(readLevels(s)).toEqual({ bloom: 20, lamps: 25, lights: 215 });
+    writeLevel(s, 'lamps', 250);
+    writeLevel(s, 'bloom', 0);
+    expect(s.data.get('ab-alone.light.lamps')).toBe('250');
+    expect(readLevels(s)).toEqual({ bloom: 0, lamps: 250, lights: 215 });
+  });
+  it('ignores a garbage stored value, and a stored value over 300 %: the default', () => {
+    for (const bad of ['bright', '', '-5', '301', '50.5']) expect(readLevels(memoryStorage({ 'ab-alone.light.lights': bad })).lights).toBe(215);
+  });
+  it('falls back to the default when storage throws or is missing, and does not throw when writing to it', () => {
+    expect(readLevels(throwing).bloom).toBe(20);
+    expect(readLevels(null).bloom).toBe(20);
+    expect(() => writeLevel(throwing, 'bloom', 0)).not.toThrow();
+    expect(() => writeLevel(null, 'bloom', 0)).not.toThrow();
+  });
+});
+
 describe('mix storage, the four volume sliders (#438)', () => {
   it('defaults to music, effects and voice at 100 %, ambience at 5 %', () => {
     expect(readMix(memoryStorage())).toEqual({ music: 100, ambience: 5, effects: 100, voice: 100 });
@@ -434,15 +455,14 @@ describe('tier storage', () => {
 });
 
 describe('renderPixelRatio (#424)', () => {
-  it('caps pixel ratio at 1.0 on low tier / mobile to save fill rate', () => {
-    expect(renderPixelRatio(2, false, 'low')).toBe(1);
-    expect(renderPixelRatio(3, false, 'low')).toBe(1);
-    expect(renderPixelRatio(0.8, false, 'low')).toBe(0.8);
+  it('gives a phone up to 1.5 like any player: at 1 a DPR-3 screen stretched every drawn pixel 3 times, a blur', () => {
+    expect(renderPixelRatio(3, false)).toBe(1.5);
+    expect(renderPixelRatio(0.8, false)).toBe(0.8);
   });
-  it('gives high-tier players up to 1.5 DPR: a full-screen Retina window at 2 drew 10 FPS (#843)', () => {
-    expect(renderPixelRatio(1, false, 'high')).toBe(1);
-    expect(renderPixelRatio(2, false, 'high')).toBe(1.5);
-    expect(renderPixelRatio(3, false, 'high')).toBe(1.5);
+  it('caps every player at 1.5 DPR: a full-screen Retina window at 2 drew 10 FPS (#843)', () => {
+    expect(renderPixelRatio(1, false)).toBe(1);
+    expect(renderPixelRatio(2, false)).toBe(1.5);
+    expect(renderPixelRatio(3, false)).toBe(1.5);
   });
   it('renders at half the pixels under automation, so software WebGL costs less per frame', () => {
     expect(renderPixelRatio(1, true)).toBe(0.5);
@@ -469,17 +489,6 @@ describe('nextPixelRatio, the adaptive resolution (#843)', () => {
   });
   it('reads the median: one long frame (a shader compile, a texture load) changes nothing', () => {
     expect(nextPixelRatio(1.5, [...frames(16, 29), 8000], 1)).toBe(1.5);
-  });
-});
-
-describe('antialiased, MSAA by screen (#844)', () => {
-  it('keeps MSAA under a device ratio of 1.5, where jagged edges show', () => {
-    expect(antialiased(1)).toBe(true);
-    expect(antialiased(1.25)).toBe(true);
-  });
-  it('drops it from 1.5 up: the pixels are too small to show the edges, and 4 samples a pixel cost the most there', () => {
-    expect(antialiased(1.5)).toBe(false);
-    expect(antialiased(2)).toBe(false);
   });
 });
 

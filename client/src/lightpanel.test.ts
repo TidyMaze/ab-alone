@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
-import { applyTuning, lightPanel } from './lightpanel';
+import { applyTuning, lightPanel, scalePower } from './lightpanel';
 
 describe('lightPanel (?lights)', () => {
   const scene = (): { scene: THREE.Scene; key: THREE.DirectionalLight; lamp: THREE.PointLight; neon: THREE.MeshStandardMaterial } => {
@@ -169,5 +169,54 @@ describe('lightPanel (?lights)', () => {
     const panel = lightPanel(scene().scene);
     expect(lightPanel(new THREE.Scene(), panel)).toBe(panel);
     expect(panel.children).toHaveLength(0); // no light, no group
+  });
+});
+
+describe('scalePower, the settings light sliders', () => {
+  const scene = () => {
+    const s = new THREE.Scene();
+    const key = new THREE.DirectionalLight(0xffffff, 2);
+    const fill = new THREE.AmbientLight(0xffffff, 0.5);
+    const lamp = new THREE.PointLight(0x38e8ff, 2);
+    const panel = new THREE.RectAreaLight(0xffffff, 4);
+    const neon = new THREE.MeshStandardMaterial({ emissiveIntensity: 6 });
+    const tube = new THREE.Mesh(new THREE.BoxGeometry(), neon);
+    tube.name = 'corner-neon-nw';
+    const twin = new THREE.Mesh(new THREE.BoxGeometry(), neon); // the same material: scaled once
+    twin.name = 'corner-neon-ne';
+    const wall = new THREE.MeshStandardMaterial({ emissiveIntensity: 1 });
+    s.add(key, fill, lamp, panel, tube, twin, new THREE.Mesh(new THREE.BoxGeometry(), wall));
+    return { s, key, fill, lamp, panel, neon, wall, bloom: { value: 0.06 } };
+  };
+
+  it('scales the point and rect area lights, the neon glow and the bloom, never the key, the fill or another glow', () => {
+    const { s, key, fill, lamp, panel, neon, wall, bloom } = scene();
+    scalePower(s, { bloom: 300, lamps: 50, lights: 200 }, bloom);
+    expect([lamp.intensity, panel.intensity, neon.emissiveIntensity, bloom.value]).toEqual([4, 8, 3, 0.18]);
+    expect([key.intensity, fill.intensity, wall.emissiveIntensity]).toEqual([2, 0.5, 1]);
+    scalePower(s, { bloom: 300, lamps: 0, lights: 200 }); // no bloom: the rest still scales
+    expect(neon.emissiveIntensity).toBe(0);
+  });
+
+  it('scales the environment light of what reflects the room with the lights: at 0 a white marble goes dark too', () => {
+    const { s } = scene();
+    const env = new THREE.Texture();
+    const marble = new THREE.MeshPhysicalMaterial({ envMap: env, envMapIntensity: 0.8 });
+    const plain = new THREE.MeshStandardMaterial({ envMapIntensity: 0.8 }); // no envMap: nothing to scale
+    s.add(new THREE.Mesh(new THREE.SphereGeometry(), marble), new THREE.Mesh(new THREE.SphereGeometry(), marble), new THREE.Mesh(new THREE.BoxGeometry(), plain));
+    scalePower(s, { bloom: 100, lamps: 100, lights: 0 });
+    expect([marble.envMapIntensity, plain.envMapIntensity]).toEqual([0, 0.8]);
+    scalePower(s, { bloom: 100, lamps: 100, lights: 150 });
+    expect(marble.envMapIntensity).toBeCloseTo(1.2);
+  });
+
+  it('scales from the power it found, again and again, until something else sets it', () => {
+    const { s, lamp, neon } = scene();
+    scalePower(s, { bloom: 100, lamps: 0, lights: 200 });
+    scalePower(s, { bloom: 100, lamps: 150, lights: 200 });
+    expect([lamp.intensity, neon.emissiveIntensity]).toEqual([4, 9]); // not 8, not 0
+    lamp.intensity = 3; // the tuning when the lights are made again, or ?lights
+    scalePower(s, { bloom: 100, lamps: 100, lights: 50 });
+    expect([lamp.intensity, neon.emissiveIntensity]).toEqual([1.5, 6]);
   });
 });

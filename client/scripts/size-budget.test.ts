@@ -28,6 +28,9 @@ const BUILD: Record<string, number> = {
   'assets/basis_transcoder-o4Hde_L7.js': 16384, // the KTX2 transcoder, for the first textures
   'assets/basis_transcoder-VXdx5NbI.wasm': 32768,
   'assets/pbr/grate-normal.ktx2': 65536, // the bay loads after the page (#661)
+  'assets/pbr/skin-Leather027-albedo.ktx2': 131072, // the default shell skin, worn from the first frame
+  'assets/pbr/skin-Marble025-normal.ktx2': 262144, // the default glass skin
+  'assets/pbr/skin-Lava002-albedo.ktx2': 524288, // any other skin loads when the player picks it
 };
 
 describe('measure', () => {
@@ -35,13 +38,13 @@ describe('measure', () => {
     const { parts, sources } = measure(BUILD);
     expect(sources).toEqual([]);
     expect(parts).toEqual([
-      { name: 'First screen', bytes: 1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 16384 + 32768, budget: 5 * MB },
+      { name: 'First screen', bytes: 1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 16384 + 32768 + 131072 + 262144, budget: 5 * MB },
       { name: 'Deck mess', bytes: 128 + 256, budget: 15 * MB },
       { name: 'Deck cargo', bytes: 512 + 1024, budget: 15 * MB },
       { name: 'Deck furnace', bytes: 0, budget: 15 * MB },
       { name: 'Deck chapel', bytes: 0, budget: 15 * MB },
       { name: 'Deck bridge', bytes: 0, budget: 15 * MB },
-      { name: 'Site', bytes: 131071, budget: 250 * MB },
+      { name: 'Site', bytes: 1048575, budget: 250 * MB },
     ]);
     expect(BUDGETS).toEqual({ firstScreen: 5 * MB, deck: 15 * MB, site: 250 * MB });
   });

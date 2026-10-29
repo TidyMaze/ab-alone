@@ -84,15 +84,16 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 /* The volume page (#438): Sound shows the four sliders in place of the items, so the menu is never taller than its items
    and covers no cell. Each slider is its name over a range of 0 to 100 %. */
 #settings-menu[data-page='volume'] > :not(.setting-volume), #settings-menu:not([data-page='volume']) > .setting-volume { display: none; }
-.setting-volume {
+/* The three light sliders are rows of the menu itself, with its items, styled as the volumes. */
+:is(.setting-volume, .setting-lights) {
   box-sizing: border-box; max-width: 100%;
   display: flex; flex-direction: column; justify-content: center; gap: 0.125rem; padding: 0.25rem 0.75rem; min-width: 8rem;
   grid-column: 1 / -1; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
   font: 0.75rem/1.2 var(--ui);
 }
-.setting-volume input { width: 100%; box-sizing: border-box; margin: 0; accent-color: var(--accent); cursor: pointer; }
-.setting-volume input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (pointer: coarse) { .setting-volume { min-height: 2.75rem; } }
+:is(.setting-volume, .setting-lights) input { width: 100%; box-sizing: border-box; margin: 0; accent-color: var(--accent); cursor: pointer; }
+:is(.setting-volume, .setting-lights) input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (pointer: coarse) { :is(.setting-volume, .setting-lights) { min-height: 2.75rem; } }
 /* The log archive (#513): Logs shows the entries read in place of the items, one title per row, wrapped. */
 #settings-menu[data-page='archive'] > :not(.setting-archive), #settings-menu:not([data-page='archive']) > .setting-archive { display: none; }
 .setting-archive {
@@ -291,6 +292,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   /* Bug #427, #458: the column scrolls, so a menu inside it is clipped at its bottom edge or left edge once the UI scale grows it or when it is wider than the column. Fixed to the
      viewport and hung from the cog, it leaves that clip on every browser. */
   #settings-menu { position: fixed; top: calc(16px + 2.75rem + 0.25rem); right: 16px; width: max-content; max-width: calc(100vw - 32px); }
+  /* With the light sliders the menu is taller than a phone held sideways: it scrolls, so every row stays reachable. */
+  #settings-menu { max-height: calc((100dvh - 32px) / var(--ui-scale) - 2.75rem - 0.25rem); overflow-y: auto; } /* zoomed (#382) */
   @supports (anchor-name: --cog) {
     #settings-menu { position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
   }
@@ -301,7 +304,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   /* The cog starts the first row: the open menu lies beside it, over that row, its items side by side, so it reaches no
      lower than the rows when the plate is tall (#284, #287). */
   #settings-menu { top: 0; left: calc(100% + 0.5rem); right: auto; flex-flow: row wrap; max-width: calc(100vw - 32px - 100% - 0.5rem); }
-  #settings-menu :is(.setting-volume, .setting-archive) { flex: 1 0 100%; box-sizing: border-box; }
+  #settings-menu :is(.setting-volume, .setting-lights, .setting-archive) { flex: 1 0 100%; box-sizing: border-box; }
   /* The open mode menu starts a new row. #666: an open boss list is one row of its own under Boss fight (or Fight
      together) that scrolls sideways, so a new boss adds no row over the board: the menu is no wider than the
      window (min-width), the padding keeps the focus outlines inside the scroll box. */
@@ -342,8 +345,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 @media (orientation: landscape) and (max-width: 1100px), (orientation: landscape) and (max-height: 500px) {
   #settings-menu { display: grid; grid-template-columns: repeat(3, 2.75rem); grid-auto-flow: dense; }
   #settings-menu .setting-group { grid-column: span 2; }
-  #settings-menu .skin-pair { flex-wrap: nowrap; }
-}
+  #settings-menu .skin-pair { flex-wrap: nowrap; }}
 
 #hud {
   box-sizing: border-box; max-width: 22rem;

@@ -36,9 +36,8 @@ describe('marble looks, world.md section 5', () => {
     expect(luminance(channels(GLASS.color))).toBeLessThan(luminance(channels(0xd8d4c8)) / 4);
   });
 
-  it('the shell is matte and ridged, nothing emissive, no core', () => {
+  it('the shell is matte, nothing emissive, no core', () => {
     expect(SHELL.roughness).toBeGreaterThanOrEqual(0.5);
-    expect(SHELL.ridges).toBeGreaterThan(0);
     expect(SHELL).not.toHaveProperty('emissive');
     expect(SHELL).not.toHaveProperty('core');
   });

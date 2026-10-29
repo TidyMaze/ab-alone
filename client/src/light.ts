@@ -36,8 +36,7 @@ export const LIGHT = {
     },
   },
   // Reflections (#376): the prefiltered room (RoomEnvironment) as the marbles' envMap only, low so the key stays the base.
-  // glass: the smoked glass is dark, so its reflection lifts it toward the deck; kept low for the 3:1 of #344.
-  environment: { intensity: 0.25, glass: 0.1 },
+  environment: { intensity: 0.25 },
   // Accents (#376): a cold rim from behind, a small warm point at the lamp's side. Each is weaker than the key.
   accents: {
     rim: { color: 0x7fd6e8, intensity: 1.5, position: [5, 6, -6] as const },

@@ -92,7 +92,9 @@ const check = async (page: Page, testInfo: TestInfo, state: string) => {
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sound' })).toBeVisible();
   await frame(page);
-  expect(await problems(page), `${state}, settings menu open`).toEqual([]);
+  // The user's choice: the light sliders are rows of the open menu, which may lie over cells; it stays on screen.
+  const open = (await problems(page)).filter((p) => !/ covers cell |^a tap on cell /.test(p));
+  expect(open, `${state}, settings menu open`).toEqual([]);
   // On a touch screen every item of the open menu is a touch target of at least 44 px (#287).
   const small = await page.evaluate(() =>
     [...document.querySelectorAll('#settings-menu button')]

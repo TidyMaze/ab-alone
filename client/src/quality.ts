@@ -5,6 +5,7 @@
 import type { View } from './camera';
 import { FRAME } from './frame';
 import { glassSkinById } from './glassskins';
+import type { Level } from './lightpanel';
 import { PALETTES, type Palette } from './palettes';
 import type { Theme } from './settings';
 import type { Bus, Mix } from './sound';
@@ -105,6 +106,18 @@ export const readMix = (store: Store): Mix => {
   return { music: volume('music'), ambience: volume('ambience'), effects: volume('effects'), voice: volume('voice') };
 };
 export const writeVolume = (store: Store, bus: Bus, percent: number): void => write(store, volumeKey(bus), String(percent));
+// The three light sliders (lightpanel.ts scalePower), 0 to 300 % of the tuned power each; until the player moves one,
+// the levels the owner tuned in the game (2026-10-29).
+const DEFAULT_LEVELS: Readonly<Record<Level, number>> = { bloom: 20, lamps: 25, lights: 215 };
+const levelKey = (level: Level): string => `ab-alone.light.${level}`;
+export const readLevels = (store: Store): Record<Level, number> => {
+  const level = (l: Level): number => {
+    const saved = read(store, levelKey(l)) ?? '';
+    return /^\d+$/.test(saved) && Number(saved) <= 300 ? Number(saved) : DEFAULT_LEVELS[l];
+  };
+  return { bloom: level('bloom'), lamps: level('lamps'), lights: level('lights') };
+};
+export const writeLevel = (store: Store, level: Level, percent: number): void => write(store, levelKey(level), String(percent));
 // Photosensitivity safe mode (#380): on unless the player turned it off.
 export const readSafeMode = (store: Store): boolean => read(store, SAFE_KEY) !== 'off';
 export const writeSafeMode = (store: Store, on: boolean): void => write(store, SAFE_KEY, on ? 'on' : 'off');
@@ -183,15 +196,13 @@ export function meshDetail(tier: Tier): MeshDetail {
     : { discSegments: 32, marbleWidthSegments: 32, marbleHeightSegments: 16 };
 }
 
-// On mobile / low tier the canvas renders capped at 1.0 DPR: WebGL2 fills cost by pixels (#424).
-// The high tier caps at 1.5: a full-screen Retina window at 2 renders 3840×2160 and drew 10 FPS (#843).
+// Every tier caps the canvas at 1.5: a full-screen Retina window at 2 renders 3840×2160 and drew 10 FPS (#843), and a
+// phone capped at 1.0 (#424) stretched each drawn pixel 3 times on a DPR-3 screen, a blur. The adaptive resolution
+// below steps down when a phone is too slow for it.
 // Under automation the canvas renders at half DPR (#349).
 const AUTOMATED_PIXEL_RATIO = 0.5;
-export const renderPixelRatio = (dpr: number, automated: boolean, tier: Tier = 'high'): number => {
-  if (automated) return Math.min(dpr, AUTOMATED_PIXEL_RATIO);
-  if (tier === 'low') return Math.min(dpr, 1.0);
-  return Math.min(dpr, 1.5);
-};
+export const renderPixelRatio = (dpr: number, automated: boolean): number =>
+  Math.min(dpr, automated ? AUTOMATED_PIXEL_RATIO : 1.5);
 
 // The adaptive resolution (#843): while the median frame of the last ones takes more than 20 ms (under 50 FPS), the
 // pixel ratio steps down a quarter, never under `floor`. The median, so one long frame (a shader compile, a texture
@@ -202,10 +213,6 @@ export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor:
   const median = [...frameMs].sort((a, b) => a - b)[frameMs.length >> 1]!;
   return median > SLOW_FRAME_MS ? Math.max(floor, ratio - RATIO_STEP) : ratio;
 }
-
-// MSAA by screen (#844): from a device ratio of 1.5 the pixels are too small to show jagged edges, and 4 samples per
-// pixel cost the most on these screens. Fixed when the renderer is made.
-export const antialiased = (dpr: number): boolean => dpr < 1.5;
 
 // Under automation (navigator.webdriver) we skip expensive effects like prefiltering and shadows (#459).
 export const isAutomation = (webdriver: boolean): boolean => webdriver;

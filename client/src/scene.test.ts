@@ -114,6 +114,18 @@ describe('SceneRenderer (#632)', () => {
     expect(srRimNoNormal.rim.near.material.normalMap).toBeNull();
   });
 
+  it('the board plate wears the metalness map of its set, tiled like its albedo, at full metalness', () => {
+    const renderer = createMockRenderer();
+    const plateMetalness = new THREE.Texture();
+    const sr = new SceneRenderer({ renderer, plateAlbedo: new THREE.Texture(), plateMetalness });
+    expect(sr.plate.material.metalnessMap).toBe(plateMetalness);
+    expect(sr.plate.material.metalness).toBe(1);
+    expect([plateMetalness.wrapS, plateMetalness.repeat.x, plateMetalness.repeat.y]).toEqual([THREE.RepeatWrapping, 0.15, 0.15]);
+
+    const without = new SceneRenderer({ renderer, plateAlbedo: new THREE.Texture(), plateMetalness: null });
+    expect([without.plate.material.metalnessMap, without.plate.material.metalness]).toEqual([null, 0]);
+  });
+
   it('handles WebGPU backend detection', () => {
     const renderer = createMockRenderer();
     (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend = true;
