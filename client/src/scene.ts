@@ -1,11 +1,12 @@
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
-import { pass } from 'three/tsl';
+import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
+import { pass, renderOutput } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
 import { DECKS, LIGHT } from './light';
 import { DECK_PARTICLES, type Deck } from './deck';
-import { fogSettings, hasParticles, renderPixelRatio, type Tier } from './quality';
+import { antialiased, fogSettings, hasParticles, renderPixelRatio, type Tier } from './quality';
 import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
@@ -54,6 +55,7 @@ export function createBloomPipeline(
   renderer: THREE.WebGPURenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
+  smooth = false,
 ): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> }) | null {
   try {
     const pipeline = new THREE.RenderPipeline(renderer);
@@ -62,6 +64,11 @@ export function createBloomPipeline(
     const bloomNode = bloom(colorNode, 0.175, 0.15, 1);
     bloomNode.setResolutionScale(0.25); // a soft glow: a quarter of the resolution is enough (#781, #844)
     pipeline.outputNode = colorNode.add(bloomNode);
+    // No MSAA (#857): `smooth` ends with FXAA, which reads the tone-mapped picture, so renderOutput maps it once here.
+    if (smooth) {
+      pipeline.outputColorTransform = false;
+      pipeline.outputNode = fxaa(renderOutput(pipeline.outputNode));
+    }
     return Object.assign(pipeline, { bloom: bloomNode }); // its strength, radius and threshold tuned with ?lights
 
   } catch {
@@ -244,7 +251,7 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera);
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, antialiased(dpr));
   }
 
   async init(): Promise<void> {

@@ -209,6 +209,9 @@ export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor:
   return median > SLOW_FRAME_MS ? Math.max(floor, ratio - RATIO_STEP) : ratio;
 }
 
+// Desktop edges need FXAA below device ratio 1.5 (#857); touch screens retain MSAA (#868).
+export const antialiased = (dpr: number): boolean => dpr < 1.5;
+
 /**
  * Airborne particles (#443): light dust/steam/smoke outside the board volume.
  * Disabled under clear board, reduced motion, low quality tier and automation.
