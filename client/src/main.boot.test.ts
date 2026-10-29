@@ -214,7 +214,7 @@ describe('the renderer and its textures', () => {
       const booting = boot('?bot=off');
       const { options, draw } = renderer();
       const game = await booting;
-      expect(options).toEqual([{ antialias: true, forceWebGL: false }]);
+      expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
       const scene = draw();
       expect((scene.background as THREE.Color).getHex()).toBe(0x0b0d0f);
       expect(materials(scene).some((m) => m.map && !(m.map as THREE.CanvasTexture).isCanvasTexture)).toBe(false);
@@ -225,10 +225,10 @@ describe('the renderer and its textures', () => {
       const booting = boot('?bot=off&backend=webgl');
       const { options } = renderer();
       await booting;
-      expect(options).toEqual([{ antialias: true, forceWebGL: true }]);
+      expect(options).toEqual([{ antialias: false, forceWebGL: true }]);
     });
 
-    it('drops MSAA on a Retina screen drawn at 1.5 (#844)', async () => {
+    it('drops MSAA on a Retina desktop screen (#844, #857)', async () => {
       vi.stubGlobal('devicePixelRatio', 2);
       const booting = boot('?bot=off&quality=low', { webdriver: false }); // low: no reflections, the stub has no PMREM
       const { options } = renderer();
@@ -236,11 +236,11 @@ describe('the renderer and its textures', () => {
       expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
     });
 
-    it('keeps MSAA on a 1x screen, where a drawn pixel is big (#844)', async () => {
+    it('drops MSAA on a 1x desktop screen: FXAA avoids the clustered lighting sample cost (#857)', async () => {
       const booting = boot('?bot=off&quality=low', { webdriver: false });
       const { options } = renderer();
       await booting;
-      expect(options).toEqual([{ antialias: true, forceWebGL: false }]);
+      expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
     });
 
     it('drops MSAA on a 3x desktop screen drawn at 1.5: the edges are too fine to show (#844)', async () => {

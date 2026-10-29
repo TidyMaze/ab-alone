@@ -3,6 +3,7 @@ import { axialTo3D, CELLS, VANISHED } from './board';
 import { DIST_MAX, DIST_MIN, POLAR_MAX, POLAR_MIN, resetView, viewPosition, type View } from './camera';
 import { frameShape } from './frame';
 import {
+  antialiased,
   drawDue,
   fogSettings,
   readClearBoard,
@@ -482,6 +483,17 @@ describe('nextPixelRatio, the adaptive resolution (#843)', () => {
   });
   it('reads the median: one long frame (a shader compile, a texture load) changes nothing', () => {
     expect(nextPixelRatio(1.5, [...frames(16, 29), 8000], 1)).toBe(1.5);
+  });
+});
+
+describe('antialiased, smoothed edges by screen (#844, #857)', () => {
+  it('smooths the edges under a device ratio of 1.5, where jagged edges show', () => {
+    expect(antialiased(1)).toBe(true);
+    expect(antialiased(1.25)).toBe(true);
+  });
+  it('leaves them from 1.5 up: the pixels are too small to show the edges', () => {
+    expect(antialiased(1.5)).toBe(false);
+    expect(antialiased(2)).toBe(false);
   });
 });
 

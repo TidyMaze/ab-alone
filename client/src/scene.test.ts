@@ -420,4 +420,21 @@ describe('SceneRenderer (#632)', () => {
     const pipeline = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera())!;
     expect((pipeline.outputNode as any).node.bNode.getResolutionScale()).toBe(0.25);
   });
+
+  it('smooths the edges with FXAA on the tone-mapped picture when asked, in place of MSAA (#857)', () => {
+    const plain = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera())!;
+    expect(plain.outputNode.type).not.toBe('FXAANode');
+    expect(plain.outputColorTransform).toBe(true);
+    const smooth = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera(), true)!;
+    expect(smooth.outputNode.type).toBe('FXAANode');
+    expect(smooth.outputColorTransform).toBe(false); // renderOutput tone-maps before FXAA, once
+    expect(smooth.bloom.getResolutionScale()).toBe(0.25);
+  });
+
+  it('asks FXAA under a device ratio of 1.5 only, where jagged edges show (#857)', () => {
+    const fxaa = (devicePixelRatio: number): string =>
+      new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio }).pipeline!.outputNode.type;
+    expect(fxaa(1)).toBe('FXAANode');
+    expect(fxaa(2)).not.toBe('FXAANode');
+  });
 });
