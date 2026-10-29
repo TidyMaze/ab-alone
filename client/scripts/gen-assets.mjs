@@ -331,7 +331,7 @@ export function generateAssets(seed) {
     ['backdrop.png', backdrop(256, 256, rand)],
     ['crack-decal.png', crackDecal(128, rand)],
   ]);
-  // Their own stream, so the assets above keep their bytes (#401). The Mess cells are ambientCG Metal051A (CC0),
+  // Their own stream, so the assets above keep their bytes (#401). The Mess cells are ambientCG Concrete036 (CC0),
   // committed by hand: still drawn here so the other decks keep their bytes, not written.
   const generated = ([name]) => name !== 'mess';
   for (const [name, buf] of Object.entries(deckSets(256, steel, rng(seed + 401))).filter(generated)) assets.set(`deck-${name}.png`, buf);
