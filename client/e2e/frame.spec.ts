@@ -30,7 +30,7 @@ test('the cells sit on a steel frame that never takes a click meant for a cell, 
 
 test('clear board and the low tier keep the frame, #292', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('ab-alone.quality', 'low');
+    localStorage.setItem('ab-alone.tier', 'low');
     localStorage.setItem('ab-alone.clear-board', 'on');
   });
   await page.goto('./?bot=off');

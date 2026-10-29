@@ -33,9 +33,10 @@ import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
 import { applyTuning, LEVELS, lightPanel, scalePower, type Level } from './lightpanel';
 import { LIGHT_TUNING } from './lighttuning';
-import { TUBE_SPACING, tubeLights } from './neonlight';
+import { tubeLights } from './neonlight';
 import { ringLamp } from './ringlamp';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
+import { CulledLighting } from './culledlighting';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { Diagnostics, copyText, gameInfo } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
@@ -299,9 +300,9 @@ const renderer = new THREE.WebGPURenderer({
 await renderer.init().catch(bootFailed);
 // The neon tubes' rows of short lights (neonlight.ts) cost little when each pixel only adds the lights that reach it:
 // clustered (Forward+) lighting, 4x the frame rate of a rect light per tube. It needs compute shaders, so WebGPU only:
-// on WebGL a tube gets one light.
+// WebGL adds every light at every pixel, the same light at a higher cost (#882).
 const clustered = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
-if (clustered) renderer.lighting = new ClusteredLighting();
+renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {
@@ -438,7 +439,6 @@ let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-cr
 let transcriptOn = readTranscript(store); // the audio log transcript (#516), on by default
 const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
 let tier = readTier(store, {
-  width: innerWidth,
   cores: navigator.hardwareConcurrency,
   memory: (navigator as { deviceMemory?: number }).deviceMemory,
   reducedMotion: reducedMotion(),
@@ -451,7 +451,7 @@ if (queryQuality === 'high' || queryQuality === 'low') {
 diag.log.log('info', 'start', { backend, tier });
 
 // Reflections (#376, #424): the bay, prefiltered once it has loaded (mountBay), for the marble materials on high tier only.
-// Omitted on low tier / mobile and under automation to save WebGL2 fill rate and PMREM prefilter cost (#416, #424).
+// Omitted on low tier and under automation to save WebGL2 fill rate and PMREM prefilter cost (#416, #424).
 let reflections: THREE.Texture | null = null;
 
 // The whole board fits the window, held upright too, below the HUD and the buttons (#227).
@@ -1719,8 +1719,8 @@ drawProps = (): void => {
   }
   // Each neon tube lights the room for real: a row of lights along it (neonlight.ts), one slider in ?lights.
   for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
-    propsGroup.add(...tubeLights(tube as THREE.Mesh, clustered ? TUBE_SPACING : Infinity));
-  const ring = ringLamp(clustered ? TUBE_SPACING : Infinity);
+    propsGroup.add(...tubeLights(tube as THREE.Mesh));
+  const ring = ringLamp();
   propsGroup.add(...ring.meshes, ...ring.lights);
   propMeshes.push(...ring.meshes);
   const viewportRimLight = new THREE.PointLight(sLights.rim, 2.7, 11.0);

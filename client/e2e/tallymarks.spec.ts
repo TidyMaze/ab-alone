@@ -15,7 +15,7 @@ const PLIES: [number, number][][] = [
 
 test('an ejection scratches one mark on the frame at the losing side, with clear board and the low tier, #389', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('ab-alone.quality', 'low');
+    localStorage.setItem('ab-alone.tier', 'low');
     localStorage.setItem('ab-alone.clear-board', 'on');
   });
   await page.emulateMedia({ reducedMotion: 'reduce' }); // slides take no time

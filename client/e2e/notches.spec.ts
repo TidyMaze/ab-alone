@@ -18,7 +18,7 @@ const PLIES: [number, number][][] = [
 
 test('an ejected boss marble puts a phase notch out on the frame, with clear board and the low tier, #356', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('ab-alone.quality', 'low');
+    localStorage.setItem('ab-alone.tier', 'low');
     localStorage.setItem('ab-alone.clear-board', 'on');
   });
   await page.emulateMedia({ reducedMotion: 'reduce' }); // slides take no time

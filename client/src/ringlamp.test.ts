@@ -27,7 +27,7 @@ describe('ringLamp (#879)', () => {
   });
 
   it('backs the face with a ring of point lights named for ?lights, white, one every 2.5 m at most', () => {
-    const { lights } = ringLamp(2.5);
+    const { lights } = ringLamp();
     expect(lights).toHaveLength(Math.ceil((2 * Math.PI * RING.radius) / 2.5));
     for (const light of lights) {
       expect(light).toBeInstanceOf(THREE.PointLight);
@@ -38,9 +38,5 @@ describe('ringLamp (#879)', () => {
       expect(light.position.y).toBeLessThan(RING.y); // on the face
     }
     expect(new Set(lights.map((l) => l.position.x.toFixed(3))).size).toBeGreaterThan(lights.length / 2);
-  });
-
-  it('keeps a few lights where the renderer cannot cull them per pixel (spacing Infinity)', () => {
-    expect(ringLamp(Infinity).lights).toHaveLength(RING.fewLights);
   });
 });

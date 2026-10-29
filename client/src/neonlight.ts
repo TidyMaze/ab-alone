@@ -10,14 +10,14 @@ export const TUBE_SPACING = 2.5;
  * Real light the shape of a glowing tube: a row of short-reach point lights along its length, in its colour, all named
  * after the tube so ?lights gives the row one slider. A neon tube shines all round, and so do they. A row costs little
  * once the renderer only adds, at each pixel, the lights that reach it (ClusteredLighting, main.ts): 4x cheaper than a
- * rect light per tube, which reaches every pixel. Without it (WebGL), `spacing` Infinity gives a tube one light.
+ * rect light per tube, which reaches every pixel. WebGL, without it, gets the same row: the same light everywhere (#882).
  */
-export function tubeLights(tube: THREE.Mesh, spacing = TUBE_SPACING): THREE.PointLight[] {
+export function tubeLights(tube: THREE.Mesh): THREE.PointLight[] {
   tube.geometry.computeBoundingBox();
   const size = tube.geometry.boundingBox!.getSize(new THREE.Vector3()).multiply(tube.scale).toArray();
   const length = Math.max(...size);
   const along = new THREE.Vector3().setComponent(size.indexOf(length), 1).applyQuaternion(tube.quaternion);
-  const count = Math.max(1, Math.ceil(length / spacing));
+  const count = Math.max(1, Math.ceil(length / TUBE_SPACING));
   return Array.from({ length: count }, (_, i) => {
     const light = new THREE.PointLight((tube.material as THREE.MeshStandardMaterial).emissive, TUBE_POWER, TUBE_REACH);
     light.name = `${tube.name} light`;
