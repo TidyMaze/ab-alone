@@ -174,9 +174,10 @@ jobs:
           fi
           echo "rust=$rust" >> "$GITHUB_OUTPUT"
 
+  # Side by side with the checks, not after them: on main it no longer adds its time to theirs.
   coverage:
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.rust == 'true'
-    needs: [rust, changes]
+    needs: [changes]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

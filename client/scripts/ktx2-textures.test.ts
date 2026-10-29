@@ -1,13 +1,14 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain Node script, no type declarations
 import jpeg from 'jpeg-js';
 // @ts-expect-error plain Node script, no type declarations
 import { png } from './gen-assets.mjs';
 // @ts-expect-error plain Node script, no type declarations
-import { decode, encode, ktx2Textures, settings, textureFiles } from './ktx2-textures.mjs';
+import { decode, encode, inWorkers, ktx2Textures, settings, textureFiles } from './ktx2-textures.mjs';
 
 // A small RGB image, 8x8, as PNG and as JPG.
 const PIXELS = Uint8Array.from({ length: 8 * 8 * 3 }, (_, i) => (i * 37) % 256);
@@ -131,6 +132,29 @@ describe('textureFiles', () => {
     const files: Map<string, Buffer> = await textureFiles(sources(), cache);
     expect([...files.keys()]).toEqual(['assets/backdrop.ktx2', 'assets/deck-mess.ktx2', 'assets/pbr/grate-albedo.ktx2']);
     expect(files.get('assets/pbr/grate-albedo.ktx2')).toEqual(await encode(JPG_FILE, 'pbr/grate-albedo.jpg', cache));
+  });
+});
+
+describe('inWorkers', () => {
+  // A worker that doubles `n` and says which thread it is.
+  const echo = (): URL => {
+    const script = join(temp(), 'echo.mjs');
+    writeFileSync(script, "import { parentPort, threadId } from 'node:worker_threads';\nparentPort.on('message', (m) => parentPort.postMessage({ n: m.n * 2, threadId }));\n");
+    return pathToFileURL(script);
+  };
+
+  it('spreads the jobs over `size` threads at once, each reply to its own job', async () => {
+    const done: [number, { n: number; threadId: number }][] = [];
+    await inWorkers([{ n: 1 }, { n: 2 }, { n: 3 }], 2, (job: { n: number }, reply: { n: number; threadId: number }) => done.push([job.n, reply]), echo());
+    expect(done.map(([n, r]) => [n, r.n]).sort()).toEqual([[1, 2], [2, 4], [3, 6]]);
+    expect(new Set(done.map(([, r]) => r.threadId)).size).toBe(2);
+  });
+
+  it('starts no thread when there is nothing to encode, and fails when a thread fails', async () => {
+    const done = vi.fn();
+    await inWorkers([], 4, done, new URL('file:///nowhere.mjs'));
+    expect(done).not.toHaveBeenCalled();
+    await expect(inWorkers([{ n: 1 }], 1, done, new URL('file:///nowhere.mjs'))).rejects.toThrow();
   });
 });
 
