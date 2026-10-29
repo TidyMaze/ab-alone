@@ -31,6 +31,7 @@ import { choirChips, drawChoirChips } from './choirchips';
 import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
+import { openInEditor } from './editorexport';
 import { applyTuning, LEVELS, lightPanel, scalePower, type Level } from './lightpanel';
 import { LIGHT_TUNING } from './lighttuning';
 import { TUBE_SPACING, tubeLights } from './neonlight';
@@ -1614,7 +1615,15 @@ function scaleLights(): void {
 const refreshLights = (): void => {
   applyTuning(sceneRenderer.scene, LIGHT_TUNING, bloomKnobs);
   scaleLights();
-  if (lightsPanel) lightPanel(sceneRenderer.scene, lightsPanel, (at) => toggleFreeCam(true, at), bloomKnobs);
+  if (lightsPanel)
+    lightPanel(
+      sceneRenderer.scene,
+      lightsPanel,
+      (at) => toggleFreeCam(true, at),
+      bloomKnobs,
+      // The dev server's endpoint (scripts/editor-scene.mjs): the build drops the button and the exporter with it.
+      import.meta.env.DEV ? () => void openInEditor(sceneRenderer.scene, sceneRenderer.camera, renderer).catch(console.error) : undefined,
+    );
 };
 // What the last look made, disposed when the next replaces it (#846): a setting is a rebuild, never a leak.
 let propMeshes: THREE.Mesh[] = [];
