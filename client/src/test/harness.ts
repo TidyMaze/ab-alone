@@ -19,6 +19,8 @@ export interface BootOptions {
   indexedDB?: IDBFactory;
   /** The system's prefers-reduced-motion. */
   reducedMotion?: boolean;
+  /** A touch screen: matchMedia('(pointer: coarse)') matches, as on a phone. */
+  touch?: boolean;
   /** A fake AudioContext (src/test/audio.ts), read back with `game.hook('__audio')`; none by default, as in a browser
    * without Web Audio. */
   audio?: boolean;
@@ -83,7 +85,7 @@ export function slowKeys(): void {
 
 /** Loads index.html and a fresh main.ts at `url` (a path, a query and a hash, for example `?bot=off`). */
 export async function boot(url = '/', options: BootOptions = {}): Promise<Game> {
-  const { webdriver = true, reducedMotion = false } = options;
+  const { webdriver = true, reducedMotion = false, touch = false } = options;
   const undo: (() => void)[] = [];
   onTestFinished(() => {
     for (const fn of undo.reverse()) fn();
@@ -113,7 +115,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   vi.stubGlobal('indexedDB', options.indexedDB ?? new IDBFactory());
   if (options.audio) vi.stubGlobal('AudioContext', FakeContext);
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: reducedMotion && query.includes('reduced-motion'),
+    matches: (reducedMotion && query.includes('reduced-motion')) || (touch && query.includes('pointer: coarse')),
     media: query,
     addEventListener: () => {},
     removeEventListener: () => {},

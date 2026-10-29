@@ -245,13 +245,21 @@ describe('the renderer and its textures', () => {
       expect(options).toEqual([{ antialias: true, forceWebGL: false }]);
     });
 
-    it('gives a DPR-3 phone no MSAA: it draws at 1.5, and 4 samples cost it 60 down to 22 FPS (FXAA later, #857)', async () => {
+    it('drops MSAA on a 3x desktop screen drawn at 1.5: the edges are too fine to show (#844)', async () => {
       vi.stubGlobal('devicePixelRatio', 3);
-      vi.stubGlobal('innerWidth', 500);
-      const booting = boot('?bot=off', { webdriver: false });
+      const booting = boot('?bot=off&quality=low', { webdriver: false });
       const { options } = renderer();
       await booting;
       expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
+    });
+
+    it('keeps MSAA on a DPR-3 phone, a touch screen: its 1.5 shows the steps, its tiled GPU resolves MSAA cheaply (#868)', async () => {
+      vi.stubGlobal('devicePixelRatio', 3);
+      vi.stubGlobal('innerWidth', 500);
+      const booting = boot('?bot=off&quality=low', { webdriver: false, touch: true });
+      const { options } = renderer();
+      await booting;
+      expect(options).toEqual([{ antialias: true, forceWebGL: false }]);
     });
   });
 });
