@@ -116,31 +116,11 @@ describe('spaceship interior architecture and room deck (#478)', () => {
     }
   });
 
-  it('spaceshipLights provides emergency sodium strip, cold rim, console bounce and pedestal glow', () => {
-    const lights = spaceshipLights();
-    expect(lights.emergency.color).toBe(0xd9822b);
-    expect(lights.rim.color).toBe(0x7fd6e8);
-    expect(lights.consoleBounce.color).toBe(0xd9822b);
-    expect(lights.pedestalGlow.color).toBe(0x7fd6e8);
-    expect(lights.emergency.intensity).toBeGreaterThan(0);
-    expect(lights.rim.intensity).toBeGreaterThan(0);
-    expect(lights.consoleBounce.intensity).toBeGreaterThan(0);
-    expect(lights.pedestalGlow.intensity).toBeGreaterThan(0);
-
-    const furnace = spaceshipLights('furnace');
-    expect(furnace.emergency.color).toBe(0xff4d00);
-    expect(furnace.consoleBounce.color).toBe(0xe86a33);
-
-    const bridge = spaceshipLights('bridge');
-    expect(bridge.emergency.color).toBe(0x00cec9);
-    expect(bridge.consoleBounce.color).toBe(0x55efc4);
-
-    const chapel = spaceshipLights('chapel');
-    expect(chapel.emergency.color).toBe(0x6c5ce7);
-    expect(chapel.consoleBounce.color).toBe(0xa29bfe);
-
-    const cargo = spaceshipLights('cargo');
-    expect(cargo.emergency.color).toBe(0x7fd6e8);
-    expect(cargo.consoleBounce.color).toBe(0x7fd6e8);
+  it('spaceshipLights gives the neon tubes the deck\'s emergency colour and the cold rim colour', () => {
+    expect(spaceshipLights()).toEqual({ emergency: 0xd9822b, rim: 0x7fd6e8 });
+    expect(spaceshipLights('furnace').emergency).toBe(0xff4d00);
+    expect(spaceshipLights('bridge').emergency).toBe(0x00cec9);
+    expect(spaceshipLights('chapel').emergency).toBe(0x6c5ce7);
+    expect(spaceshipLights('cargo').emergency).toBe(0x7fd6e8);
   });
 });

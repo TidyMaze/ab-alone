@@ -200,9 +200,9 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       }
     }
     class PMREMGenerator {
-      // The texture remembers what it was made from: the scene, whether the bay's lamps were in it, the capture options.
+      // The texture remembers what it was made from: the scene, the capture options.
       fromScene = (scene: InstanceType<typeof THREE.Scene>, _sigma: number, _near: number, _far: number, options: object) => ({
-        texture: Object.assign(new THREE.Texture(), { userData: { scene, bayLit: scene.getObjectByName('bay_lights') !== undefined, options } }),
+        texture: Object.assign(new THREE.Texture(), { userData: { scene, options } }),
       });
       dispose(): void {}
     }

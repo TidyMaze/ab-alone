@@ -32,7 +32,7 @@ describe('main.ts, ?lights', () => {
   it('shows a power slider per light and neon tube, the key and the fill among them', async () => {
     await boot('?bot=off&lights');
     const names = [...document.querySelectorAll('#light-panel label')].map((l) => l.firstChild!.textContent!.trim());
-    expect(names).toEqual(expect.arrayContaining(['key', 'fill', 'emergencyLight', 'corner-neon ×4', 'corner-neon light ×4']));
+    expect(names).toEqual(expect.arrayContaining(['key', 'fill', 'kioskGreenLight', 'corner-neon ×4', 'corner-neon light ×4']));
   });
 
   it.each([
@@ -97,7 +97,22 @@ describe('main.ts, the tuned lights', () => {
     expect(((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(
       LIGHT_TUNING['corner-neon']! * 0.25,
     );
-    expect((scene!.getObjectByName('emergencyLight') as THREE.Light).intensity).toBeCloseTo(LIGHT_TUNING.emergencyLight! * 2.15);
+    expect((scene!.getObjectByName('kioskGreenLight') as THREE.Light).intensity).toBeCloseTo(LIGHT_TUNING.kioskGreenLight! * 2.15);
+  });
+});
+
+describe('main.ts, the lights of the room (#845)', () => {
+  it('keeps the key, the fill, the neon tubes\' rows, the console screen and one viewport light, and no other', async () => {
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off');
+    const named: string[] = [];
+    scene!.traverse((o) => void ((o as THREE.Light).isLight && !o.name.includes('neon') && named.push(o.name)));
+    expect(named.sort()).toEqual(['fill', 'key', 'kioskGreenLight', 'viewportRimLight']);
   });
 });
 
@@ -113,17 +128,17 @@ describe('main.ts, the light sliders', () => {
     localStorage.setItem('ab-alone.light.lights', '200');
     localStorage.setItem('ab-alone.light.lamps', '50');
     const game = await booting;
-    const emergency = (): number => (scene!.getObjectByName('emergencyLight') as THREE.Light).intensity;
+    const kiosk = (): number => (scene!.getObjectByName('kioskGreenLight') as THREE.Light).intensity;
     const neon = (): number => ((scene!.getObjectByName('corner-neon-nw') as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity;
-    const scaled = [LIGHT_TUNING.emergencyLight! * 2, LIGHT_TUNING['corner-neon']! / 2];
-    expect([emergency(), neon()]).toEqual(scaled);
+    const scaled = [LIGHT_TUNING.kioskGreenLight! * 2, LIGHT_TUNING['corner-neon']! / 2];
+    expect([kiosk(), neon()]).toEqual(scaled);
     const bloom = document.getElementById('level-bloom') as HTMLInputElement;
     expect(bloom.value).toBe('20'); // its default level (quality.ts)
     bloom.value = '300';
     bloom.dispatchEvent(new Event('input'));
     expect(localStorage.getItem('ab-alone.light.bloom')).toBe('300');
     game.hook('__setTier', 'low'); // the props and their lights made again, the panel with them
-    expect([emergency(), neon()]).toEqual(scaled);
+    expect([kiosk(), neon()]).toEqual(scaled);
     const strength = document.querySelector<HTMLInputElement>('#light-panel input[aria-label="bloom strength power"]')!;
     expect(strength.value).toBe(String((LIGHT_TUNING['bloom strength']! * 300) / 100));
   });

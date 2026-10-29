@@ -48,8 +48,6 @@ describe('SceneRenderer (#632)', () => {
     // Lights
     expect(sr.key.light).toBeInstanceOf(THREE.SpotLight);
     expect(sr.fill.light).toBeInstanceOf(THREE.SpotLight);
-    expect(sr.coldRim).toBeInstanceOf(THREE.DirectionalLight);
-    expect(sr.warmLight).toBeInstanceOf(THREE.PointLight);
     expect(sr.decor).toBeInstanceOf(THREE.Group);
 
     // Meshes and groups
@@ -265,23 +263,9 @@ describe('SceneRenderer (#632)', () => {
       },
     };
     sr.mountBay(mockBay, 'mess');
-    (sr as unknown as { bayLights: THREE.Group | null }).bayLights = null;
     sr.applyDeck('bridge');
     expect(sr.currentBay).toBe(mockBay);
-    expect((sr as unknown as { bayLights: THREE.Group | null }).bayLights).toBeDefined();
     sr.applyDeck('furnace');
-  });
-
-  it('recolours the bay lights on a deck change instead of making new ones (#846)', () => {
-    const sr = new SceneRenderer({ renderer: createMockRenderer() });
-    const bay = { scene: new THREE.Group(), materials: { deck: new THREE.MeshStandardMaterial(), bulkhead: new THREE.MeshStandardMaterial(), grate: new THREE.MeshStandardMaterial() } };
-    sr.mountBay(bay, 'mess');
-    const lights = sr.bayLights!;
-    const lamps = [...lights.children];
-    sr.applyDeck('furnace');
-    expect(sr.bayLights).toBe(lights);
-    expect(lights.children).toEqual(lamps);
-    expect((lights.children.find((l) => l.name === 'airlock lamp') as THREE.PointLight).color.getHex()).toBe(DECK_ATMOSPHERES.furnace.accentLightColor);
   });
 
   it('draws frame geometry and caches unchanged shapes', () => {

@@ -46,11 +46,6 @@ export const LIGHT = {
   },
   // Reflections (#376, #864): the bay as the marbles' envMap only, low so the key stays the base.
   environment: { intensity: 0.25 },
-  // Accents (#376): a cold rim from behind, a small warm point at the lamp's side. Each is weaker than the key.
-  accents: {
-    rim: { color: 0x7fd6e8, intensity: 1.5, position: [5, 6, -6] as const },
-    warm: { color: 0xd9822b, intensity: 1.2, distance: 9, position: [-3, 2.5, 4] as const },
-  },
 };
 
 // The background decor (#376, #432): a dim bulkhead behind the board, darker than the board's steel so it never competes.

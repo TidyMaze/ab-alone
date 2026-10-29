@@ -1,14 +1,10 @@
 import type * as THREE from 'three/webgpu';
 
 /** The panel's groups, in order: the lights of the scene itself, the neon tubes' glow and light, the lamps, the bloom. */
-const GROUPS = ['Key & fill', 'Neon glow', 'Neon tube lights', 'Prop lamps', 'Room lamps', 'Bloom'] as const;
+const GROUPS = ['Key & fill', 'Neon glow', 'Neon tube lights', 'Prop lamps', 'Bloom'] as const;
 
-/** A lamp's family: its name without the side or number that tells it from its likes (`corner-neon-nw light`, `neonWallNwLight`, `north wall lamp 2`). */
-export const family = (name: string): string =>
-  name
-    .replace(/-(\d+|[nsew]{1,2}|north|south|top)(?=( light)?$)/, '')
-    .replace(/ \d+$/, '')
-    .replace(/(Nw|Ne|Sw|Se|West|East)(?=Light$)/, '');
+/** A lamp's family: its name without the side or number that tells it from its likes (`corner-neon-nw light`, `pedestal-neon-2 light`). */
+export const family = (name: string): string => name.replace(/-(\d+|[nsew]{1,2}|north|south|top)(?=( light)?$)/, '');
 
 /** A setting with no light of its own, such as the bloom's strength: a slider of the Bloom group, tuned by its name. */
 export interface Knob {
@@ -41,7 +37,6 @@ function dials(scene: THREE.Object3D, knobs: readonly Knob[]): Map<string, Dial>
       neon ? GROUPS[1]
       : o.parent === scene ? GROUPS[0]
       : name.includes('neon') ? GROUPS[2]
-      : o.parent!.name === 'bay_lights' ? GROUPS[4]
       : GROUPS[3];
     const dial = all.get(family(name)) ?? {
       group,
@@ -92,7 +87,7 @@ export function applyTuning(scene: THREE.Object3D, tuning: Readonly<Record<strin
 }
 
 /**
- * The tuning panel of ?lights: one power slider per family of lights (key, fill, accents, room lamps: `family`) and of
+ * The tuning panel of ?lights: one power slider per family of lights (key, fill, the prop lamps: `family`) and of
  * neon tubes (a mesh named `*neon*`, its emissive intensity), read from the scene as it is now, grouped by kind in
  * folding sections, each family by name, then one per knob (the bloom). Rebuilt into `panel` when the props are drawn
  * again, since that replaces their lights. With `onAim`, each light's slider has a button that points the camera at one
