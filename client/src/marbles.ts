@@ -25,8 +25,8 @@ export const GLASS = {
   clearcoatRoughness: 0.05,
 };
 
-/** The enemy shell: matte black, ridged by shell-normal.png (scripts/gen-assets.mjs) at this normal scale. */
-export const SHELL = { color: 0x101214, roughness: 0.6, metalness: 0.1, ridges: 1 };
+/** The enemy shell's plain look, the seats' tints and the ghosts: matte black. The marbles wear a skin (skins.ts). */
+export const SHELL = { color: 0x101214, roughness: 0.6, metalness: 0.1 };
 
 /** The shell's faint heat pulse (#509): the sodium orange glows through the black shell, one slow pulse every `period`
  * seconds up to `peak` emissive intensity, a far smaller swing than a flash; the shell stays 3:1 on every deck. */

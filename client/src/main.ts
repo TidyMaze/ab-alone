@@ -148,8 +148,7 @@ import { rematchText } from './rematch';
 import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from './slide';
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml } from './hud';
-import { drawSkin, type Look } from './skinart';
-import { nextSkin, skinById } from './skins';
+import { DEFAULT_SKIN, nextSkin, skinById } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -330,7 +329,6 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
 const [
   deckAlbedo,
   deckRoughness,
-  shellNormal,
   backdrop,
   crackDecal,
   firstDeckMap,
@@ -346,7 +344,6 @@ const [
 ] = await Promise.all([
   loadTexture('deck-albedo.ktx2', true, true),
   loadTexture('deck-roughness.ktx2', false, true),
-  loadTexture('shell-normal.ktx2', false, true),
   loadTexture('backdrop.ktx2', true, false),
   loadTexture('crack-decal.ktx2', false, false),
   deckMap(deckOf('local')), // a page opens at the Mess
@@ -1073,62 +1070,65 @@ const steel = new THREE.MeshStandardMaterial(
 applyDeck(deck);
 // Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
 (window as unknown as Record<string, unknown>).__deck = applyDeck;
-// Key 1 is the enemy shell (matte, ridged), key 2 the player's smoked glass (marbles.ts).
-const { ridges, ...shell } = SHELL;
-const scarab = new THREE.MeshStandardMaterial({
-  ...shell,
-  emissive: HEAT.color, // the heat pulse (#509), dark until the loop sets its intensity
-  emissiveIntensity: 0,
-  envMap: reflections,
-  envMapIntensity: LIGHT.environment.intensity,
-  ...(shellNormal ? { normalMap: shellNormal, normalScale: new THREE.Vector2(ridges, ridges) } : {}),
-});
-// The other dark shells (#377): the skin's pattern drawn once on a small canvas that wraps the sphere; a glowing skin
-// lights its pattern through the same canvas, the base is dark enough to stay dark.
-const shellLooks = new Map<string, THREE.MeshStandardMaterial>([['scarab', scarab]]);
-// A skin's pattern on a canvas that wraps the sphere (the shells and the pale glass, #377).
-function skinTexture(s: Look): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  [canvas.width, canvas.height] = [256, 128];
-  drawSkin(canvas.getContext('2d')!, canvas.width, canvas.height, s);
-  const map = new THREE.CanvasTexture(canvas);
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.wrapS = THREE.RepeatWrapping;
+// Key 1 is the enemy shell, key 2 the player's glass (marbles.ts): the skins of skins.ts and glassskins.ts, ambientCG
+// PBR materials (CC0). A skin's material is built flat, in its tint, the first time it is worn and dressed in its maps
+// as they load: a press never waits, and a page that keeps the default skins loads two sets of maps, not twenty.
+// The maps are square and turn once round the sphere, whose circumference is twice the way from pole to pole.
+const skinMap = async (asset: string, kind: string, srgb: boolean, tile: number): Promise<THREE.Texture | null> => {
+  const map = await loadTexture(`pbr/skin-${asset}-${kind}.ktx2`, srgb, true);
+  map?.repeat.set(tile, tile / 2);
   return map;
+};
+const dressed = new WeakMap<THREE.Material, Promise<void>>(); // when a skin's maps are on
+function dress(look: THREE.MeshStandardMaterial, { asset, tile }: { asset: string; tile: number }, glows: boolean): void {
+  dressed.set(
+    look,
+    Promise.all([
+      skinMap(asset, 'albedo', true, tile),
+      skinMap(asset, 'normal', false, tile),
+      skinMap(asset, 'roughness', false, tile),
+      glows ? skinMap(asset, 'emission', true, tile) : null,
+    ]).then(([map, normalMap, roughnessMap, emissiveMap]) => {
+      Object.assign(look, { map, normalMap, roughnessMap, emissiveMap });
+      if (emissiveMap) look.emissive.set(0xffffff); // black until the map is there: no white flash
+      look.needsUpdate = true;
+    }),
+  );
 }
+const shellLooks = new Map<string, THREE.MeshStandardMaterial>();
 function shellMaterial(id: string): THREE.MeshStandardMaterial {
   const s = skinById(id);
   let look = shellLooks.get(s.id);
   if (!look) {
-    const map = skinTexture(s);
     look = new THREE.MeshStandardMaterial({
-      map,
-      roughness: s.roughness,
+      color: s.tint,
+      roughness: 1, // the roughness map sets it
       metalness: s.metalness,
       envMap: reflections,
       envMapIntensity: LIGHT.environment.intensity,
-      ...(s.glow ? { emissive: 0xffffff, emissiveMap: map, emissiveIntensity: s.glow } : {}),
+      emissiveIntensity: s.glow ?? 0,
+      // The heat pulse (#509) glows through the default shell, dark until the loop sets its intensity.
+      ...(s.id === DEFAULT_SKIN ? { emissive: HEAT.color } : {}),
     });
+    dress(look, s, s.glow !== undefined);
     shellLooks.set(s.id, look);
   }
   return look;
 }
-// The pale glass skins (#377): GLASS in the skin's colour, or its pattern on the same kind of canvas. Smoked glass has no
-// pattern and is GLASS as it was. The inner light takes the skin's colour when it has one (Lantern core).
+// The inner light takes the skin's colour when it has one (Warm ivory).
 const glassLooks = new Map<string, THREE.MeshPhysicalMaterial>();
 function glassMaterial(id: string): THREE.MeshPhysicalMaterial {
   const s = glassSkinById(id);
   let look = glassLooks.get(s.id);
   if (!look) {
-    const map = s.pattern === null ? null : skinTexture(s);
     look = new THREE.MeshPhysicalMaterial({
       ...GLASS,
-      color: map ? 0xffffff : s.color,
-      roughness: s.roughness,
-      ...(map ? { map } : {}),
+      color: s.tint,
+      roughness: 1, // the roughness map sets it, the clear coat keeps the lamp's glint
       envMap: reflections,
       envMapIntensity: LIGHT.environment.glass,
     });
+    dress(look, s, false);
     glassLooks.set(s.id, look);
   }
   return look;
@@ -1137,6 +1137,7 @@ const marbleMaterials: Record<number, THREE.MeshStandardMaterial> = {
   1: shellMaterial(skin),
   2: glassMaterial(glass),
 };
+await Promise.all([marbleMaterials[1]!, marbleMaterials[2]!].map((m) => dressed.get(m))); // the worn skins are dressed from the first frame
 const coreGeometry = new THREE.SphereGeometry(CORE.radius, 16, 8);
 const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: true }); // drawn after the glass
 coreMaterial.color.set(glassSkinById(glass).core ?? CORE.color);
@@ -1859,9 +1860,6 @@ function applyPalette(): void {
   paleMaterial.color.setHex(pal.tell);
   firedMaterial.color.set(pal.hazard);
   ghostCore.color.setHex(pal.core);
-  scarab.color.setHex(pal.shell);
-  const smoked = glassLooks.get('smoked');
-  if (smoked) smoked.color.setHex(pal.glass);
   coreMaterial.color.setHex(glassSkinById(glass).core ?? pal.core);
   convertedCore.color.copy(coreMaterial.color);
 }
@@ -3644,7 +3642,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__announce = () => announceDrawn;
 (window as unknown as Record<string, unknown>).__fading = () => fading.map((f) => f.sprite.material.opacity);
 // Used by the browser checks to read the shell's heat pulse (#509).
-(window as unknown as Record<string, unknown>).__shellPulse = () => scarab.emissiveIntensity;
+(window as unknown as Record<string, unknown>).__shellPulse = () => shellLooks.get(DEFAULT_SKIN)?.emissiveIntensity ?? 0;
 // Used by the browser checks to hold the pulse `t` seconds into its cycle instead of following the clock (#716).
 let pulseHeld: number | null = null;
 (window as unknown as Record<string, unknown>).__holdPulse = (t: number) => {
@@ -4628,7 +4626,8 @@ renderer.setAnimationLoop((now) => {
   if (!reducedMotion()) for (const core of pulsarCores) core.rotation.y = now / 600;
   animateParticles(now);
   eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
-  scarab.emissiveIntensity = pulsing ? pulseAt(pulseHeld ?? now / 1000) : 0;
+  const heated = shellLooks.get(DEFAULT_SKIN); // only the default shell glows with the heat, once worn
+  if (heated) heated.emissiveIntensity = pulsing ? pulseAt(pulseHeld ?? now / 1000) : 0;
   turnConsole(now);
   tickLog(now);
   if (freeCam.active) {

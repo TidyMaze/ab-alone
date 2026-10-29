@@ -498,38 +498,46 @@ describe('the settings toggles', () => {
 
   it('puts the next dark skin on the enemy shells, and saves it', async () => {
     const game = await boot('?bot=off');
-    const skinned = async (): Promise<boolean> =>
-      materials((await drawn(game)).scene).some(
-        (m) => m.isMeshStandardMaterial && (m.map as THREE.CanvasTexture | null)?.isCanvasTexture,
-      ); // the lit materials: the deck console's unlit screen has its own canvas (#511)
-    expect(row('shell-skin').textContent).toBe('Scarab ridges');
-    expect(await skinned()).toBe(false);
+    const skinned = async (asset: string): Promise<boolean> => {
+      await game.settle(); // the skin's maps load after the press
+      return materials((await drawn(game)).scene).some((m) => m.isMeshStandardMaterial && m.map?.name === `skin-${asset}-albedo.ktx2`);
+    };
+    expect(row('shell-skin').textContent).toBe('Leather');
+    expect(await skinned('Porcelain003')).toBe(false);
     row('shell-skin').click();
-    expect(row('shell-skin').textContent).toBe('Obsidian');
+    expect(row('shell-skin').textContent).toBe('Black porcelain');
     expect(localStorage.getItem('ab-alone.shell-skin')).toBe('obsidian');
-    expect(await skinned()).toBe(true);
+    expect(await skinned('Porcelain003')).toBe(true);
   });
 
-  it('starts on the saved skins', async () => {
-    await bootWith({ 'ab-alone.shell-skin': 'slag', 'ab-alone.glass-skin': 'pearl' });
-    expect(row('shell-skin').textContent).toBe('Slag crust');
-    expect(row('glass-skin').textContent).toBe('Pearl');
+  it('starts on the saved skins, and loads their maps rather than the default ones', async () => {
+    const game = await bootWith({ 'ab-alone.shell-skin': 'slag', 'ab-alone.glass-skin': 'pearl' });
+    expect(row('shell-skin').textContent).toBe('Lava');
+    expect(row('glass-skin').textContent).toBe('Porcelain');
+    await game.settle();
+    const maps = materials((await drawn(game)).scene).map((m) => m.map?.name);
+    expect(maps).toContain('skin-Lava002-albedo.ktx2');
+    expect(maps).toContain('skin-Porcelain001-albedo.ktx2');
+    expect(maps).not.toContain('skin-Leather027-albedo.ktx2');
+    expect(game.hook('__shellPulse')).toBe(0); // only the default shell glows with the heat
   });
 
   it("puts the next pale skin on the player's glass, beside the shell skin, and saves it", async () => {
     const game = await boot('?bot=off');
     expect(row('glass-skin').parentElement).toBe(row('shell-skin').parentElement);
     expect(row('glass-skin').parentElement!.className).toBe('setting-group skin-pair');
-    const patterned = async (): Promise<boolean> =>
-      materials((await drawn(game)).scene).some(
-        (m) => (m as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial && (m.map as THREE.CanvasTexture | null)?.isCanvasTexture,
+    const skinned = async (asset: string): Promise<boolean> => {
+      await game.settle(); // the skin's maps load after the press
+      return materials((await drawn(game)).scene).some(
+        (m) => (m as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial && m.map?.name === `skin-${asset}-albedo.ktx2`,
       );
-    expect(row('glass-skin').textContent).toBe('Smoked glass');
-    expect(await patterned()).toBe(false);
+    };
+    expect(row('glass-skin').textContent).toBe('Marble');
+    expect(await skinned('GlazedTerracotta003')).toBe(false);
     row('glass-skin').click();
-    expect(row('glass-skin').textContent).toBe('Frost');
+    expect(row('glass-skin').textContent).toBe('Terracotta');
     expect(localStorage.getItem('ab-alone.glass-skin')).toBe('frost');
-    expect(await patterned()).toBe(true);
+    expect(await skinned('GlazedTerracotta003')).toBe(true);
   });
 
   it('switches to the next colorblind palette, beside the theme, and saves it', async () => {

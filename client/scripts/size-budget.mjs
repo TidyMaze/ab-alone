@@ -8,12 +8,17 @@ import { appendFileSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { DECK_NAMES } from '../src/deck.ts';
+import { DEFAULT_GLASS_SKIN, glassSkinById } from '../src/glassskins.ts';
+import { DEFAULT_SKIN, skinById } from '../src/skins.ts';
 
 const MB = 1_000_000;
 export const BUDGETS = { firstScreen: 5 * MB, deck: 15 * MB, site: 250 * MB };
 const FIRST_DECK = 'mess'; // the hub's deck, loaded with the first screen
+const FIRST_SKINS = [skinById(DEFAULT_SKIN).asset, glassSkinById(DEFAULT_GLASS_SKIN).asset]; // worn from the first frame, the others load when picked
 const SOURCE = /\.(blend|wav|psd|kra|xcf)$/i;
-const FIRST_SCREEN = /^(index\.html|assets\/(index-[^/]*\.(js|css)|basis_transcoder-[^/]*\.js|[^/]*\.ktx2)|.*\.wasm|icons\/.*)$/;
+const FIRST_SCREEN = new RegExp(
+  String.raw`^(index\.html|assets\/(index-[^/]*\.(js|css)|basis_transcoder-[^/]*\.js|[^/]*\.ktx2|pbr\/skin-(${FIRST_SKINS.join('|')})-[^/]*\.ktx2)|.*\.wasm|icons\/.*)$`,
+);
 
 /** The deck a file belongs to (`deck-cargo.png`, `deck-cargo-normal.png`), or undefined for a shared file. */
 const deckOf = (file) => DECK_NAMES.find((deck) => new RegExp(`^deck-${deck}[-.]`).test(basename(file)));

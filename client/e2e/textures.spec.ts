@@ -41,7 +41,12 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 plate-albedo.ktx2', // the board's plate (#772)
     '200 plate-normal.ktx2',
     '200 plate-roughness.ktx2',
-    '200 shell-normal.ktx2',
+    '200 skin-Leather027-albedo.ktx2', // the default shell skin, the other skins load when picked
+    '200 skin-Leather027-normal.ktx2',
+    '200 skin-Leather027-roughness.ktx2',
+    '200 skin-Marble025-albedo.ktx2', // the default glass skin
+    '200 skin-Marble025-normal.ktx2',
+    '200 skin-Marble025-roughness.ktx2',
     '200 spaceship-bay.glb',
   ]);
 });

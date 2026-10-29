@@ -20,8 +20,8 @@ import { DECK_NAMES } from '../src/deck.ts';
 const SOURCES = fileURLToPath(new URL('../textures/', import.meta.url));
 const CACHE = join(homedir(), '.cache', 'ab-alone-ktx2');
 const ENCODER = JSON.parse(readFileSync(new URL('../node_modules/ktx2-encoder/package.json', import.meta.url), 'utf8')).version;
-// The colour maps, in sRGB: the backdrop, the albedos and each deck's cells (`deck-cargo.png`).
-const COLOUR = new RegExp(`^(backdrop|.*-albedo|deck-(${DECK_NAMES.join('|')}))\\.`);
+// The colour maps, in sRGB: the backdrop, the albedos, the emission maps and each deck's cells (`deck-cargo.png`).
+const COLOUR = new RegExp(`^(backdrop|.*-(albedo|emission)|deck-(${DECK_NAMES.join('|')}))\\.`);
 
 /** The encoder settings of a source file, from its name. */
 export function settings(file) {
