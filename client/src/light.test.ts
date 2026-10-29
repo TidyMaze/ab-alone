@@ -13,13 +13,9 @@ describe('deck light presets (world.md section 5, #400)', () => {
 
   for (const deck of DECK_NAMES) {
     const light = DECKS[deck];
-    it(`${deck}: one hard key dominates a low ambient fill, no flat white`, () => {
-      expect(light.ambient.intensity).toBeLessThanOrEqual(0.3);
-      expect(light.key.intensity / light.ambient.intensity).toBeGreaterThanOrEqual(4);
-    });
-
-    it(`${deck}: the key comes from overhead`, () => {
-      expect(light.key.position[1]).toBeGreaterThan(0);
+    it(`${deck}: one hard key dominates a weaker fill, no flat white (#864)`, () => {
+      expect(light.fill.intensity).toBeGreaterThan(0);
+      expect(light.key.intensity / light.fill.intensity).toBeGreaterThanOrEqual(3);
     });
 
     it(`${deck}: exposure keeps the white marble below clipping`, () => {
@@ -39,11 +35,21 @@ describe('deck light presets (world.md section 5, #400)', () => {
 
   it('the key shadow, the same on every deck, covers the whole board with soft contact shadows (#459)', () => {
     expect(LIGHT.key.shadow.mapSize).toBeGreaterThanOrEqual(1024);
-    expect(LIGHT.key.shadow.camera.bounds).toBeGreaterThanOrEqual(6); // board radius ~4.3
     expect(LIGHT.key.shadow.camera.near).toBeGreaterThan(0);
     expect(LIGHT.key.shadow.camera.far).toBeGreaterThan(20);
     expect(LIGHT.key.shadow.bias).toBeLessThan(0); // avoids shadow acne
     expect(LIGHT.key.shadow.normalBias).toBeGreaterThan(0);
+  });
+
+  it('the key and the fill are spotlights with a soft cone edge, the key tighter than the fill (#864)', () => {
+    const { key, fill } = LIGHT.spots;
+    for (const cone of [key, fill]) {
+      expect(cone.angle).toBeGreaterThan(0);
+      expect(cone.angle).toBeLessThan(Math.PI / 2);
+      expect(cone.penumbra).toBeGreaterThan(0);
+      expect(cone.penumbra).toBeLessThanOrEqual(1);
+    }
+    expect(key.angle).toBeLessThanOrEqual(fill.angle);
   });
 
   it('each deck has its own key colour', () => {

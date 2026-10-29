@@ -41,10 +41,10 @@ describe('lightPanel (?lights)', () => {
     const prop = (name: string): THREE.PointLight => Object.assign(new THREE.PointLight(), { name });
     const props = new THREE.Group();
     props.add(prop('viewportRimLight'), prop('emergencyLight'), prop('corner-neon-nw light'));
-    s.add(props, Object.assign(new THREE.AmbientLight(), { name: 'fill (ambient)' }));
+    s.add(props, Object.assign(new THREE.SpotLight(), { name: 'fill' }));
     const panel = lightPanel(s);
     const groups = [...panel.querySelectorAll('details')];
-    expect([...groups[0]!.querySelectorAll('label')].map((l) => l.firstChild!.textContent)).toEqual(['key ', 'fill (ambient) ']); // as the scene has them
+    expect([...groups[0]!.querySelectorAll('label')].map((l) => l.firstChild!.textContent)).toEqual(['key ', 'fill ']); // as the scene has them
     expect(groups.map((g) => [g.open, g.querySelector('summary')!.textContent])).toEqual([
       [true, 'Key & fill (2)'],
       [true, 'Neon glow (1)'],
@@ -177,6 +177,7 @@ describe('scalePower, the settings light sliders', () => {
     const s = new THREE.Scene();
     const key = new THREE.DirectionalLight(0xffffff, 2);
     const fill = new THREE.AmbientLight(0xffffff, 0.5);
+    const spot = new THREE.SpotLight(0xffffff, 3);
     const lamp = new THREE.PointLight(0x38e8ff, 2);
     const panel = new THREE.RectAreaLight(0xffffff, 4);
     const neon = new THREE.MeshStandardMaterial({ emissiveIntensity: 6 });
@@ -185,14 +186,14 @@ describe('scalePower, the settings light sliders', () => {
     const twin = new THREE.Mesh(new THREE.BoxGeometry(), neon); // the same material: scaled once
     twin.name = 'corner-neon-ne';
     const wall = new THREE.MeshStandardMaterial({ emissiveIntensity: 1 });
-    s.add(key, fill, lamp, panel, tube, twin, new THREE.Mesh(new THREE.BoxGeometry(), wall));
-    return { s, key, fill, lamp, panel, neon, wall, bloom: { value: 0.06 } };
+    s.add(key, fill, spot, lamp, panel, tube, twin, new THREE.Mesh(new THREE.BoxGeometry(), wall));
+    return { s, key, fill, spot, lamp, panel, neon, wall, bloom: { value: 0.06 } };
   };
 
-  it('scales the point and rect area lights, the neon glow and the bloom, never the key, the fill or another glow', () => {
-    const { s, key, fill, lamp, panel, neon, wall, bloom } = scene();
+  it('scales the point, rect area and spot lights (the key and the fill), the neon glow and the bloom, never a directional or an ambient light or another glow', () => {
+    const { s, key, fill, spot, lamp, panel, neon, wall, bloom } = scene();
     scalePower(s, { bloom: 300, lamps: 50, lights: 200 }, bloom);
-    expect([lamp.intensity, panel.intensity, neon.emissiveIntensity, bloom.value]).toEqual([4, 8, 3, 0.18]);
+    expect([lamp.intensity, panel.intensity, spot.intensity, neon.emissiveIntensity, bloom.value]).toEqual([4, 8, 6, 3, 0.18]);
     expect([key.intensity, fill.intensity, wall.emissiveIntensity]).toEqual([2, 0.5, 1]);
     scalePower(s, { bloom: 300, lamps: 0, lights: 200 }); // no bloom: the rest still scales
     expect(neon.emissiveIntensity).toBe(0);
