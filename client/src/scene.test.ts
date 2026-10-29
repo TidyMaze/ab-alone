@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { BOARD_CELLS, RADIUS, VANISHED, cellIndex } from './board';
 import { resetView, type View } from './camera';
-import { DECKS, LIGHT } from './light';
+import { DECK_PARTICLES } from './deck';
+import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, type NotchRow } from './scene';
 
@@ -12,7 +13,6 @@ function createMockRenderer(): THREE.WebGPURenderer {
   return {
     domElement: canvas,
     backend: { isWebGPUBackend: false },
-    shadowMap: { enabled: false, type: 0 },
     toneMapping: 0,
     toneMappingExposure: 1,
     init: async (): Promise<void> => {},
@@ -45,11 +45,6 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.renderer).toBe(renderer);
     expect(sr.backend).toBe('WebGL2');
 
-    // Lights
-    expect(sr.key.light).toBeInstanceOf(THREE.SpotLight);
-    expect(sr.fill.light).toBeInstanceOf(THREE.SpotLight);
-    expect(sr.decor).toBeInstanceOf(THREE.Group);
-
     // Meshes and groups
     expect(sr.plate).toBeInstanceOf(THREE.Mesh);
     expect(sr.rim.near).toBeInstanceOf(THREE.Mesh);
@@ -65,25 +60,16 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.particles).toBeInstanceOf(THREE.Points);
   });
 
-  it('lights the board from its gantries: a shadowed key and a fill, no ambient light (#864)', () => {
+  it('holds as many particles as the busiest deck draws (#880)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    expect(sr.particlePositions.length / 3).toBe(Math.max(...Object.values(DECK_PARTICLES).map((p) => p.count)));
+  });
+
+  it('adds no light of its own: the room\'s tubes light the board, no ambient light (#877)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
     const lights: THREE.Light[] = [];
     sr.scene.traverse((o) => void ((o as THREE.Light).isLight && lights.push(o as THREE.Light)));
-    expect(lights.some((l) => l.type === 'AmbientLight')).toBe(false);
-    expect(sr.scene.children).toEqual(expect.arrayContaining([sr.key.light, sr.key.fixture, sr.fill.light, sr.fill.fixture]));
-    expect([sr.key.light.name, sr.fill.light.name]).toEqual(['key', 'fill']); // the ?lights panel groups them under Key & fill
-    const { shadow } = sr.key.light;
-    expect(sr.key.light.castShadow).toBe(true);
-    expect([shadow.mapSize.x, shadow.camera.near, shadow.camera.far, shadow.bias, shadow.normalBias]).toEqual([
-      LIGHT.key.shadow.mapSize,
-      LIGHT.key.shadow.camera.near,
-      LIGHT.key.shadow.camera.far,
-      LIGHT.key.shadow.bias,
-      LIGHT.key.shadow.normalBias,
-    ]);
-    expect(sr.fill.light.castShadow).toBe(false);
-    expect(sr.key.light.angle).toBe(LIGHT.spots.key.angle);
-    expect(sr.fill.light.angle).toBe(LIGHT.spots.fill.angle);
+    expect(lights).toEqual([]);
   });
 
   it('binds alien plate PBR textures to plate and rim when provided (#771)', () => {
@@ -246,13 +232,7 @@ describe('SceneRenderer (#632)', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });
     sr.applyDeck('furnace');
-    expect(sr.renderer.toneMappingExposure).toBeGreaterThan(0);
-    expect(sr.key.light.color.getHex()).toBe(DECKS.furnace.key.color);
-    expect(sr.key.light.intensity).toBe(DECKS.furnace.key.intensity);
-    expect(sr.fill.light.color.getHex()).toBe(DECKS.furnace.fill.color);
-    expect(sr.fill.light.intensity).toBe(DECKS.furnace.fill.intensity);
-    const glow = (sr.key.fixture.getObjectByName('lens') as THREE.Mesh).material as THREE.MeshStandardMaterial;
-    expect(glow.emissive.getHex()).toBe(DECKS.furnace.key.color); // the lens glows in the deck's key colour
+    expect(sr.renderer.toneMappingExposure).toBe(DECKS.furnace.exposure);
 
     const mockBay = {
       scene: new THREE.Group(),

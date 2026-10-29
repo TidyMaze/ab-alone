@@ -186,7 +186,6 @@ describe('the renderer and its textures', () => {
         WebGPURenderer: class {
           domElement = document.createElement('canvas');
           backend = { isWebGPUBackend: true };
-          shadowMap = { enabled: false, type: 0 };
           constructor(o: unknown) {
             options.push(o);
           }
@@ -361,33 +360,6 @@ describe('the view and the fog', () => {
       return fog.far - fog.near;
     };
     expect(await far('high')).toBeLessThan(await far('low'));
-  });
-});
-
-describe('the shadows (#459)', () => {
-  const shadows = async (url: string, options?: Parameters<typeof boot>[1], stored = {}): Promise<[boolean, string]> => {
-    const { BasicShadowMap, PCFSoftShadowMap } = await import('three/webgpu');
-    const { shadowMap } = (await drawn(await bootWith(stored, url, options))).renderer;
-    const types: Record<number, string> = { [BasicShadowMap]: 'basic', [PCFSoftShadowMap]: 'soft' };
-    return [shadowMap.enabled, types[shadowMap.type]!];
-  };
-
-  it('are off under automation, unless ?shadows=on or ?shadows=1 asks for them', async () => {
-    expect(await shadows('?bot=off')).toEqual([false, 'basic']);
-    expect(await shadows('?bot=off&shadows=on')).toEqual([true, 'soft']);
-    expect(await shadows('?bot=off&shadows=1')).toEqual([true, 'soft']);
-  });
-
-  it('show their state on the page, for the browser checks (#729)', async () => {
-    await shadows('?bot=off');
-    expect(document.body.dataset.shadows).toBe('off');
-    await shadows('?bot=off&shadows=on');
-    expect(document.body.dataset.shadows).toBe('on');
-  });
-
-  it('are soft for a player on the high tier, off on the low tier', async () => {
-    expect(await shadows('?bot=off', { webdriver: false }, { 'ab-alone.quality': 'high' })).toEqual([true, 'soft']);
-    expect(await shadows('?bot=off', { webdriver: false }, { 'ab-alone.quality': 'low' })).toEqual([false, 'basic']);
   });
 });
 

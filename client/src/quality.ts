@@ -214,22 +214,6 @@ export function nextPixelRatio(ratio: number, frameMs: readonly number[], floor:
   return median > SLOW_FRAME_MS ? Math.max(floor, ratio - RATIO_STEP) : ratio;
 }
 
-// Under automation (navigator.webdriver) we skip expensive effects like prefiltering and shadows (#459).
-export const isAutomation = (webdriver: boolean): boolean => webdriver;
-
-export interface ShadowSettings {
-  enabled: boolean;
-  soft: boolean;
-}
-
-// Shadows (#459): disabled under low quality tier and automation so software WebGL stays fast.
-// Forced when requested for testing / screenshot captures.
-export function shadowSettings(tier: Tier, automated: boolean, forced?: boolean): ShadowSettings {
-  if (forced) return { enabled: true, soft: true };
-  if (automated || tier === 'low') return { enabled: false, soft: false };
-  return { enabled: true, soft: true };
-}
-
 /**
  * Airborne particles (#443): light dust/steam/smoke outside the board volume.
  * Disabled under clear board, reduced motion, low quality tier and automation.

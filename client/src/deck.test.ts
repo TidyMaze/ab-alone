@@ -60,6 +60,7 @@ describe('deckOf (world.md sections 1, 3 and 5)', () => {
       expect(DECK_PARTICLES.furnace.count).toBeGreaterThan(0);
       expect(DECK_PARTICLES.chapel.count).toBeGreaterThan(0);
       expect(DECK_PARTICLES.bridge.count).toBe(0);
+      expect([DECK_PARTICLES.mess, DECK_PARTICLES.cargo, DECK_PARTICLES.furnace, DECK_PARTICLES.chapel].map((p) => p.count)).toEqual([144, 192, 240, 150]); // #880
 
       // Steam and smoke rise (drift Y > 0), ore dust settles (drift Y < 0)
       expect(DECK_PARTICLES.furnace.drift[1]).toBeGreaterThan(0);
