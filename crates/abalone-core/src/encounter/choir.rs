@@ -840,4 +840,46 @@ mod tests {
             Err(ChoirError::Game(GameError::GameOver))
         );
     }
+
+    /// A boss move that wins by force under the cycle: whatever the player answers, the boss has a
+    /// move of the army in turn that ends the game. Played through `Choir`, so the cycle is the real one.
+    fn wins_by_force(c: &Choir, m: &Move) -> bool {
+        let mut after = c.clone();
+        after.play(m).unwrap();
+        after.result().is_some()
+            || after.legal_moves().iter().all(|reply| {
+                let mut next = after.clone();
+                next.play(reply).unwrap();
+                next.result().is_none()
+                    && next.legal_moves().iter().any(|win| {
+                        let mut end = next.clone();
+                        end.play(win).unwrap();
+                        end.result().is_some()
+                    })
+            })
+    }
+
+    #[test]
+    fn the_tree_plays_the_army_cycle_not_any_marble() {
+        // Boss one ejection short of a win, Alto in turn. The lone player marble on (4, 0) is shut in
+        // by the Tenor marble on (3, 0). Alto (4, -2) moving SE to (4, -1) leaves it a single exit,
+        // and Tenor (next in the cycle) pushes it off from there. Alto (4, -2) moving W to (3, -2)
+        // looked as good to the old search, which let any marble answer: only a Bass or Alto push
+        // wins there, and neither is in turn at the next boss ply.
+        let mut c = choir_from(
+            &[(4, 0)],
+            &[
+                (Alto, &[(1, 2), (4, -2), (2, 0)]),
+                (Tenor, &[(3, 0), (3, -1)]),
+                (Bass, &[(1, 1), (2, 1)]),
+            ],
+            Player::White,
+            [0, 5],
+            0,
+        );
+        c.scale_node_budget(2000);
+        let found = c.boss_move().unwrap();
+        assert!(wins_by_force(&c, &found), "{found:?}");
+        assert!(!wins_by_force(&c, &mv(&[(4, -2)], W)));
+    }
 }
