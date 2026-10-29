@@ -37,6 +37,7 @@ for (const scale of [100, 200] as const) {
     await page.locator('canvas').waitFor();
     const body = page.locator('body');
     await expect(body).toHaveAttribute('data-console', /^mess-house-rule 1\/\d$/);
+    await expect(body).toHaveAttribute('data-bay', 'ready'); // the console is rebuilt when the bay loads (#841)
     await page.keyboard.press('t');
     const reader = page.locator('#reader');
     await expect(reader).toContainText("Captain's order, pinned above table four");
@@ -67,6 +68,8 @@ test('a click on the console screen opens the reader, a click off it leaves, and
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-console', /^mess-house-rule /);
+  // The bay loads after the page and rebuilds the props, the console included: a click on the old one lands on nothing (#841).
+  await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready');
   const reader = page.locator('#reader');
   // Orbit to the west wall, low over the board, where the console stands.
   await page.mouse.move(640, 500);
