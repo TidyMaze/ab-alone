@@ -434,9 +434,9 @@ describe('tier storage', () => {
 });
 
 describe('renderPixelRatio (#424)', () => {
-  it('caps pixel ratio at 1.0 on low tier / mobile to save fill rate', () => {
-    expect(renderPixelRatio(2, false, 'low')).toBe(1);
-    expect(renderPixelRatio(3, false, 'low')).toBe(1);
+  it('gives a phone up to 1.5 like any player: at 1 a DPR-3 screen stretched every drawn pixel 3 times, a blur', () => {
+    expect(renderPixelRatio(2, false, 'low')).toBe(1.5);
+    expect(renderPixelRatio(3, false, 'low')).toBe(1.5);
     expect(renderPixelRatio(0.8, false, 'low')).toBe(0.8);
   });
   it('gives high-tier players up to 1.5 DPR: a full-screen Retina window at 2 drew 10 FPS (#843)', () => {
@@ -472,14 +472,19 @@ describe('nextPixelRatio, the adaptive resolution (#843)', () => {
   });
 });
 
-describe('antialiased, MSAA by screen (#844)', () => {
-  it('keeps MSAA under a device ratio of 1.5, where jagged edges show', () => {
-    expect(antialiased(1)).toBe(true);
-    expect(antialiased(1.25)).toBe(true);
+describe('antialiased, MSAA by rendered pixel (#844)', () => {
+  it('keeps MSAA while the render is under a ratio of 1.5, where jagged edges show on a 1x screen', () => {
+    expect(antialiased(1, 1)).toBe(true);
+    expect(antialiased(1.25, 1.25)).toBe(true);
   });
-  it('drops it from 1.5 up: the pixels are too small to show the edges, and 4 samples a pixel cost the most there', () => {
-    expect(antialiased(1.5)).toBe(false);
-    expect(antialiased(2)).toBe(false);
+  it('keeps it when the browser stretches each drawn pixel over 2 screen pixels or more, as on a DPR-3 phone', () => {
+    expect(antialiased(3, 1.5)).toBe(true);
+    expect(antialiased(3, 1)).toBe(true);
+    expect(antialiased(2, 1)).toBe(true);
+  });
+  it('drops it on a Retina screen drawn at 1.5: the pixels are too small to show the edges, and 4 samples a pixel cost the most there', () => {
+    expect(antialiased(1.5, 1.5)).toBe(false);
+    expect(antialiased(2, 1.5)).toBe(false);
   });
 });
 

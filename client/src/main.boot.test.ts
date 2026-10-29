@@ -219,12 +219,21 @@ describe('the renderer and its textures', () => {
       expect(options).toEqual([{ antialias: true, forceWebGL: true }]);
     });
 
-    it('drops MSAA on a screen of device ratio 1.5 or more (#844)', async () => {
+    it('drops MSAA on a Retina screen drawn at 1.5 (#844)', async () => {
       vi.stubGlobal('devicePixelRatio', 2);
-      const booting = boot('?bot=off');
+      const booting = boot('?bot=off', { webdriver: false });
       const { options } = renderer();
       await booting;
       expect(options).toEqual([{ antialias: false, forceWebGL: false }]);
+    });
+
+    it('keeps MSAA on a DPR-3 phone: it draws at 1.5, stretched over 2 screen pixels', async () => {
+      vi.stubGlobal('devicePixelRatio', 3);
+      vi.stubGlobal('innerWidth', 500);
+      const booting = boot('?bot=off', { webdriver: false });
+      const { options } = renderer();
+      await booting;
+      expect(options).toEqual([{ antialias: true, forceWebGL: false }]);
     });
   });
 });
@@ -247,6 +256,14 @@ describe('the adaptive resolution (#843)', () => {
     expect(ratio()).toBe('1');
     frames(game, 40);
     expect(ratio()).toBe('1');
+  });
+
+  it('starts a phone at 1.5 too, not at 1: a DPR-3 screen stretched each drawn pixel 3 times', async () => {
+    vi.stubGlobal('devicePixelRatio', 3);
+    vi.stubGlobal('innerWidth', 500);
+    await boot('?bot=off', { webdriver: false });
+    expect(document.body.dataset.tier).toBe('low');
+    expect(ratio()).toBe('1.5');
   });
 
   it('starts again from the top when the window changes size', async () => {
