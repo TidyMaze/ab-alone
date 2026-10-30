@@ -23,6 +23,24 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   expect(await page.evaluate(() => document.body.dataset.openworld)).toBeUndefined();
 });
 
+// #966: enemy marbles stand on the map and the troop of 6 trails the hero, the first marble on the cell it just left.
+test('enemy marbles are on the map and the troop follows the hero, #966', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const data = (key: 'openworldAt' | 'openworldTroop' | 'openworldEnemies') => page.evaluate((k) => document.body.dataset[k], key);
+  await expect.poll(() => data('openworldAt')).toBe('0,0');
+  expect(Number(await data('openworldEnemies'))).toBeGreaterThan(0);
+  expect((await data('openworldTroop'))!.split(' ')).toHaveLength(6);
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(() => data('openworldAt')).not.toBe('0,0');
+  const before = await data('openworldAt');
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(() => data('openworldAt')).not.toBe(before);
+  expect((await data('openworldTroop'))!.split(' ')[0]).toBe(before);
+});
+
 test('the entry is not in the mode menu without the flag, #965', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();

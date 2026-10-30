@@ -16,16 +16,20 @@ export class OpenWorldMode {
   /** `load` reads a chunk of a seed's world, `models` the low-poly props: the first draw does not wait for them. */
   constructor(
     private readonly load: (seed: number, cx: number, cy: number) => Uint8Array,
+    private readonly loadEnemies: (seed: number, cx: number, cy: number) => Int32Array,
     private readonly models: () => Promise<PropGeometries>,
   ) {}
 
   enter(seed: number, width: number, height: number): void {
-    const world = new World((cx, cy) => this.load(seed, cx, cy));
+    const world = new World(
+      (cx, cy) => this.load(seed, cx, cy),
+      (cx, cy) => this.loadEnemies(seed, cx, cy),
+    );
     const view = new OpenWorldView(world);
     this.hero = new Hero(world);
     this.view = view;
     view.resize(width, height);
-    view.show(this.hero.at);
+    view.show(this.hero.at, this.hero.troop);
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));
@@ -39,6 +43,8 @@ export class OpenWorldMode {
     this.active = false;
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
+    delete document.body.dataset.openworldTroop;
+    delete document.body.dataset.openworldEnemies;
   }
 
   resize(width: number, height: number): void {
@@ -69,7 +75,7 @@ export class OpenWorldMode {
 
   private roll(to: Axial): void {
     if (!this.hero!.step(to)) return;
-    this.view!.show(this.hero!.at);
+    this.view!.show(this.hero!.at, this.hero!.troop);
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
   }
@@ -77,5 +83,7 @@ export class OpenWorldMode {
   private mark(seed: string): void {
     document.body.dataset.openworld = seed;
     document.body.dataset.openworldAt = this.hero!.at.join(',');
+    document.body.dataset.openworldTroop = this.hero!.troop.map((c) => c.join(',')).join(' ');
+    document.body.dataset.openworldEnemies = String(this.view!.enemyCount);
   }
 }

@@ -105,3 +105,19 @@ describe('loading the Blender models (client/models/openworld.glb)', () => {
     expect(await loadModels('/x.glb', loader)).toEqual({});
   });
 });
+
+describe('the troop and the enemies on screen', () => {
+  it('draws the troop where it stands and the enemy marbles around the hero', () => {
+    const foes = (cx: number, cy: number): Int32Array => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5) : new Int32Array());
+    const view = new OpenWorldView(new World(bytes, foes));
+    view.show([0, 0], [[1, 0], [0, 1], [-1, 1]]);
+    expect(mesh(view, 'troop').count).toBe(3);
+    expect(mesh(view, 'enemies').count).toBe(2);
+    expect(view.enemyCount).toBe(2);
+    const m = new THREE.Matrix4();
+    mesh(view, 'enemies').getMatrixAt(1, m);
+    const at = new THREE.Vector3().setFromMatrixPosition(m);
+    expect(at.x).toBeCloseTo(axialTo3D(6, 5).x);
+    expect(at.z).toBeCloseTo(axialTo3D(6, 5).z);
+  });
+});

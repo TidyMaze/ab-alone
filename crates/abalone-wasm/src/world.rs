@@ -32,6 +32,17 @@ pub fn world_chunk(seed: u32, cx: i32, cy: i32) -> Vec<u8> {
         .collect()
 }
 
+/// The enemy marbles that start in chunk `(cx, cy)` of the world `seed`: `q, r` pairs, the groups one
+/// after the other; empty off the world.
+#[wasm_bindgen]
+pub fn world_enemies(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
+    world::enemy_groups(u64::from(seed), cx, cy)
+        .into_iter()
+        .flatten()
+        .flat_map(|(q, r)| [q, r])
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -44,6 +55,22 @@ mod tests {
         let at = (2 * 16 + 3) * CELL_STRIDE;
         assert_eq!(bytes[at], cell.height);
         assert_eq!(bytes[at + 1], terrain_code(cell.terrain));
+    }
+
+    #[test]
+    fn enemies_are_q_r_pairs_that_match_the_engine() {
+        let mut found = false;
+        for cx in -8..8 {
+            let flat = world_enemies(5, cx, 3);
+            let groups: Vec<(i32, i32)> = world::enemy_groups(5, cx, 3).concat();
+            assert_eq!(flat.len(), groups.len() * 2);
+            for (i, (q, r)) in groups.iter().enumerate() {
+                assert_eq!((flat[2 * i], flat[2 * i + 1]), (*q, *r));
+                found = true;
+            }
+        }
+        assert!(found);
+        assert!(world_enemies(5, 32, 0).is_empty());
     }
 
     #[test]

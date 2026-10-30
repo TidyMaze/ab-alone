@@ -12,12 +12,18 @@ function bytes(cx: number, cy: number): Uint8Array {
   if (cx === 0 && cy === 0) out.set([1, 5], CHUNK * 2); // (0, 1)
   return out;
 }
-const mode = (models: () => Promise<Record<string, never>> = async () => ({})) => new OpenWorldMode((_seed, cx, cy) => bytes(cx, cy), models);
+const mode = (models: () => Promise<Record<string, never>> = async () => ({})) => new OpenWorldMode(
+    (_seed, cx, cy) => bytes(cx, cy),
+    (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5, 7, 5) : new Int32Array()),
+    models,
+  );
 const body = () => document.body.dataset;
 
 afterEach(() => {
   delete body().openworld;
   delete body().openworldAt;
+  delete body().openworldTroop;
+  delete body().openworldEnemies;
 });
 
 describe('the Open world mode', () => {
@@ -27,6 +33,8 @@ describe('the Open world mode', () => {
     expect(m.active).toBe(true);
     expect(body().openworld).toBe('42');
     expect(body().openworldAt).toBe('0,0');
+    expect(body().openworldEnemies).toBe('3');
+    expect(body().openworldTroop!.split(' ')).toHaveLength(6);
     const render = vi.fn();
     m.frame(render);
     m.frame(render);

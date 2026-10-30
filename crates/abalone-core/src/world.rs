@@ -15,6 +15,12 @@ pub const CLEARING: i32 = 3;
 const BOULDER_PER_MILLE: u64 = 60;
 /// Walls are laid out on a lattice of squares of this many cells.
 const WALL_BLOCK: i32 = 24;
+/// A chunk tries to place `TRIES` enemy groups, each with this chance in thousandths; with the obstacles that refuse some,
+/// about one group stands per 400 cells.
+const GROUP_PER_MILLE: f64 = 600.0;
+const TRIES: u64 = 2;
+/// No enemy stands within this many cells of the spawn.
+const SAFE: i32 = 8;
 
 /// What a cell looks like and whether it can be entered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -145,6 +151,39 @@ pub fn chunk(seed: u64, cx: i32, cy: i32) -> Option<Vec<Cell>> {
             .map(|(dq, dr)| cell(seed, cx * CHUNK + dq, cy * CHUNK + dr).expect("inside the chunk"))
             .collect(),
     )
+}
+
+/// The enemy groups that start in chunk `(cx, cy)` (docs/specs/openworld.md section 3): up to `TRIES` groups
+/// of 1 to 3 marbles in a line on three axes, from the seed and the chunk alone. A group is placed only
+/// when every one of its cells is in this chunk, open, off the spawn's `SAFE` radius and shared with no
+/// group placed before it in the chunk; the others are dropped.
+pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
+    if !in_world(cx) || !in_world(cy) {
+        return vec![];
+    }
+    let mut placed: Vec<Vec<(i32, i32)>> = Vec::new();
+    for n in 0..TRIES {
+        let draw = |salt: u64| unit(seed, 12 + 5 * n + salt, cx, cy);
+        if draw(0) * 1000.0 >= GROUP_PER_MILLE {
+            continue;
+        }
+        let q = cx * CHUNK + (draw(1) * f64::from(CHUNK)) as i32;
+        let r = cy * CHUNK + (draw(2) * f64::from(CHUNK)) as i32;
+        let (dq, dr) = [(1, 0), (0, 1), (1, -1)][(draw(3) * 3.0) as usize];
+        let len = 1 + (draw(4) * 3.0) as i32;
+        let group: Vec<(i32, i32)> = (0..len).map(|k| (q + k * dq, r + k * dr)).collect();
+        let free = group.iter().all(|&(q, r)| {
+            q.div_euclid(CHUNK) == cx
+                && r.div_euclid(CHUNK) == cy
+                && distance(q, r) > SAFE
+                && cell(seed, q, r).is_some_and(|c| !c.terrain.blocked())
+                && !placed.iter().flatten().any(|&taken| taken == (q, r))
+        });
+        if free {
+            placed.push(group);
+        }
+    }
+    placed
 }
 
 #[cfg(test)]
@@ -294,5 +333,86 @@ mod tests {
             assert!(t.blocked(), "{t:?}");
         }
         assert!(!Terrain::Sand.blocked() && !Terrain::Grass.blocked() && !Terrain::Rock.blocked());
+    }
+
+    fn all_groups() -> Vec<Vec<(i32, i32)>> {
+        (-8..8)
+            .flat_map(|cx| (-8..8).flat_map(move |cy| enemy_groups(5, cx, cy)))
+            .collect()
+    }
+
+    #[test]
+    fn enemy_groups_are_the_same_in_any_order_of_visit() {
+        let a = all_groups();
+        let reversed: Vec<_> = (-8..8)
+            .rev()
+            .flat_map(|cx| (-8..8).rev().flat_map(move |cy| enemy_groups(5, cx, cy)))
+            .collect();
+        let (mut sorted, mut backwards) = (a.clone(), reversed);
+        sorted.sort();
+        backwards.sort();
+        assert_eq!(sorted, backwards);
+        assert_ne!(
+            a,
+            (-8..8)
+                .flat_map(|cx| (-8..8).flat_map(move |cy| enemy_groups(6, cx, cy)))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_group_is_one_to_three_marbles_in_a_line_on_open_cells_away_from_the_spawn() {
+        let groups = all_groups();
+        assert!(groups.len() > 40);
+        let lens: std::collections::HashSet<usize> = groups.iter().map(Vec::len).collect();
+        assert_eq!(lens, std::collections::HashSet::from([1, 2, 3]));
+        for group in &groups {
+            for pair in group.windows(2) {
+                let step = (pair[1].0 - pair[0].0, pair[1].1 - pair[0].1);
+                assert!([(1, 0), (0, 1), (1, -1)].contains(&step), "{group:?}");
+            }
+            for &(q, r) in group {
+                assert!(distance(q, r) > SAFE);
+                assert!(!cell(5, q, r).unwrap().terrain.blocked());
+            }
+        }
+    }
+
+    #[test]
+    fn there_is_about_one_group_per_four_hundred_cells() {
+        let per_cell = all_groups().len() as f64 / (16.0 * 16.0 * 256.0);
+        assert!((1.0 / 700.0..1.0 / 300.0).contains(&per_cell), "{per_cell}");
+    }
+
+    #[test]
+    fn every_group_stays_in_its_chunk_and_no_cell_holds_two_marbles() {
+        for seed in 0..12 {
+            let mut seen = std::collections::HashSet::new();
+            for cx in -8..8 {
+                for cy in -8..8 {
+                    for group in enemy_groups(seed, cx, cy) {
+                        for &(q, r) in &group {
+                            assert_eq!(
+                                (q.div_euclid(CHUNK), r.div_euclid(CHUNK)),
+                                (cx, cy),
+                                "{group:?}"
+                            );
+                            assert!(seen.insert((q, r)), "{seed}: {q},{r} holds two marbles");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_spawn_chunks_and_the_edge_of_the_world_hold_no_group_in_the_clearing() {
+        assert!(enemy_groups(1, WORLD_CHUNKS / 2, 0).is_empty());
+        assert!(enemy_groups(1, 0, -WORLD_CHUNKS / 2 - 1).is_empty());
+        for seed in 0..60 {
+            for g in enemy_groups(seed, 0, 0) {
+                assert!(g.iter().all(|&(q, r)| distance(q, r) > SAFE));
+            }
+        }
     }
 }
