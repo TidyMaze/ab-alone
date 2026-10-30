@@ -163,6 +163,27 @@ A secondary mode: a huge generated hex map with relief, obstacles and basic enem
 troop that pushes nearby enemies on its own, legal Abalone pushes only. See
 [openworld.md](openworld.md).
 
+### 3.8 Stalker (#783)
+
+A fog of war mode: standard Abalone, a view rule on top, no move rule. Part 1 (#998) plays it against the bot from
+the mode menu; the online flag is part 2.
+
+| Item | Rule |
+|---|---|
+| Visible set | Every cell at hex distance 2 or less from one of the side's marbles (its own marbles among them) |
+| Fog | Enemy marbles outside the visible set are not drawn; off-range cells are drawn dark, the board outline stays |
+| Moves offered | The moves of the board as the player sees it, hidden cells read as empty; moves blocked by a visible marble are not offered |
+| Hidden blocker | A move that fails on a hidden marble is not played: that marble is revealed until the next move, and the player plays again |
+| Enemy's last move | Its destination cells are ringed for one turn, only those in the visible set |
+| Public | Ejection counters, the score, the end of the game |
+| Bot | Sees the whole board, and the HUD says so ("Stalker: the bot is not fogged") |
+| Delta | None on the engine (`engine_version` unchanged); anti-stalling unchanged, the 100-ply cap included (section 5) |
+| Win | First to eject 6 |
+
+**A fair-play mode, not an anti-cheat mode.** Every peer still holds the full state and validates every move
+(SPEC section 3), so the fog hides nothing from a modified client: it is a game of scouting and bluff between players
+who agree to play it.
+
 ## 4. Core loop and progression
 
 **Attempt loop (5 to 12 minutes):** enter encounter, read the board, spot the tell, apply the
