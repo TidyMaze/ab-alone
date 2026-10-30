@@ -84,6 +84,40 @@ test('the wheel zooms the Open world out far and back, and the hero still rolls,
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,-1');
 });
 
+// #976: the loaded chunks cover the ground in view at every zoom, so the edge of the loaded area never shows: on a 32:9 screen
+// at the widest zoom, the four edge strips of a screenshot have no pixel of the background colour (#0b1220).
+test('the widest zoom on a 32:9 screen shows no black background at its edges, #976', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 540 });
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const box = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 5000); // as far out as the screen allows
+  await expect.poll(async () => Number(await page.evaluate(() => document.body.dataset.openworldZoom))).toBeGreaterThan(2.5);
+  const png = await page.screenshot();
+  const background = await page.evaluate(async (base64) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${base64}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    const strip = (x: number, y: number, w: number, h: number): number => {
+      const d = ctx.getImageData(x, y, w, h).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i]! - 11) <= 2 && Math.abs(d[i + 1]! - 18) <= 2 && Math.abs(d[i + 2]! - 32) <= 2) n++;
+      return n;
+    };
+    const { width: w, height: h } = canvas;
+    return { top: strip(0, 0, w, 6), bottom: strip(0, h - 6, w, 6), left: strip(0, 0, 6, h), right: strip(w - 6, 0, 6, h) };
+  }, png.toString('base64'));
+  expect(background).toEqual({ top: 0, bottom: 0, left: 0, right: 0 });
+});
+
 test('the entry is not in the mode menu without the flag, #965', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();

@@ -12,25 +12,43 @@ import { CHUNK, cellAtPoint, chunkOf, neighbours, type Terrain, type Tile, type 
 export const MAX_REACH = 10;
 const CAPACITY = (2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK;
 
-/** The chunks to load on each side of the hero's chunk for a ground radius of `radius` cells: the ground the camera sees
- * reaches `radius` from the hero, and the hero can stand at the far side of its chunk, so one more chunk than `radius` / CHUNK. */
-export const reachFor = (radius: number): number => Math.floor(radius / CHUNK) + 1;
+/** The chunks to load on each side of the hero's chunk for a ground radius of `radius` cells (a hex distance, see
+ * `groundRadius`): the radius in chunks, rounded up, plus one chunk of margin for a hero standing at a chunk corner. Every
+ * cell of the ground in view then lies in the loaded square, so the edge of the loaded area is never on screen (#976). */
+export const reachFor = (radius: number): number => Math.ceil(radius / CHUNK) + 1;
 
-/** The farthest ground the camera sees, in cells from `at`: the four corners of the screen, cast on the ground plane. Past the
- * horizon a corner sees no ground, the radius is then infinite. */
-export function groundRadius(camera: THREE.Camera, at: THREE.Vector3): number {
+/** The four corners of the screen cast on the ground plane (y = 0): the ground the camera sees is the quadrilateral between
+ * them. A corner that looks past the horizon gets a point far away on its ray, so the footprint is always four points. */
+export function footprint(camera: THREE.Camera): THREE.Vector3[] {
   const ray = new THREE.Raycaster();
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const ground = new THREE.Vector3();
-  let far = 0;
-  for (const x of [-1, 1]) {
-    for (const y of [-1, 1]) {
-      ray.setFromCamera(new THREE.Vector2(x, y), camera);
-      if (!ray.ray.intersectPlane(plane, ground)) return Infinity;
-      far = Math.max(far, Math.hypot(ground.x - at.x, ground.z - at.z));
-    }
-  }
-  return far;
+  return [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ].map(([x, y]) => {
+    ray.setFromCamera(new THREE.Vector2(x, y), camera);
+    const point = new THREE.Vector3();
+    if (!ray.ray.intersectPlane(plane, point)) ray.ray.at(SKY_DISTANCE, point);
+    return point;
+  });
+}
+/** How far along a ray a corner that sees no ground reaches: far past any reach, so it is clipped by `MAX_REACH`. */
+const SKY_DISTANCE = 1e4;
+
+/** The hex distance in cells between two cells: the steps a marble takes from one to the other. */
+const hexDistance = ([q1, r1]: Axial, [q2, r2]: Axial): number => {
+  const dq = q1 - q2;
+  const dr = r1 - r2;
+  return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+};
+
+/** The farthest ground the camera sees, in cells from the hero's cell at `at`: the hex distance of the cell of each corner of
+ * the footprint, the largest of the four. */
+export function groundRadius(camera: THREE.Camera, at: THREE.Vector3): number {
+  const hero = cellAtPoint(at.x, at.z);
+  return Math.max(...footprint(camera).map((p) => hexDistance(cellAtPoint(p.x, p.z), hero)));
 }
 /** The closest camera: up and back from the hero. The zoom multiplies both, the distance from the hero with them. */
 const CAMERA_UP = 14;
@@ -38,15 +56,49 @@ const CAMERA_BACK = 11;
 const CAMERA_DISTANCE = Math.hypot(CAMERA_UP, CAMERA_BACK);
 /** The tilt of the camera from straight down, at the closest view. */
 const TILT = Math.atan2(CAMERA_BACK, CAMERA_UP);
-/** The fog closes in from the camera, and the far plane of the camera stops past it; both scale with the zoom (#976). */
-const FOG_NEAR = 18;
-const FOG_FAR = 34;
+/** The fog starts at the hero's depth, the middle of the ground in view, and ends this factor past the depth of the farthest
+ * corner of the footprint: it only softens the far horizon, the loaded edge lies outside the footprint (#976). */
+const FOG_BEYOND = 1.3;
 const CAMERA_FAR = 80;
 const NEAR = 0.1;
-/** The widest zoom of the camera: the reach of the loaded chunks follows it, up to `MAX_REACH` (#976). Measured in headed
- * Chromium on a 1280x720 screen: at 8 a warm rebuild takes at most 18 ms (a chunk crossing about 16 ms), 60 FPS while the
- * hero rolls; at 10 (reach 13) a rebuild takes 35 ms and the frame rate drops to 57 FPS, so 10 is too far. */
-export const MAX_ZOOM = 8;
+/** The widest zoom of the camera for a 16:9 screen: the zoom where the reach of the loaded chunks reaches `MAX_REACH` (#976).
+ * A wider screen has a lower one (`zoomLimit`). Measured in headed Chromium on a 1280x720 screen: a warm rebuild takes at
+ * most 18 ms (a chunk crossing about 16 ms) and the hero rolls at 60 FPS; a zoom where the reach is 13 takes 35 ms and runs
+ * at 57 FPS, so it is too far. */
+export const MAX_ZOOM = 6;
+
+/** Puts the camera `k` zooms up and back from the hero, looking down at it, and the planes of the camera with the zoom. */
+function lookAtHero(camera: THREE.PerspectiveCamera, at: THREE.Vector3, k: number): void {
+  const distance = CAMERA_DISTANCE * k;
+  camera.position.set(at.x, distance * Math.cos(TILT), at.z + distance * Math.sin(TILT));
+  camera.up.set(0, 0, -1); // screen up is the far side: the default up at the closest view, defined straight down
+  camera.lookAt(at);
+  camera.near = NEAR * k; // scales with the zoom: the depth precision is the same at every zoom
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+}
+
+/** The reach of the loaded chunks at the zoom `k` on a screen of `aspect`: the hero is the centre, so its cell is the origin. */
+export function reachAt(aspect: number, k: number): number {
+  const probe = new THREE.PerspectiveCamera(40, aspect, NEAR, CAMERA_FAR);
+  const origin = new THREE.Vector3();
+  lookAtHero(probe, origin, k);
+  return reachFor(groundRadius(probe, origin));
+}
+
+/** The widest zoom on a screen of `aspect`: `MAX_ZOOM`, or lower where the reach would pass `MAX_REACH` (a wide screen sees
+ * more ground). The zoom never goes further than this, so the loaded chunks always cover the ground in view. */
+export function zoomLimit(aspect: number): number {
+  if (reachAt(aspect, MAX_ZOOM) <= MAX_REACH) return MAX_ZOOM;
+  let low = 1;
+  let high = MAX_ZOOM;
+  for (let i = 0; i < 40; i++) {
+    const mid = (low + high) / 2;
+    if (reachAt(aspect, mid) <= MAX_REACH) low = mid;
+    else high = mid;
+  }
+  return low;
+}
 
 /** The ground columns: one instanced mesh each. A blocked terrain stands on the ground of its `GROUND` entry. */
 export const GROUNDS = ['water', 'sand', 'grass', 'rock', 'peak'] as const;
@@ -119,8 +171,10 @@ export const variety = (q: number, r: number): number => (((Math.imul(q, 7385609
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
-  private readonly fog = new THREE.Fog(0x0b1220, FOG_NEAR, FOG_FAR);
+  private readonly fog = new THREE.Fog(0x0b1220);
   private level = 1;
+  /** The widest zoom on the screen's aspect, see `zoomLimit`. */
+  private limit = zoomLimit(1);
   /** The chunk the hero is in, and the key of the chunks drawn: rebuilt when either changes. */
   private centre: Axial = [0, 0];
   private drawnKey = '';
@@ -184,9 +238,17 @@ export class OpenWorldView {
     }
   }
 
+  /** A new screen size: the aspect changes the ground in view, so the widest zoom and the loaded chunks follow (#976). */
   resize(width: number, height: number): void {
     this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.limit = zoomLimit(this.camera.aspect);
+    this.level = Math.min(this.level, this.limit);
+    this.frame();
+  }
+
+  /** The widest zoom on this screen: a wide screen stops sooner, so the loaded chunks always cover the ground in view. */
+  get widestZoom(): number {
+    return this.limit;
   }
 
   /** Whether a lake is drawn, so its glow moves. */
@@ -228,7 +290,7 @@ export class OpenWorldView {
 
   /** Zooms the camera by `scale`, more than 1 further out and less than 1 closer, between the closest view and the widest. */
   zoomBy(scale: number): void {
-    this.level = Math.min(MAX_ZOOM, Math.max(1, this.level * scale));
+    this.level = Math.min(this.limit, Math.max(1, this.level * scale));
     this.frame();
   }
 
@@ -236,18 +298,19 @@ export class OpenWorldView {
    * the zoom. The chunks loaded follow the ground the camera sees: rebuilt when the hero's chunk or the reach changes. */
   private frame(): void {
     const k = this.level;
-    const distance = CAMERA_DISTANCE * k;
     const at = this.hero.position;
-    this.camera.position.set(at.x, distance * Math.cos(TILT), at.z + distance * Math.sin(TILT));
-    this.camera.up.set(0, 0, -1); // screen up is the far side: the default up at the closest view, defined straight down
-    this.camera.lookAt(at);
-    this.camera.near = NEAR * k; // both planes scale: the depth precision is the same at every zoom
-    this.camera.far = CAMERA_FAR * k;
+    lookAtHero(this.camera, at, k);
+    // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
+    const corners = footprint(this.camera);
+    const view = new THREE.Vector3();
+    const depth = Math.max(...corners.map((p) => -view.copy(p).applyMatrix4(this.camera.matrixWorldInverse).z));
+    this.fog.near = CAMERA_DISTANCE * k;
+    this.fog.far = FOG_BEYOND * depth;
+    this.camera.far = this.fog.far * 1.5; // the planes reach past the fog: no ground is clipped
     this.camera.updateProjectionMatrix();
-    this.fog.near = FOG_NEAR * k;
-    this.fog.far = FOG_FAR * k;
-    this.camera.updateMatrixWorld();
-    const reach = Math.min(MAX_REACH, reachFor(groundRadius(this.camera, at)));
+    const hero = cellAtPoint(at.x, at.z);
+    const radius = Math.max(...corners.map((p) => hexDistance(cellAtPoint(p.x, p.z), hero)));
+    const reach = Math.min(MAX_REACH, reachFor(radius));
     const key = `${this.centre},${reach}`;
     if (key !== this.drawnKey) {
       this.drawnKey = key;

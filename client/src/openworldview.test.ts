@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { CHUNK, neighbours, World } from './openworld';
+import { cellAtPoint, CHUNK, chunkOf, neighbours, World } from './openworld';
 import {
+  footprint,
   GROUNDS,
   groundRadius,
   loadModels,
@@ -10,11 +11,13 @@ import {
   MAX_REACH,
   MAX_ZOOM,
   OpenWorldView,
+  reachAt,
   reachFor,
   topOf,
   variety,
   WATER,
   waterColor,
+  zoomLimit,
 } from './openworldview';
 
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
@@ -38,9 +41,9 @@ const counts = (view: OpenWorldView, prefix: string, names: readonly string[]) =
 describe('the Open world view (docs/specs/openworld.md section 2)', () => {
   it('draws every cell of the chunks around the hero as a ground column and its props on top', () => {
     const view = new OpenWorldView(new World(bytes));
-    view.resize(1600, 900); // a 16:9 screen sees the ground two chunks out at the closest view
+    view.resize(1600, 900); // a 16:9 screen sees the ground three chunks out at the closest view
     view.show([0, 0]);
-    const cells = 25 * CHUNK * CHUNK;
+    const cells = 49 * CHUNK * CHUNK;
     const ground = counts(view, 'terrain', GROUNDS);
     // Codes 0 to 7 repeat 32 times a chunk: water, sand, grass, rock, peak, boulder, tree and wall.
     expect(ground).toEqual({ water: cells / 8, sand: cells / 8, grass: (cells / 8) * 2, rock: (cells / 8) * 3, peak: cells / 8 });
@@ -56,6 +59,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
   it('rebuilds the chunks only when the hero enters another chunk', () => {
     const load = vi.fn(bytes);
     const view = new OpenWorldView(new World(load));
+    view.resize(1600, 900); // at 16:9 the reach of the closest view does not move with the hero inside its chunk
     view.show([0, 0]);
     const loaded = load.mock.calls.length;
     view.show([1, 1]);
@@ -183,9 +187,15 @@ describe('the zoom of the Open world camera (#976)', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([2, 1]);
     const fog = view.scene.fog as THREE.Fog;
-    expect([fog.near, fog.far, view.camera.far, view.camera.near]).toEqual([18, 34, 80, 0.1]);
+    // the fog starts at the hero's depth, the middle of the ground in view, and ends past the farthest corner of the footprint
+    expect(fog.near).toBeCloseTo(Math.hypot(14, 11));
+    expect(fog.far).toBeGreaterThan(fog.near);
+    expect(view.camera.far).toBeGreaterThan(fog.far);
+    expect(view.camera.near).toBeCloseTo(0.1);
     view.zoomBy(2);
-    expect([fog.near, fog.far, view.camera.far, view.camera.near]).toEqual([36, 68, 160, 0.2]); // the near plane too: the depth precision stays
+    expect(fog.near).toBeCloseTo(2 * Math.hypot(14, 11));
+    expect(view.camera.far).toBeGreaterThan(fog.far);
+    expect(view.camera.near).toBeCloseTo(0.2); // the near plane too: the depth precision stays
   });
 
   it('keeps the camera behind the hero as it walks, at the zoom it has', () => {
@@ -212,6 +222,66 @@ describe('the zoom of the Open world camera (#976)', () => {
   });
 });
 
+describe('the loaded chunks cover the ground in view, at every aspect and zoom (#976)', () => {
+  const screens: Record<string, [number, number]> = { '9/16': [900, 1600], '4/3': [800, 600], '16/9': [1600, 900], '32/9': [3840, 1080] };
+  for (const [name, [width, height]] of Object.entries(screens)) {
+    for (const zoom of [1, 2, 4, MAX_ZOOM]) {
+      for (const hero of [[0, 0], [CHUNK - 1, -CHUNK]] as Axial[]) {
+        it(`keeps the four corners of the footprint inside the loaded square: ${name}, zoom ${zoom}, hero ${hero}`, () => {
+          const view = new OpenWorldView(new World(grass));
+          view.resize(width, height);
+          view.show(hero);
+          view.zoomBy(zoom); // a wide screen stops sooner: the zoom is the widest it allows
+          const [hq, hr] = chunkOf(hero);
+          for (const p of footprint(view.camera)) {
+            const [cq, cr] = chunkOf(cellAtPoint(p.x, p.z));
+            expect(Math.abs(cq - hq)).toBeLessThanOrEqual(view.reach);
+            expect(Math.abs(cr - hr)).toBeLessThanOrEqual(view.reach);
+          }
+        });
+      }
+    }
+  }
+
+  it('gives the reach in whole chunks: the radius in cells, rounded up to chunks, one chunk of margin', () => {
+    expect(reachFor(0)).toBe(1);
+    expect(reachFor(CHUNK)).toBe(2);
+    expect(reachFor(CHUNK + 0.5)).toBe(3);
+  });
+
+  it('stops the zoom where the reach reaches MAX_REACH on a 16:9 screen, and no further', () => {
+    expect(zoomLimit(16 / 9)).toBe(MAX_ZOOM);
+    expect(reachAt(16 / 9, MAX_ZOOM)).toBe(MAX_REACH);
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(1e9);
+    expect(view.zoom).toBe(MAX_ZOOM);
+    expect(view.widestZoom).toBe(MAX_ZOOM);
+  });
+
+  it('stops a wide screen sooner, where its reach reaches MAX_REACH', () => {
+    const limit = zoomLimit(32 / 9);
+    expect(limit).toBeLessThan(MAX_ZOOM);
+    expect(reachAt(32 / 9, limit)).toBeLessThanOrEqual(MAX_REACH);
+    expect(reachAt(32 / 9, limit + 0.05)).toBeGreaterThan(MAX_REACH);
+  });
+
+  it('follows the aspect on a resize: a narrower screen lets the zoom go further, a wider one brings it back', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(1e9);
+    const wide = view.zoom;
+    view.resize(3840, 1080);
+    expect(view.zoom).toBeLessThan(wide);
+    expect(view.zoom).toBe(zoomLimit(32 / 9));
+    expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
+    view.resize(900, 1600);
+    expect(view.widestZoom).toBe(MAX_ZOOM);
+  });
+});
+
 describe('the far zoom is real 3D, with no overview (#976)', () => {
   const hero = (view: OpenWorldView) => view.scene.getObjectByName('hero')!;
 
@@ -229,8 +299,8 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
-    expect(view.reach).toBe(2);
-    expect(ground(view)).toBe((2 * 2 + 1) ** 2 * CHUNK * CHUNK);
+    expect(view.reach).toBe(3);
+    expect(ground(view)).toBe((2 * 3 + 1) ** 2 * CHUNK * CHUNK);
     const version = mesh(view, 'terrain-grass').instanceMatrix.version;
     view.zoomBy(1.01); // the reach is still two chunks: the same chunks, not rebuilt
     expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
@@ -276,13 +346,13 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     expect(groundRadius(view.camera, hero(view).position) / radius).toBeCloseTo(4, 0); // the camera stands at the hero's height, so almost linear
   });
 
-  it('has no ground radius when a corner of the screen looks past the horizon', () => {
+  it('reaches far past the loaded chunks when a corner of the screen looks past the horizon, so the reach is capped', () => {
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
     camera.position.set(0, 1, 0);
     camera.lookAt(0, 10, -1); // up: the sky fills the screen
     camera.updateMatrixWorld();
-    expect(groundRadius(camera, new THREE.Vector3())).toBe(Infinity);
-    expect(reachFor(Infinity)).toBe(Infinity);
+    expect(groundRadius(camera, new THREE.Vector3())).toBeGreaterThan(1000);
+    expect(reachFor(groundRadius(camera, new THREE.Vector3()))).toBeGreaterThan(MAX_REACH);
   });
 
   it('publishes the instances drawn per mesh, the ground, the props, the troop and the enemies', () => {
