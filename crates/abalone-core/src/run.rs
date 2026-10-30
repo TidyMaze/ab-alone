@@ -63,6 +63,27 @@ fn links(from: usize, to: usize, state: &mut u64) -> Vec<Vec<usize>> {
     out
 }
 
+/// The kinds a node after the first row of an act draws from, equally likely.
+const DRAWN: [NodeKind; 6] = [
+    NodeKind::Fight,
+    NodeKind::Fight,
+    NodeKind::Elite,
+    NodeKind::Event,
+    NodeKind::Event,
+    NodeKind::Rest,
+];
+
+/// The kind of node `index` of the map of `seed` on `row` of its act: the first row fights, the
+/// boss row its boss, the others drawn from `DRAWN`. Its own draw, apart from the map's shape, so
+/// the shape stays the one of the runs saved before the kinds (#800).
+fn kind(seed: u64, index: usize, row: usize) -> NodeKind {
+    match row {
+        0 => NodeKind::Fight,
+        FIGHT_ROWS => NodeKind::Boss,
+        _ => DRAWN[(mix(seed ^ mix(index as u64)) % DRAWN.len() as u64) as usize],
+    }
+}
+
 /// The map of the run `seed`: act by act, row by row, column ascending. A fight row has 2 to 4
 /// nodes, the boss row one.
 pub fn run_map(seed: u64) -> Vec<Node> {
@@ -74,20 +95,16 @@ pub fn run_map(seed: u64) -> Vec<Node> {
             .collect();
         widths.push(1);
         for row in 0..=FIGHT_ROWS {
-            let kind = if row < FIGHT_ROWS {
-                NodeKind::Fight
-            } else {
-                NodeKind::Boss
-            };
             let out = match widths.get(row + 1) {
                 Some(&next) => links(widths[row], next, &mut state),
                 None => vec![Vec::new()],
             };
+            let first = map.len();
             map.extend(out.into_iter().enumerate().map(|(col, links)| Node {
                 act,
                 row,
                 col,
-                kind,
+                kind: kind(seed, first + col, row),
                 links,
             }));
         }

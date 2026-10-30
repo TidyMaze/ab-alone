@@ -39,10 +39,19 @@ mod tests {
                 record[..3],
                 [node.act as i32, node.row as i32, node.col as i32]
             );
-            assert_eq!(record[3], i32::from(node.kind == NodeKind::Boss));
+            let code = match node.kind {
+                NodeKind::Fight => 0,
+                NodeKind::Boss => 1,
+                NodeKind::Elite => 2,
+                NodeKind::Rest => 3,
+                NodeKind::Event => 4,
+            };
+            assert_eq!(record[3], code);
             let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
             assert_eq!(record[4], links);
         }
         assert_eq!(flat[flat.len() - 2], 1); // the act 3 boss closes the map
+        let kinds: Vec<i32> = flat.chunks(NODE_STRIDE).map(|r| r[3]).collect();
+        assert!((2..=4).all(|k| kinds.contains(&k)), "seed 11 has an elite, a rest and an event");
     }
 }
