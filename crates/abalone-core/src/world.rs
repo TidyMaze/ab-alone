@@ -781,38 +781,36 @@ mod tests {
                 / low.len() as f64;
             assert!(
                 (trees - tree).abs() <= tree * 0.2 + 0.001,
-                "{biome:?}: {:.2} % trees against {:.0} %",
-                trees * 100.0,
-                tree * 100.0
+                "{biome:?} tree share"
             );
             let per_mille = boulders * 1000.0;
             assert!(
                 (per_mille - boulder * (1.0 - tree)).abs() <= boulder * 0.33,
-                "{biome:?}: {per_mille:.1} boulders per mille against {boulder}"
+                "{biome:?} boulders"
             );
         }
     }
 
     #[test]
     fn water_shore_uplands_and_peaks_have_the_same_terrains_in_every_biome() {
-        for c in window_cells(1..=4) {
-            match c.height {
-                0 | 1 => assert_eq!(c.terrain, Terrain::Water),
-                2 => assert!(
-                    matches!(c.terrain, Terrain::Sand | Terrain::Wall | Terrain::Boulder),
-                    "{c:?}"
-                ),
-                5 | 6 => assert!(
-                    matches!(
-                        c.terrain,
-                        Terrain::Rock | Terrain::Grass | Terrain::Wall | Terrain::Boulder
-                    ),
-                    "{c:?}"
-                ),
-                7 => assert_eq!(c.terrain, Terrain::Peak),
-                _ => {}
-            }
-        }
+        let shore = [Terrain::Sand, Terrain::Wall, Terrain::Boulder];
+        let upland = [
+            Terrain::Rock,
+            Terrain::Grass,
+            Terrain::Wall,
+            Terrain::Boulder,
+        ];
+        let kept = |c: &Cell| match c.height {
+            0 | 1 => c.terrain == Terrain::Water,
+            2 => shore.contains(&c.terrain),
+            5 | 6 => upland.contains(&c.terrain),
+            7 => c.terrain == Terrain::Peak,
+            _ => true,
+        };
+        assert!(
+            window_cells(1..=4).iter().all(kept),
+            "a biome changed a shore, upland or peak"
+        );
     }
 
     #[test]
