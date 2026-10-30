@@ -98,6 +98,9 @@ const diffOf = (page: Page, a: Buffer, b: Buffer, box: Box) =>
   );
 
 test('the fog shows smoothly across the bay, not on board cells nor as a brutal rim cut, bugs #171, #399, #665', async ({ page }, testInfo) => {
+  // The CI window (playwright.config.ts): each of the three draws costs by its pixels, 44 % fewer than the 1280x720 default,
+  // and a loaded machine must not push the test past 15 s (#854). It stays above the 768 px width of the low quality tier.
+  await page.setViewportSize({ width: 960, height: 540 });
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)

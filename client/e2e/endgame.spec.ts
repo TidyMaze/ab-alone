@@ -43,7 +43,7 @@ async function tryToMove(page: Page): Promise<void> {
 
 /** Waits for the end animation to finish, so a screenshot shows the position the player keeps looking at. */
 const settled = (page: Page) =>
-  expect.poll(() => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').length)).toBe(0);
+  page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
 
 /** The banner as the player reads it, and the marker the CSS animation hangs on. */
 async function expectOver(page: Page, anim: string, title: string, line: RegExp | string) {
@@ -149,18 +149,18 @@ test('with motion: each outcome has its own animation, and it ends by itself', a
     await expect(page.locator('body')).toHaveAttribute('data-over', anim);
     seen[anim] = await page.evaluate(() => getComputedStyle(document.body, '::before').animationName);
   }
-  await open(page, '?bot=off');
-  await load(page, false, DRAW);
+  await load(page, false, DRAW); // the file names its own bot flag: no second page load
   await expect(page.locator('body')).toHaveAttribute('data-over', 'draw');
   seen.draw = await page.evaluate(() => getComputedStyle(document.body, '::before').animationName);
   expect(new Set(Object.values(seen)).size).toBe(3);
   expect(seen.win).toBe('end-win');
   expect(seen.loss).toBe('end-loss');
   expect(seen.draw).toBe('end-draw');
-  // Short: finished well inside 3 s.
-  await expect
-    .poll(() => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').length), { timeout: 3000 })
-    .toBe(0);
+  // Short: every animation is declared to end inside 3 s (its own timing, not the time a loaded machine takes to play it),
+  // and it does end.
+  const ends = await page.evaluate(() => document.getAnimations().map((a) => a.effect!.getComputedTiming().endTime as number));
+  expect(Math.max(...ends)).toBeLessThanOrEqual(3000);
+  await settled(page);
 });
 
 test.describe('a phone held upright', () => {
