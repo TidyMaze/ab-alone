@@ -84,10 +84,11 @@ const NEAR = 0.1;
  * at 57 FPS, so it is too far. */
 export const MAX_ZOOM = 6;
 
-/** Puts the camera `k` zooms up and back from the hero, looking down at it, and the planes of the camera with the zoom. */
+/** Puts the camera `k` zooms up and back from `at` (the point it looks at, the hero's column top when eased), looking down
+ * at it, and the planes of the camera with the zoom. */
 function lookAtHero(camera: THREE.PerspectiveCamera, at: THREE.Vector3, k: number): void {
   const distance = CAMERA_DISTANCE * k;
-  camera.position.set(at.x, distance * Math.cos(TILT), at.z + distance * Math.sin(TILT));
+  camera.position.set(at.x, at.y + distance * Math.cos(TILT), at.z + distance * Math.sin(TILT));
   camera.up.set(0, 0, -1); // screen up is the far side: the default up at the closest view, defined straight down
   camera.lookAt(at);
   camera.near = NEAR * k; // scales with the zoom: the depth precision is the same at every zoom
@@ -193,10 +194,14 @@ const MARBLE = 0.3;
 const WALL = 0.9;
 const CAP = 0.07;
 
-/** The height of the top of a cell's ground: water lies low. The eight levels 0 to 7 are scaled onto the old 0 to 3 range
- * (0.2 to 0.8), so the picture does not change until the relief task (#988) replaces this. */
-export const topOf = (terrain: Terrain, height: number): number =>
-  terrain === 'water' ? 0.08 : 0.2 + (0.2 * height * 3) / 7;
+/** The height of one level of the relief: a cell of level `h` stands `0.2 + STEP * h` high, a peak (level 7) `0.2 + 7 * STEP`.
+ * Kept by looking at the screenshots of #988 (openworld-terrain.md section 5). */
+export const STEP = 0.5;
+/** The height of the top of a cell's ground: water lies low. */
+export const topOf = (terrain: Terrain, height: number): number => (terrain === 'water' ? 0.08 : 0.2 + STEP * height);
+/** The camera's height eases to the hero's column top with this time constant, in seconds, and snaps within `SETTLED` (#988). */
+const EASE = 0.12;
+const SETTLED = 0.01;
 
 /** A stable 0 to 1 draw per cell, so the mountains and the trees differ in height but never change between draws. */
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
@@ -230,6 +235,12 @@ export class OpenWorldView {
   /** The meshes a build lays: the ground columns, the props and the detailed props. */
   private readonly managed: THREE.InstancedMesh[] = [];
   private readonly hero: THREE.Mesh;
+  /** The cell the hero is on, the centre of the pick. */
+  private heroCell: Axial = [0, 0];
+  /** The point the camera looks at: the hero's x and z, its height eased to the hero's column top (#988). The first show puts it
+   * there at once (`placed`): the camera does not glide in from the origin. */
+  private readonly focus = new THREE.Vector3();
+  private placed = false;
   private troop: THREE.InstancedMesh;
   private foes: THREE.InstancedMesh;
   /** Reused by every placement, so a draw allocates no matrix holder (#981). */
@@ -340,10 +351,35 @@ export class OpenWorldView {
   show(at: Axial, troop: readonly Axial[] = []): void {
     const tile = this.world.tile(at[0], at[1])!;
     const p = axialTo3D(at[0], at[1]);
+    const top = topOf(GROUND[tile.terrain], tile.height) + MARBLE;
     this.centre = chunkOf(at);
-    this.hero.position.set(p.x, topOf(GROUND[tile.terrain], tile.height) + MARBLE, p.z);
+    this.heroCell = [at[0], at[1]];
+    this.hero.position.set(p.x, top, p.z);
+    this.focus.x = p.x;
+    this.focus.z = p.z;
+    if (!this.placed) {
+      this.focus.y = top;
+      this.placed = true;
+    }
     this.place(this.troop, troop);
     this.frame();
+  }
+
+  /** The height the camera looks at: the hero's column top, eased to it by `ease` (the browser checks and the tests read it). */
+  get focusHeight(): number {
+    return this.focus.y;
+  }
+
+  /** Eases the camera's height to the hero's column top, `dt` seconds on: the gap closes by `1 - exp(-dt / EASE)` of itself, so it
+   * never overshoots. It snaps when `instant` (reduced motion) or within `SETTLED` of the top. Returns whether the camera moved,
+   * so the frame is drawn; false once it has settled (#988). */
+  ease(dt: number, instant: boolean): boolean {
+    const target = this.hero.position.y;
+    const gap = target - this.focus.y;
+    if (gap === 0) return false;
+    this.focus.y = instant || Math.abs(gap) <= SETTLED ? target : this.focus.y + gap * (1 - Math.exp(-dt / EASE));
+    this.frame();
+    return true;
   }
 
   /** The chunks on each side of the hero's chunk that are drawn: they follow the zoom (#976). */
@@ -372,7 +408,7 @@ export class OpenWorldView {
    * the zoom. The chunks loaded follow the ground the camera sees: rebuilt when the hero's chunk or the reach changes. */
   private frame(): void {
     const k = this.level;
-    const at = this.hero.position;
+    const at = this.focus;
     lookAtHero(this.camera, at, k);
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
     const corners = footprint(this.camera);
@@ -462,13 +498,28 @@ export class OpenWorldView {
     return need;
   }
 
-  /** The cell under a point of the screen, `x` and `y` from -1 to 1, read on the plane the hero rolls on. */
+  /** The cell under a point of the screen, `x` and `y` from -1 to 1. The ray is cast against the top of each of the hero's cell and
+   * its six neighbours, each on its own plane `y = topOf(cell)`, and a hit counts only where it lies in that cell. The nearest
+   * hit to the camera wins. No hit gives the hero's own cell, so the click is no move (#988). */
   pick(x: number, y: number): Axial {
     this.raycaster.setFromCamera(this.pointer.set(x, y), this.camera);
-    this.plane.set(this.up, -this.hero.position.y);
-    this.ground.set(0, 0, 0);
-    this.raycaster.ray.intersectPlane(this.plane, this.ground);
-    return cellAtPoint(this.ground.x, this.ground.z);
+    const { ray } = this.raycaster;
+    let best = this.heroCell;
+    let nearest = Infinity;
+    for (const cell of [this.heroCell, ...neighbours(this.heroCell)]) {
+      const tile = this.world.tile(cell[0], cell[1]);
+      if (!tile) continue;
+      this.plane.set(this.up, -topOf(GROUND[tile.terrain], tile.height));
+      if (!ray.intersectPlane(this.plane, this.ground)) continue;
+      const [q, r] = cellAtPoint(this.ground.x, this.ground.z);
+      if (q !== cell[0] || r !== cell[1]) continue; // the hit is in another cell
+      const distance = this.ground.distanceToSquared(ray.origin);
+      if (distance < nearest) {
+        nearest = distance;
+        best = cell;
+      }
+    }
+    return best;
   }
 
   /** Frees the GPU objects of the view: each geometry and material of its scene, once. The view is not drawn after. */
