@@ -2,6 +2,7 @@
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Axial } from './board';
+import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
 import { BLOCKED, HIDDEN, PLIES, SEEN } from './test/stalker-game';
 
@@ -29,6 +30,12 @@ function catchScene(): () => THREE.Scene {
   return () => scene!;
 }
 
+/** Plays the recorded plies by the hook, and runs the clock past the last one's slide: a click waits for it. */
+function playPlies(game: Game, plies: number[][]): void {
+  game.hook('__playMoves', plies);
+  game.frame(SLIDE_MS + 1);
+}
+
 function startStalker(game: Game): void {
   game.openModes();
   byId('stalker').click();
@@ -53,7 +60,7 @@ describe('main.ts Stalker (#998)', () => {
   it('draws an enemy marble 2 cells away and not one 3 cells away', async () => {
     const game = await boot('/');
     startStalker(game);
-    game.hook('__playMoves', PLIES);
+    playPlies(game, PLIES);
     const s = shown(game)!;
     expect(s.visible).toHaveLength(39);
     expect(has(s.drawn, SEEN)).toBe(true);
@@ -65,7 +72,7 @@ describe('main.ts Stalker (#998)', () => {
   it('offers a move a hidden marble blocks, with its ghosts; playing it reveals the marble and the player plays again', async () => {
     const game = await boot('/');
     startStalker(game);
-    game.hook('__playMoves', PLIES);
+    playPlies(game, PLIES);
     for (const [q, r] of BLOCKED.cells) game.click(q, r);
     const canvas = document.querySelector('canvas')!;
     canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true })); // north-east
@@ -79,6 +86,7 @@ describe('main.ts Stalker (#998)', () => {
     game.click(-3, 2);
     game.click(-3, 1); // north-west, an empty cell
     expect(game.hook('__plies')).toBe(5);
+    game.frame(SLIDE_MS + 1);
     expect(shown(game)!.revealed).toEqual([]);
     expect(game.hud()).not.toContain('A hidden marble');
   });
@@ -87,17 +95,17 @@ describe('main.ts Stalker (#998)', () => {
     const scene = catchScene();
     const game = await boot('/');
     startStalker(game);
-    game.hook('__playMoves', PLIES.slice(0, 2)); // White's (0,-3) and (0,-2) to (0,-2) and (0,-1): (0,-2) is 3 away
+    playPlies(game, PLIES.slice(0, 2)); // White's (0,-3) and (0,-2) to (0,-2) and (0,-1): (0,-2) is 3 away
     expect(shown(game)!.last).toEqual([[0, -1]]);
     expect(named(scene(), 'stalker-last')).toHaveLength(1);
-    game.hook('__playMoves', PLIES.slice(2, 3)); // Black's move: the ring is gone
+    playPlies(game, PLIES.slice(2, 3)); // Black's move: the ring is gone
     expect(shown(game)!.last).toEqual([]);
   });
 
   it('fogs a replayed position by its own visible set, without the live reveal and last move', async () => {
     const game = await boot('/');
     startStalker(game);
-    game.hook('__playMoves', PLIES.slice(0, 2));
+    playPlies(game, PLIES.slice(0, 2));
     byId('replay').click();
     byId('replay-first').click();
     expect(shown(game)!.visible).toHaveLength(31);

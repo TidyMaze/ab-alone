@@ -90,21 +90,20 @@ describe('resolveSeen', () => {
 });
 
 describe('blockers', () => {
-  it('names the hidden marbles in the line of an inline push', () => {
-    const board = boardOf([[[0, 0], 1], [[1, 0], 1], [[2, 0], 2], [[3, 0], 2], [[4, 0], 1]]);
-    const seen = boardOf([[[0, 0], 1], [[1, 0], 1], [[2, 0], 2], [[4, 0], 1]]);
-    expect(blockers(board, seen, { cells: [[0, 0], [1, 0]], dir: 0 })).toEqual([cellIndex(3, 0)]);
+  it('names the first hidden marble in the line of an inline push, not the ones behind it', () => {
+    const board = boardOf([[[-1, 0], 1], [[0, 0], 1], [[1, 0], 1], [[2, 0], 2], [[3, 0], 2], [[4, 0], 2]]);
+    const seen = boardOf([[[-1, 0], 1], [[0, 0], 1], [[1, 0], 1], [[2, 0], 2], [[3, 0], 2]]);
+    expect(blockers(board, seen, { cells: [[-1, 0], [0, 0], [1, 0]], dir: 0 })).toEqual([cellIndex(4, 0)]);
+    const behind = boardOf([[[-2, 0], 1], [[-1, 0], 1], [[0, 0], 1], [[1, 0], 2], [[2, 0], 2], [[3, 0], 2], [[4, 0], 2]]);
+    const seenBehind = boardOf([[[-2, 0], 1], [[-1, 0], 1], [[0, 0], 1], [[1, 0], 2], [[2, 0], 2]]);
+    expect(blockers(behind, seenBehind, { cells: [[-2, 0], [-1, 0], [0, 0]], dir: 0 })).toEqual([cellIndex(3, 0)]);
   });
 
-  it('names the hidden marble on a broadside target, not the ones behind it', () => {
-    const board = boardOf([[[0, 0], 1], [[1, 0], 1], [[1, -1], 2], [[1, -2], 2]]);
-    const seen = boardOf([[[0, 0], 1], [[1, 0], 1]]);
-    expect(blockers(board, seen, { cells: [[0, 0], [1, 0]], dir: 4 })).toEqual([cellIndex(1, -1)]);
-  });
-
-  it('stops at the rim', () => {
+  it('names none for a line with nothing hidden, up to the rim, nor for a broadside', () => {
     const board = boardOf([[[3, 0], 1], [[4, 0], 2]]);
-    expect(blockers(board, boardOf([[[3, 0], 1]]), { cells: [[3, 0]], dir: 0 })).toEqual([cellIndex(4, 0)]);
+    expect(blockers(board, board, { cells: [[3, 0]], dir: 0 })).toEqual([]);
+    const side = boardOf([[[0, 0], 1], [[1, 0], 1], [[1, -1], 2]]);
+    expect(blockers(side, boardOf([[[0, 0], 1], [[1, 0], 1]]), { cells: [[0, 0], [1, 0]], dir: 4 })).toEqual([]);
   });
 });
 
