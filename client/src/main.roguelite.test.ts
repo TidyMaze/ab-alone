@@ -101,6 +101,21 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(document.body.dataset.run).toBe('fight');
   });
 
+  it('a run keeps the saved local game: it is back once the run is left', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    playMove(game);
+    await game.settle(); // the local game is saved
+    game.openModes();
+    byId('roguelite').click();
+    await game.settle();
+    game.openModes();
+    byId('daily').click(); // the run is abandoned
+    await game.settle();
+    const again = await boot('?bot=off', { indexedDB });
+    expect(again.hook('__plies')).toBe(1);
+  });
+
   it('another mode abandons the run: it is gone after a reload', async () => {
     const indexedDB = new IDBFactory();
     const game = await startRun('?bot=off', indexedDB);
