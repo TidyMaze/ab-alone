@@ -3,7 +3,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::board::{Board, Cell};
+use crate::board::{Board, Cell, PlaceError, Special};
 use crate::moves::{apply, Move, MoveError, Player};
 
 /// Ejections needed to win, for both sides unless a boss changes it (the Choir, Decision #131).
@@ -167,6 +167,12 @@ impl Game {
         self.win = win;
         self.outcome = won(self.ejected, win);
         self
+    }
+
+    /// Makes the marble on `cell` a `kind` special marble, before the first move of a rogue-lite
+    /// fight (docs/specs/roguelite.md section 5).
+    pub fn place_special(&mut self, cell: (i32, i32), kind: Special) -> Result<(), PlaceError> {
+        self.board.place_special(cell, kind)
     }
 
     /// Ejections `player` needs to win.

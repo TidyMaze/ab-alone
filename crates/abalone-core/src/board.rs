@@ -110,6 +110,31 @@ pub struct Board {
     dual: Option<Dual>,
     /// The Echo's memory: the moves whose mirror was never played, oldest first, with their side.
     echoes: Vec<(Player, Move)>,
+    /// The special marbles of a rogue-lite fight, in `q` then `r` order. `Some` is the rogue-lite
+    /// flag: it also turns on their rules (docs/specs/roguelite.md section 5).
+    specials: Option<Vec<((i32, i32), Special)>>,
+}
+
+/// A special marble of a rogue-lite fight (docs/specs/roguelite.md section 5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Special {
+    /// Weighs 2 in a push.
+    Heavy,
+    /// Never leaves the board.
+    Anchor,
+    /// Pushes its neighbours one cell away when it is ejected.
+    Spark,
+}
+
+/// Why a special marble cannot be placed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaceError {
+    /// The board has no rogue-lite flag.
+    NotRogueLite,
+    /// The cell holds no Black or White marble.
+    NoMarble,
+    /// The fight has started: special marbles are placed before its first move.
+    Started,
 }
 
 /// The Dual Room's state on the board (docs/specs/game-design.md section 7.15): its board holds
@@ -205,6 +230,7 @@ impl Board {
             unstable: None,
             dual: None,
             echoes: Vec::new(),
+            specials: None,
         }
     }
 
@@ -363,6 +389,33 @@ impl Board {
 
     pub fn set_echoes(&mut self, echoes: Vec<(Player, Move)>) {
         self.echoes = echoes;
+    }
+
+    /// Whether the board has the rogue-lite flag, which turns on the special marbles' rules.
+    pub fn rogue_lite(&self) -> bool {
+        self.specials.is_some()
+    }
+
+    /// Sets the rogue-lite flag, with no special marble yet.
+    pub fn set_rogue_lite(&mut self) {
+        self.specials.get_or_insert_with(Vec::new);
+    }
+
+    /// The special marbles, in `q` then `r` order, empty without the rogue-lite flag.
+    pub fn specials(&self) -> &[((i32, i32), Special)] {
+        self.specials.as_deref().unwrap_or_default()
+    }
+
+    /// The special marble on `cell`, if any.
+    pub fn special(&self, cell: (i32, i32)) -> Option<Special> {
+        self.specials().iter().find(|s| s.0 == cell).map(|s| s.1)
+    }
+
+    /// Makes the marble on `cell` a `kind` special marble, in place of any it was.
+    pub fn place_special(&mut self, cell: (i32, i32), kind: Special) -> Result<(), PlaceError> {
+        let specials = self.specials.get_or_insert_with(Vec::new);
+        specials.push((cell, kind));
+        Ok(())
     }
 
     /// Standard start layout: 14 marbles per side.
