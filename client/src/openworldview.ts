@@ -4,13 +4,28 @@
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { CHUNK, cellAtPoint, chunkOf, neighbours, type Terrain, type Tile, type World } from './openworld';
+import { CHUNK, cellAtPoint, chunkOf, neighbours, TROOP, type Terrain, type Tile, type World } from './openworld';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
  * widest zoom of a 16:9 screen (`MAX_ZOOM`); the instanced meshes hold 441 chunks, about 113k instances each. */
 export const MAX_REACH = 10;
-const CAPACITY = (2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK;
+/** The most instances each mesh holds. Measured over 301 seeds at `MAX_REACH`: the most cells of each kind in the widest
+ * window (21 x 21 chunks), plus a quarter, rounded up to a hundred. A build past a capacity stops there (`put`, `place`). */
+export const CAPACITY = {
+  water: 26400,
+  sand: 21100,
+  grass: 66200,
+  rock: 23000,
+  peak: 37200,
+  mountain: 37200,
+  tree: 15700,
+  boulder: 5300,
+  wall: 500,
+  cap: 500,
+  enemies: 700,
+  troop: TROOP,
+} as const;
 
 /** The chunks to load on each side of the hero's chunk for a ground radius of `radius` cells (a hex distance, see
  * `groundRadius`): the radius in chunks, rounded up, plus one chunk of margin for a hero standing at a chunk corner. Every
@@ -197,23 +212,23 @@ export class OpenWorldView {
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
     for (const ground of GROUNDS) {
       const { color, emissive } = LOOK[ground];
-      this.grounds[ground] = this.instances(`terrain-${ground}`, prism, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.9 }));
+      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.9 }));
     }
     (this.grounds.water.material as THREE.MeshStandardMaterial).roughness = 0.2; // a glossy surface catches the sun
     for (const prop of PROP_NAMES) {
       const { geometry, color, emissive, flat } = PROPS[prop];
-      this.props[prop] = this.instances(`prop-${prop}`, geometry, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat }));
+      this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], geometry, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat }));
     }
     this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), new THREE.MeshStandardMaterial({ color: 0xcfe8ff, roughness: 0.1 }));
     this.hero.name = 'hero';
     this.scene.add(this.hero);
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
-    this.troop = this.instances('troop', marble, new THREE.MeshStandardMaterial({ color: 0x8fc4f5, roughness: 0.2 }));
-    this.foes = this.instances('enemies', marble, new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
+    this.troop = this.instances('troop', CAPACITY.troop, marble, new THREE.MeshStandardMaterial({ color: 0x8fc4f5, roughness: 0.2 }));
+    this.foes = this.instances('enemies', CAPACITY.enemies, marble, new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
   }
 
-  private instances(name: string, geometry: THREE.BufferGeometry, material: THREE.Material): THREE.InstancedMesh {
-    const mesh = new THREE.InstancedMesh(geometry, material, CAPACITY);
+  private instances(name: string, capacity: number, geometry: THREE.BufferGeometry, material: THREE.Material): THREE.InstancedMesh {
+    const mesh = new THREE.InstancedMesh(geometry, material, capacity);
     mesh.count = 0;
     mesh.frustumCulled = false; // its bounds come from the first instances, the fog hides the rest
     mesh.name = name;
@@ -322,14 +337,16 @@ export class OpenWorldView {
   /** Lays marbles on the cells, each on its ground, in an instanced mesh. */
   private place(mesh: THREE.InstancedMesh, cells: readonly Axial[]): void {
     const dummy = new THREE.Object3D();
-    cells.forEach(([q, r], i) => {
+    const drawn = Math.min(cells.length, mesh.instanceMatrix.count); // past the capacity, the rest are not drawn
+    for (let i = 0; i < drawn; i++) {
+      const [q, r] = cells[i]!;
       const tile = this.world.tile(q, r)!;
       const p = axialTo3D(q, r);
       dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height) + MARBLE, p.z);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-    });
-    mesh.count = cells.length;
+    }
+    mesh.count = drawn;
     mesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -346,11 +363,14 @@ export class OpenWorldView {
   private build(cx: number, cy: number, reach: number): void {
     const counts = Object.fromEntries([...GROUNDS, ...PROP_NAMES].map((k) => [k, 0])) as Record<Ground | Prop, number>;
     const dummy = new THREE.Object3D();
-    const put = (mesh: THREE.InstancedMesh, key: Ground | Prop, x: number, y: number, z: number, scaleY: number): void => {
+    // Writes an instance of `key` into `mesh`, unless the mesh is full: it returns whether it was written.
+    const put = (mesh: THREE.InstancedMesh, key: Ground | Prop, x: number, y: number, z: number, scaleY: number): boolean => {
+      if (counts[key] >= mesh.instanceMatrix.count) return false;
       dummy.position.set(x, y, z);
       dummy.scale.set(1, scaleY, 1);
       dummy.updateMatrix();
       mesh.setMatrixAt(counts[key]++, dummy.matrix);
+      return true;
     };
     for (let ky = cy - reach; ky <= cy + reach; ky++) {
       for (let kx = cx - reach; kx <= cx + reach; kx++) {
@@ -360,11 +380,10 @@ export class OpenWorldView {
           const p = axialTo3D(q, r);
           const ground = GROUND[tile.terrain];
           const top = topOf(ground, tile.height);
-          if (ground === 'water') {
-            this.grounds.water.setColorAt(counts.water, waterColor(this.world, q, r));
+          if (put(this.grounds[ground], ground, p.x, top / 2, p.z, top) && ground === 'water') {
+            this.grounds.water.setColorAt(counts.water - 1, waterColor(this.world, q, r));
             this.grounds.water.instanceColor!.needsUpdate = true;
           }
-          put(this.grounds[ground], ground, p.x, top / 2, p.z, top);
           this.stand(tile, q, r, p, top, put);
         });
       }
@@ -372,7 +391,7 @@ export class OpenWorldView {
     const foes = [];
     for (let ky = cy - reach; ky <= cy + reach; ky++) for (let kx = cx - reach; kx <= cx + reach; kx++) foes.push(...this.world.enemies(kx, ky));
     this.place(this.foes, foes);
-    this.enemyCount = foes.length;
+    this.enemyCount = this.foes.count;
     for (const key of [...GROUNDS, ...PROP_NAMES]) {
       const mesh = key in this.grounds ? this.grounds[key as Ground] : this.props[key as Prop];
       mesh.count = counts[key];
@@ -387,7 +406,7 @@ export class OpenWorldView {
     r: number,
     p: { x: number; z: number },
     top: number,
-    put: (mesh: THREE.InstancedMesh, key: Prop, x: number, y: number, z: number, scaleY: number) => void,
+    put: (mesh: THREE.InstancedMesh, key: Prop, x: number, y: number, z: number, scaleY: number) => boolean,
   ): void {
     const v = variety(q, r);
     if (tile.terrain === 'peak') put(this.props.mountain, 'mountain', p.x, top + (1.2 + v * 0.8) / 2, p.z, 1.2 + v * 0.8);

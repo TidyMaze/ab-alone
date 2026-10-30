@@ -48,12 +48,13 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const ground = counts(view, 'terrain', GROUNDS);
     // Codes 0 to 7 repeat 32 times a chunk: water, sand, grass, rock, peak, boulder, tree and wall.
     expect(ground).toEqual({ water: cells / 8, sand: cells / 8, grass: (cells / 8) * 2, rock: (cells / 8) * 3, peak: cells / 8 });
+    // walls and caps are a sparse prop: a real world never fills their capacity, this one (one cell in eight) does
     expect(counts(view, 'prop', ['mountain', 'tree', 'boulder', 'wall', 'cap'])).toEqual({
       mountain: cells / 8,
       tree: cells / 8,
       boulder: cells / 8,
-      wall: cells / 8,
-      cap: cells / 8,
+      wall: Math.min(cells / 8, CAPACITY.wall),
+      cap: Math.min(cells / 8, CAPACITY.cap),
     });
   });
 
