@@ -526,4 +526,34 @@ describe('the frame loop', () => {
     expect(game.draws()).toBe(3);
     expect(game.hook('__draws')).toBe(3);
   });
+
+  it('leaves a still board undrawn for a player, and draws again on an input, a camera move and a slide (#848)', async () => {
+    const game = await boot('?bot=off', { webdriver: false });
+    game.frame();
+    expect(game.draws()).toBe(1); // the first picture
+    game.frame();
+    game.frame();
+    expect(game.draws()).toBe(1); // nothing changed
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
+    game.frame();
+    game.frame();
+    expect(game.draws()).toBe(2);
+    canvas().dispatchEvent(new WheelEvent('wheel', { deltaY: -500, cancelable: true })); // a zoom, on the canvas only
+    game.frame();
+    game.frame();
+    expect(game.draws()).toBe(3);
+    playOne(game); // by the page hooks: no input event, the move alone asks for the draws
+    game.frame();
+    game.frame();
+    expect(data().sliding).toBe('1');
+    expect(game.draws()).toBe(5); // each frame of the slide
+    game.frame(SLIDE_MS); // its last frame
+    expect(data().sliding).toBeUndefined();
+    expect(game.draws()).toBe(6);
+    game.frame(); // what waited for the slide
+    const settled = game.draws();
+    game.frame();
+    game.frame();
+    expect(game.draws()).toBe(settled); // still again
+  });
 });
