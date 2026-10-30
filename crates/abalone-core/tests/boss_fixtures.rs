@@ -34,6 +34,11 @@ fn the_echo_win_replays() {
 }
 
 #[test]
+fn the_swarm_win_replays() {
+    assert_win("swarm");
+}
+
+#[test]
 fn the_hull_win_replays() {
     assert_win("hull");
 }

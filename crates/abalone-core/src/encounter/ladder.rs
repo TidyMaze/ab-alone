@@ -638,13 +638,13 @@ mod tests {
             ids,
             [
                 "echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer", "dual",
-                "railyard", "stalker"
+                "railyard", "stalker", "swarm"
             ]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
         assert_eq!(
             budgets,
-            [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000]
+            [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000, 1500]
         );
     }
 
@@ -793,6 +793,27 @@ mod tests {
         enc.play(&reply).unwrap();
         let read = search_hooked(enc.game(), 200, DEFAULT_WEIGHTS, &|_| true, &dual_step);
         assert_eq!(player_move(&a, 0, 9, 0, 200), read.map(|r| r.mv));
+    }
+
+    #[test]
+    fn the_swarm_answers_through_its_own_move_and_the_player_reads_the_waves() {
+        let mut a = Arena::new(LadderBoss::Swarm, 3);
+        let mut swarm = Swarm::start(3);
+        assert_eq!(a.game().board(), swarm.game().board());
+        let read = swarm.player_search(200, &|_| true).map(|r| r.mv);
+        assert_eq!(player_move(&a, 0, 9, 0, 200), read);
+        let mv = read.unwrap();
+        a.play(&mv).unwrap();
+        swarm.play(&mv).unwrap();
+        assert_eq!(a.boss_move(), swarm.boss_move());
+        assert_eq!((a.phase(), a.result()), (0, None));
+        let (record, moves) = play_attempt_moves(LadderBoss::Swarm, 1, 1, 30, 300);
+        assert!(record.plies <= 60, "30 turns at most");
+        let end = match record.result {
+            AttemptResult::Won => PveResult::Won,
+            AttemptResult::Lost => PveResult::Lost,
+        };
+        assert_eq!(replay(LadderBoss::Swarm, 1, &moves), Ok(Some(end)));
     }
 
     #[test]
