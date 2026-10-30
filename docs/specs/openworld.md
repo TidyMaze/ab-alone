@@ -38,8 +38,8 @@ A-light Explore (#720 to #725), which it does not touch.
   packed with meshopt); the ground is one instanced hex prism per terrain.
 - **Spawn**: a clearing of radius 3 around the start cell has no obstacle and no enemy, and every
   cell of the clearing reaches the clearing's edge, so the hero is never boxed in. The clearing is
-  grass at height 3, and within 8 cells of the start the elevation is pulled to the grass band, fading
-  to the world's own by 64 cells, so the start is on land and not walled in by sea or peaks.
+  grass at height 3, and the world's macro level is offset per seed so that the start and the cells around it
+  are land, not sea nor peaks (see [openworld-terrain.md](openworld-terrain.md) section 2).
 
 The levels of noise, the biomes, the relief and the obstacle density are specified in
 [openworld-terrain.md](openworld-terrain.md).

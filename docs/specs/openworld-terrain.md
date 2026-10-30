@@ -26,14 +26,20 @@ so any order of visit gives the same world:
 
 | Level | Scale (cells) | Gives |
 |---|---|---|
-| macro | 256 | continents and seas, climate regions |
-| meso | 48 | ranges, big lakes, plateaus, forest patches |
+| macro | 128 | continents and seas, climate regions |
+| meso | 40 | ranges, big lakes, plateaus, forest patches |
 | micro | 8 | local bumps, ragged borders |
 
-- `field(seed, salt, q, r, weights)` replaces the one-off `noise` calls: `w_macro * noise(.., 256) +
-  w_meso * noise(.., 48) + w_micro * noise(.., 8)`, weights summing to 1. First values: height 0.50, 0.35,
-  0.15; moisture 0.45, 0.35, 0.20; temperature 0.55, 0.30, 0.15 (section 4). New salts start at 20; the
-  existing ones keep their meaning until their code is replaced.
+- `field(seed, salt, q, r, weights)` replaces the one-off `noise` calls: `w_macro * noise(.., 128) +
+  w_meso * noise(.., 40) + w_micro * noise(.., 8)`, weights summing to 1. First values: height 0.50, 0.35,
+  0.15; moisture 0.45, 0.35, 0.20; temperature 0.55, 0.30, 0.15 (section 4). The salts are 30 and up (the
+  enemy draws use 12 to 21); the existing ones keep their meaning until their code is replaced.
+- **Scale**: the widest zoom sees about 21 chunks (about 340 cells) across, so the macro level must repeat well
+  inside that: at 256 cells one feature filled the view and the far view read as a plain (measured in #983).
+- **Spawn land**: the macro level of the elevation is offset per seed by one of 16 offsets (up to 4096 cells,
+  searched once per seed): the first whose cells (the spawn, the corners of the ring of radius 4, twelve cells on
+  radius 8 and twelve on radius 32) are all land, heights 2 to 6, else the one with fewest that are not. No
+  fade near the spawn: a fade widens the flat area the far view shows.
 - Value noise of several levels bunches around 0.5, so **thresholds are measured, not guessed**: a test
   computes the histogram of a field over a window of chunks and the constants are the quantiles that give the
   target shares below. The constants carry a comment saying so.
