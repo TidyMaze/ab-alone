@@ -3,6 +3,7 @@
 
 import { cellIndex, DIRECTIONS, isMarble, MOVE_STRIDE, RADIUS, type Axial, type Move } from './board';
 import { SEAT_GLYPHS } from './marbles';
+import { read, write, type Store } from './quality';
 import { replay, type KeyStore, type ReplayEngine } from './savegame';
 
 /** Marbles of the army at the start of a run: the standard layout. */
@@ -31,7 +32,8 @@ export interface MapNode {
 /** A run: its seed, its army, the nodes picked (indices in the map), the fight of the last one while it is on and its
  * moves, and how it ended. `specials` counts the army's Heavy, Anchor and Spark marbles (#961), `placed` the ones on
  * the fight's board `[q, r, kind]`, `reward` is on while the reward of a won fight waits to be picked, and `event` while
- * the choice of an event node waits (#800). */
+ * the choice of an event node waits (#800). `best` is the most acts won in one run before this one, which unlocks its
+ * special marble types and starting armies (#801). */
 export interface Run {
   seed: number;
   army: number;
@@ -43,6 +45,7 @@ export interface Run {
   placed: number[][];
   reward: boolean;
   event: boolean;
+  best: number;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -78,7 +81,22 @@ export function parseMap(flat: ArrayLike<number>): MapNode[] {
   return nodes;
 }
 
-export const newRun = (seed: number): Run => ({
+/** The starting armies (#801): 14 marbles each, some of them special, never more; `acts` is the most acts won in one
+ * run that unlocks it. */
+export const ARMIES: readonly { name: string; specials: number[]; acts: number }[] = [
+  { name: 'Standard', specials: [0, 0, 0], acts: 0 },
+  { name: 'Bulwark', specials: [0, 2, 0], acts: 1 },
+  { name: 'Volatile', specials: [0, 0, 2], acts: 2 },
+  { name: 'Ironclad', specials: [2, 0, 0], acts: 3 },
+];
+/** The most acts won in one run that brings each special marble type into the rewards and events: Heavy, Anchor, Spark. */
+export const KIND_ACTS = [0, 1, 2];
+/** The most acts won in a run. */
+const ALL_ACTS = 3;
+const kindOn = (run: Run, kind: number): boolean => KIND_ACTS[kind - 1]! <= run.best;
+
+/** A new run of `seed`, with what `best` acts won in one run unlocked, the standard army. */
+export const newRun = (seed: number, best: number): Run => ({
   seed,
   army: START_ARMY,
   path: [],
@@ -89,7 +107,14 @@ export const newRun = (seed: number): Run => ({
   placed: [],
   reward: false,
   event: false,
+  best,
 });
+
+/** The run with the starting army `army` (an index of ARMIES), before its first pick and only once unlocked. */
+export function chooseArmy(run: Run, army: number): Run {
+  const a = ARMIES[army];
+  return a && a.acts <= run.best && !run.path.length && !run.end ? { ...run, specials: [...a.specials] } : run;
+}
 
 const sum = (counts: number[]): number => counts.reduce((a, b) => a + b, 0);
 /** The special marbles of each type in `placed`. */
@@ -173,8 +198,10 @@ export const EVENTS: readonly RunEvent[] = [
 ];
 
 /** The event of the run's last node while its choice waits, seeded by the run seed and the node, else null. */
-export const eventOf = (run: Run): RunEvent | null =>
-  run.event ? EVENTS[hash(run.seed, run.path[run.path.length - 1]! * 8 + 4) % EVENTS.length]! : null;
+export function eventOf(run: Run): RunEvent | null {
+  const pool = EVENTS.filter((e) => e.gain.every((g, k) => !g || kindOn(run, k + 1))); // the unlocked types only (#801)
+  return run.event ? pool[hash(run.seed, run.path[run.path.length - 1]! * 8 + 4) % pool.length]! : null;
+}
 
 /** The run once the trade of `e` is taken, or null when the army cannot pay it (below MIN_ARMY, no special marble to
  * lose, more special marbles than marbles) or would gain nothing. */
@@ -225,10 +252,11 @@ function hash(a: number, b: number): number {
 }
 
 /** The reward offers after a won fight, seeded by the run seed and the node: 3 of a marble (`0`, only below
- * START_ARMY) and the three special marbles (their kind, only while the army has plain marbles to make special). */
+ * START_ARMY) and the three special marbles (their kind, only while the army has plain marbles to make special, and once
+ * unlocked). */
 export function offers(run: Run): number[] {
   if (!run.reward) return [];
-  const pool = [...(run.army < START_ARMY ? [0] : []), ...(sum(run.specials) < run.army ? [1, 2, 3] : [])];
+  const pool = [...(run.army < START_ARMY ? [0] : []), ...(sum(run.specials) < run.army ? [1, 2, 3].filter((k) => kindOn(run, k)) : [])];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = hash(run.seed, run.path[run.path.length - 1]! * 8 + i) % (i + 1); // the node won, an index of the map
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
@@ -274,14 +302,83 @@ export function sparkBurst(before: ArrayLike<number>, specials: Special[], move:
   return specials.some((s) => s.kind === 3 && s.cell[0] === lq && s.cell[1] === lr) ? last : null;
 }
 
+/** An army of `army` marbles, `specials` of them special. */
+const owned = (army: number, specials: number[]): string =>
+  `${army} marbles${SPECIAL_LOOKS.flatMap((l, k) => (specials[k] ? [`, ${specials[k]} ${l.name}`] : [])).join('')}`;
+
+/** The acts a run won so far: its bosses beaten, not the one it fights or lost to (#801). */
+export function actsWon(map: MapNode[], run: Run): number {
+  const bosses = run.path.filter((n) => map[n]!.kind === 'boss').length;
+  return bosses - Number((run.fighting || run.end === 'lost') && lastNode(map, run)?.kind === 'boss');
+}
+
+/** The unlocks of a run over: the special marble types and starting armies of the acts it won past its `best`. */
+export function earned(map: MapNode[], run: Run): string[] {
+  const won = actsWon(map, run);
+  const fresh = (acts: number): boolean => acts > run.best && acts <= won;
+  return [
+    ...SPECIAL_LOOKS.flatMap((l, k) => (fresh(KIND_ACTS[k]!) ? [`${l.name} marbles`] : [])),
+    ...ARMIES.flatMap((a) => (fresh(a.acts) ? [`${a.name} army`] : [])),
+  ];
+}
+
+/** Where the most acts won in one run is kept, next to the other progress (medals.ts). */
+const BEST_KEY = 'ab-alone.roguelite';
+
+/** The most acts won in one run, 0 when none is saved or the storage is blocked. */
+export function readBest(store: Store): number {
+  const best = Number(read(store, BEST_KEY));
+  return isInt(best, ALL_ACTS) ? best : 0;
+}
+
+/** Keeps `acts` won in a run when it is the most yet. */
+export function recordBest(store: Store, acts: number): void {
+  if (acts > readBest(store)) write(store, BEST_KEY, String(acts));
+}
+
+/** What the start of a run unlocked shows: the special marble types in its rewards, the locked ones with what unlocks
+ * them, and a button per starting army, the one picked pressed. */
+function startHtml(run: Run): string {
+  const after = (acts: number): string => (acts === ALL_ACTS ? 'after a run won' : `after ${acts} act${acts === 1 ? '' : 's'} won in a run`);
+  const on = SPECIAL_LOOKS.filter((_, k) => kindOn(run, k + 1)).map((l) => l.name);
+  const off = SPECIAL_LOOKS.flatMap((l, k) => (kindOn(run, k + 1) ? [] : [` · ${l.name} ${after(KIND_ACTS[k]!)}`]));
+  const armies = ARMIES.map((a, i) => {
+    const locked = a.acts > run.best;
+    const pressed = a.specials.every((n, k) => n === run.specials[k]);
+    return (
+      `<button type="button" data-army="${i}" aria-pressed="${pressed}"${locked ? ' disabled' : ''}>` +
+      `${a.name} · ${locked ? after(a.acts) : owned(START_ARMY, a.specials)}</button>`
+    );
+  });
+  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-armies">${armies.join('')}</div>`;
+}
+
+/** The summary of a run over (#801): the path act by act, the fights won and lost, the army at the end, the unlocks. */
+function summaryHtml(map: MapNode[], run: Run): string {
+  const label = (n: MapNode): string => n.kind[0]!.toUpperCase() + n.kind.slice(1);
+  const acts = [...new Set(run.path.map((n) => map[n]!.act))].map(
+    (act) => `act ${act + 1} ${run.path.flatMap((n) => (map[n]!.act === act ? [label(map[n]!)] : [])).join(', ')}`,
+  );
+  const fights = run.path.filter((n) => ['fight', 'elite', 'boss'].includes(map[n]!.kind)).length;
+  const lost = Number(run.end === 'lost');
+  const unlocks = earned(map, run);
+  return [
+    `Path: ${acts.join(' · ')}`,
+    `Fights: ${fights - lost} won, ${lost} lost`,
+    `Army at the end: ${owned(run.army, run.specials)}`,
+    unlocks.length ? `Unlocked: ${unlocks.join(', ')}` : 'No new unlock',
+  ]
+    .map((line) => `<p class="run-help">${line}</p>`)
+    .join('');
+}
+
 /** The line that says where the run stands, on the map and in the HUD of its fights. */
 export function runLine(map: MapNode[], run: Run): string {
   if (run.end === 'won') return `Run won with ${run.army} marbles`;
   if (run.end === 'lost') return `Run lost · ${run.army} marbles left`;
   const node = run.fighting ? lastNode(map, run)! : null;
   const where = node ? `act ${node.act + 1} ${node.kind}` : '';
-  const owned = SPECIAL_LOOKS.flatMap((l, k) => (run.specials[k] ? [`, ${run.specials[k]} ${l.name}`] : [])).join('');
-  const army = `army ${run.army} marbles${owned}`;
+  const army = `army ${owned(run.army, run.specials)}`;
   const rested = lastNode(map, run)?.kind === 'rest' ? 'rested · ' : '';
   return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${army} · pick a fight`;
 }
@@ -327,9 +424,12 @@ export function eventHtml(run: Run): string {
   );
 }
 
-/** The map screen: the run line, the nodes act by act from the top, each placed on its row, the links between them
- * (the path taken marked), the nodes to pick enabled, and New run once the run is over. */
+/** The map screen: the run line, the unlocks and starting armies before the first pick, the nodes act by act from the
+ * top, each placed on its row, the links between them (the path taken marked), the nodes to pick enabled; once the run
+ * is over, its summary and New run. */
 export function mapHtml(map: MapNode[], run: Run): string {
+  const head = `<p class="run-line">${runLine(map, run)}</p>`;
+  if (run.end) return `${head}${summaryHtml(map, run)}<button type="button" id="run-new">New run</button>`;
   const open = choices(map, run);
   const rows = Math.max(...map.map((n) => n.row)) + 1;
   const total = (lastAct(map) + 1) * rows;
@@ -355,8 +455,7 @@ export function mapHtml(map: MapNode[], run: Run): string {
     );
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
-  const again = run.end ? '<button type="button" id="run-new">New run</button>' : '';
-  return `<p class="run-line">${runLine(map, run)}</p><div class="run-graph">${svg}${nodes.join('')}</div>${again}`;
+  return `${head}${run.path.length ? '' : startHtml(run)}<div class="run-graph">${svg}${nodes.join('')}</div>`;
 }
 
 const isInt = (v: unknown, max: number): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= max;
@@ -364,10 +463,11 @@ const isRecord = (mv: unknown): boolean => Array.isArray(mv) && mv.length === MO
 
 const isInts = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.length === n && v.every((x) => isInt(x, START_ARMY));
 
-/** The run in `raw`, or null when it is not a saved run. A run saved before the special marbles (#961) has none. */
+/** The run in `raw`, or null when it is not a saved run. A run saved before the special marbles (#961) has none, one
+ * saved before the unlocks (#801) everything unlocked. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false } = raw as Record<keyof Run, unknown>;
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false, best = ALL_ACTS } = raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
     isInt(army, START_ARMY) &&
@@ -380,9 +480,10 @@ function decodeRun(raw: unknown): Run | null {
     Array.isArray(placed) &&
     placed.every((p) => Array.isArray(p) && p.length === 3 && p.every((v) => Number.isInteger(v))) &&
     typeof reward === 'boolean' &&
-    typeof event === 'boolean';
+    typeof event === 'boolean' &&
+    isInt(best, ALL_ACTS);
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials, placed: placed as number[][], reward, event }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials, placed: placed as number[][], reward, event, best }
     : null;
 }
 
