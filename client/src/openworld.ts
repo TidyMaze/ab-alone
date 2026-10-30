@@ -30,8 +30,9 @@ export function parseChunk(bytes: Uint8Array): Tile[] {
   return tiles;
 }
 
-/** Chunks and enemy lists kept at once: the view's 5 x 5 chunks and a margin. The least recently used go first. */
-export const CACHE_LIMIT = 64;
+/** Chunks and enemy lists kept at once: the square of 17 x 17 chunks a view of radius 8 draws (289), and a margin. The
+ * least recently used go first; a view with a larger radius raises `World.limit`. */
+export const CACHE_LIMIT = 320;
 
 /** The value of a key, kept the most recently used; `undefined` when absent. */
 function touch<T>(cache: Map<string, T>, key: string): T | undefined {
@@ -43,16 +44,18 @@ function touch<T>(cache: Map<string, T>, key: string): T | undefined {
   return value;
 }
 
-/** Stores a value as the most recently used, dropping the least recently used beyond `CACHE_LIMIT`. */
-function remember<T>(cache: Map<string, T>, key: string, value: T): void {
+/** Stores a value as the most recently used, dropping the least recently used beyond `limit`. */
+function remember<T>(cache: Map<string, T>, key: string, value: T, limit: number): void {
   cache.set(key, value);
-  if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string);
+  if (cache.size > limit) cache.delete(cache.keys().next().value as string);
 }
 
 /** The world of a seed: chunks come from `load(cx, cy)` the first time a cell of them is asked for. */
 export class World {
   private readonly chunks = new Map<string, Tile[]>();
   private readonly groups = new Map<string, Axial[]>();
+  /** How many chunks, and how many enemy lists, are kept at once. */
+  limit = CACHE_LIMIT;
   /** How many chunks and enemy lists are cached now. */
   get cached(): { chunks: number; enemies: number } {
     return { chunks: this.chunks.size, enemies: this.groups.size };
@@ -69,7 +72,7 @@ export class World {
     let tiles = touch(this.chunks, key);
     if (!tiles) {
       tiles = parseChunk(this.load(cx, cy));
-      remember(this.chunks, key, tiles);
+      remember(this.chunks, key, tiles, this.limit);
     }
     return tiles;
   }
@@ -81,7 +84,7 @@ export class World {
     if (!cells) {
       const flat = this.loadEnemies(cx, cy);
       cells = Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
-      remember(this.groups, key, cells);
+      remember(this.groups, key, cells, this.limit);
     }
     return cells;
   }

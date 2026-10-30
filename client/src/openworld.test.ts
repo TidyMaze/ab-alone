@@ -191,8 +191,8 @@ describe('the Open world cache is bounded (#981)', () => {
     world.chunk(0, 0);
     for (let cx = 2; cx < 2 + CACHE_LIMIT - 2; cx++) world.chunk(cx, 0);
     world.chunk(0, 0); // read again: now the most recently used
-    world.chunk(100, 0); // full: 64 chunks
-    world.chunk(101, 0); // evicts the oldest, (2, 0)
+    world.chunk(1000, 0); // full
+    world.chunk(1001, 0); // evicts the oldest, (2, 0)
     const loads = (cx: number, cy: number) => load.mock.calls.filter(([x, y]) => x === cx && y === cy).length;
     expect(loads(0, 0)).toBe(1);
     expect(loads(2, 0)).toBe(1);
