@@ -83,6 +83,20 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     expect(mesh(view, 'prop-mountain').geometry).toBe(mountain);
     expect(mesh(view, 'prop-tree').geometry).toBe(tree);
   });
+
+  it('draws a model that paints its own colours with them, untinted, and keeps the tint of the others', () => {
+    const view = new OpenWorldView(new World(bytes));
+    const painted = new THREE.BoxGeometry();
+    painted.setAttribute('color', new THREE.BufferAttribute(new Float32Array(painted.attributes.position.count * 3), 3));
+    view.useModels({ mountain: painted, tree: new THREE.BoxGeometry() });
+    const paintedMaterial = mesh(view, 'prop-mountain').material as THREE.MeshStandardMaterial;
+    expect(paintedMaterial.vertexColors).toBe(true);
+    expect(paintedMaterial.color.getHex()).toBe(0xffffff);
+    expect(paintedMaterial.emissive.getHex()).toBe(0x000000);
+    const plainMaterial = mesh(view, 'prop-tree').material as THREE.MeshStandardMaterial;
+    expect(plainMaterial.vertexColors).toBe(false);
+    expect(plainMaterial.color.getHex()).toBe(0x2fb5a0);
+  });
 });
 
 describe('loading the Blender models (client/models/openworld.glb)', () => {
