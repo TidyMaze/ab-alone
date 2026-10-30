@@ -391,17 +391,10 @@ mod tests {
             assert_eq!(plies(&e), vec![played.clone(), mirror_move(&played)]);
             let mirrored = mirror_move(&played).cells[0];
             let target = (mirrored.0, mirrored.1 + if swap { 1 } else { -1 });
-            assert_eq!(e.game().board().get(target.0, target.1), Some(cell(second)));
+            assert_eq!(e.game().board().get(target.0, target.1), Some(Cell::White));
             assert_eq!(e.game().to_move(), second, "then it plays its own move");
             assert!(e.game().board().echoes().is_empty());
             assert_ne!(first, second);
-        }
-    }
-
-    fn cell(side: Player) -> Cell {
-        match side {
-            Player::Black => Cell::Black,
-            Player::White => Cell::White,
         }
     }
 
