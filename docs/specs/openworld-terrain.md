@@ -101,9 +101,41 @@ A biome is a region with its own ground, trees and boulders. Two slow fields and
 - **Chunk bytes**: 3 per cell, `height, terrain, biome` (the biome code is the table's order, `u8`).
   `world_chunk` returns `3 * 256` bytes, `parseChunk` reads a `biome` into `Tile`. Enemies are untouched.
 - **Spawn**: the clearing is Meadow.
-- **Tests**: every biome appears in a 16 x 16 chunk window of several seeds; the shares are within 5 points
-  of the table; two cells of the same biome and the same height have the same terrain unless an obstacle
-  stands on one; the spawn clearing is Meadow and open; the order of visit does not matter.
+- **Tests**: every biome appears in a 16 x 16 chunk window of several seeds; the land shares are within 5 points
+  of the table; the obstacle densities of each biome hold on the low ground (trees within a fifth, boulders within a
+  third); water, shore, uplands and peaks keep their terrains; the spawn clearing is Meadow and open; the order of
+  visit does not matter. The eight-height shares and the flood fill of #987 still hold.
+
+**Measured (#984, shipped).** "Land" is every cell above the water (heights 2 to 7) of the 16 x 16 chunks around the
+spawn, seeds 1 to 4. The thresholds are quantiles of the raw temperature (with the lapse) and moisture over that land,
+then checked against the real shares (the jitter moves a border by at most 0.04, so the shares land within 1 point):
+
+| Constant | Value | Quantile |
+|---|---|---|
+| `T_COLD` | 0.2896 | 15 % of the land is colder |
+| `T_HOT` | 0.5010 | 25 % of the land is hotter |
+| `M_HOT` | 0.4943 | 60 % of the hot land is drier (desert, the rest badlands) |
+| `M_WET` | 0.4632 | 42 % of the temperate land is wetter (forest, the rest meadow) |
+| `JITTER` | 0.08 | `(micro - 0.5) * 0.08` on every threshold, one micro sample of the temperature |
+
+Shares of the land per biome: meadow 35.9 %, forest 25.3 %, tundra 14.3 %, desert 15.0 %, badlands 9.6 %.
+Obstacles of the low ground, measured: meadow trees 2.0 % and 14.4 boulders per mille, forest 24.8 % and 11.6, tundra
+4.0 % and 29.9 (against 24 expected), desert 0 % and 30.1, badlands 0 % and 43.1.
+
+Terrain shares of the same window, before (#983) and after: grass 38.05 to 38.87 %, trees 3.39 to 2.45 %, boulders 1.43
+to 1.55 %, water 18.03 % and peaks 8.04 % unchanged, rock 19.23 %, sand 11.60 % unchanged, walls 0.23 % unchanged.
+Blocked share 31.1 to 30.3 % (the test bound 26 to 37 holds), and the 32-seed flood fill of #987 holds at 90 %.
+
+**Digest**: the world digest now hashes the biome, so its literal moves (4602184324818820941, was 4776182566584578878).
+No other digest value of the engine changed on purpose.
+
+**Cost** (`world_timing`, the machine is shared, so the minimum of the runs): one chunk 5.7 us before and 7.5 us after
+(budget 30 us); the 4096 chunks 23.7 ms before and 32.2 ms after (budget 117 ms). The biome costs one `temperature`
+lattice and a micro sample per cell, each lattice hashed once per chunk.
+
+**Memory** (client, `OpenWorldView` at rest, 234,674 instances): the matrices are 64 bytes an instance, 15.02 MB before;
+every ground, prop and detailed prop now also carries an instance colour (12 bytes an instance), so 2.82 MB more, 17.84 MB
+after (the troop and the enemies carry one too, 8 KB). A mesh that grows keeps the same ratio.
 
 ## 5. Relief (#988)
 

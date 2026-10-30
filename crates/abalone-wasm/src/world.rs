@@ -4,8 +4,8 @@
 use abalone_core::world::{self, Terrain};
 use wasm_bindgen::prelude::*;
 
-/// Bytes per cell: `[height, terrain]`.
-pub const CELL_STRIDE: usize = 2;
+/// Bytes per cell: `[height, terrain, biome]`.
+pub const CELL_STRIDE: usize = 3;
 
 /// The code of a terrain on the bridge: `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall.
 fn terrain_code(terrain: Terrain) -> u8 {
@@ -28,7 +28,7 @@ pub fn world_chunk(seed: u32, cx: i32, cy: i32) -> Vec<u8> {
     world::chunk(u64::from(seed), cx, cy)
         .unwrap_or_default()
         .iter()
-        .flat_map(|cell| [cell.height, terrain_code(cell.terrain)])
+        .flat_map(|cell| [cell.height, terrain_code(cell.terrain), cell.biome as u8])
         .collect()
 }
 
@@ -48,13 +48,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_chunk_is_two_bytes_a_cell_and_matches_the_engine() {
+    fn a_chunk_is_three_bytes_a_cell_and_matches_the_engine() {
         let bytes = world_chunk(9, 1, -1);
         assert_eq!(bytes.len(), 16 * 16 * CELL_STRIDE);
         let cell = world::cell(9, 16 + 3, -16 + 2).unwrap();
         let at = (2 * 16 + 3) * CELL_STRIDE;
         assert_eq!(bytes[at], cell.height);
         assert_eq!(bytes[at + 1], terrain_code(cell.terrain));
+        assert_eq!(bytes[at + 2], cell.biome as u8);
+    }
+
+    #[test]
+    fn the_biome_codes_are_the_five_biomes_of_the_table() {
+        let biomes: std::collections::HashSet<u8> = (1..=4)
+            .flat_map(|seed| {
+                (-8..8).flat_map(move |cx| (-8..8).map(move |cy| world_chunk(seed, cx, cy)))
+            })
+            .flat_map(|bytes| bytes.into_iter().skip(2).step_by(CELL_STRIDE))
+            .collect();
+        assert_eq!(biomes, std::collections::HashSet::from([0, 1, 2, 3, 4]));
     }
 
     #[test]

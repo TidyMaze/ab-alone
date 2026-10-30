@@ -28,8 +28,10 @@ A-light Explore (#720 to #725), which it does not touch.
   move or a push: it only picks the terrain, and a terrain that blocks is an obstacle.
 - **Terrain**: from height and a second noise (moisture), one look per cell: **lakes** (water,
   heights 0 and 1), sand (the shore, height 2), grass, rock, **mountains** (peaks, height 7). Forests
-  (**trees**, one time in four of the grass cells of a forest zone) and ruined **walls** (segments of 3 to 6 cells along one of
+  (**trees**) and ruined **walls** (segments of 3 to 6 cells along one of
   three axes, one per 24-cell square at most, laid on land) come on top.
+- **Biomes** (#984): meadow, forest, tundra (snow), desert and badlands, from a temperature and the moisture; each sets the
+  colour of the low ground and the density of its trees and boulders (see [openworld-terrain.md](openworld-terrain.md) section 4).
 - **Obstacles**: blocked cells the hero, the troop and the enemies cannot enter: water, mountains,
   trees, walls, and scattered boulders (about 2 % of the open cells). A push into an obstacle is
   refused, as a push into a friendly marble is in `rules.md`.

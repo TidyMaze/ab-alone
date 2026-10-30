@@ -4,7 +4,7 @@
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { CHUNK, cellAtPoint, chunkOf, neighbours, TROOP, type Terrain, type Tile, type World } from './openworld';
+import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, TROOP, type Terrain, type Tile, type World } from './openworld';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
@@ -140,6 +140,20 @@ export const LOOK: Record<Ground, { color: number; emissive: number }> = {
 };
 /** The lake colours: the shore, lighter and greener, and the deep middle of a lake. */
 export const WATER = { shore: 0x3fd0b4, deep: 0x0a4a7a };
+/** The looks of the biomes (openworld-terrain.md section 4): the ground of the low grass (heights 3 and 4), and the tint of the
+ * trees and the boulders, multiplied into their colour per instance. The meadow keeps the grass of `LOOK`; the rest is neutral
+ * white. Shore, uplands, peaks and water keep their colours in every biome. */
+export const BIOME_LOOK: Record<Biome, { ground: number; prop: number }> = {
+  meadow: { ground: 0x3f7d5f, prop: 0xffffff },
+  forest: { ground: 0x2b6a48, prop: 0xffffff },
+  tundra: { ground: 0xe6eef2, prop: 0xe4f0f8 },
+  desert: { ground: 0xc9a062, prop: 0xffd39a },
+  badlands: { ground: 0x7a3a2c, prop: 0xff9f7a },
+};
+/** The colour of a cell's ground, per instance: the low grass by its biome, every other ground by `LOOK` (the water's colour
+ * comes from `waterColor`). */
+export const groundColour = (tile: Tile, ground: Ground): number =>
+  ground === 'grass' && (tile.height === 3 || tile.height === 4) ? BIOME_LOOK[tile.biome].ground : LOOK[ground].color;
 /** The colour of a water cell: the share of its six neighbours that are water sets how far it lies from the shore. */
 export function waterColor(world: World, q: number, r: number): THREE.Color {
   const wet = neighbours([q, r]).filter(([nq, nr]) => world.tile(nq, nr)?.terrain === 'water').length / 6;
@@ -211,8 +225,12 @@ const propMaterial = (prop: Prop): THREE.MeshStandardMaterial => {
   const { color, emissive, flat } = PROPS[prop];
   return new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat });
 };
+/** The instance colours of a mesh of `capacity` instances, all white: the colour of an instance a build does not set. */
+const whiteColours = (capacity: number): THREE.InstancedBufferAttribute => new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3).fill(1), 3);
 /** The writer of a build's props: a prop of a cell (`near`: within `HI_RADIUS`). */
-type Lay = (prop: Prop, near: boolean, x: number, y: number, z: number, scaleY: number) => void;
+type Lay = (prop: Prop, near: boolean, x: number, y: number, z: number, scaleY: number, colour: number) => void;
+/** The colour that leaves an instance as its mesh's material has it (no tint). */
+const WHITE = 0xffffff;
 /** A cell with no height: the props of a count are laid at no place, so the position they are given is never read. */
 const NOWHERE = { x: 0, z: 0 };
 
@@ -245,6 +263,8 @@ export class OpenWorldView {
   private foes: THREE.InstancedMesh;
   /** Reused by every placement, so a draw allocates no matrix holder (#981). */
   private readonly dummy = new THREE.Object3D();
+  /** Reused by every instance colour written, so a build allocates none. */
+  private readonly colour = new THREE.Color();
   private readonly enemyCells: Axial[] = [];
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
@@ -263,8 +283,9 @@ export class OpenWorldView {
     this.scene.add(sun);
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
     for (const ground of GROUNDS) {
-      const { color, emissive } = LOOK[ground];
-      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.9 }));
+      const { emissive } = LOOK[ground];
+      // The colour comes per instance (groundColour), so the material is white: the water's way too.
+      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, new THREE.MeshStandardMaterial({ color: 0xffffff, emissive, roughness: 0.9 }));
       this.managed.push(this.grounds[ground]);
     }
     (this.grounds.water.material as THREE.MeshStandardMaterial).roughness = 0.2; // a glossy surface catches the sun
@@ -284,8 +305,10 @@ export class OpenWorldView {
     this.foes = this.instances('enemies', CAPACITY.enemies, marble, new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
   }
 
+  /** An instanced mesh of `capacity` instances, each with its own colour (3 floats, white until a build sets it, #984). */
   private instances(name: string, capacity: number, geometry: THREE.BufferGeometry, material: THREE.Material): THREE.InstancedMesh {
     const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+    mesh.instanceColor = whiteColours(capacity);
     mesh.count = 0;
     mesh.frustumCulled = false; // its bounds come from the first instances, the fog hides the rest
     mesh.name = name;
@@ -456,7 +479,7 @@ export class OpenWorldView {
     grown.name = mesh.name;
     grown.count = 0;
     grown.frustumCulled = false;
-    if (mesh.instanceColor) grown.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+    grown.instanceColor = whiteColours(capacity); // the build writes every colour it places (#984)
     this.scene.remove(mesh);
     this.scene.add(grown);
     mesh.dispose();
@@ -543,15 +566,16 @@ export class OpenWorldView {
     const counts = new Map<THREE.InstancedMesh, number>();
     const { dummy } = this;
     // Writes the next instance of `mesh` (it holds them all: `fit`).
-    const put = (mesh: THREE.InstancedMesh, x: number, y: number, z: number, scaleY: number) => {
+    const put = (mesh: THREE.InstancedMesh, x: number, y: number, z: number, scaleY: number, colour: number) => {
       const n = counts.get(mesh) ?? 0;
       dummy.position.set(x, y, z);
       dummy.scale.set(1, scaleY, 1);
       dummy.updateMatrix();
       mesh.setMatrixAt(n, dummy.matrix);
+      mesh.setColorAt(n, this.colour.set(colour));
       counts.set(mesh, n + 1);
     };
-    const lay: Lay = (prop, near, x, y, z, scaleY) => put(this.route(prop, near), x, y, z, scaleY);
+    const lay: Lay = (prop, near, x, y, z, scaleY, colour) => put(this.route(prop, near), x, y, z, scaleY, colour);
     for (let ky = cy - reach; ky <= cy + reach; ky++) {
       for (let kx = cx - reach; kx <= cx + reach; kx++) {
         this.world.chunk(kx, ky).forEach((tile, i) => {
@@ -560,11 +584,8 @@ export class OpenWorldView {
           const p = axialTo3D(q, r);
           const ground = GROUND[tile.terrain];
           const top = topOf(ground, tile.height);
-          put(this.grounds[ground], p.x, top / 2, p.z, top);
-          if (ground === 'water') {
-            this.grounds.water.setColorAt(counts.get(this.grounds.water)! - 1, waterColor(this.world, q, r));
-            this.grounds.water.instanceColor!.needsUpdate = true;
-          }
+          put(this.grounds[ground], p.x, top / 2, p.z, top, groundColour(tile, ground));
+          if (ground === 'water') this.grounds.water.setColorAt(counts.get(this.grounds.water)! - 1, waterColor(this.world, q, r));
           this.stand(tile, q, r, p, top, lay, hexDistance([q, r], hero) <= HI_RADIUS);
         });
       }
@@ -581,18 +602,20 @@ export class OpenWorldView {
     for (const mesh of this.managed) {
       mesh.count = counts.get(mesh) ?? 0;
       mesh.instanceMatrix.needsUpdate = true;
+      mesh.instanceColor!.needsUpdate = true;
     }
   }
 
-  /** The prop a tile carries on its ground, `top` high. */
+  /** The prop a tile carries on its ground, `top` high, tinted by its biome when it is a tree or a boulder. */
   private stand(tile: Tile, q: number, r: number, p: { x: number; z: number }, top: number, lay: Lay, near: boolean): void {
     const v = variety(q, r);
-    if (tile.terrain === 'peak') lay('mountain', near, p.x, top + (1.2 + v * 0.8) / 2, p.z, 1.2 + v * 0.8);
-    else if (tile.terrain === 'tree') lay('tree', near, p.x, top + (0.8 + v * 0.4) / 2, p.z, 0.8 + v * 0.4);
-    else if (tile.terrain === 'boulder') lay('boulder', near, p.x, top + 0.2, p.z, 0.8);
+    const tint = BIOME_LOOK[tile.biome].prop;
+    if (tile.terrain === 'peak') lay('mountain', near, p.x, top + (1.2 + v * 0.8) / 2, p.z, 1.2 + v * 0.8, WHITE);
+    else if (tile.terrain === 'tree') lay('tree', near, p.x, top + (0.8 + v * 0.4) / 2, p.z, 0.8 + v * 0.4, tint);
+    else if (tile.terrain === 'boulder') lay('boulder', near, p.x, top + 0.2, p.z, 0.8, tint);
     else if (tile.terrain === 'wall') {
-      lay('wall', near, p.x, top + WALL / 2, p.z, WALL);
-      lay('cap', false, p.x, top + WALL + CAP / 2, p.z, CAP);
+      lay('wall', near, p.x, top + WALL / 2, p.z, WALL, WHITE);
+      lay('cap', false, p.x, top + WALL + CAP / 2, p.z, CAP, WHITE);
     }
   }
 }
