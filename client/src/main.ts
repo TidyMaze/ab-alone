@@ -174,6 +174,7 @@ import { drawTerminal, pageAt, TERMINAL, terminalFonts, terminalPages, type Term
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import {
   drawDue,
+  drawWanted,
   fogSettings,
   hasParticles,
   readClearBoard,
@@ -290,6 +291,13 @@ let run: { map: MapNode[]; state: Run } | null = null;
 // Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
 let royaleNet: RoyaleNet<Royale> | null = null;
 let ticking = 0;
+// A player's page draws only when something asked for a frame (#848, quality.ts drawWanted): `dirty` counts the draws a
+// change of the picture still needs, two since the bloom blurs every second draw (scene.ts, #894). Any input may change
+// it (a hover, an orbit, a slider, a resize that clears the canvas).
+const CHANGE_DRAWS = 2;
+let dirty = CHANGE_DRAWS;
+for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'pointerleave', 'wheel', 'keydown', 'keyup', 'input', 'change', 'click', 'resize'])
+  addEventListener(type, () => (dirty = CHANGE_DRAWS), { capture: true, passive: true });
 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
@@ -468,11 +476,13 @@ let view = resetView();
 let reading: View | null = null;
 const consoleDef = spaceshipArchitecture(tier).find((p) => p.id === 'console-screen')!; // in every tier (room.ts)
 function updateFog(): void {
+  dirty = CHANGE_DRAWS;
   sceneRenderer.fogRadius = fogRadius;
   sceneRenderer.updateFog(tier, clear, view, fogRadius, deck);
 }
 
 function applyView(): void {
+  dirty = CHANGE_DRAWS;
   if (freeCam.active) {
     updateFreeCamCamera();
     return;
@@ -592,6 +602,7 @@ let lastFrame = performance.now();
 function setPixelRatio(ratio: number): void {
   pixelRatio = ratio;
   frameTimes = [];
+  dirty = CHANGE_DRAWS;
   renderer.setPixelRatio(ratio);
   document.body.dataset.ratio = String(ratio);
 }
@@ -921,6 +932,7 @@ function showConsole(page: number): void {
   const shown = consolePages[page]!;
   drawTerminal(consoleG, shown, uiScale);
   consoleTexture.needsUpdate = true;
+  dirty = CHANGE_DRAWS;
   document.body.dataset.console = `${consoleEntry} ${page + 1}/${consolePages.length}`; // read by the e2e tests
   const lines = [shown.title.join(' '), shown.body.join(' '), `Page ${page + 1} of ${shown.pages}`];
   reader.replaceChildren(...lines.map((text) => Object.assign(document.createElement('p'), { textContent: text })));
@@ -1057,6 +1069,7 @@ function applyDeck(next: Deck): void {
     if (deck !== next || !steel.map) return; // another deck started meanwhile, or the flat look
     steel.map = map ?? deckAlbedo;
     if (steel.normalMap && normal) steel.normalMap = normal;
+    dirty = CHANGE_DRAWS;
     document.body.dataset.deckSet = map ? next : 'steel';
   });
 }
@@ -1106,6 +1119,7 @@ function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset
       if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
       if (extra.includes('emission')) look.emissive.set(0xffffff); // black until the map is there: no white flash
       look.needsUpdate = true;
+      dirty = CHANGE_DRAWS;
     }),
   );
 }
@@ -1785,6 +1799,7 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
   currentBay = bay;
   drawProps();
   sceneRenderer.mountBay(bay, deck);
+  dirty = CHANGE_DRAWS;
   refreshLights(); // the room's lamps came with it
   if (hasReflections(tier, navigator.webdriver)) reflect(prefilteredBay()); // its lamps are tuned: the room is taken once
   if (currentBay) {
@@ -2779,6 +2794,7 @@ function hud(extra = ''): void {
 }
 
 function refresh(): void {
+  dirty = CHANGE_DRAWS;
   syncAuto();
   if (hub) {
     hub.draw(sceneRenderer, discs, sfx, loadProgress(store).beaten, marbleMesh(glassOf()), drawFrame, lightRim);
@@ -4704,8 +4720,25 @@ let drawAsked = false;
 function animateParticles(now: number): void {
   sceneRenderer.animateParticles(now, deck);
 }
+// An effect that moves on screen by itself, frame after frame: while one is shown a player's page draws every frame.
+function moving(): boolean {
+  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0];
+  const lists = [fading, ejecting, bleeding, passing, slams, bursts, hazes, beltRibs, ripples];
+  return (
+    effects.some(Boolean) ||
+    lists.some((list) => list.length > 0) ||
+    (pulsarCores.length > 0 && !reducedMotion()) ||
+    eggsDrawn.some((egg) => egg.glow) ||
+    sceneRenderer.particles.visible ||
+    (pulsing && shellLooks.has(DEFAULT_SKIN)) ||
+    freeCam.active
+  );
+}
 
 renderer.setAnimationLoop((now) => {
+  const moves = moving(); // before the effects run, so the frame that ends one draws
+  const wanted = drawWanted(dirty > 0, moves, drawAsked, navigator.webdriver);
+  if (moves) dirty = CHANGE_DRAWS; // its last picture draws twice too, for the bloom
   if (fpsOn) {
     fpsStamps = keepWindow(fpsStamps, now);
     lastFps = fpsOf(fpsStamps);
@@ -4743,10 +4776,11 @@ renderer.setAnimationLoop((now) => {
     }
   }
   if (!navigator.webdriver) adaptResolution(now);
-  if (!drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
+  if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   for (const sync of syncMarbles) sync();
   sceneRenderer.render();
   draws++;
   drawAsked = false;
+  dirty = Math.max(0, dirty - 1);
   lastDraw = { start: now, cost: performance.now() - now };
 });

@@ -79,6 +79,16 @@ fn at(board: &Board, (q, r): (i32, i32)) -> Option<Cell> {
     board.get(q, r)
 }
 
+/// What stands one step from `from` in direction `d`: the cell's content, or a marble that never
+/// moves when The Dual Room's wall stands between the two cells.
+fn ahead(board: &Board, from: (i32, i32), d: (i32, i32)) -> Option<Cell> {
+    let to = step(from, d, 1);
+    match at(board, to) {
+        Some(_) if board.walled(from, to) => Some(Cell::Overseer),
+        cell => cell,
+    }
+}
+
 /// What `cells` weigh in a push: 1 per marble, plus its charges in The Unstable Core's fight
 /// (`Board::unstable`), where a charged marble weighs more on both sides.
 fn weight(board: &Board, cells: impl Iterator<Item = (i32, i32)>) -> u32 {
@@ -158,6 +168,10 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
     if (0..n).any(|i| group[i] != step(group[0], v, i as i32)) {
         return Err(MoveError::NotALine);
     }
+    // The Dual Room's wall splits a line.
+    if (1..n).any(|i| board.walled(group[i - 1], group[i])) {
+        return Err(MoveError::NotALine);
+    }
     let d = mv.dir.vector();
     let inline = n == 1 || d == v || d == step((0, 0), v, -1);
     let mut next = board.clone();
@@ -167,12 +181,12 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
         let front = if d == v { group[n - 1] } else { group[0] };
         let lead = step(front, d, 1);
         let mut run = 0;
-        while at(board, step(lead, d, run))
+        while ahead(board, step(front, d, run), d)
             .is_some_and(|c| c != own && c != Cell::Empty && c != Cell::Overseer)
         {
             run += 1;
         }
-        let behind = at(board, step(lead, d, run));
+        let behind = ahead(board, step(front, d, run), d);
         if run == 0 {
             match behind {
                 Some(Cell::Empty) => {}
@@ -202,7 +216,7 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
         }
     } else {
         for &c in &group {
-            match at(board, step(c, d, 1)) {
+            match ahead(board, c, d) {
                 Some(Cell::Empty) => {}
                 Some(_) => return Err(MoveError::Blocked),
                 None => return Err(MoveError::OffBoard),

@@ -4,6 +4,7 @@ import { DIST_MAX, DIST_MIN, POLAR_MAX, POLAR_MIN, resetView, viewPosition, type
 import { frameShape } from './frame';
 import {
   drawDue,
+  drawWanted,
   fogSettings,
   readClearBoard,
   readFps,
@@ -531,6 +532,20 @@ describe('drawDue', () => {
   it('does not hold a draw a test asked for behind a slow draw, the one that compiled the shaders, bug #435', () => {
     expect(drawDue(1099, 1000, 3000, true, true)).toBe(false);
     expect(drawDue(1100, 1000, 3000, true, true)).toBe(true);
+  });
+});
+
+describe('drawWanted (#848)', () => {
+  it('leaves a still board undrawn for a player', () => {
+    expect(drawWanted(false, false, false, false)).toBe(false);
+  });
+  it('draws for a player once the picture changed, while an effect moves, or when a test asked', () => {
+    expect(drawWanted(true, false, false, false)).toBe(true);
+    expect(drawWanted(false, true, false, false)).toBe(true);
+    expect(drawWanted(false, false, true, false)).toBe(true);
+  });
+  it('leaves automation to its throttle alone, so the browser checks still see draws on a still board', () => {
+    expect(drawWanted(false, false, false, true)).toBe(true);
   });
 });
 
