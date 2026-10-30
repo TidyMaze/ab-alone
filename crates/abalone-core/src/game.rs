@@ -786,6 +786,40 @@ mod tests {
     }
 
     #[test]
+    fn the_echo_memory_changes_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut remembered = Board::empty();
+        remembered.set_echoes(vec![(Player::Black, mv(&[(0, 2)], E))]);
+        assert_ne!(position_hash(&remembered, Player::Black), plain);
+        let mut other_move = Board::empty();
+        other_move.set_echoes(vec![(Player::Black, mv(&[(0, 2)], W))]);
+        assert_ne!(
+            position_hash(&other_move, Player::Black),
+            position_hash(&remembered, Player::Black)
+        );
+    }
+
+    #[test]
+    fn a_bonus_move_keeps_the_turn_and_counts_as_a_ply() {
+        let mut game = lone();
+        game.play_bonus(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(game.to_move(), Player::Black, "the mover plays again");
+        assert_eq!(game.history().len(), 1);
+        assert_eq!(game.no_ejection_plies(), 1, "a bonus ply counts for the cap");
+        assert_eq!(
+            game.history()[0].hash,
+            position_hash(game.board(), Player::Black)
+        );
+        game.play(&mv(&[(1, 0)], E)).unwrap();
+        assert_eq!(game.to_move(), Player::White);
+        let (mut won, push) = rim_push();
+        won.ejected = [5, 0];
+        won.play_bonus(&push).unwrap();
+        assert_eq!(won.outcome(), Some(Outcome::Win(Player::Black)));
+        assert_eq!(won.play_bonus(&push), Err(GameError::GameOver));
+    }
+
+    #[test]
     fn pass_gives_the_move_back_and_rehashes_the_last_ply() {
         let mut game = lone();
         game.play(&mv(&[(0, 0)], E)).unwrap();
