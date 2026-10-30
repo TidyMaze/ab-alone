@@ -150,7 +150,7 @@ impl Arena {
 
     /// `true` when no player marble flips after `mv` if the boss then passes: the conversion tell
     /// of the Chaplain, which the player reads on hover. Other bosses have no such tell.
-    fn flip_free(&self, mv: &Move) -> bool {
+    fn tell_safe(&self, mv: &Move) -> bool {
         let Arena::Plain(enc, boss) = self else {
             return true;
         };
@@ -192,7 +192,7 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         let pick = mix(seed ^ mix(u64::from(index))) % moves.len().max(1) as u64;
         moves.get(pick as usize).cloned()
     } else {
-        let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.flip_free(mv);
+        let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.tell_safe(mv);
         // The pro reads the hooks, not the health swing: the ladder keeps the player it measured.
         let step =
             |b: &Board, p: Player, m: &Move, a: Board| (chaplain_step(0, b, p, m, a).0, [0, 0]);
@@ -383,19 +383,42 @@ mod tests {
     }
 
     #[test]
-    fn a_move_that_leaves_a_marble_to_flip_is_not_flip_free() {
+    fn a_move_that_leaves_a_marble_to_flip_is_not_tell_safe() {
         let a = pocket();
         let mvs = legal_moves(a.game().board(), Player::Black);
         assert_eq!(mvs.len(), 1);
-        assert!(!a.flip_free(&mvs[0]));
+        assert!(!a.tell_safe(&mvs[0]));
     }
 
     #[test]
-    fn every_boss_opens_flip_free() {
+    fn a_move_whose_bonus_mirror_repeats_a_third_time_is_not_tell_safe() {
+        // Both sides shuffle one marble, each move mirrored: Black's next step back is
+        // followed by the Echo's bonus, which brings the start position back a third time.
+        let mut a = echo_arena(&[(0, 2)], &[(0, -2)], Player::White);
+        let step = |q, r, dir| Move {
+            cells: vec![(q, r)],
+            dir,
+        };
+        use crate::moves::Direction::{E, NW};
+        a.play(&step(0, -2, NW)).unwrap();
+        a.play(&step(0, 3, NW)).unwrap();
+        a.play(&step(0, -2, NW)).unwrap();
+        let back = step(0, 3, NW);
+        assert_eq!(
+            a.game().seen_after(&back),
+            2,
+            "the plain check lets it through"
+        );
+        assert!(!a.tell_safe(&back));
+        assert!(a.tell_safe(&step(0, 3, E)));
+    }
+
+    #[test]
+    fn every_boss_opens_tell_safe() {
         for boss in LadderBoss::ALL {
             let a = Arena::new(boss, 0);
             let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
-            assert!(a.flip_free(&mv), "{boss:?}");
+            assert!(a.tell_safe(&mv), "{boss:?}");
         }
     }
 
@@ -450,6 +473,7 @@ mod tests {
         let a = echo_arena(
             &[(2, 0), (3, 0), (0, -2), (0, -3), (0, 4)],
             &[(4, 0), (0, -4), (0, 2), (0, 3)],
+            Player::Black,
         );
         let north = Move {
             cells: vec![(0, -3), (0, -2)],
@@ -464,7 +488,7 @@ mod tests {
         assert_eq!(player_move(&a, 0, 9, 0, 400), Some(east));
     }
 
-    fn echo_arena(black: &[P], white: &[P]) -> Arena {
+    fn echo_arena(black: &[P], white: &[P], to_move: Player) -> Arena {
         let mut board = Board::empty();
         for &(q, r) in black {
             board.set(q, r, Cell::Black);
@@ -472,7 +496,7 @@ mod tests {
         for &(q, r) in white {
             board.set(q, r, Cell::White);
         }
-        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let game = Game::from_position(board, to_move, [0, 0]);
         Arena::Plain(echo_fight(game, 0), LadderBoss::Echo)
     }
 
