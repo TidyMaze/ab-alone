@@ -1,4 +1,5 @@
 import type * as THREE from 'three/webgpu';
+import { LIGHT_TUNING } from './lighttuning';
 
 /** The panel's groups, in order: the lights of the scene itself, the neon tubes' glow and light, the lamps, the bloom. */
 const GROUPS = ['Scene lights', 'Neon glow', 'Neon tube lights', 'Prop lamps', 'Bloom'] as const;
@@ -11,6 +12,8 @@ export interface Knob {
   name: string;
   uniform: { value: number };
   max: number;
+  /** The settings' bloom slider scales it (the strength): the panel shows its power after that slider. */
+  scaled?: boolean;
 }
 
 interface Dial {
@@ -20,6 +23,8 @@ interface Dial {
   /** The lights of one name, by name: one lamp each (a neon tube's row is one). */
   lamps: Map<string, THREE.Object3D[]>;
   max?: number;
+  /** The settings slider whose percent scales the power the panel shows (scalePower), if any. */
+  level?: Level;
 }
 
 /** Every family of lights and neon tubes of the scene as it is now, then the knobs, by name. */
@@ -41,6 +46,7 @@ function dials(scene: THREE.Object3D, knobs: readonly Knob[]): Map<string, Dial>
     const dial = all.get(family(name)) ?? {
       group,
       get: () => (neon ? neon.emissiveIntensity : light.intensity),
+      level: neon ? 'lamps' : 'lights',
       sets: [],
       lamps: new Map<string, THREE.Object3D[]>(),
     };
@@ -48,8 +54,15 @@ function dials(scene: THREE.Object3D, knobs: readonly Knob[]): Map<string, Dial>
     dial.lamps.set(name, [...(dial.lamps.get(name) ?? []), o]);
     all.set(family(name), dial);
   });
-  for (const { name, uniform, max } of knobs)
-    all.set(name, { group: 'Bloom', get: () => uniform.value, sets: [(v) => void (uniform.value = v)], lamps: new Map(), max });
+  for (const { name, uniform, max, scaled } of knobs)
+    all.set(name, {
+      group: 'Bloom',
+      get: () => uniform.value,
+      level: scaled ? 'bloom' : undefined,
+      sets: [(v) => void (uniform.value = v)],
+      lamps: new Map(),
+      max,
+    });
   return all;
 }
 
@@ -93,6 +106,8 @@ export function applyTuning(scene: THREE.Object3D, tuning: Readonly<Record<strin
  * again, since that replaces their lights. With `onAim`, each light's slider has a button that points the camera at one
  * lamp of the family, the next at each press (a lamp: the lights of one name, the middle of a neon tube's row).
  * With `onEditor`, a last button opens the scene in the three.js Editor (#872).
+ * With `save`, a Save button hands `write` the power of each family that is not the one of lighttuning.ts, as the tuning
+ * it comes from: the panel shows the power after the settings sliders (`levels`, scalePower), the tuning is before them.
  */
 export function lightPanel(
   scene: THREE.Object3D,
@@ -100,6 +115,7 @@ export function lightPanel(
   onAim?: (at: THREE.Vector3) => void,
   knobs: readonly Knob[] = [],
   onEditor?: () => void,
+  save?: { levels: Readonly<Record<Level, number>>; write: (power: Record<string, number>) => void },
 ): HTMLElement {
   panel.id = 'light-panel';
   panel.replaceChildren();
@@ -145,6 +161,19 @@ export function lightPanel(
       panel.append(section);
     }
     section.append(label);
+  }
+  if (save) {
+    const button = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Save' });
+    button.setAttribute('aria-label', 'Save to sceneoverrides.json');
+    button.addEventListener('click', () => {
+      // A slider at 0 % hides the tuning behind it (a division by nothing): its families are left as the file has them.
+      const tuned = sorted.flatMap(([kind, { get, level }]) => {
+        const percent = level ? save.levels[level] : 100;
+        return percent ? [[kind, Number(((get() * 100) / percent).toPrecision(4))] as const] : [];
+      });
+      save.write(Object.fromEntries(tuned.filter(([kind, power]) => power !== LIGHT_TUNING[kind])));
+    });
+    panel.append(button);
   }
   for (const [group, section] of sections) section.querySelector('summary')!.textContent = `${group} (${section.querySelectorAll('label').length})`;
   if (onEditor) {

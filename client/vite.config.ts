@@ -6,6 +6,8 @@ import { editorScene } from './scripts/editor-scene.mjs';
 import { ktx2Textures } from './scripts/ktx2-textures.mjs';
 // @ts-expect-error plain Node script, no type declarations (the client has no Node types)
 import { offlineApp } from './scripts/offline-app.mjs';
+// @ts-expect-error plain Node script, no type declarations (the client has no Node types)
+import { sceneOverrides } from './scripts/sceneoverrides.mjs';
 
 export default defineConfig(({ command, mode, isPreview }) => ({
   // The production build is served by GitHub Pages under /ab-alone/, and so is its preview (the offline e2e test).
@@ -38,6 +40,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
     offlineApp(),
     // The three.js Editor export of ?lights (#872): dev server only.
     editorScene(),
+    sceneOverrides(), // the ?lights panel's Save button writes src/sceneoverrides.json (#875), dev server only
     ...(mode === 'e2e'
       ? [
           {
