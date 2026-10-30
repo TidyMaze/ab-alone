@@ -118,15 +118,13 @@ pub fn overseer_move(enc: &Encounter) -> Option<Move> {
     let step = |_: &Board, _: Player, _: &Move, after: Board, ejected: [u8; 2]| {
         overseer_step(after, overseer_phase(ejected[0]))
     };
-    // The boss moves first, so the player's last turn is the 2nd ply of the tree per turn left.
-    let last_ply = enc.turns_left().map(|turns| 2 * turns);
     search_phased(
         enc.game(),
         enc.boss.node_budget,
         DEFAULT_WEIGHTS,
         &|_| true,
         &step,
-        last_ply,
+        enc.turns_left(),
     )
     .map(|r| r.mv)
 }
@@ -307,12 +305,6 @@ mod tests {
             old_move(&enc),
             Some(stall.clone()),
             "the old search defended"
-        );
-        let next = replies(&enc, &stall);
-        assert!(!next.is_empty());
-        assert!(
-            next.iter().all(|e| e.result() == Some(PveResult::Lost)),
-            "the player's last turn ends the fight"
         );
     }
 

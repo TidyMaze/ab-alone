@@ -356,16 +356,16 @@ pub fn search_hooked(
 /// boss recomputes its phase inside the tree.
 pub type PhasedStep<'a> = &'a dyn Fn(&Board, Player, &Move, Board, [u8; 2]) -> (Board, [u8; 2]);
 
-/// [`search_hooked`] with a [`PhasedStep`] and a clock: `last_ply` is the ply from the root at
-/// which the root mover wins (a fight with a turn limit), always even; `None` for no clock. A
-/// win by ejection on that very ply still goes first.
+/// [`search_hooked`] with a [`PhasedStep`] and a clock: `turns` is the number of replies the
+/// opponent of the root mover still has (a fight with a turn limit), `None` for no clock. The
+/// root mover wins after the last one, unless that reply wins by ejection first.
 pub fn search_phased(
     game: &Game,
     node_budget: u32,
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
     step: PhasedStep,
-    last_ply: Option<u32>,
+    turns: Option<u32>,
 ) -> Option<SearchResult> {
     let signed = |board: &Board, mover: Player, mv: &Move, after: Board, ejected: [u8; 2]| {
         let (after, [black, white]) = step(board, mover, mv, after, ejected);
@@ -377,7 +377,7 @@ pub fn search_phased(
         weights,
         allow,
         Some(&signed),
-        last_ply.map(|p| p as i32),
+        turns.map(|n| 2 * n as i32),
     )
 }
 
@@ -495,7 +495,7 @@ mod tests {
         let calm = |_: &Board, _: Player, _: &Move, after: Board, _: [u8; 2]| (after, [0, 0]);
         let run = |clock| search_phased(&game, 3000, DEFAULT_WEIGHTS, &|_| true, &calm, clock);
         assert!(run(None).unwrap().score.abs() < WIN / 2, "no clock, no win");
-        assert_eq!(run(Some(2)).unwrap().score, WIN - 2);
+        assert_eq!(run(Some(1)).unwrap().score, WIN - 2);
         let node = Node {
             board: Board::standard(),
             to_move: Player::White,

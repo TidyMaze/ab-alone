@@ -716,7 +716,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Counter, turn it against the boss**: the boss's own push burns a core when it puts one on an
   incinerator, and the vents burn its marbles in P1 and P2: push a boss marble one cell onto an
   incinerator instead of two cells off the board. The boss search sees the burns (every ply of its
-  tree burns, in the phase at its root) and keeps cores and its marbles off the vents; it never
+  tree burns, in the phase the credits so far give), plays the neurotoxin clock (the player's last
+  turn is a boss win in the tree) and keeps cores and its marbles off the vents; it never
   pushes a core in unless every other move costs it more.
 - **Winnable** (`cargo run --release --example overseer_sim`): the bot ladder's player (4x the boss
   budget, its search sees the burns) wins about half of 20 seeded fights inside the 40 turns. The
