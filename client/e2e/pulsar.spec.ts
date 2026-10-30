@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { pauseClock, stepClock } from './clock';
 import { openModes } from './modes';
 
 // The Pulsar (#675, game-design.md section 7.10) from the fixture of the core tests: fight seed 2 and ?bot=off, so the
@@ -84,20 +85,25 @@ test('The Pulsar: a charging pulsar counts down, fires, throws a lone marble off
   await expect(tell).toHaveText('Pulse in 4 turns, force 3'); // the phase raises the force
 });
 
+// The shockwave plays on the page clock (page.clock): paused before the last ply and stepped by hand, so the frames the
+// test samples do not depend on how fast a loaded machine draws (#891).
 test('The Pulsar: the shockwave grows from the pulsar across the board, #675', async ({ page }, testInfo) => {
   const body = page.locator('body');
+  await page.clock.install();
   await startPulsar(page, false);
-  await plies(page, 0, 5);
-  await expect(body).toHaveAttribute('data-pulsing', '1');
+  await plies(page, 0, 4);
+  await pauseClock(page);
+  await plies(page, 4, 5);
+  await expect.poll(async () => { await stepClock(page, 50); return body.getAttribute('data-pulsing'); }, { intervals: [0], timeout: 12_000 }).toBe('1');
   const radii: number[] = [];
-  for (let frame = 0; frame < 6; frame++) {
-    await freshDraw(page);
+  for (let frame = 0; frame < 5; frame++) { // the shockwave lasts 700 ms: 5 steps of 100 ms after it fired it is still out
     const shock = await page.evaluate(() => (window as any).__shock());
-    if (shock === null) break;
+    expect(shock).not.toBeNull();
     radii.push(shock.radius);
     await page.screenshot({ path: testInfo.outputPath(`pulsar-shock-${frame}.png`) });
+    await stepClock(page, 100);
   }
-  expect(radii.length).toBeGreaterThan(0);
+  await stepClock(page, 700);
   expect(radii).toEqual([...radii].sort((a, b) => a - b)); // it grows
   await expect(body).not.toHaveAttribute('data-pulsing', '1');
   await expect(body).toHaveAttribute('data-pulses', '1');
