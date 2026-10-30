@@ -38,6 +38,8 @@ export interface EncounterLike extends Playable, BossLike {
   boss_move(): Int32Array;
   /** The reply the boss announces for a move, empty when it announces nothing. */
   tell_move(mv: Int32Array): Int32Array;
+  /** The bonus plies the last move added after it (The Echo), empty for the other bosses. */
+  last_bonuses(): Int32Array;
 }
 
 /** Search budget of the bot in positions per move, `BOT_NODES` of client/src/bot.ts. */
@@ -116,6 +118,8 @@ export interface Played {
   played: string;
   /** The bot or boss reply, `null` when the game ended on the agent's move, and always online. */
   reply: string | null;
+  /** The bonus plies The Echo's rule played after the agent's move and after the reply, in order (#859). */
+  bonuses: string[];
   state: State;
 }
 
@@ -276,6 +280,8 @@ export class Session {
       }
       const played = formatMove(parsed.move);
       game.plies.push(played);
+      const bonuses = (): string[] => (game.boss ? fromRecords(game.boss.encounter.last_bonuses()).map(formatMove) : []);
+      const echoed = bonuses();
       let reply: string | null = null;
       if (game.room) void game.room.session.send(Array.from(mine));
       else if (!over(game)) {
@@ -283,8 +289,9 @@ export class Session {
         game.engine.play(record);
         reply = formatMove(fromRecord(record));
         game.plies.push(reply);
+        echoed.push(...bonuses());
       }
-      return ok({ played, reply, state: state(game) });
+      return ok({ played, reply, bonuses: echoed, state: state(game) });
     });
   }
 

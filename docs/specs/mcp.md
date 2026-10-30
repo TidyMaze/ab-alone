@@ -198,11 +198,12 @@ Output:
 {
   "played": "(-1,2)(0,2)>E",
   "reply": "(1,-2)>SW",
+  "bonuses": [],
   "state": { "...": "the get_state object" }
 }
 ```
 
-`reply` is `null` when the game ended on the agent's move. Online, `reply` is always `null`: use `wait_for_opponent_move` (section 7).
+`reply` is `null` when the game ended on the agent's move. `bonuses` lists the bonus plies The Echo's rule played after the agent's move and after the reply, in order (`Encounter.last_bonuses()`, #859), empty otherwise. Online, `reply` is always `null`: use `wait_for_opponent_move` (section 7).
 
 Errors: `no_game`, `game_over`, `not_your_turn`, `bad_move`, `illegal_move`.
 
