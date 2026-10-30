@@ -163,8 +163,8 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   #boss-goal { min-height: 44px; min-width: 44px; margin: -0.3rem 0; }
 }
 /* Hint (#192): lit while its ghost is asked or shown (aria-pressed), greyed while the bot thinks or the game is over. */
-#hint[aria-pressed='true'], #auto-play[aria-pressed='true'], #free-cam[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
-#hint:disabled, #replay:disabled, #auto-play:disabled, #free-cam:disabled, #invite-copy:disabled { cursor: default; color: var(--muted); border-color: var(--edge); }
+#hint[aria-pressed='true'], #auto-play[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
+#hint:disabled, #replay:disabled, #auto-play:disabled, #invite-copy:disabled { cursor: default; color: var(--muted); border-color: var(--edge); }
 #auto-reason { font: 0.75rem/1.2 var(--ui); color: var(--text); text-align: right; }
 /* New game asking for its confirmation: the words carry it, the hazard colour repeats it. */
 #new-game.confirm { border-color: var(--hazard); color: var(--hazard); padding: 0.5rem 0.75rem; }
