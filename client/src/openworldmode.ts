@@ -32,6 +32,8 @@ export class OpenWorldMode {
   hero: Hero | null = null;
   private view: OpenWorldView | null = null;
   private dirty = false;
+  /** The time of the last frame, in ms: the camera's ease runs on the time between frames. */
+  private clock = 0;
   /** The arrow keys held down: a vertical and a horizontal one together roll a diagonal. */
   private readonly held = new Set<string>();
   /** The props are read once for the page: every entry reuses them. */
@@ -120,12 +122,18 @@ export class OpenWorldMode {
     this.mark(document.body.dataset.openworld!);
   }
 
-  /** Draws the scene when something changed since the last draw, and every frame while a lake is in view and motion is on. */
-  frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void): void {
-    const moving = !this.reduced() && this.view!.hasWater;
+  /** Eases the camera toward the hero's column top, then draws the scene when something changed since the last draw (the ease
+   * included, until it settles), and every frame while a lake is in view and motion is on. `now` is the frame time in ms. */
+  frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void, now = performance.now()): void {
+    if (!this.view) return; // left: nothing to draw
+    const seconds = (now - this.clock) / 1000;
+    this.clock = now;
+    const reduced = this.reduced();
+    if (this.view!.ease(seconds, reduced)) this.dirty = true;
+    const moving = !reduced && this.view!.hasWater;
     if (!this.dirty && !moving) return;
     this.dirty = false;
-    this.view!.glow(moving ? performance.now() : 0);
+    this.view!.glow(moving ? now : 0);
     render(this.view!.scene, this.view!.camera);
   }
 

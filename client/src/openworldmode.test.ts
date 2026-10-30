@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours } from './openworld';
 import { heldCell, OpenWorldMode } from './openworldmode';
-import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels } from './openworldview';
+import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -217,10 +217,11 @@ describe('the Open world mode', () => {
       m.frame(render);
       return render.mock.calls[0]![1] as THREE.Camera;
     };
-    expect(camera().position.y).toBeCloseTo(28);
+    const top = topOf('grass', 1) + 0.3; // the spawn is grass at height 1 in this file: its column top and the marble on it (#988)
+    expect(camera().position.y).toBeCloseTo(28 + top);
     m.enter(1, 800, 600);
     expect(body().openworldZoom).toBe('1');
-    expect(camera().position.y).toBeCloseTo(14);
+    expect(camera().position.y).toBeCloseTo(14 + top);
   });
 
   it('publishes what is drawn at the zoom, the props among it, for the browser checks, #976', () => {
@@ -346,5 +347,46 @@ describe('the Open world models are loaded once per page (#981)', () => {
     m.enter(2, 800, 600);
     m.leave();
     expect(models).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Grass at height 1, and the cell (1, 0) at height 4: a step up a cliff of 3 levels (#988).
+function cliff(_seed: number, cx: number, cy: number): Uint8Array {
+  if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+  const out = new Uint8Array(CHUNK * CHUNK * 2);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2], i * 2);
+  if (cx === 0 && cy === 0) out.set([4, 2], 2); // (1, 0) is index 1 of its chunk
+  return out;
+}
+
+describe('the camera eases up a cliff (#988)', () => {
+  it('draws every frame while the camera eases to the top of the cliff, then draws nothing once it has settled', () => {
+    const m = mode(undefined, cliff, () => false);
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render, 0);
+    m.key('ArrowRight');
+    m.release('ArrowRight');
+    expect(body().openworldAt).toBe('1,0');
+    const drawn: boolean[] = [];
+    for (let frame = 1; frame <= 60; frame++) {
+      const before = render.mock.calls.length;
+      m.frame(render, (frame * 1000) / 60);
+      drawn.push(render.mock.calls.length > before);
+    }
+    expect(drawn.slice(0, 30).every(Boolean)).toBe(true); // every frame of the first half second
+    expect(drawn.slice(50).some(Boolean)).toBe(false); // settled: nothing left to draw
+  });
+
+  it('jumps to the top of the cliff at once with reduced motion: one draw, then none', () => {
+    const m = mode(undefined, cliff, () => true);
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render, 0);
+    render.mockClear();
+    m.key('ArrowRight');
+    m.release('ArrowRight');
+    for (let frame = 1; frame <= 60; frame++) m.frame(render, (frame * 1000) / 60);
+    expect(render).toHaveBeenCalledTimes(1);
   });
 });
