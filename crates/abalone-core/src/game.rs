@@ -583,6 +583,27 @@ mod tests {
     }
 
     #[test]
+    fn a_replaced_board_that_repeats_a_position_a_third_time_is_a_draw() {
+        let mut game = lone();
+        let cycle = [
+            mv(&[(0, 0)], SE),
+            mv(&[(4, -4)], W),
+            mv(&[(0, 1)], NW),
+            mv(&[(3, -4)], E),
+        ];
+        game.play(&cycle[0]).unwrap();
+        let twice = game.board().clone();
+        for m in cycle[1..].iter().chain(&cycle[..2]) {
+            game.play(m).unwrap();
+        }
+        game.play(&mv(&[(0, 1)], E)).unwrap();
+        assert_eq!(game.outcome(), None);
+        game.replace_board(twice);
+        assert_eq!(game.outcome(), Some(Outcome::Draw), "the third time");
+        assert_eq!(game.draw_reason(), Some(DrawReason::Repetition));
+    }
+
+    #[test]
     fn seen_after_counts_the_position_a_move_would_make() {
         let mut game = lone();
         let cycle = [
