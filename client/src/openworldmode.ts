@@ -34,6 +34,8 @@ export class OpenWorldMode {
   private dirty = false;
   /** The arrow keys held down: a vertical and a horizontal one together roll a diagonal. */
   private readonly held = new Set<string>();
+  /** The props are read once for the page: every entry reuses them. */
+  private modelsOnce?: Promise<PropGeometries>;
 
   /** `load` reads a chunk of a seed's world, `models` the low-poly props: the first draw does not wait for them. `reduced`
    * tells whether the page asks for reduced motion, which holds the water still. */
@@ -45,6 +47,7 @@ export class OpenWorldMode {
   ) {}
 
   enter(seed: number, width: number, height: number): void {
+    this.view?.dispose();
     const world = new World(
       (cx, cy) => this.load(seed, cx, cy),
       (cx, cy) => this.loadEnemies(seed, cx, cy),
@@ -57,7 +60,9 @@ export class OpenWorldMode {
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));
-    void this.models().then((geometries) => {
+    this.modelsOnce ??= this.models();
+    void this.modelsOnce.then((geometries) => {
+      if (this.view !== view) return; // left before the models arrived
       view.useModels(geometries);
       this.dirty = true;
     });
@@ -66,6 +71,9 @@ export class OpenWorldMode {
   leave(): void {
     this.active = false;
     this.held.clear();
+    this.view?.dispose();
+    this.view = null;
+    this.dirty = false;
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
     delete document.body.dataset.openworldTroop;

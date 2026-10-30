@@ -199,6 +199,14 @@ export class OpenWorldView {
   private readonly hero: THREE.Mesh;
   private readonly troop: THREE.InstancedMesh;
   private readonly foes: THREE.InstancedMesh;
+  /** Reused by every placement, so a draw allocates no matrix holder (#981). */
+  private readonly dummy = new THREE.Object3D();
+  private readonly enemyCells: Axial[] = [];
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly pointer = new THREE.Vector2();
+  private readonly plane = new THREE.Plane();
+  private readonly up = new THREE.Vector3(0, 1, 0);
+  private readonly ground = new THREE.Vector3();
   /** The enemy marbles drawn around the hero. */
   enemyCount = 0;
 
@@ -336,7 +344,8 @@ export class OpenWorldView {
 
   /** Lays marbles on the cells, each on its ground, in an instanced mesh. */
   private place(mesh: THREE.InstancedMesh, cells: readonly Axial[]): void {
-    const dummy = new THREE.Object3D();
+    const { dummy } = this;
+    dummy.scale.set(1, 1, 1); // the shared holder may carry the height of the last column placed
     const drawn = Math.min(cells.length, mesh.instanceMatrix.count); // past the capacity, the rest are not drawn
     for (let i = 0; i < drawn; i++) {
       const [q, r] = cells[i]!;
@@ -352,17 +361,30 @@ export class OpenWorldView {
 
   /** The cell under a point of the screen, `x` and `y` from -1 to 1, read on the plane the hero rolls on. */
   pick(x: number, y: number): Axial {
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(new THREE.Vector2(x, y), this.camera);
-    const ground = new THREE.Vector3();
-    ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.hero.position.y), ground);
-    return cellAtPoint(ground.x, ground.z);
+    this.raycaster.setFromCamera(this.pointer.set(x, y), this.camera);
+    this.plane.set(this.up, -this.hero.position.y);
+    this.ground.set(0, 0, 0);
+    this.raycaster.ray.intersectPlane(this.plane, this.ground);
+    return cellAtPoint(this.ground.x, this.ground.z);
+  }
+
+  /** Frees the GPU objects of the view: each geometry and material of its scene, once. The view is not drawn after. */
+  dispose(): void {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    this.scene.traverse((object) => {
+      if (!(object as THREE.Mesh).isMesh) return;
+      geometries.add((object as THREE.Mesh).geometry);
+      materials.add((object as THREE.Mesh).material as THREE.Material);
+    });
+    geometries.forEach((geometry) => geometry.dispose());
+    materials.forEach((material) => material.dispose());
   }
 
   /** Lays the chunks `reach` around `(cx, cy)`: the ground columns, the props and the enemies. */
   private build(cx: number, cy: number, reach: number): void {
     const counts = Object.fromEntries([...GROUNDS, ...PROP_NAMES].map((k) => [k, 0])) as Record<Ground | Prop, number>;
-    const dummy = new THREE.Object3D();
+    const { dummy } = this;
     // Writes an instance of `key` into `mesh`, unless the mesh is full: it returns whether it was written.
     const put = (mesh: THREE.InstancedMesh, key: Ground | Prop, x: number, y: number, z: number, scaleY: number): boolean => {
       if (counts[key] >= mesh.instanceMatrix.count) return false;
@@ -388,9 +410,10 @@ export class OpenWorldView {
         });
       }
     }
-    const foes = [];
-    for (let ky = cy - reach; ky <= cy + reach; ky++) for (let kx = cx - reach; kx <= cx + reach; kx++) foes.push(...this.world.enemies(kx, ky));
-    this.place(this.foes, foes);
+    const { enemyCells } = this;
+    enemyCells.length = 0;
+    for (let ky = cy - reach; ky <= cy + reach; ky++) for (let kx = cx - reach; kx <= cx + reach; kx++) enemyCells.push(...this.world.enemies(kx, ky));
+    this.place(this.foes, enemyCells);
     this.enemyCount = this.foes.count;
     for (const key of [...GROUNDS, ...PROP_NAMES]) {
       const mesh = key in this.grounds ? this.grounds[key as Ground] : this.props[key as Prop];
