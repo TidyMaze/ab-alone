@@ -6,6 +6,7 @@ import { resetView, type View } from './camera';
 import { DECK_PARTICLES } from './deck';
 import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
+import BloomNode from 'three/addons/tsl/display/BloomNode.js';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
@@ -419,5 +420,18 @@ describe('SceneRenderer (#632)', () => {
   it('blurs the bloom at a quarter of the resolution: it is a soft glow, and full-size blur passes cost the most (#781, #844)', () => {
     const pipeline = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera())!;
     expect((pipeline.outputNode as any).node.bNode.getResolutionScale()).toBe(0.25);
+  });
+
+  it('blurs the glow every second frame, the last glow staying on screen between two runs: the bloom is a third of a phone\'s frame (#894)', () => {
+    const blur = vi.spyOn(BloomNode.prototype, 'updateBefore').mockImplementation(() => {});
+    const { bloom } = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera())!;
+    const ran: boolean[] = [];
+    for (let i = 0; i < 5; i++) {
+      const before = blur.mock.calls.length;
+      bloom.updateBefore({} as never);
+      ran.push(blur.mock.calls.length > before);
+    }
+    expect(ran).toEqual([true, false, true, false, true]);
+    blur.mockRestore();
   });
 });
