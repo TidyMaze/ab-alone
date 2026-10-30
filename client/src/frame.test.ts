@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOARD_CELLS, CELLS, VANISHED, axialTo3D, cellIndex } from './board';
+import { DUAL_CELLS, ROOMS } from './dual';
 import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight } from './frame';
 
 const DISC = 0.46; // the cell disc radius of main.ts
@@ -44,12 +45,39 @@ describe('frameShape (world.md section 6)', () => {
 
   it('The Ballast Mind plays on radius 5 (#564): its frame is that size, a hole on each of its six pillars', () => {
     const pillars = [[1, 1], [-1, 2], [-2, 1], [-1, -1], [1, -2], [2, -1]];
-    const board = BOARD_CELLS.map(([q, r]) => (pillars.some(([pq, pr]) => pq === q && pr === r) ? VANISHED : 0));
+    const board = BOARD_CELLS.slice(0, 91).map(([q, r]) => (pillars.some(([pq, pr]) => pq === q && pr === r) ? VANISHED : 0));
     const shape = frameShape(board);
     expect(shape.radius).toBe(5);
     expect(shape.holes).toHaveLength(6);
     expect(apothem(shape.inner)).toBeCloseTo(5 * (Math.sqrt(3) / 2) + FRAME.margin);
-    for (const [q, r] of BOARD_CELLS) expect(reach(axialTo3D(q, r)) + DISC).toBeLessThan(apothem(shape.inner));
+    for (const [q, r] of BOARD_CELLS.slice(0, 91)) expect(reach(axialTo3D(q, r)) + DISC).toBeLessThan(apothem(shape.inner));
+  });
+
+  it('The Dual Room (#947): one plate round its two rooms, no hole for the cells off them, the rim halves split', () => {
+    const board = BOARD_CELLS.map((c) => (DUAL_CELLS.some(([q, r]) => q === c[0] && r === c[1]) ? 0 : VANISHED));
+    const shape = frameShape(board);
+    expect(shape.radius).toBe(9);
+    expect(shape.holes).toEqual([]);
+    expect(shape.inner).toHaveLength(12);
+    expect(shape.outer).toHaveLength(12);
+    // Inside the outline: a point is inside when it is on the inner side of every edge of one room's hexagon.
+    const inRoom = (p: { x: number; z: number }, centre: { x: number; z: number }, apo: number) =>
+      [0, 1, 2, 3, 4, 5].every((k) => {
+        const a = Math.PI / 6 + (k * Math.PI) / 3;
+        return (p.x - centre.x) * Math.cos(a) + (p.z - centre.z) * Math.sin(a) <= apo;
+      });
+    const rooms = ROOMS.map(([q, r]) => axialTo3D(q, r));
+    for (const [q, r] of DUAL_CELLS) {
+      const p = axialTo3D(q, r);
+      expect(rooms.some((c) => inRoom(p, c, 4 * (Math.sqrt(3) / 2) + FRAME.margin - DISC))).toBe(true);
+    }
+    for (const p of shape.inner) expect(rooms.some((c) => inRoom(p, c, 4 * (Math.sqrt(3) / 2) + FRAME.margin + 1e-9))).toBe(true);
+    for (const p of shape.outer) expect(rooms.some((c) => inRoom(p, c, 4 * (Math.sqrt(3) / 2) + FRAME.margin + FRAME.rim + 1e-9))).toBe(true);
+    const { near, far } = rimHalves(shape);
+    expect(near).toHaveLength(14);
+    expect(far).toHaveLength(14);
+    expect(near[0]).toEqual(shape.outer[0]);
+    expect(far[0]).toEqual(shape.outer[6]);
   });
 
   it('a vanished cell of The Hull is a hole in the plate, inside the rim', () => {
