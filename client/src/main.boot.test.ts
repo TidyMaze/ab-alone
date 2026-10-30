@@ -659,10 +659,26 @@ describe('the volume sliders (#438)', () => {
     expect(menu.dataset.page).toBeUndefined();
   });
 
+  it('starts the music at 0 under automation, the harness default (#990)', async () => {
+    await boot('?bot=off');
+    expect((byId('volume-music') as HTMLInputElement).value).toBe('0');
+    expect((byId('volume-effects') as HTMLInputElement).value).toBe('100');
+  });
+
+  it('starts the music at 100 in a normal browser (#990)', async () => {
+    await boot('?bot=off', { webdriver: false });
+    expect((byId('volume-music') as HTMLInputElement).value).toBe('100');
+  });
+
+  it('a music volume the player saved wins over the automated default (#990)', async () => {
+    await bootWith({ 'ab-alone.volume.music': '70' });
+    expect((byId('volume-music') as HTMLInputElement).value).toBe('70');
+  });
+
   it('shows the saved volumes and saves a moved slider', async () => {
     await bootWith({ 'ab-alone.volume.voice': '40' });
     const slider = (bus: string): HTMLInputElement => byId(`volume-${bus}`);
-    expect([slider('music').value, slider('voice').value]).toEqual(['100', '40']);
+    expect([slider('music').value, slider('voice').value]).toEqual(['0', '40']);
     slider('effects').value = '25';
     slider('effects').dispatchEvent(new Event('input'));
     expect(localStorage.getItem('ab-alone.volume.effects')).toBe('25');
