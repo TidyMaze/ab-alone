@@ -275,10 +275,9 @@ export class SceneRenderer {
   }
 
   frameCamera(width: number, height: number): void {
-    const { fov, shift } = framing(width, height);
     this.camera.aspect = width / height;
-    this.camera.fov = fov;
-    this.camera.setViewOffset(width, height, 0, -shift, width, height);
+    this.camera.fov = framing(width, height).fov;
+    this.camera.updateProjectionMatrix();
   }
 
   applyView(view: View, reading: View | null, context: ViewContext): void {
@@ -286,17 +285,16 @@ export class SceneRenderer {
       position: [0, 0, 0] as const,
       size: [1, 1, 1] as const,
     };
-    const [x, y, z] = reading ? consoleDef.position : [0, 0, 0];
+    const target = view.target ?? { x: 0, y: 0, z: 0 };
+    const [x, y, z] = reading ? consoleDef.position : [target.x, target.y, target.z];
     const [, height, width] = consoleDef.size;
+    const eye = viewPosition(view);
     const p = reading
       ? screenView({ x, y, z }, { x: 1, y: 0, z: 0 }, width, height, this.camera.fov, this.camera.aspect)
-      : viewPosition(view);
+      : { x: x + eye.x, y: y + eye.y, z: z + eye.z };
 
     this.camera.position.set(p.x, p.y, p.z);
     this.camera.lookAt(x, y, z);
-    // The picture slides right by the aside of the view (#695), never while reading: the reader centres the screen.
-    const { fullWidth, fullHeight, offsetY } = this.camera.view!;
-    this.camera.setViewOffset(fullWidth, fullHeight, reading ? 0 : (-view.aside * fullWidth) / 2, offsetY, fullWidth, fullHeight);
     this.camera.updateMatrixWorld();
     this.updateFog(context.tier, context.clear, view, this.fogRadius, context.deck);
   }

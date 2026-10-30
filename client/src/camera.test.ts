@@ -119,7 +119,7 @@ describe('zoom', () => {
 
 describe('viewPosition', () => {
   it('turns a quarter around the board with azimuth pi/2', () => {
-    const p = viewPosition({ azimuth: Math.PI / 2, polar: Math.PI / 4, distance: 10, aside: 0 });
+    const p = viewPosition({ azimuth: Math.PI / 2, polar: Math.PI / 4, distance: 10 });
     expect(p.x).toBeCloseTo(10 * Math.SQRT1_2);
     expect(p.y).toBeCloseTo(10 * Math.SQRT1_2);
     expect(p.z).toBeCloseTo(0);

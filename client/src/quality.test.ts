@@ -100,7 +100,7 @@ describe('fogSettings', () => {
   const views: View[] = [];
   for (let k = 0; k < 24; k++) {
     for (const polar of [POLAR_MIN, resetView().polar, POLAR_MAX]) {
-      for (const distance of [DIST_MIN, resetView().distance, DIST_MAX]) views.push({ azimuth: (k * Math.PI) / 12, polar, distance, aside: 0 });
+      for (const distance of [DIST_MIN, resetView().distance, DIST_MAX]) views.push({ azimuth: (k * Math.PI) / 12, polar, distance });
     }
   }
 
