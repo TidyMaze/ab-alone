@@ -971,8 +971,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_14_since_the_echo_offers_the_players_bonus() {
-        assert_eq!(engine_version(), 14);
+    fn the_engine_version_is_15_since_the_dual_room_boss_ignores_the_centre() {
+        assert_eq!(engine_version(), 15);
     }
 
     #[test]
