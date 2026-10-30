@@ -953,10 +953,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   from 30 down to 0 (the health bar of #788 shows the turns left).
 - **Look**: Cargo deck. The marbles drop in on their marks; at the end of turn 30 the **evac
   lights the whole board** and lifts the surviving marbles. Reduced motion: a fade.
-- **Turn it against the boss** (owner design rule): every swarm marble lands alone on the rim, so
-  push it off before the next one lands beside it; the swarm's own pushes on the rim can shove
-  its marbles out, and the announce marks say where to stand so a wave lands where you can push
-  it. The boss search sees the arrivals: every player ply of its tree lands the next wave where
+- **Turn it against the boss** (owner design rule): every swarm marble lands on the rim, where
+  a 2 to 1 push sends it off, so push it off before the next one lands beside it; the announce
+  marks say where it lands one turn ahead, so stand next to the mark with a line ready. The boss search sees the arrivals: every player ply of its tree lands the next wave where
   the announce would put it.
 - **The Ballast Mind** (owner rule, section 7.5): it fits as a one-shot hook (the wave of the
   phase lands at once on the empty rim cells away from the player's start side), and is borrowed
