@@ -390,7 +390,7 @@ mod tests {
             e.play(&played).unwrap();
             assert_eq!(plies(&e), vec![played.clone(), mirror_move(&played)]);
             let mirrored = mirror_move(&played).cells[0];
-            let target = (mirrored.0, mirrored.1 + if swap { 1 } else { -1 });
+            let target = (mirrored.0, mirrored.1 - 1);
             assert_eq!(e.game().board().get(target.0, target.1), Some(Cell::White));
             assert_eq!(e.game().to_move(), second, "then it plays its own move");
             assert!(e.game().board().echoes().is_empty());
@@ -514,7 +514,7 @@ mod tests {
         {
             let swap = false;
             let (_, second) = sides(swap);
-            let ejected = if swap { [5, 0] } else { [0, 5] };
+            let ejected = [0, 5];
             let mut e = fight(
                 swap,
                 &[(2, 0), (3, 0), (-4, 0)],
