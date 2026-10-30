@@ -4816,7 +4816,7 @@ function animateParticles(now: number): void {
 }
 // An effect that moves on screen by itself, frame after frame: while one is shown a player's page draws every frame.
 function moving(): boolean {
-  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0];
+  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0, collapse, drop];
   const lists = [fading, ejecting, bleeding, passing, slams, bursts, hazes, beltRibs, ripples];
   return (
     effects.some(Boolean) ||
