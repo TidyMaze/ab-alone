@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { cellAtPoint, CHUNK, chunkOf, neighbours, World } from './openworld';
+import { cellAtPoint, CHUNK, chunkOf, neighbours, TROOP, World } from './openworld';
 import {
+  CAPACITY,
   footprint,
   GROUNDS,
   groundRadius,
@@ -288,6 +289,39 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
   });
 });
 
+describe('the instance capacity of each mesh (#976): no waste, and no write past the end', () => {
+  it('sizes the troop at the troop, and each other mesh at its measured maximum, not the widest view', () => {
+    const view = new OpenWorldView(new World(grass));
+    expect(mesh(view, 'troop').instanceMatrix.count).toBe(TROOP);
+    expect(mesh(view, 'enemies').instanceMatrix.count).toBe(CAPACITY.enemies);
+    expect(mesh(view, 'prop-mountain').instanceMatrix.count).toBe(CAPACITY.mountain);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(CAPACITY.grass);
+  });
+
+  it('clamps a mesh at its capacity: a widest view of peaks draws the mountains it holds, and writes no more', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 2);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4], i * 2); // every cell a peak
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(MAX_ZOOM); // the widest view holds more peaks than the mountains' capacity
+    expect(mesh(view, 'prop-mountain').count).toBe(CAPACITY.mountain);
+    expect(view.drawn['prop-mountain']).toBe(CAPACITY.mountain);
+  });
+
+  it('clamps the enemies at their capacity, and counts the ones drawn', () => {
+    const crowd = Int32Array.from({ length: 2 * (CAPACITY.enemies + 10) }, () => 5); // every enemy on the cell (5, 5)
+    const view = new OpenWorldView(new World(grass, (cx, cy) => (cx === 0 && cy === 0 ? crowd : new Int32Array())));
+    view.show([0, 0]);
+    expect(mesh(view, 'enemies').count).toBe(CAPACITY.enemies);
+    expect(view.enemyCount).toBe(CAPACITY.enemies);
+  });
+});
+
 describe('the far zoom is real 3D, with no overview (#976)', () => {
   const hero = (view: OpenWorldView) => view.scene.getObjectByName('hero')!;
 
@@ -322,8 +356,9 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     view.zoomBy(MAX_ZOOM);
     expect(reachFor(groundRadius(view.camera, hero(view).position))).toBeLessThanOrEqual(MAX_REACH);
     expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
-    expect(ground(view)).toBe((2 * view.reach + 1) ** 2 * CHUNK * CHUNK);
-    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe((2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK);
+    // every cell of the square is grass here: the grass mesh holds its capacity and no more
+    expect(mesh(view, 'terrain-grass').count).toBe(Math.min((2 * view.reach + 1) ** 2 * CHUNK * CHUNK, CAPACITY.grass));
+    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(CAPACITY.grass);
   });
 
   it('rebuilds the chunks when the hero enters another chunk at a far zoom, with the reach of the zoom', () => {
