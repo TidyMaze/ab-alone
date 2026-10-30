@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { relativeLuminance, type RGB } from '../src/contrast';
 
 test.describe('Background luminance and decor (#432)', () => {
-  test('the background behind the board is lifted above the baseline', async ({ page }) => {
+  test('the background behind the board is lifted above the baseline', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1470, height: 867 });
     await page.addInitScript(() => {
       localStorage.setItem('ab-alone.theme', 'dark');
@@ -10,8 +10,10 @@ test.describe('Background luminance and decor (#432)', () => {
     await page.goto('./?bot=off');
     await page.locator('canvas').waitFor();
     await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete (#661)
+    const draws = await page.evaluate(() => (window as any).__drawNext() as number);
+    await page.waitForFunction((n) => (window as any).__draws() > n, draws); // loaded geometry must also have been drawn
 
-    const png = await page.screenshot();
+    const png = await page.screenshot({ path: testInfo.outputPath('background.png') });
 
     // Sample points: four corners + behind the board
     const points: [number, number][] = [
@@ -38,6 +40,7 @@ test.describe('Background luminance and decor (#432)', () => {
     }, [png.toString('base64'), points] as const);
 
     const lums = colors.map((c) => ({ rgb: c, lum: relativeLuminance(c) }));
+    console.log(JSON.stringify(lums));
 
     // Behind board is lifted above the 0.0017 baseline, but darker than board steel (0.082)
     const behindBoardLum = lums[4]!.lum;
