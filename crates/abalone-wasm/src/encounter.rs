@@ -16,7 +16,7 @@ use abalone_core::encounter::ballast::{
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::dual::{dual_boss, dual_landed, dual_move, dual_start};
-use abalone_core::encounter::echo::{echo_bonuses, echo_boss, echo_move, echo_start};
+use abalone_core::encounter::echo::{echo_bonuses, echo_boss, echo_move, echo_start, echo_tell};
 use abalone_core::encounter::hull::{hull_boss, hull_move};
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
 use abalone_core::encounter::overseer::{overseer_boss, overseer_move, overseer_start};
@@ -352,6 +352,8 @@ pub fn boss_goal(id: &str) -> Option<String> {
 pub struct Encounter {
     fight: Fight,
     entry: &'static BossEntry,
+    /// The bonus plies the last `play` added after its move (The Echo).
+    bonuses: Vec<Move>,
 }
 
 #[wasm_bindgen]
@@ -361,7 +363,11 @@ impl Encounter {
     pub fn new(boss_id: &str, seed: u32) -> Result<Encounter, String> {
         let entry = boss_entry(boss_id).ok_or_else(|| format!("unknown boss {boss_id}"))?;
         let fight = (entry.start)((entry.def)(), u64::from(seed));
-        Ok(Encounter { fight, entry })
+        Ok(Encounter {
+            fight,
+            entry,
+            bonuses: Vec::new(),
+        })
     }
 
     pub fn name(&self) -> String {
@@ -458,13 +464,41 @@ impl Encounter {
     /// Plays one move record for the side to move. `Err` carries the reason.
     pub fn play(&mut self, mv: &[i32]) -> Result<(), String> {
         let mv = decode(mv)?;
+        let before = self.fight.game().history().len();
         match &mut self.fight {
             Fight::Plain(e) => e.play(&mv).map_err(|e| format!("{e:?}")),
             Fight::Choir(c) => c.play(&mv).map_err(|e| match e {
                 ChoirError::Game(e) => format!("{e:?}"),
                 other => format!("{other:?}"),
             }),
+        }?;
+        self.bonuses = self.fight.game().history()[before + 1..]
+            .iter()
+            .map(|p| p.mv.clone())
+            .collect();
+        Ok(())
+    }
+
+    /// The bonus plies the last move played added after it (The Echo: the mirror moves of the
+    /// other side), flat move records in order. Empty for the other bosses.
+    pub fn last_bonuses(&self) -> Vec<i32> {
+        self.bonuses.iter().flat_map(encode).collect()
+    }
+
+    /// The bonus moves the other side would get if the side to move played `mv` (The Echo), records
+    /// of 9: `1` when that bonus would be skipped (it would lose its receiver the game), `0` else,
+    /// then the move record. Empty for the other bosses and a malformed record.
+    pub fn echo_tell(&self, mv: &[i32]) -> Vec<i32> {
+        let (Fight::Plain(e), Ok(mv)) = (&self.fight, decode(mv)) else {
+            return Vec::new();
+        };
+        if self.entry.id != "echo" {
+            return Vec::new();
         }
+        echo_tell(e, &mv)
+            .iter()
+            .flat_map(|(m, skipped)| std::iter::once(i32::from(*skipped)).chain(encode(m)))
+            .collect()
     }
 
     /// The boss move, one record, using the boss node budget. Empty on the player's turn or when
@@ -1661,7 +1695,15 @@ mod tests {
             0,
         ));
         let entry = boss_entry("pulsar").unwrap();
-        assert_eq!(Encounter { fight, entry }.pulsar(), vec![0, 3, 0]);
+        assert_eq!(
+            Encounter {
+                fight,
+                entry,
+                bonuses: Vec::new(),
+            }
+            .pulsar(),
+            vec![0, 3, 0]
+        );
     }
 
     #[test]
@@ -2014,6 +2056,7 @@ mod tests {
         let mut f = Encounter {
             fight: Fight::Choir(Choir::from_position(game, members, 7)),
             entry: boss_entry("choir").unwrap(),
+            bonuses: Vec::new(),
         };
         assert!(f.removed().is_empty());
         assert_eq!(f.phase_notches(), vec![1, 2]);
@@ -2103,6 +2146,7 @@ mod tests {
             Encounter {
                 fight: Fight::Plain(CoreEncounter::new(game, alien_boss(), 1)),
                 entry: boss_entry("alien").unwrap(),
+                bonuses: Vec::new(),
             }
         };
         let seen: Vec<(u8, u8, Vec<u8>)> = (0..=5)
@@ -2137,6 +2181,7 @@ mod tests {
         let mut f = Encounter {
             fight: Fight::Plain(abalone_core::encounter::echo::echo_fight(game, 1)),
             entry: boss_entry("echo").unwrap(),
+            bonuses: Vec::new(),
         };
         let push = Move {
             cells: vec![(2, 0), (3, 0)],
