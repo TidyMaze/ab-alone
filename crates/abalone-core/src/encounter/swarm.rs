@@ -326,7 +326,7 @@ impl Swarm {
 mod tests {
     use super::*;
     use crate::board::MAX_RADIUS;
-    use crate::moves::Direction::{self, E, SW, W};
+    use crate::moves::Direction::{self, E, SE, SW, W};
     use crate::search::WIN;
 
     fn mv(cells: &[P], dir: Direction) -> Move {
@@ -479,6 +479,21 @@ mod tests {
         assert_eq!((s.turn(), s.result()), (1, None));
         assert!(s.landed().is_empty());
         assert_eq!(s.boss_move(), None);
+    }
+
+    #[test]
+    fn a_player_boxed_in_passes_and_the_next_reply_starts() {
+        // The swarm's move boxes the lone player marble in: it has no move, so it passes, the next
+        // wave lands and the swarm is to move again.
+        let white = [(-3, 0), (-3, -1), (-3, 1), (-4, 2)];
+        let mut s = swarm(&[(-4, 0)], &white, [0, 0], 5);
+        s.play(&mv(&[(-4, 0)], SE)).unwrap();
+        s.play(&mv(&[(-3, -1)], SW)).unwrap();
+        assert!(legal_moves(s.game().board(), Player::Black).is_empty());
+        assert_eq!(s.game().to_move(), Player::White);
+        assert_eq!(s.turn(), 6);
+        assert_eq!(s.landed().len(), 1, "turn 7's wave landed");
+        assert!(s.boss_move().is_some());
     }
 
     #[test]
