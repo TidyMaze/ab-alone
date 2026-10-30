@@ -34,6 +34,12 @@ describe('bot.worker', () => {
     expect((reply as { move: number[] }).move).toHaveLength(8);
   });
 
+  it("places a rogue-lite fight's special marbles before it replays, #961", async () => {
+    expect(await ask({ id: 13, history: [], nodes: 50, army: 14, placed: [[0, 4, 1]] })).toMatchObject({ id: 13, move: expect.any(Array) });
+    const reply = await ask({ id: 14, history: [], nodes: 50, army: 14, placed: [[0, 0, 1]] }); // no marble there
+    expect(reply).toEqual({ id: 14, error: expect.stringContaining('NoMarble') });
+  });
+
   it('answers an evaluate request with a score', async () => {
     expect(await ask({ id: 8, history: [], nodes: 50, evaluate: true })).toEqual({ id: 8, score: expect.any(Number) });
   });

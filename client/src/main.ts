@@ -21,7 +21,7 @@ import {
 } from './board';
 import { extendPath, releaseDir } from './drag';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
-import { askBot, askEval, botBudget } from './bot';
+import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
@@ -250,7 +250,28 @@ import { LocalSaves } from './savegame';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
-import { clearRun, fightOver, loadRun, mapHtml, newRun, parseMap, pick, runLine, saveRun, type MapNode, type Run } from './roguelite';
+import {
+  claim,
+  clearRun,
+  fightOver,
+  left,
+  loadRun,
+  mapHtml,
+  newRun,
+  parseMap,
+  parseSpecials,
+  pick,
+  place,
+  placeHtml,
+  placing,
+  rewardHtml,
+  runLine,
+  saveRun,
+  sparkBurst,
+  SPECIAL_LOOKS,
+  type MapNode,
+  type Run,
+} from './roguelite';
 import { ARENA, ARENA_SCALE, YOU, deadlineText, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
 import { buildReveal, shownAt, sinkAt, type Fall, type Reveal } from './royale-reveal';
 import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf } from './royale-net';
@@ -309,6 +330,8 @@ const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, figh
 let royale: Royale | null = null;
 // The rogue-lite run (#798) while it is on, else null: its map and where it stands.
 let run: { map: MapNode[]; state: Run } | null = null;
+// The special marble type a press on one of the army's marbles places before a fight (#961), 0 for none.
+let armed = 0;
 // Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
 let royaleNet: RoyaleNet<Royale> | null = null;
 let ticking = 0;
@@ -1639,6 +1662,11 @@ const seatGlyphs = SEAT_GLYPHS.map(({ points }) =>
   new THREE.ShapeGeometry(new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x * 0.2, y * 0.2)))).rotateX(glyphTilt - Math.PI / 2),
 );
 const seatInk = new THREE.MeshBasicMaterial({ color: SEAT_INK });
+// The special marbles' glyphs (#961), on the shell facing the default view, as the seat glyphs.
+const specialGlyphs = SPECIAL_LOOKS.map(({ points }) =>
+  new THREE.ShapeGeometry(new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x * 0.22, y * 0.22)))).rotateX(glyphTilt - Math.PI / 2),
+);
+const specialInks = SPECIAL_LOOKS.map(({ color }) => new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
 // The breach (#503): a cracked arena cell glows in the hazard colour under the Hull's crack decal and ticks.
 const breachGlow = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false });
 
@@ -1959,7 +1987,9 @@ const saves = new LocalSaves(gameStore, navigator.storage);
 // no bot (#565).
 const resumed = await saves.load(worker ? undefined : false, () => new Engine());
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
-const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), (army) => Engine.with_army(army));
+// The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
+const armyEngine = (army: number, placed: number[][]): Engine => engineFor(Engine, army, placed);
+const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), armyEngine);
 const resumedRun = await loadSavedRun();
 if (resumed) {
   if (!resumed.bot) worker = null;
@@ -2142,7 +2172,7 @@ async function botTurn(): Promise<void> {
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army),
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
@@ -2213,8 +2243,11 @@ const ejecting: Ejecting[] = [];
 function playMove(record: number[]): void {
   leaveReplay(); // a bot reply or a peer's move shows the live game
   const before = Array.from(engine.board());
+  const specials = run && !(engine instanceof Encounter) ? parseSpecials(engine.specials()) : [];
   engine.play(Int32Array.from(record));
   afterPlay(before, record);
+  const spark = sparkBurst(before, specials, parseMoves(record)[0]!);
+  if (spark && !reducedMotion()) burstSpark(spark);
   if (!online && !fight && !run) void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
   if (run?.state.fighting) runMoved();
   analyse();
@@ -2470,6 +2503,17 @@ function fireUnstable(events: UnstableEvents, reduced: boolean): void {
     drawSweep(0);
     document.body.dataset.shockwaves = String(Number(document.body.dataset.shockwaves ?? 0) + 1); // read by the e2e tests
   }
+}
+
+/** A Spark thrown off bursts from its last cell (#961): a ring in its colour, drawn as the Core's bursts. */
+function burstSpark(cell: Axial): void {
+  const p = axialTo3D(...cell);
+  const material = new THREE.MeshBasicMaterial({ color: SPECIAL_LOOKS[2]!.color, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const mesh = Object.assign(new THREE.Mesh(shockGeometry, material), { name: 'spark-burst' });
+  mesh.position.set(p.x, 0.3, p.z);
+  scene.add(mesh);
+  bursts.push({ mesh, start: performance.now(), reduced: false, skipped: false });
+  document.body.dataset.sparks = String(Number(document.body.dataset.sparks ?? 0) + 1); // read by the e2e tests
 }
 
 /** Draws the bursts and the sweep `elapsedMs` into their effects, and takes them away once they are over. */
@@ -3009,6 +3053,17 @@ function refresh(): void {
     marbles.add(ring);
     onMarble(cellIndex(cell[0], cell[1]), ring);
   }
+  // The special marbles of a rogue-lite fight (#961): each type's glyph in its colour on the marble.
+  const specials = run && !(engine instanceof Encounter) ? parseSpecials(engine.specials()) : [];
+  for (const { cell, kind } of specials) {
+    const p = axialTo3D(...cell);
+    const glyph = Object.assign(new THREE.Mesh(specialGlyphs[kind - 1]!, specialInks[kind - 1]!), { name: 'special-mark' });
+    glyph.position.set(p.x, 0.36, p.z).add(glyphLift);
+    marbles.add(glyph);
+    onMarble(cellIndex(...cell), glyph);
+  }
+  document.body.dataset.specials = specials.map((s) => `${s.cell},${s.kind}`).join(' '); // read by the e2e tests
+
   if (martyr) {
     const p = axialTo3D(martyr[0], martyr[1]);
     const ring = Object.assign(new THREE.Mesh(outlineGeometry, emberMaterial), { name: 'martyr-ring' });
@@ -3383,6 +3438,7 @@ function play(mv: Move): void {
 function click(q: number, r: number): void {
   if (hub) return walk([q, r]);
   if (royale) return pickRoyale(q, r);
+  if (armed) return placeAt(q, r); // only during a placement
   if (blocked(() => click(q, r))) return;
   const side = engine.board()[cellIndex(q, r)];
   if (side === engine.to_move()) {
@@ -4366,6 +4422,7 @@ function beginRun(): void {
 }
 function startRun(state: Run, map: MapNode[], resumed: Engine | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
+  armed = 0;
   moveModes('pick');
   leaveOnline();
   leaveRoyale();
@@ -4393,12 +4450,25 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | null = null): vo
     refresh();
   }
 }
+// The run's panel: the reward of a won fight (#961), the placement before a fight's first move, or the map.
 function showRun(): void {
   const { map, state } = run!;
-  runPanel.innerHTML = mapHtml(map, state);
-  runPanel.hidden = state.fighting;
-  document.body.dataset.run = state.end || (state.fighting ? 'fight' : 'map'); // read by the e2e tests
+  const placed = placing(state);
+  runPanel.innerHTML = state.reward ? rewardHtml(state) : placed ? placeHtml(state, armed) : mapHtml(map, state);
+  runPanel.hidden = state.fighting && !placed;
+  runPanel.classList.toggle('place', placed);
+  document.body.dataset.run = state.end || (state.reward ? 'reward' : placed ? 'place' : state.fighting ? 'fight' : 'map'); // read by the e2e tests
   hud();
+}
+// A press on one of the army's marbles (Black) during the placement places the type armed, or takes it back.
+function placeAt(q: number, r: number): void {
+  if (engine.board()[cellIndex(q, r)] !== 1) return;
+  run!.state = place(run!.state, [q, r], armed);
+  if (left(run!.state, armed) === 0) armed = 0; // none left: the type is put down
+  void saveRun(gameStore, run!.state);
+  engine = armyEngine(run!.state.army, run!.state.placed);
+  showRun();
+  refresh();
 }
 function fightRun(game: Engine): void {
   engine = game;
@@ -4414,14 +4484,17 @@ function fightRun(game: Engine): void {
 // After each move of a fight: the moves are saved, and once it is over the army loses the marbles the bot ejected.
 function runMoved(): void {
   const status = engine.status();
-  const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, run!.state, status === 1, engine.ejected(2));
+  const kept = (): number[] => [1, 2, 3].map((k) => parseSpecials((engine as Engine).specials()).filter((s) => s.kind === k).length);
+  const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, run!.state, status === 1, engine.ejected(2), kept());
   run!.state = state;
+  armed = 0;
   void saveRun(gameStore, state);
-  if (!state.fighting) showRun();
+  if (!state.fighting || state.moves.length === 1) showRun(); // the fight's end, or its first move ends the placement
 }
 function leaveRun(): void {
   if (!run) return;
   run = null;
+  armed = 0;
   runPanel.hidden = true;
   delete document.body.dataset.run;
   newGameButton.hidden = false;
@@ -4433,7 +4506,14 @@ function resumeRun(saved: NonNullable<Awaited<ReturnType<typeof loadSavedRun>>>)
 runPanel.addEventListener('click', (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>('button');
   if (button?.id === 'run-new') beginRun();
-  else if (button) {
+  else if (button?.dataset.offer) {
+    run!.state = claim(run!.state, Number(button.dataset.offer));
+    void saveRun(gameStore, run!.state);
+    showRun();
+  } else if (button?.dataset.kind) {
+    armed = armed === Number(button.dataset.kind) ? 0 : Number(button.dataset.kind);
+    showRun();
+  } else if (button) {
     run!.state = pick(run!.state, Number(button.dataset.node));
     void saveRun(gameStore, run!.state);
     fightRun(Engine.with_army(run!.state.army));

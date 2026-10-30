@@ -13,8 +13,9 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
   currency.
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
   fight starts with the army's marbles on the standard layout, the missing ones taken from the
-  back row first; the bot has its 14. Marbles ejected in a fight are lost for the run. Rewards
-  that add marbles or special marbles (Heavy, Anchor, Spark) come with #799.
+  back row first; the bot has its 14. Marbles ejected in a fight are lost for the run. A won fight
+  that does not end the run offers a reward (section 6): a marble or a special marble (Heavy,
+  Anchor, Spark), placed before the next fights.
 - **End**: the run is lost when a fight is lost (a draw is a loss) or the army is below 4 marbles,
   and won by beating the act 3 boss. The bot wins a fight once the army is down to 3 marbles, so a
   fight never goes on after the run is lost; the army wins at the usual 6 ejections.
@@ -37,7 +38,8 @@ links of the last node.
 
 ## 3. Saving
 
-The run (seed, army, the nodes picked, and the moves of the fight on) is saved in IndexedDB after
+The run (seed, army, its special marbles, the nodes picked, the special marbles placed on the fight
+on and its moves, and a reward waiting to be picked) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -94,5 +96,26 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
 - **Bridge**: `Engine::place_special(q, r, kind)` and `Engine::specials()` (records `[q, r, kind]`,
   `1` Heavy, `2` Anchor, `3` Spark).
 
-Part 2 of #799 adds the placement screen before a fight, the reward screen after a won fight, the
-looks of the three types and how many of each a fight may hold.
+## 6. Special marbles on screen (#961)
+
+- **The army's special marbles** are some of its marbles, counted by type with the run, and never
+  more than the army: when the army falls below its count, the Sparks go first, then the Anchors,
+  then the Heavies. One placed on a fight's board and thrown off is lost for the run.
+- **Placement**: a fight of an army that holds special marbles opens on the placement screen,
+  beside the board (over its far half when the window is held upright), so the army's marbles stay
+  free. The player picks a type, then presses one of the army's marbles: it becomes that type
+  (`Engine::place_special`), a second press with the same type takes it back; once none of the
+  type is left, it is put down. **A fight holds at most 3 of each type** (the cap of #799's open question 2,
+  which keeps the bot's search affordable), and no more than the army holds. The first move starts
+  the fight and closes the screen; the placements are saved with the run, so a reload replays them.
+- **Reward**: after a won fight that does not end the run, the reward screen offers 3 of: one more
+  marble (only below 14) and the three special types (only while the army has a plain marble to
+  make special). The offers are a pure function of the run seed and the node won (its index in the
+  map, a 32-bit hash), so a run replays them. A special reward makes one plain marble of the army
+  special.
+- **Looks**: a glyph on the marble, facing the default view, its own shape and colour, both 3:1
+  on the player's glass and the enemy's shell, never the colour alone: Heavy a steel square, Anchor
+  a blue triangle pointing down, Spark a yellow star. The placement and reward buttons show the same glyphs.
+- **The Spark's burst**: a ring in the Spark's colour grows from its last cell and fades
+  (450 ms, the Unstable Core's burst), and the page keeps drawing while it plays (#848). Reduced
+  motion: no ring.

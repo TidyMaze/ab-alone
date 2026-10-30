@@ -240,7 +240,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
 
   // The bot workers answer in-process, on the next task, with the page's own engine.
   const wasm = await import('abalone-wasm');
-  const { answer } = await import('../bot');
+  const { answer, engineFor } = await import('../bot');
   vi.stubGlobal(
     'Worker',
     class {
@@ -251,7 +251,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
             data:
               options.fails === 'worker'
                 ? { id: req.id, error: 'Error: boom' }
-                : answer(req, (army) => (army === undefined ? new wasm.Engine() : wasm.Engine.with_army(army)), (id, seed) => new wasm.Encounter(id, seed)),
+                : answer(req, (army, placed) => engineFor(wasm.Engine, army, placed), (id, seed) => new wasm.Encounter(id, seed)),
           } as MessageEvent<BotResponse>),
         );
       }
