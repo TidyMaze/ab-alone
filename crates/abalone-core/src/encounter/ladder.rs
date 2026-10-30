@@ -10,7 +10,7 @@ use crate::encounter::ballast::{ballast_move, ballast_search, ballast_start, BAL
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
 use crate::encounter::dual::{dual_move, dual_start, dual_step, DUAL_NODE_BUDGET};
-use crate::encounter::echo::{echo_boss, echo_move, echo_search, echo_start};
+use crate::encounter::echo::{echo_boss, echo_free_moves, echo_move, echo_search, echo_start};
 use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
 use crate::encounter::telemetry::{
@@ -193,7 +193,7 @@ fn mix(mut x: u64) -> u64 {
 /// The player bot move: a seeded random legal move for its first `opening` moves, then the
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
 /// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
-/// and plays the plain search when no move is left. Against the Chaplain and the Ballast Mind the
+/// takes the Echo's safe free moves, and plays the plain search when no move is left. Against the Chaplain and the Ballast Mind the
 /// search sees the hooks. `None` when the player has no move
 /// (every marble was converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
@@ -204,6 +204,12 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         moves.get(pick as usize).cloned()
     } else {
         let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.tell_safe(mv);
+        // The Echo's free move costs no tempo: the pro takes the first safe one (#958).
+        if let Arena::Plain(enc, LadderBoss::Echo) = arena {
+            if let Some(free) = echo_free_moves(enc).into_iter().find(|m| strict(m)) {
+                return Some(free);
+            }
+        }
         // The pro reads the hooks, not the health swing: the ladder keeps the player it measured.
         let step =
             |b: &Board, p: Player, m: &Move, a: Board| (chaplain_step(0, b, p, m, a).0, [0, 0]);
