@@ -222,6 +222,9 @@ impl Searcher<'_> {
         if node.ejected[index(other(mover))] >= self.win[index(other(mover))] {
             return Some(ply - WIN);
         }
+        if node.ejected[index(mover)] >= self.win[index(mover)] {
+            return Some(WIN - ply);
+        }
         if self.last_ply == Some(ply) {
             return Some(WIN - ply);
         }
