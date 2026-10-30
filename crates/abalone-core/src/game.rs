@@ -231,11 +231,20 @@ impl Game {
     /// Times the position after the side to move plays `mv` has been seen in this game, that
     /// occurrence included; 0 when `mv` is illegal. [`REPETITION_LIMIT`] ends the game in a draw.
     pub fn seen_after(&self, mv: &Move) -> usize {
+        self.seen_then(mv, other(self.to_move))
+    }
+
+    /// [`Game::seen_after`] for `mv` played as a free bonus move: the same side moves again.
+    pub fn seen_after_bonus(&self, mv: &Move) -> usize {
+        self.seen_then(mv, self.to_move)
+    }
+
+    /// Times the position after `mv`, with `next` to move, would have been seen.
+    fn seen_then(&self, mv: &Move, next: Player) -> usize {
         let Ok((board, _)) = apply(&self.board, self.to_move, mv) else {
             return 0;
         };
-        let hash = position_hash(&board, other(self.to_move));
-        1 + self.seen(hash)
+        1 + self.seen(position_hash(&board, next))
     }
 
     /// Replaces the board after a ply (a boss hook) and re-hashes that ply's position, so

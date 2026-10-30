@@ -193,9 +193,9 @@ fn mix(mut x: u64) -> u64 {
 /// The player bot move: a seeded random legal move for its first `opening` moves, then the
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
 /// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
-/// takes the Echo's safe free moves that eject, and plays the plain search when no move is left. Against the Chaplain and the Ballast Mind the
-/// search sees the hooks. `None` when the player has no move
-/// (every marble was converted).
+/// takes the Echo's safe free moves that eject and never plays another free move, and plays the
+/// plain search when no move is left. Against the Chaplain and the Ballast Mind the search sees
+/// the hooks. `None` when the player has no move (every marble was converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     let game = arena.game();
     if index < opening {
@@ -203,18 +203,19 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         let pick = mix(seed ^ mix(u64::from(index))) % moves.len().max(1) as u64;
         moves.get(pick as usize).cloned()
     } else {
-        let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.tell_safe(mv);
         // The Echo's free move costs no tempo, but one that gives the mirrored board back is the
         // Echo's lock (#951): the pro takes the first safe one that ejects, else declines (#958).
-        if let Arena::Plain(enc, LadderBoss::Echo) = arena {
-            let ejects = |m: &Move| apply(game.board(), Player::Black, m).is_ok_and(|a| a.1);
-            if let Some(free) = echo_free_moves(enc)
-                .into_iter()
-                .find(|m| ejects(m) && strict(m))
-            {
-                return Some(free);
-            }
+        let offered = match arena {
+            Arena::Plain(enc, LadderBoss::Echo) => echo_free_moves(enc),
+            _ => Vec::new(),
+        };
+        let ejects = |m: &Move| apply(game.board(), Player::Black, m).is_ok_and(|a| a.1);
+        let safe = |m: &&Move| ejects(m) && game.seen_after_bonus(m) == 1 && arena.tell_safe(m);
+        if let Some(free) = offered.iter().find(safe) {
+            return Some(free.clone());
         }
+        let own = |mv: &Move| !offered.contains(mv);
+        let strict = |mv: &Move| own(mv) && game.seen_after(mv) == 1 && arena.tell_safe(mv);
         // The pro reads the hooks, not the health swing: the ladder keeps the player it measured.
         let step =
             |b: &Board, p: Player, m: &Move, a: Board| (chaplain_step(0, b, p, m, a).0, [0, 0]);
@@ -229,7 +230,7 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
             }
             _ => search_with(game, budget, DEFAULT_WEIGHTS, allow).map(|r| r.mv),
         };
-        pick(&strict).or_else(|| pick(&|_| true))
+        pick(&strict).or_else(|| pick(&own))
     }
 }
 
