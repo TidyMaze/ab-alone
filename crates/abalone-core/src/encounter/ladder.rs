@@ -406,17 +406,20 @@ mod tests {
 
     #[test]
     fn a_move_whose_bonus_mirror_repeats_a_third_time_is_not_tell_safe() {
-        // Both sides shuffle one marble, each move mirrored: Black's next step back is
-        // followed by the Echo's bonus, which brings the start position back a third time.
+        // Both sides shuffle one marble, each move mirrored (Black takes its free moves):
+        // Black's next step back is followed by the Echo's bonus, which brings the start
+        // position back a third time.
         let mut a = echo_arena(&[(0, 2)], &[(0, -2)], Player::White);
         let step = |q, r, dir| Move {
             cells: vec![(q, r)],
             dir,
         };
-        use crate::moves::Direction::{E, NW};
+        use crate::moves::Direction::{E, NW, SE};
         a.play(&step(0, -2, NW)).unwrap();
+        a.play(&step(0, 2, SE)).unwrap();
         a.play(&step(0, 3, NW)).unwrap();
         a.play(&step(0, -2, NW)).unwrap();
+        a.play(&step(0, 2, SE)).unwrap();
         let back = step(0, 3, NW);
         assert_eq!(
             a.game().seen_after(&back),

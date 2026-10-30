@@ -1,7 +1,8 @@
 //! Boss 4, The Echo (docs/specs/game-design.md section 7.4): when a move of one side can be
-//! played in point symmetry by the other side, that mirror is played at once for the other side
-//! as a free bonus move, both ways, then that side plays its own move. In P2 the other side also
-//! gets the mirror of one older move that was never echoed, when it is legal now.
+//! played in point symmetry by the other side, that mirror is a free bonus move for the other
+//! side, both ways, then that side plays its own move. The Echo's bonus is played at once; the
+//! player's is offered, taken by playing it, declined by any other move (#958). In P2 the other
+//! side also gets the mirror of one older move that was never echoed, when it is legal now.
 
 use crate::board::Board;
 use crate::encounter::{losses, BossDef, Encounter};
@@ -95,27 +96,47 @@ fn remember(board: &Board, change: impl FnOnce(&mut Vec<(Player, Move)>)) -> Boa
     out
 }
 
-/// `true` when playing `bonus` ends the game as a loss for the side to move, who receives it. Such
-/// a bonus is skipped. A legal move never ejects its own marble nor credits the other side, so the
-/// only loss a bonus can bring its receiver is a draw (repetition or cap), a loss for the player.
-fn loses(game: &Game, bonus: &Move) -> bool {
-    let mut after = game.clone();
-    after.play_bonus(bonus).expect("a legal bonus");
-    game.to_move() == Player::Black && after.outcome() == Some(Outcome::Draw)
+/// The free moves offered to the player that are legal now and would not lose them the game: a
+/// draw (third repetition or the no-ejection cap) is a player loss, so such a move is not offered.
+/// Empty on the Echo's turn and once the game is over.
+pub fn echo_free_moves(enc: &Encounter) -> Vec<Move> {
+    enc.offer
+        .iter()
+        .filter(|m| {
+            let mut after = enc.game.clone();
+            after.play_bonus(m).is_ok() && after.outcome() != Some(Outcome::Draw)
+        })
+        .cloned()
+        .collect()
 }
 
-/// Plays `bonus` for the side to move, which moves again, unless it would lose it the game.
+/// Plays `mv` as a free move when it is offered, and the player moves again: `false` otherwise.
+pub(crate) fn take_free(enc: &mut Encounter, mv: &Move) -> bool {
+    if !echo_free_moves(enc).contains(mv) {
+        return false;
+    }
+    enc.game.play_bonus(mv).expect("a legal free move");
+    let i = enc.offer.iter().position(|m| m == mv).expect("offered");
+    enc.offer.remove(i);
+    true
+}
+
+/// Gives `bonus` to the side to move: the Echo plays it at once, the player is offered it.
 fn bonus(enc: &mut Encounter, bonus: &Move) {
-    if !loses(&enc.game, bonus) {
+    if enc.game.to_move() == Player::White {
         enc.game.play_bonus(bonus).expect("a legal bonus");
+    } else {
+        enc.offer.push(bonus.clone());
     }
 }
 
 /// The bonus moves after the main move `mv` of [`Encounter::play`], while the game runs: the
 /// mirror of `mv` for the other side when it is legal, then in P2 the mirror of the latest older
 /// move of the same side never echoed and legal now. A bonus is never mirrored itself. A move
-/// whose mirror was illegal is remembered on the board; an echoed or skipped one is not.
+/// whose mirror was illegal is remembered on the board; an echoed or offered one is not. A main
+/// move declines the player's offer first.
 pub(crate) fn play_bonuses(enc: &mut Encounter, mv: &Move) {
+    enc.offer.clear();
     if enc.game.outcome().is_some() {
         return;
     }
@@ -141,33 +162,35 @@ pub(crate) fn play_bonuses(enc: &mut Encounter, mv: &Move) {
     }
 }
 
-/// The bonus moves the other side gets when the side to move plays `mv`, in order: the tell.
-/// Empty when `mv` is illegal or gives none.
+/// The bonus moves the other side gets when the side to move plays `mv`, in order, played (the
+/// Echo's) or offered (the player's): the tell. Empty when `mv` is illegal, free or gives none.
 pub fn echo_bonuses(enc: &Encounter, mv: &Move) -> Vec<Move> {
     let mut after = enc.clone();
     let before = enc.game().history().len() + 1;
     if after.play(mv).is_err() {
         return Vec::new();
     }
-    after.game().history()[before..]
+    let played = after.game().history().get(before..).unwrap_or_default();
+    played
         .iter()
         .map(|p| p.mv.clone())
+        .chain(echo_free_moves(&after))
         .collect()
 }
 
 /// The bonus moves the other side would get if the side to move played `mv`, in order, each with
-/// `true` when it would be skipped (it would lose its receiver the game): the client's tell. Empty
-/// when `mv` is illegal, ends the game, or gives no bonus.
+/// `true` when it would be skipped (a player's free move that would lose them the game is not
+/// offered): the client's tell. Empty when `mv` is illegal, free, ends the game, or gives no bonus.
 pub fn echo_tell(enc: &Encounter, mv: &Move) -> Vec<(Move, bool)> {
     let mut main = enc.game().clone();
-    if main.play(mv).is_err() || main.outcome().is_some() {
+    if echo_free_moves(enc).contains(mv) || main.play(mv).is_err() || main.outcome().is_some() {
         return Vec::new();
     }
+    let given = echo_bonuses(enc, mv);
     let mut after = enc.clone();
     after.play(mv).expect("a legal move");
-    let played = &after.game().history()[enc.game().history().len() + 1..];
     let tell = |m: Move| {
-        let skipped = !played.iter().any(|p| p.mv == m);
+        let skipped = !given.contains(&m);
         (m, skipped)
     };
     let mut out = Vec::new();
@@ -455,11 +478,9 @@ mod tests {
             let back = side_mv(swap, &[(0, -3)], SE);
             e.play(&back).unwrap();
             // The second side's bonus, the mirror of `a`, is legal again for the first side, but
-            // a bonus is never mirrored: only the mirror of `back` is played.
-            assert_eq!(
-                plies(&e),
-                vec![a.clone(), mirror_move(&a), back.clone(), mirror_move(&back)]
-            );
+            // a bonus is never mirrored: only the mirror of `back` is offered.
+            assert_eq!(plies(&e), vec![a.clone(), mirror_move(&a), back.clone()]);
+            assert_eq!(echo_free_moves(&e), vec![mirror_move(&back)]);
             assert_eq!(e.game().to_move(), sides(swap).0);
             assert!(e.game().board().echoes().is_empty());
             assert_ne!(e.game().to_move(), second);
@@ -587,7 +608,7 @@ mod tests {
     #[test]
     fn a_normal_move_declines_the_offer_for_good() {
         let played = mv(&[(0, -2)], NW);
-        let mut e = offered(&[(0, 2), (-3, 4)], &[(0, -2)], [0, 0], &played);
+        let mut e = offered(&[(0, 2), (-3, 4)], &[(0, -2), (3, -4)], [0, 0], &played);
         let own = mv(&[(-3, 4)], E);
         e.play(&own).unwrap();
         assert_eq!(
@@ -599,10 +620,11 @@ mod tests {
             e.game().board().echoes().is_empty(),
             "declined counts as echoed"
         );
-        let reply = mv(&[(0, -2)], W);
+        let reply = mv(&[(2, -4)], W);
         e.play(&reply).unwrap();
-        assert!(
-            !echo_free_moves(&e).contains(&mirror_move(&played)),
+        assert_eq!(
+            echo_free_moves(&e),
+            vec![mirror_move(&reply)],
             "a declined free move never comes back"
         );
     }
