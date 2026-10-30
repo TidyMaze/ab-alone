@@ -194,10 +194,10 @@ describe('main.ts board and HUD', () => {
           expect(texture?.name, `${skin.id} ${slot}`).toBe(side === 'glass' && kind === 'emission' ? `skin-${skin.asset}-albedo.ktx2` : kinds.includes(kind) ? `skin-${skin.asset}-${kind}.ktx2` : undefined);
           if (texture) expect(texture.colorSpace, `${skin.id} ${slot}`).toBe(kind === 'albedo' || kind === 'emission' ? THREE.SRGBColorSpace : THREE.NoColorSpace);
         }
-        expect(m.color.r, skin.id).toBe(1);
+        expect(m.color.toArray(), skin.id).toEqual(side === 'shell' ? [0.2, 0.2, 0.2] : [1, 1, 1]);
         if (side === 'glass') {
           expect(m.emissiveMap).toBe(m.map); // the same photograph fills the white body, no extra asset
-          expect(m.emissiveIntensity).toBe(0.5);
+          expect(m.emissiveIntensity).toBe(1);
         }
         expect(m.metalness, skin.id).toBe(kinds.includes('metalness') ? 1 : 0);
         if (kinds.includes('emission')) {
@@ -225,7 +225,7 @@ describe('main.ts board and HUD', () => {
     game.openSettings();
     setting('palette'); // Protan
     const { shells, glass } = drawn(scene());
-    expect([shells[0]!.material.color.r, glass[0]!.material.color.r]).toEqual([1, 1]);
+    expect([shells[0]!.material.color.r, glass[0]!.material.color.r]).toEqual([0.2, 1]);
   });
 
   it('draws The Ballast Mind on its radius 5 board (#564): 85 discs round six void pillars, a frame of radius 5', async () => {

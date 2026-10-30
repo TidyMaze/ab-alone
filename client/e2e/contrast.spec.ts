@@ -9,7 +9,8 @@ import { HEAT } from '../src/marbles';
 // reach 3:1: a seam point where the neighbouring cell occludes the bevel may fail. The empty rim cells of the far half
 // too, at the high tier with Clear board off: the fog stays off the cells (bug #399). The far row holds marbles, which
 // hide its bevels, so fog.spec.ts checks that row.
-const CELLS: [number, number][] = [[0, 0], [-2, 1], [2, -1], [1, 1], [-2, -2], [4, -2]];
+// (-2, 0) stays visible: (-2, 1) has a bevel hidden by the marble one row nearer the camera (#890).
+const CELLS: [number, number][] = [[0, 0], [-2, 0], [2, -1], [1, 1], [-2, -2], [4, -2]];
 const EDGE = 0.44;
 const SURFACE = 0.52;
 const MIN_PASSING = 6;

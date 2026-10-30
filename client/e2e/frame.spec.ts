@@ -7,6 +7,10 @@ import { openModes } from './modes';
 // The 61 cells sit on a hexagonal steel frame (#292, world.md section 6): a plate under them, a rim around them.
 const frame = (page: Page) => page.evaluate(() => (window as any).__frame());
 const rings = (page: Page) => page.evaluate(() => (window as any).__rings());
+const freshDraw = async (page: Page) => {
+  const n = await page.evaluate(() => (window as any).__drawNext() as number);
+  await page.waitForFunction((before) => (window as any).__draws() > before, n);
+};
 // __cellToScreen is linear in q and r: fractional coordinates give any point of the board plane.
 const clickAt = async (page: Page, q: number, r: number) => {
   const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
@@ -68,7 +72,6 @@ const pixel = (page: Page, png: Buffer, p: { x: number; y: number }) =>
   );
 
 test('the rim half at the end of the side to move lights in its colour, then goes out at the end, #300', async ({ page }) => {
-  test.slow(); // under automation a loaded machine can skip draws for seconds after the move (quality.ts drawDue)
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('./?bot=off'); // hot-seat: Black, side 1, wears the shell and starts at the near end
   await page.locator('canvas').waitFor();
@@ -77,7 +80,7 @@ test('the rim half at the end of the side to move lights in its colour, then goe
   await expect(page.locator('body')).toHaveAttribute('data-rim', 'near');
   expect((await frame(page)).lit).toEqual({ near: SODIUM, far: 0 });
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
-  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await freshDraw(page);
   const blackTurn = await page.screenshot({ type: 'png' });
 
   await clickAt(page, 0, 2);
@@ -88,15 +91,12 @@ test('the rim half at the end of the side to move lights in its colour, then goe
 
   // By place, not colour alone (world.md section 8): each half is 3:1 brighter lit than dark.
   const [near, far] = [await rimPoint(page, 'near'), await rimPoint(page, 'far')];
-  await expect
-    .poll(async () => {
-      const whiteTurn = await page.screenshot({ type: 'png' });
-      return Math.min(
-        contrastRatio(await pixel(page, blackTurn, near), await pixel(page, whiteTurn, near)),
-        contrastRatio(await pixel(page, whiteTurn, far), await pixel(page, blackTurn, far)),
-      );
-    }, { timeout: 30_000 })
-    .toBeGreaterThanOrEqual(3);
+  await freshDraw(page);
+  const whiteTurn = await page.screenshot({ type: 'png' });
+  expect(Math.min(
+    contrastRatio(await pixel(page, blackTurn, near), await pixel(page, whiteTurn, near)),
+    contrastRatio(await pixel(page, whiteTurn, far), await pixel(page, blackTurn, far)),
+  )).toBeGreaterThanOrEqual(3);
 
   await page.locator('#import-file').setInputFiles({
     name: 'game.json',
