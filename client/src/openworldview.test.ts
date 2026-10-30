@@ -7,6 +7,8 @@ import {
   footprint,
   GROUNDS,
   groundRadius,
+  HI_CAPACITY,
+  HI_RADIUS,
   loadModels,
   LOOK,
   MAX_REACH,
@@ -106,7 +108,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const view = new OpenWorldView(new World(bytes));
     const tree = mesh(view, 'prop-tree').geometry;
     const mountain = new THREE.BoxGeometry();
-    view.useModels({ mountain });
+    view.useModels({ low: { mountain }, high: {} });
     expect(mesh(view, 'prop-mountain').geometry).toBe(mountain);
     expect(mesh(view, 'prop-tree').geometry).toBe(tree);
   });
@@ -115,35 +117,142 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const view = new OpenWorldView(new World(bytes));
     const painted = new THREE.BoxGeometry();
     painted.setAttribute('color', new THREE.BufferAttribute(new Float32Array(painted.getAttribute('position').count * 3), 3));
-    view.useModels({ mountain: painted, tree: new THREE.BoxGeometry() });
+    view.useModels({ low: { mountain: painted, tree: new THREE.BoxGeometry() }, high: { mountain: painted } });
     const paintedMaterial = mesh(view, 'prop-mountain').material as THREE.MeshStandardMaterial;
     expect(paintedMaterial.vertexColors).toBe(true);
     expect(paintedMaterial.color.getHex()).toBe(0xffffff);
     expect(paintedMaterial.emissive.getHex()).toBe(0x000000);
+    const detailedMaterial = mesh(view, 'prop-mountain-hi').material as THREE.MeshStandardMaterial;
+    expect(detailedMaterial.vertexColors).toBe(true);
+    expect(detailedMaterial.color.getHex()).toBe(0xffffff);
     const plainMaterial = mesh(view, 'prop-tree').material as THREE.MeshStandardMaterial;
     expect(plainMaterial.vertexColors).toBe(false);
     expect(plainMaterial.color.getHex()).toBe(0x2fb5a0);
   });
 });
 
-describe('loading the Blender models (client/models/openworld.glb)', () => {
-  const scene = new THREE.Group();
-  for (const name of ['ow_mountain', 'ow_tree', 'ow_wall']) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry());
-    m.name = name;
-    scene.add(m);
-  }
+describe('loading the Blender models (client/models/openworld.glb, openworld-hi.glb, #989)', () => {
+  const sceneOf = (names: string[]) => {
+    const scene = new THREE.Group();
+    for (const name of names) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry());
+      m.name = name;
+      scene.add(m);
+    }
+    return scene;
+  };
+  const urls = { low: '/assets/pbr/openworld.glb', high: '/assets/pbr/openworld-hi.glb' };
+  // each file holds its own names: the low-poly `ow_<prop>`, the detailed `ow_<prop>_hi`
+  const files: Record<string, THREE.Group> = {
+    [urls.low]: sceneOf(['ow_mountain', 'ow_tree', 'ow_wall']),
+    [urls.high]: sceneOf(['ow_mountain_hi', 'ow_tree_hi', 'ow_boulder_hi', 'ow_wall_hi']),
+  };
 
-  it('takes the geometry of each model by its name and skips the missing ones', async () => {
-    const loader = { loadAsync: vi.fn(async () => ({ scene })) };
-    const geometries = await loadModels('/assets/pbr/openworld.glb', loader);
-    expect(loader.loadAsync).toHaveBeenCalledWith('/assets/pbr/openworld.glb');
-    expect(Object.keys(geometries).sort()).toEqual(['mountain', 'tree', 'wall']);
+  it('takes the geometry of each model by its name: the low-poly ones from one file, the detailed ones from the other', async () => {
+    const loader = { loadAsync: vi.fn(async (url: string) => ({ scene: files[url]! })) };
+    const models = await loadModels(urls, loader);
+    expect(loader.loadAsync).toHaveBeenCalledWith(urls.low);
+    expect(loader.loadAsync).toHaveBeenCalledWith(urls.high);
+    expect(Object.keys(models.low).sort()).toEqual(['mountain', 'tree', 'wall']);
+    expect(Object.keys(models.high).sort()).toEqual(['boulder', 'mountain', 'tree', 'wall']);
   });
 
-  it('gives none when the load fails, so the procedural shapes stay', async () => {
+  it('keeps the low-poly models when only the detailed file fails: the low-poly props draw every cell', async () => {
+    const loader = { loadAsync: async (url: string) => (url === urls.high ? Promise.reject(new Error('404')) : { scene: files[url]! }) };
+    const models = await loadModels(urls, loader);
+    expect(Object.keys(models.low).sort()).toEqual(['mountain', 'tree', 'wall']);
+    expect(models.high).toEqual({});
+  });
+
+  it('gives none when both loads fail, so the procedural shapes stay', async () => {
     const loader = { loadAsync: async () => Promise.reject(new Error('404')) };
-    expect(await loadModels('/x.glb', loader)).toEqual({});
+    expect(await loadModels(urls, loader)).toEqual({ low: {}, high: {} });
+  });
+});
+
+// Every chunk of the square -3..3 is one terrain code: 4 a peak, 5 a boulder, 6 a tree, 7 a wall.
+function all(terrain: number): (cx: number, cy: number) => Uint8Array {
+  return (cx, cy) => {
+    if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+    const out = new Uint8Array(CHUNK * CHUNK * 2);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, terrain], i * 2);
+    return out;
+  };
+}
+const hexDistance = ([q1, r1]: Axial, [q2, r2]: Axial): number => {
+  const dq = q1 - q2;
+  const dr = r1 - r2;
+  return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+};
+/** The cell of each instance of a mesh, read back from its matrices. */
+const cellsOf = (view: OpenWorldView, name: string): Axial[] => {
+  const m = mesh(view, name);
+  const matrix = new THREE.Matrix4();
+  const out: Axial[] = [];
+  for (let i = 0; i < m.count; i++) {
+    m.getMatrixAt(i, matrix);
+    const p = new THREE.Vector3().setFromMatrixPosition(matrix);
+    out.push(cellAtPoint(p.x, p.z));
+  }
+  return out;
+};
+const box = () => new THREE.BoxGeometry();
+
+describe('the detailed props near the hero (#989)', () => {
+  it('has a detailed mesh per modelled prop, holding the cells within HI_RADIUS of the hero: 3r(r+1)+1', () => {
+    expect(HI_RADIUS).toBe(8);
+    expect(HI_CAPACITY).toBe(3 * HI_RADIUS * (HI_RADIUS + 1) + 1);
+    const view = new OpenWorldView(new World(bytes));
+    for (const prop of ['mountain', 'tree', 'boulder', 'wall']) {
+      expect(mesh(view, `prop-${prop}-hi`).instanceMatrix.count).toBe(HI_CAPACITY);
+    }
+  });
+
+  it('draws the cells within HI_RADIUS of the hero with the detailed mesh, the others with the low-poly one, each in exactly one', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    const near = cellsOf(view, 'prop-mountain-hi');
+    const far = cellsOf(view, 'prop-mountain');
+    const cells = 49 * CHUNK * CHUNK;
+    expect(near).toHaveLength(HI_CAPACITY); // every cell of the hex of radius 8 is loaded
+    expect(new Set(near.map(String)).size).toBe(HI_CAPACITY);
+    expect(near.every((c) => hexDistance(c, [0, 0]) <= HI_RADIUS)).toBe(true);
+    expect(far.every((c) => hexDistance(c, [0, 0]) > HI_RADIUS)).toBe(true);
+    expect(new Set([...near, ...far].map(String)).size).toBe(cells);
+    expect(near.length + far.length).toBe(cells);
+  });
+
+  it('moves the split with the hero: a step to a neighbour rebuilds it, so the cells now in reach are detailed', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: {}, high: { mountain: box() } });
+    view.show([0, 0]);
+    expect(cellsOf(view, 'prop-mountain-hi')).not.toContainEqual([9, 0]);
+    view.show([1, 0]); // (9, 0) is 8 cells from here, 9 from the first cell
+    expect(cellsOf(view, 'prop-mountain-hi')).toContainEqual([9, 0]);
+    expect(cellsOf(view, 'prop-mountain-hi')).not.toContainEqual([-8, 0]); // 9 from here, 8 from the first cell
+  });
+
+  it('draws only the low-poly props until the detailed models arrive, then rebuilds with them at once', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(view.drawn['prop-mountain-hi']).toBe(0);
+    expect(view.drawn['prop-mountain']).toBe(49 * CHUNK * CHUNK);
+    view.useModels({ low: {}, high: { mountain: box() } }); // no hero step: the view rebuilds the split itself
+    expect(view.drawn['prop-mountain-hi']).toBe(HI_CAPACITY);
+    expect(view.drawn['prop-mountain']).toBe(49 * CHUNK * CHUNK - HI_CAPACITY);
+  });
+
+  it('keeps every cell on the low-poly mesh when the detailed models did not load', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: {} });
+    view.show([0, 0]);
+    expect(view.drawn['prop-mountain-hi']).toBe(0);
+    expect(view.drawn['prop-mountain']).toBe(49 * CHUNK * CHUNK);
   });
 });
 
@@ -491,7 +600,7 @@ const objectsOf = (view: OpenWorldView) => {
 describe('the Open world view frees its GPU objects (#981)', () => {
   it('disposes every geometry and material of its scene once, the models it was given included', () => {
     const view = new OpenWorldView(new World(bytes));
-    view.useModels({ tree: new THREE.BoxGeometry() });
+    view.useModels({ low: { tree: new THREE.BoxGeometry() }, high: { tree: new THREE.BoxGeometry() } });
     view.show([0, 0]);
     const { geometries, materials } = objectsOf(view);
     expect(geometries.size).toBeGreaterThan(5);
@@ -502,6 +611,9 @@ describe('the Open world view frees its GPU objects (#981)', () => {
     expect(new Set(disposeGeometry.mock.contexts)).toEqual(geometries);
     expect(disposeMaterial.mock.calls.length).toBe(materials.size);
     expect(new Set(disposeMaterial.mock.contexts)).toEqual(materials);
+    const detailed = mesh(view, 'prop-tree-hi'); // the detailed meshes are freed with the rest (#989)
+    expect(disposeGeometry.mock.contexts).toContain(detailed.geometry);
+    expect(disposeMaterial.mock.contexts).toContain(detailed.material);
     vi.restoreAllMocks();
   });
 });
