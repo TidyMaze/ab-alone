@@ -64,6 +64,32 @@ centre weight (3 to 4 of 10, worse). A lower free-move budget helped but moves w
 budget in a chaotic way (budget 200: 9 of 10 at 10x, budget 300: 3 of 10 at 10x, 7 of 10 at 4000
 nodes), so it is not a stable knob.
 
+### The Echo rework (#859): bonus mirrors both ways, not winnable by the ladder, not tuned
+
+New rules (game-design.md section 7.4): the mirror of each move is a free bonus move for the other
+side, both ways, P2 at 3 ejections echoes one older never-echoed move, no P3; each bonus ply counts
+for the 100-ply no-ejection cap and the repetitions. The boss search plays the bonus mirrors in its
+tree (`echo_step`); the node budget stays 400. The ladder pro also searches with `echo_step`, and
+reads the ghost: a move after which the bonus mirrors make a draw is not played.
+
+| Player budget | Before wins /10 | After wins /10 | Median plies after | Highest phase after | Deaths after |
+|---|---|---|---|---|---|
+| 400 (1x) | 2 (median 165, push 1, draw 7) | 0 | 58 | P2 | draw 10 |
+| 4000 (10x) | 8 (median 107, draw 2) | 0 | 51 | P2 | draw 10 |
+| 4000 (10x), 40 seeds | | 2 of 40 | 51 | P2 | draw 38 |
+
+Before is `main` at 68d7792 (the old Echo: the mirror of the player move as its reply, else its
+search). Plies count the main moves. Every lost game after is a draw at the 100-ply no-ejection cap
+(about 50 main moves, each followed by a bonus): every move a side makes is copied for the other
+side, so the board stays near point-symmetric and neither side wins a marble. The pro at 10x wins 2 of
+40 seeds. Far below the 7 to 9 of 10 target; nothing is tuned here (#859), the rule is the owner's.
+The knobs left are the cap (bonus plies counted or not), the boss budget, or the opt-out.
+
+Reply time through wasm (nodejs release build, 6 seeds of up to 80 plies, the player side plays its
+auto-play search, boss replies only, ms): The Echo 61 average, 108 at the 95th percentile, 125 at most
+(400 nodes; before the rework 42 / 93 / 111); measured in the same run, the Hull 244 / 368 / 772 and the
+Pulsar 272 / 408 / 532.
+
 ### The Hull: winnable, no change
 
 7 of 10 with the pro-level player, 9 of 10 with the plain search. The rim cracks force contact,
@@ -500,7 +526,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 
 | Boss | Seed | Player budget | Moves |
 |---|---|---|---|
-| echo | 0 | 4000 | 126 |
+| echo | 28 (the first of 2 wins in 40 seeds after the rework, #859) | 4000 | 143 |
 | hull | 0 | 30000 | 89 |
 | choir | 0 | 15000 | 93 |
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
@@ -518,7 +544,7 @@ A player wins at 6 ejections, so the boss is left with 14 minus 6 = 8 marbles (1
 the Ballast Mind) unless conversions made it grow. The phase thresholds of section 7 of
 `game-design.md` then read:
 
-- The Echo P3 (5 left) and the Hull P3 (5 left): never played. The highest phase in the table is P2.
+- The Hull P3 (5 left): never played. The highest phase in the table is P2. The Echo has no P3 since #859.
 - The Chaplain (#748) has P2 at the 4th ejection, but the pro player wipes the boss by conversion before it (section 3).
 - The Choir was reworked in #747 (standard board, 6 ejections, armies removed at 3 and 5): re-measured at 10x, 10 of 10 won, median 118 plies, P3 reached. The text above about Decision #131 (10 ejections) is history.
 - The Ballast Mind is fixed by Decision #482 (win at 12 ejections, 4 boss marbles left); since #749 its

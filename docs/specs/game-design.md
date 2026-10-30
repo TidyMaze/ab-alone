@@ -410,8 +410,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   see repetitions, so it never skips a bonus. Node budget 400.
 - **Calibrate**: knob = AI node budget. Fail if win rate on attempt 1 to 3 exceeds 40 percent
   (too readable) or the median is over 12 attempts. Measured after #859 (boss-balance.md section
-  3): the ladder pro player wins none of 10 at 1x and 10x, every game a draw at the 100-ply cap;
-  not tuned in #859.
+  3): the ladder pro player wins none of 10 at 1x and 10x (2 of 40 at 10x), every loss a draw at
+  the 100-ply no-ejection cap; not tuned in #859.
 
 ### 7.5 The Ballast Mind (#47, #749): final exam
 
