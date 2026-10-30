@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours, World } from './openworld';
-import { GROUNDS, loadModels, LOOK, MAX_ZOOM, OpenWorldView, overviewPalette, topOf, variety, WATER, waterColor } from './openworldview';
+import { GROUNDS, loadModels, LOOK, MAX_ZOOM, OpenWorldView, topOf, variety, WATER, waterColor } from './openworldview';
 
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
 function bytes(cx: number, cy: number): Uint8Array {
@@ -191,93 +191,18 @@ describe('the zoom of the Open world camera (#976)', () => {
   });
 });
 
-describe('the overview past the close range (#976)', () => {
+describe('the far zoom is real 3D, with no overview (#976)', () => {
   const hero = (view: OpenWorldView) => view.scene.getObjectByName('hero')!;
-  const back = (view: OpenWorldView) => view.camera.position.z - hero(view).position.z;
-  const overlay = (view: OpenWorldView) => view.scene.getObjectByName('overview')!;
-  const raw = () => new Uint8Array();
 
-  it('switches to the overview past the close range: no fog, the chunks hidden, the plane and the hero dot shown', () => {
-    const view = new OpenWorldView(new World(bytes), raw);
-    view.show([2, 1]);
-    expect(view.scene.fog).not.toBeNull();
-    expect(mesh(view, 'terrain-grass').visible).toBe(true);
-    expect(overlay(view).visible).toBe(false);
-    view.zoomBy(2.5); // the close range's last view: still the real chunks
-    expect(view.scene.fog).not.toBeNull();
-    view.zoomBy(1.1);
-    expect(view.scene.fog).toBeNull();
-    expect(mesh(view, 'terrain-grass').visible).toBe(false);
-    expect(hero(view).visible).toBe(false);
-    expect(overlay(view).visible).toBe(true);
-    expect(view.camera.near).toBeGreaterThan(1);
-    view.zoomBy(1 / 1e3); // back below the close range
-    expect(view.scene.fog).not.toBeNull();
-    expect(mesh(view, 'terrain-grass').visible).toBe(true);
-    expect(overlay(view).visible).toBe(false);
-  });
-
-  it('looks straight down at the hero from high up, the tilt easing to none at the widest zoom', () => {
-    const view = new OpenWorldView(new World(bytes), raw);
-    view.show([2, 1]);
-    view.zoomBy(3);
-    expect(back(view)).toBeGreaterThan(0);
-    view.zoomBy(MAX_ZOOM / 3);
-    expect(view.zoom).toBe(MAX_ZOOM);
-    expect(back(view)).toBeCloseTo(0, 6);
-    expect(view.camera.position.y).toBeCloseTo(Math.hypot(14, 11) * MAX_ZOOM, 0);
-    expect(view.camera.far).toBeGreaterThan(view.camera.position.y * 2);
-    const dot = view.scene.getObjectByName('overview-hero')!;
-    expect(dot.position.x).toBeCloseTo(hero(view).position.x);
-    expect(dot.position.z).toBeCloseTo(hero(view).position.z);
-    expect(dot.scale.x).toBeGreaterThan(1);
-  });
-
-  it('paints the overview from the raw loader, not through the world, a few chunks at a time', () => {
-    const world = vi.fn(bytes);
-    const loader = vi.fn(() => new Uint8Array());
-    const view = new OpenWorldView(new World(world), loader);
-    view.show([0, 0]);
-    expect(view.paintOverview(8)).toBe(false); // not on yet
-    view.zoomBy(5);
-    const worldCalls = world.mock.calls.length; // the close range's chunks are read through the world, once
-    expect(view.paintOverview(8)).toBe(true);
-    expect(loader).toHaveBeenCalledTimes(8);
-    expect(world.mock.calls.length).toBe(worldCalls);
-  });
-
-  it('frees the texture, the plane and the dot when the overview is disposed, and is safe to dispose before it was made', () => {
-    const view = new OpenWorldView(new World(bytes), raw);
-    view.show([0, 0]);
-    view.disposeOverview(); // none made yet
-    view.zoomBy(5);
-    const geometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
-    const material = vi.spyOn(THREE.MeshBasicMaterial.prototype, 'dispose');
-    const texture = vi.spyOn(THREE.DataTexture.prototype, 'dispose');
-    view.disposeOverview();
-    expect(geometry).toHaveBeenCalledTimes(2);
-    expect(material).toHaveBeenCalledTimes(2);
-    expect(texture).toHaveBeenCalledTimes(1);
-    expect(view.scene.fog).not.toBeNull();
-    view.disposeOverview(); // again: nothing left
-    expect(texture).toHaveBeenCalledTimes(1);
-  });
-
-  it('without a loader the chunks count as painted and the overview keeps the sky colour', () => {
+  it('keeps the chunks, the props, the fog and the hero drawn at the widest zoom', () => {
     const view = new OpenWorldView(new World(bytes));
-    view.show([0, 0]);
-    view.zoomBy(5);
-    expect(view.paintOverview(4)).toBe(true);
-    view.disposeOverview();
-  });
-
-  it('gives the palette of the terrains: one colour each, a boulder, tree and wall in their ground colour', () => {
-    const palette = overviewPalette();
-    const colour = (hex: number) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255, 255];
-    expect(Array.from(palette.subarray(0, 4))).toEqual(colour(LOOK.water.color));
-    expect(Array.from(palette.subarray(5 * 4, 5 * 4 + 4))).toEqual(colour(LOOK.rock.color)); // boulder
-    expect(Array.from(palette.subarray(6 * 4, 6 * 4 + 4))).toEqual(colour(LOOK.grass.color)); // tree
-    expect(Array.from(palette.subarray(7 * 4, 7 * 4 + 4))).toEqual(colour(LOOK.rock.color)); // wall
+    view.show([2, 1]);
+    view.zoomBy(MAX_ZOOM);
+    expect(view.scene.fog).not.toBeNull();
+    expect(mesh(view, 'terrain-grass').visible).toBe(true);
+    expect(mesh(view, 'prop-tree').visible).toBe(true);
+    expect(hero(view).visible).toBe(true);
+    expect(view.scene.getObjectByName('overview')).toBeUndefined();
   });
 });
 

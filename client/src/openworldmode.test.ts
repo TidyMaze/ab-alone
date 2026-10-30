@@ -191,35 +191,15 @@ describe('the Open world mode', () => {
     expect(camera().position.y).toBeCloseTo(14);
   });
 
-  it('does not roll the hero on a click in the overview, and keeps the close range click', () => {
-    const m = mode();
-    m.enter(1, 800, 600);
-    m.press(400 + 55, 300, 800, 600); // a cell to the right: rolls at the close range
-    expect(m.hero!.at).toEqual([1, 0]);
-    m.zoom(MAX_ZOOM);
-    m.press(400 - 55, 300, 800, 600); // the same press in the overview: nothing
-    expect(m.hero!.at).toEqual([1, 0]);
-  });
-
-  it('keeps drawing while the overview paints, then stops', () => {
+  it('rolls the hero onto the cell picked by a click at the widest zoom too, #976', () => {
     const m = mode();
     m.enter(1, 800, 600);
     m.zoom(MAX_ZOOM);
-    const render = vi.fn();
-    for (let i = 0; i < 200; i++) m.frame(render);
-    const drawn = render.mock.calls.length;
-    expect(drawn).toBeGreaterThan(1);
-    m.frame(render);
-    expect(render.mock.calls.length).toBe(drawn);
-  });
-
-  it('frees the overview when it is left', () => {
-    const m = mode();
-    m.enter(1, 800, 600);
-    const dispose = vi.spyOn(OpenWorldView.prototype, 'disposeOverview');
-    m.leave();
-    expect(dispose).toHaveBeenCalledTimes(1);
-    dispose.mockRestore();
+    const pick = vi.spyOn(OpenWorldView.prototype, 'pick').mockReturnValue([1, 0]);
+    m.press(400, 300, 800, 600);
+    expect(pick).toHaveBeenCalled();
+    expect(m.hero!.at).toEqual([1, 0]);
+    pick.mockRestore();
   });
 
   it('ignores a resize before it is entered', () => {
