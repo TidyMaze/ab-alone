@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { openModes } from './modes';
 
-// #962: the Open world mode, behind ?openworld=<seed>: the hero rolls over the generated world, an obstacle (here water or a
-// tree on seed 7) stops it, and Escape leaves to the board.
+// #962: the Open world mode, behind ?openworld=<seed>: the hero rolls over the generated world, an obstacle stops it, and
+// Escape leaves to the board. The test does not name the blocked cell (a change of the terrain constants moves it, #1002): it
+// walks right until a press moves nothing, at most 200 steps.
 test('the hero rolls over the Open world, an obstacle stops it, and Escape leaves, #965', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
@@ -10,12 +11,20 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   await page.locator('#openworld').click();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
-  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowUp');
-  await expect.poll(at).toBe('2,-3');
-  await page.keyboard.press('ArrowUp'); // the cell ahead is blocked on this seed
-  await expect.poll(at).toBe('2,-3');
-  await page.keyboard.press('ArrowRight');
-  await expect.poll(at).toBe('3,-3');
+  let before = '0,0';
+  let stopped = false;
+  for (let i = 0; i < 200 && !stopped; i++) {
+    await page.keyboard.press('ArrowRight');
+    const now = (await at())!;
+    stopped = now === before;
+    before = now;
+  }
+  expect(stopped, 'something blocks the way right within 200 steps').toBe(true);
+  expect(before).not.toBe('0,0'); // it rolled before it was stopped
+  await page.keyboard.press('ArrowRight'); // still blocked
+  await expect.poll(at).toBe(before);
+  await page.keyboard.press('ArrowLeft'); // the cell it came from is open
+  await expect.poll(at).not.toBe(before);
   await expect(page.locator('#openworld-hud')).toBeVisible();
   await expect(page.locator('#hud')).toBeHidden();
   await page.keyboard.press('Escape');
