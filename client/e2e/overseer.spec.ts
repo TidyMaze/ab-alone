@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { pauseClock, stepClock } from './clock';
 import { openModes } from './modes';
 
 // The Overseer (#635, game-design.md section 7.11) from the fixture of the core tests
@@ -103,36 +104,37 @@ const LINES = [
 ];
 const bubbleText = (page: Page) => page.locator('#bubble-text').textContent() as Promise<string>;
 
-// The bubble runs on the page clock (page.clock): the 3 s hold and the fade are jumped over, not waited for (#836).
+// The bubble runs on the page clock (page.clock): paused after the setup and stepped by hand, so the typed length does
+// not depend on how fast a loaded machine draws (#836, #891).
 test('The Overseer: its taunt is typed in a bubble over its marble, with a flicker, then fades, #741', async ({ page }, testInfo) => {
   await page.clock.install();
   await startOverseer(page);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.mouse.move(2, 2); // no hover ghost
+  await pauseClock(page);
   await page.evaluate(() => document.getElementById('boss-retry')!.click()); // the same fight again: the taunt types in
   const bubble = page.locator('#bubble');
   await expect(bubble).toBeVisible();
-  await freshDraw(page); // the old line is gone from the bubble: the new one starts typing
+  await stepClock(page, 50); // the old line is gone from the bubble: the new one starts typing
   const lengths: number[] = [];
   for (let n = 0; n < 3; n++) {
     lengths.push((await bubbleText(page)).length);
-    await page.clock.fastForward(300);
-    await freshDraw(page);
+    await stepClock(page, 300);
   }
   expect(lengths[0]).toBeLessThan(lengths[2]!);
   expect(lengths[2]).toBeLessThan('Take your time. The neurotoxin will wait.'.length);
-  await page.mouse.move(2, 2);
-  await freshDraw(page);
+  await stepClock(page, 50);
   await page.screenshot({ path: testInfo.outputPath('overseer-typing.png') });
-  await page.clock.fastForward(2500); // the rest of the line is typed
+  await stepClock(page, 2500); // the rest of the line is typed
   await expect(page.locator('#bubble-text')).toHaveText('Take your time. The neurotoxin will wait.');
   const box = (await bubble.boundingBox())!;
   const view = page.viewportSize()!;
   expect(box.x).toBeGreaterThan(0);
   expect(box.x + box.width).toBeLessThan(view.width);
   expect(box.y).toBeGreaterThan(0);
-  await freshDraw(page);
+  await stepClock(page, 50);
   await page.screenshot({ path: testInfo.outputPath('overseer-taunt.png') });
-  await page.clock.fastForward(3500); // 3 s after the last character, then the fade
+  await stepClock(page, 3500); // 3 s after the last character, then the fade
   await expect(bubble).toBeHidden();
 });
 
