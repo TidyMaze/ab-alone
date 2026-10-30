@@ -12,7 +12,6 @@ import {
   fitView,
   framing,
   isDrag,
-  middle,
   orbit,
   pinchScale,
   resetView,
@@ -156,12 +155,6 @@ describe('framing, bug #227', () => {
   });
 });
 
-describe('middle, #957', () => {
-  it('is the middle of the box round the points on the board plane, ', () => {
-    expect(middle([{ x: -4, y: 0, z: 0 }, { x: 4.5, y: 0.5, z: -7 }, { x: 1, y: 0, z: 6 }])).toEqual({ x: 0.25, y: 0, z: -0.5 });
-  });
-});
-
 describe('screenView, the terminal reader (#512)', () => {
   // The half width and half height a camera at `d` sees, for a vertical field of view and an aspect.
   const seen = (d: number, fov: number, aspect: number) => {
@@ -210,14 +203,6 @@ describe('fitView, bug #691', () => {
     const side = { x: 6, y: 0, z: 0 };
     expect(fitView(resetView(), [side], 1280, 720)).toEqual(resetView());
     expect(fitView(resetView(), [side], 375, 812).distance).toBeGreaterThan(resetView().distance * 1.2);
-  });
-
-  it('fits the points around the target of the view, the board centre it orbits (#957)', () => {
-    const target = { x: 0.25, y: 0, z: -0.5 };
-    const near = { x: 0, y: 0, z: 6 };
-    const moved = (p: { x: number; y: number; z: number }) => ({ x: p.x + target.x, y: p.y, z: p.z + target.z });
-    const fit = fitView(resetView(), [near], 1280, 720);
-    expect(fitView({ ...resetView(), target }, [moved(near)], 1280, 720)).toEqual({ ...fit, target });
   });
 
   it('leaves the margin to the edge, and stops at the farthest distance', () => {

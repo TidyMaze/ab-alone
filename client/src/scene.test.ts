@@ -188,9 +188,8 @@ describe('SceneRenderer (#632)', () => {
   });
 
   // Held upright the board sits lower by framing's shift, leaving the top to the HUD and the buttons (#227).
-  it('puts the target of the view, the board centre, in the middle of the window at any size, bug #957', () => {
+  it('puts the board centre in the middle of the window at any size, bug #957', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
-    const target = { x: 0.25, y: 0, z: -Math.sqrt(3) / 4 };
     for (const [width, height] of [
       [1280, 720], // desktop
       [375, 812], // phone upright
@@ -201,9 +200,6 @@ describe('SceneRenderer (#632)', () => {
       sr.applyView(resetView(), null, { tier: 'high', clear: false, deck: 'mess' });
       expect(sr.cellToScreen(0, 0, width, height).x).toBeCloseTo(width / 2, 6);
       expect(sr.cellToScreen(0, 0, width, height).y).toBeCloseTo(middle, 6);
-      sr.applyView({ ...resetView(), azimuth: 1, target }, null, { tier: 'high', clear: false, deck: 'mess' });
-      expect(sr.cellToScreen(0.5, -0.5, width, height).x).toBeCloseTo(width / 2, 6);
-      expect(sr.cellToScreen(0.5, -0.5, width, height).y).toBeCloseTo(middle, 6);
     }
   });
 

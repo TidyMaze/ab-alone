@@ -28,7 +28,7 @@ import { bootFailed } from './bootfail';
 import { bossHtml, goalShown } from './bosshud';
 import { drawBossBar } from './bossbar';
 import { choirChips, drawChoirChips } from './choirchips';
-import { FOV, fitView, framing, isDrag, middle, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
+import { FOV, fitView, framing, isDrag, orbit, pinchScale, resetView, screenView, viewPosition, wheelScale, zoom, type View } from './camera';
 import { FreeCameraController } from './freecam';
 import { RenderModeManager, type RenderMode } from './rendermode';
 import { openInEditor } from './editorexport';
@@ -319,13 +319,12 @@ let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
-// its counter fit the window too (#691). The Dual Room's (#947) looks along its void at the middle between its two rooms,
+// its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
-const DUAL_MIDDLE = middle(DUAL_POINTS);
 const fightView = (): View => {
   if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
-  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR, target: DUAL_MIDDLE }, DUAL_POINTS, innerWidth, innerHeight);
+  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
   return resetView(activeRadius());
 };
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
@@ -4355,7 +4354,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   note();
   refresh();
   if (coop) {
-    view = fitted = fightView(); // as in a solo fight (#695)
+    view = fitted = fightView(); // as in a solo fight
     applyView();
   }
 }

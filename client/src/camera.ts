@@ -6,7 +6,6 @@ export interface View {
   azimuth: number; // radians around the vertical axis, 0 looks from +z
   polar: number; // radians from the vertical axis, 0 straight above the board
   distance: number; // from the board centre
-  target?: Vec3; // the board centre the camera looks at and orbits, the origin when absent: The Dual Room's is off it (#957)
 }
 
 export const POLAR_MIN = 0.15;
@@ -41,12 +40,6 @@ export const resetView = (radius = 4): View => ({
   distance: (radius / 4) * Math.hypot(11, 8),
 });
 
-// The middle of the box round the points on the board plane: The Dual Room's centre, between its two rooms (#957).
-export function middle(points: readonly Vec3[]): Vec3 {
-  const mid = (vs: number[]): number => (Math.min(...vs) + Math.max(...vs)) / 2;
-  return { x: mid(points.map((p) => p.x)), y: 0, z: mid(points.map((p) => p.z)) };
-}
-
 // The view drawn back along its own line, never closer, until every point lies inside a window of this size, within
 // FIT_MARGIN of its half size from the edges (#691): The Pulsar's beacons stand off the board's corners. At most DIST_MAX.
 // The board's centre stays in the middle of the window's width, the HUD plate folds out of the way instead (#957).
@@ -56,7 +49,6 @@ export function fitView(view: View, points: readonly Vec3[], width: number, heig
   const tanV = Math.tan((fov * Math.PI) / 360);
   const tanH = tanV * (width / height);
   const lift = (2 * shift) / height; // the picture moved down, in half heights
-  const { x: tx, y: ty, z: tz } = view.target ?? { x: 0, y: 0, z: 0 };
   const fits = (distance: number): boolean => {
     const eye = viewPosition({ ...view, distance });
     const f = { x: -eye.x / distance, y: -eye.y / distance, z: -eye.z / distance }; // to the board centre
@@ -64,7 +56,7 @@ export function fitView(view: View, points: readonly Vec3[], width: number, heig
     const right = { x: -f.z / across, z: f.x / across };
     const up = { x: -right.z * f.y, y: right.z * f.x - right.x * f.z, z: right.x * f.y };
     return points.every((p) => {
-      const d = { x: p.x - tx - eye.x, y: p.y - ty - eye.y, z: p.z - tz - eye.z };
+      const d = { x: p.x - eye.x, y: p.y - eye.y, z: p.z - eye.z };
       const depth = d.x * f.x + d.y * f.y + d.z * f.z;
       const sx = (d.x * right.x + d.z * right.z) / (depth * tanH);
       const sy = (d.x * up.x + d.y * up.y + d.z * up.z) / (depth * tanV) - lift;

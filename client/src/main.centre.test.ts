@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { axialTo3D } from './board';
-import { framing, middle } from './camera';
-import { DUAL_CELLS } from './dual';
+import { framing } from './camera';
 import { boot, type Game } from './test/harness';
 
 // Bug #957: the board's centre sits in the middle of the window on every view a fight opens on and on Reset view, the
-// HUD plate does not push it aside (#695 is gone): the player folds the plate instead. For The Dual Room the centre is
-// the middle between its two rooms. Held upright the board sits lower by framing's shift, leaving the top to the HUD and
+// HUD plate does not push it aside (#695 is gone): the player folds the plate instead. The Dual Room's two rooms lie
+// either side of the origin. Held upright the board sits lower by framing's shift, leaving the top to the HUD and
 // the buttons (#227).
 
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
@@ -34,30 +32,22 @@ function fight(game: Game, boss: string): void {
 /** Where the axial point (q, r) is drawn in the window. */
 const drawn = (game: Game, q: number, r: number): { x: number; y: number } => game.hook('__cellToScreen', q, r);
 
-// The middle of The Dual Room's two rooms, in axial coordinates.
-const { x, z } = middle(DUAL_CELLS.map(([q, r]) => axialTo3D(q, r)));
-const DUAL_MIDDLE = [x - z / Math.sqrt(3), (2 * z) / Math.sqrt(3)] as const;
-
 describe('main.ts the board centred in the window (#957)', () => {
   for (const [width, height] of SIZES)
     it(`a fight opens, and Reset view goes back, on the board centre in the middle of a ${width}x${height} window`, async () => {
       windowOf(width, height);
       const game = await boot('?bot=off');
       const centreY = height / 2 + framing(width, height).shift;
-      for (const [boss, [q, r]] of [
-        ['The Choir', [0, 0]],
-        ['The Pulsar', [0, 0]],
-        ['The Dual Room', DUAL_MIDDLE],
-      ] as const) {
+      for (const boss of ['The Choir', 'The Pulsar', 'The Dual Room']) {
         // The plate as Chromium lays it out: before #957 the view slid aside off it.
         vi.spyOn(byId('hud'), 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ x: 16, y: 16, width: 230, height: 175 }));
         fight(game, boss);
-        expect(drawn(game, q, r).x).toBeCloseTo(width / 2, 3);
-        expect(drawn(game, q, r).y).toBeCloseTo(centreY, 3);
+        expect(drawn(game, 0, 0).x).toBeCloseTo(width / 2, 3);
+        expect(drawn(game, 0, 0).y).toBeCloseTo(centreY, 3);
         document.querySelector('canvas')!.dispatchEvent(new WheelEvent('wheel', { deltaY: -300 }));
         byId('reset-view').click();
-        expect(drawn(game, q, r).x).toBeCloseTo(width / 2, 3);
-        expect(drawn(game, q, r).y).toBeCloseTo(centreY, 3);
+        expect(drawn(game, 0, 0).x).toBeCloseTo(width / 2, 3);
+        expect(drawn(game, 0, 0).y).toBeCloseTo(centreY, 3);
       }
     });
 });

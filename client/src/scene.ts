@@ -286,13 +286,11 @@ export class SceneRenderer {
       position: [0, 0, 0] as const,
       size: [1, 1, 1] as const,
     };
-    const target = view.target ?? { x: 0, y: 0, z: 0 };
-    const [x, y, z] = reading ? consoleDef.position : [target.x, target.y, target.z];
+    const [x, y, z] = reading ? consoleDef.position : [0, 0, 0];
     const [, height, width] = consoleDef.size;
-    const eye = viewPosition(view);
     const p = reading
       ? screenView({ x, y, z }, { x: 1, y: 0, z: 0 }, width, height, this.camera.fov, this.camera.aspect)
-      : { x: x + eye.x, y: y + eye.y, z: z + eye.z };
+      : viewPosition(view);
 
     this.camera.position.set(p.x, p.y, p.z);
     this.camera.lookAt(x, y, z);
