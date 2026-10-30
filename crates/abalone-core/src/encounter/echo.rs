@@ -169,33 +169,41 @@ pub(crate) fn play_bonuses(enc: &mut Encounter, mv: &Move) {
     }
 }
 
-/// The bonus moves the other side gets when the side to move plays `mv`, in order, played (the
-/// Echo's) or offered (the player's): the tell. Empty when `mv` is illegal, free or gives none.
-pub fn echo_bonuses(enc: &Encounter, mv: &Move) -> Vec<Move> {
-    let mut after = enc.clone();
-    let before = enc.game().history().len() + 1;
-    if after.play(mv).is_err() {
-        return Vec::new();
+/// `enc` after `mv`, with the bonus moves `mv` gives the other side, in order, played (the Echo's)
+/// or offered (the player's). `None` when `mv` is illegal or free.
+fn given(enc: &Encounter, mv: &Move) -> Option<(Encounter, Vec<Move>)> {
+    if echo_free_moves(enc).contains(mv) {
+        return None;
     }
-    let played = after.game().history().get(before..).unwrap_or_default();
-    played
+    let mut after = enc.clone();
+    after.play(mv).ok()?;
+    let bonuses = after.game().history()[enc.game().history().len() + 1..]
         .iter()
         .map(|p| p.mv.clone())
         .chain(echo_free_moves(&after))
-        .collect()
+        .collect();
+    Some((after, bonuses))
+}
+
+/// The bonus moves the other side gets when the side to move plays `mv`, in order, played (the
+/// Echo's) or offered (the player's): the tell. Empty when `mv` is illegal, free or gives none.
+pub fn echo_bonuses(enc: &Encounter, mv: &Move) -> Vec<Move> {
+    given(enc, mv)
+        .map(|(_, bonuses)| bonuses)
+        .unwrap_or_default()
 }
 
 /// The bonus moves the other side would get if the side to move played `mv`, in order, each with
-/// `true` when it would be skipped (a player's free move that would lose them the game is not
+/// `true` when it would not be given (a player's free move that would lose them the game is not
 /// offered): the client's tell. Empty when `mv` is illegal, free, ends the game, or gives no bonus.
 pub fn echo_tell(enc: &Encounter, mv: &Move) -> Vec<(Move, bool)> {
     let mut main = enc.game().clone();
-    if echo_free_moves(enc).contains(mv) || main.play(mv).is_err() || main.outcome().is_some() {
+    if main.play(mv).is_err() || main.outcome().is_some() {
         return Vec::new();
     }
-    let given = echo_bonuses(enc, mv);
-    let mut after = enc.clone();
-    after.play(mv).expect("a legal move");
+    let Some((after, given)) = given(enc, mv) else {
+        return Vec::new();
+    };
     let tell = |m: Move| {
         let skipped = !given.contains(&m);
         (m, skipped)
