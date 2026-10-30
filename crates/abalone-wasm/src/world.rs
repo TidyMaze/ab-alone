@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 /// Bytes per cell: `[height, terrain]`.
 pub const CELL_STRIDE: usize = 2;
 
-/// The code of a terrain on the bridge: `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder.
+/// The code of a terrain on the bridge: `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall.
 fn terrain_code(terrain: Terrain) -> u8 {
     match terrain {
         Terrain::Water => 0,
@@ -16,6 +16,8 @@ fn terrain_code(terrain: Terrain) -> u8 {
         Terrain::Rock => 3,
         Terrain::Peak => 4,
         Terrain::Boulder => 5,
+        Terrain::Tree => 6,
+        Terrain::Wall => 7,
     }
 }
 
@@ -51,7 +53,16 @@ mod tests {
 
     #[test]
     fn every_terrain_has_its_code() {
-        let all = [Terrain::Water, Terrain::Sand, Terrain::Grass, Terrain::Rock, Terrain::Peak, Terrain::Boulder];
-        assert_eq!(all.map(terrain_code), [0, 1, 2, 3, 4, 5]);
+        let all = [
+            Terrain::Water,
+            Terrain::Sand,
+            Terrain::Grass,
+            Terrain::Rock,
+            Terrain::Peak,
+            Terrain::Boulder,
+            Terrain::Tree,
+            Terrain::Wall,
+        ];
+        assert_eq!(all.map(terrain_code), [0, 1, 2, 3, 4, 5, 6, 7]);
     }
 }

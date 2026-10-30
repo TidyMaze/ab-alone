@@ -81,8 +81,8 @@
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
 //! - Open world chunk (`world_chunk(seed, cx, cy)`): 2 bytes `[height, terrain]` per cell of the
 //!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. `height` `0` to `3`;
-//!   `terrain` `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder; water, peak and
-//!   boulder are blocked (docs/specs/openworld.md section 2).
+//!   `terrain` `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall;
+//!   all but sand, grass and rock are blocked (docs/specs/openworld.md section 2).
 
 pub mod convert;
 pub mod encounter;

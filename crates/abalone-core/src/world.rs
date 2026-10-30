@@ -13,6 +13,8 @@ pub const WORLD_CHUNKS: i32 = 64;
 pub const CLEARING: i32 = 3;
 /// Boulders sit on this share of the cells that are not water or peak, in thousandths.
 const BOULDER_PER_MILLE: u64 = 60;
+/// Walls are laid out on a lattice of squares of this many cells.
+const WALL_BLOCK: i32 = 24;
 
 /// What a cell looks like and whether it can be entered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,12 +25,14 @@ pub enum Terrain {
     Rock,
     Peak,
     Boulder,
+    Tree,
+    Wall,
 }
 
 impl Terrain {
-    /// Water, peaks and boulders cannot be entered.
+    /// Water, peaks, boulders, trees and walls cannot be entered.
     pub fn blocked(self) -> bool {
-        matches!(self, Terrain::Water | Terrain::Peak | Terrain::Boulder)
+        !matches!(self, Terrain::Sand | Terrain::Grass | Terrain::Rock)
     }
 }
 
@@ -91,8 +95,38 @@ pub fn cell(seed: u64, q: i32, r: i32) -> Option<Cell> {
         (3, _) => Terrain::Peak,
         _ => Terrain::Grass,
     };
-    let boulder = !terrain.blocked() && unit(seed, 4, q, r) * 1000.0 < BOULDER_PER_MILLE as f64;
-    Some(Cell { height, terrain: if boulder { Terrain::Boulder } else { terrain } })
+    let open = !terrain.blocked();
+    let forest = terrain == Terrain::Grass && noise(seed, 5, q, r, 7) > 0.55 && unit(seed, 6, q, r) < 0.5;
+    let terrain = if open && on_wall(seed, q, r) {
+        Terrain::Wall
+    } else if forest {
+        Terrain::Tree
+    } else if open && unit(seed, 4, q, r) * 1000.0 < BOULDER_PER_MILLE as f64 {
+        Terrain::Boulder
+    } else {
+        terrain
+    };
+    Some(Cell { height, terrain })
+}
+
+/// Whether `(q, r)` is on a ruined wall: each `WALL_BLOCK` square of the grid may hold one segment of 3
+/// to 6 cells along one of three axes, from the seed and the square alone, so a wall may cross a
+/// chunk edge and the squares around the cell are the only ones to look at.
+fn on_wall(seed: u64, q: i32, r: i32) -> bool {
+    let (bx, by) = (q.div_euclid(WALL_BLOCK), r.div_euclid(WALL_BLOCK));
+    (-1..=1).any(|dx| {
+        (-1..=1).any(|dy| {
+            let (x, y) = (bx + dx, by + dy);
+            if unit(seed, 7, x, y) >= 0.45 {
+                return false;
+            }
+            let start_q = x * WALL_BLOCK + (unit(seed, 8, x, y) * f64::from(WALL_BLOCK)) as i32;
+            let start_r = y * WALL_BLOCK + (unit(seed, 9, x, y) * f64::from(WALL_BLOCK)) as i32;
+            let (dq, dr) = [(1, 0), (0, 1), (1, -1)][(unit(seed, 10, x, y) * 3.0) as usize];
+            let len = 3 + (unit(seed, 11, x, y) * 4.0) as i32;
+            (0..len).any(|k| (start_q + k * dq, start_r + k * dr) == (q, r))
+        })
+    })
 }
 
 /// The `CHUNK` x `CHUNK` cells of chunk `(cx, cy)`, row by row (`r` then `q` ascending), `None`
@@ -155,6 +189,28 @@ mod tests {
     }
 
     #[test]
+    fn walls_stand_on_land_and_trees_grow_on_grass_height() {
+        let (mut walls, mut trees) = (0, 0);
+        for q in -96..96 {
+            for r in -96..96 {
+                let c = cell(5, q, r).unwrap();
+                match c.terrain {
+                    Terrain::Wall => {
+                        walls += 1;
+                        assert!((1..=2).contains(&c.height), "walls stand on land");
+                    }
+                    Terrain::Tree => {
+                        trees += 1;
+                        assert!((1..=2).contains(&c.height));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        assert!(walls > 20 && trees > 100, "{walls} wall cells, {trees} tree cells");
+    }
+
+    #[test]
     fn the_distance_is_the_axial_one() {
         assert_eq!(distance(0, 0), 0);
         assert_eq!(distance(2, -1), 2);
@@ -171,7 +227,7 @@ mod tests {
                     match c.terrain {
                         Terrain::Water => assert_eq!(c.height, 0),
                         Terrain::Peak => assert_eq!(c.height, 3),
-                        Terrain::Sand | Terrain::Grass | Terrain::Rock | Terrain::Boulder => {
+                        Terrain::Sand | Terrain::Grass | Terrain::Rock | Terrain::Boulder | Terrain::Tree | Terrain::Wall => {
                             assert!((0..=3).contains(&c.height))
                         }
                     }
@@ -183,7 +239,16 @@ mod tests {
     #[test]
     fn the_map_varies_and_obstacles_are_a_fair_share() {
         let cells: Vec<Cell> = (-4..4).flat_map(|cx| (-4..4).flat_map(move |cy| chunk(5, cx, cy).unwrap())).collect();
-        for terrain in [Terrain::Water, Terrain::Sand, Terrain::Grass, Terrain::Rock, Terrain::Peak, Terrain::Boulder] {
+        for terrain in [
+            Terrain::Water,
+            Terrain::Sand,
+            Terrain::Grass,
+            Terrain::Rock,
+            Terrain::Peak,
+            Terrain::Boulder,
+            Terrain::Tree,
+            Terrain::Wall,
+        ] {
             assert!(cells.iter().any(|c| c.terrain == terrain), "{terrain:?} never appears");
         }
         let blocked = cells.iter().filter(|c| c.terrain.blocked()).count() * 100 / cells.len();
@@ -195,8 +260,10 @@ mod tests {
     }
 
     #[test]
-    fn only_water_peaks_and_boulders_block() {
-        assert!(Terrain::Water.blocked() && Terrain::Peak.blocked() && Terrain::Boulder.blocked());
+    fn only_water_peaks_boulders_trees_and_walls_block() {
+        for t in [Terrain::Water, Terrain::Peak, Terrain::Boulder, Terrain::Tree, Terrain::Wall] {
+            assert!(t.blocked(), "{t:?}");
+        }
         assert!(!Terrain::Sand.blocked() && !Terrain::Grass.blocked() && !Terrain::Rock.blocked());
     }
 }

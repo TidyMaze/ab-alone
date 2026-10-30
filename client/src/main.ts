@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -178,7 +178,9 @@ import { fpsOf, keepWindow } from './fps';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
-import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, type SpaceshipBayAssets } from './roomloader';
+import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
+import { OpenWorldMode } from './openworldmode';
+import { loadModels } from './openworldview';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
 import { LORE } from './lore';
@@ -3431,6 +3433,7 @@ const span = (): number => {
 };
 
 canvas.addEventListener('pointerdown', (e) => {
+  if (openWorld.active) return openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) {
@@ -3579,6 +3582,7 @@ addEventListener('resize', () => {
   frameCamera();
   setPixelRatio(renderPixelRatio(devicePixelRatio, navigator.webdriver));
   renderer.setSize(innerWidth, innerHeight);
+  openWorld.resize(innerWidth, innerHeight);
   applyView(); // the reader fits the screen to the new window
 });
 
@@ -4056,7 +4060,7 @@ function leaveHub(): void {
 }
 addEventListener('keydown', (e) => {
   // An open terminal reader pages by them, a text field moves its caret.
-  const to = hub && !(e.target instanceof HTMLInputElement) ? hub.onKeyDown(e.key, Boolean(reading)) : null;
+  const to = hub && !openWorld.active && !(e.target instanceof HTMLInputElement) ? hub.onKeyDown(e.key, Boolean(reading)) : null;
   if (!to) return;
   e.preventDefault(); // no page scroll
   walk(to);
@@ -4439,6 +4443,31 @@ runPanel.addEventListener('click', (e) => {
 });
 runButton.addEventListener('click', beginRun);
 runButton.disabled = false; // listener ready (#146)
+// The Open world (#962, docs/specs/openworld.md): its own scene, drawn by this renderer in place of the board's while it
+// is on. Its entry is in the mode menu only when the page has ?openworld, or ?openworld=<seed> for a given world.
+const openWorldButton = document.getElementById('openworld') as HTMLButtonElement;
+const openWorldSeed = new URLSearchParams(location.search).get('openworld');
+const openWorld = new OpenWorldMode(
+  (seed, cx, cy) => world_chunk(seed, cx, cy),
+  () => loadModels(`${import.meta.env.BASE_URL}assets/pbr/openworld.glb`, meshoptLoader()),
+);
+openWorldButton.hidden = openWorldSeed === null;
+openWorldButton.addEventListener('click', () => {
+  moveModes('pick');
+  leaveOnline();
+  leaveRoyale();
+  openWorld.enter(Number(openWorldSeed) || crypto.getRandomValues(new Uint32Array(1))[0]!, innerWidth, innerHeight);
+  openWorldButton.blur(); // the menu's arrow keys would take the hero's
+});
+openWorldButton.disabled = false; // listener ready (#146)
+addEventListener('keydown', (e) => {
+  if (!openWorld.active || !openWorld.key(e.key)) return;
+  e.preventDefault(); // no page scroll
+  if (openWorld.active) return;
+  dirty = CHANGE_DRAWS; // left: the board draws again
+  drawAsked = true;
+  refresh();
+});
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload.
 (window as unknown as Record<string, unknown>).__run = async (state: Run) => {
   await saveRun(gameStore, state);
@@ -4879,6 +4908,7 @@ function moving(): boolean {
 
 renderer.setAnimationLoop((now) => {
   lastDraw = timeDraw(lastDraw, now);
+  if (openWorld.active) return openWorld.frame((scene, camera) => renderer.render(scene, camera));
   const moves = moving(); // before the effects run, so the frame that ends one draws
   const wanted = drawWanted(dirty > 0, moves, drawAsked, navigator.webdriver);
   if (moves) dirty = CHANGE_DRAWS; // its last picture draws twice too, for the bloom
