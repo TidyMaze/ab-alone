@@ -251,6 +251,7 @@ mod tests {
     use crate::encounter::{marbles, PveResult};
     use crate::moves::Direction::{E, NW, SE};
     use crate::moves::{apply, legal_moves, Direction, MoveError};
+    use crate::search::Weights;
 
     fn board(black: &[P], white: &[P], dual: Dual) -> Board {
         let mut board = dual_board();
@@ -671,6 +672,32 @@ mod tests {
         let reply = dual_move(&enc).unwrap();
         assert!(legal_moves(enc.game().board(), Player::White).contains(&reply));
         assert_eq!(dual_move(&enc), Some(reply));
+    }
+
+    #[test]
+    fn the_boss_search_does_not_pull_its_marbles_to_the_void() {
+        assert_eq!(
+            BRIDGE[2],
+            (0, 0),
+            "the search's centre is the void's middle"
+        );
+        assert_eq!(
+            DUAL_WEIGHTS,
+            Weights {
+                centre: 0,
+                ..DEFAULT_WEIGHTS
+            }
+        );
+        let mut enc = dual_start(5);
+        enc.play(&mv(&[(-5, 7), (-4, 6)], Direction::NE)).unwrap();
+        let read = search_hooked(
+            enc.game(),
+            DUAL_NODE_BUDGET,
+            DUAL_WEIGHTS,
+            &|_| true,
+            &dual_step,
+        );
+        assert_eq!(dual_move(&enc), read.map(|r| r.mv));
     }
 
     #[test]
