@@ -2264,7 +2264,9 @@ function afterPlay(before: number[], record: number[], live = true): void {
     document.body.dataset.returns = String(Number(document.body.dataset.returns ?? 0) + 1); // read by the e2e tests
   }
   if (!reduced && engine instanceof Encounter && parseDual(engine.dual())?.collapsed && dualShown?.collapsed === false) {
-    collapse = { start: performance.now() };
+    const fall = { start: Infinity }; // the wall stands whole until the push's slide is over
+    collapse = fall;
+    whenSettled(() => (fall.start = performance.now()));
     document.body.dataset.wall = 'falling'; // read by the e2e tests
   }
   const ejection = findEjection(before, after, mv);
@@ -2881,6 +2883,7 @@ function hud(extra = ''): void {
 function refresh(): void {
   dirty = CHANGE_DRAWS;
   syncAuto();
+  if (hub || royale) drawDual(null); // no fight, no wall (#947)
   if (hub) {
     hub.draw(sceneRenderer, discs, sfx, loadProgress(store).beaten, marbleMesh(glassOf()), drawFrame, lightRim);
     hud();

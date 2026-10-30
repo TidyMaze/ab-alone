@@ -30,8 +30,9 @@ export const WALL = { x: 0.25, z: -Math.sqrt(3) / 4, length: 5.5, height: 0.6, d
 /** The returning marble falls from this height (cell spacings) onto its cell in DROP_MS. */
 export const DROP_HEIGHT = 3;
 export const DROP_MS = 450;
-/** The wall sinks into the floor and fades in COLLAPSE_MS. */
-export const COLLAPSE_MS = 900;
+/** The wall sinks into the floor and fades in COLLAPSE_MS, once the push's slide is over: longer than the splash of the
+ * ejection that brings it down (blood.ts), so its fall reads on its own. */
+export const COLLAPSE_MS = 1200;
 
 export interface DualState {
   collapsed: boolean;
@@ -66,8 +67,8 @@ export function dropAt(elapsedMs: number, reduced: boolean): { y: number; done: 
   return { y: DROP_HEIGHT * (1 - t * t), done: t === 1 };
 }
 
-/** The wall `elapsedMs` into its collapse: sunk by `y`, at `opacity`. Reduced motion: gone at once. */
+/** The wall `elapsedMs` into its collapse: sunk by `y`, at `opacity`, whole before it starts. Reduced motion: gone at once. */
 export function wallAt(elapsedMs: number, reduced: boolean): { y: number; opacity: number; done: boolean } {
-  const t = reduced ? 1 : Math.min(1, elapsedMs / COLLAPSE_MS);
+  const t = reduced ? 1 : Math.min(1, Math.max(0, elapsedMs / COLLAPSE_MS));
   return { y: t === 0 ? 0 : -WALL.height * t, opacity: 1 - t, done: t === 1 };
 }
