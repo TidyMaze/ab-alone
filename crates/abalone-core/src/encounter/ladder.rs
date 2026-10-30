@@ -436,10 +436,10 @@ mod tests {
         let ids: Vec<_> = LadderBoss::ALL.iter().map(|b| b.id()).collect();
         assert_eq!(
             ids,
-            ["echo", "hull", "chaplain", "choir", "ballast", "alien"]
+            ["echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer"]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
-        assert_eq!(budgets, [400, 3000, 300, 1500, 100, 3000]);
+        assert_eq!(budgets, [400, 3000, 300, 1500, 100, 3000, 3000]);
     }
 
     #[test]
@@ -527,6 +527,18 @@ mod tests {
         a.play(&mv).unwrap();
         enc.play(&mv).unwrap();
         assert_eq!(a.boss_move(), ballast_move(&enc));
+    }
+
+    #[test]
+    fn the_overseer_burns_and_answers_through_its_own_move() {
+        let mut a = Arena::new(LadderBoss::Overseer, 3);
+        let mut enc = overseer_start(3);
+        assert_eq!(a.game().board(), enc.game().board());
+        let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
+        a.play(&mv).unwrap();
+        enc.play(&mv).unwrap();
+        assert_eq!(a.boss_move(), overseer_move(&enc));
+        assert!(a.boss_move().is_some());
     }
 
     #[test]
