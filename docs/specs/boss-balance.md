@@ -466,6 +466,30 @@ The 10x player beats this boss search even on the full 14-marble layout, so no k
 brings it inside. Owner decision on #667: the Alien stays as it is, the bot ladder cannot calibrate
 it, and humans judge its difficulty.
 
+### The Overseer: its AI plays the neurotoxin clock and its phases (#828), not tuned
+
+Before (the ladder row only, 402b79f): the boss search burned on every ply but kept the phase of
+the root and ignored the 40-turn clock. After: the phase is recomputed in the tree from the
+ejections credited so far (`search_phased`), and a leaf at the player's last turn scores as a boss
+win. The node budget stays 3000 (the Hull's), no rule changes, `engine_version` unchanged.
+
+Ladder (`LadderBoss::Overseer`, 10 seeds, the plain-search player: it does not see the
+incinerators or the clock, so the ladder cannot calibrate this boss, as for the Alien):
+
+| Player budget | Before wins /10 | After wins /10 | Median plies | Deaths after |
+|---|---|---|---|---|
+| 3000 (1x) | 0 | 0 | 79 | push 7, rim ejection 3 |
+| 30000 (10x) | 1 | 1 | 79 | push 6, rim ejection 2, draw 1 |
+
+79 plies is the 40th player turn: the neurotoxin ends nearly every fight, before and after. The
+clock only changes a reply in the last turns, and the fight is lost to it anyway for this player.
+Nothing was tuned. `cargo run --release --example overseer_sim` plays the player that sees the
+incinerators.
+
+Reply time through wasm (release build in Node, 6 seeds of 80 plies, boss replies, a loaded
+machine, ms): The Overseer 315 average, 679 at the 95th percentile, 7382 at most (3000 nodes);
+measured in the same run, the Hull 746 / 2026 / 41282 and the Pulsar 986 / 4812 / 24050.
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
