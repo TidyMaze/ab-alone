@@ -94,11 +94,14 @@ export const writeClearBoard = (store: Store, on: boolean): void => write(store,
 // toggle: a Sound off saved before them sets every slider without a value of its own to 0.
 const DEFAULT_MIX: Mix = { music: 100, ambience: 5, effects: 100, voice: 100 };
 const volumeKey = (bus: Bus): string => `ab-alone.volume.${bus}`;
-export const readMix = (store: Store): Mix => {
+// Under automation (navigator.webdriver, #990) the music starts at 0: a browser driven by Playwright would play it out loud.
+// A volume the player saved still wins.
+export const readMix = (store: Store, automated = false): Mix => {
   const muted = read(store, SOUND_KEY) === 'off';
   const volume = (bus: Bus): number => {
     const saved = read(store, volumeKey(bus)) ?? '';
-    return /^\d+$/.test(saved) && Number(saved) <= 100 ? Number(saved) : muted ? 0 : DEFAULT_MIX[bus];
+    if (/^\d+$/.test(saved) && Number(saved) <= 100) return Number(saved);
+    return muted || (automated && bus === 'music') ? 0 : DEFAULT_MIX[bus];
   };
   return { music: volume('music'), ambience: volume('ambience'), effects: volume('effects'), voice: volume('voice') };
 };

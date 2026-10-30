@@ -624,7 +624,7 @@ applySafe();
 // The sounds (docs/specs/world.md section 7) through four buses, each with its volume slider in the menu (#438). The
 // audio context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
 // way down, a touch on the way up, and moving a slider up from 0 starts it too (setVolume).
-const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store));
+const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store, navigator.webdriver));
 // The sound twin of each boss tell (#358), only when the tell appears or changes. The cues played, read by the e2e tests.
 const tells = new TellWatch();
 const tellCues: Tell[] = [];
