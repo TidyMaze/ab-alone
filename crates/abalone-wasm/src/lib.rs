@@ -79,18 +79,24 @@
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
 //!   an act). `links` is a bit mask of the columns of the next row of the same act the node leads
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
+//! - Open world chunk (`world_chunk(seed, cx, cy)`): 2 bytes `[height, terrain]` per cell of the
+//!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. `height` `0` to `3`;
+//!   `terrain` `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder; water, peak and
+//!   boulder are blocked (docs/specs/openworld.md section 2).
 
 pub mod convert;
 pub mod encounter;
 pub mod game;
 pub mod royale;
 pub mod run;
+pub mod world;
 
 pub use convert::{draw_reason_code, result_code, status_code, MOVE_STRIDE};
 pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::Engine;
 pub use royale::Royale;
 pub use run::run_map;
+pub use world::world_chunk;
 
 #[cfg(test)]
 mod tests {
