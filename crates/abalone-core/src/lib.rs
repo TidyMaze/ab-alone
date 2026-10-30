@@ -5,6 +5,7 @@ pub mod moves;
 pub mod royale;
 pub mod run;
 pub mod search;
+pub mod world;
 
 pub fn version() -> &'static str {
     "0.1.0"
