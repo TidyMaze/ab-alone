@@ -376,6 +376,24 @@ describe('mix storage, the four volume sliders (#438)', () => {
     expect(readMix(throwing).effects).toBe(100);
     expect(readMix(null).effects).toBe(100);
   });
+  it('under automation the music slider defaults to 0, the other three keep their defaults (#990)', () => {
+    expect(readMix(memoryStorage(), true)).toEqual({ music: 0, ambience: 5, effects: 100, voice: 100 });
+  });
+  it('a normal browser keeps the music slider at 100 % (#990)', () => {
+    expect(readMix(memoryStorage(), false)).toEqual({ music: 100, ambience: 5, effects: 100, voice: 100 });
+  });
+  it('a music slider saved by the player wins over the automated default (#990)', () => {
+    expect(readMix(memoryStorage({ 'ab-alone.volume.music': '40' }), true).music).toBe(40);
+    expect(readMix(memoryStorage({ 'ab-alone.volume.music': '100' }), true).music).toBe(100);
+  });
+  it('a garbage stored music value under automation falls back to 0 (#990)', () => {
+    expect(readMix(memoryStorage({ 'ab-alone.volume.music': 'loud' }), true).music).toBe(0);
+  });
+  it('under automation the music default is 0 when storage throws or is missing (#990)', () => {
+    expect(readMix(throwing, true).music).toBe(0);
+    expect(readMix(null, true).music).toBe(0);
+    expect(readMix(throwing, true).effects).toBe(100);
+  });
   it('does not throw when writing to a broken or missing storage', () => {
     expect(() => writeVolume(throwing, 'music', 0)).not.toThrow();
     expect(() => writeVolume(null, 'music', 0)).not.toThrow();
