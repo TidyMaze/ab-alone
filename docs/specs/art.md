@@ -8,7 +8,7 @@ and no new look: each rule names its source (section numbers), and changes when 
 
 - **Brief.** A viewport onto a dim ship deck lit by one practical lamp, a cyan glow where the
   player is, never a web app around a canvas; clarity of play wins over mood (ui.md 1). The
-  player is the last warm thing aboard, glass with a cyan light; the crew hardened into black
+  player is the last warm thing aboard, an opaque glass marble; the crew hardened into black
   shells and still plays by the rules (world.md 2).
 - **Tone.** Cosmic dread, grief, bureaucracy. Never gore for its own sake (world.md 2).
 - **Palette** (world.md 5, 8, ui.md 2). Near-black `#0b0d0f` base, oxidized steel `#4a5258`, rust
@@ -19,7 +19,7 @@ and no new look: each rule names its source (section numbers), and changes when 
 - **Materials** (world.md 5). Brushed, pitted steel, oil stains, welds, taped cables,
   condensation, dust. Nothing emissive but lights, screens and marbles.
 - **Marbles** (world.md 5, 8). Player: an opaque sphere in one of ten white ambientCG materials (Marble by
-  default), its cyan core, which dims with each marble lost, kept inside it and hidden. Shell: black, one of ten dark ambientCG
+  default), with no core inside: the opaque skin hid the cyan one, and each was a draw call (#885). Shell: black, one of ten dark ambientCG
   materials (Leather by default, the skins' choice in the settings), a faint heat pulse, no core. The pulse is
   a slow sodium glow on the default Leather shell, one every 6 s, far fainter than a flash and still 3:1 on every deck at
   its brightest; off under safe mode, reduced motion and the low tier (#509). Boss: the shell plus one
@@ -27,7 +27,7 @@ and no new look: each rule names its source (section numbers), and changes when 
   (#507); The Echo and The Choir keep the plain shell, the Choir's army glyphs are its shape cue.
   Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
   its own angle, seeded, so the set never lines up and a game always looks the same.
-- **Light** (world.md 5). Low-key: one hard source per deck, a dim cyan fill from the player's
+- **Light** (world.md 5). Low-key: one hard source per deck, the rim's cold cyan on the player's turn, no light on the
   marbles, slow and rare flicker. Localized spaceship architectural lights (emergency sodium strip above the airlock,
   cold rim backlight on forward bay, warm console bounce on the avionics desk, and subtle cyan ground wash grounding the pedestal, #644).
   Soft contact shadows ground marbles onto the deck cells and frame
@@ -74,7 +74,7 @@ source kept out of the Pages artifact). All under the repo's MIT licence; the fo
 
 | Assets | Format and budget | Made | Today, issues |
 |---|---|---|---|
-| Marbles: skins, core, boss accents, flipped look | Materials, geometry; 20 skins of 512 px maps (albedo, normal, roughness, and the metalness, ambient occlusion or emission map an asset ships, 67 in all), 3.6 MB of sources, each skin loaded when worn | ambientCG, CC0, committed by hand (the board plate's Metal051A too) | The 20 skins of `skins.ts` and `glassskins.ts`, ids kept from #377, each one `textures/pbr/skin-<asset>-<map>.jpg`: black Leather027, Porcelain003, Lava002, Fabric004, Rubber001, Metal027, Metal028, Lava001, Onyx013, Terrazzo015; white Marble025, GlazedTerracotta003, Porcelain001, Ivory002B, Styrofoam004, Marble021, Ivory001A, Rock025, Onyx015, Plastic013A; opaque spheres with no tint, the cyan core (#291) inside the white one; the core dims an even step per marble lost, down to opacity 0.4 at the losing marble, still 3:1 on the shell (#506); boss accents as data in `marbles.ts`, a child mesh kept upright on each boss-side shell in boss mode, each colour 3:1 on every palette's and skin's shell (#507; the wire wrap on The Ballast Mind since #564); a marble The Chaplain converted is the shell up to its middle and the glass above, its core dimmed to opacity 0.6, 3:1 on the deck and the shell in every palette, under the wax (#508), with the Chaplain's pale glyph over the wax and the pale crack decal on the shell half, 3:1 on every shell skin (#790; on the white glass skins the pale glyph cannot) |
+| Marbles: skins, boss accents, flipped look | Materials, geometry; 20 skins of 512 px maps (albedo, normal, roughness, and the metalness, ambient occlusion or emission map an asset ships, 67 in all), 3.6 MB of sources, each skin loaded when worn | ambientCG, CC0, committed by hand (the board plate's Metal051A too) | The 20 skins of `skins.ts` and `glassskins.ts`, ids kept from #377, each one `textures/pbr/skin-<asset>-<map>.jpg`: black Leather027, Porcelain003, Lava002, Fabric004, Rubber001, Metal027, Metal028, Lava001, Onyx013, Terrazzo015; white Marble025, GlazedTerracotta003, Porcelain001, Ivory002B, Styrofoam004, Marble021, Ivory001A, Rock025, Onyx015, Plastic013A; opaque spheres with no tint, no core inside (#885, it replaces the cyan core of #291 and its dimming of #506); boss accents as data in `marbles.ts`, a child mesh kept upright on each boss-side shell in boss mode, each colour 3:1 on every palette's and skin's shell (#507; the wire wrap on The Ballast Mind since #564); a marble The Chaplain converted is the shell up to its middle and the glass above, no core inside the glass, 3:1 on the deck and the shell in every palette, under the wax (#508), with the Chaplain's pale glyph over the wax and the pale crack decal on the shell half, 3:1 on every shell skin (#790; on the white glass skins the pale glyph cannot) |
 | Board: light and textures per deck, frame, rim, backdrop | Data, geometry; textures 512 px, 300 KB a deck; backdrop 30 KB | Procedural, generated | A light preset and a fog density per deck, each mode and boss on its deck (`deck.ts`, #400), a 256 px cell albedo per deck, 13 to 127 KB (`deck-<deck>.png`, #401: worn laminate, ore-dusted steel, sooted steel, wood and wire, polished panel), a 256 px cell normal map per deck, 20 to 107 KB (`deck-<deck>-normal.png`, #440: laminate scratches, ore grit, soot-pitted steel, wood grain, panel seams), with one shared roughness map, and one steel albedo on the frame (lightened x1.9 for marble contrast, #344); a hexagonal steel frame built in code, plate and rim (#292), the rim lights for the side to move (#300): #290, #28 |
 | Props, one lore object per boss arena | glTF, 150 KB each, 1 MB a deck | Procedural, then hand-made | Hauler mess table deck surface and props (canister, slate, conduit) ground board in room setting (#470): #28, #20 |
 | Tells, phase notches, tally marks | Geometry; a crack decal, 128 px, 16 KB | Procedural, generated | Chaplain and Choir done, phase notches and tally marks on the rim (#356, #389), Hull crack `crack-decal.png` 128 px, 2 KB, near-black fissures (bone-white reads under 3:1 on the deck of #344) (#355), six thin fractures that taper to a point and fork at a sharp angle, one decal for The Hull and The Ballast Mind (#838): #62, #22 |

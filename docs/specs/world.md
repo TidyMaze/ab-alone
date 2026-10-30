@@ -105,14 +105,14 @@ The one-page summary of sections 5 to 8, with the asset list, its size budget an
 is made in the repo, is [art.md](art.md).
 
 **Palette.** Near-black base (#0b0d0f), rust (#7a3b1d), oxidized steel (#4a5258), sodium orange
-(#d9822b) for hazard and furnace, a single cold cyan (#7fd6e8) for the player's inner light.
+(#d9822b) for hazard and furnace, a single cold cyan (#7fd6e8) for the player's accents (the ring and the ghost marble, `main.ts` `pal.core`), not an inner light.
 Red is reserved for danger (breach, ejection warning). Nothing saturated outside these.
 
 **Materials.** Brushed and pitted steel, oil stains, welded patches, taped cables, condensation,
 dust. PBR textures, no emissive surfaces except lights, screens and marbles.
 
 **Lighting.** Low-key. Mostly one hard source per deck (practical lamp, vent glow, screen), plus
-a dim cyan fill from the player marbles. Soft contact shadows ground the marbles onto the cells
+the rim's cold cyan on the player's turn (`frame.ts` `RIM_LIGHT`), no light on the marbles. Soft contact shadows ground the marbles onto the cells
 and frame (#459), disabled under low quality tier and automation to save software WebGL. Flicker
 is slow and rare (see photosensitivity, section 8). Shadows stay readable: cells and marbles must
 stay legible in every lighting state.
@@ -124,10 +124,10 @@ Clear-board mode removes it.
 
 | Faction | Look | Silhouette cue |
 |---|---|---|
-| Player | Smoked glass, cyan inner light that dims with each lost marble | Smooth, glowing core |
+| Player | Opaque glass skin, no core inside (#885) | Smooth |
 | Shelled (enemy) | Matte black organic shell, ridged like a scarab, faint heat pulse | Ridged, no core |
 | Boss variants | Same shell with one accent (rust crown, candle wax, wire wrap) | Added silhouette |
-| Flipped (by The Chaplain) | Player glass slowly shelling over: black ridges creep from the base up, the cyan core dims but stays visible until the flip completes | Half glass, half ridged |
+| Flipped (by The Chaplain) | Player glass slowly shelling over: black ridges creep from the base up until the flip completes | Half glass, half ridged |
 | Battle royale slots | Shell tint per player (six Okabe-Ito tints, 3:1 on the deck in every colour vision, #501) plus an engraved near-black glyph, 3:1 on its tint and repeated beside the seat's name on the HUD plate (#558), never color alone | Unique glyph each: disc, triangle, square, cross, star, diamond |
 
 **Board look per deck.**

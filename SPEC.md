@@ -93,7 +93,7 @@ Each phase is a GitHub milestone. A phase starts only when the previous one is p
 
 - Dead Space references: rusty industrial metal, flickering lights, fog, HUD projected in world
   space (no flat UI overlay where avoidable), heavy low-frequency sound.
-- Marbles: player = dimly lit glass with an inner light; enemy = black organic shell (scarab).
+- Marbles: player = opaque glass; enemy = black organic shell (scarab).
 - Ejection = sucked into space with a decompression sound.
 - Accessibility: colorblind-safe player colors, a "clear board" toggle that turns off fog and
   post-processing.

@@ -110,8 +110,10 @@ fallback anyway, and writing materials in TSL (three's shader language, compiles
 GLSL) avoids a second rewrite. Gate: if a visual feature cannot be done in both backends, it
 degrades (fog and bloom stay, compute-based extras are WebGPU only and optional).
 
-Scene notes: instanced meshes for marbles (61, up to 217), baked lighting plus a few dynamic
-lights, fog and flicker as the Dead Space mood, post-processing chain with a single "clear
+Scene notes: instanced meshes for marbles (one per look) and for the cells and their bevels (two
+meshes; the discs stay on a layer the camera skips, for picking, #885), 76 dynamic lights, culled
+per pixel on WebGL: a pixel shades a point light only inside its cutoff distance (#882,
+`client/src/culledlighting.ts`), fog and flicker as the Dead Space mood, post-processing chain with a single "clear
 board" toggle that disables it (accessibility, SPEC section 5). Animations are driven by the
 engine's `Effects` list, as timelines, so replays are free.
 
@@ -125,12 +127,14 @@ deck has a lighting preset (data, not code).
 
 | Tier | Backend | Contents |
 |---|---|---|
-| Full | WebGPU / desktop high tier | Whole chain, PMREM reflections, 32-segment discs & 32x16 spheres, DPR up to 1.5, stepped down a quarter (floor 1.0) while the median frame takes over 20 ms (#843), MSAA only under a drawn ratio of 1.5, so none on a phone, which gets FXAA later (#844, #857), bloom blurred at quarter resolution (#844) |
-| Reduced | WebGL2 fallback, mobile or user choice | Fog, DPR up to 1.5 like the full chain, stepped down by the same adaptive resolution (#843), 16-segment discs & 16x12 spheres, no PMREM reflections, fewer dynamic lights |
+| Full | WebGPU / desktop high tier | Whole chain, PMREM reflections, 32-segment discs & 32x16 spheres, DPR up to 1.5, stepped down a quarter (floor 1.0) while the median frame takes over 20 ms (#843), MSAA only under a drawn ratio of 1.5 or on a touch screen, whose tiled GPU resolves it in tile memory (#844, #868, `client/src/main.ts`), bloom blurred at quarter resolution, every second frame (#844, #894) |
+| Reduced | weak device (under 4 cores or under 4 GB), reduced motion or user choice | Fog, DPR up to 1.5 like the full chain, stepped down by the same adaptive resolution (#843), 16-segment discs & 16x12 spheres, no PMREM reflections, fewer dynamic lights |
 | Clear board | any | No fog, no post chain, flat lighting (SPEC section 5 toggle, also the accessibility mode), a setting in the menu behind the settings cog (#277) |
 
-Tier is picked at start from a one-frame benchmark and `prefers-reduced-motion`, always
-overridable in settings. Degradation is a table, not an accident: a feature not in the tier is
+Tier is picked at start from the device's cores and memory and `prefers-reduced-motion`, never
+from the screen width: a phone gets the same rule as a desktop (#882). The detected tier is not
+stored; only a tier asked for (`?quality=low|high`) is, under `ab-alone.tier`
+(`client/src/quality.ts`). Degradation is a table, not an accident: a feature not in the tier is
 off, never half-broken.
 
 **Photosensitivity.** A flash limiter sits in the post chain and the flicker driver: luminance
