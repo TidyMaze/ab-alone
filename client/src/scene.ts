@@ -61,6 +61,11 @@ export function createBloomPipeline(
     const colorNode = scenePass.getTextureNode('output');
     const bloomNode = bloom(colorNode, 0.175, 0.15, 1);
     bloomNode.setResolutionScale(0.25); // a soft glow: a quarter of the resolution is enough (#781, #844)
+    const blur = bloomNode.updateBefore.bind(bloomNode);
+    let frame = 0;
+    bloomNode.updateBefore = (f) => {
+      if (frame++ % 2 === 0) blur(f); // every second frame: the 12 blur passes are a third of a phone's frame, the glow stays put in between (#894)
+    };
     pipeline.outputNode = colorNode.add(bloomNode);
     return Object.assign(pipeline, { bloom: bloomNode }); // its strength, radius and threshold tuned with ?lights
 
