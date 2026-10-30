@@ -11,8 +11,8 @@ pub const CHUNK: i32 = 16;
 pub const WORLD_CHUNKS: i32 = 64;
 /// Cells within this distance of the spawn cell `(0, 0)` are open grass.
 pub const CLEARING: i32 = 3;
-/// Boulders sit on this share of the cells that are not water or peak, in thousandths.
-const BOULDER_PER_MILLE: u64 = 60;
+/// Boulders sit on this share of the open cells left once walls and trees are placed, in thousandths.
+const BOULDER_PER_MILLE: u64 = 20;
 /// Walls are laid out on a lattice of squares of this many cells.
 const WALL_BLOCK: i32 = 24;
 /// A chunk tries to place `TRIES` enemy groups, each with this chance in thousandths; with the obstacles that refuse some,
@@ -217,9 +217,10 @@ impl Window {
             _ => Terrain::Grass,
         };
         let open = !terrain.blocked();
+        // A grass cell of a forest zone is a tree one time in four.
         let forest = terrain == Terrain::Grass
             && self.forest.noise(q, r) > 0.55
-            && unit(self.seed, 6, q, r) < 0.5;
+            && unit(self.seed, 6, q, r) < 0.25;
         let on_wall = self.wall[((r - self.r0) * CHUNK + (q - self.q0)) as usize];
         let terrain = if open && on_wall {
             Terrain::Wall
