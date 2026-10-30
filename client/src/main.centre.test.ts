@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { axialTo3D } from './board';
 import { framing, middle } from './camera';
 import { DUAL_CELLS } from './dual';
@@ -49,6 +49,8 @@ describe('main.ts the board centred in the window (#957)', () => {
         ['The Pulsar', [0, 0]],
         ['The Dual Room', DUAL_MIDDLE],
       ] as const) {
+        // The plate as Chromium lays it out: before #957 the view slid aside off it.
+        vi.spyOn(byId('hud'), 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ x: 16, y: 16, width: 230, height: 175 }));
         fight(game, boss);
         expect(drawn(game, q, r).x).toBeCloseTo(width / 2, 3);
         expect(drawn(game, q, r).y).toBeCloseTo(centreY, 3);
