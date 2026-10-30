@@ -177,3 +177,7 @@ describe('the heat pulse', () => {
     expect(glow).toBeLessThan(0.1 / 4);
   });
 });
+
+it('keeps the default shell heat below the fill that erased its 3:1 contrast (#890)', () => {
+  expect(HEAT.peak).toBeLessThanOrEqual(0.015);
+});

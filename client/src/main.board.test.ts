@@ -149,6 +149,7 @@ describe('main.ts board and HUD', () => {
     // marbles no longer read 3:1 against them (#787).
     expect(discs[0]!.material.color.getHex()).toBe(0xffffff);
     expect(discs[0]!.material.metalness).toBe(0);
+    expect((discs[0]!.children[0] as THREE.Mesh<THREE.TorusGeometry>).geometry.parameters.tube).toBeGreaterThanOrEqual(0.04);
     expect(plate.material.map).toBeInstanceOf(THREE.Texture);
     expect(near.material.map).toBeInstanceOf(THREE.Texture);
     const { shells, glass } = drawn(scene());
@@ -189,12 +190,16 @@ describe('main.ts board and HUD', () => {
         expect(kinds, skin.id).toEqual(['albedo', 'normal', 'roughness', ...skin.extra]);
         for (const [kind, slot] of Object.entries(slots)) {
           const texture = m[slot as keyof typeof m] as THREE.Texture | null;
-          expect(texture?.name, `${skin.id} ${slot}`).toBe(kinds.includes(kind) ? `skin-${skin.asset}-${kind}.ktx2` : undefined);
+          expect(texture?.name, `${skin.id} ${slot}`).toBe(side === 'glass' && kind === 'emission' ? `skin-${skin.asset}-albedo.ktx2` : kinds.includes(kind) ? `skin-${skin.asset}-${kind}.ktx2` : undefined);
           if (texture) expect(texture.colorSpace, `${skin.id} ${slot}`).toBe(kind === 'albedo' || kind === 'emission' ? THREE.SRGBColorSpace : THREE.NoColorSpace);
         }
-        expect(m.color.getHex(), skin.id).toBe(0xffffff);
+        expect(m.color.r, skin.id).toBe(side === 'shell' ? 0.35 : 1);
+        if (side === 'glass') {
+          expect(m.emissiveMap).toBe(m.map); // the same photograph fills the white body, no extra asset
+          expect(m.emissiveIntensity).toBe(0.35);
+        }
         expect(m.metalness, skin.id).toBe(kinds.includes('metalness') ? 1 : 0);
-        if (kinds.includes('emission')) expect([m.emissive.getHex(), m.emissiveIntensity], skin.id).toEqual([0xffffff, 1]);
+        if (kinds.includes('emission')) expect([m.emissive.getHex(), m.emissiveIntensity], skin.id).toEqual([0xffffff, 0.2]);
         expect([m.transparent, m.opacity, m.depthWrite], skin.id).toEqual([false, 1, true]);
         setting(`${side}-skin`);
       }

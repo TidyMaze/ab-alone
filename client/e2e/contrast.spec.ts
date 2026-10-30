@@ -98,16 +98,16 @@ for (const deck of DECK_NAMES) {
 }
 
 // Task #344: both marbles stand out from the deck at 3:1 (world.md section 5, art.md section 1). The start position,
-// hot-seat: the shell plays the near rows, the glass the far ones. A marble is the mean colour of a small box where its
-// cell's centre is drawn, seen through the lower body of the marble (under the glass's core); the deck is the mean of
+// hot-seat: the shell plays the near rows, the glass the far ones. A marble is the mean colour of a small box at the
+// centre of its projected bounds: the old cell-floor point grazed the opaque PBR sphere (#890). The deck is the mean of
 // the same box on five empty cells in the middle. The box follows the cell spacing, so it holds on desktop and phone.
 const SHELL_CELLS: [number, number][] = [[-4, 4], [-2, 4], [0, 4], [-1, 3], [0, 2]];
 const GLASS_CELLS: [number, number][] = [[4, -4], [2, -4], [0, -4], [1, -3], [0, -2]];
 const DECK_CELLS: [number, number][] = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
 
-const boxMeans = (page: Page, png: Buffer, cells: [number, number][]) =>
+const boxMeans = (page: Page, png: Buffer, cells: [number, number][], marbles = false) =>
   page.evaluate(
-    async ([b64, list]) => {
+    async ([b64, list, marbles]) => {
       const img = new Image();
       img.src = `data:image/png;base64,${b64}`;
       await img.decode();
@@ -118,15 +118,19 @@ const boxMeans = (page: Page, png: Buffer, cells: [number, number][]) =>
       g.drawImage(img, 0, 0);
       const toScreen = (window as any).__cellToScreen;
       const half = Math.max(2, Math.round((toScreen(1, 0).x - toScreen(0, 0).x) * 0.08));
+      const objects = marbles ? (window as any).__marbles().children : [];
+      const bounds = marbles ? (window as any).__bloodAt(0).marbles : [];
       return list.map(([q, r]) => {
-        const p = toScreen(q, r);
+        const i = objects.findIndex((m: any) => Math.abs(m.position.x - q - r / 2) < 1e-6 && Math.abs(m.position.z - r * Math.sqrt(3) / 2) < 1e-6);
+        const box = bounds[i];
+        const p = marbles ? { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 } : toScreen(q, r);
         const d = g.getImageData(Math.round(p.x) - half, Math.round(p.y) - half, 2 * half, 2 * half).data;
         const sum = [0, 0, 0];
         for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) sum[k]! += d[i + k]!;
         return sum.map((s) => s / (d.length / 4)) as unknown as RGB;
       });
     },
-    [png.toString('base64'), cells] as const,
+    [png.toString('base64'), cells, marbles] as const,
   );
 
 for (const deckName of DECK_NAMES) {
@@ -141,7 +145,7 @@ for (const deckName of DECK_NAMES) {
       const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
       const failures: string[] = [];
       for (const [side, cells] of [['shell', SHELL_CELLS], ['glass', GLASS_CELLS]] as const) {
-        const ratios = (await boxMeans(page, png, cells)).map((rgb) => contrastRatio(rgb, mean));
+        const ratios = (await boxMeans(page, png, cells, true)).map((rgb) => contrastRatio(rgb, mean));
         const line = `${deckName} ${side} on ${name}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
         console.log(line);
         if (ratios.some((ratio) => ratio < 3)) failures.push(line);
@@ -174,7 +178,7 @@ for (const deckName of DECK_NAMES) {
     const png = await page.screenshot({ path: testInfo.outputPath(`pulse-${deckName}.png`), type: 'png' });
     const deck = await boxMeans(page, png, DECK_CELLS);
     const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
-    const ratios = (await boxMeans(page, png, SHELL_CELLS)).map((rgb) => contrastRatio(rgb, mean));
+    const ratios = (await boxMeans(page, png, SHELL_CELLS, true)).map((rgb) => contrastRatio(rgb, mean));
     const line = `${deckName} shell at the pulse's peak: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
     console.log(line);
     expect(ratios.filter((ratio) => ratio < 3), line).toEqual([]);
@@ -198,7 +202,7 @@ for (const id of SKIN_IDS) {
     const mean = (colors: RGB[]) => [0, 1, 2].map((k) => colors.reduce((s, c) => s + c[k]!, 0) / colors.length) as unknown as RGB;
     const deck = mean(await boxMeans(page, png, DECK_CELLS));
     const [voidColor] = await pixels(page, png, [[20, 360]]);
-    const ratios = (await boxMeans(page, png, SHELL_CELLS)).map((rgb) => [contrastRatio(rgb, deck), contrastRatio(rgb, voidColor!)]);
+    const ratios = (await boxMeans(page, png, SHELL_CELLS, true)).map((rgb) => [contrastRatio(rgb, deck), contrastRatio(rgb, voidColor!)]);
     const line = `${id}: deck ${ratios.map((r) => r[0]!.toFixed(2)).join(' ')}, void ${ratios.map((r) => r[1]!.toFixed(2)).join(' ')}`;
     console.log(line);
     expect(ratios.map((r) => r[0]!).filter((ratio) => ratio < 3), line).toEqual([]);
@@ -219,7 +223,7 @@ for (const id of GLASS_IDS) {
     const png = await page.screenshot({ path: testInfo.outputPath(`glass-${id}.png`), type: 'png' });
     const mean = (colors: RGB[]) => [0, 1, 2].map((k) => colors.reduce((s, c) => s + c[k]!, 0) / colors.length) as unknown as RGB;
     const deck = mean(await boxMeans(page, png, DECK_CELLS));
-    const ratios = (await boxMeans(page, png, GLASS_CELLS)).map((rgb) => contrastRatio(rgb, deck));
+    const ratios = (await boxMeans(page, png, GLASS_CELLS, true)).map((rgb) => contrastRatio(rgb, deck));
     const line = `${id}: glass ${ratios.map((r) => r.toFixed(2)).join(' ')}`;
     console.log(line);
     expect(ratios.filter((ratio) => ratio < 3), line).toEqual([]);

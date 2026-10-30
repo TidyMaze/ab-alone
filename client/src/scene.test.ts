@@ -299,6 +299,7 @@ describe('SceneRenderer (#632)', () => {
     const sr = new SceneRenderer({ renderer });
     sr.lightRim({ end: 'near', color: 0x22b8cf });
     expect(sr.rim.near.material.emissive.getHex()).toBe(0x22b8cf);
+    expect(sr.rim.near.material.emissiveIntensity).toBeGreaterThan(1);
     expect(sr.rim.far.material.emissive.getHex()).toBe(0);
 
     sr.lightRim(null);
