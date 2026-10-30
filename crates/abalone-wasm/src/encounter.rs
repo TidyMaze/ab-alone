@@ -911,8 +911,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_10_since_the_ballast_player_starts_with_16_marbles() {
-        assert_eq!(engine_version(), 10);
+    fn the_engine_version_is_11_since_the_echo_plays_bonus_mirrors() {
+        assert_eq!(engine_version(), 11);
     }
 
     #[test]
@@ -980,7 +980,7 @@ mod tests {
         assert_eq!(f.name(), "The Echo");
         assert_eq!(f.to_move(), 1);
         assert_eq!(f.phase(), 0);
-        assert_eq!(f.phases(), 3);
+        assert_eq!(f.phases(), 2, "the Echo has two phases");
         assert_eq!(f.result(), 0);
         assert_eq!(f.status(), 0);
         assert_eq!(f.draw_reason(), 0);
@@ -1052,16 +1052,33 @@ mod tests {
     }
 
     #[test]
-    fn the_echo_mirrors_the_player_move_and_the_tell_announces_it() {
+    fn the_echo_plays_the_mirror_as_a_bonus_and_the_tell_announces_it() {
         let mut f = fight();
         let mv = first_move(&f);
         let announced = f.tell_move(&mv);
         assert_eq!(announced.len(), MOVE_STRIDE);
+        let before = f.board();
         f.play(&mv).unwrap();
+        assert_eq!(
+            f.to_move(),
+            2,
+            "the Echo plays its own move after the bonus"
+        );
+        let mirrored = decode(&announced).unwrap();
+        let (q, r) = mirrored.cells[0];
+        let i = board_cells(4).position(|c| c == (q, r)).unwrap();
+        assert_eq!(
+            (before[i], f.board()[i]),
+            (2, 0),
+            "the bonus moved its marble"
+        );
         let reply = f.boss_move();
-        assert_eq!(reply, announced, "the tell is the boss reply");
         assert_eq!(f.play(&reply), Ok(()));
         assert_eq!(f.to_move(), 1);
+        assert!(
+            f.tell_move(&reply).is_empty(),
+            "no bonus for the side not to move"
+        );
     }
 
     #[test]
