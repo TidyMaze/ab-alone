@@ -175,6 +175,8 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import {
   drawDue,
   drawWanted,
+  timeDraw,
+  type LastDraw,
   fogSettings,
   hasParticles,
   readClearBoard,
@@ -4707,7 +4709,7 @@ refresh();
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 document.body.appendChild(renderer.domElement);
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
-let lastDraw = { start: -Infinity, cost: 0 };
+let lastDraw: LastDraw = { start: -Infinity, cost: 0, timed: true };
 let draws = 0;
 let drawAsked = false;
 // Used by the browser checks to wait for a draw: under automation the loop skips frames (#216), so a frame is not a draw (#365).
@@ -4736,6 +4738,7 @@ function moving(): boolean {
 }
 
 renderer.setAnimationLoop((now) => {
+  lastDraw = timeDraw(lastDraw, now);
   const moves = moving(); // before the effects run, so the frame that ends one draws
   const wanted = drawWanted(dirty > 0, moves, drawAsked, navigator.webdriver);
   if (moves) dirty = CHANGE_DRAWS; // its last picture draws twice too, for the bloom
@@ -4782,5 +4785,5 @@ renderer.setAnimationLoop((now) => {
   draws++;
   drawAsked = false;
   dirty = Math.max(0, dirty - 1);
-  lastDraw = { start: now, cost: performance.now() - now };
+  lastDraw = { start: now, cost: performance.now() - now, timed: false };
 });
