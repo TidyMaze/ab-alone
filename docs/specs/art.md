@@ -8,7 +8,7 @@ and no new look: each rule names its source (section numbers), and changes when 
 
 - **Brief.** A viewport onto a dim ship deck lit by one practical lamp, a cyan glow where the
   player is, never a web app around a canvas; clarity of play wins over mood (ui.md 1). The
-  player is the last warm thing aboard, glass with a cyan light; the crew hardened into black
+  player is the last warm thing aboard, an opaque glass marble; the crew hardened into black
   shells and still plays by the rules (world.md 2).
 - **Tone.** Cosmic dread, grief, bureaucracy. Never gore for its own sake (world.md 2).
 - **Palette** (world.md 5, 8, ui.md 2). Near-black `#0b0d0f` base, oxidized steel `#4a5258`, rust

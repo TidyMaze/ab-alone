@@ -105,7 +105,7 @@ The one-page summary of sections 5 to 8, with the asset list, its size budget an
 is made in the repo, is [art.md](art.md).
 
 **Palette.** Near-black base (#0b0d0f), rust (#7a3b1d), oxidized steel (#4a5258), sodium orange
-(#d9822b) for hazard and furnace, a single cold cyan (#7fd6e8) for the player's inner light.
+(#d9822b) for hazard and furnace, a single cold cyan (#7fd6e8) for the player's accents (the ring and the ghost marble, `main.ts` `pal.core`), not an inner light.
 Red is reserved for danger (breach, ejection warning). Nothing saturated outside these.
 
 **Materials.** Brushed and pitted steel, oil stains, welded patches, taped cables, condensation,
