@@ -8,6 +8,7 @@ pub mod assembly;
 pub mod ballast;
 pub mod chaplain;
 pub mod choir;
+pub mod dual;
 pub mod echo;
 pub mod fixture;
 pub mod hull;
@@ -20,6 +21,7 @@ pub mod telemetry;
 pub mod unstable;
 
 use crate::board::{Board, Cell};
+use crate::encounter::dual::carried_dual;
 use crate::encounter::magnetizer::{carried_announce, carried_poles, settle, Repulsion};
 use crate::encounter::unstable::carried_unstable;
 use crate::game::{Game, GameError, Outcome};
@@ -352,11 +354,13 @@ impl Encounter {
         let announce = carried_announce(before, mv, board);
         let unstable = carried_unstable(before, mv, board);
         let martyr = carried_martyr(before, mv, board);
+        let dual = carried_dual(before, mv, board);
         if kept != board.converted()
             || poles != board.polarities()
             || announce != board.announce()
             || unstable.as_ref() != board.unstable()
             || martyr != board.martyr()
+            || dual != board.dual()
         {
             let mut next = board.clone();
             next.set_martyr(martyr);
@@ -364,6 +368,7 @@ impl Encounter {
             next.set_polarities(poles);
             next.set_announce(announce);
             next.set_unstable(unstable);
+            next.set_dual(dual);
             self.game.replace_board(next);
         }
     }

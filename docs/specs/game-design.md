@@ -266,6 +266,7 @@ Each new boss: add its mechanic to The Ballast Mind's borrowed effects when it f
 | Extra | 4 Chapel | The Overseer (proposed by @TidyMaze, section 7.11) | #635 | any time, boss menu |
 | Extra | 2 Cargo | The Assembly Line (proposed by @Varadiell, section 7.12) | #744 | any time, boss menu |
 | Extra | 3 Furnace | The Unstable Core (proposed by @Varadiell, section 7.13) | #751 | any time, boss menu |
+| Extra | 1 Mess | The Dual Room (proposed by @Varadiell, section 7.15) | #796 | any time, boss menu |
 
 Issue numbers keep their original order, play order is the last column. The Echo opens the
 game because its ghost preview shows the tell in the move UI itself, so it teaches the "read
@@ -837,6 +838,78 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   rule and the hooks of both sides (budget 3000 nodes, the Hull's).
 - **Calibrate**: knobs = charge per turn, overload at 4, phase ejections (3, 5), the wedge rhythm
   (3 turns), AI depth. Fail if most fights end with no overload.
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
+  the days after it ships changes, section 7.6). No hub door.
+
+### 7.15 The Dual Room: two rooms where ejected marbles come back
+
+- **Concept**: the Mess deck's two galleys, split by a bulkhead. What you throw out of one room
+  is thrown back into the other, until the bulkhead gives way.
+- **Board and sides** (owner): two radius 4 boards (61 cells each) side by side, touching along
+  one edge. A **wall** stands on that shared edge: no move or push crosses it, and pushing against
+  it is like pushing against a marble that does not move (lead). In the engine it is one board of
+  two hexes with a flag (`Board::dual`), no general multi-board system: the south room is the hex
+  of centre `(-2, 4)` (rows `r = 0` to `8`), the north room the hex of centre `(3, -5)` (rows
+  `r = -9` to `-1`), so the wall runs between the rows `r = 0` and `r = -1`. Every other mode and
+  boss keeps its board. Mess deck look. Win at **6** ejections, lose at 6 as usual (`rules.md`
+  §10.3).
+- **Start** (owner counts, lead layout): **7** player marbles in each room on its far side, **5**
+  boss marbles in each room against the wall. The north room is the mirror of the south one
+  (below).
+
+  ```text
+  north room (r = -9 .. -1)        P = player, B = boss
+   r=-9      P P P P P                 far side
+   r=-8     . . P P . .
+   ...
+   r=-2     . . B B . .
+   r=-1      . B B B .                 wall row
+  ========== wall ==========
+   r=0       . B B B .                 wall row
+   r=1      . . B B . .
+   ...
+   r=7      . . P P . .
+   r=8       P P P P P                 far side
+  south room (r = 0 .. 8)
+  ```
+
+- **Mirror**: the cell symmetric to `(q, r)` across the wall is its mirror in the room's own
+  coordinates: a south cell `(q, r)` maps to `(q + r + 1, -1 - r)` in the north room, a north cell
+  `(q, r)` to `(q + r, -1 - r)` in the south room. Each row keeps its distance to the wall (the wall
+  row maps to the wall row, the far side to the far side); the hex grid shifts it half a cell.
+- **Return** (owner): a marble ejected (of either side) **comes back one ply later**, at the end
+  of the opponent's next move, in the **other** room. Its landing cell is **announced** on the board
+  as soon as it is ejected.
+  - **P1** (start): it lands on the **mirror** of the cell it was pushed off from. If that cell is
+    taken, on the nearest empty cell of that room (hex distance, then the lowest `q`, then `r`),
+    at the announce and again at the landing.
+  - **P2** (after **3** ejections credited to you): it lands in the room with **fewer marbles**
+    (both colours; a tie keeps the other room) on a **random empty rim cell** of that room (a cell
+    next to the off-board, the inner wall cells excluded).
+  - **P3** (after **5**): the **wall collapses**: the shared edge becomes a passage, marbles move
+    and push across it as on one board, and ejected marbles **no longer come back**.
+  The phase is the one after the ejecting move: the 3rd ejection already returns as P2, the 5th
+  is gone, and the wall falls at the end of that move. A return announced before still lands.
+- **Win and loss** (lead): **every ejection counts**, even when the marble comes back: win at 6,
+  lose at 6. A return is not an ejection and credits nothing.
+- **Deterministic, for P2P**: every random pick is splitmix64 of the fight seed and the ply. The
+  wall, the counted ejections, the marble just ejected and the announced return live on the board
+  and in the position hash. No `Math.random`, no clock.
+- **Tell**: the announce mark on the landing cell (the colour of the coming marble) during the
+  ply before it lands; the HUD line says where it lands, and that the wall falls at 5.
+- **Look**: the two boards side by side under one camera, the wall a lit barrier that collapses at
+  P3, the returning marble dropping in on its mark. Reduced motion: no fall animation, it appears.
+- **Turn it against the boss** (owner design rule): an ejected boss marble lands on the mirror of
+  the cell you push it off from, so pick that cell to drop it into a trap in the other room (onto
+  the rim in front of your line); keep the mirror of your own exposed rim cells covered; in P2 the
+  return goes to the emptier room, so thin out the room you want it out of. The boss search plays
+  the wall, the returns of both sides and the collapse (every ply of its tree goes through the
+  hook, seed 0 for the P2 draw).
+- **The Ballast Mind** (owner rule, section 7.5): not borrowed. A return needs a second room and
+  spans two plies (ejected, then back one ply later): it is not a one-shot hook on the Ballast
+  board, which has one room.
+- **Calibrate**: knobs = the phase ejections (3, 5), the start layout, AI budget. Fail if most
+  fights end before P3 (nobody sees the wall fall).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door.
 
