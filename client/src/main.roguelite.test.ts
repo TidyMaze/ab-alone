@@ -75,7 +75,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it('a marble lost by an army of 4 loses the run, and New run starts another', async () => {
     const game = await boot('?bot=off');
-    await game.hook('__run', pick({ ...newRun(1), army: 4 }, 0)); // the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
+    await game.hook('__run', pick({ ...newRun(1, 3), army: 4 }, 0)); // the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
     expect(document.body.dataset.run).toBe('fight');
     // White walks its column q = 1 down four times while Black steps (-2, 2) aside and back, then pushes (1, 3) off.
     const column = (k: number): Axial[] => [-4, -3, -2].map((r): Axial => [1, r + k]);
@@ -95,7 +95,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('an invite link wins over a saved run: the online game starts, the run stays saved for later', async () => {
     const indexedDB = new IDBFactory();
     const first = await boot('?bot=off', { indexedDB });
-    await first.hook('__run', pick(newRun(1), 0));
+    await first.hook('__run', pick(newRun(1, 3), 0));
     await first.settle();
     const game = await boot('?net=hook#room=the-room', { indexedDB });
     for (let i = 0; i < 50 && document.body.dataset.seat !== 'pending'; i++) await game.settle();
@@ -141,7 +141,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('places the army special marbles before the first move, saves them, and the first move starts the fight', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', pick({ ...newRun(1), specials: [1, 0, 2] }, 0));
+    await game.hook('__run', pick({ ...newRun(1, 3), specials: [1, 0, 2] }, 0));
     expect(document.body.dataset.run).toBe('place');
     expect(map().hidden).toBe(false);
     expect(map().classList.contains('place')).toBe(true);
@@ -180,7 +180,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('a won fight offers a reward, its pick goes back to the map', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(1), army: 12, path: [0], reward: true });
+    await game.hook('__run', { ...newRun(1, 3), army: 12, path: [0], reward: true });
     expect(document.body.dataset.run).toBe('reward');
     expect(line()).toBe('Fight won · pick a reward');
     const offers = [...map().querySelectorAll<HTMLButtonElement>('button[data-offer]')];
@@ -196,7 +196,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it.each([false, true])('a Spark pushed off bursts on screen, never with reduced motion (%s)', async (reducedMotion) => {
     const game = await boot('?bot=off', { reducedMotion });
-    await game.hook('__run', { ...pick({ ...newRun(1), army: 4, specials: [1, 0, 1] }, 0), placed: [[1, 3, 3], [0, 2, 1]] });
+    await game.hook('__run', { ...pick({ ...newRun(1, 3), army: 4, specials: [1, 0, 1] }, 0), placed: [[1, 3, 3], [0, 2, 1]] });
     const column = (k: number): Axial[] => [-4, -3, -2].map((r): Axial => [1, r + k]);
     for (let k = 0; k < 5; k++) {
       play(game, k % 2 ? [[-3, 2]] : [[-2, 2]], k % 2 ? [-2, 2] : [-3, 2]);
@@ -211,7 +211,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('the bot replays the fight with its special marbles: a Heavy push the plain board refuses, #961', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...pick({ ...newRun(1), specials: [1, 0, 0] }, 0), placed: [[0, 4, 1]] });
+    await game.hook('__run', { ...pick({ ...newRun(1, 3), specials: [1, 0, 0] }, 0), placed: [[0, 4, 1]] });
     // The column q = 0 marches up while White steps (2, -2) down out of the way.
     for (let k = 0; k < 3; k++) {
       play(game, [0, 1, 2].map((d): Axial => [0, 2 + d - k]), [0, 1 - k]);
@@ -233,7 +233,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('a rest from the map brings the army back to 14 with no fight, saved with the run', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(3), army: 9, path: [1] });
+    await game.hook('__run', { ...newRun(3, 3), army: 9, path: [1] });
     expect(node(3).getAttribute('aria-label')).toBe('Act 1, rest');
     expect(node(2).className).toBe('node elite');
     node(3).click();
@@ -247,7 +247,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it.each([['1', 'taken'], ['0', 'left']])('an event waits for its choice, %s: %s, then the map goes on', async (choice) => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...newRun(3), army: 12, specials: [0, 0, 1], path: [1] });
+    await game.hook('__run', { ...newRun(3, 3), army: 12, specials: [0, 0, 1], path: [1] });
     node(4).click();
     expect(document.body.dataset.run).toBe('event');
     expect(line()).toMatch(/^Event · /);
@@ -263,7 +263,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it('an elite is a fight against the bot on the army board', async () => {
     const game = await boot('?nodes=50');
-    await game.hook('__run', pick({ ...newRun(3), path: [0] }, 2));
+    await game.hook('__run', pick({ ...newRun(3, 3), path: [0] }, 2));
     expect(game.hud()).toContain('Rogue-lite run · act 1 elite · army 14 marbles');
     playMove(game);
     await game.settle();
@@ -287,7 +287,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     for (let seed = 0; ; seed++) {
       const nodes = parseMap(run_map(seed));
       const path = toBoss(nodes);
-      const state = pick({ ...newRun(seed), path: path.slice(0, -1) }, path[path.length - 1]!);
+      const state = pick({ ...newRun(seed, 3), path: path.slice(0, -1) }, path[path.length - 1]!);
       if (actBoss(nodes, state, boss_ids())?.id === id) return { state, nodes };
     }
   }
@@ -323,8 +323,56 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     await game.settle();
     expect(document.body.dataset.run).toBe('lost');
     expect(line()).toBe('Run lost · 14 marbles left');
-    await game.hook('__run', visit(nodes, newRun(state.seed), 0));
+    await game.hook('__run', visit(nodes, newRun(state.seed, 3), 0));
     expect(document.body.dataset.boss).toBeUndefined();
     expect(document.body.dataset.deck).toBe('mess');
+  });
+
+  // Unlocks between runs and the run summary (#801).
+  const armies = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-army]')];
+  it('the start shows the unlocks; an unlocked starting army is picked, saved, and placed before the first fight', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    localStorage.setItem('ab-alone.roguelite', '1'); // an act won in an earlier run
+    game.openModes();
+    byId('roguelite').click();
+    expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
+    armies()[1]!.click();
+    expect(line()).toBe('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
+    expect(armies()[1]!.getAttribute('aria-pressed')).toBe('true');
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(line()).toBe('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
+    open()[0]!.click();
+    expect(document.body.dataset.run).toBe('place');
+  });
+
+  it('an act boss beaten counts at once: a run abandoned after it keeps the unlock, its own unlocks stay', async () => {
+    const game = await boot('?bot=off');
+    // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6; won, its reward waits.
+    await game.hook('__run', { ...newRun(3, 0), army: 12, path: [0, 2, 6, 9], reward: true });
+    expect(localStorage.getItem('ab-alone.roguelite')).toBe('1');
+    expect(document.body.dataset.run).toBe('reward');
+    expect(map().querySelectorAll('button[data-offer]')).toHaveLength(2); // its own unlocks: a marble or a Heavy
+    game.openModes();
+    byId('daily').click(); // the run is abandoned
+    expect(localStorage.getItem('ab-alone.roguelite')).toBe('1');
+  });
+
+  it('a run over shows its summary and keeps the acts it won for the next runs', async () => {
+    const game = await boot('?bot=off');
+    // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6, and leads to the first fight 10 of act 2, lost here.
+    await game.hook('__run', { ...newRun(3, 0), army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
+    expect(document.body.dataset.run).toBe('lost');
+    expect([...map().querySelectorAll('.run-help')].map((p) => p.textContent)).toEqual([
+      'Path: act 1 Fight, Elite, Elite, Boss · act 2 Fight',
+      'Fights: 4 won, 1 lost',
+      'Army at the end: 3 marbles',
+      'Unlocked: Anchor marbles, Bulwark army',
+    ]);
+    expect(localStorage.getItem('ab-alone.roguelite')).toBe('1');
+    byId('run-new').click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
   });
 });

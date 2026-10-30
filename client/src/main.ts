@@ -254,6 +254,8 @@ import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame'
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import {
   actBoss,
+  actsWon,
+  chooseArmy,
   claim,
   clearRun,
   eventHtml,
@@ -268,6 +270,8 @@ import {
   place,
   placeHtml,
   placing,
+  readBest,
+  recordBest,
   resolve,
   rewardHtml,
   runLine,
@@ -4431,13 +4435,14 @@ const playOnlineButton = document.getElementById('play-online') as HTMLButtonEle
 
 // The rogue-lite run (#798, docs/specs/roguelite.md): Rogue-lite run in the mode menu starts a new run on the map of
 // its seed. A pick on the map starts that node's fight against the bot, the army's marbles on the standard layout less
-// those lost; once it is over the map shows again, or the run's end and New run. The run is saved after every pick and
-// move and resumed on load; another mode abandons it.
+// those lost; once it is over the map shows again, or the run's summary and New run. The run is saved after every pick
+// and move and resumed on load; another mode abandons it. The most acts won in one run unlocks the next runs' special
+// marble types and starting armies (#801), picked on the map before the first node.
 const runPanel = document.getElementById('run-map')!;
 const runButton = document.getElementById('roguelite') as HTMLButtonElement;
 function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-  startRun(newRun(seed), parseMap(run_map(seed)));
+  startRun(newRun(seed, readBest(store)), parseMap(run_map(seed)));
 }
 function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
@@ -4473,6 +4478,7 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
 // move (never in a boss fight: no special marble there), or the map.
 function showRun(): void {
   const { map, state } = run!;
+  recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
   const placed = placing(state) && !(engine instanceof Encounter);
   runPanel.innerHTML = state.reward ? rewardHtml(map, state) : state.event ? eventHtml(state) : placed ? placeHtml(state, armed) : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
@@ -4545,6 +4551,10 @@ runPanel.addEventListener('click', (e) => {
     run!.state = resolve(run!.state, button.dataset.choice === '1');
     void saveRun(gameStore, run!.state);
     showRun();
+  } else if (button?.dataset.army) {
+    run!.state = chooseArmy(run!.state, Number(button.dataset.army));
+    void saveRun(gameStore, run!.state);
+    showRun();
   } else if (button?.dataset.kind) {
     armed = armed === Number(button.dataset.kind) ? 0 : Number(button.dataset.kind);
     showRun();
@@ -4583,8 +4593,10 @@ addEventListener('keydown', (e) => {
   drawAsked = true;
   refresh();
 });
-// Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload.
+// Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
+// shows its summary (#801).
 (window as unknown as Record<string, unknown>).__run = async (state: Run) => {
+  if (state.end) return startRun(state, parseMap(run_map(state.seed)));
   await saveRun(gameStore, state);
   resumeRun((await loadSavedRun())!); // the browser checks load valid runs
 };
