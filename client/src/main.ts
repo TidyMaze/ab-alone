@@ -1896,6 +1896,9 @@ const saves = new LocalSaves(gameStore, navigator.storage);
 // Without ?bot=off the page resumes the game of either mode: a hot-seat game from the hub's table goes on with
 // no bot (#565).
 const resumed = await saves.load(worker ? undefined : false, () => new Engine());
+// A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
+const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), (army) => Engine.with_army(army));
+const resumedRun = await loadSavedRun();
 if (resumed) {
   if (!resumed.bot) worker = null;
   engine = resumed.engine;
@@ -4249,8 +4252,7 @@ function leaveRun(): void {
   newGameButton.hidden = false;
   void clearRun(gameStore);
 }
-async function resumeRun(): Promise<void> {
-  const saved = await loadRun(gameStore, (seed) => parseMap(run_map(seed)), (army) => Engine.with_army(army));
+function resumeRun(saved: Awaited<ReturnType<typeof loadSavedRun>>): void {
   if (saved) startRun(saved.state, saved.map, saved.engine);
 }
 runPanel.addEventListener('click', (e) => {
@@ -4267,7 +4269,7 @@ runButton.disabled = false; // listener ready (#146)
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload.
 (window as unknown as Record<string, unknown>).__run = async (state: Run) => {
   await saveRun(gameStore, state);
-  await resumeRun();
+  resumeRun(await loadSavedRun());
 };
 
 // The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8
@@ -4673,7 +4675,7 @@ refresh();
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 document.body.appendChild(renderer.domElement);
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
-await resumeRun(); // a run saved in progress, over the local game
+resumeRun(resumedRun); // a run saved in progress, over the local game
 let lastDraw = { start: -Infinity, cost: 0 };
 let draws = 0;
 let drawAsked = false;
