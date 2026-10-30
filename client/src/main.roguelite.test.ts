@@ -203,4 +203,24 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(document.body.dataset.run).toBe('lost');
     expect(specials()).toBe('0,2,1'); // the Heavy stayed, the Spark went off
   });
+
+  it('the bot replays the fight with its special marbles: a Heavy push the plain board refuses, #961', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...pick({ ...newRun(1), specials: [1, 0, 0] }, 0), placed: [[0, 4, 1]] });
+    // The column q = 0 marches up while White steps (2, -2) down out of the way.
+    for (let k = 0; k < 3; k++) {
+      play(game, [0, 1, 2].map((d): Axial => [0, 2 + d - k]), [0, 1 - k]);
+      play(game, [[2, -2 + k]], [2, -1 + k]);
+    }
+    await game.settle();
+    const bot = await boot('?nodes=50', { indexedDB }); // the bot on, the run resumed
+    expect(bot.hook('__plies')).toBe(6);
+    play(bot, [[0, -1], [0, 0], [0, 1]], [0, -2]); // Heavy + 2 (4) push 3: legal with the Heavy only
+    expect(bot.hook('__plies')).toBe(7);
+    await bot.settle();
+    bot.frame(1000);
+    await bot.settle();
+    expect(bot.hook('__plies')).toBe(8); // the bot answered on the same board
+  });
 });
