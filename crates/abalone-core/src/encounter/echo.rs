@@ -154,6 +154,36 @@ pub fn echo_bonuses(enc: &Encounter, mv: &Move) -> Vec<Move> {
         .collect()
 }
 
+/// The bonus moves the other side would get if the side to move played `mv`, in order, each with
+/// `true` when it would be skipped (it would lose its receiver the game): the client's tell. Empty
+/// when `mv` is illegal, ends the game, or gives no bonus.
+pub fn echo_tell(enc: &Encounter, mv: &Move) -> Vec<(Move, bool)> {
+    let mut main = enc.game().clone();
+    if main.play(mv).is_err() || main.outcome().is_some() {
+        return Vec::new();
+    }
+    let mut after = enc.clone();
+    after.play(mv).expect("a legal move");
+    let played = &after.game().history()[enc.game().history().len() + 1..];
+    let tell = |m: Move| {
+        let skipped = !played.iter().any(|p| p.mv == m);
+        (m, skipped)
+    };
+    let mut out = Vec::new();
+    if playable(main.board(), main.to_move(), mv) {
+        out.push(tell(mirror_move(mv)));
+    }
+    let left = after.game().board().echoes();
+    let spent = enc
+        .game()
+        .board()
+        .echoes()
+        .iter()
+        .find(|e| !left.contains(e));
+    out.extend(spent.map(|(_, old)| tell(mirror_move(old))));
+    out
+}
+
 /// The bonus moves inside the search tree, after `mover` played `mv` (`before` the board before
 /// it, `after` the board after it, `ejected` the credits before it): the mirror for the other
 /// side, then in P2 the latest older one, with the ejections they credit. The tree does not see
