@@ -166,7 +166,11 @@ export function lightPanel(
     const button = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Save' });
     button.setAttribute('aria-label', 'Save to sceneoverrides.json');
     button.addEventListener('click', () => {
-      const tuned = sorted.map(([kind, { get, level }]) => [kind, Number(((get() * 100) / (level ? save.levels[level] : 100)).toPrecision(4))] as const);
+      // A slider at 0 % hides the tuning behind it (a division by nothing): its families are left as the file has them.
+      const tuned = sorted.flatMap(([kind, { get, level }]) => {
+        const percent = level ? save.levels[level] : 100;
+        return percent ? [[kind, Number(((get() * 100) / percent).toPrecision(4))] as const] : [];
+      });
       save.write(Object.fromEntries(tuned.filter(([kind, power]) => power !== LIGHT_TUNING[kind])));
     });
     panel.append(button);

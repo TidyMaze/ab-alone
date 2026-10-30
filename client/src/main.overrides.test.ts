@@ -3,8 +3,8 @@ import * as THREE from 'three/webgpu';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { boot } from './test/harness';
 
-// A saved sceneoverrides.json (#875): the key's power over what lighttuning.ts tunes.
-vi.mock('./sceneoverrides.json', () => ({ default: { power: { key: 0.7 } } }));
+// A saved sceneoverrides.json (#875): the kiosk light's power over what lighttuning.ts tunes (100).
+vi.mock('./sceneoverrides.json', () => ({ default: { power: { kioskGreenLight: 70 } } }));
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -22,10 +22,10 @@ describe('main.ts, the saved scene overrides (#875)', () => {
   it('applies them after the tuning, under the sliders\' levels (lights 215 %), on every deck', async () => {
     const { scene } = spyScene();
     const game = await boot('?bot=off');
-    const key = (): number => (scene().getObjectByName('key') as THREE.Light).intensity;
-    expect(key()).toBeCloseTo(0.7 * 2.15);
+    const key = (): number => (scene().getObjectByName('kioskGreenLight') as THREE.Light).intensity;
+    expect(key()).toBeCloseTo(70 * 2.15);
     game.hook('__setTier', 'low'); // the lights made again
-    expect(key()).toBeCloseTo(0.7 * 2.15);
+    expect(key()).toBeCloseTo(70 * 2.15);
   });
 
   it('saves the panel through the dev server: the tuning behind the sliders, only what is off lighttuning.ts', async () => {
@@ -37,8 +37,20 @@ describe('main.ts, the saved scene overrides (#875)', () => {
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect([url, init.method]).toEqual(['/__sceneoverrides', 'POST']);
     const { power } = JSON.parse(init.body as string);
-    expect(power.key).toBe(0.7); // 1.505 at 215 %, back to the file's 0.7
-    expect(power.fill).toBeUndefined(); // the tuned power
+    expect(power.kioskGreenLight).toBe(70); // 150.5 at 215 %, back to the file's 70
+    expect(power.viewportRimLight).toBeUndefined(); // the tuned power
+  });
+
+  it('says so when the dev server refuses the save or cannot be reached, the click no longer looking like a success (#875)', async () => {
+    await boot('?bot=off&lights');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const save = (): void => document.querySelector<HTMLButtonElement>('#light-panel button[aria-label="Save to sceneoverrides.json"]')!.click();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('bad power', { status: 400 })));
+    save();
+    await vi.waitFor(() => expect(error).toHaveBeenCalledTimes(1));
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new Error('offline'))));
+    save();
+    await vi.waitFor(() => expect(error).toHaveBeenCalledTimes(2));
   });
 
   it('has no Save button in the production build', async () => {

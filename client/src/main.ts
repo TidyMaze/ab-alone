@@ -1621,7 +1621,9 @@ const saveOverrides = import.meta.env.DEV
   ? {
       levels,
       write: (power: Record<string, number>): void =>
-        void fetch('/__sceneoverrides', { method: 'POST', body: JSON.stringify({ power }) }),
+        void fetch('/__sceneoverrides', { method: 'POST', body: JSON.stringify({ power }) })
+          .then((r) => r.ok || console.error(`sceneoverrides.json not saved: ${r.status}`))
+          .catch(console.error),
     }
   : undefined;
 // The lights as tuned (lighttuning.ts) and as saved from the panel (sceneoverrides.json), each time they are made again:

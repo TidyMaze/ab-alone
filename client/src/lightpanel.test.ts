@@ -3,6 +3,9 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
 import { applyTuning, lightPanel, scalePower } from './lightpanel';
 
+// The tuning the Save tests compare the panel with: the key's, as it was when they were written.
+vi.mock('./lighttuning', () => ({ LIGHT_TUNING: { key: 1.5 } }));
+
 describe('lightPanel (?lights)', () => {
   const scene = (): { scene: THREE.Scene; key: THREE.DirectionalLight; lamp: THREE.PointLight; neon: THREE.MeshStandardMaterial } => {
     const scene = new THREE.Scene();
@@ -187,7 +190,7 @@ describe('lightPanel (?lights)', () => {
         { name: 'bloom radius', uniform: { value: 0.5 }, max: 1 }, // not
       ];
       const write = vi.fn();
-      const panel = lightPanel(s, undefined, undefined, knobs, { levels, write });
+      const panel = lightPanel(s, undefined, undefined, knobs, undefined, { levels, write });
       return { panel, write, save: panel.querySelector<HTMLButtonElement>('button[aria-label="Save to sceneoverrides.json"]')! };
     };
 
@@ -210,6 +213,16 @@ describe('lightPanel (?lights)', () => {
       save.click();
       expect(write).toHaveBeenCalledWith(expect.objectContaining({ key: 2, 'PointLight 38e8ff (-13, 11, -17.5)': 1 }));
       expect(Object.keys(write.mock.calls[0]![0])).toHaveLength(5);
+    });
+
+    it('leaves out the powers of a slider at 0 %: the tuning cannot be told from a power of nothing (#875)', () => {
+      const { panel, write, save } = saved({ bloom: 100, lamps: 100, lights: 0 });
+      slide(panel, 'key', '2');
+      save.click();
+      const power = write.mock.calls[0]![0] as Record<string, number>;
+      expect(power.key).toBeUndefined();
+      expect(Object.values(power).every(Number.isFinite)).toBe(true);
+      expect(power['bloom radius']).toBe(0.5); // the other sliders still save
     });
 
     it('rounds to 4 digits', () => {
