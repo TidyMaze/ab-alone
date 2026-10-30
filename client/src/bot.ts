@@ -14,6 +14,8 @@ export interface BotRequest {
   player?: boolean;
   /** Set to ask for the search score of the position instead of a move (never with a boss). */
   evaluate?: boolean;
+  /** Set in a rogue-lite fight (#798): the worker replays the history on an engine of this army. */
+  army?: number;
 }
 
 export interface BossRef {
@@ -75,7 +77,7 @@ export function botBudget(search: string, automated: boolean): number {
 /** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,
-  makeEngine: () => EngineLike,
+  makeEngine: (army?: number) => EngineLike,
   makeEncounter: (id: string, seed: number) => EncounterLike,
 ): BotResponse {
   if (req.boss) {
@@ -86,7 +88,7 @@ export function answer(
     for (const mv of req.history) fight.play(Int32Array.from(mv));
     return { id: req.id, move: Array.from(req.player ? fight.player_move() : fight.boss_move()) };
   }
-  const engine = makeEngine();
+  const engine = makeEngine(req.army);
   for (const mv of req.history) engine.play(Int32Array.from(mv));
   if (req.evaluate) return { id: req.id, score: engine.evaluate(req.nodes) };
   return { id: req.id, move: Array.from(engine.best_move(req.nodes)) };
@@ -135,8 +137,9 @@ export async function askBot(
   boss?: BossRef,
   difficultyPercent?: number,
   player?: boolean,
+  army?: number,
 ): Promise<number[]> {
-  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player })).move;
+  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player, army })).move;
 }
 
 /** Page side: the search score of the position after `history`, for the side to move. */

@@ -146,6 +146,11 @@ required to play.
 
 Lore is found, never told: terminals and audio logs only, no cutscenes.
 
+### 3.6 Rogue-lite run (#797)
+
+A secondary mode: 3 acts of a branching map of fights, the army only shrinks. See
+[roguelite.md](roguelite.md).
+
 ## 4. Core loop and progression
 
 **Attempt loop (5 to 12 minutes):** enter encounter, read the board, spot the tell, apply the

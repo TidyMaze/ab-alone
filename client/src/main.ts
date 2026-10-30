@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -233,6 +233,7 @@ import { LocalSaves } from './savegame';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
+import { clearRun, fightOver, loadRun, mapHtml, newRun, parseMap, pick, runLine, saveRun, type MapNode, type Run } from './roguelite';
 import { ARENA, ARENA_SCALE, YOU, deadlineText, loadRoyale, nextRound, outSeats, parseLog, roundOrders, royaleHtml, seatAt, standings, type RoyaleFile } from './royale';
 import { buildReveal, shownAt, sinkAt, type Fall, type Reveal } from './royale-reveal';
 import { netStatus, parseRoyale, ROOM_JUDGE, roundPeriod, RoyaleNet, seedOf } from './royale-net';
@@ -285,6 +286,8 @@ let fitted: View | null = null;
 const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
 // The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
+// The rogue-lite run (#798) while it is on, else null: its map and where it stands.
+let run: { map: MapNode[]; state: Run } | null = null;
 // Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
 let royaleNet: RoyaleNet<Royale> | null = null;
 let ticking = 0;
@@ -877,6 +880,7 @@ const modeMenu = document.getElementById('mode-menu')!;
 modeButton.innerHTML = icon('modes');
 let modesOpen = false;
 const moveModes = (event: MenuEvent): void => {
+  if (event === 'pick') leaveRun(); // another mode abandons the run (startRun starts its own after)
   modesOpen = menuOpen(modesOpen, event);
   modeMenu.hidden = !modesOpen;
   modeButton.setAttribute('aria-expanded', String(modesOpen));
@@ -1902,10 +1906,14 @@ let thinking = false;
 
 // A local game survives a reload: saved in IndexedDB after every move, replayed through the engine on
 // load (docs/specs/tech.md section 8). Loaded before the board listeners exist, so no click races it.
-const saves = new LocalSaves(indexedDbStore(), navigator.storage);
+const gameStore = indexedDbStore();
+const saves = new LocalSaves(gameStore, navigator.storage);
 // Without ?bot=off the page resumes the game of either mode: a hot-seat game from the hub's table goes on with
 // no bot (#565).
 const resumed = await saves.load(worker ? undefined : false, () => new Engine());
+// A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
+const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), (army) => Engine.with_army(army));
+const resumedRun = await loadSavedRun();
 if (resumed) {
   if (!resumed.bot) worker = null;
   engine = resumed.engine;
@@ -1985,7 +1993,7 @@ function stopAuto(): void {
 }
 function syncAuto(): void {
   const boss = engine instanceof Encounter ? engine.name() : null;
-  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss }, fight !== null && hasMedal(store, fight.id));
+  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null }, fight !== null && hasMedal(store, fight.id));
   const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
   const reason = state.shown ? state.reason : null;
   const usable = state.shown && reason === null && !over;
@@ -2087,7 +2095,7 @@ async function botTurn(): Promise<void> {
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto),
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
@@ -2160,7 +2168,8 @@ function playMove(record: number[]): void {
   const before = Array.from(engine.board());
   engine.play(Int32Array.from(record));
   afterPlay(before, record);
-  if (!online && !fight) void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
+  if (!online && !fight && !run) void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
+  if (run?.state.fighting) runMoved();
   analyse();
 }
 
@@ -2694,7 +2703,7 @@ function hud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${onlineNote}${online ? '' : offlineNotice}${extra}`,
+    note: `${run ? runLine(run.map, run.state) : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -2710,7 +2719,7 @@ function hud(extra = ''): void {
   });
   rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
-  exportButton.hidden = importButton.hidden = online !== null || fight !== null; // local games only (#219)
+  exportButton.hidden = importButton.hidden = online !== null || fight !== null || run !== null; // local games only (#219)
   syncHint();
   const showGoal = goalShown(shownPly(), goalOpen);
   goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
@@ -4201,6 +4210,99 @@ function leaveOnline(): void {
 }
 const playOnlineButton = document.getElementById('play-online') as HTMLButtonElement;
 
+// The rogue-lite run (#798, docs/specs/roguelite.md): Rogue-lite run in the mode menu starts a new run on the map of
+// its seed. A pick on the map starts that node's fight against the bot, the army's marbles on the standard layout less
+// those lost; once it is over the map shows again, or the run's end and New run. The run is saved after every pick and
+// move and resumed on load; another mode abandons it.
+const runPanel = document.getElementById('run-map')!;
+const runButton = document.getElementById('roguelite') as HTMLButtonElement;
+function beginRun(): void {
+  const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
+  startRun(newRun(seed), parseMap(run_map(seed)));
+}
+function startRun(state: Run, map: MapNode[], resumed: Engine | null = null): void {
+  run = null; // its save is overwritten below, not deleted by leaveRun
+  moveModes('pick');
+  leaveOnline();
+  leaveRoyale();
+  leaveHub();
+  applyDeck(deckOf('local'));
+  worker = botWorker;
+  fight = null; // a boss fight the run was started from
+  delete document.body.dataset.boss;
+  retryButton.hidden = true;
+  engine = new Engine(); // the board under the map: the saved local game is left alone, as by a boss fight
+  history.length = 0;
+  replaying = null;
+  selected = [];
+  thinking = false; // a bot reply to the old game is dropped (botTurn)
+  view = resetView(4);
+  applyView();
+  roomOf = null; // no Back to the ship: the mode menu leaves a run
+  stopAnalysis(); // no bar and no hint in a run, as in a boss fight (fair play, #164)
+  newGameButton.hidden = true;
+  run = { map, state };
+  void saveRun(gameStore, state);
+  if (resumed) fightRun(resumed);
+  else {
+    showRun();
+    refresh();
+  }
+}
+function showRun(): void {
+  const { map, state } = run!;
+  runPanel.innerHTML = mapHtml(map, state);
+  runPanel.hidden = state.fighting;
+  document.body.dataset.run = state.end || (state.fighting ? 'fight' : 'map'); // read by the e2e tests
+  hud();
+}
+function fightRun(game: Engine): void {
+  engine = game;
+  history.length = 0;
+  history.push(...run!.state.moves);
+  replaying = null;
+  selected = [];
+  thinking = false; // a bot reply to the last fight is dropped (botTurn)
+  showRun();
+  refresh();
+  void botTurn(); // a fight saved while the bot was thinking
+}
+// After each move of a fight: the moves are saved, and once it is over the army loses the marbles the bot ejected.
+function runMoved(): void {
+  const status = engine.status();
+  const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, run!.state, status === 1, engine.ejected(2));
+  run!.state = state;
+  void saveRun(gameStore, state);
+  if (!state.fighting) showRun();
+}
+function leaveRun(): void {
+  if (!run) return;
+  run = null;
+  runPanel.hidden = true;
+  delete document.body.dataset.run;
+  newGameButton.hidden = false;
+  void clearRun(gameStore);
+}
+function resumeRun(saved: NonNullable<Awaited<ReturnType<typeof loadSavedRun>>>): void {
+  startRun(saved.state, saved.map, saved.engine);
+}
+runPanel.addEventListener('click', (e) => {
+  const button = (e.target as Element).closest<HTMLButtonElement>('button');
+  if (button?.id === 'run-new') beginRun();
+  else if (button) {
+    run!.state = pick(run!.state, Number(button.dataset.node));
+    void saveRun(gameStore, run!.state);
+    fightRun(Engine.with_army(run!.state.army));
+  }
+});
+runButton.addEventListener('click', beginRun);
+runButton.disabled = false; // listener ready (#146)
+// Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload.
+(window as unknown as Record<string, unknown>).__run = async (state: Run) => {
+  await saveRun(gameStore, state);
+  resumeRun((await loadSavedRun())!); // the browser checks load valid runs
+};
+
 // The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8
 // arena, at the Furnace. The player presses a target on the arena, as a move, which locks the order (#611), or holds;
 // the bots' orders come from the round-start state, and the round resolves. The HUD plate shows the next round's
@@ -4555,6 +4657,7 @@ const royaleInvite = royaleFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
 else if (royaleInvite) void goRoyale(royaleInvite, 2);
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite); // an unknown boss starts nothing
+else if (resumedRun) resumeRun(resumedRun); // a run saved in progress, over the local game; an invite link wins
 else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Ship hub (#602)
 else analyse(); // the start position
 

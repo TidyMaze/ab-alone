@@ -76,6 +76,7 @@
           <button id="boss-fight" type="button" aria-expanded="false" disabled>Boss fight</button>
           <div id="boss-list" hidden></div>
           <button id="daily" type="button" disabled>Daily challenge</button>
+          <button id="roguelite" type="button" disabled>Rogue-lite run</button>
           <button id="ship" type="button" disabled>Ship</button>
         </div>
         <input id="import-file" type="file" accept=".json,application/json" hidden aria-label="Game file" />
@@ -111,6 +112,7 @@
       <textarea id="diagnostics" readonly hidden aria-label="Diagnostics"></textarea>
       <button id="copy-diagnostics" type="button" disabled>Copy diagnostics</button>
     </div>
+    <div id="run-map" role="region" aria-label="Rogue-lite map" hidden></div>
     <div id="bubble" hidden><span id="bubble-text" aria-hidden="true"></span><span id="bubble-line" role="status"></span></div>
     <div id="reader" role="region" aria-label="Terminal" aria-live="polite" hidden></div>
     <script type="module" src="/src/main.ts"></script>

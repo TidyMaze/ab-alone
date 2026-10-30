@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   answer,
   askBot,
@@ -91,6 +91,13 @@ describe('answer', () => {
     expect(reply).toEqual({ id: 7, move: [1, 0, 123, 0, 0, 0, 0, 0] });
   });
 
+  it('replays a rogue-lite fight on an engine of its army, #798', () => {
+    const armies: (number | undefined)[] = [];
+    answer({ id: 9, history: [], nodes: 5, army: 9 }, (army) => (armies.push(army), new FakeEngine()), noEncounter);
+    answer({ id: 10, history: [], nodes: 5 }, (army) => (armies.push(army), new FakeEngine()), noEncounter);
+    expect(armies).toEqual([9, undefined]);
+  });
+
   it('answers an evaluate request with the score of the replayed position, #191', () => {
     const engine = new FakeEngine();
     const req = { id: 8, history: [[1, 0, 0, 2, 0, 0, 0, 0]], nodes: 10, evaluate: true };
@@ -114,6 +121,13 @@ describe('askBot', () => {
     };
     return worker;
   }
+
+  it('posts the army of a rogue-lite fight, #798', async () => {
+    const worker = fakeWorker();
+    const posted = vi.spyOn(worker, 'postMessage');
+    await askBot(worker, [], 50, undefined, undefined, undefined, 7);
+    expect(posted.mock.calls[0]![0]).toMatchObject({ army: 7 });
+  });
 
   it('round-trips a request and resolves with the move of the matching reply', async () => {
     const worker = fakeWorker();
