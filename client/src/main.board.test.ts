@@ -131,7 +131,8 @@ describe('main.ts board and HUD', () => {
     const { shells, glass } = drawn(scene());
     const instanced = scene().children.filter((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh && c.visible && c.geometry.type === 'SphereGeometry');
     expect(instanced.map((m) => [m.material, m.count])).toEqual(expect.arrayContaining([[shells[0]!.material, 14], [glass[0]!.material, 14]]));
-    expect(instanced).toHaveLength(2);
+    expect(instanced).toHaveLength(3); // one further batch for the white pieces' shared contour (#890)
+    expect(instanced.find((m) => (m.material as THREE.Material).name === 'white-contour')?.count).toBe(14);
     const camera = new THREE.Camera();
     expect([...shells, ...glass].some((m) => m.layers.test(camera.layers))).toBe(false);
   });
@@ -166,7 +167,16 @@ describe('main.ts board and HUD', () => {
     expect(leather.map!.repeat.toArray()).toEqual([tile, tile / 2]);
     expect(glass[0]!.material.map?.name).toBe('skin-Marble025-albedo.ktx2');
     expect(shells[0]!.children).toHaveLength(0);
-    expect(glass[0]!.children).toHaveLength(0); // no core: the opaque sphere would hide it (#885)
+    for (const marble of glass) {
+      expect(marble.children).toHaveLength(1); // no hidden core (#885)
+      const contour = marble.children[0] as THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+      expect(contour.name).toBe('white-contour');
+      expect(contour.geometry).toBe(marble.geometry);
+      expect(contour.material.side).toBe(THREE.BackSide);
+      expect(contour.material.color.getHex()).toBe(0x0b0d0f);
+      expect(contour.scale.toArray()).toEqual([1.18, 1.18, 1.18]);
+      expect(contour.geometry.parameters.radius * contour.scale.x).toBeLessThan(0.46); // stays inside its cell
+    }
   });
 
   it('wears every map its asset ships on each of the 20 skins, in its own colours, opaque', async () => {
@@ -191,13 +201,13 @@ describe('main.ts board and HUD', () => {
         expect(kinds, skin.id).toEqual(['albedo', 'normal', 'roughness', ...skin.extra]);
         for (const [kind, slot] of Object.entries(slots)) {
           const texture = m[slot as keyof typeof m] as THREE.Texture | null;
-          expect(texture?.name, `${skin.id} ${slot}`).toBe(side === 'glass' && kind === 'emission' ? `skin-${skin.asset}-albedo.ktx2` : kinds.includes(kind) ? `skin-${skin.asset}-${kind}.ktx2` : undefined);
+          expect(texture?.name, `${skin.id} ${slot}`).toBe(kinds.includes(kind) ? `skin-${skin.asset}-${kind}.ktx2` : undefined);
           if (texture) expect(texture.colorSpace, `${skin.id} ${slot}`).toBe(kind === 'albedo' || kind === 'emission' ? THREE.SRGBColorSpace : THREE.NoColorSpace);
         }
         expect(m.color.toArray(), skin.id).toEqual(side === 'shell' ? [0.2, 0.2, 0.2] : [1, 1, 1]);
         if (side === 'glass') {
-          expect(m.emissiveMap).toBe(m.map); // the same photograph fills the white body, no extra asset
-          expect(m.emissiveIntensity).toBe(1.2);
+          expect(m.emissiveMap).toBeNull();
+          expect(m.emissive.getHex()).toBe(0); // the natural PBR shading, no fill flattening its relief
         }
         expect(m.metalness, skin.id).toBe(kinds.includes('metalness') ? 1 : 0);
         if (kinds.includes('emission')) {
@@ -361,7 +371,7 @@ describe('main.ts board and HUD', () => {
     await boot('?nodes=100');
     const { glass } = drawn(scene());
     expect(glass.length).toBeGreaterThan(0);
-    for (const marble of glass) expect(marble.children).toHaveLength(0);
+    for (const marble of glass) expect(marble.children.map((c) => c.name)).toEqual(['white-contour']);
   });
 
   it('draws the frame round the board and lights the rim at the end of the side to move', async () => {

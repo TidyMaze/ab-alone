@@ -13,6 +13,16 @@ const RING_LIGHTS = Math.ceil((2 * Math.PI * RING.radius) / TUBE_SPACING);
 // deck whose own texture set did not load (#401, #440).
 
 describe('main.ts, __drawNext', () => {
+  it('can request a draw at the player resolution for narrow contour measurements (#890)', async () => {
+    const game = await boot('?bot=off');
+    game.frame();
+    expect(game.hook('__drawNext', 1)).toBe(1);
+    expect(document.body.dataset.ratio).toBe('1');
+    game.frame(100);
+    expect(game.hook('__draws')).toBe(2);
+    game.hook('__drawNext');
+    expect(document.body.dataset.ratio).toBe('1');
+  });
   it('under automation, a draw asked for after a slow one waits 100 ms, not 4 times its cost', async () => {
     const game = await boot('?bot=off');
     const now = vi.mocked(performance.now);
