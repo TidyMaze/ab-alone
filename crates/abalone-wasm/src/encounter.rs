@@ -16,7 +16,9 @@ use abalone_core::encounter::ballast::{
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::dual::{dual_boss, dual_landed, dual_move, dual_start};
-use abalone_core::encounter::echo::{echo_bonuses, echo_boss, echo_move, echo_start, echo_tell};
+use abalone_core::encounter::echo::{
+    echo_bonuses, echo_boss, echo_free_moves, echo_move, echo_start, echo_tell,
+};
 use abalone_core::encounter::hull::{hull_boss, hull_move};
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
 use abalone_core::encounter::overseer::{overseer_boss, overseer_move, overseer_start};
@@ -326,7 +328,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    13 // 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    14 // 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -483,6 +485,15 @@ impl Encounter {
     /// other side), flat move records in order. Empty for the other bosses.
     pub fn last_bonuses(&self) -> Vec<i32> {
         self.bonuses.iter().flat_map(encode).collect()
+    }
+
+    /// The free moves The Echo offers the player now, flat move records: playing one keeps the
+    /// player to move, any other move declines them all (#958). Empty for the other bosses.
+    pub fn free_moves(&self) -> Vec<i32> {
+        match &self.fight {
+            Fight::Plain(e) => echo_free_moves(e).iter().flat_map(encode).collect(),
+            Fight::Choir(_) => Vec::new(),
+        }
     }
 
     /// The bonus moves the other side would get if the side to move played `mv` (The Echo), records
