@@ -29,6 +29,7 @@ function playMove(game: Game): void {
 function play(game: Game, cells: Axial[], target: Axial): void {
   for (const cell of cells) game.click(...cell);
   game.click(...target);
+  game.frame(1000); // the slide ends
 }
 
 describe('main.ts, the rogue-lite run (#798)', () => {
@@ -55,6 +56,8 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(game.hud()).toContain('Rogue-lite run · act 1 fight · army 14 marbles');
     playMove(game);
     await game.settle(); // the bot's reply, and the save
+    game.frame(1000); // the bot's move waits for the slide of the player's
+    await game.settle();
     expect(game.hook('__plies')).toBe(2);
     const again = await boot('?nodes=50', { indexedDB });
     expect(document.body.dataset.run).toBe('fight');
