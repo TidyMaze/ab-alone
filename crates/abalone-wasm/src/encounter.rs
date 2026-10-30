@@ -273,7 +273,7 @@ const BOSSES: [BossEntry; 13] = [
     },
     BossEntry {
         id: "dual",
-        goal: "Two rooms split by a wall: an ejected marble comes back in the other room; at 5 the wall falls. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Two rooms split by a void: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose.",
         def: dual_boss,
         start: dual_fight,
         reply: dual_move,
