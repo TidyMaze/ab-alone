@@ -251,7 +251,7 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, antialiased(dpr));
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, antialiased(dpr) && !(this.renderer.samples > 0));
   }
 
   async init(): Promise<void> {
