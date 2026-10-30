@@ -2,6 +2,8 @@
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { COLLAPSE_MS, DROP_MS, DUAL_AZIMUTH, DUAL_POLAR, type DualState } from './dual';
+import { BLOOD_MS } from './blood';
+import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
 import { COLLAPSE_AT, RETURN_AT, RETURN_CELL, SEED } from './test/dual-game';
 import { dualGame } from './test/dual-fixture';
@@ -43,6 +45,30 @@ function fightDual(game: Game): void {
   game.openModes();
   byId('boss-fight').click();
   [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Dual Room')!.click();
+}
+
+/** Plays the first `to` plies of the recorded fight by clicks, as a player's page does without the test hooks; after
+ * the last one the clock runs on until its slide is over. */
+function clickPlies(game: Game, to: number): void {
+  const DIRS = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
+  for (const [k, record] of dualGame().slice(0, to).entries()) {
+    const cells = Array.from({ length: record[0]! }, (_, i): [number, number] => [record[2 + 2 * i]!, record[3 + 2 * i]!]);
+    const [dq, dr] = DIRS[record[1]!]!;
+    // A target cell only this move reaches: a broadside's target can be another direction's too.
+    const legal = game.hook<{ cells: [number, number][]; dir: number }[]>('__legal').filter(
+      (m) => m.cells.length === cells.length && m.cells.every(([q, r]) => cells.some(([cq, cr]) => cq === q && cr === r)),
+    );
+    const reach = (dir: number): string[] => cells.map(([q, r]) => `${q + DIRS[dir]![0]!},${r + DIRS[dir]![1]!}`);
+    const target = cells
+      .map(([q, r]): [number, number] => [q + dq!, r + dr!])
+      .find(([q, r]) => !cells.some(([cq, cr]) => cq === q && cr === r) && legal.every((m) => m.dir === record[1] || !reach(m.dir).includes(`${q},${r}`)))!;
+    for (const [q, r] of cells) game.click(q, r);
+    game.click(...target);
+    expect(game.hook('__plies')).toBe(k + 1);
+    if (k < to - 1) for (let n = 0; n < 4; n++) game.frame(1000);
+  }
+  for (let n = 0; n < 15; n++) game.frame(16); // the move's slide is over, its effects still run
+  expect(document.body.dataset.sliding).not.toBe('1');
 }
 
 describe('main.ts The Dual Room (#947)', () => {
@@ -119,8 +145,10 @@ describe('main.ts The Dual Room (#947)', () => {
     fightDual(game);
     played(game, 0, COLLAPSE_AT - 1);
     played(game, COLLAPSE_AT - 1, COLLAPSE_AT);
-    for (let n = 0; n < 3 && document.body.dataset.wall !== 'falling'; n++) game.frame(100);
     expect(document.body.dataset.wall).toBe('falling');
+    game.frame(SLIDE_MS / 2); // the push slides first, the wall stands till it is over
+    expect(dual(game).wall).toEqual({ visible: true, y: 0, opacity: 1 });
+    game.frame(SLIDE_MS); // the slide ends: the wall starts to fall
     game.frame(COLLAPSE_MS / 2);
     const half = dual(game).wall;
     expect(half.visible).toBe(true);
@@ -149,21 +177,38 @@ describe('main.ts The Dual Room (#947)', () => {
   it('the page of a player keeps drawing while the returning marble falls (#848)', async () => {
     const game = await boot('?bot=off&quality=low', { webdriver: false, reducedMotion: false }); // no dust drifting
     fightDual(game);
-    const DIRS = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
-    for (const [k, record] of dualGame().slice(0, RETURN_AT + 1).entries()) {
-      const cells = Array.from({ length: record[0]! }, (_, i): [number, number] => [record[2 + 2 * i]!, record[3 + 2 * i]!]);
-      const [dq, dr] = DIRS[record[1]!]!;
-      for (const [q, r] of cells) game.click(q, r);
-      game.click(...cells.map(([q, r]): [number, number] => [q + dq!, r + dr!]).find(([q, r]) => !cells.some(([cq, cr]) => cq === q && cr === r))!);
-      if (k < RETURN_AT) for (let n = 0; n < 4; n++) game.frame(1000);
-    }
-    for (let n = 0; n < 15; n++) game.frame(16); // the move's slide is over, the marble still falls
-    expect(document.body.dataset.sliding).not.toBe('1');
+    clickPlies(game, RETURN_AT + 1);
     expect(dual(game).drop).not.toBeNull();
     const before = game.draws();
     for (let n = 0; n < 6; n++) game.frame(16);
     expect(game.draws() - before).toBe(6);
     expect(dual(game).drop).not.toBeNull();
+  });
+
+  it('the page of a player keeps drawing while the wall sinks (#848)', async () => {
+    const game = await boot('?bot=off&quality=low', { webdriver: false, reducedMotion: false });
+    fightDual(game);
+    clickPlies(game, COLLAPSE_AT);
+    // Past the push's slide, the ejection and its splash: the wall sinks alone, after the slide, longer than them.
+    for (let elapsed = 15 * 16; elapsed <= BLOOD_MS; elapsed += 16) game.frame(16);
+    expect(document.body.dataset.wall).toBe('falling');
+    const before = game.draws();
+    for (let n = 0; n < 6; n++) game.frame(16);
+    expect(game.draws() - before).toBe(6);
+    expect(document.body.dataset.wall).toBe('falling');
+  });
+
+  it('leaves no wall standing in the hub or the battle royale', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightDual(game);
+    expect(dual(game).wall.visible).toBe(true);
+    byId('ship').click();
+    expect(dual(game).wall.visible).toBe(false);
+    fightDual(game);
+    expect(dual(game).wall.visible).toBe(true);
+    game.openModes();
+    byId('battle-royale').click();
+    expect(dual(game).wall.visible).toBe(false);
   });
 
   it('another boss shows no wall and no mark', async () => {

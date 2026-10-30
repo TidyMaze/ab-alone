@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BLOOD_MS } from './blood';
 import { axialTo3D, type Axial } from './board';
 import {
   COLLAPSE_MS,
@@ -103,6 +104,11 @@ describe('the animations', () => {
     expect(half.y).toBeCloseTo(-WALL.height / 2);
     expect(half.opacity).toBeCloseTo(0.5);
     expect(wallAt(COLLAPSE_MS, false)).toEqual({ y: -WALL.height, opacity: 0, done: true });
+  });
+
+  it('stands whole before its fall starts, and falls longer than the splash of the ejection that brings it down', () => {
+    expect(wallAt(-Infinity, false)).toEqual({ y: 0, opacity: 1, done: false });
+    expect(COLLAPSE_MS).toBeGreaterThan(BLOOD_MS);
   });
 
   it('reduced motion: the wall is gone at once', () => {
