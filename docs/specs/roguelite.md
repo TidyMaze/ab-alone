@@ -18,8 +18,8 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 - **End**: the run is lost when a fight is lost (a draw is a loss) or the army is below 4 marbles,
   and won by beating the act 3 boss. The bot wins a fight once the army is down to 3 marbles, so a
   fight never goes on after the run is lost; the army wins at the usual 6 ejections.
-- **Meta**: unlocks only, between runs (#801): other special marble types and starting armies,
-  never power. Every run starts from zero.
+- **Meta**: unlocks only, between runs (section 8, #801): other special marble types and starting
+  armies, never power. Every run starts from zero.
 - **Determinism**: the map comes from a run seed (engine splitmix64), so a run can be replayed and
   shared.
 
@@ -152,3 +152,30 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   army fight on the boss node then) does not replay on the boss's board and starts over. The deal
   follows the roster's order and length: a boss added to or moved in the roster deals the bosses of
   a saved run again.
+
+## 8. Unlocks and the run summary (#801)
+
+Only variety carries over between runs, never power (Decision #934): every starting army has 14
+marbles, and an unlock only widens what a run may hold.
+
+- **Progress**: the most acts won in one run (an act boss beaten, 0 to 3), kept in localStorage
+  (`ab-alone.roguelite`) next to the boss medals, recorded when a run is over (won or lost); a run
+  abandoned for another mode records nothing. A run keeps the progress it started with (`best`),
+  so its rewards and events replay; a run saved before #801 has everything unlocked.
+- **Unlocks**:
+
+  | Acts won in one run | Special marble type in rewards and events | Starting army (14 marbles) |
+  |---|---|---|
+  | 0 | Heavy | Standard (14 plain) |
+  | 1 | Anchor | Bulwark (12 plain, 2 Anchors) |
+  | 2 | Spark | Volatile (12 plain, 2 Sparks) |
+  | 3 (a run won) | | Ironclad (12 plain, 2 Heavies) |
+
+  A locked type is never a reward offer, and an event that gains it is never dealt.
+- **Start**: before the first pick, the map shows the types in the rewards (the locked ones with
+  the acts that unlock them) and a button per starting army, the locked ones disabled with what
+  unlocks them. The Standard army is picked by default; the choice is saved with the run.
+- **Summary**: a run over shows, in place of the map, its line (won or lost, the marbles left), the
+  path taken act by act, the fights won and lost (the run's last fight lost when it is lost), the
+  army at the end with its special marbles, the unlocks this run earned (or No new unlock), and New
+  run.
