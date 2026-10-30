@@ -159,9 +159,9 @@ Only variety carries over between runs, never power (Decision #934): every start
 marbles, and an unlock only widens what a run may hold.
 
 - **Progress**: the most acts won in one run (an act boss beaten, 0 to 3), kept in localStorage
-  (`ab-alone.roguelite`) next to the boss medals, recorded when a run is over (won or lost); a run
-  abandoned for another mode records nothing. A run keeps the progress it started with (`best`),
-  so its rewards and events replay; a run saved before #801 has everything unlocked.
+  (`ab-alone.roguelite`) next to the boss medals, recorded as soon as an act boss is beaten, so a
+  run abandoned afterwards still counts its acts. A run keeps the progress it started with
+  (`best`), so its rewards and events replay; a run saved before #801 has everything unlocked.
 - **Unlocks**:
 
   | Acts won in one run | Special marble type in rewards and events | Starting army (14 marbles) |

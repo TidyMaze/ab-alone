@@ -4463,7 +4463,7 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
 // move (never in a boss fight: no special marble there), or the map.
 function showRun(): void {
   const { map, state } = run!;
-  if (state.end) recordBest(store, actsWon(map, state)); // the unlocks of a run over, for the next runs
+  recordBest(store, actsWon(map, state)); // each act boss beaten unlocks for the next runs, this one keeps its own
   const placed = placing(state) && !(engine instanceof Encounter);
   runPanel.innerHTML = state.reward ? rewardHtml(map, state) : state.event ? eventHtml(state) : placed ? placeHtml(state, armed) : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
@@ -4581,10 +4581,9 @@ addEventListener('keydown', (e) => {
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
 // shows its summary (#801).
 (window as unknown as Record<string, unknown>).__run = async (state: Run) => {
+  if (state.end) return startRun(state, parseMap(run_map(state.seed)));
   await saveRun(gameStore, state);
-  const saved = await loadSavedRun();
-  if (saved) resumeRun(saved); // the browser checks load valid runs
-  else startRun(state, parseMap(run_map(state.seed)));
+  resumeRun((await loadSavedRun())!); // the browser checks load valid runs
 };
 
 // The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8

@@ -695,6 +695,8 @@ body[data-reading] #log { visibility: visible; }
 #run-map button[aria-pressed='true'] { color: var(--bg); background: var(--accent); }
 #run-map .run-help { margin: 0; text-align: center; color: var(--muted); }
 #run-map svg.glyph { position: static; width: 1em; height: 1em; flex: none; }
+/* The starting armies before the first pick (#801): two by two, so the map keeps its height on a 720 px window. */
+#run-map .run-armies { display: grid; grid-template-columns: 1fr 1fr; gap: 0.375rem; width: 100%; flex: none; }
 
 /* The Open world mode (#962) draws its own scene: the board's HUD steps aside for its plate. */
 #openworld-hud { display: none; position: fixed; bottom: 1rem; left: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); }

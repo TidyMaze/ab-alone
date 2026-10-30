@@ -95,8 +95,8 @@ export const KIND_ACTS = [0, 1, 2];
 const ALL_ACTS = 3;
 const kindOn = (run: Run, kind: number): boolean => KIND_ACTS[kind - 1]! <= run.best;
 
-/** A new run of `seed`, with what `best` acts won in one run unlocked (by default everything), the standard army. */
-export const newRun = (seed: number, best = ALL_ACTS): Run => ({
+/** A new run of `seed`, with what `best` acts won in one run unlocked, the standard army. */
+export const newRun = (seed: number, best: number): Run => ({
   seed,
   army: START_ARMY,
   path: [],
@@ -306,10 +306,10 @@ export function sparkBurst(before: ArrayLike<number>, specials: Special[], move:
 const owned = (army: number, specials: number[]): string =>
   `${army} marbles${SPECIAL_LOOKS.flatMap((l, k) => (specials[k] ? [`, ${specials[k]} ${l.name}`] : [])).join('')}`;
 
-/** The acts a run over won: its bosses beaten (#801). */
+/** The acts a run won so far: its bosses beaten, not the one it fights or lost to (#801). */
 export function actsWon(map: MapNode[], run: Run): number {
   const bosses = run.path.filter((n) => map[n]!.kind === 'boss').length;
-  return bosses - Number(run.end === 'lost' && lastNode(map, run)?.kind === 'boss');
+  return bosses - Number((run.fighting || run.end === 'lost') && lastNode(map, run)?.kind === 'boss');
 }
 
 /** The unlocks of a run over: the special marble types and starting armies of the acts it won past its `best`. */
@@ -339,7 +339,7 @@ export function recordBest(store: Store, acts: number): void {
 /** What the start of a run unlocked shows: the special marble types in its rewards, the locked ones with what unlocks
  * them, and a button per starting army, the one picked pressed. */
 function startHtml(run: Run): string {
-  const after = (acts: number): string => `after ${acts} acts won in a run`;
+  const after = (acts: number): string => (acts === ALL_ACTS ? 'after a run won' : `after ${acts} act${acts === 1 ? '' : 's'} won in a run`);
   const on = SPECIAL_LOOKS.filter((_, k) => kindOn(run, k + 1)).map((l) => l.name);
   const off = SPECIAL_LOOKS.flatMap((l, k) => (kindOn(run, k + 1) ? [] : [` · ${l.name} ${after(KIND_ACTS[k]!)}`]));
   const armies = ARMIES.map((a, i) => {
@@ -350,7 +350,7 @@ function startHtml(run: Run): string {
       `${a.name} · ${locked ? after(a.acts) : owned(START_ARMY, a.specials)}</button>`
     );
   });
-  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-kinds">${armies.join('')}</div>`;
+  return `<p class="run-help">Special marbles in rewards: ${on.join(', ')}${off.join('')}</p><div class="run-armies">${armies.join('')}</div>`;
 }
 
 /** The summary of a run over (#801): the path act by act, the fights won and lost, the army at the end, the unlocks. */
