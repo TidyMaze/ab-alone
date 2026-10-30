@@ -14,6 +14,10 @@ const press = (key: string): KeyboardEvent => {
   return e;
 };
 
+const release = (key: string): void => {
+  window.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+};
+
 describe('the Open world mode', () => {
   it('is in the mode menu only when the page asks for it', async () => {
     await boot('?bot=off');
@@ -60,5 +64,49 @@ describe('the Open world mode', () => {
     press('ArrowRight');
     expect(data().hub).toBe(hub); // the hub's marble did not roll
     expect(data().openworldAt).toBe('1,0');
+  });
+
+  it('rolls the hero on the diagonal while a vertical and a horizontal arrow are held, and lets go on keyup or blur, #977', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    press('ArrowLeft'); // (-1, 0)
+    press('ArrowUp'); // Left and Up held: up-left
+    expect(data().openworldAt).toBe('-1,-1');
+    release('ArrowLeft');
+    press('ArrowUp'); // Left let go: a single Up, (-1, -2)
+    expect(data().openworldAt).toBe('-1,-2');
+    window.dispatchEvent(new Event('blur')); // the window loses focus: nothing is held any more
+    press('ArrowRight'); // single, not up-right with the Up still held: (0, -2)
+    expect(data().openworldAt).toBe('0,-2');
+  });
+
+  it('zooms the Open world out with the wheel and with a pinch, #976', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    const canvas = document.querySelector('canvas')!;
+    const zoomOf = () => Number(data().openworldZoom);
+    const wheel = (deltaY: number) => canvas.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
+    const finger = (type: string, id: number, x: number) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: 300, bubbles: true });
+      Object.defineProperty(e, 'pointerId', { value: id });
+      canvas.dispatchEvent(e);
+    };
+    wheel(1000);
+    expect(zoomOf()).toBeGreaterThan(2.5); // far out, still the 3D view
+    wheel(-1000);
+    expect(zoomOf()).toBe(1);
+    finger('pointermove', 9, 100); // a hover, no finger down: nothing
+    finger('pointerdown', 1, 300);
+    finger('pointermove', 1, 300); // one finger moves, not apart: nothing
+    expect(zoomOf()).toBe(1);
+    finger('pointerdown', 2, 700); // two fingers 400 apart
+    finger('pointermove', 2, 500); // 200 apart: the camera goes back
+    expect(zoomOf()).toBe(2);
+    finger('pointermove', 2, 700); // 400 apart again: closer
+    expect(zoomOf()).toBe(1);
+    finger('pointerup', 1, 300);
+    finger('pointerup', 2, 700);
   });
 });

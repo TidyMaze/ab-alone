@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { CHUNK } from './openworld';
-import { OpenWorldMode } from './openworldmode';
+import { axialTo3D, type Axial } from './board';
+import { CHUNK, neighbours } from './openworld';
+import { heldCell, OpenWorldMode } from './openworldmode';
+import { MAX_ZOOM, maxZoomFor, OpenWorldView } from './openworldview';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -12,10 +14,22 @@ function bytes(cx: number, cy: number): Uint8Array {
   if (cx === 0 && cy === 0) out.set([1, 5], CHUNK * 2); // (0, 1)
   return out;
 }
-const mode = (models: () => Promise<Record<string, never>> = async () => ({})) => new OpenWorldMode(
-    (_seed, cx, cy) => bytes(cx, cy),
+// A lake everywhere in the square -3..3 of chunks.
+function sea(_seed: number, cx: number, cy: number): Uint8Array {
+  if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+  const out = new Uint8Array(CHUNK * CHUNK * 2);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0], i * 2);
+  return out;
+}
+const mode = (
+  models: () => Promise<Record<string, never>> = async () => ({}),
+  load: (seed: number, cx: number, cy: number) => Uint8Array = (_seed, cx, cy) => bytes(cx, cy),
+  reduced: () => boolean = () => true,
+) => new OpenWorldMode(
+    load,
     (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5, 7, 5) : new Int32Array()),
     models,
+    reduced,
   );
 const body = () => document.body.dataset;
 
@@ -24,6 +38,42 @@ afterEach(() => {
   delete body().openworldAt;
   delete body().openworldTroop;
   delete body().openworldEnemies;
+  delete body().openworldZoom;
+  delete body().openworldDrawn;
+});
+
+// Screen direction of a step, `[-1 | 0 | 1, -1 | 0 | 1]` for left/right and up/down, from the ground layout of `axialTo3D`.
+const screen = (from: Axial, to: Axial): [number, number] => {
+  const a = axialTo3D(...from);
+  const b = axialTo3D(...to);
+  return [Math.sign(Math.round((b.x - a.x) * 100)), Math.sign(Math.round((b.z - a.z) * 100))];
+};
+const held = (...keys: string[]) => new Set(keys);
+
+describe('heldCell', () => {
+  it('gives the diagonal neighbour of each pair of a vertical and a horizontal arrow, on every row', () => {
+    for (const at of [[0, 0], [2, 3], [-1, -4]] as Axial[]) {
+      const up = heldCell(at, held('ArrowUp', 'ArrowLeft'))!;
+      const upRight = heldCell(at, held('ArrowUp', 'ArrowRight'))!;
+      const down = heldCell(at, held('ArrowDown', 'ArrowLeft'))!;
+      const downRight = heldCell(at, held('ArrowDown', 'ArrowRight'))!;
+      expect(screen(at, up)).toEqual([-1, -1]);
+      expect(screen(at, upRight)).toEqual([1, -1]);
+      expect(screen(at, down)).toEqual([-1, 1]);
+      expect(screen(at, downRight)).toEqual([1, 1]);
+      for (const cell of [up, upRight, down, downRight]) expect(neighbours(at).some((n) => n[0] === cell[0] && n[1] === cell[1])).toBe(true);
+    }
+  });
+
+  it('gives nothing for a single arrow, for opposite arrows, or for three arrows', () => {
+    const at: Axial = [0, 0];
+    expect(heldCell(at, held('ArrowUp'))).toBeNull();
+    expect(heldCell(at, held('ArrowLeft', 'ArrowRight'))).toBeNull();
+    expect(heldCell(at, held('ArrowUp', 'ArrowDown'))).toBeNull();
+    expect(heldCell(at, held('ArrowUp', 'ArrowDown', 'ArrowLeft'))).toBeNull();
+    expect(heldCell(at, held('ArrowUp', 'ArrowLeft', 'ArrowRight'))).toBeNull();
+    expect(heldCell(at, held())).toBeNull();
+  });
 });
 
 describe('the Open world mode', () => {
@@ -90,9 +140,198 @@ describe('the Open world mode', () => {
     expect(body().openworldAt).toBeUndefined();
   });
 
+  it('rolls the hero on the diagonal of two held arrows, and keeps walking while they are held', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    expect(m.key('ArrowLeft')).toBe(true);
+    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.key('ArrowUp')).toBe(true); // Left and Up held: up-left from (-1, 0)
+    expect(m.hero!.at).toEqual([-1, -1]);
+    expect(m.key('ArrowUp')).toBe(true); // the key repeats: up-left again
+    expect(m.hero!.at).toEqual([-1, -2]);
+  });
+
+  it('does nothing for opposite arrows held together, and a release drops the key', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    expect(m.key('ArrowLeft')).toBe(true);
+    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.key('ArrowRight')).toBe(true); // Left and Right: nothing
+    expect(m.hero!.at).toEqual([-1, 0]);
+    m.release('ArrowLeft');
+    expect(m.key('ArrowRight')).toBe(true); // Right alone rolls again
+    expect(m.hero!.at).toEqual([0, 0]);
+  });
+
+  it('forgets the held keys when the window loses focus or the mode is left', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowUp'); // (1, -1) from the even spawn row
+    m.release(); // blur: no key is held any more
+    expect(m.key('ArrowLeft')).toBe(true);
+    expect(m.hero!.at).toEqual([0, -1]); // a single arrow, not a diagonal with Up
+    m.key('Escape'); // leaving clears the held keys too
+    m.enter(1, 800, 600);
+    expect(m.key('ArrowUp')).toBe(true);
+    expect(m.hero!.at).toEqual([1, -1]); // single Up from the spawn, Left is not held
+  });
+
+  it('clamps the zoom to a wider screen its widest zoom, and publishes the clamped zoom, #976', () => {
+    const m = mode();
+    m.enter(1, 1600, 900);
+    m.zoom(1e9);
+    expect(body().openworldZoom).toBe(String(maxZoomFor(1600 / 900)));
+    m.resize(3840, 1080);
+    expect(body().openworldZoom).toBe(String(maxZoomFor(3840 / 1080)));
+    expect(Number(body().openworldZoom)).toBeLessThan(maxZoomFor(1600 / 900));
+  });
+
+  it('publishes nothing on a resize after the mode is left', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.leave();
+    m.resize(1600, 900);
+    expect(body().openworldZoom).toBeUndefined();
+  });
+
+  it('zooms the Open world camera, and an entry starts at the closest view again, #976', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.zoom(2);
+    expect(body().openworldZoom).toBe('2');
+    const camera = (): THREE.Camera => {
+      const render = vi.fn();
+      m.frame(render);
+      return render.mock.calls[0]![1] as THREE.Camera;
+    };
+    expect(camera().position.y).toBeCloseTo(28);
+    m.enter(1, 800, 600);
+    expect(body().openworldZoom).toBe('1');
+    expect(camera().position.y).toBeCloseTo(14);
+  });
+
+  it('publishes what is drawn at the zoom, the props among it, for the browser checks, #976', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.zoom(2);
+    const drawn = JSON.parse(body().openworldDrawn!) as Record<string, number>;
+    expect(drawn['terrain-grass']).toBeGreaterThan(0);
+    expect(drawn['prop-boulder']).toBeGreaterThan(0);
+    expect(drawn.troop).toBe(6);
+    expect(drawn.enemies).toBe(3);
+  });
+
+  it('rolls the hero onto the cell picked by a click at the widest zoom too, #976', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.zoom(MAX_ZOOM);
+    const pick = vi.spyOn(OpenWorldView.prototype, 'pick').mockReturnValue([1, 0]);
+    m.press(400, 300, 800, 600);
+    expect(pick).toHaveBeenCalled();
+    expect(m.hero!.at).toEqual([1, 0]);
+    pick.mockRestore();
+  });
+
   it('ignores a resize before it is entered', () => {
     const m = mode();
     m.resize(100, 100);
     expect(m.active).toBe(false);
+  });
+
+  it('draws every frame while a lake is in view and motion is on, and moves the glow of the water', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const m = mode(undefined, sea, () => false);
+    m.enter(1, 800, 600);
+    const glow: number[] = [];
+    const render = vi.fn((scene: THREE.Scene) => {
+      const water = scene.getObjectByName('terrain-water') as THREE.InstancedMesh;
+      glow.push((water.material as THREE.MeshStandardMaterial).emissiveIntensity);
+    });
+    m.frame(render);
+    now.mockReturnValue((1200 * Math.PI) / 2);
+    m.frame(render);
+    m.frame(render);
+    expect(render).toHaveBeenCalledTimes(3);
+    expect(glow[0]).toBeCloseTo(1);
+    expect(glow[1]).toBeCloseTo(1.15);
+    now.mockRestore();
+  });
+
+  it('holds the lake still with reduced motion: drawn only when something changed', () => {
+    const m = mode(undefined, sea, () => true);
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render);
+    m.frame(render);
+    expect(render).toHaveBeenCalledTimes(1);
+    m.resize(400, 300);
+    m.frame(render);
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  it('draws only when something changed, with motion on, when no lake is in view', () => {
+    const m = mode(undefined, (_seed, cx, cy) => bytes(cx, cy), () => false);
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render);
+    m.frame(render);
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('leaving the Open world frees its view, every time (#981)', () => {
+  it('enters and leaves 30 times: each view is disposed, with each of its geometries and materials once', () => {
+    const disposeView = vi.spyOn(OpenWorldView.prototype, 'dispose');
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
+    const m = mode();
+    for (let i = 0; i < 30; i++) {
+      m.enter(i, 800, 600);
+      m.frame(() => {});
+      m.leave();
+    }
+    const views = disposeView.mock.contexts as OpenWorldView[];
+    expect(views).toHaveLength(30);
+    let geometries = 0;
+    let materials = 0;
+    for (const view of views) {
+      const seen = { g: new Set<THREE.BufferGeometry>(), m: new Set<THREE.Material>() };
+      view.scene.traverse((object) => {
+        if (!(object as THREE.Mesh).isMesh) return;
+        seen.g.add((object as THREE.Mesh).geometry);
+        seen.m.add((object as THREE.Mesh).material as THREE.Material);
+      });
+      geometries += seen.g.size;
+      materials += seen.m.size;
+    }
+    expect(disposeGeometry).toHaveBeenCalledTimes(geometries);
+    expect(disposeMaterial).toHaveBeenCalledTimes(materials);
+    expect(m.active).toBe(false);
+    vi.restoreAllMocks();
+  });
+
+  it('does not draw or touch a view once it is left, even when the models arrive late', async () => {
+    let arrive!: (g: Record<string, never>) => void;
+    const m = mode(() => new Promise((resolve) => (arrive = resolve)));
+    m.enter(1, 800, 600);
+    m.leave();
+    const render = vi.fn();
+    arrive({});
+    await Promise.resolve();
+    await Promise.resolve();
+    m.frame(render);
+    expect(render).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Open world models are loaded once per page (#981)', () => {
+  it('loads the models the first time the mode is entered, not on every entry', async () => {
+    const models = vi.fn(async () => ({}));
+    const m = mode(models);
+    m.enter(1, 800, 600);
+    m.leave();
+    m.enter(2, 800, 600);
+    m.leave();
+    expect(models).toHaveBeenCalledTimes(1);
   });
 });

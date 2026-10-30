@@ -3500,7 +3500,11 @@ const span = (): number => {
 };
 
 canvas.addEventListener('pointerdown', (e) => {
-  if (openWorld.active) return openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
+  if (openWorld.active) {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); // two fingers pinch the Open world's camera (#976)
+    if (pointers.size === 1) openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
+    return;
+  }
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) {
@@ -3516,6 +3520,14 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   const last = pointers.get(e.pointerId);
+  if (openWorld.active) {
+    if (last) {
+      const prevSpan = pointers.size === 2 ? span() : 0;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) openWorld.zoom(pinchScale(prevSpan, span())); // the Open world's camera, not the board's (#976)
+    }
+    return;
+  }
   if (last && press) {
     if (freeCam.active) {
       freeCam.onPointerMove(e.clientX - last.x, e.clientY - last.y);
@@ -3627,6 +3639,7 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
+    if (openWorld.active) return openWorld.zoom(wheelScale(e.deltaY)); // the Open world's camera, not the board's (#976)
     view = zoom(view, wheelScale(e.deltaY));
     applyView();
   },
@@ -4575,6 +4588,7 @@ const openWorld = new OpenWorldMode(
   (seed, cx, cy) => world_chunk(seed, cx, cy),
   (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
   () => loadModels(`${import.meta.env.BASE_URL}assets/pbr/openworld.glb`, meshoptLoader()),
+  () => reducedMotion(),
 );
 openWorldButton.hidden = openWorldSeed === null;
 openWorldButton.addEventListener('click', () => {
@@ -4593,6 +4607,8 @@ addEventListener('keydown', (e) => {
   drawAsked = true;
   refresh();
 });
+addEventListener('keyup', (e) => openWorld.release(e.key)); // a diagonal needs both arrows held (#977)
+addEventListener('blur', () => openWorld.release()); // no key stays held once the window is left
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload. A run over is not saved: it
 // shows its summary (#801).
 (window as unknown as Record<string, unknown>).__run = async (state: Run) => {
