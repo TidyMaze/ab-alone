@@ -1,7 +1,7 @@
 //! Rogue-lite run bridge (docs/specs/roguelite.md): the map of a run seed, see the module docs of
 //! the crate for its encoding. The army's fight is `Engine::with_army`.
 
-use abalone_core::run::{self, NodeKind};
+use abalone_core::run;
 use wasm_bindgen::prelude::*;
 
 /// Integers per map node: `[act, row, col, kind, links]`.
@@ -18,7 +18,7 @@ pub fn run_map(seed: u32) -> Vec<i32> {
                 node.act as i32,
                 node.row as i32,
                 node.col as i32,
-                i32::from(node.kind == NodeKind::Boss),
+                node.kind as i32,
                 links,
             ]
         })
@@ -28,6 +28,7 @@ pub fn run_map(seed: u32) -> Vec<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use abalone_core::run::NodeKind;
 
     #[test]
     fn run_map_flattens_the_core_map() {
@@ -39,10 +40,22 @@ mod tests {
                 record[..3],
                 [node.act as i32, node.row as i32, node.col as i32]
             );
-            assert_eq!(record[3], i32::from(node.kind == NodeKind::Boss));
+            let code = match node.kind {
+                NodeKind::Fight => 0,
+                NodeKind::Boss => 1,
+                NodeKind::Elite => 2,
+                NodeKind::Rest => 3,
+                NodeKind::Event => 4,
+            };
+            assert_eq!(record[3], code);
             let links: i32 = node.links.iter().map(|&c| 1 << c).sum();
             assert_eq!(record[4], links);
         }
         assert_eq!(flat[flat.len() - 2], 1); // the act 3 boss closes the map
+        let kinds: Vec<i32> = flat.chunks(NODE_STRIDE).map(|r| r[3]).collect();
+        assert!(
+            (2..=4).all(|k| kinds.contains(&k)),
+            "seed 11 has an elite, a rest and an event"
+        );
     }
 }

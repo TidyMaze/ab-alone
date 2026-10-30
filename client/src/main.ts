@@ -251,8 +251,11 @@ import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './re
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import {
+  actBoss,
   claim,
   clearRun,
+  eventHtml,
+  fightBudget,
   fightOver,
   left,
   loadRun,
@@ -260,15 +263,16 @@ import {
   newRun,
   parseMap,
   parseSpecials,
-  pick,
   place,
   placeHtml,
   placing,
+  resolve,
   rewardHtml,
   runLine,
   saveRun,
   sparkBurst,
   SPECIAL_LOOKS,
+  visit,
   type MapNode,
   type Run,
 } from './roguelite';
@@ -1989,7 +1993,12 @@ const resumed = await saves.load(worker ? undefined : false, () => new Engine())
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
 const armyEngine = (army: number, placed: number[][]): Engine => engineFor(Engine, army, placed);
-const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), armyEngine);
+// The fight of the run's last node: the act's roster boss (#800), or the bot against the army.
+const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
+  const boss = actBoss(map, state, boss_ids());
+  return boss ? new Encounter(boss.id, boss.seed) : armyEngine(state.army, state.placed);
+};
+const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), runEngine);
 const resumedRun = await loadSavedRun();
 if (resumed) {
   if (!resumed.bot) worker = null;
@@ -2166,8 +2175,8 @@ async function botTurn(): Promise<void> {
   const current = fight;
   const game = liveGame();
   const started = performance.now();
-  const searchBudget = scaleBudget(budget, difficulty);
-  const diffPercent = DIFFICULTY_PERCENT[difficulty];
+  const searchBudget = run ? fightBudget(run.map, run.state, scaleBudget(budget, difficulty)) : scaleBudget(budget, difficulty); // an elite searches more (#800)
+  const diffPercent = (run && actBoss(run.map, run.state, boss_ids())?.percent) || DIFFICULTY_PERCENT[difficulty]; // an act boss at its act's strength
   let move: number[];
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
@@ -4420,7 +4429,7 @@ function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
   startRun(newRun(seed), parseMap(run_map(seed)));
 }
-function startRun(state: Run, map: MapNode[], resumed: Engine | null = null): void {
+function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
   armed = 0;
   moveModes('pick');
@@ -4450,14 +4459,16 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | null = null): vo
     refresh();
   }
 }
-// The run's panel: the reward of a won fight (#961), the placement before a fight's first move, or the map.
+// The run's panel: the reward of a won fight (#961), an event's choice (#800), the placement before a fight's first
+// move (never in a boss fight: no special marble there), or the map.
 function showRun(): void {
   const { map, state } = run!;
-  const placed = placing(state);
-  runPanel.innerHTML = state.reward ? rewardHtml(state) : placed ? placeHtml(state, armed) : mapHtml(map, state);
+  const placed = placing(state) && !(engine instanceof Encounter);
+  runPanel.innerHTML = state.reward ? rewardHtml(map, state) : state.event ? eventHtml(state) : placed ? placeHtml(state, armed) : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
-  document.body.dataset.run = state.end || (state.reward ? 'reward' : placed ? 'place' : state.fighting ? 'fight' : 'map'); // read by the e2e tests
+  const screen = state.reward ? 'reward' : state.event ? 'event' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  document.body.dataset.run = state.end || screen; // read by the e2e tests
   hud();
 }
 // A press on one of the army's marbles (Black) during the placement places the type armed, or takes it back.
@@ -4470,7 +4481,12 @@ function placeAt(q: number, r: number): void {
   showRun();
   refresh();
 }
-function fightRun(game: Engine): void {
+// A fight of the run: an act's boss plays as from the boss menu, its deck and view (#800); the others on the local deck.
+function fightRun(game: Engine | Encounter): void {
+  const boss = actBoss(run!.map, run!.state, boss_ids());
+  fight = boss && { id: boss.id, seed: boss.seed };
+  if (boss) document.body.dataset.boss = boss.id;
+  else delete document.body.dataset.boss;
   engine = game;
   history.length = 0;
   history.push(...run!.state.moves);
@@ -4479,12 +4495,17 @@ function fightRun(game: Engine): void {
   thinking = false; // a bot reply to the last fight is dropped (botTurn)
   showRun();
   refresh();
+  applyDeck(deckOf(boss ? 'boss' : 'local', boss?.id));
+  view = fitted = fightView();
+  applyView();
   void botTurn(); // a fight saved while the bot was thinking
 }
 // After each move of a fight: the moves are saved, and once it is over the army loses the marbles the bot ejected.
 function runMoved(): void {
-  const status = engine.status();
-  const kept = (): number[] => [1, 2, 3].map((k) => parseSpecials((engine as Engine).specials()).filter((s) => s.kind === k).length);
+  const boss = engine instanceof Encounter;
+  const status = engine instanceof Encounter ? engine.result() : engine.status(); // a boss fight: 1 won, 2 lost
+  const kept = (): number[] | undefined =>
+    boss ? undefined : [1, 2, 3].map((k) => parseSpecials((engine as Engine).specials()).filter((s) => s.kind === k).length);
   const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, run!.state, status === 1, engine.ejected(2), kept());
   run!.state = state;
   armed = 0;
@@ -4510,13 +4531,18 @@ runPanel.addEventListener('click', (e) => {
     run!.state = claim(run!.state, Number(button.dataset.offer));
     void saveRun(gameStore, run!.state);
     showRun();
+  } else if (button?.dataset.choice) {
+    run!.state = resolve(run!.state, button.dataset.choice === '1');
+    void saveRun(gameStore, run!.state);
+    showRun();
   } else if (button?.dataset.kind) {
     armed = armed === Number(button.dataset.kind) ? 0 : Number(button.dataset.kind);
     showRun();
   } else if (button) {
-    run!.state = pick(run!.state, Number(button.dataset.node));
+    run!.state = visit(run!.map, run!.state, Number(button.dataset.node));
     void saveRun(gameStore, run!.state);
-    fightRun(Engine.with_army(run!.state.army));
+    if (run!.state.fighting) fightRun(runEngine(run!.state, run!.map));
+    else showRun(); // a rest or an event
   }
 });
 runButton.addEventListener('click', beginRun);
