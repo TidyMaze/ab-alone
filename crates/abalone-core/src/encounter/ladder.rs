@@ -148,8 +148,9 @@ impl Arena {
         }
     }
 
-    /// `true` when no player marble flips after `mv` if the boss then passes: the conversion tell
-    /// of the Chaplain, which the player reads on hover. Other bosses have no such tell.
+    /// `true` when the tell the player reads on hover shows no harm from `mv`: no player marble
+    /// flips if the boss then passes (the Chaplain's conversion tell), no draw after the Echo's
+    /// bonus mirrors (its ghost). Other bosses have no such tell.
     fn tell_safe(&self, mv: &Move) -> bool {
         let Arena::Plain(enc, boss) = self else {
             return true;
@@ -159,6 +160,9 @@ impl Arena {
             LadderBoss::Chaplain => after
                 .play(mv)
                 .is_ok_and(|()| chaplain_tell(&after).is_empty()),
+            LadderBoss::Echo => after
+                .play(mv)
+                .is_ok_and(|()| after.game().outcome() != Some(Outcome::Draw)),
             _ => true,
         }
     }
