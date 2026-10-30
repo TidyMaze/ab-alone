@@ -526,4 +526,37 @@ describe('the frame loop', () => {
     expect(game.draws()).toBe(3);
     expect(game.hook('__draws')).toBe(3);
   });
+
+  it('keeps drawing every frame while the dust of the high tier drifts (#443, #848)', async () => {
+    const game = await boot('?bot=off&quality=high', { webdriver: false });
+    game.frame();
+    game.frame();
+    game.frame();
+    expect(game.draws()).toBe(3);
+  });
+
+  it('leaves a still board undrawn for a player, and draws again on an input, a camera move and a slide (#848)', async () => {
+    const game = await boot('?bot=off&quality=low', { webdriver: false }); // no dust drifting
+    const drawsOver = (frames: number): number => {
+      const before = game.draws();
+      for (let i = 0; i < frames; i++) game.frame();
+      return game.draws() - before;
+    };
+    // Each change draws two frames: the bloom blurs every second one (scene.ts, #894), so the glow follows the change.
+    expect(drawsOver(3)).toBe(2); // the first picture
+    expect(drawsOver(3)).toBe(0); // nothing changed
+    dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
+    expect(drawsOver(3)).toBe(2);
+    canvas().dispatchEvent(new WheelEvent('wheel', { deltaY: -500, cancelable: true })); // a zoom, on the canvas only
+    expect(drawsOver(3)).toBe(2);
+    playOne(game); // by the page hooks: no input event, the move alone asks for the draws
+    expect(drawsOver(3)).toBe(3);
+    expect(data().sliding).toBe('1'); // each frame of the slide draws
+    const last = game.draws();
+    game.frame(SLIDE_MS); // its last frame
+    expect(data().sliding).toBeUndefined();
+    expect(game.draws()).toBe(last + 1);
+    expect(drawsOver(3)).toBe(1); // its last picture once more, for the bloom
+    expect(drawsOver(3)).toBe(0); // still again
+  });
 });
