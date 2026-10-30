@@ -317,7 +317,7 @@ let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
-// its counter fit the window too (#691), off the HUD plate (#695). The Dual Room's (#947) looks across its void, the two
+// its counter fit the window too (#691), off the HUD plate (#695). The Dual Room's (#947) looks along its void, the two
 // rooms side by side, drawn back until both fit.
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 const fightView = (): View => {

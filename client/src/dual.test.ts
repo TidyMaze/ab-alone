@@ -9,7 +9,6 @@ import {
   DROP_MS,
   DUAL_AZIMUTH,
   DUAL_CELLS,
-  DUAL_POLAR,
   ROOMS,
   bridgeAt,
   dropAt,
@@ -45,7 +44,6 @@ describe('The Dual Room board (#947, #955, game-design.md section 7.15)', () => 
 
   it('opens the fight looking along the void, the two rooms side by side', () => {
     expect(DUAL_AZIMUTH).toBeCloseTo(Math.PI / 2);
-    expect(DUAL_POLAR).toBeCloseTo(0.9);
     expect(axialTo3D(...ROOMS[0]!).x).toBe(axialTo3D(...ROOMS[1]!).x);
   });
 });

@@ -575,8 +575,9 @@ ejection. Budget unchanged (3000 nodes), no knob tuned. Before: the ladder added
 
 Before, the rooms were too wide to reach the boss: most fights drew by repetition. After, the
 boss starts near the void and the player pushes it in: P3 is reached in 28 of 30 fights (the
-section 7.15 calibration rule holds), but the boss is easy, even at 0.5x. The owner's knobs are
-the start layout and the phase ejections; tuning is a follow-up.
+section 7.15 calibration rule holds), but the boss is too easy: 10 of 10 at 4x and 8 of 10 even at
+0.5x, **outside the 7 to 9 of 10 target** (section 1). Not tuned here; the owner's knobs are the
+start layout and the phase ejections, follow-up #982.
 
 Re-run on main after #951 (its search sees a bonus win at its own node, `dual_step` included):
 the same table, row for row.

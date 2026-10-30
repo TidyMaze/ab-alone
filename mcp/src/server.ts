@@ -46,7 +46,7 @@ export function createServer(session: Session): McpServer {
     {
       description:
         'The game state: mode (bot, boss, online), your side, side to move, status (running, black_won, white_won, ' +
-        'draw), marbles ejected by each side and the number needed to win, the board as ASCII and as 61 characters (91 or 271 on a larger boss board), ' +
+        'draw), marbles ejected by each side and the number needed to win, the board as ASCII and as 61 characters (91 or 169 on a larger boss board), ' +
         'the last 6 plies, and in a boss fight the boss: phase, tell (what it does after the next ply), marks on the ' +
         'board, result.',
     },

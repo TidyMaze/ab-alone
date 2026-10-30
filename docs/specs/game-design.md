@@ -941,7 +941,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   and in the position hash. No `Math.random`, no clock.
 - **Tell**: the announce mark on the landing cell (the colour of the coming marble) during the
   ply before it lands; the HUD line says where it lands, and that the bridge comes at 5.
-- **Look**: the two rooms under one camera, the void a dark gap, the bridge's 5 cells rising into
+- **Look**: the two rooms under one camera, the void a dark gap, the bridge's 5 cells coming down into
   the gap at P3, the returning marble dropping in on its mark. Reduced motion: no animation, the
   bridge and the marble appear.
 - **Turn it against the boss** (owner design rule): the boss starts near the void, so push its
