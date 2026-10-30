@@ -84,6 +84,23 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(line()).toBe('Rogue-lite run · army 14 marbles · pick a fight');
   });
 
+  it('an invite link wins over a saved run: the online game starts, the run stays saved for later', async () => {
+    const indexedDB = new IDBFactory();
+    const first = await boot('?bot=off', { indexedDB });
+    await first.hook('__run', pick(newRun(1), 0));
+    await first.settle();
+    const game = await boot('?net=hook#room=the-room', { indexedDB });
+    for (let i = 0; i < 50 && document.body.dataset.seat !== 'pending'; i++) await game.settle();
+    expect(document.body.dataset.online).toBe('White');
+    expect(document.body.dataset.run).toBeUndefined();
+    expect(map().hidden).toBe(true);
+    expect(game.hud()).not.toContain('Rogue-lite run');
+    await game.settle();
+    expect(game.hook('__plies')).toBe(0); // no bot on the run's side of the board
+    await boot('?bot=off', { indexedDB });
+    expect(document.body.dataset.run).toBe('fight');
+  });
+
   it('another mode abandons the run: it is gone after a reload', async () => {
     const indexedDB = new IDBFactory();
     const game = await startRun('?bot=off', indexedDB);
