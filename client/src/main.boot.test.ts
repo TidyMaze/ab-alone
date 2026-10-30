@@ -872,6 +872,21 @@ it('keeps the bay lights when a setting redraws the props (#787)', async () => {
   expect(lights()).toBe(before);
 });
 
+it('hangs no neon tube over the board, the gantry tubes light it unseen (#956)', async () => {
+  const game = await boot('?bot=off');
+  const bay = { scene: new THREE.Group(), materials: { deck: new THREE.MeshStandardMaterial(), bulkhead: new THREE.MeshStandardMaterial(), grate: new THREE.MeshStandardMaterial() } };
+  for (const mounted of [null, bay]) {
+    game.hook('__mountBay', mounted);
+    const { scene } = await drawn(game);
+    for (const tube of ['neon-gantry-north', 'neon-gantry-south']) {
+      expect(scene.getObjectByName(tube)!.visible).toBe(false);
+      const lights = scene.getObjectsByProperty('name', `${tube} light`);
+      expect(lights.length).toBeGreaterThan(0);
+      expect(lights.every((light) => light.visible)).toBe(true);
+    }
+  }
+});
+
 it('disposes the props a setting replaces, so the settings never leak geometries or materials (#846)', async () => {
   const game = await boot('?bot=off');
   const { scene } = await drawn(game);
