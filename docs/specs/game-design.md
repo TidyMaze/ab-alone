@@ -927,7 +927,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   `r = 2`): **11** marbles, rows `r = 3` and `r = 4`. The boss starts with **no marble**.
 - **Turn**: one turn is one player move, then one boss reply: (a) the swarm marbles announced for
   that turn **arrive**, then (b) the swarm plays one standard move with its marbles, or **passes**
-  when it has none (no marble, or every one boxed in, as the Choir's pass).
+  when it has none (no marble, or every one boxed in, as the Choir's pass). A player boxed in by
+  a full board passes too (`rules.md` section 7): the next reply starts at once.
 - **Arrivals**: turns 1 to 14, **1** marble a turn; turns 15 to 24, **2**; turns 25 to 30, **3**
   (52 in all, more than the 50 free cells: the board can fill). They land on the **allowed rim
   cells**: the 13 rim cells with `r <= 0` (never on the player's start side, `r > 0`). The cells of

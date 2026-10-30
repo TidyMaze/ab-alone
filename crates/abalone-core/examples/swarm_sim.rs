@@ -40,7 +40,10 @@ fn main() {
         .unwrap_or(10);
     let fights: Vec<_> = std::thread::scope(|s| {
         let threads: Vec<_> = (0..seeds).map(|i| s.spawn(move || fight(i))).collect();
-        threads.into_iter().map(|t| t.join().expect("fight")).collect()
+        threads
+            .into_iter()
+            .map(|t| t.join().expect("fight"))
+            .collect()
     });
     let mut times = Vec::new();
     let mut won = 0;
