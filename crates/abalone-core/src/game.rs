@@ -852,6 +852,22 @@ mod tests {
     }
 
     #[test]
+    fn seen_after_a_bonus_hashes_with_the_same_side_to_move() {
+        let mut game = Game::new();
+        let up = mv(&[(0, 2)], NW);
+        let down = mv(&[(0, 1)], SE);
+        assert_eq!(game.seen_after_bonus(&up), 1);
+        game.play_bonus(&up).unwrap();
+        assert_eq!(game.seen_after_bonus(&down), 2, "the start, Black to move");
+        assert_eq!(
+            game.seen_after(&down),
+            1,
+            "the start with White to move: never seen"
+        );
+        assert_eq!(game.seen_after_bonus(&mv(&[(0, 0)], E)), 0, "illegal");
+    }
+
+    #[test]
     fn the_echo_memory_changes_the_position_hash() {
         let plain = position_hash(&Board::empty(), Player::Black);
         let mut remembered = Board::empty();

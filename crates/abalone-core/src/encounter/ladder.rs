@@ -473,6 +473,34 @@ mod tests {
     }
 
     #[test]
+    fn the_pro_never_plays_a_quiet_free_move_as_its_own() {
+        use crate::moves::Direction::{E, NE, W};
+        // Seed 3 after two plies: the pro's search alone picks the Echo's quiet free move.
+        let mut a = Arena::new(LadderBoss::Echo, 3);
+        a.play(&Move {
+            cells: vec![(0, 4), (1, 3)],
+            dir: NE,
+        })
+        .unwrap();
+        a.play(&Move {
+            cells: vec![(-2, -2)],
+            dir: E,
+        })
+        .unwrap();
+        let free = Move {
+            cells: vec![(2, 2)],
+            dir: W,
+        };
+        let Arena::Plain(enc, _) = &a else {
+            unreachable!()
+        };
+        assert_eq!(echo_free_moves(enc), vec![free.clone()]);
+        assert_eq!(echo_search(enc, 1000, &|_| true), Some(free.clone()));
+        let mv = player_move(&a, 3, 9, 0, 1000).unwrap();
+        assert_ne!(mv, free, "declined");
+    }
+
+    #[test]
     fn every_boss_opens_tell_safe() {
         for boss in LadderBoss::ALL {
             let a = Arena::new(boss, 0);
