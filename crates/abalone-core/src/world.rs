@@ -11,8 +11,8 @@ pub const CHUNK: i32 = 16;
 pub const WORLD_CHUNKS: i32 = 64;
 /// Cells within this distance of the spawn cell `(0, 0)` are open grass.
 pub const CLEARING: i32 = 3;
-/// Boulders sit on this share of the cells that are not water or peak, in thousandths.
-const BOULDER_PER_MILLE: u64 = 60;
+/// Boulders sit on this share of the open cells left once walls and trees are placed, in thousandths.
+const BOULDER_PER_MILLE: u64 = 20;
 /// Walls are laid out on a lattice of squares of this many cells.
 const WALL_BLOCK: i32 = 24;
 /// A chunk tries to place `TRIES` enemy groups, each with this chance in thousandths; with the obstacles that refuse some,
@@ -217,9 +217,10 @@ impl Window {
             _ => Terrain::Grass,
         };
         let open = !terrain.blocked();
+        // A grass cell of a forest zone is a tree one time in four.
         let forest = terrain == Terrain::Grass
             && self.forest.noise(q, r) > 0.55
-            && unit(self.seed, 6, q, r) < 0.5;
+            && unit(self.seed, 6, q, r) < 0.25;
         let on_wall = self.wall[((r - self.r0) * CHUNK + (q - self.q0)) as usize];
         let terrain = if open && on_wall {
             Terrain::Wall
@@ -417,12 +418,12 @@ mod tests {
             );
         }
         let blocked = cells.iter().filter(|c| c.terrain.blocked()).count() * 100 / cells.len();
-        assert!((10..=45).contains(&blocked), "{blocked} % blocked");
+        assert!((30..=38).contains(&blocked), "{blocked} % blocked");
         let boulders = cells
             .iter()
             .filter(|c| c.terrain == Terrain::Boulder)
             .count();
-        assert!(boulders * 100 / cells.len() <= 6);
+        assert!(boulders * 100 / cells.len() <= 2);
         let heights: std::collections::HashSet<u8> = cells.iter().map(|c| c.height).collect();
         assert_eq!(heights.len(), 4);
     }
@@ -554,7 +555,7 @@ mod tests {
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
             world_digest(),
-            3_089_906_282_619_527_092,
+            9_996_814_764_041_329_087,
             "digest of the reference world"
         );
     }
@@ -567,6 +568,45 @@ mod tests {
             for g in enemy_groups(seed, 0, 0) {
                 assert!(g.iter().all(|&(q, r)| distance(q, r) > SAFE));
             }
+        }
+    }
+
+    /// The 5 x 5 chunks around the spawn chunk, as cell coordinates `[-2 * CHUNK, 3 * CHUNK)`.
+    fn spawn_window() -> impl Iterator<Item = (i32, i32)> {
+        (-2 * CHUNK..3 * CHUNK).flat_map(|q| (-2 * CHUNK..3 * CHUNK).map(move |r| (q, r)))
+    }
+
+    /// The open cells of the spawn window, and those of them that a flood fill over the six
+    /// neighbours reaches from the spawn. The fill may leave the window to go round an obstacle, but
+    /// stays in the 16 x 16 chunks around the spawn.
+    fn spawn_window_reach(seed: u64) -> (usize, usize) {
+        let inside = |q: i32, r: i32| {
+            (-8 * CHUNK..8 * CHUNK).contains(&q) && (-8 * CHUNK..8 * CHUNK).contains(&r)
+        };
+        let open = |q: i32, r: i32| cell(seed, q, r).is_some_and(|c| !c.terrain.blocked());
+        let mut reached = std::collections::HashSet::from([(0, 0)]);
+        let mut todo = vec![(0, 0)];
+        while let Some((q, r)) = todo.pop() {
+            for (dq, dr) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)] {
+                let next = (q + dq, r + dr);
+                if inside(next.0, next.1) && open(next.0, next.1) && reached.insert(next) {
+                    todo.push(next);
+                }
+            }
+        }
+        let total = spawn_window().filter(|&(q, r)| open(q, r)).count();
+        let got = spawn_window().filter(|c| reached.contains(c)).count();
+        (total, got)
+    }
+
+    #[test]
+    fn most_open_cells_around_the_spawn_are_reachable_on_foot() {
+        for seed in 1..=8 {
+            let (open, reached) = spawn_window_reach(seed);
+            assert!(
+                reached * 100 >= open * 90,
+                "seed {seed}: {reached} of {open} open cells reached on foot"
+            );
         }
     }
 }
