@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { cellAtPoint, CHUNK, chunkOf, neighbours, TROOP, World } from './openworld';
+import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
 import {
+  BIOME_LOOK,
   CAPACITY,
+  groundColour,
   footprint,
   GROUND,
   GROUNDS,
@@ -760,5 +762,73 @@ describe('the Open world view frees its GPU objects (#981)', () => {
     expect(disposeGeometry.mock.contexts).toContain(detailed.geometry);
     expect(disposeMaterial.mock.contexts).toContain(detailed.material);
     vi.restoreAllMocks();
+  });
+});
+
+describe('the biomes look (openworld-terrain.md section 4, #984)', () => {
+  const at = (height: number, terrain: Terrain, biome: Biome): Tile => ({ height, terrain, biome });
+  // The chunks of the square -2..2, each one biome by its column (`cx` mod 5 is the biome code), with a tree or a boulder
+  // every other cell on the low ground (heights 3 and 4): five biomes, each with its props.
+  const biomeOf = (cx: number) => BIOMES[((cx % 5) + 5) % 5]!;
+  const byBiome = (cx: number, cy: number): Uint8Array => {
+    if (Math.abs(cx) > 2 || Math.abs(cy) > 2) return new Uint8Array();
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([3 + (i % 2), i % 2 ? 5 : 6, BIOMES.indexOf(biomeOf(cx))], i * 3);
+    return out;
+  };
+  const colourOf = (view: OpenWorldView, name: string): number[] => {
+    const m = mesh(view, name);
+    return Array.from({ length: m.count }, (_, i) => new THREE.Color().fromArray(m.instanceColor!.array, i * 3).getHex());
+  };
+
+  it('colours the low grass by its biome, and every other ground by LOOK', () => {
+    expect(groundColour(at(3, 'grass', 'meadow'), 'grass')).toBe(LOOK.grass.color);
+    expect(groundColour(at(4, 'grass', 'tundra'), 'grass')).toBe(BIOME_LOOK.tundra.ground);
+    expect(groundColour(at(3, 'tree', 'desert'), 'grass')).toBe(BIOME_LOOK.desert.ground); // a tree stands on the grass of its biome
+    expect(groundColour(at(5, 'grass', 'desert'), 'grass')).toBe(LOOK.grass.color); // uplands keep their green
+    expect(groundColour(at(2, 'sand', 'tundra'), 'sand')).toBe(LOOK.sand.color); // the shore keeps its sand
+    expect(groundColour(at(0, 'water', 'tundra'), 'water')).toBe(LOOK.water.color); // water keeps its colour (waterColor)
+  });
+
+  it('gives each biome its own low ground, the meadow the grass of before', () => {
+    expect(BIOME_LOOK.meadow.ground).toBe(0x3f7d5f);
+    expect(new Set(BIOMES.map((biome) => BIOME_LOOK[biome].ground)).size).toBe(BIOMES.length);
+  });
+
+  it('tints the trees and the boulders: whitish in tundra, warm in desert and badlands, neutral elsewhere', () => {
+    expect(BIOME_LOOK.meadow.prop).toBe(0xffffff);
+    expect(BIOME_LOOK.forest.prop).toBe(0xffffff);
+    expect(BIOME_LOOK.tundra.prop).toBe(0xe4f0f8);
+    expect(BIOME_LOOK.desert.prop).toBe(0xffd39a);
+    expect(BIOME_LOOK.badlands.prop).toBe(0xff9f7a);
+  });
+
+  it('paints the low ground and the props of each cell with its biome, one colour per instance', () => {
+    const view = new OpenWorldView(new World(byBiome));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    for (const name of ['terrain-grass', 'prop-tree', 'prop-boulder']) {
+      expect(mesh(view, name).instanceColor!.count).toBe(mesh(view, name).instanceMatrix.count);
+    }
+    const grounds = new Set(colourOf(view, 'terrain-grass'));
+    for (const biome of ['meadow', 'tundra', 'desert', 'badlands', 'forest'] as const) {
+      expect(grounds.has(BIOME_LOOK[biome].ground)).toBe(true);
+    }
+    const trees = new Set(colourOf(view, 'prop-tree'));
+    for (const biome of ['tundra', 'desert', 'badlands'] as const) expect(trees.has(BIOME_LOOK[biome].prop)).toBe(true);
+    expect(colourOf(view, 'prop-boulder').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the colours when the meshes grow to hold a wide view (#1010)', () => {
+    const view = new OpenWorldView(new World(byBiome));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const before = mesh(view, 'terrain-grass').instanceMatrix.count;
+    view.zoomBy(MAX_ZOOM); // the widest zoom
+    view.show([0, 0]);
+    const grounds = mesh(view, 'terrain-grass');
+    expect(grounds.instanceMatrix.count).toBeGreaterThanOrEqual(before);
+    expect(grounds.instanceColor!.count).toBe(grounds.instanceMatrix.count);
+    expect(new Set(colourOf(view, 'terrain-grass')).size).toBeGreaterThan(1);
   });
 });
