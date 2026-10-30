@@ -313,7 +313,7 @@ impl Default for Game {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::Cell;
+    use crate::board::{Cell, Dual};
     use crate::moves::Direction::*;
     use crate::moves::{legal_moves, Direction};
 
@@ -682,6 +682,23 @@ mod tests {
         assert_ne!(
             position_hash(&nearer, Player::Black),
             position_hash(&announced, Player::Black)
+        );
+    }
+
+    #[test]
+    fn the_dual_room_state_changes_the_position_hash() {
+        let plain = position_hash(&Board::empty(), Player::Black);
+        let mut walled = Board::empty();
+        walled.set_dual(Some(Dual::default()));
+        assert_ne!(position_hash(&walled, Player::Black), plain);
+        let mut coming = walled.clone();
+        coming.set_dual(Some(Dual {
+            coming: Some((Cell::White, (1, -1))),
+            ..Dual::default()
+        }));
+        assert_ne!(
+            position_hash(&coming, Player::Black),
+            position_hash(&walled, Player::Black)
         );
     }
 

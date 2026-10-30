@@ -8,6 +8,7 @@ pub mod assembly;
 pub mod ballast;
 pub mod chaplain;
 pub mod choir;
+pub mod dual;
 pub mod echo;
 pub mod fixture;
 pub mod hull;
