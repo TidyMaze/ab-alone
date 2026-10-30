@@ -11,6 +11,7 @@ import {
   hasReflections,
   meshDetail,
   renderPixelRatio,
+  smoothEdges,
   nextPixelRatio,
   readFlatHud,
   readTranscript,
@@ -444,6 +445,15 @@ describe('tier storage', () => {
     expect(s.data.get('ab-alone.tier')).toBe('high');
     expect(() => writeTier(throwing, 'low')).not.toThrow();
     expect(() => writeTier(null, 'low')).not.toThrow();
+  });
+});
+
+describe('smoothEdges (#857)', () => {
+  it('is FXAA below a drawn ratio of 1.5 on a renderer without MSAA only', () => {
+    expect(smoothEdges(1, false)).toBe(true);
+    expect(smoothEdges(0.5, false)).toBe(true); // under automation the canvas is drawn at 0.5
+    expect(smoothEdges(1.5, false)).toBe(false);
+    expect(smoothEdges(1, true)).toBe(false);
   });
 });
 

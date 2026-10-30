@@ -6,7 +6,7 @@ import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
 import { DECKS, LIGHT } from './light';
 import { DECK_PARTICLES, type Deck } from './deck';
-import { fogSettings, hasParticles, renderPixelRatio, type Tier } from './quality';
+import { fogSettings, hasParticles, renderPixelRatio, smoothEdges, type Tier } from './quality';
 import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
@@ -256,7 +256,7 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, dpr < 1.5 && !(this.renderer.samples > 0));
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0));
   }
 
   async init(): Promise<void> {

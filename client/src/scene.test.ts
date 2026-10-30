@@ -436,8 +436,13 @@ describe('SceneRenderer (#632)', () => {
     ['a screen drawn at 1.5 or more', 2, 0, true],
   ])('smooths with FXAA on %s only below a ratio of 1.5 and without MSAA (#857)', (_, devicePixelRatio, samples, plain) => {
     const renderer = Object.assign(createMockRenderer(), { samples });
-    const { pipeline } = new SceneRenderer({ renderer, devicePixelRatio });
+    const { pipeline } = new SceneRenderer({ renderer, devicePixelRatio, webdriver: false });
     expect(pipeline!.outputColorTransform).toBe(plain);
+  });
+
+  it('judges the ratio the canvas is drawn at: under automation a Retina window is drawn at 0.5 and smoothed (#857)', () => {
+    const { pipeline } = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 2, webdriver: true });
+    expect(pipeline!.outputColorTransform).toBe(false);
   });
 
   it('blurs the glow every second frame, the last glow staying on screen between two runs: the bloom is a third of a phone\'s frame (#894)', () => {

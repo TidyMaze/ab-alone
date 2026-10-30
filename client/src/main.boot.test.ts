@@ -186,8 +186,10 @@ describe('the renderer and its textures', () => {
         WebGPURenderer: class {
           domElement = document.createElement('canvas');
           backend = { isWebGPUBackend: true };
+          samples: number;
           constructor(o: unknown) {
             options.push(o);
+            this.samples = (o as { antialias: boolean }).antialias ? 4 : 0;
           }
           init = async (): Promise<void> => {};
           setPixelRatio(): void {}
@@ -226,6 +228,31 @@ describe('the renderer and its textures', () => {
       const { options } = renderer();
       await booting;
       expect(options).toEqual([{ antialias: false, forceWebGL: true }]);
+    });
+
+    const bevel = (scene: THREE.Scene) => materials(scene).find((m) => m.color.getHex() === 0xc4cacf && m.metalness === 0.3)!;
+
+    it('lifts the cell bevel under FXAA, which softens its thin ring (#857)', async () => {
+      const booting = boot('?bot=off&quality=low', { webdriver: false });
+      const { draw } = renderer();
+      await booting;
+      expect(bevel(draw()).emissive.getHex()).toBe(0x7f8993);
+    });
+
+    it('keeps the cell bevel as it was under MSAA on a touch screen (#857)', async () => {
+      vi.stubGlobal('devicePixelRatio', 3);
+      const booting = boot('?bot=off&quality=low', { webdriver: false, touch: true });
+      const { draw } = renderer();
+      await booting;
+      expect(bevel(draw()).emissive.getHex()).toBe(0x25292d);
+    });
+
+    it('keeps the cell bevel as it was on a Retina desktop, drawn at 1.5 with neither MSAA nor FXAA (#857)', async () => {
+      vi.stubGlobal('devicePixelRatio', 3);
+      const booting = boot('?bot=off&quality=low', { webdriver: false });
+      const { draw } = renderer();
+      await booting;
+      expect(bevel(draw()).emissive.getHex()).toBe(0x25292d);
     });
 
     it('drops MSAA on a Retina screen drawn at 1.5 (#844)', async () => {
