@@ -211,7 +211,7 @@ pub fn dual_landed(enc: &Encounter) -> Option<(Cell, P)> {
 
 /// What a ply does in the boss search: the pushed-off marble is noted, then the hook runs with
 /// seed 0. A return credits nothing: the search counts the push itself.
-fn search_step(before: &Board, _mover: Player, mv: &Move, mut after: Board) -> (Board, [u8; 2]) {
+pub fn dual_step(before: &Board, _mover: Player, mv: &Move, mut after: Board) -> (Board, [u8; 2]) {
     after.set_dual(carried_dual(before, mv, &after));
     (run(after, 0), [0, 0])
 }
@@ -228,7 +228,7 @@ pub fn dual_move(enc: &Encounter) -> Option<Move> {
         enc.boss.node_budget,
         DEFAULT_WEIGHTS,
         &|_| true,
-        &search_step,
+        &dual_step,
     )
     .map(|r| r.mv)
 }
@@ -612,12 +612,12 @@ mod tests {
         let before = board(&[(-4, 6), (-4, 7)], &[(-4, 8), (3, -5)], Dual::default());
         let push = mv(&[(-4, 6), (-4, 7)], SE);
         let after = apply(&before, Player::Black, &push).unwrap().0;
-        let (out, credits) = search_step(&before, Player::Black, &push, after);
+        let (out, credits) = dual_step(&before, Player::Black, &push, after);
         assert_eq!(credits, [0, 0], "the search counts the push itself");
         assert_eq!(out.dual().unwrap().coming, Some((Cell::White, (5, -9))));
         let reply = mv(&[(3, -5)], E);
         let next = apply(&out, Player::White, &reply).unwrap().0;
-        let (back, _) = search_step(&out, Player::White, &reply, next);
+        let (back, _) = dual_step(&out, Player::White, &reply, next);
         assert_eq!(back.get(5, -9), Some(Cell::White), "the tree lands it too");
     }
 

@@ -9,6 +9,7 @@ use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
 use crate::encounter::ballast::{ballast_move, ballast_search, ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
+use crate::encounter::dual::{dual_move, dual_start, dual_step, DUAL_NODE_BUDGET};
 use crate::encounter::echo::{echo_boss, echo_move, echo_search, echo_start};
 use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
@@ -36,10 +37,11 @@ pub enum LadderBoss {
     Ballast,
     Alien,
     Overseer,
+    Dual,
 }
 
 impl LadderBoss {
-    pub const ALL: [LadderBoss; 7] = [
+    pub const ALL: [LadderBoss; 8] = [
         LadderBoss::Echo,
         LadderBoss::Hull,
         LadderBoss::Chaplain,
@@ -47,6 +49,7 @@ impl LadderBoss {
         LadderBoss::Ballast,
         LadderBoss::Alien,
         LadderBoss::Overseer,
+        LadderBoss::Dual,
     ];
 
     /// Stable id used in the telemetry.
@@ -59,6 +62,7 @@ impl LadderBoss {
             LadderBoss::Ballast => "ballast",
             LadderBoss::Alien => "alien",
             LadderBoss::Overseer => "overseer",
+            LadderBoss::Dual => "dual",
         }
     }
 
@@ -77,6 +81,7 @@ impl LadderBoss {
             LadderBoss::Ballast => BALLAST_NODE_BUDGET,
             LadderBoss::Alien => ALIEN_NODE_BUDGET,
             LadderBoss::Overseer => OVERSEER_NODE_BUDGET,
+            LadderBoss::Dual => DUAL_NODE_BUDGET,
         }
     }
 }
@@ -101,6 +106,7 @@ impl Arena {
             LadderBoss::Alien => Arena::Plain(alien_start(seed), boss),
             LadderBoss::Overseer => Arena::Plain(overseer_start(seed), boss),
             LadderBoss::Echo => Arena::Plain(echo_start(seed), boss),
+            LadderBoss::Dual => Arena::Plain(dual_start(seed), boss),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
             LadderBoss::Choir => Arena::Choir(Choir::start(seed)),
@@ -142,6 +148,7 @@ impl Arena {
             Arena::Plain(enc, LadderBoss::Overseer) => overseer_move(enc),
             Arena::Plain(enc, LadderBoss::Chaplain) => chaplain_move(enc),
             Arena::Plain(enc, LadderBoss::Hull) => hull_move(enc),
+            Arena::Plain(enc, LadderBoss::Dual) => dual_move(enc),
             // The Ballast Mind: the Choir is never plain.
             Arena::Plain(enc, _) => ballast_move(enc),
             Arena::Choir(choir) => choir.boss_move(),
@@ -203,6 +210,9 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         let pick = |allow: &dyn Fn(&Move) -> bool| match arena {
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
+            Arena::Plain(_, LadderBoss::Dual) => {
+                search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &dual_step).map(|r| r.mv)
+            }
             _ if arena.kind() == LadderBoss::Chaplain => {
                 search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
             }
