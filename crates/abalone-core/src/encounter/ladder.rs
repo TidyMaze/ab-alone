@@ -11,6 +11,7 @@ use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, ch
 use crate::encounter::choir::Choir;
 use crate::encounter::echo::{echo_boss, echo_move, mirror_move};
 use crate::encounter::hull::{hull_boss, hull_move};
+use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
 use crate::encounter::telemetry::{
     classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
@@ -34,16 +35,18 @@ pub enum LadderBoss {
     Choir,
     Ballast,
     Alien,
+    Overseer,
 }
 
 impl LadderBoss {
-    pub const ALL: [LadderBoss; 6] = [
+    pub const ALL: [LadderBoss; 7] = [
         LadderBoss::Echo,
         LadderBoss::Hull,
         LadderBoss::Chaplain,
         LadderBoss::Choir,
         LadderBoss::Ballast,
         LadderBoss::Alien,
+        LadderBoss::Overseer,
     ];
 
     /// Stable id used in the telemetry.
@@ -55,6 +58,7 @@ impl LadderBoss {
             LadderBoss::Choir => "choir",
             LadderBoss::Ballast => "ballast",
             LadderBoss::Alien => "alien",
+            LadderBoss::Overseer => "overseer",
         }
     }
 
@@ -72,6 +76,7 @@ impl LadderBoss {
             LadderBoss::Choir => crate::encounter::choir::CHOIR_NODE_BUDGET,
             LadderBoss::Ballast => BALLAST_NODE_BUDGET,
             LadderBoss::Alien => ALIEN_NODE_BUDGET,
+            LadderBoss::Overseer => OVERSEER_NODE_BUDGET,
         }
     }
 }
@@ -94,6 +99,7 @@ impl Arena {
         match boss {
             LadderBoss::Ballast => Arena::Plain(ballast_start(seed), boss),
             LadderBoss::Alien => Arena::Plain(alien_start(seed), boss),
+            LadderBoss::Overseer => Arena::Plain(overseer_start(seed), boss),
             LadderBoss::Echo => plain(echo_boss()),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
@@ -133,6 +139,7 @@ impl Arena {
         match self {
             Arena::Plain(enc, LadderBoss::Echo) => echo_move(enc),
             Arena::Plain(enc, LadderBoss::Alien) => alien_move(enc),
+            Arena::Plain(enc, LadderBoss::Overseer) => overseer_move(enc),
             Arena::Plain(enc, LadderBoss::Chaplain) => chaplain_move(enc),
             Arena::Plain(enc, LadderBoss::Hull) => hull_move(enc),
             // The Ballast Mind: the Choir is never plain.
