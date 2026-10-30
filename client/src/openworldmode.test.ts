@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { CHUNK } from './openworld';
 import { OpenWorldMode } from './openworldmode';
+import { OpenWorldView } from './openworldview';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -94,5 +95,50 @@ describe('the Open world mode', () => {
     const m = mode();
     m.resize(100, 100);
     expect(m.active).toBe(false);
+  });
+});
+
+describe('leaving the Open world frees its view, every time (#981)', () => {
+  it('enters and leaves 30 times: each view is disposed, with each of its geometries and materials once', () => {
+    const disposeView = vi.spyOn(OpenWorldView.prototype, 'dispose');
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
+    const m = mode();
+    for (let i = 0; i < 30; i++) {
+      m.enter(i, 800, 600);
+      m.frame(() => {});
+      m.leave();
+    }
+    const views = disposeView.mock.contexts as OpenWorldView[];
+    expect(views).toHaveLength(30);
+    let geometries = 0;
+    let materials = 0;
+    for (const view of views) {
+      const seen = { g: new Set<THREE.BufferGeometry>(), m: new Set<THREE.Material>() };
+      view.scene.traverse((object) => {
+        if (!(object as THREE.Mesh).isMesh) return;
+        seen.g.add((object as THREE.Mesh).geometry);
+        seen.m.add((object as THREE.Mesh).material as THREE.Material);
+      });
+      geometries += seen.g.size;
+      materials += seen.m.size;
+    }
+    expect(disposeGeometry).toHaveBeenCalledTimes(geometries);
+    expect(disposeMaterial).toHaveBeenCalledTimes(materials);
+    expect(m.active).toBe(false);
+    vi.restoreAllMocks();
+  });
+
+  it('does not draw or touch a view once it is left, even when the models arrive late', async () => {
+    let arrive!: (g: Record<string, never>) => void;
+    const m = mode(() => new Promise((resolve) => (arrive = resolve)));
+    m.enter(1, 800, 600);
+    m.leave();
+    const render = vi.fn();
+    arrive({});
+    await Promise.resolve();
+    await Promise.resolve();
+    m.frame(render);
+    expect(render).not.toHaveBeenCalled();
   });
 });

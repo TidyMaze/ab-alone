@@ -121,3 +121,33 @@ describe('the troop and the enemies on screen', () => {
     expect(at.z).toBeCloseTo(axialTo3D(6, 5).z);
   });
 });
+
+/** The geometries and the materials of the meshes of a view's scene, each once. */
+const objectsOf = (view: OpenWorldView) => {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  view.scene.traverse((object) => {
+    if (!(object as THREE.Mesh).isMesh) return;
+    geometries.add((object as THREE.Mesh).geometry);
+    materials.add((object as THREE.Mesh).material as THREE.Material);
+  });
+  return { geometries, materials };
+};
+
+describe('the Open world view frees its GPU objects (#981)', () => {
+  it('disposes every geometry and material of its scene once, the models it was given included', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.useModels({ tree: new THREE.BoxGeometry() });
+    view.show([0, 0]);
+    const { geometries, materials } = objectsOf(view);
+    expect(geometries.size).toBeGreaterThan(5);
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
+    view.dispose();
+    expect(disposeGeometry.mock.calls.length).toBe(geometries.size);
+    expect(new Set(disposeGeometry.mock.contexts)).toEqual(geometries);
+    expect(disposeMaterial.mock.calls.length).toBe(materials.size);
+    expect(new Set(disposeMaterial.mock.contexts)).toEqual(materials);
+    vi.restoreAllMocks();
+  });
+});
