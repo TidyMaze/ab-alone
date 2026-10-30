@@ -3,7 +3,7 @@ import init, { Engine } from 'abalone-wasm';
 import { CELLS, cellIndex, encodeMove, parseMoves, type Axial, type Move } from './board';
 import { blockers, hexDistance, resolveSeen, seenBoard, seenGhosts, seenMoves, STALKER_RANGE, stalkerNote, visibleCells } from './stalker';
 
-// Stalker (#783, #998, game-design.md section 3.4): the visible set and the moves the player is offered on the board
+// Stalker (#783, #998, game-design.md section 3.8): the visible set and the moves the player is offered on the board
 // as it is seen. The judge of seenMoves is the real rules engine: with nothing hidden, it offers the engine's moves.
 const fs = 'node:fs/promises';
 const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
@@ -125,7 +125,7 @@ describe('seenGhosts', () => {
 
 describe('stalkerNote', () => {
   it('says the bot is not fogged, and while a marble is revealed that the move is blocked', () => {
-    expect(stalkerNote(false)).toBe(' · Stalker: the bot is not fogged');
-    expect(stalkerNote(true)).toBe(' · Stalker: the bot is not fogged · A hidden marble blocks that move: play again');
+    expect(stalkerNote(false)).toBe('Stalker: the bot is not fogged'); // the first note: no separator before it
+    expect(stalkerNote(true)).toBe('Stalker: the bot is not fogged · A hidden marble blocks that move: play again');
   });
 });

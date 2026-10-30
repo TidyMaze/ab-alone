@@ -53,8 +53,20 @@ describe('main.ts Stalker (#998)', () => {
     expect(start.visible).toHaveLength(31);
     expect(start.drawn).toEqual([]); // White is 4 cells away from every Black marble
     expect(drawnAt(game, [0, -2])).toBe(false);
+    expect(byId('hud').querySelector('small')!.textContent).toBe(NOTE); // the only note, no stray separator
     const [fog] = named(scene(), 'stalker-fog') as THREE.InstancedMesh[];
     expect(fog!.count).toBe(61 - 31);
+    playPlies(game, PLIES); // a second refresh draws the same veil again, with its own count: no new mesh for the GPU
+    expect(named(scene(), 'stalker-fog')).toEqual([fog]);
+    expect(fog!.count).toBe(61 - 39);
+  });
+
+  it('turns the evaluation bar and the Hint off for good, as a boss fight does: they search the whole board', async () => {
+    const game = await boot('/?bot=on');
+    expect(byId('eval').hidden).toBe(false);
+    startStalker(game);
+    expect(byId('eval').hidden).toBe(true);
+    expect(byId('hint').hidden).toBe(true);
   });
 
   it('draws an enemy marble 2 cells away and not one 3 cells away', async () => {
