@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -4527,6 +4527,7 @@ const openWorldButton = document.getElementById('openworld') as HTMLButtonElemen
 const openWorldSeed = new URLSearchParams(location.search).get('openworld');
 const openWorld = new OpenWorldMode(
   (seed, cx, cy) => world_chunk(seed, cx, cy),
+  (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
   () => loadModels(`${import.meta.env.BASE_URL}assets/pbr/openworld.glb`, meshoptLoader()),
 );
 openWorldButton.hidden = openWorldSeed === null;

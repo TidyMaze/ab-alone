@@ -77,7 +77,11 @@ export class OpenWorldView {
   private readonly grounds = {} as Record<Ground, THREE.InstancedMesh>;
   private readonly props = {} as Record<Prop, THREE.InstancedMesh>;
   private readonly hero: THREE.Mesh;
+  private readonly troop: THREE.InstancedMesh;
+  private readonly foes: THREE.InstancedMesh;
   private region = '';
+  /** The enemy marbles drawn around the hero. */
+  enemyCount = 0;
 
   constructor(private readonly world: World) {
     this.scene.background = new THREE.Color(0x0b1220);
@@ -98,6 +102,9 @@ export class OpenWorldView {
     this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), new THREE.MeshStandardMaterial({ color: 0xcfe8ff, roughness: 0.1 }));
     this.hero.name = 'hero';
     this.scene.add(this.hero);
+    const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
+    this.troop = this.instances('troop', marble, new THREE.MeshStandardMaterial({ color: 0x8fc4f5, roughness: 0.2 }));
+    this.foes = this.instances('enemies', marble, new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
   }
 
   private instances(name: string, geometry: THREE.BufferGeometry, material: THREE.Material): THREE.InstancedMesh {
@@ -124,7 +131,7 @@ export class OpenWorldView {
 
   /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero enters another chunk, the hero and the
    * camera follow every step. */
-  show(at: Axial): void {
+  show(at: Axial, troop: readonly Axial[] = []): void {
     const [cx, cy] = chunkOf(at);
     const region = `${cx},${cy}`;
     if (region !== this.region) {
@@ -134,9 +141,24 @@ export class OpenWorldView {
     const tile = this.world.tile(at[0], at[1])!;
     const p = axialTo3D(at[0], at[1]);
     this.hero.position.set(p.x, topOf(GROUND[tile.terrain], tile.height) + MARBLE, p.z);
+    this.place(this.troop, troop);
     this.camera.position.set(p.x, 14, p.z + 11);
     this.camera.lookAt(this.hero.position);
     this.camera.updateMatrixWorld();
+  }
+
+  /** Lays marbles on the cells, each on its ground, in an instanced mesh. */
+  private place(mesh: THREE.InstancedMesh, cells: readonly Axial[]): void {
+    const dummy = new THREE.Object3D();
+    cells.forEach(([q, r], i) => {
+      const tile = this.world.tile(q, r)!;
+      const p = axialTo3D(q, r);
+      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height) + MARBLE, p.z);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.count = cells.length;
+    mesh.instanceMatrix.needsUpdate = true;
   }
 
   /** The cell under a point of the screen, `x` and `y` from -1 to 1, read on the plane the hero rolls on. */
@@ -170,6 +192,10 @@ export class OpenWorldView {
         });
       }
     }
+    const foes = [];
+    for (let ky = cy - REACH; ky <= cy + REACH; ky++) for (let kx = cx - REACH; kx <= cx + REACH; kx++) foes.push(...this.world.enemies(kx, ky));
+    this.place(this.foes, foes);
+    this.enemyCount = foes.length;
     for (const key of [...GROUNDS, ...PROP_NAMES]) {
       const mesh = key in this.grounds ? this.grounds[key as Ground] : this.props[key as Prop];
       mesh.count = counts[key];

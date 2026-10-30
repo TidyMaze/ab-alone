@@ -33,7 +33,12 @@ export function parseChunk(bytes: Uint8Array): Tile[] {
 /** The world of a seed: chunks come from `load(cx, cy)` the first time a cell of them is asked for. */
 export class World {
   private readonly chunks = new Map<string, Tile[]>();
-  constructor(private readonly load: (cx: number, cy: number) => Uint8Array) {}
+  private readonly groups = new Map<string, Axial[]>();
+  /** `loadEnemies(cx, cy)` gives the enemy marbles that start in a chunk, `q, r` pairs. */
+  constructor(
+    private readonly load: (cx: number, cy: number) => Uint8Array,
+    private readonly loadEnemies: (cx: number, cy: number) => Int32Array = () => new Int32Array(),
+  ) {}
 
   /** The chunk `(cx, cy)`, `[]` off the world. */
   chunk(cx: number, cy: number): readonly Tile[] {
@@ -44,6 +49,23 @@ export class World {
       this.chunks.set(key, tiles);
     }
     return tiles;
+  }
+
+  /** The enemy marbles that start in the chunk `(cx, cy)`. */
+  enemies(cx: number, cy: number): readonly Axial[] {
+    const key = `${cx},${cy}`;
+    let cells = this.groups.get(key);
+    if (!cells) {
+      const flat = this.loadEnemies(cx, cy);
+      cells = Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
+      this.groups.set(key, cells);
+    }
+    return cells;
+  }
+
+  /** Whether an enemy marble stands on a cell. A group never leaves the chunk it starts in, so only the cell's own chunk is read. */
+  occupied(q: number, r: number): boolean {
+    return this.enemies(...chunkOf([q, r])).some((e) => e[0] === q && e[1] === r);
   }
 
   /** The tile of a cell, `undefined` off the world. */
@@ -75,16 +97,22 @@ export function cellAtPoint(x: number, z: number): Axial {
   return [rq + 0, rr + 0]; // + 0: no -0
 }
 
-/** The hero: one marble that rolls one cell at a time over the open cells of the world. */
+/** The troop follows the hero: this many marbles. */
+export const TROOP = 6;
+
+/** The hero: one marble that rolls one cell at a time over the open cells of the world, and the troop that trails it. */
 export class Hero {
   at: Axial = SPAWN;
+  /** The troop starts around the spawn; after a step each marble takes the place of the one before it, the first the hero's. */
+  troop: Axial[] = neighbours(SPAWN);
   constructor(private readonly world: World) {}
 
-  /** Rolls to `to` when it is a neighbour that is on the world and not blocked; reports whether it moved. */
+  /** Rolls to `to` when it is a neighbour that is on the world, not blocked and free of enemies; reports whether it moved. */
   step(to: Axial): boolean {
     if (!neighbours(this.at).some((n) => same(n, to))) return false;
     const tile = this.world.tile(to[0], to[1]);
-    if (!tile || blocked(tile)) return false;
+    if (!tile || blocked(tile) || this.world.occupied(to[0], to[1])) return false;
+    this.troop = [this.at, ...this.troop.filter((c) => !same(c, to))].slice(0, TROOP);
     this.at = to;
     return true;
   }
