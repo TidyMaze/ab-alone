@@ -5,6 +5,7 @@ use crate::convert::{
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
+use abalone_core::run::army_game;
 use abalone_core::search::{best_move, position_score};
 use wasm_bindgen::prelude::*;
 
@@ -24,8 +25,10 @@ impl Engine {
 
     /// A rogue-lite fight (docs/specs/roguelite.md): the army's `army` marbles, clamped to 4..=14,
     /// against the bot's 14. White wins once the army is down to 3 marbles.
-    pub fn with_army(_army: u8) -> Engine {
-        unimplemented!()
+    pub fn with_army(army: u8) -> Engine {
+        Engine {
+            game: army_game(army),
+        }
     }
 
     /// Side to move: `1` Black, `2` White.
