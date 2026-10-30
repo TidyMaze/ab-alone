@@ -39,7 +39,7 @@ const problems = (page: Page) =>
       const name = plates[el.id] ?? (el.textContent || el.getAttribute('aria-label')!);
       el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // a scrolling column brings it into view
       const box = el.getBoundingClientRect();
-      if (meets(box, hud)) found.push(`${name} covers the HUD`);
+      if (el.id !== 'hud-fold' && meets(box, hud)) found.push(`${name} covers the HUD`); // its own fold button (#957)
       if (!onScreen(box)) found.push(`${name} is off screen`);
       for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
     }
