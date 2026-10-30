@@ -193,8 +193,10 @@ const MARBLE = 0.3;
 const WALL = 0.9;
 const CAP = 0.07;
 
-/** The height of the top of a cell's ground: water lies low. */
-export const topOf = (terrain: Terrain, height: number): number => (terrain === 'water' ? 0.08 : 0.2 + 0.2 * height);
+/** The height of the top of a cell's ground: water lies low. The eight levels 0 to 7 are scaled onto the old 0 to 3 range
+ * (0.2 to 0.8), so the picture does not change until the relief task (#988) replaces this. */
+export const topOf = (terrain: Terrain, height: number): number =>
+  terrain === 'water' ? 0.08 : 0.2 + (0.2 * height * 3) / 7;
 
 /** A stable 0 to 1 draw per cell, so the mountains and the trees differ in height but never change between draws. */
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
