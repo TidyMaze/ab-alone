@@ -3,6 +3,7 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { BRIDGE, BRIDGE_HEIGHT, BRIDGE_MS, DROP_MS, DUAL_AZIMUTH, DUAL_POLAR, type DualState } from './dual';
 import { BLOOD_MS } from './blood';
+import { RIM_LIGHT } from './frame';
 import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
 import { BRIDGE_AT, RETURN_AT, RETURN_CELL, SEED } from './test/dual-game';
@@ -122,6 +123,39 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     game.frame(16);
     expect(dual(game).drop).toBeNull();
     expect(game.hook('__plies')).toBe(0);
+  });
+
+  it('marks the return of a player marble in the light of the glass', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightDual(game);
+    // A player marble walks to the south room's rim, (1, 2), and the boss pushes it off from there.
+    const plies = [
+      [1, 4, -1, 6, 0, 0, 0, 0],
+      [1, 0, 2, -2, 0, 0, 0, 0],
+      [1, 2, -1, 5, 0, 0, 0, 0],
+      [1, 1, 3, -2, 0, 0, 0, 0],
+      [1, 2, 0, 4, 0, 0, 0, 0],
+      [1, 0, 2, -2, 0, 0, 0, 0],
+      [1, 4, 1, 3, 0, 0, 0, 0],
+      [2, 0, -1, 2, 0, 2, 0, 0],
+    ];
+    expect(game.hook<number>('__playMoves', plies)).toBe(plies.length);
+    expect(dual(game).state!.coming!.side).toBe(1);
+    const [mark] = named(scene(), 'return-mark') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
+    expect(mark!.material.color.getHex()).toBe(RIM_LIGHT.glass);
+    expect(tell()).toBe('Your marble comes back on the mark next turn · the bridge comes at 5');
+  });
+
+  it('leaving for the hub during the fall ends it, with no marble left to drop', async () => {
+    const game = await boot('?bot=off', { reducedMotion: false });
+    fightDual(game);
+    played(game, 0, RETURN_AT + 1);
+    expect(dual(game).drop).not.toBeNull();
+    byId('ship').click();
+    game.frame(DROP_MS);
+    game.frame(16);
+    expect(dual(game).drop).toBeNull();
   });
 
   it('reduced motion: the returning marble is on its cell at once', async () => {
