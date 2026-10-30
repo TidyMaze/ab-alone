@@ -1,7 +1,10 @@
 //! Rogue-lite run (docs/specs/roguelite.md): the map of a run from its seed, and the fight of an
 //! army that lost marbles in the fights before.
 
-use crate::game::Game;
+use crate::board::{Board, Cell, STANDARD_BLACK};
+use crate::encounter::hull::mix;
+use crate::game::{Game, WIN_EJECTIONS};
+use crate::moves::Player;
 
 /// Acts of a run, each ending on its boss node.
 pub const ACTS: usize = 3;
@@ -30,14 +33,75 @@ pub struct Node {
     pub links: Vec<usize>,
 }
 
-/// The map of the run `seed`: act by act, row by row, column ascending.
-pub fn run_map(_seed: u64) -> Vec<Node> {
-    unimplemented!()
+/// The next splitmix64 draw of `state`.
+fn draw(state: &mut u64) -> u64 {
+    *state = mix(*state);
+    *state
 }
 
-/// A fight of an army of `army` marbles (clamped to `MIN_ARMY..=FULL_ARMY`) against the bot.
-pub fn army_game(_army: u8) -> Game {
-    unimplemented!()
+/// The links from a row of `from` nodes to a row of `to` nodes: a walk from the first pair to the
+/// last that steps one row, the other or both at random, so every node leads on, every node of the
+/// next row is reached and no two paths cross.
+fn links(from: usize, to: usize, state: &mut u64) -> Vec<Vec<usize>> {
+    let mut out = vec![Vec::new(); from];
+    let (mut i, mut j) = (0, 0);
+    out[0].push(0);
+    while i + 1 < from || j + 1 < to {
+        let step = match (i + 1 < from, j + 1 < to) {
+            (true, true) => draw(state) % 3,
+            (true, false) => 0,
+            _ => 1,
+        };
+        i += usize::from(step != 1);
+        j += usize::from(step != 0);
+        out[i].push(j);
+    }
+    out
+}
+
+/// The map of the run `seed`: act by act, row by row, column ascending. A fight row has 2 to 4
+/// nodes, the boss row one.
+pub fn run_map(seed: u64) -> Vec<Node> {
+    let mut state = seed;
+    let mut map = Vec::new();
+    for act in 0..ACTS {
+        let mut widths: Vec<usize> = (0..FIGHT_ROWS)
+            .map(|_| 2 + (draw(&mut state) % 3) as usize)
+            .collect();
+        widths.push(1);
+        for row in 0..=FIGHT_ROWS {
+            let kind = if row < FIGHT_ROWS {
+                NodeKind::Fight
+            } else {
+                NodeKind::Boss
+            };
+            let out = match widths.get(row + 1) {
+                Some(&next) => links(widths[row], next, &mut state),
+                None => vec![Vec::new()],
+            };
+            map.extend(out.into_iter().enumerate().map(|(col, links)| Node {
+                act,
+                row,
+                col,
+                kind,
+                links,
+            }));
+        }
+    }
+    map
+}
+
+/// A fight of an army of `army` marbles (clamped to `MIN_ARMY..=FULL_ARMY`) against the bot, on
+/// the standard layout less the missing marbles, back row first. The bot wins once the army is
+/// down to 3 marbles, which ends the run; the army wins at the usual 6 ejections.
+pub fn army_game(army: u8) -> Game {
+    let army = army.clamp(MIN_ARMY, FULL_ARMY);
+    let mut board = Board::standard();
+    for &(q, r) in &STANDARD_BLACK[..usize::from(FULL_ARMY - army)] {
+        board.set(q, r, Cell::Empty);
+    }
+    Game::from_position(board, Player::Black, [0, 0])
+        .with_win([WIN_EJECTIONS, (army - (MIN_ARMY - 1)).min(WIN_EJECTIONS)])
 }
 
 #[cfg(test)]
@@ -47,7 +111,9 @@ mod tests {
     use crate::moves::Player;
 
     fn row(map: &[Node], act: usize, row: usize) -> Vec<&Node> {
-        map.iter().filter(|n| n.act == act && n.row == row).collect()
+        map.iter()
+            .filter(|n| n.act == act && n.row == row)
+            .collect()
     }
 
     fn count(board: &Board, cell: Cell) -> usize {
@@ -74,7 +140,9 @@ mod tests {
             assert!(boss[0].links.is_empty());
         }
         assert_eq!(map.len(), map.iter().filter(|n| n.act < ACTS).count());
-        assert!(map.windows(2).all(|w| (w[0].act, w[0].row, w[0].col) < (w[1].act, w[1].row, w[1].col)));
+        assert!(map
+            .windows(2)
+            .all(|w| (w[0].act, w[0].row, w[0].col) < (w[1].act, w[1].row, w[1].col)));
     }
 
     #[test]

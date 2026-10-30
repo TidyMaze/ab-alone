@@ -29,7 +29,7 @@ pub enum Cell {
 
 /// Standard start, Black side (bottom, r > 0): row r=4 (5 cells), row r=3 (6), the three centre cells of r=2.
 /// White is the point reflection `(q, r) -> (-q, -r)`.
-const STANDARD_BLACK: [(i32, i32); 14] = [
+pub(crate) const STANDARD_BLACK: [(i32, i32); 14] = [
     (-4, 4),
     (-3, 4),
     (-2, 4),
