@@ -506,6 +506,38 @@ mod tests {
     }
 
     #[test]
+    fn the_tell_marks_each_bonus_and_whether_it_is_skipped() {
+        let e = fight(false, &[(0, 2)], &[(0, -2), (-1, -2)], [0, 0]);
+        let up = mv(&[(0, 2)], SE);
+        assert_eq!(echo_tell(&e, &up), vec![(mirror_move(&up), false)]);
+        assert!(
+            echo_tell(&e, &mv(&[(0, 2)], E)).is_empty(),
+            "blocked mirror"
+        );
+        assert!(echo_tell(&e, &mv(&[(0, -2)], E)).is_empty(), "illegal move");
+        // P2: the older move comes after the last move's (blocked) mirror.
+        let (older, a, _) = older_setup(false, [3, 0]);
+        let b = mv(&[(-3, 4)], E);
+        assert_eq!(echo_tell(&older, &b), vec![(mirror_move(&a), false)]);
+        // A main move that wins gives no bonus at all.
+        let won = fight(
+            false,
+            &[(2, 0), (3, 0), (-4, 0)],
+            &[(4, 0), (-2, 0), (-3, 0)],
+            [5, 5],
+        );
+        assert!(echo_tell(&won, &mv(&[(2, 0), (3, 0)], E)).is_empty());
+        // The player's bonus that would make the third repetition is skipped.
+        let mut e = fight(false, &[(0, 2)], &[(0, -2)], [0, 0]);
+        let (there, back) = (mv(&[(0, 2)], SE), mv(&[(0, -3)], SE));
+        for m in [&there, &back, &there] {
+            e.play(m).unwrap();
+        }
+        assert_eq!(echo_tell(&e, &back), vec![(mirror_move(&back), true)]);
+        assert_eq!(e.game().history().len(), 6, "nothing is played");
+    }
+
+    #[test]
     fn the_tell_lists_the_bonus_moves_a_move_gives() {
         let e = fight(false, &[(0, 2)], &[(0, -2), (-1, -2)], [0, 0]);
         let played = mv(&[(0, 2)], SE);
