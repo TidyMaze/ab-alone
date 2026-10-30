@@ -258,13 +258,19 @@ impl Swarm {
         }
     }
 
-    /// The reply is done: the evac after the last one, else the next wave is announced.
+    /// The reply is done: the evac after the last one, else the next wave is announced. A player
+    /// boxed in by a full board passes (rules.md section 7) and the next reply starts.
     fn end_reply(&mut self) {
         self.turn += 1;
         if self.turn >= SWARM_TURNS {
             self.game.end(Player::Black);
         }
         self.announce_next();
+        if self.game.outcome().is_none() && legal_moves(self.game.board(), Player::Black).is_empty()
+        {
+            self.game.pass();
+            self.arrive();
+        }
     }
 
     fn announce_next(&mut self) {
