@@ -688,6 +688,28 @@ mod tests {
     }
 
     #[test]
+    fn a_free_move_gives_no_bonus_even_with_a_second_offer() {
+        // P2: the Echo plays `a` (mirror blocked by (1,2)), the player moves (1,2) away, the Echo
+        // plays `b`: the player is offered the mirror of `b` and, now legal, the one of `a`.
+        let mut e = at(
+            &[(0, 2), (1, 2), (-4, 0), (-3, 4)],
+            &[(0, -2), (-2, -2), (3, -4), (-2, 0), (-3, 0)],
+            Player::White,
+            [3, 0],
+        );
+        let (a, w, b) = (mv(&[(0, -2)], W), mv(&[(1, 2)], E), mv(&[(3, -4)], W));
+        for m in [&a, &w, &b] {
+            e.play(m).unwrap();
+        }
+        let free = vec![mirror_move(&b), mirror_move(&a)];
+        assert_eq!(echo_free_moves(&e), free);
+        for m in &free {
+            assert!(echo_bonuses(&e, m).is_empty(), "{m:?} is free");
+            assert!(echo_tell(&e, m).is_empty(), "{m:?} is free");
+        }
+    }
+
+    #[test]
     fn a_free_move_that_would_lose_the_player_the_game_is_not_offered() {
         // Both sides shuffle one marble and the player takes the free move: the second time it
         // would bring the start position back a third time, a draw, a player loss.
