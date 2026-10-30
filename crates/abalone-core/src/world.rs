@@ -559,46 +559,6 @@ mod tests {
         );
     }
 
-    /// Timing, not a check: `cargo test --release -p abalone-core -- --ignored --nocapture world_timing`.
-    #[test]
-    #[ignore]
-    fn world_timing() {
-        use std::time::Instant;
-        let started = Instant::now();
-        let mut sink = 0usize;
-        for _ in 0..200 {
-            sink += chunk(7, 3, -2).unwrap().len();
-        }
-        println!("one chunk, chunk(): {:?} per call", started.elapsed() / 200);
-        let started = Instant::now();
-        for _ in 0..20 {
-            sink += enemy_groups(7, 3, -2).len();
-        }
-        println!(
-            "one chunk, enemy_groups(): {:?} per call",
-            started.elapsed() / 20
-        );
-        let started = Instant::now();
-        let mut all = 0usize;
-        for cx in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
-            for cy in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
-                all += chunk(7, cx, cy).unwrap().len();
-            }
-        }
-        println!(
-            "4096 chunks, chunk(): {:?} total ({all} cells)",
-            started.elapsed()
-        );
-        let started = Instant::now();
-        for cx in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
-            for cy in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
-                sink += enemy_groups(7, cx, cy).len();
-            }
-        }
-        println!("4096 chunks, enemy_groups(): {:?} total", started.elapsed());
-        assert!(sink > 0);
-    }
-
     #[test]
     fn the_spawn_chunks_and_the_edge_of_the_world_hold_no_group_in_the_clearing() {
         assert!(enemy_groups(1, WORLD_CHUNKS / 2, 0).is_empty());
