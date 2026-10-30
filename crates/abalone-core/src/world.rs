@@ -417,12 +417,12 @@ mod tests {
             );
         }
         let blocked = cells.iter().filter(|c| c.terrain.blocked()).count() * 100 / cells.len();
-        assert!((10..=45).contains(&blocked), "{blocked} % blocked");
+        assert!((30..=38).contains(&blocked), "{blocked} % blocked");
         let boulders = cells
             .iter()
             .filter(|c| c.terrain == Terrain::Boulder)
             .count();
-        assert!(boulders * 100 / cells.len() <= 6);
+        assert!(boulders * 100 / cells.len() <= 2);
         let heights: std::collections::HashSet<u8> = cells.iter().map(|c| c.height).collect();
         assert_eq!(heights.len(), 4);
     }
@@ -567,6 +567,45 @@ mod tests {
             for g in enemy_groups(seed, 0, 0) {
                 assert!(g.iter().all(|&(q, r)| distance(q, r) > SAFE));
             }
+        }
+    }
+
+    /// The 5 x 5 chunks around the spawn chunk, as cell coordinates `[-2 * CHUNK, 3 * CHUNK)`.
+    fn spawn_window() -> impl Iterator<Item = (i32, i32)> {
+        (-2 * CHUNK..3 * CHUNK).flat_map(|q| (-2 * CHUNK..3 * CHUNK).map(move |r| (q, r)))
+    }
+
+    /// The open cells of the spawn window, and those of them that a flood fill over the six
+    /// neighbours reaches from the spawn. The fill may leave the window to go round an obstacle, but
+    /// stays in the 16 x 16 chunks around the spawn.
+    fn spawn_window_reach(seed: u64) -> (usize, usize) {
+        let inside = |q: i32, r: i32| {
+            (-8 * CHUNK..8 * CHUNK).contains(&q) && (-8 * CHUNK..8 * CHUNK).contains(&r)
+        };
+        let open = |q: i32, r: i32| cell(seed, q, r).is_some_and(|c| !c.terrain.blocked());
+        let mut reached = std::collections::HashSet::from([(0, 0)]);
+        let mut todo = vec![(0, 0)];
+        while let Some((q, r)) = todo.pop() {
+            for (dq, dr) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)] {
+                let next = (q + dq, r + dr);
+                if inside(next.0, next.1) && open(next.0, next.1) && reached.insert(next) {
+                    todo.push(next);
+                }
+            }
+        }
+        let total = spawn_window().filter(|&(q, r)| open(q, r)).count();
+        let got = spawn_window().filter(|c| reached.contains(c)).count();
+        (total, got)
+    }
+
+    #[test]
+    fn most_open_cells_around_the_spawn_are_reachable_on_foot() {
+        for seed in 1..=8 {
+            let (open, reached) = spawn_window_reach(seed);
+            assert!(
+                reached * 100 >= open * 90,
+                "seed {seed}: {reached} of {open} open cells reached on foot"
+            );
         }
     }
 }
