@@ -135,4 +135,72 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     await boot('?bot=off', { indexedDB });
     expect(document.body.dataset.run).toBeUndefined();
   });
+
+  // The special marbles (#961): placed before the first move, a reward after a won fight, a Spark's burst.
+  const specials = (): string => document.body.dataset.specials!;
+  it('places the army special marbles before the first move, saves them, and the first move starts the fight', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', pick({ ...newRun(1), specials: [1, 0, 2] }, 0));
+    expect(document.body.dataset.run).toBe('place');
+    expect(map().hidden).toBe(false);
+    expect(map().classList.contains('place')).toBe(true);
+    expect(line()).toBe('Place your special marbles');
+    const kinds = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-kind]')];
+    expect(kinds().map((b) => b.textContent)).toEqual(['Heavy · 1 left', 'Spark · 2 left']);
+    game.click(0, 4); // no type picked: a plain selection
+    expect(specials()).toBe('');
+    game.click(0, 4); // the selection taken back
+    kinds()[0]!.click();
+    expect(kinds()[0]!.getAttribute('aria-pressed')).toBe('true');
+    game.click(0, -4); // a bot marble: nothing
+    game.click(0, 0); // an empty cell: nothing
+    game.click(0, 4);
+    expect(specials()).toBe('0,4,1');
+    expect(kinds()[0]!.textContent).toBe('Heavy · 0 left');
+    kinds()[1]!.click();
+    game.click(1, 3);
+    expect(specials()).toBe('0,4,1 1,3,3');
+    kinds()[1]!.click(); // pressed again: no type picked
+    expect(kinds().map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false']);
+    await game.settle();
+    const again = await boot('?bot=off', { indexedDB }); // a reload keeps the placements
+    expect(document.body.dataset.run).toBe('place');
+    expect(specials()).toBe('0,4,1 1,3,3');
+    play(again, [[-2, 2]], [-3, 2]);
+    expect(document.body.dataset.run).toBe('fight');
+    expect(map().hidden).toBe(true);
+    expect(specials()).toBe('0,4,1 1,3,3');
+  });
+
+  it('a won fight offers a reward, its pick goes back to the map', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...newRun(1), army: 12, path: [0], reward: true });
+    expect(document.body.dataset.run).toBe('reward');
+    expect(line()).toBe('Fight won · pick a reward');
+    const offers = [...map().querySelectorAll<HTMLButtonElement>('button[data-offer]')];
+    expect(offers).toHaveLength(3);
+    const offer = Number(offers[0]!.dataset.offer);
+    offers[0]!.click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(line()).toContain(offer ? 'army 12 marbles, 1 ' : 'army 13 marbles');
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(document.body.dataset.run).toBe('map'); // the reward is saved with the run
+  });
+
+  it.each([false, true])('a Spark pushed off bursts on screen, never with reduced motion (%s)', async (reducedMotion) => {
+    const game = await boot('?bot=off', { reducedMotion });
+    await game.hook('__run', { ...pick({ ...newRun(1), army: 4, specials: [1, 0, 1] }, 0), placed: [[1, 3, 3], [0, 2, 1]] });
+    const column = (k: number): Axial[] => [-4, -3, -2].map((r): Axial => [1, r + k]);
+    for (let k = 0; k < 5; k++) {
+      play(game, k % 2 ? [[-3, 2]] : [[-2, 2]], k % 2 ? [-2, 2] : [-3, 2]);
+      play(game, column(k), [1, -1 + k]);
+    }
+    expect(document.body.dataset.sparks).toBe(reducedMotion ? undefined : '1');
+    await game.settle();
+    expect(document.body.dataset.run).toBe('lost');
+    expect(specials()).toBe('0,2,1'); // the Heavy stayed, the Spark went off
+  });
 });
