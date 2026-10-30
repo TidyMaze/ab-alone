@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { bossIds, newEncounter, newEngine } from './engine';
 import { BOT_NODES, drawReasonName, Session, sideName, statusName, type EncounterLike, type EngineLike, type Result, type State, type ToolError } from './game';
-import { formatMove, fromRecord, parseMove, toRecord } from './notation';
+import { formatMove, fromRecord, fromRecords, parseMove, toRecord } from './notation';
 
 function value<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(`expected a value, got ${JSON.stringify(result.error)}`);
@@ -276,7 +276,7 @@ describe('play_move', () => {
     expect(last.state.status).toBe('draw');
     expect(last.state.draw_reason).toBe('repetition');
     expect(last.state.last_moves).toEqual(['(2,2)>SW', '(2,-1)>NW', '(1,3)>NE', '(2,-2)>SE', '(2,2)>SW', '(2,-1)>NW']);
-    expect(value(game.legalMoves())).toEqual({ to_move: 'black', moves: [], announces: {}, count: 0 });
+    expect(value(game.legalMoves())).toEqual({ to_move: 'black', moves: [], announces: {}, free: [], count: 0 });
     expect(failure(game.playMove({ move: '(1,3)>NE' })).code).toBe('game_over');
   });
 
@@ -408,6 +408,37 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
     const hull = session();
     value(hull.newGame({ boss: 'hull' }));
     expect(value(hull.legalMoves()).announces).toEqual({});
+  });
+
+  test('the Echo offers the agent a free move: listed in legal_moves.free, playing it keeps the turn, no reply (#958)', () => {
+    const game = session();
+    value(game.newGame({ boss: 'echo', seed: 7 }));
+    expect(value(game.legalMoves()).free).toEqual([]);
+    const { reply } = value(game.playMove({ move: '(1,3)>NE' }));
+    const reference = newEncounter('echo', 7);
+    reference.play(record('(1,3)>NE'));
+    reference.play(record(reply!));
+    const free = fromRecords(reference.free_moves()).map(formatMove);
+    expect(free).toHaveLength(1);
+    const legal = value(game.legalMoves());
+    expect(legal.free).toEqual(free);
+    expect(legal.moves).toContain(free[0]);
+    expect(legal.announces[free[0]!]).toBeUndefined();
+    const taken = value(game.playMove({ move: free[0]! }));
+    expect(taken).toMatchObject({ played: free[0], reply: null, bonuses: [] });
+    expect(taken.state.to_move).toBe('black');
+    expect(value(game.legalMoves()).free).toEqual([]);
+    expect(value(game.playMove({ move: value(game.legalMoves()).moves[0]! })).reply).not.toBeNull();
+  });
+
+  test('legal_moves.free is empty against the bot and the other bosses', () => {
+    const hull = session();
+    value(hull.newGame({ boss: 'hull' }));
+    value(hull.playMove({ move: '(1,3)>NE' }));
+    expect(value(hull.legalMoves()).free).toEqual([]);
+    const bot = session();
+    value(bot.newGame({}));
+    expect(value(bot.legalMoves()).free).toEqual([]);
   });
 
   test('resign against a boss: the fight is lost', () => {
