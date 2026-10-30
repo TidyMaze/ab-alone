@@ -1776,6 +1776,7 @@ drawProps = (): void => {
     if (!screen && def.id !== 'log-recorder' && !def.id.includes('neon')) {
       mesh.visible = !currentBay;
     }
+    if (def.id.startsWith('neon-gantry')) mesh.visible = false; // no ceiling to hang on (#956): its lights stay
     if (def.id.includes('neon') && currentBay) {
       if (def.id === 'corner-neon-nw') {
         mesh.position.set(-8.4, 5.2, -17.35);

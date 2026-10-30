@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { DIST_MAX, DIST_MIN, POLAR_MIN, viewPosition } from './camera';
 import {
   applyDeckAtmosphere,
   applyPbrToMesh,
@@ -185,7 +186,7 @@ describe('roomloader PBR pipeline', () => {
     expect(conduitMesh.material).toBe(bay!.materials.conduit);
     expect(terminalMesh.visible).toBe(false);
     expect(screenMesh.visible).toBe(false);
-    expect(ribMesh.material).toBe(bay!.materials.grate);
+    expect(ribMesh.parent).toBeNull(); // no ceiling over the play area (#956)
     expect((hazardMesh.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0xd9822b);
     expect((moonMesh.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0xffffff);
     expect((moonMesh.material as THREE.MeshStandardMaterial).fog).toBe(false);
@@ -215,6 +216,39 @@ describe('roomloader PBR pipeline', () => {
     const shipped = await names(await read('../public/assets/pbr/spaceship-bay.glb'));
     expect(shipped).toHaveLength(28);
     expect(shipped).toEqual(await names(await read('../models/spaceship-bay.glb'))); // the materials are picked by these names
+  });
+
+  it('leaves nothing of the bay between a raised, zoomed-out camera and the board (#956)', async () => {
+    const shipped = '../public/assets/pbr/spaceship-bay.glb'; // a variable: vite rewrites a literal new URL() to a served one
+    const glb = new Uint8Array(await readFile(new URL(shipped, import.meta.url))).buffer;
+    const gltfLoader = { loadAsync: async () => meshoptLoader().parseAsync(glb, '') };
+    const bay = (await loadSpaceshipBay('/assets/pbr/', gltfLoader as any, { loadAsync: async () => new THREE.Texture() }))!;
+    bay.scene.updateMatrixWorld(true);
+    const solid: THREE.Mesh[] = [];
+    bay.scene.traverse((o) => (o as THREE.Mesh).isMesh && o.visible && solid.push(o as THREE.Mesh));
+    for (const mesh of solid) (mesh.material as THREE.Material).side = THREE.DoubleSide;
+    const boxes = solid.map((mesh) => new THREE.Box3().setFromObject(mesh)); // a ray tests the triangles of the boxes it meets
+    // The board's rim, its corners at 5, and its centre, from every side, at every height from the highest the orbit
+    // allows down to half way (polar 1), every zoom up to the widest.
+    const board = [new THREE.Vector3(), ...Array.from({ length: 12 }, (_, k) => new THREE.Vector3(5 * Math.cos((k * Math.PI) / 6), 0, 5 * Math.sin((k * Math.PI) / 6)))];
+    const ray = new THREE.Raycaster();
+    const between = new Set<string>();
+    const hit = new THREE.Vector3();
+    for (let polar = POLAR_MIN; polar <= 1; polar += 0.05)
+      for (let distance = DIST_MIN; distance <= DIST_MAX; distance += 1)
+        for (let azimuth = 0; azimuth < 2 * Math.PI; azimuth += Math.PI / 12) {
+          const { x, y, z } = viewPosition({ azimuth, polar, distance, aside: 0 });
+          const eye = new THREE.Vector3(x, y, z);
+          for (const point of board) {
+            const to = point.clone().sub(eye);
+            ray.set(eye, to.clone().normalize());
+            ray.far = to.length();
+            const near = solid.filter((_, i) => (ray.ray.intersectBox(boxes[i]!, hit)?.distanceTo(eye) ?? Infinity) < ray.far);
+            // The board's own point on the deck is not in the way: only a hit short of it.
+            for (const hit of ray.intersectObjects(near, false)) if (hit.distance < ray.far - 0.5) between.add(hit.object.name);
+          }
+        }
+    expect([...between]).toEqual([]);
   });
 
   it('returns null if GLB fails to load', async () => {

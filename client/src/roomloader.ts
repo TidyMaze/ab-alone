@@ -152,6 +152,10 @@ export async function loadSpaceshipBay(
     });
 
     const sceneGroup = gltf.scene;
+    // No ceiling over the play area (#956): a raised, zoomed-out camera looked at the board through its ribs and rails.
+    const ceiling: THREE.Object3D[] = [];
+    sceneGroup.traverse((child) => /^(gantry_arch_rib|crane_rail)/i.test(child.name) && ceiling.push(child));
+    for (const piece of ceiling) piece.removeFromParent();
 
     sceneGroup.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
