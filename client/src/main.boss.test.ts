@@ -58,20 +58,22 @@ function hover(game: Game, cell: Axial | null): void {
 const gesture = (): boolean => dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
 const cues = (game: Game): string[] => game.hook<string[]>('__tellCues');
 
-// Ply by ply, one marble each there and back twice: the start position a third time at ply 8, a draw by repetition,
+// Move by move against The Echo, whose mirror of each move is a bonus move for the other side (#859): Black up, White
+// east, Black east, White east, Black east bring a position back a third time, a draw by repetition at the 5th move,
 // which is a defeat against a boss (as e2e/fight-end.ts). ?bot=off plays both sides.
-const THERE_AND_BACK: [number, number, number, number][] = [
+const ECHO_DRAW: [number, number, number, number][] = [
   [0, 2, 0, 1],
-  [0, -2, 0, -1],
-  [0, 1, 0, 2],
-  [0, -1, 0, -2],
+  [0, -1, 1, -1],
+  [-1, 1, 0, 1],
+  [0, -1, 1, -1],
+  [-1, 1, 0, 1],
 ];
 function loseByRepetition(game: Game): void {
-  for (const [q, r, tq, tr] of [...THERE_AND_BACK, ...THERE_AND_BACK]) {
+  for (const [q, r, tq, tr] of ECHO_DRAW) {
     game.click(q, r);
     game.click(tq, tr);
   }
-  expect(game.hook('__plies')).toBe(8);
+  expect(game.hook('__plies')).toBe(5);
 }
 const DAY = Date.parse('2027-03-25T08:00:00Z'); // its daily boss is The Echo, with 13 bosses (#947)
 const NEXT_DAY = Date.parse('2027-03-26T08:00:00Z');
@@ -123,10 +125,10 @@ describe('main.ts boss fights', () => {
     expect(byId('daily-card').hidden).toBe(true);
     const boss = byId('hud').querySelector('.boss')!;
     expect(boss.querySelector('strong')!.textContent).toBe('The Echo');
-    expect([...boss.querySelectorAll('.notch')].map((n) => n.textContent)).toEqual(['P1', 'P2', 'P3']);
+    expect([...boss.querySelectorAll('.notch')].map((n) => n.textContent)).toEqual(['P1', 'P2']);
     expect(boss.querySelector('.notch.active')!.textContent).toBe('P1');
     expect(boss.querySelector('.goal')!.textContent).toBe(
-      'Goal: It mirrors your move. Eject 6 to win; lose 6 or draw to lose.',
+      'Goal: Every move is mirrored for free for the other side, both ways; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.',
     );
     expect(boss.querySelector('.result')).toBeNull();
     expect(boss.querySelector('.tell')).toBeNull(); // The Echo draws no tell on the board
@@ -151,7 +153,7 @@ describe('main.ts boss fights', () => {
     expect(bar.hidden).toBe(false);
     expect(bar.querySelector('.name')!.textContent).toBe('The Echo');
     expect(bar.querySelectorAll('.frag')).toHaveLength(6);
-    expect(bar.querySelectorAll('.frag.step')).toHaveLength(2); // P2 and P3 begin at a step
+    expect(bar.querySelectorAll('.frag.step')).toHaveLength(1); // P2 begins at a step
     expect(bar.querySelectorAll('.frag.empty')).toHaveLength(0);
     fightBoss(game, 'The Ballast Mind');
     expect(bar.querySelector('.name')!.textContent).toBe('The Ballast Mind');
@@ -313,7 +315,7 @@ describe('main.ts boss fights', () => {
     const game = await boot('?bot=off');
     byId('setting-flat-hud').click();
     fightBoss(game, 'The Echo');
-    expect(game.hud()).toContain('Boss phase: 1 of 3');
+    expect(game.hud()).toContain('Boss phase: 1 of 2');
     expect(game.hud()).toContain('Tell: none');
     fightBoss(game, 'The Choir');
     expect(game.hud()).toContain('Tell: Next army: Alto');
@@ -396,7 +398,7 @@ describe('main.ts daily challenge', () => {
     loseByRepetition(game);
     expect(card.hidden).toBe(false);
     expect(text.value).toBe(
-      'AB-ALONE daily 2027-03-25: The Echo\nDefeat in 8 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
+      'AB-ALONE daily 2027-03-25: The Echo\nDefeat in 5 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
     );
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

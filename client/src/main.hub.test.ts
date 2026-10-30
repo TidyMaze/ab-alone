@@ -81,6 +81,23 @@ const THERE_AND_BACK: [number, number, number, number][] = [
   [0, 1, 0, 2],
   [0, -1, 0, -2],
 ];
+// Against The Echo each move's mirror is a bonus move for the other side (#859): Black up, then east and back east, a
+// position a third time at the 5th move, a draw by repetition (a defeat against a boss). The page plays both sides.
+const ECHO_DRAW: [number, number, number, number][] = [
+  [0, 2, 0, 1],
+  [0, -1, 1, -1],
+  [-1, 1, 0, 1],
+  [0, -1, 1, -1],
+  [-1, 1, 0, 1],
+];
+async function loseToTheEcho(game: Game): Promise<void> {
+  for (const [ply, [q, r, tq, tr]] of ECHO_DRAW.entries()) {
+    game.click(q, r);
+    game.click(tq, tr);
+    game.frame(5000); // the slide ends
+    await until(game, () => game.hook('__plies') === ply + 1);
+  }
+}
 type Play = (q: number, r: number, tq: number, tr: number) => Promise<void>;
 async function repeat(game: Game, white?: Play): Promise<void> {
   for (const [ply, [q, r, tq, tr]] of [...THERE_AND_BACK, ...THERE_AND_BACK].entries()) {
@@ -382,7 +399,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(data().deck).toBe('mess');
     expect(game.hud()).toContain('The Echo');
     expect(back().hidden).toBe(true); // the fight is on
-    await repeat(game);
+    await loseToTheEcho(game);
     expect(game.hud()).toContain('Defeat');
     expect(back().hidden).toBe(false);
     expect(back().textContent).toBe('Back to the ship');
