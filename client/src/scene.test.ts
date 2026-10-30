@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { RADIUS, VANISHED, cellIndex } from './board';
-import { resetView, type View } from './camera';
+import { framing, resetView, type View } from './camera';
 import { DECK_PARTICLES } from './deck';
 import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
@@ -187,6 +187,7 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.camera.position.x).toBeLessThan(0);
   });
 
+  // Held upright the board sits lower by framing's shift, leaving the top to the HUD and the buttons (#227).
   it('puts the target of the view, the board centre, in the middle of the window at any size, bug #957', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
     const target = { x: 0.25, y: 0, z: -Math.sqrt(3) / 4 };
@@ -196,12 +197,13 @@ describe('SceneRenderer (#632)', () => {
       [812, 375], // phone sideways
     ] as const) {
       sr.frameCamera(width, height);
+      const middle = height / 2 + framing(width, height).shift;
       sr.applyView(resetView(), null, { tier: 'high', clear: false, deck: 'mess' });
       expect(sr.cellToScreen(0, 0, width, height).x).toBeCloseTo(width / 2, 6);
-      expect(sr.cellToScreen(0, 0, width, height).y).toBeCloseTo(height / 2, 6);
+      expect(sr.cellToScreen(0, 0, width, height).y).toBeCloseTo(middle, 6);
       sr.applyView({ ...resetView(), azimuth: 1, target }, null, { tier: 'high', clear: false, deck: 'mess' });
       expect(sr.cellToScreen(0.5, -0.5, width, height).x).toBeCloseTo(width / 2, 6);
-      expect(sr.cellToScreen(0.5, -0.5, width, height).y).toBeCloseTo(height / 2, 6);
+      expect(sr.cellToScreen(0.5, -0.5, width, height).y).toBeCloseTo(middle, 6);
     }
   });
 

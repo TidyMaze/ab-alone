@@ -131,9 +131,9 @@ const halfWidth = (fov: number, width: number, height: number) => Math.tan((fov 
 
 describe('framing, bug #227', () => {
   it('a window at least as wide as tall keeps the default view', () => {
-    expect(framing(1280, 720)).toEqual({ fov: FOV });
-    expect(framing(812, 375)).toEqual({ fov: FOV });
-    expect(framing(600, 600)).toEqual({ fov: FOV });
+    expect(framing(1280, 720)).toEqual({ fov: FOV, shift: 0 });
+    expect(framing(812, 375)).toEqual({ fov: FOV, shift: 0 });
+    expect(framing(600, 600)).toEqual({ fov: FOV, shift: 0 });
   });
 
   it('a window taller than wide sees as wide as a square one, so the whole board fits its width', () => {
@@ -148,6 +148,11 @@ describe('framing, bug #227', () => {
       expect(halfWidth(fov, w, h)).toBeCloseTo(square, 9);
     }
     expect(framing(599, 600).fov).toBeCloseTo(FOV, 0); // no jump at the square
+  });
+
+  it('a window taller than wide moves the board down by a quarter of the spare height, for the HUD and buttons', () => {
+    expect(framing(375, 812).shift).toBe((812 - 375) / 4);
+    expect(framing(768, 1024).shift).toBe(64);
   });
 });
 

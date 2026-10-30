@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { axialTo3D } from './board';
-import { middle } from './camera';
+import { framing, middle } from './camera';
 import { DUAL_CELLS } from './dual';
 import { boot, type Game } from './test/harness';
 
 // Bug #957: the board's centre sits in the middle of the window on every view a fight opens on and on Reset view, the
 // HUD plate does not push it aside (#695 is gone): the player folds the plate instead. For The Dual Room the centre is
-// the middle between its two rooms.
+// the middle between its two rooms. Held upright the board sits lower by framing's shift, leaving the top to the HUD and
+// the buttons (#227).
 
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const SIZES = [
@@ -42,6 +43,7 @@ describe('main.ts the board centred in the window (#957)', () => {
     it(`a fight opens, and Reset view goes back, on the board centre in the middle of a ${width}x${height} window`, async () => {
       windowOf(width, height);
       const game = await boot('?bot=off');
+      const centreY = height / 2 + framing(width, height).shift;
       for (const [boss, [q, r]] of [
         ['The Choir', [0, 0]],
         ['The Pulsar', [0, 0]],
@@ -49,11 +51,11 @@ describe('main.ts the board centred in the window (#957)', () => {
       ] as const) {
         fight(game, boss);
         expect(drawn(game, q, r).x).toBeCloseTo(width / 2, 3);
-        expect(drawn(game, q, r).y).toBeCloseTo(height / 2, 3);
+        expect(drawn(game, q, r).y).toBeCloseTo(centreY, 3);
         document.querySelector('canvas')!.dispatchEvent(new WheelEvent('wheel', { deltaY: -300 }));
         byId('reset-view').click();
         expect(drawn(game, q, r).x).toBeCloseTo(width / 2, 3);
-        expect(drawn(game, q, r).y).toBeCloseTo(height / 2, 3);
+        expect(drawn(game, q, r).y).toBeCloseTo(centreY, 3);
       }
     });
 });

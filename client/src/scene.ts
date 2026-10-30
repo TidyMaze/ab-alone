@@ -275,9 +275,10 @@ export class SceneRenderer {
   }
 
   frameCamera(width: number, height: number): void {
+    const { fov, shift } = framing(width, height);
     this.camera.aspect = width / height;
-    this.camera.fov = framing(width, height).fov;
-    this.camera.updateProjectionMatrix();
+    this.camera.fov = fov;
+    this.camera.setViewOffset(width, height, 0, -shift, width, height);
   }
 
   applyView(view: View, reading: View | null, context: ViewContext): void {

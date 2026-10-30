@@ -22,12 +22,13 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.m
 export const clampPolar = (a: number): number => clamp(a, POLAR_MIN, POLAR_MAX);
 export const clampDistance = (d: number): number => clamp(d, DIST_MIN, DIST_MAX);
 
-// The vertical field of view in degrees for a window. A window taller than wide keeps the horizontal view of a square
-// one, so the whole board fits the width of a phone held upright (#227). The board's centre stays in the middle (#957).
-export function framing(width: number, height: number): { fov: number } {
-  if (width >= height) return { fov: FOV };
+// The vertical field of view in degrees and how far down the picture is moved, in pixels, for a window.
+// A window taller than wide keeps the horizontal view of a square one, so the whole board fits the width
+// of a phone held upright, and the board sits lower to leave the top to the HUD and the buttons (#227).
+export function framing(width: number, height: number): { fov: number; shift: number } {
+  if (width >= height) return { fov: FOV, shift: 0 };
   const half = Math.tan((FOV * Math.PI) / 360) * (height / width);
-  return { fov: (360 / Math.PI) * Math.atan(half) };
+  return { fov: (360 / Math.PI) * Math.atan(half), shift: (height - width) / 4 };
 }
 
 // A pointer that moved farther than the threshold since it went down is dragging, not clicking.
@@ -48,12 +49,13 @@ export function middle(points: readonly Vec3[]): Vec3 {
 
 // The view drawn back along its own line, never closer, until every point lies inside a window of this size, within
 // FIT_MARGIN of its half size from the edges (#691): The Pulsar's beacons stand off the board's corners. At most DIST_MAX.
-// The board's centre stays in the middle of the window, the HUD plate folds out of the way instead (#957).
+// The board's centre stays in the middle of the window's width, the HUD plate folds out of the way instead (#957).
 export const FIT_MARGIN = 0.03;
 export function fitView(view: View, points: readonly Vec3[], width: number, height: number): View {
-  const { fov } = framing(width, height);
+  const { fov, shift } = framing(width, height);
   const tanV = Math.tan((fov * Math.PI) / 360);
   const tanH = tanV * (width / height);
+  const lift = (2 * shift) / height; // the picture moved down, in half heights
   const { x: tx, y: ty, z: tz } = view.target ?? { x: 0, y: 0, z: 0 };
   const fits = (distance: number): boolean => {
     const eye = viewPosition({ ...view, distance });
@@ -65,7 +67,7 @@ export function fitView(view: View, points: readonly Vec3[], width: number, heig
       const d = { x: p.x - tx - eye.x, y: p.y - ty - eye.y, z: p.z - tz - eye.z };
       const depth = d.x * f.x + d.y * f.y + d.z * f.z;
       const sx = (d.x * right.x + d.z * right.z) / (depth * tanH);
-      const sy = (d.x * up.x + d.y * up.y + d.z * up.z) / (depth * tanV);
+      const sy = (d.x * up.x + d.y * up.y + d.z * up.z) / (depth * tanV) - lift;
       return Math.max(Math.abs(sx), Math.abs(sy)) <= 1 - FIT_MARGIN;
     });
   };
