@@ -127,7 +127,7 @@ deck has a lighting preset (data, not code).
 
 | Tier | Backend | Contents |
 |---|---|---|
-| Full | WebGPU / desktop high tier | Whole chain, PMREM reflections, 32-segment discs & 32x16 spheres, DPR up to 1.5, stepped down a quarter (floor 1.0) while the median frame takes over 20 ms (#843), MSAA only under a drawn ratio of 1.5 or on a touch screen, whose tiled GPU resolves it in tile memory (#844, #868, `client/src/main.ts`), bloom blurred at quarter resolution, every second frame (#844, #894) |
+| Full | WebGPU / desktop high tier | Whole chain, PMREM reflections, 32-segment discs & 32x16 spheres, DPR up to 1.5, stepped down a quarter (floor 1.0) while the median frame takes over 20 ms (#843), MSAA only on a touch screen, whose tiled GPU resolves it in tile memory (#868, `client/src/main.ts`); FXAA ends the post-process under a drawn ratio of 1.5 (#857, `smoothEdges` in `client/src/quality.ts`), bloom blurred at quarter resolution, every second frame (#844, #894) |
 | Reduced | weak device (under 4 cores or under 4 GB), reduced motion or user choice | Fog, DPR up to 1.5 like the full chain, stepped down by the same adaptive resolution (#843), 16-segment discs & 16x12 spheres, no PMREM reflections, fewer dynamic lights |
 | Clear board | any | No fog, no post chain, flat lighting (SPEC section 5 toggle, also the accessibility mode), a setting in the menu behind the settings cog (#277) |
 

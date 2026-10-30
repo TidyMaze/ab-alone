@@ -199,7 +199,8 @@ const AUTOMATED_PIXEL_RATIO = 0.5;
 export const renderPixelRatio = (dpr: number, automated: boolean): number =>
   Math.min(dpr, automated ? AUTOMATED_PIXEL_RATIO : 1.5);
 
-// FXAA smooths the edges (#857) where a drawn pixel is big, a ratio under 1.5, and the renderer has no MSAA (a touch screen keeps it).
+// FXAA smooths the edges (#857) where a drawn pixel is big (a ratio under 1.5) and the renderer has no MSAA, which
+// a touch screen keeps.
 export const smoothEdges = (drawnRatio: number, msaa: boolean): boolean => drawnRatio < 1.5 && !msaa;
 
 // The adaptive resolution (#843): while the median frame of the last ones takes more than 20 ms (under 50 FPS), the
