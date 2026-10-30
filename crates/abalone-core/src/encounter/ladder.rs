@@ -516,10 +516,10 @@ mod tests {
         let ids: Vec<_> = LadderBoss::ALL.iter().map(|b| b.id()).collect();
         assert_eq!(
             ids,
-            ["echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer"]
+            ["echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer", "dual"]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
-        assert_eq!(budgets, [100, 3000, 300, 1500, 100, 3000, 3000]);
+        assert_eq!(budgets, [100, 3000, 300, 1500, 100, 3000, 3000, 3000]);
     }
 
     #[test]
@@ -640,6 +640,22 @@ mod tests {
             1,
             "the first egg after ply 4"
         );
+    }
+
+    #[test]
+    fn the_dual_room_answers_through_its_own_move_and_the_player_reads_the_returns() {
+        let mut a = Arena::new(LadderBoss::Dual, 3);
+        let mut enc = dual_start(3);
+        assert_eq!(a.game().board(), enc.game().board());
+        let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
+        a.play(&mv).unwrap();
+        enc.play(&mv).unwrap();
+        assert_eq!(a.boss_move(), dual_move(&enc));
+        let reply = a.boss_move().unwrap();
+        a.play(&reply).unwrap();
+        enc.play(&reply).unwrap();
+        let read = search_hooked(enc.game(), 200, DEFAULT_WEIGHTS, &|_| true, &dual_step);
+        assert_eq!(player_move(&a, 0, 9, 0, 200), read.map(|r| r.mv));
     }
 
     #[test]
