@@ -422,6 +422,24 @@ describe('SceneRenderer (#632)', () => {
     expect((pipeline.outputNode as any).node.bNode.getResolutionScale()).toBe(0.25);
   });
 
+  it('ends with FXAA on the tone-mapped picture when asked: no MSAA, the edges stay smooth (#857)', () => {
+    const smooth = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera(), true)!;
+    expect(smooth.outputColorTransform).toBe(false);
+    expect((smooth.outputNode as any).constructor.name).toBe('FXAANode');
+    const plain = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera())!;
+    expect(plain.outputColorTransform).toBe(true);
+  });
+
+  it.each([
+    ['a 1x desktop without MSAA', 1, 0, false],
+    ['a 1x touch screen with MSAA', 1, 4, true],
+    ['a screen drawn at 1.5 or more', 2, 0, true],
+  ])('smooths with FXAA on %s only below a ratio of 1.5 and without MSAA (#857)', (_, devicePixelRatio, samples, plain) => {
+    const renderer = Object.assign(createMockRenderer(), { samples });
+    const { pipeline } = new SceneRenderer({ renderer, devicePixelRatio });
+    expect(pipeline!.outputColorTransform).toBe(plain);
+  });
+
   it('blurs the glow every second frame, the last glow staying on screen between two runs: the bloom is a third of a phone\'s frame (#894)', () => {
     const blur = vi.spyOn(BloomNode.prototype, 'updateBefore').mockImplementation(() => {});
     const { bloom } = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera())!;
