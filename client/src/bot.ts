@@ -16,6 +16,8 @@ export interface BotRequest {
   evaluate?: boolean;
   /** Set in a rogue-lite fight (#798): the worker replays the history on an engine of this army. */
   army?: number;
+  /** With `army`: the special marbles placed before the fight, `[q, r, kind]` (#961). */
+  placed?: number[][];
 }
 
 export interface BossRef {
@@ -74,10 +76,23 @@ export function botBudget(search: string, automated: boolean): number {
   return automated && Number.isInteger(n) && n > 0 ? n : BOT_NODES;
 }
 
+/** The engine of a request: a plain game, or a rogue-lite fight of `army` marbles with its special marbles `placed`
+ * (#961), so the bot searches the board the page plays. */
+export function engineFor<E extends { place_special(q: number, r: number, kind: number): void }>(
+  make: { new (): E; with_army(army: number): E },
+  army?: number,
+  placed: number[][] = [],
+): E {
+  if (army === undefined) return new make();
+  const engine = make.with_army(army);
+  for (const [q, r, kind] of placed) engine.place_special(q!, r!, kind!);
+  return engine;
+}
+
 /** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,
-  makeEngine: (army?: number) => EngineLike,
+  makeEngine: (army?: number, placed?: number[][]) => EngineLike,
   makeEncounter: (id: string, seed: number) => EncounterLike,
 ): BotResponse {
   if (req.boss) {
@@ -88,7 +103,7 @@ export function answer(
     for (const mv of req.history) fight.play(Int32Array.from(mv));
     return { id: req.id, move: Array.from(req.player ? fight.player_move() : fight.boss_move()) };
   }
-  const engine = makeEngine(req.army);
+  const engine = makeEngine(req.army, req.placed);
   for (const mv of req.history) engine.play(Int32Array.from(mv));
   if (req.evaluate) return { id: req.id, score: engine.evaluate(req.nodes) };
   return { id: req.id, move: Array.from(engine.best_move(req.nodes)) };
@@ -138,8 +153,9 @@ export async function askBot(
   difficultyPercent?: number,
   player?: boolean,
   army?: number,
+  placed?: number[][],
 ): Promise<number[]> {
-  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player, army })).move;
+  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player, army, placed })).move;
 }
 
 /** Page side: the search score of the position after `history`, for the side to move. */

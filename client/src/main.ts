@@ -21,7 +21,7 @@ import {
 } from './board';
 import { extendPath, releaseDir } from './drag';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
-import { askBot, askEval, botBudget } from './bot';
+import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
 import { bootFailed } from './bootfail';
@@ -1986,12 +1986,8 @@ const saves = new LocalSaves(gameStore, navigator.storage);
 // no bot (#565).
 const resumed = await saves.load(worker ? undefined : false, () => new Engine());
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
-// The army's fight with its special marbles placed (#961).
-function armyEngine(army: number, placed: number[][]): Engine {
-  const game = Engine.with_army(army);
-  for (const [q, r, kind] of placed) game.place_special(q!, r!, kind!);
-  return game;
-}
+// The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
+const armyEngine = (army: number, placed: number[][]): Engine => engineFor(Engine, army, placed);
 const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), armyEngine);
 const resumedRun = await loadSavedRun();
 if (resumed) {
@@ -2175,7 +2171,7 @@ async function botTurn(): Promise<void> {
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army),
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
