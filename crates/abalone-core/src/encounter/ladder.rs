@@ -431,6 +431,24 @@ mod tests {
     }
 
     #[test]
+    fn the_pro_takes_the_echos_free_move_first() {
+        use crate::moves::Direction::{NW, SE};
+        let mut a = echo_arena(
+            &[(0, 2), (-3, 4), (2, 2)],
+            &[(0, -2), (3, -4)],
+            Player::White,
+        );
+        let step = |q, r, dir| Move {
+            cells: vec![(q, r)],
+            dir,
+        };
+        a.play(&step(0, -2, NW)).unwrap();
+        assert_eq!(player_move(&a, 0, 9, 0, 1000), Some(step(0, 2, SE)));
+        // Its opening moves stay random.
+        assert!(player_move(&a, 0, 0, 1, 1000).is_some());
+    }
+
+    #[test]
     fn every_boss_opens_tell_safe() {
         for boss in LadderBoss::ALL {
             let a = Arena::new(boss, 0);
