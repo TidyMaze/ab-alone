@@ -72,10 +72,12 @@ test('a lost enemy shell clacks', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-sound', 'clack');
 });
 
-// #438: four sliders, one per bus, all at 100 % by default. window.__gain(bus) is the gain of a bus, 0 before a gesture.
+// #438: four sliders, one per bus. Under Playwright (navigator.webdriver) the music starts at 0, so a test run is silent (#990);
+// effects and voice at 100 %. window.__gain(bus) is the gain of a bus, 0 before a gesture.
 test('Sound opens four sliders at defaults, each moves its own bus, and the menu closes back on its items', async ({ page }) => {
   await open(page);
-  for (const name of ['Music', 'Effects', 'Voice'] as const) await expect(await slider(page, name)).toHaveValue('100');
+  await expect(await slider(page, 'Music')).toHaveValue('0');
+  for (const name of ['Effects', 'Voice'] as const) await expect(await slider(page, name)).toHaveValue('100');
   await expect(await slider(page, 'Ambience')).toHaveValue('5');
   await expect(page.getByRole('button', { name: 'Clear board' })).toBeHidden(); // the sliders in place of the items
   const music = await slider(page, 'Music');
@@ -148,8 +150,8 @@ test('Sound is no loose HUD button: it is in the settings menu, its sliders reac
   await sound.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('slider', { name: 'Music' })).toBeFocused(); // the first slider takes the focus
-  await page.keyboard.press('ArrowLeft');
-  await expect(page.getByRole('slider', { name: 'Music' })).toHaveValue('95');
+  await page.keyboard.press('ArrowRight'); // the music starts at 0 under Playwright (#990): an arrow moves it up one step
+  await expect(page.getByRole('slider', { name: 'Music' })).toHaveValue('5');
 });
 
 // The hum (world.md section 7) runs under every game once a gesture has made the audio context, through the

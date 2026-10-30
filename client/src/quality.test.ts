@@ -16,6 +16,7 @@ import {
   smoothEdges,
   nextPixelRatio,
   readFlatHud,
+  readHudFolded,
   readTranscript,
   readReducedMotion,
   readGlassSkin,
@@ -36,6 +37,7 @@ import {
   writeSafeMode,
   writeVolume,
   writeFlatHud,
+  writeHudFolded,
   writeTranscript,
   writeReducedMotion,
   writeSkin,
@@ -100,7 +102,7 @@ describe('fogSettings', () => {
   const views: View[] = [];
   for (let k = 0; k < 24; k++) {
     for (const polar of [POLAR_MIN, resetView().polar, POLAR_MAX]) {
-      for (const distance of [DIST_MIN, resetView().distance, DIST_MAX]) views.push({ azimuth: (k * Math.PI) / 12, polar, distance, aside: 0 });
+      for (const distance of [DIST_MIN, resetView().distance, DIST_MAX]) views.push({ azimuth: (k * Math.PI) / 12, polar, distance });
     }
   }
 
@@ -260,6 +262,19 @@ describe('transcript storage (#516): on unless the player turned it off', () => 
   });
 });
 
+describe('folded HUD panel storage (#957): unfolded unless the player folded it', () => {
+  it('writes then reads back, under its own key, unfolded by default and when storage throws', () => {
+    const s = memoryStorage();
+    expect(readHudFolded(s)).toBe(false);
+    writeHudFolded(s, true);
+    expect(s.data.get('ab-alone.hud-folded')).toBe('on');
+    expect(readHudFolded(s)).toBe(true);
+    writeHudFolded(s, false);
+    expect(readHudFolded(s)).toBe(false);
+    expect(readHudFolded(throwing)).toBe(false);
+  });
+});
+
 describe('flat HUD storage (#391): off unless the player turned it on', () => {
   it('defaults to off', () => {
     expect(readFlatHud(memoryStorage())).toBe(false);
@@ -375,6 +390,24 @@ describe('mix storage, the four volume sliders (#438)', () => {
   it('falls back to 100 % when storage throws or is missing', () => {
     expect(readMix(throwing).effects).toBe(100);
     expect(readMix(null).effects).toBe(100);
+  });
+  it('under automation the music slider defaults to 0, the other three keep their defaults (#990)', () => {
+    expect(readMix(memoryStorage(), true)).toEqual({ music: 0, ambience: 5, effects: 100, voice: 100 });
+  });
+  it('a normal browser keeps the music slider at 100 % (#990)', () => {
+    expect(readMix(memoryStorage(), false)).toEqual({ music: 100, ambience: 5, effects: 100, voice: 100 });
+  });
+  it('a music slider saved by the player wins over the automated default (#990)', () => {
+    expect(readMix(memoryStorage({ 'ab-alone.volume.music': '40' }), true).music).toBe(40);
+    expect(readMix(memoryStorage({ 'ab-alone.volume.music': '100' }), true).music).toBe(100);
+  });
+  it('a garbage stored music value under automation falls back to 0 (#990)', () => {
+    expect(readMix(memoryStorage({ 'ab-alone.volume.music': 'loud' }), true).music).toBe(0);
+  });
+  it('under automation the music default is 0 when storage throws or is missing (#990)', () => {
+    expect(readMix(throwing, true).music).toBe(0);
+    expect(readMix(null, true).music).toBe(0);
+    expect(readMix(throwing, true).effects).toBe(100);
   });
   it('does not throw when writing to a broken or missing storage', () => {
     expect(() => writeVolume(throwing, 'music', 0)).not.toThrow();

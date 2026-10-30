@@ -242,26 +242,13 @@ describe('main.ts The Pulsar (#675)', () => {
     Object.assign(window, { innerWidth: width, innerHeight: height });
     onTestFinished(() => void Object.assign(window, inner));
   }
-  /** The pulsars and counters drawn outside a window of this size or over `plate`. */
-  function hidden(game: Game, width: number, height: number, plate: Rect = { x: 0, y: 0, width: 0, height: 0 }): number[] {
+  /** The pulsars and counters drawn outside a window of this size. */
+  function hidden(game: Game, width: number, height: number): number[] {
     const off = (r: Rect): boolean => r.x < 0 || r.y < 0 || r.x + r.width > width || r.y + r.height > height;
-    const under = (r: Rect): boolean =>
-      r.x < plate.x + plate.width && r.x + r.width > plate.x && r.y < plate.y + plate.height && r.y + r.height > plate.y;
     const rects = game.hook<{ pulsar: Rect; counter: Rect }[]>('__pulsarRects');
     expect(rects).toHaveLength(6);
-    return rects.flatMap(({ pulsar, counter }, id) => ([pulsar, counter].some((r) => off(r) || under(r)) ? [id] : []));
+    return rects.flatMap(({ pulsar, counter }, id) => ([pulsar, counter].some(off) ? [id] : []));
   }
-
-  // Bug #695: on a phone held sideways the HUD plate covered the west pulsar.
-  it('the fight opens on a view where no pulsar or counter lies under the HUD plate', async () => {
-    windowOf(812, 375);
-    const game = await boot('?bot=off');
-    const plate = { x: 16, y: 16, width: 230, height: 175 }; // as Chromium lays it out on that phone
-    vi.spyOn(byId('hud'), 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect(plate));
-    fightPulsar(game);
-    plies(game, 0, 1);
-    expect(hidden(game, 812, 375, plate)).toEqual([]);
-  });
 
   // Bug #696: the view was fitted at the start of the fight and on Reset view only, so turning a phone upright put the
   // side pulsars off screen. A new window size fits the view again until the player moves the camera himself; then

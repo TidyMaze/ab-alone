@@ -32,7 +32,12 @@
     </div>
     <div id="chrome">
       <div id="boss-bar" hidden></div>
-      <div id="hud" role="status" aria-live="polite"></div>
+      <div id="hud-dock">
+        <div id="hud" role="status" aria-live="polite"></div>
+        <button id="hud-fold" type="button" aria-label="HUD panel" aria-expanded="true" aria-controls="hud" title="Fold the panel" disabled>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
       <div id="openworld-hud" role="status">Open world: arrows or a click on a next cell to roll, Esc to leave.</div>
       <div id="fps" aria-hidden="true" hidden></div>
       <div id="online">

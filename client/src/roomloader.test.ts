@@ -237,7 +237,7 @@ describe('roomloader PBR pipeline', () => {
     for (let polar = POLAR_MIN; polar <= 1; polar += 0.05)
       for (let distance = DIST_MIN; distance <= DIST_MAX; distance += 1)
         for (let azimuth = 0; azimuth < 2 * Math.PI; azimuth += Math.PI / 12) {
-          const { x, y, z } = viewPosition({ azimuth, polar, distance, aside: 0 });
+          const { x, y, z } = viewPosition({ azimuth, polar, distance });
           const eye = new THREE.Vector3(x, y, z);
           for (const point of board) {
             const to = point.clone().sub(eye);

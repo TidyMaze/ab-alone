@@ -115,7 +115,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #settings[aria-expanded='true'], #settings-menu button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #settings:focus-visible, #settings-menu button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #settings-box { position: relative; display: flex; flex-direction: column; align-items: flex-end; }
-#hud, #settings-box { zoom: var(--ui-scale); } /* the HUD and the menu grow with the UI scale (#382), the board does not */
+#hud, #hud-fold, #settings-box { zoom: var(--ui-scale); } /* the HUD, its fold button and the menu grow with the UI scale (#382), the board does not */
 #settings-menu {
   position: absolute; z-index: 1; top: calc(100% + 0.25rem); right: 0; width: max-content;
   display: flex; flex-direction: column; gap: 0.125rem; align-items: stretch;
@@ -432,6 +432,25 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #hud { max-width: min(36rem, 100%); }
 }
 
+/* The fold button of the plate (#957), a 44 px square beside its top right corner; held upright, where the plate may
+   span the window, in that corner, beside the turn line. Folded, the plate leaves the screen but not the page, so a
+   screen reader still hears the turn and the score: only the button stays, a small tab. */
+#hud-dock { position: relative; display: flex; align-items: flex-start; gap: 0.25rem; min-width: 0; }
+#hud-fold {
+  flex: none; display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0;
+  cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
+}
+#hud-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#hud-fold[aria-expanded='false'] svg { transform: scaleX(-1); }
+#hud-dock[data-folded] #hud {
+  position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+@media (orientation: portrait) {
+  #hud-fold { position: absolute; top: 0; right: 0; }
+  #hud .turn { padding-right: 2.75rem; }
+}
+#hud-dock[data-folded] #hud-fold { position: static; }
+
 /* The boss health bar (#788), top centre in a boss fight: the name over a bar of one red fragment per ejection needed.
    An emptied fragment is an outline; the fragment that starts a phase has a light tick on its left edge, a mark beside
    the colour. The bar lets every press through to the board; the fragments drain with a short transition, none under
@@ -701,4 +720,4 @@ body[data-reading] #log { visibility: visible; }
 /* The Open world mode (#962) draws its own scene: the board's HUD steps aside for its plate. */
 #openworld-hud { display: none; position: fixed; bottom: 1rem; left: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); }
 body[data-openworld] #openworld-hud { display: block; }
-body[data-openworld] :is(#hud, #eval, #log, #replay-bar, #online .group) { display: none !important; }
+body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group) { display: none !important; }

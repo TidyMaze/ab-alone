@@ -196,6 +196,7 @@ import {
   hasParticles,
   readClearBoard,
   readFlatHud,
+  readHudFolded,
   readFps,
   readReducedMotion,
   readGlassSkin,
@@ -217,6 +218,7 @@ import {
   smoothEdges,
   writeClearBoard,
   writeFlatHud,
+  writeHudFolded,
   writeFps,
   writeReducedMotion,
   writeGlassSkin,
@@ -321,13 +323,12 @@ let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
-// its counter fit the window too (#691), off the HUD plate (#695). The Dual Room's (#947) looks along its void, the two
-// rooms side by side, drawn back until both fit.
+// its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
+// side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 const fightView = (): View => {
-  const plate = [document.getElementById('hud')!.getBoundingClientRect()];
-  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, plate);
-  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight, plate);
+  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
+  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
   return resetView(activeRadius());
 };
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
@@ -628,7 +629,7 @@ applySafe();
 // The sounds (docs/specs/world.md section 7) through four buses, each with its volume slider in the menu (#438). The
 // audio context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
 // way down, a touch on the way up, and moving a slider up from 0 starts it too (setVolume).
-const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store));
+const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store, navigator.webdriver));
 // The sound twin of each boss tell (#358), only when the tell appears or changes. The cues played, read by the e2e tests.
 const tells = new TellWatch();
 const tellCues: Tell[] = [];
@@ -3638,6 +3639,20 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
+// The left HUD panel folds to a tab with its button alone (#957), saved. Folded, it stays in the page for screen readers.
+const hudFold = document.getElementById('hud-fold') as HTMLButtonElement;
+function foldHud(folded: boolean): void {
+  document.getElementById('hud-dock')!.toggleAttribute('data-folded', folded);
+  hudFold.setAttribute('aria-expanded', String(!folded));
+  hudFold.title = folded ? 'Unfold the panel' : 'Fold the panel';
+}
+foldHud(readHudFolded(store));
+hudFold.addEventListener('click', () => {
+  const folded = hudFold.getAttribute('aria-expanded') === 'true';
+  writeHudFolded(store, folded);
+  foldHud(folded);
+});
+hudFold.disabled = false;
 
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
@@ -4343,7 +4358,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   note();
   refresh();
   if (coop) {
-    view = fitted = fightView(); // as in a solo fight (#695)
+    view = fitted = fightView(); // as in a solo fight
     applyView();
   }
 }

@@ -33,6 +33,7 @@ const SAFE_KEY = 'ab-alone.safe-mode';
 const SCALE_KEY = 'ab-alone.ui-scale';
 const MOTION_KEY = 'ab-alone.reduced-motion';
 const FLAT_KEY = 'ab-alone.flat-hud';
+const FOLD_KEY = 'ab-alone.hud-folded';
 const TRANSCRIPT_KEY = 'ab-alone.transcript';
 
 // The same rule on a phone as on a desktop (#882): only a weak device or reduced motion drops to the low tier.
@@ -94,11 +95,14 @@ export const writeClearBoard = (store: Store, on: boolean): void => write(store,
 // toggle: a Sound off saved before them sets every slider without a value of its own to 0.
 const DEFAULT_MIX: Mix = { music: 100, ambience: 5, effects: 100, voice: 100 };
 const volumeKey = (bus: Bus): string => `ab-alone.volume.${bus}`;
-export const readMix = (store: Store): Mix => {
+// Under automation (navigator.webdriver, #990) the music starts at 0: a browser driven by Playwright would play it out loud.
+// A volume the player saved still wins.
+export const readMix = (store: Store, automated = false): Mix => {
   const muted = read(store, SOUND_KEY) === 'off';
   const volume = (bus: Bus): number => {
     const saved = read(store, volumeKey(bus)) ?? '';
-    return /^\d+$/.test(saved) && Number(saved) <= 100 ? Number(saved) : muted ? 0 : DEFAULT_MIX[bus];
+    if (/^\d+$/.test(saved) && Number(saved) <= 100) return Number(saved);
+    return muted || (automated && bus === 'music') ? 0 : DEFAULT_MIX[bus];
   };
   return { music: volume('music'), ambience: volume('ambience'), effects: volume('effects'), voice: volume('voice') };
 };
@@ -139,6 +143,9 @@ export const writeReducedMotion = (store: Store, on: boolean): void => write(sto
 // The flat HUD fallback (#391): off unless the player turned it on.
 export const readFlatHud = (store: Store): boolean => read(store, FLAT_KEY) === 'on';
 export const writeFlatHud = (store: Store, on: boolean): void => write(store, FLAT_KEY, on ? 'on' : 'off');
+// The left HUD panel folded to a tab (#957): unfolded unless the player folded it.
+export const readHudFolded = (store: Store): boolean => read(store, FOLD_KEY) === 'on';
+export const writeHudFolded = (store: Store, on: boolean): void => write(store, FOLD_KEY, on ? 'on' : 'off');
 // The audio log transcript (#516): on unless the player turned it off.
 export const readTranscript = (store: Store): boolean => read(store, TRANSCRIPT_KEY) !== 'off';
 export const writeTranscript = (store: Store, on: boolean): void => write(store, TRANSCRIPT_KEY, on ? 'on' : 'off');
