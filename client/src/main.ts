@@ -4581,9 +4581,10 @@ runPanel.addEventListener('click', (e) => {
 runButton.addEventListener('click', beginRun);
 runButton.disabled = false; // listener ready (#146)
 // The Open world (#962, docs/specs/openworld.md): its own scene, drawn by this renderer in place of the board's while it
-// is on. Its entry is in the mode menu only when the page has ?openworld, or ?openworld=<seed> for a given world.
+// is on. Its entry is in the mode menu for everyone (#1000); ?openworld=<seed> fixes the seed, else a click rolls one.
 const openWorldButton = document.getElementById('openworld') as HTMLButtonElement;
-const openWorldSeed = new URLSearchParams(location.search).get('openworld');
+const openWorldParam = new URLSearchParams(location.search).get('openworld') ?? '';
+const openWorldFixedSeed = openWorldParam.trim() === '' ? NaN : Number(openWorldParam);
 const openWorld = new OpenWorldMode(
   (seed, cx, cy) => world_chunk(seed, cx, cy),
   (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
@@ -4594,12 +4595,12 @@ const openWorld = new OpenWorldMode(
     ),
   () => reducedMotion(),
 );
-openWorldButton.hidden = openWorldSeed === null;
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');
   leaveOnline();
   leaveRoyale();
-  openWorld.enter(Number(openWorldSeed) || crypto.getRandomValues(new Uint32Array(1))[0]!, innerWidth, innerHeight);
+  const seed = Number.isFinite(openWorldFixedSeed) ? openWorldFixedSeed : crypto.getRandomValues(new Uint32Array(1))[0]!;
+  openWorld.enter(seed, innerWidth, innerHeight);
   openWorldButton.blur(); // the menu's arrow keys would take the hero's
 });
 openWorldButton.disabled = false; // listener ready (#146)
