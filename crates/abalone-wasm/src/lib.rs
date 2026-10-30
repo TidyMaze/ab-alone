@@ -67,16 +67,22 @@
 //!   - Placement: one record of 2 integers `[place, points]` per seat in seat order, places from
 //!     `1`, empty while the game runs.
 //!   - State hash: 16 lowercase hex digits, the same on every peer for the same state.
+//! - Rogue-lite map (`run_map`): records of 5 integers `[act, row, col, kind, links]` per node,
+//!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
+//!   an act). `links` is a bit mask of the columns of the next row of the same act the node leads
+//!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
 
 pub mod convert;
 pub mod encounter;
 pub mod game;
 pub mod royale;
+pub mod run;
 
 pub use convert::{draw_reason_code, result_code, status_code, MOVE_STRIDE};
 pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::Engine;
 pub use royale::Royale;
+pub use run::run_map;
 
 #[cfg(test)]
 mod tests {

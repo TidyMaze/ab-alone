@@ -22,6 +22,12 @@ impl Engine {
         Engine { game: Game::new() }
     }
 
+    /// A rogue-lite fight (docs/specs/roguelite.md): the army's `army` marbles, clamped to 4..=14,
+    /// against the bot's 14. White wins once the army is down to 3 marbles.
+    pub fn with_army(_army: u8) -> Engine {
+        unimplemented!()
+    }
+
     /// Side to move: `1` Black, `2` White.
     pub fn to_move(&self) -> u8 {
         side_code(self.game.to_move())
@@ -107,6 +113,16 @@ mod tests {
         let engine = Engine::new();
         assert_eq!(engine.to_move(), 1);
         assert_eq!(engine.status(), 0);
+    }
+
+    #[test]
+    fn with_army_starts_the_army_fight() {
+        let engine = Engine::with_army(9);
+        assert_eq!(count(&engine.board(), 1), 9);
+        assert_eq!(count(&engine.board(), 2), 14);
+        assert_eq!(engine.win_ejections(2), 6);
+        assert_eq!(Engine::with_army(5).win_ejections(2), 2);
+        assert_eq!(Engine::with_army(14).board(), Engine::new().board());
     }
 
     #[test]
