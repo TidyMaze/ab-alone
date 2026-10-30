@@ -58,6 +58,26 @@ test('two held arrows roll the hero on the diagonal, #977', async ({ page }) => 
   await page.keyboard.up('ArrowUp');
 });
 
+// #976: the wheel zooms the Open world camera out to twice the distance and back, and the hero still rolls at the widest zoom.
+test('the wheel zooms the Open world out and back, and the hero still rolls, #976', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const zoom = () => page.evaluate(() => document.body.dataset.openworldZoom);
+  await expect.poll(zoom).toBe('1');
+  const box = (await page.locator('canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 2000);
+  await expect.poll(zoom).toBe('2');
+  await page.mouse.wheel(0, -2000);
+  await expect.poll(zoom).toBe('1');
+  await page.mouse.wheel(0, 2000);
+  await expect.poll(zoom).toBe('2');
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,-1');
+});
+
 test('the entry is not in the mode menu without the flag, #965', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();

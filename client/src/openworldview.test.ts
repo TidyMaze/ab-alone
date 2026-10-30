@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { axialTo3D } from './board';
-import { CHUNK, World } from './openworld';
+import { axialTo3D, type Axial } from './board';
+import { CHUNK, neighbours, World } from './openworld';
 import { GROUNDS, loadModels, LOOK, OpenWorldView, topOf, variety } from './openworldview';
 
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
@@ -119,5 +119,59 @@ describe('the troop and the enemies on screen', () => {
     const at = new THREE.Vector3().setFromMatrixPosition(m);
     expect(at.x).toBeCloseTo(axialTo3D(6, 5).x);
     expect(at.z).toBeCloseTo(axialTo3D(6, 5).z);
+  });
+});
+
+describe('the zoom of the Open world camera (#976)', () => {
+  const hero = (view: OpenWorldView) => view.scene.getObjectByName('hero')!;
+  const back = (view: OpenWorldView) => view.camera.position.z - hero(view).position.z;
+
+  it('starts at the closest view and zooms out to twice the distance, no further nor closer', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([2, 1]);
+    expect(view.zoom).toBe(1);
+    expect(view.camera.position.y).toBeCloseTo(14);
+    expect(back(view)).toBeCloseTo(11);
+    view.zoomBy(0.5); // closer than the default: no
+    expect(view.zoom).toBe(1);
+    view.zoomBy(1.5);
+    expect(view.zoom).toBeCloseTo(1.5);
+    expect(view.camera.position.y).toBeCloseTo(21);
+    view.zoomBy(10);
+    expect(view.zoom).toBe(2);
+    expect(view.camera.position.y).toBeCloseTo(28);
+    expect(back(view)).toBeCloseTo(22);
+  });
+
+  it('moves the fog and the far plane with the zoom, so the edge of the loaded chunks stays hidden', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([2, 1]);
+    const fog = view.scene.fog as THREE.Fog;
+    expect([fog.near, fog.far, view.camera.far]).toEqual([18, 34, 80]);
+    view.zoomBy(2);
+    expect([fog.near, fog.far, view.camera.far]).toEqual([36, 68, 160]);
+  });
+
+  it('keeps the camera behind the hero as it walks, at the zoom it has', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([2, 1]);
+    view.zoomBy(2);
+    view.show([3, 1]);
+    expect(view.camera.position.y).toBeCloseTo(28);
+    expect(back(view)).toBeCloseTo(22);
+  });
+
+  it('picks the cell under the pointer at every zoom', () => {
+    for (const level of [1, 1.5, 2]) {
+      const view = new OpenWorldView(new World(bytes));
+      view.resize(800, 600);
+      view.show([2, 1]);
+      view.zoomBy(level);
+      for (const cell of [[2, 1], ...neighbours([2, 1])] as Axial[]) {
+        const p = axialTo3D(cell[0], cell[1]);
+        const ndc = new THREE.Vector3(p.x, hero(view).position.y, p.z).project(view.camera);
+        expect(view.pick(ndc.x, ndc.y)).toEqual(cell);
+      }
+    }
   });
 });

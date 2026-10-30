@@ -9,6 +9,14 @@ import { CHUNK, cellAtPoint, chunkOf, type Terrain, type Tile, type World } from
 /** Chunks loaded on each side of the hero's chunk. */
 const REACH = 2;
 const CAPACITY = (2 * REACH + 1) ** 2 * CHUNK * CHUNK;
+/** The closest camera: up and back from the hero. The zoom multiplies both, up to the widest view, `MAX_ZOOM` times as far. */
+const CAMERA_UP = 14;
+const CAMERA_BACK = 11;
+const MAX_ZOOM = 2;
+/** The fog closes in from the camera, and the far plane of the camera stops past it; both scale with the zoom (#976). */
+const FOG_NEAR = 18;
+const FOG_FAR = 34;
+const CAMERA_FAR = 80;
 
 /** The ground columns: one instanced mesh each. A blocked terrain stands on the ground of its `GROUND` entry. */
 export const GROUNDS = ['water', 'sand', 'grass', 'rock', 'peak'] as const;
@@ -73,7 +81,9 @@ export const variety = (q: number, r: number): number => (((Math.imul(q, 7385609
 
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(40, 1, 0.1, 80);
+  readonly camera = new THREE.PerspectiveCamera(40, 1, 0.1, CAMERA_FAR);
+  private readonly fog = new THREE.Fog(0x0b1220, FOG_NEAR, FOG_FAR);
+  private level = 1;
   private readonly grounds = {} as Record<Ground, THREE.InstancedMesh>;
   private readonly props = {} as Record<Prop, THREE.InstancedMesh>;
   private readonly hero: THREE.Mesh;
@@ -85,7 +95,7 @@ export class OpenWorldView {
 
   constructor(private readonly world: World) {
     this.scene.background = new THREE.Color(0x0b1220);
-    this.scene.fog = new THREE.Fog(0x0b1220, 18, 34);
+    this.scene.fog = this.fog;
     this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 1.6));
     const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
     sun.position.set(-6, 12, 4);
@@ -142,8 +152,29 @@ export class OpenWorldView {
     const p = axialTo3D(at[0], at[1]);
     this.hero.position.set(p.x, topOf(GROUND[tile.terrain], tile.height) + MARBLE, p.z);
     this.place(this.troop, troop);
-    this.camera.position.set(p.x, 14, p.z + 11);
+    this.frame();
+  }
+
+  /** The zoom of the camera: 1 is the closest view, `MAX_ZOOM` the widest. */
+  get zoom(): number {
+    return this.level;
+  }
+
+  /** Zooms the camera by `scale`, more than 1 further out and less than 1 closer, never past the closest or the widest view. */
+  zoomBy(scale: number): void {
+    this.level = Math.min(MAX_ZOOM, Math.max(1, this.level * scale));
+    this.frame();
+  }
+
+  /** Puts the camera at the zoom's distance from the hero, looking at it, and the fog and the far plane with it. */
+  private frame(): void {
+    const k = this.level;
+    this.camera.position.set(this.hero.position.x, CAMERA_UP * k, this.hero.position.z + CAMERA_BACK * k);
     this.camera.lookAt(this.hero.position);
+    this.camera.far = CAMERA_FAR * k;
+    this.camera.updateProjectionMatrix();
+    this.fog.near = FOG_NEAR * k;
+    this.fog.far = FOG_FAR * k;
     this.camera.updateMatrixWorld();
   }
 

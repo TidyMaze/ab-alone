@@ -25,6 +25,7 @@ afterEach(() => {
   delete body().openworldAt;
   delete body().openworldTroop;
   delete body().openworldEnemies;
+  delete body().openworldZoom;
 });
 
 // Screen direction of a step, `[-1 | 0 | 1, -1 | 0 | 1]` for left/right and up/down, from the ground layout of `axialTo3D`.
@@ -159,6 +160,22 @@ describe('the Open world mode', () => {
     m.enter(1, 800, 600);
     expect(m.key('ArrowUp')).toBe(true);
     expect(m.hero!.at).toEqual([1, -1]); // single Up from the spawn, Left is not held
+  });
+
+  it('zooms the Open world camera, and an entry starts at the closest view again, #976', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.zoom(2);
+    expect(body().openworldZoom).toBe('2');
+    const camera = (): THREE.Camera => {
+      const render = vi.fn();
+      m.frame(render);
+      return render.mock.calls[0]![1] as THREE.Camera;
+    };
+    expect(camera().position.y).toBeCloseTo(28);
+    m.enter(1, 800, 600);
+    expect(body().openworldZoom).toBe('1');
+    expect(camera().position.y).toBeCloseTo(14);
   });
 
   it('ignores a resize before it is entered', () => {

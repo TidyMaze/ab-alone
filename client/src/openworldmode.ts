@@ -68,6 +68,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldAt;
     delete document.body.dataset.openworldTroop;
     delete document.body.dataset.openworldEnemies;
+    delete document.body.dataset.openworldZoom;
   }
 
   resize(width: number, height: number): void {
@@ -98,6 +99,13 @@ export class OpenWorldMode {
     this.roll(this.view!.pick((x / width) * 2 - 1, 1 - (y / height) * 2));
   }
 
+  /** Zooms the Open world camera by `scale`: more than 1 further out, less than 1 closer (#976). */
+  zoom(scale: number): void {
+    this.view!.zoomBy(scale);
+    this.dirty = true;
+    this.mark(document.body.dataset.openworld!);
+  }
+
   /** Draws the scene when something changed since the last draw. */
   frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void): void {
     if (!this.dirty) return;
@@ -117,5 +125,6 @@ export class OpenWorldMode {
     document.body.dataset.openworldAt = this.hero!.at.join(',');
     document.body.dataset.openworldTroop = this.hero!.troop.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldEnemies = String(this.view!.enemyCount);
+    document.body.dataset.openworldZoom = String(this.view!.zoom);
   }
 }

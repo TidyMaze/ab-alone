@@ -3491,7 +3491,11 @@ const span = (): number => {
 };
 
 canvas.addEventListener('pointerdown', (e) => {
-  if (openWorld.active) return openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
+  if (openWorld.active) {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); // two fingers pinch the Open world's camera (#976)
+    if (pointers.size === 1) openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
+    return;
+  }
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) {
@@ -3507,6 +3511,14 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   const last = pointers.get(e.pointerId);
+  if (openWorld.active) {
+    if (last) {
+      const prevSpan = pointers.size === 2 ? span() : 0;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) openWorld.zoom(pinchScale(prevSpan, span())); // the Open world's camera, not the board's (#976)
+    }
+    return;
+  }
   if (last && press) {
     if (freeCam.active) {
       freeCam.onPointerMove(e.clientX - last.x, e.clientY - last.y);
@@ -3618,6 +3630,7 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
+    if (openWorld.active) return openWorld.zoom(wheelScale(e.deltaY)); // the Open world's camera, not the board's (#976)
     view = zoom(view, wheelScale(e.deltaY));
     applyView();
   },

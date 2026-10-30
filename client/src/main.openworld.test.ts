@@ -80,4 +80,33 @@ describe('the Open world mode', () => {
     press('ArrowRight'); // single, not up-right with the Up still held: (0, -2)
     expect(data().openworldAt).toBe('0,-2');
   });
+
+  it('zooms the Open world out with the wheel and with a pinch, #976', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    const canvas = document.querySelector('canvas')!;
+    const zoomOf = () => Number(data().openworldZoom);
+    const wheel = (deltaY: number) => canvas.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
+    const finger = (type: string, id: number, x: number) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: 300, bubbles: true });
+      Object.defineProperty(e, 'pointerId', { value: id });
+      canvas.dispatchEvent(e);
+    };
+    wheel(1000);
+    expect(zoomOf()).toBe(2);
+    wheel(-1000);
+    expect(zoomOf()).toBe(1);
+    finger('pointermove', 9, 100); // a hover, no finger down: nothing
+    finger('pointerdown', 1, 300);
+    finger('pointermove', 1, 310); // one finger moves: nothing
+    expect(zoomOf()).toBe(1);
+    finger('pointerdown', 2, 700); // two fingers 400 apart
+    finger('pointermove', 2, 500); // 200 apart: the camera goes back
+    expect(zoomOf()).toBe(2);
+    finger('pointermove', 2, 700); // 400 apart again: closer
+    expect(zoomOf()).toBe(1);
+    finger('pointerup', 1, 300);
+    finger('pointerup', 2, 700);
+  });
 });
