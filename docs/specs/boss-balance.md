@@ -64,7 +64,7 @@ centre weight (3 to 4 of 10, worse). A lower free-move budget helped but moves w
 budget in a chaotic way (budget 200: 9 of 10 at 10x, budget 300: 3 of 10 at 10x, 7 of 10 at 4000
 nodes), so it is not a stable knob.
 
-### The Echo rework (#859): bonus mirrors both ways, not winnable by the ladder, not tuned
+### The Echo rework (#859): bonus mirrors both ways, not winnable by the ladder, not tuned (tuned in #951, below)
 
 New rules (game-design.md section 7.4): the mirror of each move is a free bonus move for the other
 side, both ways, P2 at 3 ejections echoes one older never-echoed move, no P3; each bonus ply counts
@@ -516,6 +516,45 @@ Reply time through wasm (release build in Node, 6 seeds of 80 plies, boss replie
 machine, ms): The Overseer 315 average, 679 at the 95th percentile, 7382 at most (3000 nodes);
 measured in the same run, the Hull 746 / 2026 / 41282 and the Pulsar 986 / 4812 / 24050.
 
+### The Echo tuned (#951): 100 nodes, winnable again at pro level
+
+**Cause.** Replaying the 10 ladder games of #949 (1x): every loss is a draw at the 100-ply
+no-ejection cap, none by repetition, and no position is ever seen a third time. In 7 of 10 games the
+board is point-symmetric after 49 of the 51 main moves: each move's mirror is played for the other
+side, so every move of both searches scores 0, and both sides shuffle their back marbles until the
+cap (51 main moves, each with its bonus). In the other games the symmetry breaks, but the 400-node
+boss reads two plies and still holds them to the cap. Measured one at a time (player 400 nodes, 10
+seeds): seeing a bonus win at once in the tree (`search.rs`) gives the same 10 games, 0 of 10; boss
+budget 1600: 0; 400: 0; 200: 7; 100: 8.
+
+**Change.** `ECHO_NODE_BUDGET` 400 to 100 (one ply). Two engine bugs found on the way are fixed,
+each with its test, though neither moved the ladder: the search sees a win a bonus gives the side
+to move at its own node, not one ply later; `Game::replace_board` runs the repetition check again.
+No rule of #859 changes; nothing depends on the player's bonus being forced (#958 will make it an
+offer, measure again then). `engine_version` 12 (boss replies change).
+
+| Player budget | Before wins /10 (400-node boss) | After wins /10 (100-node boss) | After /20 | Median plies after | Deaths after (10 seeds) |
+|---|---|---|---|---|---|
+| 100 (1x of the new budget) | | 1 | | 152.5 | push 5, draw 4 |
+| 400 (1x of the old budget, the #949 player) | 0 | **8** | 10 | 113 | draw 1, ply cap 1 |
+| 1000 (10x, pro level) | | **7** | 9 | 104 | draw 3 |
+| 4000 (10x of the old budget) | 0 | 7 | 10 | 102 | draw 3 |
+
+Command: `LADDER_X=<1|10> cargo run --release --example ladder -- echo` (`LADDER_NODES=<400|4000>`
+for the old budgets, `LADDER_SEEDS=20` for 20 seeds), seeds 0 to 9 (0 to 19), 300 plies at most.
+The pro level wins 7 of 10, the target; on 20 seeds it is 9 of 20, so it sits at the low edge. At
+equal budgets (1x) the player wins 1 of 10: a one-ply player against a one-ply boss.
+
+What is left: in the lost games the symmetry breaks and the player leads (up to 5 to 2), but
+cannot finish before the cap. Tried on the boss and not kept (player 400 nodes, 20 seeds): a boss
+that only steps toward the centre while the board is symmetric breaks the lock (10 to 13 of 20 at
+50 to 200 nodes, 0 of 20 at 400), a boss that likes contact with the player's marbles (9 to 13 of
+20 at 50 to 200 nodes, 0 to 4 of 20 at 400). Neither beats the budget alone by more than one seed.
+
+Reply time (native release build, 6 seeds of up to 80 plies, the ladder player at 1000 nodes,
+boss replies only, 208 replies, ms): 100 nodes 2.9 average, 4.7 at the 95th percentile, 13.9 at
+most; 400 nodes on the same positions 71.0 / 137.8 / 162.6.
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
@@ -526,7 +565,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 
 | Boss | Seed | Player budget | Moves |
 |---|---|---|---|
-| echo | 28 (the first of 2 wins in 40 seeds after the rework, #859) | 4000 | 143 |
+| echo | 0 (10x, the first won seed against the 100-node boss, #951) | 1000 | 101 |
 | hull | 0 | 30000 | 89 |
 | choir | 0 | 15000 | 93 |
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
