@@ -132,7 +132,9 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const tree = mesh(view, 'prop-tree').geometry;
     const mountain = new THREE.BoxGeometry();
     view.useModels({ low: { mountain }, high: {} });
-    expect(mesh(view, 'prop-mountain').geometry).toBe(mountain);
+    // the mesh draws the model's shape, from its own copy of the geometry (#991)
+    expect(mesh(view, 'prop-mountain').geometry.getAttribute('position').count).toBe(mountain.getAttribute('position').count);
+    expect(mesh(view, 'prop-mountain').geometry).not.toBe(mountain);
     expect(mesh(view, 'prop-tree').geometry).toBe(tree);
   });
 
