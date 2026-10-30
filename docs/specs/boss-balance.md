@@ -596,7 +596,9 @@ offer. `engine_version` 14.
 **Which pro.** Three policies measured at 10x (1000 nodes), seeds 0 to 9 (0 to 19), 300 plies at
 most: taking every safe free move 6 of 10 (13 of 20, median 160.5 plies, draws 4): a quiet free
 move gives the Echo its mirrored board back, the lock of #951; never taking one 7 of 10 (16 of
-20, median 85); taking only the ejecting ones 7 of 10 (16 of 20, median 85), kept.
+20, median 85); taking only the ejecting ones 7 of 10 (16 of 20, median 85), kept. Re-measured
+after the pro checks a free move's repetition with itself still to move and never plays a quiet
+free move as its own (review of #996): the same numbers, row for row.
 
 | Player budget | Before wins /10 (#951, forced bonus) | After wins /10 (offered bonus) | After /20 | Median plies after | Deaths after (10 seeds) |
 |---|---|---|---|---|---|
