@@ -311,7 +311,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #mode-menu { flex: 1 0 100%; min-width: 0; flex-flow: row wrap; gap: 0.5rem; }
   #boss-list:not([hidden]), #coop-list:not([hidden]) { flex: 1 0 100%; flex-flow: row nowrap; overflow-x: auto; margin: -4px; padding: 4px; }
   #boss-list button, #coop-list button { flex: none; }
-  #ranked, #openworld { order: 1; }
+  #ranked { order: 1; }
   #mode-menu:has(#coop-list:not([hidden])) #ranked { order: -1; }
 }
 /* Bug #575: on a phone held upright the boss name of the Daily challenge label takes a second line of the 44 px tall
@@ -330,8 +330,10 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #daily-copy { min-height: 2.75rem; }
   #daily-result { max-width: calc(100vw - 32px); }
   #mode-menu button { padding-inline: 0.25rem; min-width: 2.75rem; font-size: 0.75rem; }
-  #daily { padding-block: 0.25rem; }
-  #daily span { display: block; }
+  /* #1000: the label is cut to 104 px (its whole name stays in the title and the accessible name), so the Open world
+     entry fits the row of Rogue-lite and Ship instead of a row of its own over the board. */
+  #daily { padding-block: 0.25rem; max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #daily span { display: block; overflow: hidden; text-overflow: ellipsis; }
 }
 /* Held upright, or in a narrow or short window, each item is its icon only, a 44 px square, so every item fits without
    reaching the board (#414): the name is its aria-label and title. Roomy windows keep icon then label. */

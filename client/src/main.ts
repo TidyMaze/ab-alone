@@ -4068,8 +4068,10 @@ const dailyButton = document.getElementById('daily') as HTMLButtonElement;
 function today(): Daily {
   const daily = dailyFor(utcDay(Date.now()), boss_ids());
   // The boss name is a span: held upright on a phone it takes a line of its own (ui.css, #575).
-  const name = Object.assign(document.createElement('span'), { textContent: boss_name(daily.id)! });
+  const bossName = boss_name(daily.id)!;
+  const name = Object.assign(document.createElement('span'), { textContent: bossName });
   dailyButton.replaceChildren(dailyTitle(daily.day, ''), name);
+  dailyButton.title = dailyTitle(daily.day, bossName); // a phone cuts the label (ui.css, #1000): the whole name stays on hover
   return daily;
 }
 function startDaily(): void {
