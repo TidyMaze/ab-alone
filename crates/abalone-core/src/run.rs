@@ -210,3 +210,49 @@ mod tests {
         assert_eq!(army_game(99).board(), army_game(FULL_ARMY).board());
     }
 }
+
+#[cfg(test)]
+mod plain_games {
+    use crate::encounter::hull::mix;
+    use crate::game::Game;
+    use crate::moves::legal_moves;
+    use crate::search::best_move;
+
+    /// A digest of 24 seeded games of 60 plies, a random legal move and a bot move in turn, on
+    /// the plain rules: the history hashes, the ejections and the outcome of each.
+    fn digest() -> u64 {
+        let mut digest = 0;
+        for seed in 0..24u64 {
+            let mut game = Game::new();
+            let mut state = seed;
+            for ply in 0..60 {
+                if game.outcome().is_some() {
+                    break;
+                }
+                let mv = if ply % 2 == 0 {
+                    state = mix(state);
+                    let moves = legal_moves(game.board(), game.to_move());
+                    moves[(state % moves.len() as u64) as usize].clone()
+                } else {
+                    best_move(&game, 60).expect("a running game has a move")
+                };
+                game.play(&mv).expect("a legal move");
+            }
+            for played in game.history() {
+                digest = mix(digest ^ played.hash);
+            }
+            let [black, white] = [crate::moves::Player::Black, crate::moves::Player::White]
+                .map(|p| u64::from(game.ejected(p)));
+            digest =
+                mix(digest ^ black ^ (white << 8) ^ (u64::from(game.outcome().is_some()) << 16));
+        }
+        digest
+    }
+
+    #[test]
+    fn plain_games_are_bit_for_bit_the_games_before_the_special_marbles() {
+        // Computed on main before #799: any change to the plain rules, the credits or the search
+        // moves it.
+        assert_eq!(digest(), 1811593443741359660);
+    }
+}
