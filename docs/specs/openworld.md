@@ -21,7 +21,8 @@ A-light Explore (#720 to #725), which it does not touch.
 - **Seed**: a chunk comes from the world seed and its coordinates alone (engine splitmix64), so
   the same seed always gives the same world, in any order of visit. Saving a world is its seed.
 - **Relief**: every cell has a height 0 to 3 from smooth value noise. The renderer lifts the cell
-  column by `height * 0.15` and lights it. Relief is a look: it never changes a move or a push.
+  column to `0.2 + 0.2 * height` (water to 0.08) and lights it. The height itself never changes a
+  move or a push: it only picks the terrain, and a terrain that blocks is an obstacle.
 - **Terrain**: from height and a second noise (moisture), one look per cell: **lakes** (water,
   height 0), sand, grass, rock, **mountains** (peaks, height 3). Forests (**trees**, on grass in a
   forest noise, about half its cells) and ruined **walls** (segments of 3 to 6 cells along one of
@@ -39,7 +40,8 @@ A-light Explore (#720 to #725), which it does not touch.
 ## 3. Enemies
 
 Basic enemies only. A group is 1 to 3 loose black marbles in a line on passable cells, placed by
-the seed (about one group per 400 cells), none within 8 cells of the spawn. They hold their
+the seed (about one group per 400 cells), none within 8 cells of the spawn, and a group stays
+inside one chunk, so no two groups share a cell. They hold their
 ground and have no behaviour of their own: they react only when pushed. A marble pushed onto an
 obstacle is a refused push; pushed onto no cell (the edge of the world) it is out for good.
 
@@ -47,9 +49,8 @@ obstacle is a refused push; pushed onto no cell (the edge of the world) it is ou
 
 - **Hero**: one glass marble, moved one cell at a time (click a neighbour, or the arrow keys, as
   in the hub, section 3.5 of `game-design.md`).
-- **Troop**: 6 marbles at the start. After each hero step the troop moves, each marble to the free
-  passable cell nearest to its place in the formation behind the hero (a trail, in the order of
-  the troop). No decision of the player.
+- **Troop**: 6 marbles at the start. After each hero step each troop marble takes the place of the
+  one before it in the trail, and the first takes the cell the hero left. No decision of the player.
 - **Automatic attack**: after its step, the troop attacks when a line of 2 or 3 of its marbles,
   hero included, is next to a smaller line of enemy marbles along that line's axis and the push is
   legal under `rules.md`. It then plays that push. Several are legal: the one that ejects the most

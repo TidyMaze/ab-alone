@@ -47,6 +47,7 @@ On top of it, the ship:
 | 🔥 | **Battle royale** on the Furnace deck: up to 6 seats, hidden orders (commit-reveal), the hull breach closes in, bots fill empty seats | ✅ playable, offline vs 5 bots and online |
 | 🛰️ | **Ship hub**: walk five decks, lifts that open as you beat each deck's boss, game tables, lore terminals, an audio log per deck, a Medal room on the Mess deck | ✅ playable, new players land there |
 | 🏆 | **Ranked** online, Elo and rank tiers | ✅ playable |
+| 🌍 | **Open world**: a generated hex map, a hero marble you walk and a troop that fights on its own, with the same rules ([spec](docs/specs/openworld.md)) | 🚧 behind the flag `openworld` |
 | 🧠 | **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)) | ✅ runs on your machine |
 
 Each boss bends one rule, tells you one move ahead, and has a positional answer on the board.
