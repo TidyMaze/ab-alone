@@ -86,7 +86,7 @@ describe('roguelite', () => {
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false, event: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false, event: false, best: 3 });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
