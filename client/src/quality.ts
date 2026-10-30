@@ -33,6 +33,7 @@ const SAFE_KEY = 'ab-alone.safe-mode';
 const SCALE_KEY = 'ab-alone.ui-scale';
 const MOTION_KEY = 'ab-alone.reduced-motion';
 const FLAT_KEY = 'ab-alone.flat-hud';
+const FOLD_KEY = 'ab-alone.hud-folded';
 const TRANSCRIPT_KEY = 'ab-alone.transcript';
 
 // The same rule on a phone as on a desktop (#882): only a weak device or reduced motion drops to the low tier.
@@ -142,6 +143,9 @@ export const writeReducedMotion = (store: Store, on: boolean): void => write(sto
 // The flat HUD fallback (#391): off unless the player turned it on.
 export const readFlatHud = (store: Store): boolean => read(store, FLAT_KEY) === 'on';
 export const writeFlatHud = (store: Store, on: boolean): void => write(store, FLAT_KEY, on ? 'on' : 'off');
+// The left HUD panel folded to a tab (#957): unfolded unless the player folded it.
+export const readHudFolded = (store: Store): boolean => read(store, FOLD_KEY) === 'on';
+export const writeHudFolded = (store: Store, on: boolean): void => write(store, FOLD_KEY, on ? 'on' : 'off');
 // The audio log transcript (#516): on unless the player turned it off.
 export const readTranscript = (store: Store): boolean => read(store, TRANSCRIPT_KEY) !== 'off';
 export const writeTranscript = (store: Store, on: boolean): void => write(store, TRANSCRIPT_KEY, on ? 'on' : 'off');

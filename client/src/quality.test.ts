@@ -16,6 +16,7 @@ import {
   smoothEdges,
   nextPixelRatio,
   readFlatHud,
+  readHudFolded,
   readTranscript,
   readReducedMotion,
   readGlassSkin,
@@ -36,6 +37,7 @@ import {
   writeSafeMode,
   writeVolume,
   writeFlatHud,
+  writeHudFolded,
   writeTranscript,
   writeReducedMotion,
   writeSkin,
@@ -100,7 +102,7 @@ describe('fogSettings', () => {
   const views: View[] = [];
   for (let k = 0; k < 24; k++) {
     for (const polar of [POLAR_MIN, resetView().polar, POLAR_MAX]) {
-      for (const distance of [DIST_MIN, resetView().distance, DIST_MAX]) views.push({ azimuth: (k * Math.PI) / 12, polar, distance, aside: 0 });
+      for (const distance of [DIST_MIN, resetView().distance, DIST_MAX]) views.push({ azimuth: (k * Math.PI) / 12, polar, distance });
     }
   }
 
@@ -257,6 +259,19 @@ describe('transcript storage (#516): on unless the player turned it off', () => 
     expect(readTranscript(throwing)).toBe(true);
     expect(readTranscript(null)).toBe(true);
     expect(() => writeTranscript(throwing, false)).not.toThrow();
+  });
+});
+
+describe('folded HUD panel storage (#957): unfolded unless the player folded it', () => {
+  it('writes then reads back, under its own key, unfolded by default and when storage throws', () => {
+    const s = memoryStorage();
+    expect(readHudFolded(s)).toBe(false);
+    writeHudFolded(s, true);
+    expect(s.data.get('ab-alone.hud-folded')).toBe('on');
+    expect(readHudFolded(s)).toBe(true);
+    writeHudFolded(s, false);
+    expect(readHudFolded(s)).toBe(false);
+    expect(readHudFolded(throwing)).toBe(false);
   });
 });
 
