@@ -12,8 +12,9 @@ pub const CHUNK: i32 = 16;
 pub const WORLD_CHUNKS: i32 = 64;
 /// Cells within this distance of the spawn cell `(0, 0)` are open grass.
 pub const CLEARING: i32 = 3;
-/// Boulders sit on this share of the open cells left once walls and trees are placed, in thousandths.
-const BOULDER_PER_MILLE: u64 = 20;
+/// Boulders on the open ground that is not low (heights 2, 5 and 6), in thousandths: the same in every biome. The low
+/// ground (heights 3 and 4) takes the density of its biome, see `Biome::boulder_per_mille`.
+const UPLAND_BOULDER_PER_MILLE: f64 = 20.0;
 /// Walls are laid out on a lattice of squares of this many cells.
 const WALL_BLOCK: i32 = 24;
 /// A chunk tries to place `TRIES` enemy groups, each with this chance in thousandths; with the obstacles that refuse some,
@@ -32,6 +33,21 @@ const MOISTURE_WEIGHTS: [f64; 3] = [0.45, 0.35, 0.20];
 /// enemy draws already use the salts 12 to 21, so these start after them.
 const HEIGHT_SALT: u64 = 30;
 const MOISTURE_SALT: u64 = 33;
+/// The temperature field: its salts are `TEMPERATURE_SALT` to `+ 2`, its weights of the macro, meso and micro levels.
+const TEMPERATURE_SALT: u64 = 37;
+const TEMPERATURE_WEIGHTS: [f64; 3] = [0.55, 0.30, 0.15];
+/// The temperature falls by this much per height above the low ground (height 3): the peaks are cold.
+const LAPSE: f64 = 0.04;
+/// Each threshold of the biomes moves by `(micro - 0.5) * JITTER` of a micro-level sample, so a border is ragged.
+const JITTER: f64 = 0.08;
+/// The thresholds of the biomes, measured: the quantiles of the temperature and of the moisture over the land (heights 2
+/// to 7) of the 16 x 16 chunks around the spawn, seeds 1 to 4, that give the shares of the table (`openworld-terrain.md`
+/// section 4). `T_COLD` the 15 % coldest, `T_HOT` the 25 % hottest, `M_HOT` the 60 % driest of the hot land (desert, the
+/// rest badlands), `M_WET` the 42 % wettest of the temperate land (forest, the rest meadow).
+const T_COLD: f64 = 0.2896;
+const T_HOT: f64 = 0.5010;
+const M_HOT: f64 = 0.4943;
+const M_WET: f64 = 0.4632;
 /// Upper bounds of the elevation of heights 1 to 7 (height 0 is below the first). They were found by
 /// measuring the elevation of chunks -8 to 8 of seeds 1 to 4 (`the_eight_height_levels_hold_their_measured_shares`):
 /// their quantiles give the shares of 8, 10, 12, 16, 18, 16, 12 and 8 % per height.
@@ -79,10 +95,9 @@ const RING: [(i32, i32); 30] = [
 /// The elevations a cell can walk on, heights 2 to 6 (not water, not peak). Fixed numbers, not the measured steps,
 /// so that measuring the steps does not move the offsets, which are chosen with them.
 const LAND: std::ops::Range<f64> = 0.45..0.70;
-/// Moisture below `DRY` makes a rock level (5) sand-coloured rock, moisture above `FOREST` makes the grass a
-/// forest zone. Both are quantiles of the moisture, measured like the elevation.
+/// Moisture below `DRY` makes a rock level (5) sand-coloured rock. It is a quantile of the moisture, measured like the
+/// elevation.
 const DRY: f64 = 0.422;
-const FOREST: f64 = 0.519;
 
 /// What a cell looks like and whether it can be entered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,6 +129,29 @@ pub enum Biome {
     Tundra = 2,
     Desert = 3,
     Badlands = 4,
+}
+
+impl Biome {
+    /// The chance that a low-ground grass cell is a tree (one draw per cell, salt 6).
+    fn tree_chance(self) -> f64 {
+        match self {
+            Biome::Meadow => 0.02,
+            Biome::Forest => 0.25,
+            Biome::Tundra => 0.04,
+            Biome::Desert | Biome::Badlands => 0.0,
+        }
+    }
+
+    /// The boulders of a low-ground cell, per mille of its draws (salt 4).
+    fn boulder_per_mille(self) -> f64 {
+        match self {
+            Biome::Meadow => 15.0,
+            Biome::Forest => 15.0,
+            Biome::Tundra => 25.0,
+            Biome::Desert => 30.0,
+            Biome::Badlands => 45.0,
+        }
+    }
 }
 
 /// One cell: its height `0` to `7`, its terrain and its biome.
@@ -316,8 +354,10 @@ struct Window {
     r0: i32,
     /// Elevation, which gives the height.
     height: Field,
-    /// Moisture, which gives the dry rock and the forest zones.
+    /// Moisture, which gives the dry rock and the biomes.
     moisture: Field,
+    /// Temperature, which gives the biomes.
+    temperature: Field,
     /// Whether each cell of the chunk is on a wall, row by row.
     wall: [bool; (CHUNK * CHUNK) as usize],
 }
@@ -350,7 +390,28 @@ impl Window {
             r0,
             height: Field::new(seed, HEIGHT_SALT, q0, r0, HEIGHT_WEIGHTS, macro_shift(seed)),
             moisture: Field::new(seed, MOISTURE_SALT, q0, r0, MOISTURE_WEIGHTS, (0, 0)),
+            temperature: Field::new(seed, TEMPERATURE_SALT, q0, r0, TEMPERATURE_WEIGHTS, (0, 0)),
             wall,
+        }
+    }
+
+    /// The biome of a cell of `height` and `moisture`: the temperature (lower uphill) and the moisture against the thresholds,
+    /// each moved by a micro-level sample of the temperature so the borders are ragged.
+    fn biome(&self, q: i32, r: i32, height: u8, moisture: f64) -> Biome {
+        let jitter = (self.temperature.levels[2].noise(q, r) - 0.5) * JITTER;
+        let temperature = self.temperature.value(q, r) - LAPSE * (f64::from(height) - 3.0);
+        if temperature < T_COLD + jitter {
+            Biome::Tundra
+        } else if temperature > T_HOT + jitter {
+            if moisture < M_HOT + jitter {
+                Biome::Desert
+            } else {
+                Biome::Badlands
+            }
+        } else if moisture >= M_WET + jitter {
+            Biome::Forest
+        } else {
+            Biome::Meadow
         }
     }
 
@@ -369,6 +430,7 @@ impl Window {
             .filter(|&&step| elevation >= step)
             .count() as u8;
         let moisture = self.moisture.value(q, r);
+        let biome = self.biome(q, r, height, moisture);
         let terrain = match height {
             0 | 1 => Terrain::Water,
             2 => Terrain::Sand,
@@ -379,15 +441,19 @@ impl Window {
             _ => Terrain::Peak,
         };
         let open = !terrain.blocked();
-        // A grass cell of a forest zone is a tree one time in four.
-        let forest =
-            terrain == Terrain::Grass && moisture > FOREST && unit(self.seed, 6, q, r) < 0.25;
+        let low = (3..=4).contains(&height);
         let on_wall = self.wall[((r - self.r0) * CHUNK + (q - self.q0)) as usize];
+        // The obstacles of the low ground follow the biome; the uplands and the shore keep the same density everywhere.
+        let (tree, per_mille) = if low {
+            (biome.tree_chance(), biome.boulder_per_mille())
+        } else {
+            (0.0, UPLAND_BOULDER_PER_MILLE)
+        };
         let terrain = if open && on_wall {
             Terrain::Wall
-        } else if forest {
+        } else if terrain == Terrain::Grass && unit(self.seed, 6, q, r) < tree {
             Terrain::Tree
-        } else if open && unit(self.seed, 4, q, r) * 1000.0 < BOULDER_PER_MILLE as f64 {
+        } else if open && unit(self.seed, 4, q, r) * 1000.0 < per_mille {
             Terrain::Boulder
         } else {
             terrain
@@ -395,7 +461,7 @@ impl Window {
         Cell {
             height,
             terrain,
-            biome: Biome::Meadow,
+            biome,
         }
     }
 }
@@ -885,6 +951,7 @@ mod tests {
                 for cell in chunk(seed, cx, cy).unwrap() {
                     hash = fnv(hash, cell.height);
                     hash = fnv(hash, cell.terrain as u8);
+                    hash = fnv(hash, cell.biome as u8);
                 }
                 for group in enemy_groups(seed, cx, cy) {
                     for (q, r) in group {
@@ -903,7 +970,7 @@ mod tests {
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
             world_digest(),
-            4_776_182_566_584_578_878,
+            4_602_184_324_818_820_941,
             "digest of the reference world"
         );
     }
