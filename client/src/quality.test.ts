@@ -5,6 +5,7 @@ import { frameShape } from './frame';
 import {
   drawDue,
   drawWanted,
+  timeDraw,
   fogSettings,
   readClearBoard,
   readFps,
@@ -532,6 +533,22 @@ describe('drawDue', () => {
   it('does not hold a draw a test asked for behind a slow draw, the one that compiled the shaders, bug #435', () => {
     expect(drawDue(1099, 1000, 3000, true, true)).toBe(false);
     expect(drawDue(1100, 1000, 3000, true, true)).toBe(true);
+  });
+});
+
+describe('timeDraw', () => {
+  it('times a draw up to the next animation frame, which software WebGL delays by the GPU time, bug #921', () => {
+    expect(timeDraw({ start: 1000, cost: 5, timed: false }, 2100)).toEqual({ start: 1000, cost: 1100, timed: true });
+  });
+  it('keeps a timed draw as it is on the frames after', () => {
+    const timed = { start: 1000, cost: 1100, timed: true };
+    expect(timeDraw(timed, 3000)).toBe(timed);
+  });
+  it('holds an unasked draw four times the GPU time under automation, an asked one only 100 ms', () => {
+    const last = timeDraw({ start: 1000, cost: 5, timed: false }, 2100);
+    expect(drawDue(5399, last.start, last.cost, false, true)).toBe(false);
+    expect(drawDue(5400, last.start, last.cost, false, true)).toBe(true);
+    expect(drawDue(2100, last.start, last.cost, true, true)).toBe(true);
   });
 });
 

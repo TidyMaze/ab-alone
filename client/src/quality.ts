@@ -175,6 +175,17 @@ const AUTOMATED_DUTY = 4;
 export const drawDue = (now: number, lastStart: number, lastCost: number, asked: boolean, automated: boolean): boolean =>
   !automated || now - lastStart >= Math.max(AUTOMATED_MIN_GAP_MS, asked ? 0 : AUTOMATED_DUTY * lastCost);
 
+// A draw's cost runs from its start to the next animation frame, not to the end of render(): the GPU works after render()
+// returns, and the frame after a draw comes late by its GPU time, about 0.4 to 1.1 s with software WebGL against 5 ms
+// of JS (bug #921). WebGL's GPU timer query is missing there. The first frame after a draw times it (`timed` false).
+export interface LastDraw {
+  start: number;
+  cost: number;
+  timed: boolean;
+}
+export const timeDraw = (last: LastDraw, now: number): LastDraw =>
+  last.timed ? last : { start: last.start, cost: now - last.start, timed: true };
+
 // A player's page draws only when something asked for a frame (#848): the picture changed (`changed`: a move, an input,
 // a load, a setting), an effect still moves (`moving`) or a test asked (`asked`). A still board leaves the GPU idle and
 // the laptop cool. Under automation the throttle above decides alone, as before: the browser checks count draws.

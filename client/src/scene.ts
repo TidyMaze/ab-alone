@@ -56,6 +56,7 @@ export function createBloomPipeline(
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   smooth = false,
+  blurEvery = 2,
 ): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> }) | null {
   try {
     const pipeline = new THREE.RenderPipeline(renderer);
@@ -66,7 +67,9 @@ export function createBloomPipeline(
     const blur = bloomNode.updateBefore.bind(bloomNode);
     let frame = 0;
     bloomNode.updateBefore = (f) => {
-      if (frame++ % 2 === 0) blur(f); // every second frame: the 12 blur passes are a third of a phone's frame, the glow stays put in between (#894)
+      // every second frame: the 12 blur passes are a third of a phone's frame, the glow stays put in between (#894).
+      // Under automation every draw (#921): the draws are seconds apart, and a check sees the one it asked for.
+      if (frame++ % blurEvery === 0) blur(f);
     };
     pipeline.outputNode = colorNode.add(bloomNode);
     // No MSAA (#857): `smooth` ends with FXAA, which reads the tone-mapped picture, so renderOutput maps it once here.
@@ -256,7 +259,7 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0));
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0), webdriver ? 1 : 2);
   }
 
   async init(): Promise<void> {

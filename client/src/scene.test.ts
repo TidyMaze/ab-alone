@@ -457,4 +457,17 @@ describe('SceneRenderer (#632)', () => {
     expect(ran).toEqual([true, false, true, false, true]);
     blur.mockRestore();
   });
+
+  it('blurs the glow on every draw under automation, so one asked draw shows the settled picture (#921)', () => {
+    const blur = vi.spyOn(BloomNode.prototype, 'updateBefore').mockImplementation(() => {});
+    const runs = (webdriver: boolean) => {
+      const { pipeline } = new SceneRenderer({ renderer: createMockRenderer(), webdriver });
+      const before = blur.mock.calls.length;
+      for (let i = 0; i < 4; i++) pipeline!.bloom.updateBefore({} as never);
+      return blur.mock.calls.length - before;
+    };
+    expect(runs(true)).toBe(4);
+    expect(runs(false)).toBe(2);
+    blur.mockRestore();
+  });
 });
