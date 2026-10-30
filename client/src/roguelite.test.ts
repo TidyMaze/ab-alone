@@ -4,8 +4,18 @@ import { cellIndex, type Move } from './board';
 import { contrastRatio, type RGB } from './contrast';
 import { GLASS, SHELL } from './marbles';
 import {
+  ACT_PERCENT,
+  actBoss,
   choices,
   claim,
+  ELITE_BUDGET,
+  eventHtml,
+  eventOf,
+  EVENTS,
+  fightBudget,
+  resolve,
+  takeEvent,
+  visit,
   clearRun,
   FIGHT_CAP,
   fightOver,
@@ -26,6 +36,7 @@ import {
   sparkBurst,
   SPECIAL_LOOKS,
   START_ARMY,
+  MIN_ARMY,
   type MapNode,
   type Run,
 } from './roguelite';
@@ -42,7 +53,7 @@ const failing: KeyStore = {
   delete: () => Promise.reject(new Error('blocked')),
 };
 // A replay engine that refuses the move [9, ...] and is over after [7, ...].
-const engine = (army: number, placed: number[][] = []) => {
+const engine = ({ army, placed }: Run) => {
   const played: number[] = [];
   return {
     army,
@@ -60,14 +71,15 @@ const MV = [1, 0, 0, 0, 0, 0, 0, 0];
 describe('roguelite', () => {
   it('parses the map records of the bridge', () => {
     expect(MAP).toHaveLength(6);
-    expect(MAP[0]).toEqual({ act: 0, row: 0, col: 0, boss: false, links: [0] });
-    expect(MAP[2]).toEqual({ act: 0, row: 1, col: 0, boss: true, links: [] });
+    expect(MAP[0]).toEqual({ act: 0, row: 0, col: 0, kind: 'fight', links: [0] });
+    expect(MAP[2]).toEqual({ act: 0, row: 1, col: 0, kind: 'boss', links: [] });
+    expect(parseMap([0, 0, 0, 2, 0, 0, 0, 1, 3, 0, 0, 0, 2, 4, 0]).map((n) => n.kind)).toEqual(['elite', 'rest', 'event']);
     expect(parseMap([0, 0, 1, 0, 0b101])[0]!.links).toEqual([0, 2]);
   });
 
   it('a new run has the full army and offers the first row of act 1', () => {
     const run = newRun(5);
-    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false });
+    expect(run).toEqual({ seed: 5, army: START_ARMY, path: [], fighting: false, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false, event: false });
     expect(choices(MAP, run)).toEqual([0, 1]);
   });
 
@@ -142,7 +154,7 @@ describe('roguelite', () => {
     await saveRun(store, placed);
     expect((await loadRun(store, mapOf, engine))!.engine).toMatchObject({ placed: [[0, 4, 1]] });
     const older: Record<string, unknown> = { ...fight }; // a run saved before the special marbles
-    for (const key of ['specials', 'placed', 'reward']) delete older[key];
+    for (const key of ['specials', 'placed', 'reward', 'event']) delete older[key];
     await store.put(RUN_KEY, older);
     expect((await loadRun(store, mapOf, engine))!.state).toEqual(fight);
     await saveRun(store, at(newRun(1), 0));
@@ -169,6 +181,7 @@ describe('roguelite', () => {
     ['bad special counts', { ...newRun(1), specials: [1, 2] }],
     ['a bad placement', { ...pick(newRun(1), 0), placed: [[0, 4]] }],
     ['a bad reward flag', { ...newRun(1), reward: 1 }],
+    ['a bad event flag', { ...newRun(1), event: 'x' }],
   ])('drops a saved run with %s', async (_, raw) => {
     const store = memoryStore();
     await store.put(RUN_KEY, raw);
@@ -285,13 +298,133 @@ describe('roguelite', () => {
 
   it('draws the reward screen: one button per offer', () => {
     const run = won({ ...newRun(1), army: 12 });
-    const doc = new DOMParser().parseFromString(rewardHtml(run), 'text/html');
+    const doc = new DOMParser().parseFromString(rewardHtml(MAP, run), 'text/html');
     const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-offer]')];
     expect(buttons.map((b) => Number(b.dataset.offer))).toEqual(offers(run));
     expect(doc.querySelector('.run-line')!.textContent).toBe('Fight won · pick a reward');
-    expect(rewardHtml(won({ ...newRun(1), army: 4, specials: [2, 1, 1] }))).toContain('One more marble');
-    expect(rewardHtml(won(newRun(1)))).toContain('Heavy: weighs 2 in a push');
-    expect(rewardHtml(won(newRun(1)))).toContain('Anchor: never pushed off');
-    expect(rewardHtml(won(newRun(1)))).toContain('Spark: bursts when pushed off');
+    expect(rewardHtml(MAP, won({ ...newRun(1), army: 4, specials: [2, 1, 1] }))).toContain('One more marble');
+    expect(rewardHtml(MAP, won(newRun(1)))).toContain('Heavy: weighs 2 in a push');
+    expect(rewardHtml(MAP, won(newRun(1)))).toContain('Anchor: never pushed off');
+    expect(rewardHtml(MAP, won(newRun(1)))).toContain('Spark: bursts when pushed off');
+  });
+  // Elites, rests, events and act bosses (#800). One act: a fight leads to an elite, a rest and an event, each to the
+  // boss. Indices: 0 fight, 1 elite, 2 rest, 3 event, 4 boss.
+  const ACT = parseMap([0, 0, 0, 0, 0b111, 0, 1, 0, 2, 1, 0, 1, 1, 3, 1, 0, 1, 2, 4, 1, 0, 2, 0, 1, 0]);
+  const parse = (html: string): Document => new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+
+  it('a rest brings the army back up to 14 and leads on, with no fight', () => {
+    const rested = visit(ACT, { ...newRun(1), army: 6, path: [0] }, 2);
+    expect(rested).toMatchObject({ army: START_ARMY, path: [0, 2], fighting: false, event: false });
+    expect(choices(ACT, rested)).toEqual([4]);
+    expect(runLine(ACT, rested)).toBe('Rogue-lite run · rested · army 14 marbles · pick a fight');
+  });
+
+  it('a fight, an elite or a boss starts its fight as a pick does', () => {
+    const run = { ...newRun(1), path: [0] };
+    expect(visit(ACT, run, 1)).toEqual(pick(run, 1));
+    expect(visit(ACT, at(run, 0, 1), 4)).toEqual(pick(at(run, 0, 1), 4));
+    expect(visit(ACT, newRun(1), 0)).toEqual(pick(newRun(1), 0));
+  });
+
+  it('an elite: a stronger bot, and a won one gives up to 2 marbles back before its reward', () => {
+    const elite = pick({ ...newRun(1), path: [0] }, 1);
+    expect(fightBudget(ACT, elite, 1000)).toBe(1000 * ELITE_BUDGET);
+    expect(ELITE_BUDGET).toBe(2);
+    expect(fightBudget(ACT, pick(newRun(1), 0), 1000)).toBe(1000);
+    expect(fightBudget(ACT, { ...elite, fighting: false }, 1000)).toBe(1000);
+    expect(fightBudget(ACT, newRun(1), 1000)).toBe(1000);
+    expect(fightOver(ACT, elite, true, 3)).toMatchObject({ army: 13, end: '', reward: true });
+    expect(fightOver(ACT, elite, true, 0).army).toBe(START_ARMY);
+    expect(fightOver(ACT, { ...elite, army: 6 }, true, 2)).toMatchObject({ army: 6, end: '' });
+    expect(fightOver(ACT, { ...elite, army: 5 }, true, 2)).toMatchObject({ army: 3, end: 'lost' }); // no marble back once lost
+    expect(fightOver(ACT, elite, false, 2).end).toBe('lost');
+    expect(runLine(ACT, elite)).toBe('Rogue-lite run · act 1 elite · army 14 marbles');
+    const after = fightOver(ACT, { ...elite, army: 10 }, true, 0);
+    expect(parse(rewardHtml(ACT, after)).querySelector('.run-line')!.textContent).toBe('Elite beaten · 2 marbles back · pick a reward');
+    expect(parse(rewardHtml(ACT, won(newRun(1)))).querySelector('.run-line')!.textContent).toBe('Fight won · pick a reward');
+  });
+
+  it('an event waits for its choice, seeded by the run seed and the node', () => {
+    const run = visit(ACT, { ...newRun(1), path: [0] }, 3);
+    expect(run).toMatchObject({ path: [0, 3], fighting: false, event: true });
+    expect(choices(ACT, run)).toEqual([]);
+    expect(EVENTS).toHaveLength(5);
+    expect(EVENTS).toContain(eventOf(run));
+    expect(eventOf(run)).toBe(eventOf({ ...run }));
+    const seen = new Set(Array.from({ length: 60 }, (_, seed) => eventOf({ ...run, seed })));
+    expect(seen.size).toBe(5); // every event shows up
+    const nodes = [1, 2, 3, 4, 5, 6, 7, 8].filter((seed) => eventOf({ ...run, seed }) !== eventOf({ ...run, seed, path: [0, 7] }));
+    expect(nodes.length).toBeGreaterThan(0);
+  });
+
+  it('each event trades marbles for special marbles or back, only when the army can pay and gains', () => {
+    const [forge, clamps, wiring, drone, pods] = EVENTS;
+    const full = newRun(1);
+    expect(takeEvent(full, forge!)).toMatchObject({ army: 12, specials: [1, 0, 0] });
+    expect(takeEvent(full, clamps!)).toMatchObject({ army: 12, specials: [0, 1, 0] });
+    expect(takeEvent(full, wiring!)).toMatchObject({ army: 13, specials: [0, 0, 1] });
+    expect(takeEvent(full, drone!)).toMatchObject({ army: 11, specials: [0, 0, 2] });
+    expect(takeEvent({ ...full, army: 10, specials: [1, 1, 1] }, pods!)).toMatchObject({ army: 13, specials: [1, 1, 0] }); // a Spark first
+    expect(takeEvent({ ...full, army: 12, specials: [1, 0, 0] }, pods!)).toMatchObject({ army: 14, specials: [0, 0, 0] }); // up to 14
+    expect(takeEvent({ ...full, army: 10 }, pods!)).toBeNull(); // no special marble to give
+    expect(takeEvent({ ...full, specials: [1, 0, 0] }, pods!)).toBeNull(); // a full army gains nothing
+    expect(takeEvent({ ...full, army: 5 }, forge!)).toBeNull(); // 3 marbles left would end the run
+    expect(takeEvent({ ...full, army: 6, specials: [2, 1, 1] }, forge!)).toBeNull(); // no plain marble left to make special
+    for (const e of EVENTS) expect(e.title && e.text && e.take).toBeTruthy();
+  });
+
+  it('an event resolved: taken it pays and gains, left it changes nothing, and the map goes on', () => {
+    const run = visit(ACT, { ...newRun(1), path: [0] }, 3);
+    const taken = resolve(run, true);
+    expect(taken).toEqual({ ...takeEvent(run, eventOf(run)!)!, event: false });
+    expect(choices(ACT, taken)).toEqual([4]);
+    expect(resolve(run, false)).toEqual({ ...run, event: false });
+    const poor = { ...run, army: MIN_ARMY };
+    expect(resolve(poor, true)).toBe(poor); // it cannot pay: the event waits
+    expect(resolve(newRun(1), true)).toEqual(newRun(1)); // no event
+    expect(eventOf(newRun(1))).toBeNull();
+  });
+
+  it('draws the event screen: its title, its text, the trade, disabled when it cannot be paid, and Leave', () => {
+    const run = visit(ACT, { ...newRun(1), path: [0] }, 3);
+    const e = eventOf(run)!;
+    const doc = parse(eventHtml(run));
+    expect(doc.querySelector('.run-line')!.textContent).toBe(`Event · ${e.title}`);
+    expect(doc.querySelector('.run-help')!.textContent).toBe(e.text);
+    const buttons = [...doc.querySelectorAll<HTMLButtonElement>('button[data-choice]')];
+    expect(buttons.map((b) => [b.dataset.choice, b.textContent, b.disabled])).toEqual([['1', e.take, false], ['0', 'Leave', false]]);
+    const poor = parse(eventHtml({ ...run, army: MIN_ARMY }));
+    expect(poor.querySelector<HTMLButtonElement>('button[data-choice="1"]')!.disabled).toBe(true);
+  });
+
+  it('draws elites, rests and events on the map', () => {
+    const doc = parse(mapHtml(ACT, newRun(1)));
+    const nodes = [...doc.querySelectorAll<HTMLButtonElement>('button[data-node]')];
+    expect(nodes.map((b) => b.textContent)).toEqual(['Fight', 'Elite', 'Rest', 'Event', 'Boss']);
+    expect(nodes.map((b) => b.className)).toEqual(['node', 'node elite', 'node rest', 'node event', 'node boss']);
+    expect(nodes[2]!.getAttribute('aria-label')).toBe('Act 1, rest');
+  });
+
+  it('a boss node is a roster boss picked by the run seed, at the act strength, a new one each act', () => {
+    const ids = ['a', 'b', 'c', 'd'];
+    const boss = actBoss(MAP, pick(at(newRun(1), 0), 2), ids)!;
+    expect(ids).toContain(boss.id);
+    expect(boss.percent).toBe(ACT_PERCENT[0]);
+    expect(ACT_PERCENT).toEqual([50, 100, 200]);
+    expect(actBoss(MAP, pick(at(newRun(1), 0), 2), ids)).toEqual(boss); // the same run: the same boss and seed
+    const second = actBoss(MAP, pick(at(newRun(1), 0, 2, 3), 5), ids)!;
+    expect(second.percent).toBe(ACT_PERCENT[1]);
+    expect(second.id).not.toBe(boss.id);
+    expect(second.seed).not.toBe(boss.seed);
+    const firsts = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => actBoss(MAP, pick(at({ ...newRun(seed) }, 0), 2), ids)!.id));
+    expect(firsts.size).toBeGreaterThan(1); // other seeds, other bosses
+    expect(actBoss(MAP, pick(newRun(1), 0), ids)).toBeNull(); // a fight
+    expect(actBoss(MAP, at(newRun(1), 0, 2), ids)).toBeNull(); // the boss beaten, no fight on
+    expect(actBoss(MAP, newRun(1), ids)).toBeNull();
+  });
+
+  it('a boss fight leaves the special marbles alone: none was placed', () => {
+    const fight = pick({ ...at(newRun(1), 0), specials: [1, 0, 1] }, 2);
+    expect(fightOver(MAP, fight, true, 2)).toMatchObject({ army: 12, specials: [1, 0, 1], reward: true });
   });
 });
