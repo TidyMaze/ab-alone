@@ -19,7 +19,7 @@ describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
   it('reads the bytes of the bridge, three a cell, by terrain and biome code', () => {
     expect(TERRAINS).toEqual(['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall']);
     expect(BIOMES).toEqual(['meadow', 'forest', 'tundra', 'desert', 'badlands']);
-    expect(parseChunk(new Uint8Array([0, 0, 0, 3, 4, 2, 2, 3, 4]))).toEqual([
+    expect(parseChunk(new Uint8Array([0, 0, 0, 3, 4, 1, 2, 3, 4]))).toEqual([
       { height: 0, terrain: 'water', biome: 'meadow' },
       { height: 3, terrain: 'peak', biome: 'forest' },
       { height: 2, terrain: 'rock', biome: 'badlands' },
@@ -28,7 +28,7 @@ describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
   });
 
   it('blocks water, peaks, boulders, trees and walls only', () => {
-    const blockedBy = TERRAINS.filter((terrain) => blocked({ height: 1, terrain }));
+    const blockedBy = TERRAINS.filter((terrain) => blocked({ height: 1, terrain, biome: 'meadow' }));
     expect(blockedBy).toEqual(['water', 'peak', 'boulder', 'tree', 'wall']);
   });
 
@@ -41,12 +41,12 @@ describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
   it('loads a chunk the first time one of its cells is asked for, once', () => {
     const asked: string[] = [];
     const world = new World((cx, cy) => (asked.push(`${cx},${cy}`), bytes(cx, cy)));
-    expect(world.tile(3, 3)).toEqual({ height: 1, terrain: 'grass' });
-    expect(world.tile(4, 4)).toEqual({ height: 1, terrain: 'grass' });
-    expect(world.tile(-1, 0)).toEqual({ height: 1, terrain: 'grass' });
+    expect(world.tile(3, 3)).toEqual({ height: 1, terrain: 'grass', biome: 'meadow' });
+    expect(world.tile(4, 4)).toEqual({ height: 1, terrain: 'grass', biome: 'meadow' });
+    expect(world.tile(-1, 0)).toEqual({ height: 1, terrain: 'grass', biome: 'meadow' });
     expect(asked).toEqual(['0,0', '-1,0']);
-    expect(world.tile(2, 0)).toEqual({ height: 1, terrain: 'boulder' });
-    expect(world.tile(CHUNK, 0)).toEqual({ height: 3, terrain: 'peak' });
+    expect(world.tile(2, 0)).toEqual({ height: 1, terrain: 'boulder', biome: 'meadow' });
+    expect(world.tile(CHUNK, 0)).toEqual({ height: 3, terrain: 'peak', biome: 'meadow' });
   });
 
   it('has no tile off the world', () => {

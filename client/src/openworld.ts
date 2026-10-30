@@ -10,12 +10,16 @@ export const SPAWN: Axial = [0, 0];
 /** The terrain codes of the bridge (`world_chunk`), by code. */
 export const TERRAINS = ['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall'] as const;
 export type Terrain = (typeof TERRAINS)[number];
+/** The biome codes of the bridge (`world_chunk`), by code: the order of `Biome` in the engine (openworld-terrain.md section 4). */
+export const BIOMES = ['meadow', 'forest', 'tundra', 'desert', 'badlands'] as const;
+export type Biome = (typeof BIOMES)[number];
 /** The terrains a marble cannot enter. */
 const BLOCKED: ReadonlySet<Terrain> = new Set(['water', 'peak', 'boulder', 'tree', 'wall']);
 
 export interface Tile {
   height: number;
   terrain: Terrain;
+  biome: Biome;
 }
 
 export const blocked = (tile: Tile): boolean => BLOCKED.has(tile.terrain);
@@ -23,10 +27,12 @@ export const blocked = (tile: Tile): boolean => BLOCKED.has(tile.terrain);
 /** The chunk a cell is in. */
 export const chunkOf = ([q, r]: Axial): Axial => [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
 
-/** The tiles of a chunk the bridge returned, row by row, `[]` off the world. */
+/** The tiles of a chunk the bridge returned, three bytes a cell (height, terrain, biome) row by row, `[]` off the world. */
 export function parseChunk(bytes: Uint8Array): Tile[] {
   const tiles: Tile[] = [];
-  for (let i = 0; i < bytes.length; i += 2) tiles.push({ height: bytes[i]!, terrain: TERRAINS[bytes[i + 1]!]! });
+  for (let i = 0; i < bytes.length; i += 3) {
+    tiles.push({ height: bytes[i]!, terrain: TERRAINS[bytes[i + 1]!]!, biome: BIOMES[bytes[i + 2]!]! });
+  }
   return tiles;
 }
 
