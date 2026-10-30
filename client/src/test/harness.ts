@@ -251,7 +251,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
             data:
               options.fails === 'worker'
                 ? { id: req.id, error: 'Error: boom' }
-                : answer(req, () => new wasm.Engine(), (id, seed) => new wasm.Encounter(id, seed)),
+                : answer(req, (army) => (army === undefined ? new wasm.Engine() : wasm.Engine.with_army(army)), (id, seed) => new wasm.Encounter(id, seed)),
           } as MessageEvent<BotResponse>),
         );
       }
