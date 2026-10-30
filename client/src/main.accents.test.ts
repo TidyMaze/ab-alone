@@ -58,7 +58,7 @@ describe('main.ts boss accents (#507)', () => {
     expect(drawn).toHaveLength(shells);
     for (const mesh of drawn) {
       expect(mesh.parent).toBeInstanceOf(THREE.Mesh);
-      expect((mesh.parent as Mesh).material).not.toBeInstanceOf(THREE.MeshPhysicalMaterial); // a shell, not the glass
+      expect((mesh.parent as Mesh).material.name).toBe('shell');
       expect(mesh.material.color.getHex()).toBe(ACCENTS[id]!.color);
     }
   });
