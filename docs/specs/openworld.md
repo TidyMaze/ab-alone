@@ -22,11 +22,17 @@ A-light Explore (#720 to #725), which it does not touch.
   the same seed always gives the same world, in any order of visit. Saving a world is its seed.
 - **Relief**: every cell has a height 0 to 3 from smooth value noise. The renderer lifts the cell
   column by `height * 0.15` and lights it. Relief is a look: it never changes a move or a push.
-- **Terrain**: from height and a second noise (moisture), one look per cell: water (height 0),
-  sand, grass, rock, peak (height 3). Each has its own material in the existing renderer.
-- **Obstacles**: blocked cells the hero, the troop and the enemies cannot enter: water, peak, and
-  scattered boulders (about 6 % of the other cells). A push into an obstacle is refused, as a push
-  into a friendly marble is in `rules.md`.
+- **Terrain**: from height and a second noise (moisture), one look per cell: **lakes** (water,
+  height 0), sand, grass, rock, **mountains** (peaks, height 3). Forests (**trees**, on grass in a
+  forest noise, about half its cells) and ruined **walls** (segments of 3 to 6 cells along one of
+  three axes, one per 24-cell square at most, laid on land) come on top.
+- **Obstacles**: blocked cells the hero, the troop and the enemies cannot enter: water, mountains,
+  trees, walls, and scattered boulders (about 6 % of the open cells). A push into an obstacle is
+  refused, as a push into a friendly marble is in `rules.md`.
+- **Style**: low-poly and faceted, as the bay: flat-shaded hex columns, coolant-blue lakes that glow
+  a little, dark faceted spires for the mountains, teal wire pines, grey boulders, black gantry
+  walls. The props are meshes made in Blender (`client/models/openworld.glb`, a few faces each,
+  packed with meshopt); the ground is one instanced hex prism per terrain.
 - **Spawn**: a clearing of radius 3 around the start cell has no obstacle and no enemy, and every
   cell of the clearing reaches the clearing's edge, so the hero is never boxed in.
 
