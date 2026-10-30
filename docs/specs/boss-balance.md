@@ -578,6 +578,9 @@ boss starts near the void and the player pushes it in: P3 is reached in 28 of 30
 section 7.15 calibration rule holds), but the boss is easy, even at 0.5x. The owner's knobs are
 the start layout and the phase ejections; tuning is a follow-up.
 
+Re-run on main after #951 (its search sees a bonus win at its own node, `dual_step` included):
+the same table, row for row.
+
 Reply time (release build, native, 6 seeds of 80 plies, boss replies, ms): before 226 average,
 314 at the 95th percentile, 339 at most; after 228 / 312 / 383.
 
