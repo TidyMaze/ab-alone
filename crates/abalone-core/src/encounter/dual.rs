@@ -11,7 +11,7 @@ use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
 use crate::game::Game;
 use crate::moves::{Move, Player};
-use crate::search::{search_hooked, DEFAULT_WEIGHTS};
+use crate::search::{search_hooked, Weights, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -19,6 +19,12 @@ type P = (i32, i32);
 pub const DUAL_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// Positions the boss search may visit per move. TUNE.
 pub const DUAL_NODE_BUDGET: u32 = 3000;
+/// The boss search's weights (#982): the plain ones without the pull to the centre, which here is
+/// the void's middle, so it does not walk its marbles onto the void's edge to be pushed in. TUNE.
+pub const DUAL_WEIGHTS: Weights = Weights {
+    centre: 0,
+    ..DEFAULT_WEIGHTS
+};
 /// The centres of the two radius 3 rooms, south then north, the void between them.
 pub const ROOMS: [P; 2] = [(-2, 4), (2, -4)];
 /// The board scan of [`Board::radius`]: both rooms fit in `|q|, |r|, |q + r| <= 7`.
@@ -238,7 +244,7 @@ pub fn dual_move(enc: &Encounter) -> Option<Move> {
     search_hooked(
         enc.game(),
         enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
+        DUAL_WEIGHTS,
         &|_| true,
         &dual_step,
     )
@@ -251,7 +257,6 @@ mod tests {
     use crate::encounter::{marbles, PveResult};
     use crate::moves::Direction::{E, NW, SE};
     use crate::moves::{apply, legal_moves, Direction, MoveError};
-    use crate::search::Weights;
 
     fn board(black: &[P], white: &[P], dual: Dual) -> Board {
         let mut board = dual_board();
