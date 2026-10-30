@@ -92,12 +92,14 @@ export function applyTuning(scene: THREE.Object3D, tuning: Readonly<Record<strin
  * folding sections, each family by name, then one per knob (the bloom). Rebuilt into `panel` when the props are drawn
  * again, since that replaces their lights. With `onAim`, each light's slider has a button that points the camera at one
  * lamp of the family, the next at each press (a lamp: the lights of one name, the middle of a neon tube's row).
+ * With `onEditor`, a last button opens the scene in the three.js Editor (#872).
  */
 export function lightPanel(
   scene: THREE.Object3D,
   panel: HTMLElement = document.createElement('div'),
   onAim?: (at: THREE.Vector3) => void,
   knobs: readonly Knob[] = [],
+  onEditor?: () => void,
 ): HTMLElement {
   panel.id = 'light-panel';
   panel.replaceChildren();
@@ -145,5 +147,10 @@ export function lightPanel(
     section.append(label);
   }
   for (const [group, section] of sections) section.querySelector('summary')!.textContent = `${group} (${section.querySelectorAll('label').length})`;
+  if (onEditor) {
+    const editor = Object.assign(document.createElement('button'), { type: 'button', className: 'editor', textContent: 'Open in three.js Editor' });
+    editor.addEventListener('click', onEditor);
+    panel.append(editor);
+  }
   return panel;
 }

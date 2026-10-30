@@ -1,6 +1,8 @@
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 // @ts-expect-error plain Node script, no type declarations (the client has no Node types)
+import { editorScene } from './scripts/editor-scene.mjs';
+// @ts-expect-error plain Node script, no type declarations (the client has no Node types)
 import { ktx2Textures } from './scripts/ktx2-textures.mjs';
 // @ts-expect-error plain Node script, no type declarations (the client has no Node types)
 import { offlineApp } from './scripts/offline-app.mjs';
@@ -34,6 +36,8 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   plugins: [
     ktx2Textures(),
     offlineApp(),
+    // The three.js Editor export of ?lights (#872): dev server only.
+    editorScene(),
     ...(mode === 'e2e'
       ? [
           {

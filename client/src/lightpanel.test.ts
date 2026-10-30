@@ -129,6 +129,16 @@ describe('lightPanel (?lights)', () => {
     expect(lightPanel(s).querySelector('button')).toBeNull(); // no camera to point: no button
   });
 
+  it('has a button that opens the scene in the three.js Editor, after the sliders, when it has somewhere to open it (#872)', () => {
+    const opened: string[] = [];
+    const panel = lightPanel(scene().scene, undefined, () => {}, [], () => opened.push('editor'));
+    const button = panel.lastElementChild as HTMLButtonElement;
+    expect([button.tagName, button.textContent, button.getAttribute('aria-label')]).toEqual(['BUTTON', 'Open in three.js Editor', null]);
+    button.click();
+    expect(opened).toEqual(['editor']);
+    expect(lightPanel(scene().scene).querySelector('button.editor')).toBeNull();
+  });
+
   it('sets the tuned power of each family, and leaves the others as they are', () => {
     const { scene: s, key, lamp, neon } = scene();
     const twin = new THREE.PointLight(0x38e8ff, 2.25);

@@ -63,6 +63,33 @@ describe('main.ts, ?lights', () => {
     expect(document.getElementById('free-cam')!.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('opens the live scene in the three.js Editor from its button (#872), and logs a refusal', async () => {
+    const openInEditor = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('POST answered 404'));
+    vi.doMock('./editorexport', () => ({ openInEditor }));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let scene: THREE.Scene | null = null;
+    const add = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function (this: THREE.Object3D, ...objects) {
+      if (this instanceof THREE.Scene) scene ??= this;
+      return add.apply(this, objects);
+    });
+    await boot('?bot=off&lights');
+    vi.doUnmock('./editorexport');
+    const button = document.querySelector<HTMLButtonElement>('#light-panel button.editor')!;
+    button.click();
+    expect(openInEditor).toHaveBeenCalledWith(scene, expect.objectContaining({ isCamera: true }), expect.anything());
+    button.click();
+    await vi.waitFor(() => expect(error).toHaveBeenCalledWith(new Error('POST answered 404')));
+  });
+
+  it('has no Editor button outside the dev server, where its endpoint does not exist (#872)', async () => {
+    vi.stubEnv('DEV', false);
+    await boot('?bot=off&lights');
+    vi.unstubAllEnvs();
+    expect(document.querySelector('#light-panel')).not.toBeNull();
+    expect(document.querySelector('#light-panel button.editor')).toBeNull();
+  });
+
   it('puts the bloom strength, radius and threshold last', async () => {
     await boot('?bot=off&lights');
     const bloom = [...document.querySelectorAll('#light-panel details')].at(-1)!;
