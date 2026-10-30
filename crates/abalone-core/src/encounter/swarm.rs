@@ -38,46 +38,80 @@ pub const SWARM_WEIGHTS: Weights = Weights {
 
 /// Distance between two cells, in steps.
 fn distance(a: P, b: P) -> i32 {
-    todo!()
+    let (dq, dr) = (a.0 - b.0, a.1 - b.1);
+    dq.abs().max(dr.abs()).max((dq + dr).abs())
 }
 
 /// Phase of turn `turn` (1 based), 0 for P1.
 fn phase(turn: u32) -> usize {
-    todo!()
+    SWARM_PHASE_TURNS.iter().filter(|&&t| turn >= t).count()
 }
 
 /// Swarm marbles that arrive on turn `turn` (1 based): none outside turns 1 to 30.
 pub fn arrivals(turn: u32) -> u8 {
-    todo!()
+    if turn == 0 || turn > SWARM_TURNS {
+        return 0;
+    }
+    SWARM_ARRIVALS[phase(turn)]
 }
 
 /// The rim cells a swarm marble may land on, in `q` then `r` order: the rim of the radius 4 board
 /// with `r <= 0`, away from the player's start side.
 pub fn allowed_rim() -> Vec<P> {
-    todo!()
+    (-4..=4)
+        .flat_map(|q| (-4..=0).map(move |r| (q, r)))
+        .filter(|&c| distance(c, (0, 0)) == 4)
+        .collect()
 }
 
 /// The empty allowed rim cells of `board`, in `q` then `r` order.
 fn free_rim(board: &Board) -> Vec<P> {
-    todo!()
+    allowed_rim()
+        .into_iter()
+        .filter(|&(q, r)| board.get(q, r) == Some(Cell::Empty))
+        .collect()
 }
 
 /// The cells announced for `count` arrivals: distinct empty allowed rim cells picked by `seed`,
 /// fewer when fewer are empty.
 pub fn announce(board: &Board, seed: u64, count: u8) -> Vec<P> {
-    todo!()
+    let mut free = free_rim(board);
+    let mut state = seed;
+    let mut out = Vec::new();
+    for _ in 0..count.min(free.len() as u8) {
+        state = mix(state);
+        out.push(free.remove((state % free.len() as u64) as usize));
+    }
+    out
 }
 
 /// `board` after the marbles announced on `cells` land, in order, and the cells they landed on: a
 /// taken cell sends its marble to the nearest empty allowed rim cell (the lowest `q`, then `r`, on a
 /// tie), none left and it does not arrive.
 pub fn land(board: &Board, cells: &[P]) -> (Board, Vec<P>) {
-    todo!()
+    let mut out = board.clone();
+    let mut landed = Vec::new();
+    for &cell in cells {
+        let nearest = free_rim(&out)
+            .into_iter()
+            .min_by_key(|&c| (distance(c, cell), c));
+        if let Some((q, r)) = nearest {
+            out.set(q, r, Cell::White);
+            landed.push((q, r));
+        }
+    }
+    (out, landed)
 }
 
 /// The start board: the player's standard layout minus its marbles nearest the centre, no swarm.
 pub fn swarm_board() -> Board {
-    todo!()
+    let mut cells = STANDARD_BLACK.to_vec();
+    cells.sort_by_key(|&c| distance(c, (0, 0)));
+    let mut board = Board::empty();
+    for &(q, r) in &cells[SWARM_LEFT_OUT..] {
+        board.set(q, r, Cell::Black);
+    }
+    board
 }
 
 /// The step of the search tree: every player ply lands `count` marbles where the announce of the
@@ -87,22 +121,41 @@ pub fn swarm_step(
     seed: u64,
     count: u8,
 ) -> impl Fn(&Board, Player, &Move, Board, [u8; 2]) -> (Board, [u8; 2]) {
-    move |_: &Board, _: Player, _: &Move, _: Board, _: [u8; 2]| -> (Board, [u8; 2]) {
-        let _ = (seed, count);
-        todo!()
+    move |before, mover, _mv, after, _credited| match mover {
+        Player::Black => (land(&after, &announce(before, seed, count)).0, [0, 0]),
+        Player::White => (after, [0, 0]),
     }
 }
 
 /// A move of the scripted turtle of the balance gate: it pushes nothing and moves no marble away
 /// from the centre.
 pub(crate) fn turtles(board: &Board, mv: &Move) -> bool {
-    todo!()
+    let (dq, dr) = mv.dir.vector();
+    let ahead = |&(q, r): &P| (q + dq, r + dr);
+    let pushes = mv
+        .cells
+        .iter()
+        .map(ahead)
+        .any(|(q, r)| !mv.cells.contains(&(q, r)) && board.get(q, r) == Some(Cell::White));
+    !pushes
+        && mv
+            .cells
+            .iter()
+            .all(|c| distance(ahead(c), (0, 0)) <= distance(*c, (0, 0)))
 }
 
 /// The scripted turtle (balance gate, #795): a turtle move picked by `seed` and the move `index`,
 /// any legal move when it has none, `None` with no move at all.
 pub fn turtle_move(game: &Game, seed: u64, index: u32) -> Option<Move> {
-    todo!()
+    let moves = legal_moves(game.board(), game.to_move());
+    let inward: Vec<Move> = moves
+        .iter()
+        .filter(|m| turtles(game.board(), m))
+        .cloned()
+        .collect();
+    let pool = if inward.is_empty() { moves } else { inward };
+    let pick = mix(seed ^ mix(u64::from(index))) % pool.len().max(1) as u64;
+    pool.get(pick as usize).cloned()
 }
 
 /// A fight against the Swarm. The player is Black and moves first, the swarm is White.
@@ -121,73 +174,128 @@ pub struct Swarm {
 impl Swarm {
     /// The start: 11 player marbles, no swarm, the first wave announced.
     pub fn start(seed: u64) -> Self {
-        todo!()
+        Self::from_position(
+            Game::from_position(swarm_board(), Player::Black, [0, 0]),
+            seed,
+            0,
+        )
     }
 
     /// A fight resumed after `turn` boss replies, the player to move. It is lost once the swarm has
     /// ejected every player marble on the board, and no draw rule ends it.
     pub fn from_position(game: Game, seed: u64, turn: u32) -> Self {
-        todo!()
+        let left = marbles(game.board(), Cell::Black);
+        let win = [u8::MAX, game.ejected(Player::White) + left];
+        let mut swarm = Self {
+            game: game.with_win(win).without_draws(),
+            seed,
+            turn,
+            announced: Vec::new(),
+            landed: Vec::new(),
+        };
+        swarm.announce_next();
+        swarm
     }
 
     pub fn game(&self) -> &Game {
-        todo!()
+        &self.game
     }
 
     /// Boss replies done.
     pub fn turn(&self) -> u32 {
-        todo!()
+        self.turn
     }
 
     /// Boss replies left before the evac.
     pub fn turns_left(&self) -> u32 {
-        todo!()
+        SWARM_TURNS.saturating_sub(self.turn)
     }
 
     /// Phase of the turn being played, 0 for P1.
     pub fn phase(&self) -> usize {
-        todo!()
+        phase(self.turn + 1)
     }
 
     /// The cells where the next boss reply's marbles arrive, empty once the fight is over.
     pub fn announced(&self) -> &[P] {
-        todo!()
+        &self.announced
     }
 
     /// The cells where the last boss reply's marbles arrived.
     pub fn landed(&self) -> &[P] {
-        todo!()
+        &self.landed
     }
 
     /// `None` while the fight runs.
     pub fn result(&self) -> Option<PveResult> {
-        todo!()
+        self.game.outcome().map(|o| match o {
+            Outcome::Win(Player::Black) => PveResult::Won,
+            _ => PveResult::Lost,
+        })
     }
 
     /// Plays `mv` for the side to move. After a player move the boss reply starts: the announced
     /// marbles land, and a swarm with no move passes. After a boss move the reply ends.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
-        todo!()
+        let boss = self.game.to_move() == Player::White;
+        self.game.play(mv)?;
+        if boss {
+            self.end_reply();
+        } else {
+            self.arrive();
+        }
+        Ok(())
     }
 
     fn arrive(&mut self) {
-        todo!()
+        let (board, landed) = land(self.game.board(), &self.announced);
+        self.landed = landed;
+        self.announced.clear();
+        self.game.replace_board(board);
+        if legal_moves(self.game.board(), Player::White).is_empty() {
+            // No swarm move: the boss passes (rules.md section 7), as the Choir's.
+            self.game.pass();
+            self.end_reply();
+        }
     }
 
     /// The reply is done: the evac after the last one, else the next wave is announced.
     fn end_reply(&mut self) {
-        todo!()
+        self.turn += 1;
+        if self.turn >= SWARM_TURNS {
+            self.game.end(Player::Black);
+        }
+        self.announce_next();
     }
 
     fn announce_next(&mut self) {
-        todo!()
+        let count = match self.game.outcome() {
+            Some(_) => 0,
+            None => arrivals(self.turn + 1),
+        };
+        let ply = self.game.history().len() as u64;
+        self.announced = announce(self.game.board(), ply_seed(self.seed, ply), count);
     }
 
     /// The boss move for its reply: its own weights, node-limited, and its tree lands the next
     /// wave where the announce after its move will put it. `None` on the player's turn or when the
     /// fight is over.
     pub fn boss_move(&self) -> Option<Move> {
-        todo!()
+        if self.game.to_move() != Player::White {
+            return None;
+        }
+        let ply = self.game.history().len() as u64 + 1;
+        let step = swarm_step(ply_seed(self.seed, ply), arrivals(self.turn + 2));
+        let allow = |_: &Move| true;
+        search_phased(
+            &self.game,
+            SWARM_NODE_BUDGET,
+            SWARM_WEIGHTS,
+            &allow,
+            &step,
+            None,
+        )
+        .map(|r| r.mv)
     }
 
     /// The player search with `budget` nodes (the ladder, auto-play): its tree lands the announced
@@ -198,7 +306,19 @@ impl Swarm {
         budget: u32,
         allow: &dyn Fn(&Move) -> bool,
     ) -> Option<SearchResult> {
-        todo!()
+        if self.game.to_move() != Player::Black {
+            return None;
+        }
+        let ply = self.game.history().len() as u64;
+        let step = swarm_step(ply_seed(self.seed, ply), arrivals(self.turn + 1));
+        search_phased(
+            &self.game,
+            budget,
+            DEFAULT_WEIGHTS,
+            allow,
+            &step,
+            Some(self.turns_left()),
+        )
     }
 }
 
@@ -269,7 +389,9 @@ mod tests {
     fn the_allowed_rim_is_the_13_rim_cells_away_from_the_player_side() {
         let rim = allowed_rim();
         assert_eq!(rim.len(), 13);
-        assert!(rim.iter().all(|&(q, r)| r <= 0 && distance((q, r), (0, 0)) == 4));
+        assert!(rim
+            .iter()
+            .all(|&(q, r)| r <= 0 && distance((q, r), (0, 0)) == 4));
         let mut sorted = rim.clone();
         sorted.sort();
         assert_eq!(rim, sorted, "in q then r order");
@@ -296,7 +418,11 @@ mod tests {
             let announced = s.announced().to_vec();
             let first = legal_moves(s.game().board(), Player::Black)[0].clone();
             s.play(&first).unwrap();
-            assert_eq!(s.landed(), announced, "seed {seed}: an empty cell lands as announced");
+            assert_eq!(
+                s.landed(),
+                announced,
+                "seed {seed}: an empty cell lands as announced"
+            );
             let next = legal_moves(s.game().board(), Player::White)[0].clone();
             s.play(&next).unwrap();
             for &cell in s.landed().iter().chain(s.announced()) {
@@ -328,9 +454,16 @@ mod tests {
         let mut one = full.clone();
         one.set(4, 0, Cell::Empty);
         assert_eq!(announce(&one, 5, 3), [(4, 0)], "only the free cell");
-        let picks: Vec<_> = (0..20).map(|seed| announce(&Board::empty(), seed, 3)).collect();
-        assert!(picks.iter().all(|p| p.len() == 3 && p[0] != p[1] && p[1] != p[2]));
-        assert!(picks.windows(2).any(|w| w[0] != w[1]), "the seed picks the cells");
+        let picks: Vec<_> = (0..20)
+            .map(|seed| announce(&Board::empty(), seed, 3))
+            .collect();
+        assert!(picks
+            .iter()
+            .all(|p| p.len() == 3 && p[0] != p[1] && p[1] != p[2]));
+        assert!(
+            picks.windows(2).any(|w| w[0] != w[1]),
+            "the seed picks the cells"
+        );
     }
 
     #[test]
