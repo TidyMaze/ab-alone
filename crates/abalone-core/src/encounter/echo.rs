@@ -375,7 +375,8 @@ mod tests {
 
     #[test]
     fn the_echo_gets_the_mirror_of_the_players_move_at_once() {
-        for swap in [false] {
+        {
+            let swap = false;
             let (first, second) = sides(swap);
             let mut e = fight(swap, &[(0, 2)], &[(0, -2)], [0, 0]);
             let played = side_mv(swap, &[(0, 2)], SE);
@@ -429,7 +430,8 @@ mod tests {
 
     #[test]
     fn p2_also_echoes_the_latest_older_move_whose_mirror_is_legal_now() {
-        for swap in [false] {
+        {
+            let swap = false;
             let (first, second) = sides(swap);
             let b = side_mv(swap, &[(-3, 4)], E);
             let (mut e, a, w) = older_setup(swap, [3, 0]);
@@ -470,7 +472,8 @@ mod tests {
 
     #[test]
     fn a_bonus_is_never_echoed_back_in_p2_either() {
-        for swap in [false] {
+        {
+            let swap = false;
             let (_, second) = sides(swap);
             let mut e = fight(swap, &[(0, 2), (-3, 4)], &[(0, -2), (3, -4)], [3, 0]);
             let a = side_mv(swap, &[(0, 2)], SE);
@@ -508,7 +511,8 @@ mod tests {
     fn a_bonus_can_win_the_game_and_ends_it() {
         // The first side's pair steps east on an empty row; the mirror pushes a marble of the
         // first side off the west rim: the 6th ejection of the second side.
-        for swap in [false] {
+        {
+            let swap = false;
             let (_, second) = sides(swap);
             let ejected = if swap { [5, 0] } else { [0, 5] };
             let mut e = fight(
