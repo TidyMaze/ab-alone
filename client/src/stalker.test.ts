@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import init, { Engine } from 'abalone-wasm';
 import { CELLS, cellIndex, encodeMove, parseMoves, type Axial, type Move } from './board';
-import { blockers, hexDistance, resolveSeen, seenBoard, seenGhosts, seenMoves, STALKER_RANGE, visibleCells } from './stalker';
+import { blockers, hexDistance, resolveSeen, seenBoard, seenGhosts, seenMoves, STALKER_RANGE, stalkerNote, visibleCells } from './stalker';
 
 // Stalker (#783, #998, game-design.md section 3.4): the visible set and the moves the player is offered on the board
 // as it is seen. The judge of seenMoves is the real rules engine: with nothing hidden, it offers the engine's moves.
@@ -109,15 +109,24 @@ describe('blockers', () => {
 });
 
 describe('seenGhosts', () => {
-  it('moves the group and the marbles it pushes one cell on, those pushed off the board are gone', () => {
-    const board = boardOf([[[2, 0], 1], [[3, 0], 1], [[4, 0], 2]]);
-    expect(seenGhosts(board, { cells: [[2, 0], [3, 0]], dir: 0 })).toEqual([
-      { cell: [3, 0], side: 1 },
-      { cell: [4, 0], side: 1 },
+  it('names the cells a seen move changes, as the ghosts of a real move: the head of the line, the pushed marbles on', () => {
+    const board = boardOf([[[1, 0], 1], [[2, 0], 1], [[3, 0], 1], [[4, 0], 2]]);
+    expect(seenGhosts(board, { cells: [[1, 0], [2, 0], [3, 0]], dir: 0 })).toEqual([{ cell: [4, 0], side: 1 }]); // White's off
+    const push = boardOf([[[0, 0], 1], [[1, 0], 1], [[2, 0], 2]]);
+    expect(seenGhosts(push, { cells: [[0, 0], [1, 0]], dir: 0 })).toEqual([
+      { cell: [2, 0], side: 1 },
+      { cell: [3, 0], side: 2 },
     ]);
-    expect(seenGhosts(board, { cells: [[2, 0], [3, 0]], dir: 4 })).toEqual([
-      { cell: [2, -1], side: 1 },
-      { cell: [3, -1], side: 1 },
+    expect(seenGhosts(push, { cells: [[0, 0], [1, 0]], dir: 4 })).toEqual([
+      { cell: [0, -1], side: 1 },
+      { cell: [1, -1], side: 1 },
     ]);
+  });
+});
+
+describe('stalkerNote', () => {
+  it('says the bot is not fogged, and while a marble is revealed that the move is blocked', () => {
+    expect(stalkerNote(false)).toBe(' · Stalker: the bot is not fogged');
+    expect(stalkerNote(true)).toBe(' · Stalker: the bot is not fogged · A hidden marble blocks that move: play again');
   });
 });
