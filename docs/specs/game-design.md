@@ -416,11 +416,15 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   mirror is illegal or bad for the boss (asymmetric pushes, edges).
 - **AI**: the Echo's search plays the bonus mirrors inside its tree, both ways, with the P2
   older-move bonus from the credits so far (`search_phased` with `echo_step`); the tree does not
-  see repetitions, so it never skips a bonus. Node budget 400.
+  see repetitions, so it never skips a bonus. Node budget 100, one ply (#951; it was 400).
 - **Calibrate**: knob = AI node budget. Fail if win rate on attempt 1 to 3 exceeds 40 percent
   (too readable) or the median is over 12 attempts. Measured after #859 (boss-balance.md section
   3): the ladder pro player wins none of 10 at 1x and 10x (2 of 40 at 10x), every loss a draw at
-  the 100-ply no-ejection cap; not tuned in #859.
+  the 100-ply no-ejection cap: the mirrors keep the board point-symmetric and the two-ply boss holds
+  the rest. Tuned in #951 to 100 nodes: the pro player (10x the boss's own budget, 1000 nodes) wins
+  7 of 10 (9 of 20), the #949 player at 400 nodes 8 of 10. Accepted by the lead at the low edge of
+  the 7 to 9 target (decision on #951), to measure again after #958 (the player's bonus becomes an
+  offer).
 
 ### 7.5 The Ballast Mind (#47, #749): final exam
 
