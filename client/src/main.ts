@@ -4252,8 +4252,8 @@ function leaveRun(): void {
   newGameButton.hidden = false;
   void clearRun(gameStore);
 }
-function resumeRun(saved: Awaited<ReturnType<typeof loadSavedRun>>): void {
-  if (saved) startRun(saved.state, saved.map, saved.engine);
+function resumeRun(saved: NonNullable<Awaited<ReturnType<typeof loadSavedRun>>>): void {
+  startRun(saved.state, saved.map, saved.engine);
 }
 runPanel.addEventListener('click', (e) => {
   const button = (e.target as Element).closest<HTMLButtonElement>('button');
@@ -4269,7 +4269,7 @@ runButton.disabled = false; // listener ready (#146)
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload.
 (window as unknown as Record<string, unknown>).__run = async (state: Run) => {
   await saveRun(gameStore, state);
-  resumeRun(await loadSavedRun());
+  resumeRun((await loadSavedRun())!); // the browser checks load valid runs
 };
 
 // The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8
@@ -4626,6 +4626,7 @@ const royaleInvite = royaleFromHash(location.hash);
 if (invited) void goOnline(invited, 2);
 else if (royaleInvite) void goRoyale(royaleInvite, 2);
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite); // an unknown boss starts nothing
+else if (resumedRun) resumeRun(resumedRun); // a run saved in progress, over the local game; an invite link wins
 else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Ship hub (#602)
 else analyse(); // the start position
 
@@ -4675,7 +4676,6 @@ refresh();
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 document.body.appendChild(renderer.domElement);
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
-resumeRun(resumedRun); // a run saved in progress, over the local game
 let lastDraw = { start: -Infinity, cost: 0 };
 let draws = 0;
 let drawAsked = false;
