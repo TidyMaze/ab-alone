@@ -196,6 +196,7 @@ import {
   hasParticles,
   readClearBoard,
   readFlatHud,
+  readHudFolded,
   readFps,
   readReducedMotion,
   readGlassSkin,
@@ -217,6 +218,7 @@ import {
   smoothEdges,
   writeClearBoard,
   writeFlatHud,
+  writeHudFolded,
   writeFps,
   writeReducedMotion,
   writeGlassSkin,
@@ -3634,6 +3636,20 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
+// The left HUD panel folds to a tab with its button alone (#957), saved. Folded, it stays in the page for screen readers.
+const hudFold = document.getElementById('hud-fold') as HTMLButtonElement;
+function foldHud(folded: boolean): void {
+  document.getElementById('hud-dock')!.toggleAttribute('data-folded', folded);
+  hudFold.setAttribute('aria-expanded', String(!folded));
+  hudFold.title = folded ? 'Unfold the panel' : 'Fold the panel';
+}
+foldHud(readHudFolded(store));
+hudFold.addEventListener('click', () => {
+  const folded = hudFold.getAttribute('aria-expanded') === 'true';
+  writeHudFolded(store, folded);
+  foldHud(folded);
+});
+hudFold.disabled = false;
 
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
