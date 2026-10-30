@@ -145,8 +145,12 @@ test('the props near the hero are drawn detailed, the ones beyond low-poly, #989
   expect(counts['prop-tree-hi']).toBeLessThanOrEqual(217);
 });
 
-test('the entry is not in the mode menu without the flag, #965', async ({ page }) => {
+// #1000: the entry is in the mode menu for everyone, and a click enters a world with a random seed.
+test('the Open world is in the mode menu without the flag, and a click enters a random world, #1000', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
-  await expect(page.locator('#openworld')).toBeHidden();
+  await openModes(page);
+  await expect(page.locator('#openworld')).toBeVisible();
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toMatch(/^\d+$/);
 });

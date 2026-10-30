@@ -342,6 +342,7 @@ describe('main.ts daily challenge', () => {
     expect(daily.disabled).toBe(false);
     expect(daily.textContent).toBe('Daily challenge 2027-03-25: The Echo');
     expect(daily.querySelector('span')!.textContent).toBe('The Echo'); // held upright it takes a line of its own (#575)
+    expect(daily.title).toBe('Daily challenge 2027-03-25: The Echo'); // the whole name when a phone cuts the label (#1000)
     game.openModes();
     daily.click();
     expect(byId('mode-menu').hidden).toBe(true);
