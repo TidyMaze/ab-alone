@@ -235,10 +235,14 @@ export class OnlineSession {
     return this.queue;
   }
 
-  /** The caller already applied `move` to its own engine. A spectator sends nothing. */
-  async send(move: number[]): Promise<void> {
-    if (this.current !== 'player') return;
-    this.o.transport.send(await this.now.log.sign(this.o.keys, move));
+  /** The caller already applied `move` to its own engine. A spectator sends nothing. In the message queue: a move the
+   * engine already has may still be hashed into the log, and ours chains to that hash (bug #952). */
+  send(move: number[]): Promise<void> {
+    this.queue = this.queue.then(async () => {
+      if (this.current !== 'player') return;
+      this.o.transport.send(await this.now.log.sign(this.o.keys, move));
+    });
+    return this.queue;
   }
 
   private get now(): Game {

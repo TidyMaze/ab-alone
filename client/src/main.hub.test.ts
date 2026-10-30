@@ -101,13 +101,15 @@ async function loseToTheEcho(game: Game): Promise<void> {
 type Play = (q: number, r: number, tq: number, tr: number) => Promise<void>;
 async function repeat(game: Game, white?: Play): Promise<void> {
   for (const [ply, [q, r, tq, tr]] of [...THERE_AND_BACK, ...THERE_AND_BACK].entries()) {
+    const turn = game.turn();
     if (white && ply % 2 === 1) await white(q, r, tq, tr);
     else {
       game.click(q, r);
       game.click(tq, tr);
       game.frame(5000); // the slide ends
     }
-    await until(game, () => game.hook('__plies') === ply + 1);
+    // The engine has White's move before the page logged it and refreshed the HUD: wait for the HUD too (#952).
+    await until(game, () => game.hook('__plies') === ply + 1 && game.turn() !== turn);
   }
 }
 /** The White player of the page's online room: a session with its own engine, which plays once Black's move is in. */

@@ -524,10 +524,11 @@ describe('main.ts board and HUD', () => {
       const cell = from ?? moves.find((m) => m.cells.length === 1)!.cells[0]!;
       const target = to ?? groupTargets(moves, [cell])[0]!.cell;
       const record = encodeMove(moveForClick(moves, [cell], target)!);
-      const plies = game.hook<number>('__plies');
+      const [plies, turn] = [game.hook<number>('__plies'), game.turn()];
       theirs.play(Int32Array.from(record));
       await them.send(record);
-      await until(game, () => game.hook<number>('__plies') === plies + 1);
+      // The engine has the move before the page logged it and refreshed the HUD: wait for the HUD too (#952).
+      await until(game, () => game.hook<number>('__plies') === plies + 1 && game.turn() !== turn);
       game.frame(2000);
       return [cell, target];
     };

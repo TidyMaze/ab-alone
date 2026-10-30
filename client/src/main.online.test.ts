@@ -157,7 +157,7 @@ describe('Play online', () => {
     expect(game.turn()).toBe('White to move');
     await until(game, () => white.session.signedLog.length === 1);
     await white.play([0, -2], [0, -1]);
-    await until(game, () => game.hook('__plies') === 2);
+    await until(game, () => game.hook('__plies') === 2 && game.turn() !== 'White to move'); // the HUD too (#952)
     expect(game.turn()).toBe('Black to move');
   });
 
@@ -201,7 +201,7 @@ describe('Play online', () => {
       click(game, mine[0]!, mine[1]!);
       await until(game, () => white.session.signedLog.length === ply + 1);
       await white.play(theirs[0]!, theirs[1]!);
-      await until(game, () => game.hook('__plies') === ply + 2);
+      await until(game, () => game.hook('__plies') === ply + 2 && game.turn() !== 'White to move'); // the HUD too (#952)
       game.frame(5000);
     }
     expect(byId('hud').querySelector('.rank-delta')?.textContent).toBe('+0 Elo');
@@ -241,7 +241,8 @@ describe('Rematch', () => {
       click(game, mine[0]!, mine[1]!);
       await until(game, () => white.session.signedLog.length === ply + 1);
       await white.play(theirs[0]!, theirs[1]!);
-      await until(game, () => game.hook('__plies') === ply + 2);
+      // The engine has White's move before the page logged it and refreshed the HUD: wait for the HUD (#952).
+      await until(game, () => game.hook('__plies') === ply + 2 && game.turn() !== 'White to move');
       game.frame(5000);
     }
     expect(game.turn()).toBe('Draw');
