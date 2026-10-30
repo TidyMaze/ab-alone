@@ -556,7 +556,7 @@ describe('the frame loop', () => {
     game.frame(SLIDE_MS); // its last frame
     expect(data().sliding).toBeUndefined();
     expect(game.draws()).toBe(last + 1);
-    drawsOver(3); // what waited for the slide
+    expect(drawsOver(3)).toBe(1); // its last picture once more, for the bloom
     expect(drawsOver(3)).toBe(0); // still again
   });
 });
