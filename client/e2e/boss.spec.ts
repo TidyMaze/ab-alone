@@ -312,7 +312,7 @@ test('start The Chaplain: a hovered move shows the marbles it flips, #150', asyn
   await page.screenshot({ path: testInfo.outputPath('chaplain-preview.png') });
 });
 
-// The same fight, a converted marble keeps its own look (#326): half ridged shell, half glass with a dimmed core, under
+// The same fight, a converted marble keeps its own look (#326): half ridged shell, half glass (no hidden core since #886), under
 // the wax (#508), its glass half 3:1 against its shell. The recorded game converts its first marble at ply 24.
 test('start The Chaplain: a converted marble keeps its look, #150', async ({ page }, testInfo) => {
   await startChaplain(page);
@@ -324,7 +324,7 @@ test('start The Chaplain: a converted marble keeps its look, #150', async ({ pag
   const cells = await page.evaluate(() => (window as any).__converted());
   const looks = await page.evaluate(() => (window as any).__convertedLooks());
   expect(looks).toHaveLength(cells.length);
-  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'core', 'cracks', 'glyph'] }))));
+  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'cracks', 'glyph'] }))));
   const contrasts = await topContrasts(page, cells, testInfo.outputPath('chaplain-converted.png'));
   for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3); // its glass half reads (#326, #508)
 });
