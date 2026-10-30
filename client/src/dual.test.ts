@@ -99,7 +99,7 @@ describe('the animations', () => {
     expect(dropAt(0, true)).toEqual({ y: 0, done: true });
   });
 
-  it('lowers the bridge's cells from BRIDGE_HEIGHT into the void in BRIDGE_MS, slowing as they land', () => {
+  it("lowers the bridge's cells from BRIDGE_HEIGHT into the void in BRIDGE_MS, slowing as they land", () => {
     expect(bridgeAt(0, false)).toEqual({ y: BRIDGE_HEIGHT, done: false });
     const half = bridgeAt(BRIDGE_MS / 2, false);
     expect(half.y).toBeCloseTo(BRIDGE_HEIGHT * 0.25);

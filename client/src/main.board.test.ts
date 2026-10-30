@@ -489,7 +489,7 @@ describe('main.ts board and HUD', () => {
     const vanished = Number(document.body.dataset.vanished);
     expect(vanished).toBeGreaterThan(0);
     expect(game.hook('__frame')).toMatchObject({ holes: vanished, drawn: true });
-    expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished + 210); // rings 5 to 9 are off this board (#564, #947)
+    expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished + 108); // rings 5 to 7 are off this board (#564, #947, #955)
     await game.settle();
   });
 
