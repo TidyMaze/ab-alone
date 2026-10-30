@@ -581,7 +581,9 @@ mod tests {
         let played = mv(&[(0, -2)], NW);
         let mut e = offered(&[(0, 2)], &[(0, -2)], [0, 0], &played);
         let free = mirror_move(&played);
+        assert_eq!(echo_free_taken(&e), 0);
         e.play(&free).unwrap();
+        assert_eq!(echo_free_taken(&e), 1, "the plies that are free moves");
         assert_eq!(plies(&e), vec![played.clone(), free.clone()]);
         assert_eq!(
             e.game().to_move(),

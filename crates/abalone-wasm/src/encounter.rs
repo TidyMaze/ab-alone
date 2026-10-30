@@ -977,7 +977,9 @@ mod tests {
         let free = f.free_moves();
         assert_eq!(free.len(), MOVE_STRIDE, "the mirror of the Echo's move");
         assert!(f.last_bonuses().is_empty(), "offered, not played");
+        assert_eq!(f.free_taken(), 0);
         f.play(&free).unwrap();
+        assert_eq!(f.free_taken(), 1, "co-op counts the turns without them");
         assert_eq!(f.to_move(), 1, "the player moves again");
         assert!(f.free_moves().is_empty());
         for id in ["hull", "choir"] {
@@ -987,6 +989,7 @@ mod tests {
             let reply = other.boss_move();
             other.play(&reply).unwrap();
             assert!(other.free_moves().is_empty(), "{id}");
+            assert_eq!(other.free_taken(), 0, "{id}");
         }
     }
 
