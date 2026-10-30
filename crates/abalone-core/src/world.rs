@@ -56,16 +56,60 @@ fn unit(seed: u64, salt: u64, x: i32, y: i32) -> f64 {
     (h >> 11) as f64 / (1u64 << 53) as f64
 }
 
-/// Smooth value noise at `(q, r)`: lattice values every `scale` cells, blended with smoothstep.
-fn noise(seed: u64, salt: u64, q: i32, r: i32, scale: i32) -> f64 {
+/// Smooth value noise at `(q, r)`: lattice values every `scale` cells, blended with smoothstep. `at`
+/// gives the value of a lattice point.
+fn noise_at(at: impl Fn(i32, i32) -> f64, q: i32, r: i32, scale: i32) -> f64 {
     let (x, y) = (q.div_euclid(scale), r.div_euclid(scale));
     let smooth = |t: f64| t * t * (3.0 - 2.0 * t);
     let tx = smooth(f64::from(q.rem_euclid(scale)) / f64::from(scale));
     let ty = smooth(f64::from(r.rem_euclid(scale)) / f64::from(scale));
-    let at = |dx, dy| unit(seed, salt, x + dx, y + dy);
-    let top = at(0, 0) + (at(1, 0) - at(0, 0)) * tx;
-    let bottom = at(0, 1) + (at(1, 1) - at(0, 1)) * tx;
+    let top = at(x, y) + (at(x + 1, y) - at(x, y)) * tx;
+    let bottom = at(x, y + 1) + (at(x + 1, y + 1) - at(x, y + 1)) * tx;
     top + (bottom - top) * ty
+}
+
+/// Lattice points a chunk spans along one axis: at most 6 for the finest noise (`scale` 5).
+const LATTICE: usize = 8;
+
+/// The lattice values of one noise field over one chunk, hashed once for all its cells.
+struct Lattice {
+    x0: i32,
+    y0: i32,
+    scale: i32,
+    values: [[f64; LATTICE]; LATTICE],
+}
+
+impl Lattice {
+    fn new(seed: u64, salt: u64, cx: i32, cy: i32, scale: i32) -> Self {
+        let (x0, y0) = (
+            (cx * CHUNK).div_euclid(scale),
+            (cy * CHUNK).div_euclid(scale),
+        );
+        let x1 = ((cx + 1) * CHUNK - 1).div_euclid(scale) + 1;
+        let y1 = ((cy + 1) * CHUNK - 1).div_euclid(scale) + 1;
+        debug_assert!(x1 - x0 < LATTICE as i32 && y1 - y0 < LATTICE as i32);
+        let mut values = [[0.0; LATTICE]; LATTICE];
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                values[(y - y0) as usize][(x - x0) as usize] = unit(seed, salt, x, y);
+            }
+        }
+        Lattice {
+            x0,
+            y0,
+            scale,
+            values,
+        }
+    }
+
+    fn noise(&self, q: i32, r: i32) -> f64 {
+        noise_at(
+            |x, y| self.values[(y - self.y0) as usize][(x - self.x0) as usize],
+            q,
+            r,
+            self.scale,
+        )
+    }
 }
 
 /// The axial distance from `(0, 0)`.
@@ -78,65 +122,124 @@ fn in_world(c: i32) -> bool {
     (-WORLD_CHUNKS / 2..WORLD_CHUNKS / 2).contains(&c)
 }
 
+/// The ruined wall of the square `(x, y)` of the `WALL_BLOCK` grid: its first cell, its step and its
+/// length. Most squares have none.
+struct Segment {
+    start: (i32, i32),
+    step: (i32, i32),
+    len: i32,
+}
+
+fn wall_segment(seed: u64, x: i32, y: i32) -> Option<Segment> {
+    if unit(seed, 7, x, y) >= 0.45 {
+        return None;
+    }
+    let start = (
+        x * WALL_BLOCK + (unit(seed, 8, x, y) * f64::from(WALL_BLOCK)) as i32,
+        y * WALL_BLOCK + (unit(seed, 9, x, y) * f64::from(WALL_BLOCK)) as i32,
+    );
+    let step = [(1, 0), (0, 1), (1, -1)][(unit(seed, 10, x, y) * 3.0) as usize];
+    let len = 3 + (unit(seed, 11, x, y) * 4.0) as i32;
+    Some(Segment { start, step, len })
+}
+
+/// Everything the cells of one chunk need, computed once: the noise lattices and the walls.
+struct Window {
+    seed: u64,
+    q0: i32,
+    r0: i32,
+    /// Elevation: salt 1 at scale 12, salt 2 at scale 5.
+    low: Lattice,
+    high: Lattice,
+    /// Dryness: salt 3 at scale 9.
+    dry: Lattice,
+    /// Forests: salt 5 at scale 7.
+    forest: Lattice,
+    /// Whether each cell of the chunk is on a wall, row by row.
+    wall: [bool; (CHUNK * CHUNK) as usize],
+}
+
+impl Window {
+    fn new(seed: u64, cx: i32, cy: i32) -> Self {
+        let (q0, r0) = (cx * CHUNK, cy * CHUNK);
+        let mut wall = [false; (CHUNK * CHUNK) as usize];
+        // A segment reaches at most one square past its own along each axis, so the squares one
+        // step around the chunk's squares hold every segment that crosses it.
+        let (x0, y0) = (q0.div_euclid(WALL_BLOCK) - 1, r0.div_euclid(WALL_BLOCK) - 1);
+        let x1 = (q0 + CHUNK - 1).div_euclid(WALL_BLOCK) + 1;
+        let y1 = (r0 + CHUNK - 1).div_euclid(WALL_BLOCK) + 1;
+        for x in x0..=x1 {
+            for y in y0..=y1 {
+                let Some(seg) = wall_segment(seed, x, y) else {
+                    continue;
+                };
+                for k in 0..seg.len {
+                    let (q, r) = (seg.start.0 + k * seg.step.0, seg.start.1 + k * seg.step.1);
+                    if (q0..q0 + CHUNK).contains(&q) && (r0..r0 + CHUNK).contains(&r) {
+                        wall[((r - r0) * CHUNK + (q - q0)) as usize] = true;
+                    }
+                }
+            }
+        }
+        Window {
+            seed,
+            q0,
+            r0,
+            low: Lattice::new(seed, 1, cx, cy, 12),
+            high: Lattice::new(seed, 2, cx, cy, 5),
+            dry: Lattice::new(seed, 3, cx, cy, 9),
+            forest: Lattice::new(seed, 5, cx, cy, 7),
+            wall,
+        }
+    }
+
+    /// The cell at `(q, r)`, which must lie in this chunk.
+    fn cell(&self, q: i32, r: i32) -> Cell {
+        if distance(q, r) <= CLEARING {
+            return Cell {
+                height: 1,
+                terrain: Terrain::Grass,
+            };
+        }
+        let elevation = 0.65 * self.low.noise(q, r) + 0.35 * self.high.noise(q, r);
+        let height = match elevation {
+            e if e < 0.32 => 0,
+            e if e < 0.50 => 1,
+            e if e < 0.64 => 2,
+            _ => 3,
+        };
+        let dry = self.dry.noise(q, r) < 0.4;
+        let terrain = match (height, dry) {
+            (0, _) => Terrain::Water,
+            (1, true) => Terrain::Sand,
+            (2, true) => Terrain::Rock,
+            (3, _) => Terrain::Peak,
+            _ => Terrain::Grass,
+        };
+        let open = !terrain.blocked();
+        let forest = terrain == Terrain::Grass
+            && self.forest.noise(q, r) > 0.55
+            && unit(self.seed, 6, q, r) < 0.5;
+        let on_wall = self.wall[((r - self.r0) * CHUNK + (q - self.q0)) as usize];
+        let terrain = if open && on_wall {
+            Terrain::Wall
+        } else if forest {
+            Terrain::Tree
+        } else if open && unit(self.seed, 4, q, r) * 1000.0 < BOULDER_PER_MILLE as f64 {
+            Terrain::Boulder
+        } else {
+            terrain
+        };
+        Cell { height, terrain }
+    }
+}
+
 /// The cell at `(q, r)` of the world of `seed`, `None` off the world.
 pub fn cell(seed: u64, q: i32, r: i32) -> Option<Cell> {
     if !in_world(q.div_euclid(CHUNK)) || !in_world(r.div_euclid(CHUNK)) {
         return None;
     }
-    if distance(q, r) <= CLEARING {
-        return Some(Cell {
-            height: 1,
-            terrain: Terrain::Grass,
-        });
-    }
-    let elevation = 0.65 * noise(seed, 1, q, r, 12) + 0.35 * noise(seed, 2, q, r, 5);
-    let height = match elevation {
-        e if e < 0.32 => 0,
-        e if e < 0.50 => 1,
-        e if e < 0.64 => 2,
-        _ => 3,
-    };
-    let dry = noise(seed, 3, q, r, 9) < 0.4;
-    let terrain = match (height, dry) {
-        (0, _) => Terrain::Water,
-        (1, true) => Terrain::Sand,
-        (2, true) => Terrain::Rock,
-        (3, _) => Terrain::Peak,
-        _ => Terrain::Grass,
-    };
-    let open = !terrain.blocked();
-    let forest =
-        terrain == Terrain::Grass && noise(seed, 5, q, r, 7) > 0.55 && unit(seed, 6, q, r) < 0.5;
-    let terrain = if open && on_wall(seed, q, r) {
-        Terrain::Wall
-    } else if forest {
-        Terrain::Tree
-    } else if open && unit(seed, 4, q, r) * 1000.0 < BOULDER_PER_MILLE as f64 {
-        Terrain::Boulder
-    } else {
-        terrain
-    };
-    Some(Cell { height, terrain })
-}
-
-/// Whether `(q, r)` is on a ruined wall: each `WALL_BLOCK` square of the grid may hold one segment of 3
-/// to 6 cells along one of three axes, from the seed and the square alone, so a wall may cross a
-/// chunk edge and the squares around the cell are the only ones to look at.
-fn on_wall(seed: u64, q: i32, r: i32) -> bool {
-    let (bx, by) = (q.div_euclid(WALL_BLOCK), r.div_euclid(WALL_BLOCK));
-    (-1..=1).any(|dx| {
-        (-1..=1).any(|dy| {
-            let (x, y) = (bx + dx, by + dy);
-            if unit(seed, 7, x, y) >= 0.45 {
-                return false;
-            }
-            let start_q = x * WALL_BLOCK + (unit(seed, 8, x, y) * f64::from(WALL_BLOCK)) as i32;
-            let start_r = y * WALL_BLOCK + (unit(seed, 9, x, y) * f64::from(WALL_BLOCK)) as i32;
-            let (dq, dr) = [(1, 0), (0, 1), (1, -1)][(unit(seed, 10, x, y) * 3.0) as usize];
-            let len = 3 + (unit(seed, 11, x, y) * 4.0) as i32;
-            (0..len).any(|k| (start_q + k * dq, start_r + k * dr) == (q, r))
-        })
-    })
+    Some(Window::new(seed, q.div_euclid(CHUNK), r.div_euclid(CHUNK)).cell(q, r))
 }
 
 /// The `CHUNK` x `CHUNK` cells of chunk `(cx, cy)`, row by row (`r` then `q` ascending), `None`
@@ -145,12 +248,14 @@ pub fn chunk(seed: u64, cx: i32, cy: i32) -> Option<Vec<Cell>> {
     if !in_world(cx) || !in_world(cy) {
         return None;
     }
-    Some(
-        (0..CHUNK)
-            .flat_map(|dr| (0..CHUNK).map(move |dq| (dq, dr)))
-            .map(|(dq, dr)| cell(seed, cx * CHUNK + dq, cy * CHUNK + dr).expect("inside the chunk"))
-            .collect(),
-    )
+    let window = Window::new(seed, cx, cy);
+    let mut cells = Vec::with_capacity((CHUNK * CHUNK) as usize);
+    for dr in 0..CHUNK {
+        for dq in 0..CHUNK {
+            cells.push(window.cell(cx * CHUNK + dq, cy * CHUNK + dr));
+        }
+    }
+    Some(cells)
 }
 
 /// The enemy groups that start in chunk `(cx, cy)` (docs/specs/openworld.md section 3): up to `TRIES` groups
@@ -161,6 +266,7 @@ pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
     if !in_world(cx) || !in_world(cy) {
         return vec![];
     }
+    let window = Window::new(seed, cx, cy);
     let mut placed: Vec<Vec<(i32, i32)>> = Vec::new();
     for n in 0..TRIES {
         let draw = |salt: u64| unit(seed, 12 + 5 * n + salt, cx, cy);
@@ -176,7 +282,7 @@ pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
             q.div_euclid(CHUNK) == cx
                 && r.div_euclid(CHUNK) == cy
                 && distance(q, r) > SAFE
-                && cell(seed, q, r).is_some_and(|c| !c.terrain.blocked())
+                && !window.cell(q, r).terrain.blocked()
                 && !placed.iter().flatten().any(|&taken| taken == (q, r))
         });
         if free {
@@ -408,7 +514,8 @@ mod tests {
     /// FNV-1a over the bytes of the chunks and the enemy groups of a few seeds and chunks: any change
     /// of the generated world changes it.
     fn world_digest() -> u64 {
-        let fnv = |hash: u64, byte: u8| (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3);
+        let fnv =
+            |hash: u64, byte: u8| (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3);
         let mut hash = 0xCBF2_9CE4_8422_2325u64;
         let coords = [
             (0, 0),
@@ -445,7 +552,11 @@ mod tests {
 
     #[test]
     fn the_generated_world_is_pinned_by_a_digest() {
-        assert_eq!(world_digest(), 3_089_906_282_619_527_092, "digest of the reference world");
+        assert_eq!(
+            world_digest(),
+            3_089_906_282_619_527_092,
+            "digest of the reference world"
+        );
     }
 
     /// Timing, not a check: `cargo test --release -p abalone-core -- --ignored --nocapture world_timing`.
@@ -463,7 +574,10 @@ mod tests {
         for _ in 0..20 {
             sink += enemy_groups(7, 3, -2).len();
         }
-        println!("one chunk, enemy_groups(): {:?} per call", started.elapsed() / 20);
+        println!(
+            "one chunk, enemy_groups(): {:?} per call",
+            started.elapsed() / 20
+        );
         let started = Instant::now();
         let mut all = 0usize;
         for cx in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
@@ -471,7 +585,10 @@ mod tests {
                 all += chunk(7, cx, cy).unwrap().len();
             }
         }
-        println!("4096 chunks, chunk(): {:?} total ({all} cells)", started.elapsed());
+        println!(
+            "4096 chunks, chunk(): {:?} total ({all} cells)",
+            started.elapsed()
+        );
         let started = Instant::now();
         for cx in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
             for cy in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
