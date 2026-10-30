@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Axial, Move } from './board';
-import { newRun, pick } from './roguelite';
+import { actBoss, newRun, parseMap, pick, visit, type MapNode, type Run } from './roguelite';
 import { boot, type Game } from './test/harness';
 
 // The rogue-lite run on the harness (#798, docs/specs/roguelite.md): Rogue-lite run in the mode menu shows the map of
@@ -226,5 +226,105 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     bot.frame(1000);
     await bot.settle();
     expect(bot.hook('__plies')).toBe(8); // the bot answered on the same board
+  });
+  // Elites, rests, events and act bosses (#800). Seed 3: node 0 leads to the elite 2, the fight 1 to the rest 3 and the
+  // events 4 and 5.
+  const node = (i: number): HTMLButtonElement => map().querySelector<HTMLButtonElement>(`button[data-node="${i}"]`)!;
+  it('a rest from the map brings the army back to 14 with no fight, saved with the run', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...newRun(3), army: 9, path: [1] });
+    expect(node(3).getAttribute('aria-label')).toBe('Act 1, rest');
+    expect(node(2).className).toBe('node elite');
+    node(3).click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(line()).toBe('Rogue-lite run · rested · army 14 marbles · pick a fight');
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(line()).toBe('Rogue-lite run · rested · army 14 marbles · pick a fight');
+  });
+
+  it.each([['1', 'taken'], ['0', 'left']])('an event waits for its choice, %s: %s, then the map goes on', async (choice) => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    await game.hook('__run', { ...newRun(3), army: 12, specials: [0, 0, 1], path: [1] });
+    node(4).click();
+    expect(document.body.dataset.run).toBe('event');
+    expect(line()).toMatch(/^Event · /);
+    await game.settle();
+    await boot('?bot=off', { indexedDB }); // a reload keeps the event waiting
+    expect(document.body.dataset.run).toBe('event');
+    map().querySelector<HTMLElement>(`button[data-choice="${choice}"]`)!.click();
+    expect(document.body.dataset.run).toBe('map');
+    const before = 'Rogue-lite run · army 12 marbles, 1 Spark · pick a fight';
+    if (choice === '1') expect(line()).not.toBe(before);
+    else expect(line()).toBe(before);
+  });
+
+  it('an elite is a fight against the bot on the army board', async () => {
+    const game = await boot('?nodes=50');
+    await game.hook('__run', pick({ ...newRun(3), path: [0] }, 2));
+    expect(game.hud()).toContain('Rogue-lite run · act 1 elite · army 14 marbles');
+    playMove(game);
+    await game.settle();
+    game.frame(1000);
+    await game.settle();
+    expect(game.hook('__plies')).toBe(2); // the bot answered
+  });
+
+  /** The path of the run `seed` from the act 1 first row, by first links, to the act 1 boss. */
+  function toBoss(nodes: MapNode[]): number[] {
+    const path = [0];
+    for (let n = nodes[0]!; n.kind !== 'boss'; ) {
+      const i = nodes.findIndex((m) => m.act === n.act && m.row === n.row + 1 && m.col === n.links[0]);
+      path.push(i);
+      n = nodes[i]!;
+    }
+    return path;
+  }
+  async function bossRun(id: string): Promise<{ state: Run; nodes: MapNode[] }> {
+    const { boss_ids, run_map } = await import('abalone-wasm');
+    for (let seed = 0; ; seed++) {
+      const nodes = parseMap(run_map(seed));
+      const path = toBoss(nodes);
+      const state = pick({ ...newRun(seed), path: path.slice(0, -1) }, path[path.length - 1]!);
+      if (actBoss(nodes, state, boss_ids())?.id === id) return { state, nodes };
+    }
+  }
+
+  it('the act boss is a roster boss picked by the seed, at the act strength, with its deck, resumed on a reload', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?nodes=50', { indexedDB });
+    const { Encounter } = await import('abalone-wasm');
+    const strength = vi.spyOn(Encounter.prototype, 'scale_node_budget');
+    const { state } = await bossRun('hull');
+    await game.hook('__run', state);
+    expect(document.body.dataset.run).toBe('fight');
+    expect(document.body.dataset.boss).toBe('hull');
+    expect(document.body.dataset.deck).not.toBe('mess');
+    expect(game.hud()).toContain('Rogue-lite run · act 1 boss');
+    playMove(game);
+    await game.settle();
+    game.frame(1000);
+    await game.settle();
+    expect(game.hook('__plies')).toBe(2); // the boss answered
+    expect(strength).toHaveBeenCalledWith(50); // act 1: the easy budget, whatever the difficulty setting
+    await boot('?nodes=50', { indexedDB });
+    expect(document.body.dataset.boss).toBe('hull');
+  });
+
+  it('a lost act boss loses the run, and the next run fights on the local deck', async () => {
+    const game = await boot('?bot=off');
+    const { state, nodes } = await bossRun('echo');
+    await game.hook('__run', state);
+    // The Echo draws by repetition in 5 moves, a loss against a boss (e2e/fight-end.ts).
+    const moves: [Axial, Axial][] = [[[0, 2], [0, 1]], [[0, -1], [1, -1]], [[-1, 1], [0, 1]], [[0, -1], [1, -1]], [[-1, 1], [0, 1]]];
+    for (const [from, to] of moves) play(game, [from], to);
+    await game.settle();
+    expect(document.body.dataset.run).toBe('lost');
+    expect(line()).toBe('Run lost · 14 marbles left');
+    await game.hook('__run', visit(nodes, newRun(state.seed), 0));
+    expect(document.body.dataset.boss).toBeUndefined();
+    expect(document.body.dataset.deck).toBe('mess');
   });
 });

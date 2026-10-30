@@ -14,18 +14,24 @@ const NODE_STRIDE = 5;
 /** Key of the run in the game store, next to the local game (savegame.ts). */
 export const RUN_KEY = 'run';
 
-/** One node of the map: a fight, or the boss that ends its act. `links` are the columns of the next row it leads to. */
+/** What a node holds, by the bridge's kind code (#800). */
+const KINDS = ['fight', 'boss', 'elite', 'rest', 'event'] as const;
+export type NodeKind = (typeof KINDS)[number];
+
+/** One node of the map: a fight, an elite, a rest, an event, or the boss that ends its act. `links` are the columns of
+ * the next row it leads to. */
 export interface MapNode {
   act: number;
   row: number;
   col: number;
-  boss: boolean;
+  kind: NodeKind;
   links: number[];
 }
 
 /** A run: its seed, its army, the nodes picked (indices in the map), the fight of the last one while it is on and its
  * moves, and how it ended. `specials` counts the army's Heavy, Anchor and Spark marbles (#961), `placed` the ones on
- * the fight's board `[q, r, kind]`, and `reward` is on while the reward of a won fight waits to be picked. */
+ * the fight's board `[q, r, kind]`, `reward` is on while the reward of a won fight waits to be picked, and `event` while
+ * the choice of an event node waits (#800). */
 export interface Run {
   seed: number;
   army: number;
@@ -36,6 +42,7 @@ export interface Run {
   specials: number[];
   placed: number[][];
   reward: boolean;
+  event: boolean;
 }
 
 /** At most this many special marbles of each type on the board of a fight (#961). */
@@ -66,7 +73,7 @@ export function parseMap(flat: ArrayLike<number>): MapNode[] {
   for (let i = 0; i < flat.length; i += NODE_STRIDE) {
     const mask = flat[i + 4]!;
     const links = [0, 1, 2, 3, 4, 5].filter((c) => mask & (1 << c));
-    nodes.push({ act: flat[i]!, row: flat[i + 1]!, col: flat[i + 2]!, boss: flat[i + 3] === 1, links });
+    nodes.push({ act: flat[i]!, row: flat[i + 1]!, col: flat[i + 2]!, kind: KINDS[flat[i + 3]!]!, links });
   }
   return nodes;
 }
@@ -81,6 +88,7 @@ export const newRun = (seed: number): Run => ({
   specials: [0, 0, 0],
   placed: [],
   reward: false,
+  event: false,
 });
 
 const sum = (counts: number[]): number => counts.reduce((a, b) => a + b, 0);
@@ -96,26 +104,107 @@ function next(map: MapNode[], path: number[]): number[] {
   const open = (n: MapNode): boolean =>
     !last
       ? n.act === 0 && n.row === 0
-      : last.boss
+      : last.kind === 'boss'
         ? n.act === last.act + 1 && n.row === 0
         : n.act === last.act && n.row === last.row + 1 && last.links.includes(n.col);
   return map.flatMap((n, i) => (open(n) ? [i] : []));
 }
 
 /** The nodes the player may pick now: none during a fight or once the run is over. */
-export const choices = (map: MapNode[], run: Run): number[] => (run.fighting || run.end || run.reward ? [] : next(map, run.path));
+export const choices = (map: MapNode[], run: Run): number[] =>
+  run.fighting || run.end || run.reward || run.event ? [] : next(map, run.path);
 
 /** The run once `node` is picked: its fight starts, no special marble on its board yet. */
 export const pick = (run: Run, node: number): Run => ({ ...run, path: [...run.path, node], fighting: true, moves: [], placed: [] });
+
+/** The run once `node` of `map` is visited (#800): a rest brings the army back up to START_ARMY, an event waits for its
+ * choice, any other node starts its fight. */
+export function visit(map: MapNode[], run: Run, node: number): Run {
+  const path = [...run.path, node];
+  const { kind } = map[node]!;
+  if (kind === 'rest') return { ...run, path, army: START_ARMY };
+  return kind === 'event' ? { ...run, path, event: true } : pick(run, node);
+}
+
+/** The node of the run's last pick, if any. */
+const lastNode = (map: MapNode[], run: Run): MapNode | undefined => map[run.path[run.path.length - 1]!];
+
+/** An elite's bot searches this many times the positions of a fight's (#800). */
+export const ELITE_BUDGET = 2;
+/** Marbles back after a won elite, up to START_ARMY: its better reward (#800). */
+const ELITE_MARBLES = 2;
+
+/** The bot's search budget in the run's fight: `nodes`, or ELITE_BUDGET times it against an elite. */
+export const fightBudget = (map: MapNode[], run: Run, nodes: number): number =>
+  run.fighting && lastNode(map, run)?.kind === 'elite' ? nodes * ELITE_BUDGET : nodes;
+
+/** The boss fight's strength by act, as the difficulty setting's budget percent (difficulty.ts): easy, normal, hard. */
+export const ACT_PERCENT = [50, 100, 200];
+
+/** The roster boss of the run's fight when its node is a boss (#800), one of `ids` (the bridge's boss_ids): the run seed
+ * deals them, a new one each act, the act's strength, and the fight's seed from the run seed and the node. */
+export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; seed: number; percent: number } | null {
+  const node = lastNode(map, run);
+  if (!run.fighting || node?.kind !== 'boss') return null;
+  const dealt = [...ids];
+  for (let i = dealt.length - 1; i > 0; i--) {
+    const j = hash(run.seed, i) % (i + 1);
+    [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];
+  }
+  return { id: dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: ACT_PERCENT[node.act]! };
+}
+
+/** An event (#800): its title and text, and the trade it offers: `army` marbles more or less (up to START_ARMY), `gain`
+ * special marbles of each type, and `lose` one special marble (the Sparks first, then the Anchors, then the Heavies). */
+export interface RunEvent {
+  title: string;
+  text: string;
+  take: string;
+  army: number;
+  gain: number[];
+  lose: boolean;
+}
+export const EVENTS: readonly RunEvent[] = [
+  { title: 'Scrap forge', text: 'A forge still glows in a wrecked bay.', take: 'Forge a Heavy · lose 2 marbles', army: -2, gain: [1, 0, 0], lose: false },
+  { title: 'Mooring clamps', text: 'Docking clamps that never let go.', take: 'Fit an Anchor · lose 2 marbles', army: -2, gain: [0, 1, 0], lose: false },
+  { title: 'Live wiring', text: 'A cable spits sparks across the deck.', take: 'Charge a Spark · lose 1 marble', army: -1, gain: [0, 0, 1], lose: false },
+  { title: 'Salvage drone', text: 'A drone offers its last two cells.', take: 'Arm 2 Sparks · lose 3 marbles', army: -3, gain: [0, 0, 2], lose: false },
+  { title: 'Cryo pods', text: 'Crew asleep in the pods, ready to wake.', take: 'Wake 3 marbles · lose a special marble', army: 3, gain: [0, 0, 0], lose: true },
+];
+
+/** The event of the run's last node while its choice waits, seeded by the run seed and the node, else null. */
+export const eventOf = (run: Run): RunEvent | null =>
+  run.event ? EVENTS[hash(run.seed, run.path[run.path.length - 1]! * 8 + 4) % EVENTS.length]! : null;
+
+/** The run once the trade of `e` is taken, or null when the army cannot pay it (below MIN_ARMY, no special marble to
+ * lose, more special marbles than marbles) or would gain nothing. */
+export function takeEvent(run: Run, e: RunEvent): Run | null {
+  const army = Math.min(START_ARMY, run.army + e.army);
+  const specials = run.specials.map((n, k) => n + e.gain[k]!);
+  const lost = [2, 1, 0].find((k) => e.lose && specials[k]! > 0);
+  if (lost !== undefined) specials[lost]! -= 1;
+  const paid = !e.lose || lost !== undefined;
+  const gained = army > run.army || sum(specials) > sum(run.specials);
+  return paid && gained && army >= MIN_ARMY && sum(specials) <= army ? { ...run, army, specials } : null;
+}
+
+/** The run once its event is resolved: its trade `taken` (unchanged when it cannot be paid) or left. */
+export function resolve(run: Run, taken: boolean): Run {
+  const e = eventOf(run);
+  if (!e) return run;
+  const after = taken ? takeEvent(run, e) : run;
+  return after ? { ...after, event: false } : run;
+}
 
 /** The run after the fight of its last node, `won` or not, the army having lost `lost` marbles and kept `kept` of each
  * special marble type placed (all by default): a loss or an army below MIN_ARMY ends it, the boss of the last act wins
  * it, any other win offers a reward. The army never holds more special marbles than marbles: past that, the Sparks go
  * first, then the Anchors, then the Heavies. */
 export function fightOver(map: MapNode[], run: Run, won: boolean, lost: number, kept = countOf(run.placed)): Run {
-  const army = run.army - lost;
-  const node = map[run.path[run.path.length - 1]!]!;
-  const end = !won || army < MIN_ARMY ? 'lost' : node.boss && node.act === lastAct(map) ? 'won' : '';
+  const node = lastNode(map, run)!;
+  const left = run.army - lost;
+  const end = !won || left < MIN_ARMY ? 'lost' : node.kind === 'boss' && node.act === lastAct(map) ? 'won' : '';
+  const army = end === '' && node.kind === 'elite' ? Math.min(START_ARMY, left + ELITE_MARBLES) : left;
   const placed = countOf(run.placed);
   const specials = run.specials.map((n, k) => n - placed[k]! + kept[k]!);
   for (let k = 2, over = sum(specials) - army; k >= 0 && over > 0; k--) {
@@ -189,11 +278,12 @@ export function sparkBurst(before: ArrayLike<number>, specials: Special[], move:
 export function runLine(map: MapNode[], run: Run): string {
   if (run.end === 'won') return `Run won with ${run.army} marbles`;
   if (run.end === 'lost') return `Run lost · ${run.army} marbles left`;
-  const node = run.fighting ? map[run.path[run.path.length - 1]!]! : null;
-  const where = node ? `act ${node.act + 1} ${node.boss ? 'boss' : 'fight'}` : '';
+  const node = run.fighting ? lastNode(map, run)! : null;
+  const where = node ? `act ${node.act + 1} ${node.kind}` : '';
   const owned = SPECIAL_LOOKS.flatMap((l, k) => (run.specials[k] ? [`, ${run.specials[k]} ${l.name}`] : [])).join('');
   const army = `army ${run.army} marbles${owned}`;
-  return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${army} · pick a fight`;
+  const rested = lastNode(map, run)?.kind === 'rest' ? 'rested · ' : '';
+  return node ? `Rogue-lite run · ${where} · ${army}` : `Rogue-lite run · ${rested}${army} · pick a fight`;
 }
 
 /** The glyph of a special marble type (`0` a plain marble), drawn in its colour, outlined in the text's colour. */
@@ -219,11 +309,22 @@ export function placeHtml(run: Run, armed: number): string {
   );
 }
 
-/** The reward screen after a won fight: a button per offer. */
-export function rewardHtml(run: Run): string {
+/** The reward screen after a won fight: a button per offer, and the marbles an elite gave back. */
+export function rewardHtml(map: MapNode[], run: Run): string {
   const label = (offer: number): string => (offer ? `${SPECIAL_LOOKS[offer - 1]!.name}: ${SPECIAL_LOOKS[offer - 1]!.help}` : 'One more marble');
   const buttons = offers(run).map((o) => `<button type="button" data-offer="${o}">${glyph(o)}${label(o)}</button>`);
-  return `<p class="run-line">Fight won · pick a reward</p><div class="run-kinds">${buttons.join('')}</div>`;
+  const title = lastNode(map, run)?.kind === 'elite' ? `Elite beaten · up to ${ELITE_MARBLES} marbles back` : 'Fight won';
+  return `<p class="run-line">${title} · pick a reward</p><div class="run-kinds">${buttons.join('')}</div>`;
+}
+
+/** The event screen: its title and text, its trade (disabled when it cannot be paid) and Leave. */
+export function eventHtml(run: Run): string {
+  const e = eventOf(run)!;
+  const take = `<button type="button" data-choice="1"${takeEvent(run, e) ? '' : ' disabled'}>${e.take}</button>`;
+  return (
+    `<p class="run-line">Event · ${e.title}</p><p class="run-help">${e.text}</p>` +
+    `<div class="run-kinds">${take}<button type="button" data-choice="0">Leave</button></div>`
+  );
 }
 
 /** The map screen: the run line, the nodes act by act from the top, each placed on its row, the links between them
@@ -247,10 +348,10 @@ export function mapHtml(map: MapNode[], run: Run): string {
   const nodes = map.map((n, i) => {
     const [x, y] = spot(n);
     const mark = i === here ? ' here' : run.path.includes(i) ? ' taken' : '';
-    const kind = n.boss ? 'boss' : 'fight';
+    const label = n.kind[0]!.toUpperCase() + n.kind.slice(1);
     return (
-      `<button type="button" class="node${n.boss ? ' boss' : ''}${mark}" data-node="${i}" style="left:${x}%;top:${y}%" ` +
-      `aria-label="Act ${n.act + 1}, ${kind}"${open.includes(i) ? '' : ' disabled'}>${n.boss ? 'Boss' : 'Fight'}</button>`
+      `<button type="button" class="node${n.kind === 'fight' ? '' : ` ${n.kind}`}${mark}" data-node="${i}" style="left:${x}%;top:${y}%" ` +
+      `aria-label="Act ${n.act + 1}, ${n.kind}"${open.includes(i) ? '' : ' disabled'}>${label}</button>`
     );
   });
   const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>`;
@@ -266,7 +367,7 @@ const isInts = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.l
 /** The run in `raw`, or null when it is not a saved run. A run saved before the special marbles (#961) has none. */
 function decodeRun(raw: unknown): Run | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false } = raw as Record<keyof Run, unknown>;
+  const { seed, army, path, fighting, moves, end, specials = [0, 0, 0], placed = [], reward = false, event = false } = raw as Record<keyof Run, unknown>;
   const ok =
     isInt(seed, 0xffffffff) &&
     isInt(army, START_ARMY) &&
@@ -278,9 +379,10 @@ function decodeRun(raw: unknown): Run | null {
     isInts(specials, 3) &&
     Array.isArray(placed) &&
     placed.every((p) => Array.isArray(p) && p.length === 3 && p.every((v) => Number.isInteger(v))) &&
-    typeof reward === 'boolean';
+    typeof reward === 'boolean' &&
+    typeof event === 'boolean';
   return ok
-    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials, placed: placed as number[][], reward }
+    ? { seed, army, path: [...(path as number[])], fighting, moves: moves as number[][], end, specials, placed: placed as number[][], reward, event }
     : null;
 }
 
@@ -303,12 +405,13 @@ export async function clearRun(store: KeyStore): Promise<void> {
   }
 }
 
-/** The saved run with its map (`mapOf` its seed) and, during a fight, the fight replayed on `make` of its army and its
- * special marbles placed. A save that does not decode, walks off its map or does not replay is deleted. */
+/** The saved run with its map (`mapOf` its seed) and, during a fight, the fight replayed on `make` of the run and its
+ * map (the army and its special marbles placed, or the act's boss). A save that does not decode, walks off its map or
+ * does not replay is deleted, but a boss fight that does not replay starts over. */
 export async function loadRun<E extends ReplayEngine>(
   store: KeyStore,
   mapOf: (seed: number) => MapNode[],
-  make: (army: number, placed: number[][]) => E,
+  make: (run: Run, map: MapNode[]) => E,
 ): Promise<{ state: Run; map: MapNode[]; engine: E | null } | null> {
   try {
     const raw = await store.get(RUN_KEY);
@@ -316,8 +419,13 @@ export async function loadRun<E extends ReplayEngine>(
     const state = decodeRun(raw);
     const map = state ? mapOf(state.seed) : [];
     const walked = state !== null && state.path.every((n, i) => next(map, state.path.slice(0, i)).includes(n));
-    const engine = walked && state.fighting && state.path.length ? replay(state.moves, () => make(state.army, state.placed)) : null;
-    if (walked && (engine || !state.fighting)) return { state, map, engine };
+    const fight = walked && state.fighting && state.path.length ? replay(state.moves, () => make(state, map)) : null;
+    // A boss node's fight saved when it was an army fight (before #800) does not replay on the boss's board: it starts over.
+    if (!fight && walked && state.fighting && lastNode(map, state)?.kind === 'boss') {
+      const over = { ...state, moves: [] };
+      return { state: over, map, engine: make(over, map) };
+    }
+    if (walked && (fight || !state.fighting)) return { state, map, engine: fight };
     await store.delete(RUN_KEY);
   } catch {
     // Storage blocked: no run to resume.

@@ -11,8 +11,9 @@ use crate::search::{search_phased, DEFAULT_WEIGHTS};
 
 /// P2 starts after this many ejections credited to the player. There is no P3.
 pub const ECHO_PHASE_EJECTIONS: [u8; 1] = [3];
-/// Positions the boss search may visit. Starting value, to tune (calibration knob).
-pub const ECHO_NODE_BUDGET: u32 = 400;
+/// Positions the boss search may visit: one ply deep. At 400 it reads two plies and holds the
+/// mirrored game to the no-ejection cap (docs/specs/boss-balance.md, #951).
+pub const ECHO_NODE_BUDGET: u32 = 100;
 
 fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
     None
@@ -331,7 +332,10 @@ mod tests {
         let boss = echo_boss();
         assert!(boss.phase_marbles.is_empty());
         assert_eq!(boss.phase_ejections, vec![3], "P2 after 3, no P3");
-        assert_eq!(boss.node_budget, ECHO_NODE_BUDGET);
+        assert_eq!(
+            boss.node_budget, 100,
+            "a depth-1 boss the player can beat (#951)"
+        );
         assert_eq!((boss.special)(1, 0), None);
         let board = Board::standard();
         assert_eq!((boss.hook)(&board, 0, 0), board);

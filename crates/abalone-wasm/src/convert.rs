@@ -145,7 +145,7 @@ pub(crate) fn cell_code(board: &Board, q: i32, r: i32) -> u8 {
 }
 
 /// The cells of a board in board order, see the module docs: the 61, then each ring beyond them
-/// in turn (ring 5 of The Ballast Mind, rings 5 to 9 of The Dual Room), so no index shifts.
+/// in turn (ring 5 of The Ballast Mind, rings 5 to 7 of The Dual Room), so no index shifts.
 pub(crate) fn board_cells(radius: i32) -> impl Iterator<Item = (i32, i32)> {
     let ring = |(q, r): (i32, i32)| q.abs().max(r.abs()).max((q + r).abs());
     cells()
@@ -215,7 +215,8 @@ mod tests {
     fn a_board_holds_its_rings_one_after_the_other_so_no_index_shifts() {
         let ring = |(q, r): (i32, i32)| q.abs().max(r.abs()).max((q + r).abs());
         let nine: Vec<(i32, i32)> = board_cells(9).collect();
-        assert_eq!(nine.len(), 271, "The Dual Room's radius 9 scan");
+        assert_eq!(nine.len(), 271);
+        assert_eq!(board_cells(7).count(), 169, "The Dual Room's radius 7 scan");
         let five: Vec<(i32, i32)> = board_cells(5).collect();
         assert_eq!(five.len(), 91);
         assert_eq!(

@@ -64,7 +64,7 @@ describe('cell order of the bridge', () => {
     expect(cellIndex(-9, -1)).toBe(-1);
     expect(cellIndex(0, 10)).toBe(-1);
     expect(cellIndex(5, 0, CELLS)).toBe(-1);
-    expect(cellAt(271)).toBeUndefined();
+    expect(cellAt(169)).toBeUndefined();
   });
 
   it('goes on past the 61 with the outer ring of The Ballast Mind\'s radius 5 board (#564), rows from r=-5', () => {
@@ -77,16 +77,16 @@ describe('cell order of the bridge', () => {
     expect(cellAt(90)).toEqual([0, 5]);
   });
 
-  it('goes on with rings 6 to 9 of the radius 9 board of The Dual Room (#947), each row by row, so no index shifts', () => {
+  it('goes on with rings 6 and 7 of the radius 7 board of The Dual Room (#947, #955), each row by row, so no index shifts', () => {
     const ringOf = ([q, r]: readonly [number, number]): number => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
-    expect(BOARD_CELLS).toHaveLength(271);
-    for (let k = 6; k <= 9; k++) {
+    expect(BOARD_CELLS).toHaveLength(169);
+    for (let k = 6; k <= 7; k++) {
       const start = cellsFor(k - 1).length;
       expect(BOARD_CELLS.slice(start, cellsFor(k).length)).toEqual(cellsFor(k).filter((c) => ringOf(c) === k));
     }
     expect(cellIndex(0, -6)).toBe(91);
-    expect(cellAt(270)).toEqual([0, 9]);
-    expect(cellIndex(10, 0)).toBe(-1);
+    expect(cellAt(168)).toEqual([0, 7]);
+    expect(cellIndex(8, 0)).toBe(-1);
   });
 });
 

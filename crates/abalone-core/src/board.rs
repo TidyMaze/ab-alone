@@ -10,8 +10,8 @@ pub const RADIUS: i32 = 4;
 
 /// Radius of the largest hexagon a mode plays on: the battle royale arena, 217 cells. The game code
 /// scans only a board's own radius (`-radius..=radius`) and relies on `get` giving `None` off the
-/// board, so a smaller board costs no more than before. The Dual Room's board scans radius 9 but
-/// holds two radius 4 rooms (`encounter::dual::DUAL_RADIUS`).
+/// board, so a smaller board costs no more than before. The Dual Room's board scans radius 7 but
+/// holds two radius 3 rooms (`encounter::dual::DUAL_RADIUS`).
 pub const MAX_RADIUS: i32 = 8;
 
 /// Content of one cell. Black and White are seats 1 and 2, the other marbles seats 3 to 6 of a
@@ -106,7 +106,7 @@ pub struct Board {
     incinerators: Vec<(i32, i32)>,
     /// The Unstable Core's marks. `Some` also turns on its weighted push rule.
     unstable: Option<Unstable>,
-    /// The Dual Room's state. `Some` also raises the wall between its two rooms.
+    /// The Dual Room's state.
     dual: Option<Dual>,
     /// The Echo's memory: the moves whose mirror was never played, oldest first, with their side.
     echoes: Vec<(Player, Move)>,
@@ -138,12 +138,12 @@ pub enum PlaceError {
 }
 
 /// The Dual Room's state on the board (docs/specs/game-design.md section 7.15): its board holds
-/// two radius 4 rooms, the south one on the rows `r >= 0`, the north one on `r <= -1`, and a wall
-/// stands between them until it collapses in P3.
+/// two radius 3 rooms, the south one on the rows `r >= 1`, the north one on `r <= -1`, and the void
+/// on the row `r = 0` between them until the bridge fills it in P3.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Dual {
-    /// The wall fell (P3): the rooms are one board.
-    pub collapsed: bool,
+    /// The bridge fills the void (P3): the rooms are one board.
+    pub bridged: bool,
     /// Boss marbles ejected so far: the phases come from them.
     pub ejections: u8,
     /// The marble the last move pushed off and the cell it left, until the hook announces its return.
@@ -152,7 +152,7 @@ pub struct Dual {
     pub coming: Option<(Cell, (i32, i32))>,
 }
 
-/// The room of a cell of the Dual Room's board: `0` south (`r >= 0`), `1` north.
+/// The room of a cell of the Dual Room's board: `0` south (`r >= 1`, the bridge too), `1` north.
 pub fn room((_, r): (i32, i32)) -> usize {
     usize::from(r < 0)
 }
@@ -203,7 +203,7 @@ impl Board {
     }
 
     /// Board of the given radius with every cell empty: [`RADIUS`] for most modes, up to
-    /// [`MAX_RADIUS`] for the battle royale, 9 as the scan of The Dual Room's two rooms.
+    /// [`MAX_RADIUS`] for the battle royale, 7 as the scan of The Dual Room's two rooms.
     pub fn with_radius(radius: i32) -> Self {
         let mut cells = HashMap::new();
         for q in -radius..=radius {
@@ -255,6 +255,12 @@ impl Board {
     /// `set` is ignored, so moves onto it are refused and pushes onto it eject.
     pub fn void(&mut self, q: i32, r: i32) {
         self.cells.remove(&(q, r));
+    }
+
+    /// Adds `(q, r)` to the board as an empty cell (The Dual Room's bridge). A cell on the board
+    /// keeps its marble.
+    pub fn open(&mut self, q: i32, r: i32) {
+        self.cells.entry((q, r)).or_insert(Cell::Empty);
     }
 
     /// Cracked cells and the plies left before each vanishes.
@@ -374,12 +380,6 @@ impl Board {
 
     pub fn set_dual(&mut self, dual: Option<Dual>) {
         self.dual = dual;
-    }
-
-    /// Whether the Dual Room's wall stands between the neighbour cells `from` and `to`.
-    pub fn walled(&self, from: (i32, i32), to: (i32, i32)) -> bool {
-        self.dual
-            .is_some_and(|d| !d.collapsed && room(from) != room(to))
     }
 
     /// The Echo's never-echoed moves, oldest first, with the side that played each.
@@ -531,21 +531,15 @@ mod tests {
     }
 
     #[test]
-    fn a_wall_stands_between_the_two_rooms_only_on_a_dual_board_until_it_collapses() {
-        let (south, north) = ((0, 0), (0, -1));
+    fn open_adds_an_empty_cell_and_keeps_one_on_the_board() {
         let mut board = Board::empty();
-        assert_eq!(board.dual(), None, "no other board has the wall");
-        assert!(!board.walled(south, north));
-        board.set_dual(Some(Dual::default()));
-        assert!(board.walled(south, north) && board.walled(north, south));
-        assert!(!board.walled(south, (1, 0)), "inside the south room");
-        assert!(!board.walled(north, (1, -2)), "inside the north room");
-        assert_eq!((room(south), room(north)), (0, 1));
-        board.set_dual(Some(Dual {
-            collapsed: true,
-            ..Dual::default()
-        }));
-        assert!(!board.walled(south, north), "the passage of P3");
+        board.void(0, 0);
+        board.open(0, 0);
+        assert_eq!(board.get(0, 0), Some(Cell::Empty), "back, empty");
+        board.set(1, 0, Cell::Black);
+        board.open(1, 0);
+        assert_eq!(board.get(1, 0), Some(Cell::Black), "a marble stays");
+        assert_eq!((room((0, 1)), room((0, -1))), (0, 1));
     }
 
     #[test]

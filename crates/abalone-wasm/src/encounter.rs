@@ -130,7 +130,7 @@ fn unstable_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(unstable_start(seed))
 }
 
-/// The Dual Room sets up its two rooms and its wall.
+/// The Dual Room sets up its two rooms and the void between them.
 fn dual_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(dual_start(seed))
 }
@@ -273,7 +273,7 @@ const BOSSES: [BossEntry; 13] = [
     },
     BossEntry {
         id: "dual",
-        goal: "Two rooms split by a wall: an ejected marble comes back in the other room; at 5 the wall falls. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Two rooms split by a void: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose.",
         def: dual_boss,
         start: dual_fight,
         reply: dual_move,
@@ -326,7 +326,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    11 // 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    13 // 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -703,7 +703,7 @@ impl Encounter {
             .collect()
     }
 
-    /// The Dual Room's wall and announced return as `[collapsed, side, q, r]`, side `0` when no
+    /// The Dual Room's bridge and announced return as `[bridged, side, q, r]`, side `0` when no
     /// marble is coming. Empty for the other bosses.
     pub fn dual(&self) -> Vec<i32> {
         let Fight::Plain(e) = &self.fight else {
@@ -713,7 +713,7 @@ impl Encounter {
             let (side, (q, r)) = d
                 .coming
                 .map_or((0, (0, 0)), |(cell, at)| (i32::from(code(Some(cell))), at));
-            vec![i32::from(d.collapsed), side, q, r]
+            vec![i32::from(d.bridged), side, q, r]
         })
     }
 
@@ -951,8 +951,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_11_since_the_echo_plays_bonus_mirrors() {
-        assert_eq!(engine_version(), 11);
+    fn the_engine_version_is_13_since_the_dual_room_has_a_void_and_a_bridge() {
+        assert_eq!(engine_version(), 13);
     }
 
     #[test]
@@ -2314,7 +2314,7 @@ mod tests {
         assert_eq!(f.to_move(), 1);
     }
 
-    // The Dual Room (#947): two rooms split by a wall, an ejected marble comes back in the other one.
+    // The Dual Room (#947, #955): two rooms split by a void, an ejected marble comes back in the other one.
 
     /// The plies of the recorded Dual Room fight (crates/abalone-core/tests/fixtures/dual.txt), shared
     /// with client/src/test/dual-game.ts and client/e2e/dual.spec.ts: its fight seed is 1.
@@ -2340,10 +2340,10 @@ mod tests {
             .collect()
     }
 
-    /// The ply that ejects the first boss marble, announced on (-1, -1), and the 5th ejection, which brings
-    /// the wall down.
-    const DUAL_RETURN_AT: usize = 27;
-    const DUAL_COLLAPSE_AT: usize = 79;
+    /// The ply that ejects the first boss marble, announced on (0, -2), and the 5th ejection, which
+    /// raises the bridge.
+    const DUAL_RETURN_AT: usize = 19;
+    const DUAL_BRIDGE_AT: usize = 41;
 
     /// The Dual Room after the first `plies` plies of the recorded fight.
     fn dual_room(plies: usize) -> Encounter {
@@ -2354,33 +2354,41 @@ mod tests {
         f
     }
 
+    fn dual_slot(q: i32, r: i32) -> usize {
+        board_cells(7).position(|c| c == (q, r)).unwrap()
+    }
+
     #[test]
-    fn the_dual_room_board_holds_its_two_rooms_in_271_codes() {
+    fn the_dual_room_goal_names_the_void_and_the_bridge() {
+        assert_eq!(
+            boss_goal("dual").unwrap(),
+            "Two rooms split by a void: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose."
+        );
+    }
+
+    #[test]
+    fn the_dual_room_board_holds_its_two_rooms_in_169_codes() {
         let f = Encounter::new("dual", 1).unwrap();
         let cells = f.board();
-        assert_eq!(cells.len(), 271);
+        assert_eq!(cells.len(), 169);
         assert_eq!(
             count(&cells, 3),
-            271 - 122,
-            "every cell off the two rooms is vanished"
+            169 - 74,
+            "every cell off the two rooms is vanished, the void too"
         );
-        assert_eq!((count(&cells, 1), count(&cells, 2)), (14, 10));
-        let slot = |q, r| board_cells(9).position(|c| c == (q, r)).unwrap();
+        assert_eq!((count(&cells, 1), count(&cells, 2)), (16, 10));
         assert_eq!(
-            cells[slot(-4, 8)],
+            cells[dual_slot(-2, 7)],
             1,
             "the player's far side of the south room"
         );
         assert_eq!(
-            cells[slot(1, -1)],
+            cells[dual_slot(0, -1)],
             2,
-            "the boss against the wall in the north room"
+            "the boss near the void in the north room"
         );
-        assert_eq!(
-            f.dual(),
-            vec![0, 0, 0, 0],
-            "the wall stands, nothing comes back"
-        );
+        assert_eq!(cells[dual_slot(0, 0)], 3, "the void");
+        assert_eq!(f.dual(), vec![0, 0, 0, 0], "no bridge, nothing comes back");
         assert!(f.last_return().is_empty());
     }
 
@@ -2391,30 +2399,35 @@ mod tests {
         assert_eq!(ejected.ejected(1), 1);
         assert_eq!(
             ejected.dual(),
-            vec![0, 2, -1, -1],
-            "a boss marble lands on (-1, -1)"
+            vec![0, 2, 0, -2],
+            "a boss marble lands on (0, -2)"
         );
         assert!(ejected.last_return().is_empty());
         let landed = dual_room(DUAL_RETURN_AT + 1);
-        assert_eq!(landed.last_return(), vec![2, -1, -1]);
-        let slot = board_cells(9).position(|c| c == (-1, -1)).unwrap();
-        assert_eq!(landed.board()[slot], 2);
+        assert_eq!(landed.last_return(), vec![2, 0, -2]);
+        assert_eq!(landed.board()[dual_slot(0, -2)], 2);
         assert_eq!(landed.ejected(1), 1, "the ejection still counts");
     }
 
     #[test]
-    fn the_fifth_dual_room_ejection_brings_the_wall_down() {
-        let before = dual_room(DUAL_COLLAPSE_AT - 1);
+    fn the_fifth_dual_room_ejection_raises_the_bridge() {
+        let before = dual_room(DUAL_BRIDGE_AT - 1);
         assert_eq!((before.dual()[0], before.phase()), (0, 1));
-        let after = dual_room(DUAL_COLLAPSE_AT);
-        assert_eq!(after.dual(), vec![1, 0, 0, 0], "down, and the 5th is gone");
+        assert_eq!(before.board()[dual_slot(0, 0)], 3);
+        let after = dual_room(DUAL_BRIDGE_AT);
+        assert_eq!(after.dual(), vec![1, 0, 0, 0], "up, and the 5th is gone");
         assert_eq!((after.phase(), after.ejected(1)), (2, 5));
-        assert_eq!(dual_plies().len(), DUAL_COLLAPSE_AT);
+        let board = after.board();
+        for q in -2..=2 {
+            assert_eq!(board[dual_slot(q, 0)], 0, "the bridge's empty cells");
+        }
+        assert_eq!(count(&board, 3), 169 - 79);
+        assert_eq!(dual_plies().len(), DUAL_BRIDGE_AT);
     }
 
     #[test]
     fn the_same_seed_and_plies_give_the_same_dual_room_fight() {
-        for plies in [DUAL_RETURN_AT, 49] {
+        for plies in [DUAL_RETURN_AT, 31] {
             let (a, b) = (dual_room(plies), dual_room(plies));
             assert_eq!(a.board(), b.board());
             assert_eq!(a.dual(), b.dual());

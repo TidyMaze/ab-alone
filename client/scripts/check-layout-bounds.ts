@@ -84,7 +84,8 @@ export function checkLayoutProblems(input: ViewportCheckInput): LayoutViolation[
 
   // 2. Element checks
   for (const el of input.elements) {
-    if (meets(el.box, input.hud)) {
+    // The HUD's own fold button (#957) lies on it by design, in its corner when the plate spans a window held upright.
+    if (el.id !== 'hud-fold' && meets(el.box, input.hud)) {
       violations.push({
         kind: 'element-covers-hud',
         elementName: el.name,

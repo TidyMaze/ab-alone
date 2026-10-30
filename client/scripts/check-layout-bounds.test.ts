@@ -127,6 +127,12 @@ describe('check-layout-bounds', () => {
       expect(problems.some((p) => p.kind === 'element-covers-hud')).toBe(true);
     });
 
+    it("the HUD's own fold button lies on the HUD without covering it (#957)", () => {
+      const fold = { id: 'hud-fold', name: 'HUD panel', tag: 'BUTTON', box: { left: 10, top: 10, right: 50, bottom: 50 } };
+      const problems = checkLayoutProblems({ ...defaultInput, elements: [fold] });
+      expect(problems.some((p) => p.kind === 'element-covers-hud')).toBe(false);
+    });
+
     it('detects when an element is off screen', () => {
       const input: ViewportCheckInput = {
         ...defaultInput,

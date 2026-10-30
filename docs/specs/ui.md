@@ -68,6 +68,11 @@ top-right, beside the plate and never over it (#227). Wider than tall, the colum
 right of the board. Held upright, the column becomes rows of buttons under the plate. No button or
 field covers a cell, and the space between them lets every tap through to the board.
 
+Fold (#957): a 44 px button labelled "HUD panel" (`aria-expanded`, `aria-controls="hud"`, titled "Fold the panel" or
+"Unfold the panel") beside the plate's top right corner, held upright in that corner beside the turn line, folds the plate
+to a tab with the button alone and unfolds it again; the choice is saved (`ab-alone.hud-folded`). Folded, the plate
+leaves the screen but not the page, so a screen reader still hears the turn and the score.
+
 HUD buttons, in groups (#839). The column holds the buttons grouped by what they do, in this order, each group a row
 that wraps, so its buttons share a row when they fit and a group with no visible button takes no room: (1) the
 settings cog; (2) the view, Reset view (Free Cam is the Free camera item of the settings menu, #938); (3) the game, New game, Rematch, Goal, Retry,
@@ -431,11 +436,12 @@ hidden in the hub and in a battle royale.
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one
 (the vertical field of view grows past 40 degrees), so the whole board fits the width of a phone held
 upright, and the picture moves down by a quarter of the spare height, which leaves the top to the
-plate and the buttons (#227). A fight against The Pulsar opens drawn back, along the same line, just
+plate and the buttons (#227). Every view a fight opens on, and Reset view, puts the board's centre in the
+middle of the window's width, and of its height wider than tall (held upright, that height less the shift);
+for The Dual Room the centre is the middle between its two rooms (#957). A fight against The Pulsar opens drawn back, along the same line, just
 far enough that the six pulsars off the corners and the counter above each fit the window too, and
-Reset view goes back there (#691). None of them lies under the HUD plate either: the picture slides
-sideways, as little as clears the plate (on a phone held sideways, to the right), and draws back only
-when no slide does (#695). A new window size, such as a phone turned upright, fits that view again
+Reset view goes back there (#691). The HUD plate never pushes the board aside: the player folds it
+instead (section 4, #957). A new window size, such as a phone turned upright, fits that view again
 while the player has not moved the camera; once he orbits or zooms, his view stays until Reset view
 (#696). A co-op Pulsar fight opens on the same view. The chrome adds a rim only: a fixed, non-interactive radial gradient
 from transparent at 65 % to near-black (`#0b0d0f` at 75 % opacity) at 100 %, the same in both themes because the 3D deck is dark either way (fog at the rim, never over the cells). No border or

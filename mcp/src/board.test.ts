@@ -123,23 +123,23 @@ describe('the 91 cells for radius 5 boards (#572)', () => {
   });
 });
 
-describe('the 271 cells of the radius 9 scan of The Dual Room (#947)', () => {
-  test('the 91, then rings 6 to 9, each row by row', () => {
-    expect(BOARD_CELLS).toHaveLength(271);
+describe('the 169 cells of the radius 7 scan of The Dual Room (#947, #955)', () => {
+  test('the 91, then rings 6 and 7, each row by row', () => {
+    expect(BOARD_CELLS).toHaveLength(169);
     expect(BOARD_CELLS[91]).toEqual([0, -6]);
-    expect(BOARD_CELLS[270]).toEqual([0, 9]);
+    expect(BOARD_CELLS[168]).toEqual([0, 7]);
     const ring = ([q, r]: [number, number]) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
     expect(BOARD_CELLS.slice(91).every((c, i, all) => i === 0 || ring(all[i - 1]!) <= ring(c))).toBe(true);
   });
 
-  test('renders its two rooms with header 0 to I and rows a to s, the cells off the rooms blank', () => {
+  test('renders its two rooms with header 0 to E and rows a to o, the void and the cells off the rooms blank', () => {
     const lines = ascii(newEncounter('dual', 1).board()).split('\n');
-    expect(lines).toHaveLength(20);
-    expect(lines[0]).toBe('  0 1 2 3 4 5 6 7 8 9 A B C D E F G H I');
-    expect(lines[1]).toBe(`a ${'  '.repeat(12)}B B B B B`); // the north room's far side, r = -9
-    expect(lines[9]).toBe(`i ${'  '.repeat(8)}. W W W .`); // its wall row, r = -1
-    expect(lines[10]).toBe(`j ${'  '.repeat(7)}. W W W .`); // the south room's wall row, r = 0
-    expect(lines[18]).toBe(`r ${'  '.repeat(3)}B B B B B`); // its far side, r = 8
-    expect(lines[19]).toBe('s'); // r = 9 holds no cell of the rooms
+    expect(lines).toHaveLength(16);
+    expect(lines[0]).toBe('  0 1 2 3 4 5 6 7 8 9 A B C D E');
+    expect(lines[1]).toBe(`a ${'  '.repeat(9)}B B B B`); // the north room's far side, r = -7
+    expect(lines[7]).toBe(`g ${'  '.repeat(6)}. W W .`); // its facing edge, r = -1
+    expect(lines[8]).toBe('h'); // the void, r = 0
+    expect(lines[9]).toBe(`i ${'  '.repeat(5)}. W W .`); // the south room's facing edge, r = 1
+    expect(lines[15]).toBe(`o ${'  '.repeat(2)}B B B B`); // its far side, r = 7
   });
 });

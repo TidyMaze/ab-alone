@@ -134,15 +134,15 @@ import {
   type UnstableEvents,
 } from './unstable';
 import {
+  BRIDGE,
   DUAL_AZIMUTH,
   DUAL_CELLS,
   DUAL_POLAR,
-  WALL,
+  bridgeAt,
   dropAt,
   dualText,
   parseDual,
   parseReturn,
-  wallAt,
   type DualState,
 } from './dual';
 import { ballastText, firedText, parseFired, type Fired } from './ballast';
@@ -196,6 +196,7 @@ import {
   hasParticles,
   readClearBoard,
   readFlatHud,
+  readHudFolded,
   readFps,
   readReducedMotion,
   readGlassSkin,
@@ -217,6 +218,7 @@ import {
   smoothEdges,
   writeClearBoard,
   writeFlatHud,
+  writeHudFolded,
   writeFps,
   writeReducedMotion,
   writeGlassSkin,
@@ -251,8 +253,11 @@ import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './re
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
 import {
+  actBoss,
   claim,
   clearRun,
+  eventHtml,
+  fightBudget,
   fightOver,
   left,
   loadRun,
@@ -260,15 +265,16 @@ import {
   newRun,
   parseMap,
   parseSpecials,
-  pick,
   place,
   placeHtml,
   placing,
+  resolve,
   rewardHtml,
   runLine,
   saveRun,
   sparkBurst,
   SPECIAL_LOOKS,
+  visit,
   type MapNode,
   type Run,
 } from './roguelite';
@@ -313,13 +319,12 @@ let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
-// its counter fit the window too (#691), off the HUD plate (#695). The Dual Room's (#947) looks along its wall, the two
-// rooms side by side, drawn back until both fit.
+// its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
+// side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 const fightView = (): View => {
-  const plate = [document.getElementById('hud')!.getBoundingClientRect()];
-  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, plate);
-  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight, plate);
+  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
+  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
   return resetView(activeRadius());
 };
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
@@ -620,7 +625,7 @@ applySafe();
 // The sounds (docs/specs/world.md section 7) through four buses, each with its volume slider in the menu (#438). The
 // audio context waits for a user gesture: browsers block audio before one. A mouse press or a key is a gesture on the
 // way down, a touch on the way up, and moving a slider up from 0 starts it too (setVolume).
-const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store));
+const sfx = new Sfx(() => (typeof AudioContext === 'undefined' ? null : new AudioContext()), readMix(store, navigator.webdriver));
 // The sound twin of each boss tell (#358), only when the tell appears or changes. The cues played, read by the e2e tests.
 const tells = new TellWatch();
 const tellCues: Tell[] = [];
@@ -1588,23 +1593,17 @@ function wedgeSlice(wedge: number): THREE.ShapeGeometry {
   }
   return wedgeSlices.get(wedge)!;
 }
-// The Dual Room (#947, game-design.md section 7.15): the lit wall between its two rooms, which sinks into the floor at
-// the 5th ejection; the mark of an announced return on its landing cell, in the light of the coming marble's side; the
-// returning marble dropping onto its cell. Reduced motion: the wall goes at once and the marble is on its cell at once.
-const wallMaterial = new THREE.MeshStandardMaterial({ color: RIM_LIGHT.glass, emissive: RIM_LIGHT.glass, emissiveIntensity: 1.5, transparent: true });
-const wall = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(WALL.length, WALL.height, WALL.depth), wallMaterial), { name: 'dual-wall' });
-const placeWall = (y: number, opacity: number): void => {
-  wall.position.set(WALL.x, WALL.height / 2 + y, WALL.z);
-  wallMaterial.opacity = opacity;
-};
-placeWall(0, 1);
-wall.visible = false;
+// The Dual Room (#947, #955, game-design.md section 7.15): the void between its two rooms, holes in the plate (frame.ts)
+// that the bridge's 5 cells fill at the 5th ejection, coming down into place; the mark of an announced return on its
+// landing cell, in the light of the coming marble's side; the returning marble dropping onto its cell. Reduced motion:
+// the bridge is in place at once and the marble is on its cell at once.
 const markGeometry = new THREE.RingGeometry(0.3, 0.42, 32).rotateX(-Math.PI / 2);
 const markMaterials = [RIM_LIGHT.glass, RIM_LIGHT.shell].map(
   (color) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }),
 );
-let dualShown: DualState | null = null; // the wall and the announced return of the last refresh
-let collapse: { start: number } | null = null; // the wall sinking
+let dualShown: DualState | null = null; // the bridge and the announced return of the last refresh
+let lowering: { start: number } | null = null; // the bridge coming down
+let bridgeY = 0; // the bridge cells' height over their place
 let drop: { cell: Axial; start: number; reduced: boolean; y: number } | null = null; // the returning marble falling
 type Fx = { mesh: THREE.Mesh; start: number; reduced: boolean; skipped: boolean };
 let unstableShown: (Core & { pips: Charge[] }) | null = null; // the next events and the charges of the last refresh
@@ -1630,7 +1629,10 @@ const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   return disc;
 });
 instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
-scene.add(wall);
+const placeBridge = (y: number): void => {
+  bridgeY = y;
+  for (const [q, r] of BRIDGE) discs[cellIndex(q, r)]!.position.y = -0.05 + y;
+};
 // The battle royale arena (#502): its own 217 discs at half the spacing, in the room of the radius 4 board, shown in its
 // place while a battle royale is on. Its marbles wear their seat's shell tint (marbles.ts).
 const arena = new THREE.Group();
@@ -1989,7 +1991,12 @@ const resumed = await saves.load(worker ? undefined : false, () => new Engine())
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
 const armyEngine = (army: number, placed: number[][]): Engine => engineFor(Engine, army, placed);
-const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), armyEngine);
+// The fight of the run's last node: the act's roster boss (#800), or the bot against the army.
+const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
+  const boss = actBoss(map, state, boss_ids());
+  return boss ? new Encounter(boss.id, boss.seed) : armyEngine(state.army, state.placed);
+};
+const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), runEngine);
 const resumedRun = await loadSavedRun();
 if (resumed) {
   if (!resumed.bot) worker = null;
@@ -2166,8 +2173,8 @@ async function botTurn(): Promise<void> {
   const current = fight;
   const game = liveGame();
   const started = performance.now();
-  const searchBudget = scaleBudget(budget, difficulty);
-  const diffPercent = DIFFICULTY_PERCENT[difficulty];
+  const searchBudget = run ? fightBudget(run.map, run.state, scaleBudget(budget, difficulty)) : scaleBudget(budget, difficulty); // an elite searches more (#800)
+  const diffPercent = (run && actBoss(run.map, run.state, boss_ids())?.percent) || DIFFICULTY_PERCENT[difficulty]; // an act boss at its act's strength
   let move: number[];
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
@@ -2300,17 +2307,17 @@ function afterPlay(before: number[], record: number[], live = true): void {
     shown = { game: engine, board: unstable.board, poles: [] };
     whenSettled(() => fireUnstable(unstable, reduced));
   }
-  // The Dual Room (#947): the marble coming back drops onto its cell, the wall sinks at the 5th ejection.
+  // The Dual Room (#947, #955): the marble coming back drops onto its cell, the bridge comes down at the 5th ejection.
   const landed = engine instanceof Encounter ? parseReturn(engine.last_return()) : null;
   if (landed) {
     drop = { cell: landed.cell, start: performance.now(), reduced, y: dropAt(0, reduced).y };
     document.body.dataset.returns = String(Number(document.body.dataset.returns ?? 0) + 1); // read by the e2e tests
   }
-  if (!reduced && engine instanceof Encounter && parseDual(engine.dual())?.collapsed && dualShown?.collapsed === false) {
-    const fall = { start: Infinity }; // the wall stands whole until the push's slide is over
-    collapse = fall;
+  if (!reduced && engine instanceof Encounter && parseDual(engine.dual())?.bridged && dualShown?.bridged === false) {
+    const fall = { start: Infinity }; // the bridge waits up high until the push's slide is over
+    lowering = fall;
     whenSettled(() => (fall.start = performance.now()));
-    document.body.dataset.wall = 'falling'; // read by the e2e tests
+    document.body.dataset.bridge = 'lowering'; // read by the e2e tests
   }
   const ejection = findEjection(before, after, mv);
   if (ejection) eject(ejection, mv.dir, held, reduced);
@@ -2570,14 +2577,13 @@ function drawUnstable(core: Core | null, charges: Charge[]): void {
   }
 }
 
-/** Draws The Dual Room's wall and the mark of an announced return (#947). Nothing in the other fights. */
+/** Draws The Dual Room's bridge and the mark of an announced return (#947, #955). Nothing in the other fights. */
 function drawDual(state: DualState | null): void {
-  if (dualShown?.collapsed !== state?.collapsed) collapse = collapse && state?.collapsed ? collapse : null;
+  if (dualShown?.bridged !== state?.bridged) lowering = lowering && state?.bridged ? lowering : null;
   dualShown = state;
-  if (!collapse) placeWall(0, 1);
-  wall.visible = !!state && (!state.collapsed || !!collapse);
-  if (state) document.body.dataset.wall = state.collapsed ? (collapse ? 'falling' : 'down') : 'up'; // read by the e2e tests
-  else delete document.body.dataset.wall;
+  placeBridge(lowering ? bridgeAt(performance.now() - lowering.start, false).y : 0);
+  if (state) document.body.dataset.bridge = state.bridged ? (lowering ? 'lowering' : 'up') : 'void'; // read by the e2e tests
+  else delete document.body.dataset.bridge;
   if (!state?.coming) return;
   const p = axialTo3D(...state.coming.cell);
   const mark = Object.assign(new THREE.Mesh(markGeometry, markMaterials[state.coming.side === glassOf() ? 0 : 1]), { name: 'return-mark' });
@@ -2585,15 +2591,14 @@ function drawDual(state: DualState | null): void {
   marbles.add(mark);
 }
 
-/** Sinks the falling wall and drops the returning marble, `now` into the animation loop. */
+/** Brings the bridge down and drops the returning marble, `now` into the animation loop. */
 function animateDual(now: number): void {
-  if (collapse) {
-    const at = wallAt(now - collapse.start, false);
-    placeWall(at.y, at.opacity);
+  if (lowering) {
+    const at = bridgeAt(now - lowering.start, false);
+    placeBridge(at.y);
     if (at.done) {
-      collapse = null;
-      wall.visible = false;
-      document.body.dataset.wall = 'down';
+      lowering = null;
+      document.body.dataset.bridge = 'up';
     }
   }
   if (drop) {
@@ -2937,7 +2942,7 @@ function hud(extra = ''): void {
 function refresh(): void {
   dirty = CHANGE_DRAWS;
   syncAuto();
-  if (hub || royale) drawDual(null); // no fight, no wall (#947)
+  if (hub || royale) drawDual(null); // no fight, no void (#947)
   if (hub) {
     hub.draw(sceneRenderer, discs, sfx, loadProgress(store).beaten, marbleMesh(glassOf()), drawFrame, lightRim);
     hud();
@@ -3643,6 +3648,20 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
+// The left HUD panel folds to a tab with its button alone (#957), saved. Folded, it stays in the page for screen readers.
+const hudFold = document.getElementById('hud-fold') as HTMLButtonElement;
+function foldHud(folded: boolean): void {
+  document.getElementById('hud-dock')!.toggleAttribute('data-folded', folded);
+  hudFold.setAttribute('aria-expanded', String(!folded));
+  hudFold.title = folded ? 'Unfold the panel' : 'Fold the panel';
+}
+foldHud(readHudFolded(store));
+hudFold.addEventListener('click', () => {
+  const folded = hudFold.getAttribute('aria-expanded') === 'true';
+  writeHudFolded(store, folded);
+  foldHud(folded);
+});
+hudFold.disabled = false;
 
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
@@ -3867,11 +3886,11 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to find The Unstable Core's marks as drawn (#751): the next events and the charges, and the
 // shockwave's slice now.
 (window as unknown as Record<string, unknown>).__unstable = () => unstableShown;
-// Used by the browser checks to find The Dual Room's marks as drawn (#947): the wall and the announced return, the wall
-// mesh now, the mark's cell and the falling marble.
+// Used by the browser checks to find The Dual Room's marks as drawn (#947, #955): the bridge and the announced return, the
+// bridge cells' heights now (null while they are the void), the mark's cell and the falling marble.
 (window as unknown as Record<string, unknown>).__dual = () => ({
   state: dualShown,
-  wall: { visible: wall.visible, y: wall.position.y - WALL.height / 2, opacity: wallMaterial.opacity },
+  bridge: BRIDGE.map(([q, r]) => (discs[cellIndex(q, r)]!.visible ? bridgeY : null)),
   mark: dualShown?.coming?.cell ?? null,
   drop: drop && { cell: drop.cell, y: drop.y },
 });
@@ -4348,7 +4367,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   note();
   refresh();
   if (coop) {
-    view = fitted = fightView(); // as in a solo fight (#695)
+    view = fitted = fightView(); // as in a solo fight
     applyView();
   }
 }
@@ -4433,7 +4452,7 @@ function beginRun(): void {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
   startRun(newRun(seed), parseMap(run_map(seed)));
 }
-function startRun(state: Run, map: MapNode[], resumed: Engine | null = null): void {
+function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null = null): void {
   run = null; // its save is overwritten below, not deleted by leaveRun
   armed = 0;
   moveModes('pick');
@@ -4463,14 +4482,16 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | null = null): vo
     refresh();
   }
 }
-// The run's panel: the reward of a won fight (#961), the placement before a fight's first move, or the map.
+// The run's panel: the reward of a won fight (#961), an event's choice (#800), the placement before a fight's first
+// move (never in a boss fight: no special marble there), or the map.
 function showRun(): void {
   const { map, state } = run!;
-  const placed = placing(state);
-  runPanel.innerHTML = state.reward ? rewardHtml(state) : placed ? placeHtml(state, armed) : mapHtml(map, state);
+  const placed = placing(state) && !(engine instanceof Encounter);
+  runPanel.innerHTML = state.reward ? rewardHtml(map, state) : state.event ? eventHtml(state) : placed ? placeHtml(state, armed) : mapHtml(map, state);
   runPanel.hidden = state.fighting && !placed;
   runPanel.classList.toggle('place', placed);
-  document.body.dataset.run = state.end || (state.reward ? 'reward' : placed ? 'place' : state.fighting ? 'fight' : 'map'); // read by the e2e tests
+  const screen = state.reward ? 'reward' : state.event ? 'event' : placed ? 'place' : state.fighting ? 'fight' : 'map';
+  document.body.dataset.run = state.end || screen; // read by the e2e tests
   hud();
 }
 // A press on one of the army's marbles (Black) during the placement places the type armed, or takes it back.
@@ -4483,7 +4504,12 @@ function placeAt(q: number, r: number): void {
   showRun();
   refresh();
 }
-function fightRun(game: Engine): void {
+// A fight of the run: an act's boss plays as from the boss menu, its deck and view (#800); the others on the local deck.
+function fightRun(game: Engine | Encounter): void {
+  const boss = actBoss(run!.map, run!.state, boss_ids());
+  fight = boss && { id: boss.id, seed: boss.seed };
+  if (boss) document.body.dataset.boss = boss.id;
+  else delete document.body.dataset.boss;
   engine = game;
   history.length = 0;
   history.push(...run!.state.moves);
@@ -4492,12 +4518,17 @@ function fightRun(game: Engine): void {
   thinking = false; // a bot reply to the last fight is dropped (botTurn)
   showRun();
   refresh();
+  applyDeck(deckOf(boss ? 'boss' : 'local', boss?.id));
+  view = fitted = fightView();
+  applyView();
   void botTurn(); // a fight saved while the bot was thinking
 }
 // After each move of a fight: the moves are saved, and once it is over the army loses the marbles the bot ejected.
 function runMoved(): void {
-  const status = engine.status();
-  const kept = (): number[] => [1, 2, 3].map((k) => parseSpecials((engine as Engine).specials()).filter((s) => s.kind === k).length);
+  const boss = engine instanceof Encounter;
+  const status = engine instanceof Encounter ? engine.result() : engine.status(); // a boss fight: 1 won, 2 lost
+  const kept = (): number[] | undefined =>
+    boss ? undefined : [1, 2, 3].map((k) => parseSpecials((engine as Engine).specials()).filter((s) => s.kind === k).length);
   const state = status === 0 ? { ...run!.state, moves: history.slice() } : fightOver(run!.map, run!.state, status === 1, engine.ejected(2), kept());
   run!.state = state;
   armed = 0;
@@ -4523,13 +4554,18 @@ runPanel.addEventListener('click', (e) => {
     run!.state = claim(run!.state, Number(button.dataset.offer));
     void saveRun(gameStore, run!.state);
     showRun();
+  } else if (button?.dataset.choice) {
+    run!.state = resolve(run!.state, button.dataset.choice === '1');
+    void saveRun(gameStore, run!.state);
+    showRun();
   } else if (button?.dataset.kind) {
     armed = armed === Number(button.dataset.kind) ? 0 : Number(button.dataset.kind);
     showRun();
   } else if (button) {
-    run!.state = pick(run!.state, Number(button.dataset.node));
+    run!.state = visit(run!.map, run!.state, Number(button.dataset.node));
     void saveRun(gameStore, run!.state);
-    fightRun(Engine.with_army(run!.state.army));
+    if (run!.state.fighting) fightRun(runEngine(run!.state, run!.map));
+    else showRun(); // a rest or an event
   }
 });
 runButton.addEventListener('click', beginRun);
@@ -4988,7 +5024,7 @@ function animateParticles(now: number): void {
 }
 // An effect that moves on screen by itself, frame after frame: while one is shown a player's page draws every frame.
 function moving(): boolean {
-  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0, collapse, drop];
+  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop];
   const lists = [fading, ejecting, bleeding, passing, slams, bursts, hazes, beltRibs, ripples];
   return (
     effects.some(Boolean) ||

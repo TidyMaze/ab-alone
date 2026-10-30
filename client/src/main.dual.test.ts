@@ -1,20 +1,22 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { COLLAPSE_MS, DROP_MS, DUAL_AZIMUTH, DUAL_POLAR, type DualState } from './dual';
+import { BRIDGE, BRIDGE_HEIGHT, BRIDGE_MS, DROP_MS, DUAL_AZIMUTH, DUAL_POLAR, type DualState } from './dual';
 import { BLOOD_MS } from './blood';
+import { RIM_LIGHT } from './frame';
 import { SLIDE_MS } from './slide';
 import { boot, type Game } from './test/harness';
-import { COLLAPSE_AT, RETURN_AT, RETURN_CELL, SEED } from './test/dual-game';
+import { BRIDGE_AT, RETURN_AT, RETURN_CELL, SEED } from './test/dual-game';
 import { dualGame } from './test/dual-fixture';
 
-// The Dual Room on the harness (#947, game-design.md section 7.15): its two rooms side by side with the wall between
-// them, the mark of an announced return, the returning marble dropping onto it, and the wall sinking at the 5th
-// ejection. ?bot=off plays the recorded fight of the wasm tests through the __playMoves hook (fight seed 1).
+// The Dual Room on the harness (#947, #955, game-design.md section 7.15): its two rooms side by side with the void
+// between them, the mark of an announced return, the returning marble dropping onto it, and the bridge's cells lowered
+// into the void at the 5th ejection. ?bot=off plays the recorded fight of the wasm tests through the __playMoves hook
+// (fight seed 1).
 
 type Shown = {
   state: DualState | null;
-  wall: { visible: boolean; y: number; opacity: number };
+  bridge: (number | null)[]; // the bridge cells' heights over their place, null while they are the void
   mark: [number, number] | null;
   drop: { cell: [number, number]; y: number } | null;
 };
@@ -71,26 +73,19 @@ function clickPlies(game: Game, to: number): void {
   expect(document.body.dataset.sliding).not.toBe('1');
 }
 
-describe('main.ts The Dual Room (#947)', () => {
-  it('opens on its two rooms side by side, the wall standing between them, on the Mess deck', async () => {
-    const scene = catchScene();
+describe('main.ts The Dual Room (#947, #955)', () => {
+  it('opens on its two rooms side by side, the void between them, on the Mess deck', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     expect(dual(game).state).toBeNull();
-    expect(dual(game).wall.visible).toBe(false);
     fightDual(game);
     expect(game.hook('__fight')).toMatchObject({ id: 'dual', seed: SEED });
     expect(document.body.dataset.deck).toBe('mess');
     expect(game.hook<{ azimuth: number; polar: number }>('__view')).toMatchObject({ azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR });
-    expect(game.hook<{ radius: number; holes: number }>('__frame')).toMatchObject({ radius: 9, holes: 0 });
-    expect(dual(game)).toEqual({
-      state: { collapsed: false, coming: null },
-      wall: { visible: true, y: 0, opacity: 1 },
-      mark: null,
-      drop: null,
-    });
-    expect(document.body.dataset.wall).toBe('up');
-    expect(tell()).toBe('Ejected marbles come back in the other room · the wall falls at 5');
-    expect(named(scene(), 'dual-wall')).toHaveLength(1);
+    expect(game.hook<{ radius: number; holes: number }>('__frame')).toMatchObject({ radius: 7, holes: BRIDGE.length });
+    const none = BRIDGE.map(() => null);
+    expect(dual(game)).toEqual({ state: { bridged: false, coming: null }, bridge: none, mark: null, drop: null });
+    expect(document.body.dataset.bridge).toBe('void');
+    expect(tell()).toBe('Ejected marbles come back in the other room · the bridge comes at 5');
   });
 
   it('marks the cell of an announced return, then drops the marble onto it', async () => {
@@ -101,7 +96,7 @@ describe('main.ts The Dual Room (#947)', () => {
     for (let n = 0; n < 4; n++) game.frame(1000);
     expect(dual(game).mark).toEqual(RETURN_CELL);
     expect(named(scene(), 'return-mark')).toHaveLength(1);
-    expect(tell()).toBe('Its marble comes back on the mark next turn · the wall falls at 5');
+    expect(tell()).toBe('Its marble comes back on the mark next turn · the bridge comes at 5');
     played(game, RETURN_AT, RETURN_AT + 1);
     for (let n = 0; n < 3 && dual(game).drop === null; n++) game.frame(100); // the move's slide first
     const drop = dual(game).drop!;
@@ -118,7 +113,7 @@ describe('main.ts The Dual Room (#947)', () => {
     expect(game.hook('__marbleTurn', ...RETURN_CELL)).not.toBeNull();
   });
 
-  it('a Retry during the fall ends it on the new fight, whose cell is empty', async () => {
+  it('a Retry during the fall ends it on the new fight', async () => {
     const game = await boot('?bot=off', { reducedMotion: false });
     fightDual(game);
     played(game, 0, RETURN_AT + 1);
@@ -127,7 +122,41 @@ describe('main.ts The Dual Room (#947)', () => {
     game.frame(DROP_MS);
     game.frame(16);
     expect(dual(game).drop).toBeNull();
-    expect(game.hook('__marbleTurn', ...RETURN_CELL)).toBeNull();
+    expect(game.hook('__plies')).toBe(0);
+  });
+
+  it('marks the return of a player marble in the light of the glass', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightDual(game);
+    // A player marble walks to the south room's rim, (1, 2), and the boss pushes it off from there.
+    const plies = [
+      [1, 4, -1, 6, 0, 0, 0, 0],
+      [1, 0, 2, -2, 0, 0, 0, 0],
+      [1, 2, -1, 5, 0, 0, 0, 0],
+      [1, 1, 3, -2, 0, 0, 0, 0],
+      [1, 2, 0, 4, 0, 0, 0, 0],
+      [1, 0, 2, -2, 0, 0, 0, 0],
+      [1, 4, 1, 3, 0, 0, 0, 0],
+      [2, 0, -1, 2, 0, 2, 0, 0],
+    ];
+    expect(game.hook<number>('__playMoves', plies)).toBe(plies.length);
+    expect(dual(game).state!.coming!.side).toBe(1);
+    const [mark] = named(scene(), 'return-mark') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
+    expect(mark!.material.color.getHex()).toBe(RIM_LIGHT.glass);
+    expect(tell()).toBe('Your marble comes back on the mark next turn · the bridge comes at 5');
+  });
+
+  it('leaving for the battle royale during the fall ends it, with no marble left to drop', async () => {
+    const game = await boot('?bot=off', { reducedMotion: false });
+    fightDual(game);
+    played(game, 0, RETURN_AT + 1);
+    expect(dual(game).drop).not.toBeNull();
+    game.openModes();
+    byId('battle-royale').click();
+    game.frame(DROP_MS);
+    game.frame(16);
+    expect(dual(game).drop).toBeNull();
   });
 
   it('reduced motion: the returning marble is on its cell at once', async () => {
@@ -140,38 +169,52 @@ describe('main.ts The Dual Room (#947)', () => {
     expect(game.hook('__marbleTurn', ...RETURN_CELL)).not.toBeNull();
   });
 
-  it('the 5th ejection sinks the wall into the floor, then it is gone; Retry raises it again', async () => {
+  it('the 5th ejection lowers the bridge into the void, then it is in place; Retry opens the void again', async () => {
     const game = await boot('?bot=off', { reducedMotion: false });
     fightDual(game);
-    played(game, 0, COLLAPSE_AT - 1);
-    played(game, COLLAPSE_AT - 1, COLLAPSE_AT);
-    expect(document.body.dataset.wall).toBe('falling');
-    game.frame(SLIDE_MS / 2); // the push slides first, the wall stands till it is over
-    expect(dual(game).wall).toEqual({ visible: true, y: 0, opacity: 1 });
-    game.frame(SLIDE_MS); // the slide ends: the wall starts to fall
-    game.frame(COLLAPSE_MS / 2);
-    const half = dual(game).wall;
-    expect(half.visible).toBe(true);
-    expect(half.y).toBeLessThan(0);
-    expect(half.opacity).toBeLessThan(1);
-    game.frame(COLLAPSE_MS);
+    played(game, 0, BRIDGE_AT - 1);
+    played(game, BRIDGE_AT - 1, BRIDGE_AT);
+    expect(document.body.dataset.bridge).toBe('lowering');
+    expect(game.hook<{ holes: number }>('__frame').holes).toBe(0);
+    game.frame(SLIDE_MS / 2); // the push slides first, the bridge waits up high till it is over
+    expect(dual(game).bridge).toEqual(BRIDGE.map(() => BRIDGE_HEIGHT));
+    game.frame(SLIDE_MS); // the slide ends: the bridge starts down
+    game.frame(BRIDGE_MS / 2);
+    const half = dual(game).bridge[0]!;
+    expect(half).toBeGreaterThan(0);
+    expect(half).toBeLessThan(BRIDGE_HEIGHT);
+    game.frame(BRIDGE_MS);
     game.frame(16);
-    expect(dual(game).wall.visible).toBe(false);
-    expect(document.body.dataset.wall).toBe('down');
-    expect(dual(game).state).toEqual({ collapsed: true, coming: null });
-    expect(tell()).toBe('The wall is down, ejected marbles are gone');
+    expect(dual(game).bridge).toEqual([0, 0, 0, 0, 0]);
+    expect(document.body.dataset.bridge).toBe('up');
+    expect(dual(game).state).toEqual({ bridged: true, coming: null });
+    expect(tell()).toBe('The bridge is up, ejected marbles are gone');
     byId('boss-retry').click();
-    expect(dual(game).wall).toEqual({ visible: true, y: 0, opacity: 1 });
-    expect(document.body.dataset.wall).toBe('up');
+    expect(document.body.dataset.bridge).toBe('void');
+    expect(game.hook<{ holes: number }>('__frame').holes).toBe(BRIDGE.length);
+    expect(dual(game).bridge).toEqual(BRIDGE.map(() => null));
   });
 
-  it('reduced motion: the wall is gone at once', async () => {
+  it('a Retry while the bridge comes down ends it, and the next bridge comes down from the top', async () => {
+    const game = await boot('?bot=off', { reducedMotion: false });
+    fightDual(game);
+    played(game, 0, BRIDGE_AT);
+    game.frame(SLIDE_MS * 2);
+    expect(dual(game).bridge[0]).toBeGreaterThan(0);
+    byId('boss-retry').click();
+    expect(dual(game).bridge).toEqual(BRIDGE.map(() => null));
+    expect(document.body.dataset.bridge).toBe('void');
+    played(game, 0, BRIDGE_AT);
+    expect(dual(game).bridge).toEqual(BRIDGE.map(() => BRIDGE_HEIGHT));
+  });
+
+  it('reduced motion: the bridge is in place at once', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightDual(game);
-    played(game, 0, COLLAPSE_AT);
+    played(game, 0, BRIDGE_AT);
     game.frame(16);
-    expect(dual(game).wall.visible).toBe(false);
-    expect(document.body.dataset.wall).toBe('down');
+    expect(dual(game).bridge).toEqual([0, 0, 0, 0, 0]);
+    expect(document.body.dataset.bridge).toBe('up');
   });
 
   it('the page of a player keeps drawing while the returning marble falls (#848)', async () => {
@@ -185,39 +228,33 @@ describe('main.ts The Dual Room (#947)', () => {
     expect(dual(game).drop).not.toBeNull();
   });
 
-  it('the page of a player keeps drawing while the wall sinks (#848)', async () => {
+  it('the page of a player keeps drawing while the bridge comes down (#848)', async () => {
     const game = await boot('?bot=off&quality=low', { webdriver: false, reducedMotion: false });
     fightDual(game);
-    clickPlies(game, COLLAPSE_AT);
-    // Past the push's slide, the ejection and its splash: the wall sinks alone, after the slide, longer than them.
+    clickPlies(game, BRIDGE_AT);
+    // Past the push's slide, the ejection and its splash: the bridge comes down alone, after the slide, longer than them.
     for (let elapsed = 15 * 16; elapsed <= BLOOD_MS; elapsed += 16) game.frame(16);
-    expect(document.body.dataset.wall).toBe('falling');
+    expect(document.body.dataset.bridge).toBe('lowering');
     const before = game.draws();
     for (let n = 0; n < 6; n++) game.frame(16);
     expect(game.draws() - before).toBe(6);
-    expect(document.body.dataset.wall).toBe('falling');
+    expect(document.body.dataset.bridge).toBe('lowering');
   });
 
-  it('leaves no wall standing in the hub or the battle royale', async () => {
-    const game = await boot('?bot=off', { reducedMotion: true });
-    fightDual(game);
-    expect(dual(game).wall.visible).toBe(true);
-    byId('ship').click();
-    expect(dual(game).wall.visible).toBe(false);
-    fightDual(game);
-    expect(dual(game).wall.visible).toBe(true);
-    game.openModes();
-    byId('battle-royale').click();
-    expect(dual(game).wall.visible).toBe(false);
-  });
-
-  it('another boss shows no wall and no mark', async () => {
+  it('another boss, the hub and the battle royale show no void, no bridge and no mark', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightDual(game);
     game.openModes();
     byId('boss-fight').click();
     [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Echo')!.click();
-    expect(dual(game)).toEqual({ state: null, wall: { visible: false, y: 0, opacity: 1 }, mark: null, drop: null });
-    expect(document.body.dataset.wall).toBeUndefined();
+    expect(dual(game)).toEqual({ state: null, bridge: [0, 0, 0, 0, 0], mark: null, drop: null });
+    expect(document.body.dataset.bridge).toBeUndefined();
+    fightDual(game);
+    byId('ship').click();
+    expect(document.body.dataset.bridge).toBeUndefined();
+    fightDual(game);
+    game.openModes();
+    byId('battle-royale').click();
+    expect(document.body.dataset.bridge).toBeUndefined();
   });
 });

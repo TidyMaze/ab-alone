@@ -416,11 +416,15 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   mirror is illegal or bad for the boss (asymmetric pushes, edges).
 - **AI**: the Echo's search plays the bonus mirrors inside its tree, both ways, with the P2
   older-move bonus from the credits so far (`search_phased` with `echo_step`); the tree does not
-  see repetitions, so it never skips a bonus. Node budget 400.
+  see repetitions, so it never skips a bonus. Node budget 100, one ply (#951; it was 400).
 - **Calibrate**: knob = AI node budget. Fail if win rate on attempt 1 to 3 exceeds 40 percent
   (too readable) or the median is over 12 attempts. Measured after #859 (boss-balance.md section
   3): the ladder pro player wins none of 10 at 1x and 10x (2 of 40 at 10x), every loss a draw at
-  the 100-ply no-ejection cap; not tuned in #859.
+  the 100-ply no-ejection cap: the mirrors keep the board point-symmetric and the two-ply boss holds
+  the rest. Tuned in #951 to 100 nodes: the pro player (10x the boss's own budget, 1000 nodes) wins
+  7 of 10 (9 of 20), the #949 player at 400 nodes 8 of 10. Accepted by the lead at the low edge of
+  the 7 to 9 target (decision on #951), to measure again after #958 (the player's bonus becomes an
+  offer).
 
 ### 7.5 The Ballast Mind (#47, #749): final exam
 
@@ -879,73 +883,79 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 
 ### 7.15 The Dual Room: two rooms where ejected marbles come back
 
-- **Concept**: the Mess deck's two galleys, split by a bulkhead. What you throw out of one room
-  is thrown back into the other, until the bulkhead gives way.
-- **Board and sides** (owner): two radius 4 boards (61 cells each) side by side, touching along
-  one edge. A **wall** stands on that shared edge: no move or push crosses it, and pushing against
-  it is like pushing against a marble that does not move (lead). In the engine it is one board of
-  two hexes with a flag (`Board::dual`), no general multi-board system: the south room is the hex
-  of centre `(-2, 4)` (rows `r = 0` to `8`), the north room the hex of centre `(3, -5)` (rows
-  `r = -9` to `-1`), so the wall runs between the rows `r = 0` and `r = -1`. Every other mode and
-  boss keeps its board. Mess deck look. Win at **6** ejections, lose at 6 as usual (`rules.md`
-  §10.3).
-- **Start** (owner counts, lead layout): **7** player marbles in each room on its far side, **5**
-  boss marbles in each room against the wall. The north room is the mirror of the south one
-  (below).
+- **Concept**: the Mess deck's two galleys, split by a gap in the deck. What you throw out of one
+  room is thrown back into the other, until a bridge closes the gap.
+- **Board and sides** (owner, #955): two rooms, each a hexagon of **side 4** (radius 3, 37 cells),
+  one above the other, split by a **void** one cell-row wide. In the engine it is one board with a
+  flag (`Board::dual`), no general multi-board system: the south room is the hex of centre
+  `(-2, 4)` (rows `r = 1` to `7`), the north room the hex of centre `(2, -4)` (rows `r = -7` to
+  `-1`), and the void is the row `r = 0`. The void's 5 cells (`q = -2` to `2`, the hex row between
+  the two facing 4-cell edges) are off the board: a marble pushed into the void is **ejected**, as
+  over the rim, and nothing moves or lines up across it. Every other mode and boss keeps its
+  board. Mess deck look. Win at **6** ejections, lose at 6 as usual (`rules.md` §10.3).
+- **Start** (owner counts, #955): **8** player marbles in each room on its far side, **5** boss
+  marbles in each room near the void. The north room is the mirror of the south one (below).
 
   ```text
-  north room (r = -9 .. -1)        P = player, B = boss
-   r=-9      P P P P P                 far side
-   r=-8     . . P P . .
-   ...
-   r=-2     . . B B . .
-   r=-1      . B B B .                 wall row
-  ========== wall ==========
-   r=0       . B B B .                 wall row
-   r=1      . . B B . .
-   ...
-   r=7      . . P P . .
-   r=8       P P P P P                 far side
-  south room (r = 0 .. 8)
+  P = player, B = boss, ~ the void (the bridge from P3)
+   r=-7         P P P P             north room, far side
+   r=-6        . P P P P
+   r=-5       . . . . . .
+   r=-4      . . . . . . .
+   r=-3       . . . . . .
+   r=-2        . B B B .
+   r=-1         . B B .             facing edge
+   r=0         ~ ~ ~ ~ ~            the void, 5 cells
+   r=1          . B B .             facing edge
+   r=2         . B B B .
+   r=3        . . . . . .
+   r=4       . . . . . . .
+   r=5        . . . . . .
+   r=6         . P P P P
+   r=7          P P P P             south room, far side
   ```
 
-- **Mirror**: the cell symmetric to `(q, r)` across the wall is its mirror in the room's own
-  coordinates: a south cell `(q, r)` maps to `(q + r + 1, -1 - r)` in the north room, a north cell
-  `(q, r)` to `(q + r, -1 - r)` in the south room. Each row keeps its distance to the wall (the wall
-  row maps to the wall row, the far side to the far side); the hex grid shifts it half a cell.
-- **Return** (owner): a marble ejected (of either side) **comes back one ply later**, at the end
-  of the opponent's next move, in the **other** room. Its landing cell is **announced** on the board
-  as soon as it is ejected.
+  South room: player `(-5..-2, 7)` and `(-4..-1, 6)`, boss `(-1, 1)`, `(0, 1)`, `(-2..0, 2)`.
+- **Mirror**: the cell symmetric to `(q, r)` across the void is `(q + r, -r)`, both ways. Each row
+  keeps its distance to the void (the facing edge maps to the facing edge, the far side to the far
+  side) and its place across the screen.
+- **Return** (owner): a marble ejected (of either side), over the rim or into the void, **comes
+  back one ply later**, at the end of the opponent's next move, in the **other** room. Its landing
+  cell is **announced** on the board as soon as it is ejected.
   - **P1** (start): it lands on the **mirror** of the cell it was pushed off from. If that cell is
     taken, on the nearest empty cell of that room (hex distance, then the lowest `q`, then `r`),
     at the announce and again at the landing.
   - **P2** (after **3** ejections credited to you): it lands in the room with **fewer marbles**
     (both colours; a tie keeps the other room) on a **random empty rim cell** of that room (a cell
-    next to the off-board, the inner wall cells excluded).
-  - **P3** (after **5**): the **wall collapses**: the shared edge becomes a passage, marbles move
-    and push across it as on one board, and ejected marbles **no longer come back**.
+    next to the off-board, the void included).
+  - **P3** (after **5**): a **bridge** fills the void: its 5 cells join the board, the whole row
+    between the two facing edges, and marbles move and push across it as on one board. Ejected
+    marbles **no longer come back**: the game ends at the 6th ejection.
   The phase is the one after the ejecting move: the 3rd ejection already returns as P2, the 5th
-  is gone, and the wall falls at the end of that move. A return announced before still lands.
+  is gone, and the bridge appears at the end of that move. A return announced before still lands
+  (in its room, never on the bridge).
 - **Win and loss** (lead): **every ejection counts**, even when the marble comes back: win at 6,
   lose at 6. A return is not an ejection and credits nothing.
 - **Deterministic, for P2P**: every random pick is splitmix64 of the fight seed and the ply. The
-  wall, the counted ejections, the marble just ejected and the announced return live on the board
+  bridge, the counted ejections, the marble just ejected and the announced return live on the board
   and in the position hash. No `Math.random`, no clock.
 - **Tell**: the announce mark on the landing cell (the colour of the coming marble) during the
-  ply before it lands; the HUD line says where it lands, and that the wall falls at 5.
-- **Look**: the two boards side by side under one camera, the wall a lit barrier that collapses at
-  P3, the returning marble dropping in on its mark. Reduced motion: no fall animation, it appears.
-- **Turn it against the boss** (owner design rule): an ejected boss marble lands on the mirror of
-  the cell you push it off from, so pick that cell to drop it into a trap in the other room (onto
-  the rim in front of your line); keep the mirror of your own exposed rim cells covered; in P2 the
-  return goes to the emptier room, so thin out the room you want it out of. The boss search plays
-  the wall, the returns of both sides and the collapse (every ply of its tree goes through the
-  hook, seed 0 for the P2 draw).
+  ply before it lands; the HUD line says where it lands, and that the bridge comes at 5.
+- **Look**: the two rooms under one camera, the void a dark gap, the bridge's 5 cells coming down into
+  the gap at P3, the returning marble dropping in on its mark. Reduced motion: no animation, the
+  bridge and the marble appear.
+- **Turn it against the boss** (owner design rule): the boss starts near the void, so push its
+  marbles into the void; an ejected boss marble lands on the mirror of the cell you push it off
+  from, so pick that cell to drop it into a trap in the other room (onto the rim in front of your
+  line); keep the mirror of your own exposed rim cells covered; in P2 the return goes to the
+  emptier room, so thin out the room you want it out of. The boss search plays the void, the
+  returns of both sides and the bridge (every ply of its tree goes through the hook, seed 0 for
+  the P2 draw).
 - **The Ballast Mind** (owner rule, section 7.5): not borrowed. A return needs a second room and
   spans two plies (ejected, then back one ply later): it is not a one-shot hook on the Ballast
   board, which has one room.
 - **Calibrate**: knobs = the phase ejections (3, 5), the start layout, AI budget. Fail if most
-  fights end before P3 (nobody sees the wall fall).
+  fights end before P3 (nobody sees the bridge). Ladder: `boss-balance.md` section 3.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door.
 

@@ -42,7 +42,7 @@ On top of it, the ship:
 | 📡 | **Online 1v1**, peer to peer, invite link, signed move log | ✅ playable |
 | 💀 | **Souls-like bosses**, ten of them (below), from the Boss fight menu, a medal per beaten boss with your fewest turns | ✅ playable |
 | 📅 | **Daily challenge**: one boss and one seed for everyone each UTC day, a result to share | ✅ playable |
-| 🗺️ | **Rogue-lite run**: 3 acts of a branching map of fights against the bot, your army of 14 marbles carried from fight to fight, every marble lost is lost for the run; a won fight rewards a marble or a special marble (Heavy, Anchor, Spark) you place before the next fight | 🚧 fight and boss nodes, rewards and special marbles; elites, rest and events to come |
+| 🗺️ | **Rogue-lite run**: 3 acts of a branching map of fights against the bot, elites (a stronger bot, marbles back), rests (the army back to 14) and events (a trade between marbles and special marbles), each act ending on a boss of the roster at the act's strength; your army of 14 marbles carried from fight to fight, every marble lost is lost for the run; a won fight rewards a marble or a special marble (Heavy, Anchor, Spark) you place before the next fight | 🚧 unlocks between runs and the run summary to come |
 | 🤝 | **Fight together**: two players share one army against a boss online, turn about | ✅ playable |
 | 🔥 | **Battle royale** on the Furnace deck: up to 6 seats, hidden orders (commit-reveal), the hull breach closes in, bots fill empty seats | ✅ playable, offline vs 5 bots and online |
 | 🛰️ | **Ship hub**: walk five decks, lifts that open as you beat each deck's boss, game tables, lore terminals, an audio log per deck, a Medal room on the Mess deck | ✅ playable, new players land there |
@@ -66,7 +66,7 @@ Die, read the tell, retry with the same seed.
 | Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; it talks back in typed bubbles, its vents turn toxic, and its marble explodes with a farewell when you win |
 | Cargo | **The Assembly Line** | three conveyor belts between the armies carry every marble off the board, then their presses strike |
 | Furnace | **The Unstable Core** | the centre cells charge your marbles, a charged marble weighs more in a push and four charges blow it off; later the core collapses and shockwaves shove the busiest wedge |
-| Mess | **The Dual Room** | two rooms side by side split by a wall: an ejected marble of either side comes back one turn later in the other room, on the mirror of its cell (after 3 ejections, on a rim cell of the emptier room), until at five ejections the wall falls and the rooms become one |
+| Mess | **The Dual Room** | two small rooms split by a void: a marble of either side ejected over the rim or into the void comes back one turn later in the other room, on the mirror of its cell (after 3 ejections, on a rim cell of the emptier room); its marbles start near the void, so push them in and pick where they land; at five ejections a bridge fills the void and ejected marbles stay out |
 
 ## What it looks like
 

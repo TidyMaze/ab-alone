@@ -8,9 +8,10 @@
 //!   Overseer's fight).
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`. The radius 5 board of The Ballast Mind
 //!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending. The Dual
-//!   Room's board scans radius 9, 271 codes: the same 91, then rings 6 to 9, each row by row, its
-//!   two rooms on the rows `r >= 0` (south) and `r <= -1` (north), every other cell vanished.
-//! - Dual (The Dual Room): `[collapsed, side, q, r]`, `1` once the wall fell, then the side of the
+//!   Room's board scans radius 7, 169 codes: the same 91, then rings 6 and 7, each row by row, its
+//!   two rooms on the rows `r >= 1` (south) and `r <= -1` (north), every other cell vanished, the
+//!   void's row `r = 0` too until the bridge's 5 cells (`q = -2` to `2`) turn empty in P3.
+//! - Dual (The Dual Room): `[bridged, side, q, r]`, `1` once the bridge is up, then the side of the
 //!   announced return and its landing cell, side `0` (and `0, 0`) when none. Last return: `[side, q,
 //!   r]` of the marble that landed at the end of the last ply, empty when none.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
@@ -77,7 +78,7 @@
 //!   (docs/specs/roguelite.md section 5).
 //! - Rogue-lite map (`run_map`): records of 5 integers `[act, row, col, kind, links]` per node,
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
-//!   an act). `links` is a bit mask of the columns of the next row of the same act the node leads
+//!   an act), `2` elite, `3` rest, `4` event. `links` is a bit mask of the columns of the next row of the same act the node leads
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
 //! - Open world chunk (`world_chunk(seed, cx, cy)`): 2 bytes `[height, terrain]` per cell of the
 //!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. `height` `0` to `3`;
@@ -106,8 +107,8 @@ mod tests {
     fn re_exports_and_submodules_are_accessible() {
         assert_eq!(MOVE_STRIDE, 8);
         assert_eq!(convert::MOVE_STRIDE, 8);
-        assert_eq!(engine_version(), 11);
-        assert_eq!(encounter::engine_version(), 11);
+        assert_eq!(engine_version(), 13);
+        assert_eq!(encounter::engine_version(), 13);
         let engine = Engine::new();
         assert_eq!(engine.to_move(), 1);
         let encounter = Encounter::new("echo", 1).unwrap();
