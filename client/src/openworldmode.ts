@@ -21,6 +21,7 @@ export class OpenWorldMode {
   ) {}
 
   enter(seed: number, width: number, height: number): void {
+    this.view?.dispose();
     const world = new World(
       (cx, cy) => this.load(seed, cx, cy),
       (cx, cy) => this.loadEnemies(seed, cx, cy),
@@ -34,6 +35,7 @@ export class OpenWorldMode {
     this.dirty = true;
     this.mark(String(seed));
     void this.models().then((geometries) => {
+      if (this.view !== view) return; // left before the models arrived
       view.useModels(geometries);
       this.dirty = true;
     });
@@ -41,6 +43,9 @@ export class OpenWorldMode {
 
   leave(): void {
     this.active = false;
+    this.view?.dispose();
+    this.view = null;
+    this.dirty = false;
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
     delete document.body.dataset.openworldTroop;
