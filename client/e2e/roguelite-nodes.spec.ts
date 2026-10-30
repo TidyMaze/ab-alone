@@ -9,15 +9,17 @@ test('the rogue-lite run: elite, rest, event and boss nodes, an event, a rest an
   const hook = (state: object) => page.evaluate((s) => (window as any).__run(s), state);
   const run = { seed: 3, army: 9, path: [1], fighting: false, moves: [], end: '', specials: [0, 0, 0], placed: [], reward: false, event: false };
   await page.goto('./?bot=off');
+  await page.waitForFunction(() => typeof (window as any).__run === 'function'); // the page is ready
   await hook(run);
   for (const kind of ['elite', 'rest', 'event', 'boss']) await expect(map.getByRole('button', { name: `Act 1, ${kind}` }).first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('roguelite-map-nodes.png') });
 
+  await hook({ ...run, specials: [0, 0, 1] }); // a Spark to give: every trade can be paid
   await map.locator('[data-node="4"]').click();
   await expect(line).toHaveText(/^Event · /);
   await page.screenshot({ path: testInfo.outputPath('roguelite-event.png') });
   await map.getByRole('button', { name: 'Leave' }).click();
-  await expect(line).toHaveText('Rogue-lite run · army 9 marbles · pick a fight');
+  await expect(line).toHaveText('Rogue-lite run · army 9 marbles, 1 Spark · pick a fight');
 
   await hook(run);
   await map.locator('[data-node="3"]').click();
