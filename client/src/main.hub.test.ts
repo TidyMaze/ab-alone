@@ -86,8 +86,10 @@ const THERE_AND_BACK: [number, number, number, number][] = [
 const ECHO_DRAW: [number, number, number, number][] = [
   [0, 2, 0, 1],
   [0, -1, 1, -1],
+  [0, 1, -1, 1], // the free move the Echo's step offers (#958)
   [-1, 1, 0, 1],
   [0, -1, 1, -1],
+  [0, 1, -1, 1],
   [-1, 1, 0, 1],
 ];
 async function loseToTheEcho(game: Game): Promise<void> {
