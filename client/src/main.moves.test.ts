@@ -527,8 +527,16 @@ describe('the frame loop', () => {
     expect(game.hook('__draws')).toBe(3);
   });
 
+  it('keeps drawing every frame while the dust of the high tier drifts (#443, #848)', async () => {
+    const game = await boot('?bot=off&quality=high', { webdriver: false });
+    game.frame();
+    game.frame();
+    game.frame();
+    expect(game.draws()).toBe(3);
+  });
+
   it('leaves a still board undrawn for a player, and draws again on an input, a camera move and a slide (#848)', async () => {
-    const game = await boot('?bot=off', { webdriver: false });
+    const game = await boot('?bot=off&quality=low', { webdriver: false }); // no dust drifting
     game.frame();
     expect(game.draws()).toBe(1); // the first picture
     game.frame();
