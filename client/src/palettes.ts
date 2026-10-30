@@ -25,6 +25,8 @@ export interface PaletteDefinition {
   tell: number; // tell marks and glyphs (bone)
   accent: string; // CSS hex string for HUD markers, borders, focus
   hazard: string; // CSS hex string for warnings
+  lightAccent: string | null; // accent on the light theme's cream, null: ui.css's own (#923)
+  lightHazard: string | null; // hazard on the cream, null: ui.css's own
 }
 
 export const PALETTE_DEFS: Record<Palette, PaletteDefinition> = {
@@ -39,6 +41,8 @@ export const PALETTE_DEFS: Record<Palette, PaletteDefinition> = {
     tell: 0xd8d4c8,
     accent: '#7fd6e8',
     hazard: '#d9822b',
+    lightAccent: null,
+    lightHazard: null,
   },
   protan: {
     // Protanopia (red-blind): avoid red/cyan confusion, preserve blue/yellow
@@ -52,6 +56,8 @@ export const PALETTE_DEFS: Record<Palette, PaletteDefinition> = {
     tell: 0xf8fafc,
     accent: '#38bdf8',
     hazard: '#facc15',
+    lightAccent: '#0b5d8a',
+    lightHazard: '#7a5a00',
   },
   deutan: {
     // Deuteranopia (green-blind): preserve blue/gold
@@ -65,6 +71,8 @@ export const PALETTE_DEFS: Record<Palette, PaletteDefinition> = {
     tell: 0xf9fafb,
     accent: '#60a5fa',
     hazard: '#fbbf24',
+    lightAccent: '#1e40af',
+    lightHazard: '#7a5a00',
   },
   tritan: {
     // Tritanopia (blue-blind): preserve red/teal-cyan
@@ -78,6 +86,8 @@ export const PALETTE_DEFS: Record<Palette, PaletteDefinition> = {
     tell: 0xfafafa,
     accent: '#2dd4bf',
     hazard: '#f43f5e',
+    lightAccent: '#0f6b5f',
+    lightHazard: '#a3123a',
   },
   contrast: {
     // High contrast: pure black, pure white and electric cyan
@@ -91,11 +101,18 @@ export const PALETTE_DEFS: Record<Palette, PaletteDefinition> = {
     tell: 0xffffff,
     accent: '#00ffff',
     hazard: '#ffaa00',
+    lightAccent: '#005f6b',
+    lightHazard: '#8a4b00',
   },
 };
 
 export const paletteById = (id: string): PaletteDefinition =>
   PALETTE_DEFS[id as Palette] ?? PALETTE_DEFS.default;
+
+/** The inline accent and hazard of a palette: all palettes on the dark theme, the on-cream pair on the light one
+ *  (null: no inline value, so ui.css's own light colours apply). */
+export const themeColors = (pal: PaletteDefinition, light: boolean): { accent: string | null; hazard: string | null } =>
+  light ? { accent: pal.lightAccent, hazard: pal.lightHazard } : { accent: pal.accent, hazard: pal.hazard };
 
 export const nextPalette = (p: Palette): Palette => {
   const i = PALETTES.indexOf(p);

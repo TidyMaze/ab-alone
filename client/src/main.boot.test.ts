@@ -478,7 +478,7 @@ describe('the settings toggles', () => {
       get matches() {
         return system.matches;
       },
-      addEventListener: (_: string, fn: () => void) => (system.change = fn),
+      addEventListener: (_: string, fn: () => void) => { if (media.includes('reduced-motion')) system.change = fn; },
     }));
     await booting;
     expect(root.dataset.motion).toBeUndefined();
@@ -569,6 +569,34 @@ describe('the settings toggles', () => {
     expect([root.dataset.palette, game.hook('__palette')]).toEqual(['protan', 'protan']);
     expect(style('--accent')).not.toBe(accent);
     expect(localStorage.getItem('ab-alone.palette')).toBe('protan');
+  });
+
+  it('sets the inline accent and hazard only on the dark theme, and re-applies them when the theme changes (#923)', async () => {
+    await bootWith({ 'ab-alone.theme': 'light', 'ab-alone.palette': 'protan' });
+    expect([style('--accent'), style('--hazard')]).toEqual(['#0b5d8a', '#7a5a00']); // the on-cream pair
+    row('palette').click(); // deutan
+    expect(style('--accent')).toBe('#1e40af');
+    for (let i = 0; i < 3; i++) row('palette').click(); // back to default: ui.css's own light colours win
+    expect([style('--accent'), style('--hazard')]).toEqual(['', '']);
+    row('theme').click(); // light to system (jsdom matches no light query), then the dark pair is back
+    expect([style('--accent'), style('--hazard')]).toEqual(['#7fd6e8', '#d9822b']);
+  });
+
+  it('follows the system theme for the accent pair when the theme is System', async () => {
+    const booting = boot('?bot=off');
+    const system = { matches: true, change: (): void => {} };
+    vi.stubGlobal('matchMedia', (media: string) => ({
+      media,
+      get matches() {
+        return media.includes('prefers-color-scheme') && system.matches;
+      },
+      addEventListener: (_: string, fn: () => void) => (system.change = fn),
+    }));
+    await booting;
+    expect(style('--accent')).toBe('');
+    system.matches = false;
+    system.change();
+    expect(style('--accent')).toBe('#7fd6e8');
   });
 
   it('starts on the saved palette', async () => {

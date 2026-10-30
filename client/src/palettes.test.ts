@@ -7,6 +7,7 @@ import {
   PALETTES,
   PALETTE_NAMES,
   simulateCvd,
+  themeColors,
   type Palette,
 } from './palettes';
 
@@ -101,6 +102,22 @@ describe('palettes', () => {
 
       // Tell vs Deck: >= 3:1
       expect(contrastRatio(deck, tellRgb), `${id}: tell vs deck contrast`).toBeGreaterThanOrEqual(3.0);
+    }
+  });
+
+  it('gives every palette an inline pair on the dark theme and an on-cream pair of 4.5:1 or more on the light one (#923)', () => {
+    const cream = [hexToRgb(0xe6e2d6), hexToRgb(0xf3f0e6)];
+    for (const id of PALETTES) {
+      const pal = paletteById(id);
+      expect(themeColors(pal, false)).toEqual({ accent: pal.accent, hazard: pal.hazard });
+      const light = themeColors(pal, true);
+      if (id === 'default') {
+        expect(light).toEqual({ accent: null, hazard: null }); // ui.css's #0a5f73 and #8f4a0c win
+        continue;
+      }
+      for (const hex of [light.accent!, light.hazard!]) {
+        for (const bg of cream) expect(contrastRatio(hexToRgb(parseInt(hex.slice(1), 16)), bg)).toBeGreaterThanOrEqual(4.5);
+      }
     }
   });
 });
