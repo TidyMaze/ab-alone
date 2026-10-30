@@ -70,6 +70,12 @@ test('the wheel zooms the Open world out far and back, and the hero still rolls,
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, 2000);
   await expect.poll(zoom).toBeGreaterThan(2.5); // far out
+  // still 3D: the ground, the props, the troop and the enemies are all drawn
+  const drawn = await page.evaluate(() => JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>);
+  expect(drawn['terrain-grass']).toBeGreaterThan(0);
+  expect(drawn['prop-tree']).toBeGreaterThan(0);
+  expect(drawn.troop).toBe(6);
+  expect(drawn.enemies).toBeGreaterThan(0);
   await page.mouse.wheel(0, -2000);
   await expect.poll(zoom).toBe(1);
   await page.mouse.wheel(0, 2000);

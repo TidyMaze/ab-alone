@@ -39,6 +39,7 @@ afterEach(() => {
   delete body().openworldTroop;
   delete body().openworldEnemies;
   delete body().openworldZoom;
+  delete body().openworldDrawn;
 });
 
 // Screen direction of a step, `[-1 | 0 | 1, -1 | 0 | 1]` for left/right and up/down, from the ground layout of `axialTo3D`.
@@ -189,6 +190,17 @@ describe('the Open world mode', () => {
     m.enter(1, 800, 600);
     expect(body().openworldZoom).toBe('1');
     expect(camera().position.y).toBeCloseTo(14);
+  });
+
+  it('publishes what is drawn at the zoom, the props among it, for the browser checks, #976', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.zoom(2);
+    const drawn = JSON.parse(body().openworldDrawn!) as Record<string, number>;
+    expect(drawn['terrain-grass']).toBeGreaterThan(0);
+    expect(drawn['prop-boulder']).toBeGreaterThan(0);
+    expect(drawn.troop).toBe(6);
+    expect(drawn.enemies).toBe(3);
   });
 
   it('rolls the hero onto the cell picked by a click at the widest zoom too, #976', () => {

@@ -2,7 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours, World } from './openworld';
-import { GROUNDS, loadModels, LOOK, MAX_ZOOM, OpenWorldView, topOf, variety, WATER, waterColor } from './openworldview';
+import {
+  GROUNDS,
+  groundRadius,
+  loadModels,
+  LOOK,
+  MAX_REACH,
+  MAX_ZOOM,
+  OpenWorldView,
+  reachFor,
+  topOf,
+  variety,
+  WATER,
+  waterColor,
+} from './openworldview';
 
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
 function bytes(cx: number, cy: number): Uint8Array {
@@ -11,6 +24,13 @@ function bytes(cx: number, cy: number): Uint8Array {
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([i % 4, i % 8], i * 2);
   return out;
 }
+// Every chunk of the world is grass, flat: the loaded square is as wide as the reach asks for.
+function grass(): Uint8Array {
+  const out = new Uint8Array(CHUNK * CHUNK * 2);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2], i * 2);
+  return out;
+}
+const ground = (view: OpenWorldView) => GROUNDS.reduce((sum, g) => sum + mesh(view, `terrain-${g}`).count, 0);
 const mesh = (view: OpenWorldView, name: string) => view.scene.getObjectByName(name) as THREE.InstancedMesh;
 const counts = (view: OpenWorldView, prefix: string, names: readonly string[]) =>
   Object.fromEntries(names.map((n) => [n, mesh(view, `${prefix}-${n}`).count]));
@@ -18,6 +38,7 @@ const counts = (view: OpenWorldView, prefix: string, names: readonly string[]) =
 describe('the Open world view (docs/specs/openworld.md section 2)', () => {
   it('draws every cell of the chunks around the hero as a ground column and its props on top', () => {
     const view = new OpenWorldView(new World(bytes));
+    view.resize(1600, 900); // a 16:9 screen sees the ground two chunks out at the closest view
     view.show([0, 0]);
     const cells = 25 * CHUNK * CHUNK;
     const ground = counts(view, 'terrain', GROUNDS);
@@ -162,9 +183,9 @@ describe('the zoom of the Open world camera (#976)', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([2, 1]);
     const fog = view.scene.fog as THREE.Fog;
-    expect([fog.near, fog.far, view.camera.far]).toEqual([18, 34, 80]);
+    expect([fog.near, fog.far, view.camera.far, view.camera.near]).toEqual([18, 34, 80, 0.1]);
     view.zoomBy(2);
-    expect([fog.near, fog.far, view.camera.far]).toEqual([36, 68, 160]);
+    expect([fog.near, fog.far, view.camera.far, view.camera.near]).toEqual([36, 68, 160, 0.2]); // the near plane too: the depth precision stays
   });
 
   it('keeps the camera behind the hero as it walks, at the zoom it has', () => {
@@ -202,6 +223,57 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     expect(mesh(view, 'terrain-grass').visible).toBe(true);
     expect(mesh(view, 'prop-tree').visible).toBe(true);
     expect(hero(view).visible).toBe(true);
+  });
+
+  it('loads the chunks the camera sees: the reach grows with the zoom, and a small zoom step rebuilds nothing', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(view.reach).toBe(2);
+    expect(ground(view)).toBe((2 * 2 + 1) ** 2 * CHUNK * CHUNK);
+    const version = mesh(view, 'terrain-grass').instanceMatrix.version;
+    view.zoomBy(1.01); // the reach is still two chunks: the same chunks, not rebuilt
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
+    view.zoomBy(4);
+    expect(view.reach).toBeGreaterThan(2);
+    expect(ground(view)).toBe((2 * view.reach + 1) ** 2 * CHUNK * CHUNK);
+  });
+
+  it('keeps every chunk of the widest zoom within the capacity of the instanced meshes', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(MAX_ZOOM);
+    expect(reachFor(groundRadius(view.camera, hero(view).position))).toBeLessThanOrEqual(MAX_REACH);
+    expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
+    expect(ground(view)).toBe((2 * view.reach + 1) ** 2 * CHUNK * CHUNK);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe((2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK);
+  });
+
+  it('rebuilds the chunks when the hero enters another chunk at a far zoom, with the reach of the zoom', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(4);
+    const reach = view.reach;
+    const version = mesh(view, 'terrain-grass').instanceMatrix.version;
+    view.show([1, 1]); // the same chunk: nothing is rebuilt
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
+    view.show([CHUNK, 0]); // the next chunk: rebuilt around it, with the same reach
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBeGreaterThan(version);
+    expect(view.reach).toBe(reach);
+    expect(ground(view)).toBe((2 * reach + 1) ** 2 * CHUNK * CHUNK);
+  });
+
+  it('gives the visible ground radius from the camera, the field of view and the aspect', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const radius = groundRadius(view.camera, hero(view).position);
+    expect(radius).toBeGreaterThan(CHUNK);
+    expect(radius).toBeLessThan(2 * CHUNK);
+    view.zoomBy(4);
+    expect(groundRadius(view.camera, hero(view).position)).toBeCloseTo(4 * radius, 0);
   });
 });
 
