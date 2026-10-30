@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
+import { encodeMove } from '../src/board';
 
 // The Pulsar (#675, game-design.md section 7.10) from the fixture of the core tests: fight seed 2 and ?bot=off, so the
 // test plays both sides through the click hook. The first pulsar pushes NW, off the bottom corner. The pulse after
@@ -84,21 +85,29 @@ test('The Pulsar: a charging pulsar counts down, fires, throws a lone marble off
   await expect(tell).toHaveText('Pulse in 4 turns, force 3'); // the phase raises the force
 });
 
+// The fixture loads the complete position; only its last ply plays live. The paused clock keeps each sample
+// inside the 700 ms shockwave even when a screenshot or another browser is slow (#891).
 test('The Pulsar: the shockwave grows from the pulsar across the board, #675', async ({ page }, testInfo) => {
   const body = page.locator('body');
+  await page.clock.install({ time: 0 });
   await startPulsar(page, false);
-  await plies(page, 0, 5);
+  await expect(body).toHaveAttribute('data-bay', 'ready');
+  await page.clock.pauseAt(60_000);
+  const records = FIXTURE.slice(0, 5).map(([q, r, dir]) => encodeMove({ cells: [[q, r]], dir }));
+  expect(await page.evaluate((moves) => (window as any).__playMoves(moves), records)).toBe(5);
+  await page.clock.runFor(300); // the player's slide ends and starts the pulse
   await expect(body).toHaveAttribute('data-pulsing', '1');
   const radii: number[] = [];
-  for (let frame = 0; frame < 6; frame++) {
-    await freshDraw(page);
+  for (let frame = 0; frame < 4; frame++) {
     const shock = await page.evaluate(() => (window as any).__shock());
-    if (shock === null) break;
+    expect(shock).not.toBeNull();
     radii.push(shock.radius);
     await page.screenshot({ path: testInfo.outputPath(`pulsar-shock-${frame}.png`) });
+    await page.clock.runFor(100);
   }
-  expect(radii.length).toBeGreaterThan(0);
-  expect(radii).toEqual([...radii].sort((a, b) => a - b)); // it grows
+  expect(radii).toEqual([...radii].sort((a, b) => a - b));
+  expect(new Set(radii).size).toBe(radii.length);
+  await page.clock.runFor(1500);
   await expect(body).not.toHaveAttribute('data-pulsing', '1');
   await expect(body).toHaveAttribute('data-pulses', '1');
 });

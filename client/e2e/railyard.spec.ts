@@ -80,22 +80,33 @@ test('The Rail Yard: an announced train counts down, passes, sweeps both sides o
 
 test('The Rail Yard: the freight train runs the line and knocks the marbles off, #626', async ({ page }, testInfo) => {
   const body = page.locator('body');
-  await startRailYard(page, false);
+  await page.clock.install({ time: 0 });
+  await startRailYard(page, true);
+  await expect(body).toHaveAttribute('data-bay', 'ready');
+  // Seed 77, the complete position one quiet ply before the first pass. The hook uses the import replay path.
+  const beforePass = [
+    [1, 2, -4, 3, 0, 0, 0, 0], [1, 3, -1, -3, 0, 0, 0, 0],
+    [1, 1, -3, 2, 0, 0, 0, 0], [1, 0, -2, -2, 0, 0, 0, 0],
+    [1, 0, -4, 2, 0, 0, 0, 0], [1, 1, -1, -2, 0, 0, 0, 0],
+    [1, 1, -3, 2, 0, 0, 0, 0], [1, 0, -2, -2, 0, 0, 0, 0],
+    [1, 0, -4, 2, 0, 0, 0, 0], [1, 1, -1, -2, 0, 0, 0, 0],
+  ];
+  expect(await page.evaluate((moves) => (window as any).__playMoves(moves), beforePass)).toBe(10);
+  await page.clock.pauseAt(60_000);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.mouse.move(2, 2); // no hover ghost
-  for (let ply = 1; ply <= 11; ply++) {
-    await page.waitForFunction(() => document.body.dataset.sliding === undefined); // a move waits for the last slide
-    await quiet(page, 1);
-  }
+  await quiet(page, 1);
   await expect(body).toHaveAttribute('data-passing', '1');
   const fronts: number[] = [];
-  for (let frame = 0; frame < 6; frame++) {
-    await freshDraw(page);
+  for (let frame = 0; frame < 4; frame++) {
+    await page.clock.runFor(200);
     const pass = await page.evaluate(() => (window as any).__passes());
-    if (pass.length === 0) break;
+    expect(pass).toHaveLength(1);
     fronts.push(pass[0].x);
     await page.screenshot({ path: testInfo.outputPath(`railyard-pass-${frame}.png`) });
   }
-  expect(fronts.length).toBeGreaterThan(0);
+  expect(fronts.at(-1)).toBeLessThan(fronts[0]!); // this train runs from (4, -4) toward (-4, 4)
+  await page.clock.runFor(2500);
   await expect(body).toHaveAttribute('data-passing', '0');
   await expect(body).toHaveAttribute('data-trains', '0');
 });
