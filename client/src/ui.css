@@ -628,6 +628,10 @@ body[data-reading] #log { visibility: visible; }
 #light-panel button { grid-column: 2; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; }
 #light-panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #light-panel summary { cursor: pointer; font-weight: 600; padding-block: 0.25rem; }
+/* Editor and Save stick to the bottom of the scrolling panel, Save last (#920). */
+#light-panel > button { position: sticky; bottom: 0.5rem; flex: none; font: inherit; padding: 0.5rem 0.75rem; min-height: 2rem; }
+#light-panel > button.editor { bottom: 3rem; }
+@media (pointer: coarse) { #light-panel > button { min-height: 2.75rem; } #light-panel > button.editor { bottom: 3.75rem; } }
 /* Loading plate (#901): shown from first paint, faded out when the textures are ready. Pure CSS. */
 #loading {
   position: fixed; inset: 0; z-index: 9; display: flex; align-items: center; justify-content: center;
