@@ -849,3 +849,30 @@ it('marks the page once the spaceship bay is in the scene, never while it is mis
   await game.settle();
   expect(document.body.dataset.bay).toBe('ready');
 });
+
+it('shows a loading plate from the first paint, fades it once the bay is in and hides it after the fade (#901)', async () => {
+  const game = await boot('?bot=off', { webdriver: false });
+  const plate = byId('loading');
+  expect(plate.getAttribute('role')).toBe('status');
+  expect(plate.textContent).toBe('Loading');
+  expect(plate.querySelector('.hex')!.getAttribute('aria-hidden')).toBe('true');
+  await game.settle();
+  expect(plate.classList.contains('done')).toBe(true); // the fade
+  await vi.waitFor(() => expect(plate.hidden).toBe(true)); // reduced motion has no transition to wait for
+  plate.classList.remove('done');
+  game.hook('__mountBay', null); // a second mount leaves the hidden plate alone
+  expect(plate.classList.contains('done')).toBe(false);
+});
+
+it('hides the loading plate at once under automation, so a check waiting on data-bay never sees it fade (#901)', async () => {
+  const game = await boot('?bot=off');
+  await game.settle();
+  expect(document.body.dataset.bay).toBe('ready');
+  expect(byId('loading').hidden).toBe(true);
+});
+
+it('hides the loading plate even when the bay is missing, so the page never loads forever (#901)', async () => {
+  const game = await boot('?bot=off', { missing: ['spaceship-bay.glb'] });
+  await game.settle();
+  await vi.waitFor(() => expect(byId('loading').hidden).toBe(true));
+});

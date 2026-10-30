@@ -3,5 +3,6 @@
 export function bootFailed(err: unknown): never {
   document.getElementById('boot-reason')!.textContent = err instanceof Error ? err.message : String(err);
   document.getElementById('boot-error')!.hidden = false;
+  document.getElementById('loading')!.hidden = true;
   throw err;
 }
