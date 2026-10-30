@@ -106,6 +106,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if let Some(unstable) = board.unstable() {
         unstable.hash(&mut hasher);
     }
+    if let Some(dual) = board.dual() {
+        dual.hash(&mut hasher);
+    }
     if !board.polarities().is_empty() {
         board.polarities().hash(&mut hasher);
     }

@@ -14,7 +14,7 @@ pub const MAX_RADIUS: i32 = 8;
 /// Content of one cell. Black and White are seats 1 and 2, the other marbles seats 3 to 6 of a
 /// battle royale. A core and the Overseer belong to The Overseer's fight: a core is a passive
 /// marble both sides push, the Overseer a marble nothing moves.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Cell {
     Empty,
     Black,
@@ -103,6 +103,28 @@ pub struct Board {
     incinerators: Vec<(i32, i32)>,
     /// The Unstable Core's marks. `Some` also turns on its weighted push rule.
     unstable: Option<Unstable>,
+    /// The Dual Room's state. `Some` also raises the wall between its two rooms.
+    dual: Option<Dual>,
+}
+
+/// The Dual Room's state on the board (docs/specs/game-design.md section 7.15): its board holds
+/// two radius 4 rooms, the south one on the rows `r >= 0`, the north one on `r <= -1`, and a wall
+/// stands between them until it collapses in P3.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Dual {
+    /// The wall fell (P3): the rooms are one board.
+    pub collapsed: bool,
+    /// Boss marbles ejected so far: the phases come from them.
+    pub ejections: u8,
+    /// The marble the last move pushed off and the cell it left, until the hook announces its return.
+    pub ejected: Option<(Cell, (i32, i32))>,
+    /// The announced return: the marble and the cell it lands on at the end of the next ply.
+    pub coming: Option<(Cell, (i32, i32))>,
+}
+
+/// The room of a cell of the Dual Room's board: `0` south (`r >= 0`), `1` north.
+pub fn room((_, r): (i32, i32)) -> usize {
+    usize::from(r < 0)
 }
 
 /// The Unstable Core's state on the board (docs/specs/game-design.md section 7.13): the charges of
@@ -175,6 +197,7 @@ impl Board {
             belts: None,
             incinerators: Vec::new(),
             unstable: None,
+            dual: None,
         }
     }
 
@@ -309,6 +332,21 @@ impl Board {
 
     pub fn set_unstable(&mut self, unstable: Option<Unstable>) {
         self.unstable = unstable;
+    }
+
+    /// The Dual Room's state, `None` outside its fight.
+    pub fn dual(&self) -> Option<Dual> {
+        self.dual
+    }
+
+    pub fn set_dual(&mut self, dual: Option<Dual>) {
+        self.dual = dual;
+    }
+
+    /// Whether the Dual Room's wall stands between the neighbour cells `from` and `to`.
+    pub fn walled(&self, from: (i32, i32), to: (i32, i32)) -> bool {
+        self.dual
+            .is_some_and(|d| !d.collapsed && room(from) != room(to))
     }
 
     /// Standard start layout: 14 marbles per side.

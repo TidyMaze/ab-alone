@@ -1,5 +1,229 @@
 //! The Dual Room (#796, docs/specs/game-design.md section 7.15): two radius 4 rooms side by side,
-//! split by a wall.
+//! split by a wall. One board of two hexes with a flag ([`Dual`]): the south room on the rows
+//! `r >= 0`, the north room on `r <= -1`, and the wall between them blocks like a marble that never
+//! moves (`moves::apply_for` asks `Board::walled`). A marble pushed off comes back one ply later in
+//! the other room, on the mirror of its cell in P1, on a random empty rim cell of the emptier room
+//! in P2; in P3 the wall collapses and ejected marbles are gone. Every ejection counts. Every random
+//! pick is splitmix64 of the fight seed and the ply, so every peer gets the same fight.
+
+use crate::board::{room, Board, Cell, Dual};
+use crate::encounter::hull::{mix, NEIGHBOURS};
+use crate::encounter::{BossDef, Encounter};
+use crate::game::Game;
+use crate::moves::{Move, Player};
+use crate::search::{search_hooked, DEFAULT_WEIGHTS};
+
+type P = (i32, i32);
+
+/// P2 and P3 start after this many boss marbles ejected. TUNE.
+pub const DUAL_PHASE_EJECTIONS: [u8; 2] = [3, 5];
+/// Positions the boss search may visit per move. TUNE.
+pub const DUAL_NODE_BUDGET: u32 = 3000;
+/// The centres of the two radius 4 rooms, south then north: they touch along the wall.
+pub const ROOMS: [P; 2] = [(-2, 4), (3, -5)];
+/// The board scan of [`Board::radius`]: both rooms fit in `|q|, |r|, |q + r| <= 9`.
+pub const DUAL_RADIUS: i32 = 9;
+/// The player's start in the south room, on its far side; the north room holds its mirror.
+pub const PLAYER_START: [P; 7] = [
+    (-6, 8),
+    (-5, 8),
+    (-4, 8),
+    (-3, 8),
+    (-2, 8),
+    (-4, 7),
+    (-3, 7),
+];
+/// The boss's start in the south room, against the wall; the north room holds its mirror.
+pub const BOSS_START: [P; 5] = [(-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1)];
+
+/// Hex distance between two cells.
+pub fn distance(a: P, b: P) -> i32 {
+    let (dq, dr) = (a.0 - b.0, a.1 - b.1);
+    (dq.abs() + dr.abs() + (dq + dr).abs()) / 2
+}
+
+/// The cell symmetric to `cell` across the wall: its mirror in the rooms' own coordinates, on the
+/// same row counted from the wall.
+pub fn mirror((q, r): P) -> P {
+    let shift = i32::from(room((q, r)) == 0);
+    (q + r + shift, -1 - r)
+}
+
+/// Whether `cell` is a rim cell: a neighbour of it is off the board.
+pub fn rim(board: &Board, (q, r): P) -> bool {
+    NEIGHBOURS
+        .iter()
+        .any(|&(dq, dr)| board.get(q + dq, r + dr).is_none())
+}
+
+/// The phase after `ejections` boss marbles ejected: 0 to 2.
+fn phase(ejections: u8) -> usize {
+    DUAL_PHASE_EJECTIONS
+        .iter()
+        .filter(|&&t| ejections >= t)
+        .count()
+}
+
+/// The cells of `board`, in `q` then `r` order.
+fn cells(board: &Board) -> impl Iterator<Item = P> + '_ {
+    let radius = board.radius();
+    (-radius..=radius)
+        .flat_map(move |q| (-radius..=radius).map(move |r| (q, r)))
+        .filter(|&(q, r)| board.get(q, r).is_some())
+}
+
+/// The empty cell of the room of `cell` nearest to it (itself when empty), the lowest `q`, then
+/// `r`, on a tie.
+fn nearest_empty(board: &Board, cell: P) -> P {
+    cells(board)
+        .filter(|&(q, r)| room((q, r)) == room(cell) && board.get(q, r) == Some(Cell::Empty))
+        .min_by_key(|&c| distance(c, cell))
+        .expect("a room never fills up")
+}
+
+/// Where a marble pushed off from `from` lands, announced now: the mirror (P1), or a rim cell of
+/// the emptier room drawn by `seed` (P2).
+fn landing(board: &Board, from: P, phase: usize, seed: u64) -> P {
+    if phase == 0 {
+        return nearest_empty(board, mirror(from));
+    }
+    let mut count = [0; 2];
+    for (q, r) in cells(board) {
+        count[room((q, r))] += usize::from(board.get(q, r) != Some(Cell::Empty));
+    }
+    let left = room(from);
+    let target = if count[left] < count[1 - left] {
+        left
+    } else {
+        1 - left
+    };
+    let spots: Vec<P> = cells(board)
+        .filter(|&c| room(c) == target && board.get(c.0, c.1) == Some(Cell::Empty) && rim(board, c))
+        .collect();
+    spots[(mix(seed) % spots.len() as u64) as usize]
+}
+
+/// The marble `mv` pushed off `before` and the cell it left, `None` when it ejected none.
+fn pushed_off(before: &Board, mv: &Move) -> Option<(Cell, P)> {
+    let (dq, dr) = mv.dir.vector();
+    mv.cells.iter().find_map(|&(q, r)| {
+        let mut cell = (q + dq, r + dr);
+        if mv.cells.contains(&cell) {
+            return None;
+        }
+        let mut last = None;
+        while let Some(marble @ (Cell::Black | Cell::White)) = before.get(cell.0, cell.1) {
+            last = Some((marble, cell));
+            cell = (cell.0 + dq, cell.1 + dr);
+        }
+        last.filter(|_| before.get(cell.0, cell.1).is_none())
+    })
+}
+
+/// The state of `before` after `mv`: the marble it pushed off, counted when it is the boss's.
+/// `None` outside the Dual Room's fight.
+pub(crate) fn carried_dual(before: &Board, mv: &Move, _after: &Board) -> Option<Dual> {
+    let mut dual = before.dual()?;
+    dual.ejected = pushed_off(before, mv);
+    dual.ejections += u8::from(matches!(dual.ejected, Some((Cell::White, _))));
+    Some(dual)
+}
+
+/// The end of a ply: the announced return lands, the marble the ply pushed off is announced in
+/// the other room (P1, P2) or gone (P3), and the wall collapses once in P3.
+fn run(mut board: Board, seed: u64) -> Board {
+    let mut dual = board.dual().expect("the Dual Room's board");
+    if let Some((marble, at)) = dual.coming.take() {
+        let (q, r) = nearest_empty(&board, at);
+        board.set(q, r, marble);
+    }
+    let phase = phase(dual.ejections);
+    if let Some((marble, from)) = dual.ejected.take() {
+        if phase < 2 {
+            dual.coming = Some((marble, landing(&board, from, phase, seed)));
+        }
+    }
+    dual.collapsed |= phase >= 2;
+    board.set_dual(Some(dual));
+    board
+}
+
+/// The hook runs after every ply.
+fn special(_ply: u32, _phase: usize) -> Option<u8> {
+    Some(0)
+}
+
+fn hook(board: &Board, _id: u8, seed: u64) -> Board {
+    run(board.clone(), seed)
+}
+
+/// The Dual Room's board with no marble: its two rooms, the wall standing.
+pub fn dual_board() -> Board {
+    let mut board = Board::with_radius(DUAL_RADIUS);
+    for q in -DUAL_RADIUS..=DUAL_RADIUS {
+        for r in -DUAL_RADIUS..=DUAL_RADIUS {
+            if ROOMS.iter().all(|&c| distance((q, r), c) > 4) {
+                board.void(q, r);
+            }
+        }
+    }
+    board.set_dual(Some(Dual::default()));
+    board
+}
+
+/// The Dual Room boss definition.
+pub fn dual_boss() -> BossDef {
+    BossDef {
+        name: "The Dual Room",
+        phase_marbles: Vec::new(),
+        phase_ejections: DUAL_PHASE_EJECTIONS.to_vec(),
+        special,
+        hook,
+        conversions: None,
+        node_budget: DUAL_NODE_BUDGET,
+    }
+}
+
+/// A new encounter: 7 player and 5 boss marbles in each room, the player is Black and moves first.
+pub fn dual_start(seed: u64) -> Encounter {
+    let mut board = dual_board();
+    for (color, start) in [(Cell::Black, &PLAYER_START[..]), (Cell::White, &BOSS_START)] {
+        for &cell in start {
+            for (q, r) in [cell, mirror(cell)] {
+                board.set(q, r, color);
+            }
+        }
+    }
+    Encounter::new(
+        Game::from_position(board, Player::Black, [0, 0]),
+        dual_boss(),
+        seed,
+    )
+}
+
+/// What a ply does in the boss search: the pushed-off marble is noted, then the hook runs with
+/// seed 0. A return credits nothing: the search counts the push itself.
+fn search_step(before: &Board, _mover: Player, mv: &Move, mut after: Board) -> (Board, [u8; 2]) {
+    after.set_dual(carried_dual(before, mv, &after));
+    (run(after, 0), [0, 0])
+}
+
+/// The boss reply: its node-limited search, where every ply of the tree goes through the hook, so
+/// it plays the wall, the returns of both sides and the collapse. `None` on the player's turn or
+/// when over.
+pub fn dual_move(enc: &Encounter) -> Option<Move> {
+    if enc.game().to_move() != Player::White {
+        return None;
+    }
+    search_hooked(
+        enc.game(),
+        enc.boss.node_budget,
+        DEFAULT_WEIGHTS,
+        &|_| true,
+        &search_step,
+    )
+    .map(|r| r.mv)
+}
 
 #[cfg(test)]
 mod tests {
@@ -66,14 +290,14 @@ mod tests {
         assert_eq!(board.dual(), Some(Dual::default()));
         let cells = on_board(&board);
         assert_eq!(cells.len(), 122);
-        for which in 0..2 {
+        for (which, &centre) in ROOMS.iter().enumerate() {
             let own: Vec<P> = cells
                 .iter()
                 .copied()
                 .filter(|&c| room(c) == which)
                 .collect();
             assert_eq!(own.len(), 61, "room {which}");
-            assert!(own.iter().all(|&c| distance(c, ROOMS[which]) <= 4));
+            assert!(own.iter().all(|&c| distance(c, centre) <= 4));
         }
         let crossings: Vec<(P, P)> = cells
             .iter()
@@ -147,6 +371,9 @@ mod tests {
         let side = board(&[(0, 0), (1, 0)], &[], Dual::default());
         let err = apply(&side, Player::Black, &mv(&[(0, 0), (1, 0)], NW)).unwrap_err();
         assert_eq!(err, MoveError::Blocked, "a broadside too");
+        let across = board(&[(0, 0), (0, -1)], &[], Dual::default());
+        let err = apply(&across, Player::Black, &mv(&[(0, 0), (0, -1)], W)).unwrap_err();
+        assert_eq!(err, MoveError::NotALine, "the wall splits a line");
         let push = mv(&[(0, 2), (0, 1)], NW);
         let walled = board(&[(0, 2), (0, 1)], &[(0, 0)], Dual::default());
         let err = apply(&walled, Player::Black, &push).unwrap_err();
