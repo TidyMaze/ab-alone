@@ -41,6 +41,23 @@ test('enemy marbles are on the map and the troop follows the hero, #966', async 
   expect((await data('openworldTroop'))!.split(' ')[0]).toBe(before);
 });
 
+// #977: a vertical and a horizontal arrow held together roll the hero on the diagonal. From (0, 0) Up rolls to (1, -1), the
+// cell up-left of that is (1, -2), free on seed 7 (the path of the first test goes through it).
+test('two held arrows roll the hero on the diagonal, #977', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  await page.keyboard.down('ArrowUp');
+  await expect.poll(at).toBe('1,-1');
+  await page.keyboard.down('ArrowLeft'); // Up and Left held: up-left
+  await expect.poll(at).toBe('1,-2');
+  await page.keyboard.up('ArrowLeft');
+  await page.keyboard.up('ArrowUp');
+});
+
 test('the entry is not in the mode menu without the flag, #965', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();

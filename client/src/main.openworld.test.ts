@@ -14,6 +14,10 @@ const press = (key: string): KeyboardEvent => {
   return e;
 };
 
+const release = (key: string): void => {
+  window.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+};
+
 describe('the Open world mode', () => {
   it('is in the mode menu only when the page asks for it', async () => {
     await boot('?bot=off');
@@ -60,5 +64,20 @@ describe('the Open world mode', () => {
     press('ArrowRight');
     expect(data().hub).toBe(hub); // the hub's marble did not roll
     expect(data().openworldAt).toBe('1,0');
+  });
+
+  it('rolls the hero on the diagonal while a vertical and a horizontal arrow are held, and lets go on keyup or blur, #977', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    press('ArrowLeft'); // (-1, 0)
+    press('ArrowUp'); // Left and Up held: up-left
+    expect(data().openworldAt).toBe('-1,-1');
+    release('ArrowLeft');
+    press('ArrowUp'); // Left let go: a single Up, (-1, -2)
+    expect(data().openworldAt).toBe('-1,-2');
+    window.dispatchEvent(new Event('blur')); // the window loses focus: nothing is held any more
+    press('ArrowRight'); // single, not up-right with the Up still held: (0, -2)
+    expect(data().openworldAt).toBe('0,-2');
   });
 });

@@ -4547,6 +4547,8 @@ addEventListener('keydown', (e) => {
   drawAsked = true;
   refresh();
 });
+addEventListener('keyup', (e) => openWorld.release(e.key)); // a diagonal needs both arrows held (#977)
+addEventListener('blur', () => openWorld.release()); // no key stays held once the window is left
 // Used by the browser checks to load a run (#798): it is saved, then resumed as on a reload.
 (window as unknown as Record<string, unknown>).__run = async (state: Run) => {
   await saveRun(gameStore, state);

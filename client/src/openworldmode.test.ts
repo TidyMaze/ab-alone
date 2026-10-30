@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { CHUNK } from './openworld';
-import { OpenWorldMode } from './openworldmode';
+import { axialTo3D, type Axial } from './board';
+import { CHUNK, neighbours } from './openworld';
+import { heldCell, OpenWorldMode } from './openworldmode';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -24,6 +25,40 @@ afterEach(() => {
   delete body().openworldAt;
   delete body().openworldTroop;
   delete body().openworldEnemies;
+});
+
+// Screen direction of a step, `[-1 | 0 | 1, -1 | 0 | 1]` for left/right and up/down, from the ground layout of `axialTo3D`.
+const screen = (from: Axial, to: Axial): [number, number] => {
+  const a = axialTo3D(...from);
+  const b = axialTo3D(...to);
+  return [Math.sign(Math.round((b.x - a.x) * 100)), Math.sign(Math.round((b.z - a.z) * 100))];
+};
+const held = (...keys: string[]) => new Set(keys);
+
+describe('heldCell', () => {
+  it('gives the diagonal neighbour of each pair of a vertical and a horizontal arrow, on every row', () => {
+    for (const at of [[0, 0], [2, 3], [-1, -4]] as Axial[]) {
+      const up = heldCell(at, held('ArrowUp', 'ArrowLeft'))!;
+      const upRight = heldCell(at, held('ArrowUp', 'ArrowRight'))!;
+      const down = heldCell(at, held('ArrowDown', 'ArrowLeft'))!;
+      const downRight = heldCell(at, held('ArrowDown', 'ArrowRight'))!;
+      expect(screen(at, up)).toEqual([-1, -1]);
+      expect(screen(at, upRight)).toEqual([1, -1]);
+      expect(screen(at, down)).toEqual([-1, 1]);
+      expect(screen(at, downRight)).toEqual([1, 1]);
+      for (const cell of [up, upRight, down, downRight]) expect(neighbours(at).some((n) => n[0] === cell[0] && n[1] === cell[1])).toBe(true);
+    }
+  });
+
+  it('gives nothing for a single arrow, for opposite arrows, or for three arrows', () => {
+    const at: Axial = [0, 0];
+    expect(heldCell(at, held('ArrowUp'))).toBeNull();
+    expect(heldCell(at, held('ArrowLeft', 'ArrowRight'))).toBeNull();
+    expect(heldCell(at, held('ArrowUp', 'ArrowDown'))).toBeNull();
+    expect(heldCell(at, held('ArrowUp', 'ArrowDown', 'ArrowLeft'))).toBeNull();
+    expect(heldCell(at, held('ArrowUp', 'ArrowLeft', 'ArrowRight'))).toBeNull();
+    expect(heldCell(at, held())).toBeNull();
+  });
 });
 
 describe('the Open world mode', () => {
@@ -88,6 +123,42 @@ describe('the Open world mode', () => {
     expect(m.active).toBe(false);
     expect(body().openworld).toBeUndefined();
     expect(body().openworldAt).toBeUndefined();
+  });
+
+  it('rolls the hero on the diagonal of two held arrows, and keeps walking while they are held', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    expect(m.key('ArrowLeft')).toBe(true);
+    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.key('ArrowUp')).toBe(true); // Left and Up held: up-left from (-1, 0)
+    expect(m.hero!.at).toEqual([-1, -1]);
+    expect(m.key('ArrowUp')).toBe(true); // the key repeats: up-left again
+    expect(m.hero!.at).toEqual([-1, -2]);
+  });
+
+  it('does nothing for opposite arrows held together, and a release drops the key', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    expect(m.key('ArrowLeft')).toBe(true);
+    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.key('ArrowRight')).toBe(true); // Left and Right: nothing
+    expect(m.hero!.at).toEqual([-1, 0]);
+    m.release('ArrowLeft');
+    expect(m.key('ArrowRight')).toBe(true); // Right alone rolls again
+    expect(m.hero!.at).toEqual([0, 0]);
+  });
+
+  it('forgets the held keys when the window loses focus or the mode is left', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowUp'); // (1, -1) from the even spawn row
+    m.release(); // blur: no key is held any more
+    expect(m.key('ArrowLeft')).toBe(true);
+    expect(m.hero!.at).toEqual([0, -1]); // a single arrow, not a diagonal with Up
+    m.key('Escape'); // leaving clears the held keys too
+    m.enter(1, 800, 600);
+    expect(m.key('ArrowUp')).toBe(true);
+    expect(m.hero!.at).toEqual([1, -1]); // single Up from the spawn, Left is not held
   });
 
   it('ignores a resize before it is entered', () => {
