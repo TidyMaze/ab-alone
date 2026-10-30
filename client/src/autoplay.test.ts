@@ -22,6 +22,10 @@ describe('autoPlayState, #792', () => {
     });
   });
 
+  it("is greyed with the reason in a rogue-lite run: the run is the player's own army, #798", () => {
+    expect(autoPlayState({ online: false, boss: null, run: true }, false)).toEqual({ shown: true, reason: 'Not in a rogue-lite run' });
+  });
+
   it('plays one move per short delay', () => {
     expect(AUTO_DELAY_MS).toBeGreaterThan(0);
     expect(AUTO_DELAY_MS).toBeLessThanOrEqual(1000);

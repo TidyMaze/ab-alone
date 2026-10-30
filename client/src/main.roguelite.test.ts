@@ -65,6 +65,14 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(again.hud()).toContain('Rogue-lite run · act 1 fight');
   });
 
+  it('Auto-play is greyed in a run fight, its reason given', async () => {
+    await startRun('?nodes=50');
+    open()[0]!.click();
+    expect(byId<HTMLButtonElement>('auto-play').hidden).toBe(false);
+    expect(byId<HTMLButtonElement>('auto-play').disabled).toBe(true);
+    expect(byId('auto-reason').textContent).toBe('Not in a rogue-lite run');
+  });
+
   it('a marble lost by an army of 4 loses the run, and New run starts another', async () => {
     const game = await boot('?bot=off');
     await game.hook('__run', pick({ ...newRun(1), army: 4 }, 0)); // the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
