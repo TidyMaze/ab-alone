@@ -437,4 +437,11 @@ describe('SceneRenderer (#632)', () => {
     expect(fxaa(1)).toBe('FXAANode');
     expect(fxaa(2)).not.toBe('FXAANode');
   });
+
+  it('keeps the touch screen MSAA image without an extra FXAA pass, even at DPR 1 (#868)', () => {
+    const renderer = createMockRenderer();
+    Object.defineProperty(renderer, 'samples', { value: 4 });
+    const scene = new SceneRenderer({ renderer, devicePixelRatio: 1 });
+    expect(scene.pipeline!.outputNode.type).not.toBe('FXAANode');
+  });
 });
