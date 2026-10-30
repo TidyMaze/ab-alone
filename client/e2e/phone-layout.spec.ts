@@ -393,7 +393,7 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(15); // Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513)
+    await expect(page.locator('#settings-menu button')).toHaveCount(16); // Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {
         const r = el.getBoundingClientRect();
@@ -411,7 +411,7 @@ test('on a desktop the buttons stay in a column at the top right, bug #227', asy
   await expect(page.locator('#hud')).toContainText('Black to move');
   const width = page.viewportSize()!.width;
   const boxes = await Promise.all(
-    ['Settings', 'Cam', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()), // Reset view is beside Cam (#839)
+    ['Settings', 'Reset view', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
   );
   expect(boxes[0]!.y).toBe(16);
   for (const [i, box] of boxes.entries()) {

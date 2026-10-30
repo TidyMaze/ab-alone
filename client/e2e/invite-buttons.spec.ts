@@ -20,7 +20,7 @@ test.describe('a phone held sideways', () => {
     await expect(page.locator('#invite')).toBeVisible();
 
     const covered = await page.evaluate(() =>
-      ['settings', 'reset-view', 'free-cam'].filter((id) => {
+      ['settings', 'reset-view'].filter((id) => {
         const r = document.getElementById(id)!.getBoundingClientRect();
         const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         return !document.getElementById(id)!.contains(top);

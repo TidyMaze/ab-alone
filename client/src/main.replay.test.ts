@@ -130,10 +130,10 @@ describe('the replay keys', () => {
 
   it('are the camera keys while Free Cam is on', async () => {
     const game = await played(1);
-    byId('free-cam').click();
+    byId('setting-free-cam').click();
     expect(key('ArrowLeft')).toBe(true);
     expect(bar()).toBe(false);
-    byId('free-cam').click();
+    byId('setting-free-cam').click();
     expect(game.turn()).toBeTruthy();
   });
 });

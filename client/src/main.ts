@@ -539,7 +539,7 @@ function toggleFreeCam(enabled?: boolean, at: { x: number; y: number; z: number 
     freeCam.disable();
     applyView();
   }
-  document.getElementById('free-cam')!.setAttribute('aria-pressed', String(freeCam.active));
+  paintMenu(); // the Free camera item's pressed state (#938)
 }
 
 function setRenderMode(mode: RenderMode): void {
@@ -724,10 +724,11 @@ const toggles: Record<string, () => void> = {
   'render-mode': () => {
     cycleRenderMode();
   },
+  'free-cam': () => toggleFreeCam(),
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode, freeCam.active)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     const full = id === 'difficulty' ? `Difficulty: ${difficulty} (${DIFFICULTY_PERCENT[difficulty]}%)` : label;
@@ -736,7 +737,7 @@ const paintMenu = (): void => {
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode)) {
+for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode, freeCam.active)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -3569,10 +3570,6 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
   applyView();
 });
 (document.getElementById('reset-view') as HTMLButtonElement).disabled = false; // listener ready (#146)
-
-const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement;
-freeCamBtn.addEventListener('click', () => toggleFreeCam());
-freeCamBtn.disabled = false;
 
 addEventListener('resize', () => {
   if (view === fitted) view = fitted = fightView();
