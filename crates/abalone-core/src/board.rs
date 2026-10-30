@@ -6,9 +6,10 @@ use std::collections::HashMap;
 /// `|q|`, `|r|` and `|q + r|` are all `<= n`.
 pub const RADIUS: i32 = 4;
 
-/// Largest board radius the engine supports: the battle royale arena, 217 cells. The game code
+/// Radius of the largest hexagon a mode plays on: the battle royale arena, 217 cells. The game code
 /// scans only a board's own radius (`-radius..=radius`) and relies on `get` giving `None` off the
-/// board, so a smaller board costs no more than before.
+/// board, so a smaller board costs no more than before. The Dual Room's board scans radius 9 but
+/// holds two radius 4 rooms (`encounter::dual::DUAL_RADIUS`).
 pub const MAX_RADIUS: i32 = 8;
 
 /// Content of one cell. Black and White are seats 1 and 2, the other marbles seats 3 to 6 of a
@@ -172,7 +173,8 @@ impl Board {
         Self::with_radius(RADIUS)
     }
 
-    /// Board of the given radius (at most [`MAX_RADIUS`]) with every cell empty.
+    /// Board of the given radius with every cell empty: [`RADIUS`] for most modes, up to
+    /// [`MAX_RADIUS`] for the battle royale, 9 as the scan of The Dual Room's two rooms.
     pub fn with_radius(radius: i32) -> Self {
         let mut cells = HashMap::new();
         for q in -radius..=radius {
