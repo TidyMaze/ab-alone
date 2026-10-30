@@ -8,9 +8,10 @@
 //!   Overseer's fight).
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`. The radius 5 board of The Ballast Mind
 //!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending. The Dual
-//!   Room's board scans radius 9, 271 codes: the same 91, then rings 6 to 9, each row by row, its
-//!   two rooms on the rows `r >= 0` (south) and `r <= -1` (north), every other cell vanished.
-//! - Dual (The Dual Room): `[collapsed, side, q, r]`, `1` once the wall fell, then the side of the
+//!   Room's board scans radius 7, 169 codes: the same 91, then rings 6 and 7, each row by row, its
+//!   two rooms on the rows `r >= 1` (south) and `r <= -1` (north), every other cell vanished, the
+//!   void's row `r = 0` too until the bridge's 5 cells (`q = -2` to `2`) turn empty in P3.
+//! - Dual (The Dual Room): `[bridged, side, q, r]`, `1` once the bridge is up, then the side of the
 //!   announced return and its landing cell, side `0` (and `0, 0`) when none. Last return: `[side, q,
 //!   r]` of the marble that landed at the end of the last ply, empty when none.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
