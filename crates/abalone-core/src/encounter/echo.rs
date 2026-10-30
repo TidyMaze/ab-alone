@@ -351,8 +351,8 @@ mod tests {
     }
 
     #[test]
-    fn the_other_side_gets_the_mirror_as_a_bonus_both_ways() {
-        for swap in [false, true] {
+    fn the_echo_gets_the_mirror_of_the_players_move_at_once() {
+        for swap in [false] {
             let (first, second) = sides(swap);
             let mut e = fight(swap, &[(0, 2)], &[(0, -2)], [0, 0]);
             let played = side_mv(swap, &[(0, 2)], SE);
@@ -405,8 +405,8 @@ mod tests {
     }
 
     #[test]
-    fn p2_also_echoes_the_latest_older_move_whose_mirror_is_legal_now_both_ways() {
-        for swap in [false, true] {
+    fn p2_also_echoes_the_latest_older_move_whose_mirror_is_legal_now() {
+        for swap in [false] {
             let (first, second) = sides(swap);
             let b = side_mv(swap, &[(-3, 4)], E);
             let (mut e, a, w) = older_setup(swap, [3, 0]);
@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn a_bonus_is_never_echoed_back_in_p2_either() {
-        for swap in [false, true] {
+        for swap in [false] {
             let (_, second) = sides(swap);
             let mut e = fight(swap, &[(0, 2), (-3, 4)], &[(0, -2), (3, -4)], [3, 0]);
             let a = side_mv(swap, &[(0, 2)], SE);
@@ -467,43 +467,27 @@ mod tests {
     }
 
     #[test]
-    fn a_bonus_that_would_lose_the_receiver_the_game_is_skipped() {
-        // Both sides shuffle one marble, each move mirrored: the fourth main move brings the
-        // start position back a third time on the bonus. A draw is a player loss, so the
-        // player's bonus is skipped (counted as echoed); the boss's bonus is played.
-        for swap in [false, true] {
-            let (first, second) = sides(swap);
-            let mut e = fight(swap, &[(0, 2)], &[(0, -2)], [0, 0]);
-            let there = side_mv(swap, &[(0, 2)], SE);
-            let back = side_mv(swap, &[(0, -3)], SE);
-            for m in [&there, &back, &there, &back] {
-                e.play(m).unwrap();
-            }
-            if swap {
-                assert_eq!(
-                    e.game().outcome(),
-                    Some(Outcome::Draw),
-                    "the boss bonus is played"
-                );
-                assert_eq!(e.game().history().len(), 8);
-            } else {
-                assert_eq!(e.game().outcome(), None, "the player's bonus is skipped");
-                assert_eq!(e.game().history().len(), 7);
-                assert_eq!(e.game().to_move(), first);
-                assert!(
-                    e.game().board().echoes().is_empty(),
-                    "skipped counts as echoed"
-                );
-            }
-            assert_ne!(first, second);
+    fn the_echo_plays_its_bonus_even_when_it_draws() {
+        // Both sides shuffle one marble, the player takes each free move: the Echo's fourth
+        // bonus brings the start position back a third time. A draw is a player loss, so the
+        // Echo plays it.
+        let mut e = at(&[(0, 2)], &[(0, -2)], Player::White, [0, 0]);
+        let there = mv(&[(0, -2)], NW);
+        let back = mv(&[(0, 3)], NW);
+        for _ in 0..2 {
+            e.play(&there).unwrap();
+            e.play(&mirror_move(&there)).unwrap();
+            e.play(&back).unwrap();
         }
+        assert_eq!(e.game().outcome(), Some(Outcome::Draw), "the Echo's bonus");
+        assert_eq!(e.game().history().len(), 8);
     }
 
     #[test]
     fn a_bonus_can_win_the_game_and_ends_it() {
         // The first side's pair steps east on an empty row; the mirror pushes a marble of the
         // first side off the west rim: the 6th ejection of the second side.
-        for swap in [false, true] {
+        for swap in [false] {
             let (_, second) = sides(swap);
             let ejected = if swap { [5, 0] } else { [0, 5] };
             let mut e = fight(
@@ -539,6 +523,161 @@ mod tests {
         }
     }
 
+    /// The Echo pushes `played` (its mirror legal for the player), from `black` and `white`.
+    fn offered(black: &[P], white: &[P], ejected: [u8; 2], played: &Move) -> Encounter {
+        let mut e = at(black, white, Player::White, ejected);
+        e.play(played).unwrap();
+        e
+    }
+
+    #[test]
+    fn the_player_is_offered_the_mirror_of_the_echos_move_not_forced() {
+        let played = mv(&[(0, -2)], NW);
+        let e = offered(&[(0, 2)], &[(0, -2)], [0, 0], &played);
+        assert_eq!(
+            plies(&e),
+            vec![played.clone()],
+            "nothing is played for the player"
+        );
+        assert_eq!(e.game().to_move(), Player::Black);
+        assert_eq!(echo_free_moves(&e), vec![mirror_move(&played)]);
+        assert!(
+            e.game().board().echoes().is_empty(),
+            "an offer is not remembered"
+        );
+        assert!(
+            echo_free_moves(&echo_start(1)).is_empty(),
+            "no offer at the start"
+        );
+    }
+
+    #[test]
+    fn taking_the_free_move_plays_it_and_the_player_moves_again() {
+        let played = mv(&[(0, -2)], NW);
+        let mut e = offered(&[(0, 2)], &[(0, -2)], [0, 0], &played);
+        let free = mirror_move(&played);
+        e.play(&free).unwrap();
+        assert_eq!(plies(&e), vec![played.clone(), free.clone()]);
+        assert_eq!(
+            e.game().to_move(),
+            Player::Black,
+            "then the player's own move"
+        );
+        assert!(echo_free_moves(&e).is_empty(), "taken once");
+        assert_eq!(echo_tell(&e, &free), vec![], "no longer free");
+        // The player's own move gives the Echo its mirror, as before.
+        let own = mv(&[(0, 3)], SE);
+        e.play(&own).unwrap();
+        assert_eq!(plies(&e)[2..], [own.clone(), mirror_move(&own)]);
+        assert_eq!(e.game().to_move(), Player::White);
+    }
+
+    #[test]
+    fn a_free_move_is_never_mirrored_and_the_tell_shows_none() {
+        let played = mv(&[(0, -2)], NW);
+        let e = offered(&[(0, 2)], &[(0, -2)], [0, 0], &played);
+        let free = mirror_move(&played);
+        assert!(
+            echo_tell(&e, &free).is_empty(),
+            "a free move gives the Echo nothing"
+        );
+        assert!(echo_bonuses(&e, &free).is_empty());
+    }
+
+    #[test]
+    fn a_normal_move_declines_the_offer_for_good() {
+        let played = mv(&[(0, -2)], NW);
+        let mut e = offered(&[(0, 2), (-3, 4)], &[(0, -2)], [0, 0], &played);
+        let own = mv(&[(-3, 4)], E);
+        e.play(&own).unwrap();
+        assert_eq!(
+            plies(&e),
+            vec![played.clone(), own.clone(), mirror_move(&own)]
+        );
+        assert_eq!(e.game().to_move(), Player::White);
+        assert!(
+            e.game().board().echoes().is_empty(),
+            "declined counts as echoed"
+        );
+        let reply = mv(&[(0, -2)], W);
+        e.play(&reply).unwrap();
+        assert!(
+            !echo_free_moves(&e).contains(&mirror_move(&played)),
+            "a declined free move never comes back"
+        );
+    }
+
+    #[test]
+    fn a_free_move_can_win_the_game() {
+        // The Echo's pair steps west on an empty row; the mirror pushes its marble off the east
+        // rim: the player's 6th ejection.
+        let played = mv(&[(-2, 0), (-3, 0)], W);
+        let mut e = offered(
+            &[(2, 0), (3, 0)],
+            &[(-2, 0), (-3, 0), (4, 0)],
+            [5, 0],
+            &played,
+        );
+        let free = mirror_move(&played);
+        assert_eq!(echo_free_moves(&e), vec![free.clone()]);
+        e.play(&free).unwrap();
+        assert_eq!(e.game().outcome(), Some(Outcome::Win(Player::Black)));
+        assert!(
+            echo_free_moves(&e).is_empty(),
+            "nothing is offered after the end"
+        );
+    }
+
+    #[test]
+    fn p2_offers_the_older_move_too_and_spends_it_even_declined() {
+        // The Echo plays `a` (mirror blocked, remembered), the player `w` (mirror blocked), then
+        // the Echo `b` (mirror blocked): in P2 the player is offered the mirror of `a`.
+        for take in [false, true] {
+            let mut e = fight(true, &OLD_BLACK, &OLD_WHITE, [3, 0]);
+            let a = side_mv(true, &[(0, 2)], E);
+            let w = side_mv(true, &[(-1, -2)], W);
+            let b = side_mv(true, &[(-3, 4)], E);
+            for m in [&a, &w, &b] {
+                e.play(m).unwrap();
+            }
+            assert_eq!(plies(&e), vec![a.clone(), w.clone(), b.clone()]);
+            assert_eq!(echo_free_moves(&e), vec![mirror_move(&a)]);
+            let spent = [(Player::Black, w.clone()), (Player::White, b.clone())];
+            assert_eq!(e.game().board().echoes(), &spent, "a is spent once offered");
+            if take {
+                e.play(&mirror_move(&a)).unwrap();
+                assert_eq!(e.game().to_move(), Player::Black);
+            } else {
+                let own = legal_moves(e.game().board(), Player::Black)
+                    .into_iter()
+                    .find(|m| *m != mirror_move(&a))
+                    .unwrap();
+                e.play(&own).unwrap();
+                assert_eq!(e.game().to_move(), Player::White);
+            }
+            assert!(echo_free_moves(&e).is_empty());
+        }
+    }
+
+    #[test]
+    fn a_free_move_that_would_lose_the_player_the_game_is_not_offered() {
+        // Both sides shuffle one marble and the player takes the free move: the second time it
+        // would bring the start position back a third time, a draw, a player loss.
+        let mut e = at(&[(0, 2)], &[(0, -2)], Player::Black, [0, 0]);
+        let there = mv(&[(0, 2)], SE);
+        let back = mv(&[(0, -3)], SE);
+        e.play(&there).unwrap();
+        e.play(&back).unwrap();
+        assert_eq!(echo_free_moves(&e), vec![mirror_move(&back)]);
+        e.play(&mirror_move(&back)).unwrap();
+        e.play(&there).unwrap();
+        e.play(&back).unwrap();
+        assert!(echo_free_moves(&e).is_empty(), "it would draw");
+        assert_eq!(e.game().outcome(), None);
+        let tell = echo_tell(&at(&[(0, 2)], &[(0, -2)], Player::Black, [0, 0]), &there);
+        assert_eq!(tell, vec![(mirror_move(&there), false)]);
+    }
+
     #[test]
     fn the_tell_marks_each_bonus_and_whether_it_is_skipped() {
         let e = fight(false, &[(0, 2)], &[(0, -2), (-1, -2)], [0, 0]);
@@ -561,14 +700,19 @@ mod tests {
             [5, 5],
         );
         assert!(echo_tell(&won, &mv(&[(2, 0), (3, 0)], E)).is_empty());
-        // The player's bonus that would make the third repetition is skipped.
+        // The player's free move that would make the third repetition is not offered.
         let mut e = fight(false, &[(0, 2)], &[(0, -2)], [0, 0]);
         let (there, back) = (mv(&[(0, 2)], SE), mv(&[(0, -3)], SE));
-        for m in [&there, &back, &there] {
+        for m in [&there, &back, &mirror_move(&back), &there] {
             e.play(m).unwrap();
         }
         assert_eq!(echo_tell(&e, &back), vec![(mirror_move(&back), true)]);
         assert_eq!(e.game().history().len(), 6, "nothing is played");
+        // The Echo's move offers the player its mirror: listed, not skipped.
+        let e = fight(false, &[(0, 2)], &[(0, -2)], [0, 0]);
+        let mut e = e;
+        e.play(&there).unwrap();
+        assert_eq!(echo_tell(&e, &back), vec![(mirror_move(&back), false)]);
     }
 
     #[test]
