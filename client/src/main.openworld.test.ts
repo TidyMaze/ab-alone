@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { boot } from './test/harness';
 
-// The Open world mode (#962, docs/specs/openworld.md): its entry is in the mode menu only with ?openworld, it draws its
-// own scene in place of the board's, and body[data-openworld] and [data-openworld-at] name the seed and the hero's cell,
-// read by the e2e tests.
+// The Open world mode (#962, docs/specs/openworld.md): its entry is in the mode menu for everyone (#1000), ?openworld=<seed>
+// fixes the seed, it draws its own scene in place of the board's, and body[data-openworld] and [data-openworld-at] name
+// the seed and the hero's cell, read by the e2e tests.
 
 const byId = <T extends HTMLElement = HTMLButtonElement>(id: string): T => document.getElementById(id) as T;
 const data = () => document.body.dataset; // the page swaps the body at each boot
@@ -19,10 +19,14 @@ const release = (key: string): void => {
 };
 
 describe('the Open world mode', () => {
-  it('is in the mode menu only when the page asks for it', async () => {
-    await boot('?bot=off');
-    expect(byId('openworld').hidden).toBe(true);
+  it('is in the mode menu without any parameter, and a click enters a world with a random seed', async () => {
+    const game = await boot('?bot=off');
+    expect(byId('openworld').hidden).toBe(false);
     expect(press('Escape').defaultPrevented).toBe(false); // not on: the keys are the page's
+    game.openModes();
+    byId('openworld').click();
+    expect(data().openworld).toMatch(/^\d+$/);
+    expect(data().openworldAt).toBe('0,0');
   });
 
   it('enters a world by its seed, rolls the hero by the arrow keys, and leaves on Escape', async () => {
