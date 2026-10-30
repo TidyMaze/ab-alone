@@ -72,6 +72,9 @@
 //!   - Placement: one record of 2 integers `[place, points]` per seat in seat order, places from
 //!     `1`, empty while the game runs.
 //!   - State hash: 16 lowercase hex digits, the same on every peer for the same state.
+//! - Special marbles of a rogue-lite fight (`Engine::specials`, `Engine::place_special`): records
+//!   of 3 integers `[q, r, kind]`, in `q` then `r` order. `kind` `1` Heavy, `2` Anchor, `3` Spark
+//!   (docs/specs/roguelite.md section 5).
 //! - Rogue-lite map (`run_map`): records of 5 integers `[act, row, col, kind, links]` per node,
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
 //!   an act). `links` is a bit mask of the columns of the next row of the same act the node leads

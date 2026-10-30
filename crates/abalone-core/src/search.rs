@@ -6,6 +6,7 @@ use crate::board::{Board, Cell, MAX_RADIUS};
 use crate::encounter::hull::NEIGHBOURS;
 use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
+use crate::run::credits;
 
 /// Score of a won game, minus the ply it is won at, so a quicker win scores higher. A lost game
 /// scores the opposite: any score beyond `WIN / 2` either way is a decided game.
@@ -160,8 +161,8 @@ fn children(node: &Node, weights: &Weights, step: Option<Hook>) -> Vec<Child> {
         .into_iter()
         .map(|mv| {
             let (board, ejects) = apply(&node.board, mover, &mv).expect("legal move");
-            let mut ejected = node.ejected;
-            ejected[index(mover)] += u8::from(ejects);
+            let [black, white] = credits(&node.board, mover, ejects, &board);
+            let mut ejected = [node.ejected[0] + black, node.ejected[1] + white];
             let board = match step {
                 Some(step) => {
                     let (board, credits) = step(&node.board, mover, &mv, board, node.ejected);
@@ -228,6 +229,10 @@ impl Searcher<'_> {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }
         let kids = children(node, &self.weights, self.step);
+        if kids.is_empty() && node.board.rogue_lite() {
+            // No legal move loses a rogue-lite fight (docs/specs/roguelite.md).
+            return Some(ply - WIN);
+        }
         if kids.is_empty() {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }

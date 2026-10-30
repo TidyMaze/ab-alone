@@ -1,7 +1,8 @@
 //! Standard 1v1 Abalone game instance exposed to WebAssembly.
 
 use crate::convert::{
-    board_bytes, decode, draw_reason_code, encode, player, side_code, status_code,
+    board_bytes, decode, draw_reason_code, encode, player, side_code, special, special_code,
+    status_code,
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
@@ -29,6 +30,25 @@ impl Engine {
         Engine {
             game: army_game(army),
         }
+    }
+
+    /// Makes the marble on `(q, r)` a special marble of a rogue-lite fight, before its first
+    /// move: `kind` `1` Heavy, `2` Anchor, `3` Spark. `Err` carries the reason.
+    pub fn place_special(&mut self, q: i32, r: i32, kind: u8) -> Result<(), String> {
+        let kind = special(kind).ok_or_else(|| format!("unknown kind {kind}"))?;
+        self.game
+            .place_special((q, r), kind)
+            .map_err(|e| format!("{e:?}"))
+    }
+
+    /// The special marbles, records of 3 integers `[q, r, kind]`, see the module docs.
+    pub fn specials(&self) -> Vec<i32> {
+        self.game
+            .board()
+            .specials()
+            .iter()
+            .flat_map(|&((q, r), kind)| [q, r, i32::from(special_code(kind))])
+            .collect()
     }
 
     /// Side to move: `1` Black, `2` White.
@@ -126,6 +146,51 @@ mod tests {
         assert_eq!(engine.win_ejections(2), 6);
         assert_eq!(Engine::with_army(5).win_ejections(2), 2);
         assert_eq!(Engine::with_army(14).board(), Engine::new().board());
+    }
+
+    #[test]
+    fn a_rogue_lite_fight_places_special_marbles_before_its_first_move() {
+        let mut engine = Engine::with_army(14);
+        assert_eq!(engine.place_special(0, 4, 1), Ok(()));
+        assert_eq!(engine.place_special(-1, 4, 2), Ok(()));
+        assert_eq!(engine.place_special(0, -4, 3), Ok(()));
+        assert_eq!(engine.specials(), vec![-1, 4, 2, 0, -4, 3, 0, 4, 1]);
+        assert_eq!(
+            engine.place_special(0, 4, 4),
+            Err("unknown kind 4".to_string())
+        );
+        assert_eq!(engine.place_special(0, 0, 1), Err("NoMarble".to_string()));
+        let first = engine.legal_moves()[..MOVE_STRIDE].to_vec();
+        engine.play(&first).unwrap();
+        assert_eq!(engine.place_special(1, 3, 1), Err("Started".to_string()));
+        let mut plain = Engine::new();
+        assert_eq!(
+            plain.place_special(0, 4, 1),
+            Err("NotRogueLite".to_string())
+        );
+        assert!(plain.specials().is_empty());
+    }
+
+    #[test]
+    fn the_same_fight_gives_the_same_game_through_the_bridge() {
+        // Two Sparks and a Heavy in a bot game: the same placement and moves give the same game.
+        let run = || {
+            let mut engine = Engine::with_army(14);
+            for (q, r, kind) in [(-4, 4, 3), (4, -4, 3), (0, 2, 1)] {
+                engine.place_special(q, r, kind).unwrap();
+            }
+            for _ in 0..40 {
+                let mv = engine.best_move(40);
+                engine.play(&mv).unwrap();
+            }
+            (
+                engine.board(),
+                engine.specials(),
+                engine.ejected(1),
+                engine.ejected(2),
+            )
+        };
+        assert_eq!(run(), run());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Move generation and validation: inline, broadside and sumito (docs/specs/rules.md sections 3 to 5).
 
-use crate::board::{Board, Cell};
+use crate::board::{Board, Cell, Special};
 
 /// The six hex directions, as axial vectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -90,10 +90,14 @@ fn ahead(board: &Board, from: (i32, i32), d: (i32, i32)) -> Option<Cell> {
 }
 
 /// What `cells` weigh in a push: 1 per marble, plus its charges in The Unstable Core's fight
-/// (`Board::unstable`), where a charged marble weighs more on both sides.
+/// (`Board::unstable`), where a charged marble weighs more on both sides, and 1 more for a Heavy
+/// of a rogue-lite fight.
 fn weight(board: &Board, cells: impl Iterator<Item = (i32, i32)>) -> u32 {
     cells
-        .map(|c| 1 + board.unstable().map_or(0, |u| u32::from(u.charge(c))))
+        .map(|c| {
+            1 + board.unstable().map_or(0, |u| u32::from(u.charge(c)))
+                + u32::from(board.special(c) == Some(Special::Heavy))
+        })
         .sum()
 }
 
@@ -175,7 +179,8 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
     let d = mv.dir.vector();
     let inline = n == 1 || d == v || d == step((0, 0), v, -1);
     let mut next = board.clone();
-    let mut ejected = false;
+    // The cell of the marble the push throws off the board.
+    let mut off = None;
     let mut moved: Vec<((i32, i32), Cell)> = group.iter().map(|&c| (c, own)).collect();
     if inline {
         let front = if d == v { group[n - 1] } else { group[0] };
@@ -203,11 +208,13 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
                 Some(Cell::Empty) => {}
                 Some(_) => return Err(MoveError::PushBlocked),
                 // A core never leaves the board over the rim (The Overseer): only an incinerator
-                // takes it.
-                None if at(board, step(lead, d, run - 1)) == Some(Cell::Core) => {
+                // takes it. Nor does an Anchor (a rogue-lite fight).
+                None if at(board, step(lead, d, run - 1)) == Some(Cell::Core)
+                    || board.special(step(lead, d, run - 1)) == Some(Special::Anchor) =>
+                {
                     return Err(MoveError::PushBlocked)
                 }
-                None => ejected = true,
+                None => off = Some(step(lead, d, run - 1)),
             }
             moved.extend((0..run).map(|i| {
                 let c = step(lead, d, i);
@@ -230,7 +237,11 @@ pub fn apply_for(board: &Board, own: Cell, mv: &Move) -> Result<(Board, bool), M
         let t = step(c, d, 1);
         next.set(t.0, t.1, cell);
     }
-    Ok((next, ejected))
+    if board.rogue_lite() {
+        let moved: Vec<_> = moved.iter().map(|&(c, _)| c).collect();
+        crate::run::carry_specials(board, &mut next, &moved, d, off);
+    }
+    Ok((next, off.is_some()))
 }
 
 #[cfg(test)]
