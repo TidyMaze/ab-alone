@@ -25,6 +25,8 @@ pub struct Weights {
     /// Per marble one neighbour short of the Chaplain's conversion (3 foes around it): the foe's
     /// are a chance, the own are a danger.
     pub threat: i32,
+    /// Per egg on the board (The Alien's): the White side's chance, the foe's loss.
+    pub egg: i32,
 }
 
 /// Hand-tuned weights of the plain search.
@@ -34,6 +36,7 @@ pub const DEFAULT_WEIGHTS: Weights = Weights {
     centre: 3,
     cohesion: 2,
     threat: 0,
+    egg: 0,
 };
 
 /// What a search found.
@@ -147,11 +150,22 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32
         let at = threatened(board);
         at[index(other(player))] - at[index(player)]
     };
+    let eggs = if w.egg == 0 {
+        0
+    } else {
+        let n = board.eggs().len() as i32;
+        if player == Player::White {
+            n
+        } else {
+            -n
+        }
+    };
     w.marbles * (own_count - opp_count)
         + w.ejected * made
         + w.centre * (opp_distance - own_distance)
         + w.cohesion * (own_pairs - opp_pairs)
         + w.threat * threat
+        + w.egg * eggs
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
@@ -552,6 +566,23 @@ mod tests {
     }
 
     #[test]
+    fn an_egg_is_the_white_sides_chance_and_the_blacks_loss() {
+        let mut board = Board::empty();
+        board.set_eggs(vec![((0, 0), 4), ((1, 0), 2)]);
+        let only_eggs = Weights {
+            marbles: 0,
+            ejected: 0,
+            centre: 0,
+            cohesion: 0,
+            threat: 0,
+            egg: 7,
+        };
+        assert_eq!(evaluate(&board, Player::White, [0, 0], &only_eggs), 14);
+        assert_eq!(evaluate(&board, Player::Black, [0, 0], &only_eggs), -14);
+        assert_eq!(evaluate(&board, Player::White, [0, 0], &DEFAULT_WEIGHTS), 0);
+    }
+
+    #[test]
     fn a_signed_credit_takes_a_credit_back_and_stops_at_zero() {
         let game = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [3, 0]);
         let back = |_: &Board, _: Player, _: &Move, after: Board| (after, [-1, 1]);
@@ -582,6 +613,7 @@ mod tests {
             centre: 0,
             cohesion: 0,
             threat: 10,
+            egg: 0,
         };
         let board = game.board();
         assert_eq!(evaluate(board, Player::White, [0, 0], &only_threat), 10);
