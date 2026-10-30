@@ -2359,6 +2359,14 @@ mod tests {
     }
 
     #[test]
+    fn the_dual_room_goal_names_the_void_and_the_bridge() {
+        assert_eq!(
+            boss_goal("dual").unwrap(),
+            "Two rooms split by a void: a marble ejected over the rim or into the void comes back in the other room; at 5 a bridge fills the void. Eject 6 to win; lose 6 or draw to lose."
+        );
+    }
+
+    #[test]
     fn the_dual_room_board_holds_its_two_rooms_in_169_codes() {
         let f = Encounter::new("dual", 1).unwrap();
         let cells = f.board();
