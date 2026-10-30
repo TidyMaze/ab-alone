@@ -537,31 +537,26 @@ describe('the frame loop', () => {
 
   it('leaves a still board undrawn for a player, and draws again on an input, a camera move and a slide (#848)', async () => {
     const game = await boot('?bot=off&quality=low', { webdriver: false }); // no dust drifting
-    game.frame();
-    expect(game.draws()).toBe(1); // the first picture
-    game.frame();
-    game.frame();
-    expect(game.draws()).toBe(1); // nothing changed
+    const drawsOver = (frames: number): number => {
+      const before = game.draws();
+      for (let i = 0; i < frames; i++) game.frame();
+      return game.draws() - before;
+    };
+    // Each change draws two frames: the bloom blurs every second one (scene.ts, #894), so the glow follows the change.
+    expect(drawsOver(3)).toBe(2); // the first picture
+    expect(drawsOver(3)).toBe(0); // nothing changed
     dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
-    game.frame();
-    game.frame();
-    expect(game.draws()).toBe(2);
+    expect(drawsOver(3)).toBe(2);
     canvas().dispatchEvent(new WheelEvent('wheel', { deltaY: -500, cancelable: true })); // a zoom, on the canvas only
-    game.frame();
-    game.frame();
-    expect(game.draws()).toBe(3);
+    expect(drawsOver(3)).toBe(2);
     playOne(game); // by the page hooks: no input event, the move alone asks for the draws
-    game.frame();
-    game.frame();
-    expect(data().sliding).toBe('1');
-    expect(game.draws()).toBe(5); // each frame of the slide
+    expect(drawsOver(3)).toBe(3);
+    expect(data().sliding).toBe('1'); // each frame of the slide draws
+    const last = game.draws();
     game.frame(SLIDE_MS); // its last frame
     expect(data().sliding).toBeUndefined();
-    expect(game.draws()).toBe(6);
-    game.frame(); // what waited for the slide
-    const settled = game.draws();
-    game.frame();
-    game.frame();
-    expect(game.draws()).toBe(settled); // still again
+    expect(game.draws()).toBe(last + 1);
+    drawsOver(3); // what waited for the slide
+    expect(drawsOver(3)).toBe(0); // still again
   });
 });
