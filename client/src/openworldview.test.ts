@@ -98,6 +98,9 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
   it('lifts a cell by its height, water lies low, and varies props by cell without chance', () => {
     expect(topOf('water', 0)).toBeLessThan(topOf('grass', 0));
     expect(topOf('grass', 3)).toBeGreaterThan(topOf('grass', 1));
+    // The eight levels 0 to 7 keep the picture of the four heights: level 7 is 0.8, level 0 is 0.2.
+    expect(topOf('grass', 0)).toBeCloseTo(0.2);
+    expect(topOf('peak', 7)).toBeCloseTo(0.8);
     expect(variety(3, 4)).toBe(variety(3, 4));
     const draws = new Set([0, 1, 2, 3, 4, 5].map((q) => variety(q, -q)));
     expect(draws.size).toBeGreaterThan(2);
