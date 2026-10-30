@@ -182,6 +182,7 @@ import {
   readSafeMode,
   readSkin,
   readMix,
+  DEFAULT_LEVELS,
   readLevels,
   readPalette,
   readTheme,
@@ -775,6 +776,20 @@ for (const level of LEVELS) {
     scaleLights();
   });
 }
+// A phone that kept low levels stays dark: one button puts the three back to their defaults (#899).
+const resetLights = Object.assign(menu.appendChild(document.createElement('button')), {
+  id: 'level-reset',
+  type: 'button',
+  textContent: 'Reset lights',
+});
+resetLights.addEventListener('click', () => {
+  for (const level of LEVELS) {
+    levels[level] = DEFAULT_LEVELS[level];
+    levelAt(level).value = String(levels[level]);
+    writeLevel(store, level, levels[level]);
+  }
+  scaleLights();
+});
 // The difficulty setting (#704) is a second button in the Export game item, so the menu keeps its height.
 const exportRow = document.getElementById('setting-export-game')!;
 const exportGroup = document.createElement('div');

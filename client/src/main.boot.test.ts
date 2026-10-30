@@ -434,6 +434,7 @@ describe('the settings toggles', () => {
       'setting-difficulty',
       'setting-import-game',
       'setting-log-archive',
+      'level-reset', // beside the light sliders, which are no buttons (#899)
     ]);
     const sound = row('sound');
     expect(sound.querySelector('svg')).not.toBeNull();
@@ -627,7 +628,21 @@ describe('the light sliders', () => {
     await boot('?bot=off');
     const menu = byId('settings-menu');
     expect([...menu.querySelectorAll('.setting-lights')].map((s) => s.textContent)).toEqual(['Bloom', 'Lamps', 'Lights']);
-    expect(menu.lastElementChild!.previousElementSibling).toBe(byId('level-lights').parentElement); // then the log archive page
+    expect(byId('level-reset').previousElementSibling).toBe(byId('level-lights').parentElement); // then the reset button
+    expect(menu.lastElementChild!.previousElementSibling).toBe(byId('level-reset')); // then the log archive page
+  });
+
+  it('go back to their defaults with the reset button, saved and applied at once (#899)', async () => {
+    const booting = boot('?bot=off');
+    localStorage.setItem('ab-alone.light.lights', '85');
+    localStorage.setItem('ab-alone.light.lamps', '5');
+    localStorage.setItem('ab-alone.light.bloom', '15');
+    await booting;
+    const sliders = (): string[] => ['bloom', 'lamps', 'lights'].map((l) => (byId(`level-${l}`) as HTMLInputElement).value);
+    expect(sliders()).toEqual(['15', '5', '85']);
+    byId('level-reset').click();
+    expect(sliders()).toEqual(['20', '25', '215']);
+    expect(['bloom', 'lamps', 'lights'].map((l) => localStorage.getItem(`ab-alone.light.${l}`))).toEqual(['20', '25', '215']);
   });
 });
 
