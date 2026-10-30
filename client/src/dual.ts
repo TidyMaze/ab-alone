@@ -22,9 +22,9 @@ export const DUAL_CELLS: readonly Axial[] = cellsFor(7).filter((c) => ROOMS.some
 /** The void's 5 cells, the row between the two facing edges: the bridge from the 5th ejection. */
 export const BRIDGE: readonly Axial[] = [-2, -1, 0, 1, 2].map((q): Axial => [q, 0]);
 
-/** The fight opens looking across the void, from the east: the two rooms side by side. */
+/** The fight opens looking along the void, from the east: the two rooms side by side. */
 export const DUAL_AZIMUTH = Math.PI / 2;
-/** Low enough that the camera stays under the bay's gantry ribs (y 12.8 and up) once drawn back to fit both rooms. */
+/** Tilted enough to read both rooms once drawn back to fit them. */
 export const DUAL_POLAR = 0.9;
 
 /** The returning marble falls from this height (cell spacings) onto its cell in DROP_MS. */
