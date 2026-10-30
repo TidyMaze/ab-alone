@@ -92,6 +92,8 @@ pub struct Encounter {
     echo: bool,
     /// The free moves the Echo's last move offers the player, until a main move (The Echo).
     offer: Vec<Move>,
+    /// The plies that were free moves the player took (The Echo).
+    free_taken: usize,
 }
 
 /// Marbles of `color` on `board`.
@@ -219,6 +221,7 @@ impl Encounter {
             phase_reached: 0,
             echo: false,
             offer: Vec::new(),
+            free_taken: 0,
         }
     }
 

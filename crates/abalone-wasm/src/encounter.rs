@@ -17,7 +17,7 @@ use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_t
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::dual::{dual_boss, dual_landed, dual_move, dual_start};
 use abalone_core::encounter::echo::{
-    echo_bonuses, echo_boss, echo_free_moves, echo_move, echo_start, echo_tell,
+    echo_bonuses, echo_boss, echo_free_moves, echo_free_taken, echo_move, echo_start, echo_tell,
 };
 use abalone_core::encounter::hull::{hull_boss, hull_move};
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
@@ -493,6 +493,15 @@ impl Encounter {
         match &self.fight {
             Fight::Plain(e) => echo_free_moves(e).iter().flat_map(encode).collect(),
             Fight::Choir(_) => Vec::new(),
+        }
+    }
+
+    /// The plies that were the Echo's free moves the player took (#958): a co-op seat's turn is its
+    /// main move and the free moves before it. `0` for the other bosses.
+    pub fn free_taken(&self) -> u32 {
+        match &self.fight {
+            Fight::Plain(e) => echo_free_taken(e) as u32,
+            Fight::Choir(_) => 0,
         }
     }
 

@@ -118,7 +118,14 @@ pub(crate) fn take_free(enc: &mut Encounter, mv: &Move) -> bool {
     enc.game.play_bonus(mv).expect("a legal free move");
     let i = enc.offer.iter().position(|m| m == mv).expect("offered");
     enc.offer.remove(i);
+    enc.free_taken += 1;
     true
+}
+
+/// The plies of the game that were free moves the player took: a co-op turn is a main move and
+/// the free moves before it.
+pub fn echo_free_taken(enc: &Encounter) -> usize {
+    enc.free_taken
 }
 
 /// Gives `bonus` to the side to move: the Echo plays it at once, the player is offered it.
