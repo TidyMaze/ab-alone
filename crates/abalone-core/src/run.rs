@@ -16,11 +16,14 @@ pub const FULL_ARMY: u8 = 14;
 /// Below this many marbles the run is over.
 pub const MIN_ARMY: u8 = 4;
 
-/// What a node of the map holds. Elites, rests and events come with later slices.
+/// What a node of the map holds (docs/specs/roguelite.md section 2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NodeKind {
     Fight,
     Boss,
+    Elite,
+    Rest,
+    Event,
 }
 
 /// One node of the map. `links` are the columns of the next row of the same act it leads to,
@@ -205,7 +208,7 @@ mod tests {
             for r in 0..FIGHT_ROWS {
                 let nodes = row(&map, act, r);
                 assert!((2..=4).contains(&nodes.len()), "act {act} row {r}");
-                assert!(nodes.iter().all(|n| n.kind == NodeKind::Fight));
+                assert!(nodes.iter().all(|n| n.kind != NodeKind::Boss));
                 let cols: Vec<usize> = nodes.iter().map(|n| n.col).collect();
                 assert_eq!(cols, (0..nodes.len()).collect::<Vec<_>>());
             }
@@ -248,6 +251,41 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn an_act_opens_on_fights_then_mixes_elites_rests_and_events() {
+        let mut seen = Vec::new();
+        for seed in 0..50 {
+            let map = run_map(seed);
+            for act in 0..ACTS {
+                assert!(row(&map, act, 0).iter().all(|n| n.kind == NodeKind::Fight));
+            }
+            for node in map.iter().filter(|n| n.row > 0 && n.row < FIGHT_ROWS) {
+                if !seen.contains(&node.kind) {
+                    seen.push(node.kind);
+                }
+            }
+        }
+        seen.sort_by_key(|k| *k as u8);
+        use NodeKind::*;
+        assert_eq!(seen, [Fight, Elite, Rest, Event]);
+    }
+
+    #[test]
+    fn the_node_kinds_leave_the_shape_of_the_map_of_slice_1() {
+        // Computed on main before #800: the acts, rows, columns and links of 50 seeds, so a run
+        // saved before the elites, rests and events still walks its map.
+        let mut digest = 0u64;
+        for seed in 0..50 {
+            for n in run_map(seed) {
+                digest = mix(digest ^ (n.act * 1000 + n.row * 100 + n.col) as u64);
+                for l in n.links {
+                    digest = mix(digest ^ l as u64);
+                }
+            }
+        }
+        assert_eq!(digest, 4066793024634845041);
     }
 
     #[test]
@@ -754,3 +792,4 @@ mod special_marbles {
         }
     }
 }
+
