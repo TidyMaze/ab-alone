@@ -765,6 +765,45 @@ describe('the Open world view frees its GPU objects (#981)', () => {
   });
 });
 
+describe('the Open world view frees the instance buffers of each mesh (#991)', () => {
+  const instanced = (view: OpenWorldView): THREE.InstancedMesh[] => {
+    const out: THREE.InstancedMesh[] = [];
+    view.scene.traverse((object) => {
+      if ((object as THREE.InstancedMesh).isInstancedMesh) out.push(object as THREE.InstancedMesh);
+    });
+    return out;
+  };
+
+  it('gives each instanced mesh its own geometry: a shared one frees the instance buffers of only one of its meshes', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.useModels({ low: { tree: box() }, high: { tree: box() } });
+    view.show([0, 0]);
+    const meshes = instanced(view);
+    expect(meshes.length).toBeGreaterThan(5);
+    expect(new Set(meshes.map((m) => m.geometry)).size).toBe(meshes.length);
+  });
+
+  it('a grown mesh takes a geometry of its own, and the geometry it replaces is disposed with it', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const before = mesh(view, 'prop-mountain').geometry;
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain').count).toBe(MOST);
+    expect(mesh(view, 'prop-mountain').geometry).not.toBe(before);
+    expect(disposeGeometry.mock.contexts).toContain(before);
+    expect(new Set(instanced(view).map((m) => m.geometry)).size).toBe(instanced(view).length);
+    vi.restoreAllMocks();
+  });
+});
+
 describe('the biomes look (openworld-terrain.md section 4, #984)', () => {
   const at = (height: number, terrain: Terrain, biome: Biome): Tile => ({ height, terrain, biome });
   // The chunks of the square -2..2, each one biome by its column (`cx` mod 5 is the biome code), with a tree or a boulder
