@@ -12,6 +12,8 @@ export class OpenWorldMode {
   hero: Hero | null = null;
   private view: OpenWorldView | null = null;
   private dirty = false;
+  /** The props are read once for the page: every entry reuses them. */
+  private modelsOnce?: Promise<PropGeometries>;
 
   /** `load` reads a chunk of a seed's world, `models` the low-poly props: the first draw does not wait for them. */
   constructor(
@@ -34,7 +36,8 @@ export class OpenWorldMode {
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));
-    void this.models().then((geometries) => {
+    this.modelsOnce ??= this.models();
+    void this.modelsOnce.then((geometries) => {
       if (this.view !== view) return; // left before the models arrived
       view.useModels(geometries);
       this.dirty = true;
