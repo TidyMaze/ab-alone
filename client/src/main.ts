@@ -4209,14 +4209,29 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | null = null): vo
   moveModes('pick');
   leaveOnline();
   leaveRoyale();
-  startLocal(true); // a fresh board against the bot, out of the hub and any boss fight
+  leaveHub();
+  applyDeck(deckOf('local'));
+  worker = botWorker;
+  fight = null; // a boss fight the run was started from
+  delete document.body.dataset.boss;
+  retryButton.hidden = true;
+  engine = new Engine(); // the board under the map: the saved local game is left alone, as by a boss fight
+  history.length = 0;
+  replaying = null;
+  selected = [];
+  thinking = false; // a bot reply to the old game is dropped (botTurn)
+  view = resetView(4);
+  applyView();
   roomOf = null; // no Back to the ship: the mode menu leaves a run
   stopAnalysis(); // no bar and no hint in a run, as in a boss fight (fair play, #164)
   newGameButton.hidden = true;
   run = { map, state };
   void saveRun(gameStore, state);
   if (resumed) fightRun(resumed);
-  else showRun();
+  else {
+    showRun();
+    refresh();
+  }
 }
 function showRun(): void {
   const { map, state } = run!;
