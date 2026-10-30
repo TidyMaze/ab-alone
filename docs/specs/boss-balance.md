@@ -528,8 +528,12 @@ seeds): seeing a bonus win at once in the tree (`search.rs`) gives the same 10 g
 budget 1600: 0; 400: 0; 200: 7; 100: 8.
 
 **Change.** `ECHO_NODE_BUDGET` 400 to 100 (one ply). Two engine bugs found on the way are fixed,
-each with its test, though neither moved the ladder: the search sees a win a bonus gives the side
-to move at its own node, not one ply later; `Game::replace_board` runs the repetition check again.
+each with its test: the search sees a win a step gives the side to move at its own node, not one
+ply later; `Game::replace_board` runs the repetition check again. Both reach every hooked boss.
+Neither moves the Echo's ladder, nor two hooked bosses re-measured at 10x on `main` 77453ae
+before and after (seeds 0 to 9): the Ballast Mind 1 of 10 both (median 136, rim ejection 6, draw
+3), the Hull 5 of 10 both (median 85.5, push 3, rim ejection 2). The other hooked bosses are not
+re-measured.
 No rule of #859 changes; nothing depends on the player's bonus being forced (#958 will make it an
 offer, measure again then). `engine_version` 12 (boss replies change).
 
