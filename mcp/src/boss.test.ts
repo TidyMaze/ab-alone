@@ -212,6 +212,23 @@ const CASES: Record<string, () => void> = {
     expect(state([0, 0, -1, 2])!.text).toBe('a shockwave hits the busiest wedge after 2 of your turns');
     expect(state([0, 0, -1, -1])!.kind).toBe('special');
   },
+
+  dual() {
+    const dual = newEncounter('dual', 1);
+    // The wall stands and nothing comes back yet: the rule as the tell, no marks.
+    expect(bossState('dual', dual)).toMatchObject({
+      name: 'The Dual Room',
+      tell: { kind: 'wall', cells: [], text: 'an ejected marble comes back in the other room one turn later; the wall falls at 5 ejections' },
+      marks: [],
+    });
+    const state = (data: number[]) => bossState('dual', withData(dual, { dual: data }));
+    expect(state([0, 2, -1, -1])).toMatchObject({
+      tell: { kind: 'return', cells: ['(-1,-1)'], text: 'a boss marble comes back on (-1,-1) at the end of the next move' },
+      marks: [{ kind: 'return', cell: '(-1,-1)', value: 2 }],
+    });
+    expect(state([0, 1, 5, -9]).tell!.text).toBe('one of your marbles comes back on (5,-9) at the end of the next move');
+    expect(state([1, 0, 0, 0]).tell).toEqual({ kind: 'wall', cells: [], text: 'the wall is down: ejected marbles are gone' });
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -219,8 +236,8 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
     expect([0, 1, 2].map(resultName)).toEqual(['playing', 'won', 'lost']);
   });
 
-  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675), The Overseer (#635) The Assembly Line (#744) and The Unstable Core (#751) are in', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core']);
+  test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675), The Overseer (#635) The Assembly Line (#744), The Unstable Core (#751) and The Dual Room (#947) are in', () => {
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual']);
   });
 
   test('every boss of the engine has its case', () => {

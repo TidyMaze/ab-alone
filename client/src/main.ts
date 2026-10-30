@@ -132,6 +132,18 @@ import {
   type Core,
   type UnstableEvents,
 } from './unstable';
+import {
+  DUAL_AZIMUTH,
+  DUAL_CELLS,
+  DUAL_POLAR,
+  WALL,
+  dropAt,
+  dualText,
+  parseDual,
+  parseReturn,
+  wallAt,
+  type DualState,
+} from './dual';
 import { ballastText, firedText, parseFired, type Fired } from './ballast';
 import { chaplainText, parseCells, previewFlips } from './chaplain';
 import { ARMY_NAMES, armiesLeft, choirText, parseArmies } from './choir';
@@ -222,7 +234,7 @@ import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
 import { rimDanger, tensionLevel } from './tension';
 import { glassSide, sideName } from './glass';
 import { ACCENTS, CORE, GLASS, HEAT, pulseAt, SHELL, type Accent } from './marbles';
-import { FRAME, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
+import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight, type FrameShape, type Point } from './frame';
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
@@ -277,11 +289,15 @@ let goalOpen = false;
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
-// its counter fit the window too (#691), off the HUD plate (#695).
-const fightView = (): View =>
-  fight?.id === 'pulsar'
-    ? fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, [document.getElementById('hud')!.getBoundingClientRect()])
-    : resetView(activeRadius());
+// its counter fit the window too (#691), off the HUD plate (#695). The Dual Room's (#947) looks along its wall, the two
+// rooms side by side, drawn back until both fit.
+const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
+const fightView = (): View => {
+  const plate = [document.getElementById('hud')!.getBoundingClientRect()];
+  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, plate);
+  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight, plate);
+  return resetView(activeRadius());
+};
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
 // camera himself and a new window size fits it again. Once he orbits or zooms, his view stays until Reset view.
 let fitted: View | null = null;
@@ -1540,6 +1556,24 @@ function wedgeSlice(wedge: number): THREE.ShapeGeometry {
   }
   return wedgeSlices.get(wedge)!;
 }
+// The Dual Room (#947, game-design.md section 7.15): the lit wall between its two rooms, which sinks into the floor at
+// the 5th ejection; the mark of an announced return on its landing cell, in the light of the coming marble's side; the
+// returning marble dropping onto its cell. Reduced motion: the wall goes at once and the marble is on its cell at once.
+const wallMaterial = new THREE.MeshStandardMaterial({ color: RIM_LIGHT.glass, emissive: RIM_LIGHT.glass, emissiveIntensity: 1.5, transparent: true });
+const wall = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(WALL.length, WALL.height, WALL.depth), wallMaterial), { name: 'dual-wall' });
+const placeWall = (y: number, opacity: number): void => {
+  wall.position.set(WALL.x, WALL.height / 2 + y, WALL.z);
+  wallMaterial.opacity = opacity;
+};
+placeWall(0, 1);
+wall.visible = false;
+const markGeometry = new THREE.RingGeometry(0.3, 0.42, 32).rotateX(-Math.PI / 2);
+const markMaterials = [RIM_LIGHT.glass, RIM_LIGHT.shell].map(
+  (color) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }),
+);
+let dualShown: DualState | null = null; // the wall and the announced return of the last refresh
+let collapse: { start: number } | null = null; // the wall sinking
+let drop: { cell: Axial; start: number; reduced: boolean; y: number } | null = null; // the returning marble falling
 type Fx = { mesh: THREE.Mesh; start: number; reduced: boolean; skipped: boolean };
 let unstableShown: (Core & { pips: Charge[] }) | null = null; // the next events and the charges of the last refresh
 let bursts: Fx[] = [];
@@ -1564,6 +1598,7 @@ const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   return disc;
 });
 instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
+scene.add(wall);
 // The battle royale arena (#502): its own 217 discs at half the spacing, in the room of the radius 4 board, shown in its
 // place while a battle royale is on. Its marbles wear their seat's shell tint (marbles.ts).
 const arena = new THREE.Group();
@@ -2222,6 +2257,18 @@ function afterPlay(before: number[], record: number[], live = true): void {
     shown = { game: engine, board: unstable.board, poles: [] };
     whenSettled(() => fireUnstable(unstable, reduced));
   }
+  // The Dual Room (#947): the marble coming back drops onto its cell, the wall sinks at the 5th ejection.
+  const landed = engine instanceof Encounter ? parseReturn(engine.last_return()) : null;
+  if (landed) {
+    drop = { cell: landed.cell, start: performance.now(), reduced, y: dropAt(0, reduced).y };
+    document.body.dataset.returns = String(Number(document.body.dataset.returns ?? 0) + 1); // read by the e2e tests
+  }
+  if (!reduced && engine instanceof Encounter && parseDual(engine.dual())?.collapsed && dualShown?.collapsed === false) {
+    const fall = { start: Infinity }; // the wall stands whole until the push's slide is over
+    collapse = fall;
+    whenSettled(() => (fall.start = performance.now()));
+    document.body.dataset.wall = 'falling'; // read by the e2e tests
+  }
   const ejection = findEjection(before, after, mv);
   if (ejection) eject(ejection, mv.dir, held, reduced);
   // The Overseer's vents (#635): the push slides first, then each marble they burnt sinks into its vent.
@@ -2466,6 +2513,43 @@ function drawUnstable(core: Core | null, charges: Charge[]): void {
     const glow = Object.assign(new THREE.Mesh(wedgeSlice(core.wedge), wedgeGlowMaterial), { name: 'wedge-glow' });
     glow.position.y = 0.012;
     marbles.add(glow);
+  }
+}
+
+/** Draws The Dual Room's wall and the mark of an announced return (#947). Nothing in the other fights. */
+function drawDual(state: DualState | null): void {
+  if (dualShown?.collapsed !== state?.collapsed) collapse = collapse && state?.collapsed ? collapse : null;
+  dualShown = state;
+  if (!collapse) placeWall(0, 1);
+  wall.visible = !!state && (!state.collapsed || !!collapse);
+  if (state) document.body.dataset.wall = state.collapsed ? (collapse ? 'falling' : 'down') : 'up'; // read by the e2e tests
+  else delete document.body.dataset.wall;
+  if (!state?.coming) return;
+  const p = axialTo3D(...state.coming.cell);
+  const mark = Object.assign(new THREE.Mesh(markGeometry, markMaterials[state.coming.side === glassOf() ? 0 : 1]), { name: 'return-mark' });
+  mark.position.set(p.x, 0.008, p.z);
+  marbles.add(mark);
+}
+
+/** Sinks the falling wall and drops the returning marble, `now` into the animation loop. */
+function animateDual(now: number): void {
+  if (collapse) {
+    const at = wallAt(now - collapse.start, false);
+    placeWall(at.y, at.opacity);
+    if (at.done) {
+      collapse = null;
+      wall.visible = false;
+      document.body.dataset.wall = 'down';
+    }
+  }
+  if (drop) {
+    const at = dropAt(now - drop.start, drop.reduced);
+    drop.y = at.y;
+    for (const obj of marbleAt.get(cellIndex(...drop.cell)) ?? []) {
+      obj.userData.dropBase ??= obj.position.y;
+      obj.position.y = (obj.userData.dropBase as number) + at.y;
+    }
+    if (at.done) drop = null;
   }
 }
 
@@ -2746,6 +2830,7 @@ function hud(extra = ''): void {
         ballastText(boss.ballast_next()),
         firedText(parseFired(boss.ballast_fired())),
         coreText(parseCore(boss.unstable())),
+        dualText(parseDual(boss.dual()), 1),
         toxinText(boss.turns_left()),
         ventNote(phaseSeen.since, shownPly()),
         fight?.id === 'magnetizer' ? polarityText(boss.phase(), shownPly()) : '',
@@ -2798,6 +2883,7 @@ function hud(extra = ''): void {
 function refresh(): void {
   dirty = CHANGE_DRAWS;
   syncAuto();
+  if (hub || royale) drawDual(null); // no fight, no wall (#947)
   if (hub) {
     hub.draw(sceneRenderer, discs, sfx, loadProgress(store).beaten, marbleMesh(glassOf()), drawFrame, lightRim);
     hud();
@@ -2996,6 +3082,7 @@ function refresh(): void {
   }
   document.body.dataset.fired = String(firedShown?.cells.length ?? 0); // read by the e2e tests
   // The charges belong to the board after the hook: while a move slides to the board before it, none is drawn.
+  drawDual(engine instanceof Encounter ? parseDual(engine.dual()) : null);
   drawUnstable(engine instanceof Encounter ? parseCore(engine.unstable()) : null, showing() || !(engine instanceof Encounter) ? [] : parseCharges(engine.charges()));
   const taunt = engine instanceof Encounter ? tauntIndex(engine.turns_left()) : -1; // the Overseer's line of this 20 %
   if (tauntSaid.game !== engine || tauntSaid.index !== taunt) {
@@ -3664,6 +3751,14 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to find The Unstable Core's marks as drawn (#751): the next events and the charges, and the
 // shockwave's slice now.
 (window as unknown as Record<string, unknown>).__unstable = () => unstableShown;
+// Used by the browser checks to find The Dual Room's marks as drawn (#947): the wall and the announced return, the wall
+// mesh now, the mark's cell and the falling marble.
+(window as unknown as Record<string, unknown>).__dual = () => ({
+  state: dualShown,
+  wall: { visible: wall.visible, y: wall.position.y - WALL.height / 2, opacity: wallMaterial.opacity },
+  mark: dualShown?.coming?.cell ?? null,
+  drop: drop && { cell: drop.cell, y: drop.y },
+});
 (window as unknown as Record<string, unknown>).__sweep = () => sweep && { scale: sweep.mesh.scale.x, opacity: sweepMaterial.opacity };
 // Used by the browser checks to find The Magnetizer's polarities as drawn: the cell, the sign and the ring of a fresh one.
 (window as unknown as Record<string, unknown>).__polarities = () => polesDrawn;
@@ -4724,7 +4819,7 @@ function animateParticles(now: number): void {
 }
 // An effect that moves on screen by itself, frame after frame: while one is shown a player's page draws every frame.
 function moving(): boolean {
-  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0];
+  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0, collapse, drop];
   const lists = [fading, ejecting, bleeding, passing, slams, bursts, hazes, beltRibs, ripples];
   return (
     effects.some(Boolean) ||
@@ -4756,6 +4851,7 @@ renderer.setAnimationLoop((now) => {
   animateBelts(now);
   if (shock) drawShock(now - shock.start);
   animateUnstable(now);
+  animateDual(now);
   if (blast) drawBlast(now - blast.start);
   animateSpeech(now);
   animateHaze(now);

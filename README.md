@@ -66,6 +66,7 @@ Die, read the tell, retry with the same seed.
 | Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; it talks back in typed bubbles, its vents turn toxic, and its marble explodes with a farewell when you win |
 | Cargo | **The Assembly Line** | three conveyor belts between the armies carry every marble off the board, then their presses strike |
 | Furnace | **The Unstable Core** | the centre cells charge your marbles, a charged marble weighs more in a push and four charges blow it off; later the core collapses and shockwaves shove the busiest wedge |
+| Mess | **The Dual Room** | two rooms side by side split by a wall: an ejected marble of either side comes back one turn later in the other room, on the mirror of its cell (after 3 ejections, on a rim cell of the emptier room), until at five ejections the wall falls and the rooms become one |
 
 ## What it looks like
 

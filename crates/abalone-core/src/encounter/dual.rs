@@ -201,6 +201,14 @@ pub fn dual_start(seed: u64) -> Encounter {
     )
 }
 
+/// The marble that landed at the end of the last ply and its cell, `None` when none did or outside
+/// the Dual Room's fight.
+pub fn dual_landed(enc: &Encounter) -> Option<(Cell, P)> {
+    let (before, _) = enc.hooked()?;
+    let (marble, at) = before.dual()?.coming?;
+    Some((marble, nearest_empty(before, at)))
+}
+
 /// What a ply does in the boss search: the pushed-off marble is noted, then the hook runs with
 /// seed 0. A return credits nothing: the search counts the push itself.
 fn search_step(before: &Board, _mover: Player, mv: &Move, mut after: Board) -> (Board, [u8; 2]) {
@@ -417,6 +425,28 @@ mod tests {
             "the ejection still counts"
         );
         assert_eq!(enc.result(), None);
+    }
+
+    #[test]
+    fn the_landed_marble_is_read_from_the_last_ply() {
+        let start = board(&[(-4, 6), (-4, 7)], &[(-4, 8), (5, -8)], Dual::default());
+        let mut enc = fight(start, Player::Black, [0, 0]);
+        assert_eq!(dual_landed(&enc), None, "no ply yet");
+        enc.play(&mv(&[(-4, 6), (-4, 7)], SE)).unwrap();
+        assert_eq!(dual_landed(&enc), None, "announced, not landed");
+        enc.play(&mv(&[(5, -8)], NW)).unwrap();
+        assert_eq!(
+            dual_landed(&enc),
+            Some((Cell::White, (4, -9))),
+            "where it fell"
+        );
+        enc.play(&mv(&[(-4, 7)], E)).unwrap();
+        assert_eq!(dual_landed(&enc), None);
+        let mut core = crate::encounter::unstable::unstable_start(1);
+        let first = legal_moves(core.game().board(), Player::Black)[0].clone();
+        core.play(&first).unwrap();
+        assert!(core.hooked().is_some());
+        assert_eq!(dual_landed(&core), None, "another boss's hook");
     }
 
     #[test]

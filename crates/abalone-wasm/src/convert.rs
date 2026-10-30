@@ -128,11 +128,12 @@ pub(crate) fn cell_code(board: &Board, q: i32, r: i32) -> u8 {
     code(board.get(q, r))
 }
 
-/// The cells of a board in board order, see the module docs: the 61, then the outer ring of a
-/// radius 5 board.
+/// The cells of a board in board order, see the module docs: the 61, then each ring beyond them
+/// in turn (ring 5 of The Ballast Mind, rings 5 to 9 of The Dual Room), so no index shifts.
 pub(crate) fn board_cells(radius: i32) -> impl Iterator<Item = (i32, i32)> {
     let ring = |(q, r): (i32, i32)| q.abs().max(r.abs()).max((q + r).abs());
-    cells().chain(cells_of(radius).filter(move |&c| ring(c) > RADIUS))
+    cells()
+        .chain((RADIUS + 1..=radius).flat_map(move |k| cells_of(k).filter(move |&c| ring(c) == k)))
 }
 
 /// The cells of the board, vanished ones included, so the indices never shift.
@@ -178,6 +179,25 @@ mod tests {
             let (a, b) = (w[0], w[1]);
             b.1 > a.1 || (b.1 == a.1 && b.0 > a.0)
         }));
+    }
+
+    #[test]
+    fn a_board_holds_its_rings_one_after_the_other_so_no_index_shifts() {
+        let ring = |(q, r): (i32, i32)| q.abs().max(r.abs()).max((q + r).abs());
+        let nine: Vec<(i32, i32)> = board_cells(9).collect();
+        assert_eq!(nine.len(), 271, "The Dual Room's radius 9 scan");
+        let five: Vec<(i32, i32)> = board_cells(5).collect();
+        assert_eq!(five.len(), 91);
+        assert_eq!(
+            nine[..91],
+            five[..],
+            "The Ballast Mind's 91 keep their slots"
+        );
+        assert_eq!(board_cells(4).count(), 61);
+        assert!(nine
+            .windows(2)
+            .all(|w| ring(w[0]).max(4) <= ring(w[1]).max(4)));
+        assert_eq!(nine[91], (0, -6), "ring 6 starts on its first row");
     }
 
     #[test]

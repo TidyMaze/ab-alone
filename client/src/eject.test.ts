@@ -150,7 +150,7 @@ describe('trackAt', () => {
 describe('findEjection', () => {
   it('finds a marble pushed off ring 5 of The Ballast Mind\'s radius 5 board (#564)', () => {
     const wide = (cells: Array<[number, number, number]>): number[] => {
-      const b = BOARD_CELLS.map(() => 0);
+      const b = BOARD_CELLS.slice(0, 91).map(() => 0);
       for (const [q, r, side] of cells) b[cellIndex(q, r)] = side;
       return b;
     };

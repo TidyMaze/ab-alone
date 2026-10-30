@@ -9,7 +9,7 @@ function bytes(marks: Record<string, number>): Uint8Array {
 
 /** Board bytes for 91 cells with the given cells set, everything else empty. */
 function bytes91(marks: Record<string, number>): Uint8Array {
-  return Uint8Array.from(BOARD_CELLS, ([q, r]) => marks[`${q},${r}`] ?? 0);
+  return Uint8Array.from(BOARD_CELLS.slice(0, 91), ([q, r]) => marks[`${q},${r}`] ?? 0);
 }
 
 describe('the 61 cells, in abalone-wasm board order', () => {
@@ -116,10 +116,30 @@ describe('ascii, as printed by render in abalone-cli', () => {
 
 describe('the 91 cells for radius 5 boards (#572)', () => {
   test('the first 61 are CELLS, followed by the 30 cells of ring 5', () => {
-    expect(BOARD_CELLS).toHaveLength(91);
     expect(BOARD_CELLS.slice(0, 61)).toEqual(CELLS);
-    const ring5 = BOARD_CELLS.slice(61);
+    const ring5 = BOARD_CELLS.slice(61, 91);
     expect(ring5).toHaveLength(30);
     expect(ring5.every(([q, r]) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) === 5)).toBe(true);
+  });
+});
+
+describe('the 271 cells of the radius 9 scan of The Dual Room (#947)', () => {
+  test('the 91, then rings 6 to 9, each row by row', () => {
+    expect(BOARD_CELLS).toHaveLength(271);
+    expect(BOARD_CELLS[91]).toEqual([0, -6]);
+    expect(BOARD_CELLS[270]).toEqual([0, 9]);
+    const ring = ([q, r]: [number, number]) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+    expect(BOARD_CELLS.slice(91).every((c, i, all) => i === 0 || ring(all[i - 1]!) <= ring(c))).toBe(true);
+  });
+
+  test('renders its two rooms with header 0 to I and rows a to s, the cells off the rooms blank', () => {
+    const lines = ascii(newEncounter('dual', 1).board()).split('\n');
+    expect(lines).toHaveLength(20);
+    expect(lines[0]).toBe('  0 1 2 3 4 5 6 7 8 9 A B C D E F G H I');
+    expect(lines[1]).toBe(`a ${'  '.repeat(12)}B B B B B`); // the north room's far side, r = -9
+    expect(lines[9]).toBe(`i ${'  '.repeat(8)}. W W W .`); // its wall row, r = -1
+    expect(lines[10]).toBe(`j ${'  '.repeat(7)}. W W W .`); // the south room's wall row, r = 0
+    expect(lines[18]).toBe(`r ${'  '.repeat(3)}B B B B B`); // its far side, r = 8
+    expect(lines[19]).toBe('s'); // r = 9 holds no cell of the rooms
   });
 });

@@ -7,7 +7,12 @@
 //!   `4` to `7` a marble of battle royale seats 3 to 6, `8` a core and `9` the Overseer (The
 //!   Overseer's fight).
 //!   Index 0 is `(q=0, r=-4)`, index 60 is `(q=0, r=4)`. The radius 5 board of The Ballast Mind
-//!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending.
+//!   has 91: the same 61, then its outer ring, row by row from `r = -5`, `q` ascending. The Dual
+//!   Room's board scans radius 9, 271 codes: the same 91, then rings 6 to 9, each row by row, its
+//!   two rooms on the rows `r >= 0` (south) and `r <= -1` (north), every other cell vanished.
+//! - Dual (The Dual Room): `[collapsed, side, q, r]`, `1` once the wall fell, then the side of the
+//!   announced return and its landing cell, side `0` (and `0, 0`) when none. Last return: `[side, q,
+//!   r]` of the marble that landed at the end of the last ply, empty when none.
 //! - Cracks (The Hull): records of 3 integers `[q, r, plies_left]`, back to back.
 //! - Eggs (The Alien): records of 3 integers `[q, r, player_turns_left]`, back to back.
 //! - Trains (The Rail Yard): records of 6 integers `[line, player_turns_left, entry_q, entry_r,
