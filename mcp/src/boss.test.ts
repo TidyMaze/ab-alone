@@ -215,19 +215,23 @@ const CASES: Record<string, () => void> = {
 
   dual() {
     const dual = newEncounter('dual', 1);
-    // The wall stands and nothing comes back yet: the rule as the tell, no marks.
+    // The void splits the rooms and nothing comes back yet: the rule as the tell, no marks.
     expect(bossState('dual', dual)).toMatchObject({
       name: 'The Dual Room',
-      tell: { kind: 'wall', cells: [], text: 'an ejected marble comes back in the other room one turn later; the wall falls at 5 ejections' },
+      tell: {
+        kind: 'bridge',
+        cells: [],
+        text: 'a marble ejected over the rim or into the void comes back in the other room one turn later; a bridge fills the void at 5 ejections',
+      },
       marks: [],
     });
     const state = (data: number[]) => bossState('dual', withData(dual, { dual: data }));
-    expect(state([0, 2, -1, -1])).toMatchObject({
-      tell: { kind: 'return', cells: ['(-1,-1)'], text: 'a boss marble comes back on (-1,-1) at the end of the next move' },
-      marks: [{ kind: 'return', cell: '(-1,-1)', value: 2 }],
+    expect(state([0, 2, 0, -2])).toMatchObject({
+      tell: { kind: 'return', cells: ['(0,-2)'], text: 'a boss marble comes back on (0,-2) at the end of the next move' },
+      marks: [{ kind: 'return', cell: '(0,-2)', value: 2 }],
     });
-    expect(state([0, 1, 5, -9]).tell!.text).toBe('one of your marbles comes back on (5,-9) at the end of the next move');
-    expect(state([1, 0, 0, 0]).tell).toEqual({ kind: 'wall', cells: [], text: 'the wall is down: ejected marbles are gone' });
+    expect(state([0, 1, 4, -7]).tell!.text).toBe('one of your marbles comes back on (4,-7) at the end of the next move');
+    expect(state([1, 0, 0, 0]).tell).toEqual({ kind: 'bridge', cells: [], text: 'the bridge is up: ejected marbles are gone' });
   },
 };
 
