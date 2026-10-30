@@ -27,7 +27,7 @@ and no new look: each rule names its source (section numbers), and changes when 
   (#507); The Echo and The Choir keep the plain shell, the Choir's army glyphs are its shape cue.
   Flipped by The Chaplain: ridges creep up the glass. Silhouette before colour. Each marble starts turned its own way and each cell disc is turned by
   its own angle, seeded, so the set never lines up and a game always looks the same.
-- **Light** (world.md 5). Low-key: one hard source per deck, a dim cyan fill from the player's
+- **Light** (world.md 5). Low-key: one hard source per deck, the rim's cold cyan on the player's turn, no light on the
   marbles, slow and rare flicker. Localized spaceship architectural lights (emergency sodium strip above the airlock,
   cold rim backlight on forward bay, warm console bounce on the avionics desk, and subtle cyan ground wash grounding the pedestal, #644).
   Soft contact shadows ground marbles onto the deck cells and frame
