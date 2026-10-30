@@ -109,14 +109,25 @@ A biome is a region with its own ground, trees and boulders. Two slow fields and
 
 Client only, after #983 (it needs the eight heights).
 
-- `topOf(level) = 0.2 + STEP * level`, water at 0.08. First value `STEP = 0.4` (peak at 3.0, a cell is 1
-  wide), tuned between 0.3 and 0.5 on screenshots and said in the PR. Props, marbles and the troop already
-  stand on `topOf`.
+- `topOf(level) = 0.2 + STEP * level`, water at 0.08. **`STEP = 0.5`** (a peak at 3.7), kept on screenshots of
+  seed 7 at STEP 0.3, 0.4 and 0.5, closest and widest: 0.3 reads flat (the cliff faces are thin), 0.4 shows short
+  faces, 0.5 shows the rock plateaus and the peak cluster standing clear of the grass with tall side faces, and no
+  cell hidden behind a peak at close zoom. Props, marbles and the troop stand on `topOf`; the mountains (1.2 to 2.0
+  high) read as spires on the taller columns, so their scale is unchanged.
+- **Finding**: on seed 7 no two passable cells differ by 2 levels or more within 45 cells of the spawn: the steepest
+  step a hero can walk is one level. The tall faces are peaks (blocked, level 7) against rock (level 6), 22 cells out
+  at (-8, 22) and (-8, 23). The e2e test steps onto a cell one level up, (4, 0).
 - **Camera**: it follows the hero's column top with an ease, `y += (target - y) * (1 - exp(-dt / 0.12))`, so a
-  step up or down a cliff does not jump.
+  step up or down a cliff does not jump. A gap within 0.01 snaps; reduced motion jumps at once. The mode draws
+  every frame of the ease and none after it settles. At STEP 0.5 a 3-level step (a gap of 1.5) is 0.010 from the top
+  after 0.6 s, on the top within 0.67 s.
 - **Pick**: a click is the nearest hit of the ray among the hero's cell and its six neighbours, each tested
-  against its own top plane `y = topOf(cell)` and kept only if the hit point is within the cell's hex (radius
-  0.56). No hit, no move. Unit test: neighbours 0 to 3 levels above and below the hero.
+  against its own top plane `y = topOf(cell)` and kept only if the hit point lies in that cell (`cellAtPoint` of the
+  hit is the candidate). No hit, no move: the hero's own cell comes back and the roll does nothing. A lower cell
+  hidden behind a higher ring cell cannot be clicked at its top centre: the test covers all six neighbours above the
+  ring's level and the two in front below it.
+- **Cost**: the build is unchanged: a rebuild at the widest zoom takes a median 38.6 ms on main and 38.8 ms with this
+  task (35 rebuilds each, in node, a synthetic world of every terrain and height).
 - Cost: no per-frame work added; a rebuild does not get slower.
 
 ## 6. Shared rules

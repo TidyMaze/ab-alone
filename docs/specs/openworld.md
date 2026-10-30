@@ -23,7 +23,8 @@ A-light Explore (#720 to #725), which it does not touch.
   the same seed always gives the same world, in any order of visit. Saving a world is its seed.
 - **Relief**: every cell has a height 0 to 7 from three levels of smooth value noise (macro, meso,
   micro, see [openworld-terrain.md](openworld-terrain.md) section 2). The renderer lifts the cell
-  column to `0.2 + 0.2 * height * 3 / 7` (water to 0.08) until the relief task (#988) changes it, and lights it. The height itself never changes a
+  column to `0.2 + STEP * height` with `STEP = 0.5` (water to 0.08, see [openworld-terrain.md](openworld-terrain.md)
+  section 5), and lights it. The height itself never changes a
   move or a push: it only picks the terrain, and a terrain that blocks is an obstacle.
 - **Terrain**: from height and a second noise (moisture), one look per cell: **lakes** (water,
   heights 0 and 1), sand (the shore, height 2), grass, rock, **mountains** (peaks, height 7). Forests
