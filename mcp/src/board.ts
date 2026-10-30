@@ -1,4 +1,4 @@
-// The board of abalone-wasm (`Engine.board()`, 61 or 91 cell values) as text for the agent: `board`, one character per
+// The board of abalone-wasm (`Engine.board()`, 61, 91 or 271 cell values) as text for the agent: `board`, one character per
 // cell, and `ascii`, the board as `render` in abalone-cli prints it (docs/specs/mcp.md section 4.2).
 import type { Cell } from './notation';
 
@@ -12,16 +12,20 @@ for (let r = -RADIUS; r <= RADIUS; r++) {
 
 const ring = ([q, r]: Cell): number => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
 
-/** The outer ring of The Ballast Mind's radius 5 board (#564, #572). */
-export const RING5: Cell[] = [];
-for (let r = -5; r <= 5; r++) {
-  for (let q = -5; q <= 5; q++) {
-    if (Math.abs(q + r) <= 5 && ring([q, r]) === 5) RING5.push([q, r]);
+/** Ring `k` of a board, row by row from `r = -k`, `q` ascending inside a row. */
+const ringCells = (k: number): Cell[] => {
+  const cells: Cell[] = [];
+  for (let r = -k; r <= k; r++) {
+    for (let q = -k; q <= k; q++) {
+      if (Math.abs(q + r) <= k && ring([q, r]) === k) cells.push([q, r]);
+    }
   }
-}
+  return cells;
+};
 
-/** The 91 cells in abalone-wasm board order: the 61 of the standard board, then ring 5 (#572). */
-export const BOARD_CELLS: Cell[] = [...CELLS, ...RING5];
+/** The cells in abalone-wasm board order: the 61 of the standard board, then each ring beyond in turn: ring 5 of The
+ * Ballast Mind's radius 5 board (91 cells, #572), rings 6 to 9 of The Dual Room's radius 9 scan (271 cells, #947). */
+export const BOARD_CELLS: Cell[] = [CELLS, ...[5, 6, 7, 8, 9].map(ringCells)].flat();
 
 /** Cell values of abalone-wasm: `0` empty, `1` Black, `2` White, `3` vanished, then `4` to `7` the battle royale
  * seats (never on a boss board), `8` a core and `9` the Overseer (The Overseer, #635). */
@@ -33,17 +37,18 @@ export function boardText(board: ArrayLike<number>): string {
   return Array.from(board, (value) => BOARD_MARKS[value]).join('');
 }
 
-/** A header with columns (1 to 9 for radius 4, 0 to A for radius 5), then rows a to i (or k for radius 5). */
+/** A header with columns (1 to 9 for radius 4, 0 to A for radius 5, 0 to I for The Dual Room's radius 9), then rows a
+ * to i (k for radius 5, s for radius 9). */
 export function ascii(board: ArrayLike<number>): string {
-  const radius = board.length === 91 ? 5 : RADIUS;
+  const radius = ({ 91: 5, 271: 9 } as Record<number, number>)[board.length] ?? RADIUS;
   const size = 2 * radius + 1;
   const grid = Array.from({ length: size }, () => Array<string>(size).fill(' '));
-  const cells = radius === 5 ? BOARD_CELLS : CELLS;
-  cells.forEach(([q, r], i) => {
+  BOARD_CELLS.slice(0, board.length).forEach(([q, r], i) => {
     grid[r + radius]![q + radius] = ASCII_MARKS[board[i]!]!;
   });
-  const rowLabels = radius === 5 ? 'abcdefghijk' : 'abcdefghi';
-  const header = radius === 5 ? '  0 1 2 3 4 5 6 7 8 9 A' : '  1 2 3 4 5 6 7 8 9';
+  const rowLabels = 'abcdefghijklmnopqrs';
+  const columns = Array.from({ length: size }, (_, k) => (k + (radius === RADIUS ? 1 : 0)).toString(36).toUpperCase());
+  const header = `  ${columns.join(' ')}`;
   const rows = grid.map((slots, row) => `${rowLabels[row]} ${slots.join(' ')}`.trimEnd());
   return [header, ...rows].join('\n');
 }

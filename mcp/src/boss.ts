@@ -22,6 +22,8 @@ export interface BossLike {
   charges(): Int32Array;
   /** `[core, collapsing, wedge, shock_in]` of The Unstable Core's next events, `-1` for none; empty otherwise. */
   unstable(): Int32Array;
+  /** `[collapsed, side, q, r]` of The Dual Room's wall and announced return, side `0` when none; empty otherwise. */
+  dual(): Int32Array;
   /** `[pulsar, player_turns_left, force]` of The Pulsar's next pulse, force `0` for infinite; empty otherwise. */
   pulsar(): Int32Array;
   /** `[turns_left, ...]` then `[row, q0, len, dir, shift, strike]` per belt of The Assembly Line; empty otherwise. */
@@ -105,6 +107,11 @@ function beltMarks(belts: Int32Array): Mark[] {
   ]);
 }
 
+/** The Dual Room's announced return: a mark on its landing cell with the side of the coming marble. */
+function returnMark([, side, q, r]: Int32Array): Mark[] {
+  return side ? [{ kind: 'return', cell: cell([q!, r!]), value: side }] : [];
+}
+
 export function bossState(id: string, boss: BossLike): BossState {
   const armies = records(boss.armies(), 3);
   const marks: Mark[] = [
@@ -119,6 +126,7 @@ export function bossState(id: string, boss: BossLike): BossState {
     ...records(boss.incinerators(), 2).map((record) => ({ kind: 'incinerator', cell: cell(record) })),
     ...records(boss.converted(), 2).map((record) => ({ kind: 'converted', cell: cell(record) })),
     ...armies.map((record) => ({ kind: 'army', cell: cell(record), value: record[2]! })),
+    ...returnMark(boss.dual()),
   ];
   return {
     id,
@@ -131,7 +139,8 @@ export function bossState(id: string, boss: BossLike): BossState {
   };
 }
 
-/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the belts, then the core's next event, then the clock, then
+/** The most specific kind wins: the next army, then the marbles that flip, then the next pulse, then the belts, then the core's next event, then
+ * The Dual Room's return or wall, then the clock, then
  * the effect The Ballast Mind borrows, then the bare special id. */
 function tell(boss: BossLike, armies: number[][]): Tell | null {
   const army = boss.next_army();
@@ -162,6 +171,17 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   }
   if (shockIn !== undefined && shockIn >= 0) {
     return { kind: 'core', cells: [], text: `a shockwave hits the busiest wedge after ${shockIn} of your turns` };
+  }
+  const [collapsed, side, q, r] = Array.from(boss.dual());
+  if (side) {
+    const who = side === 1 ? 'one of your marbles' : 'a boss marble';
+    return { kind: 'return', cells: [cell([q!, r!])], text: `${who} comes back on ${cell([q!, r!])} at the end of the next move` };
+  }
+  if (collapsed !== undefined) {
+    const text = collapsed
+      ? 'the wall is down: ejected marbles are gone'
+      : 'an ejected marble comes back in the other room one turn later; the wall falls at 5 ejections';
+    return { kind: 'wall', cells: [], text };
   }
   const turns = boss.turns_left();
   if (turns >= 0) {
