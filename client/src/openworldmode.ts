@@ -5,7 +5,7 @@ import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
 import { arrowCell } from './hubview';
 import { Hero, World } from './openworld';
-import { OpenWorldView, type PropGeometries } from './openworldview';
+import { OpenWorldView, type PropModels } from './openworldview';
 
 /** The diagonal cell of each vertical arrow and horizontal arrow held together, in the axial steps of `neighbours`: up is
  * -z on screen (the camera looks down the -z way), so these are the four diagonals of the hex grid. */
@@ -35,14 +35,14 @@ export class OpenWorldMode {
   /** The arrow keys held down: a vertical and a horizontal one together roll a diagonal. */
   private readonly held = new Set<string>();
   /** The props are read once for the page: every entry reuses them. */
-  private modelsOnce?: Promise<PropGeometries>;
+  private modelsOnce?: Promise<PropModels>;
 
-  /** `load` reads a chunk of a seed's world, `models` the low-poly props: the first draw does not wait for them. `reduced`
-   * tells whether the page asks for reduced motion, which holds the water still. */
+  /** `load` reads a chunk of a seed's world, `models` the low-poly and the detailed props: the first draw does not wait for them.
+   * `reduced` tells whether the page asks for reduced motion, which holds the water still. */
   constructor(
     private readonly load: (seed: number, cx: number, cy: number) => Uint8Array,
     private readonly loadEnemies: (seed: number, cx: number, cy: number) => Int32Array,
-    private readonly models: () => Promise<PropGeometries>,
+    private readonly models: () => Promise<PropModels>,
     private readonly reduced: () => boolean,
   ) {}
 
@@ -61,10 +61,11 @@ export class OpenWorldMode {
     this.dirty = true;
     this.mark(String(seed));
     this.modelsOnce ??= this.models();
-    void this.modelsOnce.then((geometries) => {
+    void this.modelsOnce.then((models) => {
       if (this.view !== view) return; // left before the models arrived
-      view.useModels(geometries);
+      view.useModels(models);
       this.dirty = true;
+      this.mark(String(seed)); // the detailed props drawn now are published too (#989)
     });
   }
 

@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours } from './openworld';
 import { heldCell, OpenWorldMode } from './openworldmode';
-import { MAX_ZOOM, maxZoomFor, OpenWorldView } from './openworldview';
+import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels } from './openworldview';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -22,7 +22,7 @@ function sea(_seed: number, cx: number, cy: number): Uint8Array {
   return out;
 }
 const mode = (
-  models: () => Promise<Record<string, never>> = async () => ({}),
+  models: () => Promise<PropModels> = async () => ({ low: {}, high: {} }),
   load: (seed: number, cx: number, cy: number) => Uint8Array = (_seed, cx, cy) => bytes(cx, cy),
   reduced: () => boolean = () => true,
 ) => new OpenWorldMode(
@@ -96,16 +96,29 @@ describe('the Open world mode', () => {
   });
 
   it('draws again when the models arrive', async () => {
-    let arrive!: (g: Record<string, never>) => void;
+    let arrive!: (g: PropModels) => void;
     const m = mode(() => new Promise((resolve) => (arrive = resolve)));
     m.enter(1, 800, 600);
     const render = vi.fn();
     m.frame(render);
-    arrive({});
+    arrive({ low: {}, high: {} });
     await Promise.resolve();
     await Promise.resolve();
     m.frame(render);
     expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  it('draws the detailed props near the hero once their models arrive, and publishes the count (#989)', async () => {
+    let arrive!: (g: PropModels) => void;
+    const m = mode(() => new Promise((resolve) => (arrive = resolve)));
+    m.enter(1, 800, 600);
+    expect(JSON.parse(body().openworldDrawn!)['prop-boulder']).toBe(1);
+    arrive({ low: {}, high: { boulder: new THREE.BoxGeometry() } });
+    await Promise.resolve();
+    await Promise.resolve();
+    const drawn = JSON.parse(body().openworldDrawn!);
+    expect(drawn['prop-boulder-hi']).toBe(1); // the boulder at (0, 1) is near the hero
+    expect(drawn['prop-boulder']).toBe(0);
   });
 
   it('rolls the hero on an arrow key, and keeps it before a boulder', () => {
@@ -311,12 +324,12 @@ describe('leaving the Open world frees its view, every time (#981)', () => {
   });
 
   it('does not draw or touch a view once it is left, even when the models arrive late', async () => {
-    let arrive!: (g: Record<string, never>) => void;
+    let arrive!: (g: PropModels) => void;
     const m = mode(() => new Promise((resolve) => (arrive = resolve)));
     m.enter(1, 800, 600);
     m.leave();
     const render = vi.fn();
-    arrive({});
+    arrive({ low: {}, high: {} });
     await Promise.resolve();
     await Promise.resolve();
     m.frame(render);
@@ -326,7 +339,7 @@ describe('leaving the Open world frees its view, every time (#981)', () => {
 
 describe('the Open world models are loaded once per page (#981)', () => {
   it('loads the models the first time the mode is entered, not on every entry', async () => {
-    const models = vi.fn(async () => ({}));
+    const models = vi.fn(async (): Promise<PropModels> => ({ low: {}, high: {} }));
     const m = mode(models);
     m.enter(1, 800, 600);
     m.leave();

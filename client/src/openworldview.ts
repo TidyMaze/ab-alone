@@ -153,17 +153,21 @@ const PROPS = {
 } as const;
 type Prop = keyof typeof PROPS;
 const PROP_NAMES = Object.keys(PROPS) as Prop[];
-/** The props that have a low-poly model in `client/models/openworld.glb`, made in Blender, each mesh named `ow_<prop>`. */
+/** The props that have a model in Blender: the low-poly one in `client/models/openworld.glb` (`ow_<prop>`) and the detailed one
+ * in `openworld-hi.glb` (`ow_<prop>_hi`), drawn near the hero (#989). */
 const MODELLED = ['mountain', 'tree', 'boulder', 'wall'] as const;
 export type PropGeometries = Partial<Record<Prop, THREE.BufferGeometry>>;
+/** The geometries of both sets of models: `low` the low-poly props, `high` the detailed ones. */
+export type PropModels = { low: PropGeometries; high: PropGeometries };
+export type ModelUrls = { low: string; high: string };
 
-/** The geometries of the models in the glTF at `url`; a failed load gives none, the procedural shapes stay. */
-export async function loadModels(url: string, loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> }): Promise<PropGeometries> {
+/** The geometries of the models named `ow_<prop><suffix>` in the glTF at `url`; a failed load gives none, the procedural shapes stay. */
+async function readModels(url: string, loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> }, suffix: string): Promise<PropGeometries> {
   try {
     const { scene } = await loader.loadAsync(url);
     const out: PropGeometries = {};
     for (const prop of MODELLED) {
-      const mesh = scene.getObjectByName(`ow_${prop}`) as THREE.Mesh | undefined;
+      const mesh = scene.getObjectByName(`ow_${prop}${suffix}`) as THREE.Mesh | undefined;
       if (mesh) out[prop] = mesh.geometry;
     }
     return out;
@@ -171,6 +175,16 @@ export async function loadModels(url: string, loader: { loadAsync(url: string): 
     return {};
   }
 }
+
+/** The models of both files: a failed file leaves its set empty, so the props it would give stay procedural or low-poly. */
+export async function loadModels(urls: ModelUrls, loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> }): Promise<PropModels> {
+  const [low, high] = await Promise.all([readModels(urls.low, loader, ''), readModels(urls.high, loader, '_hi')]);
+  return { low, high };
+}
+
+/** A detailed mesh holds the cells within `HI_RADIUS` of the hero: 3r(r+1)+1 of them, the most a build puts in one. */
+export const HI_RADIUS = 8;
+export const HI_CAPACITY = 3 * HI_RADIUS * (HI_RADIUS + 1) + 1;
 
 const RADIUS = 0.56; // a hex of side 0.56 tiles a grid of spacing 1 with a thin gap
 const MARBLE = 0.3;
@@ -182,6 +196,15 @@ export const topOf = (terrain: Terrain, height: number): number => (terrain === 
 
 /** A stable 0 to 1 draw per cell, so the mountains and the trees differ in height but never change between draws. */
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
+
+/** The material of a prop's mesh: its look, the same for its low-poly and its detailed mesh. */
+const propMaterial = (prop: Prop): THREE.MeshStandardMaterial => {
+  const { color, emissive, flat } = PROPS[prop];
+  return new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat });
+};
+/** The writers of a build: an instance into a mesh (false when it is full), and a prop of a cell (`near`: within `HI_RADIUS`). */
+type Put = (mesh: THREE.InstancedMesh, x: number, y: number, z: number, scaleY: number) => boolean;
+type Lay = (prop: Prop, near: boolean, x: number, y: number, z: number, scaleY: number) => void;
 
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
@@ -196,6 +219,11 @@ export class OpenWorldView {
   private loadedReach = 0;
   private readonly grounds = {} as Record<Ground, THREE.InstancedMesh>;
   private readonly props = {} as Record<Prop, THREE.InstancedMesh>;
+  /** The detailed meshes of the modelled props, and the props whose detailed model has arrived: only those draw near the hero. */
+  private readonly detailed: Partial<Record<Prop, THREE.InstancedMesh>> = {};
+  private readonly detailedReady = new Set<Prop>();
+  /** The meshes a build lays: the ground columns, the props and the detailed props. */
+  private readonly managed: THREE.InstancedMesh[] = [];
   private readonly hero: THREE.Mesh;
   private readonly troop: THREE.InstancedMesh;
   private readonly foes: THREE.InstancedMesh;
@@ -221,11 +249,16 @@ export class OpenWorldView {
     for (const ground of GROUNDS) {
       const { color, emissive } = LOOK[ground];
       this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.9 }));
+      this.managed.push(this.grounds[ground]);
     }
     (this.grounds.water.material as THREE.MeshStandardMaterial).roughness = 0.2; // a glossy surface catches the sun
     for (const prop of PROP_NAMES) {
-      const { geometry, color, emissive, flat } = PROPS[prop];
-      this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], geometry, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat }));
+      this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], PROPS[prop].geometry, propMaterial(prop));
+      this.managed.push(this.props[prop]);
+    }
+    for (const prop of MODELLED) {
+      this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop));
+      this.managed.push(this.detailed[prop]!);
     }
     this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), new THREE.MeshStandardMaterial({ color: 0xcfe8ff, roughness: 0.1 }));
     this.hero.name = 'hero';
@@ -244,20 +277,33 @@ export class OpenWorldView {
     return mesh;
   }
 
-  /** Swaps the procedural shapes for the models; the next chunk build draws them. */
-  useModels(geometries: PropGeometries): void {
+  /** Swaps the procedural shapes for the models: the low-poly ones for every cell, the detailed ones near the hero (#989). The
+   * chunks are rebuilt at once, so the detailed props show without a step. */
+  useModels({ low, high }: PropModels): void {
     for (const prop of PROP_NAMES) {
-      const geometry = geometries[prop];
+      const geometry = low[prop];
+      if (geometry) this.paint(this.props[prop], geometry);
+    }
+    for (const prop of MODELLED) {
+      const geometry = high[prop];
       if (!geometry) continue;
-      this.props[prop].geometry = geometry;
-      if (geometry.hasAttribute('color')) {
-        // a model that paints itself (vertex colours from Blender): drawn as painted, no tint hides it
-        const material = this.props[prop].material as THREE.MeshStandardMaterial;
-        material.vertexColors = true;
-        material.color.set(0xffffff);
-        material.emissive.set(0x000000);
-        material.needsUpdate = true;
-      }
+      this.paint(this.detailed[prop]!, geometry);
+      this.detailedReady.add(prop);
+    }
+    this.drawnKey = '';
+    this.frame();
+  }
+
+  /** Gives a prop's mesh a model's geometry. A model that paints itself (vertex colours from Blender) is drawn as painted: no tint
+   * hides it. */
+  private paint(mesh: THREE.InstancedMesh, geometry: THREE.BufferGeometry): void {
+    mesh.geometry = geometry;
+    if (geometry.hasAttribute('color')) {
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      material.vertexColors = true;
+      material.color.set(0xffffff);
+      material.emissive.set(0x000000);
+      material.needsUpdate = true;
     }
   }
 
@@ -334,11 +380,11 @@ export class OpenWorldView {
     const hero = cellAtPoint(at.x, at.z);
     const radius = Math.max(...corners.map((p) => hexDistance(cellAtPoint(p.x, p.z), hero)));
     const reach = Math.min(MAX_REACH, reachFor(radius));
-    const key = `${this.centre},${reach}`;
+    const key = `${this.centre},${reach},${hero}`; // the hero's cell too: it sets which props are detailed (#989)
     if (key !== this.drawnKey) {
       this.drawnKey = key;
       this.loadedReach = reach;
-      this.build(this.centre[0], this.centre[1], reach);
+      this.build(this.centre[0], this.centre[1], reach, hero);
     }
   }
 
@@ -381,18 +427,26 @@ export class OpenWorldView {
     materials.forEach((material) => material.dispose());
   }
 
-  /** Lays the chunks `reach` around `(cx, cy)`: the ground columns, the props and the enemies. */
-  private build(cx: number, cy: number, reach: number): void {
-    const counts = Object.fromEntries([...GROUNDS, ...PROP_NAMES].map((k) => [k, 0])) as Record<Ground | Prop, number>;
+  /** Lays the chunks `reach` around `(cx, cy)`: the ground columns, the props (the detailed ones within `HI_RADIUS` of `hero`) and
+   * the enemies. */
+  private build(cx: number, cy: number, reach: number, hero: Axial): void {
+    const counts = new Map<THREE.InstancedMesh, number>();
     const { dummy } = this;
-    // Writes an instance of `key` into `mesh`, unless the mesh is full: it returns whether it was written.
-    const put = (mesh: THREE.InstancedMesh, key: Ground | Prop, x: number, y: number, z: number, scaleY: number): boolean => {
-      if (counts[key] >= mesh.instanceMatrix.count) return false;
+    // Writes an instance into `mesh`, unless the mesh is full: it returns whether it was written.
+    const put: Put = (mesh, x, y, z, scaleY) => {
+      const n = counts.get(mesh) ?? 0;
+      if (n >= mesh.instanceMatrix.count) return false;
       dummy.position.set(x, y, z);
       dummy.scale.set(1, scaleY, 1);
       dummy.updateMatrix();
-      mesh.setMatrixAt(counts[key]++, dummy.matrix);
+      mesh.setMatrixAt(n, dummy.matrix);
+      counts.set(mesh, n + 1);
       return true;
+    };
+    // A prop: its detailed mesh within the radius once its model is in, else its low-poly mesh (also when the detailed one is full).
+    const lay: Lay = (prop, near, x, y, z, scaleY) => {
+      const hi = near && this.detailedReady.has(prop) ? this.detailed[prop] : undefined;
+      if (!hi || !put(hi, x, y, z, scaleY)) put(this.props[prop], x, y, z, scaleY);
     };
     for (let ky = cy - reach; ky <= cy + reach; ky++) {
       for (let kx = cx - reach; kx <= cx + reach; kx++) {
@@ -402,11 +456,11 @@ export class OpenWorldView {
           const p = axialTo3D(q, r);
           const ground = GROUND[tile.terrain];
           const top = topOf(ground, tile.height);
-          if (put(this.grounds[ground], ground, p.x, top / 2, p.z, top) && ground === 'water') {
-            this.grounds.water.setColorAt(counts.water - 1, waterColor(this.world, q, r));
+          if (put(this.grounds[ground], p.x, top / 2, p.z, top) && ground === 'water') {
+            this.grounds.water.setColorAt(counts.get(this.grounds.water)! - 1, waterColor(this.world, q, r));
             this.grounds.water.instanceColor!.needsUpdate = true;
           }
-          this.stand(tile, q, r, p, top, put);
+          this.stand(tile, q, r, p, top, lay, hexDistance([q, r], hero) <= HI_RADIUS);
         });
       }
     }
@@ -415,29 +469,21 @@ export class OpenWorldView {
     for (let ky = cy - reach; ky <= cy + reach; ky++) for (let kx = cx - reach; kx <= cx + reach; kx++) enemyCells.push(...this.world.enemies(kx, ky));
     this.place(this.foes, enemyCells);
     this.enemyCount = this.foes.count;
-    for (const key of [...GROUNDS, ...PROP_NAMES]) {
-      const mesh = key in this.grounds ? this.grounds[key as Ground] : this.props[key as Prop];
-      mesh.count = counts[key];
+    for (const mesh of this.managed) {
+      mesh.count = counts.get(mesh) ?? 0;
       mesh.instanceMatrix.needsUpdate = true;
     }
   }
 
   /** The prop a tile carries on its ground, `top` high. */
-  private stand(
-    tile: Tile,
-    q: number,
-    r: number,
-    p: { x: number; z: number },
-    top: number,
-    put: (mesh: THREE.InstancedMesh, key: Prop, x: number, y: number, z: number, scaleY: number) => boolean,
-  ): void {
+  private stand(tile: Tile, q: number, r: number, p: { x: number; z: number }, top: number, lay: Lay, near: boolean): void {
     const v = variety(q, r);
-    if (tile.terrain === 'peak') put(this.props.mountain, 'mountain', p.x, top + (1.2 + v * 0.8) / 2, p.z, 1.2 + v * 0.8);
-    else if (tile.terrain === 'tree') put(this.props.tree, 'tree', p.x, top + (0.8 + v * 0.4) / 2, p.z, 0.8 + v * 0.4);
-    else if (tile.terrain === 'boulder') put(this.props.boulder, 'boulder', p.x, top + 0.2, p.z, 0.8);
+    if (tile.terrain === 'peak') lay('mountain', near, p.x, top + (1.2 + v * 0.8) / 2, p.z, 1.2 + v * 0.8);
+    else if (tile.terrain === 'tree') lay('tree', near, p.x, top + (0.8 + v * 0.4) / 2, p.z, 0.8 + v * 0.4);
+    else if (tile.terrain === 'boulder') lay('boulder', near, p.x, top + 0.2, p.z, 0.8);
     else if (tile.terrain === 'wall') {
-      put(this.props.wall, 'wall', p.x, top + WALL / 2, p.z, WALL);
-      put(this.props.cap, 'cap', p.x, top + WALL + CAP / 2, p.z, CAP);
+      lay('wall', near, p.x, top + WALL / 2, p.z, WALL);
+      lay('cap', false, p.x, top + WALL + CAP / 2, p.z, CAP);
     }
   }
 }

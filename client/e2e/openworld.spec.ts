@@ -129,6 +129,22 @@ test('the widest zoom on a 32:9 screen shows no black background at its edges, #
   expect(background).toEqual({ top: 0, bottom: 0, left: 0, right: 0 });
 });
 
+// #989: the props within 8 cells of the hero are drawn with their detailed models once those load, the low-poly ones beyond.
+test('the props near the hero are drawn detailed, the ones beyond low-poly, #989', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const drawn = () => page.evaluate(() => JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>);
+  const DETAILED = ['prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'];
+  const LOW = ['prop-mountain', 'prop-tree', 'prop-boulder', 'prop-wall'];
+  const sum = (counts: Record<string, number>, keys: string[]) => keys.reduce((total, k) => total + (counts[k] ?? 0), 0);
+  await expect.poll(async () => sum(await drawn(), DETAILED)).toBeGreaterThan(0); // the detailed models arrive, then near the hero
+  const counts = await drawn();
+  expect(sum(counts, LOW)).toBeGreaterThan(0); // and the low-poly ones beyond
+  expect(counts['prop-tree-hi']).toBeLessThanOrEqual(217);
+});
+
 test('the entry is not in the mode menu without the flag, #965', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
