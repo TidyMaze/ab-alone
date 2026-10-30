@@ -353,7 +353,7 @@ mod tests {
     use crate::board::{Board, Cell};
     use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
-    use crate::encounter::echo::echo_boss;
+    use crate::encounter::echo::{echo_boss, echo_fight};
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
     use crate::encounter::Encounter;
     use crate::game::Game;
@@ -429,6 +429,55 @@ mod tests {
             0,
             "{mv:?} leaves the cracked cell"
         );
+    }
+
+    #[test]
+    fn the_echo_arena_plays_the_bonus_mirrors() {
+        let mut a = Arena::new(LadderBoss::Echo, 0);
+        let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
+        a.play(&mv).unwrap();
+        assert_eq!(a.game().history().len(), 2, "the Echo's bonus mirror");
+        assert_eq!(a.boss_move(), echo_move(&echo_start_after(&mv)));
+    }
+
+    fn echo_start_after(mv: &Move) -> Encounter {
+        let mut enc = crate::encounter::echo::echo_start(0);
+        enc.play(mv).unwrap();
+        enc
+    }
+
+    #[test]
+    fn the_player_reads_the_bonus_mirror_of_the_echo() {
+        // Two pushes eject a boss marble: the north one hands the boss a mirror push back, the
+        // east one does not. The plain search takes the north one; the pro, who sees the
+        // bonus mirrors, the east one.
+        let a = echo_arena(
+            &[(2, 0), (3, 0), (0, -2), (0, -3), (0, 4)],
+            &[(4, 0), (0, -4), (0, 2), (0, 3)],
+        );
+        let north = Move {
+            cells: vec![(0, -3), (0, -2)],
+            dir: crate::moves::Direction::NW,
+        };
+        let plain = search_with(a.game(), 400, DEFAULT_WEIGHTS, &|_| true).map(|r| r.mv);
+        assert_eq!(plain, Some(north));
+        let east = Move {
+            cells: vec![(2, 0), (3, 0)],
+            dir: crate::moves::Direction::E,
+        };
+        assert_eq!(player_move(&a, 0, 9, 0, 400), Some(east));
+    }
+
+    fn echo_arena(black: &[P], white: &[P]) -> Arena {
+        let mut board = Board::empty();
+        for &(q, r) in black {
+            board.set(q, r, Cell::Black);
+        }
+        for &(q, r) in white {
+            board.set(q, r, Cell::White);
+        }
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        Arena::Plain(echo_fight(game, 0), LadderBoss::Echo)
     }
 
     #[test]
@@ -578,7 +627,11 @@ mod tests {
     #[test]
     fn a_played_game_replays_to_the_same_end() {
         let (record, moves) = play_attempt_moves(LadderBoss::Echo, 3, 4, 50, 6);
-        assert_eq!(moves.len(), 6);
+        assert_eq!(
+            moves.len(),
+            6,
+            "the main moves only, the bonus moves replay by themselves"
+        );
         assert_eq!(record.plies, 6);
         assert_eq!(replay(LadderBoss::Echo, 3, &moves), Ok(None));
     }
