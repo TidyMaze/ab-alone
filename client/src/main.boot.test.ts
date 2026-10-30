@@ -22,6 +22,7 @@ async function drawn(
 ): Promise<{ scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREEWebGPU.WebGPURenderer }> {
   const { WebGPURenderer } = await import('three/webgpu');
   const render = vi.spyOn(WebGPURenderer.prototype, 'render');
+  game.hook('__drawNext'); // asked, as the browser checks ask: the throttle holds an unasked one 4 times the last cost
   game.frame(1000); // past the gap the loop keeps between two draws under automation
   const [scene, camera] = render.mock.lastCall as unknown as [THREE.Scene, THREE.PerspectiveCamera];
   const renderer = render.mock.contexts.at(-1) as THREEWebGPU.WebGPURenderer;
