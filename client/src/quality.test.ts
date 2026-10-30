@@ -129,6 +129,10 @@ describe('fogSettings', () => {
     const fog = fogSettings('high', false, resetView(), 4, 1)!;
     expect(fog.far).toBeGreaterThanOrEqual(45);
   });
+  it('shows at least a tenth of haze four units beyond the protected board edge (#896)', () => {
+    const fog = fogSettings('high', false, resetView(), 4, 1)!;
+    expect(factor(fog, fog.near + 4)).toBeGreaterThanOrEqual(0.1);
+  });
   // #400: a deck's density thickens the fog over the rim, from the same start: never over a cell on any deck.
   it('a denser deck fog starts at the same edge and is thick sooner, at every view', () => {
     for (const v of views) {
