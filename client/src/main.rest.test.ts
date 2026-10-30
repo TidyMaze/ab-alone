@@ -60,7 +60,7 @@ describe('main.ts, ?lights', () => {
     expect(game.hook('__freeCamActive')).toBe(false);
     document.querySelector<HTMLButtonElement>('#light-panel button[aria-label="Point the camera at kioskGreenLight"]')!.click();
     expect(game.hook('__freeCamActive')).toBe(true);
-    expect(document.getElementById('free-cam')!.getAttribute('aria-pressed')).toBe('true');
+    expect(document.getElementById('setting-free-cam')!.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('opens the live scene in the three.js Editor from its button (#872), and logs a refusal', async () => {
@@ -359,7 +359,7 @@ describe('main.ts, free camera and wireframe modes', () => {
 
   it('toggles free camera and cycles render modes in settings and via keyboard', async () => {
     const game = await boot('?bot=off');
-    const freeCamBtn = document.getElementById('free-cam') as HTMLButtonElement;
+    const freeCamBtn = document.getElementById('setting-free-cam') as HTMLButtonElement;
     const renderModeBtn = document.getElementById('setting-render-mode') as HTMLButtonElement;
     const resetViewBtn = document.getElementById('reset-view') as HTMLButtonElement;
 

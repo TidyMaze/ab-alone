@@ -18,6 +18,7 @@ export const ICONS = {
   flat: 'M4 5h16v14H4zM7 9h10M7 12h10M7 15h6',
   transcript: 'M3 6h18v12H3zM6 11h5M13 11h5M6 14h9',
   render: 'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12l-9-5',
+  camera: 'M3 7h4l2-3h6l2 3h4v13H3zM12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7',
 } as const;
 
 export type IconName = keyof typeof ICONS;

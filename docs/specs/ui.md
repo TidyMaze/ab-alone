@@ -70,12 +70,12 @@ field covers a cell, and the space between them lets every tap through to the bo
 
 HUD buttons, in groups (#839). The column holds the buttons grouped by what they do, in this order, each group a row
 that wraps, so its buttons share a row when they fit and a group with no visible button takes no room: (1) the
-settings cog; (2) the view, Reset view and Cam (Free Cam, `#free-cam`); (3) the game, New game, Rematch, Goal, Retry,
+settings cog; (2) the view, Reset view (Free Cam is the Free camera item of the settings menu, #938); (3) the game, New game, Rematch, Goal, Retry,
 Hold, Start, Invite and Back to the ship (the controls of the running mode, only the ones the mode shows); the daily
 result card when a daily fight ends; (4) the tools, Hint, Replay and Auto-play; (5) Game modes, last of the column, its
 menu under it; (6) the invite link of an open room: its caption, then the link with its Copy button. Held upright the
 groups give their buttons to the rows of the column, in the same order. Every button of a group has the one button
-style (the panel colour, the edge, the 14 px text, the 2 px radius): Cam is lit, like Hint, while Free Cam is on.
+style (the panel colour, the edge, the 14 px text, the 2 px radius) (Hint is lit while it is on).
 Only New game, Game modes and Copy diagnostics show an icon alone (#297); every other button shows its name, Play online
 included. While the invite link shows, the button column is back at its top, so no button above the link is
 scrolled out of a short window (#839).

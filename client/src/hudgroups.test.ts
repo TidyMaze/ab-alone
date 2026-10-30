@@ -26,8 +26,8 @@ describe('The HUD buttons', () => {
     ]);
   });
 
-  it('keep the view together: Reset view, then Cam', () => {
-    expect(children('group-view')).toEqual(['reset-view', 'free-cam']);
+  it('keep the view together: Reset view alone, Free camera is a settings item (#938)', () => {
+    expect(children('group-view')).toEqual(['reset-view']);
   });
 
   it('keep the game controls together: New game, Rematch, Goal, Retry, Hold, Start, Invite, Back to the ship', () => {

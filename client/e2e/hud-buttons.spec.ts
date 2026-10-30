@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
 
-// #839: the HUD buttons look alike. Cam and Copy are styled as Reset view, and the button that opens a private game
+// #839: the HUD buttons look alike. Copy is styled as Reset view, and the button that opens a private game
 // shows its name, in a button as tall as the other items of the mode menu.
 
 /** The look of a button: what makes a button this style, not where it sits or how wide its name is. */
@@ -19,18 +19,17 @@ const look = (page: Page, id: string) =>
     };
   });
 
-test('Cam looks like Reset view and Hint, lit while it is on, #839', async ({ page }) => {
+test('Free camera is a settings item, not a HUD button, lit while it is on, #938', async ({ page }) => {
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
-  const cam = page.getByRole('button', { name: 'Cam' });
-  await expect(cam).toBeEnabled();
-  const reset = await look(page, 'reset-view');
-  expect(await look(page, 'free-cam')).toEqual(reset);
-  expect(await look(page, 'hint')).toEqual(reset);
-  const off = await cam.evaluate((el) => getComputedStyle(el).borderTopColor);
-  await cam.click();
-  await expect(cam).toHaveAttribute('aria-pressed', 'true');
-  expect(await cam.evaluate((el) => getComputedStyle(el).borderTopColor)).not.toBe(off); // lit like Hint
+  await expect(page.locator('#free-cam')).toHaveCount(0);
+  await expect(page.locator('#group-view button')).toHaveCount(1); // Reset view alone
+  await page.locator('#settings').click();
+  const item = page.getByRole('button', { name: 'Free camera' });
+  await expect(item).toHaveAttribute('aria-pressed', 'false');
+  await item.click();
+  await expect(item).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => (window as unknown as { __freeCamActive: () => boolean }).__freeCamActive())).toBe(true);
 });
 
 test('Play online shows its name and is as tall as Fight together, #839', async ({ page }) => {

@@ -458,6 +458,7 @@ describe('the settings toggles', () => {
       'setting-shell-skin',
       'setting-glass-skin',
       'setting-render-mode',
+      'setting-free-cam',
       'setting-export-game',
       'setting-difficulty',
       'setting-import-game',
