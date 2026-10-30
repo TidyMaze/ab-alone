@@ -46,7 +46,7 @@ import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
-import { landing, parseEchoTell } from './echo';
+import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
@@ -1294,6 +1294,8 @@ const glyphGeometry = new THREE.OctahedronGeometry(0.09);
 // colour alone.
 const echoMaterial = new THREE.MeshBasicMaterial({ color: 0x4fd1c5 });
 const skipMaterial = new THREE.MeshBasicMaterial({ color: 0xe0413a });
+// The target of a free move the player is offered (#958): a teal diamond standing on the cell, over the target arrow.
+const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 // The Chaplain's martyr tell (#748): a steady ember ring and a tall glyph on the marble that explodes next boss turn.
 const emberMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
 const martyrGlyphGeometry = new THREE.OctahedronGeometry(0.11).scale(1, 2, 1);
@@ -2278,7 +2280,13 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const beltBoard = carries.length > 0 ? beforeBelts(engine.board(), carries) : null;
   // The Unstable Core's overloads, collapse and shockwave (#751): the move slides to the board before them first.
   const unstable = live && engine instanceof Encounter ? parseEvents(engine.last_unstable()) : null;
-  const after = repulsions[0]?.board ?? pulse?.board ?? beltBoard ?? unstable?.board ?? engine.board();
+  // The Echo's bonus plies (#958): the move slides to the board before them, then each slides in turn. Reduced motion:
+  // the board shows at once, as for any move.
+  const bonuses = live && !reduced && engine instanceof Encounter ? parseMoves(engine.last_bonuses()) : [];
+  // `boards[0]` is the board after the move, `boards[k + 1]` the one after bonus `k`, the last one the engine's.
+  const boards = bonuses.length === 0 ? [] : [boardAfter(before, mv)];
+  bonuses.forEach((bonus, k) => boards.push(k + 1 < bonuses.length ? boardAfter(boards[k]!, bonus) : Array.from(engine.board())));
+  const after = repulsions[0]?.board ?? pulse?.board ?? beltBoard ?? unstable?.board ?? boards[0] ?? engine.board();
   const tracks = slideTracks(before, after, mv, reduced);
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
@@ -2303,6 +2311,15 @@ function afterPlay(before: number[], record: number[], live = true): void {
       });
     });
   }
+  if (bonuses.length > 0) {
+    const game = engine;
+    shown = { game, board: boards[0]!, poles: [] };
+    bonuses.forEach((bonus, k) => whenSettled(() => slideBonus(game, boards[k]!, boards[k + 1]!, bonus)));
+    whenSettled(() => {
+      shown = null;
+      refresh();
+    });
+  }
   if (pulse) {
     shown = { game: engine, board: pulse.board, poles: [] };
     whenSettled(() => firePulse(pulse, reduced));
@@ -2323,8 +2340,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
     whenSettled(() => (fall.start = performance.now()));
     document.body.dataset.bridge = 'lowering'; // read by the e2e tests
   }
-  const ejection = findEjection(before, after, mv);
-  if (ejection) eject(ejection, mv.dir, held, reduced);
+  ejectBy(before, after, mv, held, reduced);
   // The Overseer's vents (#635): the push slides first, then each marble they burnt sinks into its vent.
   delete document.body.dataset.burns;
   const vented = engine instanceof Encounter && engine.incinerators().length > 0;
@@ -2401,6 +2417,12 @@ function burn(burns: Burn[], reduced: boolean, ply: number, won: boolean): void 
   for (const { cell, side } of burns) startEjection(side === CORE_CODE ? coreMesh() : marbleMesh(side), burnTrack(cell, reduced), scene);
 }
 
+/** The ejection `mv` makes from the board `before` to `after`, if any (see `eject`). */
+function ejectBy(before: number[], after: ArrayLike<number>, mv: Move, held: Map<number, Quat>, reduced: boolean): void {
+  const ejection = findEjection(before, after, mv);
+  if (ejection) eject(ejection, mv.dir, held, reduced);
+}
+
 /** The effect and sound of `ejection`, pushed off in direction `dir`, the marble with its turn in `held`. */
 function eject(ejection: NonNullable<ReturnType<typeof findEjection>>, dir: number, held: Map<number, Quat>, reduced: boolean): void {
   const body = document.body;
@@ -2411,6 +2433,20 @@ function eject(ejection: NonNullable<ReturnType<typeof findEjection>>, dir: numb
   turnMarble(mesh, inHolder(turnOf(held, fight?.seed ?? 0, cellIndex(...ejection.cell)), trackAt(track, 0).yaw));
   startEjection(mesh, track, scene);
   if (!reduced) startBlood(track);
+}
+
+/** Slides the Echo's bonus move `bonus` of `game` from the board `from` to `to` (#958), as a move slides; an ejected
+ * marble falls. A replaced game drops what waits for its slide. */
+function slideBonus(game: Engine | Encounter, from: number[], to: number[], bonus: Move): void {
+  const held = gameTurns();
+  const tracks = slideTracks(from, to, bonus, false);
+  turns.map = carryTurns(held, fight!.seed, tracks, bonus.dir);
+  ejectBy(from, to, bonus, held, false);
+  shown = { game, board: to, poles: [] };
+  refresh();
+  slide = { game: engine, tracks, start: performance.now() };
+  document.body.dataset.sliding = '1';
+  document.body.dataset.bonusSlides = String(Number(document.body.dataset.bonusSlides ?? 0) + 1); // read by the e2e tests
 }
 
 /** Plays repulsion `rep` of `game` (#645): the pair slides apart with the lines it pushes to the board `to`, its glyphs
@@ -2806,6 +2842,7 @@ let selected: Axial[] = [];
 let keyDir = -1; // the direction picked with Q W E A S D for the selected group, -1 for none (#738)
 let ringed: Axial[] = []; // the marbles drawn with the selection ring, read by the e2e tests
 let targets: ReturnType<typeof groupTargets> = []; // the cells drawn with a target arrow, read by the e2e tests
+let freeTargets: ReturnType<typeof groupTargets> = []; // the targets of the Echo's free moves, with a diamond (#958)
 
 // The medal of a won boss fight (#791), earned once per fight: hud() runs again on every refresh. Solo, daily and co-op
 // fights all come here, so every peer of a co-op win gets the medal.
@@ -2900,6 +2937,7 @@ function hud(extra = ''): void {
         chaplainText(exposed, boss.converted().length / 2),
         martyrText(parseMartyr(boss.martyr())),
         choirText(boss.next_army(), armiesLeft(parseArmies(boss.armies()))),
+        freeText(parseMoves(boss.free_moves()).length, freeTargets.length > 0),
       ]
         .filter((t) => t !== '')
         .join(' · ')
@@ -2958,8 +2996,11 @@ function refresh(): void {
   lightRim();
   drawNotches();
   drawTally();
-  const moves = parseMoves(engine.legal_moves());
+  const moves = legalMoves();
   targets = groupTargets(moves, selected);
+  // The Echo's free moves (#958): their marbles ringed, the target of a selected group's free move marked by a diamond.
+  const free = showing() || !(engine instanceof Encounter) ? [] : parseMoves(engine.free_moves());
+  freeTargets = groupTargets(free, selected);
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
@@ -3014,6 +3055,11 @@ function refresh(): void {
       ring.position.set(p.x, 0.005, p.z);
       arrow.position.set(p.x, 0.005, p.z);
       marbles.add(ring, arrow);
+      if (freeTargets.some(({ cell: [fq, fr] }) => fq === q && fr === r)) {
+        const diamond = Object.assign(new THREE.Mesh(freeGeometry, echoMaterial), { name: 'echo-free-target' });
+        diamond.position.set(p.x, 0.3, p.z);
+        marbles.add(diamond);
+      }
     }
     for (const dx of tickOffsets(plies)) {
       const tick = new THREE.Mesh(tickGeometry, tickMaterial); // on the front edge, clear of the marble
@@ -3096,6 +3142,17 @@ function refresh(): void {
     onMarble(cellIndex(q, r), ring);
   }
   document.body.dataset.echoLanded = String(landed.length); // read by the tests
+  const offered = showing() || !(engine instanceof Encounter) ? [] : freeMarbles(parseMoves(engine.free_moves()));
+  for (const [q, r] of offered) {
+    const p = axialTo3D(q, r);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, echoMaterial), { name: 'echo-free' });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    marbles.add(ring);
+    onMarble(cellIndex(q, r), ring);
+  }
+  document.body.dataset.echoFree = String(offered.length); // read by the tests
+  document.body.dataset.echoFreeTarget = String(freeTargets.length);
   polesDrawn = poles.flatMap((sign, i) => {
     if (sign === 0) return [];
     const [q, r] = BOARD_CELLS[i]!;
@@ -3444,6 +3501,12 @@ function play(mv: Move): void {
   if (online && fight) void answerBoss(true); // co-op: our move's boss reply
 }
 
+/** The legal moves, the Echo's free moves first: a click, a drag or a key on a free target plays the free move (#958). */
+function legalMoves(): Move[] {
+  const moves = parseMoves(engine.legal_moves());
+  return engine instanceof Encounter ? [...parseMoves(engine.free_moves()), ...moves] : moves;
+}
+
 function click(q: number, r: number): void {
   if (hub) return walk([q, r]);
   if (royale) return pickRoyale(q, r);
@@ -3456,7 +3519,7 @@ function click(q: number, r: number): void {
     hint.clear(); // a new selection
   } else {
     // The engine is the only judge: a click that is not a legal move changes nothing.
-    const mv = moveForClick(parseMoves(engine.legal_moves()), selected, [q, r]);
+    const mv = moveForClick(legalMoves(), selected, [q, r]);
     if (mv) play(mv);
   }
   refresh();
@@ -3563,7 +3626,7 @@ canvas.addEventListener('pointermove', (e) => {
   const next = cellAt(e);
   if (next === hover) return;
   hover = next;
-  refreshGhosts(parseMoves(engine.legal_moves()));
+  refreshGhosts(legalMoves());
 });
 
 function release(e: PointerEvent): void {
@@ -3588,7 +3651,7 @@ function release(e: PointerEvent): void {
 function dropMarbles(e: PointerEvent): void {
   const at = groundAt(e);
   const dir = at ? releaseDir(selected, at.x, at.z) : null;
-  const mv = dir === null ? null : moveFor(parseMoves(engine.legal_moves()), selected, dir);
+  const mv = dir === null ? null : moveFor(legalMoves(), selected, dir);
   if (!mv) return;
   play(mv);
   refresh();
@@ -3604,7 +3667,7 @@ canvas.setAttribute('aria-label', 'Abalone board');
 canvas.addEventListener('keydown', (e) => {
   if (hub || royale || reading || e.altKey || e.ctrlKey || e.metaKey || blocked(() => {})) return;
   const dir = KEY_DIRS[e.key.toLowerCase()];
-  const moves = parseMoves(engine.legal_moves());
+  const moves = legalMoves();
   if (e.key === 'Tab') {
     const group = nextGroup(moves, selected, e.shiftKey ? -1 : 1);
     if (group) e.preventDefault();
@@ -4265,7 +4328,7 @@ rematchButton.addEventListener('click', () => void online?.rematch());
 let bossReply: Promise<void> = Promise.resolve();
 function answerBoss(live: boolean): Promise<void> {
   bossReply = (async () => {
-    if (engine.status() !== 0) return; // the human move ended the fight
+    if (engine.status() !== 0 || engine.to_move() !== 2) return; // the human move ended the fight, or was a free move (#958)
     const searchBudget = scaleBudget(budget, difficulty);
     const diffPercent = DIFFICULTY_PERCENT[difficulty];
     const move = await askBot(analysisWorker, history.slice(), searchBudget, fight!, diffPercent);
@@ -4347,7 +4410,8 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
         history.length = 0;
         replaying = null;
       },
-      ...(coop && { mover: () => seatAfter(history.length, 2) }),
+      // A seat's turn is its main move and the Echo's free moves before it (#958).
+      ...(coop && { mover: () => seatAfter(history.length - (engine as Encounter).free_taken(), 2) }),
     },
     onMove: () => refresh(),
     onRefuse: (reason) => {

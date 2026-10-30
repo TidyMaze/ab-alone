@@ -49,7 +49,7 @@ async function partner(transport: Transport, room: string, side: number, fight =
   };
   const human = (mv: ArrayLike<number>): void => {
     apply(mv);
-    if (encounter.status() === 0) apply(encounter.boss_move());
+    if (encounter.status() === 0 && encounter.to_move() === 2) apply(encounter.boss_move()); // none after a free move (#958)
   };
   const session = new OnlineSession({
     game: room,
@@ -65,7 +65,7 @@ async function partner(transport: Transport, room: string, side: number, fight =
         encounter = new Encounter(fight.boss, fight.seed);
         history.length = 0;
       },
-      mover: () => seatAfter(history.length, 2),
+      mover: () => seatAfter(history.length - encounter.free_taken(), 2),
     },
     onMove: () => {},
     onRefuse: () => {},
@@ -301,20 +301,25 @@ describe('co-op: the invite link', () => {
 });
 
 describe('co-op: the end of the fight', () => {
-  // The Echo's mirror of each move is a bonus move for the other side (#859). Its search is scripted to step east
-  // from (0,-1): our seat goes up, the partner and our seat then step east, and the 5th move brings a position back a
-  // third time, a draw by repetition, a Defeat against the boss (e2e/fight-end.ts).
+  // The Echo's mirror of each move is a bonus move for the other side (#859), offered to the players (#958). Its search
+  // is scripted to step east from (0,-1): our seat goes up, the partner and our seat then take the free move west and
+  // step back east, and the 7th move brings a position back a third time, a draw by repetition, a Defeat against the
+  // boss (e2e/fight-end.ts).
   const up = { cells: [[0, 2]] as Axial[], dir: 4 };
+  const free = { cells: [[0, 1]] as Axial[], dir: 1 };
   const east = { cells: [[-1, 1]] as Axial[], dir: 0 };
   async function defeat(game: Game, two: Awaited<ReturnType<typeof partner>>): Promise<void> {
     const { Encounter } = await import('abalone-wasm');
     vi.spyOn(Encounter.prototype, 'boss_move').mockReturnValue(Int32Array.from(encodeMove({ cells: [[0, -1]], dir: 0 })));
     play(game, up);
     await until(game, () => game.hook('__plies') === 2);
+    await two.send(encodeMove(free)); // the partner's turn: its free move first, no boss reply
+    await until(game, () => game.hook('__plies') === 3);
     await two.send(encodeMove(east));
-    await until(game, () => game.hook('__plies') === 4);
+    await until(game, () => game.hook('__plies') === 5);
+    play(game, free);
     play(game, east);
-    await until(game, () => game.hook('__plies') === 5 && two.history.length === 5);
+    await until(game, () => game.hook('__plies') === 7 && two.history.length === 7);
   }
 
   it('ends on both engines at once: a position a third time is a draw by repetition, a Defeat against the boss', async () => {
@@ -335,7 +340,7 @@ describe('co-op: the end of the fight', () => {
     expect(retry.textContent).toBe('Retry');
     await two.session.rematch();
     await until(game, () => game.hud().includes('Your partner asks for a retry.'));
-    expect(game.hook('__plies')).toBe(5); // nothing starts on one ask
+    expect(game.hook('__plies')).toBe(7); // nothing starts on one ask
 
     retry.click();
     await until(game, () => game.hook('__plies') === 0);

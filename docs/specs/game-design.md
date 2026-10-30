@@ -388,49 +388,64 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   tuned in #821 (boss budget 2000 to 300, boss-balance.md section 3): 18 of 20 at 10x, 6 of 20 at
   1x. The rows tried are in boss-balance.md.
 
-### 7.4 The Echo (#46, #859): every move is mirrored, both ways
+### 7.4 The Echo (#46, #859, #958): every move is mirrored, both ways
 
 - **Concept**: the last crew member, who copies you out of habit, and makes you copy it.
 - **Twist**: when a move of one side can be played in **point symmetry** (through the board
-  centre) by the other side, that mirror is played **at once for the other side as a free bonus
-  move**, then that side plays its own move. Both ways: the Echo gets the mirror of your move, you
-  get the mirror of its move. The mirror is playable when the normal validator accepts it for the
-  side that gets it (no new move type). A bonus move is never mirrored itself (no chain).
-- **Skipped bonus** (symmetric opt-out): a bonus that would end the game as a loss for the side
-  that gets it is not played, and counts as echoed. A legal move never ejects its own marble nor
-  gives the other side an ejection, so in practice this skips only the player's bonus that would
-  make the third repetition or reach the 100-ply no-ejection cap (a draw is a player loss). Every other bonus
-  is forced; there is no Decline button.
+  centre) by the other side, that mirror is a **free bonus move for the other side**, then that
+  side plays its own move. Both ways: the Echo gets the mirror of your move, you get the mirror of
+  its move. The mirror is playable when the normal validator accepts it for the side that gets it
+  (no new move type). A bonus move is never mirrored itself (no chain).
+- **The Echo's bonus is played at once**, after your move and before its own, even when it ends
+  the game (a draw is a player loss).
+- **Your bonus is offered, not forced** (#958). The offer stands when your turn starts: the
+  marbles that can make a free move are ringed. Play the free move to take it (a click, a drag or a
+  key on its target, which is marked), then play your own move. Play any other move to decline
+  it. A declined free move is gone: it counts as echoed and never comes back as an older move.
+  When the free move is also a normal move of yours, playing it takes it as free.
+- **Not offered**: a free move that would lose you the game (the third repetition or the 100-ply
+  no-ejection cap: a draw is a player loss) is not offered and counts as echoed.
 - **Phases**: P1 at the start; **P2 after 3** ejections credited to the player. There is no P3:
-  the notches show two phases. In P2, after the bonus of the last move, the side also gets the
-  mirror of **one older move** of the other side: the most recent one that was never echoed
-  (its mirror was illegal when it was played) and whose mirror is legal now. Each move is echoed
-  at most once, so a turn has at most two bonus moves. A skipped older bonus is also spent.
+  the notches show two phases. In P2 the side also gets the mirror of **one older move** of the
+  other side: the most recent one that was never echoed (its mirror was illegal when it was
+  played) and whose mirror is legal now. The Echo's older bonus is chosen after its mirror bonus
+  is played; yours is chosen with the mirror on the board after the Echo's move, before you take
+  either, and both are offered: take them in any order, each while it is still legal. Each move is
+  echoed at most once, so a turn has at most two bonus moves. An offered older move is spent
+  whether you take it or not.
 - **End**: the first side to 6 ejections wins, even during a bonus, and no bonus follows. When a
   main move brings both sides to 6, its mover is credited first. A draw is still a player loss.
-- **Anti-stalling**: each bonus is a ply: it counts for the 100-ply no-ejection cap and for the repetitions,
-  and the position hash includes the moves never echoed (section 5).
+- **Anti-stalling**: each bonus played is a ply: it counts for the 100-ply no-ejection cap and for
+  the repetitions, and the position hash includes the moves never echoed (section 5). A declined
+  free move is not a ply. The offer itself is not in the position hash.
 - **Tell**: while you prepare a move, its ghost shows the bonus moves it gives the Echo (the
-  mirror, and in P2 the older move that will be echoed), each landing marble ringed in teal; a
-  bonus that will be skipped is a ghost under a red cross (a shape, not colour alone). Once
-  played, the bonus plies of the last move keep a teal ring on the marbles they moved until the
-  next move, for both sides. Steady marks, no animation. Nothing is hidden (`Encounter.echo_tell`,
-  `Encounter.last_bonuses`; MCP `play_move` lists them in `bonuses`).
-- **Counter, turn it against the boss**: your free bonus moves. Every boss move whose mirror you
-  can play is a free move for you: answer its pushes with their mirror, and in P2 keep blocked
-  moves in its memory that turn into free pushes for you once their path opens. Play moves whose
-  mirror is illegal or bad for the boss (asymmetric pushes, edges).
+  mirror, and in P2 the older move that will be echoed), each landing marble ringed in teal. Once
+  played, the Echo's bonus plies slide one after the other like a normal move (reduced motion: no
+  slide), then keep a teal ring on the marbles they moved until the next move. On your turn the
+  marbles that can make a free move are ringed in teal; select one and the free move's target
+  wears a teal **diamond** over its arrow (a shape, not colour alone), and the HUD says "Free
+  move". A free move you take slides as any move. Nothing is hidden (`Encounter.echo_tell`,
+  `Encounter.last_bonuses`, `Encounter.free_moves`; MCP `play_move` lists the Echo's bonus plies in
+  `bonuses`, `legal_moves` the free moves in `free`).
+- **Counter, turn it against the boss**: your free moves. Every boss move whose mirror you can play
+  offers you a free move: take its pushes back with their mirror, and in P2 keep blocked moves in
+  its memory that turn into free pushes for you once their path opens. Decline a free move that
+  only gives the symmetric position back: a mirrored board is the Echo's lock (#951). Play moves
+  whose mirror is illegal or bad for the boss (asymmetric pushes, edges).
 - **AI**: the Echo's search plays the bonus mirrors inside its tree, both ways, with the P2
-  older-move bonus from the credits so far (`search_phased` with `echo_step`); the tree does not
-  see repetitions, so it never skips a bonus. Node budget 100, one ply (#951; it was 400).
+  older-move bonus from the credits so far (`search_phased` with `echo_step`). In the tree the
+  player takes every free move, the mirror first, so the boss reads the worst case of the offer;
+  the tree picks the player's older move after the mirror is played, while the engine offers it
+  before (a known approximation of the search). The tree does not see repetitions. Node budget 100, one ply (#951; it was 400). The ladder pro
+  takes a free move only when it ejects a boss marble and is safe (no position seen again, no
+  draw); otherwise it searches its own move, which declines the offer.
 - **Calibrate**: knob = AI node budget. Fail if win rate on attempt 1 to 3 exceeds 40 percent
   (too readable) or the median is over 12 attempts. Measured after #859 (boss-balance.md section
   3): the ladder pro player wins none of 10 at 1x and 10x (2 of 40 at 10x), every loss a draw at
   the 100-ply no-ejection cap: the mirrors keep the board point-symmetric and the two-ply boss holds
   the rest. Tuned in #951 to 100 nodes: the pro player (10x the boss's own budget, 1000 nodes) wins
-  7 of 10 (9 of 20), the #949 player at 400 nodes 8 of 10. Accepted by the lead at the low edge of
-  the 7 to 9 target (decision on #951), to measure again after #958 (the player's bonus becomes an
-  offer).
+  7 of 10 (9 of 20), the #949 player at 400 nodes 8 of 10. With the offered bonus (#958) the pro
+  wins 7 of 10 (16 of 20), inside the 7 to 9 target (boss-balance.md, The Echo's offered bonus).
 
 ### 7.5 The Ballast Mind (#47, #749): final exam
 

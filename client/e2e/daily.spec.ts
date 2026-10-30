@@ -127,7 +127,7 @@ test('the daily goal shows before the first move, folds away after it, and the G
 
 // The result card (#196).
 const card = (name: string) =>
-  `AB-ALONE daily 2027-03-25: ${name}\nDefeat in 5 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
+  `AB-ALONE daily 2027-03-25: ${name}\nDefeat in 7 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/`;
 
 test('a finished daily fight shows the result card, and Copy puts its text in the clipboard, #196', async ({
   page,

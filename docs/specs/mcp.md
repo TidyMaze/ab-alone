@@ -169,12 +169,13 @@ Input: none.
 Output:
 
 ```json
-{ "to_move": "black | white", "moves": ["(0,0)>SE", "..."], "announces": {}, "count": 0 }
+{ "to_move": "black | white", "moves": ["(0,0)>SE", "..."], "announces": {}, "free": [], "count": 0 }
 ```
 
 - `moves` is `Engine.legal_moves()` (or `Encounter.legal_moves()`) in notation. Empty once the game is over.
 - On a boss turn that restricts the moves (for example the army in turn), the list only holds the allowed moves. Nothing else changes.
 - `announces` is an object from a move to the reply the boss announces for it (`Encounter.tell_move(mv)`): for The Echo, the first bonus move that move gives it, a move with no bonus is left out (#859). It is empty unless the boss announces replies. Same shape for every boss, no per-boss output type.
+- `free` is the free moves The Echo offers the agent now (`Encounter.free_moves()`, #958), also in `moves`. Playing one keeps the agent to move (no reply); playing any other move declines them all. Empty against the bot, the other bosses and online.
 
 Errors: `no_game`.
 
@@ -190,7 +191,7 @@ Behaviour:
 
 1. Parse the string (section 3.1). On failure: `bad_move`.
 2. Convert to a record and call `play`. The engine rejects an illegal move: `illegal_move`, state unchanged.
-3. If the game is still running and it is the bot's or boss's turn, play its reply (`Engine.best_move(bot_nodes)` or `Encounter.boss_move()`) and apply it with `play`.
+3. If the game is still running and it is the bot's or boss's turn (not after one of The Echo's free moves), play its reply (`Engine.best_move(bot_nodes)` or `Encounter.boss_move()`) and apply it with `play`.
 
 Output:
 
@@ -203,7 +204,7 @@ Output:
 }
 ```
 
-`reply` is `null` when the game ended on the agent's move. `bonuses` lists the bonus plies The Echo's rule played after the agent's move and after the reply, in order (`Encounter.last_bonuses()`, #859), empty otherwise. Online, `reply` is always `null`: use `wait_for_opponent_move` (section 7).
+`reply` is `null` when the game ended on the agent's move or the move was one of The Echo's free moves. `bonuses` lists the bonus plies The Echo's rule played after the agent's move, in order (`Encounter.last_bonuses()`, #859), empty otherwise: the agent's own bonus is offered in `legal_moves.free`, never played for it (#958). Online, `reply` is always `null`: use `wait_for_opponent_move` (section 7).
 
 Errors: `no_game`, `game_over`, `not_your_turn`, `bad_move`, `illegal_move`.
 

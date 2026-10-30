@@ -16,7 +16,9 @@ use abalone_core::encounter::ballast::{
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::dual::{dual_boss, dual_landed, dual_move, dual_start};
-use abalone_core::encounter::echo::{echo_bonuses, echo_boss, echo_move, echo_start, echo_tell};
+use abalone_core::encounter::echo::{
+    echo_bonuses, echo_boss, echo_free_moves, echo_free_taken, echo_move, echo_start, echo_tell,
+};
 use abalone_core::encounter::hull::{hull_boss, hull_move};
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
 use abalone_core::encounter::overseer::{overseer_boss, overseer_move, overseer_start};
@@ -161,7 +163,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
 const BOSSES: [BossEntry; 13] = [
     BossEntry {
         id: "echo",
-        goal: "Every move is mirrored for free for the other side, both ways; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Every move is mirrored for free for the other side: the Echo plays yours at once, you may take its mirror before your own move; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.",
         def: echo_boss,
         start: echo_fight,
         reply: echo_move,
@@ -326,7 +328,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    13 // 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    14 // 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -485,9 +487,27 @@ impl Encounter {
         self.bonuses.iter().flat_map(encode).collect()
     }
 
+    /// The free moves The Echo offers the player now, flat move records: playing one keeps the
+    /// player to move, any other move declines them all (#958). Empty for the other bosses.
+    pub fn free_moves(&self) -> Vec<i32> {
+        match &self.fight {
+            Fight::Plain(e) => echo_free_moves(e).iter().flat_map(encode).collect(),
+            Fight::Choir(_) => Vec::new(),
+        }
+    }
+
+    /// The plies that were the Echo's free moves the player took (#958): a co-op seat's turn is its
+    /// main move and the free moves before it. `0` for the other bosses.
+    pub fn free_taken(&self) -> u32 {
+        match &self.fight {
+            Fight::Plain(e) => echo_free_taken(e) as u32,
+            Fight::Choir(_) => 0,
+        }
+    }
+
     /// The bonus moves the other side would get if the side to move played `mv` (The Echo), records
-    /// of 9: `1` when that bonus would be skipped (it would lose its receiver the game), `0` else,
-    /// then the move record. Empty for the other bosses and a malformed record.
+    /// of 9: `1` when that bonus would not be offered (a free move that would lose the player the
+    /// game), `0` else, then the move record. Empty for the other bosses and a malformed record.
     pub fn echo_tell(&self, mv: &[i32]) -> Vec<i32> {
         let (Fight::Plain(e), Ok(mv)) = (&self.fight, decode(mv)) else {
             return Vec::new();
@@ -951,8 +971,35 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_13_since_the_dual_room_has_a_void_and_a_bridge() {
-        assert_eq!(engine_version(), 13);
+    fn the_engine_version_is_14_since_the_echo_offers_the_players_bonus() {
+        assert_eq!(engine_version(), 14);
+    }
+
+    #[test]
+    fn the_echo_offers_the_player_a_free_move_that_keeps_the_turn() {
+        let mut f = fight();
+        assert!(f.free_moves().is_empty(), "no offer at the start");
+        let mv = first_move(&f);
+        f.play(&mv).unwrap();
+        let reply = f.boss_move();
+        f.play(&reply).unwrap();
+        let free = f.free_moves();
+        assert_eq!(free.len(), MOVE_STRIDE, "the mirror of the Echo's move");
+        assert!(f.last_bonuses().is_empty(), "offered, not played");
+        assert_eq!(f.free_taken(), 0);
+        f.play(&free).unwrap();
+        assert_eq!(f.free_taken(), 1, "co-op counts the turns without them");
+        assert_eq!(f.to_move(), 1, "the player moves again");
+        assert!(f.free_moves().is_empty());
+        for id in ["hull", "choir"] {
+            let mut other = Encounter::new(id, 1).unwrap();
+            let mv = first_move(&other);
+            other.play(&mv).unwrap();
+            let reply = other.boss_move();
+            other.play(&reply).unwrap();
+            assert!(other.free_moves().is_empty(), "{id}");
+            assert_eq!(other.free_taken(), 0, "{id}");
+        }
     }
 
     #[test]

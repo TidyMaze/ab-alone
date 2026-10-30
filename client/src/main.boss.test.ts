@@ -4,6 +4,9 @@ import type { Axial } from './board';
 import { dailyFor, dailyTitle, utcDay } from './daily';
 import { CONVERTED_AT, EXPLODED_AT, SEED } from './test/chaplain-game';
 import { recordedGame } from './test/chaplain-fixture';
+import { parseRecorded } from './test/chaplain-game';
+import echoWin from '../../crates/abalone-core/tests/fixtures/echo.txt?raw';
+import { SLIDE_MS } from './slide';
 import { boot, slowKeys, type Game } from './test/harness';
 
 // Boss fights and the daily challenge on the harness (decision #445, task #454): the boss list, Retry, the Goal control,
@@ -58,14 +61,17 @@ function hover(game: Game, cell: Axial | null): void {
 const gesture = (): boolean => dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
 const cues = (game: Game): string[] => game.hook<string[]>('__tellCues');
 
-// Move by move against The Echo, whose mirror of each move is a bonus move for the other side (#859): Black up, White
-// east, Black east, White east, Black east bring a position back a third time, a draw by repetition at the 5th move,
-// which is a defeat against a boss (as e2e/fight-end.ts). ?bot=off plays both sides.
+// Move by move against The Echo, whose mirror of each move is a bonus move for the other side (#859), offered to the
+// player (#958): Black up, White east, Black's free move east, Black back, White east, the free move again, Black back
+// bring a position back a third time, a draw by repetition at the 7th move, which is a defeat against a boss (as
+// e2e/fight-end.ts). ?bot=off plays both sides.
 const ECHO_DRAW: [number, number, number, number][] = [
   [0, 2, 0, 1],
   [0, -1, 1, -1],
+  [0, 1, -1, 1], // the free move the Echo's step offers (#958)
   [-1, 1, 0, 1],
   [0, -1, 1, -1],
+  [0, 1, -1, 1],
   [-1, 1, 0, 1],
 ];
 function loseByRepetition(game: Game): void {
@@ -73,7 +79,7 @@ function loseByRepetition(game: Game): void {
     game.click(q, r);
     game.click(tq, tr);
   }
-  expect(game.hook('__plies')).toBe(5);
+  expect(game.hook('__plies')).toBe(7);
 }
 const DAY = Date.parse('2027-03-25T08:00:00Z'); // its daily boss is The Echo, with 13 bosses (#947)
 const NEXT_DAY = Date.parse('2027-03-26T08:00:00Z');
@@ -128,7 +134,7 @@ describe('main.ts boss fights', () => {
     expect([...boss.querySelectorAll('.notch')].map((n) => n.textContent)).toEqual(['P1', 'P2']);
     expect(boss.querySelector('.notch.active')!.textContent).toBe('P1');
     expect(boss.querySelector('.goal')!.textContent).toBe(
-      'Goal: Every move is mirrored for free for the other side, both ways; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.',
+      'Goal: Every move is mirrored for free for the other side: the Echo plays yours at once, you may take its mirror before your own move; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.',
     );
     expect(boss.querySelector('.result')).toBeNull();
     expect(boss.querySelector('.tell')).toBeNull(); // The Echo draws no tell on the board
@@ -399,7 +405,7 @@ describe('main.ts daily challenge', () => {
     loseByRepetition(game);
     expect(card.hidden).toBe(false);
     expect(text.value).toBe(
-      'AB-ALONE daily 2027-03-25: The Echo\nDefeat in 5 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
+      'AB-ALONE daily 2027-03-25: The Echo\nDefeat in 7 plies on attempt 1\nhttps://tidymaze.github.io/ab-alone/',
     );
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
@@ -564,7 +570,7 @@ describe('main.ts boss tells', () => {
     expect(echo).toBeGreaterThan(hull); // The Echo announces its mirror reply
   });
 
-  it('The Echo rings the bonus a hovered move gives it, and crosses one that would be skipped (#859)', async () => {
+  it('The Echo rings the bonus a hovered move gives it, and crosses a free move that would not be offered (#859)', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightBoss(game, 'The Echo');
     game.click(0, 2);
@@ -572,14 +578,14 @@ describe('main.ts boss tells', () => {
     expect([body().echoBonus, body().echoSkipped]).toEqual(['1', '0']); // the mirror (0,-2) to (0,-1), a ringed ghost
     hover(game, null);
     expect([body().echoBonus, body().echoSkipped]).toEqual(['0', '0']);
-    // Black up and its bonus, White back and its bonus, Black up again: White's step back would bring the start
-    // position a third time on Black's bonus, a draw that loses the player, so that bonus is skipped.
+    // Black up and its bonus, White back, Black takes the free move back, Black up again and its bonus: the free move
+    // White's step back would offer brings the start position a third time, a draw that loses the player: not offered.
     game.click(0, 1); // (0, 2) is still selected
-    for (const [q, r, tq, tr] of [[0, -1, 0, -2], [0, 2, 0, 1]] as const) {
+    for (const [q, r, tq, tr] of [[0, -1, 0, -2], [0, 1, 0, 2], [0, 2, 0, 1]] as const) {
       game.click(q, r);
       game.click(tq, tr);
     }
-    expect(game.hook('__plies')).toBe(3);
+    expect(game.hook('__plies')).toBe(4);
     game.click(0, -1);
     hover(game, [0, -2]);
     expect([body().echoBonus, body().echoSkipped]).toEqual(['0', '1']);
@@ -594,10 +600,85 @@ describe('main.ts boss tells', () => {
     expect(body().echoLanded).toBe('1'); // the Echo's bonus, (0,-2) to (0,-1)
     game.click(0, -1);
     game.click(1, -1);
-    expect(body().echoLanded).toBe('1'); // the player's bonus, (0,1) to (-1,1)
+    expect(body().echoLanded).toBe('0'); // the player's bonus is offered, not played (#958)
     fightBoss(game, 'The Hull');
     play(game, forward(game));
     expect(body().echoLanded).toBe('0');
+  });
+
+  it('The Echo offers the player its free move: ringed marbles, a diamond on the selected target, the HUD line (#958)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    expect(body().echoFree).toBe('0');
+    fightBoss(game, 'The Echo');
+    game.click(0, 2);
+    game.click(0, 1);
+    game.click(0, -1);
+    game.click(1, -1); // the Echo steps east: the player may take (0,1) to (-1,1) for free
+    expect([body().echoFree, body().echoFreeTarget]).toEqual(['1', '0']);
+    const tell = (): string => byId('hud').querySelector('.boss .tell')?.textContent ?? '';
+    expect(tell()).toBe('Free move: a ringed marble moves for free, any other move declines it');
+    const player = game.turn();
+    game.click(0, 1);
+    expect(body().echoFreeTarget).toBe('1');
+    expect(tell()).toBe('Free move: the diamond target is free, then you move again');
+    const diamonds = game.hook<{ children: { name: string }[] }>('__marbles').children.filter((o) => o.name === 'echo-free-target');
+    expect(diamonds).toHaveLength(1);
+    game.click(-1, 1); // taken: Black moves again, nothing is offered any more
+    expect(game.hook('__plies')).toBe(3);
+    expect(game.turn()).toBe(player);
+    expect([body().echoFree, body().echoFreeTarget]).toEqual(['0', '0']);
+    expect(tell()).toBe('');
+  });
+
+  it('a normal move declines the free move: the boss replies to it (#958)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightBoss(game, 'The Echo');
+    const player = game.turn();
+    for (const [q, r, tq, tr] of [[0, 2, 0, 1], [0, -1, 1, -1], [0, 3, 0, 2]] as const) {
+      game.click(q, r);
+      game.click(tq, tr);
+    }
+    expect(game.hook('__plies')).toBe(3);
+    expect(game.turn()).not.toBe(player);
+    expect(body().echoFree).toBe('0');
+  });
+
+  it("every bonus slides: the Echo's after the player's move, one slide after the other (#958)", async () => {
+    const game = await boot('?bot=off');
+    fightBoss(game, 'The Echo');
+    game.click(0, 2);
+    game.click(0, 1);
+    expect(body().sliding).toBe('1');
+    expect(body().bonusSlides).toBeUndefined(); // the move slides first, on the board before its bonus
+    game.frame(SLIDE_MS);
+    expect([body().sliding, body().bonusSlides]).toEqual(['1', '1']);
+    expect(body().echoLanded).toBe('0'); // the ring waits for the slide
+    game.frame(SLIDE_MS);
+    expect(body().sliding).toBeUndefined();
+    expect(body().echoLanded).toBe('1');
+  });
+
+  it('reduced motion: no bonus slides, the board shows at once (#958)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightBoss(game, 'The Echo');
+    game.click(0, 2);
+    game.click(0, 1);
+    expect([body().sliding, body().bonusSlides]).toEqual([undefined, undefined]);
+    expect(body().echoLanded).toBe('1');
+  });
+
+  it('two bonus plies of P2 slide one after the other, on the board each leaves (#958)', async () => {
+    const game = await boot('?bot=off');
+    fightBoss(game, 'The Echo', 0); // the seed of the recorded win of the core tests
+    // Its 75th ply, a player move in P2, gives the Echo its mirror and an older move.
+    expect(game.hook<number>('__playMoves', parseRecorded(echoWin).slice(0, 75))).toBe(75);
+    game.frame(SLIDE_MS);
+    expect(body().bonusSlides).toBe('1');
+    game.frame(SLIDE_MS);
+    expect(body().bonusSlides).toBe('2');
+    game.frame(SLIDE_MS);
+    expect(body().sliding).toBeUndefined();
+    expect(body().echoLanded).not.toBe('0');
   });
 
   it('The Ballast Mind announces echo only from phase 3 (#574)', async () => {

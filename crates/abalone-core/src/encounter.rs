@@ -90,6 +90,10 @@ pub struct Encounter {
     phase_reached: usize,
     /// Each main move gives the other side its mirror as a bonus move (The Echo).
     echo: bool,
+    /// The free moves the Echo's last move offers the player, until a main move (The Echo).
+    offer: Vec<Move>,
+    /// The plies that were free moves the player took (The Echo).
+    free_taken: usize,
 }
 
 /// Marbles of `color` on `board`.
@@ -216,6 +220,8 @@ impl Encounter {
             by_colour: false,
             phase_reached: 0,
             echo: false,
+            offer: Vec::new(),
+            free_taken: 0,
         }
     }
 
@@ -293,6 +299,9 @@ impl Encounter {
     /// Plays `mv` for the side to move, then settles the polarities, then fires the hook when the
     /// tell announced it and settles again.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
+        if self.echo && echo::take_free(self, mv) {
+            return Ok(());
+        }
         self.latch_phase();
         let told = self.tell();
         let before = self.game.board().clone();
