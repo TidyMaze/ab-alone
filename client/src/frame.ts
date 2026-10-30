@@ -1,7 +1,7 @@
 // The steel frame the cells sit on (docs/specs/world.md section 6): a plate under the cells, a rim around them.
 // Pure outline maths on the board plane (x, z), in cell spacings; main.ts extrudes the meshes.
-import { BOARD_CELLS, VANISHED, axialTo3D } from './board';
-import { ROOMS } from './dual';
+import { BOARD_CELLS, VANISHED, axialTo3D, cellIndex } from './board';
+import { BRIDGE, ROOMS } from './dual';
 
 export const FRAME = {
   margin: 0.55, // from the outer cell centres to the plate edge, where the rim starts: a disc is 0.46 wide
@@ -38,35 +38,49 @@ const cross = (a: Point, b: Point, c: Point, d: Point): Point => {
   return { x: a.x + t * ux, z: a.z + t * uz };
 };
 
-/** The outline round The Dual Room's two rooms (#947): each room's hexagon of sides `apothem` away, the two joined
- * where the south room's far side (toward -z) crosses the north room's near side. */
-export function dualOutline(apothem: number): Point[] {
+/** The outline round The Dual Room's two rooms and the void between them (#947, #955), `edge` away from the outer cell
+ * centres: each room's hexagon, joined by a band across the void as long as the bridge's row. It starts at the band's
+ * east end and runs round the south room first, so its first half is the south room's. */
+export function dualOutline(edge: number): Point[] {
   const [south, north] = ROOMS.map(([q, r]) => {
     const c = axialTo3D(q, r);
-    return hexagon(apothem).map((p) => ({ x: p.x + c.x, z: p.z + c.z }));
+    return hexagon(3 * (Math.sqrt(3) / 2) + edge).map((p) => ({ x: p.x + c.x, z: p.z + c.z }));
   }) as [Point[], Point[]];
+  const end = 2 + edge; // the band's ends, past the bridge's end cells (2, 0) and (-2, 0)
+  const band = (a: Point, b: Point, z: number): Point => cross(a, b, { x: 0, z }, { x: 1, z });
   return [
-    ...south.slice(0, 5),
-    cross(south[4]!, south[5]!, north[2]!, north[3]!),
+    { x: end, z: 0 },
+    { x: end, z: edge },
+    band(south[5]!, south[0]!, edge),
+    ...south.slice(0, 4),
+    band(south[3]!, south[4]!, edge),
+    { x: -end, z: edge },
+    { x: -end, z: 0 },
+    { x: -end, z: -edge },
+    band(north[2]!, north[3]!, -edge),
     ...north.slice(3),
     north[0]!,
-    north[1]!,
-    cross(north[1]!, north[2]!, south[5]!, south[0]!),
+    band(north[0]!, north[1]!, -edge),
+    { x: end, z: -edge },
   ];
 }
 
 /** The frame of a board: as big as its cells (The Ballast Mind plays on radius 5), with a hole for each
- * vanished cell. A board whose cells reach past ring 5 is The Dual Room's: one plate round its two rooms. */
+ * vanished cell. A board whose cells reach past ring 5 is The Dual Room's: one plate round its two rooms, a hole for each
+ * cell of the void until the bridge fills it. */
 export function frameShape(board: ArrayLike<number>): FrameShape {
   const cells = BOARD_CELLS.slice(0, board.length);
   const radius = cells.reduce((max, c, i) => (board[i] === VANISHED ? max : Math.max(max, ring(c))), 0);
-  const room = 4 * (Math.sqrt(3) / 2) + FRAME.margin;
-  if (radius > 5) return { radius, inner: dualOutline(room), outer: dualOutline(room + FRAME.rim), holes: [] };
-  const edge = radius * (Math.sqrt(3) / 2) + FRAME.margin;
-  const holes = cells.filter((c, i) => board[i] === VANISHED && ring(c) <= radius).map(([q, r]) => {
+  const centre = ([q, r]: readonly [number, number]): Point => {
     const p = axialTo3D(q, r);
     return { x: p.x, z: p.z };
-  });
+  };
+  if (radius > 5) {
+    const holes = BRIDGE.filter(([q, r]) => board[cellIndex(q, r)] === VANISHED).map(centre);
+    return { radius, inner: dualOutline(FRAME.margin), outer: dualOutline(FRAME.margin + FRAME.rim), holes };
+  }
+  const edge = radius * (Math.sqrt(3) / 2) + FRAME.margin;
+  const holes = cells.filter((c, i) => board[i] === VANISHED && ring(c) <= radius).map(centre);
   return { radius, inner: hexagon(edge), outer: hexagon(edge + FRAME.rim), holes };
 }
 

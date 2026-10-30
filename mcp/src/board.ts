@@ -1,4 +1,4 @@
-// The board of abalone-wasm (`Engine.board()`, 61, 91 or 271 cell values) as text for the agent: `board`, one character per
+// The board of abalone-wasm (`Engine.board()`, 61, 91 or 169 cell values) as text for the agent: `board`, one character per
 // cell, and `ascii`, the board as `render` in abalone-cli prints it (docs/specs/mcp.md section 4.2).
 import type { Cell } from './notation';
 
@@ -24,8 +24,8 @@ const ringCells = (k: number): Cell[] => {
 };
 
 /** The cells in abalone-wasm board order: the 61 of the standard board, then each ring beyond in turn: ring 5 of The
- * Ballast Mind's radius 5 board (91 cells, #572), rings 6 to 9 of The Dual Room's radius 9 scan (271 cells, #947). */
-export const BOARD_CELLS: Cell[] = [CELLS, ...[5, 6, 7, 8, 9].map(ringCells)].flat();
+ * Ballast Mind's radius 5 board (91 cells, #572), rings 6 and 7 of The Dual Room's radius 7 scan (169 cells, #947, #955). */
+export const BOARD_CELLS: Cell[] = [CELLS, ...[5, 6, 7].map(ringCells)].flat();
 
 /** Cell values of abalone-wasm: `0` empty, `1` Black, `2` White, `3` vanished, then `4` to `7` the battle royale
  * seats (never on a boss board), `8` a core and `9` the Overseer (The Overseer, #635). */
@@ -37,16 +37,16 @@ export function boardText(board: ArrayLike<number>): string {
   return Array.from(board, (value) => BOARD_MARKS[value]).join('');
 }
 
-/** A header with columns (1 to 9 for radius 4, 0 to A for radius 5, 0 to I for The Dual Room's radius 9), then rows a
- * to i (k for radius 5, s for radius 9). */
+/** A header with columns (1 to 9 for radius 4, 0 to A for radius 5, 0 to E for The Dual Room's radius 7), then rows a
+ * to i (k for radius 5, o for radius 7). */
 export function ascii(board: ArrayLike<number>): string {
-  const radius = ({ 91: 5, 271: 9 } as Record<number, number>)[board.length] ?? RADIUS;
+  const radius = ({ 91: 5, 169: 7 } as Record<number, number>)[board.length] ?? RADIUS;
   const size = 2 * radius + 1;
   const grid = Array.from({ length: size }, () => Array<string>(size).fill(' '));
   BOARD_CELLS.slice(0, board.length).forEach(([q, r], i) => {
     grid[r + radius]![q + radius] = ASCII_MARKS[board[i]!]!;
   });
-  const rowLabels = 'abcdefghijklmnopqrs';
+  const rowLabels = 'abcdefghijklmno';
   const columns = Array.from({ length: size }, (_, k) => (k + (radius === RADIUS ? 1 : 0)).toString(36).toUpperCase());
   const header = `  ${columns.join(' ')}`;
   const rows = grid.map((slots, row) => `${rowLabels[row]} ${slots.join(' ')}`.trimEnd());

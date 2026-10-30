@@ -559,6 +559,32 @@ Reply time (native release build, 6 seeds of up to 80 plies, the ladder player a
 boss replies only, 208 replies, ms): 100 nodes 2.9 average, 4.7 at the 95th percentile, 13.9 at
 most; 400 nodes on the same positions 71.0 / 137.8 / 162.6.
 
+### The Dual Room rework (#955): side-4 rooms, a void and a bridge, not tuned
+
+#955 joined `LadderBoss::Dual` to the ladder (its player search reads the returns through the
+boss's own hook, `dual_step`) and reworked the boss (game-design.md section 7.15): two radius 3
+rooms split by a void that ejects, 8 player and 5 boss marbles per room, a bridge at the 5th
+ejection. Budget unchanged (3000 nodes), no knob tuned. Before: the ladder added on #944's board
+(two radius 4 rooms, a wall, 7 + 5 marbles per room). 10 seeds, 300 plies at most.
+
+| Player budget | Before wins /10 | Before P3 /10 | After wins /10 | After P3 /10 | After median plies | Deaths after |
+|---|---|---|---|---|---|---|
+| 12000 (4x) | 4 | 5 | 10 | 10 | 59 | none |
+| 3000 (1x) | 0 (10 draws) | 0 | 8 | 9 | 107.5 | push 1, draw 1 |
+| 1500 (0.5x) | 0 (10 draws) | 0 | 8 | 9 | 105.5 | push 1, draw 1 |
+
+Before, the rooms were too wide to reach the boss: most fights drew by repetition. After, the
+boss starts near the void and the player pushes it in: P3 is reached in 28 of 30 fights (the
+section 7.15 calibration rule holds), but the boss is too easy: 10 of 10 at 4x and 8 of 10 even at
+0.5x, **outside the 7 to 9 of 10 target** (section 1). Not tuned here; the owner's knobs are the
+start layout and the phase ejections, follow-up #982.
+
+Re-run on main after #951 (its search sees a bonus win at its own node, `dual_step` included):
+the same table, row for row.
+
+Reply time (release build, native, 6 seeds of 80 plies, boss replies, ms): before 226 average,
+314 at the 95th percentile, 339 at most; after 228 / 312 / 383.
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
