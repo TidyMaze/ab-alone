@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
-import { blocked, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
+import { blocked, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
 
 // A chunk of grass at height 1 with a boulder on (2, 0) and water on (0, 1) of chunk (0, 0); chunk (1, 0) is peaks.
 const grass = [1, 2];
@@ -152,5 +152,44 @@ describe('the troop', () => {
     expect(hero.troop).toHaveLength(TROOP);
     expect(hero.troop.some((c) => same(c, onto))).toBe(false);
     expect(hero.troop[0]).toEqual(SPAWN);
+  });
+});
+
+describe('the Open world cache is bounded (#981)', () => {
+  it('keeps at most CACHE_LIMIT chunks and enemy lists and reloads an evicted chunk identically', () => {
+    const load = vi.fn((cx: number, cy: number) => bytes(cx, cy));
+    const loadEnemies = vi.fn((_cx: number, _cy: number) => new Int32Array([1, 2, 3, 4]));
+    const world = new World(load, loadEnemies);
+    const first = [...world.chunk(0, 0)];
+    const firstGroups = [...world.enemies(0, 0)];
+    for (let cx = -40; cx < 40; cx++) {
+      for (let cy = -2; cy < 2; cy++) {
+        world.chunk(cx, cy);
+        world.enemies(cx, cy);
+        expect(world.cached.chunks).toBeLessThanOrEqual(CACHE_LIMIT);
+        expect(world.cached.enemies).toBeLessThanOrEqual(CACHE_LIMIT);
+      }
+    }
+    expect(world.cached).toEqual({ chunks: CACHE_LIMIT, enemies: CACHE_LIMIT });
+    expect(world.chunk(0, 0)).toEqual(first);
+    expect(world.enemies(0, 0)).toEqual(firstGroups);
+    // Loaded at first, again in the walk (it was evicted by then) and again after the walk.
+    expect(load.mock.calls.filter(([cx, cy]) => cx === 0 && cy === 0)).toHaveLength(3);
+    expect(loadEnemies.mock.calls.filter(([cx, cy]) => cx === 0 && cy === 0)).toHaveLength(3);
+  });
+
+  it('evicts the least recently used chunk; a chunk read again stays', () => {
+    const load = vi.fn((cx: number, cy: number) => bytes(cx, cy));
+    const world = new World(load);
+    world.chunk(0, 0);
+    for (let cx = 2; cx < 2 + CACHE_LIMIT - 2; cx++) world.chunk(cx, 0);
+    world.chunk(0, 0); // read again: now the most recently used
+    world.chunk(100, 0); // full: 64 chunks
+    world.chunk(101, 0); // evicts the oldest, (2, 0)
+    const loads = (cx: number, cy: number) => load.mock.calls.filter(([x, y]) => x === cx && y === cy).length;
+    expect(loads(0, 0)).toBe(1);
+    expect(loads(2, 0)).toBe(1);
+    world.chunk(2, 0);
+    expect(loads(2, 0)).toBe(2);
   });
 });
