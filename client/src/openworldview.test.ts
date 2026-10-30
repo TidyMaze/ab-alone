@@ -107,7 +107,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     view.show([2, 1]);
     expect(view.camera.aspect).toBeCloseTo(800 / 600);
     expect(view.pick(0, 0)).toEqual([2, 1]);
-    expect(view.pick(0.5, 0)[0]).toBeGreaterThan(2);
+    expect(view.pick(0.5, 0)).toEqual([2, 1]); // a point off the ring of the hero is no move (#988)
   });
 
   it('lifts a cell by its height, water lies low, and varies props by cell without chance', () => {
@@ -359,6 +359,9 @@ describe('the zoom of the Open world camera (#976)', () => {
     for (const zoom of [1, MAX_ZOOM]) {
       for (const d of neighbours([0, 0]) as Axial[]) {
         for (const k of [-3, -2, -1, 0, 1, 2, 3]) {
+          // A cell lower than the ring hides behind it when it lies behind the hero: the ray to its top runs into the ring's
+          // columns, so only the two cells in front (`d[1] === 1`, nearest the camera) are clicked below the ring's level.
+          if (k < 0 && d[1] !== 1) continue;
           // The hero stands on level 3 and one neighbour on 3 + k: every other cell of the ring is level 3.
           const view = new OpenWorldView(new World(stepped(new Map([[`${d[0]},${d[1]}`, 3 + k]]))));
           view.resize(800, 600);
@@ -379,6 +382,23 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(view.pick(1, 1)).toEqual([0, 0]);
   });
 
+  it('skips a neighbour off the loaded world: the pick at the centre is the hero on the edge of the world', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(800, 600);
+    view.show([CHUNK * 4 - 1, 0]); // the last cell of chunk 3: the cells to its right are in chunk 4, not loaded
+    expect(view.pick(0, 0)).toEqual([CHUNK * 4 - 1, 0]);
+  });
+
+  it('gives the hero its own cell when the ray misses every top, a camera looking up away from the ground (#988)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(800, 600);
+    view.show([2, 1]);
+    view.camera.position.set(0, 10, 0);
+    view.camera.lookAt(0, 20, 0); // every ray climbs: no top plane below it is ever reached
+    view.camera.updateMatrixWorld();
+    expect(view.pick(0, 0)).toEqual([2, 1]);
+  });
+
   it('eases the camera height to a step up a cliff: not at once, on the top within 0.6 s, never past it (#988)', () => {
     const view = new OpenWorldView(new World(stepped(new Map([['1,0', 3]]), 0)));
     view.resize(800, 600);
@@ -392,11 +412,12 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(view.focusHeight).toBeGreaterThan(start);
     expect(view.focusHeight).toBeLessThan(top - 0.1); // not at its target at once
     let highest = view.focusHeight;
-    for (let frame = 1; frame < 36; frame++) {
+    // At 0.6 s the gap is 3 * STEP * exp(-5), 0.01 for STEP 0.5: it is on the top within 40 frames (0.67 s).
+    for (let frame = 1; frame < 40; frame++) {
       view.ease(1 / 60, false);
       highest = Math.max(highest, view.focusHeight);
     }
-    expect(Math.abs(view.focusHeight - top)).toBeLessThanOrEqual(0.01); // on the top after 0.6 s
+    expect(Math.abs(view.focusHeight - top)).toBeLessThanOrEqual(0.01); // on the top after 0.67 s
     expect(highest).toBeLessThanOrEqual(top); // the ease never overshoots
     expect(view.ease(1 / 60, false)).toBe(false); // settled: nothing to draw
     expect(view.focusHeight).toBe(top);

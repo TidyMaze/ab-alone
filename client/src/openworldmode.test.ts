@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours } from './openworld';
 import { heldCell, OpenWorldMode } from './openworldmode';
-import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels } from './openworldview';
+import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -217,10 +217,11 @@ describe('the Open world mode', () => {
       m.frame(render);
       return render.mock.calls[0]![1] as THREE.Camera;
     };
-    expect(camera().position.y).toBeCloseTo(28);
+    const top = topOf('grass', 1) + 0.3; // the spawn is grass at height 1 in this file: its column top and the marble on it (#988)
+    expect(camera().position.y).toBeCloseTo(28 + top);
     m.enter(1, 800, 600);
     expect(body().openworldZoom).toBe('1');
-    expect(camera().position.y).toBeCloseTo(14);
+    expect(camera().position.y).toBeCloseTo(14 + top);
   });
 
   it('publishes what is drawn at the zoom, the props among it, for the browser checks, #976', () => {
