@@ -6,11 +6,10 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 ## 1. The mode
 
 - **Run**: 3 acts, each a branching map of nodes the player walks through, top to bottom. An act
-  has 3 rows of fights then its boss: 12 fights in a run, the bosses included.
-- **Nodes**: fight (the bot), boss (ends the act). Later slices add elite (a harder fight, a better
-  reward), rest (marbles back up to 14) and event (a short text choice with a gain and a cost),
-  and make the boss an existing boss of the roster at the act's strength (#800). No shop and no
-  currency.
+  has 3 rows of nodes then its boss: 12 nodes on a path through a run, the bosses included.
+- **Nodes** (section 7): fight (the bot), elite (a stronger bot, a better reward), rest (marbles
+  back up to 14), event (a short text choice with a gain and a cost), boss (a boss of the roster
+  at the act's strength, ends the act). No shop and no currency.
 - **Army**: the run's progress is the number of marbles the player brings, 14 at the start. A
   fight starts with the army's marbles on the standard layout, the missing ones taken from the
   back row first; the bot has its 14. Marbles ejected in a fight are lost for the run. A won fight
@@ -27,19 +26,23 @@ The core of the game stays Abalone 1v1. Owner request of 2026-10-28, rules from 
 ## 2. The map
 
 Generated in the engine from the seed (`abalone-core` `run::run_map`, `run_map` on the bridge).
-A fight row has 2 to 4 nodes, the boss row one. Between two rows the links are a walk from the
+A row has 2 to 4 nodes, the boss row one. The first row of an act is fights; each node of the
+two rows after it is a fight, an elite, an event or a rest (2, 1, 2 and 1 chances in 6), its own
+draw from the seed and its index in the map, apart from the links: the map's shape is the one of
+slice 1, so a run saved before the kinds still walks its map. Between two rows the links are a walk from the
 first pair of nodes to the last that steps one row, the other or both at random: every node leads
 on, every node of the next row is reached, and no two paths cross. A boss leads to every node of the
 next act's first row.
 
-The map screen shows the acts from the top, the links under the nodes, the path taken in the
+The map screen shows the acts from the top, each node named by its kind (Fight, Elite, Rest,
+Event, Boss), the links under the nodes, the path taken in the
 accent colour, and enables only the nodes the player may pick: the first row of act 1, then the
 links of the last node.
 
 ## 3. Saving
 
 The run (seed, army, its special marbles, the nodes picked, the special marbles placed on the fight
-on and its moves, and a reward waiting to be picked) is saved in IndexedDB after
+on and its moves, a reward waiting to be picked, and an event waiting for its choice) is saved in IndexedDB after
 every pick and move, next to the local game, and resumed on load, the fight replayed. A run over is
 deleted. Starting another mode abandons the run.
 
@@ -49,7 +52,7 @@ deleted. Starting another mode abandons the run.
    nodes only; a boss node is a fight against the bot in this slice.
 2. #799: special marbles (section 5), and rewards that add them. Part 1 is the engine; part 2 adds
    the placement and reward screens, their looks and the README line.
-3. #800: elites, rest, events and act bosses.
+3. #800: elites, rest, events and act bosses (section 7).
 4. #801: unlocks between runs and the run summary.
 
 ## 5. Special marbles (#799)
@@ -119,3 +122,30 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
 - **The Spark's burst**: a ring in the Spark's colour grows from its last cell and fades
   (450 ms, the Unstable Core's burst), and the page keeps drawing while it plays (#848). Reduced
   motion: no ring.
+
+## 7. Elites, rests, events and act bosses (#800)
+
+- **Elite**: a fight against the bot on the army's board, the bot searching twice the positions of a
+  fight's (`ELITE_BUDGET`). Won, the army gets 2 marbles back (up to 14) before the reward screen,
+  whose line says so.
+- **Rest**: no fight; the army is back up to 14 marbles at once, and the run line says it rested.
+- **Event**: no fight; the event screen shows one of 5 events, picked by the run seed and the node
+  (a 32-bit hash, as the reward offers), with a trade and Leave. The trade is offered only when the
+  army can pay it (no fewer than 4 marbles after, no more special marbles than marbles, a special
+  marble to give) and gains something; Leave changes nothing.
+
+  | Event | Gain | Cost |
+  |---|---|---|
+  | Scrap forge | a Heavy | 2 marbles |
+  | Mooring clamps | an Anchor | 2 marbles |
+  | Live wiring | a Spark | 1 marble |
+  | Salvage drone | 2 Sparks | 3 marbles |
+  | Cryo pods | 3 marbles (up to 14) | a special marble, the Sparks first, then the Anchors, then the Heavies |
+
+- **Act boss**: a boss of the roster (the bridge's `boss_ids`), dealt by the run seed, a new one each
+  act, played as from the boss menu (`Encounter`, its deck, view and rules, its own layout: the army
+  count and the special marbles stay off its board) at its act's strength: the boss's search budget
+  at 50 %, 100 % and 200 % (the difficulty setting's easy, normal and hard) for acts 1, 2 and 3,
+  whatever the setting. Its seed comes from the run seed and the node. Lost (a draw too), the run is
+  lost; won, the army loses the marbles the boss ejected and the run goes on (the reward screen), or
+  is won after act 3. A boss fight is saved and resumed like the others.

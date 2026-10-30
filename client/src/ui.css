@@ -679,7 +679,7 @@ body[data-reading] #log { visibility: visible; }
   font: inherit; cursor: pointer;
 }
 #run-map button.node { position: absolute; transform: translate(-50%, -50%); }
-#run-map button.boss { font-weight: 600; border-color: var(--hazard); }
+#run-map button:is(.boss, .elite) { font-weight: 600; border-color: var(--hazard); }
 #run-map button.node:disabled { cursor: default; color: var(--muted); }
 #run-map button:not(:disabled) { border-color: var(--accent); }
 #run-map button.node:is(.taken, .here) { color: var(--bg); background: var(--accent); border-color: var(--accent); }
