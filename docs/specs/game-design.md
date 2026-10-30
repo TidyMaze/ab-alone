@@ -435,7 +435,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **AI**: the Echo's search plays the bonus mirrors inside its tree, both ways, with the P2
   older-move bonus from the credits so far (`search_phased` with `echo_step`). In the tree the
   player takes every free move, the mirror first, so the boss reads the worst case of the offer;
-  the tree does not see repetitions. Node budget 100, one ply (#951; it was 400). The ladder pro
+  the tree picks the player's older move after the mirror is played, while the engine offers it
+  before (a known approximation of the search). The tree does not see repetitions. Node budget 100, one ply (#951; it was 400). The ladder pro
   takes a free move only when it ejects a boss marble and is safe (no position seen again, no
   draw); otherwise it searches its own move, which declines the offer.
 - **Calibrate**: knob = AI node budget. Fail if win rate on attempt 1 to 3 exceeds 40 percent

@@ -163,7 +163,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
 const BOSSES: [BossEntry; 13] = [
     BossEntry {
         id: "echo",
-        goal: "Every move is mirrored for free for the other side, both ways; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Every move is mirrored for free for the other side: the Echo plays yours at once, you may take its mirror before your own move; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.",
         def: echo_boss,
         start: echo_fight,
         reply: echo_move,
@@ -506,8 +506,8 @@ impl Encounter {
     }
 
     /// The bonus moves the other side would get if the side to move played `mv` (The Echo), records
-    /// of 9: `1` when that bonus would be skipped (it would lose its receiver the game), `0` else,
-    /// then the move record. Empty for the other bosses and a malformed record.
+    /// of 9: `1` when that bonus would not be offered (a free move that would lose the player the
+    /// game), `0` else, then the move record. Empty for the other bosses and a malformed record.
     pub fn echo_tell(&self, mv: &[i32]) -> Vec<i32> {
         let (Fight::Plain(e), Ok(mv)) = (&self.fight, decode(mv)) else {
             return Vec::new();

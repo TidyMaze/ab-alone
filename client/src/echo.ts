@@ -4,7 +4,7 @@
 import { DIRECTIONS, MOVE_STRIDE, VANISHED, cellIndex, parseMoves, type Axial, type Move } from './board';
 import { pushedCells } from './slide';
 
-/** One bonus move of the tell: `skipped` when the engine would not play it (it would lose its receiver the game). */
+/** One bonus move of the tell: `skipped` when the engine would not offer it (a free move that would lose the player the game). */
 export interface EchoBonus {
   mv: Move;
   skipped: boolean;
