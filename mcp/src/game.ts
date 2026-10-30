@@ -122,7 +122,7 @@ export interface Played {
   played: string;
   /** The bot or boss reply, `null` when the game ended on the agent's move, after a free move, and always online. */
   reply: string | null;
-  /** The bonus plies The Echo's rule played after the agent's move and after the reply, in order (#859). */
+  /** The bonus plies The Echo played after the agent's move, in order (#859); the agent's own are offered (#958). */
   bonuses: string[];
   state: State;
 }
@@ -285,8 +285,7 @@ export class Session {
       }
       const played = formatMove(parsed.move);
       game.plies.push(played);
-      const bonuses = (): string[] => (game.boss ? fromRecords(game.boss.encounter.last_bonuses()).map(formatMove) : []);
-      const echoed = bonuses();
+      const echoed = game.boss ? fromRecords(game.boss.encounter.last_bonuses()).map(formatMove) : [];
       let reply: string | null = null;
       if (game.room) void game.room.session.send(Array.from(mine));
       // A free move of The Echo keeps the agent to move: no reply (#958).
@@ -295,7 +294,6 @@ export class Session {
         game.engine.play(record);
         reply = formatMove(fromRecord(record));
         game.plies.push(reply);
-        echoed.push(...bonuses());
       }
       return ok({ played, reply, bonuses: echoed, state: state(game) });
     });
