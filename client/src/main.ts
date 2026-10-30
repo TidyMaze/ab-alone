@@ -46,6 +46,7 @@ import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
+import { landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
 import { COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
@@ -1253,6 +1254,11 @@ const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
 const barGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
+// The Echo's tells (#859): a steady teal ring where a bonus move lands, on its ghost while a move is prepared and on the
+// marble once played, until the next move; a bonus the engine would skip is a ghost under a red cross, a shape and not
+// colour alone.
+const echoMaterial = new THREE.MeshBasicMaterial({ color: 0x4fd1c5 });
+const skipMaterial = new THREE.MeshBasicMaterial({ color: 0xe0413a });
 // The Chaplain's martyr tell (#748): a steady ember ring and a tall glyph on the marble that explodes next boss turn.
 const emberMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
 const martyrGlyphGeometry = new THREE.OctahedronGeometry(0.11).scale(1, 2, 1);
@@ -3011,6 +3017,17 @@ function refresh(): void {
     onMarble(cellIndex(martyr[0], martyr[1]), glyph);
   }
   document.body.dataset.martyr = martyr ? martyr.join(',') : ''; // read by the e2e tests
+  // The Echo's bonus plies of the last move (#859): a teal ring on each marble they moved, until the next move.
+  const landed = showing() || !(engine instanceof Encounter) ? [] : parseMoves(engine.last_bonuses()).flatMap(landing);
+  for (const [q, r] of landed) {
+    const p = axialTo3D(q, r);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, echoMaterial), { name: 'echo-landed' });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    marbles.add(ring);
+    onMarble(cellIndex(q, r), ring);
+  }
+  document.body.dataset.echoLanded = String(landed.length); // read by the tests
   polesDrawn = poles.flatMap((sign, i) => {
     if (sign === 0) return [];
     const [q, r] = BOARD_CELLS[i]!;
@@ -3292,6 +3309,34 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
     ghosts.add(marble);
   }
   document.body.dataset.ghosts = String(list.length);
+  // The Echo's tell (#859): each bonus the hovered move gives the other side, ringed, or crossed when it would be skipped.
+  const tell = record && engine instanceof Encounter ? parseEchoTell(engine.echo_tell(Int32Array.from(record))) : [];
+  const counts = { played: 0, skipped: 0 };
+  for (const { mv: bonus, skipped } of tell) {
+    for (const [q, r] of landing(bonus)) {
+      const p = axialTo3D(q, r);
+      if (skipped) {
+        const marble = marbleMesh(3 - engine.to_move(), ghostMaterials, ghostCore);
+        marble.position.set(p.x, 0.36, p.z);
+        const cross = [Math.PI / 4, -Math.PI / 4].map((yaw) => {
+          const bar = new THREE.Mesh(barGeometry, skipMaterial);
+          bar.position.set(p.x, 0.8, p.z);
+          bar.rotation.y = yaw;
+          return bar;
+        });
+        ghosts.add(marble, ...cross);
+        counts.skipped++;
+      } else {
+        const ring = new THREE.Mesh(outlineGeometry, echoMaterial);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(p.x, 0.36, p.z);
+        ghosts.add(ring);
+        counts.played++;
+      }
+    }
+  }
+  document.body.dataset.echoBonus = String(counts.played); // read by the tests
+  document.body.dataset.echoSkipped = String(counts.skipped);
   const flips = engine instanceof Encounter ? previewFlips(history, record, makeGame as () => Encounter) : [];
   for (const [q, r] of flips) {
     const p = axialTo3D(q, r);

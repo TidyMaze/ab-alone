@@ -154,6 +154,36 @@ pub fn echo_bonuses(enc: &Encounter, mv: &Move) -> Vec<Move> {
         .collect()
 }
 
+/// The bonus moves the other side would get if the side to move played `mv`, in order, each with
+/// `true` when it would be skipped (it would lose its receiver the game): the client's tell. Empty
+/// when `mv` is illegal, ends the game, or gives no bonus.
+pub fn echo_tell(enc: &Encounter, mv: &Move) -> Vec<(Move, bool)> {
+    let mut main = enc.game().clone();
+    if main.play(mv).is_err() || main.outcome().is_some() {
+        return Vec::new();
+    }
+    let mut after = enc.clone();
+    after.play(mv).expect("a legal move");
+    let played = &after.game().history()[enc.game().history().len() + 1..];
+    let tell = |m: Move| {
+        let skipped = !played.iter().any(|p| p.mv == m);
+        (m, skipped)
+    };
+    let mut out = Vec::new();
+    if playable(main.board(), main.to_move(), mv) {
+        out.push(tell(mirror_move(mv)));
+    }
+    let left = after.game().board().echoes();
+    let spent = enc
+        .game()
+        .board()
+        .echoes()
+        .iter()
+        .find(|e| !left.contains(e));
+    out.extend(spent.map(|(_, old)| tell(mirror_move(old))));
+    out
+}
+
 /// The bonus moves inside the search tree, after `mover` played `mv` (`before` the board before
 /// it, `after` the board after it, `ejected` the credits before it): the mirror for the other
 /// side, then in P2 the latest older one, with the ejections they credit. The tree does not see
@@ -503,6 +533,38 @@ mod tests {
             assert_eq!(plies(&e), vec![push]);
             assert_eq!(e.game().outcome(), Some(Outcome::Win(first)));
         }
+    }
+
+    #[test]
+    fn the_tell_marks_each_bonus_and_whether_it_is_skipped() {
+        let e = fight(false, &[(0, 2)], &[(0, -2), (-1, -2)], [0, 0]);
+        let up = mv(&[(0, 2)], SE);
+        assert_eq!(echo_tell(&e, &up), vec![(mirror_move(&up), false)]);
+        assert!(
+            echo_tell(&e, &mv(&[(0, 2)], E)).is_empty(),
+            "blocked mirror"
+        );
+        assert!(echo_tell(&e, &mv(&[(0, -2)], E)).is_empty(), "illegal move");
+        // P2: the older move comes after the last move's (blocked) mirror.
+        let (older, a, _) = older_setup(false, [3, 0]);
+        let b = mv(&[(-3, 4)], E);
+        assert_eq!(echo_tell(&older, &b), vec![(mirror_move(&a), false)]);
+        // A main move that wins gives no bonus at all.
+        let won = fight(
+            false,
+            &[(2, 0), (3, 0), (-4, 0)],
+            &[(4, 0), (-2, 0), (-3, 0)],
+            [5, 5],
+        );
+        assert!(echo_tell(&won, &mv(&[(2, 0), (3, 0)], E)).is_empty());
+        // The player's bonus that would make the third repetition is skipped.
+        let mut e = fight(false, &[(0, 2)], &[(0, -2)], [0, 0]);
+        let (there, back) = (mv(&[(0, 2)], SE), mv(&[(0, -3)], SE));
+        for m in [&there, &back, &there] {
+            e.play(m).unwrap();
+        }
+        assert_eq!(echo_tell(&e, &back), vec![(mirror_move(&back), true)]);
+        assert_eq!(e.game().history().len(), 6, "nothing is played");
     }
 
     #[test]
