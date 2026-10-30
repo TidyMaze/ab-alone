@@ -383,6 +383,9 @@ describe('SceneRenderer (#632)', () => {
     expect(p.x).toBeLessThan(1000);
     expect(p.y).toBeGreaterThan(0);
     expect(p.y).toBeLessThan(800);
+    const bevel = sr.cellToScreen(0, 0, 1000, 800, 1, 0.04);
+    expect(bevel.y).toBeLessThan(p.y);
+    expect(sr.cellToScreen(0, 0, 1000, 800, 2, 0.04).y).toBeLessThan(bevel.y);
   });
 
   it('executes render pass', () => {

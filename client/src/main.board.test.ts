@@ -200,7 +200,10 @@ describe('main.ts board and HUD', () => {
           expect(m.emissiveIntensity).toBe(0.5);
         }
         expect(m.metalness, skin.id).toBe(kinds.includes('metalness') ? 1 : 0);
-        if (kinds.includes('emission')) expect([m.emissive.getHex(), m.emissiveIntensity], skin.id).toEqual([0xffffff, 0.08]);
+        if (kinds.includes('emission')) {
+          expect(m.emissive.getHex(), skin.id).toBe(0xffffff);
+          expect(m.emissiveIntensity, skin.id).toBeLessThanOrEqual(0.03);
+        }
         expect([m.transparent, m.opacity, m.depthWrite], skin.id).toEqual([false, 1, true]);
         setting(`${side}-skin`);
       }

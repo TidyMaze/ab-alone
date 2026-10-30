@@ -77,7 +77,7 @@ for (const deck of DECK_NAMES) {
       }
     }
     const screen = await page.evaluate(
-      (list) => list.map(([cq, cr]) => (window as any).__cellToScreen(cq, cr) as { x: number; y: number }),
+      (list) => list.map(([cq, cr], i) => (window as any).__cellToScreen(cq, cr, i % 2 === 0 ? 0.04 : 0) as { x: number; y: number }),
       axial,
     );
     const colors = await pixels(page, png, screen.map(({ x, y }) => [x, y]));

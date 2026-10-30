@@ -16,6 +16,13 @@ const style = (name: string): string => root.style.getPropertyValue(name);
 const key = (k: string): void => void dispatchEvent(new KeyboardEvent('keydown', { key: k }));
 const press = (target: EventTarget): void => void target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
 
+it('projects the bevel height as well as the cell floor for accurate contrast samples (#890)', async () => {
+  const game = await boot('?bot=off');
+  const floor = game.hook<{ x: number; y: number }>('__cellToScreen', 0, 0);
+  const bevel = game.hook<{ x: number; y: number }>('__cellToScreen', 0, 0, 0.04);
+  expect(bevel.y).toBeLessThan(floor.y);
+});
+
 /** The scene, the camera and the renderer of the next draw. */
 async function drawn(
   game: Game,
