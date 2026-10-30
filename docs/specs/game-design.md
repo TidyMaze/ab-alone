@@ -4,7 +4,8 @@ Status: draft v0, for issue #18. Spec only, no code. Companion to `SPEC.md`.
 
 Hard constraint: the **move and sumito rules are unchanged** (what a legal move is, how a push
 resolves). A mode may add a **rule layer around them** (board mask, end-of-turn hooks,
-adjudication, scoring). Battle royale also needs an extension of the engine state (N owners,
+adjudication, scoring), and change push weights or legality inside its own fight behind a flag
+(pillar 1, Decision #935). Battle royale also needs an extension of the engine state (N owners,
 217 cells, last-toucher per marble), but not of those rules. All hooks are built-in pure
 functions run inside `apply`, so the AI search sees them. Every idea below must be testable on
 a plain board with a move list.
@@ -18,11 +19,16 @@ Feature issues: #38 (input), #40 (anti-stalling), #41 (online), #42 (encounter f
 ## 1. Design pillars
 
 1. **Real Abalone first.** If a trick needs a new move type, we drop the trick. Bosses and
-   arenas bend the board, the clock and the scoring, not the movement.
+   arenas bend the board, the clock and the scoring, not the movement. A mode or boss may change
+   push weights or legality inside its own fight, behind a flag (Decision #935): no new move type,
+   and every other mode and the open-world fights (#313, #720) stay bit for bit unchanged.
 2. **Readable dread.** Every threat is shown one turn before it hits (tell). Horror comes from
    the mood and the pressure, never from hidden rules.
 3. **Die, learn, retry.** A loss teaches one thing. Retry in under 5 seconds. No difficulty
-   slider, no stat grind: the player gets better, not the character.
+   slider, no stat grind: the player gets better, not the character. A rogue-lite run, a secondary
+   mode like the boss fights (the core of the game stays Abalone 1v1), may grow its army inside
+   the run; a run starts from zero, and what carries over is variety (other starting armies,
+   always 14 marbles), never power (Decision #934).
 4. **Every rule is testable.** Each twist has an acceptance test on a board position. If we
    cannot write the position, the rule is too vague.
 5. **Alone together.** Solo mode is lonely on purpose. Multiplayer modes stay short, with no

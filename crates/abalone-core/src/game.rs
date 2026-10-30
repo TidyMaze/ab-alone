@@ -4,7 +4,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use crate::board::{Board, Cell, PlaceError, Special};
-use crate::moves::{apply, Move, MoveError, Player};
+use crate::moves::{apply, legal_moves, Move, MoveError, Player};
+use crate::run::credits;
 
 /// Ejections needed to win, for both sides unless a boss changes it (the Choir, Decision #131).
 pub const WIN_EJECTIONS: u8 = 6;
@@ -118,6 +119,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if !board.echoes().is_empty() {
         board.echoes().hash(&mut hasher);
     }
+    if !board.specials().is_empty() {
+        board.specials().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -172,7 +176,12 @@ impl Game {
     /// Makes the marble on `cell` a `kind` special marble, before the first move of a rogue-lite
     /// fight (docs/specs/roguelite.md section 5).
     pub fn place_special(&mut self, cell: (i32, i32), kind: Special) -> Result<(), PlaceError> {
-        self.board.place_special(cell, kind)
+        if !self.history.is_empty() {
+            return Err(PlaceError::Started);
+        }
+        self.board.place_special(cell, kind)?;
+        self.start_hash = position_hash(&self.board, self.to_move);
+        Ok(())
     }
 
     /// Ejections `player` needs to win.
@@ -293,10 +302,12 @@ impl Game {
         }
         let mover = self.to_move;
         let (board, ejected) = apply(&self.board, mover, mv).map_err(GameError::Move)?;
+        let [black, white] = credits(&self.board, mover, ejected, &board);
         self.board = board;
         self.to_move = next;
         if ejected {
-            self.ejected[index(mover)] += 1;
+            self.ejected[0] += black;
+            self.ejected[1] += white;
             self.no_ejection_plies = 0;
         } else {
             self.no_ejection_plies += 1;
@@ -310,8 +321,16 @@ impl Game {
             + usize::from(self.start_hash == hash);
         let repeated = seen >= REPETITION_LIMIT;
         let capped = self.no_ejection_plies >= NO_EJECTION_PLY_LIMIT;
+        let rogue = self.board.rogue_lite();
+        let foe = other(mover);
         self.outcome = if self.ejected[index(mover)] >= self.win[index(mover)] {
             Some(Outcome::Win(mover))
+        } else if rogue && self.ejected[index(foe)] >= self.win[index(foe)] {
+            // A Spark's burst threw the pusher's own marbles off (docs/specs/roguelite.md).
+            Some(Outcome::Win(foe))
+        } else if rogue && legal_moves(&self.board, next).is_empty() {
+            // The side to move has no legal move: it loses the fight.
+            Some(Outcome::Win(other(next)))
         } else if repeated || capped {
             Some(Outcome::Draw)
         } else {

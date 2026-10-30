@@ -1,7 +1,8 @@
 //! Standard 1v1 Abalone game instance exposed to WebAssembly.
 
 use crate::convert::{
-    board_bytes, decode, draw_reason_code, encode, player, side_code, status_code,
+    board_bytes, decode, draw_reason_code, encode, player, side_code, special, special_code,
+    status_code,
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
@@ -34,13 +35,20 @@ impl Engine {
     /// Makes the marble on `(q, r)` a special marble of a rogue-lite fight, before its first
     /// move: `kind` `1` Heavy, `2` Anchor, `3` Spark. `Err` carries the reason.
     pub fn place_special(&mut self, q: i32, r: i32, kind: u8) -> Result<(), String> {
-        let _ = (q, r, kind);
-        Ok(())
+        let kind = special(kind).ok_or_else(|| format!("unknown kind {kind}"))?;
+        self.game
+            .place_special((q, r), kind)
+            .map_err(|e| format!("{e:?}"))
     }
 
     /// The special marbles, records of 3 integers `[q, r, kind]`, see the module docs.
     pub fn specials(&self) -> Vec<i32> {
-        Vec::new()
+        self.game
+            .board()
+            .specials()
+            .iter()
+            .flat_map(|&((q, r), kind)| [q, r, i32::from(special_code(kind))])
+            .collect()
     }
 
     /// Side to move: `1` Black, `2` White.
@@ -172,9 +180,6 @@ mod tests {
                 engine.place_special(q, r, kind).unwrap();
             }
             for _ in 0..40 {
-                if engine.status() != 0 {
-                    break;
-                }
                 let mv = engine.best_move(40);
                 engine.play(&mv).unwrap();
             }

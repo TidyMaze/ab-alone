@@ -411,11 +411,25 @@ impl Board {
         self.specials().iter().find(|s| s.0 == cell).map(|s| s.1)
     }
 
-    /// Makes the marble on `cell` a `kind` special marble, in place of any it was.
+    /// Makes the Black or White marble on `cell` a `kind` special marble, in place of any it was.
+    /// Refused without the rogue-lite flag.
     pub fn place_special(&mut self, cell: (i32, i32), kind: Special) -> Result<(), PlaceError> {
-        let specials = self.specials.get_or_insert_with(Vec::new);
+        let marble = matches!(self.get(cell.0, cell.1), Some(Cell::Black | Cell::White));
+        let Some(specials) = self.specials.as_mut() else {
+            return Err(PlaceError::NotRogueLite);
+        };
+        if !marble {
+            return Err(PlaceError::NoMarble);
+        }
+        specials.retain(|s| s.0 != cell);
         specials.push((cell, kind));
+        specials.sort_by_key(|s| s.0);
         Ok(())
+    }
+
+    /// Replaces the special marbles, after a ply moved them. Only on a rogue-lite board.
+    pub(crate) fn set_specials(&mut self, specials: Vec<((i32, i32), Special)>) {
+        self.specials = Some(specials);
     }
 
     /// Standard start layout: 14 marbles per side.

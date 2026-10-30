@@ -67,6 +67,8 @@ Each phase is a GitHub milestone. A phase starts only when the previous one is p
 - You play a sequence of **encounters** on board variants. Each boss = an AI with **phases**
   (changes rules, board or behaviour at 10, 8, 4 marbles left...).
 - Souls-like loop: die, retry the same boss, learn its pattern. No difficulty slider.
+- A rogue-lite run, a secondary mode, may grow its army inside the run; a run starts from zero and
+  only variety carries over, never power (Decision #934, `docs/specs/roguelite.md`).
 - Boss design checklist (bosses must be fair and readable):
   1. A **tell**: the boss telegraphs its special move one turn ahead.
   2. A **counter**: every special move has a positional answer.

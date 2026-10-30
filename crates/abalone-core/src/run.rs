@@ -1,8 +1,9 @@
-//! Rogue-lite run (docs/specs/roguelite.md): the map of a run from its seed, and the fight of an
-//! army that lost marbles in the fights before.
+//! Rogue-lite run (docs/specs/roguelite.md): the map of a run from its seed, the fight of an
+//! army that lost marbles in the fights before, and its special marbles.
 
-use crate::board::{Board, Cell, STANDARD_BLACK};
-use crate::encounter::hull::mix;
+use crate::board::{Board, Cell, Special, STANDARD_BLACK};
+use crate::encounter::hull::{mix, NEIGHBOURS};
+use crate::encounter::marbles;
 use crate::game::{Game, WIN_EJECTIONS};
 use crate::moves::Player;
 
@@ -91,9 +92,74 @@ pub fn run_map(seed: u64) -> Vec<Node> {
     map
 }
 
+/// The special marbles of `next`, the board after a push of `board` that moved the marbles on
+/// `moved` one step along `d` and threw the one on `off` off the board: the marks follow their
+/// marbles, and an ejected Spark bursts (docs/specs/roguelite.md section 5).
+pub(crate) fn carry_specials(
+    board: &Board,
+    next: &mut Board,
+    moved: &[(i32, i32)],
+    (dq, dr): (i32, i32),
+    off: Option<(i32, i32)>,
+) {
+    let mut specials: Vec<_> = board
+        .specials()
+        .iter()
+        .filter(|s| Some(s.0) != off)
+        .map(|&((q, r), kind)| {
+            if moved.contains(&(q, r)) {
+                ((q + dq, r + dr), kind)
+            } else {
+                ((q, r), kind)
+            }
+        })
+        .collect();
+    if let Some(spark) = off.filter(|&c| board.special(c) == Some(Special::Spark)) {
+        burst(next, &mut specials, spark);
+    }
+    specials.sort_by_key(|s| s.0);
+    next.set_specials(specials);
+}
+
+/// A Spark's burst from its last cell: each marble next to it moves one cell straight away from
+/// it, stays when that cell holds a marble, and goes off the board when there is none, unless it
+/// is an Anchor. A Spark it throws off does not burst. The order, by cell, changes nothing: no
+/// two neighbours aim at the same cell.
+fn burst(next: &mut Board, specials: &mut Vec<((i32, i32), Special)>, (sq, sr): (i32, i32)) {
+    let mut away = NEIGHBOURS;
+    away.sort();
+    for (dq, dr) in away {
+        let (q, r) = (sq + dq, sr + dr);
+        let Some(marble @ (Cell::Black | Cell::White)) = next.get(q, r) else {
+            continue;
+        };
+        let mark = specials.iter().position(|s| s.0 == (q, r));
+        let to = (q + dq, r + dr);
+        match next.get(to.0, to.1) {
+            Some(Cell::Empty) => {
+                next.set(to.0, to.1, marble);
+                if let Some(i) = mark {
+                    specials[i].0 = to;
+                }
+            }
+            None if mark.map(|i| specials[i].1) != Some(Special::Anchor) => {
+                if let Some(i) = mark {
+                    specials.remove(i);
+                }
+            }
+            _ => continue,
+        }
+        next.set(q, r, Cell::Empty);
+    }
+}
+
 /// The ejections a ply credits to Black and to White, `ejected` being whether the push of `mover`
-/// threw a marble off `before`, giving `after`.
-pub fn credits(_before: &Board, mover: Player, ejected: bool, _after: &Board) -> [u8; 2] {
+/// threw a marble off `before`, giving `after`. On a rogue-lite board a Spark's burst can throw
+/// more off, of both colours: each marble gone counts for the opponent of its colour.
+pub fn credits(before: &Board, mover: Player, ejected: bool, after: &Board) -> [u8; 2] {
+    if ejected && before.rogue_lite() {
+        return [Cell::White, Cell::Black].map(|c| marbles(before, c) - marbles(after, c));
+    }
     let mut credits = [0, 0];
     credits[usize::from(mover == Player::White)] = u8::from(ejected);
     credits
@@ -108,6 +174,7 @@ pub fn army_game(army: u8) -> Game {
     for &(q, r) in &STANDARD_BLACK[..usize::from(FULL_ARMY - army)] {
         board.set(q, r, Cell::Empty);
     }
+    board.set_rogue_lite();
     Game::from_position(board, Player::Black, [0, 0])
         .with_win([WIN_EJECTIONS, (army - (MIN_ARMY - 1)).min(WIN_EJECTIONS)])
 }
@@ -192,7 +259,9 @@ mod tests {
     #[test]
     fn a_full_army_is_the_standard_game() {
         let game = army_game(FULL_ARMY);
-        assert_eq!(game.board(), Game::new().board());
+        let mut standard = Board::standard();
+        standard.set_rogue_lite();
+        assert_eq!(game.board(), &standard);
         assert_eq!(game.to_move(), Player::Black);
         assert_eq!(game.win_ejections(Player::Black), 6);
         assert_eq!(game.win_ejections(Player::White), 6);
@@ -412,7 +481,7 @@ mod special_marbles {
         let push = mv(&[(2, 0), (3, 0)], E);
         let plain = board(&[(2, 0), (3, 0)], &[(4, 0)], &[]);
         assert!(legal_moves(&plain, Player::Black).contains(&push));
-        assert_eq!(apply(&plain, Player::Black, &push).unwrap().1, true);
+        assert!(apply(&plain, Player::Black, &push).unwrap().1);
         let anchored = board(&[(2, 0), (3, 0)], &[(4, 0)], &[((4, 0), Anchor)]);
         assert!(!legal_moves(&anchored, Player::Black).contains(&push));
         assert_eq!(black_plays(&anchored, &push), Err(MoveError::PushBlocked));
@@ -649,9 +718,6 @@ mod special_marbles {
             let mut game = Game::new();
             let mut state = seed;
             for _ in 0..(seed % 30 + 10) {
-                if game.outcome().is_some() {
-                    break;
-                }
                 state = mix(state);
                 let moves = legal_moves(game.board(), game.to_move());
                 game.play(&moves[(state % moves.len() as u64) as usize])

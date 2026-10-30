@@ -3,7 +3,7 @@
 //! Encapsulates board serialization, move encoding/decoding strides,
 //! status/result codes, and coordinate generators.
 
-use abalone_core::board::{Board, Cell, RADIUS};
+use abalone_core::board::{Board, Cell, Special, RADIUS};
 use abalone_core::encounter::PveResult;
 use abalone_core::game::{DrawReason, Outcome};
 use abalone_core::moves::{Direction, Move, Player};
@@ -53,6 +53,22 @@ pub fn draw_reason_code(reason: Option<DrawReason>) -> u8 {
         Some(DrawReason::Repetition) => 1,
         Some(DrawReason::NoEjectionCap) => 2,
     }
+}
+
+/// Kind code of a special marble, see the module docs.
+pub(crate) fn special_code(kind: Special) -> u8 {
+    match kind {
+        Special::Heavy => 1,
+        Special::Anchor => 2,
+        Special::Spark => 3,
+    }
+}
+
+/// The special marble of a kind code, `None` for an unknown code.
+pub(crate) fn special(code: u8) -> Option<Special> {
+    [Special::Heavy, Special::Anchor, Special::Spark]
+        .into_iter()
+        .find(|&kind| special_code(kind) == code)
 }
 
 /// Result code of an encounter, see the module docs.
@@ -160,6 +176,20 @@ mod tests {
         assert_eq!(draw_reason_code(None), 0);
         assert_eq!(draw_reason_code(Some(DrawReason::Repetition)), 1);
         assert_eq!(draw_reason_code(Some(DrawReason::NoEjectionCap)), 2);
+    }
+
+    #[test]
+    fn special_codes_go_both_ways() {
+        for (kind, code) in [
+            (Special::Heavy, 1),
+            (Special::Anchor, 2),
+            (Special::Spark, 3),
+        ] {
+            assert_eq!(special_code(kind), code);
+            assert_eq!(special(code), Some(kind));
+        }
+        assert_eq!(special(0), None);
+        assert_eq!(special(4), None);
     }
 
     #[test]
