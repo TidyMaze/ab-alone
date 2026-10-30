@@ -477,26 +477,17 @@ mod tests {
     fn the_pro_never_plays_a_quiet_free_move_as_its_own() {
         use crate::moves::Direction::{E, NE, W};
         // Seed 3 after two plies: the pro's search alone picks the Echo's quiet free move.
-        let mut a = Arena::new(LadderBoss::Echo, 3);
-        a.play(&Move {
-            cells: vec![(0, 4), (1, 3)],
-            dir: NE,
-        })
-        .unwrap();
-        a.play(&Move {
-            cells: vec![(-2, -2)],
-            dir: E,
-        })
-        .unwrap();
-        let free = Move {
-            cells: vec![(2, 2)],
-            dir: W,
+        let mut enc = echo_start(3);
+        let step = |cells: &[(i32, i32)], dir| Move {
+            cells: cells.to_vec(),
+            dir,
         };
-        let Arena::Plain(enc, _) = &a else {
-            unreachable!()
-        };
-        assert_eq!(echo_free_moves(enc), vec![free.clone()]);
-        assert_eq!(echo_search(enc, 1000, &|_| true), Some(free.clone()));
+        enc.play(&step(&[(0, 4), (1, 3)], NE)).unwrap();
+        enc.play(&step(&[(-2, -2)], E)).unwrap();
+        let free = step(&[(2, 2)], W);
+        assert_eq!(echo_free_moves(&enc), vec![free.clone()]);
+        assert_eq!(echo_search(&enc, 1000, &|_| true), Some(free.clone()));
+        let a = Arena::Plain(enc, LadderBoss::Echo);
         let mv = player_move(&a, 3, 9, 0, 1000).unwrap();
         assert_ne!(mv, free, "declined");
     }
