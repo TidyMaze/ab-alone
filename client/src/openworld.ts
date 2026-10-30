@@ -30,9 +30,9 @@ export function parseChunk(bytes: Uint8Array): Tile[] {
   return tiles;
 }
 
-/** Chunks and enemy lists kept at once: the square of 17 x 17 chunks a view of radius 8 draws (289), and a margin. The
- * least recently used go first; a view with a larger radius raises `World.limit`. */
-export const CACHE_LIMIT = 320;
+/** Chunks and enemy lists kept at once: the square of 21 x 21 chunks the largest view (radius 10) draws (441), and a
+ * margin. The least recently used go first; `World.limit` can be raised. */
+export const CACHE_LIMIT = 512;
 
 /** The value of a key, kept the most recently used; `undefined` when absent. */
 function touch<T>(cache: Map<string, T>, key: string): T | undefined {
