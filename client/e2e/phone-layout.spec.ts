@@ -242,14 +242,23 @@ for (const { name, viewport, mobile } of sizes) {
     });
 
     // The audio log player (#516): its transcript line and Skip log cover no cell, no control and not the HUD.
-    test('nothing covers the board or the HUD while an audio log plays, #516', async ({ page }, testInfo) => {
+    // Bug #902: the transcript runs on the page clock, paused from Play log on and moved on to the second line, so a
+    // slow frame loop never misses it (page.clock, as in newgame.spec.ts); the clock flows again for the checks.
+    test('nothing covers the board or the HUD while an audio log plays, #516 #902', async ({ page }, testInfo) => {
+      await page.clock.install();
       await page.goto('./?bot=off&net=hook');
       await page.locator('canvas').waitFor();
       await expect(page.locator('body')).toHaveAttribute('data-console', /^mess-house-rule /);
       await page.keyboard.press('t');
-      await page.getByRole('button', { name: 'Play log' }).click();
+      const play = page.getByRole('button', { name: 'Play log' });
+      await expect(play).toBeVisible();
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000)); // a short jump: few frames to draw
+      await play.click();
       await page.keyboard.press('Escape');
-      await expect(page.locator('#transcript')).toHaveText(logOf('mess').lines[1]!.text, { timeout: 7000 });
+      const second = logOf('mess').lines[1]!;
+      await page.clock.fastForward(second.at * 1000); // one frame paints the line due then
+      await expect(page.locator('#transcript')).toHaveText(second.text);
+      await page.clock.resume();
       await check(page, testInfo, 'while an audio log plays');
     });
 
