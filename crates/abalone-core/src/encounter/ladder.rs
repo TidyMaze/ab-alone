@@ -823,11 +823,15 @@ mod tests {
         assert_eq!((a.phase(), a.result()), (0, None));
         let (record, moves) = play_attempt_moves(LadderBoss::Swarm, 1, 1, 30, 300);
         assert!(record.plies <= 60, "30 turns at most");
-        let end = match record.result {
-            AttemptResult::Won => PveResult::Won,
-            AttemptResult::Lost => PveResult::Lost,
-        };
-        assert_eq!(replay(LadderBoss::Swarm, 1, &moves), Ok(Some(end)));
+        assert!(
+            replay(LadderBoss::Swarm, 1, &moves[1..2]).is_err(),
+            "a boss move first"
+        );
+        assert_eq!(record.result, AttemptResult::Won);
+        assert_eq!(
+            replay(LadderBoss::Swarm, 1, &moves),
+            Ok(Some(PveResult::Won))
+        );
     }
 
     #[test]

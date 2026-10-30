@@ -371,11 +371,10 @@ mod tests {
         Swarm::from_position(game, 7, turn)
     }
 
-    /// The boss reply: its search move, or nothing when it passed.
+    /// The boss reply: its search move.
     fn reply(s: &mut Swarm) {
-        if let Some(m) = s.boss_move() {
-            s.play(&m).unwrap();
-        }
+        let m = s.boss_move().unwrap();
+        s.play(&m).unwrap();
     }
 
     #[test]
