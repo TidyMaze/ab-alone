@@ -74,9 +74,11 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldDrawn;
   }
 
+  /** A new window size: the view follows it, and the zoom it may have been clamped to is published (#976). */
   resize(width: number, height: number): void {
     this.view?.resize(width, height);
     this.dirty = true;
+    if (this.active) this.mark(document.body.dataset.openworld!);
   }
 
   /** An arrow key rolls the hero one cell, or on the diagonal while a vertical and a horizontal arrow are both held;

@@ -96,6 +96,8 @@ test('the widest zoom on a 32:9 screen shows no black background at its edges, #
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, 5000); // as far out as the screen allows
   await expect.poll(async () => Number(await page.evaluate(() => document.body.dataset.openworldZoom))).toBeGreaterThan(2.5);
+  // a 32:9 screen stops before the 16:9 widest zoom (6): its reach would pass MAX_REACH further out
+  expect(Number(await page.evaluate(() => document.body.dataset.openworldZoom))).toBeLessThan(6);
   const png = await page.screenshot();
   const background = await page.evaluate(async (base64) => {
     const img = new Image();

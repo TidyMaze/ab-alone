@@ -62,7 +62,7 @@ const FOG_BEYOND = 1.3;
 const CAMERA_FAR = 80;
 const NEAR = 0.1;
 /** The widest zoom of the camera for a 16:9 screen: the zoom where the reach of the loaded chunks reaches `MAX_REACH` (#976).
- * A wider screen has a lower one (`zoomLimit`). Measured in headed Chromium on a 1280x720 screen: a warm rebuild takes at
+ * A wider screen has a lower one (`maxZoomFor`). Measured in headed Chromium on a 1280x720 screen: a warm rebuild takes at
  * most 18 ms (a chunk crossing about 16 ms) and the hero rolls at 60 FPS; a zoom where the reach is 13 takes 35 ms and runs
  * at 57 FPS, so it is too far. */
 export const MAX_ZOOM = 6;
@@ -86,9 +86,9 @@ export function reachAt(aspect: number, k: number): number {
   return reachFor(groundRadius(probe, origin));
 }
 
-/** The widest zoom on a screen of `aspect`: `MAX_ZOOM`, or lower where the reach would pass `MAX_REACH` (a wide screen sees
- * more ground). The zoom never goes further than this, so the loaded chunks always cover the ground in view. */
-export function zoomLimit(aspect: number): number {
+/** The largest zoom on a screen of `aspect` whose reach stays within `MAX_REACH`: `MAX_ZOOM`, or lower where a wide screen would
+ * pass it (it sees more ground). The zoom never goes further, so the loaded chunks always cover the ground in view (#976). */
+export function maxZoomFor(aspect: number): number {
   if (reachAt(aspect, MAX_ZOOM) <= MAX_REACH) return MAX_ZOOM;
   let low = 1;
   let high = MAX_ZOOM;
@@ -173,8 +173,8 @@ export class OpenWorldView {
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
   private readonly fog = new THREE.Fog(0x0b1220);
   private level = 1;
-  /** The widest zoom on the screen's aspect, see `zoomLimit`. */
-  private limit = zoomLimit(1);
+  /** The widest zoom on the screen's aspect, see `maxZoomFor`. */
+  private limit = maxZoomFor(1);
   /** The chunk the hero is in, and the key of the chunks drawn: rebuilt when either changes. */
   private centre: Axial = [0, 0];
   private drawnKey = '';
@@ -241,13 +241,13 @@ export class OpenWorldView {
   /** A new screen size: the aspect changes the ground in view, so the widest zoom and the loaded chunks follow (#976). */
   resize(width: number, height: number): void {
     this.camera.aspect = width / height;
-    this.limit = zoomLimit(this.camera.aspect);
+    this.limit = maxZoomFor(this.camera.aspect);
     this.level = Math.min(this.level, this.limit);
     this.frame();
   }
 
   /** The widest zoom on this screen: a wide screen stops sooner, so the loaded chunks always cover the ground in view. */
-  get widestZoom(): number {
+  get maxZoom(): number {
     return this.limit;
   }
 
