@@ -4,6 +4,8 @@ import type { Axial } from './board';
 import { dailyFor, dailyTitle, utcDay } from './daily';
 import { CONVERTED_AT, EXPLODED_AT, SEED } from './test/chaplain-game';
 import { recordedGame } from './test/chaplain-fixture';
+import { parseRecorded } from './test/chaplain-game';
+import echoWin from '../../crates/abalone-core/tests/fixtures/echo.txt?raw';
 import { SLIDE_MS } from './slide';
 import { boot, slowKeys, type Game } from './test/harness';
 
@@ -653,6 +655,20 @@ describe('main.ts boss tells', () => {
     game.frame(SLIDE_MS);
     expect(body().sliding).toBeUndefined();
     expect(body().echoLanded).toBe('1');
+  });
+
+  it('two bonus plies of P2 slide one after the other, on the board each leaves (#958)', async () => {
+    const game = await boot('?bot=off');
+    fightBoss(game, 'The Echo', 0); // the seed of the recorded win of the core tests
+    // Its 75th ply, a player move in P2, gives the Echo its mirror and an older move.
+    expect(game.hook<number>('__playMoves', parseRecorded(echoWin).slice(0, 75))).toBe(75);
+    game.frame(SLIDE_MS);
+    expect(body().bonusSlides).toBe('1');
+    game.frame(SLIDE_MS);
+    expect(body().bonusSlides).toBe('2');
+    game.frame(SLIDE_MS);
+    expect(body().sliding).toBeUndefined();
+    expect(body().echoLanded).not.toBe('0');
   });
 
   it('The Ballast Mind announces echo only from phase 3 (#574)', async () => {
