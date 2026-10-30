@@ -1300,6 +1300,7 @@ const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 // Stalker (#998, game-design.md section 3.8): the cells out of the player's range under a dark veil, one draw call, the
 // rim and the board outline left as they are; a pale ring where the bot's last move landed in range.
 const fogMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.9, depthWrite: false });
+const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
 let stalker: Engine | Encounter | null = null; // the live game of a Stalker game, the fog is on while it is played
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
 let lastLanding: Axial[] = []; // where the bot's last move landed
@@ -2994,11 +2995,12 @@ function hud(extra = ''): void {
 /** Stalker's veil over the cells out of range and the rings of the bot's last move in range (#998). */
 function drawFog(board: ArrayLike<number>, fog: Set<number>, lit: Set<number>): NonNullable<typeof stalkerShown> {
   const dark = BOARD_CELLS.filter((_, i) => i < board.length && !fog.has(i));
-  const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, dark.length), { name: 'stalker-fog' });
   dark.forEach(([q, r], k) => {
     const p = axialTo3D(q, r);
     veil.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, 0.004, p.z)); // on the disc's top face, as the crack decal
   });
+  veil.count = dark.length;
+  veil.instanceMatrix.needsUpdate = true;
   marbles.add(veil);
   const last = replaying ? [] : lastLanding.filter(([q, r]) => fog.has(cellIndex(q, r)));
   for (const [q, r] of last) {
@@ -4207,6 +4209,7 @@ stalkerButton.addEventListener('click', () => {
   leaveOnline();
   leaveRoyale();
   startLocal(true);
+  stopAnalysis(); // the bar and the Hint search the whole board: off for good, as in a boss fight (fair play, #164)
   applyDeck(deckOf('local')); // after a boss fight too
   stalker = engine;
   refresh();

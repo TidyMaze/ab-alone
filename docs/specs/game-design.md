@@ -177,6 +177,7 @@ the mode menu; the online flag is part 2.
 | Enemy's last move | Its destination cells are ringed for one turn, only those in the visible set |
 | Public | Ejection counters, the score, the end of the game |
 | Bot | Sees the whole board, and the HUD says so ("Stalker: the bot is not fogged") |
+| Evaluation bar, Hint | Off for good, as in a boss fight (fair play, #164): both search the whole board |
 | Delta | None on the engine (`engine_version` unchanged); anti-stalling unchanged, the 100-ply cap included (section 5) |
 | Win | First to eject 6 |
 

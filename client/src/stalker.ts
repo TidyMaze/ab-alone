@@ -1,4 +1,4 @@
-// Stalker (#783, #998, game-design.md section 3.4): a view rule, no move rule. The player sees the enemy marbles within
+// Stalker (#783, #998, game-design.md section 3.8): a view rule, no move rule. The player sees the enemy marbles within
 // 2 cells of their own marbles, and is offered the moves of the board as they see it: hidden cells read as empty. The
 // engine stays the judge: a move a hidden marble blocks is not played, it reveals that marble (main.ts).
 import { CELLS, DIRECTIONS, cellIndex, type Axial, type Move } from './board';
@@ -91,6 +91,7 @@ export function seenGhosts(board: ArrayLike<number>, mv: Move): { cell: Axial; s
   return ghosts.filter(({ cell, side }) => at(board, cell) !== undefined && at(board, cell) !== side);
 }
 
-/** The HUD note of a Stalker game: the bot sees the whole board, and a blocked move reveals a marble. */
+/** The HUD note of a Stalker game, the first of the notes (no separator before it): the bot sees the whole board, and
+ * a blocked move reveals a marble. */
 export const stalkerNote = (revealed: boolean): string =>
-  ` · Stalker: the bot is not fogged${revealed ? ' · A hidden marble blocks that move: play again' : ''}`;
+  `Stalker: the bot is not fogged${revealed ? ' · A hidden marble blocks that move: play again' : ''}`;
