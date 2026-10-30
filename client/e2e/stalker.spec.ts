@@ -5,7 +5,7 @@ import { openModes } from './modes';
 // Stalker against the bot (#998, game-design.md section 3.8): after the four plies of src/test/stalker-game.ts, loaded
 // by the __playMoves hook, White's marble 2 cells from Black's is drawn and the one 3 cells away is not.
 test('Stalker draws an enemy marble 2 cells away, not one 3 cells away, #998', async ({ page }) => {
-  await page.goto('./');
+  await page.goto('./?bot=on'); // a query: no landing on the Ship hub (#602)
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.getByRole('button', { name: 'Stalker' }).click();

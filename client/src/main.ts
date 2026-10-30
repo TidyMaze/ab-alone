@@ -1299,7 +1299,7 @@ const skipMaterial = new THREE.MeshBasicMaterial({ color: 0xe0413a });
 const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 // Stalker (#998, game-design.md section 3.8): the cells out of the player's range under a dark veil, one draw call, the
 // rim and the board outline left as they are; a pale ring where the bot's last move landed in range.
-const fogMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.75, depthWrite: false });
+const fogMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.9, depthWrite: false });
 let stalker: Engine | Encounter | null = null; // the live game of a Stalker game, the fog is on while it is played
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
 let lastLanding: Axial[] = []; // where the bot's last move landed
