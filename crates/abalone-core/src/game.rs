@@ -55,6 +55,8 @@ pub struct Game {
     draw_reason: Option<DrawReason>,
     /// Ejections each side needs to win, Black then White.
     win: [u8; 2],
+    /// The draw rules end the game: off for a fight with no draw (The Swarm).
+    draws: bool,
 }
 
 fn index(player: Player) -> usize {
@@ -147,6 +149,7 @@ impl Game {
             outcome: None,
             draw_reason: None,
             win: [WIN_EJECTIONS; 2],
+            draws: true,
         }
     }
 
@@ -163,6 +166,7 @@ impl Game {
             outcome: won(ejected, win),
             draw_reason: None,
             win,
+            draws: true,
         }
     }
 
@@ -174,7 +178,8 @@ impl Game {
     }
 
     /// The same game where no draw rule ends it, for a fight with no draw (The Swarm).
-    pub(crate) fn without_draws(self) -> Self {
+    pub(crate) fn without_draws(mut self) -> Self {
+        self.draws = false;
         self
     }
 
@@ -249,7 +254,7 @@ impl Game {
         self.board = board;
         let hash = position_hash(&self.board, self.to_move);
         self.history.last_mut().expect("called after a ply").hash = hash;
-        if self.outcome.is_none() && self.seen(hash) >= REPETITION_LIMIT {
+        if self.draws && self.outcome.is_none() && self.seen(hash) >= REPETITION_LIMIT {
             self.outcome = Some(Outcome::Draw);
             self.draw_reason = Some(DrawReason::Repetition);
         }
@@ -343,7 +348,7 @@ impl Game {
         } else if rogue && legal_moves(&self.board, next).is_empty() {
             // The side to move has no legal move: it loses the fight.
             Some(Outcome::Win(other(next)))
-        } else if repeated || capped {
+        } else if self.draws && (repeated || capped) {
             Some(Outcome::Draw)
         } else {
             None
@@ -398,6 +403,7 @@ mod tests {
             outcome: None,
             draw_reason: None,
             win: [WIN_EJECTIONS; 2],
+            draws: true,
         }
     }
 
