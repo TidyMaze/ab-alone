@@ -611,6 +611,30 @@ Command: `LADDER_X=<1|10> cargo run --release --example ladder -- echo` (`LADDER
 before). The equal-budget player (1x) wins 6 of 10 instead of 1: declining the free move breaks
 the symmetric lock. The fixture is recorded again (section 4).
 
+### The Dual Room: the boss search drops the pull to the centre, 8 of 10 at 10x (#982)
+
+Cause: the search's `centre` weight scores the distance to `(0, 0)`, the middle of the board. On
+the Dual Room's board that cell is the middle of the void, so the boss's search rewards marbles on
+the void's edge, the cells where one push ejects them. The board position decided, not the search
+(the rework section of #955 above: 8 of 10 even at 0.5x). Fix: the boss searches with `DUAL_WEIGHTS`, the plain
+weights with `centre` 0 (`dual.rs`). No rule changed, the start layout and the budget (3000) too;
+`engine_version` 15, the boss plays other replies. The ladder player keeps the plain weights.
+10 seeds, 300 plies at most.
+
+| Player budget | Before wins /10 | Before P3 /10 | After wins /10 | After P3 /10 | After median plies | Deaths after |
+|---|---|---|---|---|---|---|
+| 30000 (10x) | 10 (median 54) | 10 | **8** | 10 | 59 | draw 2 |
+| 12000 (4x) | 10 | 10 | 7 | 10 | 60 | push 1, draw 2 |
+| 3000 (1x) | 8 | 9 | 2 | 6 | 189 | push 3, draw 5 |
+| 1500 (0.5x) | 8 | 9 | 2 | 6 | 167.5 | push 3, draw 5 |
+
+Result: 8 of 10 at 10x, **inside the 7 to 9 of 10 target**, and the wins now fall with the
+player's budget. Tried first, the knob of #982: the boss's 5 marbles one row further from the
+void (`r = 2..3`), plain weights: 10 of 10 at 10x (median 53), no change. Screened at 4x: `centre` 0
+7 of 10; `centre` 3 and `cohesion` 10, 10 of 10; `centre` 0 and `cohesion` 10, 7 of 10, the same
+one row back 9 of 10. So the pull to the void decides, the layout and the cohesion do not. The 4x
+and 1x columns before are the rework section of #955 above.
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
@@ -626,11 +650,13 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | choir | 0 | 15000 | 93 |
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
 | chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753, recorded again for #810) | 44 |
+| dual-ladder | 0 | 30000 (10x, the ladder pro player, #982; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 51 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
 
 To record again after a rule change:
 `LADDER_X=10 LADDER_FIXTURES=<dir> cargo run --release --example ladder -- echo hull choir`
+(`dual-ladder.txt`: `LADDER_SEEDS=1 LADDER_X=10 LADDER_FIXTURES=<dir> ... -- dual`, then renamed)
 (`LADDER_NODES` sets the budget in nodes, `LADDER_JSONL` writes every attempt).
 
 ## 5. Finding: phases that a win at 6 ejections never reaches
