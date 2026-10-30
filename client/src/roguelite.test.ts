@@ -6,6 +6,13 @@ import { GLASS, SHELL } from './marbles';
 import {
   ACT_PERCENT,
   actBoss,
+  actsWon,
+  ARMIES,
+  chooseArmy,
+  earned,
+  KIND_ACTS,
+  readBest,
+  recordBest,
   choices,
   claim,
   ELITE_BUDGET,
@@ -182,6 +189,7 @@ describe('roguelite', () => {
     ['a bad placement', { ...pick(newRun(1), 0), placed: [[0, 4]] }],
     ['a bad reward flag', { ...newRun(1), reward: 1 }],
     ['a bad event flag', { ...newRun(1), event: 'x' }],
+    ['a bad best', { ...newRun(1), best: 4 }],
   ])('drops a saved run with %s', async (_, raw) => {
     const store = memoryStore();
     await store.put(RUN_KEY, raw);
@@ -435,5 +443,105 @@ describe('roguelite', () => {
   it('a boss fight leaves the special marbles alone: none was placed', () => {
     const fight = pick({ ...at(newRun(1), 0), specials: [1, 0, 1] }, 2);
     expect(fightOver(MAP, fight, true, 2)).toMatchObject({ army: 12, specials: [1, 0, 1], reward: true });
+  });
+
+  // Unlocks between runs and the run summary (#801): only variety carries over, never power.
+  it('every starting army has 14 marbles, some special, and each is unlocked by the acts won in one run', () => {
+    expect(ARMIES.map((a) => a.name)).toEqual(['Standard', 'Bulwark', 'Volatile', 'Ironclad']);
+    expect(ARMIES.map((a) => a.acts)).toEqual([0, 1, 2, 3]);
+    expect(ARMIES.map((a) => a.specials)).toEqual([[0, 0, 0], [0, 2, 0], [0, 0, 2], [2, 0, 0]]);
+    expect(KIND_ACTS).toEqual([0, 1, 2]); // Heavy from the start, Anchor after 1 act won, Spark after 2
+    expect(newRun(1)).toMatchObject({ army: START_ARMY, specials: [0, 0, 0], best: 3 }); // by default everything is unlocked
+    expect(newRun(1, 0).best).toBe(0);
+  });
+
+  it('the starting army is picked on the map before the first node, only an unlocked one', () => {
+    const run = newRun(1, 1);
+    expect(chooseArmy(run, 1)).toEqual({ ...run, specials: [0, 2, 0] });
+    expect(chooseArmy(chooseArmy(run, 1), 0)).toEqual(run);
+    expect(chooseArmy(run, 2)).toBe(run); // locked
+    expect(chooseArmy(run, 9)).toBe(run); // no such army
+    expect(chooseArmy(at(newRun(1), 0), 1).specials).toEqual([0, 0, 0]); // the run is on
+    expect(chooseArmy({ ...newRun(1), end: 'lost' }, 1).specials).toEqual([0, 0, 0]);
+  });
+
+  it('a special marble type is offered as a reward and by events only once unlocked', () => {
+    const full = won(newRun(1, 0));
+    expect(offers(full)).toEqual([1]); // only the Heavy
+    expect(offers(won(newRun(1, 1))).sort()).toEqual([1, 2]);
+    expect(offers(won({ ...newRun(1, 0), army: 12 })).sort()).toEqual([0, 1]);
+    const gains = new Set(
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].flatMap((seed) => {
+        const e = eventOf({ ...at(newRun(seed, 0), 0), event: true })!;
+        return e.gain.flatMap((g, k) => (g ? [k + 1] : []));
+      }),
+    );
+    expect([...gains]).toEqual([1]); // never an Anchor nor a Spark
+    expect(EVENTS.filter((e) => e.gain[0] || !e.gain.some(Boolean))).toHaveLength(2);
+  });
+
+  it('counts the acts a run over won: its bosses beaten', () => {
+    expect(actsWon(MAP, { ...at(newRun(1), 0), end: 'lost' })).toBe(0);
+    expect(actsWon(MAP, { ...at(newRun(1), 0, 2), end: 'lost' })).toBe(0); // lost on the boss
+    expect(actsWon(MAP, { ...at(newRun(1), 0, 2, 3), end: 'lost' })).toBe(1);
+    expect(actsWon(MAP, { ...at(newRun(1), 0, 2, 3, 5), end: 'won' })).toBe(2);
+  });
+
+  it('the unlocks a run earned: the types and armies of the acts it won past the best before it', () => {
+    expect(earned(MAP, { ...at(newRun(1, 0), 0, 2, 3), end: 'lost' })).toEqual(['Anchor marbles', 'Bulwark army']);
+    expect(earned(MAP, { ...at(newRun(1, 0), 0, 2, 3, 5), end: 'won' })).toEqual(['Anchor marbles', 'Spark marbles', 'Bulwark army', 'Volatile army']);
+    expect(earned(MAP, { ...at(newRun(1, 1), 0, 2, 3), end: 'lost' })).toEqual([]);
+    expect(earned(MAP, { ...at(newRun(1, 2), 0), end: 'lost' })).toEqual([]);
+  });
+
+  it('keeps the most acts won in one run in local storage, never lower, safe when blocked', () => {
+    const data = new Map<string, string>();
+    const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+    expect(readBest(store)).toBe(0);
+    recordBest(store, 2);
+    expect(data.get('ab-alone.roguelite')).toBe('2');
+    recordBest(store, 1);
+    expect(readBest(store)).toBe(2);
+    for (const bad of ['x', '7', '-1', '1.5']) {
+      data.set('ab-alone.roguelite', bad);
+      expect(readBest(store)).toBe(0);
+    }
+    expect(readBest(null)).toBe(0);
+    expect(() => recordBest(null, 1)).not.toThrow();
+  });
+
+  it('draws the start: what is unlocked, the armies to pick, the locked ones with what unlocks them', () => {
+    const doc = parse(mapHtml(MAP, chooseArmy(newRun(1, 1), 1)));
+    const helps = [...doc.querySelectorAll('.run-help')].map((p) => p.textContent);
+    expect(helps[0]).toBe('Special marbles in rewards: Heavy, Anchor · Spark after 2 acts won in a run');
+    const armies = [...doc.querySelectorAll<HTMLButtonElement>('button[data-army]')];
+    expect(armies.map((b) => [b.dataset.army, b.textContent, b.disabled, b.getAttribute('aria-pressed')])).toEqual([
+      ['0', 'Standard · 14 marbles', false, 'false'],
+      ['1', 'Bulwark · 14 marbles, 2 Anchor', false, 'true'],
+      ['2', 'Volatile · after 2 acts won in a run', true, 'false'],
+      ['3', 'Ironclad · after 3 acts won in a run', true, 'false'],
+    ]);
+    expect(parse(mapHtml(MAP, newRun(1))).querySelector('.run-help')!.textContent).toBe('Special marbles in rewards: Heavy, Anchor, Spark');
+    expect(parse(mapHtml(MAP, at(newRun(1), 0))).querySelector('button[data-army]')).toBeNull(); // the run is on
+  });
+
+  it('draws the summary of a run over: the path, the fights, the army, the unlocks, and New run', () => {
+    const over = { ...at(newRun(1, 0), 0, 2, 3), army: 3, specials: [1, 0, 0], end: 'lost' as const };
+    const doc = parse(mapHtml(MAP, over));
+    expect(doc.querySelector('.run-line')!.textContent).toBe('Run lost · 3 marbles left');
+    expect([...doc.querySelectorAll('.run-help')].map((p) => p.textContent)).toEqual([
+      'Path: act 1 Fight, Boss · act 2 Fight',
+      'Fights: 2 won, 1 lost',
+      'Army at the end: 3 marbles, 1 Heavy',
+      'Unlocked: Anchor marbles, Bulwark army',
+    ]);
+    expect(doc.querySelector('.run-graph')).toBeNull();
+    expect(doc.getElementById('run-new')!.textContent).toBe('New run');
+    const none = parse(mapHtml(MAP, { ...at(newRun(1, 3), 0, 2, 3, 5), end: 'won' }));
+    expect([...none.querySelectorAll('.run-help')].map((p) => p.textContent).slice(1)).toEqual([
+      'Fights: 4 won, 0 lost',
+      'Army at the end: 14 marbles',
+      'No new unlock',
+    ]);
   });
 });

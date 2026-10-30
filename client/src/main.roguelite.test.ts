@@ -327,4 +327,40 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(document.body.dataset.boss).toBeUndefined();
     expect(document.body.dataset.deck).toBe('mess');
   });
+
+  // Unlocks between runs and the run summary (#801).
+  const armies = (): HTMLButtonElement[] => [...map().querySelectorAll<HTMLButtonElement>('button[data-army]')];
+  it('the start shows the unlocks; an unlocked starting army is picked, saved, and placed before the first fight', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('?bot=off', { indexedDB });
+    localStorage.setItem('ab-alone.roguelite', '1'); // an act won in an earlier run
+    game.openModes();
+    byId('roguelite').click();
+    expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
+    armies()[1]!.click();
+    expect(line()).toBe('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
+    expect(armies()[1]!.getAttribute('aria-pressed')).toBe('true');
+    await game.settle();
+    await boot('?bot=off', { indexedDB });
+    expect(line()).toBe('Rogue-lite run · army 14 marbles, 2 Anchor · pick a fight');
+    open()[0]!.click();
+    expect(document.body.dataset.run).toBe('place');
+  });
+
+  it('a run over shows its summary and keeps the acts it won for the next runs', async () => {
+    const game = await boot('?bot=off');
+    // Seed 3: the act 1 boss 9 is reached by 0, 2 and 6, and leads to the first fight 10 of act 2, lost here.
+    await game.hook('__run', { ...newRun(3, 0), army: 3, path: [0, 2, 6, 9, 10], end: 'lost' });
+    expect(document.body.dataset.run).toBe('lost');
+    expect([...map().querySelectorAll('.run-help')].map((p) => p.textContent)).toEqual([
+      'Path: act 1 Fight, Elite, Elite, Boss · act 2 Fight',
+      'Fights: 4 won, 1 lost',
+      'Army at the end: 3 marbles',
+      'Unlocked: Anchor marbles, Bulwark army',
+    ]);
+    expect(localStorage.getItem('ab-alone.roguelite')).toBe('1');
+    byId('run-new').click();
+    expect(document.body.dataset.run).toBe('map');
+    expect(armies().map((b) => b.disabled)).toEqual([false, false, true, true]);
+  });
 });
