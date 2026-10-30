@@ -1088,6 +1088,28 @@ mod tests {
     }
 
     #[test]
+    fn the_echo_tells_its_bonus_and_lists_the_bonus_plies_played() {
+        let mut f = fight();
+        let mv = first_move(&f);
+        let mirror = f.tell_move(&mv);
+        let tell: Vec<i32> = std::iter::once(0).chain(mirror.iter().copied()).collect();
+        assert_eq!(f.echo_tell(&mv), tell, "not skipped, then the record");
+        assert!(f.echo_tell(&[1, 2]).is_empty(), "malformed record");
+        assert!(f.last_bonuses().is_empty());
+        f.play(&mv).unwrap();
+        assert_eq!(f.last_bonuses(), mirror, "the Echo's bonus ply");
+        assert!(f.play(&[1, 0, 0, 0, 0, 0, 0, 0]).is_err());
+        assert_eq!(f.last_bonuses(), mirror, "a refused move keeps them");
+        for id in ["hull", "choir"] {
+            let mut other = Encounter::new(id, 1).unwrap();
+            let mv = first_move(&other);
+            assert!(other.echo_tell(&mv).is_empty(), "{id}");
+            other.play(&mv).unwrap();
+            assert!(other.last_bonuses().is_empty(), "{id}");
+        }
+    }
+
+    #[test]
     fn the_hull_and_the_ballast_mind_reply_with_a_legal_move() {
         for id in ["hull", "ballast"] {
             let mut f = Encounter::new(id, 1).unwrap();
