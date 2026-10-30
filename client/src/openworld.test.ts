@@ -1,27 +1,28 @@
 import { describe, expect, it, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
-import { blocked, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
+import { BIOMES, blocked, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
 
 // A chunk of grass at height 1 with a boulder on (2, 0) and water on (0, 1) of chunk (0, 0); chunk (1, 0) is peaks.
-const grass = [1, 2];
+const grass = [1, 2, 0];
 function bytes(cx: number, cy: number): Uint8Array {
   if (cx < -1 || cx > 1 || cy < -1 || cy > 1) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set(cx === 1 ? [3, 4] : grass, i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set(cx === 1 ? [3, 4, 0] : grass, i * 3);
   if (cx === 0 && cy === 0) {
-    out.set([1, 5], 2 * 2); // (2, 0): boulder
-    out.set([0, 0], (1 * CHUNK + 0) * 2); // (0, 1): water
+    out.set([1, 5, 0], 2 * 3); // (2, 0): boulder
+    out.set([0, 0, 0], (1 * CHUNK + 0) * 3); // (0, 1): water
   }
   return out;
 }
 
 describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
-  it('reads the bytes of the bridge, two a cell, by terrain code', () => {
+  it('reads the bytes of the bridge, three a cell, by terrain and biome code', () => {
     expect(TERRAINS).toEqual(['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall']);
-    expect(parseChunk(new Uint8Array([0, 0, 3, 4, 2, 3]))).toEqual([
-      { height: 0, terrain: 'water' },
-      { height: 3, terrain: 'peak' },
-      { height: 2, terrain: 'rock' },
+    expect(BIOMES).toEqual(['meadow', 'forest', 'tundra', 'desert', 'badlands']);
+    expect(parseChunk(new Uint8Array([0, 0, 0, 3, 4, 2, 2, 3, 4]))).toEqual([
+      { height: 0, terrain: 'water', biome: 'meadow' },
+      { height: 3, terrain: 'peak', biome: 'forest' },
+      { height: 2, terrain: 'rock', biome: 'badlands' },
     ]);
     expect(parseChunk(new Uint8Array())).toEqual([]);
   });

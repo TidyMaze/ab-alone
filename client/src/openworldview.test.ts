@@ -29,27 +29,27 @@ import {
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
 function bytes(cx: number, cy: number): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([i % 4, i % 8], i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([i % 4, i % 8, 0], i * 3);
   return out;
 }
 // Grass everywhere, each cell at its level from `levels` (`base` for the others): a chunk of the square -3..3 (#988).
 function stepped(levels: Map<string, number>, base = 3): (cx: number, cy: number) => Uint8Array {
   return (cx, cy) => {
     if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-    const out = new Uint8Array(CHUNK * CHUNK * 2);
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
     for (let i = 0; i < CHUNK * CHUNK; i++) {
       const q = cx * CHUNK + (i % CHUNK);
       const r = cy * CHUNK + Math.floor(i / CHUNK);
-      out.set([levels.get(`${q},${r}`) ?? base, 2], i * 2);
+      out.set([levels.get(`${q},${r}`) ?? base, 2, 0], i * 3);
     }
     return out;
   };
 }
 // Every chunk of the world is grass, flat: the loaded square is as wide as the reach asks for.
 function grass(): Uint8Array {
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2], i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
   return out;
 }
 const ground = (view: OpenWorldView) => GROUNDS.reduce((sum, g) => sum + mesh(view, `terrain-${g}`).count, 0);
@@ -195,8 +195,8 @@ describe('loading the Blender models (client/models/openworld.glb, openworld-hi.
 function all(terrain: number): (cx: number, cy: number) => Uint8Array {
   return (cx, cy) => {
     if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-    const out = new Uint8Array(CHUNK * CHUNK * 2);
-    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, terrain], i * 2);
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, terrain, 0], i * 3);
     return out;
   };
 }
@@ -510,8 +510,8 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
   it('grows a mesh to draw every peak of the widest view, past its capacity, up to the most cells', () => {
     const peaks = (cx: number, cy: number): Uint8Array => {
       if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
-      const out = new Uint8Array(CHUNK * CHUNK * 2);
-      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4], i * 2); // every cell a peak
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3); // every cell a peak
       return out;
     };
     const view = new OpenWorldView(new World(peaks));
@@ -533,8 +533,8 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
   // #1010: a mesh past its initial capacity grows; only the theoretical most cells of the widest view are dropped.
   const filled = (code: number) => (cx: number, cy: number): Uint8Array => {
     if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
-    const out = new Uint8Array(CHUNK * CHUNK * 2);
-    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([0, code], i * 2); // every cell of one terrain, flat
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([0, code, 0], i * 3); // every cell of one terrain, flat
     return out;
   };
 
@@ -665,8 +665,8 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
 // Every cell of the square -3..3 of chunks is the terrain code `code(q, r)`.
 const terrain = (code: (q: number, r: number) => number) => (cx: number, cy: number): Uint8Array => {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, code(cx * CHUNK + (i % CHUNK), cy * CHUNK + Math.floor(i / CHUNK))], i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, code(cx * CHUNK + (i % CHUNK), cy * CHUNK + Math.floor(i / CHUNK)), 0], i * 3);
   return out;
 };
 const WATER_CODE = 0;

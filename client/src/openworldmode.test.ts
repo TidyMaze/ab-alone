@@ -9,16 +9,16 @@ import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './o
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2], i * 2);
-  if (cx === 0 && cy === 0) out.set([1, 5], CHUNK * 2); // (0, 1)
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
+  if (cx === 0 && cy === 0) out.set([1, 5, 0], CHUNK * 3); // (0, 1)
   return out;
 }
 // A lake everywhere in the square -3..3 of chunks.
 function sea(_seed: number, cx: number, cy: number): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0], i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0, 0], i * 3);
   return out;
 }
 const mode = (
@@ -353,9 +353,9 @@ describe('the Open world models are loaded once per page (#981)', () => {
 // Grass at height 1, and the cell (1, 0) at height 4: a step up a cliff of 3 levels (#988).
 function cliff(_seed: number, cx: number, cy: number): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2], i * 2);
-  if (cx === 0 && cy === 0) out.set([4, 2], 2); // (1, 0) is index 1 of its chunk
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
+  if (cx === 0 && cy === 0) out.set([4, 2, 0], 3); // (1, 0) is index 1 of its chunk
   return out;
 }
 
