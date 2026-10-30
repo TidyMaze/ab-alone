@@ -104,11 +104,24 @@ impl Terrain {
     }
 }
 
-/// One cell: its height `0` to `7` and its terrain.
+/// The region a cell belongs to: its ground and its obstacle density on the low ground (see `openworld-terrain.md` section 4).
+/// The code of a biome is its place in this list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Biome {
+    Meadow = 0,
+    Forest = 1,
+    Tundra = 2,
+    Desert = 3,
+    Badlands = 4,
+}
+
+/// One cell: its height `0` to `7`, its terrain and its biome.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub height: u8,
     pub terrain: Terrain,
+    pub biome: Biome,
 }
 
 /// A hash of the seed, a purpose `salt` and a point, uniform in `[0, 1)`.
@@ -347,6 +360,7 @@ impl Window {
             return Cell {
                 height: 3,
                 terrain: Terrain::Grass,
+                biome: Biome::Meadow,
             };
         }
         let elevation = self.height.value(q, r);
@@ -378,7 +392,11 @@ impl Window {
         } else {
             terrain
         };
-        Cell { height, terrain }
+        Cell {
+            height,
+            terrain,
+            biome: Biome::Meadow,
+        }
     }
 }
 
@@ -483,6 +501,7 @@ mod tests {
                     let c = cell(seed, q, r).unwrap();
                     assert_eq!(c.terrain, Terrain::Grass);
                     assert_eq!(c.height, 3);
+                    assert_eq!(c.biome, Biome::Meadow);
                     assert!(!c.terrain.blocked());
                 }
             }
@@ -502,7 +521,7 @@ mod tests {
                     }
                     Terrain::Tree => {
                         trees += 1;
-                        assert!((3..=5).contains(&c.height), "trees grow on grass");
+                        assert!((3..=4).contains(&c.height), "trees grow on the low ground");
                     }
                     _ => {}
                 }
@@ -536,7 +555,7 @@ mod tests {
                             Terrain::Grass => assert!((3..=5).contains(&c.height)),
                             Terrain::Rock => assert!((5..=6).contains(&c.height)),
                             Terrain::Peak => assert_eq!(c.height, 7),
-                            Terrain::Tree => assert!((3..=5).contains(&c.height)),
+                            Terrain::Tree => assert!((3..=4).contains(&c.height)),
                             Terrain::Boulder | Terrain::Wall => {
                                 assert!((2..=6).contains(&c.height))
                             }
@@ -602,6 +621,131 @@ mod tests {
                 (share - target).abs() <= 2.0,
                 "level {level}: {share:.1} % against {target} %"
             );
+        }
+    }
+
+    /// The cells of the 16 x 16 chunks around the spawn, for each seed of `seeds`.
+    fn window_cells(seeds: std::ops::RangeInclusive<u64>) -> Vec<Cell> {
+        seeds
+            .flat_map(|seed| {
+                (-8..8).flat_map(move |cx| (-8..8).flat_map(move |cy| chunk(seed, cx, cy).unwrap()))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn biome_codes_follow_the_table_order() {
+        let codes = [
+            Biome::Meadow,
+            Biome::Forest,
+            Biome::Tundra,
+            Biome::Desert,
+            Biome::Badlands,
+        ]
+        .map(|b| b as u8);
+        assert_eq!(codes, [0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn every_biome_appears_on_land_in_the_window() {
+        let land: Vec<Cell> = window_cells(1..=4)
+            .into_iter()
+            .filter(|c| c.height >= 2)
+            .collect();
+        for biome in [
+            Biome::Meadow,
+            Biome::Forest,
+            Biome::Tundra,
+            Biome::Desert,
+            Biome::Badlands,
+        ] {
+            assert!(
+                land.iter().any(|c| c.biome == biome),
+                "{biome:?} never appears"
+            );
+        }
+    }
+
+    #[test]
+    fn the_biome_shares_on_land_are_the_measured_ones() {
+        // Land is every cell above the water (heights 2 to 7), the 16 x 16 chunks around the spawn, seeds 1 to 4.
+        let land: Vec<Cell> = window_cells(1..=4)
+            .into_iter()
+            .filter(|c| c.height >= 2)
+            .collect();
+        let targets = [
+            (Biome::Meadow, 35.0),
+            (Biome::Forest, 25.0),
+            (Biome::Tundra, 15.0),
+            (Biome::Desert, 15.0),
+            (Biome::Badlands, 10.0),
+        ];
+        for (biome, target) in targets {
+            let share =
+                land.iter().filter(|c| c.biome == biome).count() as f64 * 100.0 / land.len() as f64;
+            assert!(
+                (share - target).abs() <= 5.0,
+                "{biome:?}: {share:.1} % against {target} %"
+            );
+        }
+    }
+
+    #[test]
+    fn each_biome_sets_its_obstacle_density_on_the_low_ground() {
+        // Low ground: heights 3 and 4, not a wall. A tree is one time in `tree` (probability), a boulder one per
+        // mille of the cells a tree does not take (`boulder`, per mille), within a fifth (trees) and a third (boulders).
+        let cells = window_cells(1..=4);
+        let table = [
+            (Biome::Meadow, 0.02, 15.0),
+            (Biome::Forest, 0.25, 15.0),
+            (Biome::Tundra, 0.04, 25.0),
+            (Biome::Desert, 0.0, 30.0),
+            (Biome::Badlands, 0.0, 45.0),
+        ];
+        for (biome, tree, boulder) in table {
+            let low: Vec<&Cell> = cells
+                .iter()
+                .filter(|c| {
+                    c.biome == biome && (3..=4).contains(&c.height) && c.terrain != Terrain::Wall
+                })
+                .collect();
+            let trees =
+                low.iter().filter(|c| c.terrain == Terrain::Tree).count() as f64 / low.len() as f64;
+            let boulders = low.iter().filter(|c| c.terrain == Terrain::Boulder).count() as f64
+                / low.len() as f64;
+            assert!(
+                (trees - tree).abs() <= tree * 0.2 + 0.001,
+                "{biome:?}: {:.2} % trees against {:.0} %",
+                trees * 100.0,
+                tree * 100.0
+            );
+            let per_mille = boulders * 1000.0;
+            assert!(
+                (per_mille - boulder * (1.0 - tree)).abs() <= boulder * 0.33,
+                "{biome:?}: {per_mille:.1} boulders per mille against {boulder}"
+            );
+        }
+    }
+
+    #[test]
+    fn water_shore_uplands_and_peaks_have_the_same_terrains_in_every_biome() {
+        for c in window_cells(1..=4) {
+            match c.height {
+                0 | 1 => assert_eq!(c.terrain, Terrain::Water),
+                2 => assert!(
+                    matches!(c.terrain, Terrain::Sand | Terrain::Wall | Terrain::Boulder),
+                    "{c:?}"
+                ),
+                5 | 6 => assert!(
+                    matches!(
+                        c.terrain,
+                        Terrain::Rock | Terrain::Grass | Terrain::Wall | Terrain::Boulder
+                    ),
+                    "{c:?}"
+                ),
+                7 => assert_eq!(c.terrain, Terrain::Peak),
+                _ => {}
+            }
         }
     }
 
