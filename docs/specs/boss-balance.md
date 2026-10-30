@@ -683,6 +683,47 @@ void (`r = 2..3`), plain weights: 10 of 10 at 10x (median 53), no change. Screen
 one row back 9 of 10. So the pull to the void decides, the layout and the cohesion do not. The 4x
 and 1x columns before are the rework section of #955 above.
 
+### The Swarm (#795): gate not met, a turtle wins every fight
+
+#795 joined `LadderBoss::Swarm` to the ladder (game-design.md section 7.14). Its player search
+lands the announced wave on every player ply of its tree and sees the evac after the 30th boss
+reply as a win (`Swarm::player_search`); the boss search lands the next wave the same way, with its
+own weights (ejections 150, centre 20) and the Choir's budget, 1500 nodes. Gate proposed in #795:
+the pro (10x) wins 7 to 9 of 10, and a scripted turtle (it never pushes and never moves a marble
+away from the centre, `turtle_move`) loses at least 8 of 10. 10 seeds, 30 turns.
+
+| Player | Wins /10 | Median plies | Player marbles left | Deaths |
+|---|---|---|---|---|
+| Ladder pro, 15000 nodes (10x) | **10** | 60 | | none |
+| Ladder player, 1500 nodes (1x) | 10 | 60 | | none |
+| Scripted turtle | **10** | 60 | 6 to 10 (median 9) | none |
+
+**Gate not met**, both halves: the fight is a free win, by turtling too. A compact group on its own
+side of the board is out of reach of a swarm that lands on the far rim and needs a 3 to 2 line to
+push. No rule was changed. Knobs tried against the turtle, one run each (temporary code, not
+kept), every one still 10 of 10 for the turtle:
+
+| Knob | Turtle marbles left |
+|---|---|
+| boss weights (marbles 10 to 100, ejections 150 to 500, centre 20 to 200) | 7 to 11 |
+| boss budget 6000 nodes | 6 to 10 |
+| arrivals 2, 3, 4 or 3, 4, 5 a turn | 2 to 10 |
+| start 8 marbles (6 left out) | 3 to 10 |
+| 40 turns, arrivals 2, 3, 4 | 2 to 7 |
+| start 8 marbles and 40 turns | 1 to 4 |
+
+The smallest knob that comes close is the start (8 marbles) with 40 turns, still a turtle win in
+every seed: no tuning knob of section 7.14 alone reaches the gate. It needs an owner decision on a
+rule (for example where the waves land, or a lower win line than "1 marble left").
+
+Command: `LADDER_X=<1|10> cargo run --release --example ladder -- swarm` and
+`cargo run --release --example swarm_sim` (the turtle; it exits 1 while the turtle wins more than
+2 of 10).
+
+Reply time (release build, native, the turtle's 10 fights, 300 boss replies, 4 cores busy with
+the 10 seeds, ms): 232 average, 446 at the 95th percentile, 600 at most (1500 nodes). The Dual Room
+measured 228 / 312 / 383 at 3000 nodes.
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
@@ -699,6 +740,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
 | chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753, recorded again for #810) | 44 |
 | dual-ladder | 0 | 30000 (10x, the ladder pro player, #982; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 51 |
+| swarm | 0 | 15000 (10x, the ladder pro player, #795) | 60 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
 
