@@ -1080,7 +1080,11 @@ function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset
     Promise.all(kinds.map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
       Object.assign(look, Object.fromEntries(loaded));
       if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
-      if (extra.includes('emission')) look.emissive.set(0xffffff); // black until the map is there: no white flash
+      if (extra.includes('emission')) {
+        look.emissive.set(0xffffff); // black until the map is there: no white flash
+        look.emissiveIntensity = 0.03; // lava remains below the board's mid-tone (#890)
+      }
+      if (look.name === 'glass') look.emissiveMap = look.map;
       look.needsUpdate = true;
     }),
   );
@@ -1090,7 +1094,10 @@ function shellMaterial(id: string): THREE.MeshStandardMaterial {
   const s = skinById(id);
   let look = shellLooks.get(s.id);
   if (!look) {
-    look = new THREE.MeshStandardMaterial({
+    look = new THREE.MeshPhysicalMaterial({
+      name: 'shell',
+      color: new THREE.Color(0.2, 0.2, 0.2), // neutral gain, preserving each photograph's hue (#890)
+      specularIntensity: 0.15, // a matte black skin must not become grey under the bay's lamps (#890)
       roughness: 1, // the roughness map sets it
       metalness: 0,
       envMap: reflections,
@@ -1108,7 +1115,7 @@ function glassMaterial(id: string): THREE.MeshPhysicalMaterial {
   const s = glassSkinById(id);
   let look = glassLooks.get(s.id);
   if (!look) {
-    look = new THREE.MeshPhysicalMaterial({ roughness: 1, metalness: 0, envMap: reflections, envMapIntensity: LIGHT.environment.intensity });
+    look = new THREE.MeshPhysicalMaterial({ name: 'glass', roughness: 1, metalness: 0, emissive: 0xffffff, emissiveIntensity: 1.2, envMap: reflections, envMapIntensity: LIGHT.environment.intensity });
     dress(look, s);
     glassLooks.set(s.id, look);
   }
@@ -1507,8 +1514,8 @@ let sweep: Fx | null = null;
 
 // The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
 // Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
-const edgeGeometry = new THREE.TorusGeometry(0.44, 0.03, 8, 32).rotateX(Math.PI / 2);
-const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x25292d });
+const edgeGeometry = new THREE.TorusGeometry(0.44, 0.04, 8, 32).rotateX(Math.PI / 2);
+const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x7f8993 });
 const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   const disc = new THREE.Mesh(discGeometry, steel);
   disc.rotation.y = cellTurn(i);
@@ -3371,8 +3378,8 @@ addEventListener('resize', () => {
 });
 
 // Used by the browser checks to click a cell by its axial coordinates.
-(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number) => {
-  return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1);
+(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number, elevation = 0) => {
+  return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1, elevation);
 };
 // Used by the browser checks to see the console screen (#512) and the recorder (#517) on the window: the box around its
 // corners, in pixels.

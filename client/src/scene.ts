@@ -201,13 +201,13 @@ export class SceneRenderer {
             color: FRAME_LOOK.rim,
             roughness: 0.35,
             metalness: 0.65,
-            emissiveIntensity: 0.6,
+            emissiveIntensity: 1.3,
           }
         : options.plateAlbedo
-          ? { map: options.plateAlbedo, roughnessMap: options.plateRoughness || null, color: FRAME_LOOK.rim, roughness: 0.35, metalness: 0.65, emissiveIntensity: 0.6 }
+          ? { map: options.plateAlbedo, roughnessMap: options.plateRoughness || null, color: FRAME_LOOK.rim, roughness: 0.35, metalness: 0.65, emissiveIntensity: 1.3 }
           : options.deckAlbedo && options.deckRoughness
-            ? { map: options.deckAlbedo, roughnessMap: options.deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3, emissiveIntensity: 0.6 }
-            : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 0.6 },
+            ? { map: options.deckAlbedo, roughnessMap: options.deckRoughness, color: FRAME_LOOK.rim, metalness: 0.3, emissiveIntensity: 1.3 }
+            : { color: COLORS.steel, roughness: 0.5, metalness: 0.3, emissiveIntensity: 1.3 },
     );
     this.plate = new THREE.Mesh(new THREE.BufferGeometry(), plateMaterial);
     this.rim = {
@@ -433,10 +433,10 @@ export class SceneRenderer {
     }
   }
 
-  cellToScreen(q: number, r: number, width: number, height: number, scale = 1): { x: number; y: number } {
+  cellToScreen(q: number, r: number, width: number, height: number, scale = 1, elevation = 0): { x: number; y: number } {
     const p = axialTo3D(q, r, scale);
     this.camera.updateMatrixWorld();
-    const v = new THREE.Vector3(p.x, 0, p.z).project(this.camera);
+    const v = new THREE.Vector3(p.x, elevation * scale, p.z).project(this.camera);
     return {
       x: ((v.x + 1) / 2) * width,
       y: ((1 - v.y) / 2) * height,

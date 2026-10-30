@@ -124,10 +124,10 @@ Clear-board mode removes it.
 
 | Faction | Look | Silhouette cue |
 |---|---|---|
-| Player | Smoked glass, cyan inner light that dims with each lost marble | Smooth, glowing core |
-| Shelled (enemy) | Matte black organic shell, ridged like a scarab, faint heat pulse | Ridged, no core |
+| Player | White photographic PBR skin, its albedo providing a steady fill so it stays 3:1 on the deck (#890); see-through ghosts retain the cyan core | Smooth, opaque surface |
+| Shelled (enemy) | Dark photographic PBR skin, restrained reflections and a faint heat pulse, 3:1 on the deck (#890) | Textured, no core |
 | Boss variants | Same shell with one accent (rust crown, candle wax, wire wrap) | Added silhouette |
-| Flipped (by The Chaplain) | Player glass slowly shelling over: black ridges creep from the base up, the cyan core dims but stays visible until the flip completes | Half glass, half ridged |
+| Flipped (by The Chaplain) | The shell skin below and the player skin above, under wax; both stay opaque, with no hidden core (#885) | Half player skin, half shell skin |
 | Battle royale slots | Shell tint per player (six Okabe-Ito tints, 3:1 on the deck in every colour vision, #501) plus an engraved near-black glyph, 3:1 on its tint and repeated beside the seat's name on the HUD plate (#558), never color alone | Unique glyph each: disc, triangle, square, cross, star, diamond |
 
 **Board look per deck.**

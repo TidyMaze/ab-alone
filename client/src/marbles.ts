@@ -22,7 +22,7 @@ export const SHELL = { color: 0x101214, roughness: 0.6, metalness: 0.1 };
 
 /** The shell's faint heat pulse (#509): the sodium orange glows through the black shell, one slow pulse every `period`
  * seconds up to `peak` emissive intensity, a far smaller swing than a flash; the shell stays 3:1 on every deck. */
-export const HEAT = { color: 0xd9822b, period: 6, peak: 0.06 };
+export const HEAT = { color: 0xd9822b, period: 6, peak: 0.008 };
 
 /** The heat pulse's glow at `t` seconds: none at 0, its peak half a period later, a smooth cosine in between. */
 export const pulseAt = (t: number): number => (HEAT.peak * (1 - Math.cos((2 * Math.PI * t) / HEAT.period))) / 2;
