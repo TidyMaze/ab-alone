@@ -157,6 +157,12 @@ Lore is found, never told: terminals and audio logs only, no cutscenes.
 A secondary mode: 3 acts of a branching map of fights, the army only shrinks. See
 [roguelite.md](roguelite.md).
 
+### 3.7 Open world (#962)
+
+A secondary mode: a huge generated hex map with relief, obstacles and basic enemies, a hero and a
+troop that pushes nearby enemies on its own, legal Abalone pushes only. See
+[openworld.md](openworld.md).
+
 ## 4. Core loop and progression
 
 **Attempt loop (5 to 12 minutes):** enter encounter, read the board, spot the tell, apply the
