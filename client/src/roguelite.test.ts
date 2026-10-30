@@ -189,6 +189,15 @@ describe('roguelite', () => {
     expect(store.data.has(RUN_KEY)).toBe(false);
   });
 
+  it('a boss fight saved before the act bosses (an army fight then, #800) starts over instead of losing the run', async () => {
+    const store = memoryStore();
+    const boss = { ...pick(at(newRun(1), 0), 2), moves: [[9, ...MV.slice(1)]] }; // moves the boss board refuses
+    await saveRun(store, boss);
+    const loaded = (await loadRun(store, () => MAP, engine))!;
+    expect(loaded.state).toEqual({ ...boss, moves: [] });
+    expect(loaded.engine).toMatchObject({ played: [] });
+  });
+
   it('a blocked storage loses the save, never the run', async () => {
     await expect(saveRun(failing, newRun(1))).resolves.toBeUndefined();
     await expect(clearRun(failing)).resolves.toBeUndefined();
@@ -340,7 +349,7 @@ describe('roguelite', () => {
     expect(fightOver(ACT, elite, false, 2).end).toBe('lost');
     expect(runLine(ACT, elite)).toBe('Rogue-lite run · act 1 elite · army 14 marbles');
     const after = fightOver(ACT, { ...elite, army: 10 }, true, 0);
-    expect(parse(rewardHtml(ACT, after)).querySelector('.run-line')!.textContent).toBe('Elite beaten · 2 marbles back · pick a reward');
+    expect(parse(rewardHtml(ACT, after)).querySelector('.run-line')!.textContent).toBe('Elite beaten · up to 2 marbles back · pick a reward');
     expect(parse(rewardHtml(ACT, won(newRun(1)))).querySelector('.run-line')!.textContent).toBe('Fight won · pick a reward');
   });
 

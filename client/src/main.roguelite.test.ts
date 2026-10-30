@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Axial, Move } from './board';
 import { actBoss, newRun, parseMap, pick, visit, type MapNode, type Run } from './roguelite';
 import { boot, type Game } from './test/harness';
@@ -295,6 +295,8 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('the act boss is a roster boss picked by the seed, at the act strength, with its deck, resumed on a reload', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?nodes=50', { indexedDB });
+    const { Encounter } = await import('abalone-wasm');
+    const strength = vi.spyOn(Encounter.prototype, 'scale_node_budget');
     const { state } = await bossRun('hull');
     await game.hook('__run', state);
     expect(document.body.dataset.run).toBe('fight');
@@ -306,6 +308,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     game.frame(1000);
     await game.settle();
     expect(game.hook('__plies')).toBe(2); // the boss answered
+    expect(strength).toHaveBeenCalledWith(50); // act 1: the easy budget, whatever the difficulty setting
     await boot('?nodes=50', { indexedDB });
     expect(document.body.dataset.boss).toBe('hull');
   });
