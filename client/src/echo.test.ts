@@ -36,6 +36,11 @@ describe('boardAfter', () => {
     const before = board([[[0, 1], 1], [[0, 2], 1], [[0, 3], 2], [[0, 4], 2]]);
     expect(boardAfter(before, { cells: [[0, 1], [0, 2]], dir: 5 })).toEqual(board([[[0, 2], 1], [[0, 3], 1], [[0, 4], 2]]));
   });
+
+  it('drops a marble pushed into a vanished cell, the hole stays', () => {
+    const before = board([[[0, 2], 1], [[0, 3], 2], [[0, 4], 3]]);
+    expect(boardAfter(before, { cells: [[0, 2]], dir: 5 })).toEqual(board([[[0, 3], 1], [[0, 4], 3]]));
+  });
 });
 
 describe('freeMarbles', () => {
