@@ -2092,7 +2092,7 @@ function stopAuto(): void {
 }
 function syncAuto(): void {
   const boss = engine instanceof Encounter ? engine.name() : null;
-  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null }, fight !== null && hasMedal(store, fight.id));
+  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null, stalker: fogged() }, fight !== null && hasMedal(store, fight.id));
   const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
   const reason = state.shown ? state.reason : null;
   const usable = state.shown && reason === null && !over;
