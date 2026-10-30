@@ -563,6 +563,41 @@ describe('main.ts boss tells', () => {
     expect(echo).toBeGreaterThan(hull); // The Echo announces its mirror reply
   });
 
+  it('The Echo rings the bonus a hovered move gives it, and crosses one that would be skipped (#859)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightBoss(game, 'The Echo');
+    game.click(0, 2);
+    hover(game, [0, 1]);
+    expect([body().echoBonus, body().echoSkipped]).toEqual(['1', '0']); // the mirror (0,-2) to (0,-1), a ringed ghost
+    hover(game, null);
+    expect([body().echoBonus, body().echoSkipped]).toEqual(['0', '0']);
+    // Black up and its bonus, White back and its bonus, Black up again: White's step back would bring the start
+    // position a third time on Black's bonus, a draw that loses the player, so that bonus is skipped.
+    for (const [q, r, tq, tr] of [[0, 2, 0, 1], [0, -1, 0, -2], [0, 2, 0, 1]] as const) {
+      game.click(q, r);
+      game.click(tq, tr);
+    }
+    expect(game.hook('__plies')).toBe(3);
+    game.click(0, -1);
+    hover(game, [0, -2]);
+    expect([body().echoBonus, body().echoSkipped]).toEqual(['0', '1']);
+  });
+
+  it('The Echo marks where its bonus plies landed until the next move (#859)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    expect(body().echoLanded).toBe('0');
+    fightBoss(game, 'The Echo');
+    game.click(0, 2);
+    game.click(0, 1);
+    expect(body().echoLanded).toBe('1'); // the Echo's bonus, (0,-2) to (0,-1)
+    game.click(0, -1);
+    game.click(1, -1);
+    expect(body().echoLanded).toBe('1'); // the player's bonus, (0,1) to (-1,1)
+    fightBoss(game, 'The Hull');
+    play(game, forward(game));
+    expect(body().echoLanded).toBe('0');
+  });
+
   it('The Ballast Mind announces echo only from phase 3 (#574)', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightBoss(game, 'The Ballast Mind');
