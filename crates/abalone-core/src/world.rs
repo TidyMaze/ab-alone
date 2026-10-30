@@ -78,7 +78,10 @@ pub fn cell(seed: u64, q: i32, r: i32) -> Option<Cell> {
         return None;
     }
     if distance(q, r) <= CLEARING {
-        return Some(Cell { height: 1, terrain: Terrain::Grass });
+        return Some(Cell {
+            height: 1,
+            terrain: Terrain::Grass,
+        });
     }
     let elevation = 0.65 * noise(seed, 1, q, r, 12) + 0.35 * noise(seed, 2, q, r, 5);
     let height = match elevation {
@@ -96,7 +99,8 @@ pub fn cell(seed: u64, q: i32, r: i32) -> Option<Cell> {
         _ => Terrain::Grass,
     };
     let open = !terrain.blocked();
-    let forest = terrain == Terrain::Grass && noise(seed, 5, q, r, 7) > 0.55 && unit(seed, 6, q, r) < 0.5;
+    let forest =
+        terrain == Terrain::Grass && noise(seed, 5, q, r, 7) > 0.55 && unit(seed, 6, q, r) < 0.5;
     let terrain = if open && on_wall(seed, q, r) {
         Terrain::Wall
     } else if forest {
@@ -153,7 +157,10 @@ mod tests {
         assert_eq!(a.len(), (CHUNK * CHUNK) as usize);
         let _elsewhere = chunk(7, -9, 5).unwrap();
         assert_eq!(chunk(7, 3, -2).unwrap(), a);
-        assert_eq!(a[(2 * CHUNK + 5) as usize], cell(7, 3 * CHUNK + 5, -2 * CHUNK + 2).unwrap());
+        assert_eq!(
+            a[(2 * CHUNK + 5) as usize],
+            cell(7, 3 * CHUNK + 5, -2 * CHUNK + 2).unwrap()
+        );
     }
 
     #[test]
@@ -207,7 +214,10 @@ mod tests {
                 }
             }
         }
-        assert!(walls > 20 && trees > 100, "{walls} wall cells, {trees} tree cells");
+        assert!(
+            walls > 20 && trees > 100,
+            "{walls} wall cells, {trees} tree cells"
+        );
     }
 
     #[test]
@@ -227,7 +237,12 @@ mod tests {
                     match c.terrain {
                         Terrain::Water => assert_eq!(c.height, 0),
                         Terrain::Peak => assert_eq!(c.height, 3),
-                        Terrain::Sand | Terrain::Grass | Terrain::Rock | Terrain::Boulder | Terrain::Tree | Terrain::Wall => {
+                        Terrain::Sand
+                        | Terrain::Grass
+                        | Terrain::Rock
+                        | Terrain::Boulder
+                        | Terrain::Tree
+                        | Terrain::Wall => {
                             assert!((0..=3).contains(&c.height))
                         }
                     }
@@ -238,7 +253,9 @@ mod tests {
 
     #[test]
     fn the_map_varies_and_obstacles_are_a_fair_share() {
-        let cells: Vec<Cell> = (-4..4).flat_map(|cx| (-4..4).flat_map(move |cy| chunk(5, cx, cy).unwrap())).collect();
+        let cells: Vec<Cell> = (-4..4)
+            .flat_map(|cx| (-4..4).flat_map(move |cy| chunk(5, cx, cy).unwrap()))
+            .collect();
         for terrain in [
             Terrain::Water,
             Terrain::Sand,
@@ -249,11 +266,17 @@ mod tests {
             Terrain::Tree,
             Terrain::Wall,
         ] {
-            assert!(cells.iter().any(|c| c.terrain == terrain), "{terrain:?} never appears");
+            assert!(
+                cells.iter().any(|c| c.terrain == terrain),
+                "{terrain:?} never appears"
+            );
         }
         let blocked = cells.iter().filter(|c| c.terrain.blocked()).count() * 100 / cells.len();
         assert!((10..=45).contains(&blocked), "{blocked} % blocked");
-        let boulders = cells.iter().filter(|c| c.terrain == Terrain::Boulder).count();
+        let boulders = cells
+            .iter()
+            .filter(|c| c.terrain == Terrain::Boulder)
+            .count();
         assert!(boulders * 100 / cells.len() <= 6);
         let heights: std::collections::HashSet<u8> = cells.iter().map(|c| c.height).collect();
         assert_eq!(heights.len(), 4);
@@ -261,7 +284,13 @@ mod tests {
 
     #[test]
     fn only_water_peaks_boulders_trees_and_walls_block() {
-        for t in [Terrain::Water, Terrain::Peak, Terrain::Boulder, Terrain::Tree, Terrain::Wall] {
+        for t in [
+            Terrain::Water,
+            Terrain::Peak,
+            Terrain::Boulder,
+            Terrain::Tree,
+            Terrain::Wall,
+        ] {
             assert!(t.blocked(), "{t:?}");
         }
         assert!(!Terrain::Sand.blocked() && !Terrain::Grass.blocked() && !Terrain::Rock.blocked());
