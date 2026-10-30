@@ -154,7 +154,7 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
-fn children(node: &Node, weights: &Weights, step: Option<SignedStep>) -> Vec<Child> {
+fn children(node: &Node, weights: &Weights, step: Option<Hook>) -> Vec<Child> {
     let mover = node.to_move;
     let mut kids: Vec<Child> = legal_moves(&node.board, mover)
         .into_iter()
@@ -164,7 +164,7 @@ fn children(node: &Node, weights: &Weights, step: Option<SignedStep>) -> Vec<Chi
             ejected[index(mover)] += u8::from(ejects);
             let board = match step {
                 Some(step) => {
-                    let (board, credits) = step(&node.board, mover, &mv, board);
+                    let (board, credits) = step(&node.board, mover, &mv, board, node.ejected);
                     ejected[0] = ejected[0].saturating_add_signed(credits[0]);
                     ejected[1] = ejected[1].saturating_add_signed(credits[1]);
                     board
@@ -192,11 +192,14 @@ fn children(node: &Node, weights: &Weights, step: Option<SignedStep>) -> Vec<Chi
 
 struct Searcher<'a> {
     weights: Weights,
-    step: Option<SignedStep<'a>>,
+    step: Option<Hook<'a>>,
     budget: u32,
     nodes: u32,
     /// Ejections each side needs to win, from the game: Black then White.
     win: [u8; 2],
+    /// The ply from the root at which the root mover wins on the clock (a fight with a turn
+    /// limit), `None` for no clock.
+    last_ply: Option<i32>,
 }
 
 impl Searcher<'_> {
@@ -217,6 +220,9 @@ impl Searcher<'_> {
         let mover = node.to_move;
         if node.ejected[index(other(mover))] >= self.win[index(other(mover))] {
             return Some(ply - WIN);
+        }
+        if self.last_ply == Some(ply) {
+            return Some(WIN - ply);
         }
         if depth == 0 {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
@@ -268,7 +274,7 @@ pub fn search_with(
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
 ) -> Option<SearchResult> {
-    run(game, node_budget, weights, allow, None)
+    run(game, node_budget, weights, allow, None, None)
 }
 
 fn run(
@@ -276,7 +282,8 @@ fn run(
     node_budget: u32,
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
-    step: Option<SignedStep>,
+    step: Option<Hook>,
+    last_ply: Option<i32>,
 ) -> Option<SearchResult> {
     if game.outcome().is_some() {
         return None;
@@ -300,6 +307,7 @@ fn run(
             game.win_ejections(Player::Black),
             game.win_ejections(Player::White),
         ],
+        last_ply,
     };
     let (mut depth, mut score) = (0, kids[0].score);
     for d in 1..=MAX_DEPTH {
@@ -322,6 +330,9 @@ fn run(
 /// the move): the board after its hook, and the ejections the hook credits to Black and to White.
 pub type Step<'a> = &'a dyn Fn(&Board, Player, &Move, Board) -> (Board, [u8; 2]);
 
+/// What the tree runs for a ply: a step with the ejections credited before it and signed credits.
+type Hook<'a> = &'a dyn Fn(&Board, Player, &Move, Board, [u8; 2]) -> (Board, [i8; 2]);
+
 /// A [`Step`] whose credits can be negative: a hook that takes a credit back (The Chaplain's
 /// health), never below 0 in total.
 pub type SignedStep<'a> = &'a dyn Fn(&Board, Player, &Move, Board) -> (Board, [i8; 2]);
@@ -334,11 +345,40 @@ pub fn search_hooked(
     allow: &dyn Fn(&Move) -> bool,
     step: Step,
 ) -> Option<SearchResult> {
-    let signed = |board: &Board, mover: Player, mv: &Move, after: Board| {
+    let signed = |board: &Board, mover: Player, mv: &Move, after: Board, _: [u8; 2]| {
         let (after, [black, white]) = step(board, mover, mv, after);
         (after, [black as i8, white as i8])
     };
-    run(game, node_budget, weights, allow, Some(&signed))
+    run(game, node_budget, weights, allow, Some(&signed), None)
+}
+
+/// A [`Step`] that also gets the ejections credited to Black and to White before the ply, so a
+/// boss recomputes its phase inside the tree.
+pub type PhasedStep<'a> = &'a dyn Fn(&Board, Player, &Move, Board, [u8; 2]) -> (Board, [u8; 2]);
+
+/// [`search_hooked`] with a [`PhasedStep`] and a clock: `last_ply` is the ply from the root at
+/// which the root mover wins (a fight with a turn limit), always even; `None` for no clock. A
+/// win by ejection on that very ply still goes first.
+pub fn search_phased(
+    game: &Game,
+    node_budget: u32,
+    weights: Weights,
+    allow: &dyn Fn(&Move) -> bool,
+    step: PhasedStep,
+    last_ply: Option<u32>,
+) -> Option<SearchResult> {
+    let signed = |board: &Board, mover: Player, mv: &Move, after: Board, ejected: [u8; 2]| {
+        let (after, [black, white]) = step(board, mover, mv, after, ejected);
+        (after, [black as i8, white as i8])
+    };
+    run(
+        game,
+        node_budget,
+        weights,
+        allow,
+        Some(&signed),
+        last_ply.map(|p| p as i32),
+    )
 }
 
 /// [`search_hooked`] where the credits of a ply can be negative.
@@ -349,7 +389,10 @@ pub fn search_signed(
     allow: &dyn Fn(&Move) -> bool,
     step: SignedStep,
 ) -> Option<SearchResult> {
-    run(game, node_budget, weights, allow, Some(step))
+    let hook = |board: &Board, mover: Player, mv: &Move, after: Board, _: [u8; 2]| {
+        step(board, mover, mv, after)
+    };
+    run(game, node_budget, weights, allow, Some(&hook), None)
 }
 
 /// Score of the position for the side to move, visiting at most `node_budget` positions (the
@@ -399,6 +442,7 @@ mod tests {
             budget: 100,
             nodes: 0,
             win,
+            last_ply: None,
         };
         assert_eq!(
             searcher([WIN_EJECTIONS; 2]).negamax(&node, 0, 0, -INF, INF),
@@ -432,13 +476,56 @@ mod tests {
     }
 
     #[test]
+    fn a_phased_step_sees_the_ejections_credited_before_each_ply() {
+        let game = Game::new().with_win([6, 6]);
+        let seen = std::cell::RefCell::new(Vec::new());
+        let step = |_: &Board, mover: Player, _: &Move, after: Board, ejected: [u8; 2]| {
+            seen.borrow_mut().push(ejected);
+            (after, [u8::from(mover == Player::Black), 0])
+        };
+        search_phased(&game, 3000, DEFAULT_WEIGHTS, &|_| true, &step, None).unwrap();
+        let seen = seen.borrow();
+        assert_eq!(seen[0], [0, 0], "the root ply");
+        assert!(seen.contains(&[1, 0]), "a ply below saw the first credit");
+    }
+
+    #[test]
+    fn the_clock_gives_the_root_mover_the_win_at_its_last_ply() {
+        let game = Game::from_position(Board::standard(), Player::White, [0, 0]);
+        let calm = |_: &Board, _: Player, _: &Move, after: Board, _: [u8; 2]| (after, [0, 0]);
+        let run = |clock| search_phased(&game, 3000, DEFAULT_WEIGHTS, &|_| true, &calm, clock);
+        assert!(run(None).unwrap().score.abs() < WIN / 2, "no clock, no win");
+        assert_eq!(run(Some(2)).unwrap().score, WIN - 2);
+        let node = Node {
+            board: Board::standard(),
+            to_move: Player::White,
+            ejected: [6, 0],
+        };
+        let searcher = Searcher {
+            weights: DEFAULT_WEIGHTS,
+            step: None,
+            budget: 100,
+            nodes: 0,
+            win: [WIN_EJECTIONS; 2],
+            last_ply: Some(2),
+        };
+        let mut searcher = searcher;
+        assert_eq!(
+            searcher.negamax(&node, 0, 2, -INF, INF),
+            Some(2 - WIN),
+            "an ejection on the last ply is still the opponent's win"
+        );
+    }
+
+    #[test]
     fn a_signed_credit_takes_a_credit_back_and_stops_at_zero() {
         let game = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [3, 0]);
         let back = |_: &Board, _: Player, _: &Move, after: Board| (after, [-1, 1]);
-        let kids = children(&root_of(&game), &DEFAULT_WEIGHTS, Some(&back));
+        let hook = |b: &Board, p: Player, m: &Move, a: Board, _: [u8; 2]| back(b, p, m, a);
+        let kids = children(&root_of(&game), &DEFAULT_WEIGHTS, Some(&hook));
         assert!(kids.iter().all(|k| k.node.ejected == [2, 1]));
         let none = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [0, 0]);
-        let kids = children(&root_of(&none), &DEFAULT_WEIGHTS, Some(&back));
+        let kids = children(&root_of(&none), &DEFAULT_WEIGHTS, Some(&hook));
         assert!(
             kids.iter().all(|k| k.node.ejected == [0, 1]),
             "never below 0"
@@ -704,6 +791,7 @@ mod tests {
                 budget: u32::MAX,
                 nodes: 0,
                 win: [WIN_EJECTIONS; 2],
+                last_ply: None,
             };
             let value = exact.negamax(&root_of(&g), found.depth, 0, -INF, INF);
             assert_eq!(Some(found.score), value);

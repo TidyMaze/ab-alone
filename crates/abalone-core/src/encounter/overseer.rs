@@ -9,7 +9,7 @@ use crate::board::{Board, Cell};
 use crate::encounter::{BossDef, Encounter};
 use crate::game::Game;
 use crate::moves::{Move, Player};
-use crate::search::{search_hooked, DEFAULT_WEIGHTS};
+use crate::search::{search_phased, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -68,6 +68,14 @@ pub fn overseer_step(board: Board, phase: usize) -> (Board, [u8; 2]) {
     (after, [other, black])
 }
 
+/// The phase when `credited` ejections are credited to the player, as `Encounter::phase` counts it.
+pub fn overseer_phase(credited: u8) -> usize {
+    OVERSEER_PHASE_EJECTIONS
+        .iter()
+        .filter(|&&t| credited >= t)
+        .count()
+}
+
 /// The Overseer boss definition.
 pub fn overseer_boss() -> BossDef {
     BossDef {
@@ -99,20 +107,26 @@ pub fn overseer_start(seed: u64) -> Encounter {
     Encounter::new(game, overseer_boss(), seed).with_turn_limit(OVERSEER_TURNS)
 }
 
-/// The boss reply: its node-limited search, where every ply of the tree burns, so it sees what
-/// the incinerators take. `None` on the player's turn or when the game is over.
+/// The boss reply: its node-limited search, where every ply of the tree burns in the phase the
+/// credits so far give, so it sees what the incinerators take, and the neurotoxin clock wins the
+/// fight for it when the player's last turn comes. `None` on the player's turn or when the game
+/// is over.
 pub fn overseer_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
-    let phase = enc.phase();
-    let step = |_: &Board, _: Player, _: &Move, after: Board| overseer_step(after, phase);
-    search_hooked(
+    let step = |_: &Board, _: Player, _: &Move, after: Board, ejected: [u8; 2]| {
+        overseer_step(after, overseer_phase(ejected[0]))
+    };
+    // The boss moves first, so the player's last turn is the 2nd ply of the tree per turn left.
+    let last_ply = enc.turns_left().map(|turns| 2 * turns);
+    search_phased(
         enc.game(),
         enc.boss.node_budget,
         DEFAULT_WEIGHTS,
         &|_| true,
         &step,
+        last_ply,
     )
     .map(|r| r.mv)
 }
@@ -166,6 +180,7 @@ mod tests {
     use crate::encounter::{marbles, PveResult};
     use crate::moves::Direction::{E, NE, SW};
     use crate::moves::{apply, legal_moves, Direction, MoveError};
+    use crate::search::search_hooked;
 
     fn mv(cells: &[P], dir: Direction) -> Move {
         Move {
@@ -216,6 +231,89 @@ mod tests {
         assert_eq!(b.node_budget, HULL_NODE_BUDGET, "the Hull's time budget");
         assert_eq!(OVERSEER_TURNS, 40);
         assert_eq!((b.special)(1, 2), Some(2), "every ply burns, by phase");
+    }
+
+    /// The boss search as it was before #828: the phase fixed at the root, no clock.
+    fn old_move(enc: &Encounter) -> Option<Move> {
+        let phase = enc.phase();
+        let step = |_: &Board, _: Player, _: &Move, after: Board| overseer_step(after, phase);
+        let budget = enc.boss.node_budget;
+        search_hooked(enc.game(), budget, DEFAULT_WEIGHTS, &|_| true, &step).map(|r| r.mv)
+    }
+
+    /// The encounter after the boss played `mv`, then every reply the player has.
+    fn replies(enc: &Encounter, mv: &Move) -> Vec<Encounter> {
+        let mut after = enc.clone();
+        after.play(mv).unwrap();
+        legal_moves(after.game().board(), Player::Black)
+            .iter()
+            .map(|reply| {
+                let mut next = after.clone();
+                next.play(reply).unwrap();
+                next
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_phase_follows_the_ejections_credited_to_the_player() {
+        let phases: Vec<_> = [0, 1, 2, 3, 4, 9].map(overseer_phase).into();
+        assert_eq!(phases, [0, 0, 1, 1, 2, 2]);
+        for credited in 0..6 {
+            let enc = fight(&[(-4, 4)], &[(4, -4)], &[], Player::Black, [credited, 0]);
+            assert_eq!(overseer_phase(credited), enc.phase(), "{credited}");
+        }
+    }
+
+    #[test]
+    fn the_boss_starts_the_phase_that_burns_the_marbles_the_player_cannot_all_save() {
+        // The player marbles stand on two incinerators, safe in P1. A core push onto a third
+        // credits the player's 2nd ejection: P2 starts, they burn at the end of the next ply and
+        // the player moves only one. The old search kept the root phase and never saw it.
+        let enc = fight(
+            &[(-3, -1), (4, 0), (-4, 4)],
+            &[(1, -1), (2, -1), (-3, 3)],
+            &[(3, -1)],
+            Player::White,
+            [1, 0],
+        );
+        let push = mv(&[(1, -1), (2, -1)], E);
+        assert_eq!(overseer_move(&enc), Some(push.clone()));
+        assert_ne!(old_move(&enc), Some(push.clone()));
+        let next = replies(&enc, &push);
+        assert!(!next.is_empty());
+        assert!(
+            next.iter().all(|e| ejected(e)[1] >= 1),
+            "a player marble burns whatever it plays"
+        );
+    }
+
+    #[test]
+    fn the_boss_stalls_when_the_neurotoxin_wins_before_the_player_can_burn_the_6th_core() {
+        // 5 ejections, one turn left: the player needs 2 plies to burn the core on (3, 1), and
+        // has 1. Whatever the boss plays, the clock wins; it plays its best-looking move instead
+        // of the defence the old search needed.
+        let enc = fight(
+            &[(-1, 1), (0, 1)],
+            &[(2, -1), (2, 0)],
+            &[(2, 1)],
+            Player::White,
+            [5, 0],
+        );
+        let enc = Encounter::new(enc.game().clone(), overseer_boss(), 0).with_turn_limit(1);
+        assert_eq!(enc.turns_left(), Some(1));
+        let stall = overseer_move(&enc).unwrap();
+        assert_ne!(
+            old_move(&enc),
+            Some(stall.clone()),
+            "the old search defended"
+        );
+        let next = replies(&enc, &stall);
+        assert!(!next.is_empty());
+        assert!(
+            next.iter().all(|e| e.result() == Some(PveResult::Lost)),
+            "the player's last turn ends the fight"
+        );
     }
 
     #[test]
