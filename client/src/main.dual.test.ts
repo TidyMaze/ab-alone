@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { COLLAPSE_MS, DROP_MS, DUAL_AZIMUTH, type DualState } from './dual';
+import { COLLAPSE_MS, DROP_MS, DUAL_AZIMUTH, DUAL_POLAR, type DualState } from './dual';
 import { boot, type Game } from './test/harness';
 import { COLLAPSE_AT, RETURN_AT, RETURN_CELL, SEED } from './test/dual-game';
 import { dualGame } from './test/dual-fixture';
@@ -54,7 +54,7 @@ describe('main.ts The Dual Room (#947)', () => {
     fightDual(game);
     expect(game.hook('__fight')).toMatchObject({ id: 'dual', seed: SEED });
     expect(document.body.dataset.deck).toBe('mess');
-    expect(game.hook<{ azimuth: number }>('__view').azimuth).toBeCloseTo(DUAL_AZIMUTH);
+    expect(game.hook<{ azimuth: number; polar: number }>('__view')).toMatchObject({ azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR });
     expect(game.hook<{ radius: number; holes: number }>('__frame')).toMatchObject({ radius: 9, holes: 0 });
     expect(dual(game)).toEqual({
       state: { collapsed: false, coming: null },
