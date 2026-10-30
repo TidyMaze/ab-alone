@@ -173,6 +173,11 @@ impl Game {
         self
     }
 
+    /// The same game where no draw rule ends it, for a fight with no draw (The Swarm).
+    pub(crate) fn without_draws(self) -> Self {
+        self
+    }
+
     /// Makes the marble on `cell` a `kind` special marble, before the first move of a rogue-lite
     /// fight (docs/specs/roguelite.md section 5).
     pub fn place_special(&mut self, cell: (i32, i32), kind: Special) -> Result<(), PlaceError> {
@@ -651,6 +656,26 @@ mod tests {
         assert_eq!(game.outcome(), Some(Outcome::Draw));
         assert_eq!(game.draw_reason(), Some(DrawReason::NoEjectionCap));
         assert_eq!(game.play(&mv(&[(4, -4)], W)), Err(GameError::GameOver));
+    }
+
+    #[test]
+    fn a_game_without_draws_ignores_the_repetition_and_the_cap() {
+        let mut game = lone().without_draws();
+        let cycle = [
+            mv(&[(0, 0)], SE),
+            mv(&[(4, -4)], W),
+            mv(&[(0, 1)], NW),
+            mv(&[(3, -4)], E),
+        ];
+        for m in cycle.iter().chain(cycle.iter()).chain(cycle.iter()) {
+            assert_eq!(game.play(m), Ok(()));
+        }
+        let board = game.board().clone();
+        game.replace_board(board);
+        assert_eq!(game.outcome(), None);
+        game.no_ejection_plies = 99;
+        assert_eq!(game.play(&cycle[0]), Ok(()));
+        assert_eq!((game.outcome(), game.draw_reason()), (None, None));
     }
 
     #[test]
