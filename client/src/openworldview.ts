@@ -6,9 +6,31 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, cellAtPoint, chunkOf, neighbours, type Terrain, type Tile, type World } from './openworld';
 
-/** Chunks loaded on each side of the hero's chunk. */
-const REACH = 2;
-const CAPACITY = (2 * REACH + 1) ** 2 * CHUNK * CHUNK;
+/** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
+ * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. */
+export const MAX_REACH = 6;
+const CAPACITY = (2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK;
+
+/** The chunks to load on each side of the hero's chunk for a ground radius of `radius` cells: the ground the camera sees
+ * reaches `radius` from the hero, and the hero can stand at the far side of its chunk, so one more chunk than `radius` / CHUNK. */
+export const reachFor = (radius: number): number => Math.floor(radius / CHUNK) + 1;
+
+/** The farthest ground the camera sees, in cells from `at`: the four corners of the screen, cast on the ground plane. Past the
+ * horizon a corner sees no ground, the radius is then infinite. */
+export function groundRadius(camera: THREE.Camera, at: THREE.Vector3): number {
+  const ray = new THREE.Raycaster();
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const ground = new THREE.Vector3();
+  let far = 0;
+  for (const x of [-1, 1]) {
+    for (const y of [-1, 1]) {
+      ray.setFromCamera(new THREE.Vector2(x, y), camera);
+      if (!ray.ray.intersectPlane(plane, ground)) return Infinity;
+      far = Math.max(far, Math.hypot(ground.x - at.x, ground.z - at.z));
+    }
+  }
+  return far;
+}
 /** The closest camera: up and back from the hero. The zoom multiplies both, the distance from the hero with them. */
 const CAMERA_UP = 14;
 const CAMERA_BACK = 11;
@@ -20,8 +42,8 @@ const FOG_NEAR = 18;
 const FOG_FAR = 34;
 const CAMERA_FAR = 80;
 const NEAR = 0.1;
-/** The widest zoom of the camera; the loaded chunks and the reach of the view follow it (#976). */
-export const MAX_ZOOM = 160;
+/** The widest zoom of the camera: the reach of the loaded chunks follows it, up to `MAX_REACH` (#976). */
+export const MAX_ZOOM = 4;
 
 /** The ground columns: one instanced mesh each. A blocked terrain stands on the ground of its `GROUND` entry. */
 export const GROUNDS = ['water', 'sand', 'grass', 'rock', 'peak'] as const;
@@ -96,12 +118,15 @@ export class OpenWorldView {
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
   private readonly fog = new THREE.Fog(0x0b1220, FOG_NEAR, FOG_FAR);
   private level = 1;
+  /** The chunk the hero is in, and the key of the chunks drawn: rebuilt when either changes. */
+  private centre: Axial = [0, 0];
+  private drawnKey = '';
+  private loadedReach = 0;
   private readonly grounds = {} as Record<Ground, THREE.InstancedMesh>;
   private readonly props = {} as Record<Prop, THREE.InstancedMesh>;
   private readonly hero: THREE.Mesh;
   private readonly troop: THREE.InstancedMesh;
   private readonly foes: THREE.InstancedMesh;
-  private region = '';
   /** The enemy marbles drawn around the hero. */
   enemyCount = 0;
 
@@ -174,17 +199,23 @@ export class OpenWorldView {
   /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero enters another chunk, the hero and the
    * camera follow every step. */
   show(at: Axial, troop: readonly Axial[] = []): void {
-    const [cx, cy] = chunkOf(at);
-    const region = `${cx},${cy}`;
-    if (region !== this.region) {
-      this.region = region;
-      this.build(cx, cy);
-    }
     const tile = this.world.tile(at[0], at[1])!;
     const p = axialTo3D(at[0], at[1]);
+    this.centre = chunkOf(at);
     this.hero.position.set(p.x, topOf(GROUND[tile.terrain], tile.height) + MARBLE, p.z);
     this.place(this.troop, troop);
     this.frame();
+  }
+
+  /** The chunks on each side of the hero's chunk that are drawn: they follow the zoom (#976). */
+  get reach(): number {
+    return this.loadedReach;
+  }
+
+  /** The instances drawn per mesh, by name: the ground columns, the props, the troop and the enemies (the browser checks read it). */
+  get drawn(): Record<string, number> {
+    const meshes = this.scene.children.filter((o): o is THREE.InstancedMesh => o instanceof THREE.InstancedMesh);
+    return Object.fromEntries(meshes.map((m) => [m.name, m.count]));
   }
 
   /** The zoom of the camera: 1 is the closest view, `MAX_ZOOM` the widest. */
@@ -198,7 +229,8 @@ export class OpenWorldView {
     this.frame();
   }
 
-  /** Puts the camera at the zoom's distance from the hero, looking down at it, and the fog and the far plane with the zoom. */
+  /** Puts the camera at the zoom's distance from the hero, looking down at it, and the fog and the planes of the camera with
+   * the zoom. The chunks loaded follow the ground the camera sees: rebuilt when the hero's chunk or the reach changes. */
   private frame(): void {
     const k = this.level;
     const distance = CAMERA_DISTANCE * k;
@@ -206,11 +238,19 @@ export class OpenWorldView {
     this.camera.position.set(at.x, distance * Math.cos(TILT), at.z + distance * Math.sin(TILT));
     this.camera.up.set(0, 0, -1); // screen up is the far side: the default up at the closest view, defined straight down
     this.camera.lookAt(at);
+    this.camera.near = NEAR * k; // both planes scale: the depth precision is the same at every zoom
     this.camera.far = CAMERA_FAR * k;
     this.camera.updateProjectionMatrix();
     this.fog.near = FOG_NEAR * k;
     this.fog.far = FOG_FAR * k;
     this.camera.updateMatrixWorld();
+    const reach = Math.min(MAX_REACH, reachFor(groundRadius(this.camera, at)));
+    const key = `${this.centre},${reach}`;
+    if (key !== this.drawnKey) {
+      this.drawnKey = key;
+      this.loadedReach = reach;
+      this.build(this.centre[0], this.centre[1], reach);
+    }
   }
 
   /** Lays marbles on the cells, each on its ground, in an instanced mesh. */
@@ -236,7 +276,8 @@ export class OpenWorldView {
     return cellAtPoint(ground.x, ground.z);
   }
 
-  private build(cx: number, cy: number): void {
+  /** Lays the chunks `reach` around `(cx, cy)`: the ground columns, the props and the enemies. */
+  private build(cx: number, cy: number, reach: number): void {
     const counts = Object.fromEntries([...GROUNDS, ...PROP_NAMES].map((k) => [k, 0])) as Record<Ground | Prop, number>;
     const dummy = new THREE.Object3D();
     const put = (mesh: THREE.InstancedMesh, key: Ground | Prop, x: number, y: number, z: number, scaleY: number): void => {
@@ -245,8 +286,8 @@ export class OpenWorldView {
       dummy.updateMatrix();
       mesh.setMatrixAt(counts[key]++, dummy.matrix);
     };
-    for (let ky = cy - REACH; ky <= cy + REACH; ky++) {
-      for (let kx = cx - REACH; kx <= cx + REACH; kx++) {
+    for (let ky = cy - reach; ky <= cy + reach; ky++) {
+      for (let kx = cx - reach; kx <= cx + reach; kx++) {
         this.world.chunk(kx, ky).forEach((tile, i) => {
           const q = kx * CHUNK + (i % CHUNK);
           const r = ky * CHUNK + Math.floor(i / CHUNK);
@@ -263,7 +304,7 @@ export class OpenWorldView {
       }
     }
     const foes = [];
-    for (let ky = cy - REACH; ky <= cy + REACH; ky++) for (let kx = cx - REACH; kx <= cx + REACH; kx++) foes.push(...this.world.enemies(kx, ky));
+    for (let ky = cy - reach; ky <= cy + reach; ky++) for (let kx = cx - reach; kx <= cx + reach; kx++) foes.push(...this.world.enemies(kx, ky));
     this.place(this.foes, foes);
     this.enemyCount = foes.length;
     for (const key of [...GROUNDS, ...PROP_NAMES]) {

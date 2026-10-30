@@ -71,6 +71,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldTroop;
     delete document.body.dataset.openworldEnemies;
     delete document.body.dataset.openworldZoom;
+    delete document.body.dataset.openworldDrawn;
   }
 
   resize(width: number, height: number): void {
@@ -130,5 +131,6 @@ export class OpenWorldMode {
     document.body.dataset.openworldTroop = this.hero!.troop.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldEnemies = String(this.view!.enemyCount);
     document.body.dataset.openworldZoom = String(this.view!.zoom);
+    document.body.dataset.openworldDrawn = JSON.stringify(this.view!.drawn);
   }
 }

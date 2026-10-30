@@ -273,7 +273,26 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     expect(radius).toBeGreaterThan(CHUNK);
     expect(radius).toBeLessThan(2 * CHUNK);
     view.zoomBy(4);
-    expect(groundRadius(view.camera, hero(view).position)).toBeCloseTo(4 * radius, 0);
+    expect(groundRadius(view.camera, hero(view).position) / radius).toBeCloseTo(4, 0); // the camera stands at the hero's height, so almost linear
+  });
+
+  it('has no ground radius when a corner of the screen looks past the horizon', () => {
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+    camera.position.set(0, 1, 0);
+    camera.lookAt(0, 10, -1); // up: the sky fills the screen
+    camera.updateMatrixWorld();
+    expect(groundRadius(camera, new THREE.Vector3())).toBe(Infinity);
+    expect(reachFor(Infinity)).toBe(Infinity);
+  });
+
+  it('publishes the instances drawn per mesh, the ground, the props, the troop and the enemies', () => {
+    const view = new OpenWorldView(new World(bytes, (cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(5, 5) : new Int32Array())));
+    view.show([0, 0], [[1, 0]]);
+    const drawn = view.drawn;
+    expect(drawn['terrain-grass']).toBe(mesh(view, 'terrain-grass').count);
+    expect(drawn['prop-tree']).toBeGreaterThan(0);
+    expect(drawn.troop).toBe(1);
+    expect(drawn.enemies).toBe(1);
   });
 });
 
