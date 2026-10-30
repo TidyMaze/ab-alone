@@ -187,13 +187,22 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.camera.position.x).toBeLessThan(0);
   });
 
-  it('slides the picture right by the aside of the view, in half widths, never while reading, bug #695', () => {
+  it('puts the target of the view, the board centre, in the middle of the window at any size, bug #957', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
-    sr.frameCamera(1000, 800);
-    sr.applyView({ ...resetView(), aside: 0.2 }, null, { tier: 'high', clear: false, deck: 'mess' });
-    expect(sr.cellToScreen(0, 0, 1000, 800).x).toBeCloseTo(600);
-    sr.applyView({ ...resetView(), aside: 0.2 }, resetView(), { tier: 'high', clear: false, deck: 'mess' });
-    expect(sr.camera.view!.offsetX).toBe(0);
+    const target = { x: 0.25, y: 0, z: -Math.sqrt(3) / 4 };
+    for (const [width, height] of [
+      [1280, 720], // desktop
+      [375, 812], // phone upright
+      [812, 375], // phone sideways
+    ] as const) {
+      sr.frameCamera(width, height);
+      sr.applyView(resetView(), null, { tier: 'high', clear: false, deck: 'mess' });
+      expect(sr.cellToScreen(0, 0, width, height).x).toBeCloseTo(width / 2, 6);
+      expect(sr.cellToScreen(0, 0, width, height).y).toBeCloseTo(height / 2, 6);
+      sr.applyView({ ...resetView(), azimuth: 1, target }, null, { tier: 'high', clear: false, deck: 'mess' });
+      expect(sr.cellToScreen(0.5, -0.5, width, height).x).toBeCloseTo(width / 2, 6);
+      expect(sr.cellToScreen(0.5, -0.5, width, height).y).toBeCloseTo(height / 2, 6);
+    }
   });
 
   it('updates atmospheric fog based on tier, clear board, and deck', () => {

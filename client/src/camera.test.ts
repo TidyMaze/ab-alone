@@ -12,6 +12,7 @@ import {
   fitView,
   framing,
   isDrag,
+  middle,
   orbit,
   pinchScale,
   resetView,
@@ -130,9 +131,9 @@ const halfWidth = (fov: number, width: number, height: number) => Math.tan((fov 
 
 describe('framing, bug #227', () => {
   it('a window at least as wide as tall keeps the default view', () => {
-    expect(framing(1280, 720)).toEqual({ fov: FOV, shift: 0 });
-    expect(framing(812, 375)).toEqual({ fov: FOV, shift: 0 });
-    expect(framing(600, 600)).toEqual({ fov: FOV, shift: 0 });
+    expect(framing(1280, 720)).toEqual({ fov: FOV });
+    expect(framing(812, 375)).toEqual({ fov: FOV });
+    expect(framing(600, 600)).toEqual({ fov: FOV });
   });
 
   it('a window taller than wide sees as wide as a square one, so the whole board fits its width', () => {
@@ -148,10 +149,11 @@ describe('framing, bug #227', () => {
     }
     expect(framing(599, 600).fov).toBeCloseTo(FOV, 0); // no jump at the square
   });
+});
 
-  it('a window taller than wide moves the board down by a quarter of the spare height, for the HUD and buttons', () => {
-    expect(framing(375, 812).shift).toBe((812 - 375) / 4);
-    expect(framing(768, 1024).shift).toBe(64);
+describe('middle, #957', () => {
+  it('is the middle of the box round the points on the board plane, ', () => {
+    expect(middle([{ x: -4, y: 0, z: 0 }, { x: 4.5, y: 0.5, z: -7 }, { x: 1, y: 0, z: 6 }])).toEqual({ x: 0.25, y: 0, z: -0.5 });
   });
 });
 
@@ -205,39 +207,12 @@ describe('fitView, bug #691', () => {
     expect(fitView(resetView(), [side], 375, 812).distance).toBeGreaterThan(resetView().distance * 1.2);
   });
 
-  it('slides the picture aside, no farther than needed, until no point lies under a covered box, the HUD plate, bug #695', () => {
-    const west = { x: -4, y: 0, z: 0 }; // the board's left corner, sideways on a phone
-    const open = fitView(resetView(), [west], 812, 375);
-    expect(open.aside).toBe(0);
-    const plate = { x: 16, y: 16, width: 300, height: 343 };
-    const fit = fitView(resetView(), [west], 812, 375, [plate]);
-    expect(fit.distance).toBe(open.distance); // not drawn back
-    expect(fit.aside).toBeGreaterThan(0); // to the right, away from the plate
-    expect(fitView(resetView(), [west], 812, 375, [{ ...plate, width: 300 - 10 }]).aside).toBeLessThan(fit.aside);
-    expect(fitView(resetView(), [{ x: 4, y: 0, z: 0 }], 812, 375, [{ ...plate, x: 812 - 316 }]).aside).toBeLessThan(0);
-    for (const clear of [
-      { ...plate, width: 100 }, // left of the point
-      { ...plate, x: 500 }, // right of it
-      { ...plate, height: 50 }, // above it
-      { ...plate, y: 300, height: 59 }, // below it
-      { x: 0, y: 0, width: 0, height: 0 }, // a plate not laid out
-    ])
-      expect(fitView(resetView(), [west], 812, 375, [clear])).toEqual(open);
-  });
-
-  it('draws back when no slide clears every point, a box on each side', () => {
-    const sides = [
-      { x: -4, y: 0, z: 0 },
-      { x: 4, y: 0, z: 0 },
-    ];
-    const open = fitView(resetView(), sides, 812, 375);
-    const plates = [
-      { x: 16, y: 16, width: 250, height: 343 },
-      { x: 812 - 266, y: 16, width: 250, height: 343 },
-    ];
-    const fit = fitView(resetView(), sides, 812, 375, plates);
-    expect(fit.distance).toBeGreaterThan(open.distance);
-    expect(fitView(fit, sides, 812, 375, plates)).toEqual(fit);
+  it('fits the points around the target of the view, the board centre it orbits (#957)', () => {
+    const target = { x: 0.25, y: 0, z: -0.5 };
+    const near = { x: 0, y: 0, z: 6 };
+    const moved = (p: { x: number; y: number; z: number }) => ({ x: p.x + target.x, y: p.y, z: p.z + target.z });
+    const fit = fitView(resetView(), [near], 1280, 720);
+    expect(fitView({ ...resetView(), target }, [moved(near)], 1280, 720)).toEqual({ ...fit, target });
   });
 
   it('leaves the margin to the edge, and stops at the farthest distance', () => {
