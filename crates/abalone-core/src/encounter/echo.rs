@@ -11,8 +11,9 @@ use crate::search::{search_phased, DEFAULT_WEIGHTS};
 
 /// P2 starts after this many ejections credited to the player. There is no P3.
 pub const ECHO_PHASE_EJECTIONS: [u8; 1] = [3];
-/// Positions the boss search may visit. Starting value, to tune (calibration knob).
-pub const ECHO_NODE_BUDGET: u32 = 400;
+/// Positions the boss search may visit: one ply deep. At 400 it reads two plies and holds the
+/// mirrored game to the no-ejection cap (docs/specs/boss-balance.md, #951).
+pub const ECHO_NODE_BUDGET: u32 = 100;
 
 fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
     None
