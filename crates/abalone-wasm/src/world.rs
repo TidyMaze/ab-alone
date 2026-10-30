@@ -48,13 +48,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_chunk_is_two_bytes_a_cell_and_matches_the_engine() {
+    fn a_chunk_is_three_bytes_a_cell_and_matches_the_engine() {
         let bytes = world_chunk(9, 1, -1);
         assert_eq!(bytes.len(), 16 * 16 * CELL_STRIDE);
         let cell = world::cell(9, 16 + 3, -16 + 2).unwrap();
         let at = (2 * 16 + 3) * CELL_STRIDE;
         assert_eq!(bytes[at], cell.height);
         assert_eq!(bytes[at + 1], terrain_code(cell.terrain));
+        assert_eq!(bytes[at + 2], cell.biome as u8);
+    }
+
+    #[test]
+    fn the_biome_codes_are_the_five_biomes_of_the_table() {
+        let biomes: Vec<u8> = (-8..8)
+            .flat_map(|cx| world_chunk(3, cx, 0))
+            .skip(2)
+            .step_by(CELL_STRIDE)
+            .collect();
+        assert!(biomes.iter().all(|&code| code <= 4));
+        assert!(biomes.contains(&0) && biomes.contains(&4));
     }
 
     #[test]
