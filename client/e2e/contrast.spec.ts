@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { contrastRatio, type RGB } from '../src/contrast';
+import { contrastRatio, relativeLuminance as luminance, type RGB } from '../src/contrast';
 import { DECK_NAMES } from '../src/deck';
 import { HEAT } from '../src/marbles';
 
@@ -48,7 +48,7 @@ const pixels = (page: Page, png: Buffer, points: [number, number][]) =>
 const deckShot = async (page: Page, deck: string, path: string) => {
   await page.evaluate((d) => (window as any).__deck(d), deck);
   await expect(page.locator('body')).toHaveAttribute('data-deck-set', deck); // the deck's texture is on the cells (#401)
-  const draws = await page.evaluate(() => (window as any).__draws() as number);
+  const draws = await page.evaluate(() => (window as any).__drawNext(1) as number);
   await page.waitForFunction((n) => (window as any).__draws() > n, draws);
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   return page.screenshot({ path, type: 'png' });
@@ -103,7 +103,9 @@ for (const deck of DECK_NAMES) {
 // centre of its projected bounds: the old cell-floor point grazed the opaque PBR sphere (#890). The deck is the mean of
 // the same box on five empty cells in the middle. The box follows the cell spacing, so it holds on desktop and phone.
 const SHELL_CELLS: [number, number][] = [[-4, 4], [-2, 4], [0, 4], [-1, 3], [0, 2]];
-const GLASS_CELLS: [number, number][] = [[4, -4], [2, -4], [0, -4], [1, -3], [0, -2]];
+// The front three and both exposed ends of the middle row: the rear row's lower silhouette is hidden by the next
+// white row, especially on a portrait phone. Measure visible boundaries, rather than another marble over them.
+const GLASS_CELLS: [number, number][] = [[-1, -3], [4, -3], [0, -2], [1, -2], [2, -2]];
 const DECK_CELLS: [number, number][] = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
 
 const boxMeans = (page: Page, png: Buffer, cells: [number, number][], marbles = false) =>
@@ -134,6 +136,39 @@ const boxMeans = (page: Page, png: Buffer, cells: [number, number][], marbles = 
     [png.toString('base64'), cells, marbles] as const,
   );
 
+// The white body's natural PBR shading may approach the deck's mid-tone. Its dark contour carries the shape (#890,
+// WCAG 1.4.11). Sample the middle of the actual silhouette stroke, projected from the tangent circle of the sphere:
+// floor offsets and a projected bounding box both miss its boundary at oblique camera angles.
+const whiteBoundary = async (page: Page, png: Buffer, deck: RGB): Promise<number[]> => {
+  const points = await page.evaluate((cells) => {
+    const w = window as any;
+    const view = w.__view();
+    return cells.flatMap(([q, r]) => {
+      const mesh = w.__marbles().children.find((m: any) => Math.abs(m.position.x - q - r / 2) < 1e-6 && Math.abs(m.position.z - r * Math.sqrt(3) / 2) < 1e-6);
+      const p = mesh.getWorldPosition(mesh.position.clone());
+      const eye = p.clone().set(view.distance * Math.sin(view.polar) * Math.sin(view.azimuth), view.distance * Math.cos(view.polar), view.distance * Math.sin(view.polar) * Math.cos(view.azimuth));
+      const v = eye.sub(p);
+      const distance = v.length();
+      v.normalize();
+      const right = p.clone().set(Math.cos(view.azimuth), 0, -Math.sin(view.azimuth));
+      right.addScaledVector(v, -right.dot(v)).normalize();
+      const up = v.clone().cross(right).normalize();
+      const radius = mesh.geometry.parameters.radius * (1 + mesh.getObjectByName('white-contour').scale.x) / 2;
+      const centre = p.clone().addScaledVector(v, radius * radius / distance);
+      const tangent = radius * Math.sqrt(1 - (radius / distance) ** 2);
+      return Array.from({ length: 8 }, (_, k) => {
+        const a = k * Math.PI / 4;
+        const edge = centre.clone().addScaledVector(right, tangent * Math.cos(a)).addScaledVector(up, tangent * Math.sin(a));
+        const r = 2 * edge.z / Math.sqrt(3);
+        const screen = w.__cellToScreen(edge.x - r / 2, r, edge.y);
+        return [screen.x, screen.y] as [number, number];
+      });
+    });
+  }, GLASS_CELLS);
+  const colors = await pixels(page, png, points);
+  return GLASS_CELLS.map((_, i) => colors.slice(i * 8, i * 8 + 8).filter((rgb) => luminance(rgb) < luminance(deck) && contrastRatio(rgb, deck) >= 3).length);
+};
+
 for (const deckName of DECK_NAMES) {
   for (const [name, width, height] of [['desktop', 1280, 720], ['phone', 375, 812]] as const) {
     test(`${deckName}: each marble reads 3:1 against the deck on ${name}, tasks #344 and #400`, async ({ page }, testInfo) => {
@@ -145,12 +180,13 @@ for (const deckName of DECK_NAMES) {
       const deck = await boxMeans(page, png, DECK_CELLS);
       const mean = [0, 1, 2].map((k) => deck.reduce((s, c) => s + c[k]!, 0) / deck.length) as unknown as RGB;
       const failures: string[] = [];
-      for (const [side, cells] of [['shell', SHELL_CELLS], ['glass', GLASS_CELLS]] as const) {
-        const ratios = (await boxMeans(page, png, cells, true)).map((rgb) => contrastRatio(rgb, mean));
-        const line = `${deckName} ${side} on ${name}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
-        console.log(line);
-        if (ratios.some((ratio) => ratio < 3)) failures.push(line);
-      }
+      const ratios = (await boxMeans(page, png, SHELL_CELLS, true)).map((rgb) => contrastRatio(rgb, mean));
+      const line = `${deckName} shell on ${name}: ratios ${ratios.map((ratio) => ratio.toFixed(2)).join(' ')}`;
+      console.log(line);
+      if (ratios.some((ratio) => ratio < 3)) failures.push(line);
+      const boundary = await whiteBoundary(page, png, mean);
+      console.log(`${deckName} white contour on ${name}: ${boundary.join(' ')} of 8 points at 3:1`);
+      if (boundary.some((n) => n < MIN_PASSING)) failures.push(`white contour: ${boundary.join(' ')}/8`);
       expect(failures, 'marbles below 3:1 against the deck').toEqual([]);
     });
   }
@@ -220,13 +256,28 @@ for (const id of GLASS_IDS) {
     await page.goto('./?bot=off');
     await page.locator('canvas').waitFor();
     await page.mouse.move(2, 2); // no hover ghost
-    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-    const png = await page.screenshot({ path: testInfo.outputPath(`glass-${id}.png`), type: 'png' });
+    const png = await deckShot(page, 'mess', testInfo.outputPath(`glass-${id}.png`));
     const mean = (colors: RGB[]) => [0, 1, 2].map((k) => colors.reduce((s, c) => s + c[k]!, 0) / colors.length) as unknown as RGB;
     const deck = mean(await boxMeans(page, png, DECK_CELLS));
-    const ratios = (await boxMeans(page, png, GLASS_CELLS, true)).map((rgb) => contrastRatio(rgb, deck));
-    const line = `${id}: glass ${ratios.map((r) => r.toFixed(2)).join(' ')}`;
+    const passing = await whiteBoundary(page, png, deck);
+    const line = `${id}: glass contour ${passing.join(' ')} of 8 points at 3:1`;
     console.log(line);
-    expect(ratios.filter((ratio) => ratio < 3), line).toEqual([]);
+    expect(passing.filter((n) => n < MIN_PASSING), line).toEqual([]);
   });
 }
+
+test('the white contrast check detects a missing contour (#890)', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await page.mouse.move(2, 2);
+  const shot = await deckShot(page, 'mess', testInfo.outputPath('contour-present.png'));
+  const colors = await boxMeans(page, shot, DECK_CELLS);
+  const deck = [0, 1, 2].map((k) => colors.reduce((sum, rgb) => sum + rgb[k]!, 0) / colors.length) as unknown as RGB;
+  expect((await whiteBoundary(page, shot, deck)).every((n) => n >= MIN_PASSING)).toBe(true);
+  await page.evaluate(() => {
+    (window as any).__marbles().children.find((m: any) => m.getObjectByName('white-contour')).getObjectByName('white-contour').material.visible = false;
+  });
+  const missing = await deckShot(page, 'mess', testInfo.outputPath('contour-missing.png'));
+  expect((await whiteBoundary(page, missing, deck)).some((n) => n < MIN_PASSING)).toBe(true);
+});

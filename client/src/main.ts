@@ -1084,7 +1084,6 @@ function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset
         look.emissive.set(0xffffff); // black until the map is there: no white flash
         look.emissiveIntensity = 0.03; // lava remains below the board's mid-tone (#890)
       }
-      if (look.name === 'glass') look.emissiveMap = look.map;
       look.needsUpdate = true;
     }),
   );
@@ -1115,7 +1114,7 @@ function glassMaterial(id: string): THREE.MeshPhysicalMaterial {
   const s = glassSkinById(id);
   let look = glassLooks.get(s.id);
   if (!look) {
-    look = new THREE.MeshPhysicalMaterial({ name: 'glass', roughness: 1, metalness: 0, emissive: 0xffffff, emissiveIntensity: 1.2, envMap: reflections, envMapIntensity: LIGHT.environment.intensity });
+    look = new THREE.MeshPhysicalMaterial({ name: 'glass', roughness: 1, metalness: 0, envMap: reflections, envMapIntensity: LIGHT.environment.intensity });
     dress(look, s);
     glassLooks.set(s.id, look);
   }
@@ -1158,10 +1157,19 @@ function reflect(texture: THREE.Texture): void {
   }
   scaleLights();
 }
+// The white PBR body keeps its photographic shading; its dark silhouette reads against the cell (#890).
+// Reuses the sphere geometry so instanceMarbles batches all contours in one draw.
+const whiteContour = new THREE.MeshBasicMaterial({ name: 'white-contour', color: COLORS.base, side: THREE.BackSide });
 function marbleMesh(side: number, looks = marbleMaterials, core?: THREE.Material): THREE.Mesh {
   const glass = side === glassOf();
   const mesh = new THREE.Mesh(marbleGeometry, looks[glass ? 2 : 1]);
   if (glass && core) mesh.add(Object.assign(new THREE.Mesh(coreGeometry, core), { renderOrder: 1 }));
+  if (glass && looks === marbleMaterials) {
+    const contour = new THREE.Mesh(marbleGeometry, whiteContour);
+    contour.name = 'white-contour';
+    contour.scale.setScalar(1.18); // radius 0.425, inside the cell's 0.46
+    mesh.add(contour);
+  }
   const accent = !glass && looks === marbleMaterials ? accents.get(fight?.id ?? '') : undefined; // the boss side (#507)
   if (accent) mesh.add(accent.clone());
   return mesh;
@@ -4548,7 +4556,8 @@ let drawAsked = false;
 // Used by the browser checks to wait for a draw: under automation the loop skips frames (#216), so a frame is not a draw (#365).
 (window as unknown as Record<string, unknown>).__draws = () => draws;
 // Used by the browser checks to ask for the next draw, which the throttle does not hold (#435): returns the draws so far.
-(window as unknown as Record<string, unknown>).__drawNext = () => {
+(window as unknown as Record<string, unknown>).__drawNext = (ratio?: number) => {
+  if (ratio !== undefined) setPixelRatio(ratio);
   drawAsked = true;
   return draws;
 };

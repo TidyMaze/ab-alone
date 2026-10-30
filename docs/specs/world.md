@@ -125,7 +125,7 @@ board edge (40 on the low tier); each deck's density scales that span (#896).
 
 | Faction | Look | Silhouette cue |
 |---|---|---|
-| Player | White photographic PBR skin, its albedo providing a steady fill so it stays 3:1 on the deck (#890); see-through ghosts retain the cyan core | Smooth, opaque surface |
+| Player | White photographic PBR skin with natural shading, a near-black silhouette staying 3:1 on the deck (#890); see-through ghosts retain the cyan core | Smooth, opaque surface |
 | Shelled (enemy) | Dark photographic PBR skin, restrained reflections and a faint heat pulse, 3:1 on the deck (#890) | Textured, no core |
 | Boss variants | Same shell with one accent (rust crown, candle wax, wire wrap) | Added silhouette |
 | Flipped (by The Chaplain) | The shell skin below and the player skin above, under wax; both stay opaque, with no hidden core (#885) | Half player skin, half shell skin |

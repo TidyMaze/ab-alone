@@ -36,10 +36,12 @@ and no new look: each rule names its source (section numbers), and changes when 
   a mid-tone so the black shell stands out, the frame's plate stays dark.
 
   Opaque PBR skins keep their photographic maps and hues, with neutral contrast levels (#890): the dark faction's
-  albedo gain is 0.2 and dielectric specular intensity 0.15; the white faction uses its own albedo as an emission fill
-  at 1.2. Lava emission is capped at 0.03, and the shell heat pulse at 0.008. The cell bevel has a 0.04 tube and a
+  albedo gain is 0.2 and dielectric specular intensity 0.15; the white faction keeps its natural PBR shading inside a
+  near-black contour, a back-face sphere at scale 1.18, batched in one extra draw. Lava emission is capped at 0.03,
+  and the shell heat pulse at 0.008. The cell bevel has a 0.04 tube and a
   steady cold emission floor; the active frame half uses emission intensity 1.3. Browser checks measure the visible
-  bevel surface and the centre of each marble's projected bounds, retaining the 3:1 minimum.
+  bevel surface, the black body's centre and the white silhouette (at least six of eight exposed boundary points),
+  retaining the 3:1 minimum. Contours are measured at player resolution, with a missing-contour negative control.
 - **Decks** (world.md 1, 3, 5). Mess: warm lamp, worn laminate (hot-seat, The Echo). Cargo: cold,
   steel and ore dust (online, The Hull). Furnace: orange glow, steam (The Choir). Chapel: candles,
   wood and wire (The Chaplain). Bridge: cold white, too clean (The Ballast Mind). Fog thickens
