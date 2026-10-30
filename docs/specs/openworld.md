@@ -21,22 +21,28 @@ A-light Explore (#720 to #725), which it does not touch.
   generated only when the hero is within 2 chunks of it.
 - **Seed**: a chunk comes from the world seed and its coordinates alone (engine splitmix64), so
   the same seed always gives the same world, in any order of visit. Saving a world is its seed.
-- **Relief**: every cell has a height 0 to 3 from smooth value noise. The renderer lifts the cell
-  column to `0.2 + 0.2 * height` (water to 0.08) and lights it. The height itself never changes a
+- **Relief**: every cell has a height 0 to 7 from three levels of smooth value noise (macro, meso,
+  micro, see [openworld-terrain.md](openworld-terrain.md) section 2). The renderer lifts the cell
+  column to `0.2 + 0.2 * height * 3 / 7` (water to 0.08) until the relief task (#988) changes it, and lights it. The height itself never changes a
   move or a push: it only picks the terrain, and a terrain that blocks is an obstacle.
 - **Terrain**: from height and a second noise (moisture), one look per cell: **lakes** (water,
-  height 0), sand, grass, rock, **mountains** (peaks, height 3). Forests (**trees**, on grass in a
-  forest noise, about half its cells) and ruined **walls** (segments of 3 to 6 cells along one of
+  heights 0 and 1), sand (the shore, height 2), grass, rock, **mountains** (peaks, height 7). Forests
+  (**trees**, one time in four of the grass cells of a forest zone) and ruined **walls** (segments of 3 to 6 cells along one of
   three axes, one per 24-cell square at most, laid on land) come on top.
 - **Obstacles**: blocked cells the hero, the troop and the enemies cannot enter: water, mountains,
-  trees, walls, and scattered boulders (about 6 % of the open cells). A push into an obstacle is
+  trees, walls, and scattered boulders (about 2 % of the open cells). A push into an obstacle is
   refused, as a push into a friendly marble is in `rules.md`.
 - **Style**: low-poly and faceted, as the bay: flat-shaded hex columns, coolant-blue lakes that glow
   a little, dark faceted spires for the mountains, teal wire pines, grey boulders, black gantry
   walls. The props are meshes made in Blender (`client/models/openworld.glb`, a few faces each,
   packed with meshopt); the ground is one instanced hex prism per terrain.
 - **Spawn**: a clearing of radius 3 around the start cell has no obstacle and no enemy, and every
-  cell of the clearing reaches the clearing's edge, so the hero is never boxed in.
+  cell of the clearing reaches the clearing's edge, so the hero is never boxed in. The clearing is
+  grass at height 3, and within 8 cells of the start the elevation is pulled to the grass band, fading
+  to the world's own by 64 cells, so the start is on land and not walled in by sea or peaks.
+
+The levels of noise, the biomes, the relief and the obstacle density are specified in
+[openworld-terrain.md](openworld-terrain.md).
 
 ## 3. Enemies
 
