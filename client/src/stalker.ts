@@ -70,23 +70,27 @@ export function resolveSeen(legalMoves: Move[], mv: Move): Move | null {
   return legalMoves.find((m) => m.dir === mv.dir && sameCells(m.cells, mv.cells)) ?? null;
 }
 
-/** The cells of the hidden marbles a seen move runs into: the line of marbles in front of an inline move, the target
- * cells of a broadside. Hidden: the real board holds what the seen board does not. */
+/** The hidden marble a seen move runs into, if any: the first one in the line of marbles in front of an inline move.
+ * The cells 1 and 2 ahead are always in range, so it is the third pushed marble, and the ones behind it stay hidden. A
+ * broadside's targets touch the group: never hidden. Hidden: the real board holds what the seen board does not. */
 export function blockers(board: ArrayLike<number>, seen: ArrayLike<number>, mv: Move): number[] {
-  const hidden = (c: Axial): boolean => at(board, c) !== at(seen, c);
-  if (!inline(mv)) return mv.cells.map((c) => step(c, mv.dir)).filter(hidden).map(([q, r]) => cellIndex(q, r, CELLS));
-  const found: number[] = [];
+  if (!inline(mv)) return [];
   for (let c = step(frontOf(mv), mv.dir); at(board, c) !== undefined && at(board, c) !== 0; c = step(c, mv.dir)) {
-    if (hidden(c)) found.push(cellIndex(c[0], c[1], CELLS));
+    if (at(board, c) !== at(seen, c)) return [cellIndex(c[0], c[1], CELLS)];
   }
-  return found;
+  return [];
 }
 
-/** The marbles a seen move would move, where they land: the group, then the marbles it pushes, those off the board gone. */
+/** The cells a seen move changes and what lands there, as the ghosts of a real move (ghost.ts): the group and the
+ * marbles it pushes one cell on, those off the board gone, the cells that keep their marble left out. */
 export function seenGhosts(board: ArrayLike<number>, mv: Move): { cell: Axial; side: number }[] {
   const ghosts = mv.cells.map((c) => ({ cell: step(c, mv.dir), side: at(board, c)! }));
   if (inline(mv)) {
     for (let c = step(frontOf(mv), mv.dir); at(board, c); c = step(c, mv.dir)) ghosts.push({ cell: step(c, mv.dir), side: at(board, c)! });
   }
-  return ghosts.filter(({ cell }) => at(board, cell) !== undefined);
+  return ghosts.filter(({ cell, side }) => at(board, cell) !== undefined && at(board, cell) !== side);
 }
+
+/** The HUD note of a Stalker game: the bot sees the whole board, and a blocked move reveals a marble. */
+export const stalkerNote = (revealed: boolean): string =>
+  ` · Stalker: the bot is not fogged${revealed ? ' · A hidden marble blocks that move: play again' : ''}`;
