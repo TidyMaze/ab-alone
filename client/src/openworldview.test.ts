@@ -5,6 +5,7 @@ import { cellAtPoint, CHUNK, chunkOf, neighbours, TROOP, World } from './openwor
 import {
   CAPACITY,
   footprint,
+  GROUND,
   GROUNDS,
   groundRadius,
   HI_CAPACITY,
@@ -17,6 +18,7 @@ import {
   OpenWorldView,
   reachAt,
   reachFor,
+  STEP,
   topOf,
   variety,
   WATER,
@@ -30,6 +32,19 @@ function bytes(cx: number, cy: number): Uint8Array {
   const out = new Uint8Array(CHUNK * CHUNK * 2);
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([i % 4, i % 8], i * 2);
   return out;
+}
+// Grass everywhere, each cell at its level from `levels` (`base` for the others): a chunk of the square -3..3 (#988).
+function stepped(levels: Map<string, number>, base = 3): (cx: number, cy: number) => Uint8Array {
+  return (cx, cy) => {
+    if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+    const out = new Uint8Array(CHUNK * CHUNK * 2);
+    for (let i = 0; i < CHUNK * CHUNK; i++) {
+      const q = cx * CHUNK + (i % CHUNK);
+      const r = cy * CHUNK + Math.floor(i / CHUNK);
+      out.set([levels.get(`${q},${r}`) ?? base, 2], i * 2);
+    }
+    return out;
+  };
 }
 // Every chunk of the world is grass, flat: the loaded square is as wide as the reach asks for.
 function grass(): Uint8Array {
@@ -98,9 +113,11 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
   it('lifts a cell by its height, water lies low, and varies props by cell without chance', () => {
     expect(topOf('water', 0)).toBeLessThan(topOf('grass', 0));
     expect(topOf('grass', 3)).toBeGreaterThan(topOf('grass', 1));
-    // The eight levels 0 to 7 keep the picture of the four heights: level 7 is 0.8, level 0 is 0.2.
+    // The eight levels 0 to 7 are one step apart: level 0 is 0.2 (land), a peak (level 7) stands 7 steps up, water lies at 0.08.
     expect(topOf('grass', 0)).toBeCloseTo(0.2);
-    expect(topOf('peak', 7)).toBeCloseTo(0.8);
+    expect(topOf('peak', 7)).toBeCloseTo(0.2 + 7 * STEP);
+    for (let level = 0; level < 7; level++) expect(topOf('sand', level + 1) - topOf('sand', level)).toBeCloseTo(STEP);
+    expect(topOf('water', 7)).toBeCloseTo(0.08);
     expect(variety(3, 4)).toBe(variety(3, 4));
     const draws = new Set([0, 1, 2, 3, 4, 5].map((q) => variety(q, -q)));
     expect(draws.size).toBeGreaterThan(2);
@@ -284,15 +301,15 @@ describe('the zoom of the Open world camera (#976)', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([2, 1]);
     expect(view.zoom).toBe(1);
-    expect(view.camera.position.y).toBeCloseTo(14);
+    expect(view.camera.position.y).toBeCloseTo(14 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(11);
     view.zoomBy(0.5); // closer than the default: no
     expect(view.zoom).toBe(1);
     view.zoomBy(1.5);
     expect(view.zoom).toBeCloseTo(1.5);
-    expect(view.camera.position.y).toBeCloseTo(21);
+    expect(view.camera.position.y).toBeCloseTo(21 + view.focusHeight);
     view.zoomBy(2 / 1.5);
-    expect(view.camera.position.y).toBeCloseTo(28);
+    expect(view.camera.position.y).toBeCloseTo(28 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(22);
     view.zoomBy(1e9);
     expect(view.zoom).toBe(MAX_ZOOM);
@@ -318,22 +335,79 @@ describe('the zoom of the Open world camera (#976)', () => {
     view.show([2, 1]);
     view.zoomBy(2);
     view.show([3, 1]);
-    expect(view.camera.position.y).toBeCloseTo(28);
+    expect(view.camera.position.y).toBeCloseTo(28 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(22);
   });
 
   it('picks the cell under the pointer at every zoom', () => {
     for (const level of [1, 1.5, 2]) {
-      const view = new OpenWorldView(new World(bytes));
+      const world = new World(bytes);
+      const view = new OpenWorldView(world);
       view.resize(800, 600);
       view.show([2, 1]);
       view.zoomBy(level);
       for (const cell of [[2, 1], ...neighbours([2, 1])] as Axial[]) {
         const p = axialTo3D(cell[0], cell[1]);
-        const ndc = new THREE.Vector3(p.x, hero(view).position.y, p.z).project(view.camera);
+        const tile = world.tile(cell[0], cell[1])!;
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
         expect(view.pick(ndc.x, ndc.y)).toEqual(cell);
       }
     }
+  });
+
+  it('picks the neighbour under the pointer on its own column top, 0 to 3 levels above and below the hero, close and far (#988)', () => {
+    for (const zoom of [1, MAX_ZOOM]) {
+      for (const d of neighbours([0, 0]) as Axial[]) {
+        for (const k of [-3, -2, -1, 0, 1, 2, 3]) {
+          // The hero stands on level 3 and one neighbour on 3 + k: every other cell of the ring is level 3.
+          const view = new OpenWorldView(new World(stepped(new Map([[`${d[0]},${d[1]}`, 3 + k]]))));
+          view.resize(800, 600);
+          view.show([0, 0]);
+          view.zoomBy(zoom);
+          const p = axialTo3D(d[0], d[1]);
+          const ndc = new THREE.Vector3(p.x, topOf('grass', 3 + k), p.z).project(view.camera);
+          expect(view.pick(ndc.x, ndc.y), `${d} at level ${3 + k}, zoom ${zoom}`).toEqual(d);
+        }
+      }
+    }
+  });
+
+  it('gives the hero its own cell, no move, when the pointer is on no cell of the hero ring', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(800, 600);
+    view.show([0, 0]);
+    expect(view.pick(1, 1)).toEqual([0, 0]);
+  });
+
+  it('eases the camera height to a step up a cliff: not at once, on the top within 0.6 s, never past it (#988)', () => {
+    const view = new OpenWorldView(new World(stepped(new Map([['1,0', 3]]), 0)));
+    view.resize(800, 600);
+    view.show([0, 0]);
+    expect(view.focusHeight).toBeCloseTo(view.scene.getObjectByName('hero')!.position.y);
+    view.show([1, 0]); // a step onto a cell 3 levels up: the top is 3 * STEP higher
+    const top = view.scene.getObjectByName('hero')!.position.y;
+    expect(top - view.focusHeight).toBeCloseTo(3 * STEP);
+    const start = view.focusHeight;
+    expect(view.ease(1 / 60, false)).toBe(true);
+    expect(view.focusHeight).toBeGreaterThan(start);
+    expect(view.focusHeight).toBeLessThan(top - 0.1); // not at its target at once
+    let highest = view.focusHeight;
+    for (let frame = 1; frame < 36; frame++) {
+      view.ease(1 / 60, false);
+      highest = Math.max(highest, view.focusHeight);
+    }
+    expect(Math.abs(view.focusHeight - top)).toBeLessThanOrEqual(0.01); // on the top after 0.6 s
+    expect(highest).toBeLessThanOrEqual(top); // the ease never overshoots
+    expect(view.ease(1 / 60, false)).toBe(false); // settled: nothing to draw
+    expect(view.focusHeight).toBe(top);
+  });
+
+  it('jumps to the top at once when the ease is instant (reduced motion, #988)', () => {
+    const view = new OpenWorldView(new World(stepped(new Map([['1,0', 3]]), 0)));
+    view.show([0, 0]);
+    view.show([1, 0]);
+    expect(view.ease(1 / 60, true)).toBe(true);
+    expect(view.focusHeight).toBe(view.scene.getObjectByName('hero')!.position.y);
   });
 });
 

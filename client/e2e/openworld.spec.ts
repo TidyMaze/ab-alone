@@ -32,6 +32,26 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   expect(await page.evaluate(() => document.body.dataset.openworld)).toBeUndefined();
 });
 
+// #988: a step up onto a higher cell. On seed 7 the spawn row runs grass at height 3 to (3, 0), then (4, 0) is grass at
+// height 4: four Right presses reach it, the cell changes and the page keeps running while the camera eases up (the ease
+// itself is unit tested in openworldview.test.ts).
+test('the hero steps up onto a higher cell of the Open world and the page keeps running, #988', async ({ page }) => {
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  for (let i = 1; i <= 4; i++) {
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(at).toBe(`${i},0`);
+  }
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))); // the frames after the step
+  expect(errors).toEqual([]);
+});
+
 // #966: enemy marbles stand on the map and the troop of 6 trails the hero, the first marble on the cell it just left.
 test('enemy marbles are on the map and the troop follows the hero, #966', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
