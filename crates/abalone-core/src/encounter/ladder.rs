@@ -193,7 +193,7 @@ fn mix(mut x: u64) -> u64 {
 /// The player bot move: a seeded random legal move for its first `opening` moves, then the
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
 /// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
-/// takes the Echo's safe free moves, and plays the plain search when no move is left. Against the Chaplain and the Ballast Mind the
+/// takes the Echo's safe free moves that eject, and plays the plain search when no move is left. Against the Chaplain and the Ballast Mind the
 /// search sees the hooks. `None` when the player has no move
 /// (every marble was converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
@@ -204,9 +204,14 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         moves.get(pick as usize).cloned()
     } else {
         let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.tell_safe(mv);
-        // The Echo's free move costs no tempo: the pro takes the first safe one (#958).
+        // The Echo's free move costs no tempo, but one that gives the mirrored board back is the
+        // Echo's lock (#951): the pro takes the first safe one that ejects, else declines (#958).
         if let Arena::Plain(enc, LadderBoss::Echo) = arena {
-            if let Some(free) = echo_free_moves(enc).into_iter().find(|m| strict(m)) {
+            let ejects = |m: &Move| apply(game.board(), Player::Black, m).is_ok_and(|a| a.1);
+            if let Some(free) = echo_free_moves(enc)
+                .into_iter()
+                .find(|m| ejects(m) && strict(m))
+            {
                 return Some(free);
             }
         }
@@ -369,7 +374,7 @@ mod tests {
     use crate::board::{Board, Cell};
     use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
-    use crate::encounter::echo::{echo_boss, echo_fight};
+    use crate::encounter::echo::{echo_boss, echo_fight, mirror_move};
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
     use crate::encounter::Encounter;
     use crate::game::Game;
@@ -437,19 +442,32 @@ mod tests {
     }
 
     #[test]
-    fn the_pro_takes_the_echos_free_move_first() {
-        use crate::moves::Direction::{NW, SE};
+    fn the_pro_takes_the_echos_free_move_only_when_it_ejects() {
+        use crate::moves::Direction::{NW, SE, W};
+        let step = |cells: &[(i32, i32)], dir| Move {
+            cells: cells.to_vec(),
+            dir,
+        };
+        let mut a = echo_arena(
+            &[(2, 0), (3, 0)],
+            &[(-2, 0), (-3, 0), (4, 0)],
+            Player::White,
+        );
+        a.play(&step(&[(-2, 0), (-3, 0)], W)).unwrap();
+        let push = mirror_move(&step(&[(-2, 0), (-3, 0)], W));
+        assert_eq!(player_move(&a, 0, 9, 0, 1000), Some(push), "a free push");
         let mut a = echo_arena(
             &[(0, 2), (-3, 4), (2, 2)],
             &[(0, -2), (3, -4)],
             Player::White,
         );
-        let step = |q, r, dir| Move {
-            cells: vec![(q, r)],
-            dir,
-        };
-        a.play(&step(0, -2, NW)).unwrap();
-        assert_eq!(player_move(&a, 0, 9, 0, 1000), Some(step(0, 2, SE)));
+        a.play(&step(&[(0, -2)], NW)).unwrap();
+        let free = step(&[(0, 2)], SE);
+        assert_ne!(
+            player_move(&a, 0, 9, 0, 1000),
+            Some(free),
+            "a quiet one declined"
+        );
         // Its opening moves stay random.
         assert!(player_move(&a, 0, 0, 1, 1000).is_some());
     }
