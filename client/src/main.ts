@@ -4542,6 +4542,7 @@ const openWorld = new OpenWorldMode(
   (seed, cx, cy) => world_chunk(seed, cx, cy),
   (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
   () => loadModels(`${import.meta.env.BASE_URL}assets/pbr/openworld.glb`, meshoptLoader()),
+  () => reducedMotion(),
 );
 openWorldButton.hidden = openWorldSeed === null;
 openWorldButton.addEventListener('click', () => {

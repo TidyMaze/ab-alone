@@ -38,11 +38,13 @@ export class OpenWorldMode {
   /** The arrow keys held down: a vertical and a horizontal one together roll a diagonal. */
   private readonly held = new Set<string>();
 
-  /** `load` reads a chunk of a seed's world, `models` the low-poly props: the first draw does not wait for them. */
+  /** `load` reads a chunk of a seed's world, `models` the low-poly props: the first draw does not wait for them. `reduced`
+   * tells whether the page asks for reduced motion, which holds the water still. */
   constructor(
     private readonly load: (seed: number, cx: number, cy: number) => Uint8Array,
     private readonly loadEnemies: (seed: number, cx: number, cy: number) => Int32Array,
     private readonly models: () => Promise<PropGeometries>,
+    private readonly reduced: () => boolean,
   ) {}
 
   enter(seed: number, width: number, height: number): void {
@@ -111,11 +113,13 @@ export class OpenWorldMode {
     this.mark(document.body.dataset.openworld!);
   }
 
-  /** Draws the scene when something changed since the last draw. */
+  /** Draws the scene when something changed since the last draw, and every frame while a lake is in view and motion is on. */
   frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void): void {
     if (this.view!.paintOverview(PAINT_CHUNKS)) this.dirty = true; // the overview paints a few chunks a frame
-    if (!this.dirty) return;
+    const moving = !this.reduced() && this.view!.hasWater;
+    if (!this.dirty && !moving) return;
     this.dirty = false;
+    this.view!.glow(moving ? performance.now() : 0);
     render(this.view!.scene, this.view!.camera);
   }
 

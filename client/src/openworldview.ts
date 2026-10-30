@@ -4,7 +4,7 @@
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { CHUNK, cellAtPoint, chunkOf, TERRAINS, type Terrain, type Tile, type World } from './openworld';
+import { CHUNK, cellAtPoint, chunkOf, neighbours, TERRAINS, type Terrain, type Tile, type World } from './openworld';
 import { Overview, SIDE } from './openworldoverview';
 
 /** Chunks loaded on each side of the hero's chunk. */
@@ -46,12 +46,19 @@ export const GROUND: Record<Terrain, Ground> = {
   wall: 'rock',
 };
 export const LOOK: Record<Ground, { color: number; emissive: number }> = {
-  water: { color: 0x1aa6c4, emissive: 0x0a5568 }, // coolant lakes glow a little
+  water: { color: 0xffffff, emissive: 0x0a5568 }, // coolant lakes glow a little; the colour comes per cell (waterColor)
   sand: { color: 0x9a8a62, emissive: 0x000000 },
   grass: { color: 0x3f7d5f, emissive: 0x000000 },
   rock: { color: 0x4b525c, emissive: 0x000000 },
   peak: { color: 0x4a525c, emissive: 0x000000 },
 };
+/** The lake colours: the shore, lighter and greener, and the deep middle of a lake. */
+export const WATER = { shore: 0x3fd0b4, deep: 0x0a4a7a };
+/** The colour of a water cell: the share of its six neighbours that are water sets how far it lies from the shore. */
+export function waterColor(world: World, q: number, r: number): THREE.Color {
+  const wet = neighbours([q, r]).filter(([nq, nr]) => world.tile(nq, nr)?.terrain === 'water').length / 6;
+  return new THREE.Color(WATER.shore).lerp(new THREE.Color(WATER.deep), wet);
+}
 
 /** The props on top of the ground: its height, its look and its geometry. */
 const PROPS = {
@@ -141,6 +148,7 @@ export class OpenWorldView {
       const { color, emissive } = LOOK[ground];
       this.grounds[ground] = this.instances(`terrain-${ground}`, prism, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.9 }));
     }
+    (this.grounds.water.material as THREE.MeshStandardMaterial).roughness = 0.2; // a glossy surface catches the sun
     for (const prop of PROP_NAMES) {
       const { geometry, color, emissive, flat } = PROPS[prop];
       this.props[prop] = this.instances(`prop-${prop}`, geometry, new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat }));
@@ -182,6 +190,16 @@ export class OpenWorldView {
   resize(width: number, height: number): void {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+  }
+
+  /** Whether a lake is drawn, so its glow moves. */
+  get hasWater(): boolean {
+    return this.grounds.water.count > 0;
+  }
+
+  /** The glow of the water breathes slowly: `ms` is the time, 0 holds it still (reduced motion). */
+  glow(ms: number): void {
+    (this.grounds.water.material as THREE.MeshStandardMaterial).emissiveIntensity = 1 + 0.15 * Math.sin(ms / 1200);
   }
 
   /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero enters another chunk, the hero and the
@@ -346,6 +364,10 @@ export class OpenWorldView {
           const p = axialTo3D(q, r);
           const ground = GROUND[tile.terrain];
           const top = topOf(ground, tile.height);
+          if (ground === 'water') {
+            this.grounds.water.setColorAt(counts.water, waterColor(this.world, q, r));
+            this.grounds.water.instanceColor!.needsUpdate = true;
+          }
           put(this.grounds[ground], ground, p.x, top / 2, p.z, top);
           this.stand(tile, q, r, p, top, put);
         });
