@@ -201,6 +201,14 @@ pub fn dual_start(seed: u64) -> Encounter {
     )
 }
 
+/// The marble that landed at the end of the last ply and its cell, `None` when none did or outside
+/// the Dual Room's fight.
+pub fn dual_landed(enc: &Encounter) -> Option<(Cell, P)> {
+    let (before, _) = enc.hooked()?;
+    let (marble, at) = before.dual()?.coming?;
+    Some((marble, nearest_empty(before, at)))
+}
+
 /// What a ply does in the boss search: the pushed-off marble is noted, then the hook runs with
 /// seed 0. A return credits nothing: the search counts the push itself.
 fn search_step(before: &Board, _mover: Player, mv: &Move, mut after: Board) -> (Board, [u8; 2]) {

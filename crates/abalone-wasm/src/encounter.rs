@@ -15,6 +15,7 @@ use abalone_core::encounter::ballast::{
 };
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
+use abalone_core::encounter::dual::{dual_boss, dual_landed, dual_move, dual_start};
 use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
 use abalone_core::encounter::hull::{hull_boss, hull_move};
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
@@ -129,6 +130,11 @@ fn unstable_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(unstable_start(seed))
 }
 
+/// The Dual Room sets up its two rooms and its wall.
+fn dual_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(dual_start(seed))
+}
+
 fn echo_announce(_enc: Option<&CoreEncounter>, mv: &Move) -> Option<Move> {
     Some(mirror_move(mv))
 }
@@ -146,7 +152,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 12] = [
+const BOSSES: [BossEntry; 13] = [
     BossEntry {
         id: "echo",
         goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
@@ -256,6 +262,15 @@ const BOSSES: [BossEntry; 12] = [
         def: unstable_boss,
         start: unstable_fight,
         reply: unstable_move,
+        announce: no_announce,
+        flips: no_flips,
+    },
+    BossEntry {
+        id: "dual",
+        goal: "Two rooms split by a wall: an ejected marble comes back in the other room; at 5 the wall falls. Eject 6 to win; lose 6 or draw to lose.",
+        def: dual_boss,
+        start: dual_fight,
+        reply: dual_move,
         announce: no_announce,
         flips: no_flips,
     },
@@ -646,6 +661,31 @@ impl Encounter {
                 ]
             })
             .collect()
+    }
+
+    /// The Dual Room's wall and announced return as `[collapsed, side, q, r]`, side `0` when no
+    /// marble is coming. Empty for the other bosses.
+    pub fn dual(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        e.game().board().dual().map_or_else(Vec::new, |d| {
+            let (side, (q, r)) = d
+                .coming
+                .map_or((0, (0, 0)), |(cell, at)| (i32::from(code(Some(cell))), at));
+            vec![i32::from(d.collapsed), side, q, r]
+        })
+    }
+
+    /// The marble that landed at the end of the last ply (The Dual Room) as `[side, q, r]`, empty
+    /// when none did.
+    pub fn last_return(&self) -> Vec<i32> {
+        let Fight::Plain(e) = &self.fight else {
+            return Vec::new();
+        };
+        dual_landed(e).map_or_else(Vec::new, |(cell, (q, r))| {
+            vec![i32::from(code(Some(cell))), q, r]
+        })
     }
 
     /// The charged marbles (The Unstable Core) as `[q, r, charges]` records, empty for the other
