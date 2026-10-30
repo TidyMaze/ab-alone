@@ -430,6 +430,43 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
     expect(mesh(view, 'enemies').count).toBe(CAPACITY.enemies);
     expect(view.enemyCount).toBe(CAPACITY.enemies);
   });
+
+  // #1010: a mesh past its initial capacity grows; only the theoretical most cells of the widest view are dropped.
+  const MOST = (2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK;
+  const filled = (code: number) => (cx: number, cy: number): Uint8Array => {
+    if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+    const out = new Uint8Array(CHUNK * CHUNK * 2);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([0, code], i * 2); // every cell of one terrain, flat
+    return out;
+  };
+
+  it('draws every water cell of the widest view, past the capacity of the water mesh (#1010)', () => {
+    const view = new OpenWorldView(new World(filled(0))); // code 0: water
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(MAX_ZOOM);
+    const side = 2 * view.reach + 1;
+    expect(view.drawn['terrain-water']).toBe(side * side * CHUNK * CHUNK);
+    expect(view.drawn['terrain-water']).toBeGreaterThan(CAPACITY.water);
+    expect(mesh(view, 'terrain-water').instanceColor).not.toBeNull(); // the colour of each lake, kept through the growth
+  });
+
+  it('draws every tree of the widest view, past the capacity of the tree mesh (#1010)', () => {
+    const view = new OpenWorldView(new World(filled(6))); // code 6: tree
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(MAX_ZOOM);
+    const side = 2 * view.reach + 1;
+    expect(view.drawn['prop-tree']).toBe(side * side * CHUNK * CHUNK);
+    expect(view.drawn['prop-tree']).toBeGreaterThan(CAPACITY.tree);
+  });
+
+  it('clamps the enemies at the most cells of the widest view, past the capacity they grow to (#1010)', () => {
+    const crowd = Int32Array.from({ length: 2 * (MOST + 5) }, () => 5);
+    const view = new OpenWorldView(new World(grass, (cx, cy) => (cx === 0 && cy === 0 ? crowd : new Int32Array())));
+    view.show([0, 0]);
+    expect(view.enemyCount).toBe(MOST);
+  });
 });
 
 describe('the far zoom is real 3D, with no overview (#976)', () => {
