@@ -1748,6 +1748,9 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
   if (currentBay) {
     document.body.dataset.bay = 'ready'; // the room is complete: the browser checks of a still scene wait for it (#661)
   }
+  const plate = document.getElementById('loading')!; // the loading plate (#901): fades, then leaves, a missing bay too
+  plate.classList.add('done');
+  setTimeout(() => (plate.hidden = true), 400);
 };
 (window as unknown as Record<string, unknown>).__mountBay = mountBay;drawProps();
 void loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader).then(mountBay);
