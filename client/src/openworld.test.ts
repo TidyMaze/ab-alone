@@ -162,7 +162,7 @@ describe('the Open world cache is bounded (#981)', () => {
     const world = new World(load, loadEnemies);
     const first = [...world.chunk(0, 0)];
     const firstGroups = [...world.enemies(0, 0)];
-    for (let cx = -40; cx < 40; cx++) {
+    for (let cx = -200; cx <= 200; cx++) {
       for (let cy = -2; cy < 2; cy++) {
         world.chunk(cx, cy);
         world.enemies(cx, cy);
@@ -176,6 +176,13 @@ describe('the Open world cache is bounded (#981)', () => {
     // Loaded at first, again in the walk (it was evicted by then) and again after the walk.
     expect(load.mock.calls.filter(([cx, cy]) => cx === 0 && cy === 0)).toHaveLength(3);
     expect(loadEnemies.mock.calls.filter(([cx, cy]) => cx === 0 && cy === 0)).toHaveLength(3);
+  });
+
+  it('lets the view raise the limit, the cache follows it', () => {
+    const world = new World((cx: number, cy: number) => bytes(cx, cy));
+    world.limit = 400;
+    for (let cx = 0; cx < 350; cx++) world.chunk(cx, 0);
+    expect(world.cached.chunks).toBe(350);
   });
 
   it('evicts the least recently used chunk; a chunk read again stays', () => {
