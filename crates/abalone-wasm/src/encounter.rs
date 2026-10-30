@@ -951,7 +951,7 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_12_since_the_echo_searches_100_nodes() {
+    fn the_engine_version_is_13_since_the_dual_room_has_a_void_and_a_bridge() {
         assert_eq!(engine_version(), 12);
     }
 

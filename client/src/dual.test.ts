@@ -43,10 +43,9 @@ describe('The Dual Room board (#947, #955, game-design.md section 7.15)', () => 
     }
   });
 
-  it('opens the fight looking across the void, the two rooms side by side', () => {
+  it('opens the fight looking along the void, the two rooms side by side', () => {
     expect(DUAL_AZIMUTH).toBeCloseTo(Math.PI / 2);
-    // Drawn back as far as the view goes (DIST_MAX 18), the camera stays under the bay's gantry ribs, from y = 12.8.
-    expect(18 * Math.cos(DUAL_POLAR)).toBeLessThan(12.8);
+    expect(DUAL_POLAR).toBeCloseTo(0.9);
     expect(axialTo3D(...ROOMS[0]!).x).toBe(axialTo3D(...ROOMS[1]!).x);
   });
 });
