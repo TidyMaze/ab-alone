@@ -405,6 +405,83 @@ mod tests {
         }
     }
 
+    /// FNV-1a over the bytes of the chunks and the enemy groups of a few seeds and chunks: any change
+    /// of the generated world changes it.
+    fn world_digest() -> u64 {
+        let fnv = |hash: u64, byte: u8| (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3);
+        let mut hash = 0xCBF2_9CE4_8422_2325u64;
+        let coords = [
+            (0, 0),
+            (-1, 0),
+            (3, -2),
+            (5, 5),
+            (-8, 7),
+            (31, -32),
+            (-32, 31),
+            (12, 9),
+            (-4, -4),
+            (17, 1),
+            (2, 20),
+            (-20, -11),
+        ];
+        for seed in [1u64, 7, 42] {
+            for &(cx, cy) in &coords {
+                for cell in chunk(seed, cx, cy).unwrap() {
+                    hash = fnv(hash, cell.height);
+                    hash = fnv(hash, cell.terrain as u8);
+                }
+                for group in enemy_groups(seed, cx, cy) {
+                    for (q, r) in group {
+                        for byte in q.to_le_bytes().into_iter().chain(r.to_le_bytes()) {
+                            hash = fnv(hash, byte);
+                        }
+                    }
+                    hash = fnv(hash, 0xFF);
+                }
+            }
+        }
+        hash
+    }
+
+    #[test]
+    fn the_generated_world_is_pinned_by_a_digest() {
+        assert_eq!(world_digest(), 3_089_906_282_619_527_092, "digest of the reference world");
+    }
+
+    /// Timing, not a check: `cargo test --release -p abalone-core -- --ignored --nocapture world_timing`.
+    #[test]
+    #[ignore]
+    fn world_timing() {
+        use std::time::Instant;
+        let started = Instant::now();
+        let mut sink = 0usize;
+        for _ in 0..200 {
+            sink += chunk(7, 3, -2).unwrap().len();
+        }
+        println!("one chunk, chunk(): {:?} per call", started.elapsed() / 200);
+        let started = Instant::now();
+        for _ in 0..20 {
+            sink += enemy_groups(7, 3, -2).len();
+        }
+        println!("one chunk, enemy_groups(): {:?} per call", started.elapsed() / 20);
+        let started = Instant::now();
+        let mut all = 0usize;
+        for cx in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
+            for cy in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
+                all += chunk(7, cx, cy).unwrap().len();
+            }
+        }
+        println!("4096 chunks, chunk(): {:?} total ({all} cells)", started.elapsed());
+        let started = Instant::now();
+        for cx in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
+            for cy in -WORLD_CHUNKS / 2..WORLD_CHUNKS / 2 {
+                sink += enemy_groups(7, cx, cy).len();
+            }
+        }
+        println!("4096 chunks, enemy_groups(): {:?} total", started.elapsed());
+        assert!(sink > 0);
+    }
+
     #[test]
     fn the_spawn_chunks_and_the_edge_of_the_world_hold_no_group_in_the_clearing() {
         assert!(enemy_groups(1, WORLD_CHUNKS / 2, 0).is_empty());
