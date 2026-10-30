@@ -178,6 +178,10 @@ describe('the Open world cache is bounded (#981)', () => {
     expect(loadEnemies.mock.calls.filter(([cx, cy]) => cx === 0 && cy === 0)).toHaveLength(3);
   });
 
+  it('holds every chunk of the largest view (radius 10: 21 x 21) plus a margin', () => {
+    expect(CACHE_LIMIT).toBeGreaterThanOrEqual(21 * 21 + 32);
+  });
+
   it('lets the view raise the limit, the cache follows it', () => {
     const world = new World((cx: number, cy: number) => bytes(cx, cy));
     world.limit = 400;
