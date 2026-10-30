@@ -47,7 +47,7 @@ async function convertOne(game: Game): Promise<Axial[]> {
 /** The board's marbles: the group that holds the player's glass marbles. */
 function boardMarbles(scene: THREE.Scene): Mesh[] {
   const glass = (scene.getObjectsByProperty('type', 'Mesh') as Mesh[]).find(
-    (m) => m.material instanceof THREE.MeshPhysicalMaterial && m.parent instanceof THREE.Group,
+    (m) => m.material.name === 'glass' && m.parent instanceof THREE.Group,
   )!;
   return glass.parent!.children as Mesh[];
 }
@@ -79,7 +79,7 @@ describe('main.ts converted look (#508)', () => {
     expect(new Set(game.hook<{ accent: string }[]>('__accents').map((w) => w.accent))).toEqual(new Set(['wax'])); // no part is an accent
     const marbles = boardMarbles(scene());
     const plainShell = marbles.find((m) => m.getObjectByName('wax') && m.material.visible)!.material;
-    const playerGlass = marbles.find((m) => m.material instanceof THREE.MeshPhysicalMaterial)!.material;
+    const playerGlass = marbles.find((m) => m.material.name === 'glass')!.material;
     for (const cell of cells) {
       const marble = marbleOn(scene(), cell);
       expect(marble.material.visible).toBe(false); // only its halves are drawn
@@ -121,6 +121,6 @@ describe('main.ts converted look (#508)', () => {
     game.openSettings();
     for (let i = 0; i < 6; i++) byId('setting-glass-skin').click();
     const glass = part(marbleOn(scene(), cell!), 'glass').material;
-    expect(glass).toBe(boardMarbles(scene()).find((m) => m.material instanceof THREE.MeshPhysicalMaterial)!.material);
+    expect(glass).toBe(boardMarbles(scene()).find((m) => m.material.name === 'glass')!.material);
   }, 60_000);
 });

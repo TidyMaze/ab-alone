@@ -53,7 +53,7 @@ function parts(scene: THREE.Scene) {
 }
 
 /** The marbles drawn on the board: the shells (MeshStandardMaterial) or the glass (MeshPhysicalMaterial). */
-const isGlass = (m: Mesh): boolean => m.material instanceof THREE.MeshPhysicalMaterial;
+const isGlass = (m: Mesh): boolean => m.material.name === 'glass';
 function drawn(scene: THREE.Scene): { shells: Mesh[]; glass: Mesh[] } {
   const { marbles, spheres } = parts(scene);
   return { shells: spheres(marbles).filter((m) => !isGlass(m)), glass: spheres(marbles).filter(isGlass) };
@@ -186,6 +186,7 @@ describe('main.ts board and HUD', () => {
       for (const skin of skins) {
         await game.settle();
         const m = mesh().material;
+        if (side === 'shell') expect((m as THREE.MeshPhysicalMaterial).specularIntensity, skin.id).toBe(0.15);
         const kinds = ['albedo', 'normal', 'roughness', ...shipped[skin.asset] ?? []];
         expect(kinds, skin.id).toEqual(['albedo', 'normal', 'roughness', ...skin.extra]);
         for (const [kind, slot] of Object.entries(slots)) {
@@ -193,13 +194,13 @@ describe('main.ts board and HUD', () => {
           expect(texture?.name, `${skin.id} ${slot}`).toBe(side === 'glass' && kind === 'emission' ? `skin-${skin.asset}-albedo.ktx2` : kinds.includes(kind) ? `skin-${skin.asset}-${kind}.ktx2` : undefined);
           if (texture) expect(texture.colorSpace, `${skin.id} ${slot}`).toBe(kind === 'albedo' || kind === 'emission' ? THREE.SRGBColorSpace : THREE.NoColorSpace);
         }
-        expect(m.color.r, skin.id).toBe(side === 'shell' ? 0.35 : 1);
+        expect(m.color.r, skin.id).toBe(1);
         if (side === 'glass') {
           expect(m.emissiveMap).toBe(m.map); // the same photograph fills the white body, no extra asset
-          expect(m.emissiveIntensity).toBe(0.35);
+          expect(m.emissiveIntensity).toBe(0.5);
         }
         expect(m.metalness, skin.id).toBe(kinds.includes('metalness') ? 1 : 0);
-        if (kinds.includes('emission')) expect([m.emissive.getHex(), m.emissiveIntensity], skin.id).toEqual([0xffffff, 0.2]);
+        if (kinds.includes('emission')) expect([m.emissive.getHex(), m.emissiveIntensity], skin.id).toEqual([0xffffff, 0.08]);
         expect([m.transparent, m.opacity, m.depthWrite], skin.id).toEqual([false, 1, true]);
         setting(`${side}-skin`);
       }
@@ -221,7 +222,7 @@ describe('main.ts board and HUD', () => {
     game.openSettings();
     setting('palette'); // Protan
     const { shells, glass } = drawn(scene());
-    expect([shells[0]!.material.color.getHex(), glass[0]!.material.color.getHex()]).toEqual([0xffffff, 0xffffff]);
+    expect([shells[0]!.material.color.r, glass[0]!.material.color.r]).toEqual([1, 1]);
   });
 
   it('draws The Ballast Mind on its radius 5 board (#564): 85 discs round six void pillars, a frame of radius 5', async () => {

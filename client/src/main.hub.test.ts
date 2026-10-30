@@ -37,8 +37,8 @@ function drawn(scene: THREE.Scene) {
   const liftChildren = liftGroups.flatMap((g) => g.children.filter((c): c is Mesh => c instanceof THREE.Mesh));
   return {
     discs: meshes.filter((m) => m.geometry instanceof THREE.CylinderGeometry && !(m instanceof THREE.InstancedMesh) && m.visible).length,
-    glass: directMarbles.filter((m) => m.material instanceof THREE.MeshPhysicalMaterial),
-    shells: directMarbles.filter((m) => m.geometry instanceof THREE.SphereGeometry && !(m.material instanceof THREE.MeshPhysicalMaterial)),
+    glass: directMarbles.filter((m) => m.material.name === 'glass'),
+    shells: directMarbles.filter((m) => m.geometry instanceof THREE.SphereGeometry && !(m.material.name === 'glass')),
     glyphs: marbleGroup.children.filter((c) => c.name.startsWith('door-')).length,
     bars: liftChildren.filter((m) => m.name === 'locked-bar'), // the bar across a closed room (#522)
     arrows: liftChildren.filter((m) => m.geometry instanceof THREE.ShapeGeometry), // a lift's arrow (#523)
