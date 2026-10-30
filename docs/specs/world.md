@@ -118,7 +118,8 @@ is slow and rare (see photosensitivity, section 8). Shadows stay readable: cells
 stay legible in every lighting state.
 
 **Fog.** Volumetric or screen-space haze, denser at the edges of the board, never over the cells.
-Clear-board mode removes it.
+Clear-board mode removes it. At standard density, haze reaches full strength 32 units beyond the protected
+board edge (40 on the low tier); each deck's density scales that span (#896).
 
 **Marble looks per faction.**
 

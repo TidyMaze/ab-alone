@@ -45,7 +45,7 @@ export function tierFromHints({ cores, memory, reducedMotion }: Hints): Tier {
 // Linear fog on the depth along the view axis (THREE.Fog). It starts at the plate's edge, the farthest point of the
 // frame's inner hexagon from the camera, and smoothly extends across the hauler bay (#665).
 // It thickens into atmospheric haze, never over a cell, at every zoom and turn of the camera. `radius` is the frame's.
-export const BAY_FOG_SPAN = 52;
+export const BAY_FOG_SPAN = 32;
 const FOG_TIER_SCALE = { low: 1.25, high: 1.0 };
 
 // `density` is the deck's (light.ts, #400): it divides the span over the bay, from the same start, so a denser fog is
