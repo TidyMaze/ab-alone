@@ -197,7 +197,7 @@ describe('main.ts board and HUD', () => {
         expect(m.color.toArray(), skin.id).toEqual(side === 'shell' ? [0.2, 0.2, 0.2] : [1, 1, 1]);
         if (side === 'glass') {
           expect(m.emissiveMap).toBe(m.map); // the same photograph fills the white body, no extra asset
-          expect(m.emissiveIntensity).toBe(1);
+          expect(m.emissiveIntensity).toBe(1.2);
         }
         expect(m.metalness, skin.id).toBe(kinds.includes('metalness') ? 1 : 0);
         if (kinds.includes('emission')) {
