@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours } from './openworld';
 import { heldCell, OpenWorldMode } from './openworldmode';
-import { MAX_ZOOM, OpenWorldView } from './openworldview';
+import { MAX_ZOOM, maxZoomFor, OpenWorldView } from './openworldview';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -174,6 +174,24 @@ describe('the Open world mode', () => {
     m.enter(1, 800, 600);
     expect(m.key('ArrowUp')).toBe(true);
     expect(m.hero!.at).toEqual([1, -1]); // single Up from the spawn, Left is not held
+  });
+
+  it('clamps the zoom to a wider screen its widest zoom, and publishes the clamped zoom, #976', () => {
+    const m = mode();
+    m.enter(1, 1600, 900);
+    m.zoom(1e9);
+    expect(body().openworldZoom).toBe(String(maxZoomFor(1600 / 900)));
+    m.resize(3840, 1080);
+    expect(body().openworldZoom).toBe(String(maxZoomFor(3840 / 1080)));
+    expect(Number(body().openworldZoom)).toBeLessThan(maxZoomFor(1600 / 900));
+  });
+
+  it('publishes nothing on a resize after the mode is left', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.leave();
+    m.resize(1600, 900);
+    expect(body().openworldZoom).toBeUndefined();
   });
 
   it('zooms the Open world camera, and an entry starts at the closest view again, #976', () => {

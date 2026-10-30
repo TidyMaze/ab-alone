@@ -16,8 +16,8 @@ import {
   topOf,
   variety,
   WATER,
+  maxZoomFor,
   waterColor,
-  zoomLimit,
 } from './openworldview';
 
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
@@ -223,9 +223,15 @@ describe('the zoom of the Open world camera (#976)', () => {
 });
 
 describe('the loaded chunks cover the ground in view, at every aspect and zoom (#976)', () => {
-  const screens: Record<string, [number, number]> = { '9/16': [900, 1600], '4/3': [800, 600], '16/9': [1600, 900], '32/9': [3840, 1080] };
+  const screens: Record<string, [number, number]> = {
+    '9/16': [900, 1600],
+    '4/3': [800, 600],
+    '16/9': [1600, 900],
+    '21/9': [2100, 900],
+    '32/9': [3840, 1080],
+  };
   for (const [name, [width, height]] of Object.entries(screens)) {
-    for (const zoom of [1, 2, 4, MAX_ZOOM]) {
+    for (const zoom of [1, 2, 4, maxZoomFor(width / height)]) {
       for (const hero of [[0, 0], [CHUNK - 1, -CHUNK]] as Axial[]) {
         it(`keeps the four corners of the footprint inside the loaded square: ${name}, zoom ${zoom}, hero ${hero}`, () => {
           const view = new OpenWorldView(new World(grass));
@@ -250,18 +256,18 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
   });
 
   it('stops the zoom where the reach reaches MAX_REACH on a 16:9 screen, and no further', () => {
-    expect(zoomLimit(16 / 9)).toBe(MAX_ZOOM);
+    expect(maxZoomFor(16 / 9)).toBe(MAX_ZOOM);
     expect(reachAt(16 / 9, MAX_ZOOM)).toBe(MAX_REACH);
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
     view.zoomBy(1e9);
     expect(view.zoom).toBe(MAX_ZOOM);
-    expect(view.widestZoom).toBe(MAX_ZOOM);
+    expect(view.maxZoom).toBe(MAX_ZOOM);
   });
 
-  it('stops a wide screen sooner, where its reach reaches MAX_REACH', () => {
-    const limit = zoomLimit(32 / 9);
+  it('stops a wide screen sooner, where its reach reaches MAX_REACH: the largest zoom whose reach fits', () => {
+    const limit = maxZoomFor(32 / 9);
     expect(limit).toBeLessThan(MAX_ZOOM);
     expect(reachAt(32 / 9, limit)).toBeLessThanOrEqual(MAX_REACH);
     expect(reachAt(32 / 9, limit + 0.05)).toBeGreaterThan(MAX_REACH);
@@ -275,10 +281,10 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     const wide = view.zoom;
     view.resize(3840, 1080);
     expect(view.zoom).toBeLessThan(wide);
-    expect(view.zoom).toBe(zoomLimit(32 / 9));
+    expect(view.zoom).toBe(maxZoomFor(32 / 9));
     expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
     view.resize(900, 1600);
-    expect(view.widestZoom).toBe(MAX_ZOOM);
+    expect(view.maxZoom).toBe(MAX_ZOOM);
   });
 });
 
