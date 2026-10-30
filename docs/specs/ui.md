@@ -306,7 +306,7 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   tests: "The bot could not answer: press New game".
 - **A loading plate (#901).** From the first paint, a fixed plate (`#loading`, `role="status"`, the word "Loading" and a
   turning hex ring) sits over the page, so nothing shifts and a blank or half-lit screen never looks broken. When the
-  bay is mounted (`body.dataset.bay` is set, a missing bay too), it fades in 0.3 s (class `done`) and is hidden 400 ms
+  bay is mounted (`mountBay` runs, a missing bay too), it fades out over 0.3 s (class `done`) and is hidden 400 ms
   later. Under automation (`navigator.webdriver`) it is hidden at once, so a check waiting on `data-bay` never sees it
   fade. Under reduced motion the ring is still and there is no fade. A failed start hides it, so it never covers
   `#boot-error`.
