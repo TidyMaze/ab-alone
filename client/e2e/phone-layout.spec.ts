@@ -437,19 +437,7 @@ for (const { name, viewport } of [
       await openModes(page);
       await page.locator('#daily').click();
       await expect(hud).toContainText('Daily challenge 2027-03-25 · attempt 1');
-      const move = async (from: [number, number], to: [number, number]) => {
-        for (const [q, r] of [from, to]) {
-          const p = await page.evaluate(([cq, cr]) => (window as any).__cellToScreen(cq, cr), [q, r]);
-          await page.mouse.click(p.x, p.y);
-        }
-      };
-      // Black (0,2) to (0,1), White (0,-2) to (0,-1), and both back, twice: the start position comes back a third time.
-      for (let i = 0; i < 2; i++) {
-        await move([0, 2], [0, 1]);
-        await move([0, -2], [0, -1]);
-        await move([0, 1], [0, 2]);
-        await move([0, -1], [0, -2]);
-      }
+      await loseByRepetition(page); // against the Echo's bonus mirrors (#859), e2e/fight-end.ts
       await expect(hud).toContainText('Defeat');
       await check(page, testInfo, 'after a daily defeat');
     });
