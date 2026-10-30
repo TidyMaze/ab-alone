@@ -531,21 +531,15 @@ mod tests {
     }
 
     #[test]
-    fn a_wall_stands_between_the_two_rooms_only_on_a_dual_board_until_it_collapses() {
-        let (south, north) = ((0, 0), (0, -1));
+    fn open_adds_an_empty_cell_and_keeps_one_on_the_board() {
         let mut board = Board::empty();
-        assert_eq!(board.dual(), None, "no other board has the wall");
-        assert!(!board.walled(south, north));
-        board.set_dual(Some(Dual::default()));
-        assert!(board.walled(south, north) && board.walled(north, south));
-        assert!(!board.walled(south, (1, 0)), "inside the south room");
-        assert!(!board.walled(north, (1, -2)), "inside the north room");
-        assert_eq!((room(south), room(north)), (0, 1));
-        board.set_dual(Some(Dual {
-            collapsed: true,
-            ..Dual::default()
-        }));
-        assert!(!board.walled(south, north), "the passage of P3");
+        board.void(0, 0);
+        board.open(0, 0);
+        assert_eq!(board.get(0, 0), Some(Cell::Empty), "back, empty");
+        board.set(1, 0, Cell::Black);
+        board.open(1, 0);
+        assert_eq!(board.get(1, 0), Some(Cell::Black), "a marble stays");
+        assert_eq!((room((0, 1)), room((0, -1))), (0, 1));
     }
 
     #[test]
