@@ -2340,8 +2340,7 @@ function afterPlay(before: number[], record: number[], live = true): void {
     whenSettled(() => (fall.start = performance.now()));
     document.body.dataset.bridge = 'lowering'; // read by the e2e tests
   }
-  const ejection = findEjection(before, after, mv);
-  if (ejection) eject(ejection, mv.dir, held, reduced);
+  ejectBy(before, after, mv, held, reduced);
   // The Overseer's vents (#635): the push slides first, then each marble they burnt sinks into its vent.
   delete document.body.dataset.burns;
   const vented = engine instanceof Encounter && engine.incinerators().length > 0;
@@ -2418,6 +2417,12 @@ function burn(burns: Burn[], reduced: boolean, ply: number, won: boolean): void 
   for (const { cell, side } of burns) startEjection(side === CORE_CODE ? coreMesh() : marbleMesh(side), burnTrack(cell, reduced), scene);
 }
 
+/** The ejection `mv` makes from the board `before` to `after`, if any (see `eject`). */
+function ejectBy(before: number[], after: ArrayLike<number>, mv: Move, held: Map<number, Quat>, reduced: boolean): void {
+  const ejection = findEjection(before, after, mv);
+  if (ejection) eject(ejection, mv.dir, held, reduced);
+}
+
 /** The effect and sound of `ejection`, pushed off in direction `dir`, the marble with its turn in `held`. */
 function eject(ejection: NonNullable<ReturnType<typeof findEjection>>, dir: number, held: Map<number, Quat>, reduced: boolean): void {
   const body = document.body;
@@ -2436,8 +2441,7 @@ function slideBonus(game: Engine | Encounter, from: number[], to: number[], bonu
   const held = gameTurns();
   const tracks = slideTracks(from, to, bonus, false);
   turns.map = carryTurns(held, fight!.seed, tracks, bonus.dir);
-  const ejection = findEjection(from, to, bonus);
-  if (ejection) eject(ejection, bonus.dir, held, false);
+  ejectBy(from, to, bonus, held, false);
   shown = { game, board: to, poles: [] };
   refresh();
   slide = { game: engine, tracks, start: performance.now() };
