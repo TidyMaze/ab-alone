@@ -18,24 +18,29 @@ test('textures are requested and the board still renders', async ({ page }) => {
   // Every texture ships as KTX2 (#700).
   expect(loaded.sort()).toEqual([
     '200 backdrop.ktx2',
+    '200 board-albedo.ktx2',
+    '200 board-metalness.ktx2',
+    '200 board-normal.ktx2',
+    '200 board-roughness.ktx2',
     '200 bulkhead-albedo.ktx2',
+    '200 bulkhead-ao.ktx2',
     '200 bulkhead-displacement.ktx2',
     '200 bulkhead-normal.ktx2',
     '200 bulkhead-roughness.ktx2',
     '200 crack-decal.ktx2',
     '200 deck-albedo.ktx2',
     '200 deck-mess-normal.ktx2', // the cells' normal map of the Mess (#440)
+    '200 deck-mess-roughness.ktx2',
     '200 deck-mess.ktx2', // the cells' texture of the Mess, the deck a page opens on (#401)
     '200 deck-pbr-albedo.ktx2', // the bay's deck, and the board's rim (#775)
-    '200 deck-pbr-albedo.ktx2',
+    '200 deck-pbr-ao.ktx2',
     '200 deck-pbr-displacement.ktx2',
     '200 deck-pbr-normal.ktx2',
-    '200 deck-pbr-normal.ktx2',
-    '200 deck-pbr-roughness.ktx2',
     '200 deck-pbr-roughness.ktx2',
     '200 deck-roughness.ktx2',
     '200 grate-albedo.ktx2',
     '200 grate-displacement.ktx2',
+    '200 grate-metalness.ktx2',
     '200 grate-normal.ktx2',
     '200 grate-roughness.ktx2',
     '200 plate-albedo.ktx2', // the board's plate (#772)
