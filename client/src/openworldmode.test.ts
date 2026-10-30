@@ -142,3 +142,15 @@ describe('leaving the Open world frees its view, every time (#981)', () => {
     expect(render).not.toHaveBeenCalled();
   });
 });
+
+describe('the Open world models are loaded once per page (#981)', () => {
+  it('loads the models the first time the mode is entered, not on every entry', async () => {
+    const models = vi.fn(async () => ({}));
+    const m = mode(models);
+    m.enter(1, 800, 600);
+    m.leave();
+    m.enter(2, 800, 600);
+    m.leave();
+    expect(models).toHaveBeenCalledTimes(1);
+  });
+});
