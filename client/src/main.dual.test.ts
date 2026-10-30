@@ -146,6 +146,26 @@ describe('main.ts The Dual Room (#947)', () => {
     expect(document.body.dataset.wall).toBe('down');
   });
 
+  it('the page of a player keeps drawing while the returning marble falls (#848)', async () => {
+    const game = await boot('?bot=off&quality=low', { webdriver: false, reducedMotion: false }); // no dust drifting
+    fightDual(game);
+    const DIRS = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
+    for (const [k, record] of dualGame().slice(0, RETURN_AT + 1).entries()) {
+      const cells = Array.from({ length: record[0]! }, (_, i): [number, number] => [record[2 + 2 * i]!, record[3 + 2 * i]!]);
+      const [dq, dr] = DIRS[record[1]!]!;
+      for (const [q, r] of cells) game.click(q, r);
+      game.click(...cells.map(([q, r]): [number, number] => [q + dq!, r + dr!]).find(([q, r]) => !cells.some(([cq, cr]) => cq === q && cr === r))!);
+      if (k < RETURN_AT) for (let n = 0; n < 4; n++) game.frame(1000);
+    }
+    for (let n = 0; n < 15; n++) game.frame(16); // the move's slide is over, the marble still falls
+    expect(document.body.dataset.sliding).not.toBe('1');
+    expect(dual(game).drop).not.toBeNull();
+    const before = game.draws();
+    for (let n = 0; n < 6; n++) game.frame(16);
+    expect(game.draws() - before).toBe(6);
+    expect(dual(game).drop).not.toBeNull();
+  });
+
   it('another boss shows no wall and no mark', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightDual(game);
