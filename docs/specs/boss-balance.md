@@ -585,6 +585,30 @@ the same table, row for row.
 Reply time (release build, native, 6 seeds of 80 plies, boss replies, ms): before 226 average,
 314 at the 95th percentile, 339 at most; after 228 / 312 / 383.
 
+### The Echo's offered bonus (#958): the player's free move is an option
+
+**Change.** The player's bonus is offered, not played (game-design.md section 7.4): taken by
+playing it, declined by any other move. The Echo's own bonus stays automatic. The boss search is
+unchanged (its tree assumes the player takes every free move). The ladder pro takes a free move
+only when it ejects a boss marble and is safe, else it searches its own move, which declines the
+offer. `engine_version` 14.
+
+**Which pro.** Three policies measured at 10x (1000 nodes), seeds 0 to 9 (0 to 19), 300 plies at
+most: taking every safe free move 6 of 10 (13 of 20, median 160.5 plies, draws 4): a quiet free
+move gives the Echo its mirrored board back, the lock of #951; never taking one 7 of 10 (16 of
+20, median 85); taking only the ejecting ones 7 of 10 (16 of 20, median 85), kept.
+
+| Player budget | Before wins /10 (#951, forced bonus) | After wins /10 (offered bonus) | After /20 | Median plies after | Deaths after (10 seeds) |
+|---|---|---|---|---|---|
+| 100 (1x) | 1 | 6 | | 107 | push 1, draw 3 |
+| 400 (the #949 player) | 8 | 7 | | 87 | draw 3 |
+| 1000 (10x, pro level) | **7** | **7** | 16 | 85 | draw 3 |
+
+Command: `LADDER_X=<1|10> cargo run --release --example ladder -- echo` (`LADDER_NODES=400`,
+`LADDER_SEEDS=20`). The pro level wins 7 of 10, inside the 7 to 9 target, and 16 of 20 (9 of 20
+before). The equal-budget player (1x) wins 6 of 10 instead of 1: declining the free move breaks
+the symmetric lock. The fixture is recorded again (section 4).
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
@@ -595,7 +619,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 
 | Boss | Seed | Player budget | Moves |
 |---|---|---|---|
-| echo | 0 (10x, the first won seed against the 100-node boss, #951) | 1000 | 101 |
+| echo | 0 (10x, the first won seed against the 100-node boss, recorded again for #958) | 1000 | 87 |
 | hull | 0 | 30000 | 89 |
 | choir | 0 | 15000 | 93 |
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |

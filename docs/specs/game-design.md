@@ -444,7 +444,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   the 100-ply no-ejection cap: the mirrors keep the board point-symmetric and the two-ply boss holds
   the rest. Tuned in #951 to 100 nodes: the pro player (10x the boss's own budget, 1000 nodes) wins
   7 of 10 (9 of 20), the #949 player at 400 nodes 8 of 10. With the offered bonus (#958) the pro
-  wins LADDER_PRO, inside the 7 to 9 target (boss-balance.md, The Echo's offered bonus).
+  wins 7 of 10 (16 of 20), inside the 7 to 9 target (boss-balance.md, The Echo's offered bonus).
 
 ### 7.5 The Ballast Mind (#47, #749): final exam
 
