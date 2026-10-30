@@ -428,19 +428,22 @@ mod tests {
 
     #[test]
     fn heights_and_terrains_agree() {
-        for cx in -3..3 {
-            for cy in -3..3 {
-                for c in chunk(11, cx, cy).unwrap() {
-                    assert!(c.height <= 7);
-                    match c.terrain {
-                        Terrain::Water => assert!(c.height <= 1),
-                        Terrain::Sand => assert_eq!(c.height, 2),
-                        Terrain::Grass => assert!((3..=5).contains(&c.height)),
-                        Terrain::Rock => assert!((5..=6).contains(&c.height)),
-                        Terrain::Peak => assert_eq!(c.height, 7),
-                        Terrain::Tree => assert!((3..=5).contains(&c.height)),
-                        Terrain::Boulder | Terrain::Wall => {
-                            assert!((2..=6).contains(&c.height))
+        // A wide window of four seeds: one seed's window can hold no peak at all (its continents are few).
+        for seed in 11..15 {
+            for cx in -8..8 {
+                for cy in -8..8 {
+                    for c in chunk(seed, cx, cy).unwrap() {
+                        assert!(c.height <= 7);
+                        match c.terrain {
+                            Terrain::Water => assert!(c.height <= 1),
+                            Terrain::Sand => assert_eq!(c.height, 2),
+                            Terrain::Grass => assert!((3..=5).contains(&c.height)),
+                            Terrain::Rock => assert!((5..=6).contains(&c.height)),
+                            Terrain::Peak => assert_eq!(c.height, 7),
+                            Terrain::Tree => assert!((3..=5).contains(&c.height)),
+                            Terrain::Boulder | Terrain::Wall => {
+                                assert!((2..=6).contains(&c.height))
+                            }
                         }
                     }
                 }
