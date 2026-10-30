@@ -211,7 +211,7 @@ import {
   writeTranscript,
   writeUiScale,
 } from './quality';
-import { nextPalette, paletteById, type Palette } from './palettes';
+import { nextPalette, paletteById, themeColors, type Palette } from './palettes';
 import { limitFlash } from './safe';
 import { clampUiScale, maxUiScale, uiScaleFactor, type UiScale } from './uiscale';
 import { BUSES, Sfx, TellWatch, type Bus, type Tell } from './sound';
@@ -654,6 +654,7 @@ const toggles: Record<string, () => void> = {
     writeUiScale(store, uiScale);
     writeSafeMode(store, safe);
     applyTheme();
+    applyPalette(); // the accent pair follows the theme (#923)
     applyUiScale();
     applySafe();
     layoutConsole();
@@ -1856,8 +1857,11 @@ const ghostCore = new THREE.MeshBasicMaterial({ color: CORE.color, transparent: 
 function applyPalette(): void {
   const pal = paletteById(palette);
   document.documentElement.dataset.palette = palette;
-  document.documentElement.style.setProperty('--accent', pal.accent);
-  document.documentElement.style.setProperty('--hazard', pal.hazard);
+  const colors = themeColors(pal, theme === 'light' || (theme === 'system' && matchMedia('(prefers-color-scheme: light)').matches));
+  for (const [name, value] of [['--accent', colors.accent], ['--hazard', colors.hazard]] as const) {
+    if (value) document.documentElement.style.setProperty(name, value);
+    else document.documentElement.style.removeProperty(name); // light default: ui.css's on-cream colours win (#923)
+  }
   ringMaterial.color.setHex(pal.core);
   tickMaterial.color.setHex(pal.tell);
   scratchMaterial.color.setHex(pal.tell);
@@ -1866,6 +1870,7 @@ function applyPalette(): void {
   ghostCore.color.setHex(pal.core);
 }
 applyPalette();
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPalette); // System theme follows the OS (#923)
 let hover: Axial | null = null;
 let hub: HubController | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
