@@ -151,7 +151,7 @@ export function actBoss(map: MapNode[], run: Run, ids: string[]): { id: string; 
     const j = hash(run.seed, i) % (i + 1);
     [dealt[i], dealt[j]] = [dealt[j]!, dealt[i]!];
   }
-  return { id: dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]!), percent: ACT_PERCENT[node.act]! };
+  return { id: dealt[node.act % dealt.length]!, seed: hash(run.seed, run.path[run.path.length - 1]! * 8 + 5), percent: ACT_PERCENT[node.act]! };
 }
 
 /** An event (#800): its title and text, and the trade it offers: `army` marbles more or less (up to START_ARMY), `gain`
@@ -313,7 +313,7 @@ export function placeHtml(run: Run, armed: number): string {
 export function rewardHtml(map: MapNode[], run: Run): string {
   const label = (offer: number): string => (offer ? `${SPECIAL_LOOKS[offer - 1]!.name}: ${SPECIAL_LOOKS[offer - 1]!.help}` : 'One more marble');
   const buttons = offers(run).map((o) => `<button type="button" data-offer="${o}">${glyph(o)}${label(o)}</button>`);
-  const title = lastNode(map, run)?.kind === 'elite' ? `Elite beaten · ${ELITE_MARBLES} marbles back` : 'Fight won';
+  const title = lastNode(map, run)?.kind === 'elite' ? `Elite beaten · up to ${ELITE_MARBLES} marbles back` : 'Fight won';
   return `<p class="run-line">${title} · pick a reward</p><div class="run-kinds">${buttons.join('')}</div>`;
 }
 
@@ -407,7 +407,7 @@ export async function clearRun(store: KeyStore): Promise<void> {
 
 /** The saved run with its map (`mapOf` its seed) and, during a fight, the fight replayed on `make` of the run and its
  * map (the army and its special marbles placed, or the act's boss). A save that does not decode, walks off its map or
- * does not replay is deleted. */
+ * does not replay is deleted, but a boss fight that does not replay starts over. */
 export async function loadRun<E extends ReplayEngine>(
   store: KeyStore,
   mapOf: (seed: number) => MapNode[],
@@ -419,8 +419,13 @@ export async function loadRun<E extends ReplayEngine>(
     const state = decodeRun(raw);
     const map = state ? mapOf(state.seed) : [];
     const walked = state !== null && state.path.every((n, i) => next(map, state.path.slice(0, i)).includes(n));
-    const engine = walked && state.fighting && state.path.length ? replay(state.moves, () => make(state, map)) : null;
-    if (walked && (engine || !state.fighting)) return { state, map, engine };
+    const fight = walked && state.fighting && state.path.length ? replay(state.moves, () => make(state, map)) : null;
+    // A boss node's fight saved when it was an army fight (before #800) does not replay on the boss's board: it starts over.
+    if (!fight && walked && state.fighting && lastNode(map, state)?.kind === 'boss') {
+      const over = { ...state, moves: [] };
+      return { state: over, map, engine: make(over, map) };
+    }
+    if (walked && (fight || !state.fighting)) return { state, map, engine: fight };
     await store.delete(RUN_KEY);
   } catch {
     // Storage blocked: no run to resume.

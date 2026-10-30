@@ -126,8 +126,8 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
 ## 7. Elites, rests, events and act bosses (#800)
 
 - **Elite**: a fight against the bot on the army's board, the bot searching twice the positions of a
-  fight's (`ELITE_BUDGET`). Won, the army gets 2 marbles back (up to 14) before the reward screen,
-  whose line says so.
+  fight's (`ELITE_BUDGET`). Won, the army gets up to 2 marbles back (never above 14) before the
+  reward screen, whose line says so.
 - **Rest**: no fight; the army is back up to 14 marbles at once, and the run line says it rested.
 - **Event**: no fight; the event screen shows one of 5 events, picked by the run seed and the node
   (a 32-bit hash, as the reward offers), with a trade and Leave. The trade is offered only when the
@@ -148,4 +148,7 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
   at 50 %, 100 % and 200 % (the difficulty setting's easy, normal and hard) for acts 1, 2 and 3,
   whatever the setting. Its seed comes from the run seed and the node. Lost (a draw too), the run is
   lost; won, the army loses the marbles the boss ejected and the run goes on (the reward screen), or
-  is won after act 3. A boss fight is saved and resumed like the others.
+  is won after act 3. A boss fight is saved and resumed like the others; one saved before #800 (an
+  army fight on the boss node then) does not replay on the boss's board and starts over. The deal
+  follows the roster's order and length: a boss added to or moved in the roster deals the bosses of
+  a saved run again.
