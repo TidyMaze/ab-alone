@@ -94,12 +94,12 @@ describe('the Open world mode', () => {
       canvas.dispatchEvent(e);
     };
     wheel(1000);
-    expect(zoomOf()).toBe(2);
+    expect(zoomOf()).toBeGreaterThan(2.5); // past the close range: the overview
     wheel(-1000);
     expect(zoomOf()).toBe(1);
     finger('pointermove', 9, 100); // a hover, no finger down: nothing
     finger('pointerdown', 1, 300);
-    finger('pointermove', 1, 310); // one finger moves: nothing
+    finger('pointermove', 1, 300); // one finger moves, not apart: nothing
     expect(zoomOf()).toBe(1);
     finger('pointerdown', 2, 700); // two fingers 400 apart
     finger('pointermove', 2, 500); // 200 apart: the camera goes back

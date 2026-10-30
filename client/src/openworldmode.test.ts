@@ -4,6 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours } from './openworld';
 import { heldCell, OpenWorldMode } from './openworldmode';
+import { MAX_ZOOM, OpenWorldView } from './openworldview';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -176,6 +177,37 @@ describe('the Open world mode', () => {
     m.enter(1, 800, 600);
     expect(body().openworldZoom).toBe('1');
     expect(camera().position.y).toBeCloseTo(14);
+  });
+
+  it('does not roll the hero on a click in the overview, and keeps the close range click', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.press(400 + 55, 300, 800, 600); // a cell to the right: rolls at the close range
+    expect(m.hero!.at).toEqual([1, 0]);
+    m.zoom(MAX_ZOOM);
+    m.press(400 - 55, 300, 800, 600); // the same press in the overview: nothing
+    expect(m.hero!.at).toEqual([1, 0]);
+  });
+
+  it('keeps drawing while the overview paints, then stops', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.zoom(MAX_ZOOM);
+    const render = vi.fn();
+    for (let i = 0; i < 200; i++) m.frame(render);
+    const drawn = render.mock.calls.length;
+    expect(drawn).toBeGreaterThan(1);
+    m.frame(render);
+    expect(render.mock.calls.length).toBe(drawn);
+  });
+
+  it('frees the overview when it is left', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    const dispose = vi.spyOn(OpenWorldView.prototype, 'disposeOverview');
+    m.leave();
+    expect(dispose).toHaveBeenCalledTimes(1);
+    dispose.mockRestore();
   });
 
   it('ignores a resize before it is entered', () => {
