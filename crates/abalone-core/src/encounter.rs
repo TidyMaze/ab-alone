@@ -17,6 +17,7 @@ pub mod magnetizer;
 pub mod overseer;
 pub mod pulsar;
 pub mod railyard;
+pub mod swarm;
 pub mod telemetry;
 pub mod unstable;
 
