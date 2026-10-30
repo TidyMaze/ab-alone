@@ -9,7 +9,7 @@ use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
 use crate::encounter::ballast::{ballast_move, ballast_search, ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
-use crate::encounter::echo::{echo_boss, echo_move, mirror_move};
+use crate::encounter::echo::{echo_boss, echo_move, echo_search, echo_start};
 use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
 use crate::encounter::telemetry::{
@@ -100,7 +100,7 @@ impl Arena {
             LadderBoss::Ballast => Arena::Plain(ballast_start(seed), boss),
             LadderBoss::Alien => Arena::Plain(alien_start(seed), boss),
             LadderBoss::Overseer => Arena::Plain(overseer_start(seed), boss),
-            LadderBoss::Echo => plain(echo_boss()),
+            LadderBoss::Echo => Arena::Plain(echo_start(seed), boss),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
             LadderBoss::Choir => Arena::Choir(Choir::start(seed)),
@@ -148,9 +148,10 @@ impl Arena {
         }
     }
 
-    /// `true` when no player marble flips after `mv` if the boss then passes: the conversion tell
-    /// of the Chaplain, which the player reads on hover. Other bosses have no such tell.
-    fn flip_free(&self, mv: &Move) -> bool {
+    /// `true` when the tell the player reads on hover shows no harm from `mv`: no player marble
+    /// flips if the boss then passes (the Chaplain's conversion tell), no draw after the Echo's
+    /// bonus mirrors (its ghost). Other bosses have no such tell.
+    fn tell_safe(&self, mv: &Move) -> bool {
         let Arena::Plain(enc, boss) = self else {
             return true;
         };
@@ -159,6 +160,9 @@ impl Arena {
             LadderBoss::Chaplain => after
                 .play(mv)
                 .is_ok_and(|()| chaplain_tell(&after).is_empty()),
+            LadderBoss::Echo => after
+                .play(mv)
+                .is_ok_and(|()| after.game().outcome() != Some(Outcome::Draw)),
             _ => true,
         }
     }
@@ -192,12 +196,13 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         let pick = mix(seed ^ mix(u64::from(index))) % moves.len().max(1) as u64;
         moves.get(pick as usize).cloned()
     } else {
-        let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.flip_free(mv);
+        let strict = |mv: &Move| game.seen_after(mv) == 1 && arena.tell_safe(mv);
         // The pro reads the hooks, not the health swing: the ladder keeps the player it measured.
         let step =
             |b: &Board, p: Player, m: &Move, a: Board| (chaplain_step(0, b, p, m, a).0, [0, 0]);
         let pick = |allow: &dyn Fn(&Move) -> bool| match arena {
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
             _ if arena.kind() == LadderBoss::Chaplain => {
                 search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
             }
@@ -222,6 +227,7 @@ fn play_out(
     let mut losses = Losses::default();
     let mut max_phase = arena.phase();
     let (mut plies, mut player_moves, mut stuck) = (0, 0, None);
+    let mut moves = Vec::new();
     while arena.game().outcome().is_none() && plies < ply_cap {
         let game = arena.game();
         let player_turn = game.to_move() == Player::Black;
@@ -241,23 +247,18 @@ fn play_out(
             mv
         };
         let boss_push = !player_turn & apply(game.board(), Player::White, &mv).is_ok_and(|a| a.1);
-        let mirror = echo
-            & game
-                .history()
-                .iter()
-                .rev()
-                .step_by(2)
-                .take(2)
-                .any(|p| mirror_move(&p.mv) == mv);
         let black = marbles(game.board(), Cell::Black);
         let lost_before = game.ejected(Player::White);
         arena.play(&mv).expect("the ladder plays legal moves");
+        moves.push(mv);
         let game = arena.game();
         let lost = game.ejected(Player::White) - lost_before;
         let flipped = i32::from(black) - i32::from(marbles(game.board(), Cell::Black));
-        losses.mirrored += u8::from(boss_push & mirror);
-        losses.pushed += u8::from(boss_push & !mirror);
-        losses.rim += lost.saturating_sub(u8::from(boss_push));
+        // The Echo's bonus mirrors after a player move are its mirrored pushes.
+        let mirrored = if echo && player_turn { lost } else { 0 };
+        losses.mirrored += mirrored;
+        losses.pushed += u8::from(boss_push);
+        losses.rim += lost.saturating_sub(u8::from(boss_push) + mirrored);
         losses.converted = losses
             .converted
             .saturating_add((flipped - i32::from(lost)).max(0) as u8);
@@ -268,7 +269,6 @@ fn play_out(
     let won = arena.result() == Some(PveResult::Won);
     let draw = game.outcome() == Some(Outcome::Draw);
     let capped = game.outcome().is_none();
-    let moves = game.history().iter().map(|p| p.mv.clone()).collect();
     let record = AttemptRecord {
         boss: arena.kind().id(),
         seed,
@@ -353,7 +353,7 @@ mod tests {
     use crate::board::{Board, Cell};
     use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
-    use crate::encounter::echo::echo_boss;
+    use crate::encounter::echo::{echo_boss, echo_fight};
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
     use crate::encounter::Encounter;
     use crate::game::Game;
@@ -387,19 +387,42 @@ mod tests {
     }
 
     #[test]
-    fn a_move_that_leaves_a_marble_to_flip_is_not_flip_free() {
+    fn a_move_that_leaves_a_marble_to_flip_is_not_tell_safe() {
         let a = pocket();
         let mvs = legal_moves(a.game().board(), Player::Black);
         assert_eq!(mvs.len(), 1);
-        assert!(!a.flip_free(&mvs[0]));
+        assert!(!a.tell_safe(&mvs[0]));
     }
 
     #[test]
-    fn every_boss_opens_flip_free() {
+    fn a_move_whose_bonus_mirror_repeats_a_third_time_is_not_tell_safe() {
+        // Both sides shuffle one marble, each move mirrored: Black's next step back is
+        // followed by the Echo's bonus, which brings the start position back a third time.
+        let mut a = echo_arena(&[(0, 2)], &[(0, -2)], Player::White);
+        let step = |q, r, dir| Move {
+            cells: vec![(q, r)],
+            dir,
+        };
+        use crate::moves::Direction::{E, NW};
+        a.play(&step(0, -2, NW)).unwrap();
+        a.play(&step(0, 3, NW)).unwrap();
+        a.play(&step(0, -2, NW)).unwrap();
+        let back = step(0, 3, NW);
+        assert_eq!(
+            a.game().seen_after(&back),
+            2,
+            "the plain check lets it through"
+        );
+        assert!(!a.tell_safe(&back));
+        assert!(a.tell_safe(&step(0, 3, E)));
+    }
+
+    #[test]
+    fn every_boss_opens_tell_safe() {
         for boss in LadderBoss::ALL {
             let a = Arena::new(boss, 0);
             let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
-            assert!(a.flip_free(&mv), "{boss:?}");
+            assert!(a.tell_safe(&mv), "{boss:?}");
         }
     }
 
@@ -429,6 +452,56 @@ mod tests {
             0,
             "{mv:?} leaves the cracked cell"
         );
+    }
+
+    #[test]
+    fn the_echo_arena_plays_the_bonus_mirrors() {
+        let mut a = Arena::new(LadderBoss::Echo, 0);
+        let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
+        a.play(&mv).unwrap();
+        assert_eq!(a.game().history().len(), 2, "the Echo's bonus mirror");
+        assert_eq!(a.boss_move(), echo_move(&echo_start_after(&mv)));
+    }
+
+    fn echo_start_after(mv: &Move) -> Encounter {
+        let mut enc = crate::encounter::echo::echo_start(0);
+        enc.play(mv).unwrap();
+        enc
+    }
+
+    #[test]
+    fn the_player_reads_the_bonus_mirror_of_the_echo() {
+        // Two pushes eject a boss marble: the north one hands the boss a mirror push back, the
+        // east one does not. The plain search takes the north one; the pro, who sees the
+        // bonus mirrors, the east one.
+        let a = echo_arena(
+            &[(2, 0), (3, 0), (0, -2), (0, -3), (0, 4)],
+            &[(4, 0), (0, -4), (0, 2), (0, 3)],
+            Player::Black,
+        );
+        let north = Move {
+            cells: vec![(0, -3), (0, -2)],
+            dir: crate::moves::Direction::NW,
+        };
+        let plain = search_with(a.game(), 400, DEFAULT_WEIGHTS, &|_| true).map(|r| r.mv);
+        assert_eq!(plain, Some(north));
+        let east = Move {
+            cells: vec![(2, 0), (3, 0)],
+            dir: crate::moves::Direction::E,
+        };
+        assert_eq!(player_move(&a, 0, 9, 0, 400), Some(east));
+    }
+
+    fn echo_arena(black: &[P], white: &[P], to_move: Player) -> Arena {
+        let mut board = Board::empty();
+        for &(q, r) in black {
+            board.set(q, r, Cell::Black);
+        }
+        for &(q, r) in white {
+            board.set(q, r, Cell::White);
+        }
+        let game = Game::from_position(board, to_move, [0, 0]);
+        Arena::Plain(echo_fight(game, 0), LadderBoss::Echo)
     }
 
     #[test]
@@ -578,7 +651,11 @@ mod tests {
     #[test]
     fn a_played_game_replays_to_the_same_end() {
         let (record, moves) = play_attempt_moves(LadderBoss::Echo, 3, 4, 50, 6);
-        assert_eq!(moves.len(), 6);
+        assert_eq!(
+            moves.len(),
+            6,
+            "the main moves only, the bonus moves replay by themselves"
+        );
         assert_eq!(record.plies, 6);
         assert_eq!(replay(LadderBoss::Echo, 3, &moves), Ok(None));
     }

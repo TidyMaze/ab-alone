@@ -398,12 +398,12 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
     expect(searches).toBe(2);
   });
 
-  test('legal_moves: the Echo announces its reply for every move, the other bosses announce nothing', () => {
+  test('legal_moves: the Echo announces the bonus mirror each move gives it, the other bosses announce nothing', () => {
     const echo = session();
     value(echo.newGame({ boss: 'echo' }));
     const legal = value(echo.legalMoves());
     expect(Object.keys(legal.announces)).toEqual(legal.moves);
-    // The point reflection through the centre (Encounter.tell_move).
+    // The point reflection through the centre, legal for every move of the symmetric start (Encounter.tell_move).
     expect(legal.announces['(1,3)>NE']).toBe('(-1,-3)>SW');
     const hull = session();
     value(hull.newGame({ boss: 'hull' }));

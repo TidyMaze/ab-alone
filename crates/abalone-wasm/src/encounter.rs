@@ -16,7 +16,7 @@ use abalone_core::encounter::ballast::{
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
 use abalone_core::encounter::dual::{dual_boss, dual_landed, dual_move, dual_start};
-use abalone_core::encounter::echo::{echo_boss, echo_move, mirror_move};
+use abalone_core::encounter::echo::{echo_bonuses, echo_boss, echo_move, echo_start};
 use abalone_core::encounter::hull::{hull_boss, hull_move};
 use abalone_core::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
 use abalone_core::encounter::overseer::{overseer_boss, overseer_move, overseer_start};
@@ -135,8 +135,14 @@ fn dual_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(dual_start(seed))
 }
 
-fn echo_announce(_enc: Option<&CoreEncounter>, mv: &Move) -> Option<Move> {
-    Some(mirror_move(mv))
+/// The Echo plays its bonus mirrors inside `play`.
+fn echo_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(echo_start(seed))
+}
+
+/// The first bonus move the other side gets from `mv`: the mirror the client draws as a ghost.
+fn echo_announce(enc: Option<&CoreEncounter>, mv: &Move) -> Option<Move> {
+    enc.and_then(|e| echo_bonuses(e, mv).into_iter().next())
 }
 
 /// Reply of a boss that plays standard Abalone: its node-limited search.
@@ -155,9 +161,9 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
 const BOSSES: [BossEntry; 13] = [
     BossEntry {
         id: "echo",
-        goal: "It mirrors your move. Eject 6 to win; lose 6 or draw to lose.",
+        goal: "Every move is mirrored for free for the other side, both ways; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.",
         def: echo_boss,
-        start: plain_fight,
+        start: echo_fight,
         reply: echo_move,
         announce: echo_announce,
         flips: no_flips,
@@ -320,7 +326,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    10 // 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    11 // 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -911,8 +917,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_10_since_the_ballast_player_starts_with_16_marbles() {
-        assert_eq!(engine_version(), 10);
+    fn the_engine_version_is_11_since_the_echo_plays_bonus_mirrors() {
+        assert_eq!(engine_version(), 11);
     }
 
     #[test]
@@ -980,7 +986,7 @@ mod tests {
         assert_eq!(f.name(), "The Echo");
         assert_eq!(f.to_move(), 1);
         assert_eq!(f.phase(), 0);
-        assert_eq!(f.phases(), 3);
+        assert_eq!(f.phases(), 2, "the Echo has two phases");
         assert_eq!(f.result(), 0);
         assert_eq!(f.status(), 0);
         assert_eq!(f.draw_reason(), 0);
@@ -1052,16 +1058,33 @@ mod tests {
     }
 
     #[test]
-    fn the_echo_mirrors_the_player_move_and_the_tell_announces_it() {
+    fn the_echo_plays_the_mirror_as_a_bonus_and_the_tell_announces_it() {
         let mut f = fight();
         let mv = first_move(&f);
         let announced = f.tell_move(&mv);
         assert_eq!(announced.len(), MOVE_STRIDE);
+        let before = f.board();
         f.play(&mv).unwrap();
+        assert_eq!(
+            f.to_move(),
+            2,
+            "the Echo plays its own move after the bonus"
+        );
+        let mirrored = decode(&announced).unwrap();
+        let (q, r) = mirrored.cells[0];
+        let i = board_cells(4).position(|c| c == (q, r)).unwrap();
+        assert_eq!(
+            (before[i], f.board()[i]),
+            (2, 0),
+            "the bonus moved its marble"
+        );
         let reply = f.boss_move();
-        assert_eq!(reply, announced, "the tell is the boss reply");
         assert_eq!(f.play(&reply), Ok(()));
         assert_eq!(f.to_move(), 1);
+        assert!(
+            f.tell_move(&reply).is_empty(),
+            "no bonus for the side not to move"
+        );
     }
 
     #[test]
@@ -2081,20 +2104,23 @@ mod tests {
 
     #[test]
     fn an_ejected_boss_marble_puts_a_notch_out() {
-        let mut f = fight();
-        for mv in [
-            [1, 4, 1, 3, 0, 0, 0, 0],  // Black (1, 3) to (1, 2)
-            [1, 5, 2, -2, 0, 0, 0, 0], // White walks (2, -2) down to the rim at (2, 2)
-            [1, 4, -2, 2, 0, 0, 0, 0], // Black waits
-            [1, 5, 2, -1, 0, 0, 0, 0],
-            [1, 5, -2, 1, 0, 0, 0, 0],
-            [1, 5, 2, 0, 0, 0, 0, 0],
-            [1, 4, -2, 2, 0, 0, 0, 0],
-            [1, 5, 2, 1, 0, 0, 0, 0],
-            [2, 0, 0, 2, 1, 2, 0, 0], // Black pushes it off, 2 against 1
-        ] {
-            f.play(&mv).unwrap();
+        let mut board = Board::empty();
+        for (q, r) in [(2, 0), (3, 0)] {
+            board.set(q, r, Cell::Black);
         }
+        for (q, r) in [(4, 0), (-4, 4)] {
+            board.set(q, r, Cell::White);
+        }
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut f = Encounter {
+            fight: Fight::Plain(abalone_core::encounter::echo::echo_fight(game, 1)),
+            entry: boss_entry("echo").unwrap(),
+        };
+        let push = Move {
+            cells: vec![(2, 0), (3, 0)],
+            dir: abalone_core::moves::Direction::E,
+        };
+        f.play(&encode(&push)).unwrap(); // Black pushes it off, 2 against 1
         assert_eq!(f.ejected(1), 1);
         assert_eq!(f.phase_notches(), vec![2, 1], "P2 after 3 ejections");
     }

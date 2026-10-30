@@ -301,20 +301,23 @@ describe('co-op: the invite link', () => {
 });
 
 describe('co-op: the end of the fight', () => {
-  // The Echo mirrors each move in its first phase: Black (0,2) up and back, the boss (0,-2) down and back (e2e/fight-end.ts).
+  // The Echo's mirror of each move is a bonus move for the other side (#859). Its search is scripted to step east
+  // from (0,-1): our seat goes up, the partner and our seat then step east, and the 5th move brings a position back a
+  // third time, a draw by repetition, a Defeat against the boss (e2e/fight-end.ts).
   const up = { cells: [[0, 2]] as Axial[], dir: 4 };
-  const down = { cells: [[0, 1]] as Axial[], dir: 5 };
-  /** Our seat plays up, the partner's down, twice: a draw by repetition at ply 8, a Defeat against the boss. */
+  const east = { cells: [[-1, 1]] as Axial[], dir: 0 };
   async function defeat(game: Game, two: Awaited<ReturnType<typeof partner>>): Promise<void> {
-    for (let i = 0; i < 2; i++) {
-      play(game, up);
-      await until(game, () => game.hook('__plies') === 4 * i + 2);
-      await two.send(encodeMove(down));
-      await until(game, () => game.hook('__plies') === 4 * i + 4);
-    }
+    const { Encounter } = await import('abalone-wasm');
+    vi.spyOn(Encounter.prototype, 'boss_move').mockReturnValue(Int32Array.from(encodeMove({ cells: [[0, -1]], dir: 0 })));
+    play(game, up);
+    await until(game, () => game.hook('__plies') === 2);
+    await two.send(encodeMove(east));
+    await until(game, () => game.hook('__plies') === 4);
+    play(game, east);
+    await until(game, () => game.hook('__plies') === 5 && two.history.length === 5);
   }
 
-  it('ends on both engines at once: there and back twice is a draw by repetition, a Defeat against the boss', async () => {
+  it('ends on both engines at once: a position a third time is a draw by repetition, a Defeat against the boss', async () => {
     const { game, two } = await hosted();
     await defeat(game, two);
     expect(game.hook('__history')).toEqual(two.history);
@@ -332,7 +335,7 @@ describe('co-op: the end of the fight', () => {
     expect(retry.textContent).toBe('Retry');
     await two.session.rematch();
     await until(game, () => game.hud().includes('Your partner asks for a retry.'));
-    expect(game.hook('__plies')).toBe(8); // nothing starts on one ask
+    expect(game.hook('__plies')).toBe(5); // nothing starts on one ask
 
     retry.click();
     await until(game, () => game.hook('__plies') === 0);

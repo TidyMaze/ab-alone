@@ -169,8 +169,8 @@ which tell killed you.
 ## 5. Anti-stalling rule (#12, #40)
 
 Lives in the **game-state wrapper** (`#10`), not in the move generator. Position identity =
-board + side to move + **mode state** (crack timers, army cycle position, the Echo's remembered
-move, boss phase), all inside the Zobrist hash. Otherwise repetition fires on positions that
+board + side to move + **mode state** (crack timers, army cycle position, the Echo's moves never
+echoed, boss phase), all inside the Zobrist hash. Otherwise repetition fires on positions that
 are not identical. The repetition history and the 100-ply counter are part of the game state
 and are rebuilt from the signed move log on every peer, so all peers agree.
 
@@ -376,20 +376,42 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   tuned in #821 (boss budget 2000 to 300, boss-balance.md section 3): 18 of 20 at 10x, 6 of 20 at
   1x. The rows tried are in boss-balance.md.
 
-### 7.4 The Echo (#46): mirrors your moves
+### 7.4 The Echo (#46, #859): every move is mirrored, both ways
 
-- **Concept**: the last crew member, who copies you out of habit.
-- **Twist**: after each of your moves, the Echo plays the **point-reflected move** (through the
-  board center) if legal. If not legal, its AI picks a move. Mirrored moves go through the
-  normal validator, no new move type.
-- **Tell**: a ghost of the mirrored move is drawn when you hover your arrow (preview shows
-  both sides). Nothing is hidden.
-- **Counter**: play moves whose mirror is bad for the boss (asymmetric pushes, edges), or
-  force illegal mirrors so it uses its weaker free move.
-- **Phases**: P2 after **3** ejections, P3 after **5**, shown as notches and in the HUD only:
-  the Echo plays the **same effect** in every phase.
-- **Calibrate**: knob = AI depth on free moves, delay. Fail if win rate on attempt 1 to 3
-  exceeds 40 percent (too readable) or the median is over 12 attempts.
+- **Concept**: the last crew member, who copies you out of habit, and makes you copy it.
+- **Twist**: when a move of one side can be played in **point symmetry** (through the board
+  centre) by the other side, that mirror is played **at once for the other side as a free bonus
+  move**, then that side plays its own move. Both ways: the Echo gets the mirror of your move, you
+  get the mirror of its move. The mirror is playable when the normal validator accepts it for the
+  side that gets it (no new move type). A bonus move is never mirrored itself (no chain).
+- **Skipped bonus** (symmetric opt-out): a bonus that would end the game as a loss for the side
+  that gets it is not played, and counts as echoed. A legal move never ejects its own marble nor
+  gives the other side an ejection, so in practice this skips only the player's bonus that would
+  make the third repetition or reach the 100-ply no-ejection cap (a draw is a player loss). Every other bonus
+  is forced; there is no Decline button.
+- **Phases**: P1 at the start; **P2 after 3** ejections credited to the player. There is no P3:
+  the notches show two phases. In P2, after the bonus of the last move, the side also gets the
+  mirror of **one older move** of the other side: the most recent one that was never echoed
+  (its mirror was illegal when it was played) and whose mirror is legal now. Each move is echoed
+  at most once, so a turn has at most two bonus moves. A skipped older bonus is also spent.
+- **End**: the first side to 6 ejections wins, even during a bonus, and no bonus follows. When a
+  main move brings both sides to 6, its mover is credited first. A draw is still a player loss.
+- **Anti-stalling**: each bonus is a ply: it counts for the 100-ply no-ejection cap and for the repetitions,
+  and the position hash includes the moves never echoed (section 5).
+- **Tell**: a ghost of the mirror is drawn while you prepare a move (and the older move that
+  will be echoed in P2); a skipped bonus is drawn crossed in red. Nothing is hidden. Until the
+  client tells land (#859 part 2) the bonus moves show as normal moves.
+- **Counter, turn it against the boss**: your free bonus moves. Every boss move whose mirror you
+  can play is a free move for you: answer its pushes with their mirror, and in P2 keep blocked
+  moves in its memory that turn into free pushes for you once their path opens. Play moves whose
+  mirror is illegal or bad for the boss (asymmetric pushes, edges).
+- **AI**: the Echo's search plays the bonus mirrors inside its tree, both ways, with the P2
+  older-move bonus from the credits so far (`search_phased` with `echo_step`); the tree does not
+  see repetitions, so it never skips a bonus. Node budget 400.
+- **Calibrate**: knob = AI node budget. Fail if win rate on attempt 1 to 3 exceeds 40 percent
+  (too readable) or the median is over 12 attempts. Measured after #859 (boss-balance.md section
+  3): the ladder pro player wins none of 10 at 1x and 10x (2 of 40 at 10x), every loss a draw at
+  the 100-ply no-ejection cap; not tuned in #859.
 
 ### 7.5 The Ballast Mind (#47, #749): final exam
 
@@ -983,7 +1005,8 @@ For each feature, the acceptance test is a position plus a move list:
 - Hull: position with a cracked cell and a boss marble next to it, push, assert ejection.
 - Choir: army order and halo, assert the skipped turn after a wipe.
 - Chaplain: position with 3 contacts, end boss turn, assert flip. Position at 2 contacts, none.
-- Echo: reflect a move, assert it goes through the validator and equals the center reflection.
+- Echo: reflect a move, assert it goes through the validator and equals the center reflection;
+  play a move, assert the other side got its mirror as a bonus ply, both ways.
 - Ballast: phase changes at 16, 10, 5 boss marbles, assert hooks switch on.
 - BR: bot simulation of 1000 games, assert one winner, no game over 150 rounds, no crash.
 - Anti-stalling: scripted shuffle, scripted long game.

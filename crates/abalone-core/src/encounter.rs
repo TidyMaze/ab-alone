@@ -88,6 +88,8 @@ pub struct Encounter {
     by_colour: bool,
     /// The highest phase reached: a boss that converts (The Chaplain) heals, and its phase stays.
     phase_reached: usize,
+    /// Each main move gives the other side its mirror as a bonus move (The Echo).
+    echo: bool,
 }
 
 /// Marbles of `color` on `board`.
@@ -213,7 +215,14 @@ impl Encounter {
             turn_limit: None,
             by_colour: false,
             phase_reached: 0,
+            echo: false,
         }
+    }
+
+    /// The same fight, where each move gives the other side its mirror as a bonus move.
+    pub fn echoing(mut self) -> Self {
+        self.echo = true;
+        self
     }
 
     /// The same fight, whose hooks' losses count by colour as long as no marble flips.
@@ -320,6 +329,9 @@ impl Encounter {
             self.game.end(Player::White);
         }
         self.end_when_wiped();
+        if self.echo {
+            echo::play_bonuses(self, mv);
+        }
         self.latch_phase();
         Ok(())
     }

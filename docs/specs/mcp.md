@@ -174,7 +174,7 @@ Output:
 
 - `moves` is `Engine.legal_moves()` (or `Encounter.legal_moves()`) in notation. Empty once the game is over.
 - On a boss turn that restricts the moves (for example the army in turn), the list only holds the allowed moves. Nothing else changes.
-- `announces` is an object from a move to the reply the boss announces for it (`Encounter.tell_move(mv)`). It is empty unless the boss announces replies. Same shape for every boss, no per-boss output type.
+- `announces` is an object from a move to the reply the boss announces for it (`Encounter.tell_move(mv)`): for The Echo, the first bonus move that move gives it, a move with no bonus is left out (#859). It is empty unless the boss announces replies. Same shape for every boss, no per-boss output type.
 
 Errors: `no_game`.
 

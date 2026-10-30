@@ -3,7 +3,7 @@
 use crate::board::{Board, Cell};
 
 /// The six hex directions, as axial vectors.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Direction {
     E,
     W,
@@ -14,14 +14,14 @@ pub enum Direction {
 }
 
 /// A side.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Player {
     Black,
     White,
 }
 
 /// One group (1 to 3 own marbles) moved one step in one direction.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Move {
     pub cells: Vec<(i32, i32)>,
     pub dir: Direction,

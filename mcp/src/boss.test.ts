@@ -27,12 +27,12 @@ function withData(encounter: BossLike, data: Partial<Record<keyof BossLike, numb
 // One case per boss of the engine: what its getters show as in `tell` and `marks` (docs/specs/mcp.md section 4.3).
 const CASES: Record<string, () => void> = {
   echo() {
-    // No board special and no marks: its twist is the announced reply, in legal_moves (game.test.ts).
+    // No board special and no marks: its twist is the bonus mirror each move gives, announced in legal_moves (game.test.ts).
     expect(bossState('echo', newEncounter('echo', 0))).toEqual({
       id: 'echo',
       name: 'The Echo',
       phase: 0,
-      phases: 3,
+      phases: 2,
       tell: null,
       marks: [],
       result: 'playing',
