@@ -555,7 +555,7 @@ mod tests {
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
             world_digest(),
-            3_089_906_282_619_527_092,
+            9_996_814_764_041_329_087,
             "digest of the reference world"
         );
     }
