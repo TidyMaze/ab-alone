@@ -235,8 +235,7 @@ impl Game {
             return 0;
         };
         let hash = position_hash(&board, other(self.to_move));
-        1 + self.history.iter().filter(|p| p.hash == hash).count()
-            + usize::from(self.start_hash == hash)
+        1 + self.seen(hash)
     }
 
     /// Replaces the board after a ply (a boss hook) and re-hashes that ply's position, so
@@ -245,6 +244,16 @@ impl Game {
         self.board = board;
         let hash = position_hash(&self.board, self.to_move);
         self.history.last_mut().expect("called after a ply").hash = hash;
+        if self.outcome.is_none() && self.seen(hash) >= REPETITION_LIMIT {
+            self.outcome = Some(Outcome::Draw);
+            self.draw_reason = Some(DrawReason::Repetition);
+        }
+    }
+
+    /// Times the position `hash` has been seen in this game, the start included.
+    fn seen(&self, hash: u64) -> usize {
+        self.history.iter().filter(|p| p.hash == hash).count()
+            + usize::from(self.start_hash == hash)
     }
 
     /// Gives the move back to the side that just played, for a rule that grants a free move.
@@ -317,9 +326,7 @@ impl Game {
             mv: mv.clone(),
             hash,
         });
-        let seen = self.history.iter().filter(|p| p.hash == hash).count()
-            + usize::from(self.start_hash == hash);
-        let repeated = seen >= REPETITION_LIMIT;
+        let repeated = self.seen(hash) >= REPETITION_LIMIT;
         let capped = self.no_ejection_plies >= NO_EJECTION_PLY_LIMIT;
         let rogue = self.board.rogue_lite();
         let foe = other(mover);
