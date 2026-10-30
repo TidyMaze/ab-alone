@@ -1,14 +1,17 @@
-//! Boss 4, The Echo (docs/specs/game-design.md section 7.4): after each player move it plays the
-//! point-reflected move through the board center when that is legal, else its search picks.
+//! Boss 4, The Echo (docs/specs/game-design.md section 7.4): when a move of one side can be
+//! played in point symmetry by the other side, that mirror is played at once for the other side
+//! as a free bonus move, both ways, then that side plays its own move. In P2 the other side also
+//! gets the mirror of one older move that was never echoed, when it is legal now.
 
 use crate::board::Board;
-use crate::encounter::{BossDef, Encounter};
+use crate::encounter::{losses, BossDef, Encounter};
+use crate::game::{Game, Outcome};
 use crate::moves::{apply, Direction, Move, Player};
+use crate::search::{search_phased, DEFAULT_WEIGHTS};
 
-/// P2 and P3 start after this many ejections credited to the player: notches only, the Echo
-/// plays the same in every phase.
-pub const ECHO_PHASE_EJECTIONS: [u8; 2] = [3, 5];
-/// Positions the free-move search may visit. Starting value, to tune (calibration knob).
+/// P2 starts after this many ejections credited to the player. There is no P3.
+pub const ECHO_PHASE_EJECTIONS: [u8; 1] = [3];
+/// Positions the boss search may visit. Starting value, to tune (calibration knob).
 pub const ECHO_NODE_BUDGET: u32 = 400;
 
 fn no_special(_ply: u32, _phase: usize) -> Option<u8> {
@@ -19,7 +22,7 @@ fn keep_board(board: &Board, _id: u8, _seed: u64) -> Board {
     board.clone()
 }
 
-/// The Echo: no board special, its twist is the reply rule in [`echo_move`].
+/// The Echo: no board special, its twist is the bonus moves of [`Encounter::play`].
 pub fn echo_boss() -> BossDef {
     BossDef {
         name: "The Echo",
@@ -30,6 +33,16 @@ pub fn echo_boss() -> BossDef {
         conversions: None,
         node_budget: ECHO_NODE_BUDGET,
     }
+}
+
+/// A fight against the Echo from `game`.
+pub fn echo_fight(game: Game, seed: u64) -> Encounter {
+    Encounter::new(game, echo_boss(), seed).echoing()
+}
+
+/// A fight against the Echo on the standard board.
+pub fn echo_start(seed: u64) -> Encounter {
+    echo_fight(Game::new(), seed)
 }
 
 fn opposite(dir: Direction) -> Direction {
@@ -43,8 +56,14 @@ fn opposite(dir: Direction) -> Direction {
     }
 }
 
-/// The point reflection of `mv` through the board center. Also the tell: the client can draw it
-/// for any move the player hovers.
+fn other(player: Player) -> Player {
+    match player {
+        Player::Black => Player::White,
+        Player::White => Player::Black,
+    }
+}
+
+/// The point reflection of `mv` through the board center.
 pub fn mirror_move(mv: &Move) -> Move {
     Move {
         cells: mv.cells.iter().map(|&(q, r)| (-q, -r)).collect(),
@@ -52,19 +71,153 @@ pub fn mirror_move(mv: &Move) -> Move {
     }
 }
 
-/// The boss reply for the current position, `None` on the player's turn or when the game is over.
-/// It is the mirror of the last player move in every phase when the normal validator accepts it,
-/// else the boss search picks.
+/// `true` when the mirror of `mv` is legal for `receiver` on `board`.
+fn playable(board: &Board, receiver: Player, mv: &Move) -> bool {
+    apply(board, receiver, &mirror_move(mv)).is_ok()
+}
+
+/// The index in the memory of `board` of the latest move of `mover` whose mirror `receiver` may
+/// play now.
+fn older(board: &Board, mover: Player, receiver: Player) -> Option<usize> {
+    board
+        .echoes()
+        .iter()
+        .rposition(|(side, mv)| *side == mover && playable(board, receiver, mv))
+}
+
+/// `board` with its memory changed by `change`.
+fn remember(board: &Board, change: impl FnOnce(&mut Vec<(Player, Move)>)) -> Board {
+    let mut echoes = board.echoes().to_vec();
+    change(&mut echoes);
+    let mut out = board.clone();
+    out.set_echoes(echoes);
+    out
+}
+
+/// `true` when playing `bonus` ends the game as a loss for the side to move, who receives it (a
+/// draw is a player loss). Such a bonus is skipped.
+fn loses(game: &Game, bonus: &Move) -> bool {
+    let receiver = game.to_move();
+    let mut after = game.clone();
+    after.play_bonus(bonus).expect("a legal bonus");
+    match after.outcome() {
+        Some(Outcome::Win(winner)) => winner != receiver,
+        Some(Outcome::Draw) => receiver == Player::Black,
+        None => false,
+    }
+}
+
+/// Plays `bonus` for the side to move, which moves again, unless it would lose it the game.
+fn bonus(enc: &mut Encounter, bonus: &Move) {
+    if !loses(&enc.game, bonus) {
+        enc.game.play_bonus(bonus).expect("a legal bonus");
+    }
+}
+
+/// The bonus moves after the main move `mv` of [`Encounter::play`], while the game runs: the
+/// mirror of `mv` for the other side when it is legal, then in P2 the mirror of the latest older
+/// move of the same side never echoed and legal now. A bonus is never mirrored itself. A move
+/// whose mirror was illegal is remembered on the board; an echoed or skipped one is not.
+pub(crate) fn play_bonuses(enc: &mut Encounter, mv: &Move) {
+    if enc.game.outcome().is_some() {
+        return;
+    }
+    let receiver = enc.game.to_move();
+    let mover = other(receiver);
+    let legal = playable(enc.game.board(), receiver, mv);
+    if legal {
+        bonus(enc, &mirror_move(mv));
+    }
+    if enc.phase() > 0 && enc.game.outcome().is_none() {
+        if let Some(i) = older(enc.game.board(), mover, receiver) {
+            let old = enc.game.board().echoes()[i].1.clone();
+            let board = remember(enc.game.board(), |e| {
+                e.remove(i);
+            });
+            enc.game.replace_board(board);
+            bonus(enc, &mirror_move(&old));
+        }
+    }
+    if !legal {
+        let board = remember(enc.game.board(), |e| e.push((mover, mv.clone())));
+        enc.game.replace_board(board);
+    }
+}
+
+/// The bonus moves the other side gets when the side to move plays `mv`, in order: the tell.
+/// Empty when `mv` is illegal or gives none.
+pub fn echo_bonuses(enc: &Encounter, mv: &Move) -> Vec<Move> {
+    let mut after = enc.clone();
+    let before = enc.game().history().len() + 1;
+    if after.play(mv).is_err() {
+        return Vec::new();
+    }
+    after.game().history()[before..]
+        .iter()
+        .map(|p| p.mv.clone())
+        .collect()
+}
+
+/// The bonus moves inside the search tree, after `mover` played `mv` (`before` the board before
+/// it, `after` the board after it, `ejected` the credits before it): the mirror for the other
+/// side, then in P2 the latest older one, with the ejections they credit. The tree does not see
+/// the repetitions, so it never skips a bonus.
+pub(crate) fn echo_step(
+    before: &Board,
+    mover: Player,
+    mv: &Move,
+    after: Board,
+    ejected: [u8; 2],
+) -> (Board, [u8; 2]) {
+    let receiver = other(mover);
+    let r = usize::from(receiver == Player::White);
+    let p2 = ECHO_PHASE_EJECTIONS[0];
+    // The player's credit after the main move: only a player push from one short counts.
+    let mut player = ejected[0];
+    if mover == Player::Black && player + 1 == p2 {
+        player += losses(before, &after)[1];
+    }
+    let mut credits = [0, 0];
+    let mut board = after;
+    let mirror = mirror_move(mv);
+    let legal = match apply(&board, receiver, &mirror) {
+        Ok((next, ejects)) => {
+            board = next;
+            credits[r] += u8::from(ejects);
+            true
+        }
+        Err(_) => false,
+    };
+    if player + credits[0] >= p2 {
+        if let Some(i) = older(&board, mover, receiver) {
+            let old = mirror_move(&board.echoes()[i].1);
+            board = remember(&board, |e| {
+                e.remove(i);
+            });
+            let (next, ejects) = apply(&board, receiver, &old).expect("legal now");
+            board = next;
+            credits[r] += u8::from(ejects);
+        }
+    }
+    if !legal {
+        board = remember(&board, |e| e.push((mover, mv.clone())));
+    }
+    (board, credits)
+}
+
+/// The search of `enc`'s side to move where every ply of the tree plays the bonus mirrors, both
+/// ways, and the phase follows the credits. Only root moves `allow` accepts are chosen.
+pub fn echo_search(enc: &Encounter, budget: u32, allow: &dyn Fn(&Move) -> bool) -> Option<Move> {
+    search_phased(enc.game(), budget, DEFAULT_WEIGHTS, allow, &echo_step, None).map(|r| r.mv)
+}
+
+/// The boss reply: its node-limited search, which plays the bonus mirrors in the tree. `None` on
+/// the player's turn or when the game is over.
 pub fn echo_move(enc: &Encounter) -> Option<Move> {
-    let game = enc.game();
-    if game.outcome().is_some() || game.to_move() != Player::White {
+    if enc.game().to_move() != Player::White {
         return None;
     }
-    game.history()
-        .last()
-        .map(|p| mirror_move(&p.mv))
-        .filter(|m| apply(game.board(), Player::White, m).is_ok())
-        .or_else(|| enc.boss_search().map(|r| r.mv))
+    echo_search(enc, enc.boss.node_budget, &|_| true)
 }
 
 #[cfg(test)]
@@ -157,7 +310,10 @@ mod tests {
         let board = Board::standard();
         assert_eq!((boss.hook)(&board, 0, 0), board);
         for (ejected, phase) in [(0, 0), (2, 0), (3, 1), (5, 1)] {
-            assert_eq!(fight(false, &[(0, 3)], &[(0, -3)], [ejected, 0]).phase(), phase);
+            assert_eq!(
+                fight(false, &[(0, 3)], &[(0, -3)], [ejected, 0]).phase(),
+                phase
+            );
         }
         let start = echo_start(3);
         assert_eq!(start.game().board(), &Board::standard());
@@ -294,13 +450,20 @@ mod tests {
                 e.play(m).unwrap();
             }
             if swap {
-                assert_eq!(e.game().outcome(), Some(Outcome::Draw), "the boss bonus is played");
+                assert_eq!(
+                    e.game().outcome(),
+                    Some(Outcome::Draw),
+                    "the boss bonus is played"
+                );
                 assert_eq!(e.game().history().len(), 8);
             } else {
                 assert_eq!(e.game().outcome(), None, "the player's bonus is skipped");
                 assert_eq!(e.game().history().len(), 7);
                 assert_eq!(e.game().to_move(), first);
-                assert!(e.game().board().echoes().is_empty(), "skipped counts as echoed");
+                assert!(
+                    e.game().board().echoes().is_empty(),
+                    "skipped counts as echoed"
+                );
             }
             assert_ne!(first, second);
         }
@@ -313,7 +476,12 @@ mod tests {
         for swap in [false, true] {
             let (_, second) = sides(swap);
             let ejected = if swap { [5, 0] } else { [0, 5] };
-            let mut e = fight(swap, &[(2, 0), (3, 0), (-4, 0)], &[(-2, 0), (-3, 0)], ejected);
+            let mut e = fight(
+                swap,
+                &[(2, 0), (3, 0), (-4, 0)],
+                &[(-2, 0), (-3, 0)],
+                ejected,
+            );
             let played = side_mv(swap, &[(2, 0), (3, 0)], E);
             e.play(&played).unwrap();
             assert_eq!(plies(&e), vec![played.clone(), mirror_move(&played)]);
@@ -343,14 +511,24 @@ mod tests {
 
     #[test]
     fn the_tell_lists_the_bonus_moves_a_move_gives() {
-        let e = fight(false, &[(0, 2)], &[(0, -2)], [0, 0]);
+        let e = fight(false, &[(0, 2)], &[(0, -2), (-1, -2)], [0, 0]);
         let played = mv(&[(0, 2)], SE);
         assert_eq!(echo_bonuses(&e, &played), vec![mirror_move(&played)]);
-        assert!(echo_bonuses(&e, &mv(&[(0, 2)], E)).is_empty(), "blocked mirror");
-        assert!(echo_bonuses(&e, &mv(&[(0, -2)], E)).is_empty(), "illegal move");
+        assert!(
+            echo_bonuses(&e, &mv(&[(0, 2)], E)).is_empty(),
+            "blocked mirror"
+        );
+        assert!(
+            echo_bonuses(&e, &mv(&[(0, -2)], E)).is_empty(),
+            "illegal move"
+        );
         let (older, a, _) = older_setup(false, [3, 0]);
         let b = mv(&[(-3, 4)], E);
-        assert_eq!(echo_bonuses(&older, &b), vec![mirror_move(&a)], "the older move");
+        assert_eq!(
+            echo_bonuses(&older, &b),
+            vec![mirror_move(&a)],
+            "the older move"
+        );
         assert_eq!(older.game().history().len(), 2, "nothing is played");
     }
 
@@ -392,7 +570,11 @@ mod tests {
         let push = mv(&[(2, 0), (3, 0)], E);
         let (after, _) = apply(&board, Player::Black, &push).unwrap();
         let (out, _) = echo_step(&board, Player::Black, &push, after, [2, 0]);
-        assert_eq!(out.get(-1, -2), Some(Cell::White), "P2 from the 3rd ejection");
+        assert_eq!(
+            out.get(-1, -2),
+            Some(Cell::White),
+            "P2 from the 3rd ejection"
+        );
     }
 
     #[test]
@@ -406,7 +588,7 @@ mod tests {
             Player::White,
             [0, 0],
         );
-        let west = mv(&[(-2, 0), (-3, 0)], W);
+        let west = mv(&[(-3, 0), (-2, 0)], W);
         let south = mv(&[(0, 2), (0, 3)], SE);
         let plain = search_with(e.game(), ECHO_NODE_BUDGET, DEFAULT_WEIGHTS, &|_| true);
         assert_eq!(plain.map(|r| r.mv), Some(west));

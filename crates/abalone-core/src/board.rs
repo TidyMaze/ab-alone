@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use crate::moves::{Move, Player};
+
 /// Radius of the standard board: 61 cells. A cell `(q, r)` is on a board of radius `n` when
 /// `|q|`, `|r|` and `|q + r|` are all `<= n`.
 pub const RADIUS: i32 = 4;
@@ -106,6 +108,8 @@ pub struct Board {
     unstable: Option<Unstable>,
     /// The Dual Room's state. `Some` also raises the wall between its two rooms.
     dual: Option<Dual>,
+    /// The Echo's memory: the moves whose mirror was never played, oldest first, with their side.
+    echoes: Vec<(Player, Move)>,
 }
 
 /// The Dual Room's state on the board (docs/specs/game-design.md section 7.15): its board holds
@@ -200,6 +204,7 @@ impl Board {
             incinerators: Vec::new(),
             unstable: None,
             dual: None,
+            echoes: Vec::new(),
         }
     }
 
@@ -349,6 +354,15 @@ impl Board {
     pub fn walled(&self, from: (i32, i32), to: (i32, i32)) -> bool {
         self.dual
             .is_some_and(|d| !d.collapsed && room(from) != room(to))
+    }
+
+    /// The Echo's never-echoed moves, oldest first, with the side that played each.
+    pub fn echoes(&self) -> &[(Player, Move)] {
+        &self.echoes
+    }
+
+    pub fn set_echoes(&mut self, echoes: Vec<(Player, Move)>) {
+        self.echoes = echoes;
     }
 
     /// Standard start layout: 14 marbles per side.

@@ -115,6 +115,9 @@ fn position_hash(board: &Board, to_move: Player) -> u64 {
     if board.announce().is_some() {
         board.announce().hash(&mut hasher);
     }
+    if !board.echoes().is_empty() {
+        board.echoes().hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -269,13 +272,23 @@ impl Game {
 
     /// Plays `mv` for the side to move.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
+        self.play_then(mv, other(self.to_move))
+    }
+
+    /// Plays `mv` for the side to move, which then moves again: a free bonus move (The Echo).
+    pub(crate) fn play_bonus(&mut self, mv: &Move) -> Result<(), GameError> {
+        self.play_then(mv, self.to_move)
+    }
+
+    /// Plays `mv` for the side to move, then `next` is to move.
+    fn play_then(&mut self, mv: &Move, next: Player) -> Result<(), GameError> {
         if self.outcome.is_some() {
             return Err(GameError::GameOver);
         }
         let mover = self.to_move;
         let (board, ejected) = apply(&self.board, mover, mv).map_err(GameError::Move)?;
         self.board = board;
-        self.to_move = other(mover);
+        self.to_move = next;
         if ejected {
             self.ejected[index(mover)] += 1;
             self.no_ejection_plies = 0;
@@ -805,7 +818,11 @@ mod tests {
         game.play_bonus(&mv(&[(0, 0)], E)).unwrap();
         assert_eq!(game.to_move(), Player::Black, "the mover plays again");
         assert_eq!(game.history().len(), 1);
-        assert_eq!(game.no_ejection_plies(), 1, "a bonus ply counts for the cap");
+        assert_eq!(
+            game.no_ejection_plies(),
+            1,
+            "a bonus ply counts for the cap"
+        );
         assert_eq!(
             game.history()[0].hash,
             position_hash(game.board(), Player::Black)
