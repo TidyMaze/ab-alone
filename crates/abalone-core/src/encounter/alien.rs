@@ -9,8 +9,8 @@ use crate::board::{Board, Cell};
 use crate::encounter::hull::mix;
 use crate::encounter::{BossDef, Encounter};
 use crate::game::Game;
-use crate::moves::{apply, Move, Player};
-use crate::search::{search_with, DEFAULT_WEIGHTS};
+use crate::moves::{Move, Player};
+use crate::search::{search_hooked, Weights, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -38,6 +38,13 @@ pub const ALIEN_EGG_CAP: usize = 3;
 /// P2 and P3 start after this many ejections credited to the player, not at a count of marbles
 /// left: the hatches add marbles, and the fight ends at 6 ejections (#621). TUNE.
 pub const ALIEN_PHASE_EJECTIONS: [u8; 2] = [2, 4];
+/// What an egg is worth to the boss search, in centi-marbles: a marble that is not out yet. TUNE.
+pub const ALIEN_EGG_WEIGHT: i32 = 50;
+/// The weights of the boss search: the plain ones plus the brood.
+pub const ALIEN_WEIGHTS: Weights = Weights {
+    egg: ALIEN_EGG_WEIGHT,
+    ..DEFAULT_WEIGHTS
+};
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
 pub const ALIEN_NODE_BUDGET: u32 = 3000;
 /// Special id at the end of a player turn: the eggs count down and hatch.
@@ -118,6 +125,17 @@ fn hook(board: &Board, id: u8, seed: u64) -> Board {
     out
 }
 
+/// What a ply does in the search tree: a marble on an egg crushes it, and a player turn counts the
+/// eggs down and hatches them. The lay is a seeded pick the tree cannot know, so it is left out.
+pub fn alien_step(after: &Board, mover: Player) -> Board {
+    let id = if mover == Player::Black {
+        ALIEN_PLAYER_END
+    } else {
+        ALIEN_BOSS_END
+    };
+    hook(after, id, 0)
+}
+
 /// The Alien boss definition.
 pub fn alien_boss() -> BossDef {
     BossDef {
@@ -152,27 +170,22 @@ pub fn alien_start(seed: u64) -> Encounter {
     )
 }
 
-/// The boss reply: its node-limited search, among the moves that leave every egg empty when
-/// there is one. `None` on the player's turn or when the game is over.
+/// The boss reply: its node-limited search, where every ply of the tree crushes, counts down and
+/// hatches the eggs and the evaluation values the brood, so it keeps its eggs from the player and
+/// crushes one itself only when it pays. `None` on the player's turn or when the game is over.
 pub fn alien_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
-    let board = enc.game().board();
-    let spares_eggs = |mv: &Move| {
-        let (after, _) = apply(board, Player::White, mv).expect("a legal move");
-        board
-            .eggs()
-            .iter()
-            .all(|&((q, r), _)| after.get(q, r) == Some(Cell::Empty))
-    };
-    search_with(
+    let step =
+        |_: &Board, mover: Player, _: &Move, after: Board| (alien_step(&after, mover), [0, 0]);
+    search_hooked(
         enc.game(),
         enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &spares_eggs,
+        ALIEN_WEIGHTS,
+        &|_| true,
+        &step,
     )
-    .or_else(|| enc.boss_search())
     .map(|r| r.mv)
 }
 
@@ -183,6 +196,7 @@ mod tests {
     use crate::encounter::marbles;
     use crate::moves::Direction::E;
     use crate::moves::{apply, legal_moves, Direction};
+    use crate::search::search_with;
 
     type Egg = (P, u8);
 
@@ -574,6 +588,60 @@ mod tests {
             legal_moves(enc.game().board(), Player::White).contains(&m),
             "a move anyway"
         );
+    }
+
+    /// The boss search as it was before #826: the plain weights, the root moves that crush none
+    /// of its eggs, no egg in the tree.
+    fn old_move(enc: &Encounter) -> Option<Move> {
+        let board = enc.game().board();
+        search_with(
+            enc.game(),
+            enc.boss.node_budget,
+            DEFAULT_WEIGHTS,
+            &|mv: &Move| spares_eggs(board, Player::White, mv),
+        )
+        .map(|r| r.mv)
+    }
+
+    #[test]
+    fn the_step_crushes_counts_down_and_hatches_like_the_encounter() {
+        let start = board(&[(-4, 4)], &[(0, 0)], &[((1, 0), 1), ((2, 0), 3)]);
+        assert_eq!(
+            alien_step(&start, Player::White).eggs(),
+            start.eggs(),
+            "the eggs wait on a boss ply"
+        );
+        let after = alien_step(&start, Player::Black);
+        assert_eq!(after.eggs(), &[((2, 0), 2)]);
+        assert_eq!(after.get(1, 0), Some(Cell::White), "hatched");
+        let mut crushed = start.clone();
+        crushed.set(2, 0, Cell::Black);
+        let after = alien_step(&crushed, Player::White);
+        assert_eq!(after.eggs(), &[((1, 0), 1)], "crushed by a marble");
+    }
+
+    #[test]
+    fn the_alien_crushes_its_own_egg_to_save_a_marble_the_old_filter_left_to_die() {
+        // Black has 5 ejections and a pair that pushes the rim marble (4, 0) off: the 6th. Its only
+        // two ways out lead onto eggs. The old search had to play the other marble instead.
+        let board = board(
+            &[(2, 0), (3, 0)],
+            &[(4, 0), (-4, 4)],
+            &[((4, -1), 4), ((3, 1), 4)],
+        );
+        let game = Game::from_position(board, Player::White, [5, 0]);
+        let enc = Encounter::new(game, alien_boss(), 0);
+        let saves = [mv(&[(4, 0)], Direction::NW), mv(&[(4, 0)], Direction::SW)];
+        let new = alien_move(&enc).unwrap();
+        assert!(saves.contains(&new), "{new:?}");
+        assert!(!saves.contains(&old_move(&enc).unwrap()));
+        let mut after = enc.clone();
+        after.play(&new).unwrap();
+        for reply in legal_moves(after.game().board(), Player::Black) {
+            let mut next = after.clone();
+            next.play(&reply).unwrap();
+            assert_ne!(next.game().ejected(Player::Black), 6, "{reply:?}");
+        }
     }
 
     #[test]
