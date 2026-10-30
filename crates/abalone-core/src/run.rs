@@ -16,14 +16,15 @@ pub const FULL_ARMY: u8 = 14;
 /// Below this many marbles the run is over.
 pub const MIN_ARMY: u8 = 4;
 
-/// What a node of the map holds (docs/specs/roguelite.md section 2).
+/// What a node of the map holds (docs/specs/roguelite.md section 2). Its value is its code on
+/// the bridge.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NodeKind {
-    Fight,
-    Boss,
-    Elite,
-    Rest,
-    Event,
+    Fight = 0,
+    Boss = 1,
+    Elite = 2,
+    Rest = 3,
+    Event = 4,
 }
 
 /// One node of the map. `links` are the columns of the next row of the same act it leads to,
@@ -809,4 +810,3 @@ mod special_marbles {
         }
     }
 }
-
