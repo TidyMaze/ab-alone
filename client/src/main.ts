@@ -135,6 +135,7 @@ import {
 import {
   DUAL_AZIMUTH,
   DUAL_CELLS,
+  DUAL_POLAR,
   WALL,
   dropAt,
   dualText,
@@ -290,11 +291,11 @@ const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
 // its counter fit the window too (#691), off the HUD plate (#695). The Dual Room's (#947) looks along its wall, the two
 // rooms side by side, drawn back until both fit.
-const DUAL_POINTS = DUAL_CELLS.map(([q, r]) => axialTo3D(q, r));
+const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 const fightView = (): View => {
   const plate = [document.getElementById('hud')!.getBoundingClientRect()];
   if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, plate);
-  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH }, DUAL_POINTS, innerWidth, innerHeight, plate);
+  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight, plate);
   return resetView(activeRadius());
 };
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the

@@ -20,6 +20,9 @@ export const DUAL_CELLS: readonly Axial[] = cellsFor(9).filter((c) => ROOMS.some
 
 /** The fight opens looking along the wall, from the east: the two rooms side by side. */
 export const DUAL_AZIMUTH = Math.PI / 2;
+/** Low enough that the camera stays under the bay's gantry ribs (y 12.8 and up, one right over the wall) once drawn back
+ * to fit both rooms. */
+export const DUAL_POLAR = 0.9;
 
 /** The wall: a lit bar on the board plane between the two wall rows, `x` its middle, `length` across both rows. */
 export const WALL = { x: 0.25, z: -Math.sqrt(3) / 4, length: 5.5, height: 0.6, depth: 0.1 };
