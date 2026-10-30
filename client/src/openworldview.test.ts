@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours, World } from './openworld';
-import { GROUNDS, loadModels, LOOK, MAX_ZOOM, OpenWorldView, overviewPalette, topOf, variety } from './openworldview';
+import { GROUNDS, loadModels, LOOK, MAX_ZOOM, OpenWorldView, overviewPalette, topOf, variety, WATER, waterColor } from './openworldview';
 
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
 function bytes(cx: number, cy: number): Uint8Array {
@@ -278,5 +278,73 @@ describe('the overview past the close range (#976)', () => {
     expect(Array.from(palette.subarray(5 * 4, 5 * 4 + 4))).toEqual(colour(LOOK.rock.color)); // boulder
     expect(Array.from(palette.subarray(6 * 4, 6 * 4 + 4))).toEqual(colour(LOOK.grass.color)); // tree
     expect(Array.from(palette.subarray(7 * 4, 7 * 4 + 4))).toEqual(colour(LOOK.rock.color)); // wall
+  });
+});
+
+// Every cell of the square -3..3 of chunks is the terrain code `code(q, r)`.
+const terrain = (code: (q: number, r: number) => number) => (cx: number, cy: number): Uint8Array => {
+  if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+  const out = new Uint8Array(CHUNK * CHUNK * 2);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, code(cx * CHUNK + (i % CHUNK), cy * CHUNK + Math.floor(i / CHUNK))], i * 2);
+  return out;
+};
+const WATER_CODE = 0;
+const GRASS_CODE = 2;
+const color = (hex: number) => new THREE.Color(hex);
+
+describe('the water (docs/specs/openworld.md section 2): depth, a glossy surface, a slow glow', () => {
+  it('colours a cell by its depth: the middle of a lake is deep, a lone water cell is shore', () => {
+    expect(waterColor(new World(terrain(() => WATER_CODE)), 0, 0).getHex()).toBe(color(WATER.deep).getHex());
+    const lone = new World(terrain((q, r) => (q === 0 && r === 0 ? WATER_CODE : GRASS_CODE)));
+    expect(waterColor(lone, 0, 0).getHex()).toBe(color(WATER.shore).getHex());
+  });
+
+  it('gets lighter with each neighbour that is land', () => {
+    const wet = new Set(neighbours([0, 0]).slice(0, 3).map(([q, r]) => `${q},${r}`));
+    const half = new World(terrain((q, r) => (q === 0 && r === 0) || wet.has(`${q},${r}`) ? WATER_CODE : GRASS_CODE));
+    expect(waterColor(half, 0, 0).getHex()).toBe(color(WATER.shore).lerp(color(WATER.deep), 0.5).getHex());
+  });
+
+  it('treats a cell off the loaded world as land', () => {
+    const none = new World(() => new Uint8Array());
+    expect(waterColor(none, 0, 0).getHex()).toBe(color(WATER.shore).getHex());
+  });
+
+  it('paints each water cell of the view with its depth', () => {
+    const lone = new OpenWorldView(new World(terrain((q, r) => (q === 0 && r === 0 ? WATER_CODE : GRASS_CODE))));
+    lone.show([0, 0]);
+    const paint = new THREE.Color();
+    mesh(lone, 'terrain-water').getColorAt(0, paint);
+    expect(paint.getHex()).toBe(color(WATER.shore).getHex());
+    const sea = new OpenWorldView(new World(terrain(() => WATER_CODE)));
+    sea.show([0, 0]);
+    mesh(sea, 'terrain-water').getColorAt(0, paint);
+    expect(paint.getHex()).toBe(color(WATER.deep).getHex());
+  });
+
+  it('has a glossy water surface: a low roughness, so the sun catches it', () => {
+    const view = new OpenWorldView(new World(terrain(() => WATER_CODE)));
+    expect((mesh(view, 'terrain-water').material as THREE.MeshStandardMaterial).roughness).toBeLessThan(0.5);
+  });
+
+  it('knows whether a lake is in view', () => {
+    const dry = new OpenWorldView(new World(terrain(() => GRASS_CODE)));
+    dry.show([0, 0]);
+    expect(dry.hasWater).toBe(false);
+    const wet = new OpenWorldView(new World(terrain(() => WATER_CODE)));
+    wet.show([0, 0]);
+    expect(wet.hasWater).toBe(true);
+  });
+
+  it('breathes the glow of the water slowly with time, and holds it still at 0', () => {
+    const view = new OpenWorldView(new World(terrain(() => WATER_CODE)));
+    view.show([0, 0]);
+    const water = mesh(view, 'terrain-water').material as THREE.MeshStandardMaterial;
+    view.glow(0);
+    expect(water.emissiveIntensity).toBeCloseTo(1);
+    view.glow((1200 * Math.PI) / 2);
+    expect(water.emissiveIntensity).toBeCloseTo(1.15);
+    view.glow(Math.PI * 1200 * 1.5);
+    expect(water.emissiveIntensity).toBeCloseTo(0.85);
   });
 });

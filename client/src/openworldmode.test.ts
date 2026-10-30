@@ -14,10 +14,22 @@ function bytes(cx: number, cy: number): Uint8Array {
   if (cx === 0 && cy === 0) out.set([1, 5], CHUNK * 2); // (0, 1)
   return out;
 }
-const mode = (models: () => Promise<Record<string, never>> = async () => ({})) => new OpenWorldMode(
-    (_seed, cx, cy) => bytes(cx, cy),
+// A lake everywhere in the square -3..3 of chunks.
+function sea(_seed: number, cx: number, cy: number): Uint8Array {
+  if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+  const out = new Uint8Array(CHUNK * CHUNK * 2);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0], i * 2);
+  return out;
+}
+const mode = (
+  models: () => Promise<Record<string, never>> = async () => ({}),
+  load: (seed: number, cx: number, cy: number) => Uint8Array = (_seed, cx, cy) => bytes(cx, cy),
+  reduced: () => boolean = () => true,
+) => new OpenWorldMode(
+    load,
     (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5, 7, 5) : new Int32Array()),
     models,
+    reduced,
   );
 const body = () => document.body.dataset;
 
@@ -214,5 +226,45 @@ describe('the Open world mode', () => {
     const m = mode();
     m.resize(100, 100);
     expect(m.active).toBe(false);
+  });
+
+  it('draws every frame while a lake is in view and motion is on, and moves the glow of the water', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const m = mode(undefined, sea, () => false);
+    m.enter(1, 800, 600);
+    const glow: number[] = [];
+    const render = vi.fn((scene: THREE.Scene) => {
+      const water = scene.getObjectByName('terrain-water') as THREE.InstancedMesh;
+      glow.push((water.material as THREE.MeshStandardMaterial).emissiveIntensity);
+    });
+    m.frame(render);
+    now.mockReturnValue((1200 * Math.PI) / 2);
+    m.frame(render);
+    m.frame(render);
+    expect(render).toHaveBeenCalledTimes(3);
+    expect(glow[0]).toBeCloseTo(1);
+    expect(glow[1]).toBeCloseTo(1.15);
+    now.mockRestore();
+  });
+
+  it('holds the lake still with reduced motion: drawn only when something changed', () => {
+    const m = mode(undefined, sea, () => true);
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render);
+    m.frame(render);
+    expect(render).toHaveBeenCalledTimes(1);
+    m.resize(400, 300);
+    m.frame(render);
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  it('draws only when something changed, with motion on, when no lake is in view', () => {
+    const m = mode(undefined, (_seed, cx, cy) => bytes(cx, cy), () => false);
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render);
+    m.frame(render);
+    expect(render).toHaveBeenCalledTimes(1);
   });
 });
