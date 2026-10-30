@@ -30,6 +30,7 @@ function play(game: Game, cells: Axial[], target: Axial): void {
   for (const cell of cells) game.click(...cell);
   game.click(...target);
   game.frame(1000); // the slide ends
+  game.frame(1000); // then the Echo's bonus slide (#958)
 }
 
 describe('main.ts, the rogue-lite run (#798)', () => {
@@ -317,8 +318,17 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     const game = await boot('?bot=off');
     const { state, nodes } = await bossRun('echo');
     await game.hook('__run', state);
-    // The Echo draws by repetition in 5 moves, a loss against a boss (e2e/fight-end.ts).
-    const moves: [Axial, Axial][] = [[[0, 2], [0, 1]], [[0, -1], [1, -1]], [[-1, 1], [0, 1]], [[0, -1], [1, -1]], [[-1, 1], [0, 1]]];
+    // The Echo draws by repetition in 7 moves, the player taking the free moves it offers (#958), a loss against a boss
+    // (e2e/fight-end.ts).
+    const moves: [Axial, Axial][] = [
+      [[0, 2], [0, 1]],
+      [[0, -1], [1, -1]],
+      [[0, 1], [-1, 1]],
+      [[-1, 1], [0, 1]],
+      [[0, -1], [1, -1]],
+      [[0, 1], [-1, 1]],
+      [[-1, 1], [0, 1]],
+    ];
     for (const [from, to] of moves) play(game, [from], to);
     await game.settle();
     expect(document.body.dataset.run).toBe('lost');

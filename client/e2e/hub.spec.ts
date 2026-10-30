@@ -91,9 +91,9 @@ test('the boss door starts the Echo, and Back to the ship after the defeat lands
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-boss', 'echo');
   await expect(body).not.toHaveAttribute('data-hub');
-  // ?bot=off: the test plays both sides; with the Echo's bonus mirrors (#859) these 5 moves bring a position back a
-  // third time, a draw by repetition: a defeat (e2e/fight-end.ts).
-  const moves = [[0, 2, 0, 1], [0, -1, 1, -1], [-1, 1, 0, 1], [0, -1, 1, -1], [-1, 1, 0, 1]];
+  // ?bot=off: the test plays both sides; with the Echo's bonus mirrors (#859), Black taking the free moves offered
+  // (#958), these 7 moves bring a position back a third time, a draw by repetition: a defeat (e2e/fight-end.ts).
+  const moves = [[0, 2, 0, 1], [0, -1, 1, -1], [0, 1, -1, 1], [-1, 1, 0, 1], [0, -1, 1, -1], [0, 1, -1, 1], [-1, 1, 0, 1]];
   for (const [ply, [q, r, tq, tr]] of moves.entries()) {
     await hookClick(page, q!, r!);
     await hookClick(page, tq!, tr!);

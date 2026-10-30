@@ -3,14 +3,16 @@ import { openModes } from './modes';
 
 // Reaching the end of a boss fight, for the daily result card tests (#196). With ?bot=off the test
 // plays both sides by hand. The daily boss of 2027-03-25 is The Echo with 13 bosses (#947), whose mirror
-// of each move is a bonus move for the other side (#859): Black up, then White east, Black east, White
-// east and Black east bring a position back a third time at the 5th move, a draw by threefold
-// repetition, which is a loss against a boss.
+// of each move is a bonus move for the other side (#859), offered to the player (#958): Black up, White
+// east, Black's free move west, Black east, White east, the free move again and Black east bring a
+// position back a third time at the 7th move, a draw by threefold repetition, which is a loss against a boss.
 const ECHO_DRAW: [number, number, number, number][] = [
   [0, 2, 0, 1], // Black (0,2) to (0,1), the Echo's bonus (0,-2) to (0,-1)
-  [0, -1, 1, -1], // White east, Black's bonus west
+  [0, -1, 1, -1], // White east, Black is offered the mirror west
+  [0, 1, -1, 1], // Black takes it
   [-1, 1, 0, 1], // Black east, White's bonus west
   [0, -1, 1, -1],
+  [0, 1, -1, 1],
   [-1, 1, 0, 1],
 ];
 export async function loseByRepetition(page: Page): Promise<void> {
