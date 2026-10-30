@@ -573,7 +573,8 @@ describe('main.ts boss tells', () => {
     expect([body().echoBonus, body().echoSkipped]).toEqual(['0', '0']);
     // Black up and its bonus, White back and its bonus, Black up again: White's step back would bring the start
     // position a third time on Black's bonus, a draw that loses the player, so that bonus is skipped.
-    for (const [q, r, tq, tr] of [[0, 2, 0, 1], [0, -1, 0, -2], [0, 2, 0, 1]] as const) {
+    game.click(0, 1); // (0, 2) is still selected
+    for (const [q, r, tq, tr] of [[0, -1, 0, -2], [0, 2, 0, 1]] as const) {
       game.click(q, r);
       game.click(tq, tr);
     }
