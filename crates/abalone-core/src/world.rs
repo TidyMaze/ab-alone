@@ -335,6 +335,7 @@ mod tests {
                     }
                     let c = cell(seed, q, r).unwrap();
                     assert_eq!(c.terrain, Terrain::Grass);
+                    assert_eq!(c.height, 3);
                     assert!(!c.terrain.blocked());
                 }
             }
@@ -350,11 +351,11 @@ mod tests {
                 match c.terrain {
                     Terrain::Wall => {
                         walls += 1;
-                        assert!((1..=2).contains(&c.height), "walls stand on land");
+                        assert!((2..=6).contains(&c.height), "walls stand on land");
                     }
                     Terrain::Tree => {
                         trees += 1;
-                        assert!((1..=2).contains(&c.height));
+                        assert!((3..=5).contains(&c.height), "trees grow on grass");
                     }
                     _ => {}
                 }
@@ -379,17 +380,16 @@ mod tests {
         for cx in -3..3 {
             for cy in -3..3 {
                 for c in chunk(11, cx, cy).unwrap() {
-                    assert!(c.height <= 3);
+                    assert!(c.height <= 7);
                     match c.terrain {
-                        Terrain::Water => assert_eq!(c.height, 0),
-                        Terrain::Peak => assert_eq!(c.height, 3),
-                        Terrain::Sand
-                        | Terrain::Grass
-                        | Terrain::Rock
-                        | Terrain::Boulder
-                        | Terrain::Tree
-                        | Terrain::Wall => {
-                            assert!((0..=3).contains(&c.height))
+                        Terrain::Water => assert!(c.height <= 1),
+                        Terrain::Sand => assert_eq!(c.height, 2),
+                        Terrain::Grass => assert!((3..=5).contains(&c.height)),
+                        Terrain::Rock => assert!((5..=6).contains(&c.height)),
+                        Terrain::Peak => assert_eq!(c.height, 7),
+                        Terrain::Tree => assert!((3..=5).contains(&c.height)),
+                        Terrain::Boulder | Terrain::Wall => {
+                            assert!((2..=6).contains(&c.height))
                         }
                     }
                 }
@@ -425,7 +425,31 @@ mod tests {
             .count();
         assert!(boulders * 100 / cells.len() <= 2);
         let heights: std::collections::HashSet<u8> = cells.iter().map(|c| c.height).collect();
-        assert_eq!(heights.len(), 4);
+        assert_eq!(heights.len(), 8);
+    }
+
+    #[test]
+    fn the_eight_height_levels_hold_their_measured_shares() {
+        // Chunks 2 to 17 on both axes, 32 cells or more from the spawn: the spawn bias does not reach them.
+        let mut counts = [0usize; 8];
+        for seed in 1..=4 {
+            for cx in 2..18 {
+                for cy in 2..18 {
+                    for c in chunk(seed, cx, cy).unwrap() {
+                        counts[c.height as usize] += 1;
+                    }
+                }
+            }
+        }
+        let total: usize = counts.iter().sum();
+        let targets = [8.0, 10.0, 12.0, 16.0, 18.0, 16.0, 12.0, 8.0];
+        for (level, (&n, target)) in counts.iter().zip(targets).enumerate() {
+            let share = n as f64 * 100.0 / total as f64;
+            assert!(
+                (share - target).abs() <= 2.0,
+                "level {level}: {share:.1} % against {target} %"
+            );
+        }
     }
 
     #[test]
@@ -601,7 +625,7 @@ mod tests {
 
     #[test]
     fn most_open_cells_around_the_spawn_are_reachable_on_foot() {
-        for seed in 1..=8 {
+        for seed in 1..=32 {
             let (open, reached) = spawn_window_reach(seed);
             assert!(
                 reached * 100 >= open * 90,
