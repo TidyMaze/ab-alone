@@ -398,9 +398,12 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   main move brings both sides to 6, its mover is credited first. A draw is still a player loss.
 - **Anti-stalling**: each bonus is a ply: it counts for the 100-ply no-ejection cap and for the repetitions,
   and the position hash includes the moves never echoed (section 5).
-- **Tell**: a ghost of the mirror is drawn while you prepare a move (and the older move that
-  will be echoed in P2); a skipped bonus is drawn crossed in red. Nothing is hidden. Until the
-  client tells land (#859 part 2) the bonus moves show as normal moves.
+- **Tell**: while you prepare a move, its ghost shows the bonus moves it gives the Echo (the
+  mirror, and in P2 the older move that will be echoed), each landing marble ringed in teal; a
+  bonus that will be skipped is a ghost under a red cross (a shape, not colour alone). Once
+  played, the bonus plies of the last move keep a teal ring on the marbles they moved until the
+  next move, for both sides. Steady marks, no animation. Nothing is hidden (`Encounter.echo_tell`,
+  `Encounter.last_bonuses`; MCP `play_move` lists them in `bonuses`).
 - **Counter, turn it against the boss**: your free bonus moves. Every boss move whose mirror you
   can play is a free move for you: answer its pushes with their mirror, and in P2 keep blocked
   moves in its memory that turn into free pushes for you once their path opens. Play moves whose
