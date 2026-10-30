@@ -208,7 +208,7 @@ test('the battle royale lobby door starts battle royale, and Back to the ship la
 /** The colour of the lift glyph at the centre of `cell` and of the floor next to it, after a draw that began now: under
  * automation the page skips draws (#216, #365). */
 async function liftPixels(page: Page, [q, r]: [number, number], path: string): Promise<[RGB, RGB]> {
-  const draws = await page.evaluate(() => (window as any).__draws() as number);
+  const draws = await page.evaluate(() => (window as any).__drawNext() as number);
   await page.waitForFunction((n) => (window as any).__draws() > n, draws);
   const png = await page.screenshot({ path });
   // The floor 0.28 west and 0.1 north of the centre: inside the ring, clear of the arrow and the bar.
@@ -233,6 +233,7 @@ async function liftPixels(page: Page, [q, r]: [number, number], path: string): P
 }
 
 test('a locked lift keeps the marble out with a Tally line, and a boss win opens it, #523', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 960, height: 540 }); // cheap requested draws keep all three visual checks below 15 s (#892)
   await shipAt(page, './?bot=off', [1, -1]);
   const body = page.locator('body');
   await expect(body).toHaveAttribute('data-lifts', 'cargo locked');
