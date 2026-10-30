@@ -951,8 +951,32 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_13_since_the_dual_room_has_a_void_and_a_bridge() {
-        assert_eq!(engine_version(), 13);
+    fn the_engine_version_is_14_since_the_echo_offers_the_players_bonus() {
+        assert_eq!(engine_version(), 14);
+    }
+
+    #[test]
+    fn the_echo_offers_the_player_a_free_move_that_keeps_the_turn() {
+        let mut f = fight();
+        assert!(f.free_moves().is_empty(), "no offer at the start");
+        let mv = first_move(&f);
+        f.play(&mv).unwrap();
+        let reply = f.boss_move();
+        f.play(&reply).unwrap();
+        let free = f.free_moves();
+        assert_eq!(free.len(), MOVE_STRIDE, "the mirror of the Echo's move");
+        assert!(f.last_bonuses().is_empty(), "offered, not played");
+        f.play(&free).unwrap();
+        assert_eq!(f.to_move(), 1, "the player moves again");
+        assert!(f.free_moves().is_empty());
+        for id in ["hull", "choir"] {
+            let mut other = Encounter::new(id, 1).unwrap();
+            let mv = first_move(&other);
+            other.play(&mv).unwrap();
+            let reply = other.boss_move();
+            other.play(&reply).unwrap();
+            assert!(other.free_moves().is_empty(), "{id}");
+        }
     }
 
     #[test]
