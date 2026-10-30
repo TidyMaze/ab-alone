@@ -487,11 +487,11 @@ mod tests {
 
     #[test]
     fn the_eight_height_levels_hold_their_measured_shares() {
-        // Chunks 5 to 20 on both axes, 80 cells or more from the spawn: the spawn bias does not reach them.
+        // The 16 x 16 chunks around the spawn, the real window, of four seeds.
         let mut counts = [0usize; 8];
         for seed in 1..=4 {
-            for cx in 5..21 {
-                for cy in 5..21 {
+            for cx in -8..8 {
+                for cy in -8..8 {
                     for c in chunk(seed, cx, cy).unwrap() {
                         counts[c.height as usize] += 1;
                     }
@@ -506,6 +506,26 @@ mod tests {
                 (share - target).abs() <= 2.0,
                 "level {level}: {share:.1} % against {target} %"
             );
+        }
+    }
+
+    #[test]
+    fn a_far_view_around_the_spawn_has_a_sea_and_a_range() {
+        // The widest zoom sees about 21 x 21 chunks around the spawn: each of seeds 1 to 8 shows water, and rock or peak.
+        for seed in 1..=8 {
+            let cells: Vec<Cell> = (-10..=10)
+                .flat_map(|cx| (-10..=10).flat_map(move |cy| chunk(seed, cx, cy).unwrap()))
+                .collect();
+            let total = cells.len() as f64;
+            let water = cells.iter().filter(|c| c.terrain == Terrain::Water).count() as f64 * 100.0 / total;
+            let range = cells
+                .iter()
+                .filter(|c| matches!(c.terrain, Terrain::Rock | Terrain::Peak))
+                .count() as f64
+                * 100.0
+                / total;
+            assert!((3.0..=45.0).contains(&water), "seed {seed}: water {water:.1} %");
+            assert!((5.0..=45.0).contains(&range), "seed {seed}: rock and peak {range:.1} %");
         }
     }
 
