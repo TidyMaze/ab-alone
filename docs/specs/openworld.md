@@ -7,8 +7,9 @@ A-light Explore (#720 to #725), which it does not touch.
 
 ## 1. The mode
 
-- **Entry**: "Open world" in the mode menu, behind the flag `openworld` until #962 is `Decided`.
-  Leave returns to where the player came from.
+- **Entry**: "Open world" in the mode menu, for everyone, no flag (#1000). A click rolls a random
+  seed; `?openworld=<seed>` fixes it (tests, sharing a world). Leave returns to where the player
+  came from.
 - **Delta to Abalone**: none to the move, the push or the legality (`rules.md`). The mode adds a
   map, obstacles and an automatic troop whose only attack is a legal Abalone push (pillar 1).
 - **Not now**: HP, damage, levels, items, economy, real-time fights (each needs a Decision, #313).
