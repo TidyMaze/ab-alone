@@ -11,7 +11,7 @@ import { BLOCKED, HIDDEN, PLIES, SEEN } from './test/stalker-game';
 // position comes from the __playMoves hook (src/test/stalker-game.ts).
 
 type Shown = { visible: Axial[]; drawn: Axial[]; revealed: Axial[]; last: Axial[] } | null;
-const byId = (id: string): HTMLElement => document.getElementById(id)!;
+const byId = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const shown = (game: Game): Shown => game.hook<Shown>('__stalker');
 const drawnAt = (game: Game, [q, r]: Axial): boolean => game.hook('__marbleTurn', q, r) !== null;
 const has = (cells: Axial[], [q, r]: Axial): boolean => cells.some(([cq, cr]) => cq === q && cr === r);
@@ -67,6 +67,14 @@ describe('main.ts Stalker (#998)', () => {
     startStalker(game);
     expect(byId('eval').hidden).toBe(true);
     expect(byId('hint').hidden).toBe(true);
+  });
+
+  it("greys Auto-play with its reason: the bot would play the player's side seeing the hidden marbles", async () => {
+    const game = await boot('/?bot=on');
+    startStalker(game);
+    expect(byId<HTMLButtonElement>('auto-play').hidden).toBe(false);
+    expect(byId<HTMLButtonElement>('auto-play').disabled).toBe(true);
+    expect(byId('auto-reason').textContent).toBe('Not in a Stalker game');
   });
 
   it('draws an enemy marble 2 cells away and not one 3 cells away', async () => {

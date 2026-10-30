@@ -26,6 +26,10 @@ describe('autoPlayState, #792', () => {
     expect(autoPlayState({ online: false, boss: null, run: true }, false)).toEqual({ shown: true, reason: 'Not in a rogue-lite run' });
   });
 
+  it('is greyed with the reason in a Stalker game: the bot sees the hidden marbles, #998', () => {
+    expect(autoPlayState({ online: false, boss: null, stalker: true }, false)).toEqual({ shown: true, reason: 'Not in a Stalker game' });
+  });
+
   it('plays one move per short delay', () => {
     expect(AUTO_DELAY_MS).toBeGreaterThan(0);
     expect(AUTO_DELAY_MS).toBeLessThanOrEqual(1000);
