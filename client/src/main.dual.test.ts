@@ -147,12 +147,13 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     expect(tell()).toBe('Your marble comes back on the mark next turn · the bridge comes at 5');
   });
 
-  it('leaving for the hub during the fall ends it, with no marble left to drop', async () => {
+  it('leaving for the battle royale during the fall ends it, with no marble left to drop', async () => {
     const game = await boot('?bot=off', { reducedMotion: false });
     fightDual(game);
     played(game, 0, RETURN_AT + 1);
     expect(dual(game).drop).not.toBeNull();
-    byId('ship').click();
+    game.openModes();
+    byId('battle-royale').click();
     game.frame(DROP_MS);
     game.frame(16);
     expect(dual(game).drop).toBeNull();
