@@ -297,6 +297,7 @@ Each new boss: add its mechanic to The Ballast Mind's borrowed effects when it f
 | Extra | 4 Chapel | The Overseer (proposed by @TidyMaze, section 7.11) | #635 | any time, boss menu |
 | Extra | 2 Cargo | The Assembly Line (proposed by @Varadiell, section 7.12) | #744 | any time, boss menu |
 | Extra | 3 Furnace | The Unstable Core (proposed by @Varadiell, section 7.13) | #751 | any time, boss menu |
+| Extra | 2 Cargo | The Swarm (proposed by @Varadiell, section 7.14) | #795 | any time, boss menu |
 | Extra | 1 Mess | The Dual Room (proposed by @Varadiell, section 7.15) | #796 | any time, boss menu |
 | Extra | 4 Chapel | The Stalker (owner request, [stalker.md](stalker.md)) | #1111 | any time, boss menu |
 
@@ -481,7 +482,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   - **the Chaplain's conversion check**: every marble touching 4 or more marbles of the other
     side flips, both sides (threshold 4, no martyr), as for the Chaplain.
   Left out, not simple on this board: the trains, belts, eggs, armies, the martyr, the cores and
-  the echo. The old mix (Hull rim crack, Chaplain threshold 3, Echo of the previous move) is gone.
+  the echo. The Swarm's wave (section 7.14) joins the pick with part 2 of #795. The old mix (Hull rim crack, Chaplain threshold 3, Echo of the previous move) is gone.
 - **Announce**: the HUD names the effect one turn ahead, during the turn before it lands
   ("Next turn: the Hull's crack"). The Hull's crack needs no longer lead, it is its own 2-turn
   warning once cracked. The pulse is also announced on the board (#838): the pulsar that will fire
@@ -916,6 +917,55 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   (3 turns), AI depth. Fail if most fights end with no overload.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door.
+
+### 7.14 The Swarm: survive 30 turns of arriving waves
+
+- **Concept**: the Cargo hold's vermin. A swarm pours in from the far side of the hold, wave
+  after wave; there is no queen to kill. Hold out until the evac lifts you out.
+- **Board and sides** (owner, #795): standard radius 4 board, standard moves and sumito. The
+  player starts with the standard layout **minus its 3 marbles nearest the centre** (the row
+  `r = 2`): **11** marbles, rows `r = 3` and `r = 4`. The boss starts with **no marble**.
+- **Turn**: one turn is one player move, then one boss reply: (a) the swarm marbles announced for
+  that turn **arrive**, then (b) the swarm plays one standard move with its marbles, or **passes**
+  when it has none (no marble, or every one boxed in, as the Choir's pass).
+- **Arrivals**: turns 1 to 14, **1** marble a turn; turns 15 to 24, **2**; turns 25 to 30, **3**
+  (52 in all, more than the 50 free cells: the board can fill). They land on the **allowed rim
+  cells**: the 13 rim cells with `r <= 0` (never on the player's start side, `r > 0`). The cells of
+  a turn are **announced one turn ahead**: at the start for turn 1, then at the end of each boss
+  reply for the next turn, picked at random among the empty allowed rim cells. A cell taken when
+  its marble is due sends it to the **nearest empty allowed rim cell** (hex distance, then the
+  lowest `q`, then the lowest `r`); with no empty allowed rim cell, that marble does not arrive.
+  Fewer empty allowed cells than the turn's count at the announce: only those are announced. No
+  cap on the swarm (owner, #795).
+- **Phases by turn**, not by ejections: P1 turns 1 to 14, P2 from turn **15**, P3 from turn **25**.
+- **Win and loss** (owner): the win at 6 ejections is **off for both sides**. The player **wins**
+  when the boss's 30th reply is done and at least 1 of its marbles is on the board (the evac
+  arrives). The boss **wins** the moment the player has no marble left. An ejected swarm marble
+  scores nothing, it is simply gone; the HUD still counts the ejections of both sides.
+- **No draw**: 30 turns are 60 plies, under the 100-ply no-ejection cap, and the fight turns both
+  draw rules off (a full rim with no arrival could repeat a position): a draw would be a loss
+  (section 3.3), so it never happens here.
+- **Deterministic, for P2P**: the announced cells are splitmix64 of the fight seed and the ply.
+  No `Math.random`, no clock: a Retry, the daily, a replayed game file and every peer get the same
+  waves.
+- **Tell**: an announce mark on each cell where a swarm marble arrives next turn; a turn counter
+  from 30 down to 0 (the health bar of #788 shows the turns left).
+- **Look**: Cargo deck. The marbles drop in on their marks; at the end of turn 30 the **evac
+  lights the whole board** and lifts the surviving marbles. Reduced motion: a fade.
+- **Turn it against the boss** (owner design rule): every swarm marble lands alone on the rim, so
+  push it off before the next one lands beside it; the swarm's own pushes on the rim can shove
+  its marbles out, and the announce marks say where to stand so a wave lands where you can push
+  it. The boss search sees the arrivals: every player ply of its tree lands the next wave where
+  the announce would put it.
+- **The Ballast Mind** (owner rule, section 7.5): it fits as a one-shot hook (the wave of the
+  phase lands at once on the empty rim cells away from the player's start side), and is borrowed
+  with part 2 of #795, with its HUD line: part 1 adds no effect to the pick.
+- **Calibrate**: knobs = the arrival counts (1, 2, 3), the turns (30), the start (11), AI budget.
+  Gate (#795): the ladder's pro player wins 7 to 9 of 10 seeds at 10x, and a scripted turtle (it
+  never moves a marble outward and never pushes) loses at least 8 of 10. Ladder:
+  `boss-balance.md` section 3.
+- **Where**: the boss menu and the daily challenge (it joins `boss_ids()` in part 2, so the daily
+  pick of the days after it ships changes, section 7.6). No hub door.
 
 ### 7.15 The Dual Room: two rooms where ejected marbles come back
 
