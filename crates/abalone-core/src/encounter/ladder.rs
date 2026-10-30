@@ -9,7 +9,7 @@ use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
 use crate::encounter::ballast::{ballast_move, ballast_search, ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
-use crate::encounter::echo::{echo_boss, echo_move, mirror_move};
+use crate::encounter::echo::{echo_boss, echo_move, echo_search, echo_start};
 use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
 use crate::encounter::telemetry::{
@@ -100,7 +100,7 @@ impl Arena {
             LadderBoss::Ballast => Arena::Plain(ballast_start(seed), boss),
             LadderBoss::Alien => Arena::Plain(alien_start(seed), boss),
             LadderBoss::Overseer => Arena::Plain(overseer_start(seed), boss),
-            LadderBoss::Echo => plain(echo_boss()),
+            LadderBoss::Echo => Arena::Plain(echo_start(seed), boss),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
             LadderBoss::Choir => Arena::Choir(Choir::start(seed)),
@@ -198,6 +198,7 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
             |b: &Board, p: Player, m: &Move, a: Board| (chaplain_step(0, b, p, m, a).0, [0, 0]);
         let pick = |allow: &dyn Fn(&Move) -> bool| match arena {
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
             _ if arena.kind() == LadderBoss::Chaplain => {
                 search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
             }
@@ -222,6 +223,7 @@ fn play_out(
     let mut losses = Losses::default();
     let mut max_phase = arena.phase();
     let (mut plies, mut player_moves, mut stuck) = (0, 0, None);
+    let mut moves = Vec::new();
     while arena.game().outcome().is_none() && plies < ply_cap {
         let game = arena.game();
         let player_turn = game.to_move() == Player::Black;
@@ -241,23 +243,18 @@ fn play_out(
             mv
         };
         let boss_push = !player_turn & apply(game.board(), Player::White, &mv).is_ok_and(|a| a.1);
-        let mirror = echo
-            & game
-                .history()
-                .iter()
-                .rev()
-                .step_by(2)
-                .take(2)
-                .any(|p| mirror_move(&p.mv) == mv);
         let black = marbles(game.board(), Cell::Black);
         let lost_before = game.ejected(Player::White);
         arena.play(&mv).expect("the ladder plays legal moves");
+        moves.push(mv);
         let game = arena.game();
         let lost = game.ejected(Player::White) - lost_before;
         let flipped = i32::from(black) - i32::from(marbles(game.board(), Cell::Black));
-        losses.mirrored += u8::from(boss_push & mirror);
-        losses.pushed += u8::from(boss_push & !mirror);
-        losses.rim += lost.saturating_sub(u8::from(boss_push));
+        // The Echo's bonus mirrors after a player move are its mirrored pushes.
+        let mirrored = if echo && player_turn { lost } else { 0 };
+        losses.mirrored += mirrored;
+        losses.pushed += u8::from(boss_push);
+        losses.rim += lost.saturating_sub(u8::from(boss_push) + mirrored);
         losses.converted = losses
             .converted
             .saturating_add((flipped - i32::from(lost)).max(0) as u8);
@@ -268,7 +265,6 @@ fn play_out(
     let won = arena.result() == Some(PveResult::Won);
     let draw = game.outcome() == Some(Outcome::Draw);
     let capped = game.outcome().is_none();
-    let moves = game.history().iter().map(|p| p.mv.clone()).collect();
     let record = AttemptRecord {
         boss: arena.kind().id(),
         seed,
