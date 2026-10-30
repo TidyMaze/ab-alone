@@ -94,17 +94,13 @@ fn remember(board: &Board, change: impl FnOnce(&mut Vec<(Player, Move)>)) -> Boa
     out
 }
 
-/// `true` when playing `bonus` ends the game as a loss for the side to move, who receives it (a
-/// draw is a player loss). Such a bonus is skipped.
+/// `true` when playing `bonus` ends the game as a loss for the side to move, who receives it. Such
+/// a bonus is skipped. A legal move never ejects its own marble nor credits the other side, so the
+/// only loss a bonus can bring its receiver is a draw (repetition or cap), a loss for the player.
 fn loses(game: &Game, bonus: &Move) -> bool {
-    let receiver = game.to_move();
     let mut after = game.clone();
     after.play_bonus(bonus).expect("a legal bonus");
-    match after.outcome() {
-        Some(Outcome::Win(winner)) => winner != receiver,
-        Some(Outcome::Draw) => receiver == Player::Black,
-        None => false,
-    }
+    game.to_move() == Player::Black && after.outcome() == Some(Outcome::Draw)
 }
 
 /// Plays `bonus` for the side to move, which moves again, unless it would lose it the game.

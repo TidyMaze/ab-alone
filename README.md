@@ -54,7 +54,7 @@ Die, read the tell, retry with the same seed.
 
 | Deck | Boss | The rule it bends |
 |---|---|---|
-| Mess | **The Echo** | every move is mirrored through the centre for the other side as a free bonus move, both ways: it gets the mirror of yours and you get the mirror of its own; after 3 ejections it also mirrors an older move |
+| Mess | **The Echo** | when a move's mirror through the centre is legal, the other side plays it as a free bonus move, both ways: it gets the mirror of yours and you get the mirror of its own; after 3 ejections it also mirrors an older move |
 | Cargo | **The Hull** | one announced cell at a time cracks, then falls away under both sides |
 | Furnace | **The Choir** | three armies of six in triangles, one sings (moves) per turn; the weakest army is removed after 3 and 5 ejections, and the last one sings twice |
 | Chapel | **The Chaplain** | a marble touching four foes changes side, a boss marble won costs it health and one lost heals it, and at four ejections a martyr explodes and converts its neighbours, who wear its glyph and a cracked shell |
