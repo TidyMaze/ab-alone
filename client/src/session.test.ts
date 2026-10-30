@@ -250,6 +250,28 @@ describe('OnlineSession', () => {
     }
   });
 
+  it('chains a reply sent once the engine has the move, while the log still hashes it, as on a loaded machine, bug #952', async () => {
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    const slow = vi.spyOn(crypto.subtle, 'digest').mockImplementation(async (...args) => {
+      await new Promise((r) => setTimeout(r, 50)); // the head of the log is known 50 ms after the record is in
+      return digest(...args);
+    });
+    try {
+      const { black, white } = await seated();
+      black.judge.play(Int32Array.from(M1));
+      await black.session.send(M1);
+      while (white.judge.played.length === 0) await new Promise((r) => setTimeout(r)); // White's engine has it
+      white.judge.play(Int32Array.from(M2));
+      await white.session.send(M2);
+      await settle();
+      expect(black.refused).toEqual([]);
+      expect(black.moves).toEqual([M2]);
+      expect(white.session.signedLog).toEqual(black.session.signedLog);
+    } finally {
+      slow.mockRestore();
+    }
+  });
+
   it('refuses a move the engine calls illegal and does not apply it', async () => {
     const [x, y] = localPair();
     const white = await player(y, 2);
