@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { BOARD_CELLS, RADIUS, VANISHED, cellIndex } from './board';
+import { RADIUS, VANISHED, cellIndex } from './board';
 import { resetView, type View } from './camera';
 import { DECK_PARTICLES } from './deck';
 import { DECKS } from './light';
@@ -268,7 +268,7 @@ describe('SceneRenderer (#632)', () => {
   it('draws frame geometry and caches unchanged shapes', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });
-    const board = new Uint8Array(BOARD_CELLS.length);
+    const board = new Uint8Array(91);
     board.fill(1, 0, 14);
     board.fill(2, 14, 28);
 
@@ -289,7 +289,7 @@ describe('SceneRenderer (#632)', () => {
     expect(frame2).toBeNull();
 
     // Board with vanished cell (hole)
-    const hullBoard = new Uint8Array(BOARD_CELLS.length);
+    const hullBoard = new Uint8Array(91);
     hullBoard[cellIndex(4, -1)] = VANISHED;
     const holeFrame = sr.drawFrame(hullBoard);
     expect(holeFrame?.holes.length).toBeGreaterThan(0);
@@ -333,7 +333,7 @@ describe('SceneRenderer (#632)', () => {
   it('draws tally marks on the rim', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });
-    const board = new Uint8Array(BOARD_CELLS.length);
+    const board = new Uint8Array(91);
     const frame = sr.drawFrame(board)!;
 
     const rows = [

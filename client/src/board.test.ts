@@ -60,9 +60,9 @@ describe('cell order of the bridge', () => {
   });
 
   it('rejects cells off the board', () => {
-    expect(cellIndex(6, 0)).toBe(-1);
-    expect(cellIndex(-5, -1)).toBe(-1);
-    expect(cellIndex(0, 6)).toBe(-1);
+    expect(cellIndex(10, 0)).toBe(-1);
+    expect(cellIndex(-9, -1)).toBe(-1);
+    expect(cellIndex(0, 10)).toBe(-1);
     expect(cellIndex(5, 0, CELLS)).toBe(-1);
     expect(cellAt(271)).toBeUndefined();
   });
@@ -77,7 +77,7 @@ describe('cell order of the bridge', () => {
     expect(cellAt(90)).toEqual([0, 5]);
   });
 
-  it('goes on with rings 6 to 9 of The Dual Room's radius 9 board (#947), each row by row, so no index shifts', () => {
+  it('goes on with rings 6 to 9 of the radius 9 board of The Dual Room (#947), each row by row, so no index shifts', () => {
     const ringOf = ([q, r]: readonly [number, number]): number => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
     expect(BOARD_CELLS).toHaveLength(271);
     for (let k = 6; k <= 9; k++) {

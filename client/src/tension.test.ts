@@ -49,7 +49,7 @@ describe('rimDanger, own marbles on the rim that one push could eject (world.md 
 
   it('on the radius 5 board of The Ballast Mind (#564), the rim is ring 5', () => {
     const wide = (...marbles: [Axial, number][]): number[] => {
-      const b = BOARD_CELLS.map(() => 0);
+      const b = BOARD_CELLS.slice(0, 91).map(() => 0);
       for (const [[q, r], side] of marbles) b[cellIndex(q, r)] = side;
       return b;
     };

@@ -82,10 +82,26 @@ describe('main.ts The Dual Room (#947)', () => {
     expect(drop.cell).toEqual(RETURN_CELL);
     expect(drop.y).toBeGreaterThan(0);
     expect(document.body.dataset.returns).toBe('1');
+    game.frame(DROP_MS / 2);
+    game.frame(1);
+    expect(dual(game).drop!.y).toBeGreaterThan(0);
+    expect(dual(game).drop!.y).toBeLessThan(drop.y);
     game.frame(DROP_MS);
     game.frame(16);
     expect(dual(game).drop).toBeNull();
     expect(game.hook('__marbleTurn', ...RETURN_CELL)).not.toBeNull();
+  });
+
+  it('a Retry during the fall ends it on the new fight, whose cell is empty', async () => {
+    const game = await boot('?bot=off', { reducedMotion: false });
+    fightDual(game);
+    played(game, 0, RETURN_AT + 1);
+    expect(dual(game).drop).not.toBeNull();
+    byId('boss-retry').click();
+    game.frame(DROP_MS);
+    game.frame(16);
+    expect(dual(game).drop).toBeNull();
+    expect(game.hook('__marbleTurn', ...RETURN_CELL)).toBeNull();
   });
 
   it('reduced motion: the returning marble is on its cell at once', async () => {

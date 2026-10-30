@@ -113,11 +113,11 @@ describe('main.ts board and HUD', () => {
     expect(scene().children.some((c) => c instanceof THREE.Group && c.children.length > 0 && c.children.every((m) => m.position.z === -23.2))).toBe(false);
   });
 
-  it('draws the 91 cells and their bevels with 2 instanced meshes, the discs kept for picking only (#885)', async () => {
+  it('draws the 271 cells and their bevels with 2 instanced meshes, the discs kept for picking only (#885)', async () => {
     const scene = catchScene();
     await boot('?bot=off');
     const drawn = scene().children.filter((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh && c.geometry.type !== 'SphereGeometry');
-    expect(drawn.map((m) => [m.count, m.geometry.type])).toEqual([[91, 'CylinderGeometry'], [91, 'TorusGeometry']]);
+    expect(drawn.map((m) => [m.count, m.geometry.type])).toEqual([[271, 'CylinderGeometry'], [271, 'TorusGeometry']]);
     const { discs } = parts(scene());
     expect(drawn[0]!.material).toBe(discs[0]!.material);
     const camera = new THREE.Camera();
@@ -141,7 +141,7 @@ describe('main.ts board and HUD', () => {
     const game = await boot('?bot=off');
     await game.settle(); // the skins' maps load after the first frame
     const { discs, plate, near } = parts(scene());
-    expect(discs).toHaveLength(91); // the 61, then ring 5 for The Ballast Mind (#564)
+    expect(discs).toHaveLength(271); // the 61, then ring 5 for The Ballast Mind (#564), rings 6 to 9 for The Dual Room (#947)
     expect(discs.filter((d) => d.visible)).toHaveLength(61);
     expect(discs[0]!.material.map).toBeInstanceOf(THREE.Texture);
     expect(discs[0]!.material.normalMap).toBeInstanceOf(THREE.Texture);
@@ -489,7 +489,7 @@ describe('main.ts board and HUD', () => {
     const vanished = Number(document.body.dataset.vanished);
     expect(vanished).toBeGreaterThan(0);
     expect(game.hook('__frame')).toMatchObject({ holes: vanished, drawn: true });
-    expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished + 30); // ring 5 is off this board (#564)
+    expect(parts(scene()).discs.filter((d) => !d.visible)).toHaveLength(vanished + 210); // rings 5 to 9 are off this board (#564, #947)
     await game.settle();
   });
 

@@ -25,7 +25,8 @@ const MODE_DECK: Record<Exclude<Mode, 'boss'>, Deck> = { local: 'mess', bot: 'me
 // One boss per deck (world.md section 3), and the extra bosses: The Alien and The Rail Yard in the Cargo hold too
 // (game-design.md sections 7.7 and 7.8), The Magnetizer in the Furnace, by its magnet cranes (section 7.9), The Pulsar
 // on the Bridge, by the ship mind's navigation beacons (section 7.10), The Overseer in the Chapel, its test chamber
-// (section 7.11), and The Assembly Line in the Cargo hold again, by its conveyor belts (section 7.12). A daily is a
+// (section 7.11), The Assembly Line in the Cargo hold again, by its conveyor belts (section 7.12), and The Dual Room in
+// the Mess, its two galleys split by a bulkhead (section 7.15). A daily is a
 // fight against one of them, so it plays on that boss's deck.
 const BOSS_DECK: Record<string, Deck> = {
   echo: 'mess',
@@ -40,6 +41,7 @@ const BOSS_DECK: Record<string, Deck> = {
   overseer: 'chapel',
   assembly: 'cargo',
   core: 'furnace',
+  dual: 'mess',
 };
 
 /** The deck of a mode, or of a boss fight: the Mess for a boss the client does not know. */

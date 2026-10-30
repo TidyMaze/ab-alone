@@ -48,9 +48,10 @@ export function cellsFor(radius: number): Axial[] {
 export const CELLS: readonly Axial[] = cellsFor(RADIUS);
 
 const ring = ([q, r]: Axial): number => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
-/** The cells a board array holds, in the bridge order: the 61, then the outer ring of The Ballast Mind's radius 5
- * board (#564). A board of 61 values stops before ring 5. */
-export const BOARD_CELLS: readonly Axial[] = [...CELLS, ...cellsFor(5).filter((c) => ring(c) === 5)];
+/** The cells a board array holds, in the bridge order: the 61, then each ring beyond them in turn, row by row: ring 5 of
+ * The Ballast Mind's radius 5 board (#564), rings 5 to 9 of The Dual Room's radius 9 scan (#947). A board of 61 values
+ * stops before ring 5, one of 91 before ring 6. */
+export const BOARD_CELLS: readonly Axial[] = [CELLS, ...[5, 6, 7, 8, 9].map((k) => cellsFor(k).filter((c) => ring(c) === k))].flat();
 
 /** Pointy-top layout: E is +x, rows go down the screen with +r (+z). `spacing` is the distance
  * between two neighbour centres. */
