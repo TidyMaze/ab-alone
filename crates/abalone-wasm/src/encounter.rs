@@ -713,7 +713,7 @@ impl Encounter {
             let (side, (q, r)) = d
                 .coming
                 .map_or((0, (0, 0)), |(cell, at)| (i32::from(code(Some(cell))), at));
-            vec![i32::from(d.collapsed), side, q, r]
+            vec![i32::from(d.bridged), side, q, r]
         })
     }
 
