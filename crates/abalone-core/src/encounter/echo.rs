@@ -390,20 +390,16 @@ mod tests {
 
     #[test]
     fn the_echo_gets_the_mirror_of_the_players_move_at_once() {
-        {
-            let swap = false;
-            let (first, second) = sides(swap);
-            let mut e = fight(swap, &[(0, 2)], &[(0, -2)], [0, 0]);
-            let played = side_mv(swap, &[(0, 2)], SE);
-            e.play(&played).unwrap();
-            assert_eq!(plies(&e), vec![played.clone(), mirror_move(&played)]);
-            let mirrored = mirror_move(&played).cells[0];
-            let target = (mirrored.0, mirrored.1 - 1);
-            assert_eq!(e.game().board().get(target.0, target.1), Some(Cell::White));
-            assert_eq!(e.game().to_move(), second, "then it plays its own move");
-            assert!(e.game().board().echoes().is_empty());
-            assert_ne!(first, second);
-        }
+        let (_, second) = sides(false);
+        let mut e = fight(false, &[(0, 2)], &[(0, -2)], [0, 0]);
+        let played = side_mv(false, &[(0, 2)], SE);
+        e.play(&played).unwrap();
+        assert_eq!(plies(&e), vec![played.clone(), mirror_move(&played)]);
+        let mirrored = mirror_move(&played).cells[0];
+        let target = (mirrored.0, mirrored.1 - 1);
+        assert_eq!(e.game().board().get(target.0, target.1), Some(Cell::White));
+        assert_eq!(e.game().to_move(), second, "then it plays its own move");
+        assert!(e.game().board().echoes().is_empty());
     }
 
     #[test]
@@ -438,19 +434,16 @@ mod tests {
 
     #[test]
     fn p2_also_echoes_the_latest_older_move_whose_mirror_is_legal_now() {
-        {
-            let swap = false;
-            let (first, second) = sides(swap);
-            let b = side_mv(swap, &[(-3, 4)], E);
-            let (mut e, a, w) = older_setup(swap, [3, 0]);
-            e.play(&b).unwrap();
-            assert_eq!(
-                plies(&e),
-                vec![a.clone(), w.clone(), b.clone(), mirror_move(&a)]
-            );
-            assert_eq!(e.game().to_move(), second);
-            assert_eq!(e.game().board().echoes(), &[(second, w), (first, b)]);
-        }
+        let (first, second) = sides(false);
+        let b = side_mv(false, &[(-3, 4)], E);
+        let (mut e, a, w) = older_setup(false, [3, 0]);
+        e.play(&b).unwrap();
+        assert_eq!(
+            plies(&e),
+            vec![a.clone(), w.clone(), b.clone(), mirror_move(&a)]
+        );
+        assert_eq!(e.game().to_move(), second);
+        assert_eq!(e.game().board().echoes(), &[(second, w), (first, b)]);
     }
 
     #[test]
@@ -480,22 +473,19 @@ mod tests {
 
     #[test]
     fn a_bonus_is_never_echoed_back_in_p2_either() {
-        {
-            let swap = false;
-            let (_, second) = sides(swap);
-            let mut e = fight(swap, &[(0, 2), (-3, 4)], &[(0, -2), (3, -4)], [3, 0]);
-            let a = side_mv(swap, &[(0, 2)], SE);
-            e.play(&a).unwrap();
-            let back = side_mv(swap, &[(0, -3)], SE);
-            e.play(&back).unwrap();
-            // The second side's bonus, the mirror of `a`, is legal again for the first side, but
-            // a bonus is never mirrored: only the mirror of `back` is offered.
-            assert_eq!(plies(&e), vec![a.clone(), mirror_move(&a), back.clone()]);
-            assert_eq!(echo_free_moves(&e), vec![mirror_move(&back)]);
-            assert_eq!(e.game().to_move(), sides(swap).0);
-            assert!(e.game().board().echoes().is_empty());
-            assert_ne!(e.game().to_move(), second);
-        }
+        let (_, second) = sides(false);
+        let mut e = fight(false, &[(0, 2), (-3, 4)], &[(0, -2), (3, -4)], [3, 0]);
+        let a = side_mv(false, &[(0, 2)], SE);
+        e.play(&a).unwrap();
+        let back = side_mv(false, &[(0, -3)], SE);
+        e.play(&back).unwrap();
+        // The second side's bonus, the mirror of `a`, is legal again for the first side, but
+        // a bonus is never mirrored: only the mirror of `back` is offered.
+        assert_eq!(plies(&e), vec![a.clone(), mirror_move(&a), back.clone()]);
+        assert_eq!(echo_free_moves(&e), vec![mirror_move(&back)]);
+        assert_eq!(e.game().to_move(), sides(false).0);
+        assert!(e.game().board().echoes().is_empty());
+        assert_ne!(e.game().to_move(), second);
     }
 
     #[test]
@@ -519,22 +509,19 @@ mod tests {
     fn a_bonus_can_win_the_game_and_ends_it() {
         // The first side's pair steps east on an empty row; the mirror pushes a marble of the
         // first side off the west rim: the 6th ejection of the second side.
-        {
-            let swap = false;
-            let (_, second) = sides(swap);
-            let ejected = [0, 5];
-            let mut e = fight(
-                swap,
-                &[(2, 0), (3, 0), (-4, 0)],
-                &[(-2, 0), (-3, 0)],
-                ejected,
-            );
-            let played = side_mv(swap, &[(2, 0), (3, 0)], E);
-            e.play(&played).unwrap();
-            assert_eq!(plies(&e), vec![played.clone(), mirror_move(&played)]);
-            assert_eq!(e.game().outcome(), Some(Outcome::Win(second)));
-            assert_eq!(echo_move(&e), None);
-        }
+        let (_, second) = sides(false);
+        let ejected = [0, 5];
+        let mut e = fight(
+            false,
+            &[(2, 0), (3, 0), (-4, 0)],
+            &[(-2, 0), (-3, 0)],
+            ejected,
+        );
+        let played = side_mv(false, &[(2, 0), (3, 0)], E);
+        e.play(&played).unwrap();
+        assert_eq!(plies(&e), vec![played.clone(), mirror_move(&played)]);
+        assert_eq!(e.game().outcome(), Some(Outcome::Win(second)));
+        assert_eq!(echo_move(&e), None);
     }
 
     #[test]
