@@ -705,14 +705,14 @@ kept), every one still 10 of 10 for the turtle:
 
 | Knob | Turtle marbles left |
 |---|---|
-| boss weights (marbles 10 to 100, ejections 150 to 500, centre 20 to 100), boss budget 6000, 40 turns, arrivals 2, 2, 3 or 2, 3, 4, start 8 or 5 marbles | not recorded |
+| boss weights (marbles 10 to 100, ejections 150 to 500, centre 20 to 100), boss budget 6000, 40 turns, arrivals 2, 2, 3 or 2, 3, 4, start 8 or 6 marbles | not recorded |
 | arrivals 3, 4, 5 a turn | 7 to 10 |
 | arrivals 2, 3, 4 and boss weights marbles 20, ejections 500, centre 200 | 11 (none lost) |
-| start 5 marbles (8 left out), arrivals 2, 3, 4 | 3 to 5 |
+| start 6 marbles (8 left out), arrivals 2, 3, 4 | 3 to 5 |
 | 40 turns, arrivals 2, 3, 4 | 2 to 7 |
-| start 5 marbles and 40 turns | 1 to 4 |
+| start 6 marbles and 40 turns | 1 to 4 |
 
-The closest is the start (5 marbles, 8 left out) with 40 turns, still a turtle win in
+The closest is the start (6 marbles, 8 left out) with 40 turns, still a turtle win in
 every seed: no tuning knob of section 7.14 alone reaches the gate. It needs an owner decision on a
 rule (for example where the waves land, or a lower win line than "1 marble left").
 
