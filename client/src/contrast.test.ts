@@ -20,7 +20,7 @@ describe('contrast', () => {
   });
 
   test('cell edge bevel and marks preserve >= 3:1 contrast against shadowed deck (#459)', () => {
-    // Bevel has emissive 0x25292d and steel highlight 0xc4cacf
+    // Bevel has emissive 0x7f8993 and steel highlight 0xc4cacf
     const bevelRgb: [number, number, number] = [0xc4, 0xca, 0xcf];
     // Under shadow, deck steel (0x4a5258) receives ambient fill (~0.25)
     const shadowDeckRgb: [number, number, number] = [

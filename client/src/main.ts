@@ -1526,7 +1526,7 @@ let sweep: Fx | null = null;
 // The cell edge (#339): a thin bright steel bevel round each disc's top, so the edge reads 3:1 against the surface.
 // Each disc is turned by its own angle (#347), so the deck texture repeated on every cell does not read as a pattern.
 const edgeGeometry = new THREE.TorusGeometry(0.44, 0.03, 8, 32).rotateX(Math.PI / 2);
-const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x25292d });
+const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xc4cacf, roughness: 0.5, metalness: 0.3, emissive: 0x7f8993 });
 const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   const disc = new THREE.Mesh(discGeometry, steel);
   disc.rotation.y = cellTurn(i);
