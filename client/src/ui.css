@@ -651,4 +651,4 @@ body[data-reading] #log { visibility: visible; }
   clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
 }
 @keyframes loading-spin { to { transform: rotate(1turn); } }
-@media (prefers-reduced-motion: reduce) { #loading .hex { animation: none; } #loading { transition: none; } }
+/* Reduced motion: the rule on :root[data-motion='reduced'] above already stops the ring and the fade (main.ts reads the media query). */
