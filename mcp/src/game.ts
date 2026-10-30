@@ -40,6 +40,8 @@ export interface EncounterLike extends Playable, BossLike {
   tell_move(mv: Int32Array): Int32Array;
   /** The bonus plies the last move added after it (The Echo), empty for the other bosses. */
   last_bonuses(): Int32Array;
+  /** The free moves The Echo offers the player now (#958), empty for the other bosses. */
+  free_moves(): Int32Array;
 }
 
 /** Search budget of the bot in positions per move, `BOT_NODES` of client/src/bot.ts. */
@@ -111,12 +113,14 @@ export interface LegalMoves {
   moves: string[];
   /** The reply a boss announces per move, empty against the bot and the bosses that announce nothing. */
   announces: Record<string, string>;
+  /** The free moves The Echo offers now, also in `moves`: playing one keeps the turn, any other move declines them (#958). */
+  free: string[];
   count: number;
 }
 
 export interface Played {
   played: string;
-  /** The bot or boss reply, `null` when the game ended on the agent's move, and always online. */
+  /** The bot or boss reply, `null` when the game ended on the agent's move, after a free move, and always online. */
   reply: string | null;
   /** The bonus plies The Echo's rule played after the agent's move and after the reply, in order (#859). */
   bonuses: string[];
@@ -256,7 +260,8 @@ export class Session {
         }
       }
       const moves = legal.map(formatMove);
-      return ok({ to_move: sideName(game.engine.to_move()), moves, announces, count: moves.length });
+      const free = game.boss && !game.resigned ? fromRecords(game.boss.encounter.free_moves()).map(formatMove) : [];
+      return ok({ to_move: sideName(game.engine.to_move()), moves, announces, free, count: moves.length });
     });
   }
 
@@ -284,7 +289,8 @@ export class Session {
       const echoed = bonuses();
       let reply: string | null = null;
       if (game.room) void game.room.session.send(Array.from(mine));
-      else if (!over(game)) {
+      // A free move of The Echo keeps the agent to move: no reply (#958).
+      else if (!over(game) && game.engine.to_move() !== BLACK) {
         const record = game.reply!();
         game.engine.play(record);
         reply = formatMove(fromRecord(record));
