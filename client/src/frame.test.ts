@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOARD_CELLS, CELLS, VANISHED, axialTo3D, cellIndex } from './board';
-import { DUAL_CELLS, ROOMS } from './dual';
+import { BRIDGE, DUAL_CELLS, ROOMS } from './dual';
 import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight } from './frame';
 
 const DISC = 0.46; // the cell disc radius of main.ts
@@ -53,31 +53,40 @@ describe('frameShape (world.md section 6)', () => {
     for (const [q, r] of BOARD_CELLS.slice(0, 91)) expect(reach(axialTo3D(q, r)) + DISC).toBeLessThan(apothem(shape.inner));
   });
 
-  it('The Dual Room (#947): one plate round its two rooms, no hole for the cells off them, the rim halves split', () => {
-    const board = BOARD_CELLS.map((c) => (DUAL_CELLS.some(([q, r]) => q === c[0] && r === c[1]) ? 0 : VANISHED));
+  it('The Dual Room (#947, #955): one plate round its two rooms and the void, a hole per void cell, the rim halves split', () => {
+    const board = BOARD_CELLS.slice(0, 169).map((c) => (DUAL_CELLS.some(([q, r]) => q === c[0] && r === c[1]) ? 0 : VANISHED));
     const shape = frameShape(board);
-    expect(shape.radius).toBe(9);
-    expect(shape.holes).toEqual([]);
-    expect(shape.inner).toHaveLength(12);
-    expect(shape.outer).toHaveLength(12);
-    // Inside the outline: a point is inside when it is on the inner side of every edge of one room's hexagon.
+    expect(shape.radius).toBe(7);
+    expect(shape.holes).toEqual(BRIDGE.map(([q, r]) => ({ x: axialTo3D(q, r).x, z: axialTo3D(q, r).z })));
+    expect(shape.inner).toHaveLength(18);
+    expect(shape.outer).toHaveLength(18);
+    // Inside the outline: a point is inside when it is on the inner side of every edge of one room's hexagon, or in the
+    // band across the void.
     const inRoom = (p: { x: number; z: number }, centre: { x: number; z: number }, apo: number) =>
       [0, 1, 2, 3, 4, 5].every((k) => {
         const a = Math.PI / 6 + (k * Math.PI) / 3;
         return (p.x - centre.x) * Math.cos(a) + (p.z - centre.z) * Math.sin(a) <= apo;
       });
+    const inBand = (p: { x: number; z: number }, edge: number) => Math.abs(p.x) <= 2 + edge + 1e-9 && Math.abs(p.z) <= edge + 1e-9;
     const rooms = ROOMS.map(([q, r]) => axialTo3D(q, r));
-    for (const [q, r] of DUAL_CELLS) {
+    const inside = (p: { x: number; z: number }, edge: number) => rooms.some((c) => inRoom(p, c, 3 * (Math.sqrt(3) / 2) + edge)) || inBand(p, edge);
+    for (const [q, r] of [...DUAL_CELLS, ...BRIDGE]) {
       const p = axialTo3D(q, r);
-      expect(rooms.some((c) => inRoom(p, c, 4 * (Math.sqrt(3) / 2) + FRAME.margin - DISC))).toBe(true);
+      for (const [dx, dz] of [[DISC, 0], [-DISC, 0], [0, DISC], [0, -DISC]]) {
+        expect(inside({ x: p.x + dx!, z: p.z + dz! }, FRAME.margin)).toBe(true);
+      }
     }
-    for (const p of shape.inner) expect(rooms.some((c) => inRoom(p, c, 4 * (Math.sqrt(3) / 2) + FRAME.margin + 1e-9))).toBe(true);
-    for (const p of shape.outer) expect(rooms.some((c) => inRoom(p, c, 4 * (Math.sqrt(3) / 2) + FRAME.margin + FRAME.rim + 1e-9))).toBe(true);
+    for (const p of shape.inner) expect(inside(p, FRAME.margin + 1e-9)).toBe(true);
+    for (const p of shape.outer) expect(inside(p, FRAME.margin + FRAME.rim + 1e-9)).toBe(true);
     const { near, far } = rimHalves(shape);
-    expect(near).toHaveLength(14);
-    expect(far).toHaveLength(14);
-    expect(near[0]).toEqual(shape.outer[0]);
-    expect(far[0]).toEqual(shape.outer[6]);
+    expect(near).toHaveLength(20);
+    expect(far).toHaveLength(20);
+    for (const p of near) expect(p.z).toBeGreaterThanOrEqual(-1e-9);
+    for (const p of far) expect(p.z).toBeLessThanOrEqual(1e-9);
+    // The bridge fills the void: no hole left.
+    for (const [q, r] of BRIDGE) board[cellIndex(q, r)] = 0;
+    expect(frameShape(board).holes).toEqual([]);
+    expect(frameShape(board).inner).toEqual(shape.inner);
   });
 
   it('a vanished cell of The Hull is a hole in the plate, inside the rim', () => {

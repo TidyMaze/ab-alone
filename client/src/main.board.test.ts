@@ -113,11 +113,11 @@ describe('main.ts board and HUD', () => {
     expect(scene().children.some((c) => c instanceof THREE.Group && c.children.length > 0 && c.children.every((m) => m.position.z === -23.2))).toBe(false);
   });
 
-  it('draws the 271 cells and their bevels with 2 instanced meshes, the discs kept for picking only (#885)', async () => {
+  it('draws the 169 cells and their bevels with 2 instanced meshes, the discs kept for picking only (#885)', async () => {
     const scene = catchScene();
     await boot('?bot=off');
     const drawn = scene().children.filter((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh && c.geometry.type !== 'SphereGeometry');
-    expect(drawn.map((m) => [m.count, m.geometry.type])).toEqual([[271, 'CylinderGeometry'], [271, 'TorusGeometry']]);
+    expect(drawn.map((m) => [m.count, m.geometry.type])).toEqual([[169, 'CylinderGeometry'], [169, 'TorusGeometry']]);
     const { discs } = parts(scene());
     expect(drawn[0]!.material).toBe(discs[0]!.material);
     const camera = new THREE.Camera();
@@ -141,7 +141,7 @@ describe('main.ts board and HUD', () => {
     const game = await boot('?bot=off');
     await game.settle(); // the skins' maps load after the first frame
     const { discs, plate, near } = parts(scene());
-    expect(discs).toHaveLength(271); // the 61, then ring 5 for The Ballast Mind (#564), rings 6 to 9 for The Dual Room (#947)
+    expect(discs).toHaveLength(169); // the 61, then ring 5 for The Ballast Mind (#564), rings 6 and 7 for The Dual Room (#947, #955)
     expect(discs.filter((d) => d.visible)).toHaveLength(61);
     expect(discs[0]!.material.map).toBeInstanceOf(THREE.Texture);
     expect(discs[0]!.material.normalMap).toBeInstanceOf(THREE.Texture);
