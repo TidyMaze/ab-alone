@@ -623,14 +623,14 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
 });
 
 // The player moves of a co-op fight against The Echo, seat 1 then seat 2 in turn, that end in a draw by repetition
-// against its deterministic search replies (#859), found with the engine.
+// against its deterministic search replies (#859, 100 nodes since #951), found with the engine.
 const COOP_DRAW: [number, number, number, number][] = [
   [0, 2, 0, 1],
-  [1, 2, 1, 3],
-  [1, 2, 1, 3],
-  [1, 3, 1, 2],
-  [1, 1, 1, 2],
-  [1, 1, 1, 2],
+  [-4, 3, -3, 2],
+  [-3, 2, -3, 1],
+  [-1, 2, 0, 2],
+  [-1, 2, -2, 3],
+  [-1, 2, -2, 3],
 ];
 
 // Co-op (docs/specs/coop-boss.md, #529, #530): page A opens the room with Fight together in the mode menu. Both pages

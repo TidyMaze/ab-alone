@@ -222,6 +222,9 @@ impl Searcher<'_> {
         if node.ejected[index(other(mover))] >= self.win[index(other(mover))] {
             return Some(ply - WIN);
         }
+        if node.ejected[index(mover)] >= self.win[index(mover)] {
+            return Some(WIN - ply);
+        }
         if self.last_ply == Some(ply) {
             return Some(WIN - ply);
         }
@@ -459,6 +462,32 @@ mod tests {
             search(&game, 300).is_some(),
             "the game runs, the boss searches"
         );
+    }
+
+    #[test]
+    fn a_side_a_step_brought_to_its_win_has_won_at_its_own_node() {
+        // A bonus move (The Echo) can credit the side that moves next: it has already won there,
+        // not one ply later.
+        let node = Node {
+            board: Board::standard(),
+            to_move: Player::Black,
+            ejected: [6, 0],
+        };
+        let mut searcher = Searcher {
+            weights: DEFAULT_WEIGHTS,
+            step: None,
+            budget: 100,
+            nodes: 0,
+            win: [WIN_EJECTIONS; 2],
+            last_ply: None,
+        };
+        assert_eq!(searcher.negamax(&node, 0, 3, -INF, INF), Some(WIN - 3));
+        let gift = |_: &Board, mover: Player, _: &Move, after: Board| {
+            (after, [u8::from(mover == Player::White) * 6, 0])
+        };
+        let game = Game::from_position(Board::standard(), Player::White, [0, 0]);
+        let r = search_hooked(&game, 100, DEFAULT_WEIGHTS, &|_| true, &gift).unwrap();
+        assert_eq!(r.score, 1 - WIN, "every move hands Black the win at once");
     }
 
     #[test]

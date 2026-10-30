@@ -519,12 +519,12 @@ mod tests {
             ["echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer"]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
-        assert_eq!(budgets, [400, 3000, 300, 1500, 100, 3000, 3000]);
+        assert_eq!(budgets, [100, 3000, 300, 1500, 100, 3000, 3000]);
     }
 
     #[test]
     fn player_budgets_are_4x_1x_and_half_of_the_boss_budget() {
-        assert_eq!(player_budgets(LadderBoss::Echo), [1600, 400, 200]);
+        assert_eq!(player_budgets(LadderBoss::Echo), [400, 100, 50]);
         assert_eq!(player_budgets(LadderBoss::Hull), [12000, 3000, 1500]);
     }
 
