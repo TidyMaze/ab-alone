@@ -80,10 +80,11 @@
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
 //!   an act), `2` elite, `3` rest, `4` event. `links` is a bit mask of the columns of the next row of the same act the node leads
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
-//! - Open world chunk (`world_chunk(seed, cx, cy)`): 2 bytes `[height, terrain]` per cell of the
-//!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. `height` `0` to `3`;
+//! - Open world chunk (`world_chunk(seed, cx, cy)`): 3 bytes `[height, terrain, biome]` per cell of the
+//!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. `height` `0` to `7`;
 //!   `terrain` `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall;
-//!   all but sand, grass and rock are blocked (docs/specs/openworld.md section 2).
+//!   all but sand, grass and rock are blocked; `biome` `0` meadow, `1` forest, `2` tundra, `3` desert,
+//!   `4` badlands (docs/specs/openworld.md section 2, openworld-terrain.md section 4).
 
 pub mod convert;
 pub mod encounter;
