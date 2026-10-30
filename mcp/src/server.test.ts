@@ -139,7 +139,8 @@ describe('the MCP server', () => {
     expect(started).toMatchObject({ mode: 'boss', boss: { id: 'echo', name: 'The Echo', tell: null, result: 'playing' } });
     expect(JSON.parse((await call('legal_moves')).text).announces['(1,3)>NE']).toBe('(-1,-3)>SW');
     const played = JSON.parse((await call('play_move', { move: '(1,3)>NE' })).text);
-    expect(played).toMatchObject({ played: '(1,3)>NE', reply: '(-1,-3)>SW', state: { mode: 'boss' } });
+    // The announced mirror is the Echo's bonus move, played inside the move (#859); the reply is its own search move.
+    expect(played).toMatchObject({ played: '(1,3)>NE', reply: '(-2,-2)>E', state: { mode: 'boss' } });
     const unknown = await call('new_game', { boss: 'nope' });
     expect(unknown.isError).toBe(true);
     expect(JSON.parse(unknown.text)).toEqual({ code: 'unknown_boss', message: 'unknown boss nope' });
