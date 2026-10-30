@@ -192,6 +192,8 @@ describe('roguelite', () => {
     expect(offers(short)).toEqual(offers({ ...short })); // the same seed and node: the same offers
     const seen = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => offers({ ...short, seed }).join()));
     expect(seen.size).toBeGreaterThan(1); // other seeds, other offers
+    const nodes = [1, 2, 3, 4, 5, 6, 7, 8].filter((seed) => offers({ ...short, seed }).join() !== offers({ ...short, seed, path: [1] }).join());
+    expect(nodes.length).toBeGreaterThan(0); // the node, not only the step: two nodes of a row offer apart
     expect(offers(won({ ...newRun(1), army: 4, specials: [2, 1, 1] }))).toEqual([0]); // all 4 marbles are special
     expect(offers(won({ ...newRun(1), specials: [5, 5, 4] }))).toEqual([]); // nothing left to offer
     expect(offers({ ...short, reward: false })).toEqual([]);

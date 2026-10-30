@@ -158,6 +158,10 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     game.click(0, 4);
     expect(specials()).toBe('0,4,1');
     expect(kinds()[0]!.textContent).toBe('Heavy · 0 left');
+    expect(kinds()[0]!.getAttribute('aria-pressed')).toBe('false'); // none left: the type is put down
+    game.click(1, 3); // a plain selection again
+    game.click(1, 3);
+    expect(specials()).toBe('0,4,1');
     kinds()[1]!.click();
     game.click(1, 3);
     expect(specials()).toBe('0,4,1 1,3,3');
