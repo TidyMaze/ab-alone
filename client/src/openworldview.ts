@@ -7,8 +7,9 @@ import { axialTo3D, type Axial } from './board';
 import { CHUNK, cellAtPoint, chunkOf, neighbours, type Terrain, type Tile, type World } from './openworld';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
- * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. */
-export const MAX_REACH = 6;
+ * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
+ * widest zoom of a 16:9 screen (`MAX_ZOOM`); the instanced meshes hold 441 chunks, about 113k instances each. */
+export const MAX_REACH = 10;
 const CAPACITY = (2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK;
 
 /** The chunks to load on each side of the hero's chunk for a ground radius of `radius` cells: the ground the camera sees
@@ -42,8 +43,10 @@ const FOG_NEAR = 18;
 const FOG_FAR = 34;
 const CAMERA_FAR = 80;
 const NEAR = 0.1;
-/** The widest zoom of the camera: the reach of the loaded chunks follows it, up to `MAX_REACH` (#976). */
-export const MAX_ZOOM = 4;
+/** The widest zoom of the camera: the reach of the loaded chunks follows it, up to `MAX_REACH` (#976). Measured in headed
+ * Chromium on a 1280x720 screen: at 8 a warm rebuild takes at most 18 ms (a chunk crossing about 16 ms), 60 FPS while the
+ * hero rolls; at 10 (reach 13) a rebuild takes 35 ms and the frame rate drops to 57 FPS, so 10 is too far. */
+export const MAX_ZOOM = 8;
 
 /** The ground columns: one instanced mesh each. A blocked terrain stands on the ground of its `GROUND` entry. */
 export const GROUNDS = ['water', 'sand', 'grass', 'rock', 'peak'] as const;
