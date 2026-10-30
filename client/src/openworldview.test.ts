@@ -87,7 +87,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
   it('draws a model that paints its own colours with them, untinted, and keeps the tint of the others', () => {
     const view = new OpenWorldView(new World(bytes));
     const painted = new THREE.BoxGeometry();
-    painted.setAttribute('color', new THREE.BufferAttribute(new Float32Array(painted.attributes.position.count * 3), 3));
+    painted.setAttribute('color', new THREE.BufferAttribute(new Float32Array(painted.getAttribute('position').count * 3), 3));
     view.useModels({ mountain: painted, tree: new THREE.BoxGeometry() });
     const paintedMaterial = mesh(view, 'prop-mountain').material as THREE.MeshStandardMaterial;
     expect(paintedMaterial.vertexColors).toBe(true);

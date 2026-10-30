@@ -166,7 +166,16 @@ export class OpenWorldView {
   useModels(geometries: PropGeometries): void {
     for (const prop of PROP_NAMES) {
       const geometry = geometries[prop];
-      if (geometry) this.props[prop].geometry = geometry;
+      if (!geometry) continue;
+      this.props[prop].geometry = geometry;
+      if (geometry.hasAttribute('color')) {
+        // a model that paints itself (vertex colours from Blender): drawn as painted, no tint hides it
+        const material = this.props[prop].material as THREE.MeshStandardMaterial;
+        material.vertexColors = true;
+        material.color.set(0xffffff);
+        material.emissive.set(0x000000);
+        material.needsUpdate = true;
+      }
     }
   }
 
