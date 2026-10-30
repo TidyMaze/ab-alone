@@ -693,16 +693,24 @@ mod tests {
                 ..DEFAULT_WEIGHTS
             }
         );
-        let mut enc = dual_start(5);
-        enc.play(&mv(&[(-5, 7), (-4, 6)], Direction::NE)).unwrap();
-        let read = search_hooked(
+        // A lone boss marble at its room's centre, the player's marbles far away.
+        let lone = board(&[(-5, 7), (2, -7)], &[(-2, 4)], Dual::default());
+        let enc = fight(lone, Player::White, [0, 0]);
+        let row = |m: &Move| {
+            let (_, dr) = m.dir.vector();
+            m.cells[0].1 + dr
+        };
+        let plain = search_hooked(
             enc.game(),
             DUAL_NODE_BUDGET,
-            DUAL_WEIGHTS,
+            DEFAULT_WEIGHTS,
             &|_| true,
             &dual_step,
-        );
-        assert_eq!(dual_move(&enc), read.map(|r| r.mv));
+        )
+        .unwrap()
+        .mv;
+        assert_eq!(row(&plain), 3, "the plain weights step it towards the void");
+        assert_eq!(row(&dual_move(&enc).unwrap()), 4, "the boss keeps its row");
     }
 
     #[test]
