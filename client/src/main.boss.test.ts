@@ -134,7 +134,7 @@ describe('main.ts boss fights', () => {
     expect([...boss.querySelectorAll('.notch')].map((n) => n.textContent)).toEqual(['P1', 'P2']);
     expect(boss.querySelector('.notch.active')!.textContent).toBe('P1');
     expect(boss.querySelector('.goal')!.textContent).toBe(
-      'Goal: Every move is mirrored for free for the other side, both ways; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.',
+      'Goal: Every move is mirrored for free for the other side: the Echo plays yours at once, you may take its mirror before your own move; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.',
     );
     expect(boss.querySelector('.result')).toBeNull();
     expect(boss.querySelector('.tell')).toBeNull(); // The Echo draws no tell on the board
@@ -654,6 +654,15 @@ describe('main.ts boss tells', () => {
     expect(body().echoLanded).toBe('0'); // the ring waits for the slide
     game.frame(SLIDE_MS);
     expect(body().sliding).toBeUndefined();
+    expect(body().echoLanded).toBe('1');
+  });
+
+  it('reduced motion: no bonus slides, the board shows at once (#958)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightBoss(game, 'The Echo');
+    game.click(0, 2);
+    game.click(0, 1);
+    expect([body().sliding, body().bonusSlides]).toEqual([undefined, undefined]);
     expect(body().echoLanded).toBe('1');
   });
 
