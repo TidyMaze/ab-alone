@@ -141,7 +141,7 @@ export function offers(run: Run): number[] {
   if (!run.reward) return [];
   const pool = [...(run.army < START_ARMY ? [0] : []), ...(sum(run.specials) < run.army ? [1, 2, 3] : [])];
   for (let i = pool.length - 1; i > 0; i--) {
-    const j = hash(run.seed, run.path.length * 8 + i) % (i + 1);
+    const j = hash(run.seed, run.path[run.path.length - 1]! * 8 + i) % (i + 1); // the node won, an index of the map
     [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
   return pool.slice(0, 3);
@@ -158,7 +158,7 @@ export function claim(run: Run, offer: number): Run {
 export const placing = (run: Run): boolean => run.fighting && run.moves.length === 0 && sum(run.specials) > 0;
 
 /** The special marbles of type `kind` left to place: the army's, at most FIGHT_CAP, less those placed. */
-const left = (run: Run, kind: number): number => Math.min(run.specials[kind - 1]!, FIGHT_CAP) - countOf(run.placed)[kind - 1]!;
+export const left = (run: Run, kind: number): number => Math.min(run.specials[kind - 1]!, FIGHT_CAP) - countOf(run.placed)[kind - 1]!;
 
 /** The run once a special marble of type `kind` is placed on the marble at `cell` (it replaces another type there), or
  * taken back when that marble is already one. Unchanged when none is left or the fight is on. */

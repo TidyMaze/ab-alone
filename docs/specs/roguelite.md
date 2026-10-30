@@ -101,19 +101,21 @@ peer see the same result, and `engine_version` is unchanged (no game of another 
 - **The army's special marbles** are some of its marbles, counted by type with the run, and never
   more than the army: when the army falls below its count, the Sparks go first, then the Anchors,
   then the Heavies. One placed on a fight's board and thrown off is lost for the run.
-- **Placement**: a fight of an army that holds special marbles opens on the placement screen, at
-  the bottom of the window so the board stays free. The player picks a type, then presses one of
-  the army's marbles: it becomes that type (`Engine::place_special`), a second press with the same
-  type takes it back. **A fight holds at most 3 of each type** (the cap of #799's open question 2,
+- **Placement**: a fight of an army that holds special marbles opens on the placement screen,
+  beside the board (over its far half when the window is held upright), so the army's marbles stay
+  free. The player picks a type, then presses one of the army's marbles: it becomes that type
+  (`Engine::place_special`), a second press with the same type takes it back; once none of the
+  type is left, it is put down. **A fight holds at most 3 of each type** (the cap of #799's open question 2,
   which keeps the bot's search affordable), and no more than the army holds. The first move starts
   the fight and closes the screen; the placements are saved with the run, so a reload replays them.
 - **Reward**: after a won fight that does not end the run, the reward screen offers 3 of: one more
   marble (only below 14) and the three special types (only while the army has a plain marble to
-  make special). The offers are a pure function of the run seed and the node (a 32-bit hash), so a
-  run replays them. A special reward makes one plain marble of the army special.
-- **Looks**: a flat glyph over the marble, its own shape and colour, both 3:1 on the player's glass
-  and the enemy's shell, never the colour alone: Heavy a steel square, Anchor a blue triangle
-  pointing down, Spark a yellow star. The placement and reward buttons show the same glyphs.
+  make special). The offers are a pure function of the run seed and the node won (its index in the
+  map, a 32-bit hash), so a run replays them. A special reward makes one plain marble of the army
+  special.
+- **Looks**: a glyph on the marble, facing the default view, its own shape and colour, both 3:1
+  on the player's glass and the enemy's shell, never the colour alone: Heavy a steel square, Anchor
+  a blue triangle pointing down, Spark a yellow star. The placement and reward buttons show the same glyphs.
 - **The Spark's burst**: a ring in the Spark's colour grows from its last cell and fades
   (450 ms, the Unstable Core's burst), and the page keeps drawing while it plays (#848). Reduced
   motion: no ring.

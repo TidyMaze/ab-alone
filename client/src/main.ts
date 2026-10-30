@@ -254,6 +254,7 @@ import {
   claim,
   clearRun,
   fightOver,
+  left,
   loadRun,
   mapHtml,
   newRun,
@@ -3051,7 +3052,8 @@ function refresh(): void {
     ring.position.set(p.x, 0.36, p.z);
     marbles.add(ring);
     onMarble(cellIndex(cell[0], cell[1]), ring);
-  }  // The special marbles of a rogue-lite fight (#961): each type's glyph in its colour on the marble.
+  }
+  // The special marbles of a rogue-lite fight (#961): each type's glyph in its colour on the marble.
   const specials = run && !(engine instanceof Encounter) ? parseSpecials(engine.specials()) : [];
   for (const { cell, kind } of specials) {
     const p = axialTo3D(...cell);
@@ -4462,6 +4464,7 @@ function showRun(): void {
 function placeAt(q: number, r: number): void {
   if (engine.board()[cellIndex(q, r)] !== 1) return;
   run!.state = place(run!.state, [q, r], armed);
+  if (left(run!.state, armed) === 0) armed = 0; // none left: the type is put down
   void saveRun(gameStore, run!.state);
   engine = armyEngine(run!.state.army, run!.state.placed);
   showRun();
