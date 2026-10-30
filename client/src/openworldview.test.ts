@@ -60,7 +60,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     });
   });
 
-  it('rebuilds the chunks only when the hero enters another chunk', () => {
+  it('loads the chunks only when the hero enters another chunk, the chunks it has are kept', () => {
     const load = vi.fn(bytes);
     const view = new OpenWorldView(new World(load));
     view.resize(1600, 900); // at 16:9 the reach of the closest view does not move with the hero inside its chunk
@@ -478,8 +478,9 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     view.zoomBy(4);
     const reach = view.reach;
     const version = mesh(view, 'terrain-grass').instanceMatrix.version;
-    view.show([1, 1]); // the same chunk: nothing is rebuilt
-    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
+    view.show([1, 1]); // the same chunk: the split of the detailed props is redrawn with the hero's cell, the reach kept (#989)
+    expect(view.reach).toBe(reach);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBeGreaterThan(version);
     view.show([CHUNK, 0]); // the next chunk: rebuilt around it, with the same reach
     expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBeGreaterThan(version);
     expect(view.reach).toBe(reach);
