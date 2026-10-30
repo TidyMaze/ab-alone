@@ -951,8 +951,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_11_since_the_echo_plays_bonus_mirrors() {
-        assert_eq!(engine_version(), 11);
+    fn the_engine_version_is_12_since_the_echo_searches_100_nodes() {
+        assert_eq!(engine_version(), 12);
     }
 
     #[test]

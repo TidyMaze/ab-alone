@@ -331,7 +331,10 @@ mod tests {
         let boss = echo_boss();
         assert!(boss.phase_marbles.is_empty());
         assert_eq!(boss.phase_ejections, vec![3], "P2 after 3, no P3");
-        assert_eq!(boss.node_budget, ECHO_NODE_BUDGET);
+        assert_eq!(
+            boss.node_budget, 100,
+            "a depth-1 boss the player can beat (#951)"
+        );
         assert_eq!((boss.special)(1, 0), None);
         let board = Board::standard();
         assert_eq!((boss.hook)(&board, 0, 0), board);
