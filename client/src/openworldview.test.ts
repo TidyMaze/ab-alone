@@ -202,7 +202,6 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     expect(mesh(view, 'terrain-grass').visible).toBe(true);
     expect(mesh(view, 'prop-tree').visible).toBe(true);
     expect(hero(view).visible).toBe(true);
-    expect(view.scene.getObjectByName('overview')).toBeUndefined();
   });
 });
 

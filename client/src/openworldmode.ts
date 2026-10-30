@@ -7,9 +7,6 @@ import { arrowCell } from './hubview';
 import { Hero, World } from './openworld';
 import { OpenWorldView, type PropGeometries } from './openworldview';
 
-/** Chunks painted into the overview each frame: the whole world in 32 frames, about 18 us a chunk (#976). */
-const PAINT_CHUNKS = 128;
-
 /** The diagonal cell of each vertical arrow and horizontal arrow held together, in the axial steps of `neighbours`: up is
  * -z on screen (the camera looks down the -z way), so these are the four diagonals of the hex grid. */
 const DIAGONAL: Record<string, Record<string, Axial>> = {
@@ -52,7 +49,7 @@ export class OpenWorldMode {
       (cx, cy) => this.load(seed, cx, cy),
       (cx, cy) => this.loadEnemies(seed, cx, cy),
     );
-    const view = new OpenWorldView(world, (cx, cy) => this.load(seed, cx, cy));
+    const view = new OpenWorldView(world);
     this.hero = new Hero(world);
     this.view = view;
     view.resize(width, height);
@@ -69,7 +66,6 @@ export class OpenWorldMode {
   leave(): void {
     this.active = false;
     this.held.clear();
-    this.view?.disposeOverview();
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
     delete document.body.dataset.openworldTroop;
@@ -102,7 +98,6 @@ export class OpenWorldMode {
 
   /** A press at `x`, `y` pixels of a `width` x `height` screen rolls the hero onto the cell under it when it is next to it. */
   press(x: number, y: number, width: number, height: number): void {
-    if (this.view!.overview) return; // the overview has no cells to roll to: a click does nothing (#976)
     this.roll(this.view!.pick((x / width) * 2 - 1, 1 - (y / height) * 2));
   }
 
@@ -115,7 +110,6 @@ export class OpenWorldMode {
 
   /** Draws the scene when something changed since the last draw, and every frame while a lake is in view and motion is on. */
   frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void): void {
-    if (this.view!.paintOverview(PAINT_CHUNKS)) this.dirty = true; // the overview paints a few chunks a frame
     const moving = !this.reduced() && this.view!.hasWater;
     if (!this.dirty && !moving) return;
     this.dirty = false;

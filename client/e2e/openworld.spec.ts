@@ -58,9 +58,8 @@ test('two held arrows roll the hero on the diagonal, #977', async ({ page }) => 
   await page.keyboard.up('ArrowUp');
 });
 
-// #976: the wheel zooms the Open world camera out past the close range into the overview and back, and the hero still rolls
-// from the overview's zoom.
-test('the wheel zooms the Open world out to the overview and back, and the hero still rolls, #976', async ({ page }) => {
+// #976: the wheel zooms the Open world camera out far and back, and the hero still rolls from the far zoom.
+test('the wheel zooms the Open world out far and back, and the hero still rolls, #976', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
   await openModes(page);
@@ -70,7 +69,7 @@ test('the wheel zooms the Open world out to the overview and back, and the hero 
   const box = (await page.locator('canvas').boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, 2000);
-  await expect.poll(zoom).toBeGreaterThan(2.5); // past the close range: the overview
+  await expect.poll(zoom).toBeGreaterThan(2.5); // far out
   await page.mouse.wheel(0, -2000);
   await expect.poll(zoom).toBe(1);
   await page.mouse.wheel(0, 2000);

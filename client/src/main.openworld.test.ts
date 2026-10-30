@@ -94,7 +94,7 @@ describe('the Open world mode', () => {
       canvas.dispatchEvent(e);
     };
     wheel(1000);
-    expect(zoomOf()).toBeGreaterThan(2.5); // past the close range: the overview
+    expect(zoomOf()).toBeGreaterThan(2.5); // far out, still the 3D view
     wheel(-1000);
     expect(zoomOf()).toBe(1);
     finger('pointermove', 9, 100); // a hover, no finger down: nothing
