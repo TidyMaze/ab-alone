@@ -1,5 +1,6 @@
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
-import { pass } from 'three/tsl';
+import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
+import { pass, renderOutput } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
@@ -54,6 +55,7 @@ export function createBloomPipeline(
   renderer: THREE.WebGPURenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
+  smooth = false,
 ): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> }) | null {
   try {
     const pipeline = new THREE.RenderPipeline(renderer);
@@ -67,6 +69,11 @@ export function createBloomPipeline(
       if (frame++ % 2 === 0) blur(f); // every second frame: the 12 blur passes are a third of a phone's frame, the glow stays put in between (#894)
     };
     pipeline.outputNode = colorNode.add(bloomNode);
+    // No MSAA (#857): `smooth` ends with FXAA, which reads the tone-mapped picture, so renderOutput maps it once here.
+    if (smooth) {
+      pipeline.outputColorTransform = false;
+      pipeline.outputNode = fxaa(renderOutput(pipeline.outputNode));
+    }
     return Object.assign(pipeline, { bloom: bloomNode }); // its strength, radius and threshold tuned with ?lights
 
   } catch {
@@ -249,7 +256,7 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera);
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, dpr < 1.5 && !(this.renderer.samples > 0));
   }
 
   async init(): Promise<void> {
