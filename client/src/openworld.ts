@@ -30,10 +30,33 @@ export function parseChunk(bytes: Uint8Array): Tile[] {
   return tiles;
 }
 
+/** Chunks and enemy lists kept at once: the view's 5 x 5 chunks and a margin. The least recently used go first. */
+export const CACHE_LIMIT = 64;
+
+/** The value of a key, kept the most recently used; `undefined` when absent. */
+function touch<T>(cache: Map<string, T>, key: string): T | undefined {
+  const value = cache.get(key);
+  if (value !== undefined) {
+    cache.delete(key);
+    cache.set(key, value);
+  }
+  return value;
+}
+
+/** Stores a value as the most recently used, dropping the least recently used beyond `CACHE_LIMIT`. */
+function remember<T>(cache: Map<string, T>, key: string, value: T): void {
+  cache.set(key, value);
+  if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string);
+}
+
 /** The world of a seed: chunks come from `load(cx, cy)` the first time a cell of them is asked for. */
 export class World {
   private readonly chunks = new Map<string, Tile[]>();
   private readonly groups = new Map<string, Axial[]>();
+  /** How many chunks and enemy lists are cached now. */
+  get cached(): { chunks: number; enemies: number } {
+    return { chunks: this.chunks.size, enemies: this.groups.size };
+  }
   /** `loadEnemies(cx, cy)` gives the enemy marbles that start in a chunk, `q, r` pairs. */
   constructor(
     private readonly load: (cx: number, cy: number) => Uint8Array,
@@ -43,10 +66,10 @@ export class World {
   /** The chunk `(cx, cy)`, `[]` off the world. */
   chunk(cx: number, cy: number): readonly Tile[] {
     const key = `${cx},${cy}`;
-    let tiles = this.chunks.get(key);
+    let tiles = touch(this.chunks, key);
     if (!tiles) {
       tiles = parseChunk(this.load(cx, cy));
-      this.chunks.set(key, tiles);
+      remember(this.chunks, key, tiles);
     }
     return tiles;
   }
@@ -54,11 +77,11 @@ export class World {
   /** The enemy marbles that start in the chunk `(cx, cy)`. */
   enemies(cx: number, cy: number): readonly Axial[] {
     const key = `${cx},${cy}`;
-    let cells = this.groups.get(key);
+    let cells = touch(this.groups, key);
     if (!cells) {
       const flat = this.loadEnemies(cx, cy);
       cells = Array.from({ length: flat.length / 2 }, (_, i): Axial => [flat[2 * i]!, flat[2 * i + 1]!]);
-      this.groups.set(key, cells);
+      remember(this.groups, key, cells);
     }
     return cells;
   }
