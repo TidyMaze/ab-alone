@@ -10,8 +10,10 @@ import { CHUNK, cellAtPoint, chunkOf, neighbours, TROOP, type Terrain, type Tile
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
  * widest zoom of a 16:9 screen (`MAX_ZOOM`); the instanced meshes hold 441 chunks, about 113k instances each. */
 export const MAX_REACH = 10;
-/** The most instances each mesh holds. Measured over 301 seeds at `MAX_REACH`: the most cells of each kind in the widest
- * window (21 x 21 chunks), plus a quarter, rounded up to a hundred. A build past a capacity stops there (`put`, `place`). */
+/** The most instances a mesh can need: one per cell of the widest view (21 x 21 chunks). A mesh grows up to it and never past. */
+export const MOST = (2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK;
+/** The instances each mesh holds at rest. Measured over 301 seeds at `MAX_REACH`: the most cells of each kind in the widest
+ * window, plus a quarter, rounded up to a hundred. A mesh that a build needs bigger grows (`fit`), up to `MOST` (#1010). */
 export const CAPACITY = {
   water: 26400,
   sand: 21100,
@@ -202,9 +204,10 @@ const propMaterial = (prop: Prop): THREE.MeshStandardMaterial => {
   const { color, emissive, flat } = PROPS[prop];
   return new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat });
 };
-/** The writers of a build: an instance into a mesh (false when it is full), and a prop of a cell (`near`: within `HI_RADIUS`). */
-type Put = (mesh: THREE.InstancedMesh, x: number, y: number, z: number, scaleY: number) => boolean;
+/** The writer of a build's props: a prop of a cell (`near`: within `HI_RADIUS`). */
 type Lay = (prop: Prop, near: boolean, x: number, y: number, z: number, scaleY: number) => void;
+/** A cell with no height: the props of a count are laid at no place, so the position they are given is never read. */
+const NOWHERE = { x: 0, z: 0 };
 
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
@@ -225,8 +228,8 @@ export class OpenWorldView {
   /** The meshes a build lays: the ground columns, the props and the detailed props. */
   private readonly managed: THREE.InstancedMesh[] = [];
   private readonly hero: THREE.Mesh;
-  private readonly troop: THREE.InstancedMesh;
-  private readonly foes: THREE.InstancedMesh;
+  private troop: THREE.InstancedMesh;
+  private foes: THREE.InstancedMesh;
   /** Reused by every placement, so a draw allocates no matrix holder (#981). */
   private readonly dummy = new THREE.Object3D();
   private readonly enemyCells: Axial[] = [];
@@ -388,21 +391,73 @@ export class OpenWorldView {
     }
   }
 
-  /** Lays marbles on the cells, each on its ground, in an instanced mesh. */
+  /** Lays marbles on the cells, each on its ground, in an instanced mesh (grown to hold them, up to `MOST`). */
   private place(mesh: THREE.InstancedMesh, cells: readonly Axial[]): void {
+    const target = this.fit(mesh, Math.min(cells.length, MOST));
     const { dummy } = this;
     dummy.scale.set(1, 1, 1); // the shared holder may carry the height of the last column placed
-    const drawn = Math.min(cells.length, mesh.instanceMatrix.count); // past the capacity, the rest are not drawn
+    const drawn = Math.min(cells.length, target.instanceMatrix.count);
     for (let i = 0; i < drawn; i++) {
       const [q, r] = cells[i]!;
       const tile = this.world.tile(q, r)!;
       const p = axialTo3D(q, r);
       dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height) + MARBLE, p.z);
       dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
+      target.setMatrixAt(i, dummy.matrix);
     }
-    mesh.count = drawn;
-    mesh.instanceMatrix.needsUpdate = true;
+    target.count = drawn;
+    target.instanceMatrix.needsUpdate = true;
+  }
+
+  /** The mesh that holds `needed` instances: `mesh` itself when it holds them, else a larger one (1.5 times its capacity at
+   * least, never past `MOST`) that takes its place in the scene and in every reference. The old mesh's buffers are freed (#1010). */
+  private fit(mesh: THREE.InstancedMesh, needed: number): THREE.InstancedMesh {
+    if (needed <= mesh.instanceMatrix.count) return mesh;
+    const capacity = Math.min(MOST, Math.max(needed, Math.ceil(mesh.instanceMatrix.count * 1.5)));
+    const grown = new THREE.InstancedMesh(mesh.geometry, mesh.material, capacity);
+    grown.name = mesh.name;
+    grown.count = 0;
+    grown.frustumCulled = false;
+    if (mesh.instanceColor) grown.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+    this.scene.remove(mesh);
+    this.scene.add(grown);
+    mesh.dispose();
+    this.swap(mesh, grown);
+    return grown;
+  }
+
+  /** Points every reference to `old` at `grown`: the grounds, the props, the troop, the enemies and the managed meshes. */
+  private swap(old: THREE.InstancedMesh, grown: THREE.InstancedMesh): void {
+    for (const ground of GROUNDS) if (this.grounds[ground] === old) this.grounds[ground] = grown;
+    for (const prop of PROP_NAMES) if (this.props[prop] === old) this.props[prop] = grown;
+    if (this.troop === old) this.troop = grown;
+    if (this.foes === old) this.foes = grown;
+    const at = this.managed.indexOf(old);
+    if (at >= 0) this.managed[at] = grown;
+  }
+
+  /** The mesh a prop goes to: its detailed mesh within `HI_RADIUS` once its model is in, else its low-poly mesh. */
+  private route(prop: Prop, near: boolean): THREE.InstancedMesh {
+    return near && this.detailedReady.has(prop) ? this.detailed[prop]! : this.props[prop];
+  }
+
+  /** How many instances each managed mesh takes for the chunks `reach` around `(cx, cy)`. It runs the build's own `stand` and
+   * routing, so a mesh is grown to hold them all before the build writes a single instance. */
+  private need(cx: number, cy: number, reach: number, hero: Axial): Map<THREE.InstancedMesh, number> {
+    const need = new Map<THREE.InstancedMesh, number>();
+    const add = (mesh: THREE.InstancedMesh) => need.set(mesh, (need.get(mesh) ?? 0) + 1);
+    const lay: Lay = (prop, near) => add(this.route(prop, near));
+    for (let ky = cy - reach; ky <= cy + reach; ky++) {
+      for (let kx = cx - reach; kx <= cx + reach; kx++) {
+        this.world.chunk(kx, ky).forEach((tile, i) => {
+          const q = kx * CHUNK + (i % CHUNK);
+          const r = ky * CHUNK + Math.floor(i / CHUNK);
+          add(this.grounds[GROUND[tile.terrain]]);
+          this.stand(tile, q, r, NOWHERE, 0, lay, hexDistance([q, r], hero) <= HI_RADIUS);
+        });
+      }
+    }
+    return need;
   }
 
   /** The cell under a point of the screen, `x` and `y` from -1 to 1, read on the plane the hero rolls on. */
@@ -430,24 +485,20 @@ export class OpenWorldView {
   /** Lays the chunks `reach` around `(cx, cy)`: the ground columns, the props (the detailed ones within `HI_RADIUS` of `hero`) and
    * the enemies. */
   private build(cx: number, cy: number, reach: number, hero: Axial): void {
+    const need = this.need(cx, cy, reach, hero);
+    for (const mesh of [...this.managed]) this.fit(mesh, need.get(mesh) ?? 0); // every mesh holds what this build writes
     const counts = new Map<THREE.InstancedMesh, number>();
     const { dummy } = this;
-    // Writes an instance into `mesh`, unless the mesh is full: it returns whether it was written.
-    const put: Put = (mesh, x, y, z, scaleY) => {
+    // Writes the next instance of `mesh` (it holds them all: `fit`).
+    const put = (mesh: THREE.InstancedMesh, x: number, y: number, z: number, scaleY: number) => {
       const n = counts.get(mesh) ?? 0;
-      if (n >= mesh.instanceMatrix.count) return false;
       dummy.position.set(x, y, z);
       dummy.scale.set(1, scaleY, 1);
       dummy.updateMatrix();
       mesh.setMatrixAt(n, dummy.matrix);
       counts.set(mesh, n + 1);
-      return true;
     };
-    // A prop: its detailed mesh within the radius once its model is in, else its low-poly mesh (also when the detailed one is full).
-    const lay: Lay = (prop, near, x, y, z, scaleY) => {
-      const hi = near && this.detailedReady.has(prop) ? this.detailed[prop] : undefined;
-      if (!hi || !put(hi, x, y, z, scaleY)) put(this.props[prop], x, y, z, scaleY);
-    };
+    const lay: Lay = (prop, near, x, y, z, scaleY) => put(this.route(prop, near), x, y, z, scaleY);
     for (let ky = cy - reach; ky <= cy + reach; ky++) {
       for (let kx = cx - reach; kx <= cx + reach; kx++) {
         this.world.chunk(kx, ky).forEach((tile, i) => {
@@ -456,7 +507,8 @@ export class OpenWorldView {
           const p = axialTo3D(q, r);
           const ground = GROUND[tile.terrain];
           const top = topOf(ground, tile.height);
-          if (put(this.grounds[ground], p.x, top / 2, p.z, top) && ground === 'water') {
+          put(this.grounds[ground], p.x, top / 2, p.z, top);
+          if (ground === 'water') {
             this.grounds.water.setColorAt(counts.get(this.grounds.water)! - 1, waterColor(this.world, q, r));
             this.grounds.water.instanceColor!.needsUpdate = true;
           }
@@ -466,7 +518,11 @@ export class OpenWorldView {
     }
     const { enemyCells } = this;
     enemyCells.length = 0;
-    for (let ky = cy - reach; ky <= cy + reach; ky++) for (let kx = cx - reach; kx <= cx + reach; kx++) enemyCells.push(...this.world.enemies(kx, ky));
+    for (let ky = cy - reach; ky <= cy + reach; ky++) {
+      for (let kx = cx - reach; kx <= cx + reach; kx++) {
+        for (const cell of this.world.enemies(kx, ky)) enemyCells.push(cell);
+      }
+    }
     this.place(this.foes, enemyCells);
     this.enemyCount = this.foes.count;
     for (const mesh of this.managed) {

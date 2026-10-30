@@ -13,6 +13,7 @@ import {
   LOOK,
   MAX_REACH,
   MAX_ZOOM,
+  MOST,
   OpenWorldView,
   reachAt,
   reachFor,
@@ -50,13 +51,13 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const ground = counts(view, 'terrain', GROUNDS);
     // Codes 0 to 7 repeat 32 times a chunk: water, sand, grass, rock, peak, boulder, tree and wall.
     expect(ground).toEqual({ water: cells / 8, sand: cells / 8, grass: (cells / 8) * 2, rock: (cells / 8) * 3, peak: cells / 8 });
-    // walls and caps are a sparse prop: a real world never fills their capacity, this one (one cell in eight) does
+    // walls and caps are a sparse prop: a real world fills nothing like their capacity, this one (one cell in eight) grows them (#1010)
     expect(counts(view, 'prop', ['mountain', 'tree', 'boulder', 'wall', 'cap'])).toEqual({
       mountain: cells / 8,
       tree: cells / 8,
       boulder: cells / 8,
-      wall: Math.min(cells / 8, CAPACITY.wall),
-      cap: Math.min(cells / 8, CAPACITY.cap),
+      wall: cells / 8,
+      cap: cells / 8,
     });
   });
 
@@ -408,7 +409,7 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
     expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(CAPACITY.grass);
   });
 
-  it('clamps a mesh at its capacity: a widest view of peaks draws the mountains it holds, and writes no more', () => {
+  it('grows a mesh to draw every peak of the widest view, past its capacity, up to the most cells', () => {
     const peaks = (cx: number, cy: number): Uint8Array => {
       if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
       const out = new Uint8Array(CHUNK * CHUNK * 2);
@@ -418,21 +419,20 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
     const view = new OpenWorldView(new World(peaks));
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(MAX_ZOOM); // the widest view holds more peaks than the mountains' capacity
-    expect(mesh(view, 'prop-mountain').count).toBe(CAPACITY.mountain);
-    expect(view.drawn['prop-mountain']).toBe(CAPACITY.mountain);
+    view.zoomBy(MAX_ZOOM); // the widest view holds more peaks than the mountains' capacity: the mesh grows
+    expect(mesh(view, 'prop-mountain').count).toBe(MOST);
+    expect(view.drawn['prop-mountain']).toBe(MOST);
   });
 
-  it('clamps the enemies at their capacity, and counts the ones drawn', () => {
+  it('grows the enemies to draw every one of them, and counts the ones drawn', () => {
     const crowd = Int32Array.from({ length: 2 * (CAPACITY.enemies + 10) }, () => 5); // every enemy on the cell (5, 5)
     const view = new OpenWorldView(new World(grass, (cx, cy) => (cx === 0 && cy === 0 ? crowd : new Int32Array())));
     view.show([0, 0]);
-    expect(mesh(view, 'enemies').count).toBe(CAPACITY.enemies);
-    expect(view.enemyCount).toBe(CAPACITY.enemies);
+    expect(mesh(view, 'enemies').count).toBe(CAPACITY.enemies + 10);
+    expect(view.enemyCount).toBe(CAPACITY.enemies + 10);
   });
 
   // #1010: a mesh past its initial capacity grows; only the theoretical most cells of the widest view are dropped.
-  const MOST = (2 * MAX_REACH + 1) ** 2 * CHUNK * CHUNK;
   const filled = (code: number) => (cx: number, cy: number): Uint8Array => {
     if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
     const out = new Uint8Array(CHUNK * CHUNK * 2);
@@ -459,6 +459,13 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
     const side = 2 * view.reach + 1;
     expect(view.drawn['prop-tree']).toBe(side * side * CHUNK * CHUNK);
     expect(view.drawn['prop-tree']).toBeGreaterThan(CAPACITY.tree);
+  });
+
+  it('grows the troop past its capacity too, so no marble of the troop is dropped (#1010)', () => {
+    const view = new OpenWorldView(new World(grass));
+    const troop = Array.from({ length: TROOP + 5 }, (_, i): Axial => [i % 5, 0]);
+    view.show([0, 0], troop);
+    expect(view.drawn.troop).toBe(TROOP + 5);
   });
 
   it('clamps the enemies at the most cells of the widest view, past the capacity they grow to (#1010)', () => {
@@ -503,9 +510,11 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     view.zoomBy(MAX_ZOOM);
     expect(reachFor(groundRadius(view.camera, hero(view).position))).toBeLessThanOrEqual(MAX_REACH);
     expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
-    // every cell of the square is grass here: the grass mesh holds its capacity and no more
-    expect(mesh(view, 'terrain-grass').count).toBe(Math.min((2 * view.reach + 1) ** 2 * CHUNK * CHUNK, CAPACITY.grass));
-    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(CAPACITY.grass);
+    // every cell of the square is grass here: the grass mesh grows to hold all of them, and no more than the most
+    const square = (2 * view.reach + 1) ** 2 * CHUNK * CHUNK;
+    expect(mesh(view, 'terrain-grass').count).toBe(square);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(square);
+    expect(square).toBeLessThanOrEqual(MOST);
   });
 
   it('rebuilds the chunks when the hero enters another chunk at a far zoom, with the reach of the zoom', () => {
