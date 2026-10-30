@@ -975,7 +975,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **The Ballast Mind** (owner rule, section 7.5): not borrowed. A return needs a second room and
   spans two plies (ejected, then back one ply later): it is not a one-shot hook on the Ballast
   board, which has one room.
-- **Calibrate**: knobs = the phase ejections (3, 5), the start layout, AI budget. Fail if most
+- **Calibrate**: knobs = the phase ejections (3, 5), the start layout, AI budget, the boss search's
+  weights (no pull to the centre, which is the void's middle, #982). Fail if most
   fights end before P3 (nobody sees the bridge). Ladder: `boss-balance.md` section 3.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door.

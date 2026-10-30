@@ -328,7 +328,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    14 // 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    15 // 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -971,8 +971,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_14_since_the_echo_offers_the_players_bonus() {
-        assert_eq!(engine_version(), 14);
+    fn the_engine_version_is_15_since_the_dual_room_boss_ignores_the_centre() {
+        assert_eq!(engine_version(), 15);
     }
 
     #[test]
