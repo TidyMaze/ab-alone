@@ -420,6 +420,28 @@ mod tests {
     }
 
     #[test]
+    fn the_landed_marble_is_read_from_the_last_ply() {
+        let start = board(&[(-4, 6), (-4, 7)], &[(-4, 8), (5, -8)], Dual::default());
+        let mut enc = fight(start, Player::Black, [0, 0]);
+        assert_eq!(dual_landed(&enc), None, "no ply yet");
+        enc.play(&mv(&[(-4, 6), (-4, 7)], SE)).unwrap();
+        assert_eq!(dual_landed(&enc), None, "announced, not landed");
+        enc.play(&mv(&[(5, -8)], NW)).unwrap();
+        assert_eq!(
+            dual_landed(&enc),
+            Some((Cell::White, (4, -9))),
+            "where it fell"
+        );
+        enc.play(&mv(&[(-4, 7)], E)).unwrap();
+        assert_eq!(dual_landed(&enc), None);
+        let mut core = crate::encounter::unstable::unstable_start(1);
+        let first = legal_moves(core.game().board(), Player::Black)[0].clone();
+        core.play(&first).unwrap();
+        assert!(core.hooked().is_some());
+        assert_eq!(dual_landed(&core), None, "another boss's hook");
+    }
+
+    #[test]
     fn a_taken_landing_cell_moves_the_return_to_the_nearest_empty_cell() {
         let start = board(&[(-4, 6), (-4, 7)], &[(-4, 8), (5, -8)], Dual::default());
         let mut enc = fight(start, Player::Black, [0, 0]);

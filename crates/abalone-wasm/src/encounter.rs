@@ -851,7 +851,7 @@ impl Encounter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::convert::{cells_of, encode, MOVE_STRIDE};
+    use crate::convert::{cells_of, encode, DIRECTIONS, MOVE_STRIDE};
     use abalone_core::encounter::ballast::{
         BALLAST_BOSS_START, BALLAST_PILLARS, BALLAST_PLAYER_START,
     };
@@ -891,7 +891,8 @@ mod tests {
                 "pulsar".to_string(),
                 "overseer".to_string(),
                 "assembly".to_string(),
-                "core".to_string()
+                "core".to_string(),
+                "dual".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -906,6 +907,7 @@ mod tests {
         assert_eq!(boss_name("overseer"), Some("The Overseer".to_string()));
         assert_eq!(boss_name("assembly"), Some("The Assembly Line".to_string()));
         assert_eq!(boss_name("core"), Some("The Unstable Core".to_string()));
+        assert_eq!(boss_name("dual"), Some("The Dual Room".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -2177,5 +2179,116 @@ mod tests {
         assert_eq!(mv.len(), MOVE_STRIDE);
         f.play(&mv).unwrap();
         assert_eq!(f.to_move(), 1);
+    }
+
+    // The Dual Room (#947): two rooms split by a wall, an ejected marble comes back in the other one.
+
+    /// The plies of the recorded Dual Room fight (crates/abalone-core/tests/fixtures/dual.txt), shared
+    /// with client/src/test/dual-game.ts and client/e2e/dual.spec.ts: its fight seed is 1.
+    fn dual_plies() -> Vec<Vec<i32>> {
+        let text = include_str!("../../abalone-core/tests/fixtures/dual.txt");
+        let names = ["E", "W", "NE", "SW", "NW", "SE"];
+        text.split("moves:\n")
+            .nth(1)
+            .unwrap()
+            .lines()
+            .map(|line| {
+                let (cells, dir) = line.split_once(' ').unwrap();
+                let cells = cells
+                    .split(';')
+                    .map(|c| {
+                        let (q, r) = c.split_once(',').unwrap();
+                        (q.parse().unwrap(), r.parse().unwrap())
+                    })
+                    .collect();
+                let dir = DIRECTIONS[names.iter().position(|&d| d == dir).unwrap()];
+                encode(&Move { cells, dir }).to_vec()
+            })
+            .collect()
+    }
+
+    /// The ply that ejects the first boss marble, announced on (-1, -1), and the 5th ejection, which brings
+    /// the wall down.
+    const DUAL_RETURN_AT: usize = 27;
+    const DUAL_COLLAPSE_AT: usize = 79;
+
+    /// The Dual Room after the first `plies` plies of the recorded fight.
+    fn dual_room(plies: usize) -> Encounter {
+        let mut f = Encounter::new("dual", 1).unwrap();
+        for mv in &dual_plies()[..plies] {
+            f.play(mv).unwrap();
+        }
+        f
+    }
+
+    #[test]
+    fn the_dual_room_board_holds_its_two_rooms_in_271_codes() {
+        let f = Encounter::new("dual", 1).unwrap();
+        let cells = f.board();
+        assert_eq!(cells.len(), 271);
+        assert_eq!(
+            count(&cells, 3),
+            271 - 122,
+            "every cell off the two rooms is vanished"
+        );
+        assert_eq!((count(&cells, 1), count(&cells, 2)), (14, 10));
+        let slot = |q, r| board_cells(9).position(|c| c == (q, r)).unwrap();
+        assert_eq!(
+            cells[slot(-4, 8)],
+            1,
+            "the player's far side of the south room"
+        );
+        assert_eq!(
+            cells[slot(1, -1)],
+            2,
+            "the boss against the wall in the north room"
+        );
+        assert_eq!(
+            f.dual(),
+            vec![0, 0, 0, 0],
+            "the wall stands, nothing comes back"
+        );
+        assert!(f.last_return().is_empty());
+    }
+
+    #[test]
+    fn the_dual_room_announces_a_return_and_lands_it_one_ply_later() {
+        assert_eq!(dual_room(DUAL_RETURN_AT - 1).dual(), vec![0, 0, 0, 0]);
+        let ejected = dual_room(DUAL_RETURN_AT);
+        assert_eq!(ejected.ejected(1), 1);
+        assert_eq!(
+            ejected.dual(),
+            vec![0, 2, -1, -1],
+            "a boss marble lands on (-1, -1)"
+        );
+        assert!(ejected.last_return().is_empty());
+        let landed = dual_room(DUAL_RETURN_AT + 1);
+        assert_eq!(landed.last_return(), vec![2, -1, -1]);
+        let slot = board_cells(9).position(|c| c == (-1, -1)).unwrap();
+        assert_eq!(landed.board()[slot], 2);
+        assert_eq!(landed.ejected(1), 1, "the ejection still counts");
+    }
+
+    #[test]
+    fn the_fifth_dual_room_ejection_brings_the_wall_down() {
+        let before = dual_room(DUAL_COLLAPSE_AT - 1);
+        assert_eq!((before.dual()[0], before.phase()), (0, 1));
+        let after = dual_room(DUAL_COLLAPSE_AT);
+        assert_eq!(after.dual(), vec![1, 0, 0, 0], "down, and the 5th is gone");
+        assert_eq!((after.phase(), after.ejected(1)), (2, 5));
+        assert_eq!(dual_plies().len(), DUAL_COLLAPSE_AT);
+    }
+
+    #[test]
+    fn the_same_seed_and_plies_give_the_same_dual_room_fight() {
+        for plies in [DUAL_RETURN_AT, 49] {
+            let (a, b) = (dual_room(plies), dual_room(plies));
+            assert_eq!(a.board(), b.board());
+            assert_eq!(a.dual(), b.dual());
+            assert_eq!(a.boss_move(), b.boss_move());
+            assert!(!a.boss_move().is_empty());
+        }
+        assert!(fight().dual().is_empty() && fight().last_return().is_empty());
+        assert!(choir().dual().is_empty() && choir().last_return().is_empty());
     }
 }

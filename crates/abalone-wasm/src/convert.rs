@@ -181,6 +181,25 @@ mod tests {
     }
 
     #[test]
+    fn a_board_holds_its_rings_one_after_the_other_so_no_index_shifts() {
+        let ring = |(q, r): (i32, i32)| q.abs().max(r.abs()).max((q + r).abs());
+        let nine: Vec<(i32, i32)> = board_cells(9).collect();
+        assert_eq!(nine.len(), 271, "The Dual Room's radius 9 scan");
+        let five: Vec<(i32, i32)> = board_cells(5).collect();
+        assert_eq!(five.len(), 91);
+        assert_eq!(
+            nine[..91],
+            five[..],
+            "The Ballast Mind's 91 keep their slots"
+        );
+        assert_eq!(board_cells(4).count(), 61);
+        assert!(nine
+            .windows(2)
+            .all(|w| ring(w[0]).max(4) <= ring(w[1]).max(4)));
+        assert_eq!(nine[91], (0, -6), "ring 6 starts on its first row");
+    }
+
+    #[test]
     fn board_bytes_give_seats_3_to_6_the_codes_4_to_7() {
         let mut b = Board::empty();
         b.set(0, 0, Cell::Seat3);
