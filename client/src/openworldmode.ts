@@ -133,6 +133,17 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldAnim;
   }
 
+  /** The New world control (#1021): the world entered is left without its save, which is discarded, and a random world is entered
+   * on the spawn in its place. Returns its seed, which the page shows and the URL takes. */
+  async newWorld(width: number, height: number): Promise<number> {
+    const left = this.seed;
+    this.unsaved = false; // the world left is discarded, not saved again
+    await this.saves.discard(left);
+    const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
+    await this.open(seed, width, height, false);
+    return seed;
+  }
+
   /** The enemy marbles near the hero now, the pushed ones where they stand (the browser checks read them). */
   enemies(): Axial[] {
     return this.fight.enemiesAround(this.world!, this.hero!.at, PUSH_REACH);
@@ -265,6 +276,8 @@ export class OpenWorldMode {
   private mark(seed: string): void {
     this.anim();
     document.body.dataset.openworld = seed;
+    const shown = document.getElementById('openworld-seed'); // the HUD's seed, to read or share (#1021)
+    if (shown) shown.textContent = seed;
     document.body.dataset.openworldAt = this.hero!.at.join(',');
     document.body.dataset.openworldTroop = this.hero!.troop.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldEnemies = String(this.view!.enemyCount);

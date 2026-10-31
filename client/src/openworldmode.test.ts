@@ -745,3 +745,35 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     expect(store.data.has('openworld:7')).toBe(false);
   });
 });
+
+// #1021: the New world control starts a random world in place of the one left, its save discarded, and shows its seed.
+describe('the New world control (#1021)', () => {
+  it('discards the save of the world left, enters a random seed on the spawn and remembers it as the last one', async () => {
+    const store = memoryStore();
+    const saves = worldSaves(store, 1);
+    const m = mode(undefined, undefined, undefined, undefined, undefined, saves);
+    store.data.set('openworld:7', { version: 1, seed: 7, hero: [2, 0], troop: [], fight: { removed: [], added: [], beaten: 0 }, savedAt: 1 });
+    await m.open(7, 800, 600);
+    expect(body().openworldAt).toBe('2,0');
+    const seed = await m.newWorld(800, 600);
+    expect(seed).not.toBe(7);
+    expect(body().openworld).toBe(String(seed));
+    expect(body().openworldAt).toBe('0,0');
+    expect(store.data.has('openworld:7')).toBe(false);
+    expect(await saves.last()).toBe(seed);
+  });
+
+  it('shows the seed of the world in the HUD, and leaves the page alone when there is no HUD', async () => {
+    const out = document.createElement('output');
+    out.id = 'openworld-seed';
+    document.body.append(out);
+    const m = mode();
+    await m.open(7, 800, 600);
+    expect(out.textContent).toBe('7');
+    await m.newWorld(800, 600);
+    expect(out.textContent).toBe(body().openworld);
+    out.remove();
+    await mode().open(8, 800, 600); // no element: nothing to write to
+    expect(body().openworld).toBe('8');
+  });
+});
