@@ -6,7 +6,7 @@ import { DIRECTIONS, type Axial } from './board';
 import { arrowCell } from './hubview';
 import { chunkOf, Hero, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
-import { GLIDE_MS, NUDGE_MS, type Pace } from './openworldglide';
+import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
@@ -17,8 +17,6 @@ export type TroopPush = (seed: number, troop: Int32Array, enemies: Int32Array) =
 /** The enemies within this many cells of the hero are the ones a push can reach. */
 export const PUSH_REACH = 10;
 
-/** The slow factor of the pushes' animation: a webdriver check sets `window.__openworldSlow` to see a push in the middle of it. */
-const slowBy = (): number => Number((window as { __openworldSlow?: number }).__openworldSlow ?? 1);
 
 /** The cells as the bridge takes them: `q, r` pairs. */
 const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat());

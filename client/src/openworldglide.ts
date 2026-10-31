@@ -3,6 +3,7 @@
 // landing. Only what is drawn glides: the cells, the collisions and the save are the step's own, and they are exact at once.
 // A pure function of time, so it is unit-tested; the view writes the poses it gives.
 import * as THREE from 'three/webgpu';
+import { EASE } from './motion';
 
 /** The glide of a step, in ms at normal speed: an ease-out that lands on the cell. */
 export const GLIDE_MS = 140;
@@ -16,6 +17,53 @@ export const SQUASH = 0.12;
 const LANDING = 0.7;
 /** The zoom past which a marble draws no roll and no squash: too small on the screen to read them (a far-out view). */
 export const ROLL_ZOOM = 3;
+
+/** The control points [x1, y1, x2, y2] of each easing token, read once from the `EASE` strings (no parsing in the frame). */
+const CURVES: Record<keyof typeof EASE, readonly [number, number, number, number]> = {
+  out: bezierOf(EASE.out),
+  in: bezierOf(EASE.in),
+  'in-out': bezierOf(EASE['in-out']),
+};
+
+function bezierOf(css: string): [number, number, number, number] {
+  const [x1, y1, x2, y2] = css.match(/-?[\d.]+/g)!.map(Number);
+  return [x1!, y1!, x2!, y2!];
+}
+
+/** One coordinate of a cubic bezier from 0 to 1 with controls `a` and `b`, at parameter `s`. */
+const bez = (a: number, b: number, s: number): number => 3 * a * s * (1 - s) * (1 - s) + 3 * b * s * s * (1 - s) + s * s * s;
+
+/** The eased progress of `t` (0 to 1) along a CSS cubic-bezier, solved by bisection on x: pure, no allocation. */
+function cubic(c: readonly [number, number, number, number], t: number): number {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (bez(c[0], c[2], mid) < t) lo = mid;
+    else hi = mid;
+  }
+  return bez(c[1], c[3], (lo + hi) / 2);
+}
+
+/** The Open world clock (openworld-animation.md section 1): the eased progress of an animation started at `startMs`, read at `nowMs`.
+ * 0 before the start, 1 from `startMs + durMs` on, and 1 for a duration of 0 or less. */
+export function animT(startMs: number, nowMs: number, durMs: number, ease: keyof typeof EASE): number {
+  if (durMs <= 0) return 1;
+  const t = (nowMs - startMs) / durMs;
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return cubic(CURVES[ease], t);
+}
+
+/** The phase of a looping motion, in `[0, 1)`: 0 for a period of 0 or less. */
+export function loopT(nowMs: number, periodMs: number): number {
+  if (periodMs <= 0) return 0;
+  const p = (nowMs % periodMs) / periodMs;
+  return p < 0 ? p + 1 : p;
+}
+
+/** The slow factor of the animations: a webdriver check sets `window.__openworldSlow` to see one in the middle of it. */
+export const slowBy = (): number => Number((window as { __openworldSlow?: number }).__openworldSlow ?? 1);
 
 /** A point in the world, as the view draws the marbles. */
 export interface Vec {
