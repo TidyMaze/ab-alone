@@ -113,10 +113,10 @@ describe('main.ts The Pulsar in space (#1146)', () => {
     expect(walls(scene())[0]!.layers.isEnabled(0)).toBe(true);
     fightPulsar(game);
     expect(space!.visible).toBe(true);
-    expect(space!.children.map((c) => c.type)).toEqual(['Points', 'Sprite']); // the stars, the distant glow
+    expect(space!.children.map((c) => c.type)).toEqual(['Mesh']); // the sheet of stars and glow
     expect(walls(scene())[0]!.layers.isEnabled(0)).toBe(false); // the walls, gantry, lamps and props
     expect(named(scene(), 'pulsar')).toHaveLength(6); // the board and its beacons stay
-    expect((scene().background as THREE.Color).getHex()).toBe(0x02030a);
+    expect((scene().background as THREE.Color).getHex()).toBe(0x000000);
     game.openModes();
     byId('ship').click(); // the ship's hub: no fight
     expect(space!.visible).toBe(false);
