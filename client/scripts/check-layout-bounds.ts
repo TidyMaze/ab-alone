@@ -17,6 +17,7 @@ export interface ElementBox {
   tag: string;
   box: Box;
   isSettingsButton?: boolean;
+  inSettingsMenu?: boolean;
 }
 
 export interface ViewportCheckInput {
@@ -101,7 +102,8 @@ export function checkLayoutProblems(input: ViewportCheckInput): LayoutViolation[
       });
     }
 
-    for (const cell of input.cells) {
+    // The open settings menu floats over the board by the owner's choice (e2e/phone-layout.spec.ts, #277, #1134).
+    for (const cell of el.inSettingsMenu ? [] : input.cells) {
       if (meets(el.box, cell.disc)) {
         const px = overlapAmount(el.box, cell.disc);
         violations.push({
@@ -161,18 +163,21 @@ export function extractViewportInput(preset: ViewportPreset): ViewportCheckInput
   const elements: ElementBox[] = [];
   for (const el of document.querySelectorAll('button, input, label, textarea, select, #eval, #transcript')) {
     if (el.getClientRects().length === 0) continue;
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // a scrolling menu brings its item into view, as a tap does
     const box = el.getBoundingClientRect();
     const id = (el as HTMLElement).id;
     const ariaLabel = el.getAttribute('aria-label');
     const text = el.textContent?.trim();
     const name = id === 'eval' ? 'the evaluation plate' : text || ariaLabel || id || el.tagName;
-    const isSettingsButton = Boolean(el.closest('#settings-menu') && el.tagName === 'BUTTON');
+    const inSettingsMenu = Boolean(el.closest('#settings-menu'));
+    const isSettingsButton = inSettingsMenu && el.tagName === 'BUTTON';
     elements.push({
       id,
       name,
       tag: el.tagName,
       box: { left: box.left, top: box.top, right: box.right, bottom: box.bottom },
       isSettingsButton,
+      inSettingsMenu,
     });
   }
   return {
@@ -190,11 +195,17 @@ export interface EvaluatorPage {
   evaluate<T>(fn: any, arg?: any): Promise<T>;
 }
 
+// The camera matrices follow the window on a rendered frame, so the cells are read two frames after a resize.
+export function afterTwoFrames(): Promise<void> {
+  return new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+}
+
 export async function auditViewport(
   page: EvaluatorPage,
   preset: ViewportPreset,
 ): Promise<{ viewport: string; violations: LayoutViolation[] }> {
   await page.setViewportSize({ width: preset.width, height: preset.height });
+  await page.evaluate(afterTwoFrames);
   const input = await page.evaluate(extractViewportInput, preset);
   const violations = checkLayoutProblems(input);
   return { viewport: preset.name, violations };
