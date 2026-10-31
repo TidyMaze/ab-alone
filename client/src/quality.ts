@@ -131,7 +131,7 @@ export const writeUiScale = (store: Store, scale: UiScale): void => write(store,
 // The theme (#317): System unless the player picked Dark or Light. index.html reads the same key before the first paint.
 export const readTheme = (store: Store): Theme => {
   const stored = read(store, THEME_KEY);
-  return stored === 'dark' || stored === 'light' ? stored : 'system';
+  return stored === 'dark' || stored === 'light' ? stored : 'dark'; // PREVIEW ONLY (redesign-preview): the redesign is on the dark theme; main keeps 'system'
 };
 export const writeTheme = (store: Store, theme: Theme): void => write(store, THEME_KEY, theme);
 // Reduced motion (#379): null until the player presses the toggle, so the system setting decides (motionReduced).
