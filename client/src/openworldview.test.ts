@@ -712,9 +712,11 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     view.zoomBy(4);
     const reach = view.reach;
     const version = mesh(view, 'terrain-grass').instanceMatrix.version;
+    const propVersion = mesh(view, 'prop-tree').instanceMatrix.version;
     view.show([1, 1]); // the same chunk: the split of the detailed props is redrawn with the hero's cell, the reach kept (#989)
     expect(view.reach).toBe(reach);
-    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBeGreaterThan(version);
+    expect(mesh(view, 'prop-tree').instanceMatrix.version).toBeGreaterThan(propVersion);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version); // the grounds do not depend on the hero (#1034)
     view.show([CHUNK, 0]); // the next chunk: rebuilt around it, with the same reach
     expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBeGreaterThan(version);
     expect(view.reach).toBe(reach);
