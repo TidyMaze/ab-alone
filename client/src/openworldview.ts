@@ -105,18 +105,28 @@ export function reachAt(aspect: number, k: number): number {
   return reachFor(groundRadius(probe, origin));
 }
 
-/** The largest zoom on a screen of `aspect` whose reach stays within `MAX_REACH`: `MAX_ZOOM`, or lower where a wide screen would
- * pass it (it sees more ground). The zoom never goes further, so the loaded chunks always cover the ground in view (#976). */
-export function maxZoomFor(aspect: number): number {
-  if (reachAt(aspect, MAX_ZOOM) <= MAX_REACH) return MAX_ZOOM;
-  let low = 1;
-  let high = MAX_ZOOM;
+/** The farthest zoom a screen may go to: a portrait phone sees little ground at `MAX_ZOOM`, so it zooms out until its reach
+ * reaches `MAX_REACH` (#1027). */
+const ZOOM_CAP = 40;
+
+/** The largest zoom in `[low, high]` whose reach stays within `MAX_REACH`, by bisection: `low` must fit, the reach grows with
+ * the zoom. */
+function widestFit(aspect: number, low: number, high: number): number {
   for (let i = 0; i < 40; i++) {
     const mid = (low + high) / 2;
     if (reachAt(aspect, mid) <= MAX_REACH) low = mid;
     else high = mid;
   }
   return low;
+}
+
+/** The largest zoom on a screen of `aspect` whose reach stays within `MAX_REACH`. A wide screen (its reach at `MAX_ZOOM` over the
+ * budget) stops sooner, a portrait one goes out further (#1027); a 16:9 screen keeps `MAX_ZOOM`, where its reach reaches the
+ * budget. The zoom never goes past it, so the loaded chunks always cover the ground in view (#976). */
+export function maxZoomFor(aspect: number): number {
+  if (reachAt(aspect, MAX_ZOOM) < MAX_REACH) return widestFit(aspect, MAX_ZOOM, ZOOM_CAP);
+  if (reachAt(aspect, MAX_ZOOM) === MAX_REACH) return MAX_ZOOM;
+  return widestFit(aspect, 1, MAX_ZOOM);
 }
 
 /** The ground columns: one instanced mesh each. A blocked terrain stands on the ground of its `GROUND` entry. */
