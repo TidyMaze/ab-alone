@@ -57,7 +57,9 @@ test('a win against the bot: banner, warm animation id, locked board', async ({ 
   await open(page, '');
   await expect(page.locator('body')).not.toHaveAttribute('data-over', /.*/); // nothing while the game runs
   await load(page, true, BLACK_WINS);
-  await expectOver(page, 'win', 'You win', '6 out. The books balance.');
+  await expectOver(page, 'win', 'You win', 'The books balance.');
+  // #1038: the result is the plate's title, so the score bar shows no words once the game is over.
+  await expect(page.locator('#eval .label')).toHaveText('');
   const before = await plies(page);
   await tryToMove(page);
   expect(await plies(page)).toBe(before);
@@ -73,7 +75,7 @@ test('a win against the bot: banner, warm animation id, locked board', async ({ 
 test('a loss against the bot: banner, cold animation id, locked board', async ({ page }) => {
   await open(page, '');
   await load(page, true, WHITE_WINS);
-  await expectOver(page, 'loss', 'You lose', '6 out. Tally strikes your name.');
+  await expectOver(page, 'loss', 'You lose', 'Tally strikes your name.');
   const before = await plies(page);
   await tryToMove(page);
   expect(await plies(page)).toBe(before);
@@ -94,7 +96,7 @@ test('a draw at the table: banner, still animation id, locked board', async ({ p
 test('hot-seat: the colour that won is named', async ({ page }) => {
   await open(page, '?bot=off');
   await load(page, false, WHITE_WINS);
-  await expectOver(page, 'win', 'White wins', '6 out. The books balance.');
+  await expectOver(page, 'win', 'White wins', 'The books balance.');
 });
 
 test('a draw against a boss is a defeat, and the daily result card stays reachable', async ({ page }) => {
@@ -114,7 +116,7 @@ test('reduced motion: the banner stays and the board is dimmed, nothing animates
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await open(page, '');
   await load(page, true, BLACK_WINS);
-  await expectOver(page, 'win', 'You win', '6 out. The books balance.');
+  await expectOver(page, 'win', 'You win', 'The books balance.');
   const style = await page.evaluate(() => {
     const canvas = getComputedStyle(document.querySelector('canvas')!);
     const veil = getComputedStyle(document.body, '::before');
@@ -130,7 +132,7 @@ test('the Reduced motion setting (#379): the banner stays, nothing animates, aft
   await page.getByRole('button', { name: 'Reduced motion' }).click();
   await open(page, '');
   await load(page, true, BLACK_WINS);
-  await expectOver(page, 'win', 'You win', '6 out. The books balance.');
+  await expectOver(page, 'win', 'You win', 'The books balance.');
   const style = await page.evaluate(() => ({
     filter: getComputedStyle(document.querySelector('canvas')!).filter,
     veilDisplay: getComputedStyle(document.body, '::before').display,
@@ -170,7 +172,7 @@ test.describe('a phone held upright', () => {
   test('the banner reads on a phone', async ({ page }) => {
     await open(page, '');
     await load(page, true, BLACK_WINS);
-    await expectOver(page, 'win', 'You win', '6 out. The books balance.');
+    await expectOver(page, 'win', 'You win', 'The books balance.');
     await settled(page);
     await page.screenshot({ path: 'test-results/end-phone-win.png' });
   });

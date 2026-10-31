@@ -2024,7 +2024,8 @@ const analyst = new Analyst(
   (moves) => askEval(analysisWorker, moves),
   (score, { history: moves, side }) => {
     const fill = evalFill(score, side);
-    const words = evalText(score, side, glassOf());
+    // Once the live game is over its result is the title of the plate (#1038): the bar shows its fill, no words.
+    const words = replaying === null && engine.status() !== 0 ? '' : evalText(score, side, glassOf());
     evalBar.style.setProperty('--fill', String(fill));
     evalMeter.setAttribute('aria-valuenow', String(Math.round(fill * 100)));
     evalMeter.setAttribute('aria-valuetext', words);
@@ -2876,7 +2877,6 @@ function hud(extra = ''): void {
   const end = endBanner({
     status,
     reason: engine.draw_reason(),
-    win: status === 1 || status === 2 ? win[status - 1]! : 0,
     mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', // a co-op fight is a boss fight on the HUD (#530)
     side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
     glass: glassOf(),
