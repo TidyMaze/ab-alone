@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { ROLL_ZOOM } from './openworldglide';
-import { STRIPE_FULL_ZOOM, STRIPE_HALF_WIDTH, STRIPE_NORMAL, STRIPE_TILT, stripedMaterial, stripeStrength } from './openworldstripe';
+import { STRIPE_FULL_ZOOM, STRIPE_HALF_WIDTH, STRIPE_NORMAL, STRIPE_TILT, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
 // The looks of the marbles (#1043): the hero, the troop and the foes, each a base colour and a stripe colour of the same hue.
 const LOOKS = [
@@ -54,6 +54,10 @@ describe('the stripe of an Open world marble (#1043)', () => {
       expect(Math.abs(hueOf(stripe) - hueOf(base)), name).toBeLessThan(0.02);
     }
     expect(new THREE.Color(0x3a3f4a).getHSL({ h: 0, s: 0, l: 0 }).l).toBeGreaterThan(new THREE.Color(0x15171c).getHSL({ h: 0, s: 0, l: 0 }).l);
+  });
+
+  it('starts its fade node at full strength, and the material reads that node', () => {
+    expect(stripeFadeNode().value).toBe(1);
   });
 
   it('is a node material whose colour is the base with the stripe mixed in, on the look roughness, kept by a clone', () => {
