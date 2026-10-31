@@ -338,6 +338,26 @@ mod tests {
     }
 
     #[test]
+    fn a_smaller_enemy_loses_its_front_marbles() {
+        let game = army_game_against(FULL_ARMY, 10);
+        assert_eq!(count(game.board(), Cell::Black), 14);
+        assert_eq!(count(game.board(), Cell::White), 10);
+        assert_eq!(game.board().get(0, -2), Some(Cell::Empty)); // its front row is gone
+        assert_eq!(game.board().get(-1, -3), Some(Cell::Empty));
+        assert_eq!(game.board().get(0, -3), Some(Cell::White));
+        assert_eq!(game.board().get(4, -4), Some(Cell::White)); // its back row stays
+        assert_eq!(game.win_ejections(Player::Black), 6);
+        assert_eq!(army_game_against(9, 10).board().get(0, 2), Some(Cell::Black));
+        assert_eq!(army_game_against(9, FULL_ARMY).board(), army_game(9).board());
+    }
+
+    #[test]
+    fn the_enemy_is_clamped() {
+        assert_eq!(army_game_against(9, 0).board(), army_game_against(9, MIN_ARMY).board());
+        assert_eq!(army_game_against(9, 99).board(), army_game(9).board());
+    }
+
+    #[test]
     fn the_army_is_clamped() {
         assert_eq!(army_game(0).board(), army_game(MIN_ARMY).board());
         assert_eq!(army_game(99).board(), army_game(FULL_ARMY).board());
