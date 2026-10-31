@@ -5,6 +5,7 @@
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
+import { EDGE_GAIN, edgeMaterial, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, TROOP_DELAY, type Vec } from './openworldglide';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
@@ -177,21 +178,21 @@ export const GROUND: Record<Terrain, Ground> = {
 };
 export const LOOK: Record<Ground, { color: number; emissive: number }> = {
   water: { color: 0xffffff, emissive: 0x0a5568 }, // coolant lakes glow a little; the colour comes per cell (waterColor)
-  sand: { color: 0x9a8a62, emissive: 0x000000 },
+  sand: { color: 0x9c8c64, emissive: 0x000000 },
   grass: { color: 0x3f7d5f, emissive: 0x000000 },
-  rock: { color: 0x4b525c, emissive: 0x000000 },
+  rock: { color: 0x4f565f, emissive: 0x000000 },
   peak: { color: 0x4a525c, emissive: 0x000000 },
 };
 /** The lake colours: the shore, lighter and greener, and the deep middle of a lake. */
-export const WATER = { shore: 0x3fd0b4, deep: 0x0a4a7a };
+export const WATER = { shore: 0x4aa8c4, deep: 0x1a5a8c };
 /** The looks of the biomes (openworld-terrain.md section 4): the ground of the low grass (heights 3 and 4), and the tint of the
  * trees and the boulders, multiplied into their colour per instance. The meadow keeps the grass of `LOOK`; the rest is neutral
  * white. Shore, uplands, peaks and water keep their colours in every biome. */
 export const BIOME_LOOK: Record<Biome, { ground: number; prop: number }> = {
   meadow: { ground: 0x3f7d5f, prop: 0xffffff },
-  forest: { ground: 0x2b6a48, prop: 0xffffff },
-  tundra: { ground: 0xe6eef2, prop: 0xe4f0f8 },
-  desert: { ground: 0xc9a062, prop: 0xffd39a },
+  forest: { ground: 0x2e6a4c, prop: 0xffffff },
+  tundra: { ground: 0xd6e2ea, prop: 0xe4f0f8 },
+  desert: { ground: 0xc2a468, prop: 0xffd39a },
   badlands: { ground: 0x7a3a2c, prop: 0xff9f7a },
 };
 /** The colour of a cell's ground, per instance: the low grass by its biome, every other ground by `LOOK` (the water's colour
@@ -247,8 +248,15 @@ export async function loadModels(urls: ModelUrls, loader: { loadAsync(url: strin
 export const HI_RADIUS = 8;
 export const HI_CAPACITY = 3 * HI_RADIUS * (HI_RADIUS + 1) + 1;
 
-const RADIUS = 0.56; // a hex of side 0.56 tiles a grid of spacing 1 with a thin gap
+const RADIUS = HEX_RADIUS; // a hex of side 0.56 tiles a grid of spacing 1 with a thin gap
 export const MARBLE = 0.3;
+/** The looks of the marbles (#1138): glossy, with the ring colours of the interface, cyan on the hero and the troop (the last move), amber
+ * on the foes (revealed). The stripe is the ring that shows the roll. */
+export const MARBLE_LOOK = {
+  hero: { base: 0xcfe8ff, stripe: 0x6fa8dc, roughness: 0.08 },
+  troop: { base: 0x8fc4f5, stripe: 0x6fa8dc, roughness: 0.12 },
+  foes: { base: 0x15171c, stripe: 0xffb000, roughness: 0.15 },
+} as const;
 const WALL = 0.9;
 const CAP = 0.07;
 
@@ -430,11 +438,12 @@ export class OpenWorldView {
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
     for (const ground of GROUNDS) {
       const { emissive } = LOOK[ground];
-      // The colour comes per instance (groundColour), so the material is white: the water's way too.
-      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, new THREE.MeshStandardMaterial({ color: 0xffffff, emissive, roughness: 0.9 }));
+      // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
+      // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
+      const water = ground === 'water';
+      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land }));
       this.managed.push(this.grounds[ground]);
     }
-    (this.grounds.water.material as THREE.MeshStandardMaterial).roughness = 0.2; // a glossy surface catches the sun
     for (const prop of PROP_NAMES) {
       this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], PROPS[prop].geometry, propMaterial(prop));
       this.managed.push(this.props[prop]);
@@ -443,13 +452,13 @@ export class OpenWorldView {
       this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop));
       this.managed.push(this.detailed[prop]!);
     }
-    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial({ base: 0xcfe8ff, stripe: 0x8fb4dc, roughness: 0.1 }, this.stripe));
+    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial(MARBLE_LOOK.hero, this.stripe));
     this.hero.name = 'hero';
     this.scene.add(this.hero);
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
-    this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial({ base: 0x8fc4f5, stripe: 0x5f93c8, roughness: 0.2 }, this.stripe));
-    this.foes = this.instances('enemies', CAPACITY.enemies, marble, stripedMaterial({ base: 0x15171c, stripe: 0x3a3f4a, roughness: 0.25 }, this.stripe));
-    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), stripedMaterial({ base: 0x15171c, stripe: 0x3a3f4a, roughness: 0.25 }, this.stripe));
+    this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial(MARBLE_LOOK.troop, this.stripe));
+    this.foes = this.instances('enemies', CAPACITY.enemies, marble, stripedMaterial(MARBLE_LOOK.foes, this.stripe));
+    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), stripedMaterial(MARBLE_LOOK.foes, this.stripe));
     this.ejected.name = 'ejected';
     this.ejected.visible = false;
     this.scene.add(this.ejected);
