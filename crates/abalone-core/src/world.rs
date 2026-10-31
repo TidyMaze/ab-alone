@@ -241,7 +241,8 @@ fn distance(q: i32, r: i32) -> i32 {
 /// How much the spawn pulls the biome of `(q, r)` to Meadow, from 0 to 1: 1 within `MEADOW_INNER` cells of the spawn,
 /// 0 beyond `MEADOW_OUTER`, a smoothstep between (no edge). A pure function of the distance, so it is order free.
 fn meadow_bias(q: i32, r: i32) -> f64 {
-    let t = ((MEADOW_OUTER - f64::from(distance(q, r))) / (MEADOW_OUTER - MEADOW_INNER)).clamp(0.0, 1.0);
+    let t = ((MEADOW_OUTER - f64::from(distance(q, r))) / (MEADOW_OUTER - MEADOW_INNER))
+        .clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
 }
 
