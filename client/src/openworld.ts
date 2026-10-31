@@ -1,6 +1,7 @@
 // The Open world mode (docs/specs/openworld.md): the cells of a huge generated map, read lazily from the engine one chunk
 // at a time, and the hero that walks them one cell at a time. Pure data and rules: no DOM, no three.js.
 import { DIRECTIONS, type Axial } from './board';
+import type { FightState } from './openworldfight';
 
 /** A chunk is CHUNK x CHUNK cells; the world is WORLD_CHUNKS x WORLD_CHUNKS chunks centred on the spawn. */
 export const CHUNK = 16;
@@ -95,11 +96,6 @@ export class World {
     return cells;
   }
 
-  /** Whether an enemy marble stands on a cell. A group never leaves the chunk it starts in, so only the cell's own chunk is read. */
-  occupied(q: number, r: number): boolean {
-    return this.enemies(...chunkOf([q, r])).some((e) => e[0] === q && e[1] === r);
-  }
-
   /** The tile of a cell, `undefined` off the world. */
   tile(q: number, r: number): Tile | undefined {
     const [cx, cy] = chunkOf([q, r]);
@@ -137,13 +133,17 @@ export class Hero {
   at: Axial = SPAWN;
   /** The troop starts around the spawn; after a step each marble takes the place of the one before it, the first the hero's. */
   troop: Axial[] = neighbours(SPAWN);
-  constructor(private readonly world: World) {}
+  /** `fight` holds the enemies as they are now, the pushed ones included (openworldfight.ts). */
+  constructor(
+    private readonly world: World,
+    private readonly fight: FightState,
+  ) {}
 
   /** Rolls to `to` when it is a neighbour that is on the world, not blocked and free of enemies; reports whether it moved. */
   step(to: Axial): boolean {
     if (!neighbours(this.at).some((n) => same(n, to))) return false;
     const tile = this.world.tile(to[0], to[1]);
-    if (!tile || blocked(tile) || this.world.occupied(to[0], to[1])) return false;
+    if (!tile || blocked(tile) || this.fight.occupied(this.world, to[0], to[1])) return false;
     this.troop = [this.at, ...this.troop.filter((c) => !same(c, to))].slice(0, TROOP);
     this.at = to;
     return true;
