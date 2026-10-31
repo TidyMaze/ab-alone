@@ -844,6 +844,35 @@ describe('a replaced geometry is freed after the frame that may use it, not at o
     vi.restoreAllMocks();
   });
 
+  it('a model swap replaces the mesh, with a material of its own, so the geometry it frees holds no buffer of a mesh still drawn (#1017)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    expect(mesh(view, 'prop-mountain')).not.toBe(old);
+    expect(mesh(view, 'prop-mountain').material).not.toBe(old.material);
+  });
+
+  it('a growth replaces the mesh with a material of its own, and frees the replaced material after the draw (#1017)', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain').material).not.toBe(old.material);
+    expect(disposeMaterial.mock.contexts).not.toContain(old.material);
+    view.drain();
+    expect(disposeMaterial.mock.contexts).toContain(old.material);
+    vi.restoreAllMocks();
+  });
+
   it('frees what it still holds when it is disposed before any draw', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([0, 0]);
