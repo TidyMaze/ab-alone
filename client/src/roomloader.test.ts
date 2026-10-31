@@ -93,6 +93,23 @@ describe('roomloader PBR pipeline', () => {
     ]);
   });
 
+  it('does not fetch a displacement map whose scale is 0: it moves nothing (#925)', async () => {
+    const mockLoader = {
+      loadAsync: vi.fn(async (url: string) => Object.assign(new THREE.Texture(), { name: url })),
+    } as unknown as THREE.TextureLoader;
+    const pbr = await loadPbrMaterial(mockLoader, '/assets/pbr/', 'deck-pbr', 0, 0.2, ['ao']);
+    expect(vi.mocked(mockLoader.loadAsync).mock.calls.map(([url]) => url)).toEqual([
+      '/assets/pbr/deck-pbr-albedo.ktx2',
+      '/assets/pbr/deck-pbr-normal.ktx2',
+      '/assets/pbr/deck-pbr-roughness.ktx2',
+      '/assets/pbr/deck-pbr-ao.ktx2',
+    ]);
+    expect(pbr!.displacement).toBeUndefined();
+    const mat = createPbrStandardMaterial(pbr!);
+    expect(mat.displacementMap).toBeNull();
+    expect(mat.aoMap).not.toBeNull();
+  });
+
   it('loads the extra maps a set ships, tiled like the others and linear', async () => {
     const mockLoader = {
       loadAsync: vi.fn(async (url: string) => Object.assign(new THREE.Texture(), { name: url })),
@@ -273,8 +290,8 @@ describe('roomloader PBR pipeline', () => {
     void loadSpaceshipBay('/assets/pbr/', mockGltfLoader as any, mockTexLoader);
 
     expect(mockGltfLoader.loadAsync).toHaveBeenCalledWith('/assets/pbr/spaceship-bay.glb');
-    // deck-pbr, bulkhead and grate: albedo, normal, roughness, displacement and their AO or metalness, 5 each.
-    expect(mockTexLoader.loadAsync).toHaveBeenCalledTimes(15);
+    // deck-pbr (no displacement: its scale is 0), bulkhead and grate: albedo, normal, roughness, displacement and their AO or metalness.
+    expect(mockTexLoader.loadAsync).toHaveBeenCalledTimes(14);
   });
 
   it('defines 5 unique deck atmospheric profiles (#660)', () => {
