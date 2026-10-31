@@ -22,12 +22,12 @@ export function evalFill(score: number, side: number): number {
   return Math.min(1 - EDGE, Math.max(EDGE, 0.5 + white / (2 * BAR_RANGE)));
 }
 
-/** The bar in words: "Even", "White +1.5" (marbles), "Black winning", "Black wins" once over. */
+/** The bar in words: "Even", "White +1.5" (marbles), "Black winning" once decided. The result is the plate's title, not the bar's. */
 export function evalText(score: number, side: number, glass: number): string {
   const white = forWhite(score, side);
   const leader = sideName(white > 0 ? 2 : 1, glass);
   const size = Math.abs(white);
-  if (size > DECIDED) return size === WIN_SCORE ? `${leader} wins` : `${leader} winning`;
+  if (size > DECIDED) return `${leader} winning`;
   const marbles = (size / 100).toFixed(1);
   return marbles === '0.0' ? 'Even' : `${leader} +${marbles}`;
 }

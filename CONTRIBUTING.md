@@ -524,3 +524,12 @@ network outage never holds a page load (bug #585). Start a new run to test a cha
 - Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
 - On a Mac, the local Chromium draws on the GPU, still with the WebGL2 backend (WebGPU is turned off). CI runners
   have no GPU and draw with SwiftShader, whose first draw of a page blocks it for seconds (bug #563).
+
+**WebGPU check (#1023):** `bun run e2e:webgpu`, from `client/`. It runs the Open world on a real WebGPU adapter
+(`client/e2e-webgpu/`, config `client/playwright.webgpu.config.ts`): Chromium's new headless mode with
+`--enable-unsafe-webgpu` (on a Mac, the Metal adapter). It enters the world, walks, zooms to the widest view, turns the
+camera and leaves twice, and fails on any console error or uncaught exception. The default suite cannot see the
+WebGPU errors of #1015 and #1017: it runs the WebGL2 fallback. The check is not in the default run (`bun run e2e`, the
+CI e2e shards) and not in CI: CI runners have no GPU, so it would skip there, and a manual dispatch would not change that.
+Run it by hand before a change to the Open world's buffers, geometries or materials. Without a real adapter (no GPU, or
+the headless shell's SwiftShader software adapter) the test skips and reports it. The headless shell is not used.

@@ -19,6 +19,9 @@ export interface HudState {
   turn?: string; // co-op, a human ply: Your turn or Partner's turn (coopTurn) in place of "Black to move" (#530)
 }
 
+/** A side's marble colour, for its row of pips (#1038): the side wearing the pale glass is White, the others Black. */
+const marble = (side: number, glass: number): string => (side === glass ? 'pale' : 'dark');
+
 const pips = (out: number, slots: number): string =>
   Array.from({ length: slots }, (_, i) => `<span class="pip${i < out ? ' out' : ''}"></span>`).join('');
 
@@ -35,7 +38,7 @@ export function hudHtml({ side, status, glass, score, ejected, win, note, online
     (online ? `<div class="presence ${online.tone}">${online.text}</div>` : '') +
     (rematch ? `<div class="rematch">${rematch}</div>` : '') +
     `<div class="score">${score}</div>` +
-    `<div class="pips" aria-hidden="true"><span>${pips(ejected[0], win[0])}</span><span>${pips(ejected[1], win[1])}</span></div>` +
+    `<div class="pips" aria-hidden="true"><span class="${marble(1, glass)}">${pips(ejected[0], win[0])}</span><span class="${marble(2, glass)}">${pips(ejected[1], win[1])}</span></div>` +
     `<small>${note}</small>`
   );
 }

@@ -379,6 +379,9 @@ await renderer.init().catch(bootFailed);
 const clustered = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
 renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
+// The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
+// as soon as the scene is. mountBay takes them when the scene exists.
+const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
@@ -1914,7 +1917,7 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
   }
 };
 (window as unknown as Record<string, unknown>).__mountBay = mountBay;drawProps();
-void loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader).then(mountBay);
+void bayLoad.then(mountBay);
 
 let frame: FrameShape | null = null;
 function drawFrame(board: ArrayLike<number>): void {
@@ -2039,7 +2042,8 @@ const analyst = new Analyst(
   (moves) => askEval(analysisWorker, moves),
   (score, { history: moves, side }) => {
     const fill = evalFill(score, side);
-    const words = evalText(score, side, glassOf());
+    // Once the live game is over its result is the title of the plate (#1038): the bar shows its fill, no words.
+    const words = replaying === null && engine.status() !== 0 ? '' : evalText(score, side, glassOf());
     evalBar.style.setProperty('--fill', String(fill));
     evalMeter.setAttribute('aria-valuenow', String(Math.round(fill * 100)));
     evalMeter.setAttribute('aria-valuetext', words);
@@ -2052,7 +2056,7 @@ let analysing = true;
 function analyse(): void {
   if (!analysing) return;
   evalBar.hidden = false;
-  analyst.request({ history: history.slice(), side: engine.to_move() });
+  analyst.request({ history: history.slice(0, shownPly()), side: engine.to_move() }); // the position on show: a replay evaluates its own (#1038)
 }
 function stopAnalysis(): void {
   analysing = false;
@@ -2144,6 +2148,7 @@ function showPly(ply: number): void {
   hint.clear();
   skipEjections();
   refresh();
+  analyse(); // the bar shows this position's evaluation, not the last live one (#1038)
 }
 function leaveReplay(): void {
   if (replaying) engine = replaying.live;
@@ -2152,6 +2157,7 @@ function leaveReplay(): void {
 function liveAgain(): void {
   leaveReplay();
   refresh();
+  analyse(); // back on the live position, the bar follows it again (#1038)
 }
 function stepReplay(step: ReplayStep): void {
   showPly(stepPly(shownPly(), step, history.length));
@@ -2891,7 +2897,6 @@ function hud(extra = ''): void {
   const end = endBanner({
     status,
     reason: engine.draw_reason(),
-    win: status === 1 || status === 2 ? win[status - 1]! : 0,
     mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', // a co-op fight is a boss fight on the HUD (#530)
     side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
     glass: glassOf(),
@@ -2968,7 +2973,6 @@ function hud(extra = ''): void {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
       bossHtml({
-        name: boss.name(),
         phase: boss.phase(),
         phases: boss.phases(),
         result: end ? 0 : boss.result(), // the end banner already says Victory or Defeat, one line less in the plate

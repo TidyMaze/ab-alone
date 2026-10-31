@@ -42,12 +42,13 @@
         <input id="replay-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Position in the move log" />
         <div id="replay-label" aria-live="polite"></div>
       </div>
-      <div id="openworld-hud" role="status">
+      <div id="openworld-hud" role="group" aria-label="Open world">
+        <p id="openworld-live" role="status" class="sr-only"></p>
         <p>Open world: arrows or a click on a next cell to roll, Esc to leave.</p>
         <p>Seed <output id="openworld-seed"></output>, shared as <code>?openworld=&lt;seed&gt;</code>.</p>
         <button id="openworld-new" type="button">New world</button>
         <div id="openworld-confirm" hidden>
-          <p>Discard this world's save and start a new one?</p>
+          <p>Discard this world's save?</p>
           <button id="openworld-keep" type="button">Keep this world</button>
           <button id="openworld-discard" type="button">Discard and start new</button>
         </div>

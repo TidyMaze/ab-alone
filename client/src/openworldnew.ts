@@ -9,6 +9,7 @@ export function bindNewWorld(root: Document, start: (width: number, height: numb
   const confirm = root.getElementById('openworld-confirm') as HTMLElement;
   const keep = root.getElementById('openworld-keep') as HTMLButtonElement;
   const discard = root.getElementById('openworld-discard') as HTMLButtonElement;
+  const live = root.getElementById('openworld-live') as HTMLElement; // the new seed, read once (#1038)
   const hide = (): void => {
     confirm.hidden = true;
     button.hidden = false;
@@ -29,6 +30,7 @@ export function bindNewWorld(root: Document, start: (width: number, height: numb
       const url = new URL(location.href);
       url.searchParams.set('openworld', String(seed));
       history.replaceState(history.state, '', url);
+      live.textContent = `New world, seed ${seed}`;
     });
   });
   // The mode left (Escape, or the menu) removes its seed from the body: a confirmation still open is closed then, so it does

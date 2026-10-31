@@ -329,6 +329,9 @@ export class OpenWorldView {
   private limit = maxZoomFor(1);
   /** The chunk the hero is in, and the key of the chunks drawn: rebuilt when either changes. */
   private centre: Axial = [0, 0];
+  /** The chunks drawn (the centre and the reach): a change lays every mesh again. `drawnKey` adds the hero's cell, which only
+   * the props depend on, so a step lays the props alone (#1034). */
+  private drawnChunks = '';
   private drawnKey = '';
   private loadedReach = 0;
   private readonly grounds = {} as Record<Ground, THREE.InstancedMesh>;
@@ -728,11 +731,16 @@ export class OpenWorldView {
     const hero = cellAtPoint(at.x, at.z);
     const radius = Math.max(...corners.map((p) => hexDistance(cellAtPoint(p.x, p.z), hero)));
     const reach = Math.min(MAX_REACH, reachFor(radius));
-    const key = `${this.centre},${reach},${hero}`; // the hero's cell too: it sets which props are detailed (#989)
-    if (key !== this.drawnKey) {
+    const chunks = `${this.centre},${reach}`;
+    const key = `${chunks},${hero}`; // the hero's cell too: it sets which props are detailed (#989)
+    if (chunks !== this.drawnChunks) {
+      this.drawnChunks = chunks;
       this.drawnKey = key;
       this.loadedReach = reach;
-      this.build(this.centre[0], this.centre[1], reach, hero);
+      this.build(this.centre[0], this.centre[1], reach, hero, true);
+    } else if (key !== this.drawnKey) {
+      this.drawnKey = key;
+      this.build(this.centre[0], this.centre[1], reach, hero, false);
     }
   }
 
@@ -882,11 +890,17 @@ export class OpenWorldView {
     this.enemyCount = this.foes.count;
   }
 
+  /** The meshes a build lays: every managed mesh, or with `terrain` false the props only. The ground columns do not depend on the
+   * hero, and neither do the enemies, so a step keeps their instances as they are (#1034). */
+  private laid(terrain: boolean): THREE.InstancedMesh[] {
+    return this.managed.filter((mesh) => terrain || !GROUNDS.some((ground) => this.grounds[ground] === mesh));
+  }
+
   /** Lays the chunks `reach` around `(cx, cy)`: the ground columns, the props (the detailed ones within `HI_RADIUS` of `hero`) and
-   * the enemies. */
-  private build(cx: number, cy: number, reach: number, hero: Axial): void {
+   * the enemies. With `terrain` false (a step within the same chunks) it lays the props alone. */
+  private build(cx: number, cy: number, reach: number, hero: Axial, terrain: boolean): void {
     const need = this.need(cx, cy, reach, hero);
-    for (const mesh of [...this.managed]) this.fit(mesh, need.get(mesh) ?? 0); // every mesh holds what this build writes
+    for (const mesh of this.laid(terrain)) this.fit(mesh, need.get(mesh) ?? 0); // every mesh holds what this build writes
     const counts = new Map<THREE.InstancedMesh, number>();
     const { dummy } = this;
     // Writes the next instance of `mesh` (it holds them all: `fit`).
@@ -908,14 +922,16 @@ export class OpenWorldView {
           const p = axialTo3D(q, r);
           const ground = GROUND[tile.terrain];
           const top = topOf(ground, tile.height);
-          put(this.grounds[ground], p.x, top / 2, p.z, top, groundColour(tile, ground));
-          if (ground === 'water') this.grounds.water.setColorAt(counts.get(this.grounds.water)! - 1, waterColor(this.world, q, r));
+          if (terrain) {
+            put(this.grounds[ground], p.x, top / 2, p.z, top, groundColour(tile, ground));
+            if (ground === 'water') this.grounds.water.setColorAt(counts.get(this.grounds.water)! - 1, waterColor(this.world, q, r));
+          }
           this.stand(tile, q, r, p, top, lay, hexDistance([q, r], hero) <= HI_RADIUS);
         });
       }
     }
-    this.updateEnemies();
-    for (const mesh of this.managed) {
+    if (terrain) this.updateEnemies();
+    for (const mesh of this.laid(terrain)) {
       mesh.count = counts.get(mesh) ?? 0;
       mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceColor!.needsUpdate = true;

@@ -56,6 +56,13 @@ after one online visit (tech.md section 9.1).
 
 ## 4. HUD layout
 
+Each fact has one place on the screen at a time (#1038). A result, a count, a name or a turn is
+written once: the plate title carries the turn or the result, the pips carry the ejected count, the
+boss bar carries the boss name, the score bar carries the evaluation of the position on show (never the
+result of a finished game). On a phone held upright the score text leaves the screen but stays in the
+accessibility tree, so a screen reader still hears the one name of the count. Desktop keeps the score
+text beside the pips; the pips take the colour of each side's marble.
+
 One plate, top-left, 16 px from the edges, max width 22rem, never over the board centre at 720p.
 The plate, like the evaluation plate below, is bolted on: a rivet in each corner, 4 px inside the
 border, in `--edge`, drawn in CSS over the plate colour, so it adds no size (#303).
@@ -143,7 +150,9 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   count against the win target. Game-over winner names and draw reasons are not duplicated in the
   score line since the turn line and end banner already announce them (#425). On desktop, six pips
   per side are scratched out as marbles are ejected; on compact and mobile screens (under 1100 px wide
-  or 500 px tall), decorative pips are hidden to slim down the HUD plate. The render backend note
+  or 500 px tall), decorative pips are hidden to slim down the HUD plate. Held upright on a phone the
+  pips are the count and the score text is out of sight (#1038). The pips of each side take its marble
+  colour: dark for Black, pale for White. The render backend note
   (WebGL2 / WebGPU) is dropped from the player HUD and kept in `environment.backend` of diagnostics.
 - **Tally line (#294, #425).** Matches start with Tally's accounting line per mode/boss, which fades
   out via CSS animation after 5 seconds or clears on the first move.
@@ -154,8 +163,8 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   result is read from the viewer's side: "You win" / "You lose" against the bot and online, "Black
   wins" / "White wins" in hot-seat and for a spectator, "Draw", and "Victory" / "Defeat" in a boss or
   daily fight, a co-op one included (#530), where a draw is a "Defeat" (rules.md section 10.3). The reason line is in
-  TALLY's tone, built by `client/src/endbanner.ts`: "6 out. The books balance.", "6 out. Tally strikes your name.",
-  "6 out. The seat is empty.", "6 out. The seat holds.", "Same position three
+  TALLY's tone, built by `client/src/endbanner.ts`: "The books balance.", "Tally strikes your name.",
+  "The seat is empty.", "The seat holds." (the ejected count is on the plate, #1038), "Same position three
   times. Tally closes the page.", "100 plies, nothing ejected. Tally calls it even.", and against a boss
   "Repeated 3 times: a defeat." or "100 plies idle: a defeat.". The one action offered is the button
   already in the column: New game (local, bot), Retry (boss, daily), Rematch (online players), and Back to the
@@ -205,7 +214,7 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   through to the board.
 - **Online status.** Online games add one line under the turn: the player's own color and
   whether the opponent is connected, updated live (#121). Strings, kept verbatim for the e2e
-  tests: "You are Black. Waiting for an opponent..." (room creator alone), "Joining as White..."
+  tests: "Waiting for an opponent..." (room creator alone, the turn title names the colour, #1038), "Joining as White..."
   (not seated yet), "You are White. Black is here.", "You are Black. White is disconnected.",
   "Room is full, watching" (spectator). Presence means the key bound to the seat is connected,
   not any peer. A dot before the text repeats the state (accent here, hazard waiting, danger
@@ -351,9 +360,10 @@ hides the bar and drops the evaluation in flight until a game leaves it (#583).
   with an accent mark at the even middle. A lead of 4 ejections and their bonus (600 centi-marbles)
   or more is clamped at 5 % of the ends: the ends are kept for a decided game.
 - **Words.** Next to the bar, the same state in words, so it never depends on colour or length:
-  "Even", "Black +0.4" (the lead in marbles), "White winning" (the search found a forced win),
-  "Black wins" (the game is over). The bar is a `role="meter"` named "Evaluation" whose value text
-  is these words.
+  "Even", "Black +0.4" (the lead in marbles), "White winning" (the search found a forced win).
+  Once the live game is over the words are blank: the result is the plate's title (#1038). In a
+  replay the words are the evaluation of the position on show, never the final result. The bar is a
+  `role="meter"` named "Evaluation" whose value text is these words.
 - **Source.** The search score of the position for the side to move (`Engine.evaluate`), turned
   into White's share from 0 (Black wins) to 1 (White wins) by `client/src/evalbar.ts`. It is
   computed after every move, after New game (#230) and after an import (#219) in a second copy of

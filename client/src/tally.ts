@@ -14,19 +14,19 @@ const MODE_LINES: Record<'local' | 'bot' | 'online', string> = {
 };
 
 const BOSS_LINES: Record<(typeof BOSS_IDS)[number], string> = {
-  echo: 'Echo: mirror logged. Six out to balance the books.',
-  hull: 'Hull: rim on file. Six out to balance the books.',
-  choir: 'Choir: six out to balance the books.',
-  chaplain: 'Chaplain: conversions on file. Six out to balance.',
-  ballast: 'Bridge: the ledger plays itself. Twelve out to balance.',
-  alien: 'Alien: brood on file. Six out to balance the books.',
-  railyard: 'Rail Yard: freight on schedule. Six out to balance the books.',
-  magnetizer: 'Magnetizer: charges on file. Six out to balance the books.',
-  pulsar: 'Pulsar: beacons on schedule. Six out to balance the books.',
-  overseer: 'Overseer: cores on file. Six burnt to balance the books.',
-  assembly: 'Assembly Line: throughput on file. Six out to balance the books.',
-  core: 'Core: charges on file. Four and a marble is written off.',
-  dual: 'Dual Room: returns on file. Six out to balance the books.',
+  echo: 'Mirror logged. Six out to balance the books.',
+  hull: 'Rim on file. Six out to balance the books.',
+  choir: 'Six out to balance the books.',
+  chaplain: 'Conversions on file. Six out to balance.',
+  ballast: 'The ledger plays itself. Twelve out to balance.',
+  alien: 'Brood on file. Six out to balance the books.',
+  railyard: 'Freight on schedule. Six out to balance the books.',
+  magnetizer: 'Charges on file. Six out to balance the books.',
+  pulsar: 'Beacons on schedule. Six out to balance the books.',
+  overseer: 'Cores on file. Six burnt to balance the books.',
+  assembly: 'Throughput on file. Six out to balance the books.',
+  core: 'Charges on file. Four and a marble is written off.',
+  dual: 'Returns on file. Six out to balance the books.',
 };
 
 /** The line Tally says at the start of a match: a boss fight takes its boss, other modes their mode. */

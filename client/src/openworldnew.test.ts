@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bindNewWorld } from './openworldnew';
+import indexHtml from '../index.html?raw';
 
 // The HUD's New world control (#1021): an in-page confirmation before the save is discarded, the new seed in the URL.
 const hud = `
@@ -8,7 +9,8 @@ const hud = `
   <div id="openworld-confirm" hidden>
     <button id="openworld-keep" type="button">Keep this world</button>
     <button id="openworld-discard" type="button">Discard and start new</button>
-  </div>`;
+  </div>
+  <p id="openworld-live" role="status"></p>`;
 const $ = (id: string) => document.getElementById(id)!;
 const settle = () => new Promise((done) => setTimeout(done));
 
@@ -16,6 +18,38 @@ afterEach(() => {
   document.body.innerHTML = '';
   delete document.body.dataset.openworld;
   history.replaceState(null, '', '/');
+});
+
+// #1038: the sheet asks once. The button already says Discard and start new, so the question does not repeat it.
+describe('the New world sheet wording (#1038)', () => {
+  it("asks Discard this world's save? and keeps the button's name", () => {
+    expect(indexHtml).toContain("<p>Discard this world's save?</p>");
+    expect(indexHtml).toContain('>Discard and start new</button>');
+    expect(indexHtml).not.toContain('start a new one');
+  });
+});
+
+// #1038, WCAG 4.1.3: the HUD is read as a group, and only the new seed is a live status, said once.
+describe('the Open world HUD and its live status (#1038)', () => {
+  it('is a group named Open world, not a status: the help and the seed are static, so the sheet is not reread', () => {
+    expect(indexHtml).toContain('<div id="openworld-hud" role="group" aria-label="Open world">');
+    expect(indexHtml).not.toContain('id="openworld-hud" role="status"');
+  });
+
+  it('has one live region for the new seed, visually hidden', () => {
+    expect(indexHtml).toContain('<p id="openworld-live" role="status" class="sr-only"></p>');
+  });
+
+  it('announces the new world and its seed once the discard has started it', async () => {
+    history.replaceState(null, '', '/?bot=off&openworld=7');
+    document.body.innerHTML = hud;
+    document.body.dataset.openworld = '7';
+    bindNewWorld(document, vi.fn(async () => 42));
+    $('openworld-new').click();
+    $('openworld-discard').click();
+    await settle();
+    expect($('openworld-live').textContent).toBe('New world, seed 42');
+  });
 });
 
 describe('the New world control of the Open world HUD (#1021)', () => {
