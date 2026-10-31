@@ -13,6 +13,7 @@ use crate::encounter::dual::{dual_move, dual_start, dual_step, DUAL_NODE_BUDGET}
 use crate::encounter::echo::{echo_boss, echo_free_moves, echo_move, echo_search, echo_start};
 use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
+use crate::encounter::railyard::{railyard_move, railyard_start, RAILYARD_NODE_BUDGET};
 use crate::encounter::telemetry::{
     classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
@@ -38,10 +39,11 @@ pub enum LadderBoss {
     Alien,
     Overseer,
     Dual,
+    RailYard,
 }
 
 impl LadderBoss {
-    pub const ALL: [LadderBoss; 8] = [
+    pub const ALL: [LadderBoss; 9] = [
         LadderBoss::Echo,
         LadderBoss::Hull,
         LadderBoss::Chaplain,
@@ -50,6 +52,7 @@ impl LadderBoss {
         LadderBoss::Alien,
         LadderBoss::Overseer,
         LadderBoss::Dual,
+        LadderBoss::RailYard,
     ];
 
     /// Stable id used in the telemetry.
@@ -63,6 +66,7 @@ impl LadderBoss {
             LadderBoss::Alien => "alien",
             LadderBoss::Overseer => "overseer",
             LadderBoss::Dual => "dual",
+            LadderBoss::RailYard => "railyard",
         }
     }
 
@@ -82,6 +86,7 @@ impl LadderBoss {
             LadderBoss::Alien => ALIEN_NODE_BUDGET,
             LadderBoss::Overseer => OVERSEER_NODE_BUDGET,
             LadderBoss::Dual => DUAL_NODE_BUDGET,
+            LadderBoss::RailYard => RAILYARD_NODE_BUDGET,
         }
     }
 }
@@ -107,6 +112,7 @@ impl Arena {
             LadderBoss::Overseer => Arena::Plain(overseer_start(seed), boss),
             LadderBoss::Echo => Arena::Plain(echo_start(seed), boss),
             LadderBoss::Dual => Arena::Plain(dual_start(seed), boss),
+            LadderBoss::RailYard => Arena::Plain(railyard_start(seed), boss),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
             LadderBoss::Choir => Arena::Choir(Choir::start(seed)),
@@ -149,6 +155,7 @@ impl Arena {
             Arena::Plain(enc, LadderBoss::Chaplain) => chaplain_move(enc),
             Arena::Plain(enc, LadderBoss::Hull) => hull_move(enc),
             Arena::Plain(enc, LadderBoss::Dual) => dual_move(enc),
+            Arena::Plain(enc, LadderBoss::RailYard) => railyard_move(enc),
             // The Ballast Mind: the Choir is never plain.
             Arena::Plain(enc, _) => ballast_move(enc),
             Arena::Choir(choir) => choir.boss_move(),
@@ -591,10 +598,13 @@ mod tests {
         let ids: Vec<_> = LadderBoss::ALL.iter().map(|b| b.id()).collect();
         assert_eq!(
             ids,
-            ["echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer", "dual"]
+            [
+                "echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer", "dual",
+                "railyard"
+            ]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
-        assert_eq!(budgets, [100, 3000, 300, 1500, 100, 3000, 3000, 3000]);
+        assert_eq!(budgets, [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000]);
     }
 
     #[test]
@@ -693,6 +703,17 @@ mod tests {
         a.play(&mv).unwrap();
         enc.play(&mv).unwrap();
         assert_eq!(a.boss_move(), overseer_move(&enc));
+        assert!(a.boss_move().is_some());
+    }
+
+    #[test]
+    fn the_rail_yard_answers_through_its_own_move() {
+        let mut a = Arena::new(LadderBoss::RailYard, 3);
+        let mut enc = railyard_start(3);
+        let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
+        a.play(&mv).unwrap();
+        enc.play(&mv).unwrap();
+        assert_eq!(a.boss_move(), railyard_move(&enc));
         assert!(a.boss_move().is_some());
     }
 

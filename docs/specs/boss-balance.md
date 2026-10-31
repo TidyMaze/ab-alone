@@ -704,3 +704,17 @@ At 1x (the player has the boss's own 300 nodes) the same command with `LADDER_X=
 `300 \| 6/20 \| 87.5 \| 1 \| conversion 11, draw 3`, fewer than at 10x as wanted. The boss replies in
 a seventh of the time it did (300 nodes against 2000), within the other bosses'. No rule change,
 `engine_version` unchanged.
+
+### The Rail Yard: its AI plays the train countdown (#827), not tuned
+
+The ladder now plays it (`LadderBoss::RailYard`). `railyard_move` no longer avoids every announced
+line at the root: each player ply of the search tree counts the trains down and a pass ejects its
+line with credits, so the boss leaves a line only when the train is about to pass. Ladder, 10 seeds,
+player at 1x (3000 nodes); the 10x cell did not finish in 550 s on one machine, so it is not measured.
+
+| | Wins /10 | Median plies | Deaths |
+|---|---|---|---|
+| Before (root filter) | 0 | 76.5 | rim_ejection 10 |
+| After (train in the tree) | 2 | 66 | rim_ejection 8 |
+
+No tuning: no constant changed.

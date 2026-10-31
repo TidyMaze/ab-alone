@@ -6,10 +6,10 @@
 
 use crate::board::{Board, Cell, RADIUS};
 use crate::encounter::hull::mix;
-use crate::encounter::{BossDef, Encounter};
+use crate::encounter::{marbles, BossDef, Encounter};
 use crate::game::Game;
-use crate::moves::{apply, legal_moves, Move, Player};
-use crate::search::{search_with, DEFAULT_WEIGHTS};
+use crate::moves::{Move, Player};
+use crate::search::{search_hooked, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -134,29 +134,23 @@ pub fn railyard_move(enc: &Encounter) -> Option<Move> {
     if game.to_move() != Player::White {
         return None;
     }
-    let board = game.board();
-    let mut rails: Vec<P> = board
-        .trains()
-        .iter()
-        .flat_map(|&(track, _)| line_cells(track / 2))
-        .collect();
-    rails.sort_unstable();
-    rails.dedup();
-    let exposed = |mv: &Move| {
-        let (after, _) = apply(board, Player::White, mv).expect("a legal move");
-        rails
-            .iter()
-            .filter(|&&(q, r)| after.get(q, r) == Some(Cell::White))
-            .count()
+    // Every player ply of the tree counts the trains down, and a pass ejects its line.
+    let step = |_: &Board, mover: Player, _: &Move, after: Board| {
+        if mover == Player::White {
+            return (after, [0, 0]);
+        }
+        let out = hook(&after, RAILYARD_COUNT, 0);
+        let lost = |c| marbles(&after, c) - marbles(&out, c);
+        let credits = [lost(Cell::White), lost(Cell::Black)];
+        (out, credits)
     };
-    let least = legal_moves(board, Player::White)
-        .iter()
-        .map(exposed)
-        .min()
-        .unwrap_or(0);
-    search_with(game, enc.boss.node_budget, DEFAULT_WEIGHTS, &|mv| {
-        exposed(mv) == least
-    })
+    search_hooked(
+        game,
+        enc.boss.node_budget,
+        DEFAULT_WEIGHTS,
+        &|_| true,
+        &step,
+    )
     .map(|r| r.mv)
 }
 
@@ -166,7 +160,7 @@ mod tests {
     use crate::board::MAX_RADIUS;
     use crate::encounter::hull::HULL_NODE_BUDGET;
     use crate::encounter::{marbles, PveResult};
-    use crate::moves::Direction;
+    use crate::moves::{apply, legal_moves, Direction};
 
     type Train = (u8, u8);
 
@@ -598,6 +592,25 @@ mod tests {
             0,
             "not onto the row: {m:?}"
         );
+    }
+
+    #[test]
+    fn a_train_five_turns_out_does_not_stop_the_boss_from_winning_but_one_about_to_pass_does() {
+        // White pushes the black marble on (4, -4) off for its 6th ejection, ending on line 0.
+        let start = |left| {
+            board(
+                &[(4, -4), (-2, 2)],
+                &[(2, -4), (3, -4), (0, 0)],
+                &[(0, left)],
+            )
+        };
+        let win = mv(&[(2, -4), (3, -4)], Direction::E);
+        let far = railyard_move(&fight(start(RAILYARD_LEAD), Player::White, [0, 5])).unwrap();
+        assert_eq!(far, win, "the train is far: take the win");
+        let near = railyard_move(&fight(start(1), Player::White, [0, 5])).unwrap();
+        assert_eq!(near, win, "a win ends the fight before the train passes");
+        let near = railyard_move(&fight(start(1), Player::White, [0, 0])).unwrap();
+        assert_ne!(near, win, "no win to take: leave the line the train sweeps");
     }
 
     #[test]
