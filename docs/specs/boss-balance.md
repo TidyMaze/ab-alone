@@ -531,6 +531,30 @@ Reply time through wasm (release build in Node, 6 seeds of 80 plies, boss replie
 machine, ms): The Overseer 315 average, 679 at the 95th percentile, 7382 at most (3000 nodes);
 measured in the same run, the Hull 746 / 2026 / 41282 and the Pulsar 986 / 4812 / 24050.
 
+### The Choir plays its army cycle in the whole tree (#825): the ladder drops, not tuned
+
+The boss search (`boss_move`) used to filter only the root move to the army in turn; deeper plies
+let the boss move any army. Now every boss ply of the tree is limited to the army whose turn it is
+at that ply (`search_turns`): Alto, Tenor, Bass, the armies removed at P2 and P3 skipped, the last
+army's two moves of P3 two boss plies, the removal of the weakest army and the army marks following
+every ply (a tie goes to the first army in the tree: it does not know the fight seed). The army in
+turn at the root still gives the weights. Node budget (1500) unchanged, no rule change,
+`engine_version` unchanged. Command: `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release
+--example ladder -- choir`, seeds 0 to 19, 300 plies at most.
+
+| Player budget | Wins /20 before | Wins /20 now | Median plies before | Median plies now | Highest phase now | Deaths now |
+|---|---|---|---|---|---|---|
+| 1500 (1x) | 0 | **2** | 198 | 277 | P2 | push 7, draw 11 |
+| 15000 (10x) | 20 | **8** | 121 | 150.5 | P2 | push 6, draw 6 |
+
+The pro player (10x) wins 8 of 20 instead of 20 of 20: the boss now sees that only one army answers
+each turn, so it no longer plans with moves it cannot play. Nothing was tuned, the owner decides.
+
+Reply time through wasm (nodejs release build, 6 seeds of 80 plies, boss replies, ms, average / 95th
+percentile / max): The Choir 53 / 74 / 104 (before 62 / 92 / 163); measured in the same run, the Hull
+117 / 158 / 197 and the Pulsar 127 / 170 / 250. The node budget is fixed, so the nodes per reply stay
+within 1500.
+
 ### The Echo tuned (#951): 100 nodes, winnable again at pro level
 
 **Cause.** Replaying the 10 ladder games of #949 (1x): every loss is a draw at the 100-ply
