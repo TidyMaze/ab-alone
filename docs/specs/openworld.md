@@ -19,6 +19,12 @@ A-light Explore (#720 to #725), which it does not touch.
 - **Cells**: the axial hex grid, cut into **chunks** of 16 x 16 cells (a parallelogram tiles the
   axial grid with no gap). The world is 64 x 64 chunks (1024 x 1024 cells) and a chunk is
   generated only when the hero is within 2 chunks of it.
+- **Loaded chunks** (the view, #976, #1046): the view draws a square of chunks around a centre chunk, `reach` chunks each
+  side. The reach is the ground in view in cells (the hex distance to the farthest corner of the screen), rounded up to
+  chunks, plus one chunk of margin, and never more than 10 (441 chunks). The centre is kept while the square still covers
+  the hero's hex ball of that radius (every cell within the radius of the hero's cell): it is re-centred on the hero's chunk
+  only when it no longer does. So a hero that paces along a chunk line rebuilds no chunk: a step only lays the props
+  (#1034). The rule holds at every zoom and turn, so the edge of the loaded chunks never shows on screen.
 - **Seed**: a chunk comes from the world seed and its coordinates alone (engine splitmix64), so
   the same seed always gives the same world, in any order of visit. Saving a world is its seed.
 - **Relief**: every cell has a height 0 to 7 from three levels of smooth value noise (macro, meso,
