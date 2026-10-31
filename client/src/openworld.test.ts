@@ -193,7 +193,7 @@ describe('the Open world cache is bounded (#981)', () => {
   });
 
   it('holds every chunk of the largest view (radius 10: 21 x 21) plus a margin', () => {
-    expect(CACHE_LIMIT).toBeGreaterThanOrEqual(21 * 21 + 32);
+    expect(CACHE_LIMIT).toBeGreaterThanOrEqual(21 * 21 + 84); // and the ring of its edge: a rebuild keeps every chunk it uses (#1034)
   });
 
   it('lets the view raise the limit, the cache follows it', () => {

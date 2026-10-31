@@ -37,9 +37,10 @@ export function parseChunk(bytes: Uint8Array): Tile[] {
   return tiles;
 }
 
-/** Chunks and enemy lists kept at once: the square of 21 x 21 chunks the largest view (radius 10) draws (441), and a
- * margin. The least recently used go first; `World.limit` can be raised. */
-export const CACHE_LIMIT = 512;
+/** Chunks and enemy lists kept at once: the square of 21 x 21 chunks the largest view (radius 10) draws (441), plus the ring of
+ * up to 84 chunks outside it that the water of its edge reads (`waterColor`), 525 in all, and a margin. Below that a rebuild evicts
+ * chunks it has just used and loads them again (#1034). The least recently used go first; `World.limit` can be raised. */
+export const CACHE_LIMIT = 640;
 
 /** The key of a chunk in the caches: a number, cheap to make on every tile read. The chunks of a world are within 32k of the spawn,
  * so no two chunks share a key. */
