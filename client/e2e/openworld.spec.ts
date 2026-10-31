@@ -158,6 +158,7 @@ test('the props near the hero are drawn detailed, the ones beyond low-poly, #989
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   const drawn = () => page.evaluate(() => JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>);
   const DETAILED = ['prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'];
   const LOW = ['prop-mountain', 'prop-tree', 'prop-boulder', 'prop-wall'];
@@ -186,6 +187,7 @@ test('the troop pushes the enemy in front of it after a step, and the enemy move
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   await page.evaluate(() =>
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
       hero: [0, 0],
@@ -211,6 +213,7 @@ test('with reduced motion the troop pushes the enemy at once, with no animation,
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   await page.evaluate(() =>
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
       hero: [0, 0],
