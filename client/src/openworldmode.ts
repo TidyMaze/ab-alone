@@ -6,7 +6,7 @@ import { DIRECTIONS, type Axial } from './board';
 import { arrowCell } from './hubview';
 import { chunkOf, Hero, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
-import { GLIDE_MS, NUDGE_MS } from './openworldglide';
+import { GLIDE_MS, NUDGE_MS, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
@@ -117,6 +117,8 @@ export class OpenWorldMode {
   private pad: readonly string[] = [];
   /** The time of the next step while an arrow is held, in ms: the frame loop makes it (#1059), Infinity while none is. */
   private nextStep = Infinity;
+  /** Whether the last step was one of a held walk, so the next one takes over its speed instead of starting from rest (#1065). */
+  private cruising = false;
   /** The props are read once for the page: every entry reuses them. */
   private modelsOnce?: Promise<PropModels>;
 
@@ -183,6 +185,7 @@ export class OpenWorldMode {
     this.dirty = false;
     this.pad = [];
     this.nextStep = Infinity;
+    this.cruising = false;
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
     delete document.body.dataset.openworldTroop;
@@ -299,24 +302,26 @@ export class OpenWorldMode {
   }
 
   /** Eases the camera toward the hero's column top, then draws the scene when something changed since the last draw (the ease
-   * included, until it settles), and every frame while a lake is in view and motion is on. `now` is the frame time in ms. */
-  frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void, now = performance.now()): void {
-    if (!this.view) return; // left: nothing to draw
+   * included, until it settles), and every frame while a lake is in view and motion is on. `now` is the frame time in ms. Returns
+   * whether it drew: the FPS readout counts the frames really rendered (#1064). */
+  frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void, now = performance.now()): boolean {
+    if (!this.view) return false; // left: nothing to draw
     this.flush(); // at most one save a frame, of the state the frame ends on (#968)
     const seconds = (now - this.clock) / 1000;
     this.clock = now;
     const reduced = this.reduced();
     if (this.view!.ease(seconds, reduced)) this.dirty = true;
     if (this.view!.easeYaw(seconds, reduced)) this.dirty = true; // the turn eases to its goal, as the height does (#1026)
+    this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
-    this.beat(now); // the held arrows walk on, one step per GLIDE_MS (#1059)
     this.anim();
     const moving = !reduced && this.view!.hasWater;
-    if (!this.dirty && !moving) return;
+    if (!this.dirty && !moving) return false;
     this.dirty = false;
     this.view!.glow(moving ? now : 0);
     render(this.view!.scene, this.view!.camera);
     this.view!.drain(); // what this frame replaced is no longer in use by it (#1017)
+    return true;
   }
 
   /** Changes the arrows held, by the keys or by the stick. The first arrow down steps the hero at once, and the cadence starts; no
@@ -324,11 +329,21 @@ export class OpenWorldMode {
   private arrows(update: () => void): void {
     const idle = this.idle();
     update();
-    if (this.idle()) this.nextStep = Infinity;
-    else if (idle) {
-      this.nextStep = performance.now() + GLIDE_MS;
-      this.stepHeld();
+    if (this.idle()) {
+      this.nextStep = Infinity;
+      if (!idle) this.stop(performance.now()); // the walk ends: the step under way slows to a rest (#1065)
+    } else if (idle) {
+      const now = performance.now();
+      this.nextStep = now + GLIDE_MS;
+      this.stepHeld(now);
     }
+  }
+
+  /** The walk stops at `now` (ms), by a release, a blocked step or arrows that cancel: the next step starts from rest, and the glide
+   * under way slows to a rest on its cell, on time (#1065). */
+  private stop(now: number): void {
+    this.cruising = false;
+    this.view!.brake(now);
   }
 
   /** Whether no arrow is held, by a key or by the stick. */
@@ -341,21 +356,30 @@ export class OpenWorldMode {
    * GLIDE_MS, whatever the refresh rate. More than a step behind (a hidden tab), it restarts from the frame. */
   private beat(now: number): void {
     if (now < this.nextStep) return;
-    this.nextStep = now - this.nextStep > GLIDE_MS ? now + GLIDE_MS : this.nextStep + GLIDE_MS;
-    this.stepHeld();
+    const late = now - this.nextStep > GLIDE_MS;
+    // A step is made at its due time, not at the frame that makes it: the glides chain end to end whatever the frame rate (#1065).
+    const due = late ? now : this.nextStep;
+    this.nextStep = due + GLIDE_MS;
+    if (late) this.cruising = false; // a hidden tab: the walk starts again from rest
+    this.stepHeld(due);
   }
 
-  /** One step in the direction of the arrows held now (`stepOf`): a blocked one leans the hero (`lean`). */
-  private stepHeld(): void {
+  /** One step in the direction of the arrows held now (`stepOf`), made at `at` (ms): a blocked one leans the hero (`lean`), arrows that
+   * cancel stop the walk. */
+  private stepHeld(at: number): void {
     const to = stepOf(this.hero!.at, new Set([...this.held, ...this.pad]), this.view!.yaw);
-    if (to) this.roll(to);
+    if (to) this.roll(to, at, this.cruising ? 'walk' : 'start');
+    else this.stop(at);
   }
 
-  private roll(to: Axial): void {
-    if (!this.hero!.step(to)) return this.lean(to);
+  /** The hero steps to `to`, at `at` (ms); `pace` is the pace of its glide: a `tap` (a press on the screen) eases out, the steps of
+   * the held arrows keep one speed (#1065). */
+  private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): void {
+    if (!this.hero!.step(to)) return this.lean(to, at);
+    this.cruising = pace !== 'tap';
     this.view!.snap(); // a step during a push's animation ends it first (#967)
-    const now = this.reduced() ? null : performance.now();
-    this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: GLIDE_MS * slowBy() }); // the step glides (#1040)
+    const now = this.reduced() ? null : at;
+    this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: GLIDE_MS * slowBy(), pace }); // the step glides (#1040)
     const played = this.troopPush();
     this.view!.updateEnemies();
     if (played && now !== null) this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
@@ -366,8 +390,9 @@ export class OpenWorldMode {
   }
 
   /** A blocked step leans the hero toward the cell it cannot take, and back: nothing under reduced motion (#1040). */
-  private lean(to: Axial): void {
-    if (!this.reduced()) this.view!.nudge(this.hero!.at, to, performance.now(), NUDGE_MS * slowBy());
+  private lean(to: Axial, at: number): void {
+    this.stop(at);
+    if (!this.reduced()) this.view!.nudge(this.hero!.at, to, at, NUDGE_MS * slowBy());
   }
 
   /** The troop's attack after a step: the bridge plays the legal push, if there is one, on the hero, the troop and the enemies near

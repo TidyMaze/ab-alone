@@ -6,7 +6,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { FightState, type Pushed } from './openworldfight';
-import { Marble, ROLL_ZOOM, type Vec } from './openworldglide';
+import { Marble, type Pace, ROLL_ZOOM, type Vec } from './openworldglide';
 import { stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
@@ -518,7 +518,7 @@ export class OpenWorldView {
 
   /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero's ball leaves the loaded square (`frame`),
    * the hero and the camera follow every step. */
-  show(at: Axial, troop: readonly Axial[] = [], glide?: { now: number; span: number }): void {
+  show(at: Axial, troop: readonly Axial[] = [], glide?: { now: number; span: number; pace?: Pace }): void {
     this.heroCell = [at[0], at[1]];
     if (glide && this.placed) this.glideTo(at, troop, glide);
     else this.snapTo(at, troop);
@@ -540,10 +540,10 @@ export class OpenWorldView {
 
   /** The hero and each troop marble glide from where they are at `now` to the cells of a step (#1040): the hero, then the troop, each
    * marble to the cell of the one before it. The glides land at `now + span`, where a push's lunge starts (`landed`). */
-  private glideTo(at: Axial, troop: readonly Axial[], { now, span }: { now: number; span: number }): void {
+  private glideTo(at: Axial, troop: readonly Axial[], { now, span, pace }: { now: number; span: number; pace?: Pace }): void {
     const roll = this.drawnLevel <= ROLL_ZOOM;
     [at, ...troop].forEach((cell, i) => {
-      if (this.marbleAt(i).go(this.standing(cell), now, span, roll)) this.landed = Math.max(this.landed, now + span);
+      if (this.marbleAt(i).go(this.standing(cell), now, span, roll, pace)) this.landed = Math.max(this.landed, now + span);
     });
   }
 
@@ -565,6 +565,12 @@ export class OpenWorldView {
     const a = axialTo3D(at[0], at[1]);
     const b = axialTo3D(to[0], to[1]);
     this.marbleAt(0).bump({ x: b.x - a.x, y: 0, z: b.z - a.z }, now, span);
+  }
+
+  /** The walk ends at `now` (ms): every marble in a glide at the walking speed slows to rest on its cell, on time (#1065). */
+  brake(now: number): void {
+    const roll = this.drawnLevel <= ROLL_ZOOM;
+    for (const marble of this.marbles) marble.brake(now, roll);
   }
 
   /** Whether a marble glides or leans on the last tick: the frame is drawn while it does (the mode marks it). */
