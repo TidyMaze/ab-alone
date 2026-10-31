@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
+import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
+import { indexedDbStore } from './idb';
 import { boot } from './test/harness';
 
 // The Open world mode (#962, docs/specs/openworld.md): its entry is in the mode menu for everyone (#1000), ?openworld=<seed>
@@ -12,6 +14,11 @@ const press = (key: string): KeyboardEvent => {
   const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
   window.dispatchEvent(e);
   return e;
+};
+
+// The menu's click reads the saved world first: IndexedDB answers in a few tasks.
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
 };
 
 const release = (key: string): void => {
@@ -28,6 +35,7 @@ describe('the Open world mode', () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();
     byId('openworld').click();
+    await settle();
     hooks().__openworldFixture!({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
     press('ArrowRight'); // the hero rolls onto (1,0): the line (1,0), (0,0), (-1,0) pushes the enemy (2,0) on to (3,0)
     expect(data().openworldAt).toBe('2,0');
@@ -48,6 +56,7 @@ describe('the Open world mode', () => {
     expect(press('Escape').defaultPrevented).toBe(false); // not on: the keys are the page's
     game.openModes();
     byId('openworld').click();
+    await settle();
     expect(data().openworld).toMatch(/^\d+$/);
     expect(data().openworldAt).toBe('0,0');
   });
@@ -57,6 +66,7 @@ describe('the Open world mode', () => {
     expect(byId('openworld').hidden).toBe(false);
     game.openModes();
     byId('openworld').click();
+    await settle();
     expect(data().openworld).toBe('7');
     expect(data().openworldAt).toBe('0,0');
     await game.settle(); // the models load: none on the empty scene of the harness
@@ -76,6 +86,7 @@ describe('the Open world mode', () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();
     byId('openworld').click();
+    await settle();
     document.querySelector('canvas')!.dispatchEvent(new MouseEvent('pointerdown', { clientX: innerWidth / 2, clientY: innerHeight / 2, bubbles: true }));
     expect(data().openworldAt).toBe('0,0'); // the centre is the hero's own cell
   });
@@ -87,6 +98,7 @@ describe('the Open world mode', () => {
     const hub = data().hub;
     game.openModes();
     byId('openworld').click();
+    await settle();
     expect(Number(data().openworld)).toBeGreaterThan(0);
     press('ArrowRight');
     expect(data().hub).toBe(hub); // the hub's marble did not roll
@@ -97,6 +109,7 @@ describe('the Open world mode', () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();
     byId('openworld').click();
+    await settle();
     press('ArrowLeft'); // (-1, 0)
     press('ArrowUp'); // Left and Up held: up-left
     expect(data().openworldAt).toBe('-1,-1');
@@ -112,6 +125,7 @@ describe('the Open world mode', () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();
     byId('openworld').click();
+    await settle();
     const canvas = document.querySelector('canvas')!;
     const zoomOf = () => Number(data().openworldZoom);
     const wheel = (deltaY: number) => canvas.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }));
@@ -135,5 +149,62 @@ describe('the Open world mode', () => {
     expect(zoomOf()).toBe(1);
     finger('pointerup', 1, 300);
     finger('pointerup', 2, 700);
+  });
+
+  // The save of the Open world (#968): the menu resumes the last world played, a seed in the URL resumes its own, `new` starts afresh.
+  const openFrom = async (url: string, indexedDB: IDBFactory) => {
+    const game = await boot(url, { indexedDB });
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    return game;
+  };
+
+  it('the menu entry resumes the last world played: its seed, the hero where it was left', async () => {
+    const idb = new IDBFactory();
+    const game = await openFrom('?bot=off', idb);
+    const seed = data().openworld!;
+    press('ArrowRight'); // the hero rolls to (1,0)
+    game.frame();
+    await settle();
+    expect(data().openworldSaved).toBe('1');
+    await openFrom('?bot=off', idb);
+    expect(data().openworld).toBe(seed);
+    expect(data().openworldAt).toBe('1,0');
+  });
+
+  it('the menu entry opens a new random world when the last one has no save of its own', async () => {
+    const idb = new IDBFactory();
+    const game = await openFrom('?bot=off&openworld=7', idb);
+    press('ArrowRight');
+    game.frame();
+    await settle();
+    await indexedDbStore().delete('openworld:7');
+    await openFrom('?bot=off', idb);
+    expect(data().openworld).not.toBe('7');
+    expect(data().openworldAt).toBe('0,0');
+  });
+
+  it('a seed in the URL resumes its own save', async () => {
+    const idb = new IDBFactory();
+    const game = await openFrom('?bot=off&openworld=7', idb);
+    press('ArrowRight');
+    game.frame();
+    await settle();
+    await openFrom('?bot=off&openworld=7', idb);
+    expect(data().openworld).toBe('7');
+    expect(data().openworldAt).toBe('1,0');
+  });
+
+  it('?openworld=new starts a fresh random world, although a last world is saved', async () => {
+    const idb = new IDBFactory();
+    const game = await openFrom('?bot=off', idb);
+    const seed = data().openworld!;
+    press('ArrowRight');
+    game.frame();
+    await settle();
+    await openFrom('?bot=off&openworld=new', idb);
+    expect(data().openworld).not.toBe(seed);
+    expect(data().openworldAt).toBe('0,0');
   });
 });

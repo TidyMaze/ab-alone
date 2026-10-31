@@ -168,6 +168,11 @@ Client only, after #983 (it needs the eight heights).
 - **Spawn**: radius 3 open grass, reachable, no enemy within 8 (`openworld.md` section 2).
 - **World version**: each task changes every world. Once the save of #968 stores a seed, it also stores a
   `WORLD_VERSION` (a constant bumped by each terrain task), so an old save is told apart, not misread.
+  As built (#968): `WORLD_VERSION` is `1` in `crates/abalone-core/src/world.rs`, with a comment above it. The digest test
+  asserts `(WORLD_VERSION, world_digest())` against `(1, <digest>)` on one line, so a change of the generator forces an edit
+  of that line: bump the version and repin the digest in the same commit. The bridge exports it as `world_version()`
+  (`crates/abalone-wasm/src/world.rs`), and the client saves it with each world (`openworld.md` section 5): a save of another
+  version is not loaded.
 - **Memory and speed** follow #981: bounded chunk caches (512 chunks, radius 10), no per-frame allocation, a
   rebuild under about 40 ms at the widest zoom.
 

@@ -22,6 +22,12 @@ fn terrain_code(terrain: Terrain) -> u8 {
     }
 }
 
+/// The version of the generated world (`WORLD_VERSION` of the core): a save of another version is not loaded (#968).
+#[wasm_bindgen]
+pub fn world_version() -> u32 {
+    world::WORLD_VERSION
+}
+
 /// The cells of chunk `(cx, cy)` of the world `seed`, `CELL_STRIDE` bytes per cell, row by row;
 /// empty off the world.
 #[wasm_bindgen]
@@ -98,6 +104,11 @@ fn push_encoded(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_world_version_is_the_core_one() {
+        assert_eq!(world_version(), abalone_core::world::WORLD_VERSION);
+    }
 
     #[test]
     fn a_chunk_is_three_bytes_a_cell_and_matches_the_engine() {

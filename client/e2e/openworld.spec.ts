@@ -158,6 +158,7 @@ test('the props near the hero are drawn detailed, the ones beyond low-poly, #989
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   const drawn = () => page.evaluate(() => JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>);
   const DETAILED = ['prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'];
   const LOW = ['prop-mountain', 'prop-tree', 'prop-boulder', 'prop-wall'];
@@ -186,6 +187,7 @@ test('the troop pushes the enemy in front of it after a step, and the enemy move
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   await page.evaluate(() =>
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
       hero: [0, 0],
@@ -211,6 +213,7 @@ test('with reduced motion the troop pushes the enemy at once, with no animation,
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7'); // entered: the world is drawn
   await page.evaluate(() =>
     (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
       hero: [0, 0],
@@ -222,4 +225,78 @@ test('with reduced motion the troop pushes the enemy at once, with no animation,
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldPush)).toBe('1');
   expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('2,0');
   expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined();
+});
+
+// #968: the Open world is saved after a push and resumed by the menu after a reload: the hero, the troop and the enemy the
+// push moved are where they were left. The save is counted on the page (openworldSaved) once it is stored.
+test('the Open world is saved after a push and resumes after a reload, the troop and the enemy where they were, #968', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  await page.evaluate(() =>
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
+      hero: [0, 0],
+      troop: [[-1, 0], [-2, 0]],
+      enemies: [[2, 0]],
+    }),
+  );
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(at).toBe('2,0');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBe('1');
+  await page.reload();
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(at).toBe('2,0');
+  expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0 -2,0');
+  expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
+});
+
+// #968: a save of another world version is not loaded: the world starts on the spawn and the stale record is deleted. The record
+// is written by hand in the page's IndexedDB (the game store of the ab-alone database) at the seed's key, as an old build left it.
+test('a save of another world version is ignored and deleted, the world starts on the spawn, #968', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  const stale = { version: 0, seed: 7, hero: [2, 0], troop: [], fight: { removed: [], added: [], beaten: 0 }, savedAt: 1 };
+  const store = () =>
+    page.evaluate(
+      () =>
+        new Promise<unknown>((done, fail) => {
+          const open = indexedDB.open('ab-alone', 1);
+          open.onerror = () => fail(open.error);
+          open.onsuccess = () => {
+            const get = open.result.transaction('game', 'readonly').objectStore('game').get('openworld:7');
+            get.onsuccess = () => {
+              open.result.close();
+              done(get.result ?? null);
+            };
+          };
+        }),
+    );
+  await page.evaluate(
+    (record) =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open('ab-alone', 1);
+        open.onerror = () => fail(open.error);
+        open.onsuccess = () => {
+          const tx = open.result.transaction('game', 'readwrite');
+          tx.objectStore('game').put(record, 'openworld:7');
+          tx.oncomplete = () => {
+            open.result.close();
+            done();
+          };
+        };
+      }),
+    stale,
+  );
+  expect(await store()).toEqual(stale);
+  await page.reload();
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
+  await expect.poll(store).toBeNull();
 });

@@ -107,8 +107,28 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 
 ## 5. Saving
 
-The world (seed), the hero and troop cells, and the enemy groups beaten are saved in IndexedDB
-after every hero step, and loaded when the mode opens.
+The world (seed), the hero and troop cells, and the enemy groups beaten are saved in IndexedDB, in the game store of the
+`ab-alone` database next to the local game and the run (`client/src/openworldsave.ts`, #968). No library: the `idb.ts` store.
+
+**What is saved.** One record per seed, under the key `openworld:<seed>`:
+`{ version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, savedAt }`, where `fight` is the
+`FightState` of `openworldfight.ts` (the generated enemies a push moved away, the enemies on other cells, the beaten count).
+The last world played is kept apart under `openworld:last` (`{ seed }`).
+
+**When.** After each hero step and each push, the final state (not the animation), written at most once a frame: the frame
+loop flushes it. The world is saved once more when the mode is left, and when another world is entered over it. A write
+does not wait for the game: a storage that fails (a private window, blocked or full storage) is no game error, the save is
+just not counted. The page counts the stored saves in `body[data-openworld-saved]`, which the e2e test polls.
+
+**Which world opens.** The menu entry (`#openworld`) resumes the last world played when it has a valid save, else rolls a
+new random seed. `?openworld=<n>` opens that seed, resuming its own save if it has one. `?openworld=new` opens a new random
+seed and starts it fresh. There is no visible "New world" control yet (a follow-up). The push count of a session
+(`openworldPush`) is not saved: it starts at 0 after a reload.
+
+**Versions and garbage.** A record whose `version` is not the `WORLD_VERSION` of the bridge (`world_version()`,
+openworld-terrain.md section 6) is not loaded: its cells would mean something else. A record that does not decode (a wrong
+shape, cells that are not integers, more troop marbles than the troop holds, another seed under the key) is not loaded
+either (a bad `fight` makes a bad record). Both are deleted, and the world starts on the spawn.
 
 ## 6. Tests
 

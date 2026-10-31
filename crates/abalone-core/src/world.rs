@@ -6,6 +6,9 @@
 use crate::encounter::hull::mix;
 use std::sync::{Mutex, PoisonError};
 
+/// The version of the generated world, saved with each Open world save (#968): bump it with every change of the generator, the
+/// same moment the pinned digest of the tests changes (the line of `the_generated_world_is_pinned_by_a_digest`).
+pub const WORLD_VERSION: u32 = 1;
 /// A chunk is `CHUNK` x `CHUNK` cells of the axial grid.
 pub const CHUNK: i32 = 16;
 /// The world is `WORLD_CHUNKS` x `WORLD_CHUNKS` chunks, centred on the spawn chunk.
@@ -967,9 +970,9 @@ mod tests {
     #[test]
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
-            world_digest(),
-            4_602_184_324_818_820_941,
-            "digest of the reference world"
+            (WORLD_VERSION, world_digest()),
+            (1, 4_602_184_324_818_820_941),
+            "WORLD_VERSION and digest of the reference world"
         );
     }
 
