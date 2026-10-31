@@ -59,6 +59,8 @@ pub struct Game {
     win: [u8; 2],
     /// The draw rules end the game: off for a fight with no draw (The Swarm).
     draws: bool,
+    /// The side that wins in place of a draw by repetition or idle plies, if any (the Trainer).
+    draw_to: Option<Player>,
 }
 
 fn index(player: Player) -> usize {
@@ -152,6 +154,7 @@ impl Game {
             draw_reason: None,
             win: [WIN_EJECTIONS; 2],
             draws: true,
+            draw_to: None,
         }
     }
 
@@ -169,6 +172,7 @@ impl Game {
             draw_reason: None,
             win,
             draws: true,
+            draw_to: None,
         }
     }
 
@@ -182,6 +186,19 @@ impl Game {
     /// The same game where no draw rule ends it, for a fight with no draw (The Swarm).
     pub(crate) fn without_draws(mut self) -> Self {
         self.draws = false;
+        self
+    }
+
+    /// The same game where no draw rule ends it, for a fight with no draw (The Swarm).
+    pub(crate) fn without_draws(mut self) -> Self {
+        self.draws = false;
+        self
+    }
+
+    /// The same game where a draw by repetition or idle plies is a win for `side` (#1159); `draw_reason` still
+    /// says it was one.
+    pub(crate) fn with_draw_to(mut self, side: Player) -> Self {
+        self.draw_to = Some(side);
         self
     }
 
@@ -357,6 +374,7 @@ impl Game {
         let capped = self.no_ejection_plies >= NO_EJECTION_PLY_LIMIT;
         let rogue = self.board.rogue_lite();
         let foe = other(mover);
+        let mut stalled = false;
         self.outcome = if self.ejected[index(mover)] >= self.win[index(mover)] {
             Some(Outcome::Win(mover))
         } else if rogue && self.ejected[index(foe)] >= self.win[index(foe)] {
@@ -366,14 +384,15 @@ impl Game {
             // The side to move has no legal move: it loses the fight.
             Some(Outcome::Win(other(next)))
         } else if self.draws && (repeated || capped) {
-            Some(Outcome::Draw)
+            stalled = true;
+            Some(self.draw_to.map_or(Outcome::Draw, Outcome::Win))
         } else {
             None
         };
-        self.draw_reason = match self.outcome {
-            Some(Outcome::Draw) if repeated => Some(DrawReason::Repetition),
-            Some(Outcome::Draw) => Some(DrawReason::NoEjectionCap),
-            _ => None,
+        self.draw_reason = match (stalled, repeated) {
+            (false, _) => None,
+            (true, true) => Some(DrawReason::Repetition),
+            (true, false) => Some(DrawReason::NoEjectionCap),
         };
         Ok(())
     }
@@ -421,6 +440,7 @@ mod tests {
             draw_reason: None,
             win: [WIN_EJECTIONS; 2],
             draws: true,
+            draw_to: None,
         }
     }
 
@@ -668,6 +688,15 @@ mod tests {
             position_hash(game.board(), Player::Black),
             position_hash(game.board(), Player::White)
         );
+    }
+
+    #[test]
+    fn a_draw_can_be_a_win_for_one_side() {
+        let mut game = lone().with_draw_to(Player::Black);
+        game.no_ejection_plies = 99;
+        assert_eq!(game.play(&mv(&[(0, 0)], SE)), Ok(()));
+        assert_eq!(game.outcome(), Some(Outcome::Win(Player::Black)));
+        assert_eq!(game.draw_reason(), Some(DrawReason::NoEjectionCap)); // still says it was a draw
     }
 
     #[test]

@@ -152,11 +152,11 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #mode-menu[hidden] { display: none; }
 #modes[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 600px), (pointer: coarse) { #mode-menu button { min-height: 2.75rem; } }
-#update, #reset-view, #invite-copy, #hint, #replay, #auto-play, #new-game, #modes, #play-online, #fight-together, #ranked, #rematch, #boss-fight, #daily, #roguelite, #openworld, #ship, #boss-retry, #ship-back, #boss-goal, #boss-list button, #coop-list button, #copy-diagnostics {
+#update, #reset-view, #invite-copy, #hint, #replay, #auto-play, #new-game, #modes, #play-online, #fight-together, #ranked, #rematch, #boss-fight, #daily, #roguelite, #trainer, #trainer-next, #openworld, #ship, #boss-retry, #ship-back, #boss-goal, #boss-list button, #coop-list button, #copy-diagnostics {
   padding: 0.5rem 0.75rem; cursor: pointer; color: var(--text); background: var(--panel);
   border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.2 var(--ui);
 }
-#update:focus-visible, #reset-view:focus-visible, #invite-copy:focus-visible, #hint:focus-visible, #replay:focus-visible, #replay-bar button:focus-visible, #auto-play:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #roguelite:focus-visible, #openworld:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#update:focus-visible, #reset-view:focus-visible, #invite-copy:focus-visible, #hint:focus-visible, #replay:focus-visible, #replay-bar button:focus-visible, #auto-play:focus-visible, #new-game:focus-visible, #modes:focus-visible, #play-online:focus-visible, #fight-together:focus-visible, #ranked:focus-visible, #rematch:focus-visible, #boss-fight:focus-visible, #daily:focus-visible, #roguelite:focus-visible, #trainer:focus-visible, #trainer-next:focus-visible, #openworld:focus-visible, #ship:focus-visible, #boss-retry:focus-visible, #ship-back:focus-visible, #boss-goal:focus-visible, #boss-list button:focus-visible, #coop-list button:focus-visible, #copy-diagnostics:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #boss-list, #coop-list { display: flex; flex-direction: column; gap: 0.25rem; align-items: stretch; }
 #boss-list .medal { display: block; font-size: 0.7em; font-weight: 700; line-height: 1; white-space: nowrap; }
 /* Bug #653: in a desktop window an open boss list holds two bosses a row, each row compact, so every boss and Daily
@@ -871,11 +871,17 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
 #dock #lobby { position: relative; }
 #dock #lobby[data-waiting='true'] { background-image: radial-gradient(circle at calc(100% - 8px) 8px, var(--accent) 4px, var(--panel) 4px, var(--panel) 5px, transparent 5px); }
 /* The sheets: above the dock, 8 px over it, as wide as the window less 16 px a side, scrolling when taller than 60 %. */
-#dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #lobby-sheet {
+#dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #trainer-card, #dock-wrap #lobby-sheet {
   position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); box-sizing: border-box; max-height: 60dvh; overflow-y: auto;
   padding: 8px; background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
 }
-#dock-wrap #mode-menu[hidden], #dock-wrap #goal-sheet[hidden], #dock-wrap #daily-card[hidden], #dock-wrap #lobby-sheet[hidden] { display: none; }
+#dock-wrap #mode-menu[hidden], #dock-wrap #goal-sheet[hidden], #dock-wrap #daily-card[hidden], #dock-wrap #trainer-card[hidden], #dock-wrap #lobby-sheet[hidden] { display: none; }
+/* Trainer result card (#1159): the wave and the scores, Next wave under them (Retry is in the dock). */
+#dock-wrap #trainer-card { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+#dock-wrap #trainer-card[hidden] { display: none; }
+#trainer-text p { margin: 0; }
+#trainer-card #trainer-next[hidden] { display: none; }
+#dock-wrap #trainer-card button { min-height: 44px; min-width: 44px; }
 #dock-wrap #mode-menu { display: flex; flex-direction: column; flex-flow: column nowrap; justify-content: flex-start; gap: 4px; align-items: stretch; min-width: 0; }
 #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 44px; min-width: 44px; }
 #dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { flex: none; width: 100%; overflow-x: auto; margin: 0; padding: 0; }
@@ -885,7 +891,7 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
   #dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { display: grid; grid-template-columns: repeat(3, 1fr); }
   #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 28px; }
 }
-#dock-wrap #goal-sheet { font: 0.875rem/1.4 var(--ui); color: var(--text); }
+#dock-wrap :is(#goal-sheet, #trainer-card) { font: 0.875rem/1.4 var(--ui); color: var(--text); }
 #dock-wrap #goal-sheet p { margin: 0; }
 #dock-wrap #daily-card { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 #dock-wrap #daily-card #daily-result { width: auto; max-width: 100%; box-sizing: border-box; }
@@ -917,14 +923,14 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
   #dock > button::after { font-size: 0.625rem; }
   #dock-replay { flex-direction: column; flex: none; }
   #support { right: 68px; bottom: 16px; }
-  #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #lobby-sheet {
+  #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #trainer-card, #dock-wrap #lobby-sheet {
     left: auto; right: calc(100% + 8px); bottom: 0; width: min(22rem, calc(100vw - 120px)); max-height: calc(100dvh - 32px);
   }
 }
 /* A desktop window: the dock is a centred bar at the bottom, its width that of its buttons, its sheets centred above it. */
 @media (orientation: landscape) and (min-height: 661px) {
   #dock-wrap { left: 50%; right: auto; transform: translateX(-50%); width: max-content; }
-  #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #lobby-sheet { left: 50%; right: auto; transform: translateX(-50%); width: min(24rem, calc(100vw - 32px)); }
+  #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #trainer-card, #dock-wrap #lobby-sheet { left: 50%; right: auto; transform: translateX(-50%); width: min(24rem, calc(100vw - 32px)); }
   #dock > button, #dock-replay button { width: 5.5rem; flex: none; }
 }
 /* A sheet over the dock hides the evaluation plate and the diagnostics box, which sit above the dock (#1032). */
@@ -968,7 +974,7 @@ body[data-openworld] #dock-wrap { display: none !important; }
 #dock-wrap button { transition: transform var(--motion-instant) var(--ease-out); }
 #dock-wrap button:active:not(:disabled) { transform: scale(0.96); }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(8px); } }
-#dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #lobby-sheet { animation: sheet-in var(--motion-base) var(--ease-out); }
+#dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #trainer-card, #dock-wrap #lobby-sheet { animation: sheet-in var(--motion-base) var(--ease-out); }
 
 /* HUD tally motion (#1095, docs/specs/motion.md story 5): a pip that has just gone out grows back to size on --motion-base, so a change
    in the count catches the eye. The pip and the score text already carry the number; reduced motion cuts the animation (rule above). */

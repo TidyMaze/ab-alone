@@ -158,6 +158,7 @@ import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
+import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, trainerBudget, waveLine, waveResult } from './trainer';
 import { generateKeys } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { beatPeriod } from './coordinator';
@@ -351,11 +352,13 @@ const fightView = (): View => {
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
 // camera himself and a new window size fits it again. Once he orbits or zooms, his view stays until Reset view.
 let fitted: View | null = null;
-const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : new Engine());
+const makeGame = (): Engine | Encounter => (fight ? new Encounter(fight.id, fight.seed) : trainer ? Engine.trainer(trainer.wave) : new Engine());
 // The battle royale (#502) while it is on, else null.
 let royale: Royale | null = null;
 // The rogue-lite run (#798) while it is on, else null: its map and where it stands.
 let run: { map: MapNode[]; state: Run } | null = null;
+// The Trainer run (#1159) while it is on, else null: the wave being played.
+let trainer: { wave: number } | null = null;
 // The special marble type a press on one of the army's marbles places before a fight (#961), 0 for none.
 let armed = 0;
 // Its rounds when it is an online one (#504), and the interval that lets their deadlines pass.
@@ -990,7 +993,10 @@ const modeMenu = document.getElementById('mode-menu')!;
 modeButton.innerHTML = icon('modes');
 let modesOpen = false;
 const moveModes = (event: MenuEvent): void => {
-  if (event === 'pick') leaveRun(); // another mode abandons the run (startRun starts its own after)
+  if (event === 'pick') {
+    leaveRun(); // another mode abandons the run (startRun starts its own after)
+    leaveTrainer();
+  }
   modesOpen = menuOpen(modesOpen, event);
   modeMenu.hidden = !modesOpen;
   modeButton.setAttribute('aria-expanded', String(modesOpen));
@@ -2194,7 +2200,7 @@ function stopAuto(): void {
 }
 function syncAuto(): void {
   const boss = engine instanceof Encounter ? engine.name() : null;
-  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null }, fight !== null && hasMedal(store, fight.id));
+  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null || trainer !== null }, fight !== null && hasMedal(store, fight.id));
   const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
   const reason = state.shown ? state.reason : null;
   const usable = state.shown && reason === null && !over;
@@ -2292,13 +2298,14 @@ async function botTurn(): Promise<void> {
   const current = fight;
   const game = liveGame();
   const started = performance.now();
-  const searchBudget = run ? fightBudget(run.map, run.state, scaleBudget(budget, difficulty)) : scaleBudget(budget, difficulty); // an elite searches more (#800)
+  const normal = run ? fightBudget(run.map, run.state, scaleBudget(budget, difficulty)) : scaleBudget(budget, difficulty); // an elite searches more (#800)
+  const searchBudget = trainer ? trainerBudget(trainer.wave, normal) : normal; // past a full army, the bot searches more (#1159)
   const diffPercent = (run && actBoss(run.map, run.state, boss_ids())?.percent) || DIFFICULTY_PERCENT[difficulty]; // an act boss at its act's strength
   let move: number[];
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed, run ? foesOf(run.map, run.state) : undefined),
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed, run ? foesOf(run.map, run.state) : undefined, trainer?.wave),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
@@ -2374,7 +2381,7 @@ function playMove(record: number[]): void {
   afterPlay(before, record);
   const spark = sparkBurst(before, specials, parseMoves(record)[0]!);
   if (spark && !reducedMotion()) burstSpark(spark);
-  if (!online && (!fight || stalkerSaved()) && !run) void saves.save(savedGame(), engine.status() !== 0);
+  if (!online && (!fight || stalkerSaved()) && !run && !trainer) void saves.save(savedGame(), engine.status() !== 0);
   if (run?.state.fighting) runMoved();
   analyse();
 }
@@ -3014,7 +3021,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer.wave)}` : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -3031,7 +3038,7 @@ function drawHud(extra = ''): void {
   hudEjected = ejected; // the next render moves only the pips that are new (#1095)
   rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
-  exportButton.hidden = importButton.hidden = online !== null || fight !== null || run !== null; // local games only (#219)
+  exportButton.hidden = importButton.hidden = online !== null || fight !== null || run !== null || trainer !== null; // local games only (#219)
   syncHint();
   // The goal is shown once (#1032): the Goal sheet holds it while open, the HUD line only before the first move.
   const sheetOpen = goalOpen && engine instanceof Encounter && status === 0;
@@ -3108,6 +3115,7 @@ function drawHud(extra = ''): void {
     document.getElementById('hud')!.insertAdjacentHTML('beforeend', rankedHudHtml(loadRankedProfile(store).rating1v1, { queueWindow, delta: rankedDelta }));
   }
   showResultCard();
+  showTrainerCard();
 }
 
 /** Stalker's veil over the cells out of range and the rings of the bot's last move in range (#998). */
@@ -4398,7 +4406,11 @@ addEventListener('keydown', (e) => {
 addEventListener('pointerdown', (e) => {
   if (goalOpen && !within(goalSheet, e.target) && !within(goalButton, e.target)) closeGoal();
 });
+<<<<<<< HEAD
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom))); // a lair's retry stays the lair's (#1170)
+=======
+retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
+>>>>>>> d9c34f4 (feat(client): Trainer mode, 1 vs 1 against a bot that gets one more marble each wave (#1159))
 
 // The hub (#521, game-design.md section 3.5): Ship draws the map of the saved deck, in that deck's look, with the
 // player's glass marble on the saved cell. A click on a neighbour cell or an arrow key rolls it one cell (hub.ts step),
@@ -4938,6 +4950,64 @@ runPanel.addEventListener('click', (e) => {
 });
 runButton.addEventListener('click', beginRun);
 runButton.disabled = false; // listener ready (#146)
+// Trainer (#1159): a 1 vs 1 against the bot, which starts with one marble and gets one more each wave, until the player
+// loses 6 marbles in a wave. The score is the highest wave survived, kept in the storage. Retry starts again at wave 1.
+const trainerButton = document.getElementById('trainer') as HTMLButtonElement;
+const trainerCard = document.getElementById('trainer-card')!;
+const trainerText = document.getElementById('trainer-text')!;
+const trainerNext = document.getElementById('trainer-next') as HTMLButtonElement;
+function startTrainer(wave: number): void {
+  trainer = null; // moveModes('pick') below leaves the old one
+  moveModes('pick');
+  leaveOnline();
+  leaveRoyale();
+  leaveHub();
+  applyDeck(deckOf('local'));
+  worker = botWorker;
+  fight = null;
+  delete document.body.dataset.boss;
+  trainer = { wave };
+  engine = Engine.trainer(wave);
+  history.length = 0;
+  replaying = null;
+  selected = [];
+  thinking = false; // a bot reply to the old wave is dropped (botTurn)
+  view = resetView(4);
+  applyView();
+  roomOf = null;
+  stopAnalysis(); // no bar and no hint, as in a run (fair play, #164)
+  newGameButton.hidden = true;
+  retryButton.hidden = false;
+  document.body.dataset.trainer = String(wave); // read by the e2e tests
+  refresh();
+}
+function leaveTrainer(): void {
+  if (!trainer) return;
+  trainer = null;
+  delete document.body.dataset.trainer;
+  retryButton.hidden = true;
+  newGameButton.hidden = false;
+}
+/** The HUD line of the wave; once it is over, the waves survived so far are kept as the best when it is the most yet. */
+function trainerNote(wave: number): string {
+  if (engine.status() !== 0) recordTrainerBest(store, waveResult(wave, engine.status()).survived);
+  return waveLine(wave, readTrainerBest(store));
+}
+/** The result card of a wave that is over, hidden otherwise. */
+function showTrainerCard(): void {
+  const over = trainer && engine.status() !== 0;
+  trainerCard.hidden = !over;
+  if (!trainer || !over) return;
+  const result = waveResult(trainer.wave, engine.status());
+  trainerText.replaceChildren(...trainerResult(result, trainer.wave, readTrainerBest(store)).map((line) => Object.assign(document.createElement('p'), { textContent: line })));
+  trainerNext.hidden = result.kind === 'lost';
+}
+trainerNext.addEventListener('click', () => startTrainer(trainer!.wave + 1));
+trainerButton.addEventListener('click', () => startTrainer(1));
+trainerButton.disabled = false; // listener ready (#146)
+// Used by the browser checks to start the Trainer at a wave (#1159), and to read the board.
+(window as unknown as Record<string, unknown>).__trainer = startTrainer;
+(window as unknown as Record<string, unknown>).__board = () => Array.from(engine.board());
 // The Open world (#962, docs/specs/openworld.md): its own scene, drawn by this renderer in place of the board's while it
 // is on. Its entry is in the mode menu for everyone (#1000). ?openworld=<seed> fixes the seed, ?openworld=new starts a fresh
 // random world; else a click resumes the last world played when it has a save (#968), or rolls a new seed.

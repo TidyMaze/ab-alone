@@ -6,7 +6,7 @@ use crate::convert::{
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
-use abalone_core::run::army_game_against;
+use abalone_core::run::{army_game_against, trainer_game};
 use abalone_core::search::{best_move, position_score};
 use wasm_bindgen::prelude::*;
 
@@ -29,6 +29,14 @@ impl Engine {
     pub fn with_army(army: u8, foes: u8) -> Engine {
         Engine {
             game: army_game_against(army, foes),
+        }
+    }
+
+    /// A Trainer wave (#1159): the player's 14 marbles (Black) against the bot's `wave` marbles,
+    /// clamped to 1..=14. Black wins once all of them are out, or on a draw; White at 6 ejections.
+    pub fn trainer(wave: u8) -> Engine {
+        Engine {
+            game: trainer_game(wave),
         }
     }
 
@@ -149,6 +157,16 @@ mod tests {
         let fight = Engine::with_army(14, 10);
         assert_eq!(count(&fight.board(), 1), 14);
         assert_eq!(count(&fight.board(), 2), 10);
+    }
+
+    #[test]
+    fn trainer_starts_a_wave_of_that_many_white_marbles() {
+        let engine = Engine::trainer(3);
+        assert_eq!(count(&engine.board(), 1), 14);
+        assert_eq!(count(&engine.board(), 2), 3);
+        assert_eq!(engine.win_ejections(1), 3);
+        assert_eq!(engine.win_ejections(2), 6);
+        assert_eq!(engine.status(), 0);
     }
 
     #[test]

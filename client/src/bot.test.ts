@@ -94,10 +94,11 @@ describe('answer', () => {
 
   it('replays a rogue-lite fight on an engine of its army and its special marbles, #798 #961', () => {
     const made: unknown[][] = [];
-    const make = (army?: number, placed?: number[][], foes?: number) => (made.push([army, placed, foes]), new FakeEngine());
+    const make = (army?: number, placed?: number[][], foes?: number, trainer?: number) => (made.push([army, placed, foes, trainer]), new FakeEngine());
     answer({ id: 9, history: [], nodes: 5, army: 9, placed: [[0, 4, 1]], foes: 10 }, make, noEncounter);
     answer({ id: 10, history: [], nodes: 5 }, make, noEncounter);
-    expect(made).toEqual([[9, [[0, 4, 1]], 10], [undefined, undefined, undefined]]);
+    answer({ id: 11, history: [], nodes: 5, trainer: 5 }, make, noEncounter);
+    expect(made).toEqual([[9, [[0, 4, 1]], 10, undefined], [undefined, undefined, undefined, undefined], [undefined, undefined, undefined, 5]]);
   });
 
   it('builds the engine of a request: a plain game, or an army with its special marbles placed, #961', () => {
@@ -108,6 +109,9 @@ describe('answer', () => {
       static with_army(army: number, foes: number): Board {
         return Object.assign(new Board(), { army, foes });
       }
+      static trainer(wave: number): Board {
+        return Object.assign(new Board(), { army: 100 + wave });
+      }
       place_special(q: number, r: number, kind: number): void {
         placedOn.push([this.army, q, r, kind]);
       }
@@ -116,6 +120,7 @@ describe('answer', () => {
     expect(engineFor(Board, 9).army).toBe(9);
     expect(engineFor(Board, 9).foes).toBe(14);
     expect(engineFor(Board, 9, [], 10).foes).toBe(10);
+    expect(engineFor(Board, undefined, [], 14, 3).army).toBe(103); // a Trainer wave, #1159
     engineFor(Board, 9, [[0, 4, 1], [1, 3, 3]]);
     expect(placedOn).toEqual([[9, 0, 4, 1], [9, 1, 3, 3]]);
   });
@@ -149,6 +154,13 @@ describe('askBot', () => {
     const posted = vi.spyOn(worker, 'postMessage');
     await askBot(worker, [], 50, undefined, undefined, undefined, 7, [[0, 4, 1]], 10);
     expect(posted.mock.calls[0]![0]).toMatchObject({ army: 7, placed: [[0, 4, 1]], foes: 10 });
+  });
+
+  it('posts the wave of a Trainer game, #1159', async () => {
+    const worker = fakeWorker();
+    const posted = vi.spyOn(worker, 'postMessage');
+    await askBot(worker, [], 50, undefined, undefined, undefined, undefined, undefined, undefined, 4);
+    expect(posted.mock.calls[0]![0]).toMatchObject({ trainer: 4 });
   });
 
   it('round-trips a request and resolves with the move of the matching reply', async () => {
