@@ -7,10 +7,19 @@ const rule = (selector: string): string => css.match(new RegExp(`^${selector.rep
 describe('the Open world HUD plate (#1138)', () => {
   it('is the dark plate with light ink and the amber accent, in both themes', () => {
     const plate = rule('#openworld-hud');
-    expect(plate).toContain('--panel: #161a1d');
-    expect(plate).toContain('--text: #d8d4c8');
-    expect(plate).toContain('--edge: #4a5258');
-    expect(plate).toContain('--accent: #ffb000');
+    expect(plate).toContain('background-color: var(--panel)');
+    expect(plate).toContain('color: var(--text)');
+    expect(plate).toContain('border: 1px solid var(--edge)');
+    expect(plate).toContain('border-radius: var(--r-card)');
+    expect(plate).toContain('--accent: var(--plate-accent)');
+    expect(plate).not.toContain('--panel:');
+    expect(plate).not.toContain('--edge:');
+  });
+
+  it('has no local hex colour on the plate, its buttons or the chip (#1172): they follow the theme and the palette', () => {
+    for (const selector of ['#openworld-hud', '#openworld-chip', '#openworld-hud button', '#openworld-hud button:focus-visible', '#openworld-hud button:active', '#openworld-chip:focus-visible', '#openworld-chip:active']) {
+      expect(rule(selector), selector).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
+    }
   });
 
   it('is bolted like the other plates: a rivet in each corner', () => {
@@ -27,26 +36,27 @@ describe('the Open world HUD plate (#1138)', () => {
     expect(rule('#openworld-hud')).toContain('transition: opacity var(--motion-base)');
   });
 
-  it('leaves a chip in the bottom-left corner, a 44 px target in the plate style, only in the world and only while folded', () => {
+  it('leaves a chip in the bottom-left corner, the same radius as the plate, a target of the shared size, only in the world and only while folded', () => {
     const chip = rule('#openworld-chip');
-    expect(chip).toContain('min-width: 2.75rem');
-    expect(chip).toContain('min-height: 2.75rem');
+    expect(chip).toContain('min-width: var(--target)');
+    expect(chip).toContain('min-height: var(--target)');
+    expect(chip).toContain('border-radius: var(--r-card)');
     expect(chip).toContain('left: 1rem');
     expect(chip).toContain('bottom: 1rem');
-    expect(chip).toContain('border: 1px solid #4a5258');
-    expect(chip).toContain('color: #ffb000');
+    expect(chip).toContain('border: 1px solid var(--edge)');
+    expect(chip).toContain('background: var(--panel)');
+    expect(chip).toContain('color: var(--plate-accent)');
     expect(css).toContain('body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }');
   });
 
   it('styles the plate buttons like the redesigned ones: dark steel, light ink, 48 px, 6 px radius, uppercase, amber focus and press', () => {
     const button = rule('#openworld-hud button');
-    expect(button).toContain('min-height: 3rem');
-    expect(button).toContain('border-radius: 6px');
+    expect(button).toContain('min-height: var(--target)');
+    expect(button).toContain('border-radius: var(--r-button)');
     expect(button).toContain('text-transform: uppercase');
-    expect(button).toContain('background: #2a3036');
-    expect(button).toContain('color: #d8d4c8');
-    expect(rule('#openworld-hud button:focus-visible')).toContain('outline: 2px solid #ffb000');
-    expect(rule('#openworld-hud button:active')).toContain('border-color: #ffb000');
+    expect(button).toContain('color: var(--text)');
+    expect(rule('#openworld-hud button:focus-visible')).toContain('outline: 2px solid var(--plate-accent)');
+    expect(rule('#openworld-hud button:active')).toContain('border-color: var(--plate-accent)');
   });
 
   it('draws the joystick as a steel ring round an open middle', () => {
