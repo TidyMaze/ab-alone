@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours, World } from './openworld';
-import { heldCell, OpenWorldMode, ORBIT_PER_PX, stepOf, TURN_STEP, twistOf } from './openworldmode';
+import { heldCell, OpenWorldMode, ORBIT_PER_PX, stepOf, steerStep, TURN_STEP, twistOf } from './openworldmode';
 import { arrowCell } from './hubview';
 import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
@@ -370,9 +370,9 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     expect(body().openworldAt).toBe('1,0');
     expect(tap(m, 'ArrowRight')).toBe(true); // onto (2,0), its old cell: free
     expect(body().openworldAt).toBe('2,0');
-    tap(m, 'ArrowRight'); // onto (3,0): the pushed enemy stands there
-    expect(body().openworldAt).toBe('2,0');
-    expect(push).toHaveBeenCalledTimes(2); // the refused step asks the bridge for nothing
+    tap(m, 'ArrowRight'); // (3,0) holds the pushed enemy: the hero goes round it by (3,-1), never onto it (#1137)
+    expect(body().openworldAt).toBe('3,-1');
+    expect(push).toHaveBeenCalledTimes(3);
   });
 
   it('plays nothing when the bridge gives no push: the enemies stay and no push is counted', () => {
@@ -867,6 +867,63 @@ describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026
   });
 });
 
+describe('steerStep: the semi-auto step round an obstacle (#1137)', () => {
+  const freeExcept = (...walls: Axial[]) => (cell: Axial) => !walls.some((w) => w[0] === cell[0] && w[1] === cell[1]);
+  const E: Axial = [1, 0];
+  const NE: Axial = [1, -1];
+  const SE: Axial = [0, 1];
+  it('takes the straight cell when it is free', () => {
+    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept())).toEqual(E);
+  });
+  it('goes round a rock ahead by the free side, the first direction when both are free', () => {
+    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E))).toEqual(NE);
+    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, NE))).toEqual(SE);
+    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, SE))).toEqual(NE);
+  });
+  it('slides to the side the intent follows best', () => {
+    // Right and Up together: the intent leans to the NE side of the east cell, so with the straight cell (NE) shut it takes E.
+    const up = held('ArrowRight', 'ArrowUp');
+    expect(stepOf([0, 0], up, 0)).toEqual(NE);
+    expect(steerStep([0, 0], up, 0, freeExcept(NE))).toEqual(E);
+    expect(steerStep([0, 0], up, 0, freeExcept(NE, E))).toEqual([0, -1]);
+  });
+  it('gives the blocked straight cell in a dead end (water, a wall, a cliff), so the hero leans, and nothing without an intent', () => {
+    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, NE, SE))).toEqual(E);
+    expect(steerStep([0, 0], held(), 0, freeExcept())).toBeNull();
+    expect(steerStep([0, 0], held('ArrowLeft', 'ArrowRight'), 0, freeExcept())).toBeNull();
+  });
+  it('never steps back: the cells behind the intent are not taken', () => {
+    expect(steerStep([0, 0], held('ArrowRight'), 0, (c) => c[0] < 0 || (c[0] === 0 && c[1] === -1))).toEqual(E);
+  });
+});
+
+describe('a held arrow slides round an obstacle instead of leaning (#1137)', () => {
+  afterEach(() => vi.restoreAllMocks());
+  it('goes round an enemy ahead without a lean, and leans only when the sides are shut too', () => {
+    const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
+    const m = mode(undefined, undefined, () => false, undefined, noPush);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[1, 0]] });
+    m.key('ArrowRight');
+    m.release('ArrowRight');
+    expect(m.hero!.at).toEqual([1, -1]);
+    expect(nudge).not.toHaveBeenCalled();
+    m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[1, 0], [1, -1], [0, 1]] });
+    m.key('ArrowRight');
+    m.release('ArrowRight');
+    expect(m.hero!.at).toEqual([0, 0]);
+    expect(nudge).toHaveBeenCalledTimes(1);
+  });
+  it('goes round a boulder and stops at the edge of the world', () => {
+    const m = mode(undefined, undefined, () => true, undefined, noPush);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [], enemies: [] });
+    m.key('ArrowDown'); // the boulder of the test world is on (0, 1); down-right-ish steps round it
+    m.release('ArrowDown');
+    expect(m.hero!.at).not.toEqual([0, 0]);
+  });
+});
+
 describe('the keys turn the camera by a step, and a drag or a twist turns it too (#1026)', () => {
   it('Q and E turn the view a step each way, R goes back to the default angle, and the yaw is published in degrees', () => {
     const m = mode();
@@ -1021,7 +1078,7 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     let clock = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => clock);
     const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
-    const m = standing(false, [[1, 0]]); // an enemy on (1,0): a Right key into the wall leans the hero, each step of the cadence
+    const m = standing(false, [[1, 0], [1, -1], [0, 1]]); // a wall of enemies ahead: a Right key leans the hero, each step of the cadence
     m.frame(vi.fn(), 0);
     m.key('ArrowRight'); // at 0 ms: the first lean at once
     const render = vi.fn();
@@ -1038,10 +1095,10 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
 
   it('leans the hero toward a cell a blocked step names, for the nudge time, and not under reduced motion', () => {
     const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
-    tap(standing(false, [[1, 0]]), 'ArrowRight'); // an enemy on (1,0) blocks it
+    tap(standing(false, [[1, 0], [1, -1], [0, 1]]), 'ArrowRight'); // a wall of enemies blocks it
     expect(nudge).toHaveBeenCalledWith([0, 0], [1, 0], expect.any(Number), NUDGE_MS);
     nudge.mockClear();
-    tap(standing(true, [[1, 0]]), 'ArrowRight');
+    tap(standing(true, [[1, 0], [1, -1], [0, 1]]), 'ArrowRight');
     expect(nudge).not.toHaveBeenCalled();
   });
 });
@@ -1182,7 +1239,7 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
     const m = mode(undefined, undefined, () => false, undefined, noPush);
     m.enter(1, 800, 600);
-    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[1, 0]] }); // an enemy on (1,0): a wall
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[1, 0], [1, -1], [0, 1]] }); // enemies ahead: a wall
     m.key('ArrowRight');
     expect(nudge).toHaveBeenCalledTimes(1);
     m.release('ArrowRight');

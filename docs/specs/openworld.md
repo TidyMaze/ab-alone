@@ -78,6 +78,12 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 - **Hero**: one glass marble, moved one cell at a time (click a neighbour, or the arrow keys, as
   in the hub, section 3.5 of `game-design.md`). A held arrow keeps walking: the first cell is taken on the
   keydown, then one cell per glide (140 ms) while the arrow is held, whatever the system's key repeat (#1059).
+- **Steering** (#1137): a held direction (arrow, stick) is an *intent*, an angle on the ground. Each step takes the cell of
+  that direction when the hero can enter it. When it cannot (a rock, a tree, water, a wall, a cliff, an enemy), the hero takes
+  the free one of the two neighbours 60 degrees to the side that the intent follows best; if both follow it equally, the lower
+  direction index (E, W, NE, SW, NW, SE). It never steps back or to a cell 120 degrees off. When no side is free, it leans and
+  stops as before (#1040). Only legal steps: the same `Hero.step` rules. Not built yet: the setting to turn it off and the HUD
+  line for the mode, and the tap-to-walk destination (A*), each its own piece.
 - **Troop**: 6 marbles at the start. After each hero step each troop marble takes the place of the
   one before it in the trail, and the first takes the cell the hero left. No decision of the player.
 - **Automatic attack**: after its step, the troop attacks when a line of 2 or 3 of its marbles,

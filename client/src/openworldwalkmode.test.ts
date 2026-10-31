@@ -11,12 +11,13 @@ import type { OpenWorldView } from './openworldview';
 // #1065: a held walk draws the hero at one speed from cell to cell, the camera follows it; a step begins on the frame that is due
 // and is drawn on it; the release slows the step under way to a rest on its cell; a single tap eases out.
 
-// Grass at height 1; a wall of boulders on the cells with q = 3 of the first chunk when `walled`.
+// Grass at height 1; when `walled`, boulders on (3, 0), (3, -1) and (2, 1): a pocket at (2, 0) with no free way on (#1137).
 const land = (walled: boolean) => (_seed: number, cx: number, cy: number): Uint8Array => {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
   const out = new Uint8Array(CHUNK * CHUNK * 3);
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
-  if (walled && cx === 0 && cy === 0) for (let r = 0; r < CHUNK; r++) out.set([1, 5, 0], (r * CHUNK + 3) * 3);
+  if (walled && cx === 0 && cy === 0) for (const [q, r] of [[3, 0], [2, 1]]) out.set([1, 5, 0], (r! * CHUNK + q!) * 3);
+  if (walled && cx === 0 && cy === -1) out.set([1, 5, 0], (15 * CHUNK + 3) * 3);
   return out;
 };
 const make = (reduced: boolean, walled = false): OpenWorldMode => {

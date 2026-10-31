@@ -3,8 +3,7 @@ import { BLACK_WINS } from './end-games';
 import { openModes } from './modes';
 
 // #962: the Open world mode, behind ?openworld=<seed>: the hero rolls over the generated world, an obstacle stops it, and
-// Escape leaves to the board. The test does not name the blocked cell (a change of the terrain constants moves it, #1002): it
-// walks right until a press moves nothing, at most 200 steps.
+// Escape leaves to the board. The blocked cell comes from the test hook, not from the terrain constants (#1002, #1137).
 test('the hero rolls over the Open world, an obstacle stops it, and Escape leaves, #965', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
@@ -13,18 +12,21 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await expect(page.locator('#openworld-hud')).toBeVisible(); // the plate shows at the load, before it folds (#1138)
-  let before = '0,0';
-  let stopped = false;
-  for (let i = 0; i < 200 && !stopped; i++) {
-    await page.keyboard.press('ArrowRight');
-    const now = (await at())!;
-    stopped = now === before;
-    before = now;
-  }
-  expect(stopped, 'something blocks the way right within 200 steps').toBe(true);
-  expect(before).not.toBe('0,0'); // it rolled before it was stopped
-  await page.keyboard.press('ArrowRight'); // still blocked
-  await expect.poll(at).toBe(before);
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight'); // it rolls over the world (3 steps fold the plate, #1138)
+  await expect.poll(at).not.toBe('0,0');
+  // a wall of enemies on the three cells ahead (the test hook): no side is free, so the held steering has nowhere to go (#1137)
+  const here = (await at())!.split(',').map(Number) as [number, number];
+  await page.evaluate(([q, r]) => {
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
+      hero: [q, r],
+      troop: [[q - 1, r]],
+      enemies: [[q + 1, r], [q + 1, r - 1], [q, r + 1]],
+    });
+  }, here);
+  const before = here.join(',');
+  await page.keyboard.press('ArrowRight'); // blocked
+  await page.waitForTimeout(300);
+  expect(await at()).toBe(before);
   // the cell it came from is open: the step is made, and a push of the troop may carry the hero back onto its cell (#967)
   const pushes = () => page.evaluate(() => document.body.dataset.openworldPush);
   const pushesBefore = await pushes();
@@ -641,4 +643,27 @@ test('the Open world HUD plate is dark with four rivets, #1138', async ({ page }
   await expect(plate).toHaveCSS('background-color', 'rgb(22, 26, 29)');
   const image = await plate.evaluate((el) => getComputedStyle(el).backgroundImage);
   expect(image.match(/radial-gradient/g)).toHaveLength(4);
+});
+
+// #1137: a held direction goes round an obstacle by itself. An enemy stands on the cell right of the hero (the loaded state comes
+// from the test hook): the Right key takes the free side cell instead of leaning, and it still stops where every side is shut.
+test('a held arrow goes round an obstacle instead of stopping, #1137', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  const fixture = (enemies: number[][]) =>
+    page.evaluate((foes) => {
+      (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0]], enemies: foes });
+    }, enemies);
+  await fixture([[1, 0]]);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(at).toBe('1,-1'); // round the rock by its north-east side, no lean
+  await page.screenshot({ path: test.info().outputPath('steer.png') });
+  await fixture([[1, 0], [1, -1], [0, 1]]);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(300);
+  expect(await at()).toBe('0,0'); // every side is shut: it stays
 });
