@@ -178,8 +178,8 @@ import { icon } from './icons';
 import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
-import { POOL, poolPixels, readRoom, roomRig } from './roomrefined';
-import { FLOOR, WALL, floorPixels, gantryArches, props as decorProps, wallPixels, wallStrips, type DecorPart } from './roomdecor';
+import { DECK_TINTS, POOL, poolPixels, readRoom, roomRig } from './roomrefined';
+import { FLOOR, GLOW, WALL, floorPixels, gantryArches, glowRingPixels, props as decorProps, refineBay, rivetPoints, wallPixels, wallStrips, type DecorPart } from './roomdecor';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
@@ -1818,8 +1818,36 @@ const planeMesh = (geometry: THREE.BufferGeometry, map: THREE.Texture, roughness
   return mesh;
 };
 const wallMesh = (): THREE.Mesh => planeMesh(new THREE.PlaneGeometry(WALL.width, WALL.height), decorWall, 0.8, [0, WALL.y, WALL.z]);
-const floorMesh = (): THREE.Mesh =>
-  planeMesh(new THREE.PlaneGeometry(FLOOR.size, FLOOR.size).rotateX(-Math.PI / 2), floorTexture, 0.7, [0, ROOM_SURFACE.y + 0.004, 0]);
+const floorMesh = (): THREE.Mesh => {
+  const mesh = planeMesh(new THREE.PlaneGeometry(FLOOR.size, FLOOR.size).rotateX(-Math.PI / 2), floorTexture, 0.7, [0, ROOM_SURFACE.y + 0.004, 0]);
+  Object.assign(mesh.material, { transparent: true, depthWrite: false });
+  return mesh;
+};
+// The soft ring of the deck's tint round the board, an additive decal, not a light.
+const glowTexture = decorTexture(glowRingPixels(128), 128);
+const glowMesh = (tint: number): THREE.Mesh => {
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(GLOW.size, GLOW.size).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: glowTexture, color: tint, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+  );
+  mesh.position.y = ROOM_SURFACE.y + 0.006;
+  return mesh;
+};
+// Rivets along the frame's rim and a thin cyan line on its inner edge, made again with each frame (#1138).
+const trim = new THREE.Group();
+const rivetGeometry = new THREE.SphereGeometry(0.035, 6, 4);
+const rivetMaterial = new THREE.MeshStandardMaterial({ color: 0x9aa3ab, roughness: 0.4, metalness: 0.7 });
+const edgeLineMaterial = new THREE.LineBasicMaterial({ color: 0x6fa8dc });
+function drawTrim(shape: FrameShape): void {
+  for (const child of trim.children) (child as THREE.Line).geometry?.dispose();
+  trim.clear();
+  const rivets = rivetPoints(shape.outer, 0.5);
+  const mesh = new THREE.InstancedMesh(rivetGeometry, rivetMaterial, rivets.length);
+  rivets.forEach((p, i) => mesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(p.x, 0.31, p.z)));
+  const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(shape.inner.map((p) => new THREE.Vector3(p.x, 0.31, p.z))), edgeLineMaterial);
+  trim.add(mesh, line);
+}
+sceneRenderer.scene.add(trim);
 const poolTexture = Object.assign(new THREE.DataTexture(poolPixels(64), 64, 64), { colorSpace: THREE.SRGBColorSpace, needsUpdate: true });
 drawProps = (): void => {
   for (const mesh of propMeshes) {
@@ -1958,7 +1986,7 @@ drawProps = (): void => {
       propsGroup.add(mesh);
       propMeshes.push(mesh);
     }
-    for (const [name, mesh] of [['wall', wallMesh()], ['floor', floorMesh()]] as const) {
+    for (const [name, mesh] of [['wall', wallMesh()], ['floor', floorMesh()], ['glow', glowMesh(DECK_TINTS[deck])]] as const) {
       mesh.name = name;
       propsGroup.add(mesh);
       propMeshes.push(mesh);
@@ -1977,6 +2005,7 @@ drawProps = (): void => {
   if (!refined) propsGroup.add(...Object.values(lights));
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
+    if (refined) refineBay(currentBay.materials);
     propsGroup.add(currentBay.scene);
   }
   refreshLights();
@@ -2007,6 +2036,7 @@ function drawFrame(board: ArrayLike<number>): void {
   const next = sceneRenderer.drawFrame(board);
   if (!next) return;
   frame = next;
+  if (refined) drawTrim(next);
   fogRadius = next.radius;
   applyLook();
 }

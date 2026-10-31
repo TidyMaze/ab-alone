@@ -43,9 +43,9 @@ export function roomRig(deck: Deck, boss: boolean): RigLight[] {
   const rig: RigLight[] = [
     { name: 'key', color: 0xf2f4f6, power: 110, reach: 40, position: [0, 12, 0] },
     { name: 'fill', color: 0xdfe6ee, power: 40, reach: 40, position: [0, 6, 12] },
-    { name: 'strip 1', color: tint, power: 45, reach: 24, position: [-12, 5, -8] },
-    { name: 'strip 2', color: tint, power: 45, reach: 24, position: [12, 5, -8] },
-    { name: 'strip 3', color: tint, power: 45, reach: 24, position: [0, 8, -16] },
+    { name: 'strip 1', color: tint, power: 18, reach: 24, position: [-12, 5, -8] },
+    { name: 'strip 2', color: tint, power: 18, reach: 24, position: [12, 5, -8] },
+    { name: 'strip 3', color: tint, power: 18, reach: 24, position: [0, 8, -16] },
   ];
   if (boss) rig.push({ name: 'rim', color: 0xffb000, power: 40, reach: 24, position: [0, 4, -12] });
   return rig;

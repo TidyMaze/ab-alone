@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DECK_NAMES } from './deck';
 import { DECK_TINTS } from './roomrefined';
-import { AMBER, FLOOR, STEELS, floorPixels, gantryArches, props, wallPixels, wallStrips } from './roomdecor';
+import * as THREE from 'three/webgpu';
+import { AMBER, BAY, FLOOR, GLOW, glowRingPixels, refineBay, rivetPoints, STEELS, floorPixels, gantryArches, props, wallPixels, wallStrips } from './roomdecor';
 
 describe('the refined room decor (#1138)', () => {
   it('has three wall strips: two in the deck tint, one amber, all lit', () => {
@@ -42,16 +43,55 @@ describe('the refined room decor (#1138)', () => {
     expect(at(5, 5)).toBe(0x5a);
   });
 
-  it('paints the floor as plated steel with a 1 px grid and the amber hazard band', () => {
+  it('marks the floor with amber hazard stripes at the near side and nothing else', () => {
     const size = 64;
     const px = floorPixels(size);
-    const rgb = (x: number, y: number): number[] => [...px.slice((y * size + x) * 4, (y * size + x) * 4 + 3)];
+    const rgba = (x: number, y: number): number[] => [...px.slice((y * size + x) * 4, (y * size + x) * 4 + 4)];
     const rowOf = (z: number): number => Math.floor((z / FLOOR.size + 0.5) * size);
-    expect(rgb(4, 2)).toEqual([0x1c, 0x21, 0x26]); // a grid line
-    expect(rgb(3, 3)).toEqual([0x34, 0x3a, 0x41]); // a plate
-    const band = Array.from({ length: size }, (_, x) => rgb(x, rowOf(10)));
-    expect(band).toContainEqual([0xff, 0xb0, 0x00]);
-    expect(band).toContainEqual([0x16, 0x18, 0x1a]);
-    expect(rgb(3, rowOf(5))).toEqual([0x34, 0x3a, 0x41]); // no band elsewhere
+    const band = Array.from({ length: size }, (_, x) => rgba(x, rowOf(8.2)));
+    expect(band).toContainEqual([0xff, 0xb0, 0x00, 255]);
+    expect(band).toContainEqual([0x16, 0x18, 0x1a, 255]);
+    expect(rgba(3, rowOf(5))).toEqual([0, 0, 0, 0]);
+    expect(rgba(3, rowOf(10))).toEqual([0, 0, 0, 0]);
+  });
+
+  it('restyles the bay materials: darker steel, finer grate, calmer floor, crisp amber chevrons, the conduit chevrons amber', () => {
+    const tex = (): THREE.Texture => new THREE.Texture();
+    const mat = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ map: tex(), emissive: 0x38e8ff, emissiveIntensity: 2.5 });
+    const m = { deck: mat(), grate: Object.assign(mat(), { normalMap: tex() }), conduit: mat(), hazard: mat() };
+    m.grate.map!.repeat.set(0.05, 0.05);
+    refineBay(m);
+    refineBay(m); // the second call changes nothing more
+    expect(m.grate.color.getHex()).toBe(BAY.grate);
+    expect(m.grate.map!.repeat.x).toBeCloseTo(0.05 * BAY.grateRepeat);
+    expect(m.grate.normalMap!.repeat.x).toBeCloseTo(BAY.grateRepeat);
+    expect(m.deck.color.getHex()).toBe(BAY.deck);
+    expect(m.deck.normalScale.x).toBe(BAY.deckNormal);
+    expect(m.hazard.color.getHex()).toBe(AMBER);
+    expect(m.hazard.emissiveIntensity).toBe(BAY.hazardGlow);
+    expect(m.conduit.emissive.getHex()).toBe(AMBER);
+    expect(m.conduit.emissiveIntensity).toBe(BAY.conduitGlow);
+    const bare = { deck: mat(), grate: new THREE.MeshStandardMaterial() }; // no conduit, no hazard, no maps: nothing to restyle there
+    refineBay(bare);
+    expect(bare.grate.color.getHex()).toBe(BAY.grate);
+  });
+
+  it('puts rivets along the edges of an outline, one every spacing at most', () => {
+    const square = [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 2, z: 2 }, { x: 0, z: 2 }];
+    const pts = rivetPoints(square, 1);
+    expect(pts).toHaveLength(8);
+    expect(pts[0]).toEqual({ x: 0, z: 0 });
+    expect(pts[1]).toEqual({ x: 1, z: 0 });
+    expect(rivetPoints([{ x: 0, z: 0 }, { x: 0.1, z: 0 }], 1)).toHaveLength(2); // a short edge still holds its first rivet
+  });
+
+  it('bakes a soft ring of tint: clear in the middle and at the edge, strongest between the radii', () => {
+    const size = 64;
+    const px = glowRingPixels(size);
+    const alpha = (x: number, y: number): number => px[(y * size + x) * 4 + 3]!;
+    const mid = Math.round(size / 2 + ((GLOW.inner + GLOW.outer) / 2 / GLOW.size) * size);
+    expect(alpha(32, 32)).toBe(0);
+    expect(alpha(0, 0)).toBe(0);
+    expect(alpha(mid, 32)).toBeGreaterThan(200);
   });
 });
