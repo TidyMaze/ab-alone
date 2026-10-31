@@ -1,0 +1,19 @@
+name: CI (docs only)
+
+# `rust` is the required check (#409), and ci.yml ignores docs-only changes, so it never reports on them and the merge is blocked.
+# This workflow reports it for exactly those paths: a PR that touches only them is green at once. A PR that also touches code
+# runs both workflows, and the real `rust` of ci.yml still has to pass.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths: ['**.md', 'docs/**', '.github/ISSUE_TEMPLATE/**', '.github/dependabot.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "docs-only change, nothing to build"
