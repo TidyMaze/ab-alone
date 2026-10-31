@@ -28,6 +28,7 @@ export interface SpaceshipBayAssets {
     grate: THREE.MeshStandardMaterial;
     trench?: THREE.MeshStandardMaterial;
     conduit?: THREE.MeshStandardMaterial;
+    hazard?: THREE.MeshStandardMaterial;
   };
 }
 
@@ -199,6 +200,7 @@ export async function loadSpaceshipBay(
         grate: grateMat,
         trench: trenchMat,
         conduit: conduitMat,
+        hazard: hazardMat,
       },
     };
   } catch {
