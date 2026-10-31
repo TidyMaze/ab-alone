@@ -1944,6 +1944,43 @@ drawProps = (): void => {
   }
   refreshLights();
 };
+// The Pulsar's fight is drawn in space (#1146): the bay's meshes leave the camera's layer (the lamps stay lit), a field of
+// stars and a distant glow take the backdrop. Any other game gets the bay back. Redone with the props (drawProps).
+const BAY_LAYER = 1; // out of the camera's layer 0
+// One flat sheet far under the plate (the camera looks down), painted once: the stars and a soft distant glow.
+const space = (() => {
+  const canvas = createCanvasTexture(1024, 1024, (g, w, h) => {
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, w, h);
+    const glow = g.createRadialGradient(w * 0.2, h * 0.25, 0, w * 0.2, h * 0.25, w * 0.22);
+    glow.addColorStop(0, 'rgba(110,150,255,0.3)');
+    glow.addColorStop(1, 'rgba(110,150,255,0)');
+    g.fillStyle = glow;
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#dfe8ff';
+    for (let i = 0; i < 600; i++) g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random(), 1 + Math.random());
+  });
+  const sheet = new THREE.Mesh(
+    new THREE.PlaneGeometry(120, 120).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), fog: false }),
+  );
+  sheet.position.y = -45;
+  return Object.assign(new THREE.Group(), { name: 'pulsar-space', visible: false }).add(sheet);
+})();
+sceneRenderer.scene.add(space);
+const bayBackdrop = sceneRenderer.scene.background;
+const spaceBackdrop = new THREE.Color(0x000000); // past the edge of the sheet: the same black
+let inSpace = false;
+function syncSpace(): void {
+  const wanted = fight?.id === 'pulsar' && !hub; // the ship's hub keeps its bay
+  if (wanted === inSpace) return;
+  inSpace = wanted;
+  space.visible = wanted;
+  sceneRenderer.scene.background = wanted ? spaceBackdrop : bayBackdrop;
+  const layer = wanted ? BAY_LAYER : 0;
+  sceneRenderer.roomDeck.layers.set(layer);
+  propsGroup.traverse((o) => void ((o as THREE.Mesh).isMesh && o.layers.set(layer)));
+}
 let currentBay: SpaceshipBayAssets | null = null;
 const mountBay = (bay: SpaceshipBayAssets | null): void => {
   currentBay = bay;
@@ -3114,6 +3151,7 @@ const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, P
 
 function refresh(): void {
   dirty = CHANGE_DRAWS;
+  syncSpace();
   syncAuto();
   if (hub || royale) drawDual(null); // no fight, no void (#947)
   if (hub) {

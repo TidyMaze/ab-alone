@@ -102,6 +102,28 @@ describe('main.ts The Pulsar ripples (#741)', () => {
   });
 });
 
+describe('main.ts The Pulsar in space (#1146)', () => {
+  const walls = (scene: THREE.Scene): THREE.Object3D[] => scene.getObjectsByProperty('name', 'wall-north');
+
+  it('draws the fight in space: the stars and the glow show, the bay is hidden, the board stays; leaving the fight brings the bay back', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    const [space] = named(scene(), 'pulsar-space');
+    expect(space!.visible).toBe(false); // the bay at first
+    expect(walls(scene())[0]!.layers.isEnabled(0)).toBe(true);
+    fightPulsar(game);
+    expect(space!.visible).toBe(true);
+    expect(space!.children.map((c) => c.type)).toEqual(['Mesh']); // the sheet of stars and glow
+    expect(walls(scene())[0]!.layers.isEnabled(0)).toBe(false); // the walls, gantry, lamps and props
+    expect(named(scene(), 'pulsar')).toHaveLength(6); // the board and its beacons stay
+    expect((scene().background as THREE.Color).getHex()).toBe(0x000000);
+    game.openModes();
+    byId('ship').click(); // the ship's hub: no fight
+    expect(space!.visible).toBe(false);
+    expect(walls(scene())[0]!.layers.isEnabled(0)).toBe(true);
+  });
+});
+
 describe('main.ts The Pulsar (#675)', () => {
   it('plays on the Bridge with its Tally line, six pulsars, the one 2 turns from its pulse charging', async () => {
     const scene = catchScene();
