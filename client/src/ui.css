@@ -818,9 +818,10 @@ body:has(#update:not([hidden])) #modes::before {
 }
 /* A phone held sideways: the dock is the right-hand column under the cog, six 44 px buttons (68 px to 372 px of a 390 px
    window). Its sheets lie to its left. */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 660px) {
   #dock-wrap { left: auto; right: 16px; top: calc(16px + 2.75rem + 0.5rem); bottom: 16px; width: 44px; }
-  #dock { flex-direction: column; width: 44px; padding: 0; border: 0; background: none; gap: 8px; }
+  /* A window under 390 px high cannot show six buttons: the column scrolls, so Auto-play is one scroll away (#1032). */
+  #dock { flex-direction: column; width: 44px; max-height: 100%; overflow-y: auto; padding: 0; border: 0; background: none; gap: 8px; }
   #dock > button, #dock-replay button { width: 44px; flex: none; }
   #dock > button::after { font-size: 0.6875rem; }
   #dock-replay { flex-direction: column; flex: none; }
@@ -830,10 +831,16 @@ body:has(#update:not([hidden])) #modes::before {
   }
 }
 /* A desktop window: the dock is a centred bar at the bottom, its width that of its buttons, its sheets centred above it. */
-@media (orientation: landscape) and (min-height: 501px) {
+@media (orientation: landscape) and (min-height: 661px) {
   #dock-wrap { left: 50%; right: auto; transform: translateX(-50%); width: max-content; }
   #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card { left: 50%; right: auto; transform: translateX(-50%); width: min(24rem, calc(100vw - 32px)); }
   #dock > button, #dock-replay button { width: 5.5rem; flex: none; }
+}
+/* A sheet over the dock hides the evaluation plate and the diagnostics box, which sit above the dock (#1032). */
+body:has(#dock-wrap :is(#mode-menu, #daily-card):not([hidden])) #support { display: none; }
+/* Held sideways the settings menu lies left of the dock column, not over it (#1032). */
+@media (orientation: landscape) and (max-height: 660px) {
+  #settings-menu { right: 68px; }
 }
 /* The dock is not on the Open world's screen: its HUD and joystick are (#962, #1025). */
 body[data-openworld] #dock-wrap { display: none !important; }

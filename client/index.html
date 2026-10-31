@@ -84,13 +84,13 @@
          page's own elements, moved here; their handlers do not change. -->
     <div id="dock-wrap">
       <nav id="dock" role="toolbar" aria-label="Controls">
-        <button id="boss-retry" type="button" data-label="Retry" hidden>Retry</button>
-        <button id="rematch" type="button" data-label="Rematch" hidden>Rematch</button>
-        <button id="boss-goal" type="button" data-label="Goal" aria-expanded="true" hidden>Goal</button>
+        <button id="boss-retry" type="button" data-label="Retry" aria-label="Retry" hidden>Retry</button>
+        <button id="rematch" type="button" data-label="Rematch" aria-label="Rematch" hidden>Rematch</button>
+        <button id="boss-goal" type="button" data-label="Goal" aria-label="Goal" aria-expanded="true" hidden>Goal</button>
         <button id="new-game" type="button" data-label="New" disabled></button>
-        <button id="reset-view" type="button" data-label="View" disabled>Reset view</button>
-        <button id="hint" type="button" data-label="Hint" aria-pressed="false" disabled>Hint</button>
-        <button id="replay" type="button" data-label="Replay" disabled>Replay</button>
+        <button id="reset-view" type="button" data-label="View" aria-label="Reset view" disabled>Reset view</button>
+        <button id="hint" type="button" data-label="Hint" aria-label="Hint" aria-pressed="false" disabled>Hint</button>
+        <button id="replay" type="button" data-label="Replay" aria-label="Replay" disabled>Replay</button>
         <div id="dock-replay" class="steps" role="group" aria-label="Replay">
           <button id="replay-first" type="button" aria-label="First position" title="First position">&#9198;</button>
           <button id="replay-prev" type="button" aria-label="Previous move (Left)" title="Previous move (Left)">&#9664;</button>
@@ -99,7 +99,7 @@
           <button id="replay-live" type="button" title="Back to the live game (Esc)">Live</button>
         </div>
         <button id="modes" type="button" data-label="Modes" aria-label="Game modes" title="Game modes" aria-haspopup="true" aria-expanded="false" aria-controls="mode-menu" disabled></button>
-        <button id="auto-play" type="button" data-label="Auto" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
+        <button id="auto-play" type="button" data-label="Auto" aria-label="Auto-play" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
       </nav>
       <div id="mode-menu" role="group" aria-label="Game modes" hidden>
         <button id="update" type="button" hidden>New version: reload</button>
