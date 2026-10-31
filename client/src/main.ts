@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_push } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_push, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -180,6 +180,7 @@ import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode } from './openworldmode';
+import { worldSaves } from './openworldsave';
 import { loadModels } from './openworldview';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
@@ -4647,10 +4648,13 @@ runPanel.addEventListener('click', (e) => {
 runButton.addEventListener('click', beginRun);
 runButton.disabled = false; // listener ready (#146)
 // The Open world (#962, docs/specs/openworld.md): its own scene, drawn by this renderer in place of the board's while it
-// is on. Its entry is in the mode menu for everyone (#1000); ?openworld=<seed> fixes the seed, else a click rolls one.
+// is on. Its entry is in the mode menu for everyone (#1000). ?openworld=<seed> fixes the seed, ?openworld=new starts a fresh
+// random world; else a click resumes the last world played when it has a save (#968), or rolls a new seed.
 const openWorldButton = document.getElementById('openworld') as HTMLButtonElement;
-const openWorldParam = new URLSearchParams(location.search).get('openworld') ?? '';
-const openWorldFixedSeed = openWorldParam.trim() === '' ? NaN : Number(openWorldParam);
+const openWorldParam = (new URLSearchParams(location.search).get('openworld') ?? '').trim();
+const openWorldFresh = openWorldParam === 'new';
+const openWorldFixedSeed = openWorldParam === '' || openWorldFresh ? NaN : Number(openWorldParam);
+const openWorldSaves = worldSaves(gameStore, world_version());
 const openWorld = new OpenWorldMode(
   (seed, cx, cy) => world_chunk(seed, cx, cy),
   (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
@@ -4661,7 +4665,15 @@ const openWorld = new OpenWorldMode(
     ),
   () => reducedMotion(),
   (seed, troop, enemies) => world_push(seed, troop, enemies),
+  openWorldSaves,
 );
+/** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
+async function enterOpenWorld(): Promise<void> {
+  if (Number.isFinite(openWorldFixedSeed)) return openWorld.open(openWorldFixedSeed, innerWidth, innerHeight);
+  const last = openWorldFresh ? null : await openWorldSaves.last();
+  if (last !== null && (await openWorldSaves.load(last))) return openWorld.open(last, innerWidth, innerHeight);
+  return openWorld.open(crypto.getRandomValues(new Uint32Array(1))[0]!, innerWidth, innerHeight, false);
+}
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
   const hooks = window as unknown as Record<string, unknown>;
@@ -4672,8 +4684,7 @@ openWorldButton.addEventListener('click', () => {
   moveModes('pick');
   leaveOnline();
   leaveRoyale();
-  const seed = Number.isFinite(openWorldFixedSeed) ? openWorldFixedSeed : crypto.getRandomValues(new Uint32Array(1))[0]!;
-  openWorld.enter(seed, innerWidth, innerHeight);
+  void enterOpenWorld();
   openWorldButton.blur(); // the menu's arrow keys would take the hero's
 });
 openWorldButton.disabled = false; // listener ready (#146)
