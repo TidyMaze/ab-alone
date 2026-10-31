@@ -372,6 +372,9 @@ await renderer.init().catch(bootFailed);
 const clustered = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
 renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
+// The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
+// as soon as the scene is. mountBay takes them when the scene exists.
+const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
@@ -1899,7 +1902,7 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
   }
 };
 (window as unknown as Record<string, unknown>).__mountBay = mountBay;drawProps();
-void loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader).then(mountBay);
+void bayLoad.then(mountBay);
 
 let frame: FrameShape | null = null;
 function drawFrame(board: ArrayLike<number>): void {
