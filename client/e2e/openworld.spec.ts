@@ -174,3 +174,26 @@ test('the Open world is in the mode menu without the flag, and a click enters a 
   await page.locator('#openworld').click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toMatch(/^\d+$/);
 });
+
+// #967: the troop pushes the enemy in front of it after a step. The fixture puts the hero on (0, 0) with two troop marbles
+// behind it and one enemy on (2, 0): one Right press rolls the hero onto (1, 0), the line of three pushes the enemy on to
+// (3, 0) and the hero along with it, to (2, 0). No animation yet: the marbles jump.
+test('the troop pushes the enemy in front of it after a step, and the enemy moves on, #967', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await page.evaluate(() =>
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
+      hero: [0, 0],
+      troop: [[-1, 0], [-2, 0]],
+      enemies: [[2, 0]],
+    }),
+  );
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldPush)).toBe('1');
+  expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('2,0');
+  expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0 -2,0');
+  expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
+  expect(await page.evaluate(() => document.body.dataset.openworldBeaten)).toBe('0');
+});
