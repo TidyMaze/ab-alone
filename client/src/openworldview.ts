@@ -7,6 +7,7 @@ import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, ROLL_ZOOM, type Vec } from './openworldglide';
+import { stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
@@ -375,6 +376,8 @@ export class OpenWorldView {
   private yawGoal = 0;
   /** The hero (the first marble) and the troop's marbles: where each is drawn, and the glide of a step under way (#1040). */
   private readonly marbles: Marble[] = [new Marble(MARBLE)];
+  /** The strength of the marbles' stripe at the drawn zoom (openworldstripe.ts), one uniform for every marble material (#1043). */
+  private readonly stripe = stripeFadeNode();
   /** Holds the drawn pose of a marble, apart from `dummy`: a build leaves its turn as it is, a marble's is set by its glide. */
   private readonly drawnPose = new THREE.Object3D();
   /** The time the glide of a step lands, in ms: a push's lunge starts then. Whether a marble glides or leans on the last tick. */
@@ -408,13 +411,13 @@ export class OpenWorldView {
       this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop));
       this.managed.push(this.detailed[prop]!);
     }
-    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), new THREE.MeshStandardMaterial({ color: 0xcfe8ff, roughness: 0.1 }));
+    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial({ base: 0xcfe8ff, stripe: 0x8fb4dc, roughness: 0.1 }, this.stripe));
     this.hero.name = 'hero';
     this.scene.add(this.hero);
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
-    this.troop = this.instances('troop', CAPACITY.troop, marble, new THREE.MeshStandardMaterial({ color: 0x8fc4f5, roughness: 0.2 }));
-    this.foes = this.instances('enemies', CAPACITY.enemies, marble, new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
-    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
+    this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial({ base: 0x8fc4f5, stripe: 0x5f93c8, roughness: 0.2 }, this.stripe));
+    this.foes = this.instances('enemies', CAPACITY.enemies, marble, stripedMaterial({ base: 0x15171c, stripe: 0x3a3f4a, roughness: 0.25 }, this.stripe));
+    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), stripedMaterial({ base: 0x15171c, stripe: 0x3a3f4a, roughness: 0.25 }, this.stripe));
     this.ejected.name = 'ejected';
     this.ejected.visible = false;
     this.scene.add(this.ejected);
@@ -803,12 +806,18 @@ export class OpenWorldView {
     return this.drawnLevel;
   }
 
+  /** The strength of the marbles' stripe at the drawn zoom, 1 to 0 (openworldstripe.ts): the browser checks and the tests read it. */
+  get stripeFade(): number {
+    return this.stripe.value;
+  }
+
   /** Puts the camera at the zoom's distance from the hero, looking down at it, and the fog and the planes of the camera with
    * the zoom. The chunks loaded follow the ground the camera sees: rebuilt when the hero's chunk or the reach changes. */
   private frame(): void {
     const at = this.focus;
     this.drawnLevel = this.fitZoom(at);
     const k = this.drawnLevel;
+    this.stripe.value = stripeStrength(k);
     lookAtHero(this.camera, at, k, this.yawNow);
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
     const corners = footprint(this.camera);
