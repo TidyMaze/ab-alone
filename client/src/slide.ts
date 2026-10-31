@@ -1,7 +1,8 @@
+import { MOTION } from './motion';
 import { BOARD_CELLS, CORE_CODE, DIRECTIONS, axialTo3D, cellIndex, isMarble, type Axial, type Move } from './board';
 
 /** Length of the slide of a moved marble to its new cell, ease out. */
-export const SLIDE_MS = 200;
+export const SLIDE_MS: number = MOTION.base;
 
 export interface SlideTrack {
   /** The new cell: the marble drawn there is the one that slides. */

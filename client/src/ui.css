@@ -564,6 +564,18 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 }
 
 @keyframes hud-in { from { opacity: 0; } }
+/* motion tokens (#1106, docs/specs/motion.md): motion.ts holds the same numbers. Under Reduced motion the durations are 0ms. */
+:root {
+  --motion-instant: 80ms;
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --motion-celebrate: 1200ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.9, 0.4);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+:root[data-motion='reduced'] { --motion-instant: 0ms; --motion-fast: 0ms; --motion-base: 0ms; --motion-slow: 0ms; --motion-celebrate: 0ms; }
 /* The Reduced motion setting (#379): main.ts sets data-motion on the root, from the toggle or the system setting. */
 :root[data-motion='reduced'] *, :root[data-motion='reduced'] *::before, :root[data-motion='reduced'] *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
 
