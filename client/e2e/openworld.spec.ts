@@ -357,3 +357,29 @@ test.describe('the touch joystick', () => {
     expect(await at()).toBe(stopped);
   });
 });
+
+// #1026: Q and E turn the Open world camera round the hero by a step, R goes back to the default angle, and the turn is saved with
+// the world, so a reload resumes it (the turn itself is unit tested in openworldview.test.ts and openworldmode.test.ts).
+test('Q and E turn the Open world camera round the hero, R goes back, and the turn resumes after a reload, #1026', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
+  await expect.poll(yaw).toBe('0');
+  await page.keyboard.press('q');
+  await expect.poll(yaw).toBe('30');
+  await page.keyboard.press('e');
+  await page.keyboard.press('e');
+  await expect.poll(yaw).toBe('-30');
+  await page.keyboard.press('r');
+  await expect.poll(yaw).toBe('0');
+  await page.keyboard.press('q');
+  await expect.poll(yaw).toBe('30');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBeDefined(); // written after the frame
+  await page.reload();
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(yaw).toBe('30');
+});

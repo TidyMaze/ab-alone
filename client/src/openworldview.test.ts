@@ -57,6 +57,11 @@ function grass(): Uint8Array {
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
   return out;
 }
+// Whether the reach at zoom `k` goes past MAX_REACH at some yaw, every degree (#1026).
+const someYawReaches = (aspect: number, k: number): boolean => {
+  for (let deg = 0; deg < 360; deg++) if (reachAt(aspect, k, (deg * Math.PI) / 180) > MAX_REACH) return true;
+  return false;
+};
 const ground = (view: OpenWorldView) => GROUNDS.reduce((sum, g) => sum + mesh(view, `terrain-${g}`).count, 0);
 const mesh = (view: OpenWorldView, name: string) => view.scene.getObjectByName(name) as THREE.InstancedMesh;
 const counts = (view: OpenWorldView, prefix: string, names: readonly string[]) =>
@@ -345,7 +350,7 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(view.camera.position.y).toBeCloseTo(28 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(22);
     view.zoomBy(1e9);
-    expect(view.zoom).toBe(MAX_ZOOM);
+    expect(view.zoom).toBe(maxZoomFor(1)); // the default screen is square: its own widest zoom (#1027)
   });
 
   it('moves the fog and the far plane with the zoom, so the edge of the loaded chunks stays hidden', () => {
@@ -513,7 +518,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     const limit = maxZoomFor(32 / 9);
     expect(limit).toBeLessThan(MAX_ZOOM);
     expect(reachAt(32 / 9, limit)).toBeLessThanOrEqual(MAX_REACH);
-    expect(reachAt(32 / 9, limit + 0.05)).toBeGreaterThan(MAX_REACH);
+    expect(someYawReaches(32 / 9, limit + 0.05)).toBe(true); // a turn of the camera needs the limit (#1026)
   });
 
   it('follows the aspect on a resize: a narrower screen lets the zoom go further, a wider one brings it back', () => {
@@ -527,7 +532,23 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     expect(view.zoom).toBe(maxZoomFor(32 / 9));
     expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
     view.resize(900, 1600);
-    expect(view.maxZoom).toBe(MAX_ZOOM);
+    expect(view.maxZoom).toBe(maxZoomFor(9 / 16));
+    expect(view.maxZoom).toBeGreaterThan(MAX_ZOOM);
+  });
+
+  it('lets a portrait phone zoom out past MAX_ZOOM, up to where its reach reaches MAX_REACH (#1027)', () => {
+    for (const aspect of [9 / 16, 3 / 4, 360 / 740, 390 / 844]) {
+      const limit = maxZoomFor(aspect);
+      expect(limit).toBeGreaterThan(MAX_ZOOM);
+      expect(reachAt(aspect, limit)).toBeLessThanOrEqual(MAX_REACH);
+      expect(someYawReaches(aspect, limit + 0.05)).toBe(true);
+    }
+  });
+
+  it('gives a limit that never grows with the width of the screen, from portrait to ultra-wide (#1027)', () => {
+    const limits = [9 / 16, 3 / 4, 1, 16 / 9, 21 / 9].map(maxZoomFor);
+    expect(limits).toEqual([...limits].sort((a, b) => b - a));
+    expect(maxZoomFor(16 / 9)).toBe(MAX_ZOOM); // the 16:9 screen keeps its limit
   });
 });
 
@@ -1196,5 +1217,95 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     view.dispose();
     expect(disposeGeometry.mock.contexts).toContain(view.ejected.geometry);
     expect(disposeMaterial.mock.contexts).toContain(view.ejected.material);
+  });
+});
+
+describe('the camera turns around the hero by its yaw (#1026)', () => {
+  const DEG = Math.PI / 180;
+
+  it('sits on the back side of the hero at each yaw: the offset from the hero turns with it, and the camera looks at it', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    for (const yaw of [0, 30 * DEG, 90 * DEG, -60 * DEG]) {
+      view.turnTo(yaw);
+      const dx = view.camera.position.x - view.focusPoint.x;
+      const dz = view.camera.position.z - view.focusPoint.z;
+      expect(Math.hypot(dx, dz)).toBeGreaterThan(0);
+      expect(Math.atan2(dx, dz)).toBeCloseTo(yaw, 6); // the back at yaw 0 is +z, as before
+    }
+  });
+
+  it('picks the cell under the pointer at each yaw: a neighbour of the hero is the one its screen point picks', () => {
+    const world = new World(grass);
+    const view = new OpenWorldView(world);
+    view.resize(1600, 900);
+    for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG, -120 * DEG]) {
+      view.turnTo(yaw);
+      view.show([0, 0]);
+      for (const cell of neighbours([0, 0])) {
+        const p = axialTo3D(cell[0], cell[1]);
+        const tile = world.tile(cell[0], cell[1])!;
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
+        expect(view.pick(ndc.x, ndc.y)).toEqual(cell);
+      }
+    }
+  });
+
+  it('eases the yaw to its goal, one frame at a time, and settles on it; a goal wraps into (-pi, pi]', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(view.yaw).toBe(0);
+    view.turn(Math.PI);
+    view.turn(Math.PI / 2 + 0.1); // 3pi/2 + 0.1 wraps to -pi/2 + 0.1
+    expect(view.yaw).toBeCloseTo(-Math.PI / 2 + 0.1);
+    const before = view.camera.position.x;
+    expect(view.easeYaw(0.05, false)).toBe(true); // moving toward the goal
+    expect(view.camera.position.x).not.toBeCloseTo(before);
+    while (view.easeYaw(0.5, false));
+    expect(view.easeYaw(0.5, false)).toBe(false);
+    expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(-Math.PI / 2 + 0.1, 6);
+  });
+
+  it('snaps to the goal at once with reduced motion, and a turn back to zero is the reset', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.turn(1);
+    expect(view.easeYaw(0.016, true)).toBe(true);
+    expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(1, 6);
+    view.turn(-view.yaw);
+    view.easeYaw(0.016, true);
+    expect(view.yaw).toBe(0);
+    expect(view.camera.position.x).toBeCloseTo(view.focusPoint.x, 6);
+  });
+
+  it('draws the widest zoom at every turn with its reach within MAX_REACH: no edge of the loaded chunks shows (#1026)', () => {
+    const screens: [number, number][] = [
+      [900, 1600],
+      [2100, 900],
+    ];
+    for (const [width, height] of screens) {
+      const view = new OpenWorldView(new World(grass));
+      view.resize(width, height);
+      view.show([0, 0]);
+      view.zoomBy(1e9);
+      for (let deg = 0; deg < 360; deg += 1) {
+        view.turnTo(deg * DEG);
+        expect(reachAt(width / height, view.drawnZoom, view.yaw)).toBeLessThanOrEqual(MAX_REACH);
+      }
+    }
+  });
+
+  it('loads the chunks of the ground in view at the widest zoom and any yaw, within the reach budget', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(390, 844);
+    view.show([0, 0]);
+    for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG]) {
+      view.turnTo(yaw);
+      view.zoomBy(1e9);
+      expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
+    }
   });
 });

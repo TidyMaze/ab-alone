@@ -7,22 +7,28 @@ import { TROOP } from './openworld';
 import { decodeFight, isCell, type FightSave, type FightState } from './openworldfight';
 import type { KeyStore } from './savegame';
 
-/** A world as saved: the seed, the hero's cell, the troop's cells (the hero's trail, `TROOP` at most) and the fight. */
+/** A world as saved: the seed, the hero's cell, the troop's cells (the hero's trail, `TROOP` at most), the fight and the camera's yaw
+ * round the hero, in radians (#1026). */
 export interface WorldSave {
   version: number;
   seed: number;
   hero: Axial;
   troop: Axial[];
   fight: FightSave;
+  yaw: number;
   savedAt: number;
 }
+
+/** The record version written now: 2 adds the camera's yaw. A record of version 1 (no `record` field, no yaw) is read with yaw 0, so
+ * a save made before the turn is kept, not lost (#1026). */
+export const RECORD = 2;
 
 /** The saves of the Open world. A failing store gives no save and a `false` put, never a throw. */
 export interface WorldSaves {
   /** The save of `seed` for this world version, `null` when there is none (a stale or garbage one is deleted). */
   load(seed: number): Promise<WorldSave | null>;
-  /** Saves the world of `seed` in the state given; `true` when it is stored. */
-  put(seed: number, hero: Axial, troop: Axial[], fight: FightState): Promise<boolean>;
+  /** Saves the world of `seed` in the state given, the camera's `yaw` too; `true` when it is stored. */
+  put(seed: number, hero: Axial, troop: Axial[], fight: FightState, yaw: number): Promise<boolean>;
   /** Deletes the save of `seed`: the New world control discards the world it leaves (#1021). A refusing store keeps it. */
   discard(seed: number): Promise<void>;
   /** Remembers `seed` as the last world played. */
@@ -37,12 +43,23 @@ const keyOf = (seed: number): string => `openworld:${seed}`;
 /** The save in `raw` when it is a whole save of `seed` for `version`; `null` otherwise. */
 export function decodeWorld(raw: unknown, seed: number, version: number): WorldSave | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const save = raw as Record<keyof WorldSave, unknown>;
+  const save = raw as Record<keyof WorldSave | 'record', unknown>;
   if (save.version !== version || save.seed !== seed) return null;
+  if (save.record !== undefined && save.record !== RECORD) return null;
+  const yaw = save.record === undefined ? 0 : save.yaw; // version 1: no turn yet (#1026)
+  if (typeof yaw !== 'number' || !Number.isFinite(yaw)) return null;
   if (!isCell(save.hero) || !Array.isArray(save.troop) || save.troop.length > TROOP || !save.troop.every(isCell)) return null;
   const fight = decodeFight(save.fight);
   if (!fight || !Number.isFinite(save.savedAt)) return null;
-  return { version, seed, hero: [save.hero[0], save.hero[1]], troop: save.troop.map(([q, r]): Axial => [q, r]), fight, savedAt: save.savedAt as number };
+  return {
+    version,
+    seed,
+    hero: [save.hero[0], save.hero[1]],
+    troop: save.troop.map(([q, r]): Axial => [q, r]),
+    fight,
+    yaw,
+    savedAt: save.savedAt as number,
+  };
 }
 
 /** The Open world saves in `store`, for the world version `version` (`world_version()` of the bridge). */
@@ -60,9 +77,9 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
       }
       return null;
     },
-    async put(seed, hero, troop, fight) {
+    async put(seed, hero, troop, fight, yaw) {
       try {
-        const save: WorldSave = { version, seed, hero, troop, fight: fight.toJSON(), savedAt: Date.now() };
+        const save = { record: RECORD, version, seed, hero, troop, fight: fight.toJSON(), yaw, savedAt: Date.now() };
         await store.put(keyOf(seed), save);
         return true;
       } catch {

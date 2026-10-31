@@ -121,6 +121,39 @@ describe('the Open world mode', () => {
     expect(data().openworldAt).toBe('0,-2');
   });
 
+  it('turns the Open world camera with a right-button drag and with a twist of two fingers, and shows no menu over it, #1026', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const canvas = document.querySelector('canvas')!;
+    const menu = new MouseEvent('contextmenu', { cancelable: true, bubbles: true });
+    canvas.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(false); // not the Open world: the board keeps its menu
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const at = (type: string, id: number, x: number, y: number, button = 0) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: y, button, bubbles: true, cancelable: true });
+      Object.defineProperty(e, 'pointerId', { value: id });
+      canvas.dispatchEvent(e);
+    };
+    const yawOf = () => Number(data().openworldYaw);
+    at('pointerdown', 5, 300, 300, 2); // the right button turns the camera, it does not roll the hero
+    expect(data().openworldAt).toBe('0,0');
+    at('pointermove', 5, 340, 300, 2); // 40 px to the right: 20 degrees
+    expect(yawOf()).toBe(20);
+    at('pointerup', 5, 340, 300, 2);
+    at('pointermove', 5, 360, 300, 2); // released: no turn
+    expect(yawOf()).toBe(20);
+    const shown = new MouseEvent('contextmenu', { cancelable: true, bubbles: true });
+    canvas.dispatchEvent(shown);
+    expect(shown.defaultPrevented).toBe(true);
+    at('pointerdown', 6, 600, 300);
+    at('pointerdown', 7, 700, 300); // two fingers, a quarter turn of the pair
+    at('pointermove', 7, 700, 400); // from 0 to 45 degrees
+    expect(yawOf()).toBe(65);
+    at('pointerup', 6, 600, 300);
+    at('pointerup', 7, 700, 400);
+  });
+
   it('zooms the Open world out with the wheel and with a pinch, #976', async () => {
     const game = await boot('?bot=off&openworld=7');
     game.openModes();

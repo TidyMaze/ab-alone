@@ -2,8 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { CHUNK, neighbours } from './openworld';
-import { heldCell, OpenWorldMode } from './openworldmode';
+import { CHUNK, neighbours, World } from './openworld';
+import { heldCell, OpenWorldMode, ORBIT_PER_PX, stepOf, TURN_STEP, twistOf } from './openworldmode';
+import { arrowCell } from './hubview';
 import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
@@ -618,7 +619,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     fight.apply([], [[3, 0]], [[9, 9]]);
     return fight.toJSON();
   };
-  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), savedAt: 1 });
+  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, savedAt: 1 });
   const withSaves = (store = memoryStore()) => {
     const saves = worldSaves(store, 1);
     return { store, saves, m: mode(undefined, undefined, undefined, undefined, undefined, saves) };
@@ -775,5 +776,122 @@ describe('the New world control (#1021)', () => {
     out.remove();
     await mode().open(8, 800, 600); // no element: nothing to write to
     expect(body().openworld).toBe('8');
+  });
+});
+
+const DEG = Math.PI / 180;
+// The angle of a set of arrow keys on the screen, in degrees counter-clockwise from the right, and the gap between two angles.
+const KEY_VECTOR: Record<string, [number, number]> = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+const keyAngle = (keys: string[]): number => {
+  const [x, y] = keys.reduce(([sx, sy], k) => [sx + KEY_VECTOR[k]![0], sy + KEY_VECTOR[k]![1]], [0, 0]);
+  return Math.atan2(y, x) / DEG;
+};
+const gapOf = (a: number, b: number): number => {
+  const d = (((a - b) % 360) + 360) % 360;
+  return Math.min(d, 360 - d);
+};
+
+describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026)', () => {
+  const SINGLE = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+  const PAIRS = [
+    ['ArrowUp', 'ArrowLeft'],
+    ['ArrowUp', 'ArrowRight'],
+    ['ArrowDown', 'ArrowLeft'],
+    ['ArrowDown', 'ArrowRight'],
+  ];
+  const ROWS: Axial[] = [
+    [0, 0],
+    [2, 1],
+    [-3, 4],
+    [1, -2],
+  ];
+
+  it('at yaw 0 is the step of the keyboard as it was, on every row: a single arrow, or a diagonal of two', () => {
+    for (const at of ROWS) {
+      for (const key of SINGLE) expect(stepOf(at, held(key), 0)).toEqual(arrowCell(at, key));
+      for (const keys of PAIRS) expect(stepOf(at, held(...keys), 0)).toEqual(heldCell(at, held(...keys)));
+    }
+  });
+
+  it('gives nothing for no key, or for opposite keys', () => {
+    expect(stepOf([0, 0], held(), 0.5)).toBeNull();
+    expect(stepOf([0, 0], held('ArrowUp', 'ArrowDown'), 0.5)).toBeNull();
+    expect(stepOf([0, 0], held('ArrowLeft', 'ArrowRight'), 0.5)).toBeNull();
+  });
+
+  it('rolls the hero to the cell the camera shows in the direction of each key, at each yaw', () => {
+    const world = new World(bytes);
+    for (const yaw of [15, 30, 45, 60, 90, 135, -70].map((d) => d * DEG)) {
+      const view = new OpenWorldView(world);
+      view.resize(1600, 900);
+      view.turnTo(yaw);
+      view.show([0, 0]);
+      const onScreen = (cell: Axial) => {
+        const p = axialTo3D(cell[0], cell[1]);
+        return new THREE.Vector3(p.x, 0, p.z).project(view.camera);
+      };
+      const from = onScreen([0, 0]);
+      for (const keys of [...SINGLE.map((k) => [k]), ...PAIRS]) {
+        const there = onScreen(stepOf([0, 0], held(...keys), yaw)!);
+        const shown = (Math.atan2(there.y - from.y, there.x - from.x) / DEG);
+        // The neighbours of the hex grid are 60 degrees apart, so the nearest one lies within 30 degrees of the key on the ground, and
+        // the camera's perspective bends the screen angle by some ten degrees more. A sign error would miss by 60 or more.
+        expect(gapOf(shown, keyAngle(keys))).toBeLessThanOrEqual(45);
+      }
+    }
+  });
+});
+
+describe('the keys turn the camera by a step, and a drag or a twist turns it too (#1026)', () => {
+  it('Q and E turn the view a step each way, R goes back to the default angle, and the yaw is published in degrees', () => {
+    const m = mode();
+    m.enter(7, 800, 600);
+    expect(body().openworldYaw).toBe('0');
+    expect(m.key('q')).toBe(true);
+    expect(body().openworldYaw).toBe(String(Math.round((TURN_STEP * 180) / Math.PI)));
+    m.key('q');
+    m.key('e');
+    expect(body().openworldYaw).toBe(String(Math.round((TURN_STEP * 180) / Math.PI)));
+    m.key('r');
+    expect(body().openworldYaw).toBe('0');
+    expect(m.key('x')).toBe(false); // not the mode's
+  });
+
+  it('the stick reads the yaw of the camera: the goal of the turn, which the keys and the drag set', () => {
+    const m = mode();
+    m.enter(7, 800, 600);
+    expect(m.yaw).toBe(0);
+    m.key('q');
+    expect(m.yaw).toBeCloseTo(TURN_STEP);
+  });
+
+  it('a drag of the right button turns the view by ORBIT_PER_PX a px, and a twist turns it by its angle, the shortest way', () => {
+    const m = mode();
+    m.enter(7, 800, 600);
+    m.orbit(100);
+    expect(body().openworldYaw).toBe(String(Math.round((100 * ORBIT_PER_PX * 180) / Math.PI)));
+    expect(twistOf(0, 3)).toBe(3);
+    expect(twistOf(-3, 3)).toBeCloseTo(6 - 2 * Math.PI);
+  });
+
+  it('the stick rolls the hero by the keys it holds in one step: a diagonal of two keys is one roll', () => {
+    const m = mode();
+    m.enter(7, 800, 600);
+    m.step(['ArrowUp', 'ArrowRight']);
+    expect(body().openworldAt).toBe('1,-1'); // the diagonal of the spawn's even row, as the keyboard rolls it
+    m.step([]);
+    expect(body().openworldAt).toBe('1,-1');
+  });
+
+  it('the turn is saved with the world: a frame writes it, and opening the world again applies it', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    const m = mode(undefined, undefined, undefined, undefined, undefined, saves);
+    m.enter(7, 800, 600);
+    m.key('q');
+    m.frame(() => {}, 0);
+    await new Promise((done) => setTimeout(done));
+    expect((await saves.load(7))!.yaw).toBeCloseTo(TURN_STEP);
+    await m.open(7, 800, 600);
+    expect(body().openworldYaw).toBe(String(Math.round((TURN_STEP * 180) / Math.PI)));
   });
 });

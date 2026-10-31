@@ -85,38 +85,72 @@ const NEAR = 0.1;
  * at 57 FPS, so it is too far. */
 export const MAX_ZOOM = 6;
 
-/** Puts the camera `k` zooms up and back from `at` (the point it looks at, the hero's column top when eased), looking down
- * at it, and the planes of the camera with the zoom. */
-function lookAtHero(camera: THREE.PerspectiveCamera, at: THREE.Vector3, k: number): void {
+/** An angle in radians turned into (-pi, pi]: the shortest turn of the camera around the hero (#1026). */
+export const wrapPi = (angle: number): number => {
+  const turn = ((((angle + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
+  return turn === -Math.PI ? Math.PI : turn;
+};
+
+/** Puts the camera `k` zooms up and back from `at` (the point it looks at, the hero's column top when eased), turned `yaw` radians
+ * round it (0 is the back at +z, as before #1026), looking down at it, and the planes of the camera with the zoom. */
+function lookAtHero(camera: THREE.PerspectiveCamera, at: THREE.Vector3, k: number, yaw = 0): void {
   const distance = CAMERA_DISTANCE * k;
-  camera.position.set(at.x, at.y + distance * Math.cos(TILT), at.z + distance * Math.sin(TILT));
-  camera.up.set(0, 0, -1); // screen up is the far side: the default up at the closest view, defined straight down
+  const back = distance * Math.sin(TILT); // the horizontal part of the offset: the camera stands behind the hero, on the yaw's side
+  camera.position.set(at.x + back * Math.sin(yaw), at.y + distance * Math.cos(TILT), at.z + back * Math.cos(yaw));
+  camera.up.set(-Math.sin(yaw), 0, -Math.cos(yaw)); // screen up is the far side: the default up at the closest view, defined straight down
   camera.lookAt(at);
   camera.near = NEAR * k; // scales with the zoom: the depth precision is the same at every zoom
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
 }
 
-/** The reach of the loaded chunks at the zoom `k` on a screen of `aspect`: the hero is the centre, so its cell is the origin. */
-export function reachAt(aspect: number, k: number): number {
+/** The reach of the loaded chunks at the zoom `k` and the yaw on a screen of `aspect`: the hero is the centre, so its cell is the origin. */
+export function reachAt(aspect: number, k: number, yaw = 0): number {
   const probe = new THREE.PerspectiveCamera(40, aspect, NEAR, CAMERA_FAR);
   const origin = new THREE.Vector3();
-  lookAtHero(probe, origin, k);
+  lookAtHero(probe, origin, k, yaw);
   return reachFor(groundRadius(probe, origin));
 }
 
-/** The largest zoom on a screen of `aspect` whose reach stays within `MAX_REACH`: `MAX_ZOOM`, or lower where a wide screen would
- * pass it (it sees more ground). The zoom never goes further, so the loaded chunks always cover the ground in view (#976). */
-export function maxZoomFor(aspect: number): number {
-  if (reachAt(aspect, MAX_ZOOM) <= MAX_REACH) return MAX_ZOOM;
-  let low = 1;
-  let high = MAX_ZOOM;
-  for (let i = 0; i < 40; i++) {
+/** The farthest zoom a screen may go to: a portrait phone sees little ground at `MAX_ZOOM`, so it zooms out until its reach
+ * reaches `MAX_REACH` (#1027). */
+const ZOOM_CAP = 40;
+
+/** The largest zoom in `[low, high]` whose reach at `yaw` stays within `MAX_REACH`, by bisection: `low` must fit, the reach grows
+ * with the zoom. */
+function widestFit(aspect: number, yaw: number, low: number, high: number): number {
+  for (let i = 0; i < 30; i++) {
     const mid = (low + high) / 2;
-    if (reachAt(aspect, mid) <= MAX_REACH) low = mid;
+    if (reachAt(aspect, mid, yaw) <= MAX_REACH) low = mid;
     else high = mid;
   }
   return low;
+}
+
+/** The yaws the widest zoom is checked at, every degree: the camera turns all round the hero (#1026). A window of a few hundredths of
+ * a degree, where a cell's corner crosses a cell edge, can still pass MAX_REACH: each frame draws less zoom there (`fitZoom`). */
+const YAWS = Array.from({ length: 360 }, (_, i) => (i * Math.PI) / 180);
+/** The widest zoom per aspect: a resize that keeps the aspect does not check the turns again. */
+const limitOf = new Map<number, number>();
+
+/** The largest zoom at `yaw` on a screen of `aspect` whose reach stays within `MAX_REACH`: a wide screen (its reach at `MAX_ZOOM`
+ * over the budget) stops sooner, a portrait one goes out further (#1027), a 16:9 one keeps `MAX_ZOOM` where its reach is the budget. */
+function zoomAt(aspect: number, yaw: number): number {
+  const reach = reachAt(aspect, MAX_ZOOM, yaw);
+  if (reach < MAX_REACH) return widestFit(aspect, yaw, MAX_ZOOM, ZOOM_CAP);
+  if (reach === MAX_REACH) return MAX_ZOOM;
+  return widestFit(aspect, yaw, 1, MAX_ZOOM);
+}
+
+/** The largest zoom on a screen of `aspect` whose reach stays within `MAX_REACH` at every yaw of the camera (#1026): the smallest
+ * of `zoomAt` over `YAWS`. The zoom never goes past it, so the loaded chunks always cover the ground in view, at any turn (#976). */
+export function maxZoomFor(aspect: number): number {
+  let limit = limitOf.get(aspect);
+  if (limit === undefined) {
+    limit = Math.min(...YAWS.map((yaw) => zoomAt(aspect, yaw)));
+    limitOf.set(aspect, limit);
+  }
+  return limit;
 }
 
 /** The ground columns: one instanced mesh each. A blocked terrain stands on the ground of its `GROUND` entry. */
@@ -217,6 +251,9 @@ export const topOf = (terrain: Terrain, height: number): number => (terrain === 
 /** The camera's height eases to the hero's column top with this time constant, in seconds, and snaps within `SETTLED` (#988). */
 const EASE = 0.12;
 const SETTLED = 0.01;
+/** The camera's turn round the hero eases the same way, with its own time constant, and snaps within `SETTLED_YAW` (radians, #1026). */
+const EASE_YAW = 0.12;
+const SETTLED_YAW = 0.001;
 
 /** A stable 0 to 1 draw per cell, so the mountains and the trees differ in height but never change between draws. */
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
@@ -286,6 +323,8 @@ export class OpenWorldView {
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
   private readonly fog = new THREE.Fog(0x0b1220);
   private level = 1;
+  /** The zoom drawn at the current turn: `level`, or less where a narrow window of turns would pass MAX_REACH (`fitZoom`). */
+  private drawnLevel = 1;
   /** The widest zoom on the screen's aspect, see `maxZoomFor`. */
   private limit = maxZoomFor(1);
   /** The chunk the hero is in, and the key of the chunks drawn: rebuilt when either changes. */
@@ -327,6 +366,9 @@ export class OpenWorldView {
   /** The marbles of the push being drawn (none when there is no animation), and the time it ends in ms. */
   private moves: Move[] = [];
   private end = 0;
+  /** The turn of the camera round the hero, in radians: `yawNow` eases to `yawGoal`, which the keys, a drag and a twist set (#1026). */
+  private yawNow = 0;
+  private yawGoal = 0;
 
   /** `fight` holds the enemies as they are now: the generated ones, with the pushes of the troop on top (openworldfight.ts). */
   constructor(
@@ -614,12 +656,67 @@ export class OpenWorldView {
     this.frame();
   }
 
+  /** The yaw the camera turns to, in radians: 0 is the default angle (#1026). */
+  get yaw(): number {
+    return this.yawGoal;
+  }
+
+  /** Turns the goal of the camera's yaw by `by` radians round the hero; the camera eases to it (`easeYaw`). */
+  turn(by: number): void {
+    this.yawGoal = wrapPi(this.yawGoal + by);
+  }
+
+  /** Turns the camera to `yaw` at once: the goal and the view, as a world is entered with its saved angle. */
+  turnTo(yaw: number): void {
+    this.yawGoal = wrapPi(yaw);
+    this.yawNow = this.yawGoal;
+    this.frame();
+  }
+
+  /** Eases the camera's yaw to its goal, `dt` seconds on, the shortest way round, as the height eases (`ease`): the gap closes by
+   * `1 - exp(-dt / EASE_YAW)` of itself, and it snaps when `instant` (reduced motion) or within `SETTLED_YAW`. Returns whether the
+   * camera moved, so the frame is drawn; false once it has settled. */
+  easeYaw(dt: number, instant: boolean): boolean {
+    const gap = wrapPi(this.yawGoal - this.yawNow);
+    if (gap === 0) return false;
+    this.yawNow = instant || Math.abs(gap) <= SETTLED_YAW ? this.yawGoal : wrapPi(this.yawNow + gap * (1 - Math.exp(-dt / EASE_YAW)));
+    this.frame();
+    return true;
+  }
+
+  /** The reach the camera needs at zoom `k` and the current yaw, from its footprint (`groundRadius`, unclipped). */
+  private reachOf(at: THREE.Vector3, k: number): number {
+    lookAtHero(this.camera, at, k, this.yawNow);
+    const hero = cellAtPoint(at.x, at.z);
+    return reachFor(Math.max(...footprint(this.camera).map((p) => hexDistance(cellAtPoint(p.x, p.z), hero))));
+  }
+
+  /** The zoom drawn at the turn: the zoom of the user, or less where the reach at this turn would pass `MAX_REACH` (a narrow window
+   * of turns that `maxZoomFor` does not sample, #1026). The loaded chunks then always cover the ground in view. */
+  private fitZoom(at: THREE.Vector3): number {
+    if (this.reachOf(at, this.level) <= MAX_REACH) return this.level;
+    let low = 1;
+    let high = this.level;
+    for (let i = 0; i < 24; i++) {
+      const mid = (low + high) / 2;
+      if (this.reachOf(at, mid) <= MAX_REACH) low = mid;
+      else high = mid;
+    }
+    return low;
+  }
+
+  /** The zoom the frame draws: the user's zoom (`zoom`) or less at a narrow turn (`fitZoom`). */
+  get drawnZoom(): number {
+    return this.drawnLevel;
+  }
+
   /** Puts the camera at the zoom's distance from the hero, looking down at it, and the fog and the planes of the camera with
    * the zoom. The chunks loaded follow the ground the camera sees: rebuilt when the hero's chunk or the reach changes. */
   private frame(): void {
-    const k = this.level;
     const at = this.focus;
-    lookAtHero(this.camera, at, k);
+    this.drawnLevel = this.fitZoom(at);
+    const k = this.drawnLevel;
+    lookAtHero(this.camera, at, k, this.yawNow);
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
     const corners = footprint(this.camera);
     const view = new THREE.Vector3();
