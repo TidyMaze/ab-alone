@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
-import { BIOMES, blocked, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
+import { BIOMES, blocked, breakable, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
 
 /** A hero on the world with no enemy pushed: the fight is the generated enemies. */
@@ -88,16 +88,84 @@ describe('the hero', () => {
     expect(hero.at).toEqual([1, 0]);
   });
 
-  it('does not roll two cells, onto a boulder, onto water or off the world', () => {
+  it('does not roll two cells, onto water or off the world', () => {
     const hero = heroOn(new World(bytes));
     expect(hero.step([2, 0])).toBe(false); // not a neighbour of the spawn
-    hero.step([1, 0]);
-    expect(hero.step([2, 0])).toBe(false); // a boulder
-    expect(hero.at).toEqual([1, 0]);
     const water = heroOn(new World(bytes));
     expect(water.step([0, 1])).toBe(false);
+    expect(water.smashed).toBeNull();
     const edge = heroOn(new World(() => new Uint8Array()));
     expect(edge.step([1, 0])).toBe(false); // no tile there
+  });
+
+  it('breaks the isolated boulder it rolls into: the move goes through and the cell turns to plain rock (#1147)', () => {
+    const world = new World(bytes);
+    const hero = heroOn(world);
+    hero.step([1, 0]);
+    expect(hero.step([2, 0])).toBe(true);
+    expect(hero.at).toEqual([2, 0]);
+    expect(hero.smashed).toBe('boulder');
+    expect(world.tile(2, 0)).toEqual({ height: 1, terrain: 'rock', biome: 'meadow' });
+    expect(world.broken).toEqual([[2, 0]]);
+    hero.step([1, 0]);
+    expect(hero.smashed).toBeNull(); // an ordinary step breaks nothing
+  });
+
+  it('does not break an obstacle an enemy stands on', () => {
+    const world = new World(bytes);
+    const fight = new FightState();
+    vi.spyOn(fight, 'occupied').mockReturnValue(true);
+    const hero = new Hero(world, fight);
+    hero.step([1, 0]);
+    expect(hero.step([2, 0])).toBe(false);
+    expect(world.tile(2, 0)!.terrain).toBe('boulder');
+  });
+});
+
+describe('what the hero can break (#1147)', () => {
+  // Chunk (0, 0): a lone tree at (5, 5), a grove of two trees at (8, 5) and (9, 5), a wall at (5, 8), a peak at (8, 8), a boulder at (3, 3).
+  const cells = (cx: number, cy: number): Uint8Array => {
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set(grass, i * 3);
+    if (cx === 0 && cy === 0) {
+      for (const [q, r, terrain] of [[5, 5, 6], [8, 5, 6], [9, 5, 6], [5, 8, 7], [8, 8, 4], [3, 3, 5]] as const) out.set([1, terrain, 0], (r * CHUNK + q) * 3);
+    }
+    return out;
+  };
+  const world = new World(cells);
+
+  it('is an isolated boulder or an isolated tree, nothing else', () => {
+    expect(breakable(world, 3, 3)).toBe(true); // a boulder
+    expect(breakable(world, 5, 5)).toBe(true); // a tree with no tree beside it
+    expect(breakable(world, 8, 5)).toBe(false); // a forest: a tree beside a tree
+    expect(breakable(world, 9, 5)).toBe(false);
+    expect(breakable(world, 5, 8)).toBe(false); // a wall
+    expect(breakable(world, 8, 8)).toBe(false); // a peak
+    expect(breakable(world, 1, 1)).toBe(false); // open grass
+    expect(breakable(world, 99 * CHUNK, 0)).toBe(false); // off the world
+  });
+
+  it('turns an isolated tree to grass when broken, and keeps a forest standing', () => {
+    const hero = heroOn(world);
+    hero.at = [4, 5];
+    expect(hero.step([5, 5])).toBe(true);
+    expect(hero.smashed).toBe('tree');
+    expect(world.tile(5, 5)!.terrain).toBe('grass');
+    hero.at = [7, 5];
+    expect(hero.step([8, 5])).toBe(false);
+  });
+
+  it('keeps a broken cell broken when its chunk is evicted and loaded again, and when restored on a new world', () => {
+    const w = new World(cells);
+    w.limit = 1;
+    w.smash(3, 3);
+    w.chunk(1, 0); // evicts chunk (0, 0)
+    expect(w.tile(3, 3)!.terrain).toBe('rock');
+    const fresh = new World(cells);
+    fresh.restore([[3, 3], [5, 5]]);
+    expect(fresh.tile(3, 3)!.terrain).toBe('rock');
+    expect(fresh.tile(5, 5)!.terrain).toBe('grass');
+    expect(fresh.broken).toEqual([[3, 3], [5, 5]]);
   });
 });
 
