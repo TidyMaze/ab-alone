@@ -335,7 +335,7 @@ describe('a step rebuilds only the props, the ground columns do not depend on th
     expect(mesh(view, 'prop-tree').instanceMatrix.version).toBeGreaterThan(propVersion);
   });
 
-  it('a step draws the same instances as a fresh build at the new hero, cell for cell: the look does not change', () => {
+  it('a step draws the same instances as a fresh build at the new hero: the same set, the look does not change (#1054 moves them)', () => {
     const models = { low: { mountain: box() }, high: { mountain: box() } };
     const stepped = new OpenWorldView(new World(bytes));
     stepped.resize(1600, 900);
@@ -346,7 +346,164 @@ describe('a step rebuilds only the props, the ground columns do not depend on th
     fresh.resize(1600, 900);
     fresh.useModels(models);
     fresh.show([1, 0]);
-    for (const name of everyMesh(fresh)) expect(drawnOf(mesh(stepped, name)), name).toEqual(drawnOf(mesh(fresh, name)));
+    for (const name of everyMesh(fresh)) expect(setOf(mesh(stepped, name)), name).toEqual(setOf(mesh(fresh, name)));
+  });
+});
+
+// The instances of a mesh as a set of matrix and colour strings: a step moves an instance to a free index, so the order differs.
+const setOf = (m: THREE.InstancedMesh): string[] =>
+  Array.from({ length: m.count }, (_, i) => `${m.instanceMatrix.array.slice(i * 16, i * 16 + 16).join()}|${m.instanceColor!.array.slice(i * 3, i * 3 + 3).join()}`).sort();
+// The instances of a mesh by the cell they stand on, as their matrix and colour.
+const byCell = (view: OpenWorldView, name: string): Map<string, string> => {
+  const m = mesh(view, name);
+  const out = new Map<string, string>();
+  cellsOf(view, name).forEach(([q, r], i) => {
+    out.set(`${q},${r}`, `${m.instanceMatrix.array.slice(i * 16, i * 16 + 16).join()}|${m.instanceColor!.array.slice(i * 3, i * 3 + 3).join()}`);
+  });
+  return out;
+};
+
+describe('a step moves only the props near the hero (#1054)', () => {
+  afterEach(() => vi.restoreAllMocks());
+  // The cells of a box of 41 x 41 cells around `centre`: the widest ball around it and its neighbours.
+  const around = (centre: Axial = [0, 0]): Axial[] => {
+    const cells: Axial[] = [];
+    for (let q = centre[0] - 20; q <= centre[0] + 20; q++) for (let r = centre[1] - 20; r <= centre[1] + 20; r++) cells.push([q, r]);
+    return cells;
+  };
+  const ballOf = (centre: Axial, cell: Axial) => hexDistance(cell, centre) <= HI_RADIUS;
+  const meshNames = (view: OpenWorldView): string[] =>
+    [...GROUNDS.map((g) => `terrain-${g}`), 'prop-mountain', 'prop-tree', 'prop-boulder', 'prop-wall', 'prop-cap', 'prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'].filter((n) => view.scene.getObjectByName(n));
+
+  it('writes only the props whose detail changes: the cells within HI_RADIUS of exactly one of the old and the new hero cell', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    const write = vi.spyOn(THREE.InstancedMesh.prototype, 'setMatrixAt');
+    view.show([1, 0]);
+    const switching = around().filter((cell) => ballOf([0, 0], cell) !== ballOf([1, 0], cell)).length;
+    expect(write).toHaveBeenCalledTimes(switching); // one write per prop that moves, not one per prop of the 441 chunks
+    expect(switching).toBeLessThan(60);
+  });
+
+  it('keeps the far props and the near ones that stay near as they are: the same instance on the same cell', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    const plain = byCell(view, 'prop-mountain');
+    const detailed = byCell(view, 'prop-mountain-hi');
+    view.show([1, 0]);
+    const plainAfter = byCell(view, 'prop-mountain');
+    const detailedAfter = byCell(view, 'prop-mountain-hi');
+    for (const cell of around()) {
+      const key = `${cell[0]},${cell[1]}`;
+      if (ballOf([0, 0], cell) === ballOf([1, 0], cell)) {
+        const before = ballOf([0, 0], cell) ? detailed : plain;
+        const after = ballOf([1, 0], cell) ? detailedAfter : plainAfter;
+        if (before.has(key)) expect(after.get(key), key).toBe(before.get(key));
+      }
+    }
+  });
+
+  it('a prop that leaves the radius goes back to its plain mesh, and one that comes within it is drawn in detail', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    expect(cellsOf(view, 'prop-mountain-hi')).toContainEqual([-8, 0]); // 8 from the origin
+    view.show([1, 0]); // 9 from here
+    expect(cellsOf(view, 'prop-mountain-hi')).not.toContainEqual([-8, 0]);
+    expect(cellsOf(view, 'prop-mountain')).toContainEqual([-8, 0]);
+    expect(cellsOf(view, 'prop-mountain-hi')).toContainEqual([9, 0]); // 8 from here, 9 from the origin
+    expect(cellsOf(view, 'prop-mountain')).not.toContainEqual([9, 0]);
+    expect(view.drawn['prop-mountain-hi']).toBe(HI_CAPACITY);
+    view.show([0, 0]); // back: the cell returns to the detailed mesh
+    expect(cellsOf(view, 'prop-mountain-hi')).toContainEqual([-8, 0]);
+    expect(cellsOf(view, 'prop-mountain')).not.toContainEqual([-8, 0]);
+  });
+
+  it('writes nothing when no detailed model has arrived: every prop stays on its plain mesh', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: {} });
+    view.show([0, 0]);
+    const write = vi.spyOn(THREE.InstancedMesh.prototype, 'setMatrixAt');
+    view.show([1, 0]);
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('moves a prop only where there is one on the world: a cell of another terrain or off the world writes nothing', () => {
+    const world = new World(bytes); // the chunks -3..3 are on the world: q runs from -48 to 63, the cells past it are off the world
+    const view = new OpenWorldView(world);
+    view.resize(1600, 900);
+    const models = { mountain: box(), tree: box(), boulder: box(), wall: box() };
+    view.useModels({ low: models, high: models });
+    view.show([58, 0]); // the hero's ball reaches past the edge of the world at q = 63
+    const write = vi.spyOn(THREE.InstancedMesh.prototype, 'setMatrixAt');
+    view.show([59, 0]);
+    const expected = around([58, 0]).filter((cell) => {
+      const tile = world.tile(cell[0], cell[1]);
+      return tile !== undefined && ['peak', 'tree', 'boulder', 'wall'].includes(tile.terrain) && ballOf([58, 0], cell) !== ballOf([59, 0], cell);
+    }).length;
+    expect(write).toHaveBeenCalledTimes(expected);
+    expect(expected).toBeGreaterThan(0);
+  });
+
+  it('a chunk rebuild still resets everything: every ground and prop is laid again, not only the ones that move', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    view.show([1, 0]);
+    const reach = view.reach;
+    const write = vi.spyOn(THREE.InstancedMesh.prototype, 'setMatrixAt');
+    view.show([reach * CHUNK, 0]); // the edge of the square, still on the world: the square moves, so the grounds and every prop are written
+    expect(view.centreChunk).toEqual([reach, 0]);
+    expect(write).toHaveBeenCalledTimes(2 * ground(view));
+    expect(view.drawn['prop-mountain'] + view.drawn['prop-mountain-hi']).toBe(ground(view));
+  });
+
+  it('keeps the instances of a walk the same as a fresh build at the last cell, as a set, on every mesh', () => {
+    const models = { low: { mountain: box(), tree: box(), boulder: box(), wall: box() }, high: { mountain: box(), tree: box(), boulder: box(), wall: box() } };
+    const path: Axial[] = [[0, 0], [1, 0], [2, 0], [3, 1], [4, 1], [5, 2], [6, 3], [7, 4], [8, 4], [9, 5], [10, 6], [11, 6], [12, 7], [12, 8], [11, 9], [10, 10], [9, 10], [8, 11], [7, 12], [6, 12]];
+    const walked = new OpenWorldView(new World(bytes));
+    walked.resize(1600, 900);
+    walked.useModels(models);
+    for (const cell of path) {
+      walked.show(cell);
+      const fresh = new OpenWorldView(new World(bytes));
+      fresh.resize(1600, 900);
+      fresh.useModels(models);
+      fresh.show(cell);
+      for (const name of meshNames(fresh)) expect(setOf(mesh(walked, name)), `${name} at ${cell}`).toEqual(setOf(mesh(fresh, name)));
+    }
+  });
+
+  it('a step that needs more instances than its mesh holds grows the mesh and keeps the instances it had (#1054)', () => {
+    // Peaks on every chunk of the widest square (21 x 21 chunks) but one: the hole at chunk (2, 0) empties one cell of the ball around (24, 0).
+    const holed = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > MAX_REACH || Math.abs(cy) > MAX_REACH || (cx === 2 && cy === 0)) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(holed));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.zoomBy(MAX_ZOOM * 2); // the widest zoom: the square is MAX_REACH chunks around the origin, and its build sizes the mesh exactly
+    view.show([0, 0]);
+    const laid = mesh(view, 'prop-mountain');
+    expect(view.reach).toBe(MAX_REACH);
+    expect(laid.count).toBe(laid.instanceMatrix.count); // the plain props of the square fill the mesh: no slack
+    view.show([24, 0]); // the ball around (24, 0) holds one cell fewer than the origin's: one plain prop more than the mesh has room for
+    const grown = mesh(view, 'prop-mountain');
+    expect(grown).not.toBe(laid);
+    expect(view.drawn['prop-mountain']).toBe(laid.count + 1);
+    expect(view.drawn['prop-mountain-hi']).toBe(HI_CAPACITY - 1);
+    expect(cellsOf(view, 'prop-mountain')).toContainEqual([-8, 0]); // a plain prop that the grown mesh keeps
+    expect(new Set(cellsOf(view, 'prop-mountain').map(String)).size).toBe(view.drawn['prop-mountain']);
   });
 });
 
