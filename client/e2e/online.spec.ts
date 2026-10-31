@@ -622,22 +622,25 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   for (const page of rest) await page.context().close();
 });
 
-// The player moves of a co-op fight against The Echo, seat 1 then seat 2 in turn, that end in a draw by repetition
-// against its deterministic search replies (#859, 100 nodes since #951), found with the engine.
-const COOP_DRAW: [number, number, number, number][] = [
-  [0, 2, 0, 1],
-  [-4, 3, -3, 2],
-  [-3, 2, -3, 1],
-  [-1, 2, 0, 2],
-  [-1, 2, -2, 3],
-  [-1, 2, -2, 3],
+// The player moves of a co-op fight against The Echo that end in a draw by repetition against its deterministic search
+// replies (#859, 100 nodes since #951), found with the engine. A seat's turn is the free moves The Echo offers it (#958)
+// and then its main move, which the boss answers: [seat (0 = A, 1 = B), from q, from r, to q, to r, plies on every page
+// once it is played]. The 7th move ends the fight: no boss reply.
+const COOP_DRAW: [number, number, number, number, number, number][] = [
+  [0, -4, 3, -3, 2, 2],
+  [1, 1, 3, 2, 2, 3], // seat 2 takes the free move offered
+  [1, 2, 2, 3, 1, 5],
+  [0, 3, 1, 2, 1, 6], // seat 1 takes the free move offered
+  [0, 2, 1, 3, 1, 8],
+  [1, 3, 1, 2, 1, 9],
+  [1, 2, 1, 3, 1, 10],
 ];
 
 // Co-op (docs/specs/coop-boss.md, #529, #530): page A opens the room with Fight together in the mode menu. Both pages
 // fight The Echo together: each human move is followed on every page by the boss reply its own engine computes. The
-// Echo's search is deterministic and each move's mirror is a bonus move for the other side (#859), so COOP_DRAW, the
-// seats in turn, ends in a draw by repetition at the 6th player move (11 moves with the boss replies): a Defeat on
-// both pages.
+// Echo's search is deterministic and each move's mirror is a bonus move for the other side (#859), offered to the
+// next seat (#958), so COOP_DRAW ends in a draw by repetition at the 7th player move (10 plies with the boss replies
+// and the free moves taken): a Defeat on both pages.
 test('a co-op boss fight from Fight together: the seats take turns, both pages play the boss replies and end alike, #529 #530', async ({ browser }) => {
   const [a, b] = await Promise.all([0, 1].map(async () => (await browser.newContext()).newPage()));
   await calm(a, b);
@@ -666,11 +669,10 @@ test('a co-op boss fight from Fight together: the seats take turns, both pages p
   await play(b, 0, 2); // seat 1 plays first: a move from seat 2 changes nothing
   await play(b, 0, 1);
   expect(await plies(b)).toBe(0);
-  for (const [k, [fq, fr, tq, tr]] of COOP_DRAW.entries()) {
-    const [mover, other] = k % 2 === 0 ? [a, b] : [b, a];
+  for (const [k, [seatNo, fq, fr, tq, tr, done]] of COOP_DRAW.entries()) {
+    const [mover, other] = seatNo === 0 ? [a, b] : [b, a];
     await play(mover, fq, fr);
     await play(mover, tq, tr);
-    const done = k === COOP_DRAW.length - 1 ? 2 * k + 1 : 2 * k + 2; // the last move ends the fight: no boss reply
     await expect.poll(() => plies(other)).toBe(done);
     if (k === 0) {
       await expect(turn(a)).toHaveText("Partner's turn");
@@ -714,11 +716,11 @@ test('a co-op Retry once both seats asked restarts the same fight, attempt 2 on 
   await seat(b, 'player');
   await expect(status(a)).toHaveText('Your partner is here.');
   for (const page of [a, b]) await expect(page.locator('#hud .boss')).toContainText('Fight together · attempt 1');
-  for (const [k, [fq, fr, tq, tr]] of COOP_DRAW.entries()) {
-    const [mover, other] = k % 2 === 0 ? [a, b] : [b, a];
+  for (const [seatNo, fq, fr, tq, tr, done] of COOP_DRAW) {
+    const [mover, other] = seatNo === 0 ? [a, b] : [b, a];
     await play(mover, fq, fr);
     await play(mover, tq, tr);
-    await expect.poll(() => plies(other)).toBe(k === COOP_DRAW.length - 1 ? 2 * k + 1 : 2 * k + 2);
+    await expect.poll(() => plies(other)).toBe(done);
   }
   for (const page of [a, b]) await expect(page.locator('#hud .turn')).toHaveText('Defeat');
 
@@ -726,7 +728,7 @@ test('a co-op Retry once both seats asked restarts the same fight, attempt 2 on 
   await expect(asked(a)).toHaveText('You asked for a retry. Waiting for your partner...');
   await expect(retry(a)).toBeDisabled();
   await expect(asked(b)).toHaveText('Your partner asks for a retry.');
-  expect(await plies(b)).toBe(11); // nothing starts on one ask
+  expect(await plies(b)).toBe(10); // nothing starts on one ask
   await retry(b).click();
   for (const page of [a, b]) {
     await expect.poll(() => plies(page)).toBe(0);
