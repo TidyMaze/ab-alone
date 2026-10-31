@@ -988,3 +988,14 @@ body[data-over] #hud .end { animation: end-line var(--motion-base) var(--ease-ou
 #boss-bar .frag.broke { animation: frag-burst var(--motion-base) var(--ease-out); }
 @keyframes chip-flash { from { transform: scale(1.12); } }
 #boss-bar .chip.next { animation: chip-flash var(--motion-fast) var(--ease-out); }
+
+/* Refusal, hint and copy motion (#1097, #1098, docs/specs/motion.md stories 7 and 8). A refused move shakes the turn line once on
+   --motion-fast, and the HUD says "not a legal move" (the text stays under Reduced motion). The Hint button draws in on --motion-base
+   when its move is shown. A copied result draws a check mark on --motion-fast and reads "Copied". Reduced motion: the tokens are 0ms,
+   so the cues show at their end state. */
+@keyframes refuse { 20% { transform: translateX(-4px); } 60% { transform: translateX(4px); } }
+body.refused #hud .turn { animation: refuse var(--motion-fast) var(--ease-out); }
+@keyframes hint-in { from { opacity: 0.4; transform: scale(1.12); } }
+body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease-out); }
+@keyframes check-in { from { clip-path: inset(0 100% 0 0); } }
+#daily-copy.copied::before { content: '\2713'; display: inline-block; margin-right: 0.4em; animation: check-in var(--motion-fast) var(--ease-out); }

@@ -10,3 +10,13 @@ export const EASE = {
 
 /** Whether motion is cut: the `data-motion='reduced'` switch main.ts sets from `motionReduced` (settings.ts). */
 export const reducedMotion = (root: { dataset: DOMStringMap } = document.documentElement): boolean => root.dataset.motion === 'reduced';
+
+/** Plays a one-shot CSS cue: `cls` goes on `el` (again from the start if it was on) and off after `ms`, so a later redraw never replays it. */
+const cueTimers = new WeakMap<Element, ReturnType<typeof setTimeout>>();
+export function cue(el: Element, cls: string, ms: number): void {
+  el.classList.remove(cls);
+  void (el as HTMLElement).offsetWidth; // a reflow, so the animation starts over
+  el.classList.add(cls);
+  clearTimeout(cueTimers.get(el));
+  cueTimers.set(el, setTimeout(() => el.classList.remove(cls), ms));
+}

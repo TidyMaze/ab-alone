@@ -298,11 +298,16 @@ describe('a click', () => {
     const black = legal(game).find((m) => m.cells.length === 1)!.cells[0]!;
     game.click(...black);
     expect(rings(game)).toEqual([black]);
+    expect(document.body.classList.contains('refused')).toBe(false);
     game.click(0, 0); // the empty centre is no target of that marble
     expect(rings(game)).toEqual([black]);
     expect(plies(game)).toBe(0);
+    expect(document.body.classList.contains('refused')).toBe(true); // the turn line shakes (#1097)
+    expect(game.hud()).toContain(' · not a legal move');
     game.click(...black);
     expect(rings(game)).toEqual([]);
+    game.click(0, 0); // nothing selected: nothing was refused
+    expect(game.hud()).not.toContain('not a legal move');
   });
 
   it('waits for the opponent online: a move would reach nobody', async () => {

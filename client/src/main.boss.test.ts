@@ -466,10 +466,13 @@ describe('main.ts daily challenge', () => {
     }
     expect(writeText).toHaveBeenCalledWith(text.value);
     expect(game.hud()).toContain(' · result copied');
+    const copy = byId('daily-copy');
+    expect([copy.textContent, copy.classList.contains('copied')]).toEqual(['Copied', true]); // the check draws in (#1098)
     // Retry hides the card again: the new attempt is on.
     byId('boss-retry').click();
     expect(card.hidden).toBe(true);
     expect(text.value).toBe('');
+    expect([copy.textContent, copy.classList.contains('copied')]).toEqual(['Copy result', false]);
   });
 
   it('when the browser refuses the clipboard, the result is selected to copy by hand, and stays selected', async () => {
@@ -481,6 +484,7 @@ describe('main.ts daily challenge', () => {
     byId('daily-copy').click(); // jsdom has no clipboard: the copy fails
     await game.settle();
     expect(game.hud()).toContain(' · result selected: copy it by hand');
+    expect(byId('daily-copy').textContent).toBe('Copy result'); // nothing was copied
     expect(document.activeElement).toBe(text);
     expect([text.selectionStart, text.selectionEnd]).toEqual([0, text.value.length]); // the HUD update kept it
   });
