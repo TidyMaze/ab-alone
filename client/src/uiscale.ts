@@ -4,8 +4,8 @@
 export const UI_SCALES = [100, 125, 150, 175, 200] as const;
 export type UiScale = (typeof UI_SCALES)[number];
 
-/** The largest step the window has room for: 200 % from a 1600 by 900 window up, 100 % below. */
-export const maxUiScale = (width: number, height: number): UiScale => (width >= 1600 && height >= 900 ? 200 : 100);
+/** The largest step the window has room for: 200 % from a 1600 by 900 window up, 150 % from 800 px wide, 125 % on a phone (#927). */
+export const maxUiScale = (width: number, height: number): UiScale => (width >= 1600 && height >= 900 ? 200 : width >= 800 ? 150 : 125);
 
 /** A stored step, applied at the cap when it is above it. */
 export const clampUiScale = (scale: UiScale, max: UiScale): UiScale => (scale > max ? max : scale);
