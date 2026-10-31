@@ -53,5 +53,7 @@ test('a replay at the start shows the start position evaluated, not the result o
   await page.getByRole('button', { name: 'Replay', exact: true }).click();
   await page.locator('#replay-first').click();
   await expect(page.locator('#replay-label')).toHaveText(`Move 0 of ${BLACK_WINS.length}`);
-  await expect(page.locator('#eval .label')).toHaveText('Even');
+  // The engine's search score of the start position is small and not exactly 0: the bar reads "Black +0.1" on main
+  // (b5e5a31, after #1048). The bar shows that evaluation in words, never the result ("winning").
+  await expect(page.locator('#eval .label')).toHaveText(/^(Even|(Black|White) \+\d+\.\d)$/);
 });
