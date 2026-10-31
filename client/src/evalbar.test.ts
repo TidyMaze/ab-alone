@@ -39,17 +39,18 @@ describe('evalText', () => {
     expect(evalText(-38, 1, 2)).toBe('White +0.4');
   });
 
-  it('names the winner of a decided game, and says wins once the game is over', () => {
+  // #1038: the bar is an evaluation. A decided position reads "winning", never the final "wins" of the result.
+  it('names the leader of a decided position as winning, never as the result', () => {
     expect(evalText(WIN_SCORE - 3, 2, 2)).toBe('White winning');
     expect(evalText(-(WIN_SCORE - 2), 2, 2)).toBe('Black winning');
-    expect(evalText(-WIN_SCORE, 2, 2)).toBe('Black wins');
-    expect(evalText(WIN_SCORE, 1, 2)).toBe('Black wins');
+    expect(evalText(-WIN_SCORE, 2, 2)).toBe('Black winning');
+    expect(evalText(WIN_SCORE, 1, 2)).toBe('Black winning');
   });
 
   it('names the side wearing the pale glass White: against the bot side 1 is White', () => {
     expect(evalText(150, 1, 1)).toBe('White +1.5');
     expect(evalText(-150, 1, 1)).toBe('Black +1.5');
-    expect(evalText(-WIN_SCORE, 1, 1)).toBe('Black wins'); // side 1 to move has lost: side 2 is the shell, Black
+    expect(evalText(-WIN_SCORE, 1, 1)).toBe('Black winning'); // side 1 to move has lost: side 2 is the shell, Black
   });
 });
 

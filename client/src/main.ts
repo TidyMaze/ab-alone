@@ -2038,7 +2038,7 @@ let analysing = true;
 function analyse(): void {
   if (!analysing) return;
   evalBar.hidden = false;
-  analyst.request({ history: history.slice(), side: engine.to_move() });
+  analyst.request({ history: history.slice(0, shownPly()), side: engine.to_move() }); // the position on show: a replay evaluates its own (#1038)
 }
 function stopAnalysis(): void {
   analysing = false;
@@ -2130,6 +2130,7 @@ function showPly(ply: number): void {
   hint.clear();
   skipEjections();
   refresh();
+  analyse(); // the bar shows this position's evaluation, not the last live one (#1038)
 }
 function leaveReplay(): void {
   if (replaying) engine = replaying.live;
@@ -2138,6 +2139,7 @@ function leaveReplay(): void {
 function liveAgain(): void {
   leaveReplay();
   refresh();
+  analyse(); // back on the live position, the bar follows it again (#1038)
 }
 function stepReplay(step: ReplayStep): void {
   showPly(stepPly(shownPly(), step, history.length));
