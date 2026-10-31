@@ -330,9 +330,9 @@ describe('a step rebuilds only the props, the ground columns do not depend on th
     const grounds = GROUNDS.map((g) => mesh(view, `terrain-${g}`));
     const versions = grounds.map((m) => [m.instanceMatrix.version, m.instanceColor!.version]);
     const propVersion = mesh(view, 'prop-tree').instanceMatrix.version;
-    view.show([1, 0]);
+    view.show([1, 0]); // no detailed model: no prop switches between its meshes, so none is written (#1054)
     expect(grounds.map((m) => [m.instanceMatrix.version, m.instanceColor!.version])).toEqual(versions);
-    expect(mesh(view, 'prop-tree').instanceMatrix.version).toBeGreaterThan(propVersion);
+    expect(mesh(view, 'prop-tree').instanceMatrix.version).toBe(propVersion);
   });
 
   it('a step draws the same instances as a fresh build at the new hero: the same set, the look does not change (#1054 moves them)', () => {
@@ -462,7 +462,7 @@ describe('a step moves only the props near the hero (#1054)', () => {
     view.show([reach * CHUNK, 0]); // the edge of the square, still on the world: the square moves, so the grounds and every prop are written
     expect(view.centreChunk).toEqual([reach, 0]);
     expect(write).toHaveBeenCalledTimes(2 * ground(view));
-    expect(view.drawn['prop-mountain'] + view.drawn['prop-mountain-hi']).toBe(ground(view));
+    expect((view.drawn['prop-mountain'] ?? 0) + (view.drawn['prop-mountain-hi'] ?? 0)).toBe(ground(view));
   });
 
   it('keeps the instances of a walk the same as a fresh build at the last cell, as a set, on every mesh', () => {
@@ -895,9 +895,9 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     const reach = view.reach;
     const version = mesh(view, 'terrain-grass').instanceMatrix.version;
     const propVersion = mesh(view, 'prop-tree').instanceMatrix.version;
-    view.show([1, 1]); // the same chunk: the split of the detailed props is redrawn with the hero's cell, the reach kept (#989)
+    view.show([1, 1]); // the same chunk: the reach is kept, and only the props that switch between detailed and plain are written (#1054)
     expect(view.reach).toBe(reach);
-    expect(mesh(view, 'prop-tree').instanceMatrix.version).toBeGreaterThan(propVersion);
+    expect(mesh(view, 'prop-tree').instanceMatrix.version).toBe(propVersion); // no tree here, and no detailed model: nothing switches
     expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version); // the grounds do not depend on the hero (#1034)
     view.show([CHUNK, 0]); // the next chunk, still inside the square at this zoom: the centre and the grounds are kept (#1046)
     expect(view.centreChunk).toEqual([0, 0]);

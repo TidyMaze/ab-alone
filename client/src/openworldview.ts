@@ -279,6 +279,22 @@ type Lay = (prop: Prop, near: boolean, x: number, y: number, z: number, scaleY: 
 const WHITE = 0xffffff;
 /** A cell with no height: the props of a count are laid at no place, so the position they are given is never read. */
 const NOWHERE = { x: 0, z: 0 };
+/** The modelled prop of each terrain: a step moves its instance between the low-poly and the detailed mesh (#1054). */
+const PROP_OF: Partial<Record<Terrain, Prop>> = { peak: 'mountain', tree: 'tree', boulder: 'boulder', wall: 'wall' };
+/** A cell as one number, the key of its instance in a props mesh. The offset keeps the axial coordinates of any world positive. */
+const KEY_SPAN = 2 ** 22;
+const cellKey = (q: number, r: number): number => (q + KEY_SPAN / 2) * KEY_SPAN + (r + KEY_SPAN / 2);
+/** The instances of a props mesh by cell (#1054): `cells[i]` is the cell of instance `i`, `at` the instance of each cell. */
+interface Slots {
+  cells: number[];
+  at: Map<number, number>;
+}
+/** The cells within `HI_RADIUS` of `centre` (the hex ball), each visited once. */
+const eachNear = (centre: Axial, visit: (cell: Axial) => void): void => {
+  for (let dq = -HI_RADIUS; dq <= HI_RADIUS; dq++) {
+    for (let dr = Math.max(-HI_RADIUS, -dq - HI_RADIUS); dr <= Math.min(HI_RADIUS, -dq + HI_RADIUS); dr++) visit([centre[0] + dq, centre[1] + dr]);
+  }
+};
 
 /** A push as the mode has played it: the hero and the troop before it (the hero first), the enemies before it, and the push the bridge
  * gave (`readPush`). The view draws the way from the first cells to the second ones. */
@@ -338,7 +354,7 @@ export class OpenWorldView {
   /** The chunk the loaded square is centred on: kept while the square covers the hero's ball, else the hero's chunk (#1046). */
   private centre: Axial = [0, 0];
   /** The chunks drawn (the centre and the reach): a change lays every mesh again. `drawnKey` adds the hero's cell, which only
-   * the props depend on, so a step lays the props alone (#1034). */
+   * the props depend on, so a step moves the props that switch between detailed and plain, and no others (#1034, #1054). */
   private drawnChunks = '';
   private drawnKey = '';
   private loadedReach = 0;
@@ -347,6 +363,10 @@ export class OpenWorldView {
   /** The detailed meshes of the modelled props, and the props whose detailed model has arrived: only those draw near the hero. */
   private readonly detailed: Partial<Record<Prop, THREE.InstancedMesh>> = {};
   private readonly detailedReady = new Set<Prop>();
+  /** The instances of each props mesh by cell: a step moves the cells that cross `HI_RADIUS` between two meshes (#1054). */
+  private readonly slots = new Map<THREE.InstancedMesh, Slots>();
+  /** The hero cell the props are laid for: a step moves the props from it to the new cell. Undefined until a build lays them. */
+  private laidHero: Axial | undefined;
   /** The meshes a build lays: the ground columns, the props and the detailed props. */
   private readonly managed: THREE.InstancedMesh[] = [];
   /** What a build or a model swap replaced, freed by `drain` after the next frame (#1017). */
@@ -456,6 +476,7 @@ export class OpenWorldView {
       this.detailedReady.add(prop);
     }
     this.drawnKey = '';
+    this.laidHero = undefined; // the next frame lays every prop again: the meshes it replaced are empty
     this.frame();
   }
 
@@ -841,7 +862,8 @@ export class OpenWorldView {
     const radius = Math.max(...corners.map((p) => hexDistance(cellAtPoint(p.x, p.z), hero)));
     const reach = Math.min(MAX_REACH, reachFor(radius));
     // The centre is kept while the square still covers the hero's ball: a step across a chunk line then lays the props alone (#1046).
-    if (!covers(this.centre, reach, hero, radius)) this.centre = chunkOf(hero);
+    // The detailed props' ball (HI_RADIUS) lies in the square too, so a step only moves props that are loaded (#1054).
+    if (!covers(this.centre, reach, hero, Math.max(radius, HI_RADIUS))) this.centre = chunkOf(hero);
     const chunks = `${this.centre},${reach}`;
     const key = `${chunks},${hero}`; // the hero's cell too: it sets which props are detailed (#989)
     if (chunks !== this.drawnChunks) {
@@ -851,7 +873,8 @@ export class OpenWorldView {
       this.build(this.centre[0], this.centre[1], reach, hero, true);
     } else if (key !== this.drawnKey) {
       this.drawnKey = key;
-      this.build(this.centre[0], this.centre[1], reach, hero, false);
+      if (this.laidHero) this.shift(this.laidHero, hero);
+      else this.build(this.centre[0], this.centre[1], reach, hero, false);
     }
   }
 
@@ -1024,7 +1047,17 @@ export class OpenWorldView {
       mesh.setColorAt(n, this.colour.set(colour));
       counts.set(mesh, n + 1);
     };
-    const lay: Lay = (prop, near, x, y, z, scaleY, colour) => put(this.route(prop, near), x, y, z, scaleY, colour);
+    // The props are laid by their cell too, so a step can move one of them (`slots`, #1054).
+    this.slots.clear();
+    for (const mesh of this.propMeshes()) this.slots.set(mesh, { cells: [], at: new Map() });
+    let cell = 0;
+    const lay: Lay = (prop, near, x, y, z, scaleY, colour) => {
+      const mesh = this.route(prop, near);
+      put(mesh, x, y, z, scaleY, colour);
+      const slots = this.slots.get(mesh)!;
+      slots.at.set(cell, slots.cells.length);
+      slots.cells.push(cell);
+    };
     for (let ky = cy - reach; ky <= cy + reach; ky++) {
       for (let kx = cx - reach; kx <= cx + reach; kx++) {
         this.world.chunk(kx, ky).forEach((tile, i) => {
@@ -1037,6 +1070,7 @@ export class OpenWorldView {
             put(this.grounds[ground], p.x, top / 2, p.z, top, groundColour(tile, ground));
             if (ground === 'water') this.grounds.water.setColorAt(counts.get(this.grounds.water)! - 1, waterColor(this.world, q, r));
           }
+          cell = cellKey(q, r);
           this.stand(tile, q, r, p, top, lay, hexDistance([q, r], hero) <= HI_RADIUS);
         });
       }
@@ -1047,6 +1081,100 @@ export class OpenWorldView {
       mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceColor!.needsUpdate = true;
     }
+    this.laidHero = hero;
+  }
+
+  /** The props' meshes: the low-poly mesh of each prop, and the detailed mesh of each modelled prop. */
+  private propMeshes(): THREE.InstancedMesh[] {
+    return [...PROP_NAMES.map((prop) => this.props[prop]), ...MODELLED.map((prop) => this.detailed[prop]!)];
+  }
+
+  /** A step from the cell `from` to `to` moves only the props whose detail changes: the cells within `HI_RADIUS` of exactly one of
+   * the two (#1054). Each leaving cell goes back to its low-poly mesh, each entering one to its detailed mesh; the other props keep
+   * their instances. The chunks are the ones the props are laid on: `frame` rebuilds them when they change. */
+  private shift(from: Axial, to: Axial): void {
+    eachNear(from, (cell) => {
+      if (hexDistance(cell, to) > HI_RADIUS) this.moveProp(cell, false);
+    });
+    eachNear(to, (cell) => {
+      if (hexDistance(cell, from) > HI_RADIUS) this.moveProp(cell, true);
+    });
+    this.laidHero = to;
+  }
+
+  /** Moves the prop of `cell` to the mesh of its new detail, `near` or not, when its prop changes mesh. A cell off the world has no
+   * tile, and a cell of another terrain no prop: neither is laid. Every cell within `HI_RADIUS` is loaded (`frame`). */
+  private moveProp(cell: Axial, near: boolean): void {
+    const [q, r] = cell;
+    const tile = this.world.tile(q, r);
+    const prop = tile && PROP_OF[tile.terrain];
+    if (!tile || !prop) return;
+    const from = this.route(prop, !near);
+    const to = this.route(prop, near);
+    if (from === to) return; // not detailed yet: the mesh stays the low-poly one
+    const key = cellKey(q, r);
+    this.removeProp(from, key);
+    const spot = { x: 0, y: 0, z: 0, scaleY: 0, colour: WHITE };
+    this.stand(tile, q, r, axialTo3D(q, r), topOf(GROUND[tile.terrain], tile.height), (name, _near, x, y, z, scaleY, colour) => {
+      if (name !== prop) return; // a wall's cap stays where it is
+      Object.assign(spot, { x, y, z, scaleY, colour });
+    }, near);
+    this.addProp(to, key, spot);
+  }
+
+  /** Takes the instance of the cell `key` out of a props mesh: its last instance takes its place, the count drops by one (#1054). */
+  private removeProp(mesh: THREE.InstancedMesh, key: number): void {
+    const slots = this.slots.get(mesh)!;
+    const at = slots.at.get(key)!;
+    const last = slots.cells.length - 1;
+    const moved = slots.cells.pop()!;
+    if (at !== last) {
+      mesh.instanceMatrix.array.copyWithin(at * 16, last * 16, last * 16 + 16);
+      mesh.instanceColor!.array.copyWithin(at * 3, last * 3, last * 3 + 3);
+      slots.cells[at] = moved;
+      slots.at.set(moved, at);
+    }
+    slots.at.delete(key);
+    this.written(mesh, last);
+  }
+
+  /** Puts a cell's prop at the end of a props mesh, at `spot` (its place, size and colour as `stand` lays it). A full mesh grows first
+   * (`grow`), up to `MOST`. */
+  private addProp(mesh: THREE.InstancedMesh, key: number, spot: { x: number; y: number; z: number; scaleY: number; colour: number }): void {
+    const target = mesh.instanceMatrix.count > this.slots.get(mesh)!.cells.length ? mesh : this.grow(mesh);
+    const slots = this.slots.get(target)!;
+    const n = slots.cells.length;
+    const { dummy } = this;
+    dummy.position.set(spot.x, spot.y, spot.z);
+    dummy.scale.set(1, spot.scaleY, 1);
+    dummy.updateMatrix();
+    target.setMatrixAt(n, dummy.matrix);
+    target.setColorAt(n, this.colour.set(spot.colour));
+    slots.at.set(key, n);
+    slots.cells.push(key);
+    this.written(target, n + 1);
+  }
+
+  /** Sets a props mesh's count to `count` and flags its instances to upload (#1054). */
+  private written(mesh: THREE.InstancedMesh, count: number): void {
+    mesh.count = count;
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor!.needsUpdate = true;
+  }
+
+  /** The mesh that takes the place of a full props mesh: a larger one holding the instances it had, at the same indices, so its
+   * slots carry over (#1054). The replaced mesh is retired like a build's (`replace`). */
+  private grow(mesh: THREE.InstancedMesh): THREE.InstancedMesh {
+    const n = mesh.count;
+    const slots = this.slots.get(mesh)!;
+    const capacity = Math.min(MOST, Math.max(n + 1, Math.ceil(mesh.instanceMatrix.count * 1.5)));
+    const grown = this.replace(mesh, mesh.geometry.clone(), capacity);
+    grown.instanceMatrix.array.set(mesh.instanceMatrix.array.subarray(0, n * 16));
+    grown.instanceColor!.array.set(mesh.instanceColor!.array.subarray(0, n * 3));
+    this.slots.delete(mesh);
+    this.slots.set(grown, slots);
+    this.written(grown, n);
+    return grown;
   }
 
   /** The prop a tile carries on its ground, `top` high, tinted by its biome when it is a tree or a boulder. */
