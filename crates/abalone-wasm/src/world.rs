@@ -58,7 +58,7 @@ pub fn world_enemies(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
 /// water, `2` edge, with the ejected enemy's cell before the push (`0, 0` when none), and the push's
 /// direction as an axial step.
 #[wasm_bindgen]
-pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>) -> Vec<i32> {
+pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>, _broken: Vec<i32>) -> Vec<i32> {
     let terrain = |q, r| terrain_at(u64::from(seed), q, r);
     push_encoded(&pairs(&troop), &pairs(&enemies), &terrain)
 }
@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn a_slide_keeps_the_order_of_the_troop_and_moves_the_enemy() {
         // The hero (0,0) and the marble (-1,0) push the enemy (1,0) east to (2,0), on the spawn clearing.
-        let out = world_push(9, vec![0, 0, -1, 0], vec![1, 0]);
+        let out = world_push(9, vec![0, 0, -1, 0], vec![1, 0], vec![]);
         assert_eq!(out, vec![0, 0, 0, 2, 1, 0, 0, 0, 1, 2, 0, 1, 0]);
     }
 
@@ -186,13 +186,37 @@ mod tests {
     #[test]
     fn a_push_off_the_world_ejects_the_last_enemy_as_kind_two() {
         // The world ends at q = 511: the enemy (511,0) is pushed onto (512,0), which is off it.
-        let out = world_push(9, vec![509, 0, 510, 0], vec![511, 0]);
+        let out = world_push(9, vec![509, 0, 510, 0], vec![511, 0], vec![]);
         assert_eq!(out, vec![511, 0, 2, 2, 510, 0, 511, 0, 0, 1, 0]);
     }
 
     #[test]
     fn no_legal_push_is_empty() {
-        assert!(world_push(9, vec![0, 0, -1, 0], vec![]).is_empty());
-        assert!(world_push(9, vec![0, 0], vec![1, 0]).is_empty());
+        assert!(world_push(9, vec![0, 0, -1, 0], vec![], vec![]).is_empty());
+        assert!(world_push(9, vec![0, 0], vec![1, 0], vec![]).is_empty());
+    }
+
+    /// A boulder or a tree of the seed 9 with a free cell on its west to start a line from, found in the world itself.
+    fn obstacle(kind: Terrain) -> (i32, i32) {
+        (-60..60)
+            .flat_map(|q| (-60..60).map(move |r| (q, r)))
+            .find(|&(q, r)| terrain_at(9, q, r) == Some(kind))
+            .unwrap()
+    }
+
+    #[test]
+    fn a_push_into_a_broken_obstacle_is_legal_and_into_an_unbroken_one_is_refused() {
+        for kind in [Terrain::Boulder, Terrain::Tree] {
+            let (q, r) = obstacle(kind);
+            // Two marbles push the enemy next to the obstacle east, onto it.
+            let troop = vec![q - 2, r, q - 3, r];
+            let enemies = vec![q - 1, r];
+            let refused = world_push(9, troop.clone(), enemies.clone(), vec![]);
+            assert!(refused.is_empty(), "{kind:?} blocks");
+            let elsewhere = world_push(9, troop.clone(), enemies.clone(), vec![q + 1, r]);
+            assert!(elsewhere.is_empty(), "another broken cell changes nothing");
+            let out = world_push(9, troop, enemies, vec![q, r]);
+            assert_eq!(out[..3], [0, 0, 0], "{kind:?} broken: the enemy slides");
+        }
     }
 }
