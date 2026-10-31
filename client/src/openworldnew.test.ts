@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bindNewWorld } from './openworldnew';
+import indexHtml from '../index.html?raw';
 
 // The HUD's New world control (#1021): an in-page confirmation before the save is discarded, the new seed in the URL.
 const hud = `
@@ -16,6 +17,15 @@ afterEach(() => {
   document.body.innerHTML = '';
   delete document.body.dataset.openworld;
   history.replaceState(null, '', '/');
+});
+
+// #1038: the sheet asks once. The button already says Discard and start new, so the question does not repeat it.
+describe('the New world sheet wording (#1038)', () => {
+  it("asks Discard this world's save? and keeps the button's name", () => {
+    expect(indexHtml).toContain("<p>Discard this world's save?</p>");
+    expect(indexHtml).toContain('>Discard and start new</button>');
+    expect(indexHtml).not.toContain('start a new one');
+  });
 });
 
 describe('the New world control of the Open world HUD (#1021)', () => {
