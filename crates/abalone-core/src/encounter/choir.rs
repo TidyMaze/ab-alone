@@ -7,12 +7,12 @@
 //! is removed at once, not counted as an ejection (a tie is broken by the fight seed). In P3 the
 //! last army plays two moves each boss turn.
 
-use crate::board::{Board, Cell};
+use crate::board::{Board, Cell, ChoirMarks};
 use crate::encounter::hull::mix;
 use crate::encounter::{carried_marks, BossDef, Encounter, PveResult};
 use crate::game::{Game, GameError};
 use crate::moves::{legal_moves, Move, Player};
-use crate::search::{search_with, Weights};
+use crate::search::{search_turns, Turns, Weights};
 
 type P = (i32, i32);
 
@@ -318,16 +318,45 @@ impl Choir {
         }
     }
 
-    /// The boss move for its turn: the army in turn, its own weights, node-limited. `None` on the
-    /// player's turn or when the game is over. The army in turn always has a move: an army with none
-    /// is skipped, and a boss with none passes.
+    /// What the search tree carries to follow the cycle: the armies, whose turn it is, the ejections.
+    fn marks(&self) -> ChoirMarks {
+        ChoirMarks {
+            armies: self
+                .members
+                .iter()
+                .map(|&(cell, army)| (cell, army.index() as u8))
+                .collect(),
+            pos: self.cycle_pos as u8,
+            second: self.second_move,
+            ejections: self.game().ejected(Player::Black),
+        }
+    }
+
+    /// The boss move for its turn: its own weights (those of the army in turn), node-limited. Every
+    /// boss ply of the tree is limited to the army in turn at that ply, the cycle, the removed
+    /// armies and the last army's two moves included. `None` on the player's turn or when the game
+    /// is over. The army in turn always has a move: an army with none is skipped, and a boss with
+    /// none passes.
     pub fn boss_move(&self) -> Option<Move> {
         if self.game().to_move() != Player::White {
             return None;
         }
-        let allow = |mv: &Move| self.check(mv).is_ok();
+        let mut board = self.game().board().clone();
+        board.set_choir(Some(self.marks()));
+        let game = self.game().clone().with_board(board);
         let weights = self.army_in_turn().weights();
-        search_with(self.game(), self.enc.boss.node_budget, weights, &allow).map(|r| r.mv)
+        let turns = Turns {
+            allowed: &tree_allowed,
+            next: &tree_next,
+        };
+        search_turns(
+            &game,
+            self.enc.boss.node_budget,
+            weights,
+            &tree_step,
+            &turns,
+        )
+        .map(|r| r.mv)
     }
 
     /// The player's move for auto-play (#792): node-limited like the boss's. `None` on the boss's
@@ -340,6 +369,109 @@ impl Choir {
     pub fn scale_node_budget(&mut self, percent: u32) {
         self.enc.scale_node_budget(percent);
     }
+}
+
+/// The army that owns every marble of `mv`, `None` when they are not all of one army.
+fn tree_army(marks: &ChoirMarks, mv: &Move) -> Option<u8> {
+    let owner = |cell: P| marks.armies.iter().find(|a| a.0 == cell).map(|a| a.1);
+    let army = owner(mv.cells[0])?;
+    mv.cells
+        .iter()
+        .all(|&cell| owner(cell) == Some(army))
+        .then_some(army)
+}
+
+/// The moves a side may play at a ply of the tree: the player any, the boss those of the army in
+/// turn (the next of the cycle with a move, as [`Choir::army_in_turn`]).
+fn tree_allowed(board: &Board, mover: Player, moves: Vec<Move>) -> Vec<Move> {
+    if mover == Player::Black {
+        return moves;
+    }
+    let marks = board
+        .choir()
+        .expect("the tree board carries the Choir marks");
+    let owners: Vec<Option<u8>> = moves.iter().map(|mv| tree_army(marks, mv)).collect();
+    let army = (0..CYCLE.len() as u8)
+        .map(|i| (marks.pos + i) % CYCLE.len() as u8)
+        .find(|&a| owners.contains(&Some(a)));
+    moves
+        .into_iter()
+        .zip(owners)
+        .filter(|(_, owner)| army.is_some() && *owner == army)
+        .map(|(mv, _)| mv)
+        .collect()
+}
+
+/// The side to move after a ply of the tree: the last army moves again in P3.
+fn tree_next(board: &Board, mover: Player) -> Player {
+    let again = board.choir().is_some_and(|marks| marks.second);
+    match mover {
+        Player::White if again => Player::White,
+        Player::White => Player::Black,
+        Player::Black => Player::White,
+    }
+}
+
+/// Marbles `army` has left in the tree.
+fn tree_marbles(marks: &ChoirMarks, army: u8) -> usize {
+    marks.armies.iter().filter(|a| a.1 == army).count()
+}
+
+/// One ply of the boss search tree: the armies follow the move and the pushes, a boss move turns
+/// the cycle, a player move that ejects counts for the phase and removes the weakest armies as
+/// `Choir::play` does (a tie goes to the first army: the tree does not know the fight seed). The
+/// plies credit no ejection of their own.
+fn tree_step(before: &Board, mover: Player, mv: &Move, mut after: Board) -> (Board, [u8; 2]) {
+    let mut marks = before
+        .choir()
+        .expect("the tree board carries the Choir marks")
+        .clone();
+    let cells: Vec<P> = marks.armies.iter().map(|a| a.0).collect();
+    let carried = carried_marks(before, mv, &cells);
+    let moved = tree_army(&marks, mv);
+    let kept: Vec<_> = carried
+        .into_iter()
+        .zip(&marks.armies)
+        .filter(|(c, _)| after.get(c.0, c.1) == Some(Cell::White))
+        .map(|(c, a)| (c, a.1))
+        .collect();
+    let lost = marks.armies.len() - kept.len();
+    marks.armies = kept;
+    let phase = |marks: &ChoirMarks| {
+        PHASE_EJECTIONS
+            .iter()
+            .filter(|&&t| marks.ejections >= t)
+            .count()
+    };
+    if mover == Player::White {
+        let army = moved.expect("a boss move uses one army");
+        if phase(&marks) == LAST_PHASE && !marks.second {
+            (marks.second, marks.pos) = (true, army);
+        } else {
+            (marks.second, marks.pos) = (false, (army + 1) % CYCLE.len() as u8);
+        }
+    } else {
+        marks.ejections += u8::from(lost > 0);
+        let alive = |marks: &ChoirMarks| {
+            (0..CYCLE.len() as u8)
+                .filter(|&a| tree_marbles(marks, a) > 0)
+                .collect::<Vec<u8>>()
+        };
+        while alive(&marks).len() > CYCLE.len() - phase(&marks) {
+            let weakest = alive(&marks)
+                .into_iter()
+                .min_by_key(|&a| tree_marbles(&marks, a))
+                .expect("an army is alive");
+            for &(cell, army) in &marks.armies {
+                if army == weakest {
+                    after.set(cell.0, cell.1, Cell::Empty);
+                }
+            }
+            marks.armies.retain(|a| a.1 != weakest);
+        }
+    }
+    after.set_choir(Some(marks));
+    (after, [0, 0])
 }
 
 /// The Choir boss definition. Its phases come from the player's ejections, and each phase

@@ -113,6 +113,22 @@ pub struct Board {
     /// The special marbles of a rogue-lite fight, in `q` then `r` order. `Some` is the rogue-lite
     /// flag: it also turns on their rules (docs/specs/roguelite.md section 5).
     specials: Option<Vec<((i32, i32), Special)>>,
+    /// The Choir's armies and turn order, only inside its search tree (#825).
+    choir: Option<ChoirMarks>,
+}
+
+/// What the Choir's search tree needs to play the army cycle: which army owns each boss marble and
+/// whose turn it is. The fight keeps the same in `Choir`; this copy rides on the tree's boards.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ChoirMarks {
+    /// Boss marbles with their army, the index in the cycle (0 to 2).
+    pub armies: Vec<((i32, i32), u8)>,
+    /// Index in the cycle of the army that moves next.
+    pub pos: u8,
+    /// The last army has played the first of its two moves this boss turn.
+    pub second: bool,
+    /// Marbles the player has ejected, which sets the phase.
+    pub ejections: u8,
 }
 
 /// A special marble of a rogue-lite fight (docs/specs/roguelite.md section 5).
@@ -231,6 +247,7 @@ impl Board {
             dual: None,
             echoes: Vec::new(),
             specials: None,
+            choir: None,
         }
     }
 
@@ -430,6 +447,15 @@ impl Board {
     /// Replaces the special marbles, after a ply moved them. Only on a rogue-lite board.
     pub(crate) fn set_specials(&mut self, specials: Vec<((i32, i32), Special)>) {
         self.specials = Some(specials);
+    }
+
+    /// The Choir's marks, `None` outside its search tree.
+    pub fn choir(&self) -> Option<&ChoirMarks> {
+        self.choir.as_ref()
+    }
+
+    pub fn set_choir(&mut self, choir: Option<ChoirMarks>) {
+        self.choir = choir;
     }
 
     /// Standard start layout: 14 marbles per side.
@@ -824,6 +850,21 @@ mod tests {
         board.set_unstable(Some(marks));
         assert_ne!(board, Board::empty());
         board.set_unstable(None);
+        assert_eq!(board, Board::empty());
+    }
+
+    #[test]
+    fn the_choir_marks_start_unset_and_are_replaced_whole() {
+        let mut board = Board::empty();
+        assert_eq!(board.choir(), None);
+        let marks = ChoirMarks {
+            armies: vec![((1, 0), 2)],
+            ..ChoirMarks::default()
+        };
+        board.set_choir(Some(marks.clone()));
+        assert_eq!(board.choir(), Some(&marks));
+        assert_ne!(board, Board::empty());
+        board.set_choir(None);
         assert_eq!(board, Board::empty());
     }
 }
