@@ -47,14 +47,12 @@ describe('settings', () => {
   const common = { generateMipmap: true, isYFlip: true, isKTX2File: true };
 
   it('encodes a normal map in UASTC, with RDO and Zstandard, linear', () => {
-    for (const file of ['deck-mess-normal.png', 'shell-normal.png', 'pbr/grate-normal.png']) {
+    for (const file of ['deck-mess-normal.png', 'shell-normal.png', 'skin-Lava001-normal.jpg']) {
       expect(settings(file)).toEqual({
         ...common,
         isUASTC: true,
         isNormalMap: true,
         enableRDO: true,
-        uastcLDRQualityLevel: 0,
-        rdoQualityLevel: 2,
         needSupercompression: true,
         isPerceptual: false,
         isSetKTX2SRGBTransferFunc: false,
@@ -62,12 +60,13 @@ describe('settings', () => {
     }
   });
 
-  it('encodes a normal map with the fastest UASTC effort and a stronger RDO, so it is smaller (#926)', () => {
-    // The effort level 0 and an RDO quality of 2 cut the bay's five normal maps from 2.90 MB to 1.66 MB, same format.
-    for (const file of ['deck-pbr-normal.png', 'pbr/board-normal.jpg', 'skin-Lava001-normal.jpg']) {
-      expect(settings(file)).toMatchObject({ uastcLDRQualityLevel: 0, rdoQualityLevel: 2 });
+  it('encodes the bay normal maps with a stronger RDO, so they are smaller, same format (#926)', () => {
+    // RDO quality 4 cuts the bay's five normal maps from 2.90 MB to 2.47 MB, UASTC and Zstandard kept.
+    for (const file of ['pbr/deck-pbr-normal.png', 'pbr/bulkhead-normal.png', 'pbr/grate-normal.png', 'pbr/plate-normal.png', 'pbr/board-normal.jpg']) {
+      expect(settings(file)).toMatchObject({ isUASTC: true, enableRDO: true, rdoQualityLevel: 4, needSupercompression: true, isNormalMap: true });
+      expect(settings(file)).not.toHaveProperty('uastcLDRQualityLevel');
     }
-    // A colour or data map keeps its settings.
+    // A colour or data map of the bay keeps its settings.
     expect(settings('pbr/grate-albedo.jpg')).not.toHaveProperty('rdoQualityLevel');
   });
 

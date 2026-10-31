@@ -23,6 +23,8 @@ const SOURCES = fileURLToPath(new URL('../textures/', import.meta.url));
 const CACHE = join(homedir(), '.cache', 'ab-alone-ktx2');
 const ENCODER = JSON.parse(readFileSync(new URL('../node_modules/ktx2-encoder/package.json', import.meta.url), 'utf8')).version;
 // The colour maps, in sRGB: the backdrop, the albedos, the emission maps and each deck's cells (`deck-cargo.png`).
+// The bay's normal maps, the ones the room waits for (#925, #926).
+const BAY_NORMAL = /^(deck-pbr|bulkhead|grate|board|plate)-normal\./;
 const COLOUR = new RegExp(`^(backdrop|.*-(albedo|emission)|deck-(${DECK_NAMES.join('|')}))\\.`);
 
 /** The encoder settings of a source file, from its name. */
@@ -35,9 +37,8 @@ export function settings(file) {
       isUASTC: true,
       isNormalMap: true,
       enableRDO: true,
-      // Effort 0 and RDO quality 2 (#926): the bay's normal maps 2.90 MB to 1.66 MB, the same format.
-      uastcLDRQualityLevel: 0,
-      rdoQualityLevel: 2,
+      // The bay's five normal maps get a stronger RDO (#926): 2.90 MB to 2.47 MB, the same format.
+      ...(BAY_NORMAL.test(name) ? { rdoQualityLevel: 4 } : {}),
       needSupercompression: true,
       isPerceptual: false,
       isSetKTX2SRGBTransferFunc: false,
