@@ -505,3 +505,102 @@ describe('the camera eases up a cliff (#988)', () => {
     expect(render).toHaveBeenCalledTimes(1);
   });
 });
+
+// The bridge's push of the e2e fixture (#967): the hero's line (the hero and the first two troop marbles, the first two pairs) moves
+// one cell right, the enemy (2,0) goes to (3,0), the third marble stays. The troop keeps its order.
+const shove: PushBridge = (_seed, troop) => {
+  const moved = Int32Array.from(troop);
+  moved[0]! += 1;
+  moved[2]! += 1;
+  return Int32Array.of(0, 0, 0, troop.length / 2, ...moved, 1, 3, 0, 1, 0);
+};
+
+describe("the troop's push animation in the mode (docs/specs/openworld.md section 4, #967)", () => {
+  // The fixture of the e2e push: the hero (0,0), the troop (-1,0) and (-2,0), the enemy (2,0). A Right press pushes it on to (3,0).
+  const pushing = (reduced = false): OpenWorldMode => {
+    const m = mode(undefined, undefined, () => reduced, undefined, shove);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    return m;
+  };
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (window as { __openworldSlow?: number }).__openworldSlow;
+  });
+
+  it('plays the animation of the push, and reduced motion plays none', () => {
+    const play = vi.spyOn(OpenWorldView.prototype, 'playPush');
+    pushing().key('ArrowRight');
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(play.mock.calls[0]![0].push.enemies).toEqual([[3, 0]]);
+    expect(play.mock.calls[0]![2]).toBe(1);
+    play.mockClear();
+    pushing(true).key('ArrowRight');
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('marks the animation while it runs, draws every frame of it, and unmarks it at its end', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0); // the push starts at the press
+    const m = pushing();
+    const render = vi.fn();
+    m.frame(render, 0);
+    m.key('ArrowRight');
+    expect(body().openworldAnim).toBe('1');
+    render.mockClear();
+    for (const now of [100, 200, 300, 400]) m.frame(render, now);
+    expect(render).toHaveBeenCalledTimes(4);
+    m.frame(render, 410); // the frame that ends it draws the final cells, and the mark goes
+    expect(body().openworldAnim).toBeUndefined();
+    render.mockClear();
+    m.frame(render, 500);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('a step during the animation snaps it first, then the new push plays', () => {
+    const snap = vi.spyOn(OpenWorldView.prototype, 'snap');
+    const play = vi.spyOn(OpenWorldView.prototype, 'playPush');
+    const m = pushing();
+    snap.mockClear(); // the fixture snaps too
+    play.mockClear();
+    m.frame(vi.fn(), 0);
+    m.key('ArrowRight');
+    m.frame(vi.fn(), 100);
+    m.release('ArrowRight');
+    m.key('ArrowLeft'); // the hero rolls back (the enemy on (3,0) blocks the way on): the bridge pushes again
+    expect(snap).toHaveBeenCalledTimes(2);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(snap.mock.invocationCallOrder[1]).toBeLessThan(play.mock.invocationCallOrder[1]!);
+  });
+
+  it('a zoom and a resize during the animation snap it too', () => {
+    const snap = vi.spyOn(OpenWorldView.prototype, 'snap');
+    const m = pushing();
+    snap.mockClear(); // the fixture snaps too
+    m.frame(vi.fn(), 0);
+    m.key('ArrowRight');
+    snap.mockClear();
+    m.zoom(1.2);
+    expect(snap).toHaveBeenCalledTimes(1);
+    m.resize(400, 300);
+    expect(snap).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaving the mode cancels the animation: no mark, nothing drawn', () => {
+    const m = pushing();
+    const render = vi.fn();
+    m.frame(render, 0);
+    m.key('ArrowRight');
+    m.key('Escape');
+    expect(body().openworldAnim).toBeUndefined();
+    render.mockClear();
+    m.frame(render, 100);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('stretches the animation by the slow factor of the page, read when it starts (a webdriver check)', () => {
+    const play = vi.spyOn(OpenWorldView.prototype, 'playPush');
+    (window as { __openworldSlow?: number }).__openworldSlow = 10;
+    pushing().key('ArrowRight');
+    expect(play.mock.calls[0]![2]).toBe(10);
+  });
+});

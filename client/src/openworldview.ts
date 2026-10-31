@@ -4,8 +4,8 @@
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, TROOP, type Terrain, type Tile, type World } from './openworld';
-import { FightState } from './openworldfight';
+import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
+import { FightState, type Pushed } from './openworldfight';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
@@ -205,7 +205,7 @@ export const HI_RADIUS = 8;
 export const HI_CAPACITY = 3 * HI_RADIUS * (HI_RADIUS + 1) + 1;
 
 const RADIUS = 0.56; // a hex of side 0.56 tiles a grid of spacing 1 with a thin gap
-const MARBLE = 0.3;
+export const MARBLE = 0.3;
 const WALL = 0.9;
 const CAP = 0.07;
 
@@ -234,6 +234,52 @@ type Lay = (prop: Prop, near: boolean, x: number, y: number, z: number, scaleY: 
 const WHITE = 0xffffff;
 /** A cell with no height: the props of a count are laid at no place, so the position they are given is never read. */
 const NOWHERE = { x: 0, z: 0 };
+
+/** A push as the mode has played it: the hero and the troop before it (the hero first), the enemies before it, and the push the bridge
+ * gave (`readPush`). The view draws the way from the first cells to the second ones. */
+export interface Played {
+  from: Axial[];
+  foes: Axial[];
+  push: Pushed;
+}
+
+/** The times of a push, in ms, at normal speed (docs/specs/openworld.md section 4): the lunge of the pushing line; the enemies slide
+ * from the contact, 40 % into the lunge; an ejected marble slides into the water, then sinks. */
+export const LUNGE_MS = 400;
+const CONTACT = 0.4 * LUNGE_MS;
+export const SLIDE_MS = 250;
+export const FALL_MS = 300;
+/** How far an ejected marble sinks below the ground, in world units. */
+const SINK = 0.6;
+
+/** The lunge: an ease-out that passes the cell by a tenth of a cell, at 80 % of the lunge, and settles back on it. */
+const lungeEase = (t: number): number => {
+  if (t <= 0.8) {
+    const u = t / 0.8;
+    return 1.1 * (1 - (1 - u) * (1 - u));
+  }
+  const v = (t - 0.8) / 0.2;
+  return 1.1 - 0.1 * (v < 0.5 ? 2 * v * v : 1 - (-2 * v + 2) ** 2 / 2);
+};
+const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;
+
+/** The way of one marble in a push: from its old cell to its new one (`x0`..`z0` to `x1`..`z1`, the heights `y0`, `y1`), at `start`,
+ * over `span` ms, then sinking over `fall` ms (an ejected marble only). `lunge` tells the ease. */
+interface Move {
+  mesh: 'hero' | 'troop' | 'foes' | 'ejected';
+  index: number;
+  start: number;
+  span: number;
+  fall: number;
+  lunge: boolean;
+  x0: number;
+  y0: number;
+  z0: number;
+  x1: number;
+  y1: number;
+  z1: number;
+}
+type Timing = Pick<Move, 'start' | 'span' | 'fall' | 'lunge'>;
 
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
@@ -276,6 +322,11 @@ export class OpenWorldView {
   private readonly ground = new THREE.Vector3();
   /** The enemy marbles drawn around the hero. */
   enemyCount = 0;
+  /** The marble of an ejected enemy while it falls: its own mesh and material, shown only while the fall plays (#967). */
+  readonly ejected: THREE.Mesh;
+  /** The marbles of the push being drawn (none when there is no animation), and the time it ends in ms. */
+  private moves: Move[] = [];
+  private end = 0;
 
   /** `fight` holds the enemies as they are now: the generated ones, with the pushes of the troop on top (openworldfight.ts). */
   constructor(
@@ -310,6 +361,10 @@ export class OpenWorldView {
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
     this.troop = this.instances('troop', CAPACITY.troop, marble, new THREE.MeshStandardMaterial({ color: 0x8fc4f5, roughness: 0.2 }));
     this.foes = this.instances('enemies', CAPACITY.enemies, marble, new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
+    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
+    this.ejected.name = 'ejected';
+    this.ejected.visible = false;
+    this.scene.add(this.ejected);
   }
 
   /** An instanced mesh of `capacity` instances, each with its own colour (3 floats, white until a build sets it, #984). Its geometry
@@ -412,6 +467,129 @@ export class OpenWorldView {
     this.focus.y = instant || Math.abs(gap) <= SETTLED ? target : this.focus.y + gap * (1 - Math.exp(-dt / EASE));
     this.frame();
     return true;
+  }
+
+  /** The point the camera looks at, on the ground under the hero (the tests and the browser checks read it). */
+  get focusPoint(): THREE.Vector3 {
+    return this.focus;
+  }
+
+  /** Whether a push is still drawn in between its cells. */
+  get animating(): boolean {
+    return this.moves.length > 0;
+  }
+
+  /** Plays a push whose state is already final (the mode lays the cells first): each marble of the pushing line starts on its old
+   * cell and lunges to the new one from `now` (ms), the enemies slide from the contact, the ejected one slides into the water and
+   * sinks. `slow` multiplies every duration. Nothing is laid here: `tick` draws the marbles in between (docs/specs/openworld.md section 4). */
+  playPush({ from, foes, push }: Played, now: number, slow = 1): void {
+    this.settle();
+    const at = (ms: number): number => ms * slow;
+    const moves: Move[] = [];
+    const lunge: Timing = { start: now, span: at(LUNGE_MS), fall: 0, lunge: true };
+    from.forEach((cell, i) => {
+      const to = push.troop[i]!;
+      if (!same(cell, to)) moves.push(this.move(i === 0 ? 'hero' : 'troop', i === 0 ? 0 : i - 1, cell, to, lunge));
+    });
+    const slide: Timing = { start: now + at(CONTACT), span: at(SLIDE_MS), fall: 0, lunge: false };
+    const [ejected] = push.ejected;
+    let next = 0; // the enemies are kept in the order of the push, the ejected one left out
+    for (const cell of foes) {
+      if (ejected && same(cell, ejected)) continue;
+      const to = push.enemies[next++]!;
+      const index = same(cell, to) ? -1 : this.enemyCells.findIndex((enemy) => same(enemy, to)); // not drawn: off the loaded chunks
+      if (index >= 0) moves.push(this.move('foes', index, cell, to, slide));
+    }
+    if (ejected) {
+      const beyond: Axial = [ejected[0] + push.dir[0], ejected[1] + push.dir[1]];
+      moves.push(this.move('ejected', 0, ejected, beyond, { start: now + at(CONTACT), span: at(SLIDE_MS), fall: at(FALL_MS), lunge: false }));
+    }
+    this.moves = moves;
+    this.end = Math.max(...moves.map((m) => m.start + m.span + m.fall));
+    this.ejected.visible = Boolean(ejected);
+  }
+
+  /** Draws the marbles of the push in between their cells at `now` (ms). Returns whether a push is drawn by this call: the call that
+   * reaches the end draws the final cells and drops the push, the next one returns false. */
+  tick(now: number): boolean {
+    if (this.moves.length === 0) return false;
+    if (now >= this.end) {
+      this.settle();
+      return true;
+    }
+    this.play(now);
+    return true;
+  }
+
+  /** Puts every marble of the push on its final cell at once, and ends the push: a step, a click, a zoom or a resize calls it first. */
+  snap(): void {
+    this.settle();
+  }
+
+  /** Ends the push on its final cells. */
+  private settle(): void {
+    if (this.moves.length === 0) return;
+    this.play(this.end);
+    this.moves = [];
+    this.ejected.visible = false;
+  }
+
+  /** Writes every marble of the push at `now`. The hero is written first: the camera follows its drawn place, and the frame may
+   * rebuild the enemies as they stand, so the others are written after it. */
+  private play(now: number): void {
+    let heroMoves = false;
+    for (const m of this.moves) {
+      if (m.mesh !== 'hero') continue;
+      this.write(m, now);
+      heroMoves = true;
+    }
+    if (heroMoves) this.frame();
+    for (const m of this.moves) if (m.mesh !== 'hero') this.write(m, now);
+  }
+
+  /** Writes one marble of a push at `now` (ms): its place between the cells, and its size and sinking when it falls. */
+  private write(m: Move, now: number): void {
+    const t = Math.min(1, Math.max(0, (now - m.start) / m.span));
+    const f = m.lunge ? lungeEase(t) : easeOutCubic(t);
+    let y = m.y0 + (m.y1 - m.y0) * f;
+    let scale = 1;
+    if (m.fall > 0) {
+      const k = Math.min(1, Math.max(0, (now - m.start - m.span) / m.fall));
+      y -= SINK * k;
+      scale = 1 - k;
+    }
+    const x = m.x0 + (m.x1 - m.x0) * f;
+    const z = m.z0 + (m.z1 - m.z0) * f;
+    if (m.mesh === 'hero') {
+      this.hero.position.set(x, y, z);
+      this.focus.x = x;
+      this.focus.z = z;
+    } else if (m.mesh === 'ejected') {
+      this.ejected.position.set(x, y, z);
+      this.ejected.scale.setScalar(scale);
+    } else {
+      const { dummy } = this;
+      dummy.position.set(x, y, z);
+      dummy.scale.setScalar(scale);
+      dummy.updateMatrix();
+      const mesh = m.mesh === 'troop' ? this.troop : this.foes; // read now: a frame may have grown it
+      mesh.setMatrixAt(m.index, dummy.matrix);
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  /** The way of a marble from `from` to `to`, on the heights of their cells; a cell off the loaded world keeps the height. */
+  private move(mesh: Move['mesh'], index: number, from: Axial, to: Axial, timing: Timing): Move {
+    const a = axialTo3D(from[0], from[1]);
+    const b = axialTo3D(to[0], to[1]);
+    const y0 = this.rest(from)!;
+    return { mesh, index, ...timing, x0: a.x, y0, z0: a.z, x1: b.x, y1: this.rest(to) ?? y0, z1: b.z };
+  }
+
+  /** The height of a marble standing on a cell, `undefined` off the loaded world. */
+  private rest([q, r]: Axial): number | undefined {
+    const tile = this.world.tile(q, r);
+    return tile && topOf(GROUND[tile.terrain], tile.height) + MARBLE;
   }
 
   /** The chunks on each side of the hero's chunk that are drawn: they follow the zoom (#976). */
@@ -579,6 +757,7 @@ export class OpenWorldView {
    * The view is not drawn after. */
   dispose(): void {
     this.drain();
+    this.moves = [];
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {
