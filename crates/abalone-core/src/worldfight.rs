@@ -5,6 +5,7 @@
 
 use crate::moves::Direction;
 use crate::world::Terrain;
+use std::cmp::Reverse;
 
 /// Where an ejected marble falls: into water, or off the edge of the world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,20 +42,101 @@ pub fn best_push(
     enemies: &[(i32, i32)],
     terrain: impl Fn(i32, i32) -> Option<Terrain>,
 ) -> Option<Push> {
-    let _ = (troop, enemies, terrain);
-    None
+    let mut found = Vec::new();
+    for (index, dir) in Direction::ALL.into_iter().enumerate() {
+        let d = dir.vector();
+        for &front in troop {
+            for n in 2..=3 {
+                // The pushing line, back to front, ends on `front`.
+                let line: Vec<_> = (0..n).map(|k| shift(front, d, k - (n - 1))).collect();
+                if !line.iter().all(|c| troop.contains(c)) {
+                    continue;
+                }
+                let Some(push) = resolve(dir, &line, troop, enemies, &terrain) else {
+                    continue;
+                };
+                let back = line[0];
+                found.push(((Reverse(push.ejections), back.1, back.0, index), push));
+            }
+        }
+    }
+    found
+        .into_iter()
+        .min_by_key(|(key, _)| *key)
+        .map(|(_, push)| push)
+}
+
+/// `c` moved `n` cells along `d`.
+fn shift((q, r): (i32, i32), (dq, dr): (i32, i32), n: i32) -> (i32, i32) {
+    (q + n * dq, r + n * dr)
+}
+
+/// The push of the troop `line` (back to front) along `dir`, when it is legal.
+fn resolve(
+    dir: Direction,
+    line: &[(i32, i32)],
+    troop: &[(i32, i32)],
+    enemies: &[(i32, i32)],
+    terrain: &impl Fn(i32, i32) -> Option<Terrain>,
+) -> Option<Push> {
+    let d = dir.vector();
+    let front = line[line.len() - 1];
+    // The enemy line: the run of enemies right in front, which ends on the cell `beyond`.
+    let mut run = Vec::new();
+    let mut beyond = shift(front, d, 1);
+    while enemies.contains(&beyond) {
+        run.push(beyond);
+        beyond = shift(beyond, d, 1);
+    }
+    if run.is_empty() || run.len() >= line.len() {
+        return None;
+    }
+    let (last, ejections) = match terrain(beyond.0, beyond.1) {
+        None => (Outcome::Ejected(Fall::Edge), 1),
+        Some(Terrain::Water) => (Outcome::Ejected(Fall::Water), 1),
+        Some(t) if t.blocked() || troop.contains(&beyond) => return None,
+        Some(_) => (Outcome::Slides(beyond), 0),
+    };
+    Some(Push {
+        dir,
+        troop: line.to_vec(),
+        enemies: run,
+        last,
+        ejections,
+    })
 }
 
 /// Plays `push` on the troop and the enemies: the pushing marbles and the enemy line move one cell
 /// along `push.dir` (the troop keeps its order), an ejected enemy is removed. Returns the cells the
 /// ejected enemies stood on before the push.
 pub fn apply_push(
-    troop: &mut Vec<(i32, i32)>,
+    troop: &mut [(i32, i32)],
     enemies: &mut Vec<(i32, i32)>,
     push: &Push,
 ) -> Vec<(i32, i32)> {
-    let _ = (troop, enemies, push);
-    Vec::new()
+    let d = push.dir.vector();
+    for m in troop.iter_mut() {
+        if push.troop.contains(m) {
+            *m = shift(*m, d, 1);
+        }
+    }
+    let gone = match push.last {
+        Outcome::Ejected(_) => push.enemies.last().copied(),
+        Outcome::Slides(_) => None,
+    };
+    let mut ejected = Vec::new();
+    enemies.retain_mut(|m| {
+        if !push.enemies.contains(m) {
+            return true;
+        }
+        if gone == Some(*m) {
+            ejected.push(*m);
+            return false;
+        }
+        *m = shift(*m, d, 1);
+        true
+    });
+    ejected
 }
 
 #[cfg(test)]
