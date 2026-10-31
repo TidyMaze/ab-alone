@@ -289,6 +289,28 @@ describe('the detailed props near the hero (#989)', () => {
   });
 });
 
+describe('the chunks of the view stay cached after a far walk (#1034)', () => {
+  // A world of water everywhere, so every edge cell of the view reads its neighbours in the chunks outside the view (`waterColor`).
+  const water = (): Uint8Array => {
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([0, 0, 0], i * 3);
+    return out;
+  };
+
+  it('a rebuild at the widest zoom loads each chunk once, after the walk has filled the cache past CACHE_LIMIT and come back', () => {
+    const load = vi.fn((_cx: number, _cy: number) => water());
+    const view = new OpenWorldView(new World(load));
+    view.resize(1600, 900);
+    view.zoomBy(MAX_ZOOM * 2);
+    for (let step = 0; step < 40; step++) view.show([step * CHUNK, 0]); // 40 chunk crossings: more chunks than the cache holds
+    load.mockClear();
+    view.show([0, 0]); // back to the spawn: a full rebuild around it
+    const keys = load.mock.calls.map(([cx, cy]) => `${cx},${cy}`);
+    expect(new Set(keys).size).toBe(keys.length); // no chunk of the rebuild is loaded again: none was evicted while in use
+    expect(view.reach).toBe(MAX_REACH);
+  });
+});
+
 describe('a step rebuilds only the props, the ground columns do not depend on the hero (#1034)', () => {
   // The instances a mesh draws, matrices and colours, as numbers: what the browser shows.
   const drawnOf = (m: THREE.InstancedMesh) => ({
