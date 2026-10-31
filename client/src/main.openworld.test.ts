@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
+import type { Axial } from './board';
 import { indexedDbStore } from './idb';
 import { GLIDE_MS } from './openworldglide';
-import { boot } from './test/harness';
+import { SLIDE_MS } from './slide';
+import { boot, type Game } from './test/harness';
 
 // The Open world mode (#962, docs/specs/openworld.md): its entry is in the mode menu for everyone (#1000), ?openworld=<seed>
 // fixes the seed, it draws its own scene in place of the board's, and body[data-openworld] and [data-openworld-at] name
@@ -260,5 +262,77 @@ describe('the Open world mode', () => {
     await openFrom('?bot=off&openworld=new', idb);
     expect(data().openworld).not.toBe(seed);
     expect(data().openworldAt).toBe('0,0');
+  });
+});
+
+// The board's keys in the Open world (#1063): none reaches the board game, its replay, its selection or its moves, and
+// leaving the world gives the board back as it was.
+describe('the board keys in the Open world, #1063', () => {
+  const canvasKey = (key: string): void => {
+    document.querySelector('canvas')!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  };
+  /** Two plies by two clicks each, the slides let go. */
+  const playTwo = (game: Game): void => {
+    for (let i = 0; i < 2; i++) {
+      const mv = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
+      game.click(...mv.cells[0]!);
+      const target = game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === mv.dir)!;
+      game.click(...target.cell);
+      game.frame(SLIDE_MS);
+    }
+  };
+  const enterWorld = async (game: Game): Promise<void> => {
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    await game.settle();
+  };
+
+  it('the arrows roll the hero and do not open the replay of the board', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    playTwo(game);
+    const turn = game.turn();
+    await enterWorld(game);
+    press('ArrowLeft');
+    expect(data().openworldAt).toBe('-1,0');
+    expect(byId('replay-bar').hidden).toBe(true);
+    expect(game.turn()).toBe(turn);
+    expect(game.hook('__plies')).toBe(2);
+  });
+
+  it('the board selection and moves ignore Tab, Q, E, A, S, D, Enter on the focused canvas', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await enterWorld(game);
+    document.querySelector('canvas')!.focus();
+    canvasKey('Tab');
+    expect(game.hook<Axial[]>('__rings')).toEqual([]);
+    for (const key of ['q', 'e', 'a', 's', 'd', 'Enter']) canvasKey(key);
+    expect(data().ghosts).not.toBe('1');
+    expect(game.hook<Axial[]>('__rings')).toEqual([]);
+    expect(game.hook('__plies')).toBe(0);
+  });
+
+  it('a replay open before the Open world stays as it was when the world is left', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    playTwo(game);
+    byId('replay').click();
+    byId('replay-prev').click();
+    const shown = byId('replay-label').textContent;
+    await enterWorld(game);
+    press('ArrowRight'); // the Open world's arrow: the board's replay does not step
+    press('Escape'); // leaves the Open world: Escape is not the board's Live
+    expect(data().openworld).toBeUndefined();
+    expect(byId('replay-label').textContent).toBe(shown);
+    expect(byId('replay-bar').hidden).toBe(false);
+  });
+
+  it('the board takes its keys back once the Open world is left', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    await enterWorld(game);
+    press('Escape');
+    expect(data().openworld).toBeUndefined();
+    document.querySelector('canvas')!.focus();
+    canvasKey('Tab');
+    expect(game.hook<Axial[]>('__rings').length).toBeGreaterThan(0);
   });
 });
