@@ -168,6 +168,7 @@ import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from '.
 import { flatHudHtml, hudHtml } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
+import { skinKinds, startOnce } from './skinmaps';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { findMatch, toleranceWindow } from './matchmaking';
@@ -365,6 +366,15 @@ for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
 
+const store = (() => {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+})();
+let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
+let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
@@ -404,6 +414,27 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
   if (!deckNormalMaps.has(name)) deckNormalMaps.set(name, loadTexture(`deck-${name}-normal.ktx2`, false, true));
   return deckNormalMaps.get(name)!;
 };
+// The worn skins' maps (#377, #925) are asked for in this tick, with the first maps: a skin's material is made later, with
+// the scene, and takes these requests. Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of
+// skins.ts and glassskins.ts, ambientCG PBR materials (CC0), opaque and in their own colours. The maps are square and turn
+// once round the sphere, whose circumference is twice the way from pole to pole.
+const SKIN_MAPS = {
+  albedo: ['map', true],
+  normal: ['normalMap', false],
+  roughness: ['roughnessMap', false],
+  metalness: ['metalnessMap', false],
+  ao: ['aoMap', false],
+  emission: ['emissiveMap', true],
+} as const;
+const skinMapLoads = new Map<string, Promise<THREE.Texture | null>>();
+const skinMap = (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Promise<THREE.Texture | null> =>
+  startOnce(skinMapLoads, `${asset}-${kind}`, () =>
+    loadTexture(`pbr/skin-${asset}-${kind}.ktx2`, SKIN_MAPS[kind][1], true).then((map) => {
+      map?.repeat.set(tile, tile / 2);
+      return map;
+    }),
+  );
+for (const s of [skinById(skin), glassSkinById(glass)]) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
 const [
   deckAlbedo,
   deckRoughness,
@@ -503,13 +534,6 @@ function prefilteredBay(): THREE.Texture {
   return texture;
 }
 // Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
-const store = (() => {
-  try {
-    return localStorage;
-  } catch {
-    return null;
-  }
-})();
 // Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
@@ -610,8 +634,6 @@ const forceParticles =
 let deck: Deck = deckOf('local');
 // The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
 let theme: Theme = readTheme(store);
-let skin = readSkin(store); // the dark shell skin (#377), skins.ts
-let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 let palette: Palette = readPalette(store); // the colorblind palette (#381), palettes.ts
 let difficulty: Difficulty = readDifficulty(store); // the AI and boss difficulty (#704), difficulty.ts
 // The FPS readout (#426): off by default. Off, the frame loop only checks the flag; on, it keeps the last frame stamps.
@@ -1168,30 +1190,13 @@ const steel = new THREE.MeshStandardMaterial(
 applyDeck(deck);
 // Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
 (window as unknown as Record<string, unknown>).__deck = applyDeck;
-// Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of skins.ts and glassskins.ts, ambientCG
-// PBR materials (CC0), opaque and in their own colours. A skin's material is built flat the first time it is worn and
-// dressed in every map its asset ships as they load: a press never waits, and a page that keeps the default skins
-// loads two sets of maps, not twenty. The maps are square and turn once round the sphere, whose circumference is twice
-// the way from pole to pole.
-const SKIN_MAPS = {
-  albedo: ['map', true],
-  normal: ['normalMap', false],
-  roughness: ['roughnessMap', false],
-  metalness: ['metalnessMap', false],
-  ao: ['aoMap', false],
-  emission: ['emissiveMap', true],
-} as const;
-const skinMap = async (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Promise<THREE.Texture | null> => {
-  const map = await loadTexture(`pbr/skin-${asset}-${kind}.ktx2`, SKIN_MAPS[kind][1], true);
-  map?.repeat.set(tile, tile / 2);
-  return map;
-};
+// A skin's material is built flat the first time it is worn and dressed in every map its asset ships as they load: a press
+// never waits, and a page that keeps the default skins loads two sets of maps, not twenty (the requests are made above).
 const dressed = new WeakMap<THREE.Material, Promise<void>>(); // when a skin's maps are on
 function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset: string; tile: number; extra: readonly Extra[] }): void {
-  const kinds = ['albedo', 'normal', 'roughness', ...extra] as const;
   dressed.set(
     look,
-    Promise.all(kinds.map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
+    Promise.all(skinKinds(extra).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
       Object.assign(look, Object.fromEntries(loaded));
       if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
       if (extra.includes('emission')) look.emissive.set(0xffffff); // black until the map is there: no white flash
