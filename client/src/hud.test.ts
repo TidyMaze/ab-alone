@@ -249,3 +249,12 @@ describe('the HUD tally moves when it changes (#1095)', () => {
     expect(css).toMatch(/:root\[data-motion='reduced'\] \*[^{]*\{ animation-duration: 0s !important/);
   });
 });
+
+describe('the end beat (#1093)', () => {
+  it('the turn title pulses once on the celebrate token and the result line arrives a beat later on the base token', () => {
+    expect(css).toMatch(/body\[data-over\] #hud \.end \{[^}]*animation: end-line var\(--motion-base\) var\(--ease-out\) var\(--motion-fast\) backwards/);
+    expect(css).toMatch(/@keyframes end-line \{ from \{[^}]*opacity: 0[^}]*translateY\(/);
+    expect(css).toMatch(/body\[data-over\] #hud \.turn span:last-child \{[^}]*animation: end-title var\(--motion-celebrate\) var\(--ease-out\)/);
+    expect(css).toMatch(/@keyframes end-title \{.*scale\(1\.0\d\)/);
+  });
+});

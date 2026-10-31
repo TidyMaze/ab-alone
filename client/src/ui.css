@@ -971,3 +971,11 @@ body[data-openworld] #dock-wrap { display: none !important; }
    in the count catches the eye. The pip and the score text already carry the number; reduced motion cuts the animation (rule above). */
 @keyframes pip-out { from { transform: rotate(20deg) scale(2); } }
 #hud .pip.fresh { animation: pip-out var(--motion-base) var(--ease-out); }
+
+/* The end beat (#1093, docs/specs/motion.md story 3): when a game ends, the turn title pulses once (at most --motion-celebrate) and the
+   result line arrives a beat later. Transform and opacity only; the text is in the DOM from the first frame, so nothing waits on the
+   motion. Reduced motion cuts both (the tokens are 0ms). */
+@keyframes end-title { 0%, 100% { transform: scale(1); } 35% { transform: scale(1.08); } }
+@keyframes end-line { from { opacity: 0; transform: translateY(6px); } }
+body[data-over] #hud .turn span:last-child { display: inline-block; transform-origin: left center; animation: end-title var(--motion-celebrate) var(--ease-out); }
+body[data-over] #hud .end { animation: end-line var(--motion-base) var(--ease-out) var(--motion-fast) backwards; }
