@@ -1054,7 +1054,7 @@ function turnReader(step: number): void {
   else showConsole(page);
 }
 addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  if (openWorld.active || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return; // the Open world's keys (#1063)
 
   if (e.key.toLowerCase() === 'c' && !reading) {
     toggleFreeCam();
@@ -2182,7 +2182,7 @@ replaySlider.addEventListener('input', () => showPly(Number(replaySlider.value))
 addEventListener('keydown', (e) => {
   const step = replayKey(e.key, replaying !== null, history.length > 0);
   const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement; // the slider steps by itself
-  if (!step || typing || hub || royale || reading || freeCam.active || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (!step || typing || openWorld.active || hub || royale || reading || freeCam.active || e.altKey || e.ctrlKey || e.metaKey) return; // not the Open world's arrows (#1063)
   e.preventDefault();
   if (step === 'live') liveAgain();
   else stepReplay(step);
@@ -3710,7 +3710,7 @@ canvas.addEventListener('contextmenu', (e) => {
 canvas.tabIndex = 0;
 canvas.setAttribute('aria-label', 'Abalone board');
 canvas.addEventListener('keydown', (e) => {
-  if (hub || royale || reading || e.altKey || e.ctrlKey || e.metaKey || blocked(() => {})) return;
+  if (openWorld.active || hub || royale || reading || e.altKey || e.ctrlKey || e.metaKey || blocked(() => {})) return; // the Open world has the canvas (#1063)
   const dir = KEY_DIRS[e.key.toLowerCase()];
   const moves = legalMoves();
   if (e.key === 'Tab') {
