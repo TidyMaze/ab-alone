@@ -33,7 +33,7 @@ test('The Ballast Mind names its borrowed effect a turn ahead, then plays the Pu
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Ballast Mind' }).click();
-  await expect(page.locator('#hud')).toContainText('The Ballast Mind');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Ballast Mind');
   await page.mouse.move(2, 2); // no hover ghost
   const tell = page.locator('#hud .boss .tell');
   await plies(page, 3);

@@ -272,7 +272,7 @@ test('no Hint during a boss fight, a daily fight or an online game, for the room
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(page.locator('#hud')).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await expect(hint).toBeHidden();
 
   await page.goto('./?net=hook');

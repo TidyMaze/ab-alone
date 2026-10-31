@@ -25,7 +25,7 @@ async function startRailYard(page: Page, reducedMotion: boolean): Promise<void> 
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Rail Yard' }).click();
-  await expect(page.locator('#hud')).toContainText('The Rail Yard');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Rail Yard');
   await expect(page.locator('body')).toHaveAttribute('data-deck', 'cargo');
 }
 

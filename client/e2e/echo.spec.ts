@@ -22,7 +22,7 @@ test('The Echo offers a free move: its marble ringed, a diamond on the selected 
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(page.locator('#hud')).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   for (const [q, r] of [[0, 2], [0, 1], [0, -1], [1, -1]] as const) await click(page, q, r);
   await expect(body).toHaveAttribute('data-echo-free', '1');
   await expect(tell).toHaveText('Free move: a ringed marble moves for free, any other move declines it');

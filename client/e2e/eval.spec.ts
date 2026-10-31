@@ -69,7 +69,7 @@ test('the bar follows a bot game, and is absent in a boss fight, #191', async ({
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(page.locator('#hud')).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await expect(bar).toBeHidden();
   await click(page, 0, 2);
   await click(page, 0, 1);

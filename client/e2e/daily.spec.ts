@@ -37,7 +37,7 @@ test('the daily challenge keeps its boss and seed all day, counts attempts, and 
   const title = (await daily.textContent())!;
   const name = title.split(': ')[1]!;
   await daily.click();
-  await expect(hud).toContainText(name);
+  await expect(page.locator('#boss-bar .name')).toContainText(name);
   await expect(hud).toContainText('Daily challenge 2027-03-25 · attempt 1');
   const first = await fight();
   expect(first.daily).toEqual({ day: '2027-03-25', attempt: 1 });
@@ -76,7 +76,7 @@ test('a plain boss fight shows no daily line and does not count a daily attempt,
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(page.locator('#hud')).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await expect(page.locator('#hud')).not.toContainText('Daily challenge');
   await page.getByRole('button', { name: 'Retry' }).click();
   await openModes(page);
@@ -181,7 +181,7 @@ test('a plain boss fight shows no result card at its end, #196', async ({ page }
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(page.locator('#hud')).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await loseByRepetition(page);
   await expect(page.locator('#daily-card')).toBeHidden();
 });

@@ -35,7 +35,7 @@ test('The Dual Room: two rooms split by a void, a return lands on its mark a ply
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Dual Room' }).click();
-  await expect(page.locator('#hud')).toContainText('The Dual Room');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Dual Room');
   await expect(body).toHaveAttribute('data-deck', 'mess');
   await expect(body).toHaveAttribute('data-bridge', 'void');
   await expect(tell).toHaveText('Ejected marbles come back in the other room · the bridge comes at 5');
