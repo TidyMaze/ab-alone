@@ -403,7 +403,12 @@ describe('the Theme row: theme, UI scale and safe mode', () => {
     expect([theme.textContent, root.dataset.theme, localStorage.getItem('ab-alone.theme')]).toEqual(['Theme: Dark', 'dark', 'dark']);
     theme.click();
     expect([theme.textContent, root.dataset.theme]).toEqual(['Theme: Light', 'light']);
-    theme.click(); // back to System: the 1024 by 768 window has no room above 100 %, so safe mode flips
+    theme.click(); // back to System: the 1024 by 768 window has room for 150 %, so the scale steps up first (#927)
+    expect([theme.textContent, root.dataset.theme, style('--ui-scale')]).toEqual(['Theme: System', undefined, '1.25']);
+    expect(theme.getAttribute('aria-pressed')).toBe('true');
+    for (let i = 0; i < 3; i++) theme.click(); // a theme cycle: the scale reaches its cap
+    expect(style('--ui-scale')).toBe('1.5');
+    for (let i = 0; i < 3; i++) theme.click(); // at the cap, the next cycle flips safe mode and the scale is 100 % again
     expect([theme.textContent, root.dataset.theme]).toEqual(['Theme: System', undefined]);
     expect(theme.getAttribute('aria-pressed')).toBe('false');
     expect([style('--end-peak'), style('--end-duration')]).toEqual(['1', '1.6s']); // the full win light
@@ -430,8 +435,8 @@ describe('the Theme row: theme, UI scale and safe mode', () => {
   });
 
   it('applies a saved UI scale at the cap of the window', async () => {
-    await bootWith({ 'ab-alone.ui-scale': '150' });
-    expect(style('--ui-scale')).toBe('1'); // 1024 by 768: 100 % at most
+    await bootWith({ 'ab-alone.ui-scale': '200' });
+    expect(style('--ui-scale')).toBe('1.5'); // 1024 by 768: 150 % at most (#927)
   });
 
   it('applies a saved UI scale the window has room for', async () => {

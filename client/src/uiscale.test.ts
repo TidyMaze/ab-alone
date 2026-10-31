@@ -32,23 +32,32 @@ describe('maxUiScale: the largest step a window has room for', () => {
     expect(maxUiScale(1920, 1080)).toBe(200);
   });
 
-  it('allows only 100 % below it: phones, tablets and small windows', () => {
+  it('allows 150 % from 800 px wide up: a small desktop window, a tablet (#927)', () => {
     for (const [w, h] of [
-      [375, 812],
-      [812, 375],
       [1280, 720],
       [1024, 768],
       [1000, 720],
       [1024, 600],
       [1599, 1080],
       [1920, 899],
+      [812, 375],
     ] as const) {
-      expect(maxUiScale(w, h)).toBe(100);
+      expect(maxUiScale(w, h)).toBe(150);
+    }
+  });
+
+  it('allows 125 % on a phone, under 800 px wide, so a phone can grow a little (#927)', () => {
+    for (const [w, h] of [
+      [375, 812],
+      [360, 780],
+      [799, 400],
+    ] as const) {
+      expect(maxUiScale(w, h)).toBe(125);
     }
   });
 
   it('applies a stored step above the cap at the cap', () => {
-    expect(clampUiScale(200, 100)).toBe(100);
+    expect(clampUiScale(200, 150)).toBe(150);
     expect(clampUiScale(150, 200)).toBe(150);
   });
 });
