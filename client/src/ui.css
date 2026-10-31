@@ -341,7 +341,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
    8 px between them. This block comes after the portrait rules above, so its gap wins over their 4 px. */
 @media (pointer: coarse) {
   #online button, #settings-menu button { min-width: var(--touch); min-height: var(--touch); }
-  #online, #mode-menu { gap: 0.5rem; }
+  #online { column-gap: 0.5rem; }
   :is(.setting-volume, .setting-lights) { min-height: var(--touch); flex-direction: row; align-items: center; gap: 0.5rem; }
   :is(.setting-volume, .setting-lights) span { flex: none; }
   :is(.setting-volume, .setting-lights) input { width: auto; flex: 1 1 auto; min-width: 0; height: 2rem; }
