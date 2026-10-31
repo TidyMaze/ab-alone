@@ -8,7 +8,7 @@ describe('the look (#1138)', () => {
     expect(TONAL).toEqual({
       plate: 0x26282c, cell: 0x32353a, veiled: 0x2a2c30,
       black: { inner: 0x4a4d52, outer: 0x0f1012 }, white: { inner: 0xffffff, outer: 0xdfe3e8 },
-      last: 0x8cc8ff, revealed: 0xffb870,
+      last: 0x6fa8dc, revealed: 0xffb000,
     });
   });
 

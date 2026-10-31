@@ -104,4 +104,25 @@ describe('main.ts tonal look (#1138)', () => {
     expect(last.length).toBeGreaterThan(0);
     expect(last[0]!.material.color.getHex()).toBe(TONAL.last);
   });
+
+  it('rings a revealed Stalker marble in amber and the last move in cyan, in the pbr look too', async () => {
+    const scene = catchScene();
+    const game = await boot('/');
+    const { Encounter } = await import('abalone-wasm');
+    byId('boss-fight').click();
+    [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Stalker')!.click();
+    vi.spyOn(Encounter.prototype, 'play').mockImplementationOnce(() => {
+      throw 'Hidden';
+    });
+    vi.spyOn(Encounter.prototype, 'revealed').mockReturnValue(Int32Array.from([0, -2]));
+    onTestFinished(() => void vi.restoreAllMocks());
+    const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
+    game.click(...move.cells[0]!);
+    game.click(...game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell);
+    const rings = scene().getObjectsByProperty('name', 'stalker-revealed') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
+    expect(rings).toHaveLength(1);
+    expect(rings[0]!.material.color.getHex()).toBe(TONAL.revealed);
+    expect(TONAL.revealed).toBe(0xffb000);
+    expect(TONAL.last).toBe(0x6fa8dc);
+  });
 });

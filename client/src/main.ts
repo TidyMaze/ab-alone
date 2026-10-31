@@ -1334,7 +1334,9 @@ const tickMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // The Chaplain tell: a steady pale ring and a glyph on each marble a hovered move would expose to a
 // flip, never a halo or colour alone.
 const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
-const lastMaterial = tonal ? new THREE.MeshBasicMaterial({ color: TONAL.last }) : paleMaterial; // the bot's last move ring (#1138)
+// The Stalker's rings, in both looks (#1138): the bot's last move in cyan, a marble it revealed in amber, not the palette's bone.
+const lastMaterial = new THREE.MeshBasicMaterial({ color: TONAL.last });
+const revealedMaterial = new THREE.MeshBasicMaterial({ color: TONAL.revealed });
 const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
 const barGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
@@ -3067,6 +3069,14 @@ function drawFog(board: ArrayLike<number>, fog: Set<number>, lit: Set<number>): 
     ring.position.set(p.x, 0.36, p.z);
     marbles.add(ring);
     onMarble(cellIndex(q, r), ring);
+  }
+  for (const i of lit) {
+    const p = axialTo3D(...BOARD_CELLS[i]!);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, revealedMaterial), { name: 'stalker-revealed' });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    marbles.add(ring);
+    onMarble(i, ring);
   }
   const cells = (set: Set<number>): Axial[] => [...set].map((i) => BOARD_CELLS[i]!);
   return { visible: cells(fog), drawn: cells(new Set([...fog, ...lit].filter((i) => board[i] === BOT_SIDE))), revealed: cells(lit), last };

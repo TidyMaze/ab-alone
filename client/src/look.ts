@@ -14,8 +14,8 @@ export const TONAL = {
   veiled: 0x2a2c30, // a cell out of the Stalker's sight
   black: { inner: 0x4a4d52, outer: 0x0f1012 }, // the black marble's radial gradient
   white: { inner: 0xffffff, outer: 0xdfe3e8 },
-  last: 0x8cc8ff, // the ring of the last move
-  revealed: 0xffb870, // a hidden marble the engine revealed
+  last: 0x6fa8dc, // the ring of the last move, in both looks: the board's cyan
+  revealed: 0xffb000, // the ring of a hidden marble the engine revealed, in both looks: the board's amber
 } as const;
 
 const isLook = (v: string | null): v is Look => v === 'pbr' || v === 'tonal';
