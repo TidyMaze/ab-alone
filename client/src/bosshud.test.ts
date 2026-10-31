@@ -4,8 +4,10 @@ import { bossHtml, goalShown } from './bosshud';
 const base = { name: 'The Echo', phase: 0, phases: 3, result: 0 };
 
 describe('bossHtml', () => {
-  it('shows the boss name', () => {
-    expect(bossHtml(base)).toContain('The Echo');
+  // #1038: the boss bar names the boss, the plate does not name it again (no strong name, desktop included).
+  it('names no boss: the boss bar carries the name', () => {
+    expect(bossHtml(base)).not.toContain('The Echo');
+    expect(bossHtml(base)).not.toContain('<strong');
   });
 
   it('draws one notch per phase, labelled P1 to P3, the current one marked', () => {
@@ -51,8 +53,8 @@ describe('bossHtml', () => {
     expect(bossHtml({ ...base, goal: '<i>' })).not.toContain('<i>');
   });
 
-  it('escapes the boss name', () => {
-    expect(bossHtml({ ...base, name: '<b>x</b>' })).not.toContain('<b>');
+  it('escapes the goal and the daily line', () => {
+    expect(bossHtml({ ...base, daily: '<b>x</b>' })).not.toContain('<b>');
   });
 });
 

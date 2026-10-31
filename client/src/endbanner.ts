@@ -9,7 +9,6 @@ export type EndAnim = 'win' | 'loss' | 'draw';
 export interface EndInput {
   status: number; // 0 running, 1 Black wins, 2 White wins, 3 draw
   reason: number; // draw reason: 1 threefold repetition, 2 anti-stalling (engine draw_reason)
-  win: number; // ejections the winner needed (6)
   mode: EndMode;
   side: number; // the viewer's side: 1 Black, 2 White, 0 both or none (hot-seat, spectator)
   glass: number; // the side wearing the pale glass, named White (sideName)
@@ -21,7 +20,7 @@ export interface EndBanner {
   anim: EndAnim;
 }
 
-export function endBanner({ status, reason, win, mode, side, glass }: EndInput): EndBanner | null {
+export function endBanner({ status, reason, mode, side, glass }: EndInput): EndBanner | null {
   if (status === 0) return null;
   const boss = mode === 'boss';
   if (status === 3) {
@@ -30,15 +29,15 @@ export function endBanner({ status, reason, win, mode, side, glass }: EndInput):
     const what = reason === 2 ? '100 plies, nothing ejected. Tally calls it even.' : 'Same position three times. Tally closes the page.';
     return { title: 'Draw', line: what, anim: 'draw' };
   }
-  if (side === 0) return { title: `${sideName(status, glass)} wins`, line: `${win} out. The books balance.`, anim: 'win' };
+  if (side === 0) return { title: `${sideName(status, glass)} wins`, line: 'The books balance.', anim: 'win' };
   if (status === side) {
     return boss
-      ? { title: 'Victory', line: `${win} out. The seat is empty.`, anim: 'win' }
-      : { title: 'You win', line: `${win} out. The books balance.`, anim: 'win' };
+      ? { title: 'Victory', line: 'The seat is empty.', anim: 'win' }
+      : { title: 'You win', line: 'The books balance.', anim: 'win' };
   }
   return boss
-    ? { title: 'Defeat', line: `${win} out. The seat holds.`, anim: 'loss' }
-    : { title: 'You lose', line: `${win} out. Tally strikes your name.`, anim: 'loss' };
+    ? { title: 'Defeat', line: 'The seat holds.', anim: 'loss' }
+    : { title: 'You lose', line: 'Tally strikes your name.', anim: 'loss' };
 }
 
 /** A place from 1: "1st" to "6th". */

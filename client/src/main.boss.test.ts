@@ -130,7 +130,7 @@ describe('main.ts boss fights', () => {
     expect(byId('setting-export-game').hidden).toBe(true);
     expect(byId('daily-card').hidden).toBe(true);
     const boss = byId('hud').querySelector('.boss')!;
-    expect(boss.querySelector('strong')!.textContent).toBe('The Echo');
+    expect(byId('boss-bar').querySelector('.name')!.textContent).toBe('The Echo'); // #1038: the boss bar names the boss, the plate does not
     expect([...boss.querySelectorAll('.notch')].map((n) => n.textContent)).toEqual(['P1', 'P2']);
     expect(boss.querySelector('.notch.active')!.textContent).toBe('P1');
     expect(boss.querySelector('.goal')!.textContent).toBe(
@@ -182,7 +182,7 @@ describe('main.ts boss fights', () => {
     fightBoss(game, 'The Echo');
     await turn(game);
     expect(game.turn()).toBe('White to move');
-    expect(byId('hud').querySelector('.boss strong')!.textContent).toBe('The Echo');
+    expect(byId('boss-bar').querySelector('.name')!.textContent).toBe('The Echo');
   });
 
   it('after the first move the Goal control folds the goal away and opens it again', async () => {
@@ -215,7 +215,7 @@ describe('main.ts boss fights', () => {
     byId('boss-retry').click();
     expect(game.hook('__plies')).toBe(0);
     expect(game.hook('__fight')).toEqual({ id: 'chaplain', seed: 7 });
-    expect(byId('hud').querySelector('.boss strong')!.textContent).toBe('The Chaplain');
+    expect(byId('boss-bar').querySelector('.name')!.textContent).toBe('The Chaplain');
     expect(byId('boss-retry').hidden).toBe(false);
   });
 
@@ -376,7 +376,7 @@ describe('main.ts daily challenge', () => {
       now.mockReturnValue(ms);
       byId('daily').click(); // the start reads the day again, as the minute timer does
       expect(byId('daily').textContent).toBe(dailyTitle(utcDay(ms), name));
-      expect(game.hud()).toContain(name);
+      expect(document.getElementById('boss-bar')!.textContent).toContain(name); // #1038: the boss bar names the boss
     }
   });
 

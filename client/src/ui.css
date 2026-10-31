@@ -379,7 +379,15 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .pips { display: flex; justify-content: space-between; margin: 0.5rem 0; }
 #hud .pips span { display: flex; gap: 0.25rem; }
 #hud .pip { width: 3px; height: 0.9rem; background: var(--accent); }
+/* #1038: each side's pips are its marble colour, the same in both themes like the marbles; a rim keeps each on its panel. */
+#hud .dark .pip:not(.out) { background: #15191c; box-shadow: 0 0 0 1px var(--muted); }
+#hud .pale .pip:not(.out) { background: #d8d4c8; box-shadow: 0 0 0 1px var(--edge); }
 #hud .pip.out { background: var(--edge); transform: rotate(20deg); }
+/* #1038: on a phone held upright the pips alone show the ejected count. The score text leaves the screen but not the
+   accessibility tree, so a screen reader still reads the one name of the count (as the folded plate does). */
+@media (orientation: portrait) {
+  #hud .score { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 #hud small { display: block; color: var(--muted); font-size: 0.8125rem; }
 /* Online status line. The words carry the state, the dot only repeats it. */
 #hud .presence { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; font-weight: 500; }
@@ -486,9 +494,6 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #boss-bar { position: static; order: -1; align-self: stretch; margin-inline: 0; display: flex; align-items: center; gap: 0.5rem; width: auto; padding: 0.25rem 0.5rem; }
   #boss-bar .name { flex: none; font-size: 0.8125rem; }
   #boss-bar .frags { flex: 1; margin-top: 0; }
-}
-@media (orientation: portrait) {
-  #hud .boss strong { display: none; }
 }
 @media (orientation: landscape) and (min-width: 1101px) and (min-height: 501px) {
   #chrome { flex-wrap: wrap; }
@@ -749,6 +754,8 @@ body[data-openworld] #openworld-hud { display: block; }
 #openworld-hud p { margin: 0 0 0.5rem; }
 #openworld-hud code { font-size: 0.8125rem; }
 #openworld-new[hidden], #openworld-confirm[hidden] { display: none; }
+/* #1038: text for a screen reader only, such as the one live status of a sheet that is read as a group. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 #openworld-confirm { margin-top: 0.5rem; }
 #openworld-hud button { margin: 0 0.5rem 0.25rem 0; }
 #openworld-hud button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

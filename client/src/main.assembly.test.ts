@@ -73,8 +73,8 @@ describe('main.ts The Assembly Line (#744)', () => {
     fightAssembly(game);
     expect(body().boss).toBe('assembly');
     expect(body().deck).toBe('cargo');
-    expect(game.hud()).toContain('The Assembly Line');
-    expect(game.hud()).toContain('Assembly Line: throughput on file. Six out to balance the books.');
+    expect(document.getElementById('boss-bar')!.textContent).toContain('The Assembly Line');
+    expect(game.hud()).toContain('Throughput on file. Six out to balance the books.');
     expect(tell()).toBe('Belts reverse in 5 turns');
     expect(belts(game)!.left).toBe(5);
     expect(body().beltDirs).toBe('1,0,0'); // only the centre belt runs, toward +q
