@@ -221,7 +221,7 @@ test('online status: creator waits with the invite, joiner joins, both see each 
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
   await a.locator('#play-online').click();
-  await expect(status(a)).toHaveText('You are Black. Waiting for an opponent...');
+  await expect(status(a)).toHaveText('Waiting for an opponent...'); // #1038: the title says Black to move, the line keeps the wait
   await expect(a.locator('#invite')).toBeVisible();
   await expect(a.getByText('Invite link: send it to your opponent')).toBeVisible();
   const invite = await a.locator('#invite').inputValue();
@@ -229,7 +229,7 @@ test('online status: creator waits with the invite, joiner joins, both see each 
   await b.goto(`./?net=hook${new URL(invite).hash}`);
   await b.locator('canvas').waitFor();
   await expect(status(b)).toHaveText('Joining as White...');
-  await expect(status(a)).toHaveText('You are Black. Waiting for an opponent...'); // B is not connected yet
+  await expect(status(a)).toHaveText('Waiting for an opponent...'); // #1038: the title says Black to move, the line keeps the wait // B is not connected yet
 
   await open(a);
   await open(b);

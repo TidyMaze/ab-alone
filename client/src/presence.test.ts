@@ -39,7 +39,8 @@ describe('Presence', () => {
 
 describe('onlineStatus', () => {
   it('room creator alone: own color and waiting', () => {
-    expect(onlineStatus(1, 'player', 'waiting', false, 2)).toEqual({ text: 'You are Black. Waiting for an opponent...', tone: 'waiting' });
+    // #1038: the title already says whose turn it is, the waiting line keeps to the wait (no "You are Black.").
+    expect(onlineStatus(1, 'player', 'waiting', false, 2)).toEqual({ text: 'Waiting for an opponent...', tone: 'waiting' });
   });
 
   it('marks an agent opponent in the line, here or disconnected, and a human one stays unmarked', () => {
