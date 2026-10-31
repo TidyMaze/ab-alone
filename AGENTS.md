@@ -49,5 +49,12 @@ The short version:
 11. Faster and cheaper (owner decision, 2026-10-29): no builds in parallel, one agent builds and
     changes the code at a time, so the changes do not conflict. No model above Sonnet, no
     reasoning effort above medium, for the lead agent and every sub-agent.
+12. A partial PR says `Refs #<issue>`, never `Closes`: the issue stays open with the numbers in a
+    comment (#925: reordering the texture requests gained nothing measurable).
+13. Screenshots go to the `pr-screenshots` branch with `gh api -X PUT .../contents/... --input
+    file.json` (the base64 in a JSON file): as a command argument it fails with "argument list too
+    long".
+14. A red e2e spec on `main` gets a `bug` issue the same day, and a full run is counted with
+    `--reporter=json`, not by grepping the list output (#1048 broke 59 specs unseen until #1061).
 
 Setup, checks and e2e commands: [CONTRIBUTING.md section 13](CONTRIBUTING.md#13-local-setup-and-checks).
