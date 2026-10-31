@@ -1,3 +1,12 @@
+---
+id: openworld-terrain
+type: feature-design
+status: draft
+title: "Open world terrain"
+parent: openworld
+depends-on: [rules]
+---
+
 # Open world terrain (#962, tasks #983, #984, #987, #988)
 
 One topic: how the generated map of the Open world gets large landmarks and fine detail, regions with

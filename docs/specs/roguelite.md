@@ -1,3 +1,12 @@
+---
+id: roguelite
+type: feature-design
+status: draft
+title: "Rogue-lite run"
+parent: game-design
+depends-on: [rules]
+---
+
 # Rogue-lite run (#797)
 
 A secondary mode, like the boss fights (#934): a branching run of fights where the army is the deck.

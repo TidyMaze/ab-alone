@@ -1,3 +1,12 @@
+---
+id: openworld
+type: feature-design
+status: draft
+title: "Open world"
+parent: game-design
+depends-on: [rules]
+---
+
 # Open world (#962)
 
 A secondary mode, like the boss fights (#934) and the rogue-lite run (#797): a huge generated hex
