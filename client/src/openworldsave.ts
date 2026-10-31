@@ -16,6 +16,8 @@ export interface WorldSave {
   troop: Axial[];
   fight: FightSave;
   yaw: number;
+  /** The obstacles the hero broke (#1147). A record saved before them has none. */
+  broken: Axial[];
   savedAt: number;
 }
 
@@ -28,7 +30,7 @@ export interface WorldSaves {
   /** The save of `seed` for this world version, `null` when there is none (a stale or garbage one is deleted). */
   load(seed: number): Promise<WorldSave | null>;
   /** Saves the world of `seed` in the state given, the camera's `yaw` too; `true` when it is stored. */
-  put(seed: number, hero: Axial, troop: Axial[], fight: FightState, yaw: number): Promise<boolean>;
+  put(seed: number, hero: Axial, troop: Axial[], fight: FightState, yaw: number, broken?: readonly Axial[]): Promise<boolean>;
   /** Deletes the save of `seed`: the New world control discards the world it leaves (#1021). A refusing store keeps it. */
   discard(seed: number): Promise<void>;
   /** Remembers `seed` as the last world played. */
@@ -48,6 +50,8 @@ export function decodeWorld(raw: unknown, seed: number, version: number): WorldS
   if (save.record !== undefined && save.record !== RECORD) return null;
   const yaw = save.record === undefined ? 0 : save.yaw; // version 1: no turn yet (#1026)
   if (typeof yaw !== 'number' || !Number.isFinite(yaw)) return null;
+  const broken = save.broken ?? []; // saved before the broken obstacles (#1147): none
+  if (!Array.isArray(broken) || !broken.every(isCell)) return null;
   if (!isCell(save.hero) || !Array.isArray(save.troop) || save.troop.length > TROOP || !save.troop.every(isCell)) return null;
   const fight = decodeFight(save.fight);
   if (!fight || !Number.isFinite(save.savedAt)) return null;
@@ -58,6 +62,7 @@ export function decodeWorld(raw: unknown, seed: number, version: number): WorldS
     troop: save.troop.map(([q, r]): Axial => [q, r]),
     fight,
     yaw,
+    broken: broken.map(([q, r]): Axial => [q, r]),
     savedAt: save.savedAt as number,
   };
 }
@@ -77,9 +82,9 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
       }
       return null;
     },
-    async put(seed, hero, troop, fight, yaw) {
+    async put(seed, hero, troop, fight, yaw, broken = []) {
       try {
-        const save = { record: RECORD, version, seed, hero, troop, fight: fight.toJSON(), yaw, savedAt: Date.now() };
+        const save = { record: RECORD, version, seed, hero, troop, fight: fight.toJSON(), yaw, broken, savedAt: Date.now() };
         await store.put(keyOf(seed), save);
         return true;
       } catch {
