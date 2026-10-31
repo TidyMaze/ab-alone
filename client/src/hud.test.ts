@@ -11,6 +11,40 @@ const blocks = {
   lightForced: css.match(/:root\[data-theme='light'\]\s*\{([^}]*)\}/)![1]!,
 };
 
+describe('refined play screen, #1136', () => {
+  const root = css.match(/:root\s*\{[^}]*--amber:[^}]*\}/)?.[0] ?? '';
+  const tokens: Record<string, string> = {
+    amber: '#ffb000', 'plate-accent': '#ffb000', 'active-fill': '#ffb000', 'active-ink': '#1b1d1f',
+    'r-card': '6px', 'r-button': '6px', space: '8px', target: '48px',
+  };
+  for (const [name, value] of Object.entries(tokens)) {
+    it(`defines --${name} as ${value} in the dark theme`, () => {
+      expect(root).toContain(`--${name}: ${value};`);
+    });
+  }
+
+  it('keeps the light theme its own accent and a dark fill', () => {
+    expect(css).toMatch(/:root\[data-theme='light'\] \{ --plate-accent: #0a5f73; --active-fill: #1b1f23; --active-ink: #f3f0e6; \}/);
+  });
+
+  it('keeps the rivets and gives the plates the 6 px radius and the amber accent', () => {
+    expect(css).toContain('--rivet: radial-gradient');
+    expect(css).toMatch(/:is\(#hud, #boss-bar, #eval, #dock\) \{ border-radius: var\(--r-card\); \}/);
+    expect(css).toMatch(/:root\[data-palette='default'\] :is\(#hud, #boss-bar, #eval, #dock\) \{ --accent: var\(--plate-accent\); \}/);
+  });
+
+  it('draws the dock with 48 px buttons, the icon above the label, the active one filled, no blur', () => {
+    expect(css).toMatch(/#dock > button, #dock-replay button \{[^}]*height: var\(--target\);[^}]*border-radius: var\(--r-button\);/);
+    expect(css).toMatch(/#dock > button \{[^}]*flex-direction: column;/);
+    expect(css).toMatch(/#dock > button::before \{[^}]*mask: var\(--icon\)/);
+    expect(css).toMatch(/#dock > button\[aria-pressed='true'\], #dock > button\[aria-expanded='true'\] \{[^}]*background: var\(--active-fill\);[^}]*color: var\(--active-ink\);/);
+    for (const id of ['new-game', 'reset-view', 'hint', 'replay', 'modes', 'auto-play', 'boss-retry', 'rematch', 'boss-goal', 'royale-hold', 'lobby']) {
+      expect(css, id).toMatch(new RegExp(`#dock #${id} \\{ --icon: url\\(`));
+    }
+    expect(css).not.toContain('backdrop-filter');
+  });
+});
+
 describe('palette tokens', () => {
   for (const [name, block] of Object.entries(blocks)) {
     it(`defines every token in the ${name} block`, () => {
