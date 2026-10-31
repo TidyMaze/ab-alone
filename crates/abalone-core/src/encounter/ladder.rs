@@ -14,6 +14,7 @@ use crate::encounter::echo::{echo_boss, echo_free_moves, echo_move, echo_search,
 use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
 use crate::encounter::railyard::{railyard_move, railyard_start, RAILYARD_NODE_BUDGET};
+use crate::encounter::stalker::{refuse, stalker_start, STALKER_NODE_BUDGET};
 use crate::encounter::telemetry::{
     classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
@@ -40,10 +41,11 @@ pub enum LadderBoss {
     Overseer,
     Dual,
     RailYard,
+    Stalker,
 }
 
 impl LadderBoss {
-    pub const ALL: [LadderBoss; 9] = [
+    pub const ALL: [LadderBoss; 10] = [
         LadderBoss::Echo,
         LadderBoss::Hull,
         LadderBoss::Chaplain,
@@ -53,6 +55,7 @@ impl LadderBoss {
         LadderBoss::Overseer,
         LadderBoss::Dual,
         LadderBoss::RailYard,
+        LadderBoss::Stalker,
     ];
 
     /// Stable id used in the telemetry.
@@ -67,6 +70,7 @@ impl LadderBoss {
             LadderBoss::Overseer => "overseer",
             LadderBoss::Dual => "dual",
             LadderBoss::RailYard => "railyard",
+            LadderBoss::Stalker => "stalker",
         }
     }
 
@@ -87,6 +91,7 @@ impl LadderBoss {
             LadderBoss::Overseer => OVERSEER_NODE_BUDGET,
             LadderBoss::Dual => DUAL_NODE_BUDGET,
             LadderBoss::RailYard => RAILYARD_NODE_BUDGET,
+            LadderBoss::Stalker => STALKER_NODE_BUDGET,
         }
     }
 }
@@ -113,6 +118,7 @@ impl Arena {
             LadderBoss::Echo => Arena::Plain(echo_start(seed), boss),
             LadderBoss::Dual => Arena::Plain(dual_start(seed), boss),
             LadderBoss::RailYard => Arena::Plain(railyard_start(seed), boss),
+            LadderBoss::Stalker => Arena::Plain(stalker_start(seed), boss),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
             LadderBoss::Choir => Arena::Choir(Choir::start(seed)),
@@ -156,6 +162,7 @@ impl Arena {
             Arena::Plain(enc, LadderBoss::Hull) => hull_move(enc),
             Arena::Plain(enc, LadderBoss::Dual) => dual_move(enc),
             Arena::Plain(enc, LadderBoss::RailYard) => railyard_move(enc),
+            Arena::Plain(enc, LadderBoss::Stalker) => enc.boss_search().map(|r| r.mv),
             // The Ballast Mind: the Choir is never plain.
             Arena::Plain(enc, _) => ballast_move(enc),
             Arena::Choir(choir) => choir.boss_move(),
@@ -178,6 +185,15 @@ impl Arena {
                 .play(mv)
                 .is_ok_and(|()| after.game().outcome() != Some(Outcome::Draw)),
             _ => true,
+        }
+    }
+
+    /// `true` when the Stalker's fog refuses `mv` for a hidden blocker, which is then revealed:
+    /// the pro picks again on the board as it now sees it.
+    fn refused(&mut self, mv: &Move) -> bool {
+        match self {
+            Arena::Plain(enc, LadderBoss::Stalker) => refuse(enc, mv).is_err(),
+            _ => false,
         }
     }
 
@@ -206,7 +222,10 @@ fn mix(mut x: u64) -> u64 {
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     let game = arena.game();
     if index < opening {
-        let moves = legal_moves(game.board(), Player::Black);
+        let moves = match arena {
+            Arena::Plain(enc, LadderBoss::Stalker) => enc.seen_moves(),
+            _ => legal_moves(game.board(), Player::Black),
+        };
         let pick = mix(seed ^ mix(u64::from(index))) % moves.len().max(1) as u64;
         moves.get(pick as usize).cloned()
     } else {
@@ -226,7 +245,19 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         // The pro reads the hooks, not the health swing: the ladder keeps the player it measured.
         let step =
             |b: &Board, p: Player, m: &Move, a: Board| (chaplain_step(0, b, p, m, a).0, [0, 0]);
+        // The Stalker's pro reads the board as seen: hidden marbles are empty cells.
+        let seen = match arena {
+            Arena::Plain(enc, LadderBoss::Stalker) => Some(Game::from_position(
+                enc.seen_board(),
+                Player::Black,
+                [game.ejected(Player::Black), game.ejected(Player::White)],
+            )),
+            _ => None,
+        };
         let pick = |allow: &dyn Fn(&Move) -> bool| match arena {
+            Arena::Plain(_, LadderBoss::Stalker) => {
+                search_with(seen.as_ref().unwrap(), budget, DEFAULT_WEIGHTS, allow).map(|r| r.mv)
+            }
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
             Arena::Plain(_, LadderBoss::Dual) => {
@@ -258,15 +289,19 @@ fn play_out(
     let (mut plies, mut player_moves, mut stuck) = (0, 0, None);
     let mut moves = Vec::new();
     while arena.game().outcome().is_none() && plies < ply_cap {
-        let game = arena.game();
-        let player_turn = game.to_move() == Player::Black;
+        let player_turn = arena.game().to_move() == Player::Black;
         let mv = if player_turn {
             player_moves += 1;
-            let Some(mv) = player_move(&arena, seed, player_moves - 1, opening, player_budget)
-            else {
+            let index = player_moves - 1;
+            let Some(mut mv) = player_move(&arena, seed, index, opening, player_budget) else {
                 stuck = Some(DeathCause::Conversion);
                 break;
             };
+            // Each refusal reveals a blocker, so the search sees one more marble: it ends.
+            while arena.refused(&mv) {
+                mv = player_move(&arena, seed, index, 0, player_budget)
+                    .expect("a seen move is left after a refusal");
+            }
             mv
         } else {
             let Some(mv) = arena.boss_move() else {
@@ -275,6 +310,7 @@ fn play_out(
             };
             mv
         };
+        let game = arena.game();
         let boss_push = !player_turn & apply(game.board(), Player::White, &mv).is_ok_and(|a| a.1);
         let black = marbles(game.board(), Cell::Black);
         let lost_before = game.ejected(Player::White);
@@ -383,6 +419,7 @@ mod tests {
     use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::{echo_boss, echo_fight, mirror_move};
+    use crate::encounter::stalker::stalker_boss;
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
     use crate::encounter::Encounter;
     use crate::game::Game;
@@ -600,11 +637,14 @@ mod tests {
             ids,
             [
                 "echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer", "dual",
-                "railyard"
+                "railyard", "stalker"
             ]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
-        assert_eq!(budgets, [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000]);
+        assert_eq!(
+            budgets,
+            [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000]
+        );
     }
 
     #[test]
@@ -790,6 +830,65 @@ mod tests {
     fn the_same_seed_replays_the_same_attempt() {
         let a = play_attempt(LadderBoss::Hull, 5, 1, 60, 12);
         assert_eq!(a, play_attempt(LadderBoss::Hull, 5, 1, 60, 12));
+    }
+
+    /// Sight 1 (five ejections): the push of the white pair is legal on the seen board, where the
+    /// marble behind it is hidden, and refused on the real one.
+    fn fogged() -> Arena {
+        let mut board = Board::empty();
+        for (q, r) in [(-1, 0), (0, 0)] {
+            board.set(q, r, Cell::Black);
+        }
+        for (q, r) in [(1, 0), (2, 0)] {
+            board.set(q, r, Cell::White);
+        }
+        let game = Game::from_position(board, Player::Black, [5, 0]);
+        let enc = Encounter::new(game, stalker_boss(), 0).stalking();
+        Arena::Plain(enc, LadderBoss::Stalker)
+    }
+
+    fn fogged_seen() -> Board {
+        let Arena::Plain(enc, _) = fogged() else {
+            unreachable!()
+        };
+        enc.seen_board()
+    }
+
+    fn push() -> Move {
+        Move {
+            cells: vec![(-1, 0), (0, 0)],
+            dir: crate::moves::Direction::E,
+        }
+    }
+
+    #[test]
+    fn the_stalker_player_searches_the_seen_board_and_the_fog_refuses_a_hidden_blocker() {
+        let mut a = fogged();
+        assert!(a.refused(&push()), "a hidden marble blocks the push");
+        assert!(
+            !a.refused(&push()),
+            "revealed, it is now seen: no new refusal"
+        );
+        let mv = player_move(&a, 0, 9, 0, 200).unwrap();
+        assert_ne!(mv, push());
+        assert!(!a.refused(&mv));
+        let mut start = Arena::new(LadderBoss::Stalker, 0);
+        assert!(!start.refused(&legal_moves(start.game().board(), Player::Black)[0]));
+        let mut choir = Arena::new(LadderBoss::Choir, 0);
+        assert!(!choir.refused(&push()), "no other boss is fogged");
+    }
+
+    #[test]
+    fn the_stalker_ladder_retries_after_a_refusal() {
+        // A seed whose random opening move is the blocked push.
+        let moves = legal_moves(&fogged_seen(), Player::Black);
+        let at = moves.iter().position(|m| *m == push()).unwrap() as u64;
+        let seed = (0..)
+            .find(|&s| mix(s ^ mix(0)) % moves.len() as u64 == at)
+            .unwrap();
+        let (r, played) = play_out(fogged(), seed, 1, 50, 1, 2);
+        assert_eq!(r.plies, 2);
+        assert_ne!(played[0], push(), "the refused push was not played");
     }
 
     #[test]
