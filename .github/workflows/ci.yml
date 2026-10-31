@@ -46,7 +46,7 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --all --locked
 
-  # The client's unit tests, on the wasm package, cached like in the `wasm` job. Five shards run in parallel, each writes a blob
+  # The client's unit tests, on the wasm package, cached like in the `wasm` job. Five shards run in parallel, dealt by file size (scripts/unit-shard.ts: --shard cuts by file count, not by cost), each writes a blob
   # report with its coverage; the `client` job below merges them and checks the 100 % gate once (#1079).
   client-shard:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
@@ -79,7 +79,7 @@ jobs:
           bun-version-file: client/package.json
       - run: bun install --frozen-lockfile
         working-directory: client
-      - run: bunx vitest run --shard=${{ matrix.shard }}/5 --reporter=blob --outputFile.blob=reports/blob-${{ matrix.shard }}-5.json --coverage
+      - run: bunx vitest run $(bun run scripts/unit-shard.ts ${{ matrix.shard }} 5) --reporter=blob --outputFile.blob=reports/blob-${{ matrix.shard }}-5.json --coverage
         working-directory: client
         env:
           VITEST_SHARD: '1'
