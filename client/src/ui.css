@@ -940,3 +940,10 @@ body[data-openworld] #dock-wrap { display: none !important; }
    the screen. The column goes back to the right, where it is in a normal game. Landscape only: held upright the column is a row
    that stretches, and an auto margin would shrink it. */
 @media (orientation: landscape) { body[data-openworld] #online { margin-left: auto; } }
+/* The lobby sheet, the daily result card and the end of a game (#1136): the theme's look, refined. 6 px cards on an 8 px grid, 48 px
+   buttons, the primary one (Start, Copy result) filled, the accent amber in the default palette. */
+:root[data-palette='default'] :is(#dock-wrap :is(#lobby-sheet, #daily-card), #hud .end) { --accent: var(--plate-accent); }
+#dock-wrap :is(#lobby-sheet, #daily-card) { gap: var(--space); border-radius: var(--r-card); }
+#dock-wrap :is(#lobby-sheet, #daily-card) :is(button, input, textarea) { border-radius: var(--r-button); }
+#dock-wrap #lobby-sheet button, #dock-wrap #daily-card #daily-copy { min-height: var(--target); }
+#dock-wrap :is(#royale-start, #daily-copy) { background: var(--active-fill); border-color: var(--active-fill); color: var(--active-ink); }
