@@ -6,6 +6,7 @@ import type { Axial } from './board';
 import { arrowCell } from './hubview';
 import { chunkOf, Hero, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
+import type { WorldSave, WorldSaves } from './openworldsave';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels } from './openworldview';
 
 /** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
@@ -51,6 +52,9 @@ export class OpenWorldMode {
   private fight = new FightState();
   private pushes = 0;
   private dirty = false;
+  /** Whether the world changed since its last save, and how many saves the page has stored (`openworldSaved`, #968). */
+  private unsaved = false;
+  private writes = 0;
   /** The time of the last frame, in ms: the camera's ease runs on the time between frames. */
   private clock = 0;
   /** The arrow keys held down: a vertical and a horizontal one together roll a diagonal. */
@@ -66,9 +70,20 @@ export class OpenWorldMode {
     private readonly models: () => Promise<PropModels>,
     private readonly reduced: () => boolean,
     private readonly push: TroopPush,
+    private readonly saves: WorldSaves,
   ) {}
 
-  enter(seed: number, width: number, height: number): void {
+  /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
+   * The save is read before the first draw, and the seed is remembered as the last world played (#968). */
+  async open(seed: number, width: number, height: number, resume = true): Promise<void> {
+    const saved = resume ? await this.saves.load(seed) : null;
+    this.enter(seed, width, height, saved);
+    void this.saves.remember(seed);
+  }
+
+  /** Enters the world of `seed` with the hero, the troop and the fight of `saved` (a save of this seed), or on the spawn. */
+  enter(seed: number, width: number, height: number, saved: WorldSave | null = null): void {
+    this.flush(); // the world left (another seed entered over it) is saved first
     this.view?.dispose();
     this.seed = seed;
     const world = new World(
@@ -76,10 +91,14 @@ export class OpenWorldMode {
       (cx, cy) => this.loadEnemies(seed, cx, cy),
     );
     this.world = world;
-    this.fight = new FightState();
+    this.fight = saved ? FightState.fromJSON(saved.fight) : new FightState();
     this.pushes = 0;
     const view = new OpenWorldView(world, this.fight);
     this.hero = new Hero(world, this.fight);
+    if (saved) {
+      this.hero.at = saved.hero;
+      this.hero.troop = saved.troop;
+    }
     this.view = view;
     view.resize(width, height);
     view.show(this.hero.at, this.hero.troop);
@@ -96,6 +115,7 @@ export class OpenWorldMode {
   }
 
   leave(): void {
+    this.flush();
     this.active = false;
     this.held.clear();
     this.view?.dispose();
@@ -177,6 +197,7 @@ export class OpenWorldMode {
    * included, until it settles), and every frame while a lake is in view and motion is on. `now` is the frame time in ms. */
   frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void, now = performance.now()): void {
     if (!this.view) return; // left: nothing to draw
+    this.flush(); // at most one save a frame, of the state the frame ends on (#968)
     const seconds = (now - this.clock) / 1000;
     this.clock = now;
     const reduced = this.reduced();
@@ -199,6 +220,7 @@ export class OpenWorldMode {
     this.view!.updateEnemies();
     if (played && !this.reduced()) this.view!.playPush(played, performance.now(), slowBy()); // reduced motion: the marbles jump
     this.dirty = true;
+    this.persist();
     this.mark(document.body.dataset.openworld!);
   }
 
@@ -216,6 +238,22 @@ export class OpenWorldMode {
     this.hero!.troop = troop;
     this.pushes++;
     return { from, foes: enemies, push: pushed };
+  }
+
+  /** Marks the world as changed: it is saved by the next frame, or when the mode is left. */
+  private persist(): void {
+    this.unsaved = true;
+  }
+
+  /** Saves the world as it is now, when it changed since the last save. The write is not waited for: a storage that fails is no
+   * game error, and the save is counted (`openworldSaved`) only once it is stored. */
+  private flush(): void {
+    if (!this.unsaved) return;
+    this.unsaved = false;
+    const { at, troop } = this.hero!;
+    void this.saves.put(this.seed, at, troop, this.fight).then((stored) => {
+      if (stored) document.body.dataset.openworldSaved = String(++this.writes);
+    });
   }
 
   /** The mark of a push being drawn (`openworldAnim`, for the browser checks): set while the view draws it, removed otherwise. */
