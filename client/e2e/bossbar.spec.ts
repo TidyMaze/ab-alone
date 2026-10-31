@@ -192,3 +192,19 @@ for (const { name, viewport, scale, mobile } of stackSizes) {
     });
   });
 }
+
+// #1096: the fragment that breaks gets one burst class, which ends with its animation.
+test('a fragment that breaks bursts once, #1096', async ({ page }, testInfo) => {
+  await fight(page, 'The Hull');
+  const records = parseRecorded(readFileSync(new URL('../../crates/abalone-core/tests/fixtures/hull.txt', import.meta.url), 'utf8'));
+  await page.evaluate(() => {
+    (window as any).__broke = 0;
+    new MutationObserver(() => {
+      if (document.querySelector('#boss-bar .frag.broke')) (window as any).__broke++;
+    }).observe(document.getElementById('boss-bar')!, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  });
+  await page.evaluate((r) => (window as any).__playMoves(r), records.slice(0, 70));
+  expect(await page.evaluate(() => (window as any).__broke)).toBeGreaterThan(0);
+  await page.screenshot({ path: testInfo.outputPath('boss-feedback.png') });
+  await expect(page.locator('#boss-bar .frag.broke')).toHaveCount(0);
+});

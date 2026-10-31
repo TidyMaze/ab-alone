@@ -18,7 +18,8 @@ export function drawBossBar(el: HTMLElement, bar: BossBar | null): void {
   if (bar === null) return;
   const { name, ejected, win, steps, phase } = bar;
   const key = `${name}|${win}|${steps}`;
-  if (el.dataset.key !== key) {
+  const fresh = el.dataset.key === key; // the bar was drawn before: its fragments change in place
+  if (!fresh) {
     el.dataset.key = key;
     const at = new Set(steps.map((s) => win - s)); // the fragment that starts at each step, counted from the left
     const frags = Array.from({ length: win }, (_, i) => `<i class="frag${at.has(i) ? ' step' : ''}"></i>`).join('');
@@ -30,6 +31,10 @@ export function drawBossBar(el: HTMLElement, bar: BossBar | null): void {
     if (!empty && f.classList.contains('empty')) {
       f.classList.add('refill');
       f.addEventListener('animationend', () => f.classList.remove('refill'), { once: true });
+    }
+    if (empty && !f.classList.contains('empty') && fresh) {
+      f.classList.add('broke'); // #1096: one small burst on the fragment that breaks
+      f.addEventListener('animationend', () => f.classList.remove('broke'), { once: true });
     }
     f.classList.toggle('empty', empty);
   });
