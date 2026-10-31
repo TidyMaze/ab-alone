@@ -23,8 +23,11 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   expect(before).not.toBe('0,0'); // it rolled before it was stopped
   await page.keyboard.press('ArrowRight'); // still blocked
   await expect.poll(at).toBe(before);
-  await page.keyboard.press('ArrowLeft'); // the cell it came from is open
-  await expect.poll(at).not.toBe(before);
+  // the cell it came from is open: the step is made, and a push of the troop may carry the hero back onto its cell (#967)
+  const pushes = () => page.evaluate(() => document.body.dataset.openworldPush);
+  const pushesBefore = await pushes();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(async () => (await at()) !== before || (await pushes()) !== pushesBefore).toBe(true);
   await expect(page.locator('#openworld-hud')).toBeVisible();
   await expect(page.locator('#hud')).toBeHidden();
   await page.keyboard.press('Escape');
@@ -173,4 +176,27 @@ test('the Open world is in the mode menu without the flag, and a click enters a 
   await expect(page.locator('#openworld')).toBeVisible();
   await page.locator('#openworld').click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toMatch(/^\d+$/);
+});
+
+// #967: the troop pushes the enemy in front of it after a step. The fixture puts the hero on (0, 0) with two troop marbles
+// behind it and one enemy on (2, 0): one Right press rolls the hero onto (1, 0), the line of three pushes the enemy on to
+// (3, 0) and the hero along with it, to (2, 0). No animation yet: the marbles jump.
+test('the troop pushes the enemy in front of it after a step, and the enemy moves on, #967', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await page.evaluate(() =>
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({
+      hero: [0, 0],
+      troop: [[-1, 0], [-2, 0]],
+      enemies: [[2, 0]],
+    }),
+  );
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldPush)).toBe('1');
+  expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('2,0');
+  expect(await page.evaluate(() => document.body.dataset.openworldTroop)).toBe('1,0 0,0 -2,0');
+  expect(await page.evaluate(() => (window as unknown as { __openworldEnemies: () => number[][] }).__openworldEnemies())).toEqual([[3, 0]]);
+  expect(await page.evaluate(() => document.body.dataset.openworldBeaten)).toBe('0');
 });

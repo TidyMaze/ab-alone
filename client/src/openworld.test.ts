@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, blocked, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
+import { FightState } from './openworldfight';
+
+/** A hero on the world with no enemy pushed: the fight is the generated enemies. */
+const heroOn = (world: World) => new Hero(world, new FightState());
 
 // A chunk of grass at height 1 with a boulder on (2, 0) and water on (0, 1) of chunk (0, 0); chunk (1, 0) is peaks.
 const grass = [1, 2, 0];
@@ -78,21 +82,21 @@ describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
 
 describe('the hero', () => {
   it('starts at the spawn and rolls onto a neighbour that is open', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     expect(hero.at).toEqual(SPAWN);
     expect(hero.step([1, 0])).toBe(true);
     expect(hero.at).toEqual([1, 0]);
   });
 
   it('does not roll two cells, onto a boulder, onto water or off the world', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     expect(hero.step([2, 0])).toBe(false); // not a neighbour of the spawn
     hero.step([1, 0]);
     expect(hero.step([2, 0])).toBe(false); // a boulder
     expect(hero.at).toEqual([1, 0]);
-    const water = new Hero(new World(bytes));
+    const water = heroOn(new World(bytes));
     expect(water.step([0, 1])).toBe(false);
-    const edge = new Hero(new World(() => new Uint8Array()));
+    const edge = heroOn(new World(() => new Uint8Array()));
     expect(edge.step([1, 0])).toBe(false); // no tile there
   });
 });
@@ -113,32 +117,41 @@ describe('the enemies', () => {
 
   it('finds a marble on its cell, in the chunk of that cell only', () => {
     const world = new World(bytes, foes);
-    expect(world.occupied(14, 0)).toBe(true);
-    expect(world.occupied(15, 0)).toBe(true);
-    expect(world.occupied(2, 16)).toBe(true);
-    expect(world.occupied(2, 17)).toBe(true);
-    expect(world.occupied(13, 0)).toBe(false);
-    expect(world.occupied(16, 0)).toBe(false); // the next chunk: no group crosses the edge
-    expect(world.occupied(0, 0)).toBe(false);
+    const fight = new FightState();
+    expect(fight.occupied(world, 14, 0)).toBe(true);
+    expect(fight.occupied(world, 15, 0)).toBe(true);
+    expect(fight.occupied(world, 2, 16)).toBe(true);
+    expect(fight.occupied(world, 2, 17)).toBe(true);
+    expect(fight.occupied(world, 13, 0)).toBe(false);
+    expect(fight.occupied(world, 16, 0)).toBe(false); // the next chunk: no group crosses the edge
+    expect(fight.occupied(world, 0, 0)).toBe(false);
   });
 
   it('stop the hero: it does not roll onto a marble', () => {
-    const hero = new Hero(new World(bytes, () => Int32Array.of(1, 0)));
+    const hero = heroOn(new World(bytes, () => Int32Array.of(1, 0)));
     expect(hero.step([1, 0])).toBe(false);
     expect(hero.at).toEqual(SPAWN);
     expect(hero.step([1, -1])).toBe(true);
+  });
+
+  it('is stopped by an enemy pushed onto its cell, and free to roll where a pushed enemy stood', () => {
+    const world = new World(bytes, () => Int32Array.of(1, 0));
+    const fight = new FightState();
+    fight.apply([[1, 0]], [[1, -1]], []); // the generated enemy on (1,0) is pushed to (1,-1)
+    expect(new Hero(world, fight).step([1, 0])).toBe(true); // its old cell is free
+    expect(new Hero(world, fight).step([1, -1])).toBe(false); // its new cell is taken
   });
 });
 
 describe('the troop', () => {
   it('starts as six marbles around the spawn', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     expect(TROOP).toBe(6);
     expect(hero.troop).toEqual(neighbours(SPAWN));
   });
 
   it('trails the hero: the cell it left first, then the cells it left before', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     for (const to of [[1, 0], [1, -1], [1, -2], [1, -3]] as const) expect(hero.step([...to])).toBe(true);
     expect(hero.troop).toHaveLength(TROOP);
     expect(hero.troop.slice(0, 4)).toEqual([[1, -2], [1, -1], [1, 0], SPAWN]);
@@ -147,7 +160,7 @@ describe('the troop', () => {
   });
 
   it('keeps six marbles when the hero rolls onto one of them', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     const onto = hero.troop[0]!;
     expect(hero.step(onto)).toBe(true);
     expect(hero.troop).toHaveLength(TROOP);

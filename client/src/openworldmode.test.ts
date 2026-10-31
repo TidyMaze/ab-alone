@@ -21,16 +21,16 @@ function sea(_seed: number, cx: number, cy: number): Uint8Array {
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0, 0], i * 3);
   return out;
 }
+type PushBridge = (seed: number, troop: Int32Array, enemies: Int32Array) => Int32Array;
+const noPush: PushBridge = () => new Int32Array();
 const mode = (
   models: () => Promise<PropModels> = async () => ({ low: {}, high: {} }),
   load: (seed: number, cx: number, cy: number) => Uint8Array = (_seed, cx, cy) => bytes(cx, cy),
   reduced: () => boolean = () => true,
-) => new OpenWorldMode(
-    load,
-    (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5, 7, 5) : new Int32Array()),
-    models,
-    reduced,
-  );
+  foes: (seed: number, cx: number, cy: number) => Int32Array = (_seed, cx, cy) =>
+    cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5, 7, 5) : new Int32Array(),
+  push: PushBridge = noPush,
+) => new OpenWorldMode(load, foes, models, reduced, push);
 const body = () => document.body.dataset;
 
 afterEach(() => {
@@ -40,6 +40,8 @@ afterEach(() => {
   delete body().openworldEnemies;
   delete body().openworldZoom;
   delete body().openworldDrawn;
+  delete body().openworldBeaten;
+  delete body().openworldPush;
 });
 
 // Screen direction of a step, `[-1 | 0 | 1, -1 | 0 | 1]` for left/right and up/down, from the ground layout of `axialTo3D`.
@@ -303,6 +305,106 @@ describe('a frame frees what it replaced only after its render (#1017)', () => {
     expect(drain).toHaveBeenCalledTimes(1);
     expect(drain.mock.invocationCallOrder[0]).toBeGreaterThan(render.mock.invocationCallOrder[0]!);
     vi.restoreAllMocks();
+  });
+});
+
+// The bridge's push of a step, echoing the troop it is given (the hero's cell first) and moving the enemy (3,0) to nowhere: the
+// hero stays where it is, the troop too; one enemy is left, at (3,0), and nothing is ejected (docs/specs/openworld.md section 4).
+const echo = (troop: Int32Array): Int32Array => Int32Array.of(0, 0, 0, troop.length / 2, ...troop, 1, 3, 0, 1, 0);
+
+describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967)', () => {
+  it('plays the push of a step: the hero and the troop move to the cells of the bridge, the enemy moves and the counts are published', () => {
+    const push = vi.fn<PushBridge>(() => new Int32Array());
+    push.mockImplementationOnce(() => Int32Array.of(0, 0, 0, 3, 2, 0, 1, 0, 0, 0, 1, 3, 0, 1, 0));
+    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
+    m.enter(1, 800, 600);
+    expect(body().openworldPush).toBe('0');
+    expect(m.key('ArrowRight')).toBe(true);
+    expect(m.hero!.at).toEqual([2, 0]);
+    expect(body().openworldAt).toBe('2,0');
+    expect(body().openworldTroop).toBe('1,0 0,0');
+    expect(body().openworldEnemies).toBe('1');
+    expect(body().openworldPush).toBe('1');
+    expect(body().openworldBeaten).toBe('0');
+    const [seed, troop, enemies] = push.mock.calls[0]!;
+    expect(seed).toBe(1);
+    expect(Array.from(troop.slice(0, 4))).toEqual([1, 0, 0, 0]); // the hero's cell, then the troop's: the cell it left first
+    expect(troop).toHaveLength(14);
+    expect(Array.from(enemies)).toEqual([2, 0]); // the enemies within 10 cells of the hero
+  });
+
+  it('blocks the hero on the cell a pushed enemy now stands on, and frees the cell it stood on', () => {
+    const push = vi.fn<PushBridge>(() => new Int32Array());
+    push.mockImplementationOnce((_seed, troop) => echo(troop));
+    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
+    m.enter(1, 800, 600);
+    m.key('ArrowRight'); // the step pushes the enemy from (2,0) to (3,0)
+    expect(body().openworldAt).toBe('1,0');
+    expect(m.key('ArrowRight')).toBe(true); // onto (2,0), its old cell: free
+    expect(body().openworldAt).toBe('2,0');
+    m.key('ArrowRight'); // onto (3,0): the pushed enemy stands there
+    expect(body().openworldAt).toBe('2,0');
+    expect(push).toHaveBeenCalledTimes(2); // the refused step asks the bridge for nothing
+  });
+
+  it('plays nothing when the bridge gives no push: the enemies stay and no push is counted', () => {
+    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()));
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    expect(body().openworldAt).toBe('1,0');
+    expect(body().openworldPush).toBe('0');
+    expect(body().openworldEnemies).toBe('1');
+    expect(body().openworldBeaten).toBe('0');
+  });
+
+  it('counts an ejected enemy as beaten, and its cell is free', () => {
+    const push = vi.fn<PushBridge>(() => new Int32Array());
+    // The enemy (2,0) falls into water: the bridge's ejected cell, kind 1, no enemy left, the hero stays at (1,0).
+    push.mockImplementationOnce((_seed, troop) => Int32Array.of(2, 0, 1, troop.length / 2, ...troop, 0, 1, 0));
+    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    expect(body().openworldBeaten).toBe('1');
+    expect(body().openworldPush).toBe('1');
+    expect(body().openworldEnemies).toBe('0');
+    expect(m.enemies()).toEqual([]);
+    expect(m.key('ArrowRight')).toBe(true);
+    expect(body().openworldAt).toBe('2,0');
+  });
+
+  it('pushes after a diagonal step too', () => {
+    const push = vi.fn<PushBridge>(() => new Int32Array());
+    const m = mode(undefined, undefined, undefined, undefined, push);
+    m.enter(1, 800, 600);
+    m.key('ArrowUp'); // one step
+    m.key('ArrowRight'); // Up and Right held: the diagonal step
+    expect(push).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts a fresh fight on each entry: the pushed enemies and the counts are the generated ones again', () => {
+    const push = vi.fn<PushBridge>(() => new Int32Array());
+    push.mockImplementationOnce((_seed, troop) => echo(troop));
+    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    expect(body().openworldPush).toBe('1');
+    m.leave();
+    expect(body().openworldPush).toBeUndefined();
+    expect(body().openworldBeaten).toBeUndefined();
+    m.enter(1, 800, 600);
+    expect(body().openworldPush).toBe('0');
+    expect(body().openworldEnemies).toBe('1');
+    expect(m.enemies()).toEqual([[2, 0]]);
+  });
+
+  it('a test fixture replaces the hero, the troop and the enemies of the loaded square, and draws them', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    expect(body().openworldAt).toBe('0,0');
+    expect(body().openworldTroop).toBe('-1,0 -2,0');
+    expect(body().openworldEnemies).toBe('1');
+    expect(m.enemies()).toEqual([[2, 0]]);
   });
 });
 

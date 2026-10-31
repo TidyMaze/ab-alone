@@ -73,6 +73,19 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   ejects the most enemies, then the lowest `(r, q)` of the back marble of the pushing line, then
   the lowest direction index (E, W, NE, SW, NW, SE), so the result is deterministic and testable.
   The rule is built in `crates/abalone-core/src/worldfight.rs` (`best_push`, `apply_push`).
+- **Client state** (`client/src/openworldfight.ts`): the enemies are the generated ones of the seed
+  with an overlay. `removed` holds the cells of generated enemies a push moved away or ejected, `added`
+  the cells of enemies that now stand where no generated one starts, `beaten` counts the ejected ones.
+  The current enemies of a cell are its generated ones not removed, plus the added ones. The hero is
+  blocked by the current enemies (not by the generated ones of its own chunk), the view draws them,
+  and a push redraws them. The overlay is plain data: `toJSON` and `FightState.fromJSON` (the save).
+  A new entry starts a fresh overlay.
+- **Bridge**: `world_push(seed, troop, enemies)` (`crates/abalone-wasm/src/world.rs`, encoding in
+  `crates/abalone-wasm/src/lib.rs`) plays the push after each step on the hero and the troop, with the
+  enemies within 10 cells of the hero. Its answer is empty when no push is legal.
+- **Data attributes** of `body`, next to `openworldAt` and `openworldTroop`: `openworldEnemies` (the
+  enemies drawn in the loaded chunks), `openworldBeaten` (the ejected enemies) and `openworldPush`
+  (the pushes played, one more at each push).
 - **Animation**: the push is drawn as a short lunge of the pushing line (about 400 ms, as the
   board's push), the pushed marbles slide one cell, an ejected one falls. Reduced motion: no
   lunge, the marbles jump.
@@ -92,3 +105,7 @@ connected; a chunk has no marble on an obstacle; the troop's attack is a legal p
 is deterministic. Client: unit tests at 100 %, and an e2e that walks a few cells, meets a group,
 watches the troop push, reloads and is still there (under 15 s). Every slice is checked in Chrome
 with the Playwright MCP before its PR, with a screenshot.
+
+Test hooks, on a webdriver page only: `window.__openworldFixture({ hero, troop, enemies })` puts the
+hero, the troop and the enemies of the loaded square (the generated ones are hidden), and
+`window.__openworldEnemies()` gives the enemies near the hero. The e2e push test uses them.

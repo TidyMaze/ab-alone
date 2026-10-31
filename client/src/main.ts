@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_push } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -4660,7 +4660,14 @@ const openWorld = new OpenWorldMode(
       meshoptLoader(),
     ),
   () => reducedMotion(),
+  (seed, troop, enemies) => world_push(seed, troop, enemies),
 );
+if (navigator.webdriver) {
+  // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
+  const hooks = window as unknown as Record<string, unknown>;
+  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][] }) => openWorld.fixture(fixture);
+  hooks.__openworldEnemies = () => openWorld.enemies();
+}
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');
   leaveOnline();
