@@ -7,6 +7,7 @@ import { EJECT_MS, FADE_MS } from './eject';
 import { gameFileText } from './gamefile';
 import { generateKeys } from './moverecord';
 import { OnlineSession } from './session';
+import { MOTION } from './motion';
 import { SLIDE_MS } from './slide';
 import { boot, slowKeys, type Game } from './test/harness';
 
@@ -197,7 +198,7 @@ describe('an ejection', () => {
     expect(spray.spray).not.toBeNull();
     expect(spray.drops).toBeGreaterThan(0);
     expect(spray.cells).toHaveLength(61);
-    expect(spray.marbles).toHaveLength(27); // 14 Black, 13 White
+    expect(spray.marbles).toHaveLength(27 + Number(data().lastMove)); // 14 Black, 13 White, and the ring of each cell the last move landed on
     expect(spray.frame.length).toBeGreaterThan(0);
     expect(game.hook<Spray>('__bloodAt', BLOOD_MS * 10)).toMatchObject({ spray: null, drops: 0 }); // over
     game.frame(EJECT_MS / 2);
@@ -506,6 +507,17 @@ describe('the pointer on the board', () => {
 });
 
 describe('the frame loop', () => {
+  it('rings the last move: a flash when the slide ends, then the resting mark (#1092)', async () => {
+    const game = await boot('?bot=off');
+    playOne(game);
+    expect(data().lastMove).not.toBe('0');
+    game.frame(0);
+    game.frame(SLIDE_MS + MOTION.base / 2);
+    expect(game.hook<{ opacity: number; scale: number }>('__lastMoveRing').opacity).toBeGreaterThan(0.55);
+    game.frame(MOTION.base);
+    expect(game.hook<{ opacity: number; scale: number }>('__lastMoveRing')).toEqual({ opacity: 0.55, scale: 1 });
+  });
+
   it('under automation draws at most every 100 ms', async () => {
     const game = await boot('?bot=off');
     game.frame();
@@ -556,6 +568,7 @@ describe('the frame loop', () => {
     game.frame(SLIDE_MS); // its last frame
     expect(data().sliding).toBeUndefined();
     expect(game.draws()).toBe(last + 1);
+    game.frame(MOTION.base); // the pulse of the last move (#1092)
     expect(drawsOver(3)).toBe(1); // its last picture once more, for the bloom
     expect(drawsOver(3)).toBe(0); // still again
   });
