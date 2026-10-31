@@ -97,7 +97,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     expect(load).toHaveBeenCalledTimes(loaded);
     view.show([CHUNK, 0]); // the next chunk, but the square still covers the hero's ball: its centre and chunks are kept
     expect(load).toHaveBeenCalledTimes(loaded);
-    view.show([4 * CHUNK, 0]); // out of the square: re-centred on its chunk, so the chunks around it load
+    view.show([4 * CHUNK - 1, 0]); // out of the square (its last cell is past the edge): re-centred on its chunk, so the chunks around it load
     expect(load.mock.calls.length).toBeGreaterThan(loaded);
   });
 
