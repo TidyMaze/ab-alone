@@ -31,8 +31,31 @@ export interface Pose extends Vec {
   sy: number;
 }
 
+/** How a glide is paced (#1065). `tap`: a single step, an ease-out that lands at rest. `start`: the first step of a held walk, from
+ * rest up to the walking speed. `walk`: a step of a held walk after another, at the walking speed from end to end. */
+export type Pace = 'tap' | 'start' | 'walk';
+/** The slopes of each pace, as shares of the step per unit of its time: [at its start, at its end]. The walking speed is 1, a cell
+ * per span. A tap is `[3, 0]`, which is exactly 1 - (1 - t)^3. */
+const SLOPES: Record<Pace, readonly [number, number]> = { tap: [3, 0], start: [0, 1], walk: [1, 1] };
+/** The steepest start a braked glide may take: past 3 the cubic would go back on itself. */
+const MAX_SLOPE = 3;
+
+/** The share of the way covered at `t` (0 to 1 of the step) by the cubic that starts with slope `v0` and ends with slope `v1`:
+ * a pure function of time, held at 0 before the step and at 1 after it. */
+export function shareAt(t: number, v0: number, v1: number): number {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return t * t * t * (v0 + v1 - 2) + t * t * (3 - 2 * v0 - v1) + t * v0;
+}
+
+/** The speed at `t` of `shareAt`: its derivative, in shares of the step per unit of its time; 0 outside the step. */
+export function slopeAt(t: number, v0: number, v1: number): number {
+  if (t < 0 || t > 1) return 0;
+  return 3 * t * t * (v0 + v1 - 2) + 2 * t * (3 - 2 * v0 - v1) + v0;
+}
+
 /** A glide: from the pose the marble had when it started, to the place of its new cell, over `span` ms from `start`. The turn is the
- * roll about `axis` in radians: the distance over the radius of the marble. */
+ * roll about `axis` in radians: the distance over the radius of the marble. `v0` and `v1` are the slopes of its pace. */
 interface Glide {
   from: Pose;
   to: Vec;
@@ -40,6 +63,8 @@ interface Glide {
   turn: number;
   start: number;
   span: number;
+  v0: number;
+  v1: number;
 }
 
 /** A lean: an offset of `dir` (already the lean's length) in the ground, over `span` ms from `start`, back to nothing at the end. */
@@ -55,8 +80,6 @@ export function squashAt(t: number): number {
   return Math.sin((Math.PI * (t - LANDING)) / (1 - LANDING));
 }
 
-/** The share of the way an ease-out covers at `t`: fast at first, slow on the cell. */
-const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;
 /** The share of the way a lean covers at `t`: out and back, from the cell to the cell. */
 const leanAt = (t: number): number => (t >= 1 ? 0 : Math.sin(Math.PI * t));
 /** The fraction of `span` that `now` is past `start`, from 0 to 1. */
@@ -65,15 +88,16 @@ const share = (now: number, start: number, span: number): number => Math.min(1, 
 /** A turn about `axis` by `angle` radians, reused by every glide so a frame allocates none. */
 const turned = new THREE.Quaternion();
 
-/** The pose of a glide at `now`, written to `out`: an ease-out from `from` to `to`, the roll of the marble on the way (when `roll`),
- * and the squash on landing (when `roll`). Without `roll` the marble keeps its turn and its shape: the far-out view. */
+/** The pose of a glide at `now`, written to `out`: from `from` to `to` at the pace of the glide, the roll of the marble on the way
+ * (when `roll`), and the squash on landing when it lands at rest (when `roll`): a marble that goes on to a next step does not
+ * squash. Without `roll` the marble keeps its turn and its shape: the far-out view. */
 function glidePose(g: Glide, now: number, out: Pose, roll: boolean): void {
   const t = share(now, g.start, g.span);
-  const f = easeOutCubic(t);
+  const f = shareAt(t, g.v0, g.v1);
   out.x = (1 - f) * g.from.x + f * g.to.x;
   out.y = (1 - f) * g.from.y + f * g.to.y;
   out.z = (1 - f) * g.from.z + f * g.to.z;
-  const s = roll ? squashAt(t) : 0;
+  const s = roll && g.v1 === 0 ? squashAt(t) : 0;
   out.sx = 1 + (SQUASH / 2) * s;
   out.sy = 1 - SQUASH * s;
   if (roll) out.q.multiplyQuaternions(turned.setFromAxisAngle(g.axis, g.turn * f), g.from.q);
@@ -119,19 +143,43 @@ export class Marble {
   }
 
   /** Glides from where the marble is at `now` (ms) to `to`, over `span` ms, rolling it on the way. Returns false, and keeps the glide
-   * under way, when it already glides or stands on `to`. `roll` false draws the place without the turn and the squash. */
-  go(to: Vec, now: number, span = GLIDE_MS, roll = true): boolean {
+   * under way, when it already glides or stands on `to`. `roll` false draws the place without the turn and the squash. `pace` is
+   * the step's (#1065): a `tap` eases out, the steps of a held walk keep one speed. */
+  go(to: Vec, now: number, span = GLIDE_MS, roll = true, pace: Pace = 'tap'): boolean {
     if (sameSpot(this.target, to)) return false;
     this.tick(now, roll);
-    const dx = to.x - this.base.x;
-    const dz = to.z - this.base.z;
-    const dist = Math.hypot(dx, dz);
-    const axis = dist === 0 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(dz / dist, 0, -dx / dist);
-    this.glide = { from: copyPose(this.base), to: { x: to.x, y: to.y, z: to.z }, axis, turn: dist / this.radius, start: now, span };
+    const [v0, v1] = SLOPES[pace];
+    this.begin(to, now, span, v0, v1);
     this.target.x = to.x;
     this.target.y = to.y;
     this.target.z = to.z;
     return true;
+  }
+
+  /** Starts a glide from the standing pose at `now` to `to`, over `span` ms, with the slopes `v0` and `v1`. */
+  private begin(to: Vec, now: number, span: number, v0: number, v1: number): void {
+    const dx = to.x - this.base.x;
+    const dz = to.z - this.base.z;
+    const dist = Math.hypot(dx, dz);
+    const axis = dist === 0 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(dz / dist, 0, -dx / dist);
+    this.glide = { from: copyPose(this.base), to: { x: to.x, y: to.y, z: to.z }, axis, turn: dist / this.radius, start: now, span, v0, v1 };
+  }
+
+  /** The walk ends (#1065): the glide under way at the walking speed goes on from its place and speed, slows to nothing, and lands
+   * on its cell at the time it was due, squashing on landing. Nothing for a marble that stands, a glide that eases out already
+   * (a tap), or one that has landed. */
+  brake(now: number, roll = true): void {
+    const g = this.glide;
+    if (!g || g.v1 === 0) return;
+    const t = share(now, g.start, g.span);
+    if (t >= 1) return;
+    const left = 1 - shareAt(t, g.v0, g.v1);
+    const matched = (slopeAt(t, g.v0, g.v1) * (1 - t)) / left; // the speed it has, over what is left
+    // A walk that ends in the first moments of its first step is a tap: it still eases out from the start, as a tap does.
+    const eager = g.v0 === 0 ? MAX_SLOPE * (1 - t) ** 4 : 0;
+    const v0 = Math.min(MAX_SLOPE, Math.max(matched, eager));
+    this.tick(now, roll);
+    this.begin(g.to, now, (1 - t) * g.span, v0, 0);
   }
 
   /** Leans the marble by `dir` (a step's direction, in cells) and back, over `span` ms: a blocked step (#1040). It rides on the glide

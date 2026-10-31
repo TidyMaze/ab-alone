@@ -174,7 +174,7 @@ import { findMatch, toleranceWindow } from './matchmaking';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
-import { fpsOf, keepWindow } from './fps';
+import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
@@ -5218,7 +5218,16 @@ function moving(): boolean {
 
 renderer.setAnimationLoop((now) => {
   lastDraw = timeDraw(lastDraw, now);
-  if (openWorld.active) return openWorld.frame((scene, camera) => renderer.render(scene, camera));
+  if (openWorld.active) {
+    const drew = openWorld.frame((scene, camera) => renderer.render(scene, camera));
+    if (fpsOn) {
+      // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.
+      if (drew) stampDrawn(fpsStamps, now);
+      lastFps = fpsAt(fpsStamps, now);
+      fpsBox.textContent = fpsLabel(lastFps);
+    }
+    return;
+  }
   const moves = moving(); // before the effects run, so the frame that ends one draws
   const wanted = drawWanted(dirty > 0, moves, drawAsked, navigator.webdriver);
   if (moves) dirty = CHANGE_DRAWS; // its last picture draws twice too, for the bloom

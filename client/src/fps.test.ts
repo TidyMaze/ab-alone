@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FPS_WINDOW, fpsOf, keepWindow } from './fps';
+import { FPS_IDLE_MS, FPS_WINDOW, fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 
 describe('fpsOf (the FPS readout, #426)', () => {
   it('counts the intervals between the first and last stamp, rounded', () => {
@@ -26,5 +26,31 @@ describe('keepWindow', () => {
     const before = [1, 2];
     keepWindow(before, 3);
     expect(before).toEqual([1, 2]);
+  });
+});
+
+describe('the readout of the drawn frames (#1064)', () => {
+  it('stamps in place, keeps the last FPS_WINDOW, and starts over after an idle gap', () => {
+    const stamps: number[] = [];
+    for (let i = 0; i < FPS_WINDOW + 5; i++) stampDrawn(stamps, i * 20);
+    expect(stamps).toHaveLength(FPS_WINDOW);
+    expect(stamps[0]).toBe(5 * 20);
+    expect(fpsOf(stamps)).toBe(50);
+    stampDrawn(stamps, (FPS_WINDOW + 4) * 20 + FPS_IDLE_MS + 1);
+    expect(stamps).toHaveLength(1);
+    stampDrawn(stamps, (FPS_WINDOW + 4) * 20 + FPS_IDLE_MS + 21);
+    expect(fpsOf(stamps)).toBe(50);
+  });
+
+  it('reads 0 for a scene that draws nothing, not the rate of its last frames', () => {
+    const stamps = [0, 20, 40];
+    expect(fpsAt(stamps, 40 + FPS_IDLE_MS)).toBe(50);
+    expect(fpsAt(stamps, 40 + FPS_IDLE_MS + 1)).toBe(0);
+    expect(fpsAt([], 0)).toBe(0);
+  });
+
+  it('labels the rate, and idle for 0', () => {
+    expect(fpsLabel(60)).toBe('60 FPS');
+    expect(fpsLabel(0)).toBe('idle');
   });
 });

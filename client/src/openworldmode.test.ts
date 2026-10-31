@@ -947,14 +947,14 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     const show = vi.spyOn(OpenWorldView.prototype, 'show');
     tap(standing(), 'ArrowRight');
     expect(show.mock.calls.at(-1)![0]).toEqual([1, 0]);
-    expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS });
+    expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS, pace: 'start' }); // the first step of a held arrow (#1065)
   });
 
   it('stretches the glide by the slow factor of the page, read when the step starts (a webdriver check)', () => {
     const show = vi.spyOn(OpenWorldView.prototype, 'show');
     (window as { __openworldSlow?: number }).__openworldSlow = 10;
     tap(standing(), 'ArrowRight');
-    expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS * 10 });
+    expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS * 10, pace: 'start' });
   });
 
   it('writes the glide mark only under webdriver, the page the browser checks drive: a player never pays for it', () => {

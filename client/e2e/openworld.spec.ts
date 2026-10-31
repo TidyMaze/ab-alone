@@ -503,6 +503,43 @@ test('a step glides the hero onto the next cell: exact at once, drawn in between
   expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined();
 });
 
+// #1065: a held arrow walks at a constant speed from cell to cell. The page records the hero's drawn place (`openworldGlide`, read after
+// each frame of the page) with the frame's time; over windows of 6 frames the speed varies by under 10 %. Before the fix each cell was
+// an ease-out to a stop, and the speed over such a window swung between about half and the whole of the walking speed.
+test('a held arrow walks the hero at a steady speed from cell to cell, #1065', async ({ page }) => {
+  await page.addInitScript(() => {
+    const samples: [number, number, number][] = [];
+    (window as unknown as { __walk: typeof samples }).__walk = samples;
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) =>
+      raf((t) => {
+        const read = performance.now(); // the clock the mode draws the glide by (not the callback's frame time, which jitters from it)
+        cb(t);
+        const at = document.body.dataset.openworldGlide;
+        if (at) samples.push([read, ...(at.split(',').map(Number) as [number, number])]);
+      });
+  });
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  await page.keyboard.down('ArrowUp');
+  await page.waitForTimeout(2200);
+  await page.keyboard.up('ArrowUp');
+  const samples = await page.evaluate(() => (window as unknown as { __walk: [number, number, number][] }).__walk);
+  const walking = samples.filter(([t]) => t > samples[0]![0] + 600 && t < samples.at(-1)![0] - 400); // past the start, before the stop
+  // The path walked, not the chord: a hex grid zigzags going "up", and a window that spans a turn would read slower by its chord.
+  const speeds: number[] = [];
+  for (let i = 0; i + 6 < walking.length; i++) {
+    let path = 0;
+    for (let j = i; j < i + 6; j++) path += Math.hypot(walking[j + 1]![1] - walking[j]![1], walking[j + 1]![2] - walking[j]![2]);
+    speeds.push(path / (walking[i + 6]![0] - walking[i]![0]));
+  }
+  expect(speeds.length).toBeGreaterThan(30);
+  expect(Math.max(...speeds) / Math.min(...speeds)).toBeLessThan(1.1);
+});
+
 // #1043: the marbles carry a stripe that turns with the roll. The camera follows the hero, so the hero stays at the centre of the
 // screen: two frames of the same glide, 0.5 s apart, differ in its centre box (the stripe turns across the marble).
 test('a glide of the hero turns its stripe: two frames in between differ on the marble, #1043', async ({ page }) => {
