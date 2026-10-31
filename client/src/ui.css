@@ -441,6 +441,11 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #hud .boss { margin-top: 0.25rem; }
   #hud .boss .goal, #hud .boss .daily { font-size: 0.75rem; }
 }
+/* A wide window that is not tall (1280x720) has the plate's long boss goal reach the board's top-left edge: the goal keeps to three
+   lines here, the Goal button has all of it (#1067). */
+@media (orientation: landscape) and (min-width: 1101px) and (max-height: 760px) {
+  #hud .boss .goal { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+}
 /* A short landscape window (a phone held sideways) has no room above the board's top-left edge: the plate
    keeps to the band left of the board, like the column, with a smaller turn line (#234). */
 @media (orientation: landscape) and (max-height: 500px) {
