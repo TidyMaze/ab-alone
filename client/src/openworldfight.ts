@@ -16,6 +16,20 @@ export interface FightSave {
   beaten: number;
 }
 
+/** Whether `raw` is a cell: two integers. */
+export const isCell = (raw: unknown): raw is Axial => Array.isArray(raw) && raw.length === 2 && raw.every((v) => Number.isSafeInteger(v));
+
+/** The saved form of a fight read back from `raw` (a save read from the store), `null` when it is not one. */
+export function decodeFight(raw: unknown): FightSave | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const save = raw as Record<keyof FightSave, unknown>;
+  const keyed = (k: unknown): boolean => typeof k === 'string' && /^-?\d+,-?\d+$/.test(k);
+  if (!Array.isArray(save.removed) || !save.removed.every(keyed)) return null;
+  if (!Array.isArray(save.added) || !save.added.every(isCell)) return null;
+  if (!Number.isSafeInteger(save.beaten) || (save.beaten as number) < 0) return null;
+  return { removed: save.removed as string[], added: save.added as Axial[], beaten: save.beaten as number };
+}
+
 /** What `world_push` gave: the new troop cells (the hero's first), the new enemy cells, the enemy ejected (none or one) and the
  * direction of the push. */
 export interface Pushed {
@@ -113,9 +127,11 @@ export class FightState {
     return { removed: [...this.removed], added: [...this.added.values()], beaten: this.beaten };
   }
 
-  /** The fight of a saved form. */
-  static fromJSON(save: FightSave): FightState {
+  /** The fight of a saved form: a fresh one when the saved form does not decode (`decodeFight`). */
+  static fromJSON(raw: unknown): FightState {
+    const save = decodeFight(raw);
     const fight = new FightState();
+    if (!save) return fight;
     for (const k of save.removed) fight.removed.add(k);
     for (const cell of save.added) fight.added.set(key(cell), cell);
     fight.beaten = save.beaten;
