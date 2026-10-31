@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
 
 // #962: the Open world mode, behind ?openworld=<seed>: the hero rolls over the generated world, an obstacle stops it, and
@@ -355,6 +355,47 @@ test.describe('the touch joystick', () => {
     const stopped = await at();
     await page.evaluate(() => new Promise((done) => setTimeout(done, 600))); // a held stick would have stepped by now
     expect(await at()).toBe(stopped);
+  });
+});
+
+// #1051: the settings menu of the Open world opens on screen. The cog is at the right of the column, as in a normal game (#1032 hid
+// the dock), so the menu hangs from its right edge and stays inside the window at every size.
+async function openSettingsInOpenWorld(page: Page): Promise<void> {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  await page.locator('#settings').click();
+  await expect(page.locator('#settings-menu')).toBeVisible();
+}
+async function expectMenuOnScreen(page: Page): Promise<void> {
+  const box = (await page.locator('#settings-menu').boundingBox())!;
+  const innerWidth = await page.evaluate(() => window.innerWidth);
+  expect(box.x, 'left edge of the settings menu').toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width, 'right edge of the settings menu').toBeLessThanOrEqual(innerWidth);
+}
+test('the Open world settings menu is on screen at 1280x720, #1051', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await openSettingsInOpenWorld(page);
+  await expectMenuOnScreen(page);
+});
+test('the Open world settings menu is on screen at 1920x1080, #1051', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openSettingsInOpenWorld(page);
+  await expectMenuOnScreen(page);
+});
+test.describe('the Open world settings menu on a touch phone, #1051', () => {
+  test.use({ hasTouch: true });
+  test('is on screen at 844x390 landscape', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await openSettingsInOpenWorld(page);
+    await expectMenuOnScreen(page);
+  });
+  test('stays on screen at 390x844 portrait', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openSettingsInOpenWorld(page);
+    await expectMenuOnScreen(page);
   });
 });
 
