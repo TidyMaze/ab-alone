@@ -47,7 +47,7 @@ export function onlineStatus(side: number, role: Role, opponent: Seen, agent: bo
   if (role === 'pending') return { text: `Joining as ${me}...`, tone: 'waiting' };
   if (opponent === 'here') return { text: `You are ${me}. ${them} is here.`, tone: 'here' };
   if (opponent === 'gone') return { text: `You are ${me}. ${them} is disconnected.`, tone: 'gone' };
-  return { text: 'Waiting for an opponent...', tone: 'waiting' }; // #1038: the turn title names the colour, no "You are Black."
+  return { text: `You are ${me}. Waiting for an opponent...`, tone: 'waiting' };
 }
 
 /** The HUD status line of a co-op room (docs/specs/coop-boss.md, #530): both seats play Black, so it names the partner. */

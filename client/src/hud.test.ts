@@ -91,8 +91,8 @@ describe('hudHtml', () => {
   });
 
   it('shows the online status line with its tone, and none offline', () => {
-    const html = hudHtml({ ...base, online: { text: 'Waiting for an opponent...', tone: 'waiting' } });
-    expect(html).toContain('<div class="presence waiting">Waiting for an opponent...</div>');
+    const html = hudHtml({ ...base, online: { text: 'You are Black. Waiting for an opponent...', tone: 'waiting' } });
+    expect(html).toContain('<div class="presence waiting">You are Black. Waiting for an opponent...</div>');
     expect(hudHtml(base)).not.toContain('presence');
   });
 
