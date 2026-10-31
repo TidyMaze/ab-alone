@@ -1214,3 +1214,83 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     expect(disposeMaterial.mock.contexts).toContain(view.ejected.material);
   });
 });
+
+describe('the camera turns around the hero by its yaw (#1026)', () => {
+  const DEG = Math.PI / 180;
+
+  it('sits on the back side of the hero at each yaw: the offset from the hero turns with it, and the camera looks at it', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    for (const yaw of [0, 30 * DEG, 90 * DEG, -60 * DEG]) {
+      view.turnTo(yaw, true);
+      const dx = view.camera.position.x - view.focusPoint.x;
+      const dz = view.camera.position.z - view.focusPoint.z;
+      expect(Math.hypot(dx, dz)).toBeGreaterThan(0);
+      expect(Math.atan2(dx, dz)).toBeCloseTo(yaw, 6); // the back at yaw 0 is +z, as before
+    }
+  });
+
+  it('picks the cell under the pointer at each yaw: a neighbour of the hero is the one its screen point picks', () => {
+    const world = new World(grass);
+    const view = new OpenWorldView(world);
+    view.resize(1600, 900);
+    for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG, -120 * DEG]) {
+      view.turnTo(yaw, true);
+      view.show([0, 0]);
+      for (const cell of neighbours([0, 0])) {
+        const p = axialTo3D(cell[0], cell[1]);
+        const tile = world.tile(cell[0], cell[1])!;
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
+        expect(view.pick(ndc.x, ndc.y)).toEqual(cell);
+      }
+    }
+  });
+
+  it('eases the yaw to its goal, one frame at a time, and settles on it; a goal wraps into (-pi, pi]', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(view.yaw).toBe(0);
+    view.turn(Math.PI);
+    view.turn(Math.PI / 2 + 0.1); // 3pi/2 + 0.1 wraps to -pi/2 + 0.1
+    expect(view.yaw).toBeCloseTo(-Math.PI / 2 + 0.1);
+    const before = view.camera.position.x;
+    expect(view.easeYaw(0.05, false)).toBe(true); // moving toward the goal
+    expect(view.camera.position.x).not.toBeCloseTo(before);
+    while (view.easeYaw(0.5, false));
+    expect(view.easeYaw(0.5, false)).toBe(false);
+    expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(-Math.PI / 2 + 0.1, 6);
+  });
+
+  it('snaps to the goal at once with reduced motion, and a turn back to zero is the reset', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.turn(1);
+    expect(view.easeYaw(0.016, true)).toBe(true);
+    expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(1, 6);
+    view.turn(-view.yaw);
+    view.easeYaw(0.016, true);
+    expect(view.yaw).toBe(0);
+    expect(view.camera.position.x).toBeCloseTo(view.focusPoint.x, 6);
+  });
+
+  it('keeps the widest zoom where the reach holds at every yaw: no edge of the loaded chunks shows at any turn (#1026)', () => {
+    for (const aspect of [9 / 16, 16 / 9, 21 / 9]) {
+      const limit = maxZoomFor(aspect);
+      for (let deg = 0; deg < 360; deg += 1) expect(reachAt(aspect, limit, deg * DEG)).toBeLessThanOrEqual(MAX_REACH);
+    }
+  });
+
+  it('loads the chunks of the ground in view at the widest zoom and any yaw, within the reach budget', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(390, 844);
+    view.show([0, 0]);
+    for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG]) {
+      view.turnTo(yaw, true);
+      view.zoomBy(1e9);
+      expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
+    }
+  });
+});

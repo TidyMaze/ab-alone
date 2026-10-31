@@ -24,12 +24,37 @@ const fightWithPush = (): FightState => {
   return fight;
 };
 const saved = { removed: ['2,0'], added: [[3, 0]], beaten: 1 };
-const record = (seed: number, version = 1) => ({ version, seed, hero, troop, fight: saved, savedAt: 5 });
+const record = (seed: number, version = 1) => ({ version, seed, hero, troop, fight: saved, yaw: 0, savedAt: 5 });
+
+describe('the save of the camera yaw (#1026)', () => {
+  it('saves the yaw with the world and loads it back', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 1.25);
+    expect((await saves.load(7))!.yaw).toBe(1.25);
+  });
+
+  it('loads a record of the previous record version, with no yaw, at the default angle: a migration, not a loss (#1026)', async () => {
+    const store = memoryStore();
+    const { yaw: _yaw, ...old } = record(7);
+    store.data.set('openworld:7', { ...old, record: 1 });
+    const back = await worldSaves(store, 1).load(7);
+    expect(back!.yaw).toBe(0);
+    expect(back!.hero).toEqual(hero);
+    expect(store.data.has('openworld:7')).toBe(true);
+  });
+
+  it('discards a record of this record version whose yaw is not a number', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', { ...record(7), record: 2, yaw: 'x' });
+    expect(await worldSaves(store, 1).load(7)).toBeNull();
+    expect(store.data.has('openworld:7')).toBe(false);
+  });
+});
 
 describe('worldSaves', () => {
   it('saves a world under its seed and loads it back with its hero, troop and fight', async () => {
     const saves = worldSaves(memoryStore(), 1);
-    expect(await saves.put(7, hero, troop, fightWithPush())).toBe(true);
+    expect(await saves.put(7, hero, troop, fightWithPush(), 0)).toBe(true);
     const back = await saves.load(7);
     expect(back).toEqual({ ...record(7), savedAt: expect.any(Number) });
     expect(back!.fight.beaten).toBe(1);
@@ -37,8 +62,8 @@ describe('worldSaves', () => {
 
   it('keeps one record per seed: a world saved does not replace another', async () => {
     const saves = worldSaves(memoryStore(), 1);
-    await saves.put(7, hero, troop, new FightState());
-    await saves.put(8, [4, 4], [], new FightState());
+    await saves.put(7, hero, troop, new FightState(), 0);
+    await saves.put(8, [4, 4], [], new FightState(), 0);
     expect((await saves.load(7))!.hero).toEqual(hero);
     expect((await saves.load(8))!.hero).toEqual([4, 4]);
     expect(await saves.load(9)).toBeNull();
@@ -48,7 +73,7 @@ describe('worldSaves', () => {
     const factory = new IDBFactory();
     vi.stubGlobal('indexedDB', factory);
     const saves = worldSaves(indexedDbStore(), 1);
-    await saves.put(7, hero, troop, new FightState());
+    await saves.put(7, hero, troop, new FightState(), 0);
     expect((await saves.load(7))!.seed).toBe(7);
     expect((await factory.databases()).map(({ name }) => name)).toEqual(['ab-alone']);
   });
@@ -107,7 +132,7 @@ describe('worldSaves', () => {
     };
     const saves = worldSaves(broken, 1);
     expect(await saves.load(7)).toBeNull();
-    expect(await saves.put(7, hero, troop, new FightState())).toBe(false);
+    expect(await saves.put(7, hero, troop, new FightState(), 0)).toBe(false);
     await expect(saves.remember(7)).resolves.toBeUndefined();
     expect(await saves.last()).toBeNull();
   });
@@ -123,7 +148,7 @@ describe('worldSaves', () => {
     vi.stubGlobal('indexedDB', undefined);
     const saves = worldSaves(indexedDbStore(), 1);
     expect(await saves.load(7)).toBeNull();
-    expect(await saves.put(7, hero, troop, new FightState())).toBe(false);
+    expect(await saves.put(7, hero, troop, new FightState(), 0)).toBe(false);
     expect(await saves.last()).toBeNull();
   });
 
@@ -131,8 +156,8 @@ describe('worldSaves', () => {
   it('discards the save of the seed given and keeps the other seeds saved', async () => {
     const store = memoryStore();
     const saves = worldSaves(store, 1);
-    await saves.put(7, hero, troop, new FightState());
-    await saves.put(8, hero, troop, new FightState());
+    await saves.put(7, hero, troop, new FightState(), 0);
+    await saves.put(8, hero, troop, new FightState(), 0);
     await saves.discard(7);
     expect(store.data.has('openworld:7')).toBe(false);
     expect(store.data.has('openworld:8')).toBe(true);
