@@ -131,3 +131,105 @@ describe('the thumb dock', () => {
     expect(copy.querySelector('span')!.textContent).toBe('Copy diagnostics');
   });
 });
+
+// The lobby sheet (#1044, docs/specs/thumb-dock.md section 1): the lobby controls sit in a sheet above the dock, the Lobby
+// control toggles it, it opens by itself while a lobby waits, and Hold stays in the dock.
+describe('the lobby sheet (#1044)', () => {
+  /** Starts an offline battle royale: Invite shows in the lobby sheet. */
+  function battleRoyale(game: Game): void {
+    game.openModes();
+    byId('battle-royale').click();
+  }
+
+  /** Presses Invite and waits until the page is the creator of the room. */
+  async function invite(game: Game): Promise<void> {
+    byId('royale-invite').click();
+    for (let i = 0; i < 200 && document.body.dataset.seat !== 'player'; i++) await game.settle();
+  }
+
+  it('the battle royale dock holds Hold and Lobby, the lobby controls sit in the sheet and not in the top column', async () => {
+    const game = await boot('?bot=off');
+    battleRoyale(game);
+    expect(byId('dock').contains(byId('royale-hold'))).toBe(true);
+    expect(byId('dock').contains(byId('lobby'))).toBe(true);
+    expect(byId('lobby-sheet').contains(byId('royale-invite'))).toBe(true);
+    expect(byId('online').contains(byId('royale-invite'))).toBe(false);
+    expect(byId('lobby').hidden).toBe(false); // Invite shows offline
+    expect(byId('lobby-sheet').hidden).toBe(true); // closed, and not opened by itself offline
+  });
+
+  it('the Lobby control toggles the lobby sheet, and aria-expanded follows', async () => {
+    const game = await boot('?bot=off');
+    battleRoyale(game);
+    byId('lobby').click();
+    expect(byId('lobby-sheet').hidden).toBe(false);
+    expect(byId('lobby').getAttribute('aria-expanded')).toBe('true');
+    byId('lobby').click();
+    expect(byId('lobby-sheet').hidden).toBe(true);
+    expect(byId('lobby').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('the Lobby control does nothing with no lobby control to show', async () => {
+    await boot('?bot=off');
+    byId('lobby').click();
+    expect(byId('lobby-sheet').hidden).toBe(true);
+    expect(byId('lobby').hidden).toBe(true);
+  });
+
+  it('Esc closes the lobby sheet and gives the focus back to Lobby', async () => {
+    const game = await boot('?bot=off');
+    battleRoyale(game);
+    byId('lobby').click();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(byId('lobby-sheet').hidden).toBe(true);
+    expect(document.activeElement).toBe(byId('lobby'));
+  });
+
+  it('a tap outside the lobby sheet and its button closes it, a tap inside keeps it open', async () => {
+    const game = await boot('?bot=off');
+    battleRoyale(game);
+    byId('lobby').click();
+    byId('lobby-sheet').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(byId('lobby-sheet').hidden).toBe(false);
+    byId('lobby').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(byId('lobby-sheet').hidden).toBe(false);
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(byId('lobby-sheet').hidden).toBe(true);
+  });
+
+  it('a press whose target is not a node (the window) counts as outside, and throws nothing', async () => {
+    const game = await boot('?bot=off');
+    battleRoyale(game);
+    byId('lobby').click();
+    window.dispatchEvent(new PointerEvent('pointerdown'));
+    expect(byId('lobby-sheet').hidden).toBe(true);
+    expect(game).toBeTruthy();
+  });
+
+  it('one sheet at a time: Game modes and Settings close the lobby sheet, and it closes theirs', async () => {
+    const game = await boot('?bot=off');
+    battleRoyale(game);
+    byId('lobby').click();
+    game.openModes();
+    expect(byId('lobby-sheet').hidden).toBe(true);
+    expect(byId('mode-menu').hidden).toBe(false);
+    byId('lobby').click();
+    expect(byId('mode-menu').hidden).toBe(true);
+    expect(byId('lobby-sheet').hidden).toBe(false);
+    game.openSettings();
+    expect(byId('lobby-sheet').hidden).toBe(true);
+    expect(byId('settings-menu').hidden).toBe(false);
+  });
+
+  it('while a lobby waits, the Lobby control carries a steady accent, and the sheet never opens by itself', async () => {
+    const game = await boot('?bot=off');
+    battleRoyale(game);
+    await invite(game);
+    expect(byId('royale-start').hidden).toBe(false); // the creator waits: Start is in the sheet
+    expect(byId('lobby').dataset.waiting).toBe('true');
+    expect(byId('lobby-sheet').hidden).toBe(true); // the board stays clear: the player taps Lobby
+    byId('lobby').click();
+    expect(byId('lobby-sheet').hidden).toBe(false);
+    expect(byId('royale-start').hidden).toBe(false);
+  });
+});

@@ -49,6 +49,7 @@ test('three players: a round resolves at its deadline, the silent player holds, 
   await expect(a.locator('#hud')).not.toBeEmpty(); // the mode menu's listeners are wired
   await openModes(a);
   await a.getByRole('button', { name: 'Battle royale', exact: true }).click();
+  await a.getByRole('button', { name: 'Lobby' }).click(); // the lobby sheet (#1044)
   await a.getByRole('button', { name: 'Invite' }).click(); // the offline game becomes a room
   const hash = new URL(await a.locator('#invite').inputValue()).hash;
   expect(hash).toMatch(/^#royale=[\w-]+$/);
