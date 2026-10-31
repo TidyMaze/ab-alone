@@ -1,24 +1,24 @@
 // The Open world's virtual joystick (#1025, #1026, docs/specs/openworld.md): on a touch screen a touch on the left half of the canvas
 // shows a floating base under the thumb. Dragging from it points the hero's step: the arrows of the drag's screen direction, read in
-// the yaw of the camera, so the hero rolls to the hex the drag points to on the screen (`heldKeys`, `stepOf`, openworldmode.ts). It
-// walks on while the thumb is held off the dead zone, and stops when the thumb lifts or a second finger comes down: a pinch or a
-// twist of the camera (#976, #1026) is the canvas's, not the stick's.
+// the yaw of the camera, so the hero rolls to the hex the drag points to on the screen (`heldKeys`, `stepOf`, openworldmode.ts). The
+// stick holds those arrows while the thumb is off the dead zone, and lets them go when the thumb lifts or a second finger comes
+// down: a pinch or a twist of the camera (#976, #1026) is the canvas's, not the stick's. The hero walks on the cadence of the held
+// arrows (#1059), not on a timer of the stick's own.
 
 /** The stick the joystick drives: the Open world mode, through the methods it reads. */
 export interface Stick {
   readonly active: boolean;
   /** The yaw of the camera round the hero, in radians: the drag is read in it. */
   readonly yaw: number;
-  /** Rolls the hero one step in the direction of the arrows held together (both of a diagonal at once). */
-  step(keys: readonly string[]): void;
+  /** Holds the arrows of the drag, both of a diagonal at once; none when the thumb lets go. The hero steps by them on the cadence of
+   * the held arrows (#1059). */
+  hold(keys: readonly string[]): void;
 }
 
 /** Inside this many px of the touch the stick holds nothing: a thumb at rest is no step. */
 export const DEAD_ZONE = 14;
 /** The farthest the knob travels from the base, in px. */
 export const BASE_RADIUS = 48;
-/** The time between two steps while the stick is held, in ms. */
-export const STEP_MS = 180;
 
 /** The hex directions are 60 degrees apart; the keys are 45 degrees apart (eight of them, a diagonal being two keys). */
 const HEX = Math.PI / 3;
@@ -46,25 +46,15 @@ export function heldKeys(dx: number, dy: number, yaw = 0): string[] {
   return keysAt(hex - yaw);
 }
 
-/** Binds the joystick of `root` (the canvas and the `#joystick` base with its `#joystick-knob`) to `stick`. The hero steps again every
- * `step` ms while the thumb holds the same direction. Returns what removes the binding. */
-export function bindJoystick(root: Document, stick: Stick, step = STEP_MS): () => void {
+/** Binds the joystick of `root` (the canvas and the `#joystick` base with its `#joystick-knob`) to `stick`: a drag holds the arrows
+ * it points to, and the mode walks the hero on their cadence. Returns what removes the binding. */
+export function bindJoystick(root: Document, stick: Stick): () => void {
   const pad = root.getElementById('joystick') as HTMLElement;
   const knob = root.getElementById('joystick-knob') as HTMLElement;
   let touch: { id: number; x: number; y: number } | null = null;
-  let held: readonly string[] = [];
-  let timer: ReturnType<typeof setInterval> | undefined;
 
-  // A new direction steps the hero at once; the same one steps it on the timer.
-  const hold = (keys: string[]): void => {
-    if (keys.join() === held.join()) return;
-    held = keys;
-    if (keys.length) stick.step(keys);
-  };
   const stop = (): void => {
-    held = [];
-    clearInterval(timer);
-    timer = undefined;
+    stick.hold([]);
     touch = null;
     pad.hidden = true;
   };
@@ -80,10 +70,6 @@ export function bindJoystick(root: Document, stick: Stick, step = STEP_MS): () =
     pad.style.top = `${e.clientY}px`;
     knob.style.transform = 'translate(0px, 0px)';
     pad.hidden = false;
-    timer = setInterval(() => {
-      if (!stick.active) stop();
-      else if (held.length) stick.step(held);
-    }, step);
   };
   const move = (e: PointerEvent): void => {
     if (!touch || e.pointerId !== touch.id) return;
@@ -91,7 +77,7 @@ export function bindJoystick(root: Document, stick: Stick, step = STEP_MS): () =
     const dy = e.clientY - touch.y;
     const scale = Math.min(1, BASE_RADIUS / Math.hypot(dx, dy));
     knob.style.transform = `translate(${Math.round(dx * scale)}px, ${Math.round(dy * scale)}px)`;
-    hold(heldKeys(dx, dy, stick.yaw));
+    stick.hold(heldKeys(dx, dy, stick.yaw));
   };
   const end = (e: PointerEvent): void => {
     if (touch && e.pointerId === touch.id) stop();

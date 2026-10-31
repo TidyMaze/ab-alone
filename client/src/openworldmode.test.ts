@@ -1105,7 +1105,7 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     m.key('ArrowUp');
     expect(at()).toBe('1,0');
     m.frame(vi.fn(), GLIDE_MS);
-    expect(at()).toBe(heldCell([1, 0], held('ArrowRight', 'ArrowUp')).join(','));
+    expect(at()).toBe(heldCell([1, 0], held('ArrowRight', 'ArrowUp'))!.join(','));
   });
 
   it('a release stops the walk at the end of the step under way: no step after it', () => {
@@ -1137,6 +1137,16 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     m.enter(1, 800, 600);
     m.frame(vi.fn(), 2 * GLIDE_MS);
     expect(at()).toBe('0,0');
+  });
+
+  it('the stick holds nothing once the mode is left: a hold then steps nothing when the world is entered again', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.leave();
+    m.hold(['ArrowRight']); // the mode is off: the stick's late hold is ignored
+    m.enter(1, 800, 600);
+    m.frame(vi.fn(), GLIDE_MS);
+    expect(m.hero!.at).toEqual([0, 0]);
   });
 
   it('a lean into a wall is kept on the cadence too, and the next key down leans at once again', () => {

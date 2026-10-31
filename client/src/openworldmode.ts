@@ -113,6 +113,10 @@ export class OpenWorldMode {
   private clock = 0;
   /** The arrow keys held down: a vertical and a horizontal one together roll a diagonal. */
   private readonly held = new Set<string>();
+  /** The arrows the stick holds (#1025): they count as held keys do. */
+  private pad: readonly string[] = [];
+  /** The time of the next step while an arrow is held, in ms: the frame loop makes it (#1059), Infinity while none is. */
+  private nextStep = Infinity;
   /** The props are read once for the page: every entry reuses them. */
   private modelsOnce?: Promise<PropModels>;
 
@@ -177,6 +181,8 @@ export class OpenWorldMode {
     this.view = null;
     this.world = null;
     this.dirty = false;
+    this.pad = [];
+    this.nextStep = Infinity;
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
     delete document.body.dataset.openworldTroop;
@@ -231,16 +237,15 @@ export class OpenWorldMode {
   }
 
   /** An arrow key rolls the hero one cell, or on the diagonal while a vertical and a horizontal arrow are both held;
-   * opposite arrows held together do nothing. Escape leaves. Reports whether the key was the mode's. */
-  key(key: string): boolean {
+   * opposite arrows held together do nothing. The first arrow down steps at once, then the held arrows step on their own
+   * cadence (`beat`, #1059): the system's key repeat (`repeat`) is ignored. Escape leaves. Reports whether the key was the mode's. */
+  key(key: string, repeat = false): boolean {
     if (key === 'Escape') return this.leave(), true;
     if (key === 'r' || key === 'R') return this.turn(-this.view!.yaw), true; // back to the default angle (#1026)
     const turn = TURNS.get(key);
     if (turn !== undefined) return this.turn(turn), true;
     if (!SCREEN.has(key)) return false;
-    this.held.add(key);
-    const to = stepOf(this.hero!.at, this.held, this.view!.yaw);
-    if (to) this.roll(to);
+    if (!repeat) this.arrows(() => this.held.add(key));
     return true;
   }
 
@@ -249,10 +254,10 @@ export class OpenWorldMode {
     return this.view!.yaw;
   }
 
-  /** The stick (#1025, #1026): the hero steps by the arrows it holds, both of a diagonal at once, in the yaw of the camera. */
-  step(keys: readonly string[]): void {
-    const to = stepOf(this.hero!.at, new Set(keys), this.view!.yaw);
-    if (to) this.roll(to);
+  /** The stick (#1025, #1026) holds the arrows of its drag, none when the thumb lets go: the hero steps by them on the cadence of the
+   * held arrows, as by the keys (#1059). Nothing while the mode is off. */
+  hold(keys: readonly string[]): void {
+    if (this.active) this.arrows(() => (this.pad = [...keys]));
   }
 
   /** Turns the camera by `by` radians round the hero: the Q and E keys, a right-button drag (`orbit`) and a twist. The view eases to
@@ -269,10 +274,15 @@ export class OpenWorldMode {
     this.turn(px * ORBIT_PER_PX);
   }
 
-  /** An arrow key let go; no argument (the window lost focus) lets go of all of them. */
+  /** An arrow key let go; no argument (the window lost focus) lets go of all of them. The walk ends with the last one: the step
+   * under way finishes, and no step follows (#1059). */
   release(key?: string): void {
-    if (key === undefined) this.held.clear();
-    else this.held.delete(key);
+    this.arrows(() => {
+      if (key === undefined) {
+        this.held.clear();
+        this.pad = [];
+      } else this.held.delete(key);
+    });
   }
 
   /** A press at `x`, `y` pixels of a `width` x `height` screen rolls the hero onto the cell under it when it is next to it. */
@@ -299,6 +309,7 @@ export class OpenWorldMode {
     if (this.view!.ease(seconds, reduced)) this.dirty = true;
     if (this.view!.easeYaw(seconds, reduced)) this.dirty = true; // the turn eases to its goal, as the height does (#1026)
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
+    this.beat(now); // the held arrows walk on, one step per GLIDE_MS (#1059)
     this.anim();
     const moving = !reduced && this.view!.hasWater;
     if (!this.dirty && !moving) return;
@@ -306,6 +317,36 @@ export class OpenWorldMode {
     this.view!.glow(moving ? now : 0);
     render(this.view!.scene, this.view!.camera);
     this.view!.drain(); // what this frame replaced is no longer in use by it (#1017)
+  }
+
+  /** Changes the arrows held, by the keys or by the stick. The first arrow down steps the hero at once, and the cadence starts; no
+   * arrow left held stops it (#1059). A second arrow changes the direction on the next step, with no step of its own. */
+  private arrows(update: () => void): void {
+    const idle = this.idle();
+    update();
+    if (this.idle()) this.nextStep = Infinity;
+    else if (idle) {
+      this.nextStep = performance.now() + GLIDE_MS;
+      this.stepHeld();
+    }
+  }
+
+  /** Whether no arrow is held, by a key or by the stick. */
+  private idle(): boolean {
+    return this.held.size === 0 && this.pad.length === 0;
+  }
+
+  /** The cadence of the held arrows: one step every GLIDE_MS, made by the frame loop at `now` (ms), never by a key repeat (#1059). */
+  private beat(now: number): void {
+    if (now < this.nextStep) return;
+    this.nextStep = now + GLIDE_MS;
+    this.stepHeld();
+  }
+
+  /** One step in the direction of the arrows held now (`stepOf`): a blocked one leans the hero (`lean`). */
+  private stepHeld(): void {
+    const to = stepOf(this.hero!.at, new Set([...this.held, ...this.pad]), this.view!.yaw);
+    if (to) this.roll(to);
   }
 
   private roll(to: Axial): void {

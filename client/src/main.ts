@@ -4714,7 +4714,7 @@ openWorldButton.disabled = false; // listener ready (#146)
 bindNewWorld(document, openWorld.newWorld.bind(openWorld)); // the HUD's New world, with its confirmation (#1021)
 bindJoystick(document, openWorld); // the touch stick of the Open world, on the left half of the canvas (#1025)
 addEventListener('keydown', (e) => {
-  if (!openWorld.active || !openWorld.key(e.key)) return;
+  if (!openWorld.active || !openWorld.key(e.key, e.repeat)) return; // a key repeat steps nothing: the held arrows walk (#1059)
   e.preventDefault(); // no page scroll
   if (openWorld.active) return;
   dirty = CHANGE_DRAWS; // left: the board draws again
