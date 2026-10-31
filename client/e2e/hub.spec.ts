@@ -168,6 +168,7 @@ test('the bot table starts a game the bot answers, #522', async ({ page }) => {
 test('the online table opens a room with its invite link, as Play online does, #522', async ({ page }) => {
   await shipAt(page, './?bot=off&net=hook', [-1, 1]);
   await hookClick(page, -2, 1);
+  await page.getByRole('button', { name: 'Lobby' }).click(); // the invite link sits in the lobby sheet (#1044)
   await expect(page.locator('#invite')).toBeVisible();
   expect(await page.locator('#invite').inputValue()).toMatch(/#room=[\w-]+$/);
   await expect(page.locator('#hud')).toContainText('You are Black');
