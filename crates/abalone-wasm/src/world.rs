@@ -104,4 +104,31 @@ mod tests {
         ];
         assert_eq!(all.map(terrain_code), [0, 1, 2, 3, 4, 5, 6, 7]);
     }
+
+    #[test]
+    fn a_slide_keeps_the_order_of_the_troop_and_moves_the_enemy() {
+        // The hero (0,0) and the marble (-1,0) push the enemy (1,0) east to (2,0), on the spawn clearing.
+        let out = world_push(9, vec![0, 0, -1, 0], vec![1, 0]);
+        assert_eq!(out, vec![0, 0, 0, 2, 1, 0, 0, 0, 1, 2, 0, 1, 0]);
+    }
+
+    #[test]
+    fn a_push_into_water_ejects_the_last_enemy_as_kind_one() {
+        let water = |q: i32, r: i32| Some(if (q, r) == (5, 0) { Terrain::Water } else { Terrain::Grass });
+        let out = push_encoded(&[(2, 0), (1, 0), (0, 0)], &[(3, 0), (4, 0)], water);
+        assert_eq!(out, vec![4, 0, 1, 3, 3, 0, 2, 0, 1, 0, 1, 4, 0, 1, 0]);
+    }
+
+    #[test]
+    fn a_push_off_the_world_ejects_the_last_enemy_as_kind_two() {
+        // The world ends at q = 511: the enemy (511,0) is pushed onto (512,0), which is off it.
+        let out = world_push(9, vec![509, 0, 510, 0], vec![511, 0]);
+        assert_eq!(out, vec![511, 0, 2, 2, 510, 0, 511, 0, 0, 1, 0]);
+    }
+
+    #[test]
+    fn no_legal_push_is_empty() {
+        assert!(world_push(9, vec![0, 0, -1, 0], vec![]).is_empty());
+        assert!(world_push(9, vec![0, 0], vec![1, 0]).is_empty());
+    }
 }
