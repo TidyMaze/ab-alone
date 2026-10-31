@@ -11,6 +11,7 @@
   --display: 'Chakra Petch', 'Arial Narrow', sans-serif;
   --ui: 'IBM Plex Sans', system-ui, sans-serif;
   --ui-scale: 1; /* UI scale (#382), set on the root by main.ts: 1 to 2 */
+  --touch: 2.75rem; /* a touch target on a coarse pointer, 44 px (#922) */
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
@@ -75,7 +76,6 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   font: 0.875rem/1.2 var(--ui);
 }
 #settings { padding: 0.5rem; anchor-name: --cog; }
-@media (pointer: coarse) { #settings-menu button { min-height: 2.75rem; } }
 #settings-menu button[hidden] { display: none; }
 /* The FPS switch beside Clear board in one item, so the menu keeps its rows (#426). */
 .setting-group { display: flex; gap: 0.25rem; }
@@ -93,7 +93,6 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 }
 :is(.setting-volume, .setting-lights) input { width: 100%; box-sizing: border-box; margin: 0; accent-color: var(--accent); cursor: pointer; }
 :is(.setting-volume, .setting-lights) input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (pointer: coarse) { :is(.setting-volume, .setting-lights) { min-height: 2.75rem; } }
 /* The log archive (#513): Logs shows the entries read in place of the items, one title per row, wrapped. */
 #settings-menu[data-page='archive'] > :not(.setting-archive), #settings-menu:not([data-page='archive']) > .setting-archive { display: none; }
 .setting-archive {
@@ -104,8 +103,6 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #settings-menu .setting-archive button { justify-content: flex-start; text-align: left; }
 /* The two skin buttons share the item's width, half each, a name cut with an ellipsis: the menu keeps its width (#377). */
 .skin-pair > button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A touch target of 44 px on a touch screen (#287): the halves grow to it, the menu keeps the width of its widest row (#377). */
-@media (pointer: coarse) { .skin-pair > button { min-width: 44px; min-height: 2.75rem; } }
 /* The FPS readout (#426): off by default, a corner that ignores the pointer. */
 #fps {
   position: fixed; left: 4px; bottom: 4px; z-index: 2; pointer-events: none; padding: 0.125rem 0.375rem;
@@ -293,7 +290,10 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
      viewport and hung from the cog, it leaves that clip on every browser. */
   #settings-menu { position: fixed; top: calc(16px + 2.75rem + 0.25rem); right: 16px; width: max-content; max-width: calc(100vw - 32px); }
   /* With the light sliders the menu is taller than a phone held sideways: it scrolls, so every row stays reachable. */
-  #settings-menu { max-height: calc((100dvh - 32px) / var(--ui-scale) - 2.75rem - 0.25rem); overflow-y: auto; } /* zoomed (#382) */
+  /* Bug #904: the menu ends 8 px above the clipboard band (16 px, a 44 px button, then 8 px), so it covers none of it. Its
+     top is under the cog (16 px, the cog's --touch height, then 0.25rem): both are taken off the window, in the zoomed
+     units of the menu (#382). */
+  #settings-menu { max-height: calc((100dvh - 84px) / var(--ui-scale) - var(--touch) - 0.25rem); overflow-y: auto; }
   @supports (anchor-name: --cog) {
     #settings-menu { position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
   }
@@ -304,7 +304,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   /* The cog starts the first row: the open menu lies beside it, over that row, its items side by side, so it reaches no
      lower than the rows when the plate is tall (#284, #287). */
   #settings-menu { top: 0; left: calc(100% + 0.5rem); right: auto; flex-flow: row wrap; max-width: calc(100vw - 32px - 100% - 0.5rem); }
-  #settings-menu :is(.setting-volume, .setting-lights, .setting-archive) { flex: 1 0 100%; box-sizing: border-box; }
+  #settings-menu :is(.setting-volume, .setting-lights, .setting-archive, #level-reset) { flex: 1 0 100%; box-sizing: border-box; } /* Reset lights spans the row (#904) */
+  #settings-menu #level-reset { justify-content: center; }
   /* The open mode menu starts a new row. #666: an open boss list is one row of its own under Boss fight (or Fight
      together) that scrolls sideways, so a new boss adds no row over the board: the menu is no wider than the
      window (min-width), the padding keeps the focus outlines inside the scroll box. */
@@ -335,6 +336,16 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #daily { padding-block: 0.25rem; max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #daily span { display: block; overflow: hidden; text-overflow: ellipsis; }
 }
+/* Touch targets (#922, #904): on a coarse pointer every button of the column and of the settings menu is at least --touch
+   (44 px) square, each light slider is 32 px high in its 44 px row (its name beside it), and the buttons of the column keep
+   8 px between them. This block comes after the portrait rules above, so its gap wins over their 4 px. */
+@media (pointer: coarse) {
+  #online button, #settings-menu button { min-width: var(--touch); min-height: var(--touch); }
+  #online, #mode-menu { gap: 0.5rem; }
+  :is(.setting-volume, .setting-lights) { min-height: var(--touch); flex-direction: row; align-items: center; gap: 0.5rem; }
+  :is(.setting-volume, .setting-lights) span { flex: none; }
+  :is(.setting-volume, .setting-lights) input { width: auto; flex: 1 1 auto; min-width: 0; height: 2rem; }
+}
 /* Held upright, or in a narrow or short window, each item is its icon only, a 44 px square, so every item fits without
    reaching the board (#414): the name is its aria-label and title. Roomy windows keep icon then label. */
 @media (orientation: portrait), (max-width: 1100px), (max-height: 500px) {
@@ -347,6 +358,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 @media (orientation: landscape) and (max-width: 1100px), (orientation: landscape) and (max-height: 500px) {
   #settings-menu { display: grid; grid-template-columns: repeat(3, 2.75rem); grid-auto-flow: dense; }
   #settings-menu .setting-group { grid-column: span 2; }
+  #settings-menu #level-reset { grid-column: 1 / -1; } /* bug #904: one row of the grid, not a 44 px cell that wraps */
   #settings-menu .skin-pair { flex-wrap: nowrap; }}
 
 #hud {
