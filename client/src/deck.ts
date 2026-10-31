@@ -42,6 +42,7 @@ const BOSS_DECK: Record<string, Deck> = {
   assembly: 'cargo',
   core: 'furnace',
   dual: 'mess',
+  stalker: 'chapel', // the Chapel's night watch (stalker.md section 2)
 };
 
 /** The deck of a mode, or of a boss fight: the Mess for a boss the client does not know. */

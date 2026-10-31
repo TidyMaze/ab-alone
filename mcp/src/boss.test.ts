@@ -233,6 +233,18 @@ const CASES: Record<string, () => void> = {
     expect(state([0, 1, 4, -7]).tell!.text).toBe('one of your marbles comes back on (4,-7) at the end of the next move');
     expect(state([1, 0, 0, 0]).tell).toEqual({ kind: 'bridge', cells: [], text: 'the bridge is up: ejected marbles are gone' });
   },
+
+  stalker() {
+    // The fog is the tell: the sight and the ejections before it narrows. No marks.
+    const stalker = newEncounter('stalker', 0);
+    expect(bossState('stalker', stalker)).toMatchObject({ name: 'The Stalker', marks: [] });
+    expect(bossState('stalker', stalker).tell).toEqual({
+      kind: 'sight',
+      cells: [],
+      text: 'you see the boss marbles only within 3 cells of your own; the sight narrows after 3 more ejections',
+    });
+    expect(bossState('stalker', withData(stalker, { stalker: [1, -1] })).tell!.text).toBe('you see the boss marbles only within 1 cell of your own');
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -241,7 +253,7 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
   });
 
   test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675), The Overseer (#635) The Assembly Line (#744), The Unstable Core (#751) and The Dual Room (#947) are in', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual']);
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker']);
   });
 
   test('every boss of the engine has its case', () => {

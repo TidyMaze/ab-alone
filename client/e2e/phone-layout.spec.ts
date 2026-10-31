@@ -439,11 +439,11 @@ for (const { name, viewport } of [
 
     test('the plate and the buttons cover no cell after a defeat, bug #271', async ({ page }, testInfo) => {
       const hud = page.locator('#hud');
-      await page.clock.setFixedTime(new Date('2027-03-25T08:00:00Z'));
+      await page.clock.setFixedTime(new Date('2027-03-30T08:00:00Z'));
       await page.goto('./?bot=off&net=hook');
       await openModes(page);
       await page.locator('#daily').click();
-      await expect(hud).toContainText('Daily challenge 2027-03-25 · attempt 1');
+      await expect(hud).toContainText('Daily challenge 2027-03-30 · attempt 1');
       await loseByRepetition(page); // against the Echo's bonus mirrors (#859), e2e/fight-end.ts
       await expect(hud).toContainText('Defeat');
       await check(page, testInfo, 'after a daily defeat');

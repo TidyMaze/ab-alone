@@ -2129,7 +2129,7 @@ function stopAuto(): void {
 }
 function syncAuto(): void {
   const boss = engine instanceof Encounter ? engine.name() : null;
-  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null, stalker: fogged() }, fight !== null && hasMedal(store, fight.id));
+  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null, stalker: fogged() && !stalkerBoss() }, fight !== null && hasMedal(store, fight.id));
   const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
   const reason = state.shown ? state.reason : null;
   const usable = state.shown && reason === null && !over;
@@ -2943,7 +2943,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${fogged() ? stalkerNote(revealed.size > 0) : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${stalkerBoss() ? sightNote() : fogged() ? stalkerNote(revealed.size > 0) : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -3062,7 +3062,17 @@ function drawFog(board: ArrayLike<number>, fog: Set<number>, lit: Set<number>): 
 }
 
 const PLAYER = 3 - BOT_SIDE;
-const fogged = (): boolean => stalker !== null && stalker === liveGame();
+/** The Stalker boss (#1111): the fog is the engine's, read from its getters. */
+const stalkerBoss = (): boolean => fight?.id === 'stalker' && engine instanceof Encounter;
+const fogged = (): boolean => stalkerBoss() || (stalker !== null && stalker === liveGame());
+/** The HUD line of the Stalker boss: the sight, and the ejections before it narrows. */
+function sightNote(): string {
+  const [sight, left] = (engine as Encounter).stalker() as unknown as number[];
+  const narrows = left! < 0 ? '' : ` · narrows to ${sight! - 1} after ${left} more ejections`;
+  return `Sight ${sight}${narrows}${revealed.size > 0 ? ' · A hidden marble blocks that move: play again' : ''}`;
+}
+/** The cells the player sees: within the range of its marbles, the sight of the Stalker boss by its phase. */
+const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, PLAYER, stalkerBoss() ? (engine as Encounter).sight() : undefined);
 /** The live board as the player sees it in Stalker. */
 const seen = (): number[] => seenBoard(engine.board(), PLAYER, visibleCells(engine.board(), PLAYER), revealed);
 
@@ -3086,7 +3096,11 @@ function refresh(): void {
   // The Echo's free moves (#958): their marbles ringed, the target of a selected group's free move marked by a diamond.
   const free = showing() || !(engine instanceof Encounter) ? [] : parseMoves(engine.free_moves());
   freeTargets = groupTargets(free, selected);
-  const fog = fogged() ? visibleCells(board, PLAYER) : null;
+  if (stalkerBoss()) {
+    revealed.clear();
+    for (const [q, r] of parseCells((engine as Encounter).revealed())) revealed.add(cellIndex(q, r));
+  }
+  const fog = fogged() ? sightOf(board) : null;
   const lit = replaying ? new Set<number>() : revealed; // a replayed position shows what was seen then
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
@@ -3581,7 +3595,7 @@ function blocked(retry: () => void): boolean {
 }
 
 function play(seenMove: Move): void {
-  const mv = fogged() ? resolveSeen(parseMoves(engine.legal_moves()), seenMove) : seenMove;
+  const mv = fogged() && !stalkerBoss() ? resolveSeen(parseMoves(engine.legal_moves()), seenMove) : seenMove;
   if (!mv) {
     // Stalker: a hidden marble blocks the move, it is revealed and the player plays again (#998)
     for (const i of blockers(engine.board(), seen(), seenMove)) revealed.add(i);
@@ -3590,7 +3604,15 @@ function play(seenMove: Move): void {
     return;
   }
   const record = encodeMove(mv);
-  playMove(record);
+  try {
+    playMove(record);
+  } catch (refusal) {
+    // The Stalker: a hidden marble blocks the move, the engine revealed it and changed nothing (#1111)
+    if (!stalkerBoss()) throw refusal;
+    selected = [];
+    keyDir = -1;
+    return refresh();
+  }
   selected = [];
   keyDir = -1;
   void online?.send(record);
@@ -3599,7 +3621,8 @@ function play(seenMove: Move): void {
 
 /** The legal moves, the Echo's free moves first: a click, a drag or a key on a free target plays the free move (#958). */
 function legalMoves(): Move[] {
-  if (fogged()) return seenMoves(seen(), engine.to_move()); // Stalker: the board as the player sees it, the engine judges on play
+  if (stalkerBoss() && engine.to_move() === PLAYER) return parseMoves((engine as Encounter).seen_moves());
+  if (fogged() && !stalkerBoss()) return seenMoves(seen(), engine.to_move()); // Stalker: the board as the player sees it, the engine judges on play
   const moves = parseMoves(engine.legal_moves());
   return engine instanceof Encounter ? [...parseMoves(engine.free_moves()), ...moves] : moves;
 }

@@ -33,6 +33,8 @@ pub enum DrawReason {
 pub enum GameError {
     GameOver,
     Move(MoveError),
+    /// A hidden marble blocks the move (The Stalker): nothing changed, the marble is revealed.
+    Hidden,
 }
 
 /// A move played, with the hash of the position it produced.

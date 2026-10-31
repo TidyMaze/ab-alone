@@ -17,6 +17,7 @@ pub mod magnetizer;
 pub mod overseer;
 pub mod pulsar;
 pub mod railyard;
+pub mod stalker;
 pub mod telemetry;
 pub mod unstable;
 
@@ -94,6 +95,10 @@ pub struct Encounter {
     offer: Vec<Move>,
     /// The plies that were free moves the player took (The Echo).
     free_taken: usize,
+    /// The player sees only what is near their marbles (The Stalker).
+    stalker: bool,
+    /// The boss marbles a refused move revealed, until the player's next played move (The Stalker).
+    revealed: Vec<(i32, i32)>,
 }
 
 /// Marbles of `color` on `board`.
@@ -222,6 +227,8 @@ impl Encounter {
             echo: false,
             offer: Vec::new(),
             free_taken: 0,
+            stalker: false,
+            revealed: Vec::new(),
         }
     }
 
@@ -303,9 +310,13 @@ impl Encounter {
             return Ok(());
         }
         self.latch_phase();
+        if self.stalker {
+            stalker::refuse(self, mv)?;
+        }
         let told = self.tell();
         let before = self.game.board().clone();
         self.game.play(mv)?;
+        self.revealed.clear();
         self.carry_marks(&before, mv);
         self.repulsions.clear();
         self.assigned.clear();

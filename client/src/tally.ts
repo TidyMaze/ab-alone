@@ -5,7 +5,7 @@
 export type TallyMode = 'local' | 'bot' | 'online' | 'boss';
 
 /** The bosses of the roster, in play order (boss_ids() in crates/abalone-wasm). */
-export const BOSS_IDS = ['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual'] as const;
+export const BOSS_IDS = ['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker'] as const;
 
 const MODE_LINES: Record<'local' | 'bot' | 'online', string> = {
   local: 'Mess: two crews, one table. Ledger open.',
@@ -27,6 +27,7 @@ const BOSS_LINES: Record<(typeof BOSS_IDS)[number], string> = {
   assembly: 'Throughput on file. Six out to balance the books.',
   core: 'Charges on file. Four and a marble is written off.',
   dual: 'Returns on file. Six out to balance the books.',
+  stalker: 'Sightings on file. Six out to balance the books.',
 };
 
 /** The line Tally says at the start of a match: a boss fight takes its boss, other modes their mode. */

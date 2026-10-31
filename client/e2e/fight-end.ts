@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import { openModes } from './modes';
 
 // Reaching the end of a boss fight, for the daily result card tests (#196). With ?bot=off the test
-// plays both sides by hand. The daily boss of 2027-03-25 is The Echo with 13 bosses (#947), whose mirror
+// plays both sides by hand. The daily boss of 2027-03-30 is The Echo with 14 bosses (#1111), whose mirror
 // of each move is a bonus move for the other side (#859), offered to the player (#958): Black up, White
 // east, Black's free move west, Black east, White east, the free move again and Black east bring a
 // position back a third time at the 7th move, a draw by threefold repetition, which is a loss against a boss.
@@ -28,15 +28,15 @@ export async function loseByRepetition(page: Page): Promise<void> {
   await expect(page.locator('#hud')).toContainText('Defeat');
 }
 
-/** Opens the daily challenge of 2027-03-25 (clock fixed), starts it and returns the boss name. */
+/** Opens the daily challenge of 2027-03-30 (clock fixed), starts it and returns the boss name. */
 export async function startDaily(page: Page): Promise<string> {
-  await page.clock.setFixedTime(new Date('2027-03-25T08:00:00Z'));
+  await page.clock.setFixedTime(new Date('2027-03-30T08:00:00Z'));
   await page.goto('./?bot=off');
   const daily = page.locator('#daily');
   await expect(daily).toBeEnabled();
   const name = (await daily.textContent())!.split(': ')[1]!;
   await openModes(page);
   await daily.click();
-  await expect(page.locator('#hud')).toContainText('Daily challenge 2027-03-25 · attempt 1');
+  await expect(page.locator('#hud')).toContainText('Daily challenge 2027-03-30 · attempt 1');
   return name;
 }
