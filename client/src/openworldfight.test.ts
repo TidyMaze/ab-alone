@@ -136,3 +136,23 @@ describe('the enemies of the fight', () => {
     expect(fight.toJSON().added).toEqual([cell]);
   });
 });
+
+describe('a saved fight is read back only when it is whole (#968)', () => {
+  it('restores a whole save, and a fight that does not decode starts fresh', () => {
+    const fight = new FightState();
+    fight.apply([], [[3, 0]], [[9, 9]]);
+    expect(FightState.fromJSON(JSON.parse(JSON.stringify(fight))).toJSON()).toEqual(fight.toJSON());
+    const garbage: unknown[] = [
+      null,
+      'x',
+      { removed: 'x', added: [], beaten: 0 },
+      { removed: ['2;0'], added: [], beaten: 0 },
+      { removed: [], added: [[1]], beaten: 0 },
+      { removed: [], added: [[1.5, 0]], beaten: 0 },
+      { removed: [], added: [], beaten: -1 },
+      { removed: [], added: [], beaten: 0.5 },
+      { removed: [], added: [] },
+    ];
+    for (const raw of garbage) expect(FightState.fromJSON(raw).toJSON(), JSON.stringify(raw)).toEqual({ removed: [], added: [], beaten: 0 });
+  });
+});
