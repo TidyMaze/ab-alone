@@ -12,6 +12,7 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   await page.locator('#openworld').click();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
+  await expect(page.locator('#openworld-hud')).toBeVisible(); // the plate shows at the load, before it folds (#1138)
   let before = '0,0';
   let stopped = false;
   for (let i = 0; i < 200 && !stopped; i++) {
@@ -29,7 +30,7 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   const pushesBefore = await pushes();
   await page.keyboard.press('ArrowLeft');
   await expect.poll(async () => (await at()) !== before || (await pushes()) !== pushesBefore).toBe(true);
-  await expect(page.locator('#openworld-hud')).toBeVisible();
+  await expect(page.locator('#openworld-chip')).toBeVisible(); // the steps folded the plate to its chip (#1138)
   await expect(page.locator('#hud')).toBeHidden();
   await page.keyboard.press('Escape');
   await expect(page.locator('#hud')).toBeVisible();
