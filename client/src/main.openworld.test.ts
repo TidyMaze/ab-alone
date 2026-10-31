@@ -263,6 +263,38 @@ describe('the Open world mode', () => {
     expect(data().openworld).not.toBe(seed);
     expect(data().openworldAt).toBe('0,0');
   });
+
+  it('counts the frames really drawn in its FPS readout: 50 FPS at 20 ms a frame, #1064', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    byId('setting-fps').click();
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    await game.settle();
+    game.frame(20); // the first draw
+    press('ArrowRight'); // a glide: every frame draws
+    release('ArrowRight');
+    for (let i = 0; i < 6; i++) game.frame(20);
+    expect(byId('fps').textContent).toBe('50 FPS');
+  });
+
+  it('reads idle in its FPS readout when a still scene draws nothing, and the diagnostics follow, #1064', async () => {
+    const game = await boot('?bot=off&openworld=7', { reducedMotion: true }); // no water to animate: a still scene draws once
+    byId('setting-fps').click();
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    await game.settle();
+    for (let i = 0; i < 40; i++) game.frame(20);
+    expect(byId('fps').textContent).toBe('idle');
+    press('ArrowRight');
+    release('ArrowRight');
+    for (let i = 0; i < 3; i++) game.frame(20); // a step and nothing after it
+    expect(byId('fps').textContent).toBe('idle');
+    byId('copy-diagnostics').click();
+    await game.settle();
+    expect(JSON.parse(byId<HTMLTextAreaElement>('diagnostics').value).environment.fps).toBe(0);
+  });
 });
 
 // The board's keys in the Open world (#1063): none reaches the board game, its replay, its selection or its moves, and
