@@ -46,6 +46,8 @@ import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
+import { MOTION } from './motion';
+import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
@@ -1329,6 +1331,11 @@ const glyphGeometry = new THREE.OctahedronGeometry(0.09);
 // marble once played, until the next move; a bonus the engine would skip is a ghost under a red cross, a shape and not
 // colour alone.
 const echoMaterial = new THREE.MeshBasicMaterial({ color: 0x4fd1c5 });
+// The last move (#1092): a gold ring on the cells it landed on, flashing when the slide ends (lastMovePulse), a static mark under reduced motion.
+const lastMoveMaterial = new THREE.MeshBasicMaterial({ color: 0xf5c542, transparent: true, opacity: LAST_MOVE_REST, depthWrite: false });
+let lastMoveRings: THREE.Mesh[] = [];
+let lastMoveStart = NaN; // on the frame clock, set by the first frame after the move
+let lastMovePlaying = false;
 const skipMaterial = new THREE.MeshBasicMaterial({ color: 0xe0413a });
 // The target of a free move the player is offered (#958): a teal diamond standing on the cell, over the target arrow.
 const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
@@ -2339,6 +2346,8 @@ function afterPlay(before: number[], record: number[], live = true): void {
   const held = gameTurns(); // first: a new game starts its own. Kept for the ejected marble, whose cell is taken
   turns.map = carryTurns(held, fight?.seed ?? 0, tracks, mv.dir);
   if (!live) return;
+  lastMoveStart = NaN;
+  lastMovePlaying = true;
   delete document.body.dataset.repulsions;
   if (tracks.some((t) => t.durationMs > 0)) {
     slide = { game: engine, tracks, start: performance.now() };
@@ -3242,6 +3251,17 @@ function refresh(): void {
     onMarble(cellIndex(q, r), ring);
   }
   document.body.dataset.echoLanded = String(landed.length); // read by the tests
+  const last = history.at(-1);
+  lastMoveRings = showing() || !last || engine instanceof Encounter ? [] : landing(parseMoves(last)[0]!).map(([q, r]) => {
+    const p = axialTo3D(q, r);
+    const ring = new THREE.Mesh(outlineGeometry, lastMoveMaterial);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    marbles.add(ring);
+    onMarble(cellIndex(q, r), ring);
+    return ring;
+  });
+  document.body.dataset.lastMove = String(lastMoveRings.length); // read by the tests
   const offered = showing() || !(engine instanceof Encounter) ? [] : freeMarbles(parseMoves(engine.free_moves()));
   for (const [q, r] of offered) {
     const p = axialTo3D(q, r);
@@ -4043,6 +4063,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
 (window as unknown as Record<string, unknown>).__hint = () => hint.shown(here());
 (window as unknown as Record<string, unknown>).__rings = () => ringed;
+// Used by the browser checks to read the opacity and scale of the last move's ring (#1092).
+(window as unknown as Record<string, unknown>).__lastMoveRing = () => ({ opacity: lastMoveMaterial.opacity, scale: lastMoveRings[0]?.scale.x ?? 0 });
 // Used by the browser checks to read the target cells and the direction of their arrow (#390).
 (window as unknown as Record<string, unknown>).__targets = () => targets;
 (window as unknown as Record<string, unknown>).__marbles = () => marbles;
@@ -5354,6 +5376,7 @@ function moving(): boolean {
     lists.some((list) => list.length > 0) ||
     (pulsarCores.length > 0 && !reducedMotion()) ||
     eggsDrawn.some((egg) => egg.glow) ||
+    (lastMovePlaying && !reducedMotion()) ||
     sceneRenderer.particles.visible ||
     (pulsing && shellLooks.has(DEFAULT_SKIN)) ||
     freeCam.active
@@ -5402,6 +5425,11 @@ renderer.setAnimationLoop((now) => {
   if (!reducedMotion()) for (const core of pulsarCores) core.rotation.y = now / 600;
   animateParticles(now);
   eggGlowMaterial.opacity = eggGlow(now / 1000, reducedMotion());
+  if (Number.isNaN(lastMoveStart) && lastMovePlaying) lastMoveStart = now;
+  lastMovePlaying = lastMovePlaying && now - lastMoveStart < SLIDE_MS + MOTION.base;
+  const pulse = lastMovePulse(lastMovePlaying ? now - lastMoveStart : Infinity, reducedMotion());
+  lastMoveMaterial.opacity = pulse.opacity;
+  for (const ring of lastMoveRings) ring.scale.setScalar(pulse.scale);
   const heated = shellLooks.get(DEFAULT_SKIN); // only the default shell glows with the heat, once worn
   if (heated) heated.emissiveIntensity = pulsing ? pulseAt(pulseHeld ?? now / 1000) : 0;
   turnConsole(now);
