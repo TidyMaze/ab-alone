@@ -363,7 +363,8 @@ export class OpenWorldMode {
   private anim(): void {
     if (this.view?.animating) document.body.dataset.openworldAnim = '1';
     else delete document.body.dataset.openworldAnim;
-    // The mark of a glide (#1040): the hero's drawn place while its marbles move, removed once they land.
+    // The mark of a glide (#1040), for the browser checks only: the hero's drawn place while its marbles move, removed once they land.
+    if (!navigator.webdriver) return;
     if (this.view?.gliding) document.body.dataset.openworldGlide = `${this.view.focusPoint.x.toFixed(2)},${this.view.focusPoint.z.toFixed(2)}`;
     else delete document.body.dataset.openworldGlide;
   }
