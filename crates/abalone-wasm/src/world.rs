@@ -22,6 +22,12 @@ fn terrain_code(terrain: Terrain) -> u8 {
     }
 }
 
+/// The version of the generated world (`WORLD_VERSION` of the core): a save of another version is not loaded (#968).
+#[wasm_bindgen]
+pub fn world_version() -> u32 {
+    world::WORLD_VERSION
+}
+
 /// The cells of chunk `(cx, cy)` of the world `seed`, `CELL_STRIDE` bytes per cell, row by row;
 /// empty off the world.
 #[wasm_bindgen]

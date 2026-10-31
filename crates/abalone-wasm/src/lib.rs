@@ -104,7 +104,7 @@ pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::Engine;
 pub use royale::Royale;
 pub use run::run_map;
-pub use world::world_chunk;
+pub use world::{world_chunk, world_version};
 
 #[cfg(test)]
 mod tests {
