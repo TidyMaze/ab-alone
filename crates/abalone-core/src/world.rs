@@ -8,7 +8,7 @@ use std::sync::{Mutex, PoisonError};
 
 /// The version of the generated world, saved with each Open world save (#968): bump it with every change of the generator, the
 /// same moment the pinned digest of the tests changes (the line of `the_generated_world_is_pinned_by_a_digest`).
-pub const WORLD_VERSION: u32 = 1;
+pub const WORLD_VERSION: u32 = 2;
 /// A chunk is `CHUNK` x `CHUNK` cells of the axial grid.
 pub const CHUNK: i32 = 16;
 /// The world is `WORLD_CHUNKS` x `WORLD_CHUNKS` chunks, centred on the spawn chunk.
@@ -101,6 +101,13 @@ const LAND: std::ops::Range<f64> = 0.45..0.70;
 /// Moisture below `DRY` makes a rock level (5) sand-coloured rock. It is a quantile of the moisture, measured like the
 /// elevation.
 const DRY: f64 = 0.422;
+/// The soft Meadow bias around the spawn (`meadow_bias`): full up to `MEADOW_INNER` cells, none from `MEADOW_OUTER`, a
+/// smoothstep between. At full bias the temperature is `MEADOW_TEMPERATURE` (between `T_COLD` and `T_HOT`, so not
+/// cold nor hot whatever the jitter) and the moisture `MEADOW_MOISTURE` (below `M_WET`, so not forest).
+const MEADOW_INNER: f64 = 8.0;
+const MEADOW_OUTER: f64 = 16.0;
+const MEADOW_TEMPERATURE: f64 = 0.395;
+const MEADOW_MOISTURE: f64 = 0.30;
 
 /// What a cell looks like and whether it can be entered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -229,6 +236,13 @@ impl Lattice {
 /// The axial distance from `(0, 0)`.
 fn distance(q: i32, r: i32) -> i32 {
     (q.abs() + r.abs() + (q + r).abs()) / 2
+}
+
+/// How much the spawn pulls the biome of `(q, r)` to Meadow, from 0 to 1: 1 within `MEADOW_INNER` cells of the spawn,
+/// 0 beyond `MEADOW_OUTER`, a smoothstep between (no edge). A pure function of the distance, so it is order free.
+fn meadow_bias(q: i32, r: i32) -> f64 {
+    let t = ((MEADOW_OUTER - f64::from(distance(q, r))) / (MEADOW_OUTER - MEADOW_INNER)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 /// The elevation at `(q, r)` from the seed alone, with the macro level shifted by `shift`: the same values as the
@@ -399,10 +413,14 @@ impl Window {
     }
 
     /// The biome of a cell of `height` and `moisture`: the temperature (lower uphill) and the moisture against the thresholds,
-    /// each moved by a micro-level sample of the temperature so the borders are ragged.
+    /// each moved by a micro-level sample of the temperature so the borders are ragged. Near the spawn both drift towards
+    /// the Meadow values by `meadow_bias`, so the surroundings are meadow and the border is soft.
     fn biome(&self, q: i32, r: i32, height: u8, moisture: f64) -> Biome {
         let jitter = (self.temperature.levels[2].noise(q, r) - 0.5) * JITTER;
-        let temperature = self.temperature.value(q, r) - LAPSE * (f64::from(height) - 3.0);
+        let bias = meadow_bias(q, r);
+        let natural = self.temperature.value(q, r) - LAPSE * (f64::from(height) - 3.0);
+        let temperature = natural + (MEADOW_TEMPERATURE - natural) * bias;
+        let moisture = moisture + (MEADOW_MOISTURE - moisture) * bias;
         if temperature < T_COLD + jitter {
             Biome::Tundra
         } else if temperature > T_HOT + jitter {
@@ -587,11 +605,13 @@ mod tests {
                 .filter(|&(q, r)| distance(q, r) <= 10)
                 .map(|(q, r)| cell(seed, q, r).unwrap())
                 .collect();
-            let meadow = disc.iter().filter(|c| c.biome == Biome::Meadow).count();
+            let (meadow, total) = (
+                disc.iter().filter(|c| c.biome == Biome::Meadow).count(),
+                disc.len(),
+            );
             assert!(
-                meadow * 100 >= disc.len() * 80,
-                "seed {seed}: {meadow} of {} cells around the spawn are meadow",
-                disc.len()
+                meadow * 100 >= total * 80,
+                "seed {seed}: {meadow} of {total} cells around the spawn are meadow"
             );
         }
     }
@@ -990,7 +1010,7 @@ mod tests {
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
             (WORLD_VERSION, world_digest()),
-            (1, 4_602_184_324_818_820_941),
+            (2, 8_603_978_012_532_690_763),
             "WORLD_VERSION and digest of the reference world"
         );
     }
