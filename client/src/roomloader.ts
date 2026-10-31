@@ -11,7 +11,8 @@ export interface PbrMaterialSet {
   albedo: THREE.Texture;
   normal: THREE.Texture;
   roughness: THREE.Texture;
-  displacement: THREE.Texture;
+  /** Absent when the scale is 0: a map that moves nothing is not fetched (#925). */
+  displacement?: THREE.Texture;
   displacementScale: number;
   ao?: THREE.Texture;
   metalness?: THREE.Texture;
@@ -52,18 +53,18 @@ export async function loadPbrMaterial(
   extras: readonly ExtraMap[] = [],
 ): Promise<PbrMaterialSet | null> {
   try {
-    const [[albedo, normal, roughness, displacement], more] = await Promise.all([
+    const [[albedo, normal, roughness], displacement, more] = await Promise.all([
       Promise.all([
         loader.loadAsync(`${basePath}${prefix}-albedo.ktx2`),
         loader.loadAsync(`${basePath}${prefix}-normal.ktx2`),
         loader.loadAsync(`${basePath}${prefix}-roughness.ktx2`),
-        loader.loadAsync(`${basePath}${prefix}-displacement.ktx2`),
       ]),
+      displacementScale === 0 ? undefined : loader.loadAsync(`${basePath}${prefix}-displacement.ktx2`),
       Promise.all(extras.map((name) => loader.loadAsync(`${basePath}${prefix}-${name}.ktx2`))),
     ]);
 
     albedo.colorSpace = THREE.SRGBColorSpace;
-    for (const map of [albedo, normal, roughness, displacement, ...more]) configureTiling(map, repeat);
+    for (const map of [albedo, normal, roughness, ...(displacement ? [displacement] : []), ...more]) configureTiling(map, repeat);
 
     return { albedo, normal, roughness, displacement, displacementScale, ...Object.fromEntries(extras.map((name, i) => [name, more[i]])) };
   } catch {
@@ -77,8 +78,7 @@ export function createPbrStandardMaterial(pbr: PbrMaterialSet): THREE.MeshStanda
     map: pbr.albedo,
     normalMap: pbr.normal,
     roughnessMap: pbr.roughness,
-    displacementMap: pbr.displacement,
-    displacementScale: pbr.displacementScale,
+    ...(pbr.displacement ? { displacementMap: pbr.displacement, displacementScale: pbr.displacementScale } : {}),
     ...(pbr.ao ? { aoMap: pbr.ao } : {}),
     // A metalness map scales `metalness`: 1 leaves the whole value to the map.
     ...(pbr.metalness ? { metalnessMap: pbr.metalness, metalness: 1 } : {}),

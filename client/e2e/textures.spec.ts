@@ -34,7 +34,6 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 deck-mess.ktx2', // the cells' texture of the Mess, the deck a page opens on (#401)
     '200 deck-pbr-albedo.ktx2', // the bay's deck, and the board's rim (#775), downloaded once
     '200 deck-pbr-ao.ktx2',
-    '200 deck-pbr-displacement.ktx2',
     '200 deck-pbr-normal.ktx2',
     '200 deck-pbr-roughness.ktx2',
     '200 deck-roughness.ktx2',
