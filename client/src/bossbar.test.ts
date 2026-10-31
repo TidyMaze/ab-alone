@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { drawBossBar } from './bossbar';
+import css from './ui.css?raw';
 
 // The boss health bar (#788): the name above, one fragment per ejection the player needs, the phase steps marked.
 const bar = { name: 'The Hull', ejected: 0, win: 6, steps: [3, 5], phase: 0 };
@@ -95,5 +96,22 @@ describe('drawBossBar', () => {
     drawBossBar(el, { ...bar, ejected: 2 });
     drawBossBar(el, { ...bar, ejected: 4 });
     expect(el.querySelector('.refill')).toBeNull();
+  });
+  it('bursts the fragment that breaks, once, and not on a new bar (#1096)', () => {
+    drawBossBar(el, { ...bar, ejected: 2 });
+    expect(el.querySelector('.broke')).toBeNull();
+    drawBossBar(el, { ...bar, ejected: 3 });
+    const broke = frags().filter((f) => f.classList.contains('broke'));
+    expect(broke).toEqual([frags()[3]]);
+    drawBossBar(el, { ...bar, ejected: 3 });
+    broke[0]!.dispatchEvent(new Event('animationend'));
+    expect(el.querySelector('.broke')).toBeNull();
+  });
+
+  it('moves the boss feedback on the spec tokens, cut by the reduced switch (#1096)', () => {
+    expect(css).toMatch(/#boss-bar \.frag \{[^}]*transition: background-color var\(--motion-slow\) var\(--ease-in-out\)/);
+    expect(css).toMatch(/#boss-bar \.frag\.broke \{[^}]*animation: frag-burst var\(--motion-base\) var\(--ease-out\)/);
+    expect(css).toMatch(/#boss-bar \.chip\.next \{[^}]*animation: chip-flash var\(--motion-fast\) var\(--ease-out\)/);
+    expect(css).toMatch(/:root\[data-motion='reduced'\] \*[^{]*\{ animation-duration: 0s !important/);
   });
 });

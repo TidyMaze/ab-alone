@@ -979,3 +979,12 @@ body[data-openworld] #dock-wrap { display: none !important; }
 @keyframes end-line { from { opacity: 0; transform: translateY(6px); } }
 body[data-over] #hud .turn span:last-child { display: inline-block; transform-origin: left center; animation: end-title var(--motion-celebrate) var(--ease-out); }
 body[data-over] #hud .end { animation: end-line var(--motion-base) var(--ease-out) var(--motion-fast) backwards; }
+
+/* Boss feedback motion (#1096, docs/specs/motion.md story 6): the bar fills and drains on --motion-slow, the fragment that breaks gives
+   one small burst on --motion-base, the army chip to move flashes once on --motion-fast. The ring on .chip.next is the steady mark and
+   the fragment outline carries the state, so reduced motion (tokens 0ms, rule above) keeps the information without the motion. */
+#boss-bar .frag { transition: background-color var(--motion-slow) var(--ease-in-out); }
+@keyframes frag-burst { from { transform: scaleY(1.6); filter: brightness(1.8); } }
+#boss-bar .frag.broke { animation: frag-burst var(--motion-base) var(--ease-out); }
+@keyframes chip-flash { from { transform: scale(1.12); } }
+#boss-bar .chip.next { animation: chip-flash var(--motion-fast) var(--ease-out); }
