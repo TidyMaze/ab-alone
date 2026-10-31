@@ -464,6 +464,7 @@ describe('the settings toggles', () => {
       'setting-import-game',
       'setting-log-archive',
       'level-reset', // beside the light sliders, which are no buttons (#899)
+      'copy-diagnostics', // the last row (#1032)
     ]);
     const sound = row('sound');
     expect(sound.querySelector('svg')).not.toBeNull();
@@ -702,7 +703,8 @@ describe('the light sliders', () => {
     const menu = byId('settings-menu');
     expect([...menu.querySelectorAll('.setting-lights')].map((s) => s.textContent)).toEqual(['Bloom', 'Lamps', 'Lights']);
     expect(byId('level-reset').previousElementSibling).toBe(byId('level-lights').parentElement); // then the reset button
-    expect(menu.lastElementChild!.previousElementSibling).toBe(byId('level-reset')); // then the log archive page
+    expect(menu.lastElementChild).toBe(byId('copy-diagnostics')); // the clipboard is the last row (#1032)
+    expect(menu.lastElementChild!.previousElementSibling!.previousElementSibling).toBe(byId('level-reset')); // then the log archive page
   });
 
   it('go back to their defaults with the reset button, saved and applied at once (#899)', async () => {

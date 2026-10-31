@@ -33,13 +33,14 @@ for (const { name, viewport } of sizes) {
       await page.locator('canvas').waitFor();
       await expect(page.locator('#settings')).toBeEnabled();
       expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
-      const buttons = await boxesOf(page, '#online button');
+      // #1032: the column's buttons are the thumb dock's (the dock holds them now, the top column keeps the cog).
+      const buttons = await boxesOf(page, '#dock > button');
       expect(buttons.map((b) => b.name)).toContain('hint');
       const small = buttons.filter((b) => b.w < 43.9 || b.h < 43.9).map((b) => `${b.name} ${b.w}x${b.h}`);
-      expect(small, 'the column buttons under 44 px').toEqual([]);
-      // The toolbar: Hint and Replay share one height (Auto-play joins them when it is offered).
-      const tools = (await boxesOf(page, '#tools button')).map((b) => b.h);
-      expect(Math.max(...tools) - Math.min(...tools)).toBeLessThanOrEqual(1);
+      expect(small, 'the dock buttons under 44 px').toEqual([]);
+      // The dock's buttons share one height (the Auto-play sixth one included when it is offered).
+      const heights = buttons.map((b) => b.h);
+      expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
       // Two buttons side by side keep at least 8 px between them.
       const rows = new Map<number, typeof buttons>();
       for (const b of buttons) rows.set(Math.round(b.top), [...(rows.get(Math.round(b.top)) ?? []), b]);
@@ -73,10 +74,11 @@ for (const { name, viewport } of sizes) {
       expect(reset.length).toBe(1);
       expect(Math.abs(reset[0].w - rows[0].w), 'Reset lights width against a light row').toBeLessThanOrEqual(1);
       expect(reset[0].h).toBeGreaterThanOrEqual(43.9);
-      // The open menu stops 8 px above the clipboard band (the Copy diagnostics button), so it covers nothing of it.
+      // #1032: Copy diagnostics is the last row of the menu (its own band at the corner is gone), 44 px high, inside it.
       const [menu] = await boxesOf(page, '#settings-menu');
       const [clip] = await boxesOf(page, '#copy-diagnostics');
-      expect(menu.bottom, 'the menu bottom against the clipboard top').toBeLessThanOrEqual(clip.top - 8 + 0.5);
+      expect(clip.h, 'Copy diagnostics row').toBeGreaterThanOrEqual(43.9);
+      expect(await page.evaluate(() => document.getElementById('settings-menu')!.lastElementChild!.id), 'the last row').toBe('copy-diagnostics');
       // Reached by scrolling the menu, the Reset lights row is whole, inside the menu and on the screen.
       await page.locator('#level-reset').scrollIntoViewIfNeeded();
       const [after] = await boxesOf(page, '#level-reset');

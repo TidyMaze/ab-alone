@@ -41,7 +41,8 @@ const problems = (page: Page) =>
       const box = el.getBoundingClientRect();
       if (el.id !== 'hud-fold' && meets(box, hud)) found.push(`${name} covers the HUD`); // its own fold button (#957)
       if (!onScreen(box)) found.push(`${name} is off screen`);
-      for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
+      const sheeted = el.closest('#mode-menu, #daily-card') != null; // #1032: a sheet above the dock may lie over the board's lower cells
+      if (!sheeted) for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
     }
     // The plates let taps through, so they must not lie over a control either, or they hide it.
     for (const [id, name] of Object.entries(plates)) {
@@ -55,9 +56,12 @@ const problems = (page: Page) =>
         }
       }
     }
+    // #1032: the Game modes sheet and the daily result card are sheets above the thumb dock; an open one may lie over
+    // the board's lower cells (spec section 3), so only a cell under the sheet is let through, never off screen.
+    const sheet = (el: Element | null) => el?.closest('#mode-menu, #daily-card') != null;
     for (const c of cells) {
       if (!onScreen(c.disc)) found.push(`${c.name} is off screen`);
-      else if (document.elementFromPoint(c.centre.x, c.centre.y)?.tagName !== 'CANVAS') found.push(`a tap on ${c.name} misses the board`);
+      else if (document.elementFromPoint(c.centre.x, c.centre.y)?.tagName !== 'CANVAS' && !sheet(document.elementFromPoint(c.centre.x, c.centre.y))) found.push(`a tap on ${c.name} misses the board`);
     }
     return found;
   });
@@ -393,7 +397,7 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(17); // Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
+    await expect(page.locator('#settings-menu button')).toHaveCount(18); // Copy diagnostics (#1032, the last row), Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {
         el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // the menu scrolls where it is shorter than its rows (#382, #904)
@@ -407,18 +411,22 @@ for (const { name, viewport, scale } of [
   });
 }
 
-test('on a desktop the buttons stay in a column at the top right, bug #227', async ({ page }) => {
+// #1032 (rewrites the #227 column): on a desktop the cog stays top right, and the main controls are a centred bar at
+// the bottom of the window, one row, the bar's bottom 16 px above the window's.
+test('on a desktop the cog is top right and the controls form a centred bar at the bottom, bugs #227 #1032', async ({ page }) => {
   await page.goto('./?bot=off');
   await expect(page.locator('#hud')).toContainText('Black to move');
-  const width = page.viewportSize()!.width;
+  const { width, height } = page.viewportSize()!;
+  const cog = await page.getByRole('button', { name: 'Settings' }).boundingBox();
+  expect(cog!.y).toBe(16);
+  expect(cog!.x + cog!.width).toBeCloseTo(width - 16, 0);
   const boxes = await Promise.all(
-    ['Settings', 'Reset view', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
+    ['Reset view', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
   );
-  expect(boxes[0]!.y).toBe(16);
-  for (const [i, box] of boxes.entries()) {
-    expect(box!.x + box!.width).toBeCloseTo(width - 16, 0);
-    if (i > 0) expect(box!.y).toBeGreaterThan(boxes[i - 1]!.y + boxes[i - 1]!.height);
-  }
+  for (const box of boxes) expect(box!.y + box!.height).toBeCloseTo(height - 16 - 8 - 1, 0); // the bar's content row
+  const centre = boxes.reduce((a, b) => a + b!.x + b!.width / 2, 0) / boxes.length;
+  expect(centre).toBeGreaterThan(width / 2 - 200);
+  expect(centre).toBeLessThan(width / 2 + 200);
 });
 
 // Bug #271: at the end of a daily fight the plate gains the daily, result and score lines, and grew over the board
