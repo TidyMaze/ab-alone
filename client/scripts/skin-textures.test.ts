@@ -43,3 +43,12 @@ describe('the shell skins colour', () => {
     actual.forEach((v, k) => expect(Math.abs(v - expected[k]!), `${s.id} channel ${k} is ${expected[k]}`).toBeLessThanOrEqual(3));
   });
 });
+
+// The same for the white skins: their `color` is the one tone the tonal look (look.ts) draws them in (#1138).
+describe('the white skins colour', () => {
+  it.each(GLASS_SKINS.map((s) => [s.id, s] as const))('%s is the mean of its albedo, 3 steps of 255 at most', (_id, s) => {
+    const expected = meanColor(s.asset);
+    const actual = [s.color >> 16, (s.color >> 8) & 255, s.color & 255];
+    actual.forEach((v, k) => expect(Math.abs(v - expected[k]!), `${s.id} channel ${k} is ${expected[k]}`).toBeLessThanOrEqual(3));
+  });
+});
