@@ -60,7 +60,11 @@ pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>) -> Vec<i32> {
 
 /// The `q, r` pairs of a flat list.
 fn pairs(flat: &[i32]) -> Vec<(i32, i32)> {
-    flat.chunks_exact(2).map(|p| (p[0], p[1])).collect()
+    flat.as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&[q, r]| (q, r))
+        .collect()
 }
 
 /// The encoding of `world_push` for any terrain (`None` off the world).
@@ -160,7 +164,13 @@ mod tests {
 
     #[test]
     fn a_push_into_water_ejects_the_last_enemy_as_kind_one() {
-        let water = |q: i32, r: i32| Some(if (q, r) == (5, 0) { Terrain::Water } else { Terrain::Grass });
+        let water = |q: i32, r: i32| {
+            Some(if (q, r) == (5, 0) {
+                Terrain::Water
+            } else {
+                Terrain::Grass
+            })
+        };
         let out = push_encoded(&[(2, 0), (1, 0), (0, 0)], &[(3, 0), (4, 0)], water);
         assert_eq!(out, vec![4, 0, 1, 3, 3, 0, 2, 0, 1, 0, 1, 4, 0, 1, 0]);
     }
