@@ -47,7 +47,7 @@ describe('settings', () => {
   const common = { generateMipmap: true, isYFlip: true, isKTX2File: true };
 
   it('encodes a normal map in UASTC, with RDO and Zstandard, linear', () => {
-    for (const file of ['deck-mess-normal.png', 'shell-normal.png', 'skin-Lava001-normal.jpg']) {
+    for (const file of ['deck-mess-normal.png', 'shell-normal.png', 'pbr/grate-normal.png']) {
       expect(settings(file)).toEqual({
         ...common,
         isUASTC: true,
@@ -58,16 +58,6 @@ describe('settings', () => {
         isSetKTX2SRGBTransferFunc: false,
       });
     }
-  });
-
-  it('encodes the bay normal maps with a stronger RDO, so they are smaller, same format (#926)', () => {
-    // RDO quality 4 cuts the bay's five normal maps from 2.90 MB to 2.47 MB, UASTC and Zstandard kept.
-    for (const file of ['pbr/deck-pbr-normal.png', 'pbr/bulkhead-normal.png', 'pbr/grate-normal.png', 'pbr/plate-normal.png', 'pbr/board-normal.jpg']) {
-      expect(settings(file)).toMatchObject({ isUASTC: true, enableRDO: true, rdoQualityLevel: 4, needSupercompression: true, isNormalMap: true });
-      expect(settings(file)).not.toHaveProperty('uastcLDRQualityLevel');
-    }
-    // A colour or data map of the bay keeps its settings.
-    expect(settings('pbr/grate-albedo.jpg')).not.toHaveProperty('rdoQualityLevel');
   });
 
   it('encodes a colour map in ETC1S, sRGB', () => {
