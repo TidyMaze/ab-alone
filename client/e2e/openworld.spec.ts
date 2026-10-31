@@ -447,3 +447,41 @@ test('a step glides the hero onto the next cell: exact at once, drawn in between
   expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,0');
   expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined();
 });
+
+// #1043: the marbles carry a stripe that turns with the roll. The camera follows the hero, so the hero stays at the centre of the
+// screen: two frames of the same glide, 0.5 s apart, differ in its centre box (the stripe turns across the marble).
+test('a glide of the hero turns its stripe: two frames in between differ on the marble, #1043', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  await page.evaluate(() => {
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [] });
+    (window as unknown as { __openworldSlow: number }).__openworldSlow = 10;
+  });
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldGlide)).toBeDefined();
+  const first = await page.screenshot({ path: test.info().outputPath('stripe-mid-glide-1.png') });
+  await page.waitForTimeout(500);
+  const second = await page.screenshot({ path: test.info().outputPath('stripe-mid-glide-2.png') });
+  const difference = await page.evaluate(async ([a, b]) => {
+    const centre = async (base64: string) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${base64}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      return ctx.getImageData(img.width / 2 - 40, img.height / 2 - 40, 80, 80).data;
+    };
+    const x = await centre(a!);
+    const y = await centre(b!);
+    let sum = 0;
+    for (let i = 0; i < x.length; i++) sum += Math.abs(x[i]! - y[i]!);
+    return sum;
+  }, [first.toString('base64'), second.toString('base64')] as const);
+  expect(difference).toBeGreaterThan(0);
+});
