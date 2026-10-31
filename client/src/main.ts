@@ -322,7 +322,14 @@ let replaying: { live: Engine | Encounter; ply: number } | null = null;
 // fight also keeps its UTC day and its attempt of that day (#195).
 // The Goal control (#248): the HUD shows the boss goal before the first move, then only while it is open.
 const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
+// The Goal sheet (#1032): the goal text above the dock while the Goal control is open, one sheet at a time.
+const goalSheet = document.getElementById('goal-sheet')!;
 let goalOpen = false;
+const closeGoal = (): void => {
+  if (!goalOpen) return;
+  goalOpen = false;
+  hud();
+};
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
@@ -916,6 +923,10 @@ applyView(); // camera and fog
 let menuIsOpen = false;
 const moveMenu = (event: MenuEvent): void => {
   menuIsOpen = menuOpen(menuIsOpen, event);
+  if (menuIsOpen) {
+    moveModes('outside'); // one sheet at a time (#1032)
+    closeGoal();
+  }
   menu.hidden = !menuIsOpen;
   delete menu.dataset.page; // the menu opens on its items again
   cog.setAttribute('aria-expanded', String(menuIsOpen));
@@ -941,6 +952,10 @@ const moveModes = (event: MenuEvent): void => {
   modesOpen = menuOpen(modesOpen, event);
   modeMenu.hidden = !modesOpen;
   modeButton.setAttribute('aria-expanded', String(modesOpen));
+  if (modesOpen) {
+    moveMenu('outside'); // one sheet at a time (#1032)
+    closeGoal();
+  }
 };
 modeButton.addEventListener('click', () => moveModes('button'));
 addEventListener('keydown', (e) => {
@@ -2914,6 +2929,9 @@ function hud(extra = ''): void {
   goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
   goalButton.disabled = shownPly() === 0; // the goal is on the plate until the first move
   goalButton.setAttribute('aria-expanded', String(showGoal));
+  const sheetOpen = goalOpen && engine instanceof Encounter && status === 0;
+  goalSheet.hidden = !sheetOpen;
+  if (sheetOpen) goalSheet.textContent = (engine as Encounter).goal();
   const boss = engine instanceof Encounter ? engine : null;
   if (boss) {
     // The vents note (#741): the change that starts burning the player's marbles, shown for 2 plies.
@@ -4168,7 +4186,20 @@ dailyButton.addEventListener('click', startDaily);
 dailyButton.disabled = false; // label and listener ready (#144)
 goalButton.addEventListener('click', () => {
   goalOpen = !goalOpen;
+  if (goalOpen) {
+    moveModes('outside'); // one sheet at a time (#1032)
+    moveMenu('outside');
+  }
   hud();
+});
+// Esc closes the Goal sheet and gives the focus back to Goal; a tap outside the sheet and its button closes it too (#1032).
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !goalOpen) return;
+  closeGoal();
+  goalButton.focus();
+});
+addEventListener('pointerdown', (e) => {
+  if (goalOpen && !goalSheet.contains(e.target as Node) && !goalButton.contains(e.target as Node)) closeGoal();
 });
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
 
@@ -5088,7 +5119,9 @@ else analyse(); // the start position
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
 // text box to copy by hand when the browser refuses (#220). Nothing is sent anywhere.
 const copyButton = document.getElementById('copy-diagnostics') as HTMLButtonElement;
-setButton(copyButton, 'Copy diagnostics', icon('diagnostics'));
+// The clipboard is the last row of the settings list (#1032), an action with its icon and its label, as the other items.
+setButton(copyButton, 'Copy diagnostics', `${icon('diagnostics')}<span>Copy diagnostics</span>`);
+menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 copyButton.addEventListener('click', async () => {
   const text = diag.text({

@@ -758,3 +758,82 @@ body[data-openworld] #openworld-hud { display: block; }
 #joystick[hidden] { display: none; }
 #joystick-knob { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: var(--accent); }
 body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group, #support) { display: none !important; }
+
+/* The thumb dock (#1032, docs/specs/thumb-dock.md): the main controls at the bottom of the window, one row of 44 px
+   buttons on a phone held upright, a right-hand column held sideways, a centred bar on a desktop. The buttons are the
+   page's own (#new-game, #reset-view, #hint, #replay, #modes, #auto-play, ...), moved here; each short label is the
+   button's data-label, its name stays the accessible name. The sheets (Game modes, Goal, the daily result) open above
+   the dock, one at a time. The dock does not grow with --ui-scale: its targets stay 44 px. */
+#dock-wrap { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 2; pointer-events: none; }
+#dock-wrap > * { pointer-events: auto; }
+#dock {
+  box-sizing: border-box; display: flex; gap: 8px; align-items: stretch; padding: 8px; background: var(--panel);
+  border: 1px solid var(--edge); border-radius: 2px;
+}
+#dock > button, #dock-replay button {
+  box-sizing: border-box; flex: 1 1 0; min-width: 44px; width: auto; height: 44px; min-height: 44px; margin: 0; padding: 0;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); background: var(--bg);
+  border: 1px solid var(--edge); border-radius: 2px; font: 0.8125rem/1 var(--ui); white-space: nowrap;
+}
+/* The button's own text and icon are hidden: the short label after it is the one shown (the name stays the text). */
+#dock > button { font-size: 0; }
+#dock > button svg { display: none; }
+#dock > button::after { content: attr(data-label); font: 0.8125rem/1 var(--ui); overflow: hidden; text-overflow: clip; }
+#dock > button[hidden], #dock-replay[hidden] { display: none; }
+#dock #new-game.confirm::after { content: 'Confirm'; }
+#dock > button:disabled { cursor: default; color: var(--muted); border-color: var(--edge); }
+#dock > button[aria-pressed='true'], #dock > button[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
+#dock #rematch, #dock #boss-retry { border-color: var(--accent); }
+#dock > button:focus-visible, #dock-replay button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#dock-replay { display: none; gap: 8px; flex: 1 1 auto; }
+/* A review (#793) replaces the dock: its five steps (First, Previous, Next, Last, Live) are the dock's own buttons. */
+body:has(#replay-bar:not([hidden])) #dock-replay { display: flex; }
+body:has(#replay-bar:not([hidden])) #dock > button { display: none; }
+#dock-replay button { font-size: 1rem; }
+#dock-replay #replay-live { border-color: var(--accent); color: var(--accent); font-size: 0.8125rem; }
+/* The update banner is a dot on Game modes; its row is the first of the Game modes sheet. */
+body:has(#update:not([hidden])) #modes::before {
+  content: ''; position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); border: 1px solid var(--bg);
+}
+#dock #modes { position: relative; }
+/* The sheets: above the dock, 8 px over it, as wide as the window less 16 px a side, scrolling when taller than 60 %. */
+#dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); box-sizing: border-box; max-height: 60dvh; overflow-y: auto;
+  padding: 8px; background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
+}
+#dock-wrap #mode-menu[hidden], #dock-wrap #goal-sheet[hidden], #dock-wrap #daily-card[hidden] { display: none; }
+#dock-wrap #mode-menu { display: flex; flex-direction: column; flex-flow: column nowrap; justify-content: flex-start; gap: 4px; align-items: stretch; min-width: 0; }
+#dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 44px; min-width: 44px; }
+#dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { flex: none; width: 100%; overflow-x: auto; margin: 0; padding: 0; }
+#dock-wrap #goal-sheet { font: 0.875rem/1.4 var(--ui); color: var(--text); }
+#dock-wrap #goal-sheet p { margin: 0; }
+#dock-wrap #daily-card { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+#dock-wrap #daily-card #daily-result { width: auto; max-width: 100%; box-sizing: border-box; }
+#dock-wrap #daily-card #daily-copy { min-height: 44px; }
+/* A phone held upright: the dock spans the window, its sheets above it. The cog and the HUD stay at the top. */
+@media (orientation: portrait) {
+  #support { bottom: calc(16px + 62px + 8px + env(safe-area-inset-bottom)); }
+  #replay-bar { width: 100%; max-width: none; box-sizing: border-box; }
+}
+/* A phone held sideways: the dock is the right-hand column under the cog, six 44 px buttons (68 px to 372 px of a 390 px
+   window). Its sheets lie to its left. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #dock-wrap { left: auto; right: 16px; top: calc(16px + 2.75rem + 0.5rem); bottom: 16px; width: 44px; }
+  #dock { flex-direction: column; width: 44px; padding: 0; border: 0; background: none; gap: 8px; }
+  #dock > button, #dock-replay button { width: 44px; flex: none; }
+  #dock > button::after { font-size: 0.6875rem; }
+  #dock-replay { flex-direction: column; flex: none; }
+  #support { right: 68px; bottom: 16px; }
+  #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card {
+    left: auto; right: calc(100% + 8px); bottom: 0; width: min(22rem, calc(100vw - 120px)); max-height: calc(100dvh - 32px);
+  }
+}
+/* A desktop window: the dock is a centred bar at the bottom, its width that of its buttons, its sheets centred above it. */
+@media (orientation: landscape) and (min-height: 501px) {
+  #dock-wrap { left: 50%; right: auto; transform: translateX(-50%); width: max-content; }
+  #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card { left: 50%; right: auto; transform: translateX(-50%); width: min(24rem, calc(100vw - 32px)); }
+  #dock > button, #dock-replay button { width: 5.5rem; flex: none; }
+}
+/* The dock is not on the Open world's screen: its HUD and joystick are (#962, #1025). */
+body[data-openworld] #dock-wrap { display: none !important; }
