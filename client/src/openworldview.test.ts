@@ -345,7 +345,7 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(view.camera.position.y).toBeCloseTo(28 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(22);
     view.zoomBy(1e9);
-    expect(view.zoom).toBe(MAX_ZOOM);
+    expect(view.zoom).toBe(maxZoomFor(1)); // the default screen is square: its own widest zoom (#1027)
   });
 
   it('moves the fog and the far plane with the zoom, so the edge of the loaded chunks stays hidden', () => {
@@ -527,7 +527,23 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     expect(view.zoom).toBe(maxZoomFor(32 / 9));
     expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
     view.resize(900, 1600);
-    expect(view.maxZoom).toBe(MAX_ZOOM);
+    expect(view.maxZoom).toBe(maxZoomFor(9 / 16));
+    expect(view.maxZoom).toBeGreaterThan(MAX_ZOOM);
+  });
+
+  it('lets a portrait phone zoom out past MAX_ZOOM, up to where its reach reaches MAX_REACH (#1027)', () => {
+    for (const aspect of [9 / 16, 3 / 4, 360 / 740, 390 / 844]) {
+      const limit = maxZoomFor(aspect);
+      expect(limit).toBeGreaterThan(MAX_ZOOM);
+      expect(reachAt(aspect, limit)).toBeLessThanOrEqual(MAX_REACH);
+      expect(reachAt(aspect, limit + 0.05)).toBeGreaterThan(MAX_REACH);
+    }
+  });
+
+  it('gives a limit that never grows with the width of the screen, from portrait to ultra-wide (#1027)', () => {
+    const limits = [9 / 16, 3 / 4, 1, 16 / 9, 21 / 9].map(maxZoomFor);
+    expect(limits).toEqual([...limits].sort((a, b) => b - a));
+    expect(maxZoomFor(16 / 9)).toBe(MAX_ZOOM); // the 16:9 screen keeps its limit
   });
 });
 
