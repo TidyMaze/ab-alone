@@ -252,7 +252,7 @@ import { loadProgress, recordWin, saveProgress } from './progress';
 import { roomAt, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
 import { indexedDbStore } from './idb';
-import { LocalSaves } from './savegame';
+import { LocalSaves, type LocalGame } from './savegame';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
 import { CONFIRM_MS, newGameLabel, pressNewGame, type Confirm } from './newgame';
 import { gameFileName, gameFileText, readGameFile } from './gamefile';
@@ -293,7 +293,7 @@ import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
 import './ui.css';
 
 import { BONE, COLORS, FRAME_LOOK, SceneRenderer } from './scene';
-import { blockers, resolveSeen, seenBoard, seenGhosts, seenMoves, stalkerNote, visibleCells } from './stalker';
+import { visibleCells } from './stalker';
 const BOT_SIDE = 2; // the human plays side 1 (the glass), the bot plays side 2
 declare const __BUILD__: string; // the commit, set by vite.config.ts
 
@@ -1336,7 +1336,6 @@ const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 // rim and the board outline left as they are; a pale ring where the bot's last move landed in range.
 const fogMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.9, depthWrite: false });
 const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
-let stalker: Engine | Encounter | null = null; // the live game of a Stalker game, the fog is on while it is played
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
 let lastLanding: Axial[] = []; // where the bot's last move landed
 let stalkerShown: { visible: Axial[]; drawn: Axial[]; revealed: Axial[]; last: Axial[] } | null = null; // read by the tests
@@ -2037,7 +2036,7 @@ const gameStore = indexedDbStore();
 const saves = new LocalSaves(gameStore, navigator.storage);
 // Without ?bot=off the page resumes the game of either mode: a hot-seat game from the hub's table goes on with
 // no bot (#565).
-const resumed = await saves.load(worker ? undefined : false, () => new Engine());
+const resumed = await saves.load(worker ? undefined : false, (boss) => (boss ? new Encounter(boss.id, boss.seed) : new Engine()));
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
 const armyEngine = (army: number, placed: number[][]): Engine => engineFor(Engine, army, placed);
@@ -2052,7 +2051,6 @@ if (resumed) {
   if (!resumed.bot) worker = null;
   engine = resumed.engine;
   history.push(...resumed.moves);
-  if (resumed.stalker) stalker = engine; // a Stalker game comes back under its fog (#1009)
 }
 
 // Evaluation bar (#191): the search score of every position of a local or bot game, from a second
@@ -2129,7 +2127,7 @@ function stopAuto(): void {
 }
 function syncAuto(): void {
   const boss = engine instanceof Encounter ? engine.name() : null;
-  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null, stalker: fogged() && !stalkerBoss() }, fight !== null && hasMedal(store, fight.id));
+  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null }, fight !== null && hasMedal(store, fight.id));
   const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
   const reason = state.shown ? state.reason : null;
   const usable = state.shown && reason === null && !over;
@@ -2309,7 +2307,7 @@ function playMove(record: number[]): void {
   afterPlay(before, record);
   const spark = sparkBurst(before, specials, parseMoves(record)[0]!);
   if (spark && !reducedMotion()) burstSpark(spark);
-  if (!online && !fight && !run) void saves.save({ bot: worker !== null, moves: history, stalker: fogged() }, engine.status() !== 0);
+  if (!online && (!fight || stalkerSaved()) && !run) void saves.save(savedGame(), engine.status() !== 0);
   if (run?.state.fighting) runMoved();
   analyse();
 }
@@ -2943,7 +2941,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${stalkerBoss() ? sightNote() : fogged() ? stalkerNote(revealed.size > 0) : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -3064,7 +3062,10 @@ function drawFog(board: ArrayLike<number>, fog: Set<number>, lit: Set<number>): 
 const PLAYER = 3 - BOT_SIDE;
 /** The Stalker boss (#1111): the fog is the engine's, read from its getters. */
 const stalkerBoss = (): boolean => fight?.id === 'stalker' && engine instanceof Encounter;
-const fogged = (): boolean => stalkerBoss() || (stalker !== null && stalker === liveGame());
+const fogged = stalkerBoss;
+/** Only the Stalker fight is saved among the boss fights (#1122), and not the daily: a reload could not tell it was one. */
+const stalkerSaved = (): boolean => stalkerBoss() && !fight!.daily;
+const savedGame = (): LocalGame => ({ bot: worker !== null, moves: history, ...(stalkerSaved() ? { boss: { id: 'stalker', seed: fight!.seed } } : {}) });
 /** The HUD line of the Stalker boss: the sight, and the ejections before it narrows. */
 function sightNote(): string {
   const [sight, left] = (engine as Encounter).stalker() as unknown as number[];
@@ -3072,9 +3073,7 @@ function sightNote(): string {
   return `Sight ${sight}${narrows}${revealed.size > 0 ? ' · A hidden marble blocks that move: play again' : ''}`;
 }
 /** The cells the player sees: within the range of its marbles, the sight of the Stalker boss by its phase. */
-const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, PLAYER, stalkerBoss() ? (engine as Encounter).sight() : undefined);
-/** The live board as the player sees it in Stalker. */
-const seen = (): number[] => seenBoard(engine.board(), PLAYER, visibleCells(engine.board(), PLAYER), revealed);
+const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, PLAYER, (engine as Encounter).sight());
 
 function refresh(): void {
   dirty = CHANGE_DRAWS;
@@ -3522,7 +3521,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   if (royale) return; // no ghost over the arena
   const mv = keyDir >= 0 ? moveFor(moves, selected, keyDir) : hover ? moveForClick(moves, selected, hover) : null;
   const record = mv ? encodeMove(mv) : hint.shown(here()); // the hovered move, else the hint (#192)
-  const list = record && fogged() ? seenGhosts(seen(), parseMoves(record)[0]!) : ghostMarbles(history, record, makeGame);
+  const list = ghostMarbles(history, record, makeGame);
   if (record && engine instanceof Encounter) {
     // The tell: the boss reply announced for the hovered move, drawn on the position after it.
     const reply = Array.from(engine.tell_move(Int32Array.from(record)));
@@ -3595,15 +3594,7 @@ function blocked(retry: () => void): boolean {
 }
 
 function play(seenMove: Move): void {
-  const mv = fogged() && !stalkerBoss() ? resolveSeen(parseMoves(engine.legal_moves()), seenMove) : seenMove;
-  if (!mv) {
-    // Stalker: a hidden marble blocks the move, it is revealed and the player plays again (#998)
-    for (const i of blockers(engine.board(), seen(), seenMove)) revealed.add(i);
-    selected = [];
-    keyDir = -1;
-    return;
-  }
-  const record = encodeMove(mv);
+  const record = encodeMove(seenMove);
   try {
     playMove(record);
   } catch (refusal) {
@@ -3622,7 +3613,6 @@ function play(seenMove: Move): void {
 /** The legal moves, the Echo's free moves first: a click, a drag or a key on a free target plays the free move (#958). */
 function legalMoves(): Move[] {
   if (stalkerBoss() && engine.to_move() === PLAYER) return parseMoves((engine as Encounter).seen_moves());
-  if (fogged() && !stalkerBoss()) return seenMoves(seen(), engine.to_move()); // Stalker: the board as the player sees it, the engine judges on play
   const moves = parseMoves(engine.legal_moves());
   return engine instanceof Encounter ? [...parseMoves(engine.free_moves()), ...moves] : moves;
 }
@@ -4197,9 +4187,7 @@ function newGame(): void {
     leaveHub();
     applyDeck(deckOf('local'));
   }
-  const fog = fogged();
   engine = new Engine();
-  stalker = fog ? engine : null; // New game keeps Stalker
   history.length = 0;
   replaying = null;
   selected = [];
@@ -4217,18 +4205,20 @@ newGameButton.disabled = false; // listener ready (#146)
 const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
-function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }): void {
+function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }): void {
   leaveHub();
   worker = botWorker; // the boss answers, after the hub's hot-seat table too (#522)
   stopAnalysis();
   fight = { id, seed, daily };
   goalOpen = false;
-  engine = new Encounter(id, seed);
+  engine = resumeFrom?.engine ?? new Encounter(id, seed);
   history.length = 0;
+  history.push(...(resumeFrom?.moves ?? []));
   replaying = null;
   selected = [];
   thinking = false;
   leaveRoyale();
+  if (!resumeFrom && stalkerSaved()) void saves.save(savedGame(), false); // a new Stalker fight replaces the saved one (#1122)
   bossList.hidden = true;
   bossButton.setAttribute('aria-expanded', 'false');
   moveModes('pick');
@@ -4288,19 +4278,6 @@ today();
 setInterval(today, 60_000); // an open page follows the day change at 00:00 UTC
 dailyButton.addEventListener('click', startDaily);
 dailyButton.disabled = false; // label and listener ready (#144)
-// Stalker (#998, game-design.md section 3.8): a game against the bot under the fog, from the mode menu.
-const stalkerButton = document.getElementById('stalker') as HTMLButtonElement;
-stalkerButton.addEventListener('click', () => {
-  moveModes('pick');
-  leaveOnline();
-  leaveRoyale();
-  startLocal(true);
-  stopAnalysis(); // the bar and the Hint search the whole board: off for good, as in a boss fight (fair play, #164)
-  applyDeck(deckOf('local')); // after a boss fight too
-  stalker = engine;
-  refresh();
-});
-stalkerButton.disabled = false; // listener ready (#146)
 goalButton.addEventListener('click', () => {
   goalOpen = !goalOpen;
   if (goalOpen) {
@@ -4366,7 +4343,6 @@ function enterRoom(at: HubSpot): void {
   roomOf = at;
 }
 function startLocal(bot: boolean): void {
-  stalker = null; // a table of the hub plays the standard game
   worker = bot ? botWorker : null;
   fight = null; // a boss fight the hub was opened from
   delete document.body.dataset.boss;
@@ -4463,7 +4439,7 @@ importFile.addEventListener('change', async () => {
   history.push(...read.moves);
   selected = [];
   thinking = false;
-  void saves.save({ bot: worker !== null, moves: history, stalker: fogged() }, engine.status() !== 0);
+  void saves.save(savedGame(), engine.status() !== 0);
   refresh();
   analyse(); // the bar follows the imported position (#191)
   void botTurn();
@@ -5354,6 +5330,7 @@ refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
 document.body.appendChild(renderer.domElement);
+if (resumed?.boss) startBoss(resumed.boss.id, resumed.boss.seed, undefined, resumed); // a Stalker fight comes back under its fog (#1122)
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
 let lastDraw: LastDraw = { start: -Infinity, cost: 0, timed: true };
 let draws = 0;

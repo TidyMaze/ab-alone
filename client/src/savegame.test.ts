@@ -351,27 +351,35 @@ describe('LocalSaves', () => {
   });
 });
 
-describe('a Stalker game is saved with its fog (#1009)', () => {
-  it('writes `stalker: true` for a Stalker game and nothing for the others', () => {
-    expect(encodeGame({ bot: true, moves: [], stalker: true })).toMatchObject({ bot: true, stalker: true });
-    expect('stalker' in encodeGame({ bot: true, moves: [] })).toBe(false);
-    expect('stalker' in encodeGame({ bot: true, moves: [], stalker: false })).toBe(false);
+describe('a Stalker boss fight is saved with its seed (#1122)', () => {
+  const boss = { id: 'stalker', seed: 7 };
+
+  it('writes boss and seed, no layout, and nothing of the kind for a plain game', () => {
+    expect(encodeGame({ bot: true, moves: [A], boss })).toEqual({ version: SAVE_VERSION, mode: 'local', boss: 'stalker', seed: 7, moves: [A] });
+    expect('boss' in encodeGame({ bot: true, moves: [] })).toBe(false);
   });
 
-  it('reads it back, and ignores anything but the boolean true', () => {
-    const base = encodeGame({ bot: true, moves: [] });
-    expect(decodeGame({ ...base, stalker: true })).toEqual({ bot: true, moves: [], stalker: true });
-    expect(decodeGame({ ...base, stalker: 'yes' })).toEqual({ bot: true, moves: [] });
-    expect(decodeGame(base)).toEqual({ bot: true, moves: [] });
+  it('reads it back, and refuses another boss, a bad seed or bad moves', () => {
+    const saved = encodeGame({ bot: true, moves: [A], boss });
+    expect(decodeGame(saved)).toEqual({ bot: true, moves: [A], boss });
+    expect(decodeGame({ ...saved, boss: 'echo' })).toBeNull();
+    expect(decodeGame({ ...saved, seed: 'x' })).toBeNull();
+    expect(decodeGame({ ...saved, moves: [[1]] })).toBeNull();
   });
 
-  it('gives it back on load, replayed with the rest of the game', async () => {
+  it('gives it back on load with a fight engine built from the boss and seed', async () => {
     const store = memoryStore();
-    const saves = new LocalSaves(store);
-    await saves.save({ bot: true, moves: [], stalker: true }, false);
-    const loaded = await new LocalSaves(store).load(undefined, () => ({ play: () => {}, status: () => 0 }));
-    expect(loaded).toMatchObject({ bot: true, stalker: true });
-    await saves.save({ bot: true, moves: [] }, false);
-    expect((await new LocalSaves(store).load(undefined, () => ({ play: () => {}, status: () => 0 })))!.stalker).toBeUndefined();
+    await new LocalSaves(store).save({ bot: true, moves: [], boss }, false);
+    const made: unknown[] = [];
+    const loaded = await new LocalSaves(store).load(undefined, (b) => (made.push(b), { play: () => {}, status: () => 0 }));
+    expect(loaded).toMatchObject({ bot: true, boss });
+    expect(made).toEqual([boss]);
+  });
+
+  it('deletes the legacy `stalker: true` save of the old mode at load, without a migration', async () => {
+    const store = memoryStore();
+    store.data.set(LOCAL_GAME, { ...encodeGame({ bot: true, moves: [] }), stalker: true });
+    expect(await new LocalSaves(store).load(undefined, () => ({ play: () => {}, status: () => 0 }))).toBeNull();
+    expect(store.data.has(LOCAL_GAME)).toBe(false);
   });
 });
