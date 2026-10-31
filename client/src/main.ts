@@ -169,6 +169,7 @@ import { flatHudHtml, hudHtml } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
+import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { findMatch, toleranceWindow } from './matchmaking';
@@ -376,6 +377,7 @@ const store = (() => {
 })();
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
+const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
@@ -394,6 +396,7 @@ const loader = new KTX2Loader().detectSupport(renderer);
 // as soon as the scene is. mountBay takes them when the scene exists.
 const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
+  if (!loadsTexture(tonal ? 'tonal' : 'pbr', name)) return null;
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
@@ -497,6 +500,7 @@ const sceneRenderer = new SceneRenderer({
   rimAlbedo,
   rimRoughness,
   rimNormal,
+  tonal,
 });
 await sceneRenderer.init().catch(bootFailed);
 const {
@@ -1193,7 +1197,7 @@ const steel = new THREE.MeshStandardMaterial(
         roughnessMap: cellRoughness(deckOf('local')),
         ...(firstDeckNormal ? { normalMap: firstDeckNormal } : {}),
       }
-    : { color: COLORS.steel, roughness: 0.8 },
+    : (tonal ? { ...flat(TONAL.cell), roughness: 0.8 } : { color: COLORS.steel, roughness: 0.8 }),
 );
 applyDeck(deck);
 // Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
@@ -1206,6 +1210,7 @@ function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset
     look,
     Promise.all(skinKinds(extra).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
       Object.assign(look, Object.fromEntries(loaded));
+      if (tonal) return; // one tone and a soft highlight, no map to wait for (#1138)
       if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
       if (extra.includes('emission')) look.emissive.set(0xffffff); // black until the map is there: no white flash
       look.needsUpdate = true;
@@ -1221,6 +1226,7 @@ function shellMaterial(id: string): THREE.MeshStandardMaterial {
     look = new THREE.MeshStandardMaterial({
       roughness: 1, // the roughness map sets it
       metalness: 0,
+      ...(tonal ? { ...flat(tonalMarble(1, s.color)), ...MARBLE_LOOK } : {}),
       envMap: reflections,
       envMapIntensity: LIGHT.environment.intensity,
       // The heat pulse (#509) glows through the default shell, dark until the loop sets its intensity.
@@ -1236,7 +1242,13 @@ function glassMaterial(id: string): THREE.MeshPhysicalMaterial {
   const s = glassSkinById(id);
   let look = glassLooks.get(s.id);
   if (!look) {
-    look = new THREE.MeshPhysicalMaterial({ roughness: 1, metalness: 0, envMap: reflections, envMapIntensity: LIGHT.environment.intensity });
+    look = new THREE.MeshPhysicalMaterial({
+      roughness: 1,
+      metalness: 0,
+      ...(tonal ? { ...flat(tonalMarble(2, s.color)), ...MARBLE_LOOK } : {}),
+      envMap: reflections,
+      envMapIntensity: LIGHT.environment.intensity,
+    });
     dress(look, s);
     glassLooks.set(s.id, look);
   }
@@ -1322,6 +1334,9 @@ const tickMaterial = new THREE.MeshBasicMaterial({ color: BONE });
 // The Chaplain tell: a steady pale ring and a glyph on each marble a hovered move would expose to a
 // flip, never a halo or colour alone.
 const paleMaterial = new THREE.MeshBasicMaterial({ color: BONE });
+// The Stalker's rings, in both looks (#1138): the bot's last move in cyan, a marble it revealed in amber, not the palette's bone.
+const lastMaterial = new THREE.MeshBasicMaterial({ color: TONAL.last });
+const revealedMaterial = new THREE.MeshBasicMaterial({ color: TONAL.revealed });
 const outlineGeometry = new THREE.TorusGeometry(0.42, 0.025, 8, 32);
 const barGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.05);
 const glyphGeometry = new THREE.OctahedronGeometry(0.09);
@@ -1334,7 +1349,7 @@ const skipMaterial = new THREE.MeshBasicMaterial({ color: 0xe0413a });
 const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 // Stalker (#998, game-design.md section 3.8): the cells out of the player's range under a dark veil, one draw call, the
 // rim and the board outline left as they are; a pale ring where the bot's last move landed in range.
-const fogMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.9, depthWrite: false });
+const fogMaterial = new THREE.MeshBasicMaterial({ color: tonal ? TONAL.veiled : 0x000000, transparent: true, opacity: tonal ? 1 : 0.9, depthWrite: false });
 const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
 let lastLanding: Axial[] = []; // where the bot's last move landed
@@ -2006,7 +2021,7 @@ function applyPalette(): void {
     if (value) document.documentElement.style.setProperty(name, value);
     else document.documentElement.style.removeProperty(name); // light default: ui.css's on-cream colours win (#923)
   }
-  ringMaterial.color.setHex(pal.core);
+  ringMaterial.color.setHex(tonal ? TONAL.last : pal.core);
   tickMaterial.color.setHex(pal.tell);
   scratchMaterial.color.setHex(pal.tell);
   paleMaterial.color.setHex(pal.tell);
@@ -3049,11 +3064,19 @@ function drawFog(board: ArrayLike<number>, fog: Set<number>, lit: Set<number>): 
   const last = replaying ? [] : lastLanding.filter(([q, r]) => fog.has(cellIndex(q, r)));
   for (const [q, r] of last) {
     const p = axialTo3D(q, r);
-    const ring = Object.assign(new THREE.Mesh(outlineGeometry, paleMaterial), { name: 'stalker-last' });
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, lastMaterial), { name: 'stalker-last' });
     ring.rotation.x = Math.PI / 2;
     ring.position.set(p.x, 0.36, p.z);
     marbles.add(ring);
     onMarble(cellIndex(q, r), ring);
+  }
+  for (const i of lit) {
+    const p = axialTo3D(...BOARD_CELLS[i]!);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, revealedMaterial), { name: 'stalker-revealed' });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    marbles.add(ring);
+    onMarble(i, ring);
   }
   const cells = (set: Set<number>): Axial[] => [...set].map((i) => BOARD_CELLS[i]!);
   return { visible: cells(fog), drawn: cells(new Set([...fog, ...lit].filter((i) => board[i] === BOT_SIDE))), revealed: cells(lit), last };

@@ -5,6 +5,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
 import { DECKS, LIGHT } from './light';
+import { TONAL, flat as flatTone } from './look';
 import { DECK_PARTICLES, type Deck } from './deck';
 import { fogSettings, hasParticles, renderPixelRatio, smoothEdges, type Tier } from './quality';
 import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './frame';
@@ -39,6 +40,8 @@ export interface SceneRendererOptions {
   rimAlbedo?: THREE.Texture | null;
   rimRoughness?: THREE.Texture | null;
   rimNormal?: THREE.Texture | null;
+  /** The Fluent x Material look (#1138, look.ts): the plate and the rim are flat tonal materials. */
+  tonal?: boolean;
 }
 
 export interface ViewContext {
@@ -187,7 +190,9 @@ export class SceneRenderer {
     // The Metal051A and Onyx013 displacement maps stay out: the plate and the rim are flat slabs whose faces have no
     // vertex inside their outline to move, and the normal map already carries the relief. Onyx013 is stone, with no metalness map.
     const plateMaterial = new THREE.MeshStandardMaterial(
-      options.plateAlbedo
+      options.tonal
+        ? { ...flatTone(TONAL.plate), roughness: 0.8, metalness: 0 }
+        : options.plateAlbedo
         ? {
             map: options.plateAlbedo,
             roughnessMap: options.plateRoughness || null,
@@ -201,7 +206,9 @@ export class SceneRenderer {
           : { color: FRAME_LOOK.plate, roughness: 0.8 },
     );
     const rimMaterial = new THREE.MeshStandardMaterial(
-      options.rimAlbedo
+      options.tonal
+        ? { color: TONAL.cell, roughness: 0.6, metalness: 0, emissiveIntensity: 0.6 } // its emissive is the turn's light (lightRim)
+        : options.rimAlbedo
         ? {
             map: options.rimAlbedo,
             roughnessMap: options.rimRoughness || null,
