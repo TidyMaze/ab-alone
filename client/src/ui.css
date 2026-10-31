@@ -35,6 +35,24 @@
   --hazard: #8f4a0c;
   --danger: #a3241a;
 }
+
+/* One token set for the redesigned screens (#1136), today's look refined: 6 px radii, an 8 px grid, 48 px touch targets, flat fills
+   and no backdrop blur over the canvas (#842). The dark theme gets the amber accent and an amber fill for an active button; the
+   light theme keeps its own accent and a dark fill. */
+:root {
+  --amber: #ffb000;
+  --plate-accent: #ffb000;
+  --active-fill: #ffb000;
+  --active-ink: #1b1d1f;
+  --r-card: 6px;
+  --r-button: 6px;
+  --space: 8px;
+  --target: 48px;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) { --plate-accent: #0a5f73; --active-fill: #1b1f23; --active-ink: #f3f0e6; }
+}
+:root[data-theme='light'] { --plate-accent: #0a5f73; --active-fill: #1b1f23; --active-ink: #f3f0e6; }
 :root[data-palette='protan'] { --accent: #38bdf8; --hazard: #facc15; }
 :root[data-palette='deutan'] { --accent: #60a5fa; --hazard: #fbbf24; }
 :root[data-palette='tritan'] { --accent: #2dd4bf; --hazard: #f43f5e; }
@@ -892,3 +910,10 @@ body[data-openworld] #dock-wrap { display: none !important; }
    the screen. The column goes back to the right, where it is in a normal game. Landscape only: held upright the column is a row
    that stretches, and an auto margin would shrink it. */
 @media (orientation: landscape) { body[data-openworld] #online { margin-left: auto; } }
+/* The lobby sheet, the daily result card and the end of a game (#1136): the theme's look, refined. 6 px cards on an 8 px grid, 48 px
+   buttons, the primary one (Start, Copy result) filled, the accent amber in the default palette. */
+:root[data-palette='default'] :is(#dock-wrap :is(#lobby-sheet, #daily-card), #hud .end) { --accent: var(--plate-accent); }
+#dock-wrap :is(#lobby-sheet, #daily-card) { gap: var(--space); border-radius: var(--r-card); }
+#dock-wrap :is(#lobby-sheet, #daily-card) :is(button, input, textarea) { border-radius: var(--r-button); }
+#dock-wrap #lobby-sheet button, #dock-wrap #daily-card #daily-copy { min-height: var(--target); }
+#dock-wrap :is(#royale-start, #daily-copy) { background: var(--active-fill); border-color: var(--active-fill); color: var(--active-ink); }
