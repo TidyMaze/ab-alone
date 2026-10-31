@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { BLACK_WINS } from './end-games';
 import { openModes } from './modes';
 
 // #962: the Open world mode, behind ?openworld=<seed>: the hero rolls over the generated world, an obstacle stops it, and
@@ -33,6 +34,27 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   await page.keyboard.press('Escape');
   await expect(page.locator('#hud')).toBeVisible();
   expect(await page.evaluate(() => document.body.dataset.openworld)).toBeUndefined();
+});
+
+// #1063: while the Open world is on, its arrows roll the hero and do not open the board's replay underneath; Escape leaves
+// the world and the board is back as it was. The game (moves played) is loaded through the game file import.
+test('the arrows in the Open world do not open the board replay, and leaving the world returns the board, #1063', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  const save = JSON.stringify({ version: 1, mode: 'local', layout: 'standard', bot: false, moves: BLACK_WINS });
+  await page.locator('#import-file').setInputFiles({ name: 'game.json', mimeType: 'application/json', buffer: Buffer.from(save) });
+  await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(at).toBe('-1,0');
+  await expect(page.locator('#replay-bar')).toHaveJSProperty('hidden', true); // the attribute, not the CSS: the HUD is hidden here anyway
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(() => document.body.dataset.openworld)).toBeUndefined();
+  await expect(page.locator('#replay-bar')).toHaveJSProperty('hidden', true);
+  await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
 });
 
 // #988: a step up onto a higher cell. On seed 7 the spawn row runs grass at height 3 to (3, 0), then (4, 0) is grass at
