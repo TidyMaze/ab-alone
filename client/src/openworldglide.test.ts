@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { animT, loopT, slowBy, GLIDE_MS, Marble, NUDGE, NUDGE_MS, ROLL_ZOOM, SQUASH, squashAt, type Vec } from './openworldglide';
+import { animT, loopT, slowBy, GLIDE_MS, Marble, NUDGE, NUDGE_MS, HOP, hopAt, ROLL_ZOOM, SQUASH, squashAt, type Vec } from './openworldglide';
 
 const RADIUS = 0.3;
 const at = (x: number, y: number, z: number): Vec => ({ x, y, z });
@@ -31,7 +31,7 @@ describe('the glide of a step (docs/specs/openworld.md section 4, #1040)', () =>
     m.place(at(0, 0.5, 0));
     m.go(at(1, 1.5, 0), 0);
     m.tick(GLIDE_MS / 2);
-    near(m.pose.y, 0.5 + 0.875 * 1);
+    near(m.pose.y, 0.5 + 0.875 * 1 + HOP); // the path, plus the hop (#1100)
     m.tick(GLIDE_MS);
     expect(m.pose.y).toBe(1.5);
   });
@@ -251,5 +251,39 @@ describe('the Open world motion clock (#1107)', () => {
     vi.stubGlobal('window', { __openworldSlow: 10 });
     expect(slowBy()).toBe(10);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('the hop of a step (#1100)', () => {
+  it('rises 0.08 cell at mid-step and is on the ground at both ends', () => {
+    expect(HOP).toBe(0.08);
+    expect(hopAt(0)).toBe(0);
+    expect(hopAt(1)).toBe(0);
+    expect(hopAt(0.5)).toBeCloseTo(HOP, 9);
+  });
+
+  it('lifts the drawn marble at mid-glide, lands on the cell, and does not hop far out or without a roll', () => {
+    const m = new Marble(RADIUS);
+    m.place(at(0, 0, 0));
+    m.go(at(1, 0, 0), 0, GLIDE_MS, true, 'walk');
+    m.tick(GLIDE_MS / 2);
+    near(m.pose.y, HOP);
+    m.tick(GLIDE_MS);
+    expect(m.pose.y).toBe(0);
+    const far = new Marble(RADIUS);
+    far.place(at(0, 0, 0));
+    far.go(at(1, 0, 0), 0, GLIDE_MS, false, 'walk');
+    far.tick(GLIDE_MS / 2, false);
+    expect(far.pose.y).toBe(0);
+  });
+
+  it('a delayed glide (the troop follows) stays on its old cell until its start, then lands on time', () => {
+    const m = new Marble(RADIUS);
+    m.place(at(0, 0, 0));
+    m.go(at(1, 0, 0), 0, GLIDE_MS - 30, true, 'tap', 30);
+    m.tick(30);
+    expect(m.pose.x).toBe(0);
+    m.tick(GLIDE_MS);
+    expect(m.pose.x).toBe(1);
   });
 });

@@ -983,7 +983,7 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     tap(m, 'ArrowRight');
     const render = vi.fn();
     m.frame(render, 60);
-    expect(body().openworldGlide).toMatch(/^-?\d/); // the hero's drawn place, mid-glide
+    expect(body().openworldGlide).toMatch(/^-?[\d.]+,-?[\d.]+,-?[\d.]+$/); // the hero's drawn place and height (the hop), mid-glide
     expect(body().openworldAnim).toBeUndefined(); // a glide is not a push
     m.frame(render, GLIDE_MS + 10); // the frame of the landing draws the last cell
     m.frame(render, GLIDE_MS + 60);
