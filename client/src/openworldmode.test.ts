@@ -9,6 +9,7 @@ import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
+import { GLIDE_MS, NUDGE_MS } from './openworldglide';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -893,5 +894,66 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
     expect((await saves.load(7))!.yaw).toBeCloseTo(TURN_STEP);
     await m.open(7, 800, 600);
     expect(body().openworldYaw).toBe(String(Math.round((TURN_STEP * 180) / Math.PI)));
+  });
+});
+
+describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1040)', () => {
+  // The hero (0,0) with the troop behind it; the cell (1,0) is free, so a Right press steps onto it.
+  const standing = (reduced = false, foes: Axial[] = []): OpenWorldMode => {
+    const m = mode(undefined, undefined, () => reduced, undefined, noPush);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: foes });
+    return m;
+  };
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (window as { __openworldSlow?: number }).__openworldSlow;
+  });
+
+  it('glides the step: the view is shown with the time of the step and the span of the glide', () => {
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    standing().key('ArrowRight');
+    expect(show.mock.calls.at(-1)![0]).toEqual([1, 0]);
+    expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS });
+  });
+
+  it('stretches the glide by the slow factor of the page, read when the step starts (a webdriver check)', () => {
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    (window as { __openworldSlow?: number }).__openworldSlow = 10;
+    standing().key('ArrowRight');
+    expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS * 10 });
+  });
+
+  it('marks the glide while the marbles move, with the drawn place of the hero, and unmarks it on landing', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const m = standing();
+    m.frame(vi.fn(), 0);
+    m.key('ArrowRight');
+    const render = vi.fn();
+    m.frame(render, 60);
+    expect(body().openworldGlide).toMatch(/^-?\d/); // the hero's drawn place, mid-glide
+    expect(body().openworldAnim).toBeUndefined(); // a glide is not a push
+    m.frame(render, GLIDE_MS + 10);
+    expect(body().openworldGlide).toBeUndefined();
+    expect(render).toHaveBeenCalled();
+  });
+
+  it('draws nothing of a glide under reduced motion: the step is shown on its cell at once', () => {
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    const m = standing(true);
+    show.mockClear();
+    m.key('ArrowRight');
+    expect(show.mock.calls.at(-1)![2]).toBeUndefined();
+    m.frame(vi.fn(), 10);
+    expect(body().openworldGlide).toBeUndefined();
+  });
+
+  it('leans the hero toward a cell a blocked step names, for the nudge time, and not under reduced motion', () => {
+    const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
+    standing(false, [[1, 0]]).key('ArrowRight'); // an enemy on (1,0) blocks it
+    expect(nudge).toHaveBeenCalledWith([0, 0], [1, 0], expect.any(Number), NUDGE_MS);
+    nudge.mockClear();
+    standing(true, [[1, 0]]).key('ArrowRight');
+    expect(nudge).not.toHaveBeenCalled();
   });
 });
