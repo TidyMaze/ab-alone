@@ -23,8 +23,11 @@ test('the hero rolls over the Open world, an obstacle stops it, and Escape leave
   expect(before).not.toBe('0,0'); // it rolled before it was stopped
   await page.keyboard.press('ArrowRight'); // still blocked
   await expect.poll(at).toBe(before);
-  await page.keyboard.press('ArrowLeft'); // the cell it came from is open
-  await expect.poll(at).not.toBe(before);
+  // the cell it came from is open: the step is made, and a push of the troop may carry the hero back onto its cell (#967)
+  const pushes = () => page.evaluate(() => document.body.dataset.openworldPush);
+  const pushesBefore = await pushes();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(async () => (await at()) !== before || (await pushes()) !== pushesBefore).toBe(true);
   await expect(page.locator('#openworld-hud')).toBeVisible();
   await expect(page.locator('#hud')).toBeHidden();
   await page.keyboard.press('Escape');
