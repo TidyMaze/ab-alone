@@ -7,6 +7,7 @@ import { DECK_PARTICLES } from './deck';
 import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
 import BloomNode from 'three/addons/tsl/display/BloomNode.js';
+import { TONAL } from './look';
 import { createBloomPipeline, FRAME_LOOK, SceneRenderer, type NotchRow } from './scene';
 
 function createMockRenderer(): THREE.WebGPURenderer {
@@ -87,6 +88,16 @@ describe('SceneRenderer (#632)', () => {
     const lights: THREE.Light[] = [];
     sr.scene.traverse((o) => void ((o as THREE.Light).isLight && lights.push(o as THREE.Light)));
     expect(lights).toEqual([]);
+  });
+
+  it('draws the plate and the rim as flat tonal materials in the tonal look, whatever maps it is given (#1138)', () => {
+    const map = new THREE.Texture();
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), plateAlbedo: map, rimAlbedo: map, tonal: true });
+    expect(sr.plate.material.color.getHex()).toBe(TONAL.plate);
+    expect(sr.plate.material.map).toBeNull();
+    expect(sr.plate.material.emissive.getHex()).toBe(TONAL.plate); // lit from within (look.ts GLOW)
+    expect(sr.rim.near.material.color.getHex()).toBe(TONAL.cell);
+    expect(sr.rim.near.material.map).toBeNull();
   });
 
   it('binds alien plate PBR textures to plate and rim when provided (#771)', () => {
