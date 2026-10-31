@@ -53,32 +53,34 @@ pub fn world_enemies(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
 /// direction as an axial step.
 #[wasm_bindgen]
 pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>) -> Vec<i32> {
-    push_encoded(&pairs(&troop), &pairs(&enemies), |q, r| {
-        world::cell(u64::from(seed), q, r).map(|c| c.terrain)
-    })
+    let terrain = |q, r| terrain_at(u64::from(seed), q, r);
+    push_encoded(&pairs(&troop), &pairs(&enemies), &terrain)
+}
+
+/// The terrain of a cell of the world `seed`, `None` off the world.
+fn terrain_at(seed: u64, q: i32, r: i32) -> Option<Terrain> {
+    let cell = world::cell(seed, q, r)?;
+    Some(cell.terrain)
 }
 
 /// The `q, r` pairs of a flat list.
 fn pairs(flat: &[i32]) -> Vec<(i32, i32)> {
-    flat.as_chunks::<2>()
-        .0
-        .iter()
-        .map(|&[q, r]| (q, r))
-        .collect()
+    let (chunks, _) = flat.as_chunks::<2>();
+    chunks.iter().map(|&[q, r]| (q, r)).collect()
 }
 
 /// The encoding of `world_push` for any terrain (`None` off the world).
 fn push_encoded(
     troop: &[(i32, i32)],
     enemies: &[(i32, i32)],
-    terrain: impl Fn(i32, i32) -> Option<Terrain>,
+    terrain: &dyn Fn(i32, i32) -> Option<Terrain>,
 ) -> Vec<i32> {
-    let Some(push) = worldfight::best_push(troop, enemies, &terrain) else {
+    let Some(push) = worldfight::best_push(troop, enemies, terrain) else {
         return Vec::new();
     };
     let (mut troop, mut enemies) = (troop.to_vec(), enemies.to_vec());
     let gone = worldfight::apply_push(&mut troop, &mut enemies, &push);
-    let ejected = gone.first().copied().unwrap_or_default();
+    let ejected = gone.first().copied().unwrap_or((0, 0));
     let kind = match push.last {
         Outcome::Slides(_) => 0,
         Outcome::Ejected(Fall::Water) => 1,
@@ -164,14 +166,9 @@ mod tests {
 
     #[test]
     fn a_push_into_water_ejects_the_last_enemy_as_kind_one() {
-        let water = |q: i32, r: i32| {
-            Some(if (q, r) == (5, 0) {
-                Terrain::Water
-            } else {
-                Terrain::Grass
-            })
-        };
-        let out = push_encoded(&[(2, 0), (1, 0), (0, 0)], &[(3, 0), (4, 0)], water);
+        // Only the cell beyond the enemy is asked for: it is water.
+        let water = |_q: i32, _r: i32| Some(Terrain::Water);
+        let out = push_encoded(&[(2, 0), (1, 0), (0, 0)], &[(3, 0), (4, 0)], &water);
         assert_eq!(out, vec![4, 0, 1, 3, 3, 0, 2, 0, 1, 0, 1, 4, 0, 1, 0]);
     }
 
