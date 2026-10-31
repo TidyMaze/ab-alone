@@ -30,6 +30,25 @@ describe('motion tokens (#1106)', () => {
   });
 });
 
+describe('menus and buttons answer touch (#1094)', () => {
+  const block = css.match(/\/\* Touch motion \(#1094,[^]*$/)![0];
+
+  it('presses a dock or sheet button down on the instant token with the out easing', () => {
+    expect(block).toMatch(/#dock-wrap button \{[^}]*transition: transform var\(--motion-instant\) var\(--ease-out\)/);
+    expect(block).toMatch(/#dock-wrap button:active:not\(:disabled\) \{[^}]*transform: scale\(0\.96\)/);
+  });
+
+  it('opens every sheet on the base token with the out easing', () => {
+    for (const id of ['mode-menu', 'goal-sheet', 'daily-card', 'lobby-sheet']) expect(block).toContain(`#dock-wrap #${id}`);
+    expect(block).toMatch(/animation: sheet-in var\(--motion-base\) var\(--ease-out\)/);
+    expect(block).toMatch(/@keyframes sheet-in \{ from \{ opacity: 0; transform: translateY\(8px\); \} \}/);
+  });
+
+  it('is cut by the reduced switch', () => {
+    expect(css).toMatch(/:root\[data-motion='reduced'\] \*[^{]*\{ animation-duration: 0s !important; transition-duration: 0s !important; \}/);
+  });
+});
+
 describe('reducedMotion', () => {
   it('follows data-motion on the root', () => {
     expect(reducedMotion({ dataset: {} })).toBe(false);

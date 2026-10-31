@@ -958,3 +958,11 @@ body[data-openworld] #dock-wrap { display: none !important; }
 #dock-wrap :is(#lobby-sheet, #daily-card) :is(button, input, textarea) { border-radius: var(--r-button); }
 #dock-wrap #lobby-sheet button, #dock-wrap #daily-card #daily-copy { min-height: var(--target); }
 #dock-wrap :is(#royale-start, #daily-copy) { background: var(--active-fill); border-color: var(--active-fill); color: var(--active-ink); }
+
+/* Touch motion (#1094, docs/specs/motion.md story 4): a pressed dock or sheet button eases down on --motion-instant, a sheet slides
+   and fades in on --motion-base. The sheet keeps its box (a transform only), so the hit area is live from the first frame.
+   Reduced motion: the tokens are 0ms and the rule above cuts the animation and the transition. */
+#dock-wrap button { transition: transform var(--motion-instant) var(--ease-out); }
+#dock-wrap button:active:not(:disabled) { transform: scale(0.96); }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(8px); } }
+#dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #lobby-sheet { animation: sheet-in var(--motion-base) var(--ease-out); }
