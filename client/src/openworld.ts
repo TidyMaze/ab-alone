@@ -41,8 +41,12 @@ export function parseChunk(bytes: Uint8Array): Tile[] {
  * margin. The least recently used go first; `World.limit` can be raised. */
 export const CACHE_LIMIT = 512;
 
+/** The key of a chunk in the caches: a number, cheap to make on every tile read. The chunks of a world are within 32k of the spawn,
+ * so no two chunks share a key. */
+const keyOf = (cx: number, cy: number): number => cx * 65536 + cy;
+
 /** The value of a key, kept the most recently used; `undefined` when absent. */
-function touch<T>(cache: Map<string, T>, key: string): T | undefined {
+function touch<T>(cache: Map<number, T>, key: number): T | undefined {
   const value = cache.get(key);
   if (value !== undefined) {
     cache.delete(key);
@@ -52,15 +56,15 @@ function touch<T>(cache: Map<string, T>, key: string): T | undefined {
 }
 
 /** Stores a value as the most recently used, dropping the least recently used beyond `limit`. */
-function remember<T>(cache: Map<string, T>, key: string, value: T, limit: number): void {
+function remember<T>(cache: Map<number, T>, key: number, value: T, limit: number): void {
   cache.set(key, value);
-  if (cache.size > limit) cache.delete(cache.keys().next().value as string);
+  if (cache.size > limit) cache.delete(cache.keys().next().value as number);
 }
 
 /** The world of a seed: chunks come from `load(cx, cy)` the first time a cell of them is asked for. */
 export class World {
-  private readonly chunks = new Map<string, Tile[]>();
-  private readonly groups = new Map<string, Axial[]>();
+  private readonly chunks = new Map<number, Tile[]>();
+  private readonly groups = new Map<number, Axial[]>();
   /** How many chunks, and how many enemy lists, are kept at once. */
   limit = CACHE_LIMIT;
   /** How many chunks and enemy lists are cached now. */
@@ -75,7 +79,7 @@ export class World {
 
   /** The chunk `(cx, cy)`, `[]` off the world. */
   chunk(cx: number, cy: number): readonly Tile[] {
-    const key = `${cx},${cy}`;
+    const key = keyOf(cx, cy);
     let tiles = touch(this.chunks, key);
     if (!tiles) {
       tiles = parseChunk(this.load(cx, cy));
@@ -86,7 +90,7 @@ export class World {
 
   /** The enemy marbles that start in the chunk `(cx, cy)`. */
   enemies(cx: number, cy: number): readonly Axial[] {
-    const key = `${cx},${cy}`;
+    const key = keyOf(cx, cy);
     let cells = touch(this.groups, key);
     if (!cells) {
       const flat = this.loadEnemies(cx, cy);
@@ -96,10 +100,12 @@ export class World {
     return cells;
   }
 
-  /** The tile of a cell, `undefined` off the world. */
+  /** The tile of a cell, `undefined` off the world. A read finds its chunk without moving it in the cache: the view reads the six
+   * neighbours of every water cell, and the chunks it draws are touched by `chunk` (#1034). */
   tile(q: number, r: number): Tile | undefined {
     const [cx, cy] = chunkOf([q, r]);
-    return this.chunk(cx, cy)[(r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)];
+    const tiles = this.chunks.get(keyOf(cx, cy)) ?? this.chunk(cx, cy);
+    return tiles[(r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)];
   }
 }
 
