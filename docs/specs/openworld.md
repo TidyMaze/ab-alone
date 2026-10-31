@@ -67,7 +67,8 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 ## 4. The hero and the troop
 
 - **Hero**: one glass marble, moved one cell at a time (click a neighbour, or the arrow keys, as
-  in the hub, section 3.5 of `game-design.md`).
+  in the hub, section 3.5 of `game-design.md`). A held arrow keeps walking: the first cell is taken on the
+  keydown, then one cell per glide (140 ms) while the arrow is held, whatever the system's key repeat (#1059).
 - **Troop**: 6 marbles at the start. After each hero step each troop marble takes the place of the
   one before it in the trail, and the first takes the cell the hero left. No decision of the player.
 - **Automatic attack**: after its step, the troop attacks when a line of 2 or 3 of its marbles,

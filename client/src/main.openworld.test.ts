@@ -2,6 +2,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 import { indexedDbStore } from './idb';
+import { GLIDE_MS } from './openworldglide';
 import { boot } from './test/harness';
 
 // The Open world mode (#962, docs/specs/openworld.md): its entry is in the mode menu for everyone (#1000), ?openworld=<seed>
@@ -111,14 +112,34 @@ describe('the Open world mode', () => {
     byId('openworld').click();
     await settle();
     press('ArrowLeft'); // (-1, 0)
-    press('ArrowUp'); // Left and Up held: up-left
+    press('ArrowUp'); // Left and Up held: up-left on the next step of the cadence (#1059)
+    game.frame(GLIDE_MS);
     expect(data().openworldAt).toBe('-1,-1');
     release('ArrowLeft');
-    press('ArrowUp'); // Left let go: a single Up, (-1, -2)
+    game.frame(GLIDE_MS); // Left let go: a single Up, (-1, -2)
     expect(data().openworldAt).toBe('-1,-2');
     window.dispatchEvent(new Event('blur')); // the window loses focus: nothing is held any more
     press('ArrowRight'); // single, not up-right with the Up still held: (0, -2)
     expect(data().openworldAt).toBe('0,-2');
+  });
+
+  it('steps an arrow at its keydown, ignores the key repeat, and walks on the frames while it is held, #1059', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    await game.settle();
+    expect(press('ArrowRight').defaultPrevented).toBe(true);
+    expect(data().openworldAt).toBe('1,0'); // the first step, on the keydown
+    const repeat = new KeyboardEvent('keydown', { key: 'ArrowRight', repeat: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(repeat);
+    expect(repeat.defaultPrevented).toBe(true); // no page scroll on the repeat either
+    expect(data().openworldAt).toBe('1,0'); // and no step
+    game.frame(GLIDE_MS);
+    expect(data().openworldAt).toBe('2,0'); // the cadence of the held arrow
+    release('ArrowRight');
+    game.frame(GLIDE_MS);
+    expect(data().openworldAt).toBe('2,0'); // let go: no more steps
   });
 
   it('turns the Open world camera with a right-button drag and with a twist of two fingers, and shows no menu over it, #1026', async () => {
