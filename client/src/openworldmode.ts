@@ -179,6 +179,7 @@ export class OpenWorldMode {
       (cx, cy) => this.loadEnemies(seed, cx, cy),
     );
     this.world = world;
+    if (saved) world.restore(saved.broken); // before any cell is read: the broken obstacles stay broken (#1147)
     this.fight = saved ? FightState.fromJSON(saved.fight) : new FightState();
     this.pushes = 0;
     const view = new OpenWorldView(world, this.fight);
@@ -222,6 +223,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldPush;
     delete document.body.dataset.openworldZoom;
     delete document.body.dataset.openworldYaw;
+    delete document.body.dataset.openworldBroken;
     delete document.body.dataset.openworldDrawn;
     delete document.body.dataset.openworldAnim;
     delete document.body.dataset.openworldGlide;
@@ -412,6 +414,7 @@ export class OpenWorldMode {
   private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): void {
     if (!this.hero!.step(to)) return this.lean(to, at);
     this.cruising = pace !== 'tap';
+    if (this.hero!.smashed) this.view!.smash(to, this.hero!.smashed, at, this.reduced()); // an obstacle broken on the way (#1147)
     this.view!.snap(); // a step during a push's animation ends it first (#967)
     const now = this.reduced() ? null : at;
     if (now !== null) this.view!.puff(now); // dust from the cell it leaves (#1110)
@@ -458,7 +461,7 @@ export class OpenWorldMode {
     if (!this.unsaved) return;
     this.unsaved = false;
     const { at, troop } = this.hero!;
-    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw).then((stored) => {
+    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken).then((stored) => {
       if (stored) document.body.dataset.openworldSaved = String(++this.writes);
     });
   }
@@ -491,6 +494,7 @@ export class OpenWorldMode {
     document.body.dataset.openworldBeaten = String(this.fight.beaten);
     document.body.dataset.openworldPush = String(this.pushes);
     document.body.dataset.openworldZoom = String(this.view!.zoom);
+    document.body.dataset.openworldBroken = String(this.world!.broken.length); // the obstacles broken (#1147)
     document.body.dataset.openworldYaw = String(Math.round((this.view!.yaw * 180) / Math.PI)); // the turn, in degrees (#1026)
     document.body.dataset.openworldDrawn = JSON.stringify(this.view!.drawn);
   }

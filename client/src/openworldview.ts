@@ -532,7 +532,8 @@ export class OpenWorldView {
    * alive, or were on the last call and are erased now. */
   sparkle(now: number, reduced: boolean): boolean {
     const { particles, sparks, sparkPose, sparkLook } = this;
-    if (reduced || this.drawnLevel > ROLL_ZOOM) particles.clear();
+    if (this.drawnLevel > ROLL_ZOOM) particles.clear();
+    else if (reduced) particles.clear(true); // the fade of a broken prop stays (#1147)
     else particles.step(now, this.hero.position, AMBIENT[this.world.tile(this.heroCell[0], this.heroCell[1])!.biome]);
     let n = 0;
     for (let i = 0; i < particles.cap; i++) {
@@ -563,6 +564,17 @@ export class OpenWorldView {
     if (this.drawnLevel > ROLL_ZOOM) return;
     const { x, y, z } = this.hero.position;
     this.particles.puff(x, y - MARBLE + 0.05, z, now);
+  }
+
+  /** The hero broke the `terrain` obstacle on `cell` at `now` (ms) (#1147): the world has the cell open already. Its prop leaves its mesh,
+   * and its shards fly (a fade under `reduced` motion); the shards are particles, so a break allocates nothing. None past `ROLL_ZOOM`. */
+  smash([q, r]: Axial, terrain: Terrain, now: number, reduced: boolean): void {
+    const prop = PROP_OF[terrain]!;
+    this.removeProp(this.route(prop, hexDistance([q, r], this.laidHero!) <= HI_RADIUS), cellKey(q, r)); // the hero has been shown: the props are laid
+    if (this.drawnLevel > ROLL_ZOOM) return;
+    const p = axialTo3D(q, r);
+    const tile = this.world.tile(q, r)!;
+    this.particles.shatter(p.x, topOf(GROUND[tile.terrain], tile.height) + 0.2, p.z, now, PROPS[prop].color, reduced);
   }
 
   /** The glow of the water breathes slowly: `ms` is the time, 0 holds it still (reduced motion). */

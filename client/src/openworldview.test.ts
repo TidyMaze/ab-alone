@@ -1921,13 +1921,13 @@ describe('the particles of the Open world (#1110)', () => {
     expect(view.sparkle(2016, false)).toBe(false);
   });
 
-  // #1147: a boulder on (1, 0) and an isolated tree on (0, 2) of a meadow; the cell is broken in the world first, as the hero does.
+  // #1147: a boulder on (1, 0) and an isolated tree on (0, 2) of the badlands; the cell is broken in the world first, as the hero does.
   describe('breaking an obstacle', () => {
     const withProps = (cx: number, cy: number) => {
-      const out = biomeOf(0)(cx, cy);
+      const out = biomeOf(4)(cx, cy); // the badlands: no pollen in the way of the count
       if (cx === 0 && cy === 0) {
-        out.set([1, 5, 0], 1 * 3);
-        out.set([1, 6, 0], 2 * CHUNK * 3); // (0, 2): a tree with no tree beside it
+        out.set([1, 5, 4], 1 * 3);
+        out.set([1, 6, 4], 2 * CHUNK * 3); // (0, 2): a tree with no tree beside it
       }
       return out;
     };
