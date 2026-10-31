@@ -30,7 +30,7 @@ async function startAssembly(page: Page): Promise<void> {
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Assembly Line' }).click();
-  await expect(page.locator('#hud')).toContainText('The Assembly Line');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Assembly Line');
   await expect(page.locator('body')).toHaveAttribute('data-deck', 'cargo');
   await page.mouse.move(2, 2); // no hover ghost
 }

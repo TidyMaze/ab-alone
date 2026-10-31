@@ -29,7 +29,7 @@ async function startPulsar(page: Page, reducedMotion: boolean): Promise<void> {
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Pulsar' }).click();
-  await expect(page.locator('#hud')).toContainText('The Pulsar');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Pulsar');
   await expect(page.locator('body')).toHaveAttribute('data-deck', 'bridge');
   await page.mouse.move(2, 2); // no hover ghost
 }

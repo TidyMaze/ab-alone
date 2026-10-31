@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { BOSS_IDS } from '../src/tally';
 
 // Issue #357: Play online, Boss fight and Daily challenge live in one menu behind the Game modes button, collapsed
 // by default, built like the settings menu (#277): it closes on Escape, a press outside and the button again.
@@ -93,22 +94,19 @@ test.describe('on a phone', () => {
   });
 });
 
-// #666: on a phone held upright the open boss list has room for 12 bosses (copies of its last entry make 12, as #663
-// does on a desktop): every item stays a 44 px touch target with a label of at least 12
+// #666: on a phone held upright the open boss list holds every boss of the game (BOSS_IDS, 13 bosses, not padded):
+// every item stays a 44 px touch target with a label of at least 12
 // px, and the last boss, scrolled into view, is on screen and the element under its centre.
 for (const viewport of [{ width: 360, height: 780 }, { width: 375, height: 812 }]) {
   test.describe(`on a ${viewport.width} px phone held upright`, () => {
     test.use({ viewport, hasTouch: true });
 
-    test('12 bosses keep 44 px touch targets and readable labels, the last one reachable, #666', async ({ page }) => {
+    test('every boss of the list keeps 44 px touch targets and readable labels, the last one reachable, #666', async ({ page }) => {
       await page.goto('./?bot=off');
       await page.getByRole('button', { name: 'Game modes' }).click();
       await page.getByRole('button', { name: 'Boss fight' }).click();
       const list = page.locator('#boss-list');
-      await list.evaluate((el) => {
-        while (el.children.length < 12) el.appendChild(el.lastElementChild!.cloneNode(true));
-      });
-      await expect(list.getByRole('button')).toHaveCount(12);
+      await expect(list.getByRole('button')).toHaveCount(BOSS_IDS.length);
       const found = await page.evaluate(() => {
         const items = [...document.querySelectorAll('#mode-menu button')].filter((el) => el.getClientRects().length > 0);
         const last = document.querySelector('#boss-list')!.lastElementChild!;
@@ -127,22 +125,19 @@ for (const viewport of [{ width: 360, height: 780 }, { width: 375, height: 812 }
 
 // Bug #653: on a 1280x720 window the open boss list of 7 bosses scrolled, The Rail Yard and Daily challenge below the
 // fold. On a desktop window every boss and Daily challenge show without a scroll. #699: the Boss fight and Fight together
-// lists have room for 12 bosses: each list gets copies of its last entry up to 12 in all.
+// lists have room for every boss of the game (BOSS_IDS): the list is no longer padded, the 13 real bosses are checked.
 for (const viewport of [{ width: 1280, height: 720 }, { width: 1280, height: 800 }]) {
   for (const [name, id] of [['Boss fight', 'boss-list'], ['Fight together', 'coop-list']]) {
-    test(`12 bosses of the ${name} list and Daily challenge fit without a scroll in a ${viewport.width}x${viewport.height} window, bugs #653 #699`, async ({ page }) => {
+    test(`every boss of the ${name} list and Daily challenge fit without a scroll in a ${viewport.width}x${viewport.height} window, bugs #653 #699`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.goto('./?bot=off');
       await page.getByRole('button', { name: 'Game modes' }).click();
       await page.getByRole('button', { name }).click();
       const list = page.locator(`#${id}`);
       await expect(list.getByRole('button').first()).toBeVisible();
-      await list.evaluate((el) => {
-        while (el.children.length < 12) el.appendChild(el.lastElementChild!.cloneNode(true));
-      });
-      await expect(list.getByRole('button')).toHaveCount(12);
+      await expect(list.getByRole('button')).toHaveCount(BOSS_IDS.length);
       const outside = await page.evaluate((id) => {
-        const column = document.getElementById('online')!;
+        const column = document.getElementById('mode-menu')!; // the menu sits in the thumb dock's wrap since #1032, not in #online
         const box = column.getBoundingClientRect();
         const inside = (b: DOMRect) =>
           b.left >= Math.max(0, box.left) && b.top >= Math.max(0, box.top) && b.right <= Math.min(innerWidth, box.right) && b.bottom <= Math.min(innerHeight, box.bottom);

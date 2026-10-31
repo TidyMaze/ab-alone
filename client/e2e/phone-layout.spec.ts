@@ -5,6 +5,7 @@ import { maxUiScale } from '../src/uiscale';
 import { openModes } from './modes';
 import { logOf } from '../src/audiologs';
 import { dailyFor, dailyTitle, utcDay } from '../src/daily';
+import { BOSS_IDS } from '../src/tally';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -333,15 +334,15 @@ for (const { name, viewport, mobile } of sizes) {
   });
 }
 
-// #666: on a phone held upright the open mode menu has room for 12 bosses, so a new boss needs no layout change. Each
-// boss list gets copies of its last entry, as #663 does on a desktop; the Daily challenge names the longest boss name.
+// #666: on a phone held upright the open mode menu has room for every boss of the game (BOSS_IDS), so a new boss needs no
+// layout change. The boss lists are not padded: the Daily challenge names the longest boss name.
 for (const { name, viewport } of sizes.filter((s) => s.mobile && s.viewport.width < s.viewport.height)) {
-  test.describe(`${name}, 12 bosses`, () => {
+  test.describe(`${name}, every boss`, () => {
     test.skip(({ browserName }) => browserName === 'firefox', 'Firefox has no mobile emulation');
     test.use({ viewport, isMobile: true, hasTouch: true });
 
     for (const list of ['Boss fight', 'Fight together']) {
-      test(`nothing covers the board or the HUD with the ${list} list of 12 bosses open, #666`, async ({ page }, testInfo) => {
+      test(`nothing covers the board or the HUD with the ${list} list of every boss open, #666`, async ({ page }, testInfo) => {
         await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
         await page.goto('./?bot=off&net=hook');
         await page.locator('canvas').waitFor();
@@ -354,15 +355,10 @@ for (const { name, viewport } of sizes.filter((s) => s.mobile && s.viewport.widt
         await page.clock.setSystemTime(new Date(`${utcDay(ms)}T08:00:00Z`));
         await page.clock.fastForward(60_000); // the minute timer renames Daily challenge
         await expect(page.locator('#daily')).toHaveText(dailyTitle(utcDay(ms), longest));
-        await page.evaluate(() => {
-          for (const el of document.querySelectorAll('#boss-list, #coop-list')) {
-            while (el.children.length < 12) el.appendChild(el.lastElementChild!.cloneNode(true));
-          }
-        });
         const button = page.getByRole('button', { name: list });
         if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click(); // closes the other list
-        await expect(page.locator(list === 'Boss fight' ? '#boss-list' : '#coop-list').getByRole('button')).toHaveCount(12);
-        await check(page, testInfo, `with the mode menu and the ${list} list of 12 bosses open`);
+        await expect(page.locator(list === 'Boss fight' ? '#boss-list' : '#coop-list').getByRole('button')).toHaveCount(BOSS_IDS.length);
+        await check(page, testInfo, `with the mode menu and the ${list} list of every boss open`);
       });
     }
   });

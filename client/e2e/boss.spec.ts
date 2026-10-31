@@ -134,7 +134,7 @@ test('start The Echo, play a move, the boss replies, Retry resets the board', as
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(hud).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await expect(hud).toContainText('P1');
   await expect(hud).toContainText('White to move');
   await expect(page.locator('#hud .notch.active')).toHaveText('P1');
@@ -145,13 +145,13 @@ test('start The Echo, play a move, the boss replies, Retry resets the board', as
   // The boss answers in the worker: two plies, the HUD is back on the human side.
   await expect.poll(plies, { timeout: 30_000 }).toBe(2);
   await expect(hud).toContainText('White to move');
-  await expect(hud).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await page.screenshot({ path: 'test-results/boss-hud.png', clip: { x: 0, y: 0, width: 420, height: 260 } });
 
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect.poll(plies).toBe(0);
   await expect(hud).toContainText('White to move');
-  await expect(hud).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await expect(hud).toContainText('White ejected 0/6');
 });
 
@@ -182,7 +182,7 @@ const startHull = async (page: Page, tier: string) => {
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-tier', tier);
   await page.locator('#boss-list').getByRole('button', { name: 'The Hull', includeHidden: true }).dispatchEvent('click');
-  await expect(page.locator('#hud')).toContainText('The Hull');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Hull');
   await expect(page.locator('body')).toHaveAttribute('data-cracks', '0');
 };
 
@@ -266,7 +266,7 @@ const startChaplain = async (page: Page, { reduced = true } = {}) => {
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Chaplain' }).click();
-  await expect(page.locator('#hud')).toContainText('The Chaplain');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Chaplain');
   await expect(page.locator('body')).toHaveAttribute('data-converted', '0');
 };
 
@@ -372,7 +372,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
-  await expect(hud).toContainText('The Choir');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Choir');
   await expect(hud).toContainText('White ejected 0/6 · Black ejected 0/6');
   await expect(hud).toContainText('Next army: Alto');
   await expect(page.locator('#hud .notch')).toHaveCount(3);
@@ -441,7 +441,7 @@ for (const [name, accent, stored] of [
     await page.goto('./');
     await page.locator('canvas').waitFor();
     await page.locator('#boss-list').getByRole('button', { name, includeHidden: true }).dispatchEvent('click');
-    await expect(page.locator('#hud')).toContainText(name);
+    await expect(page.locator('#boss-bar .name')).toContainText(name);
     const worn = (await page.evaluate(() => (window as any).__accents())) as { cell: [number, number]; accent: string }[];
     expect(worn).toHaveLength(14);
     expect(worn.every((w) => w.accent === accent)).toBe(true);
@@ -459,7 +459,7 @@ test('start The Ballast Mind: its radius 5 board on the Bridge, its shells in th
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Ballast Mind' }).click();
-  await expect(page.locator('#hud')).toContainText('The Ballast Mind');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Ballast Mind');
   await expect(page.locator('#hud')).toContainText('White ejected 0/12 · Black ejected 0/6');
   await expect(body).toHaveAttribute('data-deck', 'bridge');
   await expect(body).toHaveAttribute('data-vanished', '6'); // the pillars
@@ -480,7 +480,7 @@ test('The Ballast Mind radius 5 board frames in 1280x720 and phone upright, task
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Ballast Mind' }).click();
-  await expect(page.locator('#hud')).toContainText('The Ballast Mind');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Ballast Mind');
 
   // Verify all radius 5 cells fit within the 1280x720 viewport
   const cells = await page.evaluate(() => {

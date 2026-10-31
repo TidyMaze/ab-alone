@@ -38,7 +38,7 @@ async function startMagnetizer(page: Page): Promise<void> {
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Magnetizer' }).click();
-  await expect(page.locator('#hud')).toContainText('The Magnetizer');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Magnetizer');
   await expect(page.locator('body')).toHaveAttribute('data-deck', 'furnace');
 }
 

@@ -36,7 +36,7 @@ async function startCore(page: Page, reducedMotion = true): Promise<void> {
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Unstable Core' }).click();
-  await expect(page.locator('#hud')).toContainText('The Unstable Core');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Unstable Core');
   await expect(page.locator('body')).toHaveAttribute('data-deck', 'furnace');
   await page.mouse.move(2, 2); // no hover ghost
 }
