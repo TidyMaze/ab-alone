@@ -38,6 +38,10 @@
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
         </button>
       </div>
+      <div id="replay-bar" role="group" aria-label="Replay" hidden>
+        <input id="replay-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Position in the move log" />
+        <div id="replay-label" aria-live="polite"></div>
+      </div>
       <div id="openworld-hud" role="group" aria-label="Open world">
         <p id="openworld-live" role="status" class="sr-only"></p>
         <p>Open world: arrows or a click on a next cell to roll, Esc to leave.</p>
@@ -52,50 +56,19 @@
       <div id="joystick" aria-hidden="true" hidden><span id="joystick-knob"></span></div>
       <div id="fps" aria-hidden="true" hidden></div>
       <div id="online">
-        <button id="update" type="button" hidden>New version: reload</button>
         <div id="settings-box">
           <button id="settings" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu" disabled>
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8z"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
           </button>
           <div id="settings-menu" role="group" aria-label="Settings" hidden></div>
         </div>
-        <div id="group-view" class="group">
-          <button id="reset-view" type="button" disabled>Reset view</button>
-        </div>
         <div id="group-game" class="group">
-          <button id="new-game" type="button" disabled>New game</button>
-          <button id="rematch" type="button" hidden>Rematch</button>
-          <button id="boss-goal" type="button" aria-expanded="true" hidden>Goal</button>
-          <button id="boss-retry" type="button" hidden>Retry</button>
           <button id="royale-hold" type="button" hidden>Hold</button>
           <button id="royale-start" type="button" hidden>Start</button>
           <button id="royale-invite" type="button" hidden>Invite</button>
           <button id="ship-back" type="button" hidden>Back to the ship</button>
         </div>
-        <div id="daily-card" hidden>
-          <textarea id="daily-result" readonly rows="3" aria-label="Daily challenge result"></textarea>
-          <button id="daily-copy" type="button">Copy result</button>
-        </div>
-        <div id="tools" class="group">
-          <button id="hint" type="button" aria-pressed="false" disabled>Hint</button>
-          <button id="replay" type="button" disabled>Replay</button>
-          <button id="auto-play" type="button" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
-        </div>
         <span id="auto-reason" hidden></span>
-        <button id="modes" type="button" aria-label="Game modes" title="Game modes" aria-haspopup="true" aria-expanded="false" aria-controls="mode-menu" disabled></button>
-        <div id="mode-menu" role="group" aria-label="Game modes" hidden>
-          <button id="play-online" type="button" disabled>Play online</button>
-          <button id="fight-together" type="button" aria-expanded="false" disabled>Fight together</button>
-          <div id="coop-list" hidden></div>
-          <button id="battle-royale" type="button" disabled>Battle royale</button>
-          <button id="ranked" type="button" disabled>Ranked</button>
-          <button id="boss-fight" type="button" aria-expanded="false" disabled>Boss fight</button>
-          <div id="boss-list" hidden></div>
-          <button id="daily" type="button" disabled>Daily challenge</button>
-          <button id="roguelite" type="button" disabled>Rogue-lite run</button>
-          <button id="openworld" type="button" disabled>Open world</button>
-          <button id="ship" type="button" disabled>Ship</button>
-        </div>
         <input id="import-file" type="file" accept=".json,application/json" hidden aria-label="Game file" />
         <label id="invite-label" for="invite" hidden>Invite link: send it to your opponent</label>
         <div id="invite-row">
@@ -108,18 +81,48 @@
         <button id="log-button" type="button" hidden>Play log</button>
       </div>
     </div>
-    <div id="support">
-      <div id="replay-bar" role="group" aria-label="Replay" hidden>
-        <input id="replay-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Position in the move log" />
-        <div id="replay-label" aria-live="polite"></div>
-        <div class="steps">
+    <!-- The thumb dock (#1032): the main controls at the bottom of the window, the sheets above it. The buttons are the
+         page's own elements, moved here; their handlers do not change. -->
+    <div id="dock-wrap">
+      <nav id="dock" role="toolbar" aria-label="Controls">
+        <button id="boss-retry" type="button" data-label="Retry" aria-label="Retry" hidden>Retry</button>
+        <button id="rematch" type="button" data-label="Rematch" aria-label="Rematch" hidden>Rematch</button>
+        <button id="boss-goal" type="button" data-label="Goal" aria-label="Goal" aria-expanded="true" hidden>Goal</button>
+        <button id="new-game" type="button" data-label="New" disabled></button>
+        <button id="reset-view" type="button" data-label="View" aria-label="Reset view" disabled>Reset view</button>
+        <button id="hint" type="button" data-label="Hint" aria-label="Hint" aria-pressed="false" disabled>Hint</button>
+        <button id="replay" type="button" data-label="Replay" aria-label="Replay" disabled>Replay</button>
+        <div id="dock-replay" class="steps" role="group" aria-label="Replay">
           <button id="replay-first" type="button" aria-label="First position" title="First position">&#9198;</button>
           <button id="replay-prev" type="button" aria-label="Previous move (Left)" title="Previous move (Left)">&#9664;</button>
           <button id="replay-next" type="button" aria-label="Next move (Right)" title="Next move (Right)">&#9654;</button>
           <button id="replay-last" type="button" aria-label="Last position" title="Last position">&#9197;</button>
           <button id="replay-live" type="button" title="Back to the live game (Esc)">Live</button>
         </div>
+        <button id="modes" type="button" data-label="Modes" aria-label="Game modes" title="Game modes" aria-haspopup="true" aria-expanded="false" aria-controls="mode-menu" disabled></button>
+        <button id="auto-play" type="button" data-label="Auto" aria-label="Auto-play" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
+      </nav>
+      <div id="mode-menu" role="group" aria-label="Game modes" hidden>
+        <button id="update" type="button" hidden>New version: reload</button>
+        <button id="play-online" type="button" disabled>Play online</button>
+        <button id="fight-together" type="button" aria-expanded="false" disabled>Fight together</button>
+        <div id="coop-list" hidden></div>
+        <button id="battle-royale" type="button" disabled>Battle royale</button>
+        <button id="ranked" type="button" disabled>Ranked</button>
+        <button id="boss-fight" type="button" aria-expanded="false" disabled>Boss fight</button>
+        <div id="boss-list" hidden></div>
+        <button id="daily" type="button" disabled>Daily challenge</button>
+        <button id="roguelite" type="button" disabled>Rogue-lite run</button>
+        <button id="openworld" type="button" disabled>Open world</button>
+        <button id="ship" type="button" disabled>Ship</button>
       </div>
+      <div id="goal-sheet" role="status" hidden></div>
+      <div id="daily-card" hidden>
+        <textarea id="daily-result" readonly rows="3" aria-label="Daily challenge result"></textarea>
+        <button id="daily-copy" type="button">Copy result</button>
+      </div>
+    </div>
+    <div id="support">
       <div id="eval" hidden>
         <div class="track" role="meter" aria-label="Evaluation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="Even">
           <div class="black"></div>

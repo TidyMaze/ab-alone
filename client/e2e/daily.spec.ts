@@ -96,8 +96,8 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await page.locator('#daily').click();
   const goal = page.locator('#hud .goal');
   const control = page.getByRole('button', { name: 'Goal' });
-  await expect(goal).toHaveText(/^Goal: .+/);
-  await expect(control).toHaveAttribute('aria-expanded', 'true');
+  await expect(goal).toHaveText(/^Goal: .+/); // before the first move the HUD line holds the goal
+  await expect(control).toHaveAttribute('aria-expanded', 'false'); // the Goal sheet is shut (#1032)
   expect(await page.evaluate(() => (window as any).__history())).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('daily-goal-desktop.png') });
   await page.setViewportSize({ width: 375, height: 812 });
@@ -118,11 +118,13 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await page.screenshot({ path: testInfo.outputPath('daily-goal-folded.png') });
 
   await control.focus();
-  await page.keyboard.press('Enter'); // reachable from the keyboard
-  await expect(goal).toHaveText(/^Goal: .+/);
+  await page.keyboard.press('Enter'); // reachable from the keyboard: the Goal sheet opens above the dock (#1032)
+  const sheet = page.locator('#goal-sheet');
+  await expect(sheet).toHaveText(/.+/);
   await expect(control).toHaveAttribute('aria-expanded', 'true');
+  await expect(goal).toHaveCount(0); // the goal is shown once: the sheet holds it, the HUD does not repeat it
   await control.click();
-  await expect(goal).toHaveCount(0);
+  await expect(sheet).toBeHidden();
 });
 
 // The result card (#196).

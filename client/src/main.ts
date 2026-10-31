@@ -322,7 +322,14 @@ let replaying: { live: Engine | Encounter; ply: number } | null = null;
 // fight also keeps its UTC day and its attempt of that day (#195).
 // The Goal control (#248): the HUD shows the boss goal before the first move, then only while it is open.
 const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
+// The Goal sheet (#1032): the goal text above the dock while the Goal control is open, one sheet at a time.
+const goalSheet = document.getElementById('goal-sheet')!;
 let goalOpen = false;
+const closeGoal = (): void => {
+  if (!goalOpen) return;
+  goalOpen = false;
+  hud();
+};
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
@@ -699,6 +706,8 @@ function applyLook(): void {
 // The settings menu: one button per item, its icon then its label, opened by the cog only. Escape, a press outside
 // and the cog close it. A toggle shows its state in aria-pressed.
 const cog = document.getElementById('settings') as HTMLButtonElement;
+// Whether a press lies in an element. A press on the window (no node) lies in none of them: it counts as outside (#1032).
+const within = (el: Element, target: EventTarget | null): boolean => target instanceof Node && el.contains(target);
 const menu = document.getElementById('settings-menu')!;
 const toggles: Record<string, () => void> = {
   'clear-board': () => {
@@ -919,6 +928,10 @@ applyView(); // camera and fog
 let menuIsOpen = false;
 const moveMenu = (event: MenuEvent): void => {
   menuIsOpen = menuOpen(menuIsOpen, event);
+  if (menuIsOpen) {
+    moveModes('outside'); // one sheet at a time (#1032)
+    closeGoal();
+  }
   menu.hidden = !menuIsOpen;
   delete menu.dataset.page; // the menu opens on its items again
   cog.setAttribute('aria-expanded', String(menuIsOpen));
@@ -930,7 +943,7 @@ addEventListener('keydown', (e) => {
   cog.focus();
 });
 addEventListener('pointerdown', (e) => {
-  if (menuIsOpen && !menu.contains(e.target as Node) && !cog.contains(e.target as Node)) moveMenu('outside');
+  if (menuIsOpen && !within(menu, e.target) && !within(cog, e.target)) moveMenu('outside');
 });
 cog.disabled = false; // listener ready (#146)
 // The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
@@ -944,6 +957,10 @@ const moveModes = (event: MenuEvent): void => {
   modesOpen = menuOpen(modesOpen, event);
   modeMenu.hidden = !modesOpen;
   modeButton.setAttribute('aria-expanded', String(modesOpen));
+  if (modesOpen) {
+    moveMenu('outside'); // one sheet at a time (#1032)
+    closeGoal();
+  }
 };
 modeButton.addEventListener('click', () => moveModes('button'));
 addEventListener('keydown', (e) => {
@@ -952,7 +969,7 @@ addEventListener('keydown', (e) => {
   modeButton.focus();
 });
 addEventListener('pointerdown', (e) => {
-  if (modesOpen && !modeMenu.contains(e.target as Node) && !modeButton.contains(e.target as Node)) moveModes('outside');
+  if (modesOpen && !within(modeMenu, e.target) && !within(modeButton, e.target)) moveModes('outside');
 });
 modeButton.disabled = false; // listener ready (#146)
 
@@ -2915,10 +2932,14 @@ function hud(extra = ''): void {
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   exportButton.hidden = importButton.hidden = online !== null || fight !== null || run !== null; // local games only (#219)
   syncHint();
-  const showGoal = goalShown(shownPly(), goalOpen);
+  // The goal is shown once (#1032): the Goal sheet holds it while open, the HUD line only before the first move.
+  const sheetOpen = goalOpen && engine instanceof Encounter && status === 0;
+  const showGoal = goalShown(shownPly(), sheetOpen);
   goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
   goalButton.disabled = shownPly() === 0; // the goal is on the plate until the first move
-  goalButton.setAttribute('aria-expanded', String(showGoal));
+  goalButton.setAttribute('aria-expanded', String(sheetOpen));
+  goalSheet.hidden = !sheetOpen;
+  if (sheetOpen) goalSheet.textContent = (engine as Encounter).goal();
   const boss = engine instanceof Encounter ? engine : null;
   if (boss) {
     // The vents note (#741): the change that starts burning the player's marbles, shown for 2 plies.
@@ -4172,7 +4193,20 @@ dailyButton.addEventListener('click', startDaily);
 dailyButton.disabled = false; // label and listener ready (#144)
 goalButton.addEventListener('click', () => {
   goalOpen = !goalOpen;
+  if (goalOpen) {
+    moveModes('outside'); // one sheet at a time (#1032)
+    moveMenu('outside');
+  }
   hud();
+});
+// Esc closes the Goal sheet and gives the focus back to Goal; a tap outside the sheet and its button closes it too (#1032).
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !goalOpen) return;
+  closeGoal();
+  goalButton.focus();
+});
+addEventListener('pointerdown', (e) => {
+  if (goalOpen && !within(goalSheet, e.target) && !within(goalButton, e.target)) closeGoal();
 });
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
 
@@ -4262,9 +4296,26 @@ function showResultCard(): void {
           attempt: fight.daily.attempt,
         })
       : '';
-  resultCard.hidden = text === '';
+  const shown = text !== '' && text !== closedCard; // a card the player closed stays closed until its text changes
+  if (shown && resultCard.hidden) cardOpener = document.activeElement as HTMLElement | null;
+  resultCard.hidden = !shown;
   if (resultText.value !== text) resultText.value = text;
 }
+// The card is a sheet above the dock (#1032): Esc or a tap outside closes it, and the focus goes back to what had it.
+let closedCard = '';
+let cardOpener: HTMLElement | null = null;
+function closeResultCard(): void {
+  if (resultCard.hidden) return;
+  closedCard = resultText.value;
+  resultCard.hidden = true;
+  cardOpener?.focus();
+}
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeResultCard();
+});
+addEventListener('pointerdown', (e) => {
+  if (!within(resultCard, e.target)) closeResultCard();
+});
 document.getElementById('daily-copy')!.addEventListener('click', async () => {
   if (await copyText(resultText.value, navigator.clipboard)) return hud(' · result copied');
   resultText.focus();
@@ -5092,7 +5143,9 @@ else analyse(); // the start position
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
 // text box to copy by hand when the browser refuses (#220). Nothing is sent anywhere.
 const copyButton = document.getElementById('copy-diagnostics') as HTMLButtonElement;
-setButton(copyButton, 'Copy diagnostics', icon('diagnostics'));
+// The clipboard is the last row of the settings list (#1032), an action with its icon and its label, as the other items.
+setButton(copyButton, 'Copy diagnostics', `${icon('diagnostics')}<span>Copy diagnostics</span>`);
+menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 copyButton.addEventListener('click', async () => {
   const text = diag.text({

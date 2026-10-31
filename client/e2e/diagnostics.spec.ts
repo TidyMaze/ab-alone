@@ -25,6 +25,7 @@ test('Copy diagnostics puts the move, the bot search and the build in the clipbo
   await cell(page, 0, 1);
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2); // the bot answered
 
+  await page.locator('#settings').click(); // the clipboard is the last row of the settings list (#1032)
   await page.locator('#copy-diagnostics').click();
   await expect(page.locator('#hud')).toContainText('diagnostics copied');
   const d = await clipboard(page);
@@ -51,6 +52,7 @@ test('when the clipboard is refused, the diagnostics are selected in a text box 
   await cell(page, 0, 1);
   await expect(page.locator('#hud')).toContainText('White to move');
 
+  await page.locator('#settings').click(); // the clipboard is the last row of the settings list (#1032)
   await page.locator('#copy-diagnostics').click();
   const box = page.locator('#diagnostics');
   await expect(box).toBeVisible();
@@ -99,6 +101,7 @@ test('an online game exports its connection counters, its refused moves and its 
   await a.evaluate(() => (window as any).__netIn({ junk: true }, 'x'));
   await expect(a.locator('#hud')).toContainText('refused move: malformed');
 
+  await a.locator('#settings').click(); // the clipboard is the last row of the settings list (#1032)
   await a.locator('#copy-diagnostics').click();
   await expect(a.locator('#hud')).toContainText('diagnostics copied');
   const text = await a.evaluate(() => navigator.clipboard.readText());
