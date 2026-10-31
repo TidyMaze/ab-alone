@@ -252,6 +252,8 @@ export class OpenWorldView {
   private readonly detailedReady = new Set<Prop>();
   /** The meshes a build lays: the ground columns, the props and the detailed props. */
   private readonly managed: THREE.InstancedMesh[] = [];
+  /** What a build or a model swap replaced, freed by `drain` after the next frame (#1017). */
+  private readonly retired: { dispose(): void }[] = [];
   private readonly hero: THREE.Mesh;
   /** The cell the hero is on, the centre of the pick. */
   private heroCell: Axial = [0, 0];
@@ -338,7 +340,7 @@ export class OpenWorldView {
   /** Gives a prop's mesh a model's geometry. A model that paints itself (vertex colours from Blender) is drawn as painted: no tint
    * hides it. */
   private paint(mesh: THREE.InstancedMesh, geometry: THREE.BufferGeometry): void {
-    mesh.geometry.dispose(); // the mesh's own copy of the last geometry it had (#991)
+    this.retire(mesh.geometry); // the mesh's own copy of the last geometry it had (#991)
     mesh.geometry = geometry.clone();
     if (geometry.hasAttribute('color')) {
       const material = mesh.material as THREE.MeshStandardMaterial;
@@ -485,8 +487,7 @@ export class OpenWorldView {
     grown.instanceColor = whiteColours(capacity); // the build writes every colour it places (#984)
     this.scene.remove(mesh);
     this.scene.add(grown);
-    mesh.dispose();
-    mesh.geometry.dispose(); // the old mesh's own copy: the grown mesh has its own (#991)
+    this.retire(mesh, mesh.geometry); // the old mesh's own copy: the grown mesh has its own (#991)
     this.swap(mesh, grown);
     return grown;
   }
@@ -549,8 +550,21 @@ export class OpenWorldView {
     return best;
   }
 
-  /** Frees the GPU objects of the view: each geometry and material of its scene, once. The view is not drawn after. */
+  /** Frees what a build or a model swap replaced, once the frame drawn after it is rendered (#1017): the frame in flight may still
+   * use it. Called by the mode after each render. */
+  drain(): void {
+    for (const replaced of this.retired.splice(0)) replaced.dispose();
+  }
+
+  /** Holds a geometry or a mesh a build or a model swap replaced, until  (#1017). */
+  private retire(...replaced: { dispose(): void }[]): void {
+    this.retired.push(...replaced);
+  }
+
+  /** Frees the GPU objects of the view: each geometry and material of its scene, once, and what it replaced and has not drained.
+   * The view is not drawn after. */
   dispose(): void {
+    this.drain();
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {

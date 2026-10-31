@@ -135,6 +135,7 @@ export class OpenWorldMode {
     this.dirty = false;
     this.view!.glow(moving ? now : 0);
     render(this.view!.scene, this.view!.camera);
+    this.view!.drain(); // what this frame replaced is no longer in use by it (#1017)
   }
 
   private roll(to: Axial): void {

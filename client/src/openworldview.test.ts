@@ -753,6 +753,7 @@ describe('the Open world view frees its GPU objects (#981)', () => {
     view.show([0, 0]);
     const { geometries, materials } = objectsOf(view);
     expect(geometries.size).toBeGreaterThan(5);
+    view.drain(); // a frame has drawn since the models came: what they replaced is freed (#1017)
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
     const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
     view.dispose();
@@ -800,6 +801,7 @@ describe('the Open world view frees the instance buffers of each mesh (#991)', (
     view.zoomBy(MAX_ZOOM);
     expect(mesh(view, 'prop-mountain').count).toBe(MOST);
     expect(mesh(view, 'prop-mountain').geometry).not.toBe(before);
+    view.drain();
     expect(disposeGeometry.mock.contexts).toContain(before);
     expect(new Set(instanced(view).map((m) => m.geometry)).size).toBe(instanced(view).length);
     vi.restoreAllMocks();
