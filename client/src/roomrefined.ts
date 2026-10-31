@@ -6,6 +6,8 @@ import { read, write, type Store } from './quality';
 
 export type Room = 'today' | 'refined';
 export const ROOM_KEY = 'ab-alone.room';
+/** The refined room is the default on this branch, for the owner's preview: the owner decides whether it ships so (#1138). */
+export const DEFAULT_ROOM: Room = 'refined';
 
 /** The five deck tints (design canvas, board F. The room and decor, Today refined). */
 export const DECK_TINTS: Record<Deck, number> = { mess: 0x6fa8dc, cargo: 0x7fc4a0, furnace: 0xffb000, chapel: 0xb9a8e8, bridge: 0x6fd0dc };
@@ -23,7 +25,7 @@ export function readRoom(search: string, store: Store): Room {
     return asked;
   }
   const kept = read(store, ROOM_KEY);
-  return isRoom(kept) ? kept : 'today';
+  return isRoom(kept) ? kept : DEFAULT_ROOM;
 }
 
 export interface RigLight {

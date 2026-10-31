@@ -12,8 +12,8 @@ test('?room=refined lights the room with six point lights at most (#1138, #845)'
   await expect(page.locator('#hud')).toContainText('White to move');
 });
 
-test('the default room keeps its many lights (#1138)', async ({ page }) => {
-  await page.goto('./?bot=on');
+test('?room=today keeps its many lights (#1138)', async ({ page }) => {
+  await page.goto('./?bot=on&room=today');
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready');
   expect(await lights(page)).toBeGreaterThan(6);
 });

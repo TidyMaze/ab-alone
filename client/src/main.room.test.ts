@@ -45,9 +45,9 @@ describe('main.ts refined room (#1138)', () => {
     expect(lights(scene()).length).toBeLessThanOrEqual(LIGHT_BUDGET);
   });
 
-  it('keeps today\'s lights and no pool by default', async () => {
+  it('keeps today\'s lights and no pool with ?room=today', async () => {
     const scene = catchScene();
-    await boot('/?bot=off');
+    await boot('/?bot=off&room=today');
     expect(lights(scene()).length).toBeGreaterThan(LIGHT_BUDGET);
     expect(scene().getObjectByName('light pool')).toBeUndefined();
   });
