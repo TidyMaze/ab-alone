@@ -100,7 +100,11 @@ A biome is a region with its own ground, trees and boulders. Two slow fields and
   so no new mesh.
 - **Chunk bytes**: 3 per cell, `height, terrain, biome` (the biome code is the table's order, `u8`).
   `world_chunk` returns `3 * 256` bytes, `parseChunk` reads a `biome` into `Tile`. Enemies are untouched.
-- **Spawn**: the clearing is Meadow.
+- **Spawn**: the clearing is Meadow. Around it, a soft Meadow bias (#1024): within 8 cells of the spawn the
+  temperature is pulled to 0.395 and the moisture to 0.30 (the Meadow values), from 8 to 16 cells the pull falls
+  by a smoothstep to nothing (no edge). Only the biome moves; terrain, heights and walls are unchanged by it. So
+  the disc of axial radius 10 is Meadow on at least 80 % of its cells, on seeds 1 to 16 (seed 7 was a meadow
+  island in a desert). `WORLD_VERSION` is 2.
 - **Tests**: every biome appears in a 16 x 16 chunk window of several seeds; the land shares are within 5 points
   of the table; the obstacle densities of each biome hold on the low ground (trees within a fifth, boulders within a
   third); water, shore, uplands and peaks keep their terrains; the spawn clearing is Meadow and open; the order of
@@ -168,8 +172,8 @@ Client only, after #983 (it needs the eight heights).
 - **Spawn**: radius 3 open grass, reachable, no enemy within 8 (`openworld.md` section 2).
 - **World version**: each task changes every world. Once the save of #968 stores a seed, it also stores a
   `WORLD_VERSION` (a constant bumped by each terrain task), so an old save is told apart, not misread.
-  As built (#968): `WORLD_VERSION` is `1` in `crates/abalone-core/src/world.rs`, with a comment above it. The digest test
-  asserts `(WORLD_VERSION, world_digest())` against `(1, <digest>)` on one line, so a change of the generator forces an edit
+  As built (#968): `WORLD_VERSION` is in `crates/abalone-core/src/world.rs`, with a comment above it (`1` until #1024,
+  `2` since). The digest test asserts `(WORLD_VERSION, world_digest())` against `(2, <digest>)` on one line, so a change of the generator forces an edit
   of that line: bump the version and repin the digest in the same commit. The bridge exports it as `world_version()`
   (`crates/abalone-wasm/src/world.rs`), and the client saves it with each world (`openworld.md` section 5): a save of another
   version is not loaded.
