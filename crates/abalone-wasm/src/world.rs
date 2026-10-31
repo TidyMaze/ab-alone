@@ -2,6 +2,7 @@
 //! crate for its encoding.
 
 use abalone_core::world::{self, Terrain};
+use abalone_core::worldfight::{self, Fall, Outcome};
 use wasm_bindgen::prelude::*;
 
 /// Bytes per cell: `[height, terrain, biome]`.
@@ -41,6 +42,51 @@ pub fn world_enemies(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
         .flatten()
         .flat_map(|(q, r)| [q, r])
         .collect()
+}
+
+/// The troop's push of the Open world (docs/specs/openworld.md section 4) on the world `seed`: `troop`
+/// is the hero's cell then the troop's, `enemies` the enemy marbles near the hero, all `q, r` pairs.
+/// Empty when no push is legal; else `[ejected_q, ejected_r, ejected_kind, ntroop, ...troop, nenemies,
+/// ...enemies, dir_q, dir_r]`: the new troop cells in the order of the input (the hero's first), the
+/// new enemy cells in the order of the input without the ejected one, `ejected_kind` `0` none, `1`
+/// water, `2` edge, with the ejected enemy's cell before the push (`0, 0` when none), and the push's
+/// direction as an axial step.
+#[wasm_bindgen]
+pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>) -> Vec<i32> {
+    push_encoded(&pairs(&troop), &pairs(&enemies), |q, r| {
+        world::cell(u64::from(seed), q, r).map(|c| c.terrain)
+    })
+}
+
+/// The `q, r` pairs of a flat list.
+fn pairs(flat: &[i32]) -> Vec<(i32, i32)> {
+    flat.chunks_exact(2).map(|p| (p[0], p[1])).collect()
+}
+
+/// The encoding of `world_push` for any terrain (`None` off the world).
+fn push_encoded(
+    troop: &[(i32, i32)],
+    enemies: &[(i32, i32)],
+    terrain: impl Fn(i32, i32) -> Option<Terrain>,
+) -> Vec<i32> {
+    let Some(push) = worldfight::best_push(troop, enemies, &terrain) else {
+        return Vec::new();
+    };
+    let (mut troop, mut enemies) = (troop.to_vec(), enemies.to_vec());
+    let gone = worldfight::apply_push(&mut troop, &mut enemies, &push);
+    let ejected = gone.first().copied().unwrap_or_default();
+    let kind = match push.last {
+        Outcome::Slides(_) => 0,
+        Outcome::Ejected(Fall::Water) => 1,
+        Outcome::Ejected(Fall::Edge) => 2,
+    };
+    let (dq, dr) = push.dir.vector();
+    let mut out = vec![ejected.0, ejected.1, kind, troop.len() as i32];
+    out.extend(troop.iter().flat_map(|&(q, r)| [q, r]));
+    out.push(enemies.len() as i32);
+    out.extend(enemies.iter().flat_map(|&(q, r)| [q, r]));
+    out.extend([dq, dr]);
+    out
 }
 
 #[cfg(test)]
