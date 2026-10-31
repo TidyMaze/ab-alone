@@ -4,8 +4,8 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { LIGHT_BUDGET } from './roomrefined';
 import { boot } from './test/harness';
 
-// The refined room of main.ts (#1138): behind ?room=refined the room holds the rig of roomrefined.ts, six point lights at
-// most, and the pool of light under the board; today's room keeps its tubes' rows.
+// The refined room of main.ts (#1138): behind ?room=refined (the default on this branch) the room holds a key point light, a
+// hemisphere fill, the wall, four strips, a hazard stripe and four crates; today's room keeps its props and its tubes' rows.
 
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 
@@ -28,49 +28,39 @@ const lights = (scene: THREE.Scene): string[] => {
 };
 
 describe('main.ts refined room (#1138)', () => {
-  it('lights the room with the five lights of the rig and lays the pool of light under the board', async () => {
+  it('lights the room with the key, and the hemisphere fill, no point light more', async () => {
     const scene = catchScene();
     await boot('/?bot=off&room=refined');
-    expect(lights(scene())).toEqual(['key', 'fill', 'strip 1', 'strip 2', 'strip 3']);
-    expect(scene().getObjectByName('light pool')).toBeDefined();
+    expect(lights(scene())).toEqual(['key']);
+    expect(scene().getObjectByName('fill')).toBeInstanceOf(THREE.HemisphereLight);
+    for (const name of ['wall', 'hazard-stripe', 'strip-1', 'crate-0']) expect(scene().getObjectByName(name), name).toBeDefined();
+    expect(scene().getObjectByName('ring-lamp')).toBeUndefined();
   });
 
-  it('adds the amber rim in a boss fight, six lights in all', async () => {
+  it('adds the amber rim in a boss fight, two point lights in all', async () => {
     const scene = catchScene();
     const game = await boot('/?bot=off&room=refined');
     byId('boss-fight').click();
     [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Hull')!.click();
     game.frame(300);
-    expect(lights(scene())).toContain('rim');
-    expect(lights(scene()).length).toBeLessThanOrEqual(LIGHT_BUDGET);
+    expect(lights(scene())).toEqual(['key', 'rim']);
+    expect(lights(scene()).length + 1).toBeLessThanOrEqual(LIGHT_BUDGET);
   });
 
-  it('keeps today\'s lights and no pool with ?room=today', async () => {
+  it("keeps today's lights and props with ?room=today", async () => {
     const scene = catchScene();
     await boot('/?bot=off&room=today');
     expect(lights(scene()).length).toBeGreaterThan(LIGHT_BUDGET);
-    expect(scene().getObjectByName('light pool')).toBeUndefined();
+    expect(scene().getObjectByName('wall')).toBeUndefined();
+    expect(scene().getObjectByName('ring-lamp')).toBeDefined();
   });
 
-  it('trims the frame with rivets and a cyan inner edge, made again with each frame', async () => {
+  it('tints the strips with the deck it is on', async () => {
     const scene = catchScene();
     const game = await boot('/?bot=off&room=refined');
-    const trim = (): THREE.Object3D => scene().getObjectByName('frame trim')!;
-    const rivets = trim().children[0] as THREE.InstancedMesh;
-    expect(rivets.count).toBeGreaterThan(40);
-    expect(trim().children[1]).toBeInstanceOf(THREE.LineLoop);
-    byId('boss-fight').click(); // the Ballast Mind's board is wider: a new frame
-    [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Ballast Mind')!.click();
-    game.frame(300);
-    expect(trim().children).toHaveLength(2);
-    expect(trim().children[0]).not.toBe(rivets);
-  });
-
-  it('restyles the bay and lays the deck-tint glow and the hazard marking', async () => {
-    const scene = catchScene();
-    await boot('/?bot=off&room=refined');
-    expect(scene().getObjectByName('glow')).toBeDefined();
-    expect(scene().getObjectByName('floor')).toBeDefined();
-    expect(scene().getObjectByName('wall')).toBeDefined();
+    const strip = (): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> => scene().getObjectByName('strip-1') as never;
+    expect(strip().material.emissive.getHex()).toBe(0x6fa8dc);
+    game.hook('__deck', 'furnace');
+    expect(strip().material.emissive.getHex()).toBe(0xffb000);
   });
 });

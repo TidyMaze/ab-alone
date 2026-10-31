@@ -1,97 +1,62 @@
+import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import { DECK_NAMES } from './deck';
+import { ROOM_SURFACE } from './room';
 import { DECK_TINTS } from './roomrefined';
-import * as THREE from 'three/webgpu';
-import { AMBER, BAY, FLOOR, GLOW, glowRingPixels, refineBay, rivetPoints, STEELS, floorPixels, gantryArches, props, wallPixels, wallStrips } from './roomdecor';
+import { AMBER, DARK_FLOOR, HIDDEN_BAY, STEEL, cornerCrates, flatBay, hazardStripe, wallStrips } from './roomdecor';
 
 describe('the refined room decor (#1138)', () => {
-  it('has three wall strips: two in the deck tint, one amber, all lit', () => {
+  it('has four lit wall strips: three in the deck tint, one amber', () => {
     for (const deck of DECK_NAMES) {
       const strips = wallStrips(deck);
-      expect(strips.map((s) => s.color)).toEqual([DECK_TINTS[deck], AMBER, DECK_TINTS[deck]]);
+      expect(strips.map((s) => s.color)).toEqual([DECK_TINTS[deck], DECK_TINTS[deck], AMBER, DECK_TINTS[deck]]);
       for (const s of strips) expect(s.emissive).toBe(s.color);
     }
   });
 
-  it('has two gantry arches of dark steel, each with four rivets', () => {
-    const parts = gantryArches();
-    for (const i of [0, 1]) {
-      expect(parts.filter((p) => p.id.startsWith(`arch-${i}-rivet`))).toHaveLength(4);
-      expect(parts.filter((p) => p.id.startsWith(`arch-${i}-`) && !p.id.includes('rivet')).map((p) => p.id.split('-')[2])).toEqual(['post', 'post', 'beam']);
+  it('lays a plain amber stripe on the floor, not lit', () => {
+    const stripe = hazardStripe();
+    expect(stripe.color).toBe(AMBER);
+    expect(stripe.emissive).toBeUndefined();
+    expect(stripe.position[1]).toBeGreaterThan(ROOM_SURFACE.y);
+  });
+
+  it('puts a plain steel crate in each corner, no two alike', () => {
+    const crates = cornerCrates();
+    expect(crates).toHaveLength(4);
+    expect(new Set(crates.map((c) => `${c.position[0]},${c.position[2]}`)).size).toBe(4);
+    for (const c of crates) expect(c.color).toBe(STEEL.crate);
+  });
+
+  it('hides what the refined room does not keep and keeps the frame, the chevrons, the walls of the room and the floor', () => {
+    for (const gone of ['Console_Screen', 'Console_Kiosk_Stand', 'East_Hollow_Viewport', 'Hollow_Moon_Disc', 'Crane_Rail_Port', 'Bulkhead_Column_EN', 'Bulkhead_Wall_North', 'Radial_Floor_Conduits', 'Airlock_Bulkhead_Doors', 'Pedestal_Grate_Trench'])
+      expect(HIDDEN_BAY.test(gone), gone).toBe(true);
+    for (const kept of ['Airlock_Gantry_Frame', 'Airlock_Hazard_Chevrons', 'Ship_Deck_Floor']) expect(HIDDEN_BAY.test(kept), kept).toBe(false);
+  });
+
+  it('restyles the bay: flat steel without maps, the bay floor kept darker, the chevrons amber', () => {
+    const map = () => new THREE.Texture();
+    const mat = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ map: map(), normalMap: map(), roughnessMap: map(), metalnessMap: map(), aoMap: map() });
+    const m = { deck: mat(), bulkhead: mat(), grate: mat(), hazard: mat() };
+    const deckMap = m.deck.map;
+    const root = new THREE.Group();
+    const hidden = Object.assign(new THREE.Mesh(), { name: 'Console_Screen' });
+    const kept = Object.assign(new THREE.Mesh(), { name: 'Airlock_Gantry_Frame' });
+    root.add(hidden, kept);
+    flatBay(root, m);
+    expect(hidden.visible).toBe(false);
+    expect(kept.visible).toBe(true);
+    expect(m.grate.color.getHex()).toBe(STEEL.frame);
+    expect(m.bulkhead.color.getHex()).toBe(STEEL.wall);
+    for (const flat of [m.grate, m.bulkhead]) {
+      expect([flat.map, flat.normalMap, flat.roughnessMap, flat.metalnessMap, flat.aoMap, flat.displacementMap]).toEqual([null, null, null, null, null, null]);
     }
-    expect(parts.filter((p) => p.color === STEELS[0])).toHaveLength(6);
-  });
-
-  it('has crates, canisters, a conduit and a slate in the three steels, each lit accent in the deck tint', () => {
-    const list = props('furnace');
-    expect(new Set(list.filter((p) => !p.emissive).map((p) => p.color))).toEqual(new Set(STEELS));
-    for (const kind of ['crate', 'canister', 'conduit', 'slate']) expect(list.some((p) => p.id.startsWith(kind))).toBe(true);
-    const accents = list.filter((p) => p.emissive);
-    expect(accents.map((a) => a.id)).toEqual(['crate-a-accent', 'canister-a-accent', 'slate-accent']);
-    for (const a of accents) expect(a.emissive).toBe(DECK_TINTS.furnace);
-    expect(new Set(list.map((p) => p.id)).size).toBe(list.length);
-  });
-
-  it('paints the wall as dark steel panels with a 1 px seam', () => {
-    const px = wallPixels(8);
-    expect(px).toHaveLength(8 * 8 * 4);
-    const at = (x: number, y: number): number => px[(y * 8 + x) * 4]!;
-    expect(at(0, 3)).toBe(0x14); // the seam
-    expect(at(4, 3)).toBe(0x14);
-    expect(at(1, 1)).toBe(0x5a);
-    expect(at(5, 1)).toBe(0x64); // the next panel is a shade lighter
-    expect(at(5, 5)).toBe(0x5a);
-  });
-
-  it('marks the floor with amber hazard stripes at the near side and nothing else', () => {
-    const size = 64;
-    const px = floorPixels(size);
-    const rgba = (x: number, y: number): number[] => [...px.slice((y * size + x) * 4, (y * size + x) * 4 + 4)];
-    const rowOf = (z: number): number => Math.floor((z / FLOOR.size + 0.5) * size);
-    const band = Array.from({ length: size }, (_, x) => rgba(x, rowOf(8.2)));
-    expect(band).toContainEqual([0xff, 0xb0, 0x00, 255]);
-    expect(band).toContainEqual([0x16, 0x18, 0x1a, 255]);
-    expect(rgba(3, rowOf(5))).toEqual([0, 0, 0, 0]);
-    expect(rgba(3, rowOf(10))).toEqual([0, 0, 0, 0]);
-  });
-
-  it('restyles the bay materials: darker steel, finer grate, calmer floor, crisp amber chevrons, the conduit chevrons amber', () => {
-    const tex = (): THREE.Texture => new THREE.Texture();
-    const mat = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ map: tex(), emissive: 0x38e8ff, emissiveIntensity: 2.5 });
-    const m = { deck: mat(), grate: Object.assign(mat(), { normalMap: tex() }), conduit: mat(), hazard: mat() };
-    m.grate.map!.repeat.set(0.05, 0.05);
-    refineBay(m);
-    refineBay(m); // the second call changes nothing more
-    expect(m.grate.color.getHex()).toBe(BAY.grate);
-    expect(m.grate.map!.repeat.x).toBeCloseTo(0.05 * BAY.grateRepeat);
-    expect(m.grate.normalMap!.repeat.x).toBeCloseTo(BAY.grateRepeat);
-    expect(m.deck.color.getHex()).toBe(BAY.deck);
-    expect(m.deck.normalScale.x).toBe(BAY.deckNormal);
+    expect(m.deck.color.getHex()).toBe(DARK_FLOOR);
+    expect(m.deck.map).toBe(deckMap); // the bay's own hex floor stays
     expect(m.hazard.color.getHex()).toBe(AMBER);
-    expect(m.hazard.emissiveIntensity).toBe(BAY.hazardGlow);
-    expect(m.conduit.emissive.getHex()).toBe(AMBER);
-    expect(m.conduit.emissiveIntensity).toBe(BAY.conduitGlow);
-    const bare = { deck: mat(), grate: new THREE.MeshStandardMaterial() }; // no conduit, no hazard, no maps: nothing to restyle there
-    refineBay(bare);
-    expect(bare.grate.color.getHex()).toBe(BAY.grate);
-  });
-
-  it('puts rivets along the edges of an outline, one every spacing at most', () => {
-    const square = [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 2, z: 2 }, { x: 0, z: 2 }];
-    const pts = rivetPoints(square, 1);
-    expect(pts).toHaveLength(8);
-    expect(pts[0]).toEqual({ x: 0, z: 0 });
-    expect(pts[1]).toEqual({ x: 1, z: 0 });
-    expect(rivetPoints([{ x: 0, z: 0 }, { x: 0.1, z: 0 }], 1)).toHaveLength(2); // a short edge still holds its first rivet
-  });
-
-  it('bakes a soft ring of tint: clear in the middle and at the edge, strongest between the radii', () => {
-    const size = 64;
-    const px = glowRingPixels(size);
-    const alpha = (x: number, y: number): number => px[(y * size + x) * 4 + 3]!;
-    const mid = Math.round(size / 2 + ((GLOW.inner + GLOW.outer) / 2 / GLOW.size) * size);
-    expect(alpha(32, 32)).toBe(0);
-    expect(alpha(0, 0)).toBe(0);
-    expect(alpha(mid, 32)).toBeGreaterThan(200);
+    expect(m.hazard.emissive.getHex()).toBe(AMBER);
+    const bare = { deck: mat(), bulkhead: mat(), grate: mat() }; // no hazard material
+    flatBay(new THREE.Group(), bare);
+    expect(bare.grate.color.getHex()).toBe(STEEL.frame);
   });
 });
