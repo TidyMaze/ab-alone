@@ -24,5 +24,5 @@ test('a boss fight starts with the line of its boss', async ({ page }) => {
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
 
-  await expect(page.locator('#hud .tally')).toHaveText('Echo: mirror logged. Six out to balance the books.');
+  await expect(page.locator('#hud .tally')).toHaveText('Mirror logged. Six out to balance the books.'); // #1038: the boss bar names the boss, the line keeps its flavour
 });

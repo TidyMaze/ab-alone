@@ -67,8 +67,8 @@ describe('main.ts The Rail Yard (#626)', () => {
     fightRailYard(game);
     expect(body().boss).toBe('railyard');
     expect(body().deck).toBe('cargo');
-    expect(game.hud()).toContain('The Rail Yard');
-    expect(game.hud()).toContain('Rail Yard: freight on schedule. Six out to balance the books.');
+    expect(document.getElementById('boss-bar')!.textContent).toContain('The Rail Yard');
+    expect(game.hud()).toContain('Freight on schedule. Six out to balance the books.');
     expect(trains(game)).toEqual([]); // none at the start
     expect(body().trains).toBe('0');
     plies(game, 1); // the end of the player's turn 1
@@ -116,7 +116,7 @@ describe('main.ts The Rail Yard (#626)', () => {
     expect(named(scene(), 'train')).toHaveLength(0);
     expect(named(scene(), 'rail')).toHaveLength(0);
     expect(body().ejecting).toBeUndefined();
-    expect(game.hud()).toContain('The Rail Yard');
+    expect(document.getElementById('boss-bar')!.textContent).toContain('The Rail Yard');
     expect(activePhase()).toBe('P2'); // the 3 boss marbles count for the player: P2 after 3 ejections
     expect(game.hook<Move[]>('__legal').some((m) => String(m.cells) === '3,-3')).toBe(false); // gone from the line
   });

@@ -39,6 +39,6 @@ test('The Choir scratches six slots a side like every boss, #389', async ({ page
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
-  await expect(page.locator('#hud')).toContainText('The Choir');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Choir');
   expect(await tally(page)).toEqual([{ marked: 0, slots: 6 }, { marked: 0, slots: 6 }]);
 });

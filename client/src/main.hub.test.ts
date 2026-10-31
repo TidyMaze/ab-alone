@@ -401,7 +401,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(hub()).toBeUndefined();
     expect(data().boss).toBe('echo');
     expect(data().deck).toBe('mess');
-    expect(game.hud()).toContain('The Echo');
+    expect(document.getElementById('boss-bar')!.textContent).toContain('The Echo');
     expect(back().hidden).toBe(true); // the fight is on
     await loseToTheEcho(game);
     expect(game.hud()).toContain('Defeat');
@@ -424,7 +424,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(hub()).toBeUndefined();
     expect(data().boss).toBe('ballast');
     expect(data().deck).toBe('bridge');
-    expect(game.hud()).toContain('The Ballast Mind');
+    expect(document.getElementById('boss-bar')!.textContent).toContain('The Ballast Mind');
     expect(game.hook('__frame')).toMatchObject({ radius: 5, holes: 6 });
   });
 

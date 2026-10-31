@@ -34,7 +34,7 @@ test('an ejected boss marble puts a phase notch out on the frame, with clear boa
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
   const hud = page.locator('#hud');
-  await expect(hud).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   expect(await notches()).toEqual({ lit: 3, dark: 0, glyph: true }); // P2 after 3 ejections
   await expect(page.locator('#hud .notch')).toHaveCount(2); // the flat P1 P2 fallback stays
 

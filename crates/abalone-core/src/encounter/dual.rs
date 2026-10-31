@@ -11,7 +11,7 @@ use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
 use crate::game::Game;
 use crate::moves::{Move, Player};
-use crate::search::{search_hooked, DEFAULT_WEIGHTS};
+use crate::search::{search_hooked, Weights, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
@@ -19,6 +19,12 @@ type P = (i32, i32);
 pub const DUAL_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// Positions the boss search may visit per move. TUNE.
 pub const DUAL_NODE_BUDGET: u32 = 3000;
+/// The boss search's weights (#982): the plain ones without the pull to the centre, which here is
+/// the void's middle, so it does not walk its marbles onto the void's edge to be pushed in. TUNE.
+pub const DUAL_WEIGHTS: Weights = Weights {
+    centre: 0,
+    ..DEFAULT_WEIGHTS
+};
 /// The centres of the two radius 3 rooms, south then north, the void between them.
 pub const ROOMS: [P; 2] = [(-2, 4), (2, -4)];
 /// The board scan of [`Board::radius`]: both rooms fit in `|q|, |r|, |q + r| <= 7`.
@@ -238,7 +244,7 @@ pub fn dual_move(enc: &Encounter) -> Option<Move> {
     search_hooked(
         enc.game(),
         enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
+        DUAL_WEIGHTS,
         &|_| true,
         &dual_step,
     )
@@ -671,6 +677,40 @@ mod tests {
         let reply = dual_move(&enc).unwrap();
         assert!(legal_moves(enc.game().board(), Player::White).contains(&reply));
         assert_eq!(dual_move(&enc), Some(reply));
+    }
+
+    #[test]
+    fn the_boss_search_does_not_pull_its_marbles_to_the_void() {
+        assert_eq!(
+            BRIDGE[2],
+            (0, 0),
+            "the search's centre is the void's middle"
+        );
+        assert_eq!(
+            DUAL_WEIGHTS,
+            Weights {
+                centre: 0,
+                ..DEFAULT_WEIGHTS
+            }
+        );
+        // A lone boss marble at its room's centre, the player's marbles far away.
+        let lone = board(&[(-5, 7), (2, -7)], &[(-2, 4)], Dual::default());
+        let enc = fight(lone, Player::White, [0, 0]);
+        let row = |m: &Move| {
+            let (_, dr) = m.dir.vector();
+            m.cells[0].1 + dr
+        };
+        let plain = search_hooked(
+            enc.game(),
+            DUAL_NODE_BUDGET,
+            DEFAULT_WEIGHTS,
+            &|_| true,
+            &dual_step,
+        )
+        .unwrap()
+        .mv;
+        assert_eq!(row(&plain), 3, "the plain weights step it towards the void");
+        assert_eq!(row(&dual_move(&enc).unwrap()), 4, "the boss keeps its row");
     }
 
     #[test]

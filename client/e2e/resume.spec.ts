@@ -138,7 +138,7 @@ test('a boss fight is not saved: a reload shows a new local game', async ({ page
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(hud).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await move(page, [0, 2], [0, 1]);
   await expect.poll(() => plies(page), { timeout: 30_000 }).toBe(2); // the boss replied
 

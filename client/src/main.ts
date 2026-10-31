@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_push, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -168,18 +168,22 @@ import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from '.
 import { flatHudHtml, hudHtml } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
+import { skinKinds, startOnce } from './skinmaps';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { findMatch, toleranceWindow } from './matchmaking';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
-import { fpsOf, keepWindow } from './fps';
+import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
-import { OpenWorldMode } from './openworldmode';
+import { OpenWorldMode, twistOf } from './openworldmode';
+import { bindJoystick } from './openworldjoystick';
+import { bindNewWorld } from './openworldnew';
+import { worldSaves } from './openworldsave';
 import { loadModels } from './openworldview';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
 import { AUDIO_LOGS, lineAt, logOf, type AudioLog } from './audiologs';
@@ -320,7 +324,14 @@ let replaying: { live: Engine | Encounter; ply: number } | null = null;
 // fight also keeps its UTC day and its attempt of that day (#195).
 // The Goal control (#248): the HUD shows the boss goal before the first move, then only while it is open.
 const goalButton = document.getElementById('boss-goal') as HTMLButtonElement;
+// The Goal sheet (#1032): the goal text above the dock while the Goal control is open, one sheet at a time.
+const goalSheet = document.getElementById('goal-sheet')!;
 let goalOpen = false;
+const closeGoal = (): void => {
+  if (!goalOpen) return;
+  goalOpen = false;
+  hud();
+};
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
@@ -356,6 +367,15 @@ for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 
 // ?backend=webgl forces the WebGL2 backend, anything else lets three pick WebGPU first.
 const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl';
 
+const store = (() => {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+})();
+let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
+let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
@@ -370,6 +390,9 @@ await renderer.init().catch(bootFailed);
 const clustered = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
 renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
+// The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
+// as soon as the scene is. mountBay takes them when the scene exists.
+const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
@@ -392,6 +415,27 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
   if (!deckNormalMaps.has(name)) deckNormalMaps.set(name, loadTexture(`deck-${name}-normal.ktx2`, false, true));
   return deckNormalMaps.get(name)!;
 };
+// The worn skins' maps (#377, #925) are asked for in this tick, with the first maps: a skin's material is made later, with
+// the scene, and takes these requests. Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of
+// skins.ts and glassskins.ts, ambientCG PBR materials (CC0), opaque and in their own colours. The maps are square and turn
+// once round the sphere, whose circumference is twice the way from pole to pole.
+const SKIN_MAPS = {
+  albedo: ['map', true],
+  normal: ['normalMap', false],
+  roughness: ['roughnessMap', false],
+  metalness: ['metalnessMap', false],
+  ao: ['aoMap', false],
+  emission: ['emissiveMap', true],
+} as const;
+const skinMapLoads = new Map<string, Promise<THREE.Texture | null>>();
+const skinMap = (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Promise<THREE.Texture | null> =>
+  startOnce(skinMapLoads, `${asset}-${kind}`, () =>
+    loadTexture(`pbr/skin-${asset}-${kind}.ktx2`, SKIN_MAPS[kind][1], true).then((map) => {
+      map?.repeat.set(tile, tile / 2);
+      return map;
+    }),
+  );
+for (const s of [skinById(skin), glassSkinById(glass)]) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
 const [
   deckAlbedo,
   deckRoughness,
@@ -491,13 +535,6 @@ function prefilteredBay(): THREE.Texture {
   return texture;
 }
 // Fog and vignette follow the quality tier, clear-board switches both off (docs/specs/tech.md 5.1).
-const store = (() => {
-  try {
-    return localStorage;
-  } catch {
-    return null;
-  }
-})();
 // Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
@@ -598,8 +635,6 @@ const forceParticles =
 let deck: Deck = deckOf('local');
 // The theme (#317): System follows the system setting, Dark and Light set data-theme (index.html sets it before the first paint).
 let theme: Theme = readTheme(store);
-let skin = readSkin(store); // the dark shell skin (#377), skins.ts
-let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 let palette: Palette = readPalette(store); // the colorblind palette (#381), palettes.ts
 let difficulty: Difficulty = readDifficulty(store); // the AI and boss difficulty (#704), difficulty.ts
 // The FPS readout (#426): off by default. Off, the frame loop only checks the flag; on, it keeps the last frame stamps.
@@ -694,6 +729,8 @@ function applyLook(): void {
 // The settings menu: one button per item, its icon then its label, opened by the cog only. Escape, a press outside
 // and the cog close it. A toggle shows its state in aria-pressed.
 const cog = document.getElementById('settings') as HTMLButtonElement;
+// Whether a press lies in an element. A press on the window (no node) lies in none of them: it counts as outside (#1032).
+const within = (el: Element, target: EventTarget | null): boolean => target instanceof Node && el.contains(target);
 const menu = document.getElementById('settings-menu')!;
 const toggles: Record<string, () => void> = {
   'clear-board': () => {
@@ -914,6 +951,10 @@ applyView(); // camera and fog
 let menuIsOpen = false;
 const moveMenu = (event: MenuEvent): void => {
   menuIsOpen = menuOpen(menuIsOpen, event);
+  if (menuIsOpen) {
+    moveModes('outside'); // one sheet at a time (#1032)
+    closeGoal();
+  }
   menu.hidden = !menuIsOpen;
   delete menu.dataset.page; // the menu opens on its items again
   cog.setAttribute('aria-expanded', String(menuIsOpen));
@@ -925,7 +966,7 @@ addEventListener('keydown', (e) => {
   cog.focus();
 });
 addEventListener('pointerdown', (e) => {
-  if (menuIsOpen && !menu.contains(e.target as Node) && !cog.contains(e.target as Node)) moveMenu('outside');
+  if (menuIsOpen && !within(menu, e.target) && !within(cog, e.target)) moveMenu('outside');
 });
 cog.disabled = false; // listener ready (#146)
 // The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
@@ -939,6 +980,10 @@ const moveModes = (event: MenuEvent): void => {
   modesOpen = menuOpen(modesOpen, event);
   modeMenu.hidden = !modesOpen;
   modeButton.setAttribute('aria-expanded', String(modesOpen));
+  if (modesOpen) {
+    moveMenu('outside'); // one sheet at a time (#1032)
+    closeGoal();
+  }
 };
 modeButton.addEventListener('click', () => moveModes('button'));
 addEventListener('keydown', (e) => {
@@ -947,7 +992,7 @@ addEventListener('keydown', (e) => {
   modeButton.focus();
 });
 addEventListener('pointerdown', (e) => {
-  if (modesOpen && !modeMenu.contains(e.target as Node) && !modeButton.contains(e.target as Node)) moveModes('outside');
+  if (modesOpen && !within(modeMenu, e.target) && !within(modeButton, e.target)) moveModes('outside');
 });
 modeButton.disabled = false; // listener ready (#146)
 
@@ -1032,7 +1077,7 @@ function turnReader(step: number): void {
   else showConsole(page);
 }
 addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  if (openWorld.active || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return; // the Open world's keys (#1063)
 
   if (e.key.toLowerCase() === 'c' && !reading) {
     toggleFreeCam();
@@ -1146,30 +1191,13 @@ const steel = new THREE.MeshStandardMaterial(
 applyDeck(deck);
 // Used by the browser checks to light the board in play as any deck, the Bridge included, which has no mode yet.
 (window as unknown as Record<string, unknown>).__deck = applyDeck;
-// Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of skins.ts and glassskins.ts, ambientCG
-// PBR materials (CC0), opaque and in their own colours. A skin's material is built flat the first time it is worn and
-// dressed in every map its asset ships as they load: a press never waits, and a page that keeps the default skins
-// loads two sets of maps, not twenty. The maps are square and turn once round the sphere, whose circumference is twice
-// the way from pole to pole.
-const SKIN_MAPS = {
-  albedo: ['map', true],
-  normal: ['normalMap', false],
-  roughness: ['roughnessMap', false],
-  metalness: ['metalnessMap', false],
-  ao: ['aoMap', false],
-  emission: ['emissiveMap', true],
-} as const;
-const skinMap = async (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Promise<THREE.Texture | null> => {
-  const map = await loadTexture(`pbr/skin-${asset}-${kind}.ktx2`, SKIN_MAPS[kind][1], true);
-  map?.repeat.set(tile, tile / 2);
-  return map;
-};
+// A skin's material is built flat the first time it is worn and dressed in every map its asset ships as they load: a press
+// never waits, and a page that keeps the default skins loads two sets of maps, not twenty (the requests are made above).
 const dressed = new WeakMap<THREE.Material, Promise<void>>(); // when a skin's maps are on
 function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset: string; tile: number; extra: readonly Extra[] }): void {
-  const kinds = ['albedo', 'normal', 'roughness', ...extra] as const;
   dressed.set(
     look,
-    Promise.all(kinds.map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
+    Promise.all(skinKinds(extra).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
       Object.assign(look, Object.fromEntries(loaded));
       if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
       if (extra.includes('emission')) look.emissive.set(0xffffff); // black until the map is there: no white flash
@@ -1905,7 +1933,7 @@ const mountBay = (bay: SpaceshipBayAssets | null): void => {
   }
 };
 (window as unknown as Record<string, unknown>).__mountBay = mountBay;drawProps();
-void loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader).then(mountBay);
+void bayLoad.then(mountBay);
 
 let frame: FrameShape | null = null;
 function drawFrame(board: ArrayLike<number>): void {
@@ -2030,7 +2058,8 @@ const analyst = new Analyst(
   (moves) => askEval(analysisWorker, moves),
   (score, { history: moves, side }) => {
     const fill = evalFill(score, side);
-    const words = evalText(score, side, glassOf());
+    // Once the live game is over its result is the title of the plate (#1038): the bar shows its fill, no words.
+    const words = replaying === null && engine.status() !== 0 ? '' : evalText(score, side, glassOf());
     evalBar.style.setProperty('--fill', String(fill));
     evalMeter.setAttribute('aria-valuenow', String(Math.round(fill * 100)));
     evalMeter.setAttribute('aria-valuetext', words);
@@ -2043,7 +2072,7 @@ let analysing = true;
 function analyse(): void {
   if (!analysing) return;
   evalBar.hidden = false;
-  analyst.request({ history: history.slice(), side: engine.to_move() });
+  analyst.request({ history: history.slice(0, shownPly()), side: engine.to_move() }); // the position on show: a replay evaluates its own (#1038)
 }
 function stopAnalysis(): void {
   analysing = false;
@@ -2135,6 +2164,7 @@ function showPly(ply: number): void {
   hint.clear();
   skipEjections();
   refresh();
+  analyse(); // the bar shows this position's evaluation, not the last live one (#1038)
 }
 function leaveReplay(): void {
   if (replaying) engine = replaying.live;
@@ -2143,6 +2173,7 @@ function leaveReplay(): void {
 function liveAgain(): void {
   leaveReplay();
   refresh();
+  analyse(); // back on the live position, the bar follows it again (#1038)
 }
 function stepReplay(step: ReplayStep): void {
   showPly(stepPly(shownPly(), step, history.length));
@@ -2165,7 +2196,7 @@ replaySlider.addEventListener('input', () => showPly(Number(replaySlider.value))
 addEventListener('keydown', (e) => {
   const step = replayKey(e.key, replaying !== null, history.length > 0);
   const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement; // the slider steps by itself
-  if (!step || typing || hub || royale || reading || freeCam.active || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (!step || typing || openWorld.active || hub || royale || reading || freeCam.active || e.altKey || e.ctrlKey || e.metaKey) return; // not the Open world's arrows (#1063)
   e.preventDefault();
   if (step === 'live') liveAgain();
   else stepReplay(step);
@@ -2884,7 +2915,6 @@ function hud(extra = ''): void {
   const end = endBanner({
     status,
     reason: engine.draw_reason(),
-    win: status === 1 || status === 2 ? win[status - 1]! : 0,
     mode: fight ? 'boss' : online ? 'online' : worker ? 'bot' : 'local', // a co-op fight is a boss fight on the HUD (#530)
     side: online ? (online.role === 'player' ? online.side : 0) : fight || worker ? 1 : 0,
     glass: glassOf(),
@@ -2918,10 +2948,14 @@ function hud(extra = ''): void {
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   exportButton.hidden = importButton.hidden = online !== null || fight !== null || run !== null; // local games only (#219)
   syncHint();
-  const showGoal = goalShown(shownPly(), goalOpen);
+  // The goal is shown once (#1032): the Goal sheet holds it while open, the HUD line only before the first move.
+  const sheetOpen = goalOpen && engine instanceof Encounter && status === 0;
+  const showGoal = goalShown(shownPly(), sheetOpen);
   goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
   goalButton.disabled = shownPly() === 0; // the goal is on the plate until the first move
-  goalButton.setAttribute('aria-expanded', String(showGoal));
+  goalButton.setAttribute('aria-expanded', String(sheetOpen));
+  goalSheet.hidden = !sheetOpen;
+  if (sheetOpen) goalSheet.textContent = (engine as Encounter).goal();
   const boss = engine instanceof Encounter ? engine : null;
   if (boss) {
     // The vents note (#741): the change that starts burning the player's marbles, shown for 2 plies.
@@ -2958,7 +2992,6 @@ function hud(extra = ''): void {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
       bossHtml({
-        name: boss.name(),
         phase: boss.phase(),
         phases: boss.phases(),
         result: end ? 0 : boss.result(), // the end banner already says Victory or Defeat, one line less in the plate
@@ -3612,11 +3645,18 @@ const span = (): number => {
   const [a, b] = [...pointers.values()];
   return Math.hypot(a!.x - b!.x, a!.y - b!.y);
 };
+// The angle of the two pointers, for a twist of the Open world's camera (#1026), and the pointer that turns it with the right button.
+const angle = (): number => {
+  const [a, b] = [...pointers.values()];
+  return Math.atan2(b!.y - a!.y, b!.x - a!.x);
+};
+let turning: number | null = null;
 
 canvas.addEventListener('pointerdown', (e) => {
   if (openWorld.active) {
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); // two fingers pinch the Open world's camera (#976)
-    if (pointers.size === 1) openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); // two fingers pinch and twist the Open world's camera (#976, #1026)
+    if (e.button === 2) turning = e.pointerId; // the right button turns the camera round the hero, it does not roll the hero (#1026)
+    else if (pointers.size === 1) openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
     return;
   }
   canvas.setPointerCapture(e.pointerId);
@@ -3637,8 +3677,13 @@ canvas.addEventListener('pointermove', (e) => {
   if (openWorld.active) {
     if (last) {
       const prevSpan = pointers.size === 2 ? span() : 0;
+      const prevAngle = pointers.size === 2 ? angle() : 0;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 2) openWorld.zoom(pinchScale(prevSpan, span())); // the Open world's camera, not the board's (#976)
+      if (e.pointerId === turning) openWorld.orbit(e.clientX - last.x); // the right button's drag turns the camera (#1026)
+      if (pointers.size === 2) {
+        openWorld.zoom(pinchScale(prevSpan, span())); // the Open world's camera, not the board's (#976)
+        openWorld.turn(twistOf(prevAngle, angle())); // a twist turns it too (#1026)
+      }
     }
     return;
   }
@@ -3684,6 +3729,7 @@ function release(e: PointerEvent): void {
   const wasClick = e.type === 'pointerup' && press && !press.drag && pointers.size === 1;
   const dropped = e.type === 'pointerup' && marbleDrag && press!.drag && pointers.size === 1;
   pointers.delete(e.pointerId);
+  if (e.pointerId === turning) turning = null;
   if (pointers.size === 0) press = marbleDrag = null;
   if (dropped) return dropMarbles(e);
   if (!wasClick) return;
@@ -3710,13 +3756,17 @@ function dropMarbles(e: PointerEvent): void {
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
+// The right button turns the Open world's camera: no browser menu over the canvas (#1026).
+canvas.addEventListener('contextmenu', (e) => {
+  if (openWorld.active) e.preventDefault();
+});
 
 // Keyboard play (#738), only while the canvas has focus: Tab and Shift+Tab walk the legal groups (past the ends the
 // focus moves on), Q W E A S D pick the direction, Enter plays it, Escape backs out one step.
 canvas.tabIndex = 0;
 canvas.setAttribute('aria-label', 'Abalone board');
 canvas.addEventListener('keydown', (e) => {
-  if (hub || royale || reading || e.altKey || e.ctrlKey || e.metaKey || blocked(() => {})) return;
+  if (openWorld.active || hub || royale || reading || e.altKey || e.ctrlKey || e.metaKey || blocked(() => {})) return; // the Open world has the canvas (#1063)
   const dir = KEY_DIRS[e.key.toLowerCase()];
   const moves = legalMoves();
   if (e.key === 'Tab') {
@@ -4217,7 +4267,20 @@ stalkerButton.addEventListener('click', () => {
 stalkerButton.disabled = false; // listener ready (#146)
 goalButton.addEventListener('click', () => {
   goalOpen = !goalOpen;
+  if (goalOpen) {
+    moveModes('outside'); // one sheet at a time (#1032)
+    moveMenu('outside');
+  }
   hud();
+});
+// Esc closes the Goal sheet and gives the focus back to Goal; a tap outside the sheet and its button closes it too (#1032).
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !goalOpen) return;
+  closeGoal();
+  goalButton.focus();
+});
+addEventListener('pointerdown', (e) => {
+  if (goalOpen && !within(goalSheet, e.target) && !within(goalButton, e.target)) closeGoal();
 });
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
 
@@ -4308,9 +4371,26 @@ function showResultCard(): void {
           attempt: fight.daily.attempt,
         })
       : '';
-  resultCard.hidden = text === '';
+  const shown = text !== '' && text !== closedCard; // a card the player closed stays closed until its text changes
+  if (shown && resultCard.hidden) cardOpener = document.activeElement as HTMLElement | null;
+  resultCard.hidden = !shown;
   if (resultText.value !== text) resultText.value = text;
 }
+// The card is a sheet above the dock (#1032): Esc or a tap outside closes it, and the focus goes back to what had it.
+let closedCard = '';
+let cardOpener: HTMLElement | null = null;
+function closeResultCard(): void {
+  if (resultCard.hidden) return;
+  closedCard = resultText.value;
+  resultCard.hidden = true;
+  cardOpener?.focus();
+}
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeResultCard();
+});
+addEventListener('pointerdown', (e) => {
+  if (!within(resultCard, e.target)) closeResultCard();
+});
 document.getElementById('daily-copy')!.addEventListener('click', async () => {
   if (await copyText(resultText.value, navigator.clipboard)) return hud(' · result copied');
   resultText.focus();
@@ -4425,7 +4505,11 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   leaveHub();
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
-  rematchButton.textContent = coop ? 'Retry' : 'Rematch'; // co-op: the same fight again, both seats asked (#531)
+  // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
+  const again = coop ? 'Retry' : 'Rematch';
+  rematchButton.textContent = again;
+  rematchButton.setAttribute('aria-label', again);
+  rematchButton.dataset.label = again;
   delete document.body.dataset.boss;
   applyDeck(deckOf('online'));
   retryButton.hidden = true;
@@ -4717,10 +4801,13 @@ runPanel.addEventListener('click', (e) => {
 runButton.addEventListener('click', beginRun);
 runButton.disabled = false; // listener ready (#146)
 // The Open world (#962, docs/specs/openworld.md): its own scene, drawn by this renderer in place of the board's while it
-// is on. Its entry is in the mode menu for everyone (#1000); ?openworld=<seed> fixes the seed, else a click rolls one.
+// is on. Its entry is in the mode menu for everyone (#1000). ?openworld=<seed> fixes the seed, ?openworld=new starts a fresh
+// random world; else a click resumes the last world played when it has a save (#968), or rolls a new seed.
 const openWorldButton = document.getElementById('openworld') as HTMLButtonElement;
-const openWorldParam = new URLSearchParams(location.search).get('openworld') ?? '';
-const openWorldFixedSeed = openWorldParam.trim() === '' ? NaN : Number(openWorldParam);
+const openWorldParam = (new URLSearchParams(location.search).get('openworld') ?? '').trim();
+const openWorldFresh = openWorldParam === 'new';
+const openWorldFixedSeed = openWorldParam === '' || openWorldFresh ? NaN : Number(openWorldParam);
+const openWorldSaves = worldSaves(gameStore, world_version());
 const openWorld = new OpenWorldMode(
   (seed, cx, cy) => world_chunk(seed, cx, cy),
   (seed, cx, cy) => Int32Array.from(world_enemies(seed, cx, cy)),
@@ -4730,18 +4817,34 @@ const openWorld = new OpenWorldMode(
       meshoptLoader(),
     ),
   () => reducedMotion(),
+  (seed, troop, enemies) => world_push(seed, troop, enemies),
+  openWorldSaves,
 );
+/** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
+async function enterOpenWorld(): Promise<void> {
+  if (Number.isFinite(openWorldFixedSeed)) return openWorld.open(openWorldFixedSeed, innerWidth, innerHeight);
+  const last = openWorldFresh ? null : await openWorldSaves.last();
+  if (last !== null && (await openWorldSaves.load(last))) return openWorld.open(last, innerWidth, innerHeight);
+  return openWorld.open(crypto.getRandomValues(new Uint32Array(1))[0]!, innerWidth, innerHeight, false);
+}
+if (navigator.webdriver) {
+  // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
+  const hooks = window as unknown as Record<string, unknown>;
+  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][] }) => openWorld.fixture(fixture);
+  hooks.__openworldEnemies = () => openWorld.enemies();
+}
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');
   leaveOnline();
   leaveRoyale();
-  const seed = Number.isFinite(openWorldFixedSeed) ? openWorldFixedSeed : crypto.getRandomValues(new Uint32Array(1))[0]!;
-  openWorld.enter(seed, innerWidth, innerHeight);
+  void enterOpenWorld();
   openWorldButton.blur(); // the menu's arrow keys would take the hero's
 });
 openWorldButton.disabled = false; // listener ready (#146)
+bindNewWorld(document, openWorld.newWorld.bind(openWorld)); // the HUD's New world, with its confirmation (#1021)
+bindJoystick(document, openWorld); // the touch stick of the Open world, on the left half of the canvas (#1025)
 addEventListener('keydown', (e) => {
-  if (!openWorld.active || !openWorld.key(e.key)) return;
+  if (!openWorld.active || !openWorld.key(e.key, e.repeat)) return; // a key repeat steps nothing: the held arrows walk (#1059)
   e.preventDefault(); // no page scroll
   if (openWorld.active) return;
   dirty = CHANGE_DRAWS; // left: the board draws again
@@ -5119,7 +5222,9 @@ else analyse(); // the start position
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a
 // text box to copy by hand when the browser refuses (#220). Nothing is sent anywhere.
 const copyButton = document.getElementById('copy-diagnostics') as HTMLButtonElement;
-setButton(copyButton, 'Copy diagnostics', icon('diagnostics'));
+// The clipboard is the last row of the settings list (#1032), an action with its icon and its label, as the other items.
+setButton(copyButton, 'Copy diagnostics', `${icon('diagnostics')}<span>Copy diagnostics</span>`);
+menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 copyButton.addEventListener('click', async () => {
   const text = diag.text({
@@ -5192,7 +5297,16 @@ function moving(): boolean {
 
 renderer.setAnimationLoop((now) => {
   lastDraw = timeDraw(lastDraw, now);
-  if (openWorld.active) return openWorld.frame((scene, camera) => renderer.render(scene, camera));
+  if (openWorld.active) {
+    const drew = openWorld.frame((scene, camera) => renderer.render(scene, camera));
+    if (fpsOn) {
+      // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.
+      if (drew) stampDrawn(fpsStamps, now);
+      lastFps = fpsAt(fpsStamps, now);
+      fpsBox.textContent = fpsLabel(lastFps);
+    }
+    return;
+  }
   const moves = moving(); // before the effects run, so the frame that ends one draws
   const wanted = drawWanted(dirty > 0, moves, drawAsked, navigator.webdriver);
   if (moves) dirty = CHANGE_DRAWS; // its last picture draws twice too, for the bloom

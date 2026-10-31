@@ -41,7 +41,7 @@ pub enum MoveError {
 }
 
 impl Direction {
-    const ALL: [Direction; 6] = [
+    pub(crate) const ALL: [Direction; 6] = [
         Direction::E,
         Direction::W,
         Direction::NE,
@@ -50,7 +50,7 @@ impl Direction {
         Direction::SE,
     ];
 
-    pub(crate) fn vector(self) -> (i32, i32) {
+    pub fn vector(self) -> (i32, i32) {
         match self {
             Direction::E => (1, 0),
             Direction::W => (-1, 0),

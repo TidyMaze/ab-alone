@@ -55,3 +55,10 @@ fn the_chaplain_win_replays() {
 fn the_chaplain_ladder_win_replays() {
     assert_win_file("chaplain-ladder", "chaplain");
 }
+
+/// The Dual Room game of the ladder pro player at 10x (#982). `dual.txt` stays the game that
+/// raises the bridge, which the wasm, client and e2e tests read.
+#[test]
+fn the_dual_ladder_win_replays() {
+    assert_win_file("dual-ladder", "dual");
+}

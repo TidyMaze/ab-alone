@@ -11,6 +11,7 @@
   --display: 'Chakra Petch', 'Arial Narrow', sans-serif;
   --ui: 'IBM Plex Sans', system-ui, sans-serif;
   --ui-scale: 1; /* UI scale (#382), set on the root by main.ts: 1 to 2 */
+  --touch: 2.75rem; /* a touch target on a coarse pointer, 44 px (#922) */
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
@@ -75,7 +76,6 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
   font: 0.875rem/1.2 var(--ui);
 }
 #settings { padding: 0.5rem; anchor-name: --cog; }
-@media (pointer: coarse) { #settings-menu button { min-height: 2.75rem; } }
 #settings-menu button[hidden] { display: none; }
 /* The FPS switch beside Clear board in one item, so the menu keeps its rows (#426). */
 .setting-group { display: flex; gap: 0.25rem; }
@@ -93,7 +93,6 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 }
 :is(.setting-volume, .setting-lights) input { width: 100%; box-sizing: border-box; margin: 0; accent-color: var(--accent); cursor: pointer; }
 :is(.setting-volume, .setting-lights) input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (pointer: coarse) { :is(.setting-volume, .setting-lights) { min-height: 2.75rem; } }
 /* The log archive (#513): Logs shows the entries read in place of the items, one title per row, wrapped. */
 #settings-menu[data-page='archive'] > :not(.setting-archive), #settings-menu:not([data-page='archive']) > .setting-archive { display: none; }
 .setting-archive {
@@ -104,8 +103,6 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #settings-menu .setting-archive button { justify-content: flex-start; text-align: left; }
 /* The two skin buttons share the item's width, half each, a name cut with an ellipsis: the menu keeps its width (#377). */
 .skin-pair > button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A touch target of 44 px on a touch screen (#287): the halves grow to it, the menu keeps the width of its widest row (#377). */
-@media (pointer: coarse) { .skin-pair > button { min-width: 44px; min-height: 2.75rem; } }
 /* The FPS readout (#426): off by default, a corner that ignores the pointer. */
 #fps {
   position: fixed; left: 4px; bottom: 4px; z-index: 2; pointer-events: none; padding: 0.125rem 0.375rem;
@@ -115,7 +112,7 @@ body[data-tier='low']::after, body[data-clear='on']::after { display: none; }
 #settings[aria-expanded='true'], #settings-menu button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
 #settings:focus-visible, #settings-menu button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #settings-box { position: relative; display: flex; flex-direction: column; align-items: flex-end; }
-#hud, #hud-fold, #settings-box { zoom: var(--ui-scale); } /* the HUD, its fold button and the menu grow with the UI scale (#382), the board does not */
+#hud, #hud-fold, #settings-box, #eval { zoom: var(--ui-scale); } /* the HUD, its fold button, the menu and the score bar grow with the UI scale (#382, #927), the board does not */
 #settings-menu {
   position: absolute; z-index: 1; top: calc(100% + 0.25rem); right: 0; width: max-content;
   display: flex; flex-direction: column; gap: 0.125rem; align-items: stretch;
@@ -293,7 +290,10 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
      viewport and hung from the cog, it leaves that clip on every browser. */
   #settings-menu { position: fixed; top: calc(16px + 2.75rem + 0.25rem); right: 16px; width: max-content; max-width: calc(100vw - 32px); }
   /* With the light sliders the menu is taller than a phone held sideways: it scrolls, so every row stays reachable. */
-  #settings-menu { max-height: calc((100dvh - 32px) / var(--ui-scale) - 2.75rem - 0.25rem); overflow-y: auto; } /* zoomed (#382) */
+  /* Bug #904: the menu ends 8 px above the clipboard band (16 px, a 44 px button, then 8 px), so it covers none of it. Its
+     top is under the cog (16 px, the cog's --touch height, then 0.25rem): both are taken off the window, in the zoomed
+     units of the menu (#382). */
+  #settings-menu { max-height: calc((100dvh - 84px) / var(--ui-scale) - var(--touch) - 0.25rem); overflow-y: auto; }
   @supports (anchor-name: --cog) {
     #settings-menu { position-anchor: --cog; top: calc(anchor(bottom) + 0.25rem); right: anchor(right); }
   }
@@ -304,7 +304,8 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   /* The cog starts the first row: the open menu lies beside it, over that row, its items side by side, so it reaches no
      lower than the rows when the plate is tall (#284, #287). */
   #settings-menu { top: 0; left: calc(100% + 0.5rem); right: auto; flex-flow: row wrap; max-width: calc(100vw - 32px - 100% - 0.5rem); }
-  #settings-menu :is(.setting-volume, .setting-lights, .setting-archive) { flex: 1 0 100%; box-sizing: border-box; }
+  #settings-menu :is(.setting-volume, .setting-lights, .setting-archive, #level-reset) { flex: 1 0 100%; box-sizing: border-box; } /* Reset lights spans the row (#904) */
+  #settings-menu #level-reset { justify-content: center; }
   /* The open mode menu starts a new row. #666: an open boss list is one row of its own under Boss fight (or Fight
      together) that scrolls sideways, so a new boss adds no row over the board: the menu is no wider than the
      window (min-width), the padding keeps the focus outlines inside the scroll box. */
@@ -325,6 +326,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
    of the open mode menu take a 12 px label and closer sides, so their rows still keep off the board. */
 @media (orientation: portrait) and (max-width: 600px), (orientation: portrait) and (pointer: coarse) {
   #chrome, #online, #mode-menu { gap: 0.25rem; }
+  #boss-bar { margin-bottom: 0.25rem; } /* #929: the bar ends 8 px above the plate, as in a window, not 4 */
   #settings-menu { left: calc(100% + 0.25rem); max-width: calc(100vw - 32px - 100% - 0.25rem); gap: 2px; }
   #settings-menu .setting-group { gap: 2px; }
   #daily-copy { min-height: 2.75rem; }
@@ -334,6 +336,16 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
      entry fits the row of Rogue-lite and Ship instead of a row of its own over the board. */
   #daily { padding-block: 0.25rem; max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #daily span { display: block; overflow: hidden; text-overflow: ellipsis; }
+}
+/* Touch targets (#922, #904): on a coarse pointer every button of the column and of the settings menu is at least --touch
+   (44 px) square, each light slider is 32 px high in its 44 px row (its name beside it), and the buttons of the column keep
+   8 px between them. This block comes after the portrait rules above, so its gap wins over their 4 px. */
+@media (pointer: coarse) {
+  #online button, #settings-menu button { min-width: var(--touch); min-height: var(--touch); }
+  #online { column-gap: 0.5rem; }
+  :is(.setting-volume, .setting-lights) { min-height: var(--touch); flex-direction: row; align-items: center; gap: 0.5rem; }
+  :is(.setting-volume, .setting-lights) span { flex: none; }
+  :is(.setting-volume, .setting-lights) input { width: auto; flex: 1 1 auto; min-width: 0; height: 2rem; }
 }
 /* Held upright, or in a narrow or short window, each item is its icon only, a 44 px square, so every item fits without
    reaching the board (#414): the name is its aria-label and title. Roomy windows keep icon then label. */
@@ -347,6 +359,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 @media (orientation: landscape) and (max-width: 1100px), (orientation: landscape) and (max-height: 500px) {
   #settings-menu { display: grid; grid-template-columns: repeat(3, 2.75rem); grid-auto-flow: dense; }
   #settings-menu .setting-group { grid-column: span 2; }
+  #settings-menu #level-reset { grid-column: 1 / -1; } /* bug #904: one row of the grid, not a 44 px cell that wraps */
   #settings-menu .skin-pair { flex-wrap: nowrap; }}
 
 #hud {
@@ -366,7 +379,15 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .pips { display: flex; justify-content: space-between; margin: 0.5rem 0; }
 #hud .pips span { display: flex; gap: 0.25rem; }
 #hud .pip { width: 3px; height: 0.9rem; background: var(--accent); }
+/* #1038: each side's pips are its marble colour, the same in both themes like the marbles; a rim keeps each on its panel. */
+#hud .dark .pip:not(.out) { background: #15191c; box-shadow: 0 0 0 1px var(--muted); }
+#hud .pale .pip:not(.out) { background: #d8d4c8; box-shadow: 0 0 0 1px var(--edge); }
 #hud .pip.out { background: var(--edge); transform: rotate(20deg); }
+/* #1038: on a phone held upright the pips alone show the ejected count. The score text leaves the screen but not the
+   accessibility tree, so a screen reader still reads the one name of the count (as the folded plate does). */
+@media (orientation: portrait) {
+  #hud .score { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 #hud small { display: block; color: var(--muted); font-size: 0.8125rem; }
 /* Online status line. The words carry the state, the dot only repeats it. */
 #hud .presence { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; font-weight: 500; }
@@ -420,6 +441,11 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #hud .boss { margin-top: 0.25rem; }
   #hud .boss .goal, #hud .boss .daily { font-size: 0.75rem; }
 }
+/* A wide window that is not tall (1280x720) has the plate's long boss goal reach the board's top-left edge: the goal keeps to three
+   lines here, the Goal button has all of it (#1067). */
+@media (orientation: landscape) and (min-width: 1101px) and (max-height: 760px) {
+  #hud .boss .goal { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+}
 /* A short landscape window (a phone held sideways) has no room above the board's top-left edge: the plate
    keeps to the band left of the board, like the column, with a smaller turn line (#234). */
 @media (orientation: landscape) and (max-height: 500px) {
@@ -466,11 +492,18 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 }
 /* Held upright it is the first row of the column, one slim row (the name, then the bar), and the plate's own boss name
    gives its line back, so the rows under it keep off the board's top cells (bug #234). */
-@media (orientation: portrait) {
+/* Bug #929: the same row in a window at least 1101 by 501 px, where the bar is centred on the row and, zoomed to 200 %, cut
+   the plate. There it takes a row of its own above the plate (the row gap of the column is 16 px) and its boss name stays
+   on the plate. */
+@media (orientation: portrait), (min-width: 1101px) and (min-height: 501px) {
   #boss-bar { position: static; order: -1; align-self: stretch; margin-inline: 0; display: flex; align-items: center; gap: 0.5rem; width: auto; padding: 0.25rem 0.5rem; }
   #boss-bar .name { flex: none; font-size: 0.8125rem; }
   #boss-bar .frags { flex: 1; margin-top: 0; }
-  #hud .boss strong { display: none; }
+}
+@media (orientation: landscape) and (min-width: 1101px) and (min-height: 501px) {
+  #chrome { flex-wrap: wrap; }
+  #boss-bar { flex: 1 0 100%; justify-content: center; }
+  #boss-bar .frags { flex: 0 1 24rem; }
 }
 #boss-bar[hidden] { display: none; }
 #boss-bar .frags { display: flex; gap: 3px; margin-top: 0.25rem; }
@@ -490,7 +523,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #boss-bar .chips { left: calc(100% + 0.375rem); gap: 0.125rem; font-size: 0.6875rem; }
   #boss-bar .chip { padding: 0.0625rem 0.25rem; }
 }
-@media (orientation: portrait) {
+@media (orientation: portrait), (min-width: 1101px) and (min-height: 501px) {
   #boss-bar { flex-wrap: wrap; }
   #boss-bar .chips { position: static; flex: 0 0 100%; justify-content: center; }
 }
@@ -503,7 +536,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
    above Copy diagnostics, the words beside the bar. Either way it covers no cell and no control. */
 #eval {
   position: fixed; bottom: 16px; left: 16px; z-index: 1; box-sizing: border-box; display: flex;
-  flex-direction: column; gap: 0.25rem; width: max(8rem, 50vw - 45vh - 1.5rem); max-width: 22rem;
+  flex-direction: column; gap: 0.25rem; width: calc(max(8rem, 50vw - 45vh - 1.5rem) / var(--ui-scale)); max-width: 22rem; /* zoomed: the plate keeps its width on the screen (#927) */
   padding: 0.375rem 0.75rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge);
   border-radius: 2px; font: 500 0.8125rem/1.2 var(--ui); font-variant-numeric: tabular-nums; pointer-events: none;
 }
@@ -631,6 +664,7 @@ body[data-reading] #log { visibility: visible; }
 }
 #replay-bar[hidden] { display: none; }
 #replay-slider { width: 100%; margin: 0; accent-color: var(--accent); }
+@media (pointer: coarse) { #replay-slider { height: 2.75rem; } } /* a 44 px target to drag on a touch screen (#928) */
 #replay-bar .steps { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 #replay-bar button {
   min-width: 2rem; padding: 0.25rem 0.5rem; cursor: pointer; color: var(--text); background: var(--panel);
@@ -720,6 +754,116 @@ body[data-reading] #log { visibility: visible; }
 #run-map .run-armies { display: grid; grid-template-columns: 1fr 1fr; gap: 0.375rem; width: 100%; flex: none; }
 
 /* The Open world mode (#962) draws its own scene: the board's HUD steps aside for its plate. */
-#openworld-hud { display: none; position: fixed; bottom: 1rem; left: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); }
+#openworld-hud { display: none; position: fixed; bottom: 1rem; left: 1rem; right: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); }
 body[data-openworld] #openworld-hud { display: block; }
-body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group) { display: none !important; }
+/* The New world control (#1021): the confirmation sits under the button, and each button shows its focus. */
+#openworld-hud p { margin: 0 0 0.5rem; }
+#openworld-hud code { font-size: 0.8125rem; }
+#openworld-new[hidden], #openworld-confirm[hidden] { display: none; }
+/* #1038: text for a screen reader only, such as the one live status of a sheet that is read as a group. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+#openworld-confirm { margin-top: 0.5rem; }
+#openworld-hud button { margin: 0 0.5rem 0.25rem 0; }
+#openworld-hud button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The virtual joystick (#1025): a base under the thumb of a touch on the left half, shown only while the touch lasts, so never on a
+   desktop. It passes the pointer through, the canvas keeps the touch's pinch and taps. */
+#joystick { position: fixed; z-index: 1; width: 96px; height: 96px; margin: -48px 0 0 -48px; border: 2px solid var(--edge); border-radius: 50%; background: var(--panel); opacity: 0.85; pointer-events: none; }
+#joystick[hidden] { display: none; }
+#joystick-knob { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: var(--accent); }
+body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group, #support) { display: none !important; }
+
+/* The thumb dock (#1032, docs/specs/thumb-dock.md): the main controls at the bottom of the window, one row of 44 px
+   buttons on a phone held upright, a right-hand column held sideways, a centred bar on a desktop. The buttons are the
+   page's own (#new-game, #reset-view, #hint, #replay, #modes, #auto-play, ...), moved here; each short label is the
+   button's data-label, its name stays the accessible name. The sheets (Game modes, Goal, the daily result) open above
+   the dock, one at a time. The dock does not grow with --ui-scale: its targets stay 44 px. */
+#dock-wrap { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 2; pointer-events: none; }
+#dock-wrap > * { pointer-events: auto; }
+#dock {
+  box-sizing: border-box; display: flex; gap: 8px; align-items: stretch; padding: 8px; background: var(--panel);
+  border: 1px solid var(--edge); border-radius: 2px;
+}
+#dock > button, #dock-replay button {
+  box-sizing: border-box; flex: 1 1 0; min-width: 44px; width: auto; height: 44px; min-height: 44px; margin: 0; padding: 0;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); background: var(--bg);
+  border: 1px solid var(--edge); border-radius: 2px; font: 0.8125rem/1 var(--ui); white-space: nowrap;
+}
+/* The button's own text and icon are hidden: the short label after it is the one shown (the name stays the text). */
+#dock > button { font-size: 0; }
+#dock > button svg { display: none; }
+#dock > button::after { content: attr(data-label); font: 0.8125rem/1 var(--ui); overflow: hidden; text-overflow: clip; }
+#dock > button[hidden], #dock-replay[hidden] { display: none; }
+#dock #new-game.confirm::after { content: 'Confirm'; }
+#dock > button:disabled { cursor: default; color: var(--muted); border-color: var(--edge); }
+#dock > button[aria-pressed='true'], #dock > button[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
+#dock #rematch, #dock #boss-retry { border-color: var(--accent); }
+#dock > button:focus-visible, #dock-replay button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#dock-replay { display: none; gap: 8px; flex: 1 1 auto; }
+/* A review (#793) replaces the dock: its five steps (First, Previous, Next, Last, Live) are the dock's own buttons. */
+body:has(#replay-bar:not([hidden])) #dock-replay { display: flex; }
+body:has(#replay-bar:not([hidden])) #dock > button { display: none; }
+#dock-replay button { font-size: 1rem; }
+#dock-replay #replay-live { border-color: var(--accent); color: var(--accent); font-size: 0.8125rem; }
+/* The update banner is a dot on Game modes; its row is the first of the Game modes sheet. */
+body:has(#update:not([hidden])) #modes::before {
+  content: ''; position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); border: 1px solid var(--bg);
+}
+#dock #modes { position: relative; }
+/* The sheets: above the dock, 8 px over it, as wide as the window less 16 px a side, scrolling when taller than 60 %. */
+#dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); box-sizing: border-box; max-height: 60dvh; overflow-y: auto;
+  padding: 8px; background: var(--panel); border: 1px solid var(--edge); border-radius: 2px;
+}
+#dock-wrap #mode-menu[hidden], #dock-wrap #goal-sheet[hidden], #dock-wrap #daily-card[hidden] { display: none; }
+#dock-wrap #mode-menu { display: flex; flex-direction: column; flex-flow: column nowrap; justify-content: flex-start; gap: 4px; align-items: stretch; min-width: 0; }
+#dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 44px; min-width: 44px; }
+#dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { flex: none; width: 100%; overflow-x: auto; margin: 0; padding: 0; }
+/* A desktop window (a fine pointer, 1101 px and wider) has room for the growing roster: the boss lists run three to a row and every item is 32 px high and the sheet may take 80 % of the height, so every boss and Daily challenge show without a scroll at 1280x720 (#1069). */
+@media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
+  #dock-wrap #mode-menu { max-height: 80dvh; }
+  #dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { display: grid; grid-template-columns: repeat(3, 1fr); }
+  #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 32px; }
+}
+#dock-wrap #goal-sheet { font: 0.875rem/1.4 var(--ui); color: var(--text); }
+#dock-wrap #goal-sheet p { margin: 0; }
+#dock-wrap #daily-card { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+#dock-wrap #daily-card #daily-result { width: auto; max-width: 100%; box-sizing: border-box; }
+#dock-wrap #daily-card #daily-copy { min-height: 44px; }
+/* A phone held upright: the dock spans the window, its sheets above it. The cog and the HUD stay at the top. */
+@media (orientation: portrait) {
+  #support { bottom: calc(16px + 62px + 8px + env(safe-area-inset-bottom)); }
+  #replay-bar { width: 100%; max-width: none; box-sizing: border-box; }
+}
+/* A phone held sideways: the dock is the right-hand column under the cog, six 44 px buttons (68 px to 372 px of a 390 px
+   window). Its sheets lie to its left. */
+@media (orientation: landscape) and (max-height: 660px) {
+  #dock-wrap { left: auto; right: 16px; top: calc(16px + 2.75rem + 0.5rem); bottom: 16px; width: 44px; }
+  /* A window under 390 px high cannot show six buttons: the column scrolls, so Auto-play is one scroll away (#1032). */
+  #dock { flex-direction: column; width: 44px; max-height: 100%; overflow-y: auto; padding: 0; border: 0; background: none; gap: 8px; }
+  #dock > button, #dock-replay button { width: 44px; flex: none; }
+  #dock > button::after { font-size: 0.6875rem; }
+  #dock-replay { flex-direction: column; flex: none; }
+  #support { right: 68px; bottom: 16px; }
+  #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card {
+    left: auto; right: calc(100% + 8px); bottom: 0; width: min(22rem, calc(100vw - 120px)); max-height: calc(100dvh - 32px);
+  }
+}
+/* A desktop window: the dock is a centred bar at the bottom, its width that of its buttons, its sheets centred above it. */
+@media (orientation: landscape) and (min-height: 661px) {
+  #dock-wrap { left: 50%; right: auto; transform: translateX(-50%); width: max-content; }
+  #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card { left: 50%; right: auto; transform: translateX(-50%); width: min(24rem, calc(100vw - 32px)); }
+  #dock > button, #dock-replay button { width: 5.5rem; flex: none; }
+}
+/* A sheet over the dock hides the evaluation plate and the diagnostics box, which sit above the dock (#1032). */
+body:has(#dock-wrap :is(#mode-menu, #daily-card):not([hidden])) #support { display: none; }
+/* Held sideways the settings menu lies left of the dock column, not over it (#1032). */
+@media (orientation: landscape) and (max-height: 660px) {
+  body:not([data-openworld]) #settings-menu { right: 68px; }
+}
+/* The dock is not on the Open world's screen: its HUD and joystick are (#962, #1025). */
+body[data-openworld] #dock-wrap { display: none !important; }
+/* Bug #1051: with the dock hidden the column is alone in the top bar and would sit at its left edge, so the cog and its menu open off
+   the screen. The column goes back to the right, where it is in a normal game. Landscape only: held upright the column is a row
+   that stretches, and an auto margin would shrink it. */
+@media (orientation: landscape) { body[data-openworld] #online { margin-left: auto; } }

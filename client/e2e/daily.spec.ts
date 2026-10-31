@@ -37,7 +37,7 @@ test('the daily challenge keeps its boss and seed all day, counts attempts, and 
   const title = (await daily.textContent())!;
   const name = title.split(': ')[1]!;
   await daily.click();
-  await expect(hud).toContainText(name);
+  await expect(page.locator('#boss-bar .name')).toContainText(name);
   await expect(hud).toContainText('Daily challenge 2027-03-25 · attempt 1');
   const first = await fight();
   expect(first.daily).toEqual({ day: '2027-03-25', attempt: 1 });
@@ -76,7 +76,7 @@ test('a plain boss fight shows no daily line and does not count a daily attempt,
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(page.locator('#hud')).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await expect(page.locator('#hud')).not.toContainText('Daily challenge');
   await page.getByRole('button', { name: 'Retry' }).click();
   await openModes(page);
@@ -96,8 +96,8 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await page.locator('#daily').click();
   const goal = page.locator('#hud .goal');
   const control = page.getByRole('button', { name: 'Goal' });
-  await expect(goal).toHaveText(/^Goal: .+/);
-  await expect(control).toHaveAttribute('aria-expanded', 'true');
+  await expect(goal).toHaveText(/^Goal: .+/); // before the first move the HUD line holds the goal
+  await expect(control).toHaveAttribute('aria-expanded', 'false'); // the Goal sheet is shut (#1032)
   expect(await page.evaluate(() => (window as any).__history())).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('daily-goal-desktop.png') });
   await page.setViewportSize({ width: 375, height: 812 });
@@ -118,11 +118,13 @@ test('the daily goal shows before the first move, folds away after it, and the G
   await page.screenshot({ path: testInfo.outputPath('daily-goal-folded.png') });
 
   await control.focus();
-  await page.keyboard.press('Enter'); // reachable from the keyboard
-  await expect(goal).toHaveText(/^Goal: .+/);
+  await page.keyboard.press('Enter'); // reachable from the keyboard: the Goal sheet opens above the dock (#1032)
+  const sheet = page.locator('#goal-sheet');
+  await expect(sheet).toHaveText(/.+/);
   await expect(control).toHaveAttribute('aria-expanded', 'true');
+  await expect(goal).toHaveCount(0); // the goal is shown once: the sheet holds it, the HUD does not repeat it
   await control.click();
-  await expect(goal).toHaveCount(0);
+  await expect(sheet).toBeHidden();
 });
 
 // The result card (#196).
@@ -179,7 +181,7 @@ test('a plain boss fight shows no result card at its end, #196', async ({ page }
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(page.locator('#hud')).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await loseByRepetition(page);
   await expect(page.locator('#daily-card')).toBeHidden();
 });

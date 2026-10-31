@@ -108,7 +108,7 @@ describe('main.ts The Magnetizer (#645, #671)', () => {
     fightMagnetizer(game);
     expect(body().boss).toBe('magnetizer');
     expect(body().deck).toBe('furnace');
-    expect(game.hud()).toContain('Magnetizer: charges on file. Six out to balance the books.');
+    expect(game.hud()).toContain('Charges on file. Six out to balance the books.');
     expect(tell()).toBe('Polarity in 2 turns');
     plies(game, 0, 2); // the start of turn 2: turn 3 is announced
     const coming = announce(game)!;

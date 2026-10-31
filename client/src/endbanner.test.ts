@@ -46,12 +46,13 @@ describe('endBanner', () => {
     expect(endBanner(input('local', 0, 2, 0, 6, 1))!.title).toBe('Black wins');
   });
 
-  it('gives the reason in the ship tone, with the ejections the winner needed', () => {
-    expect(endBanner(input('bot', 1, 1, 0, 6))!.line).toBe('6 out. The books balance.');
-    expect(endBanner(input('bot', 1, 2, 0, 6))!.line).toBe('6 out. Tally strikes your name.');
-    expect(endBanner(input('boss', 1, 1, 0, 10))!.line).toBe('10 out. The seat is empty.');
-    expect(endBanner(input('boss', 1, 2, 0, 6))!.line).toBe('6 out. The seat holds.');
-    expect(endBanner(input('local', 0, 2, 0, 6))!.line).toBe('6 out. The books balance.');
+  // #1038: the ejected count is the pips and the score line of the plate, not the end line again (no "6 out.").
+  it('gives the reason in the ship tone, without the ejections the plate already shows', () => {
+    expect(endBanner(input('bot', 1, 1, 0, 6))!.line).toBe('The books balance.');
+    expect(endBanner(input('bot', 1, 2, 0, 6))!.line).toBe('Tally strikes your name.');
+    expect(endBanner(input('boss', 1, 1, 0, 10))!.line).toBe('The seat is empty.');
+    expect(endBanner(input('boss', 1, 2, 0, 6))!.line).toBe('The seat holds.');
+    expect(endBanner(input('local', 0, 2, 0, 6))!.line).toBe('The books balance.');
     expect(endBanner(input('bot', 1, 3, REPEAT))!.line).toBe('Same position three times. Tally closes the page.');
     expect(endBanner(input('bot', 1, 3, STALL))!.line).toBe('100 plies, nothing ejected. Tally calls it even.');
     expect(endBanner(input('boss', 1, 3, REPEAT))!.line).toBe('Repeated 3 times: a defeat.');

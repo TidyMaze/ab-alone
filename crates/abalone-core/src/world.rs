@@ -4,15 +4,20 @@
 //! cells change what a marble may do.
 
 use crate::encounter::hull::mix;
+use std::sync::{Mutex, PoisonError};
 
+/// The version of the generated world, saved with each Open world save (#968): bump it with every change of the generator, the
+/// same moment the pinned digest of the tests changes (the line of `the_generated_world_is_pinned_by_a_digest`).
+pub const WORLD_VERSION: u32 = 2;
 /// A chunk is `CHUNK` x `CHUNK` cells of the axial grid.
 pub const CHUNK: i32 = 16;
 /// The world is `WORLD_CHUNKS` x `WORLD_CHUNKS` chunks, centred on the spawn chunk.
 pub const WORLD_CHUNKS: i32 = 64;
 /// Cells within this distance of the spawn cell `(0, 0)` are open grass.
 pub const CLEARING: i32 = 3;
-/// Boulders sit on this share of the open cells left once walls and trees are placed, in thousandths.
-const BOULDER_PER_MILLE: u64 = 20;
+/// Boulders on the open ground that is not low (heights 2, 5 and 6), in thousandths: the same in every biome. The low
+/// ground (heights 3 and 4) takes the density of its biome, see `Biome::boulder_per_mille`.
+const UPLAND_BOULDER_PER_MILLE: f64 = 20.0;
 /// Walls are laid out on a lattice of squares of this many cells.
 const WALL_BLOCK: i32 = 24;
 /// A chunk tries to place `TRIES` enemy groups, each with this chance in thousandths; with the obstacles that refuse some,
@@ -21,6 +26,88 @@ const GROUP_PER_MILLE: f64 = 600.0;
 const TRIES: u64 = 2;
 /// No enemy stands within this many cells of the spawn.
 const SAFE: i32 = 8;
+/// Scales, in cells, of the three levels of a field: macro (continents), meso (ranges) and micro (bumps). The widest
+/// zoom sees about 21 chunks across, so the macro level must repeat well inside that.
+const LEVEL_SCALES: [i32; 3] = [128, 40, 8];
+/// Weights of the macro, meso and micro levels of the elevation and of the moisture; each set sums to 1.
+const HEIGHT_WEIGHTS: [f64; 3] = [0.50, 0.35, 0.15];
+const MOISTURE_WEIGHTS: [f64; 3] = [0.45, 0.35, 0.20];
+/// Salts of the levels: the elevation uses `HEIGHT_SALT` to `+ 2`, the moisture `MOISTURE_SALT` to `+ 2`. The
+/// enemy draws already use the salts 12 to 21, so these start after them.
+const HEIGHT_SALT: u64 = 30;
+const MOISTURE_SALT: u64 = 33;
+/// The temperature field: its salts are `TEMPERATURE_SALT` to `+ 2`, its weights of the macro, meso and micro levels.
+const TEMPERATURE_SALT: u64 = 37;
+const TEMPERATURE_WEIGHTS: [f64; 3] = [0.55, 0.30, 0.15];
+/// The temperature falls by this much per height above the low ground (height 3): the peaks are cold.
+const LAPSE: f64 = 0.04;
+/// Each threshold of the biomes moves by `(micro - 0.5) * JITTER` of a micro-level sample, so a border is ragged.
+const JITTER: f64 = 0.08;
+/// The thresholds of the biomes, measured: the quantiles of the temperature and of the moisture over the land (heights 2
+/// to 7) of the 16 x 16 chunks around the spawn, seeds 1 to 4, that give the shares of the table (`openworld-terrain.md`
+/// section 4). `T_COLD` the 15 % coldest, `T_HOT` the 25 % hottest, `M_HOT` the 60 % driest of the hot land (desert, the
+/// rest badlands), `M_WET` the 42 % wettest of the temperate land (forest, the rest meadow).
+const T_COLD: f64 = 0.2896;
+const T_HOT: f64 = 0.5010;
+const M_HOT: f64 = 0.4943;
+const M_WET: f64 = 0.4632;
+/// Upper bounds of the elevation of heights 1 to 7 (height 0 is below the first). They were found by
+/// measuring the elevation of chunks -8 to 8 of seeds 1 to 4 (`the_eight_height_levels_hold_their_measured_shares`):
+/// their quantiles give the shares of 8, 10, 12, 16, 18, 16, 12 and 8 % per height.
+const ELEVATION_STEPS: [f64; 7] = [0.361, 0.430, 0.482, 0.531, 0.581, 0.636, 0.704];
+/// The macro level of the elevation is shifted per seed by one of `OFFSET_CANDIDATES` offsets of up to `OFFSET_SPAN`
+/// cells (hashed with `OFFSET_SALT`): the first one whose cells of `RING` are all land, else the one with fewest
+/// cells that are not. So the spawn and its surroundings are walkable.
+const OFFSET_SALT: u64 = 36;
+const OFFSET_CANDIDATES: u64 = 16;
+const OFFSET_SPAN: i32 = 4096;
+/// The cells that must be land: the spawn, the corners of the ring of radius 4 (the clearing's edge), twelve cells
+/// on the ring of radius 8 and twelve on the ring of radius 32, corners and edge midpoints.
+const RING: [(i32, i32); 30] = [
+    (4, 0),
+    (0, 4),
+    (-4, 4),
+    (-4, 0),
+    (0, -4),
+    (4, -4),
+    (32, 0),
+    (16, 16),
+    (0, 32),
+    (-16, 32),
+    (-32, 32),
+    (-32, 16),
+    (-32, 0),
+    (-16, -16),
+    (0, -32),
+    (16, -32),
+    (32, -32),
+    (32, -16),
+    (8, 0),
+    (4, 4),
+    (0, 8),
+    (-4, 8),
+    (-8, 8),
+    (-8, 4),
+    (-8, 0),
+    (-4, -4),
+    (0, -8),
+    (4, -8),
+    (8, -8),
+    (8, -4),
+];
+/// The elevations a cell can walk on, heights 2 to 6 (not water, not peak). Fixed numbers, not the measured steps,
+/// so that measuring the steps does not move the offsets, which are chosen with them.
+const LAND: std::ops::Range<f64> = 0.45..0.70;
+/// Moisture below `DRY` makes a rock level (5) sand-coloured rock. It is a quantile of the moisture, measured like the
+/// elevation.
+const DRY: f64 = 0.422;
+/// The soft Meadow bias around the spawn (`meadow_bias`): full up to `MEADOW_INNER` cells, none from `MEADOW_OUTER`, a
+/// smoothstep between. At full bias the temperature is `MEADOW_TEMPERATURE` (between `T_COLD` and `T_HOT`, so not
+/// cold nor hot whatever the jitter) and the moisture `MEADOW_MOISTURE` (below `M_WET`, so not forest).
+const MEADOW_INNER: f64 = 8.0;
+const MEADOW_OUTER: f64 = 16.0;
+const MEADOW_TEMPERATURE: f64 = 0.395;
+const MEADOW_MOISTURE: f64 = 0.30;
 
 /// What a cell looks like and whether it can be entered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,11 +129,47 @@ impl Terrain {
     }
 }
 
-/// One cell: its height `0` to `3` and its terrain.
+/// The region a cell belongs to: its ground and its obstacle density on the low ground (see `openworld-terrain.md` section 4).
+/// The code of a biome is its place in this list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Biome {
+    Meadow = 0,
+    Forest = 1,
+    Tundra = 2,
+    Desert = 3,
+    Badlands = 4,
+}
+
+impl Biome {
+    /// The chance that a low-ground grass cell is a tree (one draw per cell, salt 6).
+    fn tree_chance(self) -> f64 {
+        match self {
+            Biome::Meadow => 0.02,
+            Biome::Forest => 0.25,
+            Biome::Tundra => 0.04,
+            Biome::Desert | Biome::Badlands => 0.0,
+        }
+    }
+
+    /// The boulders of a low-ground cell, per mille of its draws (salt 4).
+    fn boulder_per_mille(self) -> f64 {
+        match self {
+            Biome::Meadow => 15.0,
+            Biome::Forest => 15.0,
+            Biome::Tundra => 25.0,
+            Biome::Desert => 30.0,
+            Biome::Badlands => 45.0,
+        }
+    }
+}
+
+/// One cell: its height `0` to `7`, its terrain and its biome.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub height: u8,
     pub terrain: Terrain,
+    pub biome: Biome,
 }
 
 /// A hash of the seed, a purpose `salt` and a point, uniform in `[0, 1)`.
@@ -80,13 +203,11 @@ struct Lattice {
 }
 
 impl Lattice {
-    fn new(seed: u64, salt: u64, cx: i32, cy: i32, scale: i32) -> Self {
-        let (x0, y0) = (
-            (cx * CHUNK).div_euclid(scale),
-            (cy * CHUNK).div_euclid(scale),
-        );
-        let x1 = ((cx + 1) * CHUNK - 1).div_euclid(scale) + 1;
-        let y1 = ((cy + 1) * CHUNK - 1).div_euclid(scale) + 1;
+    /// The lattice of the cells `q0..q0 + CHUNK` by `r0..r0 + CHUNK`.
+    fn new(seed: u64, salt: u64, q0: i32, r0: i32, scale: i32) -> Self {
+        let (x0, y0) = (q0.div_euclid(scale), r0.div_euclid(scale));
+        let x1 = (q0 + CHUNK - 1).div_euclid(scale) + 1;
+        let y1 = (r0 + CHUNK - 1).div_euclid(scale) + 1;
         debug_assert!(x1 - x0 < LATTICE as i32 && y1 - y0 < LATTICE as i32);
         let mut values = [[0.0; LATTICE]; LATTICE];
         for y in y0..=y1 {
@@ -117,6 +238,69 @@ fn distance(q: i32, r: i32) -> i32 {
     (q.abs() + r.abs() + (q + r).abs()) / 2
 }
 
+/// How much the spawn pulls the biome of `(q, r)` to Meadow, from 0 to 1: 1 within `MEADOW_INNER` cells of the spawn,
+/// 0 beyond `MEADOW_OUTER`, a smoothstep between (no edge). A pure function of the distance, so it is order free.
+fn meadow_bias(q: i32, r: i32) -> f64 {
+    let t = ((MEADOW_OUTER - f64::from(distance(q, r))) / (MEADOW_OUTER - MEADOW_INNER))
+        .clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// The elevation at `(q, r)` from the seed alone, with the macro level shifted by `shift`: the same values as the
+/// chunk lattices, so the land test sees the world the chunks show.
+fn elevation_at(seed: u64, q: i32, r: i32, shift: (i32, i32)) -> f64 {
+    let level = |i: usize, (dq, dr): (i32, i32)| {
+        noise_at(
+            |x, y| unit(seed, HEIGHT_SALT + i as u64, x, y),
+            q + dq,
+            r + dr,
+            LEVEL_SCALES[i],
+        )
+    };
+    HEIGHT_WEIGHTS[0] * level(0, shift)
+        + HEIGHT_WEIGHTS[1] * level(1, (0, 0))
+        + HEIGHT_WEIGHTS[2] * level(2, (0, 0))
+}
+
+/// The last seed whose macro shift was searched, with its shift: a pure memo, so the chunks of one world search once.
+/// A lock keeps a racing thread from reading one seed with another seed's shift.
+static LAST_SHIFT: Mutex<Option<(u64, (i32, i32))>> = Mutex::new(None);
+
+/// The macro shift of `seed`, from `LAST_SHIFT` when it is the same seed.
+fn macro_shift(seed: u64) -> (i32, i32) {
+    let known = *LAST_SHIFT.lock().unwrap_or_else(PoisonError::into_inner);
+    match known {
+        Some((known, shift)) if known == seed => shift,
+        _ => {
+            let shift = search_shift(seed);
+            *LAST_SHIFT.lock().unwrap_or_else(PoisonError::into_inner) = Some((seed, shift));
+            shift
+        }
+    }
+}
+
+/// The search of the macro shift of `seed` (see `OFFSET_CANDIDATES`). `min_by_key` keeps the first candidate with
+/// the fewest cells of `RING` that are not land.
+fn search_shift(seed: u64) -> (i32, i32) {
+    let candidate = |c: u64| {
+        let c = c as i32;
+        let span = f64::from(OFFSET_SPAN);
+        let shift = (
+            (unit(seed, OFFSET_SALT, c, 0) * span) as i32,
+            (unit(seed, OFFSET_SALT, c, 1) * span) as i32,
+        );
+        let missing = std::iter::once((0, 0))
+            .chain(RING)
+            .filter(|&(q, r)| !LAND.contains(&elevation_at(seed, q, r, shift)))
+            .count();
+        (missing, shift)
+    };
+    (0..OFFSET_CANDIDATES)
+        .map(candidate)
+        .min_by_key(|&(missing, _)| missing)
+        .map_or((0, 0), |(_, shift)| shift)
+}
+
 /// Whether the chunk coordinate is inside the world.
 fn in_world(c: i32) -> bool {
     (-WORLD_CHUNKS / 2..WORLD_CHUNKS / 2).contains(&c)
@@ -143,18 +327,55 @@ fn wall_segment(seed: u64, x: i32, y: i32) -> Option<Segment> {
     Some(Segment { start, step, len })
 }
 
-/// Everything the cells of one chunk need, computed once: the noise lattices and the walls.
+/// A field: value noise at the three `LEVEL_SCALES`, the level `i` from the salt `salt + i`, summed with
+/// `weights`. Every node of every level is hashed once per chunk.
+struct Field {
+    levels: [Lattice; 3],
+    /// The offset of each level in cells: only the macro level can have one.
+    shifts: [(i32, i32); 3],
+    weights: [f64; 3],
+}
+
+impl Field {
+    /// The field of the chunk at `(q0, r0)`, its macro level shifted by `shift` cells.
+    fn new(seed: u64, salt: u64, q0: i32, r0: i32, weights: [f64; 3], shift: (i32, i32)) -> Self {
+        let shifts = [shift, (0, 0), (0, 0)];
+        Field {
+            levels: std::array::from_fn(|i| {
+                Lattice::new(
+                    seed,
+                    salt + i as u64,
+                    q0 + shifts[i].0,
+                    r0 + shifts[i].1,
+                    LEVEL_SCALES[i],
+                )
+            }),
+            shifts,
+            weights,
+        }
+    }
+
+    fn value(&self, q: i32, r: i32) -> f64 {
+        self.levels
+            .iter()
+            .zip(self.shifts)
+            .zip(self.weights)
+            .map(|((level, (dq, dr)), weight)| weight * level.noise(q + dq, r + dr))
+            .sum()
+    }
+}
+
+/// Everything the cells of one chunk need, computed once: the fields and the walls.
 struct Window {
     seed: u64,
     q0: i32,
     r0: i32,
-    /// Elevation: salt 1 at scale 12, salt 2 at scale 5.
-    low: Lattice,
-    high: Lattice,
-    /// Dryness: salt 3 at scale 9.
-    dry: Lattice,
-    /// Forests: salt 5 at scale 7.
-    forest: Lattice,
+    /// Elevation, which gives the height.
+    height: Field,
+    /// Moisture, which gives the dry rock and the biomes.
+    moisture: Field,
+    /// Temperature, which gives the biomes.
+    temperature: Field,
     /// Whether each cell of the chunk is on a wall, row by row.
     wall: [bool; (CHUNK * CHUNK) as usize],
 }
@@ -185,11 +406,34 @@ impl Window {
             seed,
             q0,
             r0,
-            low: Lattice::new(seed, 1, cx, cy, 12),
-            high: Lattice::new(seed, 2, cx, cy, 5),
-            dry: Lattice::new(seed, 3, cx, cy, 9),
-            forest: Lattice::new(seed, 5, cx, cy, 7),
+            height: Field::new(seed, HEIGHT_SALT, q0, r0, HEIGHT_WEIGHTS, macro_shift(seed)),
+            moisture: Field::new(seed, MOISTURE_SALT, q0, r0, MOISTURE_WEIGHTS, (0, 0)),
+            temperature: Field::new(seed, TEMPERATURE_SALT, q0, r0, TEMPERATURE_WEIGHTS, (0, 0)),
             wall,
+        }
+    }
+
+    /// The biome of a cell of `height` and `moisture`: the temperature (lower uphill) and the moisture against the thresholds,
+    /// each moved by a micro-level sample of the temperature so the borders are ragged. Near the spawn both drift towards
+    /// the Meadow values by `meadow_bias`, so the surroundings are meadow and the border is soft.
+    fn biome(&self, q: i32, r: i32, height: u8, moisture: f64) -> Biome {
+        let jitter = (self.temperature.levels[2].noise(q, r) - 0.5) * JITTER;
+        let bias = meadow_bias(q, r);
+        let natural = self.temperature.value(q, r) - LAPSE * (f64::from(height) - 3.0);
+        let temperature = natural + (MEADOW_TEMPERATURE - natural) * bias;
+        let moisture = moisture + (MEADOW_MOISTURE - moisture) * bias;
+        if temperature < T_COLD + jitter {
+            Biome::Tundra
+        } else if temperature > T_HOT + jitter {
+            if moisture < M_HOT + jitter {
+                Biome::Desert
+            } else {
+                Biome::Badlands
+            }
+        } else if moisture >= M_WET + jitter {
+            Biome::Forest
+        } else {
+            Biome::Meadow
         }
     }
 
@@ -197,41 +441,50 @@ impl Window {
     fn cell(&self, q: i32, r: i32) -> Cell {
         if distance(q, r) <= CLEARING {
             return Cell {
-                height: 1,
+                height: 3,
                 terrain: Terrain::Grass,
+                biome: Biome::Meadow,
             };
         }
-        let elevation = 0.65 * self.low.noise(q, r) + 0.35 * self.high.noise(q, r);
-        let height = match elevation {
-            e if e < 0.32 => 0,
-            e if e < 0.50 => 1,
-            e if e < 0.64 => 2,
-            _ => 3,
-        };
-        let dry = self.dry.noise(q, r) < 0.4;
-        let terrain = match (height, dry) {
-            (0, _) => Terrain::Water,
-            (1, true) => Terrain::Sand,
-            (2, true) => Terrain::Rock,
-            (3, _) => Terrain::Peak,
-            _ => Terrain::Grass,
+        let elevation = self.height.value(q, r);
+        let height = ELEVATION_STEPS
+            .iter()
+            .filter(|&&step| elevation >= step)
+            .count() as u8;
+        let moisture = self.moisture.value(q, r);
+        let biome = self.biome(q, r, height, moisture);
+        let terrain = match height {
+            0 | 1 => Terrain::Water,
+            2 => Terrain::Sand,
+            3 | 4 => Terrain::Grass,
+            5 if moisture < DRY => Terrain::Rock,
+            5 => Terrain::Grass,
+            6 => Terrain::Rock,
+            _ => Terrain::Peak,
         };
         let open = !terrain.blocked();
-        // A grass cell of a forest zone is a tree one time in four.
-        let forest = terrain == Terrain::Grass
-            && self.forest.noise(q, r) > 0.55
-            && unit(self.seed, 6, q, r) < 0.25;
+        let low = (3..=4).contains(&height);
         let on_wall = self.wall[((r - self.r0) * CHUNK + (q - self.q0)) as usize];
+        // The obstacles of the low ground follow the biome; the uplands and the shore keep the same density everywhere.
+        let (tree, per_mille) = if low {
+            (biome.tree_chance(), biome.boulder_per_mille())
+        } else {
+            (0.0, UPLAND_BOULDER_PER_MILLE)
+        };
         let terrain = if open && on_wall {
             Terrain::Wall
-        } else if forest {
+        } else if terrain == Terrain::Grass && unit(self.seed, 6, q, r) < tree {
             Terrain::Tree
-        } else if open && unit(self.seed, 4, q, r) * 1000.0 < BOULDER_PER_MILLE as f64 {
+        } else if open && unit(self.seed, 4, q, r) * 1000.0 < per_mille {
             Terrain::Boulder
         } else {
             terrain
         };
-        Cell { height, terrain }
+        Cell {
+            height,
+            terrain,
+            biome,
+        }
     }
 }
 
@@ -335,9 +588,32 @@ mod tests {
                     }
                     let c = cell(seed, q, r).unwrap();
                     assert_eq!(c.terrain, Terrain::Grass);
+                    assert_eq!(c.height, 3);
+                    assert_eq!(c.biome, Biome::Meadow);
                     assert!(!c.terrain.blocked());
                 }
             }
+        }
+    }
+
+    #[test]
+    fn the_spawn_surroundings_are_mostly_meadow_on_every_seed() {
+        // A disc of axial radius 10 around the spawn (331 cells), on seeds 1 to 16 (seed 7 was a meadow island in a
+        // desert): Meadow on at least 80 % of its cells.
+        for seed in 1..=16 {
+            let disc: Vec<Cell> = (-10..=10)
+                .flat_map(|q| (-10..=10).map(move |r| (q, r)))
+                .filter(|&(q, r)| distance(q, r) <= 10)
+                .map(|(q, r)| cell(seed, q, r).unwrap())
+                .collect();
+            let (meadow, total) = (
+                disc.iter().filter(|c| c.biome == Biome::Meadow).count(),
+                disc.len(),
+            );
+            assert!(
+                meadow * 100 >= total * 80,
+                "seed {seed}: {meadow} of {total} cells around the spawn are meadow"
+            );
         }
     }
 
@@ -350,11 +626,11 @@ mod tests {
                 match c.terrain {
                     Terrain::Wall => {
                         walls += 1;
-                        assert!((1..=2).contains(&c.height), "walls stand on land");
+                        assert!((2..=6).contains(&c.height), "walls stand on land");
                     }
                     Terrain::Tree => {
                         trees += 1;
-                        assert!((1..=2).contains(&c.height));
+                        assert!((3..=4).contains(&c.height), "trees grow on the low ground");
                     }
                     _ => {}
                 }
@@ -376,20 +652,22 @@ mod tests {
 
     #[test]
     fn heights_and_terrains_agree() {
-        for cx in -3..3 {
-            for cy in -3..3 {
-                for c in chunk(11, cx, cy).unwrap() {
-                    assert!(c.height <= 3);
-                    match c.terrain {
-                        Terrain::Water => assert_eq!(c.height, 0),
-                        Terrain::Peak => assert_eq!(c.height, 3),
-                        Terrain::Sand
-                        | Terrain::Grass
-                        | Terrain::Rock
-                        | Terrain::Boulder
-                        | Terrain::Tree
-                        | Terrain::Wall => {
-                            assert!((0..=3).contains(&c.height))
+        // A wide window of four seeds: one seed's window can hold no peak at all (its continents are few).
+        for seed in 11..15 {
+            for cx in -8..8 {
+                for cy in -8..8 {
+                    for c in chunk(seed, cx, cy).unwrap() {
+                        assert!(c.height <= 7);
+                        match c.terrain {
+                            Terrain::Water => assert!(c.height <= 1),
+                            Terrain::Sand => assert_eq!(c.height, 2),
+                            Terrain::Grass => assert!((3..=5).contains(&c.height)),
+                            Terrain::Rock => assert!((5..=6).contains(&c.height)),
+                            Terrain::Peak => assert_eq!(c.height, 7),
+                            Terrain::Tree => assert!((3..=4).contains(&c.height)),
+                            Terrain::Boulder | Terrain::Wall => {
+                                assert!((2..=6).contains(&c.height))
+                            }
                         }
                     }
                 }
@@ -399,8 +677,11 @@ mod tests {
 
     #[test]
     fn the_map_varies_and_obstacles_are_a_fair_share() {
-        let cells: Vec<Cell> = (-4..4)
-            .flat_map(|cx| (-4..4).flat_map(move |cy| chunk(5, cx, cy).unwrap()))
+        // Four seeds over 16 x 16 chunks: one seed's window is dominated by its few continents.
+        let cells: Vec<Cell> = (1..=4)
+            .flat_map(|seed| {
+                (-8..8).flat_map(move |cx| (-8..8).flat_map(move |cy| chunk(seed, cx, cy).unwrap()))
+            })
             .collect();
         for terrain in [
             Terrain::Water,
@@ -418,14 +699,188 @@ mod tests {
             );
         }
         let blocked = cells.iter().filter(|c| c.terrain.blocked()).count() * 100 / cells.len();
-        assert!((30..=38).contains(&blocked), "{blocked} % blocked");
+        assert!((26..=37).contains(&blocked), "{blocked} % blocked");
         let boulders = cells
             .iter()
             .filter(|c| c.terrain == Terrain::Boulder)
             .count();
         assert!(boulders * 100 / cells.len() <= 2);
         let heights: std::collections::HashSet<u8> = cells.iter().map(|c| c.height).collect();
-        assert_eq!(heights.len(), 4);
+        assert_eq!(heights.len(), 8);
+    }
+
+    #[test]
+    fn the_eight_height_levels_hold_their_measured_shares() {
+        // The 16 x 16 chunks around the spawn, the real window, of four seeds.
+        let mut counts = [0usize; 8];
+        for seed in 1..=4 {
+            for cx in -8..8 {
+                for cy in -8..8 {
+                    for c in chunk(seed, cx, cy).unwrap() {
+                        counts[c.height as usize] += 1;
+                    }
+                }
+            }
+        }
+        let total: usize = counts.iter().sum();
+        let targets = [8.0, 10.0, 12.0, 16.0, 18.0, 16.0, 12.0, 8.0];
+        for (level, (&n, target)) in counts.iter().zip(targets).enumerate() {
+            let share = n as f64 * 100.0 / total as f64;
+            assert!(
+                (share - target).abs() <= 2.0,
+                "level {level}: {share:.1} % against {target} %"
+            );
+        }
+    }
+
+    /// The cells of the 16 x 16 chunks around the spawn, for each seed of `seeds`.
+    fn window_cells(seeds: std::ops::RangeInclusive<u64>) -> Vec<Cell> {
+        seeds
+            .flat_map(|seed| {
+                (-8..8).flat_map(move |cx| (-8..8).flat_map(move |cy| chunk(seed, cx, cy).unwrap()))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn biome_codes_follow_the_table_order() {
+        let codes = [
+            Biome::Meadow,
+            Biome::Forest,
+            Biome::Tundra,
+            Biome::Desert,
+            Biome::Badlands,
+        ]
+        .map(|b| b as u8);
+        assert_eq!(codes, [0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn every_biome_appears_on_land_in_the_window() {
+        let land: Vec<Cell> = window_cells(1..=4)
+            .into_iter()
+            .filter(|c| c.height >= 2)
+            .collect();
+        for biome in [
+            Biome::Meadow,
+            Biome::Forest,
+            Biome::Tundra,
+            Biome::Desert,
+            Biome::Badlands,
+        ] {
+            assert!(
+                land.iter().any(|c| c.biome == biome),
+                "{biome:?} never appears"
+            );
+        }
+    }
+
+    #[test]
+    fn the_biome_shares_on_land_are_the_measured_ones() {
+        // Land is every cell above the water (heights 2 to 7), the 16 x 16 chunks around the spawn, seeds 1 to 4.
+        let land: Vec<Cell> = window_cells(1..=4)
+            .into_iter()
+            .filter(|c| c.height >= 2)
+            .collect();
+        let targets = [
+            (Biome::Meadow, 35.0),
+            (Biome::Forest, 25.0),
+            (Biome::Tundra, 15.0),
+            (Biome::Desert, 15.0),
+            (Biome::Badlands, 10.0),
+        ];
+        for (biome, target) in targets {
+            let share =
+                land.iter().filter(|c| c.biome == biome).count() as f64 * 100.0 / land.len() as f64;
+            assert!(
+                (share - target).abs() <= 5.0,
+                "{biome:?}: {share:.1} % against {target} %"
+            );
+        }
+    }
+
+    #[test]
+    fn each_biome_sets_its_obstacle_density_on_the_low_ground() {
+        // Low ground: heights 3 and 4, not a wall. A tree is one time in `tree` (probability), a boulder one per
+        // mille of the cells a tree does not take (`boulder`, per mille), within a fifth (trees) and a third (boulders).
+        let cells = window_cells(1..=4);
+        let table = [
+            (Biome::Meadow, 0.02, 15.0),
+            (Biome::Forest, 0.25, 15.0),
+            (Biome::Tundra, 0.04, 25.0),
+            (Biome::Desert, 0.0, 30.0),
+            (Biome::Badlands, 0.0, 45.0),
+        ];
+        for (biome, tree, boulder) in table {
+            let low: Vec<&Cell> = cells
+                .iter()
+                .filter(|c| {
+                    c.biome == biome && (3..=4).contains(&c.height) && c.terrain != Terrain::Wall
+                })
+                .collect();
+            let trees =
+                low.iter().filter(|c| c.terrain == Terrain::Tree).count() as f64 / low.len() as f64;
+            let boulders = low.iter().filter(|c| c.terrain == Terrain::Boulder).count() as f64
+                / low.len() as f64;
+            assert!(
+                (trees - tree).abs() <= tree * 0.2 + 0.001,
+                "{biome:?} tree share"
+            );
+            let per_mille = boulders * 1000.0;
+            assert!(
+                (per_mille - boulder * (1.0 - tree)).abs() <= boulder * 0.33,
+                "{biome:?} boulders"
+            );
+        }
+    }
+
+    #[test]
+    fn water_shore_uplands_and_peaks_have_the_same_terrains_in_every_biome() {
+        let shore = [Terrain::Sand, Terrain::Wall, Terrain::Boulder];
+        let upland = [
+            Terrain::Rock,
+            Terrain::Grass,
+            Terrain::Wall,
+            Terrain::Boulder,
+        ];
+        let kept = |c: &Cell| match c.height {
+            0 | 1 => c.terrain == Terrain::Water,
+            2 => shore.contains(&c.terrain),
+            5 | 6 => upland.contains(&c.terrain),
+            7 => c.terrain == Terrain::Peak,
+            _ => true,
+        };
+        assert!(
+            window_cells(1..=4).iter().all(kept),
+            "a biome changed a shore, upland or peak"
+        );
+    }
+
+    #[test]
+    fn a_far_view_around_the_spawn_has_a_sea_and_a_range() {
+        // The widest zoom sees about 21 x 21 chunks around the spawn: each of seeds 1 to 8 shows water, and rock or peak.
+        for seed in 1..=8 {
+            let cells: Vec<Cell> = (-10..=10)
+                .flat_map(|cx| (-10..=10).flat_map(move |cy| chunk(seed, cx, cy).unwrap()))
+                .collect();
+            let total = cells.len() as f64;
+            let water =
+                cells.iter().filter(|c| c.terrain == Terrain::Water).count() as f64 * 100.0 / total;
+            let range = cells
+                .iter()
+                .filter(|c| matches!(c.terrain, Terrain::Rock | Terrain::Peak))
+                .count() as f64
+                * 100.0
+                / total;
+            assert!(
+                (3.0..=45.0).contains(&water),
+                "seed {seed}: water {water:.1} %"
+            );
+            assert!(
+                (5.0..=45.0).contains(&range),
+                "seed {seed}: rock and peak {range:.1} %"
+            );
+        }
     }
 
     #[test]
@@ -537,6 +992,7 @@ mod tests {
                 for cell in chunk(seed, cx, cy).unwrap() {
                     hash = fnv(hash, cell.height);
                     hash = fnv(hash, cell.terrain as u8);
+                    hash = fnv(hash, cell.biome as u8);
                 }
                 for group in enemy_groups(seed, cx, cy) {
                     for (q, r) in group {
@@ -554,9 +1010,9 @@ mod tests {
     #[test]
     fn the_generated_world_is_pinned_by_a_digest() {
         assert_eq!(
-            world_digest(),
-            9_996_814_764_041_329_087,
-            "digest of the reference world"
+            (WORLD_VERSION, world_digest()),
+            (2, 8_603_978_012_532_690_763),
+            "WORLD_VERSION and digest of the reference world"
         );
     }
 
@@ -601,7 +1057,7 @@ mod tests {
 
     #[test]
     fn most_open_cells_around_the_spawn_are_reachable_on_foot() {
-        for seed in 1..=8 {
+        for seed in 1..=32 {
             let (open, reached) = spawn_window_reach(seed);
             assert!(
                 reached * 100 >= open * 90,

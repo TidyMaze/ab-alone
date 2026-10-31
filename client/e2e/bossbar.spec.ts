@@ -159,3 +159,36 @@ test.describe('a 200 % UI scale, the Choir', () => {
     expect(await covered(page, '#boss-bar .chips')).toEqual([]);
   });
 });
+
+// Bug #929: at a 200 % UI scale the bar, centred on the row, overlapped the HUD plate and cut the boss title. The bar stacks
+// above the plate: at least 8 px apart, no overlap, its name whole. Checked at 1600 by 900 with the Goal card open (the
+// tallest plate), at 100 % too, and on a phone held upright.
+const stacked = (page: Page) =>
+  page.evaluate(() => {
+    const bar = document.getElementById('boss-bar')!.getBoundingClientRect();
+    const hud = document.getElementById('hud')!.getBoundingClientRect();
+    const name = document.querySelector<HTMLElement>('#boss-bar .name')!;
+    const overlapX = Math.max(0, Math.min(bar.right, hud.right) - Math.max(bar.left, hud.left));
+    const overlapY = Math.max(0, Math.min(bar.bottom, hud.bottom) - Math.max(bar.top, hud.top));
+    return { gap: hud.top - bar.bottom, overlap: overlapX * overlapY, name: name.scrollWidth, nameBox: name.clientWidth };
+  });
+
+const stackSizes = [
+  { name: 'a 1600 by 900 window at 200 %', viewport: { width: 1600, height: 900 }, scale: '200', mobile: false },
+  { name: 'a 1600 by 900 window at 100 %', viewport: { width: 1600, height: 900 }, scale: '100', mobile: false },
+  { name: 'a phone 360 px wide held upright', viewport: { width: 360, height: 780 }, scale: '100', mobile: true },
+];
+for (const { name, viewport, scale, mobile } of stackSizes) {
+  test.describe(`${name}, the boss bar`, () => {
+    test.use({ viewport, isMobile: mobile, hasTouch: mobile });
+    test('the bar stacks above the HUD, 8 px apart, no overlap, title whole, #929', async ({ page }) => {
+      await page.addInitScript((s) => localStorage.setItem('ab-alone.ui-scale', s), scale);
+      await fight(page, 'The Hull');
+      await expect(page.getByRole('button', { name: 'Goal' })).toHaveAttribute('aria-expanded', 'false'); // the sheet is shut before the first move (#1032)
+      const r = await stacked(page);
+      expect(r.overlap, JSON.stringify(r)).toBe(0);
+      expect(r.gap, JSON.stringify(r)).toBeGreaterThanOrEqual(8);
+      expect(r.name, JSON.stringify(r)).toBe(r.nameBox);
+    });
+  });
+}

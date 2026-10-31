@@ -5,6 +5,7 @@ import { maxUiScale } from '../src/uiscale';
 import { openModes } from './modes';
 import { logOf } from '../src/audiologs';
 import { dailyFor, dailyTitle, utcDay } from '../src/daily';
+import { BOSS_IDS } from '../src/tally';
 
 // Bug #227: on a phone the button column covered the HUD plate and the board's top-right cells, and held
 // upright the board was wider than the screen. In every state below no control covers the HUD plate or a
@@ -41,7 +42,8 @@ const problems = (page: Page) =>
       const box = el.getBoundingClientRect();
       if (el.id !== 'hud-fold' && meets(box, hud)) found.push(`${name} covers the HUD`); // its own fold button (#957)
       if (!onScreen(box)) found.push(`${name} is off screen`);
-      for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
+      const sheeted = el.closest('#mode-menu, #daily-card') != null; // #1032: a sheet above the dock may lie over the board's lower cells
+      if (!sheeted) for (const c of cells) if (meets(box, c.disc)) found.push(`${name} covers ${c.name}`);
     }
     // The plates let taps through, so they must not lie over a control either, or they hide it.
     for (const [id, name] of Object.entries(plates)) {
@@ -55,9 +57,12 @@ const problems = (page: Page) =>
         }
       }
     }
+    // #1032: the Game modes sheet and the daily result card are sheets above the thumb dock; an open one may lie over
+    // the board's lower cells (spec section 3), so only a cell under the sheet is let through, never off screen.
+    const sheet = (el: Element | null) => el?.closest('#mode-menu, #daily-card') != null;
     for (const c of cells) {
       if (!onScreen(c.disc)) found.push(`${c.name} is off screen`);
-      else if (document.elementFromPoint(c.centre.x, c.centre.y)?.tagName !== 'CANVAS') found.push(`a tap on ${c.name} misses the board`);
+      else if (document.elementFromPoint(c.centre.x, c.centre.y)?.tagName !== 'CANVAS' && !sheet(document.elementFromPoint(c.centre.x, c.centre.y))) found.push(`a tap on ${c.name} misses the board`);
     }
     return found;
   });
@@ -329,15 +334,15 @@ for (const { name, viewport, mobile } of sizes) {
   });
 }
 
-// #666: on a phone held upright the open mode menu has room for 12 bosses, so a new boss needs no layout change. Each
-// boss list gets copies of its last entry, as #663 does on a desktop; the Daily challenge names the longest boss name.
+// #666: on a phone held upright the open mode menu has room for every boss of the game (BOSS_IDS), so a new boss needs no
+// layout change. The boss lists are not padded: the Daily challenge names the longest boss name.
 for (const { name, viewport } of sizes.filter((s) => s.mobile && s.viewport.width < s.viewport.height)) {
-  test.describe(`${name}, 12 bosses`, () => {
+  test.describe(`${name}, every boss`, () => {
     test.skip(({ browserName }) => browserName === 'firefox', 'Firefox has no mobile emulation');
     test.use({ viewport, isMobile: true, hasTouch: true });
 
     for (const list of ['Boss fight', 'Fight together']) {
-      test(`nothing covers the board or the HUD with the ${list} list of 12 bosses open, #666`, async ({ page }, testInfo) => {
+      test(`nothing covers the board or the HUD with the ${list} list of every boss open, #666`, async ({ page }, testInfo) => {
         await page.clock.install({ time: Date.parse('2026-10-23T08:00:00Z') });
         await page.goto('./?bot=off&net=hook');
         await page.locator('canvas').waitFor();
@@ -350,15 +355,10 @@ for (const { name, viewport } of sizes.filter((s) => s.mobile && s.viewport.widt
         await page.clock.setSystemTime(new Date(`${utcDay(ms)}T08:00:00Z`));
         await page.clock.fastForward(60_000); // the minute timer renames Daily challenge
         await expect(page.locator('#daily')).toHaveText(dailyTitle(utcDay(ms), longest));
-        await page.evaluate(() => {
-          for (const el of document.querySelectorAll('#boss-list, #coop-list')) {
-            while (el.children.length < 12) el.appendChild(el.lastElementChild!.cloneNode(true));
-          }
-        });
         const button = page.getByRole('button', { name: list });
         if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click(); // closes the other list
-        await expect(page.locator(list === 'Boss fight' ? '#boss-list' : '#coop-list').getByRole('button')).toHaveCount(12);
-        await check(page, testInfo, `with the mode menu and the ${list} list of 12 bosses open`);
+        await expect(page.locator(list === 'Boss fight' ? '#boss-list' : '#coop-list').getByRole('button')).toHaveCount(BOSS_IDS.length);
+        await check(page, testInfo, `with the mode menu and the ${list} list of every boss open`);
       });
     }
   });
@@ -393,9 +393,10 @@ for (const { name, viewport, scale } of [
     await page.locator('canvas').waitFor();
     await expect(page.locator('#settings')).toBeEnabled();
     await page.locator('#settings').click();
-    await expect(page.locator('#settings-menu button')).toHaveCount(17); // Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
+    await expect(page.locator('#settings-menu button')).toHaveCount(18); // Copy diagnostics (#1032, the last row), Render mode (#763), Difficulty (#704), Flat HUD shares Reduced motion (#391), glass shares shell (#377), Palette shares Theme (#381), Transcript shares Sound (#516), Logs shares Import (#513), Free camera (#938)
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('#settings-menu button')].map((el) => {
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // the menu scrolls where it is shorter than its rows (#382, #904)
         const r = el.getBoundingClientRect();
         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         const onScreen = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
@@ -406,18 +407,22 @@ for (const { name, viewport, scale } of [
   });
 }
 
-test('on a desktop the buttons stay in a column at the top right, bug #227', async ({ page }) => {
+// #1032 (rewrites the #227 column): on a desktop the cog stays top right, and the main controls are a centred bar at
+// the bottom of the window, one row, the bar's bottom 16 px above the window's.
+test('on a desktop the cog is top right and the controls form a centred bar at the bottom, bugs #227 #1032', async ({ page }) => {
   await page.goto('./?bot=off');
   await expect(page.locator('#hud')).toContainText('Black to move');
-  const width = page.viewportSize()!.width;
+  const { width, height } = page.viewportSize()!;
+  const cog = await page.getByRole('button', { name: 'Settings' }).boundingBox();
+  expect(cog!.y).toBe(16);
+  expect(cog!.x + cog!.width).toBeCloseTo(width - 16, 0);
   const boxes = await Promise.all(
-    ['Settings', 'Reset view', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
+    ['Reset view', 'New game', 'Game modes'].map((b) => page.getByRole('button', { name: b }).boundingBox()),
   );
-  expect(boxes[0]!.y).toBe(16);
-  for (const [i, box] of boxes.entries()) {
-    expect(box!.x + box!.width).toBeCloseTo(width - 16, 0);
-    if (i > 0) expect(box!.y).toBeGreaterThan(boxes[i - 1]!.y + boxes[i - 1]!.height);
-  }
+  for (const box of boxes) expect(box!.y + box!.height).toBeCloseTo(height - 16 - 8 - 1, 0); // the bar's content row
+  const centre = boxes.reduce((a, b) => a + b!.x + b!.width / 2, 0) / boxes.length;
+  expect(centre).toBeGreaterThan(width / 2 - 200);
+  expect(centre).toBeLessThan(width / 2 + 200);
 });
 
 // Bug #271: at the end of a daily fight the plate gains the daily, result and score lines, and grew over the board

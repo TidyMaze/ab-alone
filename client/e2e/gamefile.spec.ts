@@ -250,7 +250,7 @@ test('export and import are not shown during a boss fight, #287', async ({ page 
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Echo' }).click();
-  await expect(page.locator('#hud')).toContainText('The Echo');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Echo');
   await expectNoExportImport(page);
 });
 

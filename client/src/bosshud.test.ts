@@ -4,8 +4,10 @@ import { bossHtml, goalShown } from './bosshud';
 const base = { name: 'The Echo', phase: 0, phases: 3, result: 0 };
 
 describe('bossHtml', () => {
-  it('shows the boss name', () => {
-    expect(bossHtml(base)).toContain('The Echo');
+  // #1038: the boss bar names the boss, the plate does not name it again (no strong name, desktop included).
+  it('names no boss: the boss bar carries the name', () => {
+    expect(bossHtml(base)).not.toContain('The Echo');
+    expect(bossHtml(base)).not.toContain('<strong');
   });
 
   it('draws one notch per phase, labelled P1 to P3, the current one marked', () => {
@@ -51,21 +53,23 @@ describe('bossHtml', () => {
     expect(bossHtml({ ...base, goal: '<i>' })).not.toContain('<i>');
   });
 
-  it('escapes the boss name', () => {
-    expect(bossHtml({ ...base, name: '<b>x</b>' })).not.toContain('<b>');
+  it('escapes the goal and the daily line', () => {
+    expect(bossHtml({ ...base, daily: '<b>x</b>' })).not.toContain('<b>');
   });
 });
 
 describe('goalShown', () => {
-  it('shows the goal before the first move, whatever the control says', () => {
+  // #1032 owner rule: the goal is shown once. The HUD line is shown before the first move only, and never while the
+  // Goal sheet is open (the sheet holds it then).
+  it('shows the HUD line before the first move, unless the Goal sheet holds it', () => {
     expect(goalShown(0, false)).toBe(true);
-    expect(goalShown(0, true)).toBe(true);
+    expect(goalShown(0, true)).toBe(false);
   });
 
-  it('hides it from the first move on, until the control asks for it', () => {
+  it('never shows the HUD line from the first move on', () => {
     expect(goalShown(1, false)).toBe(false);
     expect(goalShown(8, false)).toBe(false);
-    expect(goalShown(1, true)).toBe(true);
-    expect(goalShown(8, true)).toBe(true);
+    expect(goalShown(1, true)).toBe(false);
+    expect(goalShown(8, true)).toBe(false);
   });
 });

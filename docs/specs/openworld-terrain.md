@@ -26,14 +26,20 @@ so any order of visit gives the same world:
 
 | Level | Scale (cells) | Gives |
 |---|---|---|
-| macro | 256 | continents and seas, climate regions |
-| meso | 48 | ranges, big lakes, plateaus, forest patches |
+| macro | 128 | continents and seas, climate regions |
+| meso | 40 | ranges, big lakes, plateaus, forest patches |
 | micro | 8 | local bumps, ragged borders |
 
-- `field(seed, salt, q, r, weights)` replaces the one-off `noise` calls: `w_macro * noise(.., 256) +
-  w_meso * noise(.., 48) + w_micro * noise(.., 8)`, weights summing to 1. First values: height 0.50, 0.35,
-  0.15; moisture 0.45, 0.35, 0.20; temperature 0.55, 0.30, 0.15 (section 4). New salts start at 20; the
-  existing ones keep their meaning until their code is replaced.
+- `field(seed, salt, q, r, weights)` replaces the one-off `noise` calls: `w_macro * noise(.., 128) +
+  w_meso * noise(.., 40) + w_micro * noise(.., 8)`, weights summing to 1. First values: height 0.50, 0.35,
+  0.15; moisture 0.45, 0.35, 0.20; temperature 0.55, 0.30, 0.15 (section 4). The salts are 30 and up (the
+  enemy draws use 12 to 21); the existing ones keep their meaning until their code is replaced.
+- **Scale**: the widest zoom sees about 21 chunks (about 340 cells) across, so the macro level must repeat well
+  inside that: at 256 cells one feature filled the view and the far view read as a plain (measured in #983).
+- **Spawn land**: the macro level of the elevation is offset per seed by one of 16 offsets (up to 4096 cells,
+  searched once per seed): the first whose cells (the spawn, the corners of the ring of radius 4, twelve cells on
+  radius 8 and twelve on radius 32) are all land, heights 2 to 6, else the one with fewest that are not. No
+  fade near the spawn: a fade widens the flat area the far view shows.
 - Value noise of several levels bunches around 0.5, so **thresholds are measured, not guessed**: a test
   computes the histogram of a field over a window of chunks and the constants are the quantiles that give the
   target shares below. The constants carry a comment saying so.
@@ -94,23 +100,70 @@ A biome is a region with its own ground, trees and boulders. Two slow fields and
   so no new mesh.
 - **Chunk bytes**: 3 per cell, `height, terrain, biome` (the biome code is the table's order, `u8`).
   `world_chunk` returns `3 * 256` bytes, `parseChunk` reads a `biome` into `Tile`. Enemies are untouched.
-- **Spawn**: the clearing is Meadow.
-- **Tests**: every biome appears in a 16 x 16 chunk window of several seeds; the shares are within 5 points
-  of the table; two cells of the same biome and the same height have the same terrain unless an obstacle
-  stands on one; the spawn clearing is Meadow and open; the order of visit does not matter.
+- **Spawn**: the clearing is Meadow. Around it, a soft Meadow bias (#1024): within 8 cells of the spawn the
+  temperature is pulled to 0.395 and the moisture to 0.30 (the Meadow values), from 8 to 16 cells the pull falls
+  by a smoothstep to nothing (no edge). Only the biome moves; terrain, heights and walls are unchanged by it. So
+  the disc of axial radius 10 is Meadow on at least 80 % of its cells, on seeds 1 to 16 (seed 7 was a meadow
+  island in a desert). `WORLD_VERSION` is 2.
+- **Tests**: every biome appears in a 16 x 16 chunk window of several seeds; the land shares are within 5 points
+  of the table; the obstacle densities of each biome hold on the low ground (trees within a fifth, boulders within a
+  third); water, shore, uplands and peaks keep their terrains; the spawn clearing is Meadow and open; the order of
+  visit does not matter. The eight-height shares and the flood fill of #987 still hold.
+
+**Measured (#984, shipped).** "Land" is every cell above the water (heights 2 to 7) of the 16 x 16 chunks around the
+spawn, seeds 1 to 4. The thresholds are quantiles of the raw temperature (with the lapse) and moisture over that land,
+then checked against the real shares (the jitter moves a border by at most 0.04, so the shares land within 1 point):
+
+| Constant | Value | Quantile |
+|---|---|---|
+| `T_COLD` | 0.2896 | 15 % of the land is colder |
+| `T_HOT` | 0.5010 | 25 % of the land is hotter |
+| `M_HOT` | 0.4943 | 60 % of the hot land is drier (desert, the rest badlands) |
+| `M_WET` | 0.4632 | 42 % of the temperate land is wetter (forest, the rest meadow) |
+| `JITTER` | 0.08 | `(micro - 0.5) * 0.08` on every threshold, one micro sample of the temperature |
+
+Shares of the land per biome: meadow 35.9 %, forest 25.3 %, tundra 14.3 %, desert 15.0 %, badlands 9.6 %.
+Obstacles of the low ground, measured: meadow trees 2.0 % and 14.4 boulders per mille, forest 24.8 % and 11.6, tundra
+4.0 % and 29.9 (against 24 expected), desert 0 % and 30.1, badlands 0 % and 43.1.
+
+Terrain shares of the same window, before (#983) and after: grass 38.05 to 38.87 %, trees 3.39 to 2.45 %, boulders 1.43
+to 1.55 %, water 18.03 % and peaks 8.04 % unchanged, rock 19.23 %, sand 11.60 % unchanged, walls 0.23 % unchanged.
+Blocked share 31.1 to 30.3 % (the test bound 26 to 37 holds), and the 32-seed flood fill of #987 holds at 90 %.
+
+**Digest**: the world digest now hashes the biome, so its literal moves (4602184324818820941, was 4776182566584578878).
+No other digest value of the engine changed on purpose.
+
+**Cost** (`world_timing`, the machine is shared, so the minimum of the runs): one chunk 5.7 us before and 7.5 us after
+(budget 30 us); the 4096 chunks 23.7 ms before and 32.2 ms after (budget 117 ms). The biome costs one `temperature`
+lattice and a micro sample per cell, each lattice hashed once per chunk.
+
+**Memory** (client, `OpenWorldView` at rest, 234,674 instances): the matrices are 64 bytes an instance, 15.02 MB before;
+every ground, prop and detailed prop now also carries an instance colour (12 bytes an instance), so 2.82 MB more, 17.84 MB
+after (the troop and the enemies carry one too, 8 KB). A mesh that grows keeps the same ratio.
 
 ## 5. Relief (#988)
 
 Client only, after #983 (it needs the eight heights).
 
-- `topOf(level) = 0.2 + STEP * level`, water at 0.08. First value `STEP = 0.4` (peak at 3.0, a cell is 1
-  wide), tuned between 0.3 and 0.5 on screenshots and said in the PR. Props, marbles and the troop already
-  stand on `topOf`.
+- `topOf(level) = 0.2 + STEP * level`, water at 0.08. **`STEP = 0.5`** (a peak at 3.7), kept on screenshots of
+  seed 7 at STEP 0.3, 0.4 and 0.5, closest and widest: 0.3 reads flat (the cliff faces are thin), 0.4 shows short
+  faces, 0.5 shows the rock plateaus and the peak cluster standing clear of the grass with tall side faces, and no
+  cell hidden behind a peak at close zoom. Props, marbles and the troop stand on `topOf`; the mountains (1.2 to 2.0
+  high) read as spires on the taller columns, so their scale is unchanged.
+- **Finding**: on seed 7 no two passable cells differ by 2 levels or more within 45 cells of the spawn: the steepest
+  step a hero can walk is one level. The tall faces are peaks (blocked, level 7) against rock (level 6), 22 cells out
+  at (-8, 22) and (-8, 23). The e2e test steps onto a cell one level up, (4, 0).
 - **Camera**: it follows the hero's column top with an ease, `y += (target - y) * (1 - exp(-dt / 0.12))`, so a
-  step up or down a cliff does not jump.
+  step up or down a cliff does not jump. A gap within 0.01 snaps; reduced motion jumps at once. The mode draws
+  every frame of the ease and none after it settles. At STEP 0.5 a 3-level step (a gap of 1.5) is 0.010 from the top
+  after 0.6 s, on the top within 0.67 s.
 - **Pick**: a click is the nearest hit of the ray among the hero's cell and its six neighbours, each tested
-  against its own top plane `y = topOf(cell)` and kept only if the hit point is within the cell's hex (radius
-  0.56). No hit, no move. Unit test: neighbours 0 to 3 levels above and below the hero.
+  against its own top plane `y = topOf(cell)` and kept only if the hit point lies in that cell (`cellAtPoint` of the
+  hit is the candidate). No hit, no move: the hero's own cell comes back and the roll does nothing. A lower cell
+  hidden behind a higher ring cell cannot be clicked at its top centre: the test covers all six neighbours above the
+  ring's level and the two in front below it.
+- **Cost**: the build is unchanged: a rebuild at the widest zoom takes a median 38.6 ms on main and 38.8 ms with this
+  task (35 rebuilds each, in node, a synthetic world of every terrain and height).
 - Cost: no per-frame work added; a rebuild does not get slower.
 
 ## 6. Shared rules
@@ -119,6 +172,11 @@ Client only, after #983 (it needs the eight heights).
 - **Spawn**: radius 3 open grass, reachable, no enemy within 8 (`openworld.md` section 2).
 - **World version**: each task changes every world. Once the save of #968 stores a seed, it also stores a
   `WORLD_VERSION` (a constant bumped by each terrain task), so an old save is told apart, not misread.
+  As built (#968): `WORLD_VERSION` is in `crates/abalone-core/src/world.rs`, with a comment above it (`1` until #1024,
+  `2` since). The digest test asserts `(WORLD_VERSION, world_digest())` against `(2, <digest>)` on one line, so a change of the generator forces an edit
+  of that line: bump the version and repin the digest in the same commit. The bridge exports it as `world_version()`
+  (`crates/abalone-wasm/src/world.rs`), and the client saves it with each world (`openworld.md` section 5): a save of another
+  version is not loaded.
 - **Memory and speed** follow #981: bounded chunk caches (512 chunks, radius 10), no per-frame allocation, a
   rebuild under about 40 ms at the widest zoom.
 

@@ -1,33 +1,38 @@
 import { describe, expect, it, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
-import { blocked, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
+import { BIOMES, blocked, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
+import { FightState } from './openworldfight';
+
+/** A hero on the world with no enemy pushed: the fight is the generated enemies. */
+const heroOn = (world: World) => new Hero(world, new FightState());
 
 // A chunk of grass at height 1 with a boulder on (2, 0) and water on (0, 1) of chunk (0, 0); chunk (1, 0) is peaks.
-const grass = [1, 2];
+const grass = [1, 2, 0];
 function bytes(cx: number, cy: number): Uint8Array {
   if (cx < -1 || cx > 1 || cy < -1 || cy > 1) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set(cx === 1 ? [3, 4] : grass, i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set(cx === 1 ? [3, 4, 0] : grass, i * 3);
   if (cx === 0 && cy === 0) {
-    out.set([1, 5], 2 * 2); // (2, 0): boulder
-    out.set([0, 0], (1 * CHUNK + 0) * 2); // (0, 1): water
+    out.set([1, 5, 0], 2 * 3); // (2, 0): boulder
+    out.set([0, 0, 0], (1 * CHUNK + 0) * 3); // (0, 1): water
   }
   return out;
 }
 
 describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
-  it('reads the bytes of the bridge, two a cell, by terrain code', () => {
+  it('reads the bytes of the bridge, three a cell, by terrain and biome code', () => {
     expect(TERRAINS).toEqual(['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall']);
-    expect(parseChunk(new Uint8Array([0, 0, 3, 4, 2, 3]))).toEqual([
-      { height: 0, terrain: 'water' },
-      { height: 3, terrain: 'peak' },
-      { height: 2, terrain: 'rock' },
+    expect(BIOMES).toEqual(['meadow', 'forest', 'tundra', 'desert', 'badlands']);
+    expect(parseChunk(new Uint8Array([0, 0, 0, 3, 4, 1, 2, 3, 4]))).toEqual([
+      { height: 0, terrain: 'water', biome: 'meadow' },
+      { height: 3, terrain: 'peak', biome: 'forest' },
+      { height: 2, terrain: 'rock', biome: 'badlands' },
     ]);
     expect(parseChunk(new Uint8Array())).toEqual([]);
   });
 
   it('blocks water, peaks, boulders, trees and walls only', () => {
-    const blockedBy = TERRAINS.filter((terrain) => blocked({ height: 1, terrain }));
+    const blockedBy = TERRAINS.filter((terrain) => blocked({ height: 1, terrain, biome: 'meadow' }));
     expect(blockedBy).toEqual(['water', 'peak', 'boulder', 'tree', 'wall']);
   });
 
@@ -40,12 +45,12 @@ describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
   it('loads a chunk the first time one of its cells is asked for, once', () => {
     const asked: string[] = [];
     const world = new World((cx, cy) => (asked.push(`${cx},${cy}`), bytes(cx, cy)));
-    expect(world.tile(3, 3)).toEqual({ height: 1, terrain: 'grass' });
-    expect(world.tile(4, 4)).toEqual({ height: 1, terrain: 'grass' });
-    expect(world.tile(-1, 0)).toEqual({ height: 1, terrain: 'grass' });
+    expect(world.tile(3, 3)).toEqual({ height: 1, terrain: 'grass', biome: 'meadow' });
+    expect(world.tile(4, 4)).toEqual({ height: 1, terrain: 'grass', biome: 'meadow' });
+    expect(world.tile(-1, 0)).toEqual({ height: 1, terrain: 'grass', biome: 'meadow' });
     expect(asked).toEqual(['0,0', '-1,0']);
-    expect(world.tile(2, 0)).toEqual({ height: 1, terrain: 'boulder' });
-    expect(world.tile(CHUNK, 0)).toEqual({ height: 3, terrain: 'peak' });
+    expect(world.tile(2, 0)).toEqual({ height: 1, terrain: 'boulder', biome: 'meadow' });
+    expect(world.tile(CHUNK, 0)).toEqual({ height: 3, terrain: 'peak', biome: 'meadow' });
   });
 
   it('has no tile off the world', () => {
@@ -77,21 +82,21 @@ describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
 
 describe('the hero', () => {
   it('starts at the spawn and rolls onto a neighbour that is open', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     expect(hero.at).toEqual(SPAWN);
     expect(hero.step([1, 0])).toBe(true);
     expect(hero.at).toEqual([1, 0]);
   });
 
   it('does not roll two cells, onto a boulder, onto water or off the world', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     expect(hero.step([2, 0])).toBe(false); // not a neighbour of the spawn
     hero.step([1, 0]);
     expect(hero.step([2, 0])).toBe(false); // a boulder
     expect(hero.at).toEqual([1, 0]);
-    const water = new Hero(new World(bytes));
+    const water = heroOn(new World(bytes));
     expect(water.step([0, 1])).toBe(false);
-    const edge = new Hero(new World(() => new Uint8Array()));
+    const edge = heroOn(new World(() => new Uint8Array()));
     expect(edge.step([1, 0])).toBe(false); // no tile there
   });
 });
@@ -112,32 +117,41 @@ describe('the enemies', () => {
 
   it('finds a marble on its cell, in the chunk of that cell only', () => {
     const world = new World(bytes, foes);
-    expect(world.occupied(14, 0)).toBe(true);
-    expect(world.occupied(15, 0)).toBe(true);
-    expect(world.occupied(2, 16)).toBe(true);
-    expect(world.occupied(2, 17)).toBe(true);
-    expect(world.occupied(13, 0)).toBe(false);
-    expect(world.occupied(16, 0)).toBe(false); // the next chunk: no group crosses the edge
-    expect(world.occupied(0, 0)).toBe(false);
+    const fight = new FightState();
+    expect(fight.occupied(world, 14, 0)).toBe(true);
+    expect(fight.occupied(world, 15, 0)).toBe(true);
+    expect(fight.occupied(world, 2, 16)).toBe(true);
+    expect(fight.occupied(world, 2, 17)).toBe(true);
+    expect(fight.occupied(world, 13, 0)).toBe(false);
+    expect(fight.occupied(world, 16, 0)).toBe(false); // the next chunk: no group crosses the edge
+    expect(fight.occupied(world, 0, 0)).toBe(false);
   });
 
   it('stop the hero: it does not roll onto a marble', () => {
-    const hero = new Hero(new World(bytes, () => Int32Array.of(1, 0)));
+    const hero = heroOn(new World(bytes, () => Int32Array.of(1, 0)));
     expect(hero.step([1, 0])).toBe(false);
     expect(hero.at).toEqual(SPAWN);
     expect(hero.step([1, -1])).toBe(true);
+  });
+
+  it('is stopped by an enemy pushed onto its cell, and free to roll where a pushed enemy stood', () => {
+    const world = new World(bytes, () => Int32Array.of(1, 0));
+    const fight = new FightState();
+    fight.apply([[1, 0]], [[1, -1]], []); // the generated enemy on (1,0) is pushed to (1,-1)
+    expect(new Hero(world, fight).step([1, 0])).toBe(true); // its old cell is free
+    expect(new Hero(world, fight).step([1, -1])).toBe(false); // its new cell is taken
   });
 });
 
 describe('the troop', () => {
   it('starts as six marbles around the spawn', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     expect(TROOP).toBe(6);
     expect(hero.troop).toEqual(neighbours(SPAWN));
   });
 
   it('trails the hero: the cell it left first, then the cells it left before', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     for (const to of [[1, 0], [1, -1], [1, -2], [1, -3]] as const) expect(hero.step([...to])).toBe(true);
     expect(hero.troop).toHaveLength(TROOP);
     expect(hero.troop.slice(0, 4)).toEqual([[1, -2], [1, -1], [1, 0], SPAWN]);
@@ -146,7 +160,7 @@ describe('the troop', () => {
   });
 
   it('keeps six marbles when the hero rolls onto one of them', () => {
-    const hero = new Hero(new World(bytes));
+    const hero = heroOn(new World(bytes));
     const onto = hero.troop[0]!;
     expect(hero.step(onto)).toBe(true);
     expect(hero.troop).toHaveLength(TROOP);
@@ -179,7 +193,7 @@ describe('the Open world cache is bounded (#981)', () => {
   });
 
   it('holds every chunk of the largest view (radius 10: 21 x 21) plus a margin', () => {
-    expect(CACHE_LIMIT).toBeGreaterThanOrEqual(21 * 21 + 32);
+    expect(CACHE_LIMIT).toBeGreaterThanOrEqual(21 * 21 + 84); // and the ring of its edge: a rebuild keeps every chunk it uses (#1034)
   });
 
   it('lets the view raise the limit, the cache follows it', () => {
@@ -187,6 +201,22 @@ describe('the Open world cache is bounded (#981)', () => {
     world.limit = 400;
     for (let cx = 0; cx < 350; cx++) world.chunk(cx, 0);
     expect(world.cached.chunks).toBe(350);
+  });
+
+  it('a tile read finds its chunk without loading it again, and does not move it in the cache (#1034)', () => {
+    const load = vi.fn((cx: number, cy: number) => bytes(cx, cy));
+    const world = new World(load);
+    world.limit = 2;
+    world.chunk(0, 0);
+    world.chunk(1, 0);
+    world.tile(0, 0); // found, not loaded again; not moved to the most recent place
+    world.chunk(2, 0); // evicts the least recently used: (0, 0), not (1, 0)
+    const loads = (cx: number, cy: number) => load.mock.calls.filter(([x, y]) => x === cx && y === cy).length;
+    expect(loads(0, 0)).toBe(1);
+    world.chunk(1, 0);
+    expect(loads(1, 0)).toBe(1);
+    world.chunk(0, 0);
+    expect(loads(0, 0)).toBe(2);
   });
 
   it('evicts the least recently used chunk; a chunk read again stays', () => {

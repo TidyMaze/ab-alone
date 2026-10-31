@@ -466,7 +466,7 @@ describe('main.ts board and HUD', () => {
     const bot = await boot('?nodes=1');
     expect(bot.hud()).toContain('Mess: one seat filled. The other is counted.');
     startBoss(bot, 'hull');
-    expect(bot.hud()).toContain('Hull: rim on file.');
+    expect(bot.hud()).toContain('Rim on file.'); // #1038: the boss bar names the boss, the line keeps its flavour
     await bot.settle(); // the bot's pending answers arrive before the test ends
   });
 

@@ -23,6 +23,12 @@ describe('tallyLine', () => {
     expect(tallyLine({ mode: 'boss', boss: 'echo' })).not.toBe(tallyLine({ mode: 'local' }));
   });
 
+  // #1038: the boss bar names the boss, so the line keeps its flavour only, with no "Echo:" in front.
+  it('carries no boss name, the flavour only', () => {
+    expect(tallyLine({ mode: 'boss', boss: 'echo' })).toBe('Mirror logged. Six out to balance the books.');
+    for (const id of BOSS_IDS) expect(tallyLine({ mode: 'boss', boss: id })).not.toContain(':');
+  });
+
   it('stays one short line, no newline', () => {
     for (const id of BOSS_IDS) {
       const line = tallyLine({ mode: 'boss', boss: id });

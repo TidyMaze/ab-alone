@@ -2,7 +2,6 @@
 // in encounter mode.
 
 export interface BossHud {
-  name: string;
   phase: number; // 0 is P1
   phases: number;
   result: number; // 0 playing, 1 won, 2 lost (a draw is a loss)
@@ -11,15 +10,16 @@ export interface BossHud {
   daily?: string; // the daily challenge line of a daily fight, '' otherwise
 }
 
-/** The goal line shows before the first move, then only while the Goal control has it open. */
-export const goalShown = (plies: number, open: boolean): boolean => plies === 0 || open;
+/** The HUD's goal line shows before the first move only, and never while the Goal sheet holds it (#1032): the goal
+ *  is shown once. */
+export const goalShown = (plies: number, sheetOpen: boolean): boolean => plies === 0 && !sheetOpen;
 
 const RESULT_TEXT = ['', 'Victory', 'Defeat'];
 
 const escape = (text: string): string =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-export function bossHtml({ name, phase, phases, result, goal = '', tell = '', daily = '' }: BossHud): string {
+export function bossHtml({ phase, phases, result, goal = '', tell = '', daily = '' }: BossHud): string {
   const notches = Array.from(
     { length: phases },
     (_, i) => `<span class="notch${i === phase ? ' active' : ''}">P${i + 1}</span>`,
@@ -28,5 +28,5 @@ export function bossHtml({ name, phase, phases, result, goal = '', tell = '', da
   const told = tell === '' ? '' : `<div class="tell">${escape(tell)}</div>`;
   const aim = goal === '' ? '' : `<div class="goal">Goal: ${escape(goal)}</div>`;
   const day = daily === '' ? '' : `<div class="daily">${escape(daily)}</div>`;
-  return `<div class="boss"><strong>${escape(name)}</strong><div class="notches">${notches}</div>${aim}${day}${told}${outcome}</div>`;
+  return `<div class="boss"><div class="notches">${notches}</div>${aim}${day}${told}${outcome}</div>`;
 }

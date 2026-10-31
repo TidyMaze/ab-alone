@@ -1,6 +1,7 @@
 // The Open world mode (docs/specs/openworld.md): the cells of a huge generated map, read lazily from the engine one chunk
 // at a time, and the hero that walks them one cell at a time. Pure data and rules: no DOM, no three.js.
 import { DIRECTIONS, type Axial } from './board';
+import type { FightState } from './openworldfight';
 
 /** A chunk is CHUNK x CHUNK cells; the world is WORLD_CHUNKS x WORLD_CHUNKS chunks centred on the spawn. */
 export const CHUNK = 16;
@@ -10,12 +11,16 @@ export const SPAWN: Axial = [0, 0];
 /** The terrain codes of the bridge (`world_chunk`), by code. */
 export const TERRAINS = ['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall'] as const;
 export type Terrain = (typeof TERRAINS)[number];
+/** The biome codes of the bridge (`world_chunk`), by code: the order of `Biome` in the engine (openworld-terrain.md section 4). */
+export const BIOMES = ['meadow', 'forest', 'tundra', 'desert', 'badlands'] as const;
+export type Biome = (typeof BIOMES)[number];
 /** The terrains a marble cannot enter. */
 const BLOCKED: ReadonlySet<Terrain> = new Set(['water', 'peak', 'boulder', 'tree', 'wall']);
 
 export interface Tile {
   height: number;
   terrain: Terrain;
+  biome: Biome;
 }
 
 export const blocked = (tile: Tile): boolean => BLOCKED.has(tile.terrain);
@@ -23,19 +28,26 @@ export const blocked = (tile: Tile): boolean => BLOCKED.has(tile.terrain);
 /** The chunk a cell is in. */
 export const chunkOf = ([q, r]: Axial): Axial => [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
 
-/** The tiles of a chunk the bridge returned, row by row, `[]` off the world. */
+/** The tiles of a chunk the bridge returned, three bytes a cell (height, terrain, biome) row by row, `[]` off the world. */
 export function parseChunk(bytes: Uint8Array): Tile[] {
   const tiles: Tile[] = [];
-  for (let i = 0; i < bytes.length; i += 2) tiles.push({ height: bytes[i]!, terrain: TERRAINS[bytes[i + 1]!]! });
+  for (let i = 0; i < bytes.length; i += 3) {
+    tiles.push({ height: bytes[i]!, terrain: TERRAINS[bytes[i + 1]!]!, biome: BIOMES[bytes[i + 2]!]! });
+  }
   return tiles;
 }
 
-/** Chunks and enemy lists kept at once: the square of 21 x 21 chunks the largest view (radius 10) draws (441), and a
- * margin. The least recently used go first; `World.limit` can be raised. */
-export const CACHE_LIMIT = 512;
+/** Chunks and enemy lists kept at once: the square of 21 x 21 chunks the largest view (radius 10) draws (441), plus the ring of
+ * up to 84 chunks outside it that the water of its edge reads (`waterColor`), 525 in all, and a margin. Below that a rebuild evicts
+ * chunks it has just used and loads them again (#1034). The least recently used go first; `World.limit` can be raised. */
+export const CACHE_LIMIT = 640;
+
+/** The key of a chunk in the caches: a number, cheap to make on every tile read. The chunks of a world are within 32k of the spawn,
+ * so no two chunks share a key. */
+const keyOf = (cx: number, cy: number): number => cx * 65536 + cy;
 
 /** The value of a key, kept the most recently used; `undefined` when absent. */
-function touch<T>(cache: Map<string, T>, key: string): T | undefined {
+function touch<T>(cache: Map<number, T>, key: number): T | undefined {
   const value = cache.get(key);
   if (value !== undefined) {
     cache.delete(key);
@@ -45,15 +57,15 @@ function touch<T>(cache: Map<string, T>, key: string): T | undefined {
 }
 
 /** Stores a value as the most recently used, dropping the least recently used beyond `limit`. */
-function remember<T>(cache: Map<string, T>, key: string, value: T, limit: number): void {
+function remember<T>(cache: Map<number, T>, key: number, value: T, limit: number): void {
   cache.set(key, value);
-  if (cache.size > limit) cache.delete(cache.keys().next().value as string);
+  if (cache.size > limit) cache.delete(cache.keys().next().value as number);
 }
 
 /** The world of a seed: chunks come from `load(cx, cy)` the first time a cell of them is asked for. */
 export class World {
-  private readonly chunks = new Map<string, Tile[]>();
-  private readonly groups = new Map<string, Axial[]>();
+  private readonly chunks = new Map<number, Tile[]>();
+  private readonly groups = new Map<number, Axial[]>();
   /** How many chunks, and how many enemy lists, are kept at once. */
   limit = CACHE_LIMIT;
   /** How many chunks and enemy lists are cached now. */
@@ -68,7 +80,7 @@ export class World {
 
   /** The chunk `(cx, cy)`, `[]` off the world. */
   chunk(cx: number, cy: number): readonly Tile[] {
-    const key = `${cx},${cy}`;
+    const key = keyOf(cx, cy);
     let tiles = touch(this.chunks, key);
     if (!tiles) {
       tiles = parseChunk(this.load(cx, cy));
@@ -79,7 +91,7 @@ export class World {
 
   /** The enemy marbles that start in the chunk `(cx, cy)`. */
   enemies(cx: number, cy: number): readonly Axial[] {
-    const key = `${cx},${cy}`;
+    const key = keyOf(cx, cy);
     let cells = touch(this.groups, key);
     if (!cells) {
       const flat = this.loadEnemies(cx, cy);
@@ -89,15 +101,12 @@ export class World {
     return cells;
   }
 
-  /** Whether an enemy marble stands on a cell. A group never leaves the chunk it starts in, so only the cell's own chunk is read. */
-  occupied(q: number, r: number): boolean {
-    return this.enemies(...chunkOf([q, r])).some((e) => e[0] === q && e[1] === r);
-  }
-
-  /** The tile of a cell, `undefined` off the world. */
+  /** The tile of a cell, `undefined` off the world. A read finds its chunk without moving it in the cache: the view reads the six
+   * neighbours of every water cell, and the chunks it draws are touched by `chunk` (#1034). */
   tile(q: number, r: number): Tile | undefined {
     const [cx, cy] = chunkOf([q, r]);
-    return this.chunk(cx, cy)[(r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)];
+    const tiles = this.chunks.get(keyOf(cx, cy)) ?? this.chunk(cx, cy);
+    return tiles[(r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)];
   }
 }
 
@@ -131,13 +140,17 @@ export class Hero {
   at: Axial = SPAWN;
   /** The troop starts around the spawn; after a step each marble takes the place of the one before it, the first the hero's. */
   troop: Axial[] = neighbours(SPAWN);
-  constructor(private readonly world: World) {}
+  /** `fight` holds the enemies as they are now, the pushed ones included (openworldfight.ts). */
+  constructor(
+    private readonly world: World,
+    private readonly fight: FightState,
+  ) {}
 
   /** Rolls to `to` when it is a neighbour that is on the world, not blocked and free of enemies; reports whether it moved. */
   step(to: Axial): boolean {
     if (!neighbours(this.at).some((n) => same(n, to))) return false;
     const tile = this.world.tile(to[0], to[1]);
-    if (!tile || blocked(tile) || this.world.occupied(to[0], to[1])) return false;
+    if (!tile || blocked(tile) || this.fight.occupied(this.world, to[0], to[1])) return false;
     this.troop = [this.at, ...this.troop.filter((c) => !same(c, to))].slice(0, TROOP);
     this.at = to;
     return true;

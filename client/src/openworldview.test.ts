@@ -1,10 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { cellAtPoint, CHUNK, chunkOf, neighbours, TROOP, World } from './openworld';
+import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
+import { FightState } from './openworldfight';
+import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM } from './openworldglide';
 import {
+  BIOME_LOOK,
   CAPACITY,
+  groundColour,
   footprint,
+  GROUND,
   GROUNDS,
   groundRadius,
   HI_CAPACITY,
@@ -13,29 +18,51 @@ import {
   LOOK,
   MAX_REACH,
   MAX_ZOOM,
+  MOST,
   OpenWorldView,
   reachAt,
   reachFor,
+  STEP,
   topOf,
   variety,
   WATER,
   maxZoomFor,
+  MARBLE,
+  type Played,
   waterColor,
 } from './openworldview';
 
 // Every chunk of the square -3..3 is the same: the terrain code runs 0 to 7 along the cells, the height 0 to 3.
 function bytes(cx: number, cy: number): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([i % 4, i % 8], i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([i % 4, i % 8, 0], i * 3);
   return out;
+}
+// Grass everywhere, each cell at its level from `levels` (`base` for the others): a chunk of the square -3..3 (#988).
+function stepped(levels: Map<string, number>, base = 3): (cx: number, cy: number) => Uint8Array {
+  return (cx, cy) => {
+    if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) {
+      const q = cx * CHUNK + (i % CHUNK);
+      const r = cy * CHUNK + Math.floor(i / CHUNK);
+      out.set([levels.get(`${q},${r}`) ?? base, 2, 0], i * 3);
+    }
+    return out;
+  };
 }
 // Every chunk of the world is grass, flat: the loaded square is as wide as the reach asks for.
 function grass(): Uint8Array {
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2], i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
   return out;
 }
+// Whether the reach at zoom `k` goes past MAX_REACH at some yaw, every degree (#1026).
+const someYawReaches = (aspect: number, k: number): boolean => {
+  for (let deg = 0; deg < 360; deg++) if (reachAt(aspect, k, (deg * Math.PI) / 180) > MAX_REACH) return true;
+  return false;
+};
 const ground = (view: OpenWorldView) => GROUNDS.reduce((sum, g) => sum + mesh(view, `terrain-${g}`).count, 0);
 const mesh = (view: OpenWorldView, name: string) => view.scene.getObjectByName(name) as THREE.InstancedMesh;
 const counts = (view: OpenWorldView, prefix: string, names: readonly string[]) =>
@@ -50,17 +77,17 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const ground = counts(view, 'terrain', GROUNDS);
     // Codes 0 to 7 repeat 32 times a chunk: water, sand, grass, rock, peak, boulder, tree and wall.
     expect(ground).toEqual({ water: cells / 8, sand: cells / 8, grass: (cells / 8) * 2, rock: (cells / 8) * 3, peak: cells / 8 });
-    // walls and caps are a sparse prop: a real world never fills their capacity, this one (one cell in eight) does
+    // walls and caps are a sparse prop: a real world fills nothing like their capacity, this one (one cell in eight) grows them (#1010)
     expect(counts(view, 'prop', ['mountain', 'tree', 'boulder', 'wall', 'cap'])).toEqual({
       mountain: cells / 8,
       tree: cells / 8,
       boulder: cells / 8,
-      wall: Math.min(cells / 8, CAPACITY.wall),
-      cap: Math.min(cells / 8, CAPACITY.cap),
+      wall: cells / 8,
+      cap: cells / 8,
     });
   });
 
-  it('loads the chunks only when the hero enters another chunk, the chunks it has are kept', () => {
+  it('loads the chunks only when the hero leaves the loaded square, the chunks it has are kept (#1046)', () => {
     const load = vi.fn(bytes);
     const view = new OpenWorldView(new World(load));
     view.resize(1600, 900); // at 16:9 the reach of the closest view does not move with the hero inside its chunk
@@ -68,7 +95,9 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const loaded = load.mock.calls.length;
     view.show([1, 1]);
     expect(load).toHaveBeenCalledTimes(loaded);
-    view.show([CHUNK, 0]);
+    view.show([CHUNK, 0]); // the next chunk, but the square still covers the hero's ball: its centre and chunks are kept
+    expect(load).toHaveBeenCalledTimes(loaded);
+    view.show([4 * CHUNK - 1, 0]); // out of the square (its last cell is past the edge): re-centred on its chunk, so the chunks around it load
     expect(load.mock.calls.length).toBeGreaterThan(loaded);
   });
 
@@ -91,12 +120,17 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     view.show([2, 1]);
     expect(view.camera.aspect).toBeCloseTo(800 / 600);
     expect(view.pick(0, 0)).toEqual([2, 1]);
-    expect(view.pick(0.5, 0)[0]).toBeGreaterThan(2);
+    expect(view.pick(0.5, 0)).toEqual([2, 1]); // a point off the ring of the hero is no move (#988)
   });
 
   it('lifts a cell by its height, water lies low, and varies props by cell without chance', () => {
     expect(topOf('water', 0)).toBeLessThan(topOf('grass', 0));
     expect(topOf('grass', 3)).toBeGreaterThan(topOf('grass', 1));
+    // The eight levels 0 to 7 are one step apart: level 0 is 0.2 (land), a peak (level 7) stands 7 steps up, water lies at 0.08.
+    expect(topOf('grass', 0)).toBeCloseTo(0.2);
+    expect(topOf('peak', 7)).toBeCloseTo(0.2 + 7 * STEP);
+    for (let level = 0; level < 7; level++) expect(topOf('sand', level + 1) - topOf('sand', level)).toBeCloseTo(STEP);
+    expect(topOf('water', 7)).toBeCloseTo(0.08);
     expect(variety(3, 4)).toBe(variety(3, 4));
     const draws = new Set([0, 1, 2, 3, 4, 5].map((q) => variety(q, -q)));
     expect(draws.size).toBeGreaterThan(2);
@@ -109,7 +143,9 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const tree = mesh(view, 'prop-tree').geometry;
     const mountain = new THREE.BoxGeometry();
     view.useModels({ low: { mountain }, high: {} });
-    expect(mesh(view, 'prop-mountain').geometry).toBe(mountain);
+    // the mesh draws the model's shape, from its own copy of the geometry (#991)
+    expect(mesh(view, 'prop-mountain').geometry.getAttribute('position').count).toBe(mountain.getAttribute('position').count);
+    expect(mesh(view, 'prop-mountain').geometry).not.toBe(mountain);
     expect(mesh(view, 'prop-tree').geometry).toBe(tree);
   });
 
@@ -174,8 +210,8 @@ describe('loading the Blender models (client/models/openworld.glb, openworld-hi.
 function all(terrain: number): (cx: number, cy: number) => Uint8Array {
   return (cx, cy) => {
     if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-    const out = new Uint8Array(CHUNK * CHUNK * 2);
-    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, terrain], i * 2);
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, terrain, 0], i * 3);
     return out;
   };
 }
@@ -256,6 +292,221 @@ describe('the detailed props near the hero (#989)', () => {
   });
 });
 
+describe('the chunks of the view stay cached after a far walk (#1034)', () => {
+  // A world of water everywhere, so every edge cell of the view reads its neighbours in the chunks outside the view (`waterColor`).
+  const water = (): Uint8Array => {
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([0, 0, 0], i * 3);
+    return out;
+  };
+
+  it('a rebuild at the widest zoom loads each chunk once, after the walk has filled the cache past CACHE_LIMIT and come back', () => {
+    const load = vi.fn((_cx: number, _cy: number) => water());
+    const view = new OpenWorldView(new World(load));
+    view.resize(1600, 900);
+    view.zoomBy(MAX_ZOOM * 2);
+    for (let step = 0; step < 40; step++) view.show([step * CHUNK, 0]); // 40 chunk crossings: more chunks than the cache holds
+    load.mockClear();
+    view.show([0, 0]); // back to the spawn: a full rebuild around it
+    const keys = load.mock.calls.map(([cx, cy]) => `${cx},${cy}`);
+    expect(new Set(keys).size).toBe(keys.length); // no chunk of the rebuild is loaded again: none was evicted while in use
+    expect(view.reach).toBe(MAX_REACH);
+  });
+});
+
+describe('a step rebuilds only the props, the ground columns do not depend on the hero (#1034)', () => {
+  // The instances a mesh draws, matrices and colours, as numbers: what the browser shows.
+  const drawnOf = (m: THREE.InstancedMesh) => ({
+    count: m.count,
+    matrices: Array.from(m.instanceMatrix.array.slice(0, m.count * 16)),
+    colours: Array.from(m.instanceColor!.array.slice(0, m.count * 3)),
+  });
+  const everyMesh = (view: OpenWorldView): string[] => [...GROUNDS.map((g) => `terrain-${g}`), 'prop-mountain', 'prop-tree', 'prop-boulder', 'prop-wall', 'prop-cap', 'prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'].filter((n) => view.scene.getObjectByName(n));
+
+  it('a step to a neighbour writes the props only: the ground meshes keep their instances (their buffers are not rewritten)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const grounds = GROUNDS.map((g) => mesh(view, `terrain-${g}`));
+    const versions = grounds.map((m) => [m.instanceMatrix.version, m.instanceColor!.version]);
+    const propVersion = mesh(view, 'prop-tree').instanceMatrix.version;
+    view.show([1, 0]); // no detailed model: no prop switches between its meshes, so none is written (#1054)
+    expect(grounds.map((m) => [m.instanceMatrix.version, m.instanceColor!.version])).toEqual(versions);
+    expect(mesh(view, 'prop-tree').instanceMatrix.version).toBe(propVersion);
+  });
+
+  it('a step draws the same instances as a fresh build at the new hero: the same set, the look does not change (#1054 moves them)', () => {
+    const models = { low: { mountain: box() }, high: { mountain: box() } };
+    const stepped = new OpenWorldView(new World(bytes));
+    stepped.resize(1600, 900);
+    stepped.useModels(models);
+    stepped.show([0, 0]);
+    stepped.show([1, 0]);
+    const fresh = new OpenWorldView(new World(bytes));
+    fresh.resize(1600, 900);
+    fresh.useModels(models);
+    fresh.show([1, 0]);
+    for (const name of everyMesh(fresh)) expect(setOf(mesh(stepped, name)), name).toEqual(setOf(mesh(fresh, name)));
+  });
+});
+
+// The instances of a mesh as a set of matrix and colour strings: a step moves an instance to a free index, so the order differs.
+const setOf = (m: THREE.InstancedMesh): string[] =>
+  Array.from({ length: m.count }, (_, i) => `${m.instanceMatrix.array.slice(i * 16, i * 16 + 16).join()}|${m.instanceColor!.array.slice(i * 3, i * 3 + 3).join()}`).sort();
+// The instances of a mesh by the cell they stand on, as their matrix and colour.
+const byCell = (view: OpenWorldView, name: string): Map<string, string> => {
+  const m = mesh(view, name);
+  const out = new Map<string, string>();
+  cellsOf(view, name).forEach(([q, r], i) => {
+    out.set(`${q},${r}`, `${m.instanceMatrix.array.slice(i * 16, i * 16 + 16).join()}|${m.instanceColor!.array.slice(i * 3, i * 3 + 3).join()}`);
+  });
+  return out;
+};
+
+describe('a step moves only the props near the hero (#1054)', () => {
+  afterEach(() => vi.restoreAllMocks());
+  // The cells of a box of 41 x 41 cells around `centre`: the widest ball around it and its neighbours.
+  const around = (centre: Axial = [0, 0]): Axial[] => {
+    const cells: Axial[] = [];
+    for (let q = centre[0] - 20; q <= centre[0] + 20; q++) for (let r = centre[1] - 20; r <= centre[1] + 20; r++) cells.push([q, r]);
+    return cells;
+  };
+  const ballOf = (centre: Axial, cell: Axial) => hexDistance(cell, centre) <= HI_RADIUS;
+  const meshNames = (view: OpenWorldView): string[] =>
+    [...GROUNDS.map((g) => `terrain-${g}`), 'prop-mountain', 'prop-tree', 'prop-boulder', 'prop-wall', 'prop-cap', 'prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'].filter((n) => view.scene.getObjectByName(n));
+
+  it('writes only the props whose detail changes: the cells within HI_RADIUS of exactly one of the old and the new hero cell', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    const write = vi.spyOn(THREE.InstancedMesh.prototype, 'setMatrixAt');
+    view.show([1, 0]);
+    const switching = around().filter((cell) => ballOf([0, 0], cell) !== ballOf([1, 0], cell)).length;
+    expect(write).toHaveBeenCalledTimes(switching); // one write per prop that moves, not one per prop of the 441 chunks
+    expect(switching).toBeLessThan(60);
+  });
+
+  it('keeps the far props and the near ones that stay near as they are: the same instance on the same cell', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    const plain = byCell(view, 'prop-mountain');
+    const detailed = byCell(view, 'prop-mountain-hi');
+    view.show([1, 0]);
+    const plainAfter = byCell(view, 'prop-mountain');
+    const detailedAfter = byCell(view, 'prop-mountain-hi');
+    for (const cell of around()) {
+      const key = `${cell[0]},${cell[1]}`;
+      if (ballOf([0, 0], cell) === ballOf([1, 0], cell)) {
+        const before = ballOf([0, 0], cell) ? detailed : plain;
+        const after = ballOf([1, 0], cell) ? detailedAfter : plainAfter;
+        if (before.has(key)) expect(after.get(key), key).toBe(before.get(key));
+      }
+    }
+  });
+
+  it('a prop that leaves the radius goes back to its plain mesh, and one that comes within it is drawn in detail', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    expect(cellsOf(view, 'prop-mountain-hi')).toContainEqual([-8, 0]); // 8 from the origin
+    view.show([1, 0]); // 9 from here
+    expect(cellsOf(view, 'prop-mountain-hi')).not.toContainEqual([-8, 0]);
+    expect(cellsOf(view, 'prop-mountain')).toContainEqual([-8, 0]);
+    expect(cellsOf(view, 'prop-mountain-hi')).toContainEqual([9, 0]); // 8 from here, 9 from the origin
+    expect(cellsOf(view, 'prop-mountain')).not.toContainEqual([9, 0]);
+    expect(view.drawn['prop-mountain-hi']).toBe(HI_CAPACITY);
+    view.show([0, 0]); // back: the cell returns to the detailed mesh
+    expect(cellsOf(view, 'prop-mountain-hi')).toContainEqual([-8, 0]);
+    expect(cellsOf(view, 'prop-mountain')).not.toContainEqual([-8, 0]);
+  });
+
+  it('writes nothing when no detailed model has arrived: every prop stays on its plain mesh', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: {} });
+    view.show([0, 0]);
+    const write = vi.spyOn(THREE.InstancedMesh.prototype, 'setMatrixAt');
+    view.show([1, 0]);
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('moves a prop only where there is one on the world: a cell of another terrain or off the world writes nothing', () => {
+    const world = new World(bytes); // the chunks -3..3 are on the world: q runs from -48 to 63, the cells past it are off the world
+    const view = new OpenWorldView(world);
+    view.resize(1600, 900);
+    const models = { mountain: box(), tree: box(), boulder: box(), wall: box() };
+    view.useModels({ low: models, high: models });
+    view.show([58, 0]); // the hero's ball reaches past the edge of the world at q = 63
+    const write = vi.spyOn(THREE.InstancedMesh.prototype, 'setMatrixAt');
+    view.show([59, 0]);
+    const expected = around([58, 0]).filter((cell) => {
+      const tile = world.tile(cell[0], cell[1]);
+      return tile !== undefined && ['peak', 'tree', 'boulder', 'wall'].includes(tile.terrain) && ballOf([58, 0], cell) !== ballOf([59, 0], cell);
+    }).length;
+    expect(write).toHaveBeenCalledTimes(expected);
+    expect(expected).toBeGreaterThan(0);
+  });
+
+  it('a chunk rebuild still resets everything: every ground and prop is laid again, not only the ones that move', () => {
+    const view = new OpenWorldView(new World(all(4)));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.show([0, 0]);
+    view.show([1, 0]);
+    const reach = view.reach;
+    const write = vi.spyOn(THREE.InstancedMesh.prototype, 'setMatrixAt');
+    view.show([reach * CHUNK, 0]); // the edge of the square, still on the world: the square moves, so the grounds and every prop are written
+    expect(view.centreChunk).toEqual([reach, 0]);
+    expect(write).toHaveBeenCalledTimes(2 * ground(view));
+    expect((view.drawn['prop-mountain'] ?? 0) + (view.drawn['prop-mountain-hi'] ?? 0)).toBe(ground(view));
+  });
+
+  it('keeps the instances of a walk the same as a fresh build at the last cell, as a set, on every mesh', () => {
+    const models = { low: { mountain: box(), tree: box(), boulder: box(), wall: box() }, high: { mountain: box(), tree: box(), boulder: box(), wall: box() } };
+    const path: Axial[] = [[0, 0], [1, 0], [2, 0], [3, 1], [4, 1], [5, 2], [6, 3], [7, 4], [8, 4], [9, 5], [10, 6], [11, 6], [12, 7], [12, 8], [11, 9], [10, 10], [9, 10], [8, 11], [7, 12], [6, 12]];
+    const walked = new OpenWorldView(new World(bytes));
+    walked.resize(1600, 900);
+    walked.useModels(models);
+    for (const cell of path) {
+      walked.show(cell);
+      const fresh = new OpenWorldView(new World(bytes));
+      fresh.resize(1600, 900);
+      fresh.useModels(models);
+      fresh.show(cell);
+      for (const name of meshNames(fresh)) expect(setOf(mesh(walked, name)), `${name} at ${cell}`).toEqual(setOf(mesh(fresh, name)));
+    }
+  });
+
+  it('a step that needs more instances than its mesh holds grows the mesh and keeps the instances it had (#1054)', () => {
+    // Peaks on every chunk of the widest square (21 x 21 chunks) but one: the hole at chunk (2, 0) empties one cell of the ball around (24, 0).
+    const holed = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > MAX_REACH || Math.abs(cy) > MAX_REACH || (cx === 2 && cy === 0)) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(holed));
+    view.resize(1600, 900);
+    view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
+    view.zoomBy(MAX_ZOOM * 2); // the widest zoom: the square is MAX_REACH chunks around the origin, and its build sizes the mesh exactly
+    view.show([0, 0]);
+    const laid = mesh(view, 'prop-mountain');
+    expect(view.reach).toBe(MAX_REACH);
+    expect(laid.count).toBe(laid.instanceMatrix.count); // the plain props of the square fill the mesh: no slack
+    view.show([24, 0]); // the ball around (24, 0) holds one cell fewer than the origin's: one plain prop more than the mesh has room for
+    const grown = mesh(view, 'prop-mountain');
+    expect(grown).not.toBe(laid);
+    expect(view.drawn['prop-mountain']).toBe(laid.count + 1);
+    expect(view.drawn['prop-mountain-hi']).toBe(HI_CAPACITY - 1);
+    expect(cellsOf(view, 'prop-mountain')).toContainEqual([-8, 0]); // a plain prop that the grown mesh keeps
+    expect(new Set(cellsOf(view, 'prop-mountain').map(String)).size).toBe(view.drawn['prop-mountain']);
+  });
+});
+
 describe('the troop and the enemies on screen', () => {
   it('draws the troop where it stands and the enemy marbles around the hero', () => {
     const foes = (cx: number, cy: number): Int32Array => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5) : new Int32Array());
@@ -270,6 +521,32 @@ describe('the troop and the enemies on screen', () => {
     expect(at.x).toBeCloseTo(axialTo3D(6, 5).x);
     expect(at.z).toBeCloseTo(axialTo3D(6, 5).z);
   });
+
+  it('draws the enemies as they stand now: a generated one that was pushed is gone, the pushed one is where it stands', () => {
+    const foes = (cx: number, cy: number): Int32Array => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5) : new Int32Array());
+    const fight = new FightState();
+    const view = new OpenWorldView(new World(bytes, foes), fight);
+    view.show([0, 0]);
+    expect(view.enemyCount).toBe(2);
+    fight.apply([[5, 5]], [[5, 4]], []); // the push of the generated enemy (5,5) to (5,4), and nothing else
+    view.updateEnemies();
+    expect(mesh(view, 'enemies').count).toBe(2);
+    expect(view.enemyCount).toBe(2);
+    const m = new THREE.Matrix4();
+    mesh(view, 'enemies').getMatrixAt(0, m); // the generated (6,5) stays
+    expect(new THREE.Vector3().setFromMatrixPosition(m).x).toBeCloseTo(axialTo3D(6, 5).x);
+    mesh(view, 'enemies').getMatrixAt(1, m); // the pushed one, on (5,4)
+    expect(new THREE.Vector3().setFromMatrixPosition(m).x).toBeCloseTo(axialTo3D(5, 4).x);
+    expect(new THREE.Vector3().setFromMatrixPosition(m).z).toBeCloseTo(axialTo3D(5, 4).z);
+  });
+
+  it('draws the enemies of a fight a build takes too: a pushed enemy of the loaded square is in the first draw', () => {
+    const fight = new FightState();
+    fight.apply([], [[1, 0]], []);
+    const view = new OpenWorldView(new World(bytes), fight);
+    view.show([0, 0]);
+    expect(view.enemyCount).toBe(1);
+  });
 });
 
 describe('the zoom of the Open world camera (#976)', () => {
@@ -280,18 +557,18 @@ describe('the zoom of the Open world camera (#976)', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([2, 1]);
     expect(view.zoom).toBe(1);
-    expect(view.camera.position.y).toBeCloseTo(14);
+    expect(view.camera.position.y).toBeCloseTo(14 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(11);
     view.zoomBy(0.5); // closer than the default: no
     expect(view.zoom).toBe(1);
     view.zoomBy(1.5);
     expect(view.zoom).toBeCloseTo(1.5);
-    expect(view.camera.position.y).toBeCloseTo(21);
+    expect(view.camera.position.y).toBeCloseTo(21 + view.focusHeight);
     view.zoomBy(2 / 1.5);
-    expect(view.camera.position.y).toBeCloseTo(28);
+    expect(view.camera.position.y).toBeCloseTo(28 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(22);
     view.zoomBy(1e9);
-    expect(view.zoom).toBe(MAX_ZOOM);
+    expect(view.zoom).toBe(maxZoomFor(1)); // the default screen is square: its own widest zoom (#1027)
   });
 
   it('moves the fog and the far plane with the zoom, so the edge of the loaded chunks stays hidden', () => {
@@ -314,22 +591,100 @@ describe('the zoom of the Open world camera (#976)', () => {
     view.show([2, 1]);
     view.zoomBy(2);
     view.show([3, 1]);
-    expect(view.camera.position.y).toBeCloseTo(28);
+    expect(view.camera.position.y).toBeCloseTo(28 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(22);
   });
 
   it('picks the cell under the pointer at every zoom', () => {
     for (const level of [1, 1.5, 2]) {
-      const view = new OpenWorldView(new World(bytes));
+      const world = new World(bytes);
+      const view = new OpenWorldView(world);
       view.resize(800, 600);
       view.show([2, 1]);
       view.zoomBy(level);
       for (const cell of [[2, 1], ...neighbours([2, 1])] as Axial[]) {
         const p = axialTo3D(cell[0], cell[1]);
-        const ndc = new THREE.Vector3(p.x, hero(view).position.y, p.z).project(view.camera);
+        const tile = world.tile(cell[0], cell[1])!;
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
         expect(view.pick(ndc.x, ndc.y)).toEqual(cell);
       }
     }
+  });
+
+  it('picks the neighbour under the pointer on its own column top, 0 to 3 levels above and below the hero, close and far (#988)', () => {
+    for (const zoom of [1, MAX_ZOOM]) {
+      for (const d of neighbours([0, 0]) as Axial[]) {
+        for (const k of [-3, -2, -1, 0, 1, 2, 3]) {
+          // A cell lower than the ring hides behind it when it lies behind the hero: the ray to its top runs into the ring's
+          // columns, so only the two cells in front (`d[1] === 1`, nearest the camera) are clicked below the ring's level.
+          if (k < 0 && d[1] !== 1) continue;
+          // The hero stands on level 3 and one neighbour on 3 + k: every other cell of the ring is level 3.
+          const view = new OpenWorldView(new World(stepped(new Map([[`${d[0]},${d[1]}`, 3 + k]]))));
+          view.resize(800, 600);
+          view.show([0, 0]);
+          view.zoomBy(zoom);
+          const p = axialTo3D(d[0], d[1]);
+          const ndc = new THREE.Vector3(p.x, topOf('grass', 3 + k), p.z).project(view.camera);
+          expect(view.pick(ndc.x, ndc.y), `${d} at level ${3 + k}, zoom ${zoom}`).toEqual(d);
+        }
+      }
+    }
+  });
+
+  it('gives the hero its own cell, no move, when the pointer is on no cell of the hero ring', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(800, 600);
+    view.show([0, 0]);
+    expect(view.pick(1, 1)).toEqual([0, 0]);
+  });
+
+  it('skips a neighbour off the loaded world: the pick at the centre is the hero on the edge of the world', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(800, 600);
+    view.show([CHUNK * 4 - 1, 0]); // the last cell of chunk 3: the cells to its right are in chunk 4, not loaded
+    expect(view.pick(0, 0)).toEqual([CHUNK * 4 - 1, 0]);
+  });
+
+  it('gives the hero its own cell when the ray misses every top, a camera looking up away from the ground (#988)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(800, 600);
+    view.show([2, 1]);
+    view.camera.position.set(0, 10, 0);
+    view.camera.lookAt(0, 20, 0); // every ray climbs: no top plane below it is ever reached
+    view.camera.updateMatrixWorld();
+    expect(view.pick(0, 0)).toEqual([2, 1]);
+  });
+
+  it('eases the camera height to a step up a cliff: not at once, on the top within 0.6 s, never past it (#988)', () => {
+    const view = new OpenWorldView(new World(stepped(new Map([['1,0', 3]]), 0)));
+    view.resize(800, 600);
+    view.show([0, 0]);
+    expect(view.focusHeight).toBeCloseTo(view.scene.getObjectByName('hero')!.position.y);
+    view.show([1, 0]); // a step onto a cell 3 levels up: the top is 3 * STEP higher
+    const top = view.scene.getObjectByName('hero')!.position.y;
+    expect(top - view.focusHeight).toBeCloseTo(3 * STEP);
+    const start = view.focusHeight;
+    expect(view.ease(1 / 60, false)).toBe(true);
+    expect(view.focusHeight).toBeGreaterThan(start);
+    expect(view.focusHeight).toBeLessThan(top - 0.1); // not at its target at once
+    let highest = view.focusHeight;
+    // At 0.6 s the gap is 3 * STEP * exp(-5), 0.01 for STEP 0.5: it is on the top within 40 frames (0.67 s).
+    for (let frame = 1; frame < 40; frame++) {
+      view.ease(1 / 60, false);
+      highest = Math.max(highest, view.focusHeight);
+    }
+    expect(Math.abs(view.focusHeight - top)).toBeLessThanOrEqual(0.01); // on the top after 0.67 s
+    expect(highest).toBeLessThanOrEqual(top); // the ease never overshoots
+    expect(view.ease(1 / 60, false)).toBe(false); // settled: nothing to draw
+    expect(view.focusHeight).toBe(top);
+  });
+
+  it('jumps to the top at once when the ease is instant (reduced motion, #988)', () => {
+    const view = new OpenWorldView(new World(stepped(new Map([['1,0', 3]]), 0)));
+    view.show([0, 0]);
+    view.show([1, 0]);
+    expect(view.ease(1 / 60, true)).toBe(true);
+    expect(view.focusHeight).toBe(view.scene.getObjectByName('hero')!.position.y);
   });
 });
 
@@ -349,7 +704,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
           view.resize(width, height);
           view.show(hero);
           view.zoomBy(zoom); // a wide screen stops sooner: the zoom is the widest it allows
-          const [hq, hr] = chunkOf(hero);
+          const [hq, hr] = view.centreChunk; // the square is around its centre, which the hero's chunk may not be (#1046)
           for (const p of footprint(view.camera)) {
             const [cq, cr] = chunkOf(cellAtPoint(p.x, p.z));
             expect(Math.abs(cq - hq)).toBeLessThanOrEqual(view.reach);
@@ -381,7 +736,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     const limit = maxZoomFor(32 / 9);
     expect(limit).toBeLessThan(MAX_ZOOM);
     expect(reachAt(32 / 9, limit)).toBeLessThanOrEqual(MAX_REACH);
-    expect(reachAt(32 / 9, limit + 0.05)).toBeGreaterThan(MAX_REACH);
+    expect(someYawReaches(32 / 9, limit + 0.05)).toBe(true); // a turn of the camera needs the limit (#1026)
   });
 
   it('follows the aspect on a resize: a narrower screen lets the zoom go further, a wider one brings it back', () => {
@@ -395,7 +750,23 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     expect(view.zoom).toBe(maxZoomFor(32 / 9));
     expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
     view.resize(900, 1600);
-    expect(view.maxZoom).toBe(MAX_ZOOM);
+    expect(view.maxZoom).toBe(maxZoomFor(9 / 16));
+    expect(view.maxZoom).toBeGreaterThan(MAX_ZOOM);
+  });
+
+  it('lets a portrait phone zoom out past MAX_ZOOM, up to where its reach reaches MAX_REACH (#1027)', () => {
+    for (const aspect of [9 / 16, 3 / 4, 360 / 740, 390 / 844]) {
+      const limit = maxZoomFor(aspect);
+      expect(limit).toBeGreaterThan(MAX_ZOOM);
+      expect(reachAt(aspect, limit)).toBeLessThanOrEqual(MAX_REACH);
+      expect(someYawReaches(aspect, limit + 0.05)).toBe(true);
+    }
+  });
+
+  it('gives a limit that never grows with the width of the screen, from portrait to ultra-wide (#1027)', () => {
+    const limits = [9 / 16, 3 / 4, 1, 16 / 9, 21 / 9].map(maxZoomFor);
+    expect(limits).toEqual([...limits].sort((a, b) => b - a));
+    expect(maxZoomFor(16 / 9)).toBe(MAX_ZOOM); // the 16:9 screen keeps its limit
   });
 });
 
@@ -408,27 +779,70 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
     expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(CAPACITY.grass);
   });
 
-  it('clamps a mesh at its capacity: a widest view of peaks draws the mountains it holds, and writes no more', () => {
+  it('grows a mesh to draw every peak of the widest view, past its capacity, up to the most cells', () => {
     const peaks = (cx: number, cy: number): Uint8Array => {
       if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
-      const out = new Uint8Array(CHUNK * CHUNK * 2);
-      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4], i * 2); // every cell a peak
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3); // every cell a peak
       return out;
     };
     const view = new OpenWorldView(new World(peaks));
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(MAX_ZOOM); // the widest view holds more peaks than the mountains' capacity
-    expect(mesh(view, 'prop-mountain').count).toBe(CAPACITY.mountain);
-    expect(view.drawn['prop-mountain']).toBe(CAPACITY.mountain);
+    view.zoomBy(MAX_ZOOM); // the widest view holds more peaks than the mountains' capacity: the mesh grows
+    expect(mesh(view, 'prop-mountain').count).toBe(MOST);
+    expect(view.drawn['prop-mountain']).toBe(MOST);
   });
 
-  it('clamps the enemies at their capacity, and counts the ones drawn', () => {
+  it('grows the enemies to draw every one of them, and counts the ones drawn', () => {
     const crowd = Int32Array.from({ length: 2 * (CAPACITY.enemies + 10) }, () => 5); // every enemy on the cell (5, 5)
     const view = new OpenWorldView(new World(grass, (cx, cy) => (cx === 0 && cy === 0 ? crowd : new Int32Array())));
     view.show([0, 0]);
-    expect(mesh(view, 'enemies').count).toBe(CAPACITY.enemies);
-    expect(view.enemyCount).toBe(CAPACITY.enemies);
+    expect(mesh(view, 'enemies').count).toBe(CAPACITY.enemies + 10);
+    expect(view.enemyCount).toBe(CAPACITY.enemies + 10);
+  });
+
+  // #1010: a mesh past its initial capacity grows; only the theoretical most cells of the widest view are dropped.
+  const filled = (code: number) => (cx: number, cy: number): Uint8Array => {
+    if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([0, code, 0], i * 3); // every cell of one terrain, flat
+    return out;
+  };
+
+  it('draws every water cell of the widest view, past the capacity of the water mesh (#1010)', () => {
+    const view = new OpenWorldView(new World(filled(0))); // code 0: water
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(MAX_ZOOM);
+    const side = 2 * view.reach + 1;
+    expect(view.drawn['terrain-water']).toBe(side * side * CHUNK * CHUNK);
+    expect(view.drawn['terrain-water']).toBeGreaterThan(CAPACITY.water);
+    expect(mesh(view, 'terrain-water').instanceColor).not.toBeNull(); // the colour of each lake, kept through the growth
+  });
+
+  it('draws every tree of the widest view, past the capacity of the tree mesh (#1010)', () => {
+    const view = new OpenWorldView(new World(filled(6))); // code 6: tree
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(MAX_ZOOM);
+    const side = 2 * view.reach + 1;
+    expect(view.drawn['prop-tree']).toBe(side * side * CHUNK * CHUNK);
+    expect(view.drawn['prop-tree']).toBeGreaterThan(CAPACITY.tree);
+  });
+
+  it('grows the troop past its capacity too, so no marble of the troop is dropped (#1010)', () => {
+    const view = new OpenWorldView(new World(grass));
+    const troop = Array.from({ length: TROOP + 5 }, (_, i): Axial => [i % 5, 0]);
+    view.show([0, 0], troop);
+    expect(view.drawn.troop).toBe(TROOP + 5);
+  });
+
+  it('clamps the enemies at the most cells of the widest view, past the capacity they grow to (#1010)', () => {
+    const crowd = Int32Array.from({ length: 2 * (MOST + 5) }, () => 5);
+    const view = new OpenWorldView(new World(grass, (cx, cy) => (cx === 0 && cy === 0 ? crowd : new Int32Array())));
+    view.show([0, 0]);
+    expect(view.enemyCount).toBe(MOST);
   });
 });
 
@@ -466,22 +880,30 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     view.zoomBy(MAX_ZOOM);
     expect(reachFor(groundRadius(view.camera, hero(view).position))).toBeLessThanOrEqual(MAX_REACH);
     expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
-    // every cell of the square is grass here: the grass mesh holds its capacity and no more
-    expect(mesh(view, 'terrain-grass').count).toBe(Math.min((2 * view.reach + 1) ** 2 * CHUNK * CHUNK, CAPACITY.grass));
-    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(CAPACITY.grass);
+    // every cell of the square is grass here: the grass mesh grows to hold all of them, and no more than the most
+    const square = (2 * view.reach + 1) ** 2 * CHUNK * CHUNK;
+    expect(mesh(view, 'terrain-grass').count).toBe(square);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.count).toBe(square);
+    expect(square).toBeLessThanOrEqual(MOST);
   });
 
-  it('rebuilds the chunks when the hero enters another chunk at a far zoom, with the reach of the zoom', () => {
+  it('rebuilds the chunks only when the hero leaves the square at a far zoom, with the reach of the zoom (#1046)', () => {
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
     view.zoomBy(4);
     const reach = view.reach;
     const version = mesh(view, 'terrain-grass').instanceMatrix.version;
-    view.show([1, 1]); // the same chunk: the split of the detailed props is redrawn with the hero's cell, the reach kept (#989)
+    const propVersion = mesh(view, 'prop-tree').instanceMatrix.version;
+    view.show([1, 1]); // the same chunk: the reach is kept, and only the props that switch between detailed and plain are written (#1054)
     expect(view.reach).toBe(reach);
-    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBeGreaterThan(version);
-    view.show([CHUNK, 0]); // the next chunk: rebuilt around it, with the same reach
+    expect(mesh(view, 'prop-tree').instanceMatrix.version).toBe(propVersion); // no tree here, and no detailed model: nothing switches
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version); // the grounds do not depend on the hero (#1034)
+    view.show([CHUNK, 0]); // the next chunk, still inside the square at this zoom: the centre and the grounds are kept (#1046)
+    expect(view.centreChunk).toEqual([0, 0]);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
+    view.show([(reach + 1) * CHUNK, 0]); // a chunk past the square: rebuilt around it, with the same reach
+    expect(view.centreChunk).toEqual([reach + 1, 0]);
     expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBeGreaterThan(version);
     expect(view.reach).toBe(reach);
     expect(ground(view)).toBe((2 * reach + 1) ** 2 * CHUNK * CHUNK);
@@ -521,8 +943,8 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
 // Every cell of the square -3..3 of chunks is the terrain code `code(q, r)`.
 const terrain = (code: (q: number, r: number) => number) => (cx: number, cy: number): Uint8Array => {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
-  const out = new Uint8Array(CHUNK * CHUNK * 2);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, code(cx * CHUNK + (i % CHUNK), cy * CHUNK + Math.floor(i / CHUNK))], i * 2);
+  const out = new Uint8Array(CHUNK * CHUNK * 3);
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, code(cx * CHUNK + (i % CHUNK), cy * CHUNK + Math.floor(i / CHUNK)), 0], i * 3);
   return out;
 };
 const WATER_CODE = 0;
@@ -605,6 +1027,7 @@ describe('the Open world view frees its GPU objects (#981)', () => {
     view.show([0, 0]);
     const { geometries, materials } = objectsOf(view);
     expect(geometries.size).toBeGreaterThan(5);
+    view.drain(); // a frame has drawn since the models came: what they replaced is freed (#1017)
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
     const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
     view.dispose();
@@ -616,5 +1039,800 @@ describe('the Open world view frees its GPU objects (#981)', () => {
     expect(disposeGeometry.mock.contexts).toContain(detailed.geometry);
     expect(disposeMaterial.mock.contexts).toContain(detailed.material);
     vi.restoreAllMocks();
+  });
+});
+
+describe('the Open world view frees the instance buffers of each mesh (#991)', () => {
+  const instanced = (view: OpenWorldView): THREE.InstancedMesh[] => {
+    const out: THREE.InstancedMesh[] = [];
+    view.scene.traverse((object) => {
+      if ((object as THREE.InstancedMesh).isInstancedMesh) out.push(object as THREE.InstancedMesh);
+    });
+    return out;
+  };
+
+  it('gives each instanced mesh its own geometry: a shared one frees the instance buffers of only one of its meshes', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.useModels({ low: { tree: box() }, high: { tree: box() } });
+    view.show([0, 0]);
+    const meshes = instanced(view);
+    expect(meshes.length).toBeGreaterThan(5);
+    expect(new Set(meshes.map((m) => m.geometry)).size).toBe(meshes.length);
+  });
+
+  it('a grown mesh takes a geometry of its own, and the geometry it replaces is disposed with it', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const before = mesh(view, 'prop-mountain').geometry;
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain').count).toBe(MOST);
+    expect(mesh(view, 'prop-mountain').geometry).not.toBe(before);
+    view.drain();
+    expect(disposeGeometry.mock.contexts).toContain(before);
+    expect(new Set(instanced(view).map((m) => m.geometry)).size).toBe(instanced(view).length);
+    vi.restoreAllMocks();
+  });
+});
+
+describe('a replaced geometry is freed after the frame that may use it, not at once (#1017)', () => {
+  it('keeps a model geometry that replaces a procedural one until the next draw, then frees it', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    expect(disposeGeometry.mock.contexts).not.toContain(procedural);
+    view.drain();
+    expect(disposeGeometry.mock.contexts).toContain(procedural);
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the geometry and the mesh that a growth replaces until the next draw, then frees them', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const disposeMesh = vi.spyOn(THREE.InstancedMesh.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain')).not.toBe(old);
+    expect(disposeGeometry.mock.contexts).not.toContain(old.geometry);
+    expect(disposeMesh.mock.contexts).not.toContain(old);
+    view.drain();
+    expect(disposeGeometry.mock.contexts).toContain(old.geometry);
+    expect(disposeMesh.mock.contexts).toContain(old);
+    vi.restoreAllMocks();
+  });
+
+  it('a model swap replaces the mesh, with a material of its own, so the geometry it frees holds no buffer of a mesh still drawn (#1017)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    expect(mesh(view, 'prop-mountain')).not.toBe(old);
+    expect(mesh(view, 'prop-mountain').material).not.toBe(old.material);
+  });
+
+  it('a growth replaces the mesh with a material of its own, and frees the replaced material after the draw (#1017)', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain').material).not.toBe(old.material);
+    expect(disposeMaterial.mock.contexts).not.toContain(old.material);
+    view.drain();
+    expect(disposeMaterial.mock.contexts).toContain(old.material);
+    vi.restoreAllMocks();
+  });
+
+  it('frees what it still holds when it is disposed before any draw', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.dispose();
+    expect(disposeGeometry.mock.contexts).toContain(procedural);
+    vi.restoreAllMocks();
+  });
+
+  it('frees a replaced geometry once, however often it is drained', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.drain();
+    view.drain();
+    expect(disposeGeometry.mock.contexts.filter((g) => g === procedural)).toHaveLength(1);
+    vi.restoreAllMocks();
+  });
+});
+
+describe('the biomes look (openworld-terrain.md section 4, #984)', () => {
+  const at = (height: number, terrain: Terrain, biome: Biome): Tile => ({ height, terrain, biome });
+  // The chunks of the square -2..2, each one biome by its column (`cx` mod 5 is the biome code), with a tree or a boulder
+  // every other cell on the low ground (heights 3 and 4): five biomes, each with its props.
+  const biomeOf = (cx: number) => BIOMES[((cx % 5) + 5) % 5]!;
+  const byBiome = (cx: number, cy: number): Uint8Array => {
+    if (Math.abs(cx) > 2 || Math.abs(cy) > 2) return new Uint8Array();
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([3 + (i % 2), i % 2 ? 5 : 6, BIOMES.indexOf(biomeOf(cx))], i * 3);
+    return out;
+  };
+  const colourOf = (view: OpenWorldView, name: string): number[] => {
+    const m = mesh(view, name);
+    return Array.from({ length: m.count }, (_, i) => new THREE.Color().fromArray(m.instanceColor!.array, i * 3).getHex());
+  };
+
+  it('colours the low grass by its biome, and every other ground by LOOK', () => {
+    expect(groundColour(at(3, 'grass', 'meadow'), 'grass')).toBe(LOOK.grass.color);
+    expect(groundColour(at(4, 'grass', 'tundra'), 'grass')).toBe(BIOME_LOOK.tundra.ground);
+    expect(groundColour(at(3, 'tree', 'desert'), 'grass')).toBe(BIOME_LOOK.desert.ground); // a tree stands on the grass of its biome
+    expect(groundColour(at(5, 'grass', 'desert'), 'grass')).toBe(LOOK.grass.color); // uplands keep their green
+    expect(groundColour(at(2, 'sand', 'tundra'), 'sand')).toBe(LOOK.sand.color); // the shore keeps its sand
+    expect(groundColour(at(0, 'water', 'tundra'), 'water')).toBe(LOOK.water.color); // water keeps its colour (waterColor)
+  });
+
+  it('gives each biome its own low ground, the meadow the grass of before', () => {
+    expect(BIOME_LOOK.meadow.ground).toBe(0x3f7d5f);
+    expect(new Set(BIOMES.map((biome) => BIOME_LOOK[biome].ground)).size).toBe(BIOMES.length);
+  });
+
+  it('tints the trees and the boulders: whitish in tundra, warm in desert and badlands, neutral elsewhere', () => {
+    expect(BIOME_LOOK.meadow.prop).toBe(0xffffff);
+    expect(BIOME_LOOK.forest.prop).toBe(0xffffff);
+    expect(BIOME_LOOK.tundra.prop).toBe(0xe4f0f8);
+    expect(BIOME_LOOK.desert.prop).toBe(0xffd39a);
+    expect(BIOME_LOOK.badlands.prop).toBe(0xff9f7a);
+  });
+
+  it('paints the low ground and the props of each cell with its biome, one colour per instance', () => {
+    const view = new OpenWorldView(new World(byBiome));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    for (const name of ['terrain-grass', 'prop-tree', 'prop-boulder']) {
+      expect(mesh(view, name).instanceColor!.count).toBe(mesh(view, name).instanceMatrix.count);
+    }
+    const grounds = new Set(colourOf(view, 'terrain-grass'));
+    for (const biome of ['meadow', 'tundra', 'desert', 'badlands', 'forest'] as const) {
+      expect(grounds.has(BIOME_LOOK[biome].ground)).toBe(true);
+    }
+    const trees = new Set(colourOf(view, 'prop-tree'));
+    for (const biome of ['tundra', 'desert', 'badlands'] as const) expect(trees.has(BIOME_LOOK[biome].prop)).toBe(true);
+    expect(colourOf(view, 'prop-boulder').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the colours when the meshes grow to hold a wide view (#1010)', () => {
+    const view = new OpenWorldView(new World(byBiome));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const before = mesh(view, 'terrain-grass').instanceMatrix.count;
+    view.zoomBy(MAX_ZOOM); // the widest zoom
+    view.show([0, 0]);
+    const grounds = mesh(view, 'terrain-grass');
+    expect(grounds.instanceMatrix.count).toBeGreaterThanOrEqual(before);
+    expect(grounds.instanceColor!.count).toBe(grounds.instanceMatrix.count);
+    expect(new Set(colourOf(view, 'terrain-grass')).size).toBeGreaterThan(1);
+  });
+});
+
+describe("the troop's push animation (docs/specs/openworld.md section 4, #967)", () => {
+  // The push of the e2e fixture: the hero rolls from (0,0) to (1,0), the line of three (the hero and the troop's first two
+  // marbles) pushes the enemy (2,0) on to (3,0), and the hero and the troop follow it. The third troop marble stays.
+  const pushOf = (): Played => ({
+    from: [[1, 0], [0, 0], [-1, 0], [-2, 0]],
+    foes: [[2, 0]],
+    push: { troop: [[2, 0], [1, 0], [0, 0], [-2, 0]], enemies: [[3, 0]], ejected: [], dir: [1, 0] },
+  });
+  const SQUARE = (cx: number, cy: number): Uint8Array => (Math.abs(cx) > 3 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
+  // The view once the push is played: the state the mode draws at once, on the final cells.
+  function settled(played: Played, load = SQUARE, standing: Axial[] = []): OpenWorldView {
+    const fight = new FightState();
+    fight.apply([], standing, []); // enemies already on the board before the push
+    fight.apply(played.foes, played.push.enemies, played.push.ejected);
+    const view = new OpenWorldView(new World(load), fight);
+    view.show(played.push.troop[0]!, played.push.troop.slice(1));
+    view.updateEnemies();
+    return view;
+  }
+  // The drawn place of a marble: an instance of an instanced mesh, or the mesh itself (the hero, the ejected marble).
+  function placeOf(view: OpenWorldView, name: string, index = 0): THREE.Vector3 {
+    const object = view.scene.getObjectByName(name)!;
+    if (!(object instanceof THREE.InstancedMesh)) return object.position.clone();
+    const m = new THREE.Matrix4();
+    object.getMatrixAt(index, m);
+    return new THREE.Vector3().setFromMatrixPosition(m);
+  }
+  const inCell = (point: THREE.Vector3, [q, r]: Axial): boolean =>
+    Math.abs(point.x - axialTo3D(q, r).x) < 1e-6 && Math.abs(point.z - axialTo3D(q, r).z) < 1e-6;
+  const between = (v: number, a: number, b: number): boolean => (v - a) * (v - b) < 0;
+  afterEach(() => vi.restoreAllMocks());
+
+  it('lunges the pushing line from the old cells to the new ones: on the old cell at the start, between at the middle, on the new one at the end', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0);
+    view.tick(0);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 0), [0, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [-1, 0])).toBe(true);
+    view.tick(200);
+    expect(between(placeOf(view, 'hero').x, axialTo3D(1, 0).x, axialTo3D(2, 0).x)).toBe(true);
+    view.tick(400);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 0), [1, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [0, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 2), [-2, 0])).toBe(true); // the marble out of the line does not move
+  });
+
+  it('overshoots the new cell by a tenth of a cell at the end of the lunge, then settles back on it', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0);
+    const cell = axialTo3D(2, 0).x - axialTo3D(1, 0).x;
+    view.tick(320);
+    expect(placeOf(view, 'hero').x - axialTo3D(1, 0).x).toBeCloseTo(1.1 * cell, 3);
+    view.tick(340);
+    expect(between(placeOf(view, 'hero').x, axialTo3D(2, 0).x, axialTo3D(1, 0).x + 1.1 * cell)).toBe(true);
+    view.tick(380);
+    expect(between(placeOf(view, 'hero').x, axialTo3D(2, 0).x, axialTo3D(1, 0).x + 1.1 * cell)).toBe(true);
+  });
+
+  it('slides the pushed enemy one cell once the lunge reaches contact (40 % of it): on its cell before, on the next one at the end', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0);
+    view.tick(150);
+    expect(inCell(placeOf(view, 'enemies'), [2, 0])).toBe(true);
+    view.tick(285);
+    expect(between(placeOf(view, 'enemies').x, axialTo3D(2, 0).x, axialTo3D(3, 0).x)).toBe(true);
+    view.tick(410);
+    expect(inCell(placeOf(view, 'enemies'), [3, 0])).toBe(true);
+  });
+
+  it('an enemy of the fight that the push leaves where it is does not move while the others slide', () => {
+    const played: Played = { ...pushOf(), foes: [[2, 0], [9, 9]], push: { ...pushOf().push, enemies: [[3, 0], [9, 9]] } };
+    const view = settled(played, SQUARE, [[9, 9]]);
+    view.playPush(played, 0);
+    view.tick(285);
+    const drawn = Array.from({ length: view.enemyCount }, (_, i) => placeOf(view, 'enemies', i));
+    expect(drawn.some((p) => inCell(p, [9, 9]))).toBe(true);
+    expect(drawn.some((p) => inCell(p, [3, 0]) || between(p.x, axialTo3D(2, 0).x, axialTo3D(3, 0).x))).toBe(true);
+  });
+
+  it('a push by the troop alone leaves the hero where it is, and animates the marbles that move', () => {
+    const played: Played = {
+      from: [[-5, 0], [3, 0], [2, 0]],
+      foes: [[1, 0]],
+      push: { troop: [[-5, 0], [2, 0], [1, 0]], enemies: [[0, 0]], ejected: [], dir: [-1, 0] },
+    };
+    const view = settled(played);
+    view.playPush(played, 0);
+    view.tick(200);
+    expect(inCell(placeOf(view, 'hero'), [-5, 0])).toBe(true);
+    expect(between(placeOf(view, 'troop', 0).x, axialTo3D(3, 0).x, axialTo3D(2, 0).x)).toBe(true);
+    expect(between(placeOf(view, 'enemies').x, axialTo3D(1, 0).x, axialTo3D(0, 0).x)).toBe(true);
+  });
+
+  it('an ejected enemy slides into the water cell, then sinks below the ground while it shrinks to nothing, and is hidden at the end', () => {
+    const played: Played = {
+      from: [[1, 0], [0, 0], [-1, 0]],
+      foes: [[2, 0]],
+      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], dir: [1, 0] },
+    };
+    const view = settled(played);
+    view.playPush(played, 0);
+    view.tick(0);
+    expect(view.ejected.visible).toBe(true);
+    expect(inCell(view.ejected.position, [2, 0])).toBe(true);
+    expect(view.ejected.scale.x).toBe(1);
+    view.tick(410); // the slide is over, the fall starts
+    expect(inCell(view.ejected.position, [3, 0])).toBe(true);
+    expect(view.ejected.scale.x).toBe(1);
+    const high = view.ejected.position.y;
+    view.tick(560);
+    expect(view.ejected.scale.x).toBeGreaterThan(0);
+    expect(view.ejected.scale.x).toBeLessThan(1);
+    expect(view.ejected.position.y).toBeLessThan(high);
+    view.tick(710);
+    expect(view.ejected.scale.x).toBe(0);
+    expect(view.ejected.position.y).toBeLessThan(topOf('grass', 1)); // below the ground
+    expect(view.ejected.visible).toBe(false);
+  });
+
+  it('an ejected enemy pushed off the world keeps its height as it sinks, the cell beyond having no ground', () => {
+    const played: Played = {
+      from: [[62, 0], [61, 0], [60, 0]],
+      foes: [[63, 0]],
+      push: { troop: [[63, 0], [62, 0], [61, 0]], enemies: [], ejected: [[63, 0]], dir: [1, 0] },
+    };
+    const view = settled(played);
+    view.playPush(played, 0);
+    view.tick(410);
+    const ground = topOf('grass', 1) + MARBLE;
+    expect(view.ejected.position.y).toBeCloseTo(ground, 6);
+    view.tick(560);
+    expect(view.ejected.position.y).toBeLessThan(ground);
+    expect(view.ejected.scale.x).toBeLessThan(1);
+  });
+
+  it('a snap puts every marble on its final cell at once, hides the ejected marble and ends the animation', () => {
+    const played: Played = {
+      from: [[1, 0], [0, 0], [-1, 0]],
+      foes: [[2, 0]],
+      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], dir: [1, 0] },
+    };
+    const view = settled(played);
+    view.playPush(played, 0);
+    view.tick(100);
+    expect(view.animating).toBe(true);
+    view.snap();
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 0), [1, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [0, 0])).toBe(true);
+    expect(view.ejected.visible).toBe(false);
+    expect(view.animating).toBe(false);
+    expect(view.tick(100)).toBe(false);
+  });
+
+  it('the camera follows the hero where it is drawn: the point it looks at moves with the lunge and ends on the hero cell', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0);
+    view.tick(200);
+    expect(between(view.focusPoint.x, axialTo3D(1, 0).x, axialTo3D(2, 0).x)).toBe(true);
+    view.tick(400);
+    expect(inCell(view.focusPoint, [2, 0])).toBe(true);
+  });
+
+  it('has no record once the animation has ended, and none before a push', () => {
+    const view = settled(pushOf());
+    expect(view.animating).toBe(false);
+    expect(view.tick(0)).toBe(false);
+    view.playPush(pushOf(), 0);
+    expect(view.animating).toBe(true);
+    expect(view.tick(410)).toBe(true); // the frame that ends it draws the final cells
+    expect(view.tick(411)).toBe(false);
+    expect(view.animating).toBe(false);
+  });
+
+  it('an enemy that is not drawn has no record, and the push still plays its hero and troop', () => {
+    const view = new OpenWorldView(new World(SQUARE)); // no fight: the enemies of the push are not drawn
+    view.show([2, 0], [[1, 0], [0, 0], [-2, 0]]);
+    view.playPush(pushOf(), 0);
+    expect(view.tick(400)).toBe(true); // the lunge is the whole push
+    expect(view.tick(410)).toBe(false);
+    expect(view.animating).toBe(false);
+  });
+
+  it('a slow factor stretches every duration, the lunge included', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0, 10);
+    view.tick(400);
+    expect(between(placeOf(view, 'hero').x, axialTo3D(1, 0).x, axialTo3D(2, 0).x)).toBe(true);
+    view.tick(4100);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+    expect(view.animating).toBe(false);
+  });
+
+  it('disposes the ejected marble with the rest of the view: its geometry and its material, once', () => {
+    const view = settled(pushOf());
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
+    view.dispose();
+    expect(disposeGeometry.mock.contexts).toContain(view.ejected.geometry);
+    expect(disposeMaterial.mock.contexts).toContain(view.ejected.material);
+  });
+});
+
+describe('the camera turns around the hero by its yaw (#1026)', () => {
+  const DEG = Math.PI / 180;
+
+  it('sits on the back side of the hero at each yaw: the offset from the hero turns with it, and the camera looks at it', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    for (const yaw of [0, 30 * DEG, 90 * DEG, -60 * DEG]) {
+      view.turnTo(yaw);
+      const dx = view.camera.position.x - view.focusPoint.x;
+      const dz = view.camera.position.z - view.focusPoint.z;
+      expect(Math.hypot(dx, dz)).toBeGreaterThan(0);
+      expect(Math.atan2(dx, dz)).toBeCloseTo(yaw, 6); // the back at yaw 0 is +z, as before
+    }
+  });
+
+  it('picks the cell under the pointer at each yaw: a neighbour of the hero is the one its screen point picks', () => {
+    const world = new World(grass);
+    const view = new OpenWorldView(world);
+    view.resize(1600, 900);
+    for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG, -120 * DEG]) {
+      view.turnTo(yaw);
+      view.show([0, 0]);
+      for (const cell of neighbours([0, 0])) {
+        const p = axialTo3D(cell[0], cell[1]);
+        const tile = world.tile(cell[0], cell[1])!;
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
+        expect(view.pick(ndc.x, ndc.y)).toEqual(cell);
+      }
+    }
+  });
+
+  it('eases the yaw to its goal, one frame at a time, and settles on it; a goal wraps into (-pi, pi]', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(view.yaw).toBe(0);
+    view.turn(Math.PI);
+    view.turn(Math.PI / 2 + 0.1); // 3pi/2 + 0.1 wraps to -pi/2 + 0.1
+    expect(view.yaw).toBeCloseTo(-Math.PI / 2 + 0.1);
+    const before = view.camera.position.x;
+    expect(view.easeYaw(0.05, false)).toBe(true); // moving toward the goal
+    expect(view.camera.position.x).not.toBeCloseTo(before);
+    while (view.easeYaw(0.5, false));
+    expect(view.easeYaw(0.5, false)).toBe(false);
+    expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(-Math.PI / 2 + 0.1, 6);
+  });
+
+  it('snaps to the goal at once with reduced motion, and a turn back to zero is the reset', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.turn(1);
+    expect(view.easeYaw(0.016, true)).toBe(true);
+    expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(1, 6);
+    view.turn(-view.yaw);
+    view.easeYaw(0.016, true);
+    expect(view.yaw).toBe(0);
+    expect(view.camera.position.x).toBeCloseTo(view.focusPoint.x, 6);
+  });
+
+  it('draws the widest zoom at every turn with its reach within MAX_REACH: no edge of the loaded chunks shows (#1026)', () => {
+    const screens: [number, number][] = [
+      [900, 1600],
+      [2100, 900],
+    ];
+    for (const [width, height] of screens) {
+      const view = new OpenWorldView(new World(grass));
+      view.resize(width, height);
+      view.show([0, 0]);
+      view.zoomBy(1e9);
+      for (let deg = 0; deg < 360; deg += 1) {
+        view.turnTo(deg * DEG);
+        expect(reachAt(width / height, view.drawnZoom, view.yaw)).toBeLessThanOrEqual(MAX_REACH);
+      }
+    }
+  });
+
+  it('loads the chunks of the ground in view at the widest zoom and any yaw, within the reach budget', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(390, 844);
+    view.show([0, 0]);
+    for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG]) {
+      view.turnTo(yaw);
+      view.zoomBy(1e9);
+      expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
+    }
+  });
+});
+
+describe('the step glide of the hero and the troop (docs/specs/openworld.md section 4, #1040)', () => {
+  const GRASS = (cx: number, cy: number): Uint8Array => (Math.abs(cx) > 3 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
+  // The pushing line of the glide's push: the hero and three troop marbles, the enemy (2,0) on to (3,0).
+  const pushLine = (): Played => ({
+    from: [[1, 0], [0, 0], [-1, 0], [-2, 0]],
+    foes: [[2, 0]],
+    push: { troop: [[2, 0], [1, 0], [0, 0], [-2, 0]], enemies: [[3, 0]], ejected: [], dir: [1, 0] },
+  });
+  // The drawn place of a marble: the hero, or an instance of the troop.
+  function placeOf(view: OpenWorldView, name: 'hero' | 'troop', index = 0): THREE.Vector3 {
+    const object = view.scene.getObjectByName(name)!;
+    if (!(object instanceof THREE.InstancedMesh)) return object.position.clone();
+    const m = new THREE.Matrix4();
+    object.getMatrixAt(index, m);
+    return new THREE.Vector3().setFromMatrixPosition(m);
+  }
+  const inCell = (point: THREE.Vector3, [q, r]: Axial): boolean =>
+    Math.abs(point.x - axialTo3D(q, r).x) < 1e-6 && Math.abs(point.z - axialTo3D(q, r).z) < 1e-6;
+  const between = (v: number, a: number, b: number): boolean => (v - a) * (v - b) < 0;
+  const xOf = (cell: Axial): number => axialTo3D(cell[0], cell[1]).x;
+  // The view on the spawn (0,0), the troop behind it: the state before a step.
+  const standing = (): OpenWorldView => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([0, 0], [[-1, 0], [-2, 0]]);
+    return view;
+  };
+
+  it('glides the hero from its old cell to the new one: on the old cell at the start, between at the middle, on the new one at the end', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    expect(view.tick(0)).toBe(true);
+    expect(inCell(placeOf(view, 'hero'), [0, 0])).toBe(true);
+    view.tick(GLIDE_MS / 2);
+    expect(between(placeOf(view, 'hero').x, xOf([0, 0]), xOf([1, 0]))).toBe(true);
+    view.tick(GLIDE_MS);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(view.tick(GLIDE_MS + 10)).toBe(false); // landed: nothing moves
+  });
+
+  it("glides each troop marble to the cell of the one before it, the first from the hero's old cell", () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(GLIDE_MS / 2);
+    expect(between(placeOf(view, 'troop', 0).x, xOf([-1, 0]), xOf([0, 0]))).toBe(true);
+    expect(between(placeOf(view, 'troop', 1).x, xOf([-2, 0]), xOf([-1, 0]))).toBe(true);
+    view.tick(GLIDE_MS);
+    expect(inCell(placeOf(view, 'troop', 0), [0, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [-1, 0])).toBe(true);
+  });
+
+  it('chains a held step from the place the hero has mid-glide: no snap back to the cell it left', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(60);
+    const mid = placeOf(view, 'hero').x;
+    view.show([2, 0], [[1, 0], [0, 0]], { now: 60, span: GLIDE_MS });
+    view.tick(60);
+    expect(placeOf(view, 'hero').x).toBeCloseTo(mid, 9);
+    view.tick(60 + GLIDE_MS);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+  });
+
+  it('stands the marbles on their cells at once when a show has no glide: a world entered, a fixture, reduced motion', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]]);
+    expect(view.tick(0)).toBe(false);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 0), [0, 0])).toBe(true);
+  });
+
+  it('rolls the hero at the close zoom: its turn is drawn once it has rolled', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(GLIDE_MS);
+    const hero = view.scene.getObjectByName('hero')!;
+    expect(hero.quaternion.angleTo(new THREE.Quaternion())).toBeGreaterThan(1);
+  });
+
+  it('draws no roll and no squash at the far zoom: the hero only slides there', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.resize(1600, 900);
+    view.zoomBy(MAX_ZOOM);
+    expect(view.drawnZoom).toBeGreaterThan(ROLL_ZOOM);
+    view.show([0, 0], [[-1, 0], [-2, 0]]);
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(GLIDE_MS / 2);
+    const hero = view.scene.getObjectByName('hero')!;
+    expect(hero.quaternion.angleTo(new THREE.Quaternion())).toBe(0);
+    expect(hero.scale.x).toBe(1);
+    expect(hero.scale.y).toBe(1);
+  });
+
+  it('waits for the step to land before the push lunges, and lunges from the cells the step took', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([0, 0], [[-1, 0], [-2, 0], [-3, 0]]);
+    view.show([1, 0], [[0, 0], [-1, 0], [-2, 0]], { now: 0, span: GLIDE_MS });
+    view.playPush(pushLine(), 0);
+    view.tick(GLIDE_MS / 2);
+    expect(between(placeOf(view, 'hero').x, xOf([0, 0]), xOf([1, 0]))).toBe(true); // still the step
+    view.tick(GLIDE_MS);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true); // the lunge starts on the cell the step took
+    view.tick(GLIDE_MS + 200);
+    expect(between(placeOf(view, 'hero').x, xOf([1, 0]), xOf([2, 0]))).toBe(true);
+    view.tick(GLIDE_MS + 540);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+  });
+
+  it('a push that carries the hero on takes its end as the hero cell: the pick reads the new cell', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([0, 0], [[-1, 0], [-2, 0], [-3, 0]]);
+    view.show([1, 0], [[0, 0], [-1, 0], [-2, 0]]);
+    view.playPush(pushLine(), 0);
+    view.tick(10_000);
+    expect(view.pick(0, 0)).toEqual([2, 0]);
+  });
+
+  it('reports the glide while a marble moves, and not once it has landed', () => {
+    const view = standing();
+    expect(view.gliding).toBe(false);
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(10);
+    expect(view.gliding).toBe(true);
+    view.tick(GLIDE_MS + 10); // the landing draws the last cell
+    expect(view.gliding).toBe(true);
+    view.tick(GLIDE_MS + 20);
+    expect(view.gliding).toBe(false);
+  });
+
+  it('leaves a marble that is on its cell where it stands: a glide to the cells it has keeps nothing moving', () => {
+    const view = standing();
+    view.show([0, 0], [[-1, 0], [-2, 0]], { now: 0, span: GLIDE_MS });
+    expect(view.tick(0)).toBe(false);
+    expect(view.gliding).toBe(false);
+  });
+
+  it('stands a first world on its cell at once, with no glide in from the origin', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    expect(view.tick(0)).toBe(false);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(view.focusHeight).toBeCloseTo(placeOf(view, 'hero').y, 9);
+  });
+
+  it('a push that carries the hero on to the next chunk draws the chunks around the hero where it ends, as a view shown there does', () => {
+    // no ground west of the chunk -2: the chunks drawn depend on the chunk the hero is in
+    const edge = (cx: number, cy: number): Uint8Array => (cx <= -2 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
+    const a = CHUNK - 1;
+    const pushed: Played = {
+      from: [[a, 0], [a - 1, 0], [a - 2, 0], [a - 3, 0]],
+      foes: [[a + 1, 0]],
+      push: { troop: [[a + 1, 0], [a, 0], [a - 1, 0], [a - 3, 0]], enemies: [[a + 2, 0]], ejected: [], dir: [1, 0] },
+    };
+    const view = new OpenWorldView(new World(edge));
+    view.show([a, 0], [[a - 1, 0], [a - 2, 0], [a - 3, 0]]);
+    view.playPush(pushed, 0);
+    view.tick(10_000);
+    const fresh = new OpenWorldView(new World(edge));
+    fresh.show([a + 1, 0], [[a, 0], [a - 1, 0], [a - 3, 0]]);
+    const terrain = (v: OpenWorldView) => Object.entries(v.drawn).filter(([name]) => name.startsWith('terrain'));
+    expect(terrain(view)).toEqual(terrain(fresh));
+  });
+
+  it('nudges the hero toward the cell a blocked step names, and back on its own cell', () => {
+    const view = standing();
+    const x0 = placeOf(view, 'hero').x;
+    view.nudge([0, 0], [1, 0], 0, NUDGE_MS);
+    expect(view.tick(NUDGE_MS / 2)).toBe(true);
+    expect(placeOf(view, 'hero').x).toBeGreaterThan(x0);
+    view.tick(NUDGE_MS);
+    expect(placeOf(view, 'hero').x).toBeCloseTo(x0, 9);
+    expect(inCell(placeOf(view, 'hero'), [0, 0])).toBe(true);
+  });
+});
+
+describe('the stripe of the marbles fades with the zoom, and the materials keep it (#1043)', () => {
+  it('draws the stripe at full strength up to zoom 2.5, half at 2.75, and none at 3 where the roll stops', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(view.stripeFade).toBe(1);
+    view.zoomBy(2.75);
+    expect(view.zoom).toBeCloseTo(2.75);
+    expect(view.stripeFade).toBeCloseTo(0.5);
+    view.zoomBy(3 / 2.75);
+    expect(view.stripeFade).toBe(0);
+    expect(view.drawnZoom).toBeCloseTo(ROLL_ZOOM);
+  });
+
+  it('gives the hero, the troop, the foes and the ejected marble a stripe in their own material, with no swap when the zoom changes', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.show([0, 0]);
+    const names = ['hero', 'troop', 'enemies'];
+    const before = names.map((name) => (view.scene.getObjectByName(name) as THREE.Mesh).material);
+    const all = [...before, view.ejected.material];
+    for (const material of all) expect((material as THREE.MeshStandardNodeMaterial).colorNode).not.toBeNull();
+    expect(new Set(all).size).toBe(4);
+    view.zoomBy(2);
+    const after = names.map((name) => (view.scene.getObjectByName(name) as THREE.Mesh).material);
+    after.forEach((material, i) => expect(material).toBe(before[i]));
+  });
+});
+
+describe('the loaded chunks keep their centre while the hero paces along a chunk line (#1046)', () => {
+  const DEG = Math.PI / 180;
+  // The farthest ground in view from the hero's cell, as the view draws it (the camera as it stands now).
+  const radiusAt = (view: OpenWorldView, cell: Axial): number => {
+    const p = axialTo3D(cell[0], cell[1]);
+    return groundRadius(view.camera, new THREE.Vector3(p.x, 0, p.z));
+  };
+  // Whether the square of `reach` chunks around the chunk `centre` covers every cell of the hex ball of `radius` around `hero`.
+  const coversBall = (centre: Axial, reach: number, hero: Axial, radius: number): boolean =>
+    [0, 1].every((i) => hero[i]! - radius >= (centre[i]! - reach) * CHUNK && hero[i]! + radius < (centre[i]! + reach + 1) * CHUNK);
+
+  it('pacing across a chunk line at the widest zoom rebuilds no chunk: the centre and the grounds are kept', () => {
+    const load = vi.fn(() => grass());
+    const view = new OpenWorldView(new World(load));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(1e9);
+    const loaded = load.mock.calls.length;
+    const version = mesh(view, 'terrain-grass').instanceMatrix.version;
+    for (let i = 0; i < 10; i++) {
+      view.show([-1, 0]); // across the line between the chunks 0 and -1
+      view.show([0, 0]);
+    }
+    for (let i = 0; i < 10; i++) {
+      view.show([0, -1]); // and across the line between the chunks 0 and -1 on the other axis
+      view.show([0, 0]);
+    }
+    expect(load).toHaveBeenCalledTimes(loaded);
+    expect(view.centreChunk).toEqual([0, 0]);
+    expect(view.reach).toBe(MAX_REACH);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
+  });
+
+  it('re-centres the square on the hero chunk only when the square no longer covers the hero ball, and keeps it until then', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    let kept = 0;
+    let recentred = 0;
+    for (let q = 1; q <= 6 * CHUNK; q++) {
+      const before = view.centreChunk;
+      const hero: Axial = [q, 0];
+      view.show(hero);
+      const radius = radiusAt(view, hero);
+      expect(view.reach).toBe(reachFor(radius));
+      if (coversBall(before, reachFor(radius), hero, radius)) {
+        kept++;
+        expect(view.centreChunk).toEqual(before);
+      } else {
+        recentred++;
+        expect(view.centreChunk).toEqual(chunkOf(hero));
+      }
+    }
+    expect(kept).toBeGreaterThan(0);
+    expect(recentred).toBeGreaterThan(0);
+  });
+
+  it('covers the ground in view with the loaded square at every zoom and turn, while the hero walks past the chunk lines (#976, #1046)', () => {
+    const heroes: Axial[] = [[0, 0], [CHUNK - 1, 0], [CHUNK, -1], [CHUNK + 5, -CHUNK], [2 * CHUNK - 1, -CHUNK + 1], [3 * CHUNK, 0]];
+    for (const zoom of [1, 4, maxZoomFor(16 / 9)]) {
+      for (let deg = 0; deg < 360; deg += 90) {
+        const view = new OpenWorldView(new World(grass));
+        view.resize(1600, 900);
+        view.turnTo(deg * DEG);
+        view.zoomBy(zoom);
+        for (const hero of heroes) {
+          view.show(hero);
+          const [cq, cr] = view.centreChunk;
+          expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
+          for (const p of footprint(view.camera)) {
+            const [pq, pr] = chunkOf(cellAtPoint(p.x, p.z));
+            expect(Math.abs(pq - cq)).toBeLessThanOrEqual(view.reach);
+            expect(Math.abs(pr - cr)).toBeLessThanOrEqual(view.reach);
+          }
+        }
+      }
+    }
+  });
+
+  it('a push that carries the hero out of the loaded square re-centres the chunks on its end cell (#1040, #1046)', () => {
+    // the first cell east of the centre chunk that the square no longer covers, at the closest zoom on 16:9
+    const probe = new OpenWorldView(new World(grass));
+    probe.resize(1600, 900);
+    probe.show([0, 0]);
+    let edge = 0;
+    while (probe.centreChunk[0] === 0) probe.show([++edge, 0]);
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([edge - 1, 0], [[edge - 2, 0]]); // the last cell the square covers
+    expect(view.centreChunk).toEqual([0, 0]);
+    const played: Played = {
+      from: [[edge - 1, 0], [edge - 2, 0]],
+      foes: [],
+      push: { troop: [[edge, 0], [edge - 1, 0]], enemies: [], ejected: [], dir: [1, 0] },
+    };
+    view.playPush(played, 0);
+    view.tick(10_000);
+    expect(view.centreChunk).toEqual(chunkOf([edge, 0]));
   });
 });

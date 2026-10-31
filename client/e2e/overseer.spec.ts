@@ -33,7 +33,7 @@ async function startOverseer(page: Page): Promise<void> {
   await openModes(page);
   await page.getByRole('button', { name: 'Boss fight' }).click();
   await page.locator('#boss-list').getByRole('button', { name: 'The Overseer' }).click();
-  await expect(page.locator('#hud')).toContainText('The Overseer');
+  await expect(page.locator('#boss-bar .name')).toContainText('The Overseer');
   await expect(page.locator('body')).toHaveAttribute('data-deck', 'chapel');
 }
 

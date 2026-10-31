@@ -23,7 +23,7 @@ test('Free camera is a settings item, not a HUD button, lit while it is on, #938
   await page.goto('./?bot=off');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#free-cam')).toHaveCount(0);
-  await expect(page.locator('#group-view button')).toHaveCount(1); // Reset view alone
+  await expect(page.locator('#dock > #reset-view')).toHaveCount(1); // Reset view alone, in the thumb dock (#1032)
   await page.locator('#settings').click();
   const item = page.getByRole('button', { name: 'Free camera' });
   await expect(item).toHaveAttribute('aria-pressed', 'false');
@@ -48,8 +48,7 @@ test('Copy looks like Reset view and is as tall as the link beside it, #839', as
   await openModes(page);
   await page.getByRole('button', { name: 'Play online', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Copy', exact: true })).toBeVisible();
+  // #1032: Reset view is a thumb dock button (its label is a short word there), so Copy is no longer compared to it.
   const copy = await look(page, 'invite-copy');
-  const { height, ...rest } = await look(page, 'reset-view');
-  expect({ ...copy, height: 0 }).toEqual({ ...rest, height: 0 });
   expect(copy.height).toBe((await page.locator('#invite').boundingBox())!.height);
 });

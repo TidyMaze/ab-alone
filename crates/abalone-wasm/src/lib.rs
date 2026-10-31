@@ -80,10 +80,17 @@
 //!   act by act from `0`, row by row, `col` ascending. `kind` `0` fight, `1` boss (the last row of
 //!   an act), `2` elite, `3` rest, `4` event. `links` is a bit mask of the columns of the next row of the same act the node leads
 //!   to; a boss leads to every node of the next act's first row (docs/specs/roguelite.md).
-//! - Open world chunk (`world_chunk(seed, cx, cy)`): 2 bytes `[height, terrain]` per cell of the
-//!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. `height` `0` to `3`;
+//! - Open world chunk (`world_chunk(seed, cx, cy)`): 3 bytes `[height, terrain, biome]` per cell of the
+//!   16 x 16 chunk, row by row (`r` then `q` ascending), empty off the world. `height` `0` to `7`;
 //!   `terrain` `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall;
-//!   all but sand, grass and rock are blocked (docs/specs/openworld.md section 2).
+//!   all but sand, grass and rock are blocked; `biome` `0` meadow, `1` forest, `2` tundra, `3` desert,
+//!   `4` badlands (docs/specs/openworld.md section 2, openworld-terrain.md section 4).
+//! - Open world push (`world_push(seed, troop, enemies)`): `troop` is the hero's cell then the troop's,
+//!   `enemies` the enemy marbles near the hero, `q, r` pairs. Empty when no push is legal, else
+//!   `[ejected_q, ejected_r, ejected_kind, ntroop, ...troop, nenemies, ...enemies, dir_q, dir_r]`:
+//!   `ejected_kind` `0` none, `1` water, `2` edge, with the ejected enemy's cell before the push (`0, 0`
+//!   when none); the new cells keep the input order and the ejected enemy is left out of `enemies`;
+//!   `dir` is the push's axial step (docs/specs/openworld.md section 4).
 
 pub mod convert;
 pub mod encounter;
@@ -97,7 +104,7 @@ pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::Engine;
 pub use royale::Royale;
 pub use run::run_map;
-pub use world::world_chunk;
+pub use world::{world_chunk, world_version};
 
 #[cfg(test)]
 mod tests {
@@ -107,8 +114,8 @@ mod tests {
     fn re_exports_and_submodules_are_accessible() {
         assert_eq!(MOVE_STRIDE, 8);
         assert_eq!(convert::MOVE_STRIDE, 8);
-        assert_eq!(engine_version(), 14);
-        assert_eq!(encounter::engine_version(), 14);
+        assert_eq!(engine_version(), 15);
+        assert_eq!(encounter::engine_version(), 15);
         let engine = Engine::new();
         assert_eq!(engine.to_move(), 1);
         let encounter = Encounter::new("echo", 1).unwrap();

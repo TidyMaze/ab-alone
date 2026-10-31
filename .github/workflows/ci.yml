@@ -46,11 +46,16 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --all --locked
 
-  # The client's unit tests, on the wasm package, cached like in the `wasm` job.
-  client:
+  # The client's unit tests, on the wasm package, cached like in the `wasm` job. Five shards run in parallel, dealt by file size (scripts/unit-shard.ts: --shard cuts by file count, not by cost), each writes a blob
+  # report with its coverage; the `client` job below merges them and checks the 100 % gate once (#1079).
+  client-shard:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - id: wasm-cache
@@ -74,7 +79,42 @@ jobs:
           bun-version-file: client/package.json
       - run: bun install --frozen-lockfile
         working-directory: client
-      - run: bun run test
+      - run: bunx vitest run $(bun run scripts/unit-shard.ts ${{ matrix.shard }} 5) --reporter=blob --outputFile.blob=reports/blob-${{ matrix.shard }}-5.json --coverage
+        working-directory: client
+        env:
+          VITEST_SHARD: '1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          path: client/reports/blob-${{ matrix.shard }}-5.json
+          retention-days: 1
+
+  # Merges the five blob reports: every test ran, and the merged coverage meets the 100 % thresholds (decision #445).
+  client:
+    needs: client-shard
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: crates/abalone-wasm/pkg
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/abalone-wasm/**', 'crates/abalone-core/**') }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: client/package.json
+      - run: bun install --frozen-lockfile
+        working-directory: client
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: vitest-blob-*
+          path: client/reports
+          merge-multiple: true
+      - run: bunx vitest --merge-reports=reports --coverage
         working-directory: client
 
   # The client's types and production build, on the same cached wasm package.

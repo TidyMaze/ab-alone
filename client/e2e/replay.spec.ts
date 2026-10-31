@@ -41,3 +41,19 @@ test('Replay steps through an imported game, view only, and Live returns to the 
   await expect(page.locator('#replay-bar')).toBeHidden();
   await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
 });
+
+// #1038: the score bar of a replay shows the evaluation of the position on show, never the final result of the game.
+test('a replay at the start shows the start position evaluated, not the result of the game, #1038', async ({ page }) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  await page
+    .locator('#import-file')
+    .setInputFiles({ name: 'game.json', mimeType: 'application/json', buffer: Buffer.from(save(BLACK_WINS)) });
+  await expect(page.locator('body')).toHaveAttribute('data-over', 'win');
+  await page.getByRole('button', { name: 'Replay', exact: true }).click();
+  await page.locator('#replay-first').click();
+  await expect(page.locator('#replay-label')).toHaveText(`Move 0 of ${BLACK_WINS.length}`);
+  // The engine's search score of the start position is small and not exactly 0: the bar reads "Black +0.1" on main
+  // (b5e5a31, after #1048). The bar shows that evaluation in words, never the result ("winning").
+  await expect(page.locator('#eval .label')).toHaveText(/^(Even|(Black|White) \+\d+\.\d)$/);
+});
