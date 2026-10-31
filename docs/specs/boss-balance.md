@@ -492,6 +492,21 @@ The 10x player beats this boss search even on the full 14-marble layout, so no k
 brings it inside. Owner decision on #667: the Alien stays as it is, the bot ladder cannot calibrate
 it, and humans judge its difficulty.
 
+### The Alien after #826: its search plays the eggs, not tuned
+
+The root filter `spares_eggs` is replaced by an `alien_step` on every ply of the tree (crush, count
+down, hatch; the lay is a seeded pick, left out) and an egg weight of 50 in the evaluation
+(`ALIEN_EGG_WEIGHT`, TUNE). Node budget 3000, no rule change. Ladder player unchanged,
+`ALIEN_X=1 ALIEN_SEEDS=20 cargo run --release --example alien_sim`, seeds 0 to 19:
+
+| | Wins /20 | Median plies | Median eggs crushed | Median hatched | Median Alien peak |
+|---|---|---|---|---|---|
+| Before (main d5b9cab) | 20 | 86 | 2 | 20 | 22.5 |
+| After | 20 | 93 | 2 | 21.5 | 23.5 |
+
+The bot still loses every fight to the pro-budget ladder player (as in #667); the fights last a
+little longer. No further tuning.
+
 ### The Overseer: its AI plays the neurotoxin clock and its phases (#828), not tuned
 
 Before (the ladder row only, 402b79f): the boss search burned on every ply but kept the phase of
