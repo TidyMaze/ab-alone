@@ -140,17 +140,20 @@ mod tests {
 
     #[test]
     fn with_army_starts_the_army_fight() {
-        let engine = Engine::with_army(9);
+        let engine = Engine::with_army(9, 14);
         assert_eq!(count(&engine.board(), 1), 9);
         assert_eq!(count(&engine.board(), 2), 14);
         assert_eq!(engine.win_ejections(2), 6);
-        assert_eq!(Engine::with_army(5).win_ejections(2), 2);
-        assert_eq!(Engine::with_army(14).board(), Engine::new().board());
+        assert_eq!(Engine::with_army(5, 14).win_ejections(2), 2);
+        assert_eq!(Engine::with_army(14, 14).board(), Engine::new().board());
+        let fight = Engine::with_army(14, 10);
+        assert_eq!(count(&fight.board(), 1), 14);
+        assert_eq!(count(&fight.board(), 2), 10);
     }
 
     #[test]
     fn a_rogue_lite_fight_places_special_marbles_before_its_first_move() {
-        let mut engine = Engine::with_army(14);
+        let mut engine = Engine::with_army(14, 14);
         assert_eq!(engine.place_special(0, 4, 1), Ok(()));
         assert_eq!(engine.place_special(-1, 4, 2), Ok(()));
         assert_eq!(engine.place_special(0, -4, 3), Ok(()));
@@ -175,7 +178,7 @@ mod tests {
     fn the_same_fight_gives_the_same_game_through_the_bridge() {
         // Two Sparks and a Heavy in a bot game: the same placement and moves give the same game.
         let run = || {
-            let mut engine = Engine::with_army(14);
+            let mut engine = Engine::with_army(14, 14);
             for (q, r, kind) in [(-4, 4, 3), (4, -4, 3), (0, 2, 1)] {
                 engine.place_special(q, r, kind).unwrap();
             }
