@@ -84,10 +84,43 @@ test('two held arrows roll the hero on the diagonal, #977', async ({ page }) => 
   await expect.poll(at).toBe('0,0');
   await page.keyboard.down('ArrowUp');
   await expect.poll(at).toBe('1,-1');
-  await page.keyboard.down('ArrowLeft'); // Up and Left held: up-left
-  await expect.poll(at).toBe('1,-2');
+  // Up and Left held: the diagonal is the next step of the cadence (#1059), so the first move after the Left keydown is up-left.
+  // Read in the page as it is made: the walk goes on while both are held, and a poll could see a later cell.
+  const firstMove = page.evaluate(
+    () =>
+      new Promise<string>((done) => {
+        const from = document.body.dataset.openworldAt; // a mark of the same cell (the models arriving) is no move
+        const observer = new MutationObserver(() => {
+          if (document.body.dataset.openworldAt === from) return;
+          observer.disconnect();
+          done(document.body.dataset.openworldAt!);
+        });
+        observer.observe(document.body, { attributes: true, attributeFilter: ['data-openworld-at'] });
+      }),
+  );
+  await page.keyboard.down('ArrowLeft');
+  expect(await firstMove).toBe('1,-2');
   await page.keyboard.up('ArrowLeft');
   await page.keyboard.up('ArrowUp');
+});
+
+// #1059: a held arrow walks the hero on its own, one cell per 140 ms, with no key repeat: the keydown steps at once, the frames
+// step while it is held, and the keyup stops it. The spawn's clearing is open to 3 cells on every seed, so 3 cells are walked
+// within 3 s with no obstacle in the way, and the walk stops once the arrow is let go.
+test('a held arrow walks the Open world on its own and stops on keyup, #1059', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  await page.keyboard.down('ArrowRight');
+  await expect.poll(at).toBe('1,0'); // the keydown's own step
+  await expect.poll(at, { timeout: 3000 }).toBe('3,0'); // the frames walk on: no key repeat is sent for a key held down
+  await page.keyboard.up('ArrowRight');
+  const stopped = await at();
+  await page.evaluate(() => new Promise((done) => setTimeout(done, 400)));
+  expect(await at()).toBe(stopped); // let go: no more steps
 });
 
 // #976: the wheel zooms the Open world camera out far and back, and the hero still rolls from the far zoom.
