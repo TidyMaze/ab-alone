@@ -4289,9 +4289,26 @@ function showResultCard(): void {
           attempt: fight.daily.attempt,
         })
       : '';
-  resultCard.hidden = text === '';
+  const shown = text !== '' && text !== closedCard; // a card the player closed stays closed until its text changes
+  if (shown && resultCard.hidden) cardOpener = document.activeElement as HTMLElement | null;
+  resultCard.hidden = !shown;
   if (resultText.value !== text) resultText.value = text;
 }
+// The card is a sheet above the dock (#1032): Esc or a tap outside closes it, and the focus goes back to what had it.
+let closedCard = '';
+let cardOpener: HTMLElement | null = null;
+function closeResultCard(): void {
+  if (resultCard.hidden) return;
+  closedCard = resultText.value;
+  resultCard.hidden = true;
+  cardOpener?.focus();
+}
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeResultCard();
+});
+addEventListener('pointerdown', (e) => {
+  if (!resultCard.contains(e.target as Node)) closeResultCard();
+});
 document.getElementById('daily-copy')!.addEventListener('click', async () => {
   if (await copyText(resultText.value, navigator.clipboard)) return hud(' · result copied');
   resultText.focus();

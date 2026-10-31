@@ -380,6 +380,37 @@ describe('main.ts daily challenge', () => {
     }
   });
 
+  it('the daily result card closes with Esc or a tap outside, gives the focus back, and stays closed until its text changes (#1032)', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(DAY);
+    const game = await boot('?bot=off', { reducedMotion: true });
+    byId('daily').click();
+    byId('reset-view').focus(); // the focus the card returns to
+    loseByRepetition(game);
+    const card = byId('daily-card');
+    expect(card.hidden).toBe(false);
+    game.hud(); // a HUD refresh keeps an open card open
+    expect(card.hidden).toBe(false);
+    byId('daily-result').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); // a tap in the card keeps it
+    expect(card.hidden).toBe(false);
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); // a tap outside closes it
+    expect(card.hidden).toBe(true);
+    expect(document.activeElement).toBe(byId('reset-view'));
+    game.hud(); // closed, it stays closed while its text is the same
+    expect(card.hidden).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); // closed already: nothing happens
+    expect(card.hidden).toBe(true);
+  });
+
+  it('Esc closes the daily result card', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(DAY);
+    const game = await boot('?bot=off', { reducedMotion: true });
+    byId('daily').click();
+    loseByRepetition(game);
+    expect(byId('daily-card').hidden).toBe(false);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(byId('daily-card').hidden).toBe(true);
+  });
+
   it('Retry after 00:00 UTC starts the new day’s fight, its first attempt', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(DAY);
     const game = await boot('?bot=off');
