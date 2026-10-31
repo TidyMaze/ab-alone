@@ -991,3 +991,197 @@ describe('the biomes look (openworld-terrain.md section 4, #984)', () => {
     expect(new Set(colourOf(view, 'terrain-grass')).size).toBeGreaterThan(1);
   });
 });
+
+describe("the troop's push animation (docs/specs/openworld.md section 4, #967)", () => {
+  // The push of the e2e fixture: the hero rolls from (0,0) to (1,0), the line of three (the hero and the troop's first two
+  // marbles) pushes the enemy (2,0) on to (3,0), and the hero and the troop follow it. The third troop marble stays.
+  const pushOf = (): Played => ({
+    from: [[1, 0], [0, 0], [-1, 0], [-2, 0]],
+    foes: [[2, 0]],
+    push: { troop: [[2, 0], [1, 0], [0, 0], [-2, 0]], enemies: [[3, 0]], ejected: [], dir: [1, 0] },
+  });
+  const SQUARE = (cx: number, cy: number): Uint8Array => (Math.abs(cx) > 3 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
+  // The view once the push is played: the state the mode draws at once, on the final cells.
+  function settled(played: Played, load = SQUARE): OpenWorldView {
+    const fight = new FightState();
+    fight.apply(played.foes, played.push.enemies, played.push.ejected);
+    const view = new OpenWorldView(new World(load), fight);
+    view.show(played.push.troop[0]!, played.push.troop.slice(1));
+    view.updateEnemies();
+    return view;
+  }
+  // The drawn place of a marble: an instance of an instanced mesh, or the mesh itself (the hero, the ejected marble).
+  function placeOf(view: OpenWorldView, name: string, index = 0): THREE.Vector3 {
+    const object = view.scene.getObjectByName(name)!;
+    if (!(object instanceof THREE.InstancedMesh)) return object.position.clone();
+    const m = new THREE.Matrix4();
+    object.getMatrixAt(index, m);
+    return new THREE.Vector3().setFromMatrixPosition(m);
+  }
+  const inCell = (point: THREE.Vector3, [q, r]: Axial): boolean =>
+    Math.abs(point.x - axialTo3D(q, r).x) < 1e-6 && Math.abs(point.z - axialTo3D(q, r).z) < 1e-6;
+  const between = (v: number, a: number, b: number): boolean => (v - a) * (v - b) < 0;
+  afterEach(() => vi.restoreAllMocks());
+
+  it('lunges the pushing line from the old cells to the new ones: on the old cell at the start, between at the middle, on the new one at the end', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0);
+    view.tick(0);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 0), [0, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [-1, 0])).toBe(true);
+    view.tick(200);
+    expect(between(placeOf(view, 'hero').x, axialTo3D(1, 0).x, axialTo3D(2, 0).x)).toBe(true);
+    view.tick(400);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 0), [1, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [0, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 2), [-2, 0])).toBe(true); // the marble out of the line does not move
+  });
+
+  it('overshoots the new cell by a tenth of a cell at the end of the lunge, then settles back on it', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0);
+    const cell = axialTo3D(2, 0).x - axialTo3D(1, 0).x;
+    view.tick(320);
+    expect(placeOf(view, 'hero').x - axialTo3D(1, 0).x).toBeCloseTo(1.1 * cell, 3);
+    view.tick(340);
+    expect(between(placeOf(view, 'hero').x, axialTo3D(2, 0).x, axialTo3D(1, 0).x + 1.1 * cell)).toBe(true);
+    view.tick(380);
+    expect(between(placeOf(view, 'hero').x, axialTo3D(2, 0).x, axialTo3D(1, 0).x + 1.1 * cell)).toBe(true);
+  });
+
+  it('slides the pushed enemy one cell once the lunge reaches contact (40 % of it): on its cell before, on the next one at the end', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0);
+    view.tick(150);
+    expect(inCell(placeOf(view, 'enemies'), [2, 0])).toBe(true);
+    view.tick(285);
+    expect(between(placeOf(view, 'enemies').x, axialTo3D(2, 0).x, axialTo3D(3, 0).x)).toBe(true);
+    view.tick(410);
+    expect(inCell(placeOf(view, 'enemies'), [3, 0])).toBe(true);
+  });
+
+  it('a push by the troop alone leaves the hero where it is, and animates the marbles that move', () => {
+    const played: Played = {
+      from: [[-5, 0], [3, 0], [2, 0]],
+      foes: [[1, 0]],
+      push: { troop: [[-5, 0], [2, 0], [1, 0]], enemies: [[0, 0]], ejected: [], dir: [-1, 0] },
+    };
+    const view = settled(played);
+    view.playPush(played, 0);
+    view.tick(200);
+    expect(inCell(placeOf(view, 'hero'), [-5, 0])).toBe(true);
+    expect(between(placeOf(view, 'troop', 0).x, axialTo3D(3, 0).x, axialTo3D(2, 0).x)).toBe(true);
+    expect(between(placeOf(view, 'enemies').x, axialTo3D(1, 0).x, axialTo3D(0, 0).x)).toBe(true);
+  });
+
+  it('an ejected enemy slides into the water cell, then sinks below the ground while it shrinks to nothing, and is hidden at the end', () => {
+    const played: Played = {
+      from: [[1, 0], [0, 0], [-1, 0]],
+      foes: [[2, 0]],
+      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], dir: [1, 0] },
+    };
+    const view = settled(played);
+    view.playPush(played, 0);
+    view.tick(0);
+    expect(view.ejected.visible).toBe(true);
+    expect(inCell(view.ejected.position, [2, 0])).toBe(true);
+    expect(view.ejected.scale.x).toBe(1);
+    view.tick(410); // the slide is over, the fall starts
+    expect(inCell(view.ejected.position, [3, 0])).toBe(true);
+    expect(view.ejected.scale.x).toBe(1);
+    const high = view.ejected.position.y;
+    view.tick(560);
+    expect(view.ejected.scale.x).toBeGreaterThan(0);
+    expect(view.ejected.scale.x).toBeLessThan(1);
+    expect(view.ejected.position.y).toBeLessThan(high);
+    view.tick(710);
+    expect(view.ejected.scale.x).toBe(0);
+    expect(view.ejected.position.y).toBeLessThan(topOf('grass', 1)); // below the ground
+    expect(view.ejected.visible).toBe(false);
+  });
+
+  it('an ejected enemy pushed off the world keeps its height as it sinks, the cell beyond having no ground', () => {
+    const played: Played = {
+      from: [[62, 0], [61, 0], [60, 0]],
+      foes: [[63, 0]],
+      push: { troop: [[63, 0], [62, 0], [61, 0]], enemies: [], ejected: [[63, 0]], dir: [1, 0] },
+    };
+    const view = settled(played);
+    view.playPush(played, 0);
+    view.tick(410);
+    const ground = topOf('grass', 1) + MARBLE;
+    expect(view.ejected.position.y).toBeCloseTo(ground, 6);
+    view.tick(560);
+    expect(view.ejected.position.y).toBeLessThan(ground);
+    expect(view.ejected.scale.x).toBeLessThan(1);
+  });
+
+  it('a snap puts every marble on its final cell at once, hides the ejected marble and ends the animation', () => {
+    const played: Played = {
+      from: [[1, 0], [0, 0], [-1, 0]],
+      foes: [[2, 0]],
+      push: { troop: [[2, 0], [1, 0], [0, 0]], enemies: [], ejected: [[2, 0]], dir: [1, 0] },
+    };
+    const view = settled(played);
+    view.playPush(played, 0);
+    view.tick(100);
+    expect(view.animating).toBe(true);
+    view.snap();
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 0), [1, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [0, 0])).toBe(true);
+    expect(view.ejected.visible).toBe(false);
+    expect(view.animating).toBe(false);
+    expect(view.tick(100)).toBe(false);
+  });
+
+  it('the camera follows the hero where it is drawn: the point it looks at moves with the lunge and ends on the hero cell', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0);
+    view.tick(200);
+    expect(between(view.focusPoint.x, axialTo3D(1, 0).x, axialTo3D(2, 0).x)).toBe(true);
+    view.tick(400);
+    expect(inCell(view.focusPoint, [2, 0])).toBe(true);
+  });
+
+  it('has no record once the animation has ended, and none before a push', () => {
+    const view = settled(pushOf());
+    expect(view.animating).toBe(false);
+    expect(view.tick(0)).toBe(false);
+    view.playPush(pushOf(), 0);
+    expect(view.animating).toBe(true);
+    expect(view.tick(410)).toBe(true); // the frame that ends it draws the final cells
+    expect(view.tick(411)).toBe(false);
+    expect(view.animating).toBe(false);
+  });
+
+  it('an enemy that is not drawn has no record, and the push still plays its hero and troop', () => {
+    const view = new OpenWorldView(new World(SQUARE)); // no fight: the enemies of the push are not drawn
+    view.show([2, 0], [[1, 0], [0, 0], [-2, 0]]);
+    view.playPush(pushOf(), 0);
+    expect(view.tick(400)).toBe(true);
+    expect(view.tick(410)).toBe(true);
+    expect(view.animating).toBe(false);
+  });
+
+  it('a slow factor stretches every duration, the lunge included', () => {
+    const view = settled(pushOf());
+    view.playPush(pushOf(), 0, 10);
+    view.tick(400);
+    expect(between(placeOf(view, 'hero').x, axialTo3D(1, 0).x, axialTo3D(2, 0).x)).toBe(true);
+    view.tick(4100);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+    expect(view.animating).toBe(false);
+  });
+
+  it('disposes the ejected marble with the rest of the view: its geometry and its material, once', () => {
+    const view = settled(pushOf());
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
+    view.dispose();
+    expect(disposeGeometry.mock.contexts).toContain(view.ejected.geometry);
+    expect(disposeMaterial.mock.contexts).toContain(view.ejected.material);
+  });
+});
