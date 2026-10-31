@@ -26,6 +26,8 @@ export interface BossLike {
   dual(): Int32Array;
   /** `[pulsar, player_turns_left, force]` of The Pulsar's next pulse, force `0` for infinite; empty otherwise. */
   pulsar(): Int32Array;
+  /** `[sight, ejections before it narrows]` of The Stalker, the second `-1` in its last phase; empty otherwise. */
+  stalker(): Int32Array;
   /** `[turns_left, ...]` then `[row, q0, len, dir, shift, strike]` per belt of The Assembly Line; empty otherwise. */
   belts(): Int32Array;
   /** `[q, r]` pairs. */
@@ -190,6 +192,11 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   const borrowed = boss.ballast_next();
   if (borrowed >= 0) {
     return { kind: 'borrowed', cells: [], text: `the boss borrows ${BORROWED[borrowed]} at the end of this turn, seen on your next turn` };
+  }
+  const [sight, narrows] = Array.from(boss.stalker());
+  if (sight !== undefined) {
+    const range = `you see the boss marbles only within ${sight} ${sight === 1 ? 'cell' : 'cells'} of your own`;
+    return { kind: 'sight', cells: [], text: narrows! < 0 ? range : `${range}; the sight narrows after ${narrows} more ejections` };
   }
   const special = boss.tell();
   return special < 0 ? null : { kind: 'special', cells: [], text: `board special ${special} fires after the next ply` };

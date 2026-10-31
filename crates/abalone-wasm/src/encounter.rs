@@ -28,6 +28,7 @@ use abalone_core::encounter::pulsar::{
 use abalone_core::encounter::railyard::{
     railyard_boss, railyard_move, railyard_start, track_cells,
 };
+use abalone_core::encounter::stalker::{stalker_boss, stalker_start};
 use abalone_core::encounter::unstable::{
     last_events, unstable_boss, unstable_move, unstable_start, unstable_tell,
 };
@@ -137,6 +138,11 @@ fn dual_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(dual_start(seed))
 }
 
+/// The Stalker starts on the standard board, under its fog.
+fn stalker_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Plain(stalker_start(seed))
+}
+
 /// The Echo plays its bonus mirrors inside `play`.
 fn echo_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(echo_start(seed))
@@ -160,7 +166,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 13] = [
+const BOSSES: [BossEntry; 14] = [
     BossEntry {
         id: "echo",
         goal: "Every move is mirrored for free for the other side: the Echo plays yours at once, you may take its mirror before your own move; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.",
@@ -282,6 +288,15 @@ const BOSSES: [BossEntry; 13] = [
         announce: no_announce,
         flips: no_flips,
     },
+    BossEntry {
+        id: "stalker",
+        goal: "The stalker sees your whole army. You see its marbles only near your own, and a move may be stopped by one you cannot see. Eject 6 to win; lose 6 or draw to lose.",
+        def: stalker_boss,
+        start: stalker_fight,
+        reply: search_reply,
+        announce: no_announce,
+        flips: no_flips,
+    },
 ];
 
 /// The polarity of every cell of `board`, in the board order: `0` none, `1` +, `-1` −.
@@ -328,7 +343,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    15 // 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    16 // 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -479,6 +494,54 @@ impl Encounter {
             .map(|p| p.mv.clone())
             .collect();
         Ok(())
+    }
+
+    /// The Stalker's core fight, `None` for the other bosses.
+    fn stalking(&self) -> Option<&CoreEncounter> {
+        match &self.fight {
+            Fight::Plain(e) if self.entry.id == "stalker" => Some(e),
+            _ => None,
+        }
+    }
+
+    /// The player's sight in cells (The Stalker), `0` for the other bosses.
+    pub fn sight(&self) -> u8 {
+        self.stalking().map_or(0, CoreEncounter::sight)
+    }
+
+    /// `[sight, ejections before it narrows]`, the second `-1` in the last phase; empty for the other bosses.
+    pub fn stalker(&self) -> Vec<i32> {
+        self.stalking().map_or_else(Vec::new, |e| {
+            let left = self.phase_notches().first().map_or(-1, |&n| i32::from(n));
+            vec![i32::from(e.sight()), left]
+        })
+    }
+
+    /// The board as the player sees it: the 61 cells, the boss marbles out of sight empty (The Stalker). The full board
+    /// for the other bosses.
+    pub fn seen_board(&self) -> Vec<u8> {
+        self.stalking()
+            .map_or_else(|| self.board(), |e| board_bytes(&e.seen_board()))
+    }
+
+    /// The moves the player is offered, flat records: those of the seen board (The Stalker). `legal_moves` for the others.
+    pub fn seen_moves(&self) -> Vec<i32> {
+        self.stalking().map_or_else(
+            || self.legal_moves(),
+            |e| e.seen_moves().iter().flat_map(encode).collect(),
+        )
+    }
+
+    /// The cells the player sees, `[q, r]` pairs (The Stalker); empty for the other bosses.
+    pub fn visible(&self) -> Vec<i32> {
+        self.stalking()
+            .map_or_else(Vec::new, |e| cell_list(&e.visible()))
+    }
+
+    /// The boss marbles a refused move revealed until the next played move, `[q, r]` pairs (The Stalker).
+    pub fn revealed(&self) -> Vec<i32> {
+        self.stalking()
+            .map_or_else(Vec::new, |e| cell_list(e.revealed()))
     }
 
     /// The bonus plies the last move played added after it (The Echo: the mirror moves of the
@@ -971,8 +1034,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_15_since_the_dual_room_boss_ignores_the_centre() {
-        assert_eq!(engine_version(), 15);
+    fn the_engine_version_is_16_since_the_stalker_joins_the_roster() {
+        assert_eq!(engine_version(), 16);
     }
 
     #[test]
@@ -1019,7 +1082,8 @@ mod tests {
                 "overseer".to_string(),
                 "assembly".to_string(),
                 "core".to_string(),
-                "dual".to_string()
+                "dual".to_string(),
+                "stalker".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -1035,6 +1099,7 @@ mod tests {
         assert_eq!(boss_name("assembly"), Some("The Assembly Line".to_string()));
         assert_eq!(boss_name("core"), Some("The Unstable Core".to_string()));
         assert_eq!(boss_name("dual"), Some("The Dual Room".to_string()));
+        assert_eq!(boss_name("stalker"), Some("The Stalker".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -1730,6 +1795,41 @@ mod tests {
         assert_eq!((f.ejected(1), f.phase()), (3, 1));
         assert!(choir().pulsar().is_empty() && choir().last_pulse().is_empty());
         assert!(Encounter::new("echo", 1).unwrap().pulsar().is_empty());
+    }
+
+    #[test]
+    fn the_stalker_shows_the_player_a_fogged_board_and_its_sight() {
+        let f = Encounter::new("stalker", 3).unwrap();
+        assert_eq!(f.name(), "The Stalker");
+        assert!(f.goal().starts_with("The stalker sees your whole army."));
+        assert_eq!((f.phase(), f.phases(), f.sight()), (0, 3, 3));
+        assert_eq!(f.stalker(), vec![3, 3], "sight 3, 3 ejections to go");
+        assert!(f.board().contains(&2) && !f.seen_board().contains(&2));
+        assert_eq!(f.seen_moves(), f.legal_moves(), "nothing blocks the start");
+        assert!(f.revealed().is_empty() && !f.visible().is_empty());
+        let other = Encounter::new("hull", 3).unwrap();
+        assert_eq!(other.seen_board(), other.board());
+        assert_eq!(other.seen_moves(), other.legal_moves());
+        assert!(other.stalker().is_empty() && other.visible().is_empty());
+        assert_eq!(other.sight(), 0);
+    }
+
+    #[test]
+    fn the_stalker_in_its_last_phase_sees_1_and_narrows_no_more() {
+        let fight = Fight::Plain(
+            CoreEncounter::new(
+                Game::from_position(Board::standard(), Player::Black, [5, 0]),
+                stalker_boss(),
+                0,
+            )
+            .stalking(),
+        );
+        let f = Encounter {
+            fight,
+            entry: boss_entry("stalker").unwrap(),
+            bonuses: Vec::new(),
+        };
+        assert_eq!(f.stalker(), vec![1, -1]);
     }
 
     #[test]

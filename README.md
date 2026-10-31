@@ -69,6 +69,7 @@ Die, read the tell, retry with the same seed.
 | Cargo | **The Assembly Line** | three conveyor belts between the armies carry every marble off the board, then their presses strike |
 | Furnace | **The Unstable Core** | the centre cells charge your marbles, a charged marble weighs more in a push and four charges blow it off; later the core collapses and shockwaves shove the busiest wedge |
 | Mess | **The Dual Room** | two small rooms split by a void: a marble of either side ejected over the rim or into the void comes back one turn later in the other room, on the mirror of its cell (after 3 ejections, on a rim cell of the emptier room); its marbles start near the void, so push them in and pick where they land; at five ejections a bridge fills the void and ejected marbles stay out |
+| Chapel | **The Stalker** | the night watch sees your whole army; you see its marbles only near your own (3 cells, then 2, then 1 as you eject), and a move may be stopped by a marble you cannot see: it is refused, the marble is revealed and you play again |
 
 ## What it looks like
 

@@ -1,0 +1,77 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi } from 'vitest';
+import type { Axial } from './board';
+import { boot, type Game } from './test/harness';
+
+// The Stalker as a boss (#1111, docs/specs/stalker.md): picked in the Boss fight list, fogged from the engine's getters
+// (sight, visible cells, revealed marbles), the sight on the HUD. The refusal itself is a core test; here the client
+// reads what the engine says.
+
+type Shown = { visible: Axial[]; drawn: Axial[]; revealed: Axial[]; last: Axial[] } | null;
+const byId = (id: string): HTMLElement => document.getElementById(id)!;
+const shown = (game: Game): Shown => game.hook<Shown>('__stalker');
+
+function pickStalker(): void {
+  byId('boss-fight').click();
+  [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Stalker')!.click();
+}
+
+describe('main.ts The Stalker boss (#1111)', () => {
+  it('is the last entry of the Boss fight list, fogged at sight 3, with the sight on the HUD', async () => {
+    const game = await boot('/');
+    expect(shown(game)).toBeNull();
+    byId('boss-fight').click();
+    const entries = [...byId('boss-list').querySelectorAll('button')];
+    expect(entries[entries.length - 1]!.textContent).toBe('The Stalker');
+    pickStalker();
+    expect(byId('boss-list').hidden).toBe(true);
+    const s = shown(game)!;
+    expect(s.visible).toHaveLength(41); // sight 3 of the 14 starting marbles
+    expect(s.drawn).toEqual([]);
+    expect(game.hud()).toContain('Sight 3 · narrows to 2 after 3 more ejections');
+    expect(game.hud()).not.toContain('not fogged');
+    expect((byId('auto-play') as HTMLButtonElement).disabled).toBe(true);
+    expect(byId('auto-reason').textContent).toMatch(/^Beat The Stalker once/); // the boss's medal reason, not the mode's
+  });
+
+  it('draws the marbles a refused move revealed, from the engine, and the player plays again', async () => {
+    const game = await boot('/');
+    const { Encounter } = await import('abalone-wasm'); // the harness's instance
+    pickStalker();
+    const play = vi.spyOn(Encounter.prototype, 'play').mockImplementationOnce(() => {
+      throw 'Hidden';
+    });
+    vi.spyOn(Encounter.prototype, 'revealed').mockReturnValue(Int32Array.from([0, -2]));
+    const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
+    game.click(...move.cells[0]!);
+    game.click(...game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(game.hook('__plies')).toBe(0);
+    expect(shown(game)!.revealed).toEqual([[0, -2]]);
+    expect(shown(game)!.drawn).toEqual([[0, -2]]);
+    expect(game.hook('__rings')).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  it('reads the last phase as Sight 1 with nothing left to narrow', async () => {
+    const game = await boot('/');
+    const { Encounter } = await import('abalone-wasm');
+    vi.spyOn(Encounter.prototype, 'stalker').mockReturnValue(Int32Array.from([1, -1]));
+    pickStalker();
+    expect(game.hud()).toContain('Sight 1');
+    expect(game.hud()).not.toContain('narrows');
+    vi.restoreAllMocks();
+  });
+
+  it('lets any other error of a move through', async () => {
+    const game = await boot('/?bot=off');
+    const { Engine } = await import('abalone-wasm');
+    vi.spyOn(Engine.prototype, 'play').mockImplementation(() => {
+      throw new Error('broken');
+    });
+    const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
+    game.click(...move.cells[0]!);
+    expect(() => game.click(...game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell)).toThrow('broken');
+    vi.restoreAllMocks();
+  });
+});
