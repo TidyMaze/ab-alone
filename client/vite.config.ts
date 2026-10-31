@@ -62,7 +62,8 @@ export default defineConfig(({ command, mode, isPreview }) => ({
       // test code itself.
       include: ['src/**/*.ts', 'scripts/**/*.{ts,mjs}'],
       exclude: ['**/*.test.ts', 'src/test/**'],
-      thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
+      // CI runs the suite in shards (#1079): a shard sees part of the code, so the 100 % gate is checked once, on the merged reports.
+      thresholds: loadEnv(mode, '.', '').VITEST_SHARD ? undefined : { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
   },
 }));
