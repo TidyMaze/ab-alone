@@ -59,15 +59,17 @@ describe('bossHtml', () => {
 });
 
 describe('goalShown', () => {
-  it('shows the goal before the first move, whatever the control says', () => {
+  // #1032 owner rule: the goal is shown once. The HUD line is shown before the first move only, and never while the
+  // Goal sheet is open (the sheet holds it then).
+  it('shows the HUD line before the first move, unless the Goal sheet holds it', () => {
     expect(goalShown(0, false)).toBe(true);
-    expect(goalShown(0, true)).toBe(true);
+    expect(goalShown(0, true)).toBe(false);
   });
 
-  it('hides it from the first move on, until the control asks for it', () => {
+  it('never shows the HUD line from the first move on', () => {
     expect(goalShown(1, false)).toBe(false);
     expect(goalShown(8, false)).toBe(false);
-    expect(goalShown(1, true)).toBe(true);
-    expect(goalShown(8, true)).toBe(true);
+    expect(goalShown(1, true)).toBe(false);
+    expect(goalShown(8, true)).toBe(false);
   });
 });

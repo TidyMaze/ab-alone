@@ -10,8 +10,9 @@ export interface BossHud {
   daily?: string; // the daily challenge line of a daily fight, '' otherwise
 }
 
-/** The goal line shows before the first move, then only while the Goal control has it open. */
-export const goalShown = (plies: number, open: boolean): boolean => plies === 0 || open;
+/** The HUD's goal line shows before the first move only, and never while the Goal sheet holds it (#1032): the goal
+ *  is shown once. */
+export const goalShown = (plies: number, sheetOpen: boolean): boolean => plies === 0 && !sheetOpen;
 
 const RESULT_TEXT = ['', 'Victory', 'Defeat'];
 

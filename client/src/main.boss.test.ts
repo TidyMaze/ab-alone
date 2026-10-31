@@ -143,7 +143,7 @@ describe('main.ts boss fights', () => {
     const goal = byId<HTMLButtonElement>('boss-goal');
     expect(goal.hidden).toBe(false);
     expect(goal.disabled).toBe(true);
-    expect(goal.getAttribute('aria-expanded')).toBe('true');
+    expect(goal.getAttribute('aria-expanded')).toBe('false'); // the sheet is shut: the HUD line holds the goal here (#1032)
     // The phase notches on the rim (#356): one groove per notch, the threshold glyph.
     const notches = game.hook<{ lit: number; dark: number; glyph: boolean }>('__notches');
     expect(notches.lit + notches.dark).toBeGreaterThan(0);
@@ -185,25 +185,32 @@ describe('main.ts boss fights', () => {
     expect(byId('boss-bar').querySelector('.name')!.textContent).toBe('The Echo');
   });
 
-  it('after the first move the Goal control folds the goal away and opens it again', async () => {
+  // #1032 owner rule: the goal is shown once. After the first move the HUD has no goal line; the Goal control opens the
+  // goal in the sheet above the dock, and the HUD line stays off while the sheet is open.
+  it('after the first move the Goal control opens the goal in its sheet, and the HUD never repeats it', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightBoss(game, 'The Echo');
     play(game, forward(game));
     const goal = byId<HTMLButtonElement>('boss-goal');
-    const shown = (): boolean => byId('hud').querySelector('.boss .goal') !== null;
+    const hudShows = (): boolean => byId('hud').querySelector('.boss .goal') !== null;
     expect(goal.disabled).toBe(false);
     expect(goal.getAttribute('aria-expanded')).toBe('false');
-    expect(shown()).toBe(false);
+    expect(byId('goal-sheet').hidden).toBe(true);
+    expect(hudShows()).toBe(false);
     goal.click();
     expect(goal.getAttribute('aria-expanded')).toBe('true');
-    expect(shown()).toBe(true);
+    expect(byId('goal-sheet').hidden).toBe(false);
+    expect(byId('goal-sheet').textContent).toMatch(/^Every move is mirrored/);
+    expect(hudShows()).toBe(false); // the sheet holds the goal, the HUD does not repeat it
     goal.click();
-    expect(shown()).toBe(false);
-    // A new fight starts with the goal folded again once a move is played.
+    expect(goal.getAttribute('aria-expanded')).toBe('false');
+    expect(byId('goal-sheet').hidden).toBe(true);
+    // A new fight starts with the sheet closed.
     goal.click();
     fightBoss(game, 'The Hull');
     play(game, forward(game));
-    expect(shown()).toBe(false);
+    expect(byId('goal-sheet').hidden).toBe(true);
+    expect(hudShows()).toBe(false);
   });
 
   it('Retry restarts the same boss with the same seed', async () => {

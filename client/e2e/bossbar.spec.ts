@@ -184,7 +184,7 @@ for (const { name, viewport, scale, mobile } of stackSizes) {
     test('the bar stacks above the HUD, 8 px apart, no overlap, title whole, #929', async ({ page }) => {
       await page.addInitScript((s) => localStorage.setItem('ab-alone.ui-scale', s), scale);
       await fight(page, 'The Hull');
-      await expect(page.getByRole('button', { name: 'Goal' })).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByRole('button', { name: 'Goal' })).toHaveAttribute('aria-expanded', 'false'); // the sheet is shut before the first move (#1032)
       const r = await stacked(page);
       expect(r.overlap, JSON.stringify(r)).toBe(0);
       expect(r.gap, JSON.stringify(r)).toBeGreaterThanOrEqual(8);

@@ -2930,11 +2930,12 @@ function hud(extra = ''): void {
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   exportButton.hidden = importButton.hidden = online !== null || fight !== null || run !== null; // local games only (#219)
   syncHint();
-  const showGoal = goalShown(shownPly(), goalOpen);
+  // The goal is shown once (#1032): the Goal sheet holds it while open, the HUD line only before the first move.
+  const sheetOpen = goalOpen && engine instanceof Encounter && status === 0;
+  const showGoal = goalShown(shownPly(), sheetOpen);
   goalButton.hidden = !(engine instanceof Encounter) || status !== 0; // once the fight is over the plate has no room for another row (#271)
   goalButton.disabled = shownPly() === 0; // the goal is on the plate until the first move
-  goalButton.setAttribute('aria-expanded', String(showGoal));
-  const sheetOpen = goalOpen && engine instanceof Encounter && status === 0;
+  goalButton.setAttribute('aria-expanded', String(sheetOpen));
   goalSheet.hidden = !sheetOpen;
   if (sheetOpen) goalSheet.textContent = (engine as Encounter).goal();
   const boss = engine instanceof Encounter ? engine : null;
