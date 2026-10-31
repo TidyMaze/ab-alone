@@ -195,6 +195,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldDrawn;
     delete document.body.dataset.openworldAnim;
     delete document.body.dataset.openworldGlide;
+    delete document.body.dataset.openworldParticles;
   }
 
   /** The New world control (#1021): the world entered is left without its save, which is discarded, and a random world is entered
@@ -313,8 +314,10 @@ export class OpenWorldMode {
     this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
+    const sparks = this.view!.sparkle(now, reduced); // the particles of the biome (#1110): they keep the scene live while any drifts
+    this.countSparks();
     const moving = !reduced && this.view!.hasWater;
-    if (!this.dirty && !moving) return false;
+    if (!this.dirty && !moving && !sparks) return false;
     this.dirty = false;
     this.view!.glow(moving ? now : 0);
     render(this.view!.scene, this.view!.camera);
@@ -377,6 +380,7 @@ export class OpenWorldMode {
     this.cruising = pace !== 'tap';
     this.view!.snap(); // a step during a push's animation ends it first (#967)
     const now = this.reduced() ? null : at;
+    if (now !== null) this.view!.puff(now); // dust from the cell it leaves (#1110)
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: GLIDE_MS * slowBy(), pace }); // the step glides (#1040)
     const played = this.troopPush();
     this.view!.updateEnemies();
@@ -433,6 +437,13 @@ export class OpenWorldMode {
     if (!navigator.webdriver) return;
     if (this.view?.gliding) document.body.dataset.openworldGlide = `${this.view.focusPoint.x.toFixed(2)},${this.view.focusPoint.z.toFixed(2)}`;
     else delete document.body.dataset.openworldGlide;
+  }
+
+  /** The particles drawn (`openworldParticles`), for the browser checks only: written when the count changes. */
+  private countSparks(): void {
+    if (!navigator.webdriver) return;
+    const count = String(this.view!.sparkCount);
+    if (document.body.dataset.openworldParticles !== count) document.body.dataset.openworldParticles = count;
   }
 
   private mark(seed: string): void {

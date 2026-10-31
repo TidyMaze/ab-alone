@@ -11,14 +11,16 @@ import { memoryStore } from './savegame';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
 import { GLIDE_MS, NUDGE_MS } from './openworldglide';
 
-// Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
-function bytes(cx: number, cy: number): Uint8Array {
+// Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1). The badlands have no particles (#1110), so a frame
+// with motion on is idle when nothing moves; `meadow` is the same world with pollen.
+function bytes(cx: number, cy: number, biome = 4): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
   const out = new Uint8Array(CHUNK * CHUNK * 3);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
-  if (cx === 0 && cy === 0) out.set([1, 5, 0], CHUNK * 3); // (0, 1)
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, biome], i * 3);
+  if (cx === 0 && cy === 0) out.set([1, 5, biome], CHUNK * 3); // (0, 1)
   return out;
 }
+const meadow = (_seed: number, cx: number, cy: number): Uint8Array => bytes(cx, cy, 0);
 // A lake everywhere in the square -3..3 of chunks.
 function sea(_seed: number, cx: number, cy: number): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
@@ -495,8 +497,8 @@ describe('the Open world models are loaded once per page (#981)', () => {
 function cliff(_seed: number, cx: number, cy: number): Uint8Array {
   if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
   const out = new Uint8Array(CHUNK * CHUNK * 3);
-  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
-  if (cx === 0 && cy === 0) out.set([4, 2, 0], 3); // (1, 0) is index 1 of its chunk
+  for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 4], i * 3); // the badlands: no particles (#1110)
+  if (cx === 0 && cy === 0) out.set([4, 2, 4], 3); // (1, 0) is index 1 of its chunk
   return out;
 }
 
@@ -1008,7 +1010,10 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     m.frame(render, GLIDE_MS + 10); // the frame that lands the hero draws its last place
     expect(render).toHaveBeenCalledTimes(1);
     render.mockClear();
-    m.frame(render, GLIDE_MS + 30);
+    m.frame(render, 600); // the dust of the step (#1110) is gone: the frame that erases it is the last one
+    expect(render).toHaveBeenCalledTimes(1);
+    render.mockClear();
+    m.frame(render, 630);
     expect(render).not.toHaveBeenCalled();
   });
 
@@ -1184,5 +1189,59 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     clock = 10;
     m.key('ArrowRight');
     expect(nudge).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the particles in the mode frame (#1110)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps drawing while pollen drifts in a meadow, with motion on: the scene is live', () => {
+    const m = mode(undefined, meadow, () => false);
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render, 0);
+    m.frame(render, 400);
+    m.frame(render, 800);
+    expect(render).toHaveBeenCalledTimes(3);
+  });
+
+  it('draws only the first frame under reduced motion, as before', () => {
+    const m = mode(undefined, meadow, () => true);
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render, 0);
+    m.frame(render, 400);
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it('puffs dust at a step with motion on, none under reduced motion', () => {
+    const puff = vi.spyOn(OpenWorldView.prototype, 'puff');
+    const live = mode(undefined, meadow, () => false, undefined, noPush);
+    live.enter(1, 800, 600);
+    live.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [] });
+    tap(live, 'ArrowRight');
+    expect(puff).toHaveBeenCalledTimes(1);
+    puff.mockClear();
+    const still = mode(undefined, meadow, () => true, undefined, noPush);
+    still.enter(1, 800, 600);
+    still.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [] });
+    tap(still, 'ArrowRight');
+    expect(puff).not.toHaveBeenCalled();
+  });
+
+  it('writes the particle count only under webdriver, the page the browser checks drive', () => {
+    const m = mode(undefined, meadow, () => false);
+    m.enter(1, 800, 600);
+    m.frame(vi.fn(), 2000);
+    expect(body().openworldParticles).toBeUndefined();
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    try {
+      m.frame(vi.fn(), 2400);
+      expect(Number(body().openworldParticles)).toBeGreaterThan(0);
+      m.leave();
+      expect(body().openworldParticles).toBeUndefined();
+    } finally {
+      delete (navigator as { webdriver?: boolean }).webdriver;
+    }
   });
 });

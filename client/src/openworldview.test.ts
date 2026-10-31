@@ -1836,3 +1836,93 @@ describe('the loaded chunks keep their centre while the hero paces along a chunk
     expect(view.centreChunk).toEqual(chunkOf([edge, 0]));
   });
 });
+
+describe('the particles of the Open world (#1110)', () => {
+  // A grass world whose biome code is `code` (0 meadow, 4 badlands) everywhere in the square -3..3 of chunks.
+  const biomeOf = (code: number) => (cx: number, cy: number) => {
+    if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
+    const out = new Uint8Array(CHUNK * CHUNK * 3);
+    for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, code], i * 3);
+    return out;
+  };
+  const sparks = (view: OpenWorldView) => mesh(view, 'particles');
+  /** Runs the particles in frames of 16 ms from `from` to `to` ms and returns the last answer. */
+  const run = (view: OpenWorldView, to: number, reduced = false, from = 0): boolean => {
+    let live = false;
+    for (let t = from; t <= to; t += 16) live = view.sparkle(t, reduced);
+    return live;
+  };
+
+  it('drifts pollen near the hero in a meadow: some instances are drawn, never past the pool', () => {
+    const view = new OpenWorldView(new World(biomeOf(0)));
+    view.show([0, 0]);
+    expect(run(view, 3000)).toBe(true);
+    expect(sparks(view).count).toBeGreaterThan(5);
+    expect(sparks(view).count).toBeLessThanOrEqual(sparks(view).instanceMatrix.count);
+    expect(view.scene.children).toContain(sparks(view));
+  });
+
+  it('draws none in the badlands, and none under reduced motion', () => {
+    const bad = new OpenWorldView(new World(biomeOf(4)));
+    bad.show([0, 0]);
+    expect(run(bad, 3000)).toBe(false);
+    expect(sparks(bad).count).toBe(0);
+    const still = new OpenWorldView(new World(biomeOf(0)));
+    still.show([0, 0]);
+    expect(run(still, 3000, true)).toBe(false);
+    expect(sparks(still).count).toBe(0);
+  });
+
+  it('empties the pool past ROLL_ZOOM, and draws once more to erase the last particles', () => {
+    const view = new OpenWorldView(new World(biomeOf(0)));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(run(view, 2000)).toBe(true);
+    view.zoomBy(MAX_ZOOM);
+    expect(view.drawnZoom).toBeGreaterThan(ROLL_ZOOM);
+    expect(view.sparkle(2100, false)).toBe(true); // the frame that erases them
+    expect(sparks(view).count).toBe(0);
+    expect(view.sparkle(2116, false)).toBe(false);
+  });
+
+  it('clears the particles at once when reduced motion comes on', () => {
+    const view = new OpenWorldView(new World(biomeOf(0)));
+    view.show([0, 0]);
+    run(view, 1000);
+    expect(sparks(view).count).toBeGreaterThan(0);
+    view.sparkle(1016, true);
+    expect(sparks(view).count).toBe(0);
+  });
+
+  it('puffs dust under the hero at a step, and not past ROLL_ZOOM', () => {
+    const view = new OpenWorldView(new World(biomeOf(4)));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.puff(100);
+    expect(view.sparkle(120, false)).toBe(true);
+    expect(sparks(view).count).toBe(5);
+    expect(run(view, 600, false, 136)).toBe(false); // gone after 350 ms
+    expect(sparks(view).count).toBe(0);
+    view.zoomBy(MAX_ZOOM);
+    view.puff(2000);
+    expect(view.sparkle(2016, false)).toBe(false);
+  });
+
+  it('allocates nothing in a frame: the mesh and its buffers are the same objects', () => {
+    const view = new OpenWorldView(new World(biomeOf(0)));
+    view.show([0, 0]);
+    const first = sparks(view);
+    const buffer = first.instanceMatrix.array;
+    run(view, 2000);
+    expect(sparks(view)).toBe(first);
+    expect(sparks(view).instanceMatrix.array).toBe(buffer);
+  });
+
+  it('frees the particles mesh with the view', () => {
+    const view = new OpenWorldView(new World(biomeOf(0)));
+    view.show([0, 0]);
+    const dispose = vi.spyOn(sparks(view).geometry, 'dispose');
+    view.dispose();
+    expect(dispose).toHaveBeenCalled();
+  });
+});
