@@ -834,7 +834,7 @@ mod tests {
 
     /// Sight 1 (five ejections): the push of the white pair is legal on the seen board, where the
     /// marble behind it is hidden, and refused on the real one.
-    fn fogged() -> Arena {
+    fn fogged_encounter() -> Encounter {
         let mut board = Board::empty();
         for (q, r) in [(-1, 0), (0, 0)] {
             board.set(q, r, Cell::Black);
@@ -843,15 +843,15 @@ mod tests {
             board.set(q, r, Cell::White);
         }
         let game = Game::from_position(board, Player::Black, [5, 0]);
-        let enc = Encounter::new(game, stalker_boss(), 0).stalking();
-        Arena::Plain(enc, LadderBoss::Stalker)
+        Encounter::new(game, stalker_boss(), 0).stalking()
+    }
+
+    fn fogged() -> Arena {
+        Arena::Plain(fogged_encounter(), LadderBoss::Stalker)
     }
 
     fn fogged_seen() -> Board {
-        let Arena::Plain(enc, _) = fogged() else {
-            unreachable!()
-        };
-        enc.seen_board()
+        fogged_encounter().seen_board()
     }
 
     fn push() -> Move {
