@@ -509,6 +509,7 @@ describe('the pointer on the board', () => {
 describe('the frame loop', () => {
   it('rings the last move: a flash when the slide ends, then the resting mark (#1092)', async () => {
     const game = await boot('?bot=off');
+    expect(game.hook<{ opacity: number; scale: number }>('__lastMoveRing').scale).toBe(0); // no ring before the first move
     playOne(game);
     expect(data().lastMove).not.toBe('0');
     game.frame(0);
