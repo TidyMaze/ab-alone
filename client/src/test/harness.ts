@@ -112,6 +112,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
   for (const { name } of [...root.attributes]) if (name !== 'lang') root.removeAttribute(name);
   document.body.replaceWith(Object.assign(document.createElement('body'), { innerHTML: body }));
   localStorage.clear();
+  localStorage.setItem('ab-alone.room', 'today'); // the refined room is the default (#1138): the tests of today's room keep it, ?room= overrides
   history.replaceState(null, '', new URL(url, location.origin).href);
   Object.defineProperty(navigator, 'webdriver', { value: webdriver, configurable: true });
   undo.push(() => Reflect.deleteProperty(navigator, 'webdriver'));

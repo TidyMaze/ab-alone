@@ -178,6 +178,8 @@ import { icon } from './icons';
 import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
+import { POOL, poolPixels, readRoom, roomRig } from './roomrefined';
+import { FLOOR, WALL, floorPixels, gantryArches, props as decorProps, wallPixels, wallStrips, type DecorPart } from './roomdecor';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
@@ -376,6 +378,7 @@ const store = (() => {
 })();
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
+const refined = readRoom(location.search, store) === 'refined'; // the room with six lights at most and a pool of light (#1138, roomrefined.ts)
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
@@ -1788,6 +1791,36 @@ const refreshLights = (): void => {
 };
 // What the last look made, disposed when the next replaces it (#846): a setting is a rebuild, never a leak.
 let propMeshes: THREE.Mesh[] = [];
+const decorTexture = (pixels: Uint8Array, size: number, repeat?: readonly [number, number]): THREE.DataTexture => {
+  const t = Object.assign(new THREE.DataTexture(pixels, size, size), { colorSpace: THREE.SRGBColorSpace, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, needsUpdate: true });
+  if (repeat) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(...repeat);
+  }
+  return t;
+};
+// The refined room's decor (#1138, roomdecor.ts): the textures are generated once, the meshes rebuilt with the props.
+const decorWall = decorTexture(wallPixels(128), 128, WALL.repeat);
+const floorTexture = decorTexture(floorPixels(512), 512);
+const decorMesh = (p: DecorPart): THREE.Mesh => {
+  const [a, b, c, d] = p.size as [number, number, number, number];
+  const geometry = p.type === 'box' ? new THREE.BoxGeometry(a, b, c) : new THREE.CylinderGeometry(a, b, c, d);
+  const material = new THREE.MeshStandardMaterial({ color: p.color, roughness: p.roughness, metalness: p.metalness, ...(p.emissive ? { emissive: p.emissive, emissiveIntensity: 3 } : {}) });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = p.id;
+  mesh.position.set(...p.position);
+  mesh.rotation.set(...p.rotation);
+  return mesh;
+};
+const planeMesh = (geometry: THREE.BufferGeometry, map: THREE.Texture, roughness: number, at: [number, number, number]): THREE.Mesh => {
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ map, roughness, metalness: 0.3 }));
+  mesh.position.set(...at);
+  return mesh;
+};
+const wallMesh = (): THREE.Mesh => planeMesh(new THREE.PlaneGeometry(WALL.width, WALL.height), decorWall, 0.8, [0, WALL.y, WALL.z]);
+const floorMesh = (): THREE.Mesh =>
+  planeMesh(new THREE.PlaneGeometry(FLOOR.size, FLOOR.size).rotateX(-Math.PI / 2), floorTexture, 0.7, [0, ROOM_SURFACE.y + 0.004, 0]);
+const poolTexture = Object.assign(new THREE.DataTexture(poolPixels(64), 64, 64), { colorSpace: THREE.SRGBColorSpace, needsUpdate: true });
 drawProps = (): void => {
   for (const mesh of propMeshes) {
     mesh.geometry.dispose();
@@ -1902,18 +1935,46 @@ drawProps = (): void => {
     propMeshes.push(mesh);
   }
   // Each neon tube lights the room for real: a row of lights along it (neonlight.ts), one slider in ?lights.
-  for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
-    propsGroup.add(...tubeLights(tube as THREE.Mesh));
+  if (!refined)
+    for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
+      propsGroup.add(...tubeLights(tube as THREE.Mesh));
   const ring = ringLamp();
-  propsGroup.add(...ring.meshes, ...ring.lights);
+  propsGroup.add(...ring.meshes, ...(refined ? [] : ring.lights));
   propMeshes.push(...ring.meshes);
+  if (refined) {
+    // The refined room (#1138): the rig of roomrefined.ts instead of every tube's row, and a baked pool of light under the board.
+    for (const l of roomRig(deck, fight !== null)) {
+      const light = new THREE.PointLight(l.color, l.power, l.reach);
+      light.name = l.name;
+      light.position.set(...l.position);
+      propsGroup.add(light);
+    }
+    const pool = new THREE.Mesh(
+      new THREE.CircleGeometry(POOL.radius, 48).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: poolTexture, transparent: true, opacity: POOL.opacity, depthWrite: false, fog: false }),
+    );
+    for (const part of [...wallStrips(deck), ...gantryArches(), ...decorProps(deck)]) {
+      const mesh = decorMesh(part);
+      propsGroup.add(mesh);
+      propMeshes.push(mesh);
+    }
+    for (const [name, mesh] of [['wall', wallMesh()], ['floor', floorMesh()]] as const) {
+      mesh.name = name;
+      propsGroup.add(mesh);
+      propMeshes.push(mesh);
+    }
+    pool.name = 'light pool';
+    pool.position.y = ROOM_SURFACE.y + POOL.y;
+    propsGroup.add(pool);
+    propMeshes.push(pool);
+  }
   const viewportRimLight = new THREE.PointLight(sLights.rim, 2.7, 11.0);
   viewportRimLight.position.set(17.0, 4.6, 0);
   const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.25, 6.0);
   kioskGreenLight.position.set(-10.2, 2.5, -5.8);
   const lights = { viewportRimLight, kioskGreenLight };
   for (const [name, light] of Object.entries(lights)) light.name = name; // the ?lights sliders' names
-  propsGroup.add(...Object.values(lights));
+  if (!refined) propsGroup.add(...Object.values(lights));
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
