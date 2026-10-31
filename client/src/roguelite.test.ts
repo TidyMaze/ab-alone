@@ -20,6 +20,8 @@ import {
   eventOf,
   EVENTS,
   fightBudget,
+  FIGHT_FOES,
+  foesOf,
   resolve,
   takeEvent,
   visit,
@@ -341,6 +343,13 @@ describe('roguelite', () => {
     expect(visit(ACT, run, 1)).toEqual(pick(run, 1));
     expect(visit(ACT, at(run, 0, 1), 4)).toEqual(pick(at(run, 0, 1), 4));
     expect(visit(ACT, newRun(1, 3), 0)).toEqual(pick(newRun(1, 3), 0));
+  });
+
+  it('a fight puts 10 enemy marbles on the board, an elite or a boss the full 14, #1145', () => {
+    const elite = pick({ ...newRun(1, 3), path: [0] }, 1);
+    expect(FIGHT_FOES).toBe(10);
+    expect(foesOf(ACT, pick(newRun(1, 3), 0))).toBe(10);
+    expect(foesOf(ACT, elite)).toBe(START_ARMY);
   });
 
   it('an elite: a stronger bot, and a won one gives up to 2 marbles back before its reward', () => {

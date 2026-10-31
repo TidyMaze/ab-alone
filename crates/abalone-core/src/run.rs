@@ -186,14 +186,25 @@ pub fn credits(before: &Board, mover: Player, ejected: bool, after: &Board) -> [
     credits
 }
 
-/// A fight of an army of `army` marbles (clamped to `MIN_ARMY..=FULL_ARMY`) against the bot, on
-/// the standard layout less the missing marbles, back row first. The bot wins once the army is
-/// down to 3 marbles, which ends the run; the army wins at the usual 6 ejections.
+/// A fight of an army of `army` marbles (clamped to `MIN_ARMY..=FULL_ARMY`) against the bot's
+/// full 14, see `army_game_against`.
 pub fn army_game(army: u8) -> Game {
+    army_game_against(army, FULL_ARMY)
+}
+
+/// A fight of an army of `army` marbles against the bot's `foes` (both clamped to
+/// `MIN_ARMY..=FULL_ARMY`), on the standard layout less the missing marbles: the army's back row
+/// first, the bot's front row first. The bot wins once the army is down to 3 marbles, which ends
+/// the run; the army wins at the usual 6 ejections.
+pub fn army_game_against(army: u8, foes: u8) -> Game {
     let army = army.clamp(MIN_ARMY, FULL_ARMY);
+    let foes = foes.clamp(MIN_ARMY, FULL_ARMY);
     let mut board = Board::standard();
     for &(q, r) in &STANDARD_BLACK[..usize::from(FULL_ARMY - army)] {
         board.set(q, r, Cell::Empty);
+    }
+    for &(q, r) in &STANDARD_BLACK[usize::from(foes)..] {
+        board.set(-q, -r, Cell::Empty);
     }
     board.set_rogue_lite();
     Game::from_position(board, Player::Black, [0, 0])
@@ -335,6 +346,35 @@ mod tests {
         assert_eq!(game.win_ejections(Player::Black), 6);
         assert_eq!(army_game(7).win_ejections(Player::White), 4); // 3 marbles left lose the run
         assert_eq!(army_game(MIN_ARMY).win_ejections(Player::White), 1);
+    }
+
+    #[test]
+    fn a_smaller_enemy_loses_its_front_marbles() {
+        let game = army_game_against(FULL_ARMY, 10);
+        assert_eq!(count(game.board(), Cell::Black), 14);
+        assert_eq!(count(game.board(), Cell::White), 10);
+        assert_eq!(game.board().get(0, -2), Some(Cell::Empty)); // its front row is gone
+        assert_eq!(game.board().get(-1, -3), Some(Cell::Empty));
+        assert_eq!(game.board().get(0, -3), Some(Cell::White));
+        assert_eq!(game.board().get(4, -4), Some(Cell::White)); // its back row stays
+        assert_eq!(game.win_ejections(Player::Black), 6);
+        assert_eq!(
+            army_game_against(9, 10).board().get(0, 2),
+            Some(Cell::Black)
+        );
+        assert_eq!(
+            army_game_against(9, FULL_ARMY).board(),
+            army_game(9).board()
+        );
+    }
+
+    #[test]
+    fn the_enemy_is_clamped() {
+        assert_eq!(
+            army_game_against(9, 0).board(),
+            army_game_against(9, MIN_ARMY).board()
+        );
+        assert_eq!(army_game_against(9, 99).board(), army_game(9).board());
     }
 
     #[test]

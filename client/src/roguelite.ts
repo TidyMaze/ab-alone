@@ -154,6 +154,12 @@ export function visit(map: MapNode[], run: Run, node: number): Run {
 /** The node of the run's last pick, if any. */
 const lastNode = (map: MapNode[], run: Run): MapNode | undefined => map[run.path[run.path.length - 1]!];
 
+/** The marbles of a fight node's bot (#1145): its standard layout less the 4 of its front row. */
+export const FIGHT_FOES = 10;
+
+/** The marbles of the bot in the run's fight: FIGHT_FOES against a fight node, the full START_ARMY against an elite. */
+export const foesOf = (map: MapNode[], run: Run): number => (lastNode(map, run)?.kind === 'fight' ? FIGHT_FOES : START_ARMY);
+
 /** An elite's bot searches this many times the positions of a fight's (#800). */
 export const ELITE_BUDGET = 2;
 /** Marbles back after a won elite, up to START_ARMY: its better reward (#800). */
