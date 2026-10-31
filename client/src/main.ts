@@ -4430,7 +4430,11 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   leaveHub();
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
-  rematchButton.textContent = coop ? 'Retry' : 'Rematch'; // co-op: the same fight again, both seats asked (#531)
+  // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
+  const again = coop ? 'Retry' : 'Rematch';
+  rematchButton.textContent = again;
+  rematchButton.setAttribute('aria-label', again);
+  rematchButton.dataset.label = again;
   delete document.body.dataset.boss;
   applyDeck(deckOf('online'));
   retryButton.hidden = true;
