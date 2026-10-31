@@ -293,6 +293,7 @@ import { SEAT_GLYPHS, SEAT_INK, SEATS } from './marbles';
 import './ui.css';
 
 import { BONE, COLORS, FRAME_LOOK, SceneRenderer } from './scene';
+import { blockers, resolveSeen, seenBoard, seenGhosts, seenMoves, stalkerNote, visibleCells } from './stalker';
 const BOT_SIDE = 2; // the human plays side 1 (the glass), the bot plays side 2
 declare const __BUILD__: string; // the commit, set by vite.config.ts
 
@@ -1324,6 +1325,14 @@ const echoMaterial = new THREE.MeshBasicMaterial({ color: 0x4fd1c5 });
 const skipMaterial = new THREE.MeshBasicMaterial({ color: 0xe0413a });
 // The target of a free move the player is offered (#958): a teal diamond standing on the cell, over the target arrow.
 const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
+// Stalker (#998, game-design.md section 3.8): the cells out of the player's range under a dark veil, one draw call, the
+// rim and the board outline left as they are; a pale ring where the bot's last move landed in range.
+const fogMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.9, depthWrite: false });
+const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
+let stalker: Engine | Encounter | null = null; // the live game of a Stalker game, the fog is on while it is played
+const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
+let lastLanding: Axial[] = []; // where the bot's last move landed
+let stalkerShown: { visible: Axial[]; drawn: Axial[]; revealed: Axial[]; last: Axial[] } | null = null; // read by the tests
 // The Chaplain's martyr tell (#748): a steady ember ring and a tall glyph on the marble that explodes next boss turn.
 const emberMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
 const martyrGlyphGeometry = new THREE.OctahedronGeometry(0.11).scale(1, 2, 1);
@@ -2112,7 +2121,7 @@ function stopAuto(): void {
 }
 function syncAuto(): void {
   const boss = engine instanceof Encounter ? engine.name() : null;
-  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null }, fight !== null && hasMedal(store, fight.id));
+  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null, stalker: fogged() }, fight !== null && hasMedal(store, fight.id));
   const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
   const reason = state.shown ? state.reason : null;
   const usable = state.shown && reason === null && !over;
@@ -2301,6 +2310,8 @@ function playMove(record: number[]): void {
 function afterPlay(before: number[], record: number[], live = true): void {
   history.push(record);
   const mv = parseMoves(record)[0]!;
+  revealed.clear();
+  lastLanding = fogged() && engine.to_move() === PLAYER ? landing(mv) : []; // the bot's move, shown for one turn
   const reduced = reducedMotion();
   // The Magnetizer's repulsions (#645): the move slides to the board before the first one, then each plays in turn.
   const repulsions = live && !reduced && engine instanceof Encounter ? parseRepulsions(engine.repulsions()) : [];
@@ -2919,7 +2930,7 @@ function hud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${fogged() ? stalkerNote(revealed.size > 0) : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -3014,6 +3025,34 @@ function hud(extra = ''): void {
   showResultCard();
 }
 
+/** Stalker's veil over the cells out of range and the rings of the bot's last move in range (#998). */
+function drawFog(board: ArrayLike<number>, fog: Set<number>, lit: Set<number>): NonNullable<typeof stalkerShown> {
+  const dark = BOARD_CELLS.filter((_, i) => i < board.length && !fog.has(i));
+  dark.forEach(([q, r], k) => {
+    const p = axialTo3D(q, r);
+    veil.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, 0.004, p.z)); // on the disc's top face, as the crack decal
+  });
+  veil.count = dark.length;
+  veil.instanceMatrix.needsUpdate = true;
+  marbles.add(veil);
+  const last = replaying ? [] : lastLanding.filter(([q, r]) => fog.has(cellIndex(q, r)));
+  for (const [q, r] of last) {
+    const p = axialTo3D(q, r);
+    const ring = Object.assign(new THREE.Mesh(outlineGeometry, paleMaterial), { name: 'stalker-last' });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(p.x, 0.36, p.z);
+    marbles.add(ring);
+    onMarble(cellIndex(q, r), ring);
+  }
+  const cells = (set: Set<number>): Axial[] => [...set].map((i) => BOARD_CELLS[i]!);
+  return { visible: cells(fog), drawn: cells(new Set([...fog, ...lit].filter((i) => board[i] === BOT_SIDE))), revealed: cells(lit), last };
+}
+
+const PLAYER = 3 - BOT_SIDE;
+const fogged = (): boolean => stalker !== null && stalker === liveGame();
+/** The live board as the player sees it in Stalker. */
+const seen = (): number[] => seenBoard(engine.board(), PLAYER, visibleCells(engine.board(), PLAYER), revealed);
+
 function refresh(): void {
   dirty = CHANGE_DRAWS;
   syncAuto();
@@ -3034,6 +3073,8 @@ function refresh(): void {
   // The Echo's free moves (#958): their marbles ringed, the target of a selected group's free move marked by a diamond.
   const free = showing() || !(engine instanceof Encounter) ? [] : parseMoves(engine.free_moves());
   freeTargets = groupTargets(free, selected);
+  const fog = fogged() ? visibleCells(board, PLAYER) : null;
+  const lit = replaying ? new Set<number>() : revealed; // a replayed position shows what was seen then
   ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
@@ -3099,7 +3140,7 @@ function refresh(): void {
       tick.position.set(p.x + dx, 0.01, p.z + 0.39);
       marbles.add(tick);
     }
-    if (side === 0) return;
+    if (side === 0 || (fog && side === BOT_SIDE && !fog.has(i) && !lit.has(i))) return; // Stalker: hidden
     if (side === OVERSEER_CODE) {
       if (overseerBlown === engine) return;
       const pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
@@ -3186,6 +3227,7 @@ function refresh(): void {
   }
   document.body.dataset.echoFree = String(offered.length); // read by the tests
   document.body.dataset.echoFreeTarget = String(freeTargets.length);
+  stalkerShown = fog && drawFog(board, fog, lit);
   polesDrawn = poles.flatMap((sign, i) => {
     if (sign === 0) return [];
     const [q, r] = BOARD_CELLS[i]!;
@@ -3453,7 +3495,7 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   if (royale) return; // no ghost over the arena
   const mv = keyDir >= 0 ? moveFor(moves, selected, keyDir) : hover ? moveForClick(moves, selected, hover) : null;
   const record = mv ? encodeMove(mv) : hint.shown(here()); // the hovered move, else the hint (#192)
-  const list = ghostMarbles(history, record, makeGame);
+  const list = record && fogged() ? seenGhosts(seen(), parseMoves(record)[0]!) : ghostMarbles(history, record, makeGame);
   if (record && engine instanceof Encounter) {
     // The tell: the boss reply announced for the hovered move, drawn on the position after it.
     const reply = Array.from(engine.tell_move(Int32Array.from(record)));
@@ -3525,7 +3567,15 @@ function blocked(retry: () => void): boolean {
   return false;
 }
 
-function play(mv: Move): void {
+function play(seenMove: Move): void {
+  const mv = fogged() ? resolveSeen(parseMoves(engine.legal_moves()), seenMove) : seenMove;
+  if (!mv) {
+    // Stalker: a hidden marble blocks the move, it is revealed and the player plays again (#998)
+    for (const i of blockers(engine.board(), seen(), seenMove)) revealed.add(i);
+    selected = [];
+    keyDir = -1;
+    return;
+  }
   const record = encodeMove(mv);
   playMove(record);
   selected = [];
@@ -3536,6 +3586,7 @@ function play(mv: Move): void {
 
 /** The legal moves, the Echo's free moves first: a click, a drag or a key on a free target plays the free move (#958). */
 function legalMoves(): Move[] {
+  if (fogged()) return seenMoves(seen(), engine.to_move()); // Stalker: the board as the player sees it, the engine judges on play
   const moves = parseMoves(engine.legal_moves());
   return engine instanceof Encounter ? [...parseMoves(engine.free_moves()), ...moves] : moves;
 }
@@ -4003,6 +4054,9 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to find The Unstable Core's marks as drawn (#751): the next events and the charges, and the
 // shockwave's slice now.
 (window as unknown as Record<string, unknown>).__unstable = () => unstableShown;
+// Used by the browser checks to read Stalker's fog as drawn (#998): the visible cells, the enemy marbles drawn, the
+// revealed ones and the rings of the bot's last move; null outside Stalker.
+(window as unknown as Record<string, unknown>).__stalker = () => stalkerShown;
 // Used by the browser checks to find The Dual Room's marks as drawn (#947, #955): the bridge and the announced return, the
 // bridge cells' heights now (null while they are the void), the mark's cell and the falling marble.
 (window as unknown as Record<string, unknown>).__dual = () => ({
@@ -4107,7 +4161,9 @@ function newGame(): void {
     leaveHub();
     applyDeck(deckOf('local'));
   }
+  const fog = fogged();
   engine = new Engine();
+  stalker = fog ? engine : null; // New game keeps Stalker
   history.length = 0;
   replaying = null;
   selected = [];
@@ -4196,6 +4252,19 @@ today();
 setInterval(today, 60_000); // an open page follows the day change at 00:00 UTC
 dailyButton.addEventListener('click', startDaily);
 dailyButton.disabled = false; // label and listener ready (#144)
+// Stalker (#998, game-design.md section 3.8): a game against the bot under the fog, from the mode menu.
+const stalkerButton = document.getElementById('stalker') as HTMLButtonElement;
+stalkerButton.addEventListener('click', () => {
+  moveModes('pick');
+  leaveOnline();
+  leaveRoyale();
+  startLocal(true);
+  stopAnalysis(); // the bar and the Hint search the whole board: off for good, as in a boss fight (fair play, #164)
+  applyDeck(deckOf('local')); // after a boss fight too
+  stalker = engine;
+  refresh();
+});
+stalkerButton.disabled = false; // listener ready (#146)
 goalButton.addEventListener('click', () => {
   goalOpen = !goalOpen;
   if (goalOpen) {
@@ -4260,6 +4329,7 @@ function enterRoom(at: HubSpot): void {
   roomOf = at;
 }
 function startLocal(bot: boolean): void {
+  stalker = null; // a table of the hub plays the standard game
   worker = bot ? botWorker : null;
   fight = null; // a boss fight the hub was opened from
   delete document.body.dataset.boss;
