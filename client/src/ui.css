@@ -855,4 +855,3 @@ body[data-openworld] #dock-wrap { display: none !important; }
    the screen. The column goes back to the right, where it is in a normal game. Landscape only: held upright the column is a row
    that stretches, and an auto margin would shrink it. */
 @media (orientation: landscape) { body[data-openworld] #online { margin-left: auto; } }
->
