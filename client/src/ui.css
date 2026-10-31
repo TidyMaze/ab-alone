@@ -923,6 +923,21 @@ body:has(#dock-wrap :is(#mode-menu, #daily-card, #lobby-sheet):not([hidden])) #s
 @media (orientation: landscape) and (max-height: 660px) {
   body:not([data-openworld]) #settings-menu { right: 68px; }
 }
+/* The Game modes sheet, the boss list and the settings menu (#1136): the theme's look, refined. Rows are 6 px cards on an 8 px
+   grid (48 px high on a touch screen), a pressed item is filled, the accent is amber in the default palette. */
+:root[data-palette='default'] :is(#dock-wrap :is(#mode-menu, #goal-sheet), #settings-menu) { --accent: var(--plate-accent); }
+#dock-wrap :is(#mode-menu, #goal-sheet) { gap: var(--space); border-radius: var(--r-card); }
+:is(#mode-menu, #settings-menu) button { border-radius: var(--r-button); }
+#dock-wrap #mode-menu :is(#boss-list, #coop-list) { gap: var(--space); }
+#settings-menu :is(.setting-volume, .setting-lights, .setting-archive:not(:has(button))) { border-radius: var(--r-button); }
+/* A desktop window keeps its compact sheet (#1069): the 4 px gaps, so every boss shows without a scroll at 1280x720. */
+@media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
+  #dock-wrap :is(#mode-menu, #goal-sheet), #dock-wrap #mode-menu :is(#boss-list, #coop-list) { gap: 4px; }
+}
+@media (pointer: coarse) {
+  #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: var(--target); }
+}
+#settings-menu button[aria-pressed='true'], #dock-wrap #mode-menu button[aria-expanded='true'] { background: var(--active-fill); border-color: var(--active-fill); color: var(--active-ink); }
 /* The dock is not on the Open world's screen: its HUD and joystick are (#962, #1025). */
 body[data-openworld] #dock-wrap { display: none !important; }
 /* Bug #1051: with the dock hidden the column is alone in the top bar and would sit at its left edge, so the cog and its menu open off
