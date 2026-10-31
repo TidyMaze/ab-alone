@@ -86,9 +86,21 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 - **Data attributes** of `body`, next to `openworldAt` and `openworldTroop`: `openworldEnemies` (the
   enemies drawn in the loaded chunks), `openworldBeaten` (the ejected enemies) and `openworldPush`
   (the pushes played, one more at each push).
-- **Animation**: the push is drawn as a short lunge of the pushing line (about 400 ms, as the
-  board's push), the pushed marbles slide one cell, an ejected one falls. Reduced motion: no
-  lunge, the marbles jump.
+- **Animation** (#967): the state is final at once (hero, troop, enemies, data attributes); only what is drawn
+  is animated, from the old cells to the new ones, in this order (`OpenWorldView.playPush` and `tick`):
+  1. **Lunge** (0 to 400 ms): each marble of the pushing line moves from its old cell to its new one, the
+     hero's mesh with it when it is in the line. The ease goes a tenth of a cell past the new cell at 80 % of
+     the lunge, then settles back on it. The camera follows the hero's drawn place.
+  2. **Slide** (160 to 410 ms): each pushed enemy slides one cell along the push, starting at the contact
+     (40 % of the lunge).
+  3. **Fall** (160 to 410 ms slide, then 410 to 710 ms sinking): an ejected enemy slides into the water cell
+     (or past the edge), then drops 0.6 below the ground while it shrinks to nothing. It has its own mesh
+     (`ejected`), shown only while it falls.
+  - **Reduced motion** (the page's `reduced()`): no animation at all, the marbles jump as before.
+  - **Snap**: a step, a click, a zoom, a resize or a fixture first ends the animation on its final cells.
+    Leaving the mode cancels it. While it runs the mode draws every frame, and the body carries
+    `openworldAnim="1"` (removed when it ends).
+  - The times are the normal speed; `window.__openworldSlow` (a webdriver check) multiplies them.
 - **Loss** (deferred, not built): the hero ejected ends the walk (the world is kept, the hero
   starts again at the spawn, the troop at 6). It cannot happen yet, because enemies never push;
   it is specified here for when they do. A troop marble ejected is lost, with the same deferral.
