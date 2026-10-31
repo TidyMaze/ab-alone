@@ -4,7 +4,7 @@
 import type * as THREE from 'three/webgpu';
 import { DIRECTIONS, type Axial } from './board';
 import { arrowCell } from './hubview';
-import { blocked, chunkOf, Hero, World } from './openworld';
+import { blocked, breakable, chunkOf, Hero, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
@@ -402,7 +402,7 @@ export class OpenWorldMode {
   private stepHeld(at: number): void {
     const free = ([q, r]: Axial): boolean => {
       const tile = this.world!.tile(q, r);
-      return !!tile && !blocked(tile) && !this.fight.occupied(this.world!, q, r);
+      return !!tile && (!blocked(tile) || breakable(this.world!, q, r)) && !this.fight.occupied(this.world!, q, r);
     };
     const to = steerStep(this.hero!.at, new Set([...this.held, ...this.pad]), this.view!.yaw, free);
     if (to) this.roll(to, at, this.cruising ? 'walk' : 'start');
