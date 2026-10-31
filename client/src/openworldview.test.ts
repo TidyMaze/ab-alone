@@ -289,6 +289,42 @@ describe('the detailed props near the hero (#989)', () => {
   });
 });
 
+describe('a step rebuilds only the props, the ground columns do not depend on the hero (#1034)', () => {
+  // The instances a mesh draws, matrices and colours, as numbers: what the browser shows.
+  const drawnOf = (m: THREE.InstancedMesh) => ({
+    count: m.count,
+    matrices: Array.from(m.instanceMatrix.array.slice(0, m.count * 16)),
+    colours: Array.from(m.instanceColor!.array.slice(0, m.count * 3)),
+  });
+  const everyMesh = (view: OpenWorldView): string[] => [...GROUNDS.map((g) => `terrain-${g}`), 'prop-mountain', 'prop-tree', 'prop-boulder', 'prop-wall', 'prop-cap', 'prop-mountain-hi', 'prop-tree-hi', 'prop-boulder-hi', 'prop-wall-hi'].filter((n) => view.scene.getObjectByName(n));
+
+  it('a step to a neighbour writes the props only: the ground meshes keep their instances (their buffers are not rewritten)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const grounds = GROUNDS.map((g) => mesh(view, `terrain-${g}`));
+    const versions = grounds.map((m) => [m.instanceMatrix.version, m.instanceColor!.version]);
+    const propVersion = mesh(view, 'prop-tree').instanceMatrix.version;
+    view.show([1, 0]);
+    expect(grounds.map((m) => [m.instanceMatrix.version, m.instanceColor!.version])).toEqual(versions);
+    expect(mesh(view, 'prop-tree').instanceMatrix.version).toBeGreaterThan(propVersion);
+  });
+
+  it('a step draws the same instances as a fresh build at the new hero, cell for cell: the look does not change', () => {
+    const models = { low: { mountain: box() }, high: { mountain: box() } };
+    const stepped = new OpenWorldView(new World(bytes));
+    stepped.resize(1600, 900);
+    stepped.useModels(models);
+    stepped.show([0, 0]);
+    stepped.show([1, 0]);
+    const fresh = new OpenWorldView(new World(bytes));
+    fresh.resize(1600, 900);
+    fresh.useModels(models);
+    fresh.show([1, 0]);
+    for (const name of everyMesh(fresh)) expect(drawnOf(mesh(stepped, name)), name).toEqual(drawnOf(mesh(fresh, name)));
+  });
+});
+
 describe('the troop and the enemies on screen', () => {
   it('draws the troop where it stands and the enemy marbles around the hero', () => {
     const foes = (cx: number, cy: number): Int32Array => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5) : new Int32Array());
