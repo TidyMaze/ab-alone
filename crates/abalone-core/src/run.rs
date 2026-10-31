@@ -186,14 +186,25 @@ pub fn credits(before: &Board, mover: Player, ejected: bool, after: &Board) -> [
     credits
 }
 
-/// A fight of an army of `army` marbles (clamped to `MIN_ARMY..=FULL_ARMY`) against the bot, on
-/// the standard layout less the missing marbles, back row first. The bot wins once the army is
-/// down to 3 marbles, which ends the run; the army wins at the usual 6 ejections.
+/// A fight of an army of `army` marbles (clamped to `MIN_ARMY..=FULL_ARMY`) against the bot's
+/// full 14, see `army_game_against`.
 pub fn army_game(army: u8) -> Game {
+    army_game_against(army, FULL_ARMY)
+}
+
+/// A fight of an army of `army` marbles against the bot's `foes` (both clamped to
+/// `MIN_ARMY..=FULL_ARMY`), on the standard layout less the missing marbles: the army's back row
+/// first, the bot's front row first. The bot wins once the army is down to 3 marbles, which ends
+/// the run; the army wins at the usual 6 ejections.
+pub fn army_game_against(army: u8, foes: u8) -> Game {
     let army = army.clamp(MIN_ARMY, FULL_ARMY);
+    let foes = foes.clamp(MIN_ARMY, FULL_ARMY);
     let mut board = Board::standard();
     for &(q, r) in &STANDARD_BLACK[..usize::from(FULL_ARMY - army)] {
         board.set(q, r, Cell::Empty);
+    }
+    for &(q, r) in &STANDARD_BLACK[usize::from(foes)..] {
+        board.set(-q, -r, Cell::Empty);
     }
     board.set_rogue_lite();
     Game::from_position(board, Player::Black, [0, 0])
