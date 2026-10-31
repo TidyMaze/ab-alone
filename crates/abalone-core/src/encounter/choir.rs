@@ -1014,4 +1014,36 @@ mod tests {
         assert!(wins_by_force(&c, &found), "{found:?}");
         assert!(!wins_by_force(&c, &mv(&[(4, -2)], W)));
     }
+
+    #[test]
+    fn the_tree_removes_the_weakest_army_when_a_push_reaches_a_phase() {
+        let mut board = Board::empty();
+        let armies: [(u8, &[P]); 3] = [
+            (0, &[(4, 0), (0, 3)]),
+            (1, &[(1, -2), (2, -2)]),
+            (2, &[(-1, 2), (-2, 2)]),
+        ];
+        for &(q, r) in &[(2, 0), (3, 0)] {
+            board.set(q, r, Cell::Black);
+        }
+        let mut marks = ChoirMarks {
+            ejections: 2,
+            ..ChoirMarks::default()
+        };
+        for (army, cells) in armies {
+            for &c in cells {
+                board.set(c.0, c.1, Cell::White);
+                marks.armies.push((c, army));
+            }
+        }
+        board.set_choir(Some(marks));
+        let push = mv(&[(2, 0), (3, 0)], E);
+        let (after, _) = crate::moves::apply(&board, Player::Black, &push).unwrap();
+        let (after, _) = tree_step(&board, Player::Black, &push, after);
+        let marks = after.choir().unwrap();
+        assert_eq!(marks.ejections, 3);
+        assert!(marks.armies.iter().all(|a| a.1 != 0), "Alto is removed");
+        assert_eq!(after.get(0, 3), Some(Cell::Empty));
+        assert_eq!(marks.armies.len(), 4);
+    }
 }

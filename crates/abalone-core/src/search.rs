@@ -448,11 +448,14 @@ pub fn search_signed(
     run(game, node_budget, weights, allow, Some(&hook), None, None)
 }
 
+/// The moves a side may play out of its legal ones, given the board of the tree.
+pub type Allowed<'a> = &'a dyn Fn(&Board, Player, Vec<Move>) -> Vec<Move>;
+
 /// The turn rules of a boss whose plies do not simply alternate (the Choir, #825). They read the
 /// board of the tree, so the boss keeps its state on it.
 pub struct Turns<'a> {
     /// The moves `mover` may play on `board`, out of its `legal` moves.
-    pub allowed: &'a dyn Fn(&Board, Player, Vec<Move>) -> Vec<Move>,
+    pub allowed: Allowed<'a>,
     /// The side to move once `mover` has played and the step has run: `mover` again, or the other.
     pub next: &'a dyn Fn(&Board, Player) -> Player,
 }
@@ -924,7 +927,7 @@ mod tests {
                 nodes: 0,
                 win: [WIN_EJECTIONS; 2],
                 turns: None,
-            last_ply: None,
+                last_ply: None,
             };
             let value = exact.negamax(&root_of(&g), found.depth, 0, -INF, INF);
             assert_eq!(Some(found.score), value);
