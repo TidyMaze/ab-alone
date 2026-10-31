@@ -265,6 +265,18 @@ describe('roomloader PBR pipeline', () => {
     expect(bay).toBeNull();
   });
 
+  it('requests the bay model and all its maps in one tick, before any of them lands (#925)', () => {
+    // Nothing resolves here: every request must already be out when loadSpaceshipBay returns its promise.
+    const mockGltfLoader = { loadAsync: vi.fn(() => new Promise<never>(() => {})) };
+    const mockTexLoader = { loadAsync: vi.fn(() => new Promise<never>(() => {})) };
+
+    void loadSpaceshipBay('/assets/pbr/', mockGltfLoader as any, mockTexLoader);
+
+    expect(mockGltfLoader.loadAsync).toHaveBeenCalledWith('/assets/pbr/spaceship-bay.glb');
+    // deck-pbr, bulkhead and grate: albedo, normal, roughness, displacement and their AO or metalness, 5 each.
+    expect(mockTexLoader.loadAsync).toHaveBeenCalledTimes(15);
+  });
+
   it('defines 5 unique deck atmospheric profiles (#660)', () => {
     const decks: DeckId[] = ['mess', 'cargo', 'furnace', 'chapel', 'bridge'];
     for (const d of decks) {
