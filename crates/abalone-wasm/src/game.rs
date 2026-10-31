@@ -6,7 +6,7 @@ use crate::convert::{
 };
 use abalone_core::game::Game;
 use abalone_core::moves::legal_moves;
-use abalone_core::run::army_game;
+use abalone_core::run::army_game_against;
 use abalone_core::search::{best_move, position_score};
 use wasm_bindgen::prelude::*;
 
@@ -24,11 +24,11 @@ impl Engine {
         Engine { game: Game::new() }
     }
 
-    /// A rogue-lite fight (docs/specs/roguelite.md): the army's `army` marbles, clamped to 4..=14,
-    /// against the bot's 14. White wins once the army is down to 3 marbles.
-    pub fn with_army(army: u8) -> Engine {
+    /// A rogue-lite fight (docs/specs/roguelite.md): the army's `army` marbles against the bot's
+    /// `foes`, both clamped to 4..=14, the bot's front row missing first. White wins once the army is down to 3 marbles.
+    pub fn with_army(army: u8, foes: u8) -> Engine {
         Engine {
-            game: army_game(army),
+            game: army_game_against(army, foes),
         }
     }
 
