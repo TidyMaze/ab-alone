@@ -179,6 +179,7 @@ import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { POOL, poolPixels, readRoom, roomRig } from './roomrefined';
+import { FLOOR, WALL, floorPixels, gantryArches, props as decorProps, wallPixels, wallStrips, type DecorPart } from './roomdecor';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
@@ -1790,6 +1791,35 @@ const refreshLights = (): void => {
 };
 // What the last look made, disposed when the next replaces it (#846): a setting is a rebuild, never a leak.
 let propMeshes: THREE.Mesh[] = [];
+const decorTexture = (pixels: Uint8Array, size: number, repeat?: readonly [number, number]): THREE.DataTexture => {
+  const t = Object.assign(new THREE.DataTexture(pixels, size, size), { colorSpace: THREE.SRGBColorSpace, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, needsUpdate: true });
+  if (repeat) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(...repeat);
+  }
+  return t;
+};
+// The refined room's decor (#1138, roomdecor.ts): the textures are generated once, the meshes rebuilt with the props.
+const decorWall = decorTexture(wallPixels(128), 128, WALL.repeat);
+const floorTexture = decorTexture(floorPixels(512), 512);
+const decorMesh = (p: DecorPart): THREE.Mesh => {
+  const [a, b, c, d] = p.size as [number, number, number, number];
+  const geometry = p.type === 'box' ? new THREE.BoxGeometry(a, b, c) : new THREE.CylinderGeometry(a, b, c, d);
+  const material = new THREE.MeshStandardMaterial({ color: p.color, roughness: p.roughness, metalness: p.metalness, ...(p.emissive ? { emissive: p.emissive, emissiveIntensity: 3 } : {}) });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = p.id;
+  mesh.position.set(...p.position);
+  mesh.rotation.set(...p.rotation);
+  return mesh;
+};
+const planeMesh = (geometry: THREE.BufferGeometry, map: THREE.Texture, roughness: number, at: [number, number, number]): THREE.Mesh => {
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ map, roughness, metalness: 0.3 }));
+  mesh.position.set(...at);
+  return mesh;
+};
+const wallMesh = (): THREE.Mesh => planeMesh(new THREE.PlaneGeometry(WALL.width, WALL.height), decorWall, 0.8, [0, WALL.y, WALL.z]);
+const floorMesh = (): THREE.Mesh =>
+  planeMesh(new THREE.PlaneGeometry(FLOOR.size, FLOOR.size).rotateX(-Math.PI / 2), floorTexture, 0.7, [0, ROOM_SURFACE.y + 0.004, 0]);
 const poolTexture = Object.assign(new THREE.DataTexture(poolPixels(64), 64, 64), { colorSpace: THREE.SRGBColorSpace, needsUpdate: true });
 drawProps = (): void => {
   for (const mesh of propMeshes) {
@@ -1923,6 +1953,16 @@ drawProps = (): void => {
       new THREE.CircleGeometry(POOL.radius, 48).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ map: poolTexture, transparent: true, opacity: POOL.opacity, depthWrite: false, fog: false }),
     );
+    for (const part of [...wallStrips(deck), ...gantryArches(), ...decorProps(deck)]) {
+      const mesh = decorMesh(part);
+      propsGroup.add(mesh);
+      propMeshes.push(mesh);
+    }
+    for (const [name, mesh] of [['wall', wallMesh()], ['floor', floorMesh()]] as const) {
+      mesh.name = name;
+      propsGroup.add(mesh);
+      propMeshes.push(mesh);
+    }
     pool.name = 'light pool';
     pool.position.y = ROOM_SURFACE.y + POOL.y;
     propsGroup.add(pool);

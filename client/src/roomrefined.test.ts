@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DECK_NAMES } from './deck';
-import { DECK_TINTS, LIGHT_BUDGET, POOL, ROOM_KEY, poolPixels, readRoom, roomRig } from './roomrefined';
+import { DECK_TINTS, DEFAULT_ROOM, LIGHT_BUDGET, POOL, ROOM_KEY, poolPixels, readRoom, roomRig } from './roomrefined';
 
 const memory = (value?: string) => ({ getItem: (k: string) => (k === ROOM_KEY ? (value ?? null) : null), setItem: () => undefined });
 
@@ -10,12 +10,13 @@ describe('the refined room (#1138)', () => {
     expect(Object.keys(DECK_TINTS).sort()).toEqual([...DECK_NAMES].sort());
   });
 
-  it('reads ?room= first, then the stored room, then today', () => {
+  it('reads ?room= first, then the stored room, then the default', () => {
     expect(readRoom('?room=refined', memory())).toBe('refined');
     expect(readRoom('?room=today', memory('refined'))).toBe('today');
     expect(readRoom('?room=nope', memory('refined'))).toBe('refined');
-    expect(readRoom('', memory('nope'))).toBe('today');
-    expect(readRoom('', null)).toBe('today');
+    expect(readRoom('', memory('nope'))).toBe(DEFAULT_ROOM);
+    expect(readRoom('', null)).toBe(DEFAULT_ROOM);
+    expect(readRoom('', memory('today'))).toBe('today');
   });
 
   it('stores the room an address names, and survives blocked storage', () => {
