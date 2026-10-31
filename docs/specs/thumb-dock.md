@@ -1,3 +1,12 @@
+---
+id: thumb-dock
+type: feature-design
+status: draft
+title: "Thumb dock"
+parent: ui
+references: [motion]
+---
+
 # Thumb dock: spec for #1032
 
 Status: decided by the owner (section 6). Concept 1 of the four mockups (`concept-1.html`, chosen 2026-10-31). Scope: one topic, the placement of the main controls. No code in this spec.
