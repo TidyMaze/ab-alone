@@ -3,6 +3,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
+import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM } from './openworldglide';
 import {
   BIOME_LOOK,
   CAPACITY,
@@ -1367,5 +1368,179 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
       view.zoomBy(1e9);
       expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
     }
+  });
+});
+
+describe('the step glide of the hero and the troop (docs/specs/openworld.md section 4, #1040)', () => {
+  const GRASS = (cx: number, cy: number): Uint8Array => (Math.abs(cx) > 3 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
+  // The pushing line of the glide's push: the hero and three troop marbles, the enemy (2,0) on to (3,0).
+  const pushLine = (): Played => ({
+    from: [[1, 0], [0, 0], [-1, 0], [-2, 0]],
+    foes: [[2, 0]],
+    push: { troop: [[2, 0], [1, 0], [0, 0], [-2, 0]], enemies: [[3, 0]], ejected: [], dir: [1, 0] },
+  });
+  // The drawn place of a marble: the hero, or an instance of the troop.
+  function placeOf(view: OpenWorldView, name: 'hero' | 'troop', index = 0): THREE.Vector3 {
+    const object = view.scene.getObjectByName(name)!;
+    if (!(object instanceof THREE.InstancedMesh)) return object.position.clone();
+    const m = new THREE.Matrix4();
+    object.getMatrixAt(index, m);
+    return new THREE.Vector3().setFromMatrixPosition(m);
+  }
+  const inCell = (point: THREE.Vector3, [q, r]: Axial): boolean =>
+    Math.abs(point.x - axialTo3D(q, r).x) < 1e-6 && Math.abs(point.z - axialTo3D(q, r).z) < 1e-6;
+  const between = (v: number, a: number, b: number): boolean => (v - a) * (v - b) < 0;
+  const xOf = (cell: Axial): number => axialTo3D(cell[0], cell[1]).x;
+  // The view on the spawn (0,0), the troop behind it: the state before a step.
+  const standing = (): OpenWorldView => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([0, 0], [[-1, 0], [-2, 0]]);
+    return view;
+  };
+
+  it('glides the hero from its old cell to the new one: on the old cell at the start, between at the middle, on the new one at the end', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    expect(view.tick(0)).toBe(true);
+    expect(inCell(placeOf(view, 'hero'), [0, 0])).toBe(true);
+    view.tick(GLIDE_MS / 2);
+    expect(between(placeOf(view, 'hero').x, xOf([0, 0]), xOf([1, 0]))).toBe(true);
+    view.tick(GLIDE_MS);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(view.tick(GLIDE_MS + 10)).toBe(false); // landed: nothing moves
+  });
+
+  it("glides each troop marble to the cell of the one before it, the first from the hero's old cell", () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(GLIDE_MS / 2);
+    expect(between(placeOf(view, 'troop', 0).x, xOf([-1, 0]), xOf([0, 0]))).toBe(true);
+    expect(between(placeOf(view, 'troop', 1).x, xOf([-2, 0]), xOf([-1, 0]))).toBe(true);
+    view.tick(GLIDE_MS);
+    expect(inCell(placeOf(view, 'troop', 0), [0, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [-1, 0])).toBe(true);
+  });
+
+  it('chains a held step from the place the hero has mid-glide: no snap back to the cell it left', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(60);
+    const mid = placeOf(view, 'hero').x;
+    view.show([2, 0], [[1, 0], [0, 0]], { now: 60, span: GLIDE_MS });
+    view.tick(60);
+    expect(placeOf(view, 'hero').x).toBeCloseTo(mid, 9);
+    view.tick(60 + GLIDE_MS);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+  });
+
+  it('stands the marbles on their cells at once when a show has no glide: a world entered, a fixture, reduced motion', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]]);
+    expect(view.tick(0)).toBe(false);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 0), [0, 0])).toBe(true);
+  });
+
+  it('rolls the hero at the close zoom: its turn is drawn once it has rolled', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(GLIDE_MS);
+    const hero = view.scene.getObjectByName('hero')!;
+    expect(hero.quaternion.angleTo(new THREE.Quaternion())).toBeGreaterThan(1);
+  });
+
+  it('draws no roll and no squash at the far zoom: the hero only slides there', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.resize(1600, 900);
+    view.zoomBy(MAX_ZOOM);
+    expect(view.drawnZoom).toBeGreaterThan(ROLL_ZOOM);
+    view.show([0, 0], [[-1, 0], [-2, 0]]);
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(GLIDE_MS / 2);
+    const hero = view.scene.getObjectByName('hero')!;
+    expect(hero.quaternion.angleTo(new THREE.Quaternion())).toBe(0);
+    expect(hero.scale.x).toBe(1);
+    expect(hero.scale.y).toBe(1);
+  });
+
+  it('waits for the step to land before the push lunges, and lunges from the cells the step took', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([0, 0], [[-1, 0], [-2, 0], [-3, 0]]);
+    view.show([1, 0], [[0, 0], [-1, 0], [-2, 0]], { now: 0, span: GLIDE_MS });
+    view.playPush(pushLine(), 0);
+    view.tick(GLIDE_MS / 2);
+    expect(between(placeOf(view, 'hero').x, xOf([0, 0]), xOf([1, 0]))).toBe(true); // still the step
+    view.tick(GLIDE_MS);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true); // the lunge starts on the cell the step took
+    view.tick(GLIDE_MS + 200);
+    expect(between(placeOf(view, 'hero').x, xOf([1, 0]), xOf([2, 0]))).toBe(true);
+    view.tick(GLIDE_MS + 540);
+    expect(inCell(placeOf(view, 'hero'), [2, 0])).toBe(true);
+  });
+
+  it('a push that carries the hero on takes its end as the hero cell: the pick reads the new cell', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([0, 0], [[-1, 0], [-2, 0], [-3, 0]]);
+    view.show([1, 0], [[0, 0], [-1, 0], [-2, 0]]);
+    view.playPush(pushLine(), 0);
+    view.tick(10_000);
+    expect(view.pick(0, 0)).toEqual([2, 0]);
+  });
+
+  it('reports the glide while a marble moves, and not once it has landed', () => {
+    const view = standing();
+    expect(view.gliding).toBe(false);
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(10);
+    expect(view.gliding).toBe(true);
+    view.tick(GLIDE_MS + 10); // the landing draws the last cell
+    expect(view.gliding).toBe(true);
+    view.tick(GLIDE_MS + 20);
+    expect(view.gliding).toBe(false);
+  });
+
+  it('leaves a marble that is on its cell where it stands: a glide to the cells it has keeps nothing moving', () => {
+    const view = standing();
+    view.show([0, 0], [[-1, 0], [-2, 0]], { now: 0, span: GLIDE_MS });
+    expect(view.tick(0)).toBe(false);
+    expect(view.gliding).toBe(false);
+  });
+
+  it('stands a first world on its cell at once, with no glide in from the origin', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    expect(view.tick(0)).toBe(false);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(view.focusHeight).toBeCloseTo(placeOf(view, 'hero').y, 9);
+  });
+
+  it('a push that carries the hero on to the next chunk draws the chunks around the hero where it ends, as a view shown there does', () => {
+    // no ground west of the chunk -2: the chunks drawn depend on the chunk the hero is in
+    const edge = (cx: number, cy: number): Uint8Array => (cx <= -2 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
+    const a = CHUNK - 1;
+    const pushed: Played = {
+      from: [[a, 0], [a - 1, 0], [a - 2, 0], [a - 3, 0]],
+      foes: [[a + 1, 0]],
+      push: { troop: [[a + 1, 0], [a, 0], [a - 1, 0], [a - 3, 0]], enemies: [[a + 2, 0]], ejected: [], dir: [1, 0] },
+    };
+    const view = new OpenWorldView(new World(edge));
+    view.show([a, 0], [[a - 1, 0], [a - 2, 0], [a - 3, 0]]);
+    view.playPush(pushed, 0);
+    view.tick(10_000);
+    const fresh = new OpenWorldView(new World(edge));
+    fresh.show([a + 1, 0], [[a, 0], [a - 1, 0], [a - 3, 0]]);
+    const terrain = (v: OpenWorldView) => Object.entries(v.drawn).filter(([name]) => name.startsWith('terrain'));
+    expect(terrain(view)).toEqual(terrain(fresh));
+  });
+
+  it('nudges the hero toward the cell a blocked step names, and back on its own cell', () => {
+    const view = standing();
+    const x0 = placeOf(view, 'hero').x;
+    view.nudge([0, 0], [1, 0], 0, NUDGE_MS);
+    expect(view.tick(NUDGE_MS / 2)).toBe(true);
+    expect(placeOf(view, 'hero').x).toBeGreaterThan(x0);
+    view.tick(NUDGE_MS);
+    expect(placeOf(view, 'hero').x).toBeCloseTo(x0, 9);
+    expect(inCell(placeOf(view, 'hero'), [0, 0])).toBe(true);
   });
 });

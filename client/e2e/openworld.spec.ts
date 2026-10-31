@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { openModes } from './modes';
 
 // #962: the Open world mode, behind ?openworld=<seed>: the hero rolls over the generated world, an obstacle stops it, and
@@ -358,6 +358,47 @@ test.describe('the touch joystick', () => {
   });
 });
 
+// #1051: the settings menu of the Open world opens on screen. The cog is at the right of the column, as in a normal game (#1032 hid
+// the dock), so the menu hangs from its right edge and stays inside the window at every size.
+async function openSettingsInOpenWorld(page: Page): Promise<void> {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  await page.locator('#settings').click();
+  await expect(page.locator('#settings-menu')).toBeVisible();
+}
+async function expectMenuOnScreen(page: Page): Promise<void> {
+  const box = (await page.locator('#settings-menu').boundingBox())!;
+  const innerWidth = await page.evaluate(() => window.innerWidth);
+  expect(box.x, 'left edge of the settings menu').toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width, 'right edge of the settings menu').toBeLessThanOrEqual(innerWidth);
+}
+test('the Open world settings menu is on screen at 1280x720, #1051', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await openSettingsInOpenWorld(page);
+  await expectMenuOnScreen(page);
+});
+test('the Open world settings menu is on screen at 1920x1080, #1051', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openSettingsInOpenWorld(page);
+  await expectMenuOnScreen(page);
+});
+test.describe('the Open world settings menu on a touch phone, #1051', () => {
+  test.use({ hasTouch: true });
+  test('is on screen at 844x390 landscape', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await openSettingsInOpenWorld(page);
+    await expectMenuOnScreen(page);
+  });
+  test('stays on screen at 390x844 portrait', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openSettingsInOpenWorld(page);
+    await expectMenuOnScreen(page);
+  });
+});
+
 // #1026: Q and E turn the Open world camera round the hero by a step, R goes back to the default angle, and the turn is saved with
 // the world, so a reload resumes it (the turn itself is unit tested in openworldview.test.ts and openworldmode.test.ts).
 test('Q and E turn the Open world camera round the hero, R goes back, and the turn resumes after a reload, #1026', async ({ page }) => {
@@ -382,4 +423,27 @@ test('Q and E turn the Open world camera round the hero, R goes back, and the tu
   await openModes(page);
   await page.locator('#openworld').click();
   await expect.poll(yaw).toBe('30');
+});
+
+// #1040: a step glides the hero from its cell to the next one. The cell is exact at once (`openworldAt`, the save and the push use
+// it); only the drawing glides. With the slow factor of 10 the glide lasts 1.4 s, so the browser sees the hero in between.
+test('a step glides the hero onto the next cell: exact at once, drawn in between, landed at the end, #1040', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  await page.evaluate(() => {
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [] });
+    (window as unknown as { __openworldSlow: number }).__openworldSlow = 10;
+  });
+  await page.keyboard.press('ArrowRight');
+  expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,0');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldGlide)).toBeDefined();
+  await page.screenshot({ path: test.info().outputPath('glide-mid-step-1.png') });
+  await page.waitForTimeout(500); // a second frame of the same glide, further along it
+  await page.screenshot({ path: test.info().outputPath('glide-mid-step-2.png') });
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldGlide), { timeout: 5000 }).toBeUndefined();
+  expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,0');
+  expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined();
 });

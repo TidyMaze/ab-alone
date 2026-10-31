@@ -847,7 +847,12 @@ body:has(#update:not([hidden])) #modes::before {
 body:has(#dock-wrap :is(#mode-menu, #daily-card):not([hidden])) #support { display: none; }
 /* Held sideways the settings menu lies left of the dock column, not over it (#1032). */
 @media (orientation: landscape) and (max-height: 660px) {
-  #settings-menu { right: 68px; }
+  body:not([data-openworld]) #settings-menu { right: 68px; }
 }
 /* The dock is not on the Open world's screen: its HUD and joystick are (#962, #1025). */
 body[data-openworld] #dock-wrap { display: none !important; }
+/* Bug #1051: with the dock hidden the column is alone in the top bar and would sit at its left edge, so the cog and its menu open off
+   the screen. The column goes back to the right, where it is in a normal game. Landscape only: held upright the column is a row
+   that stretches, and an auto margin would shrink it. */
+@media (orientation: landscape) { body[data-openworld] #online { margin-left: auto; } }
+>

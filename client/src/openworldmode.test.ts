@@ -9,6 +9,7 @@ import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
+import { GLIDE_MS, NUDGE_MS } from './openworldglide';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
 function bytes(cx: number, cy: number): Uint8Array {
@@ -481,6 +482,7 @@ function cliff(_seed: number, cx: number, cy: number): Uint8Array {
 
 describe('the camera eases up a cliff (#988)', () => {
   it('draws every frame while the camera eases to the top of the cliff, then draws nothing once it has settled', () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0); // the step starts at the press, on the frames' clock
     const m = mode(undefined, cliff, () => false);
     m.enter(1, 800, 600);
     const render = vi.fn();
@@ -494,6 +496,7 @@ describe('the camera eases up a cliff (#988)', () => {
       m.frame(render, (frame * 1000) / 60);
       drawn.push(render.mock.calls.length > before);
     }
+    clock.mockRestore();
     expect(drawn.slice(0, 30).every(Boolean)).toBe(true); // every frame of the first half second
     expect(drawn.slice(50).some(Boolean)).toBe(false); // settled: nothing left to draw
   });
@@ -554,10 +557,10 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     render.mockClear();
     for (const now of [100, 200, 300, 400]) m.frame(render, now);
     expect(render).toHaveBeenCalledTimes(4);
-    m.frame(render, 410); // the frame that ends it draws the final cells, and the mark goes
+    m.frame(render, 560); // the step glides 140 ms, the push lunges from its landing and ends at 550 ms: that frame draws the final cells
     expect(body().openworldAnim).toBeUndefined();
     render.mockClear();
-    m.frame(render, 500);
+    m.frame(render, 570);
     expect(render).not.toHaveBeenCalled();
   });
 
@@ -893,5 +896,117 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
     expect((await saves.load(7))!.yaw).toBeCloseTo(TURN_STEP);
     await m.open(7, 800, 600);
     expect(body().openworldYaw).toBe(String(Math.round((TURN_STEP * 180) / Math.PI)));
+  });
+});
+
+describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1040)', () => {
+  // The hero (0,0) with the troop behind it; the cell (1,0) is free, so a Right press steps onto it.
+  const standing = (reduced = false, foes: Axial[] = []): OpenWorldMode => {
+    const m = mode(undefined, undefined, () => reduced, undefined, noPush);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: foes });
+    return m;
+  };
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (window as { __openworldSlow?: number }).__openworldSlow;
+  });
+
+  it('glides the step: the view is shown with the time of the step and the span of the glide', () => {
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    standing().key('ArrowRight');
+    expect(show.mock.calls.at(-1)![0]).toEqual([1, 0]);
+    expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS });
+  });
+
+  it('stretches the glide by the slow factor of the page, read when the step starts (a webdriver check)', () => {
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    (window as { __openworldSlow?: number }).__openworldSlow = 10;
+    standing().key('ArrowRight');
+    expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS * 10 });
+  });
+
+  it('writes the glide mark only under webdriver, the page the browser checks drive: a player never pays for it', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const m = standing();
+    m.frame(vi.fn(), 0);
+    m.key('ArrowRight');
+    m.frame(vi.fn(), 60);
+    expect(body().openworldGlide).toBeUndefined(); // navigator.webdriver is not set here
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    try {
+      m.frame(vi.fn(), 70);
+      expect(body().openworldGlide).toMatch(/^-?\d/);
+    } finally {
+      delete (navigator as { webdriver?: boolean }).webdriver;
+    }
+  });
+
+  it('marks the glide while the marbles move, with the drawn place of the hero, and unmarks it on landing', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
+    const m = standing();
+    m.frame(vi.fn(), 0);
+    m.key('ArrowRight');
+    const render = vi.fn();
+    m.frame(render, 60);
+    expect(body().openworldGlide).toMatch(/^-?\d/); // the hero's drawn place, mid-glide
+    expect(body().openworldAnim).toBeUndefined(); // a glide is not a push
+    m.frame(render, GLIDE_MS + 10); // the frame of the landing draws the last cell
+    m.frame(render, GLIDE_MS + 60);
+    expect(body().openworldGlide).toBeUndefined();
+    delete (navigator as { webdriver?: boolean }).webdriver;
+  });
+
+  it('draws nothing of a glide under reduced motion: the step is shown on its cell at once', () => {
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    const m = standing(true);
+    show.mockClear();
+    m.key('ArrowRight');
+    expect(show.mock.calls.at(-1)![2]).toBeUndefined();
+    m.frame(vi.fn(), 10);
+    expect(body().openworldGlide).toBeUndefined();
+  });
+
+  it('draws the landing frame of a glide, then nothing: the loop goes idle one frame after it lands', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const m = standing();
+    m.frame(vi.fn(), 0);
+    m.key('ArrowRight');
+    const render = vi.fn();
+    m.frame(render, GLIDE_MS + 10); // the frame that lands the hero draws its last place
+    expect(render).toHaveBeenCalledTimes(1);
+    render.mockClear();
+    m.frame(render, GLIDE_MS + 30);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('keeps the loop drawing a blocked lean only while the key repeats into the wall, and idle after its last 120 ms', () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    const m = standing(false, [[1, 0]]); // an enemy on (1,0): a Right press into the wall leans the hero
+    m.frame(vi.fn(), 0);
+    for (let i = 0; i < 5; i++) {
+      clock = i * 33; // the key repeat, every 33 ms
+      m.key('ArrowRight');
+    }
+    m.release('ArrowRight'); // the last press was at 132 ms: its lean is over at 252 ms
+    const render = vi.fn();
+    m.frame(render, 200);
+    expect(render).toHaveBeenCalledTimes(1);
+    m.frame(render, 260); // the frame that ends the lean draws its last place
+    expect(render).toHaveBeenCalledTimes(2);
+    render.mockClear();
+    m.frame(render, 300);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('leans the hero toward a cell a blocked step names, for the nudge time, and not under reduced motion', () => {
+    const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
+    standing(false, [[1, 0]]).key('ArrowRight'); // an enemy on (1,0) blocks it
+    expect(nudge).toHaveBeenCalledWith([0, 0], [1, 0], expect.any(Number), NUDGE_MS);
+    nudge.mockClear();
+    standing(true, [[1, 0]]).key('ArrowRight');
+    expect(nudge).not.toHaveBeenCalled();
   });
 });
