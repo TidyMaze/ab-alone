@@ -2045,6 +2045,7 @@ if (resumed) {
   if (!resumed.bot) worker = null;
   engine = resumed.engine;
   history.push(...resumed.moves);
+  if (resumed.stalker) stalker = engine; // a Stalker game comes back under its fog (#1009)
 }
 
 // Evaluation bar (#191): the search score of every position of a local or bot game, from a second
@@ -2301,7 +2302,7 @@ function playMove(record: number[]): void {
   afterPlay(before, record);
   const spark = sparkBurst(before, specials, parseMoves(record)[0]!);
   if (spark && !reducedMotion()) burstSpark(spark);
-  if (!online && !fight && !run) void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
+  if (!online && !fight && !run) void saves.save({ bot: worker !== null, moves: history, stalker: fogged() }, engine.status() !== 0);
   if (run?.state.fighting) runMoved();
   analyse();
 }
@@ -4426,7 +4427,7 @@ importFile.addEventListener('change', async () => {
   history.push(...read.moves);
   selected = [];
   thinking = false;
-  void saves.save({ bot: worker !== null, moves: history }, engine.status() !== 0);
+  void saves.save({ bot: worker !== null, moves: history, stalker: fogged() }, engine.status() !== 0);
   refresh();
   analyse(); // the bar follows the imported position (#191)
   void botTurn();

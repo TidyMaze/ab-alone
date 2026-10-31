@@ -350,3 +350,28 @@ describe('LocalSaves', () => {
     expect(store.data.get(LOCAL_GAME)).toEqual(encodeGame({ bot: false, moves: [A] }));
   });
 });
+
+describe('a Stalker game is saved with its fog (#1009)', () => {
+  it('writes `stalker: true` for a Stalker game and nothing for the others', () => {
+    expect(encodeGame({ bot: true, moves: [], stalker: true })).toMatchObject({ bot: true, stalker: true });
+    expect('stalker' in encodeGame({ bot: true, moves: [] })).toBe(false);
+    expect('stalker' in encodeGame({ bot: true, moves: [], stalker: false })).toBe(false);
+  });
+
+  it('reads it back, and ignores anything but the boolean true', () => {
+    const base = encodeGame({ bot: true, moves: [] });
+    expect(decodeGame({ ...base, stalker: true })).toEqual({ bot: true, moves: [], stalker: true });
+    expect(decodeGame({ ...base, stalker: 'yes' })).toEqual({ bot: true, moves: [] });
+    expect(decodeGame(base)).toEqual({ bot: true, moves: [] });
+  });
+
+  it('gives it back on load, replayed with the rest of the game', async () => {
+    const store = memoryStore();
+    const saves = new LocalSaves(store);
+    await saves.save({ bot: true, moves: [], stalker: true }, false);
+    const loaded = await new LocalSaves(store).load(undefined, () => ({ play: () => {}, status: () => 0 }));
+    expect(loaded).toMatchObject({ bot: true, stalker: true });
+    await saves.save({ bot: true, moves: [] }, false);
+    expect((await new LocalSaves(store).load(undefined, () => ({ play: () => {}, status: () => 0 })))!.stalker).toBeUndefined();
+  });
+});
