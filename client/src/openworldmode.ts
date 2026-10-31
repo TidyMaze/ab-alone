@@ -4,7 +4,7 @@
 import type * as THREE from 'three/webgpu';
 import { DIRECTIONS, type Axial } from './board';
 import { arrowCell } from './hubview';
-import { chunkOf, Hero, World } from './openworld';
+import { blocked, chunkOf, Hero, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
@@ -67,18 +67,26 @@ const gapOf = (a: number, b: number): number => {
   return Math.min(d, 2 * Math.PI - d);
 };
 
+/** The intent of the held arrows: their ground angle at the camera's yaw (radians, as `groundAngle`); `null` for no arrow or for
+ * opposite arrows. */
+function intentOf(held: ReadonlySet<string>, yaw: number): number | null {
+  const arrows = [...held].filter((key) => SCREEN.has(key));
+  if (arrows.length === 0 || opposed(held)) return null;
+  const [x, y] = arrows.reduce(([sx, sy], key) => [sx + SCREEN.get(key)![0], sy + SCREEN.get(key)![1]], [0, 0]);
+  return Math.atan2(y, x) + yaw;
+}
+
 /** The hex step of the held arrows in the yaw of the camera (#1026, docs/specs/openworld.md section 4). The held arrows are a screen
  * direction (the sum of the two of a diagonal), and the hero rolls to the neighbour of the hex grid that the camera shows nearest to
  * it: a neighbour at ground angle `a` shows at `a - yaw`, so the one nearest to `direction + yaw` is taken. A tie (the zigzag of an
  * odd or even row, or a yaw at the middle of two neighbours) takes the step the keyboard takes at yaw 0, as it always did. `null`
  * for no arrow or for opposite arrows. */
 export function stepOf(at: Axial, held: ReadonlySet<string>, yaw: number): Axial | null {
+  const want = intentOf(held, yaw);
+  if (want === null) return null;
   const arrows = [...held].filter((key) => SCREEN.has(key));
-  if (arrows.length === 0 || opposed(held)) return null;
-  const [x, y] = arrows.reduce(([sx, sy], key) => [sx + SCREEN.get(key)![0], sy + SCREEN.get(key)![1]], [0, 0]);
   const fallback = arrows.length === 1 ? arrowCell(at, arrows[0]!)! : heldCell(at, held)!;
   const fallbackAngle = groundAngle([fallback[0] - at[0], fallback[1] - at[1]]);
-  const want = Math.atan2(y, x) + yaw;
   let best = DIRECTIONS[0]!;
   let bestScore = [Infinity, Infinity];
   for (const dir of DIRECTIONS) {
@@ -89,6 +97,28 @@ export function stepOf(at: Axial, held: ReadonlySet<string>, yaw: number): Axial
     }
   }
   return [at[0] + best[0], at[1] + best[1]];
+}
+
+/** The semi-auto step (#1137, docs/specs/openworld.md section 4): the cell of `stepOf` when `free` takes it, else the free one of its
+ * two side neighbours (60 degrees off) that the intent follows best, a tie going to the lower direction index; the blocked straight cell when none is
+ * free (a wall, a lake, a cliff), and then the hero leans as before; `null` for no intent. `free` tells whether the hero can enter a cell. */
+export function steerStep(at: Axial, held: ReadonlySet<string>, yaw: number, free: (cell: Axial) => boolean): Axial | null {
+  const straight = stepOf(at, held, yaw);
+  if (!straight || free(straight)) return straight;
+  const ahead = groundAngle([straight[0] - at[0], straight[1] - at[1]]);
+  const want = intentOf(held, yaw)!;
+  let best = straight;
+  let bestGap = Infinity;
+  for (const dir of DIRECTIONS) {
+    const side = Math.abs(gapOf(groundAngle(dir), ahead) - Math.PI / 3) < 1e-6;
+    const cell: Axial = [at[0] + dir[0], at[1] + dir[1]];
+    const gap = Math.round(gapOf(groundAngle(dir), want) * 1e9);
+    if (side && gap < bestGap && free(cell)) {
+      best = cell;
+      bestGap = gap;
+    }
+  }
+  return best;
 }
 
 /** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
@@ -365,10 +395,14 @@ export class OpenWorldMode {
     this.stepHeld(due);
   }
 
-  /** One step in the direction of the arrows held now (`stepOf`), made at `at` (ms): a blocked one leans the hero (`lean`), arrows that
-   * cancel stop the walk. */
+  /** One step in the direction of the arrows held now (`stepOf`), made at `at` (ms): a blocked one slides round the obstacle (`steerStep`), and leans
+   * the hero (`lean`) only when no side is free; arrows that cancel stop the walk. */
   private stepHeld(at: number): void {
-    const to = stepOf(this.hero!.at, new Set([...this.held, ...this.pad]), this.view!.yaw);
+    const free = ([q, r]: Axial): boolean => {
+      const tile = this.world!.tile(q, r);
+      return !!tile && !blocked(tile) && !this.fight.occupied(this.world!, q, r);
+    };
+    const to = steerStep(this.hero!.at, new Set([...this.held, ...this.pad]), this.view!.yaw, free);
     if (to) this.roll(to, at, this.cruising ? 'walk' : 'start');
     else this.stop(at);
   }
