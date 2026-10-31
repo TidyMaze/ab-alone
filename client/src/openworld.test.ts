@@ -203,6 +203,22 @@ describe('the Open world cache is bounded (#981)', () => {
     expect(world.cached.chunks).toBe(350);
   });
 
+  it('a tile read finds its chunk without loading it again, and does not move it in the cache (#1034)', () => {
+    const load = vi.fn((cx: number, cy: number) => bytes(cx, cy));
+    const world = new World(load);
+    world.limit = 2;
+    world.chunk(0, 0);
+    world.chunk(1, 0);
+    world.tile(0, 0); // found, not loaded again; not moved to the most recent place
+    world.chunk(2, 0); // evicts the least recently used: (0, 0), not (1, 0)
+    const loads = (cx: number, cy: number) => load.mock.calls.filter(([x, y]) => x === cx && y === cy).length;
+    expect(loads(0, 0)).toBe(1);
+    world.chunk(1, 0);
+    expect(loads(1, 0)).toBe(1);
+    world.chunk(0, 0);
+    expect(loads(0, 0)).toBe(2);
+  });
+
   it('evicts the least recently used chunk; a chunk read again stays', () => {
     const load = vi.fn((cx: number, cy: number) => bytes(cx, cy));
     const world = new World(load);
