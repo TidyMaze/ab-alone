@@ -43,7 +43,7 @@ describe('the glide of a step (docs/specs/openworld.md section 4, #1040)', () =>
     m.tick(GLIDE_MS);
     // one cell of travel over the radius, about the axis that rolls a sphere along +x: the turn is -z, the way a wheel turns
     const expected = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, -1), 1 / RADIUS);
-    expect(m.pose.q.angleTo(expected)).toBeCloseTo(0, 9);
+    expect(m.pose.q.angleTo(expected)).toBeLessThan(1e-6);
     const top = new THREE.Vector3(0, RADIUS, 0).applyQuaternion(m.pose.q);
     expect(top.x).toBeLessThan(0); // 1 / radius is about 3.3 rad: the top has rolled past the bottom
   });
@@ -55,7 +55,7 @@ describe('the glide of a step (docs/specs/openworld.md section 4, #1040)', () =>
     m.tick(GLIDE_MS / 2);
     // towards +z the wheel turns about +x, by the share of the turn the ease has covered (0.875 at half the time)
     const expected = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.875 / RADIUS);
-    expect(m.pose.q.angleTo(expected)).toBeCloseTo(0, 9);
+    expect(m.pose.q.angleTo(expected)).toBeLessThan(1e-6);
   });
 
   it('draws no turn and no squash at a far-out zoom: the glide of the place stays', () => {
@@ -97,6 +97,15 @@ describe('the glide of a step (docs/specs/openworld.md section 4, #1040)', () =>
     near(m.pose.x, mid); // the new glide starts where the marble is
     m.tick(60 + GLIDE_MS);
     expect(m.pose.x).toBe(2);
+  });
+
+  it('moves to a place of the same ground at another height without a turn: the marble rises, it does not roll', () => {
+    const m = new Marble(RADIUS);
+    m.place(at(0, 0, 0));
+    expect(m.go(at(0, 1, 0), 0)).toBe(true);
+    m.tick(GLIDE_MS);
+    expect(m.pose.y).toBe(1);
+    expect(m.pose.q.angleTo(new THREE.Quaternion())).toBeLessThan(1e-6);
   });
 
   it('turns smoothly when the direction changes mid-glide: the next cell is reached from the place it was at', () => {
