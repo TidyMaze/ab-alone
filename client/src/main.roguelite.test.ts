@@ -76,7 +76,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it('a marble lost by an army of 4 loses the run, and New run starts another', async () => {
     const game = await boot('?bot=off');
-    await game.hook('__run', pick({ ...newRun(1, 3), army: 4 }, 0)); // the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
+    await game.hook('__run', pick({ ...newRun(3, 3), army: 4, path: [0] }, 2)); // an elite (14 White): the army keeps (1, 3), (-2, 2), (-1, 2), (0, 2)
     expect(document.body.dataset.run).toBe('fight');
     // White walks its column q = 1 down four times while Black steps (-2, 2) aside and back, then pushes (1, 3) off.
     const column = (k: number): Axial[] => [-4, -3, -2].map((r): Axial => [1, r + k]);
@@ -197,7 +197,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
 
   it.each([false, true])('a Spark pushed off bursts on screen, never with reduced motion (%s)', async (reducedMotion) => {
     const game = await boot('?bot=off', { reducedMotion });
-    await game.hook('__run', { ...pick({ ...newRun(1, 3), army: 4, specials: [1, 0, 1] }, 0), placed: [[1, 3, 3], [0, 2, 1]] });
+    await game.hook('__run', { ...pick({ ...newRun(3, 3), army: 4, specials: [1, 0, 1], path: [0] }, 2), placed: [[1, 3, 3], [0, 2, 1]] });
     const column = (k: number): Axial[] => [-4, -3, -2].map((r): Axial => [1, r + k]);
     for (let k = 0; k < 5; k++) {
       play(game, k % 2 ? [[-3, 2]] : [[-2, 2]], k % 2 ? [-2, 2] : [-3, 2]);
@@ -212,7 +212,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
   it('the bot replays the fight with its special marbles: a Heavy push the plain board refuses, #961', async () => {
     const indexedDB = new IDBFactory();
     const game = await boot('?bot=off', { indexedDB });
-    await game.hook('__run', { ...pick({ ...newRun(1, 3), specials: [1, 0, 0] }, 0), placed: [[0, 4, 1]] });
+    await game.hook('__run', { ...pick({ ...newRun(3, 3), specials: [1, 0, 0], path: [0] }, 2), placed: [[0, 4, 1]] });
     // The column q = 0 marches up while White steps (2, -2) down out of the way.
     for (let k = 0; k < 3; k++) {
       play(game, [0, 1, 2].map((d): Axial => [0, 2 + d - k]), [0, 1 - k]);

@@ -269,6 +269,7 @@ import {
   eventHtml,
   fightBudget,
   fightOver,
+  foesOf,
   left,
   loadRun,
   mapHtml,
@@ -2062,11 +2063,11 @@ const saves = new LocalSaves(gameStore, navigator.storage);
 const resumed = await saves.load(worker ? undefined : false, (boss) => (boss ? new Encounter(boss.id, boss.seed) : new Engine()));
 // A rogue-lite run saved in progress (#798), started over the local game once the page is ready.
 // The army's fight with its special marbles placed (#961), the same board as the bot's (bot.ts engineFor).
-const armyEngine = (army: number, placed: number[][]): Engine => engineFor(Engine, army, placed);
+const armyEngine = (state: Run, map: MapNode[]): Engine => engineFor(Engine, state.army, state.placed, foesOf(map, state));
 // The fight of the run's last node: the act's roster boss (#800), or the bot against the army.
 const runEngine = (state: Run, map: MapNode[]): Engine | Encounter => {
   const boss = actBoss(map, state, boss_ids());
-  return boss ? new Encounter(boss.id, boss.seed) : armyEngine(state.army, state.placed);
+  return boss ? new Encounter(boss.id, boss.seed) : armyEngine(state, map);
 };
 const loadSavedRun = () => loadRun(gameStore, (seed) => parseMap(run_map(seed)), runEngine);
 const resumedRun = await loadSavedRun();
@@ -2254,7 +2255,7 @@ async function botTurn(): Promise<void> {
   try {
     // An auto-played move comes no sooner than AUTO_DELAY_MS after the last, so the game can be followed and stopped.
     [move] = await Promise.all([
-      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed),
+      askBot(mover, history, searchBudget, fight ?? undefined, diffPercent, auto, run?.state.army, run?.state.placed, run ? foesOf(run.map, run.state) : undefined),
       auto ? new Promise((done) => setTimeout(done, AUTO_DELAY_MS)) : undefined,
     ]);
   } catch {
@@ -4789,7 +4790,7 @@ function placeAt(q: number, r: number): void {
   run!.state = place(run!.state, [q, r], armed);
   if (left(run!.state, armed) === 0) armed = 0; // none left: the type is put down
   void saveRun(gameStore, run!.state);
-  engine = armyEngine(run!.state.army, run!.state.placed);
+  engine = armyEngine(run!.state, run!.map);
   showRun();
   refresh();
 }

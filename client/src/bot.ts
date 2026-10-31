@@ -18,6 +18,8 @@ export interface BotRequest {
   army?: number;
   /** With `army`: the special marbles placed before the fight, `[q, r, kind]` (#961). */
   placed?: number[][];
+  /** With `army`: the marbles of the bot's army, 14 when unset (#1145). */
+  foes?: number;
 }
 
 export interface BossRef {
@@ -76,15 +78,16 @@ export function botBudget(search: string, automated: boolean): number {
   return automated && Number.isInteger(n) && n > 0 ? n : BOT_NODES;
 }
 
-/** The engine of a request: a plain game, or a rogue-lite fight of `army` marbles with its special marbles `placed`
- * (#961), so the bot searches the board the page plays. */
+/** The engine of a request: a plain game, or a rogue-lite fight of `army` marbles against `foes` with its special
+ * marbles `placed` (#961, #1145), so the bot searches the board the page plays. */
 export function engineFor<E extends { place_special(q: number, r: number, kind: number): void }>(
-  make: { new (): E; with_army(army: number): E },
+  make: { new (): E; with_army(army: number, foes: number): E },
   army?: number,
   placed: number[][] = [],
+  foes = 14,
 ): E {
   if (army === undefined) return new make();
-  const engine = make.with_army(army);
+  const engine = make.with_army(army, foes);
   for (const [q, r, kind] of placed) engine.place_special(q!, r!, kind!);
   return engine;
 }
@@ -92,7 +95,7 @@ export function engineFor<E extends { place_special(q: number, r: number, kind: 
 /** Worker side: replay the game, return the bot's move, or the score for an `evaluate` request. */
 export function answer(
   req: BotRequest,
-  makeEngine: (army?: number, placed?: number[][]) => EngineLike,
+  makeEngine: (army?: number, placed?: number[][], foes?: number) => EngineLike,
   makeEncounter: (id: string, seed: number) => EncounterLike,
 ): BotResponse {
   if (req.boss) {
@@ -103,7 +106,7 @@ export function answer(
     for (const mv of req.history) fight.play(Int32Array.from(mv));
     return { id: req.id, move: Array.from(req.player ? fight.player_move() : fight.boss_move()) };
   }
-  const engine = makeEngine(req.army, req.placed);
+  const engine = makeEngine(req.army, req.placed, req.foes);
   for (const mv of req.history) engine.play(Int32Array.from(mv));
   if (req.evaluate) return { id: req.id, score: engine.evaluate(req.nodes) };
   return { id: req.id, move: Array.from(engine.best_move(req.nodes)) };
@@ -154,8 +157,9 @@ export async function askBot(
   player?: boolean,
   army?: number,
   placed?: number[][],
+  foes?: number,
 ): Promise<number[]> {
-  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player, army, placed })).move;
+  return (await ask<MoveAnswer>(worker, { history, nodes, boss, difficultyPercent, player, army, placed, foes })).move;
 }
 
 /** Page side: the search score of the position after `history`, for the side to move. */
