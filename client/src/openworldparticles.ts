@@ -40,8 +40,8 @@ export const PUFF = {
 /** The shards of a broken obstacle (#1147): `count` flakes of the prop's colour thrown outward, falling, gone within `life` ms. */
 export const SHARDS = {
   count: 6,
-  speed: 1.1,
-  look: { rate: 0, life: 700, lift: 0, spread: 0, rise: -0.9, sway: 0, size: 0.1, colour: 0xffffff } satisfies Look,
+  speed: 1.5,
+  look: { rate: 0, life: 700, lift: 0, spread: 0, rise: -0.9, sway: 0, size: 0.14, colour: 0xffffff } satisfies Look,
 };
 /** Reduced motion: the prop just fades where it stood, as one particle of its size that does not move. */
 export const FADE: Look = { rate: 0, life: 300, lift: 0, spread: 0, rise: 0, sway: 0, size: 0.3, colour: 0xffffff };

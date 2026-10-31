@@ -667,3 +667,37 @@ test('a held arrow goes round an obstacle instead of stopping, #1137', async ({ 
   await page.waitForTimeout(300);
   expect(await at()).toBe('0,0'); // every side is shut: it stays
 });
+
+// #1147: the hero breaks an isolated boulder it rolls into. On seed 7 the boulder on (4, 2) stands alone with grass on its left: the
+// move goes through, its prop leaves the scene, shards fly, the cell is counted broken, and the break is still there after a reload.
+test('the hero breaks the isolated boulder it rolls into, and it stays broken after a reload, #1147', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  await page.evaluate(() =>
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [3, 2], troop: [[2, 2], [1, 2]], enemies: [] }),
+  );
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  const boulders = () => page.evaluate(() => (JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>)['prop-boulder']! + ((JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>)['prop-boulder-hi'] ?? 0));
+  const before = await boulders();
+  expect(before).toBeGreaterThan(0);
+  await page.screenshot({ path: test.info().outputPath('break-before.png') });
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(at).toBe('4,2'); // it went through the boulder
+  await page.waitForTimeout(220);
+  await page.screenshot({ path: test.info().outputPath('break-shards.png') });
+  expect(await boulders()).toBe(before - 1);
+  expect(await page.evaluate(() => document.body.dataset.openworldBroken)).toBe('1');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBeDefined();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: test.info().outputPath('break-after.png') });
+  await page.reload();
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(at).toBe('4,2');
+  expect(await page.evaluate(() => document.body.dataset.openworldBroken)).toBe('1');
+  expect(await boulders()).toBe(before - 1);
+});

@@ -51,6 +51,16 @@ A-light Explore (#720 to #725), which it does not touch.
 - **Obstacles**: blocked cells the hero, the troop and the enemies cannot enter: water, mountains,
   trees, walls, and scattered boulders (about 2 % of the open cells). A push into an obstacle is
   refused, as a push into a friendly marble is in `rules.md`.
+- **Breakable obstacles** (#1147): the hero breaks a small isolated obstacle by rolling into it. Only a **boulder**, or a
+  **tree with no tree on its six neighbours**, is breakable (`breakable` in `openworld.ts`). Buildings (walls), mountains,
+  water and forests (a tree beside a tree) stay in the way, and so does any cell an enemy stands on. The move that would have
+  been refused goes through and the cell becomes plain ground of its terrain (a boulder leaves rock, a tree grass); only the
+  hero breaks, the troop and the enemies treat an obstacle as blocked until it is broken, and a push into one is still refused
+  by the engine. The break plays shards of the prop's colour, thrown outward and falling, gone within 0.7 s, drawn by the
+  particle pool (`openworld-animation.md` section 6, no per-frame allocation); under reduced motion the prop fades in place in
+  0.3 s. None past the roll zoom. A broken cell stays broken: the set is kept in the world's save (`broken: [[q, r], ...]`,
+  section 5) and applied on top of every chunk read, so generation stays a pure function of the seed. `body[data-openworld-broken]`
+  counts them.
 - **Style**: low-poly and faceted, as the bay: flat-shaded hex columns, coolant-blue lakes that glow
   a little, dark faceted spires for the mountains, teal wire pines, grey boulders, black gantry
   walls. The props are meshes made in Blender (`client/models/openworld.glb`, a few faces each,
@@ -134,7 +144,7 @@ The world (seed), the hero and troop cells, and the enemy groups beaten are save
 `ab-alone` database next to the local game and the run (`client/src/openworldsave.ts`, #968). No library: the `idb.ts` store.
 
 **What is saved.** One record per seed, under the key `openworld:<seed>`:
-`{ version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, savedAt }`, where `fight` is the
+`{ version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], savedAt }`, where `fight` is the
 `FightState` of `openworldfight.ts` (the generated enemies a push moved away, the enemies on other cells, the beaten count).
 The last world played is kept apart under `openworld:last` (`{ seed }`).
 
