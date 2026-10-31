@@ -24,13 +24,18 @@ jobs:
   rust:
     # No CI on draft PRs: it runs when the PR is ready (ready_for_review) and on pushes to main.
     if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
-    needs: [cargo, client, build, mcp]
+    needs: [cargo, client, build, mcp, changes, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - run: test "$RESULTS" = 'success success success success'
         env:
           RESULTS: ${{ needs.cargo.result }} ${{ needs.client.result }} ${{ needs.build.result }} ${{ needs.mcp.result }}
+      # Coverage must succeed whenever the diff touches Rust (#1181); it is skipped only when it had no reason to run.
+      - run: test "$COVERAGE" = success || { test "$COVERAGE" = skipped && test "$RUST" != true; }
+        env:
+          COVERAGE: ${{ needs.coverage.result }}
+          RUST: ${{ needs.changes.outputs.rust }}
 
   cargo:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
@@ -184,10 +189,11 @@ jobs:
         working-directory: mcp
 
   # On push to main, finds what changed since the last successful CI run on main (not just this push: a cancelled run
-  # never tested its commits). A manual dispatch always runs everything. Only coverage depends on the diff, `rust`
-  # always runs, so a skipped job never stands in for a check that mattered (#258, CONTRIBUTING 6.4).
+  # never tested its commits); on a ready PR, what the PR changes. A manual dispatch always runs everything. Only
+  # coverage depends on the diff, `rust` always runs, so a skipped job never stands in for a check that mattered
+  # (#258, CONTRIBUTING 6.4).
   changes:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -211,12 +217,17 @@ jobs:
               echo "changed since $base:"; echo "$files"
               printf '%s\n' "$files" | grep -qE '^(crates/|Cargo\.|\.github/workflows/ci\.yml)' || rust=false
             fi
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # The checkout is the merge commit: its first parent is the base, so the diff is the PR's own change.
+            files=$(git diff --name-only HEAD^1 HEAD)
+            echo "changed by the PR:"; echo "$files"
+            printf '%s\n' "$files" | grep -qE '^(crates/|Cargo\.|\.github/workflows/ci\.yml)' || rust=false
           fi
           echo "rust=$rust" >> "$GITHUB_OUTPUT"
 
   # Side by side with the checks, not after them: on main it no longer adds its time to theirs.
   coverage:
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.rust == 'true'
+    if: needs.changes.outputs.rust == 'true'
     needs: [changes]
     runs-on: ubuntu-latest
     timeout-minutes: 10
