@@ -911,6 +911,10 @@ body:has(#dock-wrap :is(#mode-menu, #daily-card, #lobby-sheet):not([hidden])) #s
 :is(#mode-menu, #settings-menu) button { border-radius: var(--r-button); }
 #dock-wrap #mode-menu :is(#boss-list, #coop-list) { gap: var(--space); }
 #settings-menu :is(.setting-volume, .setting-lights, .setting-archive:not(:has(button))) { border-radius: var(--r-button); }
+/* A desktop window keeps its compact sheet (#1069): the 4 px gaps, so every boss shows without a scroll at 1280x720. */
+@media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
+  #dock-wrap :is(#mode-menu, #goal-sheet), #dock-wrap #mode-menu :is(#boss-list, #coop-list) { gap: 4px; }
+}
 @media (pointer: coarse) {
   #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: var(--target); }
 }

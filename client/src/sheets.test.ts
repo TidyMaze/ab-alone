@@ -23,6 +23,10 @@ describe('the Game modes sheet, the boss list and the settings menu, #1136', () 
     expect(css).toMatch(/#dock-wrap #mode-menu :is\(#boss-list, #coop-list\) \{[^}]*gap: var\(--space\);/);
   });
 
+  it('keeps the compact 4 px gaps of the desktop sheet, so every boss shows without a scroll (#1069)', () => {
+    expect(css).toMatch(/@media \(orientation: landscape\) and \(min-width: 1101px\) and \(pointer: fine\) \{\s*#dock-wrap :is\(#mode-menu, #goal-sheet\), #dock-wrap #mode-menu :is\(#boss-list, #coop-list\) \{ gap: 4px; \}/);
+  });
+
   it('fills a pressed item with the active fill instead of tinting its text', () => {
     expect(css).toMatch(/#settings-menu button\[aria-pressed='true'\], #dock-wrap #mode-menu button\[aria-expanded='true'\] \{[^}]*background: var\(--active-fill\);[^}]*color: var\(--active-ink\);/);
   });
