@@ -169,9 +169,18 @@ fn evaluate(board: &Board, player: Player, ejected: [u8; 2], w: &Weights) -> i32
 }
 
 /// Legal moves of the side to move, ejections first, then the best static score.
-fn children(node: &Node, weights: &Weights, step: Option<Hook>) -> Vec<Child> {
+fn children(
+    node: &Node,
+    weights: &Weights,
+    step: Option<Hook>,
+    turns: Option<&Turns>,
+) -> Vec<Child> {
     let mover = node.to_move;
-    let mut kids: Vec<Child> = legal_moves(&node.board, mover)
+    let mut moves = legal_moves(&node.board, mover);
+    if let Some(turns) = turns {
+        moves = (turns.allowed)(&node.board, mover, moves);
+    }
+    let mut kids: Vec<Child> = moves
         .into_iter()
         .map(|mv| {
             let (board, ejects) = apply(&node.board, mover, &mv).expect("legal move");
@@ -187,9 +196,10 @@ fn children(node: &Node, weights: &Weights, step: Option<Hook>) -> Vec<Child> {
                 None => board,
             };
             let score = evaluate(&board, mover, ejected, weights);
+            let to_move = turns.map_or(other(mover), |turns| (turns.next)(&board, mover));
             let node = Node {
                 board,
-                to_move: other(mover),
+                to_move,
                 ejected,
             };
             Child {
@@ -208,6 +218,7 @@ fn children(node: &Node, weights: &Weights, step: Option<Hook>) -> Vec<Child> {
 struct Searcher<'a> {
     weights: Weights,
     step: Option<Hook<'a>>,
+    turns: Option<&'a Turns<'a>>,
     budget: u32,
     nodes: u32,
     /// Ejections each side needs to win, from the game: Black then White.
@@ -225,6 +236,23 @@ impl Searcher<'_> {
         }
         self.nodes += 1;
         true
+    }
+
+    /// Score for `mover` of the position after one of its moves. The side to move there flips the
+    /// sign, unless `mover` moves again (the Choir's last army): then the window and the sign stay.
+    fn after(
+        &mut self,
+        mover: Player,
+        kid: &Child,
+        depth: u32,
+        ply: i32,
+        (alpha, beta): (i32, i32),
+    ) -> Option<i32> {
+        if kid.node.to_move == mover {
+            self.negamax(&kid.node, depth, ply, alpha, beta)
+        } else {
+            Some(-self.negamax(&kid.node, depth, ply, -beta, -alpha)?)
+        }
     }
 
     /// Negamax with alpha-beta cuts. `None` when the budget ran out inside.
@@ -245,7 +273,7 @@ impl Searcher<'_> {
         if depth == 0 {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }
-        let kids = children(node, &self.weights, self.step);
+        let kids = children(node, &self.weights, self.step, self.turns);
         if kids.is_empty() && node.board.rogue_lite() {
             // No legal move loses a rogue-lite fight (docs/specs/roguelite.md).
             return Some(ply - WIN);
@@ -255,7 +283,7 @@ impl Searcher<'_> {
         }
         let (mut best, mut alpha) = (-INF, alpha);
         for kid in &kids {
-            let score = -self.negamax(&kid.node, depth - 1, ply + 1, -beta, -alpha)?;
+            let score = self.after(mover, kid, depth - 1, ply + 1, (alpha, beta))?;
             best = best.max(score);
             alpha = alpha.max(score);
             if alpha >= beta {
@@ -266,13 +294,13 @@ impl Searcher<'_> {
     }
 
     /// Index and score of the best child at `depth`, `None` when the budget ran out inside.
-    fn root(&mut self, kids: &[Child], depth: u32) -> Option<(usize, i32)> {
+    fn root(&mut self, mover: Player, kids: &[Child], depth: u32) -> Option<(usize, i32)> {
         if !self.visit() {
             return None;
         }
         let (mut best, mut alpha) = (0, -INF);
         for (i, kid) in kids.iter().enumerate() {
-            let score = -self.negamax(&kid.node, depth - 1, 1, -INF, -alpha)?;
+            let score = self.after(mover, kid, depth - 1, 1, (alpha, INF))?;
             if score > alpha {
                 (best, alpha) = (i, score);
             }
@@ -296,7 +324,7 @@ pub fn search_with(
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
 ) -> Option<SearchResult> {
-    run(game, node_budget, weights, allow, None, None)
+    run(game, node_budget, weights, allow, None, None, None)
 }
 
 fn run(
@@ -305,6 +333,7 @@ fn run(
     weights: Weights,
     allow: &dyn Fn(&Move) -> bool,
     step: Option<Hook>,
+    turns: Option<&Turns>,
     last_ply: Option<i32>,
 ) -> Option<SearchResult> {
     if game.outcome().is_some() {
@@ -315,7 +344,7 @@ fn run(
         to_move: game.to_move(),
         ejected: [game.ejected(Player::Black), game.ejected(Player::White)],
     };
-    let mut kids = children(&root, &weights, step);
+    let mut kids = children(&root, &weights, step, turns);
     kids.retain(|k| allow(&k.mv));
     if kids.is_empty() {
         return None;
@@ -323,6 +352,7 @@ fn run(
     let mut searcher = Searcher {
         weights,
         step,
+        turns,
         budget: node_budget,
         nodes: 0,
         win: [
@@ -333,7 +363,7 @@ fn run(
     };
     let (mut depth, mut score) = (0, kids[0].score);
     for d in 1..=MAX_DEPTH {
-        let Some((best, value)) = searcher.root(&kids, d) else {
+        let Some((best, value)) = searcher.root(root.to_move, &kids, d) else {
             break;
         };
         // Search the previous best first next time: the strongest ordering there is.
@@ -371,7 +401,7 @@ pub fn search_hooked(
         let (after, [black, white]) = step(board, mover, mv, after);
         (after, [black as i8, white as i8])
     };
-    run(game, node_budget, weights, allow, Some(&signed), None)
+    run(game, node_budget, weights, allow, Some(&signed), None, None)
 }
 
 /// A [`Step`] that also gets the ejections credited to Black and to White before the ply, so a
@@ -399,6 +429,7 @@ pub fn search_phased(
         weights,
         allow,
         Some(&signed),
+        None,
         turns.map(|n| 2 * n as i32),
     )
 }
@@ -414,7 +445,42 @@ pub fn search_signed(
     let hook = |board: &Board, mover: Player, mv: &Move, after: Board, _: [u8; 2]| {
         step(board, mover, mv, after)
     };
-    run(game, node_budget, weights, allow, Some(&hook), None)
+    run(game, node_budget, weights, allow, Some(&hook), None, None)
+}
+
+/// The moves a side may play out of its legal ones, given the board of the tree.
+pub type Allowed<'a> = &'a dyn Fn(&Board, Player, Vec<Move>) -> Vec<Move>;
+
+/// The turn rules of a boss whose plies do not simply alternate (the Choir, #825). They read the
+/// board of the tree, so the boss keeps its state on it.
+pub struct Turns<'a> {
+    /// The moves `mover` may play on `board`, out of its `legal` moves.
+    pub allowed: Allowed<'a>,
+    /// The side to move once `mover` has played and the step has run: `mover` again, or the other.
+    pub next: &'a dyn Fn(&Board, Player) -> Player,
+}
+
+/// [`search_hooked`] with `turns` applied at every ply of the tree, not only at the root.
+pub fn search_turns(
+    game: &Game,
+    node_budget: u32,
+    weights: Weights,
+    step: Step,
+    turns: &Turns,
+) -> Option<SearchResult> {
+    let signed = |board: &Board, mover: Player, mv: &Move, after: Board, _: [u8; 2]| {
+        let (after, [black, white]) = step(board, mover, mv, after);
+        (after, [black as i8, white as i8])
+    };
+    run(
+        game,
+        node_budget,
+        weights,
+        &|_| true,
+        Some(&signed),
+        Some(turns),
+        None,
+    )
 }
 
 /// Score of the position for the side to move, visiting at most `node_budget` positions (the
@@ -464,6 +530,7 @@ mod tests {
             budget: 100,
             nodes: 0,
             win,
+            turns: None,
             last_ply: None,
         };
         assert_eq!(
@@ -493,6 +560,7 @@ mod tests {
             budget: 100,
             nodes: 0,
             win: [WIN_EJECTIONS; 2],
+            turns: None,
             last_ply: None,
         };
         assert_eq!(searcher.negamax(&node, 0, 3, -INF, INF), Some(WIN - 3));
@@ -555,6 +623,7 @@ mod tests {
             budget: 100,
             nodes: 0,
             win: [WIN_EJECTIONS; 2],
+            turns: None,
             last_ply: Some(2),
         };
         let mut searcher = searcher;
@@ -587,10 +656,10 @@ mod tests {
         let game = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [3, 0]);
         let back = |_: &Board, _: Player, _: &Move, after: Board| (after, [-1, 1]);
         let hook = |b: &Board, p: Player, m: &Move, a: Board, _: [u8; 2]| back(b, p, m, a);
-        let kids = children(&root_of(&game), &DEFAULT_WEIGHTS, Some(&hook));
+        let kids = children(&root_of(&game), &DEFAULT_WEIGHTS, Some(&hook), None);
         assert!(kids.iter().all(|k| k.node.ejected == [2, 1]));
         let none = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [0, 0]);
-        let kids = children(&root_of(&none), &DEFAULT_WEIGHTS, Some(&hook));
+        let kids = children(&root_of(&none), &DEFAULT_WEIGHTS, Some(&hook), None);
         assert!(
             kids.iter().all(|k| k.node.ejected == [0, 1]),
             "never below 0"
@@ -857,6 +926,7 @@ mod tests {
                 budget: u32::MAX,
                 nodes: 0,
                 win: [WIN_EJECTIONS; 2],
+                turns: None,
                 last_ply: None,
             };
             let value = exact.negamax(&root_of(&g), found.depth, 0, -INF, INF);

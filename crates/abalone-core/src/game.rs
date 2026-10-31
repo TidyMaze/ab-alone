@@ -186,6 +186,12 @@ impl Game {
         Ok(())
     }
 
+    /// The same game on `board`, for a search whose boards carry marks the fight keeps elsewhere.
+    pub(crate) fn with_board(mut self, board: Board) -> Self {
+        self.board = board;
+        self
+    }
+
     /// Ejections `player` needs to win.
     pub fn win_ejections(&self, player: Player) -> u8 {
         self.win[index(player)]
