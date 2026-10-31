@@ -64,6 +64,23 @@ describe('main.ts The Stalker boss (#1111)', () => {
     vi.restoreAllMocks();
   });
 
+  it("rings the boss's last move where it landed in sight, and the ring is part of the shown state (#1111)", async () => {
+    const game = await boot('/');
+    pickStalker();
+    expect(shown(game)!.last).toEqual([]);
+    const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
+    game.click(...move.cells[0]!);
+    game.click(...game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell);
+    game.frame(300);
+    await game.settle();
+    game.frame(300);
+    expect(game.hook<number>('__plies')).toBeGreaterThanOrEqual(2); // the boss answered
+    expect(shown(game)!.last.length).toBeGreaterThan(0); // its marble landed within the sight of three
+    byId('replay').click(); // a review shows the position, not the last move of the live game
+    game.frame(300);
+    expect(shown(game)!.last).toEqual([]);
+  });
+
   it('lets any other error of a move through', async () => {
     const game = await boot('/?bot=off');
     const { Engine } = await import('abalone-wasm');
