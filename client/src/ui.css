@@ -379,7 +379,15 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 #hud .pips { display: flex; justify-content: space-between; margin: 0.5rem 0; }
 #hud .pips span { display: flex; gap: 0.25rem; }
 #hud .pip { width: 3px; height: 0.9rem; background: var(--accent); }
+/* #1038: each side's pips are its marble colour, the same in both themes like the marbles; a rim keeps each on its panel. */
+#hud .dark .pip:not(.out) { background: #15191c; box-shadow: 0 0 0 1px var(--muted); }
+#hud .pale .pip:not(.out) { background: #d8d4c8; box-shadow: 0 0 0 1px var(--edge); }
 #hud .pip.out { background: var(--edge); transform: rotate(20deg); }
+/* #1038: on a phone held upright the pips alone show the ejected count. The score text leaves the screen but not the
+   accessibility tree, so a screen reader still reads the one name of the count (as the folded plate does). */
+@media (orientation: portrait) {
+  #hud .score { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 #hud small { display: block; color: var(--muted); font-size: 0.8125rem; }
 /* Online status line. The words carry the state, the dot only repeats it. */
 #hud .presence { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; font-weight: 500; }

@@ -123,9 +123,15 @@ describe('hudHtml', () => {
     expect(html.match(/class="pip out"/g)).toHaveLength(8);
   });
 
+  it("colours each side's pips as its marble: dark for Black, pale for White, #1038", () => {
+    const rows = (glass: number) => [...hudHtml({ ...base, glass }).matchAll(/<span class="(dark|pale)">/g)].map((m) => m[1]);
+    expect(rows(2)).toEqual(['dark', 'pale']); // Black is side 1, the enemy shell
+    expect(rows(1)).toEqual(['pale', 'dark']); // against the bot, side 1 wears the glass and is White
+  });
+
   it('draws one pip per ejection a side needs: 10 for Black against the Choir, Decision #131', () => {
     const html = hudHtml({ ...base, win: [10, 6], ejected: [3, 1] });
-    const [black, white] = html.match(/<span>(<span class="pip[^"]*"><\/span>)+<\/span>/g)!;
+    const [black, white] = html.match(/<span class="(?:dark|pale)">(<span class="pip[^"]*"><\/span>)+<\/span>/g)!; // the rows carry their marble colour (#1038)
     expect(black!.match(/class="pip/g)).toHaveLength(10);
     expect(white!.match(/class="pip/g)).toHaveLength(6);
     expect(html.match(/class="pip out"/g)).toHaveLength(4);
@@ -156,6 +162,11 @@ describe('the Tally line, #294', () => {
   it('fades out the tally line after 5 seconds via CSS animation (#425)', () => {
     expect(css).toMatch(/#hud \.tally \{[^}]*animation:\s*tally-fade 1s ease-out 4s forwards;/);
     expect(css).toContain('@keyframes tally-fade');
+  });
+
+  // #1038: on a phone the pips alone show the ejected count. The score text stays for a screen reader, one name for the count.
+  it('hides the score text on a phone held upright, out of sight but in the accessibility tree', () => {
+    expect(css).toMatch(/@media \(orientation: portrait\) \{\s*#hud \.score \{[^}]*clip-path: inset\(50%\);[^}]*\}/);
   });
 
   it('hides the redundant pips on compact/mobile screens (#425)', () => {
