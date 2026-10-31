@@ -9,7 +9,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
     if (file.startsWith('basis_transcoder')) transcoder.push(`${r.status()} ${new URL(r.url()).origin} ${file.replace(/-[\w-]+\./, '.')}`);
     else if (r.url().includes('/assets/')) loaded.push(`${r.status()} ${file}`);
   });
-  await page.goto('./?bot=on&room=today');
+  await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();
   await expect(page.locator('#hud')).toContainText('White to move');
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)

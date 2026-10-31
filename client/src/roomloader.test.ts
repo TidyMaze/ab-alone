@@ -121,18 +121,6 @@ describe('roomloader PBR pipeline', () => {
     expect(pbr).toBeNull();
   });
 
-  it("loads only the floor's maps when the bay is asked for 'deck', the bulkhead and the grate each a flat material (#1138)", async () => {
-    const group = new THREE.Group();
-    const loadAsync = vi.fn(async (url: string) => Object.assign(new THREE.Texture(), { name: url }));
-    const bay = await loadSpaceshipBay('/assets/pbr/', { loadAsync: async () => ({ scene: group }) } as any, { loadAsync } as unknown as THREE.TextureLoader, 'deck');
-    const files = loadAsync.mock.calls.map(([url]) => url.split('/').pop()!.split('-')[0]);
-    expect(new Set(files)).toEqual(new Set(['deck']));
-    const { deck, bulkhead, grate } = bay!.materials;
-    expect(deck.map).not.toBeNull();
-    expect([bulkhead.map, grate.map]).toEqual([null, null]);
-    expect(new Set([deck, bulkhead, grate]).size).toBe(3); // each can take its own colour
-  });
-
   it('loads spaceship bay GLB and binds PBR materials to mesh hierarchy', async () => {
     const mockGroup = new THREE.Group();
     const floorMesh = new THREE.Mesh(new THREE.BoxGeometry());

@@ -181,9 +181,6 @@ import { icon } from './icons';
 import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
-import { readRoom } from './roomrefined';
-import { buildRefinedRoom } from './roomscene';
-import { KEPT_PROPS, flatBay } from './roomdecor';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
@@ -384,7 +381,6 @@ const store = (() => {
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
-const refined = readRoom(location.search, store) === 'refined'; // the room with six lights at most and a pool of light (#1138, roomrefined.ts)
 // Textures ship as KTX2, encoded from client/textures/ by scripts/ktx2-textures.mjs (#700). KTX2Loader transcodes each
 // one to a format the GPU reads, which it asks the renderer: the renderer comes up first. Its transcoder is a file of
 // the build (a hashed asset, like the wasm), so the offline app has it. A failed load keeps the flat fallback look.
@@ -401,7 +397,7 @@ renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 // The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
 // as soon as the scene is. mountBay takes them when the scene exists.
-const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader, refined ? 'deck' : 'all');
+const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader);
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   if (!loadsTexture(tonal ? 'tonal' : 'pbr', name)) return null;
   try {
@@ -1824,7 +1820,6 @@ drawProps = (): void => {
   propsGroup.clear();
   const sLights = spaceshipLights(deck);
   for (const def of spaceshipArchitecture(tier)) {
-    if (refined && !KEPT_PROPS.has(def.id)) continue; // the refined room keeps the lore console and the log recorder only (#1138)
     let mat: THREE.Material;
     const screen = def.id === 'console-screen';
     if (screen) {
@@ -1930,34 +1925,23 @@ drawProps = (): void => {
     propMeshes.push(mesh);
   }
   // Each neon tube lights the room for real: a row of lights along it (neonlight.ts), one slider in ?lights.
-  if (!refined)
-    for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
-      propsGroup.add(...tubeLights(tube as THREE.Mesh));
+  for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
+    propsGroup.add(...tubeLights(tube as THREE.Mesh));
   const ring = ringLamp();
-  if (!refined) {
-    propsGroup.add(...ring.meshes, ...ring.lights);
-    propMeshes.push(...ring.meshes);
-  }
-  if (refined) {
-    // The refined room (#1138): a key, a fill, the strips, the wall, a hazard stripe and four crates (roomscene.ts).
-    const room = buildRefinedRoom(deck, fight !== null);
-    propsGroup.add(...room.objects);
-    propMeshes.push(...room.meshes);
-  }
+  propsGroup.add(...ring.meshes, ...ring.lights);
+  propMeshes.push(...ring.meshes);
   const viewportRimLight = new THREE.PointLight(sLights.rim, 2.7, 11.0);
   viewportRimLight.position.set(17.0, 4.6, 0);
   const kioskGreenLight = new THREE.PointLight(0x55efc4, 2.25, 6.0);
   kioskGreenLight.position.set(-10.2, 2.5, -5.8);
   const lights = { viewportRimLight, kioskGreenLight };
   for (const [name, light] of Object.entries(lights)) light.name = name; // the ?lights sliders' names
-  if (!refined) propsGroup.add(...Object.values(lights));
+  propsGroup.add(...Object.values(lights));
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
-    if (refined) flatBay(currentBay.scene, currentBay.materials);
     propsGroup.add(currentBay.scene);
   }
   refreshLights();
-  dirty = CHANGE_DRAWS; // a new deck or look repaints the room
 };
 let currentBay: SpaceshipBayAssets | null = null;
 const mountBay = (bay: SpaceshipBayAssets | null): void => {

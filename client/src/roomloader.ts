@@ -28,7 +28,6 @@ export interface SpaceshipBayAssets {
     grate: THREE.MeshStandardMaterial;
     trench?: THREE.MeshStandardMaterial;
     conduit?: THREE.MeshStandardMaterial;
-    hazard?: THREE.MeshStandardMaterial;
   };
 }
 
@@ -101,23 +100,20 @@ export async function loadSpaceshipBay(
   basePath = '/assets/pbr/',
   gltfLoader = meshoptLoader(),
   texLoader: TextureSource,
-  maps: 'all' | 'deck' = 'all', // 'deck': only the floor's maps are loaded, the bulkhead and the grate are flat materials (the refined room, #1138)
 ): Promise<SpaceshipBayAssets | null> {
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([
       gltfLoader.loadAsync(`${basePath}spaceship-bay.glb`),
       // What each source ships: Tiles072 an AO, blue_metal_plate an AO (its metalness is 0), Metal009 a metalness. None has an emission.
       loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.2, ['ao']),
-      maps === 'all' ? loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1, ['ao']) : null,
-      maps === 'all' ? loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1, ['metalness']) : null,
+      loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1, ['ao']),
+      loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1, ['metalness']),
     ]);
 
     const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x333b42, roughness: 0.8 });
-    // Without its maps a material is its own flat one, so each can take its own colour (roomdecor.ts flatBay).
-    const flat = (): THREE.MeshStandardMaterial => (maps === 'all' ? fallbackMat : fallbackMat.clone());
     const deckMat = pbrDeck ? createPbrStandardMaterial(pbrDeck) : fallbackMat;
-    const bulkheadMat = pbrBulkhead ? createPbrStandardMaterial(pbrBulkhead) : flat();
-    const grateMat = pbrGrate ? createPbrStandardMaterial(pbrGrate) : flat();
+    const bulkheadMat = pbrBulkhead ? createPbrStandardMaterial(pbrBulkhead) : fallbackMat;
+    const grateMat = pbrGrate ? createPbrStandardMaterial(pbrGrate) : fallbackMat;
     const trenchMat = new THREE.MeshStandardMaterial({
       color: 0x48525b,
       roughness: 0.3,
@@ -203,7 +199,6 @@ export async function loadSpaceshipBay(
         grate: grateMat,
         trench: trenchMat,
         conduit: conduitMat,
-        hazard: hazardMat,
       },
     };
   } catch {
