@@ -1834,7 +1834,7 @@ const glowMesh = (tint: number): THREE.Mesh => {
   return mesh;
 };
 // Rivets along the frame's rim and a thin cyan line on its inner edge, made again with each frame (#1138).
-const trim = new THREE.Group();
+const trim = Object.assign(new THREE.Group(), { name: 'frame trim' });
 const rivetGeometry = new THREE.SphereGeometry(0.035, 6, 4);
 const rivetMaterial = new THREE.MeshStandardMaterial({ color: 0x9aa3ab, roughness: 0.4, metalness: 0.7 });
 const edgeLineMaterial = new THREE.LineBasicMaterial({ color: 0x6fa8dc });

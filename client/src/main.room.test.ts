@@ -51,4 +51,26 @@ describe('main.ts refined room (#1138)', () => {
     expect(lights(scene()).length).toBeGreaterThan(LIGHT_BUDGET);
     expect(scene().getObjectByName('light pool')).toBeUndefined();
   });
+
+  it('trims the frame with rivets and a cyan inner edge, made again with each frame', async () => {
+    const scene = catchScene();
+    const game = await boot('/?bot=off&room=refined');
+    const trim = (): THREE.Object3D => scene().getObjectByName('frame trim')!;
+    const rivets = trim().children[0] as THREE.InstancedMesh;
+    expect(rivets.count).toBeGreaterThan(40);
+    expect(trim().children[1]).toBeInstanceOf(THREE.LineLoop);
+    byId('boss-fight').click(); // the Ballast Mind's board is wider: a new frame
+    [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Ballast Mind')!.click();
+    game.frame(300);
+    expect(trim().children).toHaveLength(2);
+    expect(trim().children[0]).not.toBe(rivets);
+  });
+
+  it('restyles the bay and lays the deck-tint glow and the hazard marking', async () => {
+    const scene = catchScene();
+    await boot('/?bot=off&room=refined');
+    expect(scene().getObjectByName('glow')).toBeDefined();
+    expect(scene().getObjectByName('floor')).toBeDefined();
+    expect(scene().getObjectByName('wall')).toBeDefined();
+  });
 });
