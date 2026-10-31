@@ -38,7 +38,16 @@
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
         </button>
       </div>
-      <div id="openworld-hud" role="status">Open world: arrows or a click on a next cell to roll, Esc to leave.</div>
+      <div id="openworld-hud" role="status">
+        <p>Open world: arrows or a click on a next cell to roll, Esc to leave.</p>
+        <p>Seed <output id="openworld-seed"></output>, shared as <code>?openworld=&lt;seed&gt;</code> in the address bar.</p>
+        <button id="openworld-new" type="button">New world</button>
+        <div id="openworld-confirm" hidden>
+          <p>Discard the save of this world and start a new random world?</p>
+          <button id="openworld-keep" type="button">Keep this world</button>
+          <button id="openworld-discard" type="button">Discard and start new</button>
+        </div>
+      </div>
       <div id="fps" aria-hidden="true" hidden></div>
       <div id="online">
         <button id="update" type="button" hidden>New version: reload</button>

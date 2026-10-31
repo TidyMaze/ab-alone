@@ -722,4 +722,11 @@ body[data-reading] #log { visibility: visible; }
 /* The Open world mode (#962) draws its own scene: the board's HUD steps aside for its plate. */
 #openworld-hud { display: none; position: fixed; bottom: 1rem; left: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: 2px; font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); }
 body[data-openworld] #openworld-hud { display: block; }
+/* The New world control (#1021): the confirmation sits under the button, and each button shows its focus. */
+#openworld-hud p { margin: 0 0 0.5rem; }
+#openworld-hud code { font-size: 0.8125rem; }
+#openworld-new[hidden], #openworld-confirm[hidden] { display: none; }
+#openworld-confirm { margin-top: 0.5rem; }
+#openworld-hud button { margin: 0 0.5rem 0.25rem 0; }
+#openworld-hud button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group) { display: none !important; }
