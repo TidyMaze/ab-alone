@@ -52,6 +52,7 @@ describe('settings', () => {
         ...common,
         isUASTC: true,
         isNormalMap: true,
+        maxSize: 512,
         enableRDO: true,
         needSupercompression: true,
         isPerceptual: false,
@@ -91,6 +92,34 @@ describe('decode', () => {
   });
 });
 
+describe('decode of a normal map above the size cap', () => {
+  const big = (n: number, rgb: number[]) => png(n, n, 3, Uint8Array.from({ length: n * n * 3 }, (_, i) => rgb[i % 3]!));
+
+  it('halves the size until it fits, 4 texels become 1', () => {
+    const { width, height, data } = decode(big(8, [200, 128, 128]), 'a-normal.png', 2);
+    expect([width, height, data.length]).toEqual([2, 2, 2 * 2 * 4]);
+    expect(data[3]).toBe(255);
+  });
+
+  it('keeps the vector unit length: the average of 4 texels is renormalised', () => {
+    // Four texels leaning left, right, up and down average to a flat (128, 128, 255) after the renormalisation.
+    const px = [[255, 128, 218], [1, 128, 218], [128, 255, 218], [128, 1, 218]];
+    const raw = png(2, 2, 3, Uint8Array.from(px.flat()));
+    const { data } = decode(raw, 'a-normal.png', 1);
+    expect([...data]).toEqual([128, 128, 255, 255]);
+  });
+
+  it('keeps a flat vector on a texel of zero length', () => {
+    const { data } = decode(png(2, 2, 3, Uint8Array.from({ length: 12 }, (_, i) => (i < 6 ? 0 : 255))), 'a-normal.png', 1);
+    expect([...data]).toEqual([128, 128, 255, 255]);
+  });
+
+  it('leaves a map within the cap as it is', () => {
+    expect(decode(big(8, [1, 2, 3]), 'a-normal.png', 8).width).toBe(8);
+    expect(decode(big(8, [1, 2, 3]), 'a-normal.png').width).toBe(8);
+  });
+});
+
 describe('encode', () => {
   it('writes an ETC1S KTX2 with its mipmaps, sRGB for a colour map', async () => {
     const ktx2 = await encode(PNG_FILE, 'deck-mess.png', temp());
@@ -100,6 +129,12 @@ describe('encode', () => {
   it('writes a UASTC KTX2, linear, for a normal map', async () => {
     const ktx2 = await encode(PNG_FILE, 'deck-mess-normal.png', temp());
     expect(header(ktx2)).toEqual({ id: KTX2_ID, width: 8, height: 8, levels: 4, supercompression: 2, transfer: 1 });
+  });
+
+  it('writes a normal map above the size cap at the cap', async () => {
+    const wide = png(1024, 1024, 3, new Uint8Array(1024 * 1024 * 3).fill(128));
+    const ktx2 = await encode(wide, 'deck-pbr-normal.png', temp());
+    expect(header(ktx2)).toMatchObject({ width: 512, height: 512, levels: 10 });
   });
 
   it('keeps each output in the cache, by its source and settings, and reads it back from there', async () => {

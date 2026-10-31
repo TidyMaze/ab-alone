@@ -25,6 +25,10 @@ const ENCODER = JSON.parse(readFileSync(new URL('../node_modules/ktx2-encoder/pa
 // The colour maps, in sRGB: the backdrop, the albedos, the emission maps and each deck's cells (`deck-cargo.png`).
 const COLOUR = new RegExp(`^(backdrop|.*-(albedo|emission)|deck-(${DECK_NAMES.join('|')}))\\.`);
 
+// A normal map is capped at 512 texels: UASTC is a fixed 8 bits per texel, so the 1024 maps weighed 0.3 to 1.1 MB each
+// and half of the 5 MB the first screen downloads (#926). A fourth of the bytes, the relief of the lit surfaces stays.
+export const NORMAL_MAX_SIZE = 512;
+
 /** The encoder settings of a source file, from its name. */
 export function settings(file) {
   const common = { generateMipmap: true, isYFlip: true, isKTX2File: true };
@@ -34,6 +38,7 @@ export function settings(file) {
       ...common,
       isUASTC: true,
       isNormalMap: true,
+      maxSize: NORMAL_MAX_SIZE,
       enableRDO: true,
       needSupercompression: true,
       isPerceptual: false,
