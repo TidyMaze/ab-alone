@@ -1086,6 +1086,30 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     expect(render).toHaveBeenCalledTimes(1);
   });
 
+  it('a late frame does not stretch the walk: the schedule keeps its own clock, one cell per GLIDE_MS on average', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight'); // the schedule: 140 ms
+    m.frame(vi.fn(), 150); // 10 ms late: the next step is due at 280 ms, not 290
+    expect(at()).toBe('2,0');
+    m.frame(vi.fn(), 285); // 5 ms late
+    expect(at()).toBe('3,0');
+    m.frame(vi.fn(), 425);
+    expect(at()).toBe('4,0');
+  });
+
+  it('a hidden tab that comes back more than a step late restarts the walk from the frame, without a burst', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    m.frame(vi.fn(), 1000); // back after a second: one step, and the next one a step later
+    expect(at()).toBe('2,0');
+    m.frame(vi.fn(), 1100);
+    expect(at()).toBe('2,0');
+    m.frame(vi.fn(), 1140);
+    expect(at()).toBe('3,0');
+  });
+
   it('ignores the system key repeat: a repeat steps nothing and does not restart the cadence', () => {
     const m = mode();
     m.enter(1, 800, 600);

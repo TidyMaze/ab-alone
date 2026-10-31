@@ -336,10 +336,12 @@ export class OpenWorldMode {
     return this.held.size === 0 && this.pad.length === 0;
   }
 
-  /** The cadence of the held arrows: one step every GLIDE_MS, made by the frame loop at `now` (ms), never by a key repeat (#1059). */
+  /** The cadence of the held arrows: one step every GLIDE_MS, made by the frame loop at `now` (ms), never by a key repeat (#1059).
+   * The schedule keeps its own clock, so a frame late by part of a step does not stretch the walk: the average is one cell per
+   * GLIDE_MS, whatever the refresh rate. More than a step behind (a hidden tab), it restarts from the frame. */
   private beat(now: number): void {
     if (now < this.nextStep) return;
-    this.nextStep = now + GLIDE_MS;
+    this.nextStep = now - this.nextStep > GLIDE_MS ? now + GLIDE_MS : this.nextStep + GLIDE_MS;
     this.stepHeld();
   }
 
