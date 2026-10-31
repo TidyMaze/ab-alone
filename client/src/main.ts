@@ -2930,6 +2930,7 @@ function medalNote(boss: { id: string }): string {
 }
 
 // The HUD, and the lobby controls after it: their state (shown, a lobby waiting) is set while the HUD is drawn (#1044).
+let hudEjected: readonly [number, number] | undefined; // ejected counts of the last HUD render (#1095)
 function hud(extra = ''): void {
   drawHud(extra);
   syncLobby();
@@ -2959,6 +2960,7 @@ function drawHud(extra = ''): void {
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
   document.getElementById('hud')!.innerHTML = hudHtml({
+    was: hudEjected,
     end: end ?? undefined,
     side: engine.to_move(),
     status,
@@ -2980,6 +2982,7 @@ function drawHud(extra = ''): void {
           ? retryText(online.askedRematch(online.ourSeat), online.askedRematch(3 - online.ourSeat))
           : rematchText(online.side, online.askedRematch(online.side), online.askedRematch(3 - online.side), glassOf()),
   });
+  hudEjected = ejected; // the next render moves only the pips that are new (#1095)
   rematchButton.hidden = online?.role !== 'player' || status === 0; // spectators never see it
   rematchButton.disabled = !online?.canRematch(); // asked already, or the opponent is gone
   exportButton.hidden = importButton.hidden = online !== null || fight !== null || run !== null; // local games only (#219)

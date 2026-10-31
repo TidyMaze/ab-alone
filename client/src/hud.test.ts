@@ -227,3 +227,25 @@ describe('flatHudHtml, the flat HUD fallback (#391)', () => {
     expect(flatHudHtml({ ...game, boss: { phase: 0, phases: 2, tell: '' } })).toContain('<div>Boss phase: 1 of 2</div><div>Tell: none</div>');
   });
 });
+
+describe('the HUD tally moves when it changes (#1095)', () => {
+  const base = { side: 1, status: 0, glass: 1, score: '', ejected: [0, 0] as [number, number], win: [6, 6] as [number, number], note: '' };
+
+  it('marks only the pips newly out since the last render', () => {
+    const html = hudHtml({ ...base, ejected: [3, 1], was: [2, 1] });
+    expect(html.match(/class="pip out fresh"/g)).toHaveLength(1);
+    expect(html.match(/class="pip out"/g)).toHaveLength(3);
+  });
+
+  it('marks nothing when the count is unchanged, went down, or no previous render is known', () => {
+    expect(hudHtml({ ...base, ejected: [2, 1], was: [2, 1] })).not.toContain('fresh');
+    expect(hudHtml({ ...base, ejected: [0, 0], was: [2, 1] })).not.toContain('fresh');
+    expect(hudHtml({ ...base, ejected: [2, 1] })).not.toContain('fresh');
+  });
+
+  it('animates the fresh pip on the base token with the out easing, cut by the reduced switch', () => {
+    expect(css).toMatch(/#hud \.pip\.fresh \{[^}]*animation: pip-out var\(--motion-base\) var\(--ease-out\)/);
+    expect(css).toMatch(/@keyframes pip-out \{ from \{[^}]*scale\(/);
+    expect(css).toMatch(/:root\[data-motion='reduced'\] \*[^{]*\{ animation-duration: 0s !important/);
+  });
+});
