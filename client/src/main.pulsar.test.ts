@@ -109,7 +109,7 @@ describe('main.ts The Pulsar (#675)', () => {
     fightPulsar(game);
     expect(body().boss).toBe('pulsar');
     expect(body().deck).toBe('bridge');
-    expect(game.hud()).toContain('Pulsar: beacons on schedule. Six out to balance the books.');
+    expect(game.hud()).toContain('Beacons on schedule. Six out to balance the books.');
     expect(tell()).toBe('Pulse in 3 turns, force 2');
     expect(pulsar(game)).toEqual({ id: NW, left: 3, force: 2, charging: false });
     expect(named(scene(), 'pulsar')).toHaveLength(6);

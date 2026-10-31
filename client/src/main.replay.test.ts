@@ -179,12 +179,12 @@ describe('what the replay covers', () => {
     game.openModes();
     byId('boss-fight').click();
     [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent!.startsWith('The Hull'))!.click();
-    expect(game.hud()).toContain('The Hull');
+    expect(document.getElementById('boss-bar')!.textContent).toContain('The Hull');
     playOne(game);
     byId('replay').click();
     byId('replay-first').click();
     expect(label()).toBe('Move 0 of 1');
-    expect(game.hud()).toContain('The Hull');
+    expect(document.getElementById('boss-bar')!.textContent).toContain('The Hull');
     byId('replay-last').click();
     expect(plies(game)).toBe(1);
   });

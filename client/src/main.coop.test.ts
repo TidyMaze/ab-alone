@@ -143,9 +143,9 @@ describe('co-op: the encounter judges the room', () => {
     expect(game.hook('__fight')).toEqual({ id: 'echo', seed: coopFromHash(location.hash)!.seed });
     await until(game, () => data().seat === 'player');
     expect(data().online).toBe('Black');
-    expect(game.hud()).toContain('The Echo');
+    expect(document.getElementById('boss-bar')!.textContent).toContain('The Echo');
     expect(presence()).toBe('Waiting for a partner...');
-    expect(game.hud()).toContain('Echo: mirror logged.'); // Tally's line of the boss, as in solo
+    expect(game.hud()).toContain('Mirror logged.'); // Tally's line of the boss, as in solo, without the name (#1038)
     byId('play-online').click(); // a versus room after it: the label is the versus one again
     expect(byId('invite-label').textContent).toBe('Invite link: send it to your opponent');
     expect(byId('rematch').textContent).toBe('Rematch'); // and its button, Retry in co-op (#531)

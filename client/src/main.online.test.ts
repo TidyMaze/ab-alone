@@ -116,7 +116,7 @@ describe('Play online', () => {
     expect(data().opponent).toBe('waiting');
     expect(data().coordinator).toBe('1');
     expect(data().handover).toBe('none');
-    expect(presence()).toBe('You are Black. Waiting for an opponent...');
+    expect(presence()).toBe('Waiting for an opponent...'); // #1038: the title names the colour, not the line
   });
 
   it('scrolls the button column back to the top, so no button above the link is left out of reach (#839)', async () => {
@@ -176,7 +176,7 @@ describe('Play online', () => {
     await opponent(game.peer()!, game.room()!, 2, 1);
     await until(game, () => game.hud().includes(' · refused move: engine-version'));
     expect(data().opponent).toBe('waiting');
-    expect(presence()).toBe('You are Black. Waiting for an opponent...');
+    expect(presence()).toBe('Waiting for an opponent...'); // #1038: the title names the colour, not the line
   });
 
   it('Ranked queues 1v1 with rank badge and tolerance window, and updates Elo rating on game end (#711)', async () => {

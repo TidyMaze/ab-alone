@@ -91,7 +91,7 @@ describe('main.ts The Unstable Core (#751)', () => {
     fightCore(game);
     expect(body().boss).toBe('core');
     expect(body().deck).toBe('furnace');
-    expect(game.hud()).toContain('Core: charges on file. Four and a marble is written off.');
+    expect(game.hud()).toContain('Charges on file. Four and a marble is written off.');
     expect(tell()).toBe('Charged marbles weigh more · 4 charges blow a marble off');
     expect(named(scene(), 'energy-cell')).toHaveLength(7);
     expect(named(scene(), 'charge-pip')).toHaveLength(0);
