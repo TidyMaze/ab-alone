@@ -482,6 +482,7 @@ function cliff(_seed: number, cx: number, cy: number): Uint8Array {
 
 describe('the camera eases up a cliff (#988)', () => {
   it('draws every frame while the camera eases to the top of the cliff, then draws nothing once it has settled', () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0); // the step starts at the press, on the frames' clock
     const m = mode(undefined, cliff, () => false);
     m.enter(1, 800, 600);
     const render = vi.fn();
@@ -495,6 +496,7 @@ describe('the camera eases up a cliff (#988)', () => {
       m.frame(render, (frame * 1000) / 60);
       drawn.push(render.mock.calls.length > before);
     }
+    clock.mockRestore();
     expect(drawn.slice(0, 30).every(Boolean)).toBe(true); // every frame of the first half second
     expect(drawn.slice(50).some(Boolean)).toBe(false); // settled: nothing left to draw
   });
@@ -555,10 +557,10 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     render.mockClear();
     for (const now of [100, 200, 300, 400]) m.frame(render, now);
     expect(render).toHaveBeenCalledTimes(4);
-    m.frame(render, 410); // the frame that ends it draws the final cells, and the mark goes
+    m.frame(render, 560); // the step glides 140 ms, the push lunges from its landing and ends at 550 ms: that frame draws the final cells
     expect(body().openworldAnim).toBeUndefined();
     render.mockClear();
-    m.frame(render, 500);
+    m.frame(render, 570);
     expect(render).not.toHaveBeenCalled();
   });
 
@@ -933,9 +935,9 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     m.frame(render, 60);
     expect(body().openworldGlide).toMatch(/^-?\d/); // the hero's drawn place, mid-glide
     expect(body().openworldAnim).toBeUndefined(); // a glide is not a push
-    m.frame(render, GLIDE_MS + 10);
+    m.frame(render, GLIDE_MS + 10); // the frame of the landing draws the last cell
+    m.frame(render, GLIDE_MS + 60);
     expect(body().openworldGlide).toBeUndefined();
-    expect(render).toHaveBeenCalled();
   });
 
   it('draws nothing of a glide under reduced motion: the step is shown on its cell at once', () => {

@@ -1427,6 +1427,52 @@ describe('the step glide of the hero and the troop (docs/specs/openworld.md sect
     expect(view.pick(0, 0)).toEqual([2, 0]);
   });
 
+  it('reports the glide while a marble moves, and not once it has landed', () => {
+    const view = standing();
+    expect(view.gliding).toBe(false);
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(10);
+    expect(view.gliding).toBe(true);
+    view.tick(GLIDE_MS + 10); // the landing draws the last cell
+    expect(view.gliding).toBe(true);
+    view.tick(GLIDE_MS + 20);
+    expect(view.gliding).toBe(false);
+  });
+
+  it('leaves a marble that is on its cell where it stands: a glide to the cells it has keeps nothing moving', () => {
+    const view = standing();
+    view.show([0, 0], [[-1, 0], [-2, 0]], { now: 0, span: GLIDE_MS });
+    expect(view.tick(0)).toBe(false);
+    expect(view.gliding).toBe(false);
+  });
+
+  it('stands a first world on its cell at once, with no glide in from the origin', () => {
+    const view = new OpenWorldView(new World(GRASS));
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    expect(view.tick(0)).toBe(false);
+    expect(inCell(placeOf(view, 'hero'), [1, 0])).toBe(true);
+    expect(view.focusHeight).toBeCloseTo(placeOf(view, 'hero').y, 9);
+  });
+
+  it('a push that carries the hero on to the next chunk draws the chunks around the hero where it ends, as a view shown there does', () => {
+    // no ground west of the chunk -2: the chunks drawn depend on the chunk the hero is in
+    const edge = (cx: number, cy: number): Uint8Array => (cx <= -2 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
+    const a = CHUNK - 1;
+    const pushed: Played = {
+      from: [[a, 0], [a - 1, 0], [a - 2, 0], [a - 3, 0]],
+      foes: [[a + 1, 0]],
+      push: { troop: [[a + 1, 0], [a, 0], [a - 1, 0], [a - 3, 0]], enemies: [[a + 2, 0]], ejected: [], dir: [1, 0] },
+    };
+    const view = new OpenWorldView(new World(edge));
+    view.show([a, 0], [[a - 1, 0], [a - 2, 0], [a - 3, 0]]);
+    view.playPush(pushed, 0);
+    view.tick(10_000);
+    const fresh = new OpenWorldView(new World(edge));
+    fresh.show([a + 1, 0], [[a, 0], [a - 1, 0], [a - 3, 0]]);
+    const terrain = (v: OpenWorldView) => Object.entries(v.drawn).filter(([name]) => name.startsWith('terrain'));
+    expect(terrain(view)).toEqual(terrain(fresh));
+  });
+
   it('nudges the hero toward the cell a blocked step names, and back on its own cell', () => {
     const view = standing();
     const x0 = placeOf(view, 'hero').x;

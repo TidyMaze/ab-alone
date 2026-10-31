@@ -6,6 +6,7 @@ import { DIRECTIONS, type Axial } from './board';
 import { arrowCell } from './hubview';
 import { chunkOf, Hero, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
+import { GLIDE_MS, NUDGE_MS } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
@@ -186,6 +187,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldYaw;
     delete document.body.dataset.openworldDrawn;
     delete document.body.dataset.openworldAnim;
+    delete document.body.dataset.openworldGlide;
   }
 
   /** The New world control (#1021): the world entered is left without its save, which is discarded, and a random world is entered
@@ -307,15 +309,22 @@ export class OpenWorldMode {
   }
 
   private roll(to: Axial): void {
-    if (!this.hero!.step(to)) return;
+    if (!this.hero!.step(to)) return this.lean(to);
     this.view!.snap(); // a step during a push's animation ends it first (#967)
+    const now = this.reduced() ? null : performance.now();
+    this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: GLIDE_MS * slowBy() }); // the step glides (#1040)
     const played = this.troopPush();
-    this.view!.show(this.hero!.at, this.hero!.troop);
     this.view!.updateEnemies();
-    if (played && !this.reduced()) this.view!.playPush(played, performance.now(), slowBy()); // reduced motion: the marbles jump
+    if (played && now !== null) this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
+    else if (played) this.view!.show(this.hero!.at, this.hero!.troop); // reduced motion: the marbles jump
     this.dirty = true;
     this.persist();
     this.mark(document.body.dataset.openworld!);
+  }
+
+  /** A blocked step leans the hero toward the cell it cannot take, and back: nothing under reduced motion (#1040). */
+  private lean(to: Axial): void {
+    if (!this.reduced()) this.view!.nudge(this.hero!.at, to, performance.now(), NUDGE_MS * slowBy());
   }
 
   /** The troop's attack after a step: the bridge plays the legal push, if there is one, on the hero, the troop and the enemies near
@@ -354,6 +363,9 @@ export class OpenWorldMode {
   private anim(): void {
     if (this.view?.animating) document.body.dataset.openworldAnim = '1';
     else delete document.body.dataset.openworldAnim;
+    // The mark of a glide (#1040): the hero's drawn place while its marbles move, removed once they land.
+    if (this.view?.gliding) document.body.dataset.openworldGlide = `${this.view.focusPoint.x.toFixed(2)},${this.view.focusPoint.z.toFixed(2)}`;
+    else delete document.body.dataset.openworldGlide;
   }
 
   private mark(seed: string): void {

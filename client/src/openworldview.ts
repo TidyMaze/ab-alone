@@ -6,6 +6,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { FightState, type Pushed } from './openworldfight';
+import { Marble, ROLL_ZOOM, type Vec } from './openworldglide';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
@@ -369,6 +370,13 @@ export class OpenWorldView {
   /** The turn of the camera round the hero, in radians: `yawNow` eases to `yawGoal`, which the keys, a drag and a twist set (#1026). */
   private yawNow = 0;
   private yawGoal = 0;
+  /** The hero (the first marble) and the troop's marbles: where each is drawn, and the glide of a step under way (#1040). */
+  private readonly marbles: Marble[] = [new Marble(MARBLE)];
+  /** Holds the drawn pose of a marble, apart from `dummy`: a build leaves its turn as it is, a marble's is set by its glide. */
+  private readonly drawnPose = new THREE.Object3D();
+  /** The time the glide of a step lands, in ms: a push's lunge starts then. Whether a marble glides or leans on the last tick. */
+  private landed = 0;
+  private moving = false;
 
   /** `fight` holds the enemies as they are now: the generated ones, with the pushes of the troop on top (openworldfight.ts). */
   constructor(
@@ -477,21 +485,98 @@ export class OpenWorldView {
 
   /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero enters another chunk, the hero and the
    * camera follow every step. */
-  show(at: Axial, troop: readonly Axial[] = []): void {
-    const tile = this.world.tile(at[0], at[1])!;
-    const p = axialTo3D(at[0], at[1]);
-    const top = topOf(GROUND[tile.terrain], tile.height) + MARBLE;
+  show(at: Axial, troop: readonly Axial[] = [], glide?: { now: number; span: number }): void {
     this.centre = chunkOf(at);
     this.heroCell = [at[0], at[1]];
-    this.hero.position.set(p.x, top, p.z);
-    this.focus.x = p.x;
-    this.focus.z = p.z;
+    if (glide && this.placed) this.glideTo(at, troop, glide);
+    else this.snapTo(at, troop);
+    this.frame();
+  }
+
+  /** Stands the hero on `at` and the troop on `troop` at once: no glide (a world entered, a fixture, reduced motion). */
+  private snapTo(at: Axial, troop: readonly Axial[]): void {
+    this.place(this.troop, troop);
+    this.landed = 0;
+    this.marbleAt(0).place(this.standing(at));
+    troop.forEach((cell, i) => this.marbleAt(i + 1).place(this.standing(cell)));
+    this.draw(0);
     if (!this.placed) {
-      this.focus.y = top;
+      this.focus.y = this.hero.position.y;
       this.placed = true;
     }
-    this.place(this.troop, troop);
-    this.frame();
+  }
+
+  /** The hero and each troop marble glide from where they are at `now` to the cells of a step (#1040): the hero, then the troop, each
+   * marble to the cell of the one before it. The glides land at `now + span`, where a push's lunge starts (`landed`). */
+  private glideTo(at: Axial, troop: readonly Axial[], { now, span }: { now: number; span: number }): void {
+    const roll = this.drawnLevel <= ROLL_ZOOM;
+    [at, ...troop].forEach((cell, i) => {
+      if (this.marbleAt(i).go(this.standing(cell), now, span, roll)) this.landed = Math.max(this.landed, now + span);
+    });
+  }
+
+  /** The marble at index `i` (0 the hero, then the troop), made when the troop grows. */
+  private marbleAt(i: number): Marble {
+    while (this.marbles.length <= i) this.marbles.push(new Marble(MARBLE));
+    return this.marbles[i]!;
+  }
+
+  /** The place a marble stands on at a cell: the cell's centre, on the top of its ground. */
+  private standing([q, r]: Axial): Vec {
+    const p = axialTo3D(q, r);
+    const tile = this.world.tile(q, r)!;
+    return { x: p.x, y: topOf(GROUND[tile.terrain], tile.height) + MARBLE, z: p.z };
+  }
+
+  /** A blocked step leans the hero toward the cell it cannot take, and back on its own cell over `span` ms (#1040). */
+  nudge(at: Axial, to: Axial, now: number, span: number): void {
+    const a = axialTo3D(at[0], at[1]);
+    const b = axialTo3D(to[0], to[1]);
+    this.marbleAt(0).bump({ x: b.x - a.x, y: 0, z: b.z - a.z }, now, span);
+  }
+
+  /** Whether a marble glides or leans on the last tick: the frame is drawn while it does (the mode marks it). */
+  get gliding(): boolean {
+    return this.moving;
+  }
+
+  /** Draws the marbles that glide or lean at `now` (ms): the hero, which the camera follows, and the troop. Returns whether one moves. */
+  private glideMarbles(now: number): boolean {
+    const roll = this.drawnLevel <= ROLL_ZOOM;
+    const hero = this.marbleAt(0).tick(now, roll);
+    if (hero) {
+      this.draw(0);
+      this.frame();
+    }
+    let troop = false;
+    for (let i = 1; i < this.marbles.length; i++) {
+      if (!this.marbles[i]!.tick(now, roll)) continue;
+      this.draw(i);
+      troop = true;
+    }
+    this.moving = hero || troop;
+    return this.moving;
+  }
+
+  /** Writes the drawn pose of marble `i` (0 the hero, then the troop) to its mesh: the hero itself, or the troop's instance. The camera
+   * follows the hero's place (`focus`). */
+  private draw(i: number): void {
+    const { x, y, z, q, sx, sy } = this.marbles[i]!.pose;
+    if (i === 0) {
+      this.hero.position.set(x, y, z);
+      this.hero.quaternion.copy(q);
+      this.hero.scale.set(sx, sy, sx);
+      this.focus.x = x;
+      this.focus.z = z;
+      return;
+    }
+    const { drawnPose } = this;
+    drawnPose.position.set(x, y, z);
+    drawnPose.quaternion.copy(q);
+    drawnPose.scale.set(sx, sy, sx);
+    drawnPose.updateMatrix();
+    this.troop.setMatrixAt(i - 1, drawnPose.matrix);
+    this.troop.instanceMatrix.needsUpdate = true;
   }
 
   /** The height the camera looks at: the hero's column top, eased to it by `ease` (the browser checks and the tests read it). */
@@ -526,14 +611,18 @@ export class OpenWorldView {
    * sinks. `slow` multiplies every duration. Nothing is laid here: `tick` draws the marbles in between (docs/specs/openworld.md section 4). */
   playPush({ from, foes, push }: Played, now: number, slow = 1): void {
     this.settle();
+    const begin = Math.max(now, this.landed); // the lunge starts once the step's glide has landed (#1040)
+    const [hero] = push.troop;
+    this.centre = chunkOf(hero!); // the chunks follow the hero to the cell the push ends on
+    this.heroCell = hero!;
     const at = (ms: number): number => ms * slow;
     const moves: Move[] = [];
-    const lunge: Timing = { start: now, span: at(LUNGE_MS), fall: 0, lunge: true };
+    const lunge: Timing = { start: begin, span: at(LUNGE_MS), fall: 0, lunge: true };
     from.forEach((cell, i) => {
       const to = push.troop[i]!;
       if (!same(cell, to)) moves.push(this.move(i === 0 ? 'hero' : 'troop', i === 0 ? 0 : i - 1, cell, to, lunge));
     });
-    const slide: Timing = { start: now + at(CONTACT), span: at(SLIDE_MS), fall: 0, lunge: false };
+    const slide: Timing = { start: begin + at(CONTACT), span: at(SLIDE_MS), fall: 0, lunge: false };
     const [ejected] = push.ejected;
     let next = 0; // the enemies are kept in the order of the push, the ejected one left out
     for (const cell of foes) {
@@ -544,17 +633,18 @@ export class OpenWorldView {
     }
     if (ejected) {
       const beyond: Axial = [ejected[0] + push.dir[0], ejected[1] + push.dir[1]];
-      moves.push(this.move('ejected', 0, ejected, beyond, { start: now + at(CONTACT), span: at(SLIDE_MS), fall: at(FALL_MS), lunge: false }));
+      moves.push(this.move('ejected', 0, ejected, beyond, { start: begin + at(CONTACT), span: at(SLIDE_MS), fall: at(FALL_MS), lunge: false }));
     }
     this.moves = moves;
     this.end = Math.max(...moves.map((m) => m.start + m.span + m.fall));
     this.ejected.visible = Boolean(ejected);
   }
 
-  /** Draws the marbles of the push in between their cells at `now` (ms). Returns whether a push is drawn by this call: the call that
-   * reaches the end draws the final cells and drops the push, the next one returns false. */
+  /** Draws the marbles that glide or lean at `now` (ms), and the marbles of the push in between their cells. Returns whether any is
+   * drawn by this call: the call that reaches the end of a push draws the final cells and drops the push, the next one returns false. */
   tick(now: number): boolean {
-    if (this.moves.length === 0) return false;
+    const gliding = this.glideMarbles(now);
+    if (this.moves.length === 0) return gliding;
     if (now >= this.end) {
       this.settle();
       return true;
@@ -602,10 +692,11 @@ export class OpenWorldView {
     }
     const x = m.x0 + (m.x1 - m.x0) * f;
     const z = m.z0 + (m.z1 - m.z0) * f;
-    if (m.mesh === 'hero') {
-      this.hero.position.set(x, y, z);
-      this.focus.x = x;
-      this.focus.z = z;
+    if (m.mesh === 'hero' || m.mesh === 'troop') {
+      if (now < m.start) return; // the step's glide is drawn until the lunge starts (#1040)
+      const i = m.mesh === 'hero' ? 0 : m.index + 1;
+      this.marbleAt(i).put({ x, y, z });
+      this.draw(i);
     } else if (m.mesh === 'ejected') {
       this.ejected.position.set(x, y, z);
       this.ejected.scale.setScalar(scale);
@@ -614,9 +705,8 @@ export class OpenWorldView {
       dummy.position.set(x, y, z);
       dummy.scale.setScalar(scale);
       dummy.updateMatrix();
-      const mesh = m.mesh === 'troop' ? this.troop : this.foes; // read now: a frame may have grown it
-      mesh.setMatrixAt(m.index, dummy.matrix);
-      mesh.instanceMatrix.needsUpdate = true;
+      this.foes.setMatrixAt(m.index, dummy.matrix);
+      this.foes.instanceMatrix.needsUpdate = true;
     }
   }
 

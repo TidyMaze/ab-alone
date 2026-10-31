@@ -383,3 +383,26 @@ test('Q and E turn the Open world camera round the hero, R goes back, and the tu
   await page.locator('#openworld').click();
   await expect.poll(yaw).toBe('30');
 });
+
+// #1040: a step glides the hero from its cell to the next one. The cell is exact at once (`openworldAt`, the save and the push use
+// it); only the drawing glides. With the slow factor of 10 the glide lasts 1.4 s, so the browser sees the hero in between.
+test('a step glides the hero onto the next cell: exact at once, drawn in between, landed at the end, #1040', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  await page.evaluate(() => {
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [] });
+    (window as unknown as { __openworldSlow: number }).__openworldSlow = 10;
+  });
+  await page.keyboard.press('ArrowRight');
+  expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,0');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldGlide)).toBeDefined();
+  await page.screenshot({ path: test.info().outputPath('glide-mid-step-1.png') });
+  await page.waitForTimeout(500); // a second frame of the same glide, further along it
+  await page.screenshot({ path: test.info().outputPath('glide-mid-step-2.png') });
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldGlide), { timeout: 5000 }).toBeUndefined();
+  expect(await page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,0');
+  expect(await page.evaluate(() => document.body.dataset.openworldAnim)).toBeUndefined();
+});
