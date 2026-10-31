@@ -100,6 +100,11 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_world_version_is_the_core_one() {
+        assert_eq!(world_version(), abalone_core::world::WORLD_VERSION);
+    }
+
+    #[test]
     fn a_chunk_is_three_bytes_a_cell_and_matches_the_engine() {
         let bytes = world_chunk(9, 1, -1);
         assert_eq!(bytes.len(), 16 * 16 * CELL_STRIDE);
