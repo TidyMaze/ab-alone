@@ -56,10 +56,16 @@ pub fn world_enemies(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
 /// ...enemies, dir_q, dir_r]`: the new troop cells in the order of the input (the hero's first), the
 /// new enemy cells in the order of the input without the ejected one, `ejected_kind` `0` none, `1`
 /// water, `2` edge, with the ejected enemy's cell before the push (`0, 0` when none), and the push's
-/// direction as an axial step.
+/// direction as an axial step. `broken` holds the `q, r` pairs of the obstacles the hero has broken
+/// (#1154): they are plain ground, not blocked.
 #[wasm_bindgen]
-pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>, _broken: Vec<i32>) -> Vec<i32> {
-    let terrain = |q, r| terrain_at(u64::from(seed), q, r);
+pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>, broken: Vec<i32>) -> Vec<i32> {
+    let broken = pairs(&broken);
+    let terrain = |q, r| match terrain_at(u64::from(seed), q, r) {
+        Some(Terrain::Boulder) if broken.contains(&(q, r)) => Some(Terrain::Rock),
+        Some(Terrain::Tree) if broken.contains(&(q, r)) => Some(Terrain::Grass),
+        other => other,
+    };
     push_encoded(&pairs(&troop), &pairs(&enemies), &terrain)
 }
 

@@ -4922,7 +4922,7 @@ const openWorld = new OpenWorldMode(
       meshoptLoader(),
     ),
   () => reducedMotion(),
-  (seed, troop, enemies) => world_push(seed, troop, enemies),
+  (seed, troop, enemies, broken) => world_push(seed, troop, enemies, broken),
   openWorldSaves,
 );
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */

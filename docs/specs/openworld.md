@@ -55,8 +55,8 @@ A-light Explore (#720 to #725), which it does not touch.
   **tree with no tree on its six neighbours**, is breakable (`breakable` in `openworld.ts`). Buildings (walls), mountains,
   water and forests (a tree beside a tree) stay in the way, and so does any cell an enemy stands on. The move that would have
   been refused goes through and the cell becomes plain ground of its terrain (a boulder leaves rock, a tree grass); only the
-  hero breaks, the troop and the enemies treat an obstacle as blocked until it is broken, and a push into one is still refused
-  by the engine. The break plays shards of the prop's colour, thrown outward and falling, gone within 0.7 s, drawn by the
+  hero breaks, the troop and the enemies treat an obstacle as blocked until it is broken, and a push into one is refused
+  by the engine until then (the bridge gets the broken cells, which are plain ground for it: #1154). The break plays shards of the prop's colour, thrown outward and falling, gone within 0.7 s, drawn by the
   particle pool (`openworld-animation.md` section 6, no per-frame allocation); under reduced motion the prop fades in place in
   0.3 s. None past the roll zoom. A broken cell stays broken: the set is kept in the world's save (`broken: [[q, r], ...]`,
   section 5) and applied on top of every chunk read, so generation stays a pure function of the seed. `body[data-openworld-broken]`
@@ -113,7 +113,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   blocked by the current enemies (not by the generated ones of its own chunk), the view draws them,
   and a push redraws them. The overlay is plain data: `toJSON` and `FightState.fromJSON` (the save).
   A new entry starts a fresh overlay.
-- **Bridge**: `world_push(seed, troop, enemies)` (`crates/abalone-wasm/src/world.rs`, encoding in
+- **Bridge**: `world_push(seed, troop, enemies, broken)` (`crates/abalone-wasm/src/world.rs`, encoding in
   `crates/abalone-wasm/src/lib.rs`) plays the push after each step on the hero and the troop, with the
   enemies within 10 cells of the hero. Its answer is empty when no push is legal.
 - **Data attributes** of `body`, next to `openworldAt` and `openworldTroop`: `openworldEnemies` (the
