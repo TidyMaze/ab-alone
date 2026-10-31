@@ -300,3 +300,60 @@ test('a save of another world version is ignored and deleted, the world starts o
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   await expect.poll(store).toBeNull();
 });
+
+// #1021: New world asks in the page before it discards the save of the world, Keep goes on with the same seed, and Discard starts
+// a random one with the seed in the HUD and the URL. A reload of the seed left starts it on the spawn: its save is gone.
+test('New world confirms in the page, discards the save of the world left and starts a random seed, #1021', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(at).not.toBe('0,0');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBe('1');
+  await expect(page.locator('#openworld-seed')).toHaveText('7');
+  await page.locator('#openworld-new').click();
+  await expect(page.locator('#openworld-confirm')).toBeVisible();
+  await page.locator('#openworld-keep').click();
+  await expect(page.locator('#openworld-confirm')).toBeHidden();
+  await expect(page.locator('#openworld-seed')).toHaveText('7');
+  await page.locator('#openworld-new').click();
+  await page.locator('#openworld-discard').click();
+  await expect(page.locator('#openworld-seed')).not.toHaveText('7');
+  await expect(page.locator('#openworld-seed')).toHaveText(/^\d+$/);
+  await expect.poll(() => page.evaluate(() => new URL(location.href).searchParams.get('openworld'))).toBe(await page.locator('#openworld-seed').textContent());
+  expect(await at()).toBe('0,0');
+  await page.goto('./?bot=off&openworld=7'); // the save of seed 7 is gone: it starts on the spawn
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(at).toBe('0,0');
+});
+
+// #1025: on a touch screen a touch on the left half shows the virtual joystick under the thumb; dragging right holds the right key,
+// the hero walks on while the thumb is held and stops when it lifts. Touch is emulated through CDP (hasTouch).
+test.describe('the touch joystick', () => {
+  test.use({ hasTouch: true });
+  test('a drag on the left half walks the hero right until the thumb lifts, #1025', async ({ page }) => {
+    await page.goto('./?bot=off&openworld=7');
+    await page.locator('canvas').waitFor();
+    await openModes(page);
+    await page.locator('#openworld').click();
+    const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+    await expect.poll(at).toBe('0,0');
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, y: number) =>
+      cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    await touch('touchStart', 150, 300);
+    await expect(page.locator('#joystick')).toBeVisible();
+    await touch('touchMove', 200, 300); // 50 px to the right: the right key is held
+    await expect.poll(at).not.toBe('0,0');
+    await touch('touchEnd', 200, 300);
+    await expect(page.locator('#joystick')).toBeHidden();
+    const stopped = await at();
+    await page.evaluate(() => new Promise((done) => setTimeout(done, 600))); // a held stick would have stepped by now
+    expect(await at()).toBe(stopped);
+  });
+});

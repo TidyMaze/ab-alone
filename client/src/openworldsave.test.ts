@@ -126,4 +126,21 @@ describe('worldSaves', () => {
     expect(await saves.put(7, hero, troop, new FightState())).toBe(false);
     expect(await saves.last()).toBeNull();
   });
+
+  // #1021: the New world control discards the save of the world it leaves; the other seeds' saves stay.
+  it('discards the save of the seed given and keeps the other seeds saved', async () => {
+    const store = memoryStore();
+    const saves = worldSaves(store, 1);
+    await saves.put(7, hero, troop, new FightState());
+    await saves.put(8, hero, troop, new FightState());
+    await saves.discard(7);
+    expect(store.data.has('openworld:7')).toBe(false);
+    expect(store.data.has('openworld:8')).toBe(true);
+  });
+
+  it('a storage that refuses the delete keeps the save and throws nothing', async () => {
+    const store = memoryStore();
+    store.delete = async () => Promise.reject(new Error('blocked'));
+    await expect(worldSaves(store, 1).discard(7)).resolves.toBeUndefined();
+  });
 });

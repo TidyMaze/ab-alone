@@ -23,6 +23,8 @@ export interface WorldSaves {
   load(seed: number): Promise<WorldSave | null>;
   /** Saves the world of `seed` in the state given; `true` when it is stored. */
   put(seed: number, hero: Axial, troop: Axial[], fight: FightState): Promise<boolean>;
+  /** Deletes the save of `seed`: the New world control discards the world it leaves (#1021). A refusing store keeps it. */
+  discard(seed: number): Promise<void>;
   /** Remembers `seed` as the last world played. */
   remember(seed: number): Promise<void>;
   /** The seed of the last world played, `null` when there is none. */
@@ -65,6 +67,13 @@ export function worldSaves(store: KeyStore, version: number): WorldSaves {
         return true;
       } catch {
         return false; // storage blocked or full: the game goes on without this save
+      }
+    },
+    async discard(seed) {
+      try {
+        await store.delete(keyOf(seed));
+      } catch {
+        // Storage blocked: the save stays, and the world is left as it is.
       }
     },
     async remember(seed) {

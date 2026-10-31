@@ -180,6 +180,8 @@ import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode } from './openworldmode';
+import { bindJoystick } from './openworldjoystick';
+import { bindNewWorld } from './openworldnew';
 import { worldSaves } from './openworldsave';
 import { loadModels } from './openworldview';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
@@ -4688,6 +4690,8 @@ openWorldButton.addEventListener('click', () => {
   openWorldButton.blur(); // the menu's arrow keys would take the hero's
 });
 openWorldButton.disabled = false; // listener ready (#146)
+bindNewWorld(document, openWorld.newWorld.bind(openWorld)); // the HUD's New world, with its confirmation (#1021)
+bindJoystick(document, openWorld); // the touch stick of the Open world, on the left half of the canvas (#1025)
 addEventListener('keydown', (e) => {
   if (!openWorld.active || !openWorld.key(e.key)) return;
   e.preventDefault(); // no page scroll
