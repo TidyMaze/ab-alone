@@ -132,7 +132,9 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const tree = mesh(view, 'prop-tree').geometry;
     const mountain = new THREE.BoxGeometry();
     view.useModels({ low: { mountain }, high: {} });
-    expect(mesh(view, 'prop-mountain').geometry).toBe(mountain);
+    // the mesh draws the model's shape, from its own copy of the geometry (#991)
+    expect(mesh(view, 'prop-mountain').geometry.getAttribute('position').count).toBe(mountain.getAttribute('position').count);
+    expect(mesh(view, 'prop-mountain').geometry).not.toBe(mountain);
     expect(mesh(view, 'prop-tree').geometry).toBe(tree);
   });
 
@@ -761,6 +763,45 @@ describe('the Open world view frees its GPU objects (#981)', () => {
     const detailed = mesh(view, 'prop-tree-hi'); // the detailed meshes are freed with the rest (#989)
     expect(disposeGeometry.mock.contexts).toContain(detailed.geometry);
     expect(disposeMaterial.mock.contexts).toContain(detailed.material);
+    vi.restoreAllMocks();
+  });
+});
+
+describe('the Open world view frees the instance buffers of each mesh (#991)', () => {
+  const instanced = (view: OpenWorldView): THREE.InstancedMesh[] => {
+    const out: THREE.InstancedMesh[] = [];
+    view.scene.traverse((object) => {
+      if ((object as THREE.InstancedMesh).isInstancedMesh) out.push(object as THREE.InstancedMesh);
+    });
+    return out;
+  };
+
+  it('gives each instanced mesh its own geometry: a shared one frees the instance buffers of only one of its meshes', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.useModels({ low: { tree: box() }, high: { tree: box() } });
+    view.show([0, 0]);
+    const meshes = instanced(view);
+    expect(meshes.length).toBeGreaterThan(5);
+    expect(new Set(meshes.map((m) => m.geometry)).size).toBe(meshes.length);
+  });
+
+  it('a grown mesh takes a geometry of its own, and the geometry it replaces is disposed with it', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const before = mesh(view, 'prop-mountain').geometry;
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain').count).toBe(MOST);
+    expect(mesh(view, 'prop-mountain').geometry).not.toBe(before);
+    expect(disposeGeometry.mock.contexts).toContain(before);
+    expect(new Set(instanced(view).map((m) => m.geometry)).size).toBe(instanced(view).length);
     vi.restoreAllMocks();
   });
 });

@@ -305,9 +305,11 @@ export class OpenWorldView {
     this.foes = this.instances('enemies', CAPACITY.enemies, marble, new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
   }
 
-  /** An instanced mesh of `capacity` instances, each with its own colour (3 floats, white until a build sets it, #984). */
+  /** An instanced mesh of `capacity` instances, each with its own colour (3 floats, white until a build sets it, #984). Its geometry
+   * is its own copy (#991): three frees a mesh's instance buffers with the geometry of the mesh, and a geometry shared by two meshes
+   * frees only the first one's. */
   private instances(name: string, capacity: number, geometry: THREE.BufferGeometry, material: THREE.Material): THREE.InstancedMesh {
-    const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+    const mesh = new THREE.InstancedMesh(geometry.clone(), material, capacity);
     mesh.instanceColor = whiteColours(capacity);
     mesh.count = 0;
     mesh.frustumCulled = false; // its bounds come from the first instances, the fog hides the rest
@@ -336,7 +338,8 @@ export class OpenWorldView {
   /** Gives a prop's mesh a model's geometry. A model that paints itself (vertex colours from Blender) is drawn as painted: no tint
    * hides it. */
   private paint(mesh: THREE.InstancedMesh, geometry: THREE.BufferGeometry): void {
-    mesh.geometry = geometry;
+    mesh.geometry.dispose(); // the mesh's own copy of the last geometry it had (#991)
+    mesh.geometry = geometry.clone();
     if (geometry.hasAttribute('color')) {
       const material = mesh.material as THREE.MeshStandardMaterial;
       material.vertexColors = true;
@@ -475,7 +478,7 @@ export class OpenWorldView {
   private fit(mesh: THREE.InstancedMesh, needed: number): THREE.InstancedMesh {
     if (needed <= mesh.instanceMatrix.count) return mesh;
     const capacity = Math.min(MOST, Math.max(needed, Math.ceil(mesh.instanceMatrix.count * 1.5)));
-    const grown = new THREE.InstancedMesh(mesh.geometry, mesh.material, capacity);
+    const grown = new THREE.InstancedMesh(mesh.geometry.clone(), mesh.material, capacity);
     grown.name = mesh.name;
     grown.count = 0;
     grown.frustumCulled = false;
@@ -483,6 +486,7 @@ export class OpenWorldView {
     this.scene.remove(mesh);
     this.scene.add(grown);
     mesh.dispose();
+    mesh.geometry.dispose(); // the old mesh's own copy: the grown mesh has its own (#991)
     this.swap(mesh, grown);
     return grown;
   }
