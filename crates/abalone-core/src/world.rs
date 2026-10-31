@@ -578,6 +578,25 @@ mod tests {
     }
 
     #[test]
+    fn the_spawn_surroundings_are_mostly_meadow_on_every_seed() {
+        // A disc of axial radius 10 around the spawn (331 cells), on seeds 1 to 16 (seed 7 was a meadow island in a
+        // desert): Meadow on at least 80 % of its cells.
+        for seed in 1..=16 {
+            let disc: Vec<Cell> = (-10..=10)
+                .flat_map(|q| (-10..=10).map(move |r| (q, r)))
+                .filter(|&(q, r)| distance(q, r) <= 10)
+                .map(|(q, r)| cell(seed, q, r).unwrap())
+                .collect();
+            let meadow = disc.iter().filter(|c| c.biome == Biome::Meadow).count();
+            assert!(
+                meadow * 100 >= disc.len() * 80,
+                "seed {seed}: {meadow} of {} cells around the spawn are meadow",
+                disc.len()
+            );
+        }
+    }
+
+    #[test]
     fn walls_stand_on_land_and_trees_grow_on_grass_height() {
         let (mut walls, mut trees) = (0, 0);
         for q in -96..96 {
