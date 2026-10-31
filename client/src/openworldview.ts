@@ -5,6 +5,7 @@
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, TROOP, type Terrain, type Tile, type World } from './openworld';
+import { FightState } from './openworldfight';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
@@ -276,7 +277,11 @@ export class OpenWorldView {
   /** The enemy marbles drawn around the hero. */
   enemyCount = 0;
 
-  constructor(private readonly world: World) {
+  /** `fight` holds the enemies as they are now: the generated ones, with the pushes of the troop on top (openworldfight.ts). */
+  constructor(
+    private readonly world: World,
+    private readonly fight: FightState = new FightState(),
+  ) {
     this.scene.background = new THREE.Color(0x0b1220);
     this.scene.fog = this.fog;
     this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 1.6));
@@ -585,6 +590,22 @@ export class OpenWorldView {
     materials.forEach((material) => material.dispose());
   }
 
+  /** Lays the enemy marbles of the loaded chunks as the fight has them now: the generated ones not moved, and the pushed ones.
+   * A push calls it again, the chunks stay as they are. */
+  updateEnemies(): void {
+    const { enemyCells } = this;
+    enemyCells.length = 0;
+    const [cx, cy] = this.centre;
+    const reach = this.loadedReach;
+    for (let ky = cy - reach; ky <= cy + reach; ky++) {
+      for (let kx = cx - reach; kx <= cx + reach; kx++) {
+        for (const cell of this.fight.chunkEnemies(this.world, kx, ky)) enemyCells.push(cell);
+      }
+    }
+    this.place(this.foes, enemyCells);
+    this.enemyCount = this.foes.count;
+  }
+
   /** Lays the chunks `reach` around `(cx, cy)`: the ground columns, the props (the detailed ones within `HI_RADIUS` of `hero`) and
    * the enemies. */
   private build(cx: number, cy: number, reach: number, hero: Axial): void {
@@ -617,15 +638,7 @@ export class OpenWorldView {
         });
       }
     }
-    const { enemyCells } = this;
-    enemyCells.length = 0;
-    for (let ky = cy - reach; ky <= cy + reach; ky++) {
-      for (let kx = cx - reach; kx <= cx + reach; kx++) {
-        for (const cell of this.world.enemies(kx, ky)) enemyCells.push(cell);
-      }
-    }
-    this.place(this.foes, enemyCells);
-    this.enemyCount = this.foes.count;
+    this.updateEnemies();
     for (const mesh of this.managed) {
       mesh.count = counts.get(mesh) ?? 0;
       mesh.instanceMatrix.needsUpdate = true;

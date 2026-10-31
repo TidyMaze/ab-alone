@@ -49,6 +49,13 @@ export class FightState {
   /** The enemies ejected so far. */
   beaten = 0;
 
+  /** Forgets every push: the generated enemies are all back, none beaten. */
+  reset(): void {
+    this.removed.clear();
+    this.added.clear();
+    this.beaten = 0;
+  }
+
   /** Hides the generated enemies of the chunks `reach` around `(cx, cy)`: a test fixture replaces them with its own. */
   hide(world: World, cx: number, cy: number, reach: number): void {
     for (let ky = cy - reach; ky <= cy + reach; ky++) {

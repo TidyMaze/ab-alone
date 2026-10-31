@@ -4,8 +4,19 @@
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
 import { arrowCell } from './hubview';
-import { Hero, World } from './openworld';
-import { OpenWorldView, type PropModels } from './openworldview';
+import { chunkOf, Hero, World } from './openworld';
+import { FightState, readPush } from './openworldfight';
+import { MAX_REACH, OpenWorldView, type PropModels } from './openworldview';
+
+/** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
+ * the enemies near the hero, all `q, r` pairs; its answer is empty when no push is legal (`readPush`). */
+export type TroopPush = (seed: number, troop: Int32Array, enemies: Int32Array) => Int32Array;
+
+/** The enemies within this many cells of the hero are the ones a push can reach. */
+export const PUSH_REACH = 10;
+
+/** The cells as the bridge takes them: `q, r` pairs. */
+const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat());
 
 /** The diagonal cell of each vertical arrow and horizontal arrow held together, in the axial steps of `neighbours`: up is
  * -z on screen (the camera looks down the -z way), so these are the four diagonals of the hex grid. */
@@ -31,6 +42,11 @@ export class OpenWorldMode {
   active = false;
   hero: Hero | null = null;
   private view: OpenWorldView | null = null;
+  private world: World | null = null;
+  /** The seed of the world entered, the enemies as the pushes left them, and the pushes played so far. */
+  private seed = 0;
+  private fight = new FightState();
+  private pushes = 0;
   private dirty = false;
   /** The time of the last frame, in ms: the camera's ease runs on the time between frames. */
   private clock = 0;
@@ -40,22 +56,27 @@ export class OpenWorldMode {
   private modelsOnce?: Promise<PropModels>;
 
   /** `load` reads a chunk of a seed's world, `models` the low-poly and the detailed props: the first draw does not wait for them.
-   * `reduced` tells whether the page asks for reduced motion, which holds the water still. */
+   * `reduced` tells whether the page asks for reduced motion, which holds the water still. `push` plays the troop's push. */
   constructor(
     private readonly load: (seed: number, cx: number, cy: number) => Uint8Array,
     private readonly loadEnemies: (seed: number, cx: number, cy: number) => Int32Array,
     private readonly models: () => Promise<PropModels>,
     private readonly reduced: () => boolean,
+    private readonly push: TroopPush,
   ) {}
 
   enter(seed: number, width: number, height: number): void {
     this.view?.dispose();
+    this.seed = seed;
     const world = new World(
       (cx, cy) => this.load(seed, cx, cy),
       (cx, cy) => this.loadEnemies(seed, cx, cy),
     );
-    const view = new OpenWorldView(world);
-    this.hero = new Hero(world);
+    this.world = world;
+    this.fight = new FightState();
+    this.pushes = 0;
+    const view = new OpenWorldView(world, this.fight);
+    this.hero = new Hero(world, this.fight);
     this.view = view;
     view.resize(width, height);
     view.show(this.hero.at, this.hero.troop);
@@ -76,13 +97,36 @@ export class OpenWorldMode {
     this.held.clear();
     this.view?.dispose();
     this.view = null;
+    this.world = null;
     this.dirty = false;
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
     delete document.body.dataset.openworldTroop;
     delete document.body.dataset.openworldEnemies;
+    delete document.body.dataset.openworldBeaten;
+    delete document.body.dataset.openworldPush;
     delete document.body.dataset.openworldZoom;
     delete document.body.dataset.openworldDrawn;
+  }
+
+  /** The enemy marbles near the hero now, the pushed ones where they stand (the browser checks read them). */
+  enemies(): Axial[] {
+    return this.fight.enemiesAround(this.world!, this.hero!.at, PUSH_REACH);
+  }
+
+  /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the
+   * enemies of the loaded square replaced by `enemies`, none pushed. */
+  fixture({ hero, troop, enemies }: { hero: Axial; troop: Axial[]; enemies: Axial[] }): void {
+    const [cx, cy] = chunkOf(hero);
+    this.fight.reset();
+    this.fight.hide(this.world!, cx, cy, MAX_REACH);
+    this.fight.apply([], enemies, []);
+    this.hero!.at = hero;
+    this.hero!.troop = troop;
+    this.view!.show(hero, troop);
+    this.view!.updateEnemies();
+    this.dirty = true;
+    this.mark(document.body.dataset.openworld!);
   }
 
   /** A new window size: the view follows it, and the zoom it may have been clamped to is published (#976). */
@@ -140,9 +184,24 @@ export class OpenWorldMode {
 
   private roll(to: Axial): void {
     if (!this.hero!.step(to)) return;
+    this.troopPush();
     this.view!.show(this.hero!.at, this.hero!.troop);
+    this.view!.updateEnemies();
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
+  }
+
+  /** The troop's attack after a step: the bridge plays the legal push, if there is one, on the hero, the troop and the enemies near
+   * the hero. The hero and the troop take the cells it gives (the hero's first), the enemies are kept in the fight. */
+  private troopPush(): void {
+    const enemies = this.enemies();
+    const pushed = readPush(this.push(this.seed, flat([this.hero!.at, ...this.hero!.troop]), flat(enemies)));
+    if (!pushed) return;
+    this.fight.apply(enemies, pushed.enemies, pushed.ejected);
+    const [hero, ...troop] = pushed.troop;
+    this.hero!.at = hero!;
+    this.hero!.troop = troop;
+    this.pushes++;
   }
 
   private mark(seed: string): void {
@@ -150,6 +209,8 @@ export class OpenWorldMode {
     document.body.dataset.openworldAt = this.hero!.at.join(',');
     document.body.dataset.openworldTroop = this.hero!.troop.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldEnemies = String(this.view!.enemyCount);
+    document.body.dataset.openworldBeaten = String(this.fight.beaten);
+    document.body.dataset.openworldPush = String(this.pushes);
     document.body.dataset.openworldZoom = String(this.view!.zoom);
     document.body.dataset.openworldDrawn = JSON.stringify(this.view!.drawn);
   }
