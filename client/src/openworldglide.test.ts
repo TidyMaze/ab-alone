@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { GLIDE_MS, Marble, NUDGE, NUDGE_MS, ROLL_ZOOM, SQUASH, squashAt, type Vec } from './openworldglide';
+import { animT, loopT, slowBy, GLIDE_MS, Marble, NUDGE, NUDGE_MS, ROLL_ZOOM, SQUASH, squashAt, type Vec } from './openworldglide';
 
 const RADIUS = 0.3;
 const at = (x: number, y: number, z: number): Vec => ({ x, y, z });
@@ -204,5 +204,52 @@ describe('the nudge of a blocked step (#1040)', () => {
     m.tick(GLIDE_MS);
     expect(m.pose.x).toBe(1);
     expect(m.pose.z).toBeCloseTo(0, 9);
+  });
+});
+
+describe('the Open world motion clock (#1107)', () => {
+  it('is 0 before the start, at the start, and 1 from the end on, for each ease', () => {
+    for (const e of ['out', 'in', 'in-out'] as const) {
+      expect(animT(100, 50, 200, e)).toBe(0);
+      expect(animT(100, 100, 200, e)).toBe(0);
+      expect(animT(100, 300, 200, e)).toBe(1);
+      expect(animT(100, 900, 200, e)).toBe(1);
+    }
+  });
+
+  it('eases the middle: out is ahead, in is behind, in-out is past half at the half (its curve starts slow, ends fast)', () => {
+    expect(animT(0, 100, 200, 'out')).toBeGreaterThan(0.5);
+    expect(animT(0, 100, 200, 'in')).toBeLessThan(0.5);
+    expect(animT(0, 100, 200, 'in-out')).toBeCloseTo(0.7756, 3);
+    for (const e of ['out', 'in', 'in-out'] as const) {
+      let last = 0;
+      for (let ms = 0; ms <= 200; ms += 10) {
+        const t = animT(0, ms, 200, e);
+        expect(t).toBeGreaterThanOrEqual(last);
+        last = t;
+      }
+    }
+  });
+
+  it('is 1 for a zero or negative duration', () => {
+    expect(animT(100, 100, 0, 'out')).toBe(1);
+    expect(animT(100, 0, -5, 'in')).toBe(1);
+  });
+
+  it('loops in [0, 1)', () => {
+    expect(loopT(0, 2400)).toBe(0);
+    expect(loopT(600, 2400)).toBe(0.25);
+    expect(loopT(2400, 2400)).toBe(0);
+    expect(loopT(2500, 2400)).toBeCloseTo(100 / 2400, 10);
+    expect(loopT(-600, 2400)).toBe(0.75);
+    expect(loopT(5, 0)).toBe(0);
+  });
+
+  it('reads the slow factor of window.__openworldSlow, 1 by default', () => {
+    vi.stubGlobal('window', {});
+    expect(slowBy()).toBe(1);
+    vi.stubGlobal('window', { __openworldSlow: 10 });
+    expect(slowBy()).toBe(10);
+    vi.unstubAllGlobals();
   });
 });
