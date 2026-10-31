@@ -87,7 +87,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     });
   });
 
-  it('loads the chunks only when the hero enters another chunk, the chunks it has are kept', () => {
+  it('loads the chunks only when the hero leaves the loaded square, the chunks it has are kept (#1046)', () => {
     const load = vi.fn(bytes);
     const view = new OpenWorldView(new World(load));
     view.resize(1600, 900); // at 16:9 the reach of the closest view does not move with the hero inside its chunk
@@ -95,7 +95,9 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const loaded = load.mock.calls.length;
     view.show([1, 1]);
     expect(load).toHaveBeenCalledTimes(loaded);
-    view.show([CHUNK, 0]);
+    view.show([CHUNK, 0]); // the next chunk, but the square still covers the hero's ball: its centre and chunks are kept
+    expect(load).toHaveBeenCalledTimes(loaded);
+    view.show([4 * CHUNK - 1, 0]); // out of the square (its last cell is past the edge): re-centred on its chunk, so the chunks around it load
     expect(load.mock.calls.length).toBeGreaterThan(loaded);
   });
 
@@ -545,7 +547,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
           view.resize(width, height);
           view.show(hero);
           view.zoomBy(zoom); // a wide screen stops sooner: the zoom is the widest it allows
-          const [hq, hr] = chunkOf(hero);
+          const [hq, hr] = view.centreChunk; // the square is around its centre, which the hero's chunk may not be (#1046)
           for (const p of footprint(view.camera)) {
             const [cq, cr] = chunkOf(cellAtPoint(p.x, p.z));
             expect(Math.abs(cq - hq)).toBeLessThanOrEqual(view.reach);
@@ -728,7 +730,7 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     expect(square).toBeLessThanOrEqual(MOST);
   });
 
-  it('rebuilds the chunks when the hero enters another chunk at a far zoom, with the reach of the zoom', () => {
+  it('rebuilds the chunks only when the hero leaves the square at a far zoom, with the reach of the zoom (#1046)', () => {
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
@@ -740,7 +742,11 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     expect(view.reach).toBe(reach);
     expect(mesh(view, 'prop-tree').instanceMatrix.version).toBeGreaterThan(propVersion);
     expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version); // the grounds do not depend on the hero (#1034)
-    view.show([CHUNK, 0]); // the next chunk: rebuilt around it, with the same reach
+    view.show([CHUNK, 0]); // the next chunk, still inside the square at this zoom: the centre and the grounds are kept (#1046)
+    expect(view.centreChunk).toEqual([0, 0]);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
+    view.show([(reach + 1) * CHUNK, 0]); // a chunk past the square: rebuilt around it, with the same reach
+    expect(view.centreChunk).toEqual([reach + 1, 0]);
     expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBeGreaterThan(version);
     expect(view.reach).toBe(reach);
     expect(ground(view)).toBe((2 * reach + 1) ** 2 * CHUNK * CHUNK);
@@ -1570,5 +1576,106 @@ describe('the stripe of the marbles fades with the zoom, and the materials keep 
     view.zoomBy(2);
     const after = names.map((name) => (view.scene.getObjectByName(name) as THREE.Mesh).material);
     after.forEach((material, i) => expect(material).toBe(before[i]));
+  });
+});
+
+describe('the loaded chunks keep their centre while the hero paces along a chunk line (#1046)', () => {
+  const DEG = Math.PI / 180;
+  // The farthest ground in view from the hero's cell, as the view draws it (the camera as it stands now).
+  const radiusAt = (view: OpenWorldView, cell: Axial): number => {
+    const p = axialTo3D(cell[0], cell[1]);
+    return groundRadius(view.camera, new THREE.Vector3(p.x, 0, p.z));
+  };
+  // Whether the square of `reach` chunks around the chunk `centre` covers every cell of the hex ball of `radius` around `hero`.
+  const coversBall = (centre: Axial, reach: number, hero: Axial, radius: number): boolean =>
+    [0, 1].every((i) => hero[i]! - radius >= (centre[i]! - reach) * CHUNK && hero[i]! + radius < (centre[i]! + reach + 1) * CHUNK);
+
+  it('pacing across a chunk line at the widest zoom rebuilds no chunk: the centre and the grounds are kept', () => {
+    const load = vi.fn(() => grass());
+    const view = new OpenWorldView(new World(load));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(1e9);
+    const loaded = load.mock.calls.length;
+    const version = mesh(view, 'terrain-grass').instanceMatrix.version;
+    for (let i = 0; i < 10; i++) {
+      view.show([-1, 0]); // across the line between the chunks 0 and -1
+      view.show([0, 0]);
+    }
+    for (let i = 0; i < 10; i++) {
+      view.show([0, -1]); // and across the line between the chunks 0 and -1 on the other axis
+      view.show([0, 0]);
+    }
+    expect(load).toHaveBeenCalledTimes(loaded);
+    expect(view.centreChunk).toEqual([0, 0]);
+    expect(view.reach).toBe(MAX_REACH);
+    expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
+  });
+
+  it('re-centres the square on the hero chunk only when the square no longer covers the hero ball, and keeps it until then', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    let kept = 0;
+    let recentred = 0;
+    for (let q = 1; q <= 6 * CHUNK; q++) {
+      const before = view.centreChunk;
+      const hero: Axial = [q, 0];
+      view.show(hero);
+      const radius = radiusAt(view, hero);
+      expect(view.reach).toBe(reachFor(radius));
+      if (coversBall(before, reachFor(radius), hero, radius)) {
+        kept++;
+        expect(view.centreChunk).toEqual(before);
+      } else {
+        recentred++;
+        expect(view.centreChunk).toEqual(chunkOf(hero));
+      }
+    }
+    expect(kept).toBeGreaterThan(0);
+    expect(recentred).toBeGreaterThan(0);
+  });
+
+  it('covers the ground in view with the loaded square at every zoom and turn, while the hero walks past the chunk lines (#976, #1046)', () => {
+    const heroes: Axial[] = [[0, 0], [CHUNK - 1, 0], [CHUNK, -1], [CHUNK + 5, -CHUNK], [2 * CHUNK - 1, -CHUNK + 1], [3 * CHUNK, 0]];
+    for (const zoom of [1, 4, maxZoomFor(16 / 9)]) {
+      for (let deg = 0; deg < 360; deg += 90) {
+        const view = new OpenWorldView(new World(grass));
+        view.resize(1600, 900);
+        view.turnTo(deg * DEG);
+        view.zoomBy(zoom);
+        for (const hero of heroes) {
+          view.show(hero);
+          const [cq, cr] = view.centreChunk;
+          expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
+          for (const p of footprint(view.camera)) {
+            const [pq, pr] = chunkOf(cellAtPoint(p.x, p.z));
+            expect(Math.abs(pq - cq)).toBeLessThanOrEqual(view.reach);
+            expect(Math.abs(pr - cr)).toBeLessThanOrEqual(view.reach);
+          }
+        }
+      }
+    }
+  });
+
+  it('a push that carries the hero out of the loaded square re-centres the chunks on its end cell (#1040, #1046)', () => {
+    // the first cell east of the centre chunk that the square no longer covers, at the closest zoom on 16:9
+    const probe = new OpenWorldView(new World(grass));
+    probe.resize(1600, 900);
+    probe.show([0, 0]);
+    let edge = 0;
+    while (probe.centreChunk[0] === 0) probe.show([++edge, 0]);
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([edge - 1, 0], [[edge - 2, 0]]); // the last cell the square covers
+    expect(view.centreChunk).toEqual([0, 0]);
+    const played: Played = {
+      from: [[edge - 1, 0], [edge - 2, 0]],
+      foes: [],
+      push: { troop: [[edge, 0], [edge - 1, 0]], enemies: [], ejected: [], dir: [1, 0] },
+    };
+    view.playPush(played, 0);
+    view.tick(10_000);
+    expect(view.centreChunk).toEqual(chunkOf([edge, 0]));
   });
 });

@@ -37,6 +37,12 @@ export const CAPACITY = {
  * cell of the ground in view then lies in the loaded square, so the edge of the loaded area is never on screen (#976). */
 export const reachFor = (radius: number): number => Math.ceil(radius / CHUNK) + 1;
 
+/** Whether the square of `reach` chunks around the chunk `centre` covers every cell of the hex ball of `radius` cells around
+ * `hero`: the ball's box lies in the square (a chunk is a 16 x 16 block of the axial grid). The ground in view lies in that ball
+ * (`groundRadius`), so a square that covers the ball shows no edge (#1046). */
+const covers = (centre: Axial, reach: number, hero: Axial, radius: number): boolean =>
+  [0, 1].every((i) => hero[i]! - radius >= (centre[i]! - reach) * CHUNK && hero[i]! + radius < (centre[i]! + reach + 1) * CHUNK);
+
 /** The four corners of the screen cast on the ground plane (y = 0): the ground the camera sees is the quadrilateral between
  * them. A corner that looks past the horizon gets a point far away on its ray, so the footprint is always four points. */
 export function footprint(camera: THREE.Camera): THREE.Vector3[] {
@@ -329,7 +335,7 @@ export class OpenWorldView {
   private drawnLevel = 1;
   /** The widest zoom on the screen's aspect, see `maxZoomFor`. */
   private limit = maxZoomFor(1);
-  /** The chunk the hero is in, and the key of the chunks drawn: rebuilt when either changes. */
+  /** The chunk the loaded square is centred on: kept while the square covers the hero's ball, else the hero's chunk (#1046). */
   private centre: Axial = [0, 0];
   /** The chunks drawn (the centre and the reach): a change lays every mesh again. `drawnKey` adds the hero's cell, which only
    * the props depend on, so a step lays the props alone (#1034). */
@@ -489,10 +495,9 @@ export class OpenWorldView {
     (this.grounds.water.material as THREE.MeshStandardMaterial).emissiveIntensity = 1 + 0.15 * Math.sin(ms / 1200);
   }
 
-  /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero enters another chunk, the hero and the
-   * camera follow every step. */
+  /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero's ball leaves the loaded square (`frame`),
+   * the hero and the camera follow every step. */
   show(at: Axial, troop: readonly Axial[] = [], glide?: { now: number; span: number }): void {
-    this.centre = chunkOf(at);
     this.heroCell = [at[0], at[1]];
     if (glide && this.placed) this.glideTo(at, troop, glide);
     else this.snapTo(at, troop);
@@ -619,8 +624,7 @@ export class OpenWorldView {
     this.settle();
     const begin = Math.max(now, this.landed); // the lunge starts once the step's glide has landed (#1040)
     const [hero] = push.troop;
-    this.centre = chunkOf(hero!); // the chunks follow the hero to the cell the push ends on
-    this.heroCell = hero!;
+    this.heroCell = hero!; // the chunks follow the hero to the cell the push ends on, when its ball leaves the square (`frame`)
     const at = (ms: number): number => ms * slow;
     const moves: Move[] = [];
     const lunge: Timing = { start: begin, span: at(LUNGE_MS), fall: 0, lunge: true };
@@ -735,6 +739,12 @@ export class OpenWorldView {
     return this.loadedReach;
   }
 
+  /** The chunk the loaded square is centred on: the hero's chunk, or the one it was centred on while the square still covers
+   * the hero's ball (#1046). */
+  get centreChunk(): Axial {
+    return this.centre;
+  }
+
   /** The instances drawn per mesh, by name: the ground columns, the props, the troop and the enemies (the browser checks read it). */
   get drawn(): Record<string, number> {
     const meshes = this.scene.children.filter((o): o is THREE.InstancedMesh => o instanceof THREE.InstancedMesh);
@@ -830,6 +840,8 @@ export class OpenWorldView {
     const hero = cellAtPoint(at.x, at.z);
     const radius = Math.max(...corners.map((p) => hexDistance(cellAtPoint(p.x, p.z), hero)));
     const reach = Math.min(MAX_REACH, reachFor(radius));
+    // The centre is kept while the square still covers the hero's ball: a step across a chunk line then lays the props alone (#1046).
+    if (!covers(this.centre, reach, hero, radius)) this.centre = chunkOf(hero);
     const chunks = `${this.centre},${reach}`;
     const key = `${chunks},${hero}`; // the hero's cell too: it sets which props are detailed (#989)
     if (chunks !== this.drawnChunks) {
