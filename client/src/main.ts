@@ -179,7 +179,7 @@ import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
-import { OpenWorldMode } from './openworldmode';
+import { OpenWorldMode, twistOf } from './openworldmode';
 import { bindJoystick } from './openworldjoystick';
 import { bindNewWorld } from './openworldnew';
 import { worldSaves } from './openworldsave';
@@ -3564,11 +3564,18 @@ const span = (): number => {
   const [a, b] = [...pointers.values()];
   return Math.hypot(a!.x - b!.x, a!.y - b!.y);
 };
+// The angle of the two pointers, for a twist of the Open world's camera (#1026), and the pointer that turns it with the right button.
+const angle = (): number => {
+  const [a, b] = [...pointers.values()];
+  return Math.atan2(b!.y - a!.y, b!.x - a!.x);
+};
+let turning: number | null = null;
 
 canvas.addEventListener('pointerdown', (e) => {
   if (openWorld.active) {
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); // two fingers pinch the Open world's camera (#976)
-    if (pointers.size === 1) openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); // two fingers pinch and twist the Open world's camera (#976, #1026)
+    if (e.button === 2) turning = e.pointerId; // the right button turns the camera round the hero, it does not roll the hero (#1026)
+    else if (pointers.size === 1) openWorld.press(e.clientX, e.clientY, innerWidth, innerHeight); // the Open world rolls its hero (#962)
     return;
   }
   canvas.setPointerCapture(e.pointerId);
@@ -3589,8 +3596,13 @@ canvas.addEventListener('pointermove', (e) => {
   if (openWorld.active) {
     if (last) {
       const prevSpan = pointers.size === 2 ? span() : 0;
+      const prevAngle = pointers.size === 2 ? angle() : 0;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 2) openWorld.zoom(pinchScale(prevSpan, span())); // the Open world's camera, not the board's (#976)
+      if (e.pointerId === turning) openWorld.orbit(e.clientX - last.x); // the right button's drag turns the camera (#1026)
+      if (pointers.size === 2) {
+        openWorld.zoom(pinchScale(prevSpan, span())); // the Open world's camera, not the board's (#976)
+        openWorld.turn(twistOf(prevAngle, angle())); // a twist turns it too (#1026)
+      }
     }
     return;
   }
@@ -3636,6 +3648,7 @@ function release(e: PointerEvent): void {
   const wasClick = e.type === 'pointerup' && press && !press.drag && pointers.size === 1;
   const dropped = e.type === 'pointerup' && marbleDrag && press!.drag && pointers.size === 1;
   pointers.delete(e.pointerId);
+  if (e.pointerId === turning) turning = null;
   if (pointers.size === 0) press = marbleDrag = null;
   if (dropped) return dropMarbles(e);
   if (!wasClick) return;
@@ -3662,6 +3675,10 @@ function dropMarbles(e: PointerEvent): void {
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
+// The right button turns the Open world's camera: no browser menu over the canvas (#1026).
+canvas.addEventListener('contextmenu', (e) => {
+  if (openWorld.active) e.preventDefault();
+});
 
 // Keyboard play (#738), only while the canvas has focus: Tab and Shift+Tab walk the legal groups (past the ends the
 // focus moves on), Q W E A S D pick the direction, Enter plays it, Escape backs out one step.

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
-import { CHUNK, neighbours } from './openworld';
+import { CHUNK, neighbours, World } from './openworld';
 import { heldCell, OpenWorldMode, ORBIT_PER_PX, stepOf, TURN_STEP, twistOf } from './openworldmode';
 import { arrowCell } from './hubview';
 import { FightState } from './openworldfight';
@@ -619,7 +619,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     fight.apply([], [[3, 0]], [[9, 9]]);
     return fight.toJSON();
   };
-  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), savedAt: 1 });
+  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, savedAt: 1 });
   const withSaves = (store = memoryStore()) => {
     const saves = worldSaves(store, 1);
     return { store, saves, m: mode(undefined, undefined, undefined, undefined, undefined, saves) };
@@ -824,7 +824,7 @@ describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026
     for (const yaw of [15, 30, 45, 60, 90, 135, -70].map((d) => d * DEG)) {
       const view = new OpenWorldView(world);
       view.resize(1600, 900);
-      view.turnTo(yaw, true);
+      view.turnTo(yaw);
       view.show([0, 0]);
       const onScreen = (cell: Axial) => {
         const p = axialTo3D(cell[0], cell[1]);
@@ -834,8 +834,9 @@ describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026
       for (const keys of [...SINGLE.map((k) => [k]), ...PAIRS]) {
         const there = onScreen(stepOf([0, 0], held(...keys), yaw)!);
         const shown = (Math.atan2(there.y - from.y, there.x - from.x) / DEG);
-        // Within the 30 degrees either side of the key that a neighbour of the hex grid is nearest to; the perspective adds a little.
-        expect(gapOf(shown, keyAngle(keys))).toBeLessThanOrEqual(33);
+        // The neighbours of the hex grid are 60 degrees apart, so the nearest one lies within 30 degrees of the key on the ground, and
+        // the camera's perspective bends the screen angle by some ten degrees more. A sign error would miss by 60 or more.
+        expect(gapOf(shown, keyAngle(keys))).toBeLessThanOrEqual(45);
       }
     }
   });
@@ -854,6 +855,14 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
     m.key('r');
     expect(body().openworldYaw).toBe('0');
     expect(m.key('x')).toBe(false); // not the mode's
+  });
+
+  it('the stick reads the yaw of the camera: the goal of the turn, which the keys and the drag set', () => {
+    const m = mode();
+    m.enter(7, 800, 600);
+    expect(m.yaw).toBe(0);
+    m.key('q');
+    expect(m.yaw).toBeCloseTo(TURN_STEP);
   });
 
   it('a drag of the right button turns the view by ORBIT_PER_PX a px, and a twist turns it by its angle, the shortest way', () => {

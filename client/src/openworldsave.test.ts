@@ -36,11 +36,18 @@ describe('the save of the camera yaw (#1026)', () => {
   it('loads a record of the previous record version, with no yaw, at the default angle: a migration, not a loss (#1026)', async () => {
     const store = memoryStore();
     const { yaw: _yaw, ...old } = record(7);
-    store.data.set('openworld:7', { ...old, record: 1 });
+    store.data.set('openworld:7', old); // no record field: the version 1 layout
     const back = await worldSaves(store, 1).load(7);
     expect(back!.yaw).toBe(0);
     expect(back!.hero).toEqual(hero);
     expect(store.data.has('openworld:7')).toBe(true);
+  });
+
+  it('discards a record of a record version this build does not know, a later one', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', { ...record(7), record: 3, yaw: 0 });
+    expect(await worldSaves(store, 1).load(7)).toBeNull();
+    expect(store.data.has('openworld:7')).toBe(false);
   });
 
   it('discards a record of this record version whose yaw is not a number', async () => {

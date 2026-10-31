@@ -155,6 +155,28 @@ describe('bindJoystick: a touch on the left half holds the direction, the hero w
     expect(s.step).not.toHaveBeenCalled();
   });
 
+  it('a drag back into the dead zone holds nothing: the hero stops at once', () => {
+    const s = bind();
+    pointer('pointerdown', canvas(), LEFT);
+    pointer('pointermove', canvas(), { x: 150, y: 300 });
+    s.step.mockClear();
+    pointer('pointermove', canvas(), { x: 102, y: 300 }); // 2 px from the touch: inside the dead zone
+    vi.advanceTimersByTime(STEP_MS * 2);
+    expect(s.step).not.toHaveBeenCalled();
+    expect(pad().hidden).toBe(false);
+  });
+
+  it('a mouse press while a thumb holds the stick is not a second finger: the stick goes on', () => {
+    const s = bind();
+    pointer('pointerdown', canvas(), LEFT);
+    pointer('pointermove', canvas(), { x: 150, y: 300 });
+    pointer('pointerdown', canvas(), { x: 200, y: 300, id: 3, kind: 'mouse' });
+    expect(pad().hidden).toBe(false);
+    s.step.mockClear();
+    vi.advanceTimersByTime(STEP_MS);
+    expect(s.step).toHaveBeenCalledWith(['ArrowRight']);
+  });
+
   it('a move of another finger is not the stick', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);

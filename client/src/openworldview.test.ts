@@ -57,6 +57,11 @@ function grass(): Uint8Array {
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 2, 0], i * 3);
   return out;
 }
+// Whether the reach at zoom `k` goes past MAX_REACH at some yaw, every degree (#1026).
+const someYawReaches = (aspect: number, k: number): boolean => {
+  for (let deg = 0; deg < 360; deg++) if (reachAt(aspect, k, (deg * Math.PI) / 180) > MAX_REACH) return true;
+  return false;
+};
 const ground = (view: OpenWorldView) => GROUNDS.reduce((sum, g) => sum + mesh(view, `terrain-${g}`).count, 0);
 const mesh = (view: OpenWorldView, name: string) => view.scene.getObjectByName(name) as THREE.InstancedMesh;
 const counts = (view: OpenWorldView, prefix: string, names: readonly string[]) =>
@@ -513,7 +518,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     const limit = maxZoomFor(32 / 9);
     expect(limit).toBeLessThan(MAX_ZOOM);
     expect(reachAt(32 / 9, limit)).toBeLessThanOrEqual(MAX_REACH);
-    expect(reachAt(32 / 9, limit + 0.05)).toBeGreaterThan(MAX_REACH);
+    expect(someYawReaches(32 / 9, limit + 0.05)).toBe(true); // a turn of the camera needs the limit (#1026)
   });
 
   it('follows the aspect on a resize: a narrower screen lets the zoom go further, a wider one brings it back', () => {
@@ -536,7 +541,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
       const limit = maxZoomFor(aspect);
       expect(limit).toBeGreaterThan(MAX_ZOOM);
       expect(reachAt(aspect, limit)).toBeLessThanOrEqual(MAX_REACH);
-      expect(reachAt(aspect, limit + 0.05)).toBeGreaterThan(MAX_REACH);
+      expect(someYawReaches(aspect, limit + 0.05)).toBe(true);
     }
   });
 
@@ -1223,7 +1228,7 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     view.resize(1600, 900);
     view.show([0, 0]);
     for (const yaw of [0, 30 * DEG, 90 * DEG, -60 * DEG]) {
-      view.turnTo(yaw, true);
+      view.turnTo(yaw);
       const dx = view.camera.position.x - view.focusPoint.x;
       const dz = view.camera.position.z - view.focusPoint.z;
       expect(Math.hypot(dx, dz)).toBeGreaterThan(0);
@@ -1236,7 +1241,7 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     const view = new OpenWorldView(world);
     view.resize(1600, 900);
     for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG, -120 * DEG]) {
-      view.turnTo(yaw, true);
+      view.turnTo(yaw);
       view.show([0, 0]);
       for (const cell of neighbours([0, 0])) {
         const p = axialTo3D(cell[0], cell[1]);
@@ -1276,10 +1281,20 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     expect(view.camera.position.x).toBeCloseTo(view.focusPoint.x, 6);
   });
 
-  it('keeps the widest zoom where the reach holds at every yaw: no edge of the loaded chunks shows at any turn (#1026)', () => {
-    for (const aspect of [9 / 16, 16 / 9, 21 / 9]) {
-      const limit = maxZoomFor(aspect);
-      for (let deg = 0; deg < 360; deg += 1) expect(reachAt(aspect, limit, deg * DEG)).toBeLessThanOrEqual(MAX_REACH);
+  it('draws the widest zoom at every turn with its reach within MAX_REACH: no edge of the loaded chunks shows (#1026)', () => {
+    const screens: [number, number][] = [
+      [900, 1600],
+      [2100, 900],
+    ];
+    for (const [width, height] of screens) {
+      const view = new OpenWorldView(new World(grass));
+      view.resize(width, height);
+      view.show([0, 0]);
+      view.zoomBy(1e9);
+      for (let deg = 0; deg < 360; deg += 1) {
+        view.turnTo(deg * DEG);
+        expect(reachAt(width / height, view.drawnZoom, view.yaw)).toBeLessThanOrEqual(MAX_REACH);
+      }
     }
   });
 
@@ -1288,7 +1303,7 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     view.resize(390, 844);
     view.show([0, 0]);
     for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG]) {
-      view.turnTo(yaw, true);
+      view.turnTo(yaw);
       view.zoomBy(1e9);
       expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
     }
