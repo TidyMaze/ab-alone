@@ -819,11 +819,11 @@ body:has(#update:not([hidden])) #modes::before {
 #dock-wrap #mode-menu { display: flex; flex-direction: column; flex-flow: column nowrap; justify-content: flex-start; gap: 4px; align-items: stretch; min-width: 0; }
 #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 44px; min-width: 44px; }
 #dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { flex: none; width: 100%; overflow-x: auto; margin: 0; padding: 0; }
-/* A desktop window (a fine pointer, 1101 px and wider) has room for the growing roster: the boss lists run three to a row and every item is 32 px high and the sheet may take 80 % of the height, so every boss and Daily challenge show without a scroll at 1280x720 (#1069). */
+/* A desktop window (a fine pointer, 1101 px and wider) has room for the growing roster: the boss lists run three to a row and every item is 28 px high and the sheet may take 80 % of the height, so every boss and Daily challenge show without a scroll at 1280x720 (#1069). */
 @media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
   #dock-wrap #mode-menu { max-height: 80dvh; }
   #dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { display: grid; grid-template-columns: repeat(3, 1fr); }
-  #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 32px; }
+  #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 28px; }
 }
 #dock-wrap #goal-sheet { font: 0.875rem/1.4 var(--ui); color: var(--text); }
 #dock-wrap #goal-sheet p { margin: 0; }
