@@ -23,3 +23,24 @@ test('The Stalker is a boss: pick it in the Boss fight list, the veil and the si
   await expect.poll(plies).toBe(2); // the move and the boss's reply
   await page.screenshot({ path: testInfo.outputPath('stalker-boss-fight.png') });
 });
+
+// #1122: reload during a Stalker fight and come back to the same fight under its fog; the Game modes menu has no Stalker (#1123).
+test('A Stalker fight comes back under its fog after a reload, and the menu has no Stalker entry, #1122 #1123', async ({ page }, testInfo) => {
+  await page.goto('./?bot=on');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await expect(page.locator('#stalker')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('modes-no-stalker.png') });
+  await page.locator('#boss-fight').click();
+  await page.locator('#boss-list button').last().click();
+  const move = await page.evaluate(() => (window as any).__legal()[0] as { cells: [number, number][]; dir: number });
+  await page.evaluate((m) => (window as any).__click(...m.cells[0]!), move);
+  await page.evaluate((m) => (window as any).__click(...(window as any).__targets().find((t: any) => t.dir === m.dir).cell), move);
+  await expect.poll(() => page.evaluate(() => (window as any).__plies() as number)).toBe(2);
+  const history = await page.evaluate(() => (window as any).__history());
+  await page.reload();
+  await expect(page.locator('#hud')).toContainText('Sight 3');
+  expect(await page.evaluate(() => (window as any).__history())).toEqual(history);
+  expect(await page.evaluate(() => (window as any).__stalker().visible.length)).toBeGreaterThan(0);
+  await page.screenshot({ path: testInfo.outputPath('stalker-after-reload.png') });
+});

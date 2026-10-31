@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
+import { IDBFactory } from 'fake-indexeddb';
 import { boot, type Game } from './test/harness';
 
 // The Stalker as a boss (#1111, docs/specs/stalker.md): picked in the Boss fight list, fogged from the engine's getters
@@ -63,6 +64,23 @@ describe('main.ts The Stalker boss (#1111)', () => {
     vi.restoreAllMocks();
   });
 
+  it("rings the boss's last move where it landed in sight, and the ring is part of the shown state (#1111)", async () => {
+    const game = await boot('/');
+    pickStalker();
+    expect(shown(game)!.last).toEqual([]);
+    const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
+    game.click(...move.cells[0]!);
+    game.click(...game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell);
+    game.frame(300);
+    await game.settle();
+    game.frame(300);
+    expect(game.hook<number>('__plies')).toBeGreaterThanOrEqual(2); // the boss answered
+    expect(shown(game)!.last.length).toBeGreaterThan(0); // its marble landed within the sight of three
+    byId('replay').click(); // a review shows the position, not the last move of the live game
+    game.frame(300);
+    expect(shown(game)!.last).toEqual([]);
+  });
+
   it('lets any other error of a move through', async () => {
     const game = await boot('/?bot=off');
     const { Engine } = await import('abalone-wasm');
@@ -73,5 +91,38 @@ describe('main.ts The Stalker boss (#1111)', () => {
     game.click(...move.cells[0]!);
     expect(() => game.click(...game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell)).toThrow('broken');
     vi.restoreAllMocks();
+  });
+
+  it('comes back under its fog after a reload, and Retry replaces the saved fight (#1122)', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('/', { indexedDB });
+    pickStalker();
+    const move = game.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
+    game.click(...move.cells[0]!);
+    game.click(...game.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell);
+    await game.settle();
+    const plies = game.hook<number>('__plies');
+    expect(plies).toBeGreaterThan(0);
+    const history = game.hook('__history');
+    const again = await boot('/', { indexedDB });
+    expect(again.hook('__history')).toEqual(history);
+    expect(again.hud()).toContain('Sight 3');
+    expect(shown(again)!.visible.length).toBeGreaterThan(0);
+    expect(byId('boss-retry').hidden).toBe(false);
+    byId('boss-retry').click(); // a new fight over the same seed: the save starts over
+    await again.settle();
+    const third = await boot('/', { indexedDB });
+    expect(third.hook('__plies')).toBe(0);
+    expect(third.hud()).toContain('Sight 3');
+  });
+
+  it('does not save the other bosses', async () => {
+    const indexedDB = new IDBFactory();
+    const game = await boot('/', { indexedDB });
+    byId('boss-fight').click();
+    byId('boss-list').querySelector('button')!.click(); // The Echo
+    await game.settle();
+    const again = await boot('/', { indexedDB });
+    expect(shown(again)).toBeNull();
   });
 });

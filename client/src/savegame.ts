@@ -12,22 +12,25 @@ export const LOCAL_GAME = 'local';
 export interface LocalGame {
   bot: boolean;
   moves: number[][];
-  /** A Stalker game (#1009): the fog is back on after a reload. Absent for the others. */
-  stalker?: boolean;
+  /** A Stalker boss fight (#1122): rebuilt from its seed, the fog is back on after a reload. Absent for the others. */
+  boss?: BossFight;
+}
+
+/** The boss fight a save holds: only the Stalker is saved. */
+export interface BossFight {
+  id: string;
+  seed: number;
 }
 
 /** The stored form, also the export file of #219. */
-export interface SavedGame {
-  version: typeof SAVE_VERSION;
-  mode: 'local';
-  layout: 'standard';
-  bot: boolean;
-  moves: number[][];
-  stalker?: true;
-}
+export type SavedGame =
+  | { version: typeof SAVE_VERSION; mode: 'local'; layout: 'standard'; bot: boolean; moves: number[][] }
+  | { version: typeof SAVE_VERSION; mode: 'local'; boss: 'stalker'; seed: number; moves: number[][] };
 
-export function encodeGame({ bot, moves, stalker }: LocalGame): SavedGame {
-  return { version: SAVE_VERSION, mode: 'local', layout: 'standard', bot, moves: moves.map((mv) => [...mv]), ...(stalker ? { stalker: true } : {}) };
+export function encodeGame({ bot, moves, boss }: LocalGame): SavedGame {
+  const copy = moves.map((mv) => [...mv]);
+  if (boss) return { version: SAVE_VERSION, mode: 'local', boss: 'stalker', seed: boss.seed, moves: copy };
+  return { version: SAVE_VERSION, mode: 'local', layout: 'standard', bot, moves: copy };
 }
 
 /** A move record of the bridge: `MOVE_STRIDE` 32-bit integers. The engine judges the rest. */
@@ -37,10 +40,13 @@ const isRecord = (mv: unknown): mv is number[] =>
 /** The local game in `raw`, or null when it is not a save of this version. */
 export function decodeGame(raw: unknown): LocalGame | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const save = raw as Record<keyof SavedGame, unknown>;
-  if (save.version !== SAVE_VERSION || save.mode !== 'local' || save.layout !== 'standard') return null;
-  if (typeof save.bot !== 'boolean' || !Array.isArray(save.moves) || !save.moves.every(isRecord)) return null;
-  return { bot: save.bot, moves: save.moves.map((mv) => [...mv]), ...(save.stalker === true ? { stalker: true } : {}) };
+  const save = raw as Record<string, unknown>;
+  if (save.version !== SAVE_VERSION || save.mode !== 'local' || save.stalker !== undefined) return null; // the old `stalker: true` mode is dropped
+  if (!Array.isArray(save.moves) || !save.moves.every(isRecord)) return null;
+  const moves = save.moves.map((mv) => [...mv]);
+  if (save.boss !== undefined) return save.boss === 'stalker' && typeof save.seed === 'number' ? { bot: true, moves, boss: { id: 'stalker', seed: save.seed } } : null;
+  if (save.layout !== 'standard' || typeof save.bot !== 'boolean') return null;
+  return { bot: save.bot, moves };
 }
 
 export interface ReplayEngine {
@@ -114,16 +120,16 @@ export class LocalSaves {
    * A save that does not decode or replay is deleted, never shown half-done. A save of the other mode is left alone. */
   async load<E extends ReplayEngine>(
     bot: boolean | undefined,
-    make: () => E,
-  ): Promise<{ engine: E; moves: number[][]; bot: boolean; stalker?: boolean } | null> {
+    make: (boss?: BossFight) => E,
+  ): Promise<{ engine: E; moves: number[][]; bot: boolean; boss?: BossFight } | null> {
     try {
       const raw = await this.store.get(LOCAL_GAME);
       if (raw === undefined) return null;
       const game = decodeGame(raw);
       if (game && bot !== undefined && game.bot !== bot) return null;
-      const engine = game && replay(game.moves, make);
+      const engine = game && replay(game.moves, () => make(game.boss));
       this.mine = engine !== null;
-      if (engine) return { engine, moves: game.moves, bot: game.bot, ...(game.stalker ? { stalker: true } : {}) };
+      if (engine) return { engine, moves: game.moves, bot: game.bot, ...(game.boss ? { boss: game.boss } : {}) };
       await this.store.delete(LOCAL_GAME);
     } catch {
       // Storage blocked: a new game.
