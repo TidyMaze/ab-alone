@@ -18,7 +18,30 @@ const release = (key: string): void => {
   window.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
 };
 
+// The test hooks of the Open world, on a webdriver page only (docs/specs/openworld.md section 6).
+type Cells = [number, number][];
+type Hooks = { __openworldFixture?: (f: { hero: [number, number]; troop: Cells; enemies: Cells }) => void; __openworldEnemies?: () => Cells };
+const hooks = () => window as unknown as Hooks;
+
 describe('the Open world mode', () => {
+  it('the troop pushes the enemy in front of it after a step, through the engine: the hero, the troop and the enemy move, #967', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    hooks().__openworldFixture!({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    press('ArrowRight'); // the hero rolls onto (1,0): the line (1,0), (0,0), (-1,0) pushes the enemy (2,0) on to (3,0)
+    expect(data().openworldAt).toBe('2,0');
+    expect(data().openworldPush).toBe('1');
+    expect(data().openworldTroop).toBe('1,0 0,0 -2,0');
+    expect(hooks().__openworldEnemies!()).toEqual([[3, 0]]);
+  });
+
+  it('exposes no test hook on a page that is not a webdriver one', async () => {
+    delete hooks().__openworldFixture;
+    await boot('?bot=off&openworld=7', { webdriver: false });
+    expect(hooks().__openworldFixture).toBeUndefined();
+  });
+
   it('is in the mode menu without any parameter, and a click enters a world with a random seed', async () => {
     const game = await boot('?bot=off');
     expect(byId('openworld').hidden).toBe(false);

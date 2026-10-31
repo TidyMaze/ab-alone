@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
+import { FightState } from './openworldfight';
 import {
   BIOME_LOOK,
   CAPACITY,
@@ -294,6 +295,32 @@ describe('the troop and the enemies on screen', () => {
     const at = new THREE.Vector3().setFromMatrixPosition(m);
     expect(at.x).toBeCloseTo(axialTo3D(6, 5).x);
     expect(at.z).toBeCloseTo(axialTo3D(6, 5).z);
+  });
+
+  it('draws the enemies as they stand now: a generated one that was pushed is gone, the pushed one is where it stands', () => {
+    const foes = (cx: number, cy: number): Int32Array => (cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5) : new Int32Array());
+    const fight = new FightState();
+    const view = new OpenWorldView(new World(bytes, foes), fight);
+    view.show([0, 0]);
+    expect(view.enemyCount).toBe(2);
+    fight.apply([[5, 5]], [[5, 4]], []); // the push of the generated enemy (5,5) to (5,4), and nothing else
+    view.updateEnemies();
+    expect(mesh(view, 'enemies').count).toBe(2);
+    expect(view.enemyCount).toBe(2);
+    const m = new THREE.Matrix4();
+    mesh(view, 'enemies').getMatrixAt(0, m); // the generated (6,5) stays
+    expect(new THREE.Vector3().setFromMatrixPosition(m).x).toBeCloseTo(axialTo3D(6, 5).x);
+    mesh(view, 'enemies').getMatrixAt(1, m); // the pushed one, on (5,4)
+    expect(new THREE.Vector3().setFromMatrixPosition(m).x).toBeCloseTo(axialTo3D(5, 4).x);
+    expect(new THREE.Vector3().setFromMatrixPosition(m).z).toBeCloseTo(axialTo3D(5, 4).z);
+  });
+
+  it('draws the enemies of a fight a build takes too: a pushed enemy of the loaded square is in the first draw', () => {
+    const fight = new FightState();
+    fight.apply([], [[1, 0]], []);
+    const view = new OpenWorldView(new World(bytes), fight);
+    view.show([0, 0]);
+    expect(view.enemyCount).toBe(1);
   });
 });
 

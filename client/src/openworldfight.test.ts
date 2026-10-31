@@ -75,6 +75,16 @@ describe('the enemies of the fight', () => {
     expect(fight.occupied(w, 2, 0)).toBe(true);
   });
 
+  it('a reset gives back the generated enemies, and no beaten count', () => {
+    const w = world();
+    const fight = new FightState();
+    fight.apply([[5, 5], [6, 5]], [[6, 5]], [[6, 5]]);
+    fight.apply([[6, 5]], [[16, 5]], []);
+    fight.reset();
+    expect(fight.toJSON()).toEqual({ removed: [], added: [], beaten: 0 });
+    expect(fight.enemiesAround(w, [0, 0], 11)).toEqual([[5, 5], [6, 5]]);
+  });
+
   it('an enemy applied on a hidden generated cell is shown there again', () => {
     const w = world();
     const fight = new FightState();
