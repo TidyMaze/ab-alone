@@ -4,6 +4,9 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours } from './openworld';
 import { heldCell, OpenWorldMode } from './openworldmode';
+import { FightState } from './openworldfight';
+import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
+import { memoryStore } from './savegame';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1).
@@ -30,7 +33,8 @@ const mode = (
   foes: (seed: number, cx: number, cy: number) => Int32Array = (_seed, cx, cy) =>
     cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5, 7, 5) : new Int32Array(),
   push: PushBridge = noPush,
-) => new OpenWorldMode(load, foes, models, reduced, push);
+  saves: WorldSaves = worldSaves(memoryStore(), 1),
+) => new OpenWorldMode(load, foes, models, reduced, push, saves);
 const body = () => document.body.dataset;
 
 afterEach(() => {
@@ -602,5 +606,142 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     (window as { __openworldSlow?: number }).__openworldSlow = 10;
     pushing().key('ArrowRight');
     expect(play.mock.calls[0]![2]).toBe(10);
+  });
+});
+
+describe('the Open world save in the mode (docs/specs/openworld.md section 5, #968)', () => {
+  const settle = () => new Promise((done) => setTimeout(done)); // the store's writes are microtasks
+  const frameOf = (m: OpenWorldMode) => m.frame(vi.fn());
+  // A saved world of seed 7: the hero on (2,0), the troop on (1,0) and (0,0), a generated enemy pushed on to (3,0), one beaten.
+  const fightSaved = () => {
+    const fight = new FightState();
+    fight.apply([], [[3, 0]], [[9, 9]]);
+    return fight.toJSON();
+  };
+  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), savedAt: 1 });
+  const withSaves = (store = memoryStore()) => {
+    const saves = worldSaves(store, 1);
+    return { store, saves, m: mode(undefined, undefined, undefined, undefined, undefined, saves) };
+  };
+
+  it('a saved world is applied before the first draw: the hero, the troop, the fight and the beaten count', () => {
+    const { m } = withSaves();
+    m.enter(7, 800, 600, savedWorld());
+    expect(body().openworldAt).toBe('2,0');
+    expect(body().openworldTroop).toBe('1,0 0,0');
+    expect(body().openworldBeaten).toBe('1');
+    expect(m.enemies()).toContainEqual([3, 0]);
+    const render = vi.fn();
+    m.frame(render);
+    expect(render).toHaveBeenCalledOnce();
+  });
+
+  it('a step is saved once the frame runs, with the cell it reached and the seed', async () => {
+    delete body().openworldSaved;
+    const { m, store } = withSaves();
+    m.enter(7, 800, 600);
+    m.key('ArrowRight');
+    expect(store.data.has('openworld:7')).toBe(false); // not before the frame
+    frameOf(m);
+    await settle();
+    expect(store.data.get('openworld:7')).toMatchObject({ version: 1, seed: 7, hero: [1, 0], fight: { removed: [], added: [], beaten: 0 } });
+    expect(body().openworldSaved).toBe('1');
+  });
+
+  it('a frame with nothing new writes nothing', async () => {
+    const { m, saves } = withSaves();
+    const put = vi.spyOn(saves, 'put');
+    m.enter(7, 800, 600);
+    frameOf(m);
+    await settle();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('steps between two frames are one write, of the last state', async () => {
+    const { m, saves } = withSaves();
+    const put = vi.spyOn(saves, 'put');
+    m.enter(7, 800, 600);
+    m.key('ArrowRight');
+    m.key('ArrowRight');
+    m.key('ArrowRight');
+    frameOf(m);
+    frameOf(m);
+    await settle();
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(put.mock.calls[0]![1]).toEqual([3, 0]);
+  });
+
+  it('a push is saved with the step: the enemy pushed on to (3,0) is in the save', async () => {
+    const store = memoryStore();
+    const m = mode(undefined, undefined, undefined, undefined, shove, worldSaves(store, 1));
+    m.enter(7, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
+    m.key('ArrowRight');
+    frameOf(m);
+    await settle();
+    const saved = store.data.get('openworld:7') as WorldSave;
+    expect(saved.hero).toEqual([2, 0]);
+    expect(saved.fight.added).toEqual([[3, 0]]);
+  });
+
+  it('leaving saves the final state at once, before any frame', async () => {
+    const { m, store } = withSaves();
+    m.enter(7, 800, 600);
+    m.key('ArrowRight');
+    m.leave();
+    await settle();
+    expect((store.data.get('openworld:7') as WorldSave).hero).toEqual([1, 0]);
+  });
+
+  it('entering another world saves the one entered before', async () => {
+    const { m, store } = withSaves();
+    m.enter(7, 800, 600);
+    m.key('ArrowRight');
+    m.enter(8, 800, 600);
+    await settle();
+    expect((store.data.get('openworld:7') as WorldSave).hero).toEqual([1, 0]);
+    expect(store.data.has('openworld:8')).toBe(false);
+  });
+
+  it('a save the storage refuses is not counted, and the game goes on', async () => {
+    delete body().openworldSaved;
+    const broken = worldSaves(
+      {
+        get: async () => Promise.reject(new Error('blocked')),
+        put: async () => Promise.reject(new Error('blocked')),
+        delete: async () => Promise.reject(new Error('blocked')),
+      },
+      1,
+    );
+    const m = mode(undefined, undefined, undefined, undefined, undefined, broken);
+    m.enter(7, 800, 600);
+    m.key('ArrowRight');
+    frameOf(m);
+    await settle();
+    expect(body().openworldSaved).toBeUndefined();
+    expect(body().openworldAt).toBe('1,0');
+  });
+
+  it('opens the saved world of a seed and remembers that seed as the last one played', async () => {
+    const { m, store, saves } = withSaves();
+    store.data.set('openworld:7', savedWorld());
+    await m.open(7, 800, 600);
+    expect(body().openworldAt).toBe('2,0');
+    expect(await saves.last()).toBe(7);
+  });
+
+  it('opened with resume off, a world starts on the spawn whatever is saved for its seed', async () => {
+    const { m, store } = withSaves();
+    store.data.set('openworld:7', savedWorld());
+    await m.open(7, 800, 600, false);
+    expect(body().openworldAt).toBe('0,0');
+  });
+
+  it('a stale save is deleted when the world opens, which then starts fresh', async () => {
+    const { m, store } = withSaves();
+    store.data.set('openworld:7', { ...savedWorld(), version: 0 });
+    await m.open(7, 800, 600);
+    expect(body().openworldAt).toBe('0,0');
+    expect(store.data.has('openworld:7')).toBe(false);
   });
 });
