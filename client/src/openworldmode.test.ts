@@ -540,6 +540,7 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
   });
 
   it('marks the animation while it runs, draws every frame of it, and unmarks it at its end', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(0); // the push starts at the press
     const m = pushing();
     const render = vi.fn();
     m.frame(render, 0);

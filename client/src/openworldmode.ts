@@ -197,7 +197,7 @@ export class OpenWorldMode {
     const played = this.troopPush();
     this.view!.show(this.hero!.at, this.hero!.troop);
     this.view!.updateEnemies();
-    if (played && !this.reduced()) this.view!.playPush(played, this.clock, slowBy()); // reduced motion: the marbles jump
+    if (played && !this.reduced()) this.view!.playPush(played, performance.now(), slowBy()); // reduced motion: the marbles jump
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
   }
