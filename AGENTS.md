@@ -56,5 +56,8 @@ The short version:
     long".
 14. A red e2e spec on `main` gets a `bug` issue the same day, and a full run is counted with
     `--reporter=json`, not by grepping the list output (#1048 broke 59 specs unseen until #1061).
+15. Small and simple PRs (KISS), but each one brings something the user can test: no micro PR without a
+    visible change. Plumbing (tokens, helpers, a core without its UI) goes into the first feature that
+    uses it; a feature is split by what a player can try, not by layer (owner, 2026-10-31).
 
 Setup, checks and e2e commands: [CONTRIBUTING.md section 13](CONTRIBUTING.md#13-local-setup-and-checks).
