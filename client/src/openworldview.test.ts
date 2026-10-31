@@ -806,6 +806,66 @@ describe('the Open world view frees the instance buffers of each mesh (#991)', (
   });
 });
 
+describe('a replaced geometry is freed after the frame that may use it, not at once (#1017)', () => {
+  it('keeps a model geometry that replaces a procedural one until the next draw, then frees it', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    expect(disposeGeometry.mock.contexts).not.toContain(procedural);
+    view.drain();
+    expect(disposeGeometry.mock.contexts).toContain(procedural);
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the geometry and the mesh that a growth replaces until the next draw, then frees them', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const disposeMesh = vi.spyOn(THREE.InstancedMesh.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain')).not.toBe(old);
+    expect(disposeGeometry.mock.contexts).not.toContain(old.geometry);
+    expect(disposeMesh.mock.contexts).not.toContain(old);
+    view.drain();
+    expect(disposeGeometry.mock.contexts).toContain(old.geometry);
+    expect(disposeMesh.mock.contexts).toContain(old);
+    vi.restoreAllMocks();
+  });
+
+  it('frees what it still holds when it is disposed before any draw', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.dispose();
+    expect(disposeGeometry.mock.contexts).toContain(procedural);
+    vi.restoreAllMocks();
+  });
+
+  it('frees a replaced geometry once, however often it is drained', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.drain();
+    view.drain();
+    expect(disposeGeometry.mock.contexts.filter((g) => g === procedural)).toHaveLength(1);
+    vi.restoreAllMocks();
+  });
+});
+
 describe('the biomes look (openworld-terrain.md section 4, #984)', () => {
   const at = (height: number, terrain: Terrain, biome: Biome): Tile => ({ height, terrain, biome });
   // The chunks of the square -2..2, each one biome by its column (`cx` mod 5 is the biome code), with a tree or a boulder
