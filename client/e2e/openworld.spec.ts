@@ -602,6 +602,32 @@ test('a step hops the hero: it rises mid-step and lands on its cell, #1100', asy
   expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.04); // up to 0.08 cell at mid-step
 });
 
+// #1138: the plate shows at the load, folds to a chip after 3 steps, and the chip opens it again.
+test('the Open world HUD plate folds after 3 steps and the chip reopens it, #1138', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const plate = page.locator('#openworld-hud');
+  const chip = page.locator('#openworld-chip');
+  await expect(plate).toBeVisible();
+  await expect(chip).toBeHidden();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowRight']) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(250);
+  }
+  await expect(plate).toBeHidden(); // folded: out of sight
+  await expect(chip).toBeVisible();
+  const box = (await chip.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  await chip.click();
+  await expect(plate).toBeVisible();
+  await expect(chip).toBeHidden();
+});
+
 // #1138: the HUD plate is the dark plate with rivets (four radial gradients), whatever the system theme.
 test('the Open world HUD plate is dark with four rivets, #1138', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
