@@ -966,3 +966,8 @@ body[data-openworld] #dock-wrap { display: none !important; }
 #dock-wrap button:active:not(:disabled) { transform: scale(0.96); }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(8px); } }
 #dock-wrap #mode-menu, #dock-wrap #goal-sheet, #dock-wrap #daily-card, #dock-wrap #lobby-sheet { animation: sheet-in var(--motion-base) var(--ease-out); }
+
+/* HUD tally motion (#1095, docs/specs/motion.md story 5): a pip that has just gone out grows back to size on --motion-base, so a change
+   in the count catches the eye. The pip and the score text already carry the number; reduced motion cuts the animation (rule above). */
+@keyframes pip-out { from { transform: rotate(20deg) scale(2); } }
+#hud .pip.fresh { animation: pip-out var(--motion-base) var(--ease-out); }

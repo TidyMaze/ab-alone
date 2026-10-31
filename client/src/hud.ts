@@ -16,16 +16,17 @@ export interface HudState {
   end?: EndBanner; // once over: the end banner (#282), replaces the turn line text
   rematch?: string; // online games only, once over: who asked for a rematch (rematchText)
   tally?: string; // Tally's line at the start of a match, '' or absent once the first move is made (#294)
+  was?: readonly [number, number]; // the ejected counts of the last render: a pip newly out moves once (#1095)
   turn?: string; // co-op, a human ply: Your turn or Partner's turn (coopTurn) in place of "Black to move" (#530)
 }
 
 /** A side's marble colour, for its row of pips (#1038): the side wearing the pale glass is White, the others Black. */
 const marble = (side: number, glass: number): string => (side === glass ? 'pale' : 'dark');
 
-const pips = (out: number, slots: number): string =>
-  Array.from({ length: slots }, (_, i) => `<span class="pip${i < out ? ' out' : ''}"></span>`).join('');
+const pips = (out: number, slots: number, was = out): string =>
+  Array.from({ length: slots }, (_, i) => `<span class="pip${i < out ? ' out' : ''}${i >= was && i < out ? ' fresh' : ''}"></span>`).join('');
 
-export function hudHtml({ side, status, glass, score, ejected, win, note, online, rematch, end, tally = '', turn: ply }: HudState): string {
+export function hudHtml({ side, status, glass, score, ejected, win, note, online, rematch, end, tally = '', turn: ply, was }: HudState): string {
   const over = status !== 0;
   const turn = end ? end.title : over ? (status === 3 ? 'Draw' : `${sideName(status, glass)} wins`) : (ply ?? `${sideName(side, glass)} to move`);
   const marker = `<span class="marker ${over ? 'over' : side === 1 ? 'black' : 'white'}" aria-hidden="true"></span>`;
@@ -38,7 +39,7 @@ export function hudHtml({ side, status, glass, score, ejected, win, note, online
     (online ? `<div class="presence ${online.tone}">${online.text}</div>` : '') +
     (rematch ? `<div class="rematch">${rematch}</div>` : '') +
     `<div class="score">${score}</div>` +
-    `<div class="pips" aria-hidden="true"><span class="${marble(1, glass)}">${pips(ejected[0], win[0])}</span><span class="${marble(2, glass)}">${pips(ejected[1], win[1])}</span></div>` +
+    `<div class="pips" aria-hidden="true"><span class="${marble(1, glass)}">${pips(ejected[0], win[0], was?.[0])}</span><span class="${marble(2, glass)}">${pips(ejected[1], win[1], was?.[1])}</span></div>` +
     `<small>${note}</small>`
   );
 }
