@@ -664,6 +664,7 @@ body[data-reading] #log { visibility: visible; }
 }
 #replay-bar[hidden] { display: none; }
 #replay-slider { width: 100%; margin: 0; accent-color: var(--accent); }
+@media (pointer: coarse) { #replay-slider { height: 2.75rem; } } /* a 44 px target to drag on a touch screen (#928) */
 #replay-bar .steps { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 #replay-bar button {
   min-width: 2rem; padding: 0.25rem 0.5rem; cursor: pointer; color: var(--text); background: var(--panel);
