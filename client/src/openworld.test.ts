@@ -162,10 +162,11 @@ describe('what the hero can break (#1147)', () => {
     w.chunk(1, 0); // evicts chunk (0, 0)
     expect(w.tile(3, 3)!.terrain).toBe('rock');
     const fresh = new World(cells);
-    fresh.restore([[3, 3], [5, 5]]);
+    fresh.restore([[3, 3], [5, 5], [1, 1]]); // a cell with no obstacle (a stale save) stays as it is
     expect(fresh.tile(3, 3)!.terrain).toBe('rock');
     expect(fresh.tile(5, 5)!.terrain).toBe('grass');
-    expect(fresh.broken).toEqual([[3, 3], [5, 5]]);
+    expect(fresh.tile(1, 1)!.terrain).toBe('grass');
+    expect(fresh.broken).toEqual([[3, 3], [5, 5], [1, 1]]);
   });
 });
 
