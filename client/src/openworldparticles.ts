@@ -24,10 +24,10 @@ export interface Look {
 
 /** The ambient particles by biome, born within `RADIUS` cells of the hero. The badlands have none. */
 export const AMBIENT: Partial<Record<Biome, Look>> = {
-  meadow: { rate: 5, life: 4000, lift: 0.1, spread: 1.2, rise: 0.1, sway: 0.25, size: 0.07, colour: 0xffe27a },
-  forest: { rate: 3, life: 6000, lift: 2.2, spread: 0.6, rise: -0.35, sway: 0.4, size: 0.07, colour: 0xd9822b },
-  tundra: { rate: 8, life: 5000, lift: 2.4, spread: 0.8, rise: -0.45, sway: 0.15, size: 0.07, colour: 0xffffff },
-  desert: { rate: 4, life: 3000, lift: 0.05, spread: 0.5, rise: 0.15, sway: 0.3, size: 0.05, colour: 0xe0b878 },
+  meadow: { rate: 12, life: 4000, lift: 0.2, spread: 1.4, rise: 0.12, sway: 0.35, size: 0.14, colour: 0xfff0a0 },
+  forest: { rate: 8, life: 6000, lift: 2.2, spread: 0.8, rise: -0.35, sway: 0.5, size: 0.15, colour: 0xe08a2e },
+  tundra: { rate: 11, life: 5000, lift: 2.4, spread: 1.0, rise: -0.45, sway: 0.25, size: 0.17, colour: 0xffffff },
+  desert: { rate: 14, life: 3000, lift: 0.1, spread: 0.8, rise: 0.15, sway: 0.4, size: 0.14, colour: 0xf0c888 },
 };
 
 /** The dust puff of a step: `count` grains thrown outward from the cell the hero leaves, gone within `life` ms. */
@@ -69,6 +69,7 @@ export class ParticlePool {
   private readonly life: Float32Array;
   private last = -Infinity;
   private owed = 0;
+  private warm = false;
   private seed = 2463534242;
 
   constructor(readonly cap: number) {
@@ -82,7 +83,7 @@ export class ParticlePool {
     this.phase = new Float32Array(cap);
     this.size = new Float32Array(cap);
     this.colour = new Uint32Array(cap);
-    this.born = new Float64Array(cap);
+    this.born = new Float64Array(cap).fill(-Infinity); // no slot is alive at any time, past times included
     this.life = new Float32Array(cap);
   }
 
@@ -148,12 +149,21 @@ export class ParticlePool {
       this.owed = 0;
       return;
     }
+    // The first look of a pool (after a clear too) starts the world already alive: the particles a steady state holds, at random
+    // points of their life.
+    for (let k = this.warm ? 0 : Math.floor((look.rate * look.life) / 1000); k > 0; k--) this.bear(look, hero, now - this.random() * look.life * 0.9);
+    this.warm = true;
     this.owed += (look.rate * gap) / 1000;
     for (; this.owed >= 1; this.owed--) {
-      const angle = this.random() * 2 * Math.PI;
-      const far = Math.sqrt(this.random()) * RADIUS;
-      this.spawn(look, hero.x + Math.cos(angle) * far, hero.y + look.lift + this.random() * look.spread, hero.z + Math.sin(angle) * far, now, 0, 0);
+      this.bear(look, hero, now);
     }
+  }
+
+  /** Born at `at` (ms), somewhere within `RADIUS` cells of `hero`. */
+  private bear(look: Look, hero: { x: number; y: number; z: number }, at: number): void {
+    const angle = this.random() * 2 * Math.PI;
+    const far = Math.sqrt(this.random()) * RADIUS;
+    this.spawn(look, hero.x + Math.cos(angle) * far, hero.y + look.lift + this.random() * look.spread, hero.z + Math.sin(angle) * far, at, 0, 0);
   }
 
   /** The dust puff of a step: `PUFF.count` grains thrown outward from (`x`, `y`, `z`) at `now`. */
@@ -168,5 +178,6 @@ export class ParticlePool {
   clear(): void {
     this.life.fill(0);
     this.owed = 0;
+    this.warm = false;
   }
 }

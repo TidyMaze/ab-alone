@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AMBIENT, capFor, PUFF, ParticlePool, type Look } from './openworldparticles';
 
 const hero = { x: 0, y: 1, z: 0 };
+/** A look that spends the warm start and spawns nothing. */
+const QUIET: Look = { ...AMBIENT.tundra!, rate: 0, life: 0 };
 const pose = { x: 0, y: 0, z: 0, s: 0, colour: 0 };
 /** Steps the pool every 16 ms from `from` up to `to` ms. */
 function run(pool: ParticlePool, look: Look | undefined, to: number, from = 0): void {
+  if (from === 0) pool.step(-16, hero, QUIET); // no warm start here: the pool is empty at 0
   for (let t = from; t <= to; t += 16) pool.step(t, hero, look);
 }
 
@@ -40,6 +43,23 @@ describe('ParticlePool', () => {
     }
   });
 
+  it('starts a biome already alive, most of the pool, at random points of the particles life', () => {
+    const pool = new ParticlePool(64);
+    pool.step(0, hero, AMBIENT.tundra);
+    expect(pool.alive(0)).toBeGreaterThanOrEqual(40);
+    expect(pool.alive(0)).toBeLessThanOrEqual(64);
+  });
+
+  it('warms up on the first look, not on a first frame without one, and again after a clear', () => {
+    const pool = new ParticlePool(64);
+    pool.step(0, hero, undefined);
+    pool.step(16, hero, AMBIENT.tundra);
+    expect(pool.alive(16)).toBeGreaterThanOrEqual(40);
+    pool.clear();
+    pool.step(32, hero, AMBIENT.tundra);
+    expect(pool.alive(32)).toBeGreaterThanOrEqual(40);
+  });
+
   it('never grows past a small cap, and drops the spawn that finds no slot', () => {
     const pool = new ParticlePool(3);
     run(pool, AMBIENT.tundra, 3000);
@@ -49,6 +69,7 @@ describe('ParticlePool', () => {
   it('moves a particle as a pure function of time: snow falls, pollen rises, a leaf falls', () => {
     for (const [biome, dir] of [['tundra', -1], ['meadow', 1], ['forest', -1]] as const) {
       const pool = new ParticlePool(1);
+      pool.step(-1, hero, QUIET);
       pool.step(0, hero, { ...AMBIENT[biome]!, rate: 1000 });
       expect(pool.pose(0, 1000, pose)).toBe(true);
       const y0 = pose.y;
@@ -63,6 +84,7 @@ describe('ParticlePool', () => {
   it('fades a particle in at its birth and out at its end, and frees the slot after its life', () => {
     const look = { ...AMBIENT.tundra!, rate: 1000 };
     const pool = new ParticlePool(1);
+    pool.step(-1, hero, QUIET);
     pool.step(0, hero, look);
     expect(pool.pose(0, 0, pose)).toBe(true);
     expect(pose.s).toBe(0); // just born
@@ -88,6 +110,7 @@ describe('ParticlePool', () => {
 
   it('caps what a long pause of the frames owes (a hidden tab)', () => {
     const pool = new ParticlePool(64);
+    pool.step(-1, hero, QUIET);
     pool.step(0, hero, AMBIENT.tundra);
     pool.step(600000, hero, AMBIENT.tundra);
     expect(pool.alive(600000)).toBeLessThanOrEqual(3);
