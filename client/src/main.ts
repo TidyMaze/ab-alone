@@ -178,8 +178,9 @@ import { icon } from './icons';
 import { fpsAt, fpsLabel, fpsOf, keepWindow, stampDrawn } from './fps';
 import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
-import { DECK_TINTS, POOL, poolPixels, readRoom, roomRig } from './roomrefined';
-import { FLOOR, GLOW, WALL, floorPixels, gantryArches, glowRingPixels, props as decorProps, refineBay, rivetPoints, wallPixels, wallStrips, type DecorPart } from './roomdecor';
+import { readRoom } from './roomrefined';
+import { buildRefinedRoom } from './roomscene';
+import { flatBay } from './roomdecor';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
@@ -395,7 +396,7 @@ renderer.lighting = clustered ? new ClusteredLighting() : new CulledLighting();
 const loader = new KTX2Loader().detectSupport(renderer);
 // The bay's model and maps are requested here, with the first maps below, not after the skins (#925): the room is ready
 // as soon as the scene is. mountBay takes them when the scene exists.
-const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader);
+const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader, refined ? 'deck' : 'all');
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
@@ -1791,64 +1792,6 @@ const refreshLights = (): void => {
 };
 // What the last look made, disposed when the next replaces it (#846): a setting is a rebuild, never a leak.
 let propMeshes: THREE.Mesh[] = [];
-const decorTexture = (pixels: Uint8Array, size: number, repeat?: readonly [number, number]): THREE.DataTexture => {
-  const t = Object.assign(new THREE.DataTexture(pixels, size, size), { colorSpace: THREE.SRGBColorSpace, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, needsUpdate: true });
-  if (repeat) {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(...repeat);
-  }
-  return t;
-};
-// The refined room's decor (#1138, roomdecor.ts): the textures are generated once, the meshes rebuilt with the props.
-const decorWall = decorTexture(wallPixels(128), 128, WALL.repeat);
-const floorTexture = decorTexture(floorPixels(512), 512);
-const decorMesh = (p: DecorPart): THREE.Mesh => {
-  const [a, b, c, d] = p.size as [number, number, number, number];
-  const geometry = p.type === 'box' ? new THREE.BoxGeometry(a, b, c) : new THREE.CylinderGeometry(a, b, c, d);
-  const material = new THREE.MeshStandardMaterial({ color: p.color, roughness: p.roughness, metalness: p.metalness, ...(p.emissive ? { emissive: p.emissive, emissiveIntensity: 3 } : {}) });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = p.id;
-  mesh.position.set(...p.position);
-  mesh.rotation.set(...p.rotation);
-  return mesh;
-};
-const planeMesh = (geometry: THREE.BufferGeometry, map: THREE.Texture, roughness: number, at: [number, number, number]): THREE.Mesh => {
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ map, roughness, metalness: 0.3 }));
-  mesh.position.set(...at);
-  return mesh;
-};
-const wallMesh = (): THREE.Mesh => planeMesh(new THREE.PlaneGeometry(WALL.width, WALL.height), decorWall, 0.8, [0, WALL.y, WALL.z]);
-const floorMesh = (): THREE.Mesh => {
-  const mesh = planeMesh(new THREE.PlaneGeometry(FLOOR.size, FLOOR.size).rotateX(-Math.PI / 2), floorTexture, 0.7, [0, ROOM_SURFACE.y + 0.004, 0]);
-  Object.assign(mesh.material, { transparent: true, depthWrite: false });
-  return mesh;
-};
-// The soft ring of the deck's tint round the board, an additive decal, not a light.
-const glowTexture = decorTexture(glowRingPixels(128), 128);
-const glowMesh = (tint: number): THREE.Mesh => {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(GLOW.size, GLOW.size).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ map: glowTexture, color: tint, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
-  );
-  mesh.position.y = ROOM_SURFACE.y + 0.006;
-  return mesh;
-};
-// Rivets along the frame's rim and a thin cyan line on its inner edge, made again with each frame (#1138).
-const trim = Object.assign(new THREE.Group(), { name: 'frame trim' });
-const rivetGeometry = new THREE.SphereGeometry(0.035, 6, 4);
-const rivetMaterial = new THREE.MeshStandardMaterial({ color: 0x9aa3ab, roughness: 0.4, metalness: 0.7 });
-const edgeLineMaterial = new THREE.LineBasicMaterial({ color: 0x6fa8dc });
-function drawTrim(shape: FrameShape): void {
-  for (const child of trim.children) (child as THREE.Line).geometry?.dispose();
-  trim.clear();
-  const rivets = rivetPoints(shape.outer, 0.5);
-  const mesh = new THREE.InstancedMesh(rivetGeometry, rivetMaterial, rivets.length);
-  rivets.forEach((p, i) => mesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(p.x, 0.31, p.z)));
-  const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(shape.inner.map((p) => new THREE.Vector3(p.x, 0.31, p.z))), edgeLineMaterial);
-  trim.add(mesh, line);
-}
-sceneRenderer.scene.add(trim);
-const poolTexture = Object.assign(new THREE.DataTexture(poolPixels(64), 64, 64), { colorSpace: THREE.SRGBColorSpace, needsUpdate: true });
 drawProps = (): void => {
   for (const mesh of propMeshes) {
     mesh.geometry.dispose();
@@ -1857,7 +1800,7 @@ drawProps = (): void => {
   propMeshes = [];
   propsGroup.clear();
   const sLights = spaceshipLights(deck);
-  for (const def of spaceshipArchitecture(tier)) {
+  for (const def of refined ? [] : spaceshipArchitecture(tier)) {
     let mat: THREE.Material;
     const screen = def.id === 'console-screen';
     if (screen) {
@@ -1967,34 +1910,15 @@ drawProps = (): void => {
     for (const tube of propsGroup.children.filter((o) => o.name.includes('neon')))
       propsGroup.add(...tubeLights(tube as THREE.Mesh));
   const ring = ringLamp();
-  propsGroup.add(...ring.meshes, ...(refined ? [] : ring.lights));
-  propMeshes.push(...ring.meshes);
+  if (!refined) {
+    propsGroup.add(...ring.meshes, ...ring.lights);
+    propMeshes.push(...ring.meshes);
+  }
   if (refined) {
-    // The refined room (#1138): the rig of roomrefined.ts instead of every tube's row, and a baked pool of light under the board.
-    for (const l of roomRig(deck, fight !== null)) {
-      const light = new THREE.PointLight(l.color, l.power, l.reach);
-      light.name = l.name;
-      light.position.set(...l.position);
-      propsGroup.add(light);
-    }
-    const pool = new THREE.Mesh(
-      new THREE.CircleGeometry(POOL.radius, 48).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ map: poolTexture, transparent: true, opacity: POOL.opacity, depthWrite: false, fog: false }),
-    );
-    for (const part of [...wallStrips(deck), ...gantryArches(), ...decorProps(deck)]) {
-      const mesh = decorMesh(part);
-      propsGroup.add(mesh);
-      propMeshes.push(mesh);
-    }
-    for (const [name, mesh] of [['wall', wallMesh()], ['floor', floorMesh()], ['glow', glowMesh(DECK_TINTS[deck])]] as const) {
-      mesh.name = name;
-      propsGroup.add(mesh);
-      propMeshes.push(mesh);
-    }
-    pool.name = 'light pool';
-    pool.position.y = ROOM_SURFACE.y + POOL.y;
-    propsGroup.add(pool);
-    propMeshes.push(pool);
+    // The refined room (#1138): a key, a fill, the strips, the wall, a hazard stripe and four crates (roomscene.ts).
+    const room = buildRefinedRoom(deck, fight !== null);
+    propsGroup.add(...room.objects);
+    propMeshes.push(...room.meshes);
   }
   const viewportRimLight = new THREE.PointLight(sLights.rim, 2.7, 11.0);
   viewportRimLight.position.set(17.0, 4.6, 0);
@@ -2005,10 +1929,11 @@ drawProps = (): void => {
   if (!refined) propsGroup.add(...Object.values(lights));
   if (currentBay) {
     applyDeckAtmosphere(currentBay, deck as DeckId);
-    if (refined) refineBay(currentBay.materials);
+    if (refined) flatBay(currentBay.scene, currentBay.materials);
     propsGroup.add(currentBay.scene);
   }
   refreshLights();
+  dirty = CHANGE_DRAWS; // a new deck or look repaints the room
 };
 let currentBay: SpaceshipBayAssets | null = null;
 const mountBay = (bay: SpaceshipBayAssets | null): void => {
@@ -2036,7 +1961,6 @@ function drawFrame(board: ArrayLike<number>): void {
   const next = sceneRenderer.drawFrame(board);
   if (!next) return;
   frame = next;
-  if (refined) drawTrim(next);
   fogRadius = next.radius;
   applyLook();
 }
