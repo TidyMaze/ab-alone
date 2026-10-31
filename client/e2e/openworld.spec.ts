@@ -577,3 +577,27 @@ test('a glide of the hero turns its stripe: two frames in between differ on the 
   }, [first.toString('base64'), second.toString('base64')] as const);
   expect(difference).toBeGreaterThan(0);
 });
+
+// #1100: a step hops. The page records the hero's drawn height (the third number of `openworldGlide`) over a slowed step: it rises
+// above the height it has on its cell and is back on it at the end. Reduced motion has no glide, hence no hop.
+test('a step hops the hero: it rises mid-step and lands on its cell, #1100', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  await page.evaluate(() => {
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [] });
+    (window as unknown as { __openworldSlow: number }).__openworldSlow = 10;
+  });
+  await page.keyboard.press('ArrowRight');
+  const heights: number[] = [];
+  for (let i = 0; i < 40; i++) {
+    const glide = await page.evaluate(() => document.body.dataset.openworldGlide);
+    if (glide) heights.push(Number(glide.split(',')[2]));
+    if (i === 8) await page.screenshot({ path: test.info().outputPath('hop-mid-step.png') });
+    await page.waitForTimeout(40);
+  }
+  expect(heights.length).toBeGreaterThan(5);
+  expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.04); // up to 0.08 cell at mid-step
+});

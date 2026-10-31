@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
-import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM } from './openworldglide';
+import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
 import {
   BIOME_LOOK,
   CAPACITY,
@@ -1581,6 +1581,18 @@ describe('the step glide of the hero and the troop (docs/specs/openworld.md sect
     expect(between(placeOf(view, 'troop', 1).x, xOf([-2, 0]), xOf([-1, 0]))).toBe(true);
     view.tick(GLIDE_MS);
     expect(inCell(placeOf(view, 'troop', 0), [0, 0])).toBe(true);
+    expect(inCell(placeOf(view, 'troop', 1), [-1, 0])).toBe(true);
+  });
+
+  it('the troop follows the hero a little later and lands with it, and hops (#1100)', () => {
+    const view = standing();
+    view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
+    view.tick(TROOP_DELAY * 2);
+    expect(inCell(placeOf(view, 'troop', 1), [-2, 0])).toBe(true); // the second marble has not started
+    expect(between(placeOf(view, 'hero').x, xOf([0, 0]), xOf([1, 0]))).toBe(true);
+    view.tick(GLIDE_MS / 2);
+    expect(placeOf(view, 'hero').y).toBeGreaterThan(placeOf(view, 'troop', 1).y - 1); // drawn, hopping
+    view.tick(GLIDE_MS);
     expect(inCell(placeOf(view, 'troop', 1), [-1, 0])).toBe(true);
   });
 

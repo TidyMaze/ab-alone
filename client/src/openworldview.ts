@@ -6,7 +6,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { FightState, type Pushed } from './openworldfight';
-import { Marble, type Pace, ROLL_ZOOM, type Vec } from './openworldglide';
+import { Marble, type Pace, ROLL_ZOOM, TROOP_DELAY, type Vec } from './openworldglide';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
 import { stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
@@ -588,7 +588,8 @@ export class OpenWorldView {
   private glideTo(at: Axial, troop: readonly Axial[], { now, span, pace }: { now: number; span: number; pace?: Pace }): void {
     const roll = this.drawnLevel <= ROLL_ZOOM;
     [at, ...troop].forEach((cell, i) => {
-      if (this.marbleAt(i).go(this.standing(cell), now, span, roll, pace)) this.landed = Math.max(this.landed, now + span);
+      const delay = roll ? Math.min(i * TROOP_DELAY, span / 2) : 0; // the troop follows the hero, each marble a little later, landing with it (#1100)
+      if (this.marbleAt(i).go(this.standing(cell), now, span - delay, roll, pace, delay)) this.landed = Math.max(this.landed, now + span);
     });
   }
 
@@ -682,6 +683,11 @@ export class OpenWorldView {
   /** The point the camera looks at, on the ground under the hero (the tests and the browser checks read it). */
   get focusPoint(): THREE.Vector3 {
     return this.focus;
+  }
+
+  /** The drawn height of the hero, hop included (the browser checks read it, #1100). */
+  get heroY(): number {
+    return this.hero.position.y;
   }
 
   /** Whether a push is still drawn in between its cells. */
