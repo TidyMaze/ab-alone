@@ -559,10 +559,13 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     const snap = vi.spyOn(OpenWorldView.prototype, 'snap');
     const play = vi.spyOn(OpenWorldView.prototype, 'playPush');
     const m = pushing();
+    snap.mockClear(); // the fixture snaps too
+    play.mockClear();
     m.frame(vi.fn(), 0);
     m.key('ArrowRight');
     m.frame(vi.fn(), 100);
-    m.key('ArrowRight'); // the hero rolls on, the line pushes again
+    m.release('ArrowRight');
+    m.key('ArrowLeft'); // the hero rolls back (the enemy on (3,0) blocks the way on): the bridge pushes again
     expect(snap).toHaveBeenCalledTimes(2);
     expect(play).toHaveBeenCalledTimes(2);
     expect(snap.mock.invocationCallOrder[1]).toBeLessThan(play.mock.invocationCallOrder[1]!);
@@ -571,8 +574,10 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
   it('a zoom and a resize during the animation snap it too', () => {
     const snap = vi.spyOn(OpenWorldView.prototype, 'snap');
     const m = pushing();
+    snap.mockClear(); // the fixture snaps too
     m.frame(vi.fn(), 0);
     m.key('ArrowRight');
+    snap.mockClear();
     m.zoom(1.2);
     expect(snap).toHaveBeenCalledTimes(1);
     m.resize(400, 300);

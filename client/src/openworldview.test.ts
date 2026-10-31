@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
@@ -26,6 +26,8 @@ import {
   variety,
   WATER,
   maxZoomFor,
+  MARBLE,
+  type Played,
   waterColor,
 } from './openworldview';
 
@@ -1002,8 +1004,9 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
   });
   const SQUARE = (cx: number, cy: number): Uint8Array => (Math.abs(cx) > 3 || Math.abs(cy) > 3 ? new Uint8Array() : grass());
   // The view once the push is played: the state the mode draws at once, on the final cells.
-  function settled(played: Played, load = SQUARE): OpenWorldView {
+  function settled(played: Played, load = SQUARE, standing: Axial[] = []): OpenWorldView {
     const fight = new FightState();
+    fight.apply([], standing, []); // enemies already on the board before the push
     fight.apply(played.foes, played.push.enemies, played.push.ejected);
     const view = new OpenWorldView(new World(load), fight);
     view.show(played.push.troop[0]!, played.push.troop.slice(1));
@@ -1060,6 +1063,16 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     expect(between(placeOf(view, 'enemies').x, axialTo3D(2, 0).x, axialTo3D(3, 0).x)).toBe(true);
     view.tick(410);
     expect(inCell(placeOf(view, 'enemies'), [3, 0])).toBe(true);
+  });
+
+  it('an enemy of the fight that the push leaves where it is does not move while the others slide', () => {
+    const played: Played = { ...pushOf(), foes: [[2, 0], [9, 9]], push: { ...pushOf().push, enemies: [[3, 0], [9, 9]] } };
+    const view = settled(played, SQUARE, [[9, 9]]);
+    view.playPush(played, 0);
+    view.tick(285);
+    const drawn = Array.from({ length: view.enemyCount }, (_, i) => placeOf(view, 'enemies', i));
+    expect(drawn.some((p) => inCell(p, [9, 9]))).toBe(true);
+    expect(drawn.some((p) => inCell(p, [3, 0]) || between(p.x, axialTo3D(2, 0).x, axialTo3D(3, 0).x))).toBe(true);
   });
 
   it('a push by the troop alone leaves the hero where it is, and animates the marbles that move', () => {
@@ -1161,8 +1174,8 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     const view = new OpenWorldView(new World(SQUARE)); // no fight: the enemies of the push are not drawn
     view.show([2, 0], [[1, 0], [0, 0], [-2, 0]]);
     view.playPush(pushOf(), 0);
-    expect(view.tick(400)).toBe(true);
-    expect(view.tick(410)).toBe(true);
+    expect(view.tick(400)).toBe(true); // the lunge is the whole push
+    expect(view.tick(410)).toBe(false);
     expect(view.animating).toBe(false);
   });
 

@@ -6,7 +6,7 @@ import type { Axial } from './board';
 import { arrowCell } from './hubview';
 import { chunkOf, Hero, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
-import { MAX_REACH, OpenWorldView, type PropModels } from './openworldview';
+import { MAX_REACH, OpenWorldView, type Played, type PropModels } from './openworldview';
 
 /** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
  * the enemies near the hero, all `q, r` pairs; its answer is empty when no push is legal (`readPush`). */
@@ -14,6 +14,9 @@ export type TroopPush = (seed: number, troop: Int32Array, enemies: Int32Array) =
 
 /** The enemies within this many cells of the hero are the ones a push can reach. */
 export const PUSH_REACH = 10;
+
+/** The slow factor of the pushes' animation: a webdriver check sets `window.__openworldSlow` to see a push in the middle of it. */
+const slowBy = (): number => Number((window as { __openworldSlow?: number }).__openworldSlow ?? 1);
 
 /** The cells as the bridge takes them: `q, r` pairs. */
 const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat());
@@ -107,6 +110,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldPush;
     delete document.body.dataset.openworldZoom;
     delete document.body.dataset.openworldDrawn;
+    delete document.body.dataset.openworldAnim;
   }
 
   /** The enemy marbles near the hero now, the pushed ones where they stand (the browser checks read them). */
@@ -117,6 +121,7 @@ export class OpenWorldMode {
   /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the
    * enemies of the loaded square replaced by `enemies`, none pushed. */
   fixture({ hero, troop, enemies }: { hero: Axial; troop: Axial[]; enemies: Axial[] }): void {
+    this.view!.snap();
     const [cx, cy] = chunkOf(hero);
     this.fight.reset();
     this.fight.hide(this.world!, cx, cy, MAX_REACH);
@@ -131,6 +136,7 @@ export class OpenWorldMode {
 
   /** A new window size: the view follows it, and the zoom it may have been clamped to is published (#976). */
   resize(width: number, height: number): void {
+    this.view?.snap();
     this.view?.resize(width, height);
     this.dirty = true;
     if (this.active) this.mark(document.body.dataset.openworld!);
@@ -161,6 +167,7 @@ export class OpenWorldMode {
 
   /** Zooms the Open world camera by `scale`: more than 1 further out, less than 1 closer (#976). */
   zoom(scale: number): void {
+    this.view!.snap();
     this.view!.zoomBy(scale);
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
@@ -174,6 +181,8 @@ export class OpenWorldMode {
     this.clock = now;
     const reduced = this.reduced();
     if (this.view!.ease(seconds, reduced)) this.dirty = true;
+    if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
+    this.anim();
     const moving = !reduced && this.view!.hasWater;
     if (!this.dirty && !moving) return;
     this.dirty = false;
@@ -184,27 +193,39 @@ export class OpenWorldMode {
 
   private roll(to: Axial): void {
     if (!this.hero!.step(to)) return;
-    this.troopPush();
+    this.view!.snap(); // a step during a push's animation ends it first (#967)
+    const played = this.troopPush();
     this.view!.show(this.hero!.at, this.hero!.troop);
     this.view!.updateEnemies();
+    if (played && !this.reduced()) this.view!.playPush(played, this.clock, slowBy()); // reduced motion: the marbles jump
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
   }
 
   /** The troop's attack after a step: the bridge plays the legal push, if there is one, on the hero, the troop and the enemies near
-   * the hero. The hero and the troop take the cells it gives (the hero's first), the enemies are kept in the fight. */
-  private troopPush(): void {
+   * the hero. The hero and the troop take the cells it gives (the hero's first), the enemies are kept in the fight. Returns the push
+   * as it was played, from the cells before it, for its animation; `null` when no push was legal. */
+  private troopPush(): Played | null {
     const enemies = this.enemies();
-    const pushed = readPush(this.push(this.seed, flat([this.hero!.at, ...this.hero!.troop]), flat(enemies)));
-    if (!pushed) return;
+    const from = [this.hero!.at, ...this.hero!.troop];
+    const pushed = readPush(this.push(this.seed, flat(from), flat(enemies)));
+    if (!pushed) return null;
     this.fight.apply(enemies, pushed.enemies, pushed.ejected);
     const [hero, ...troop] = pushed.troop;
     this.hero!.at = hero!;
     this.hero!.troop = troop;
     this.pushes++;
+    return { from, foes: enemies, push: pushed };
+  }
+
+  /** The mark of a push being drawn (`openworldAnim`, for the browser checks): set while the view draws it, removed otherwise. */
+  private anim(): void {
+    if (this.view?.animating) document.body.dataset.openworldAnim = '1';
+    else delete document.body.dataset.openworldAnim;
   }
 
   private mark(seed: string): void {
+    this.anim();
     document.body.dataset.openworld = seed;
     document.body.dataset.openworldAt = this.hero!.at.join(',');
     document.body.dataset.openworldTroop = this.hero!.troop.map((c) => c.join(',')).join(' ');
