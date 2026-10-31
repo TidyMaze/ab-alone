@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Diagnostics, copyText, gameInfo, layout } from './diagnostics';
+import { Diagnostics, copyText, gameInfo, layout, renderCostText } from './diagnostics';
 import { MoveLog } from './movelog';
 import { generateKeys } from './moverecord';
 
@@ -110,6 +110,7 @@ describe('Diagnostics text', () => {
     diag.netState('open');
     diag.refused('malformed');
     const text = diag.text({
+      renderCost: 'draw calls: 1',
       build: 'abc123',
       exported: '2026-10-24T10:00:00.000Z',
       environment: { backend: 'WebGL2' },
@@ -121,6 +122,7 @@ describe('Diagnostics text', () => {
       build: 'abc123',
       exported: '2026-10-24T10:00:00.000Z',
       environment: { backend: 'WebGL2' },
+      renderCost: 'draw calls: 1',
       game: { mode: 'bot', layout: 'standard', toMove: 1, status: 0, moves: [M1, M2] },
       counters: { opened: 1, failures: {}, connectMs: [10], refused: { malformed: 1 }, desync: 0 },
       dropped: 0,
@@ -142,6 +144,7 @@ describe('Diagnostics text', () => {
     const { diag } = diagnostics();
     diag.log.log('info', 'oops', { keys, priv: 'secret' });
     const text = diag.text({
+      renderCost: 'draw calls: 1',
       build: 'b',
       exported: 'e',
       environment: { keys },
@@ -180,5 +183,14 @@ describe('copyText', () => {
   it('says so when the clipboard refuses, or is missing outside a secure page', async () => {
     expect(await copyText('hello', { writeText: async () => Promise.reject(new Error('NotAllowedError')) })).toBe(false);
     expect(await copyText('hello', undefined)).toBe(false);
+  });
+});
+
+describe('renderCostText', () => {
+  it('lists the draw calls, triangles, geometries, textures, point lights, tier and pixel ratio', () => {
+    const cost = { calls: 120, triangles: 45_000, geometries: 80, textures: 12, pointLights: 3, tier: 'high', pixelRatio: 1.5 };
+    expect(renderCostText(cost)).toBe(
+      'draw calls: 120\ntriangles: 45000\ngeometries: 80\ntextures: 12\npoint lights: 3\ntier: high\npixel ratio: 1.5',
+    );
   });
 });

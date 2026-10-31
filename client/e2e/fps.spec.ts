@@ -24,6 +24,8 @@ test('the FPS readout is off by default, shows a rate once switched on, and surv
   await page.getByRole('button', { name: 'Copy diagnostics' }).click();
   const diagnostics = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(diagnostics.environment.fps).toBeGreaterThan(0);
+  expect(diagnostics.renderCost).toMatch(/^draw calls: \d+\ntriangles: \d+\ngeometries: \d+\ntextures: \d+\npoint lights: \d+\ntier: \w+\npixel ratio: [\d.]+$/);
+  expect(await page.evaluate(() => (window as any).__renderCost.calls)).toBeGreaterThan(0);
 });
 
 test('marble selection preserves framerate and causes no frame time spikes, bug #777', async ({ page }) => {
