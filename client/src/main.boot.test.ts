@@ -176,6 +176,16 @@ describe('the renderer and its textures', () => {
     expect(report.events.find((e) => e.event === 'start')?.data).toMatchObject({ backend: 'WebGL2' });
   });
 
+  it('reports the render cost in the diagnostics and on window.__renderCost (#851)', async () => {
+    const game = await boot('?bot=off');
+    const report = (await diagnostics(game)) as unknown as { renderCost: string };
+    const cost = (window as unknown as { __renderCost: { calls: number; pointLights: number; tier: string; text: string } }).__renderCost;
+    expect(report.renderCost).toMatch(/^draw calls: \d+\ntriangles: \d+\ngeometries: \d+\ntextures: \d+\npoint lights: \d+\ntier: \w+\npixel ratio: [\d.]+$/);
+    expect(cost.text).toBe(report.renderCost);
+    expect(cost).toMatchObject({ calls: 7, triangles: 300, geometries: 5, textures: 2, tier: 'high' });
+    expect(cost.pointLights).toBeGreaterThan(0);
+  });
+
   describe('on a WebGPU renderer that loads no texture', () => {
     // A renderer of its own in place of the harness's: WebGPU, and every texture load fails.
     function renderer(): { options: unknown[]; draw: () => THREE.Scene } {
@@ -188,6 +198,7 @@ describe('the renderer and its textures', () => {
           domElement = document.createElement('canvas');
           backend = { isWebGPUBackend: true };
           samples: number;
+          info = { render: { calls: 7, triangles: 300 }, memory: { geometries: 5, textures: 2 } };
           constructor(o: unknown) {
             options.push(o);
             this.samples = (o as { antialias: boolean }).antialias ? 4 : 0;

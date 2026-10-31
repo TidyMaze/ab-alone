@@ -51,6 +51,30 @@ export function layout(value: unknown, pad = ''): string {
   return JSON.stringify(value);
 }
 
+/** What one frame costs to render (#851): plain numbers read from `renderer.info`, the scene and the quality tier. */
+export interface RenderCost {
+  calls: number;
+  triangles: number;
+  geometries: number;
+  textures: number;
+  pointLights: number;
+  tier: string;
+  pixelRatio: number;
+}
+
+/** The render cost as one `name: value` line each, for Copy diagnostics and the browser checks. */
+export function renderCostText(c: RenderCost): string {
+  return [
+    `draw calls: ${c.calls}`,
+    `triangles: ${c.triangles}`,
+    `geometries: ${c.geometries}`,
+    `textures: ${c.textures}`,
+    `point lights: ${c.pointLights}`,
+    `tier: ${c.tier}`,
+    `pixel ratio: ${c.pixelRatio}`,
+  ].join('\n');
+}
+
 /** Writes `text` to the clipboard. False when the browser refuses, or has no Clipboard API (not a secure page). */
 export async function copyText(text: string, clipboard: Pick<Clipboard, 'writeText'> | undefined): Promise<boolean> {
   try {
@@ -102,7 +126,7 @@ export class Diagnostics {
   }
 
   /** The Copy diagnostics text: JSON, without any private key. */
-  text(o: { build: string; exported: string; environment: Record<string, unknown>; game: GameInfo }): string {
+  text(o: { build: string; exported: string; environment: Record<string, unknown>; renderCost: string; game: GameInfo }): string {
     return layout(
       scrub({
         app: 'ab-alone',

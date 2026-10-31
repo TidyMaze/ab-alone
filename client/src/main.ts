@@ -41,7 +41,7 @@ import sceneOverrides from './sceneoverrides.json';
 import { ClusteredLighting } from 'three/examples/jsm/lighting/ClusteredLighting.js';
 import { CulledLighting } from './culledlighting';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { Diagnostics, copyText, gameInfo } from './diagnostics';
+import { Diagnostics, copyText, gameInfo, renderCostText, type RenderCost } from './diagnostics';
 import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
@@ -5227,8 +5227,16 @@ const copyButton = document.getElementById('copy-diagnostics') as HTMLButtonElem
 setButton(copyButton, 'Copy diagnostics', `${icon('diagnostics')}<span>Copy diagnostics</span>`);
 menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
+const renderCost = (): RenderCost => {
+  let pointLights = 0;
+  sceneRenderer.scene.traverse((o) => void ((o as THREE.PointLight).isPointLight && pointLights++));
+  const { render, memory } = renderer.info;
+  return { calls: render.calls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pointLights, tier, pixelRatio };
+};
+Object.defineProperty(window, '__renderCost', { configurable: true, get: () => ({ ...renderCost(), text: renderCostText(renderCost()) }) });
 copyButton.addEventListener('click', async () => {
   const text = diag.text({
+    renderCost: renderCostText(renderCost()),
     build: __BUILD__,
     exported: new Date().toISOString(),
     environment: { mode: import.meta.env.MODE, backend, tier, userAgent: navigator.userAgent, fps: fpsOn ? lastFps : null },
