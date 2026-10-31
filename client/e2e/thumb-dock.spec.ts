@@ -117,6 +117,10 @@ for (const { name, viewport } of viewports) {
       const result = await check(page, 'a review');
       expect(result.ui.order).toEqual(['First position', 'Previous move (Left)', 'Next move (Right)', 'Last position', 'Live']);
       await expect(page.locator('#dock > button').first()).toBeHidden();
+      if (await page.evaluate(() => matchMedia('(pointer: coarse)').matches)) {
+        const slider = await page.locator('#replay-slider').boundingBox();
+        expect(slider!.height, 'the slider is a 44 px target on a touch screen, #928').toBeGreaterThanOrEqual(44);
+      }
     });
 
     test('Esc closes the Game modes sheet and gives the focus back to Game modes, bug #1032', async ({ page }) => {
