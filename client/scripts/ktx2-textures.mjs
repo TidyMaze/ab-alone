@@ -35,6 +35,9 @@ export function settings(file) {
       isUASTC: true,
       isNormalMap: true,
       enableRDO: true,
+      // Effort 0 and RDO quality 2 (#926): the bay's normal maps 2.90 MB to 1.66 MB, the same format.
+      uastcLDRQualityLevel: 0,
+      rdoQualityLevel: 2,
       needSupercompression: true,
       isPerceptual: false,
       isSetKTX2SRGBTransferFunc: false,
