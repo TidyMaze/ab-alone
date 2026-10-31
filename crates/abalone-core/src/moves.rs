@@ -41,7 +41,7 @@ pub enum MoveError {
 }
 
 impl Direction {
-    const ALL: [Direction; 6] = [
+    pub(crate) const ALL: [Direction; 6] = [
         Direction::E,
         Direction::W,
         Direction::NE,
