@@ -1,3 +1,11 @@
+---
+id: ui
+type: architecture-design
+status: draft
+title: "UI design direction"
+parent: world
+---
+
 # UI design direction
 
 Status: v0, for issue #88. Covers the page chrome and the flat HUD only. Board and marble

@@ -1,3 +1,11 @@
+---
+id: boss-balance
+type: architecture-design
+status: draft
+title: "Boss balance: can a strong player win? (#170)"
+parent: game-design
+---
+
 # Boss balance: can a strong player win? (#170)
 
 Measured with the bot ladder of #173 (`cargo run --release --example ladder`), 10 seeds per boss,

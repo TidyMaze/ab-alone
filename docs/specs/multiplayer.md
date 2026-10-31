@@ -1,3 +1,11 @@
+---
+id: multiplayer-spike
+type: architecture-design
+status: draft
+title: "Multiplayer sync spike (#58)"
+parent: architecture
+---
+
 # Multiplayer sync spike (#58)
 
 Status: spec, no code. Date of every price check: 2026-10-23.

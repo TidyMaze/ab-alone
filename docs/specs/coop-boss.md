@@ -1,3 +1,12 @@
+---
+id: coop-boss
+type: architecture-design
+status: draft
+title: "Co-op boss fights online (#175)"
+parent: game-design
+references: [architecture]
+---
+
 # Co-op boss fights online (#175)
 
 Two players fight one boss together in an online room. This file holds the v1 rules, decided by the

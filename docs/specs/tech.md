@@ -1,3 +1,11 @@
+---
+id: architecture
+type: architecture-design
+status: draft
+title: Tech architecture and stack
+parent: goal
+---
+
 # Tech architecture and stack
 
 Status: draft v0, for issue #17. Spec only, no code. Feature issues are listed in section 12.
