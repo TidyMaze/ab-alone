@@ -60,6 +60,10 @@ export interface Game {
   room(): string | null;
 }
 
+// The engine's answers are deterministic (a fixed node budget, bot.ts): the evaluation bar asks the same opening position
+// at every boot, a search of ~80 ms. They are kept for the whole test file, keyed by the request but its id (#1079).
+const answers = new Map<string, BotResponse>();
+
 const body = /<body>([\s\S]*)<\/body>/.exec(page)![1]!;
 // Taken before any boot wraps them: a second boot in the same test (a reload) wraps these, not the first wrappers.
 const addListener = window.addEventListener.bind(window);
@@ -246,14 +250,17 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     class {
       onmessage: ((e: MessageEvent<BotResponse>) => void) | null = null;
       postMessage(req: BotRequest): void {
-        setTimeout(() =>
-          this.onmessage?.({
-            data:
-              options.fails === 'worker'
-                ? { id: req.id, error: 'Error: boom' }
-                : answer(req, (army, placed) => engineFor(wasm.Engine, army, placed), (id, seed) => new wasm.Encounter(id, seed)),
-          } as MessageEvent<BotResponse>),
-        );
+        setTimeout(() => {
+          if (options.fails === 'worker') return void this.onmessage?.({ data: { id: req.id, error: 'Error: boom' } } as MessageEvent<BotResponse>);
+          const { id, ...query } = req;
+          const key = JSON.stringify(query);
+          let response = answers.get(key);
+          if (!response) {
+            response = answer(req, (army, placed) => engineFor(wasm.Engine, army, placed), (boss, seed) => new wasm.Encounter(boss, seed));
+            answers.set(key, response);
+          }
+          this.onmessage?.({ data: { ...response, id } } as MessageEvent<BotResponse>);
+        });
       }
       terminate(): void {}
     },
