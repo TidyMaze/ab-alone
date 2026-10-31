@@ -32,6 +32,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
 | The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **1 of 20** (reading ladder player #834, 0 of 20 at 1x; the player has 16 marbles since #838; below the target, no boss-only knob reaches it, see section 3) | 133 | P2 | rim ejection 14, draw 5 |
+| The Stalker | 3000 | 30000 (10x) | **9** (fogged pro player #1120, see section 3) | 185 | P2 | draw 1 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
 are per boss, section 3.
@@ -733,3 +734,21 @@ player at 1x (3000 nodes); the 10x cell did not finish in 550 s on one machine, 
 | After (train in the tree) | 2 | 66 | rim_ejection 8 |
 
 No tuning: no constant changed.
+
+### The Stalker (#1120): the fogged pro player, on target, not tuned
+
+`LadderBoss::Stalker` plays `stalker_start(seed)` (boss budget 3000, phases at 3 and 5 ejections, sight 3/2/1). The
+boss replies with `Encounter::boss_search` (plain search, it sees everything). The pro player is the one of section 1
+under the same fog: its random opening moves come from the offered moves (`seen_moves`), its search runs on the seen
+board (hidden boss marbles read as empty cells, ejection counts kept), and when the engine refuses a move for a hidden
+blocker the blockers are revealed and it searches again on the board as it now sees it (a refusal costs no ply). It
+keeps the repetition check of the other rows. Command: `LADDER_X=10 cargo run --release -p abalone-core --example
+ladder stalker`, 10 seeds, run alone on one machine (8 min 45 s wall).
+
+| Player budget | Wins /10 | Median plies | Highest phase | Deaths |
+|---|---|---|---|---|
+| 30000 (10x) | **9** | 185 | P2 | draw 1 |
+
+Result: 9 of 10 at 10x, inside the 7 to 9 target, so no knob changed (budget 3000, sight and phase ejections stay).
+Not measured: the 1x and 0.5x cells, more seeds, the plain (unfogged) player for comparison. The ladder `replay` of a
+stored Stalker game does not replay a refused move (the refusals are not stored), so no fixture is written for it.
