@@ -732,12 +732,24 @@ a seventh of the time it did (300 nodes against 2000), within the other bosses'.
 
 The ladder now plays it (`LadderBoss::RailYard`). `railyard_move` no longer avoids every announced
 line at the root: each player ply of the search tree counts the trains down and a pass ejects its
-line with credits, so the boss leaves a line only when the train is about to pass. Ladder, 10 seeds,
-player at 1x (3000 nodes); the 10x cell did not finish in 550 s on one machine, so it is not measured.
+line with credits, so the boss leaves a line only when the train is about to pass. The unit test
+`a_train_five_turns_out_does_not_stop_the_boss_from_winning_but_one_about_to_pass_does` is the
+position the old root filter misses. Node budget 3000, the Hull's. `LADDER_SEEDS=20`, seeds 0 to 19,
+300 plies at most, `cargo run --release --example ladder -- railyard` (player at 1x = 3000 nodes,
+10x = 30000):
 
-| | Wins /10 | Median plies | Deaths |
-|---|---|---|---|
-| Before (root filter) | 0 | 76.5 | rim_ejection 10 |
-| After (train in the tree) | 2 | 66 | rim_ejection 8 |
+| | Player | Wins /20 | Median plies | Deaths |
+|---|---|---|---|---|
+| Before (root filter) | 1x | 2 | 69 | rim_ejection 18 |
+| After (train in the tree) | 1x | 4 | 79 | rim_ejection 16 |
+| Before (root filter) | 10x | 1 | 85 | rim_ejection 19 |
+| After (train in the tree) | 10x | 4 | 69 | rim_ejection 16 |
 
-No tuning: no constant changed.
+Reading: the pro player wins as often at 10x as at 1x (4 of 20), so the extra search does not help
+it against the trains; the boss is still far above the owner target of 14 to 18 of 20 at 10x.
+Nothing was tuned here, the knob (budget or train lead) is the owner's.
+
+Reply time through wasm (nodejs release build, 6 seeds of up to 80 plies, boss replies, a loaded
+machine, ms, average / 95th percentile / maximum): The Rail Yard 111 / 142 / 253 after, 85 / 113 / 148
+before; measured in the same run, the Hull 120 / 171 / 210 and the Pulsar 133 / 191 / 254. Within the
+other bosses'. No rule change, `engine_version` unchanged.
