@@ -52,8 +52,10 @@ The levels of noise, the biomes, the relief and the obstacle density are specifi
 Basic enemies only. A group is 1 to 3 loose black marbles in a line on passable cells, placed by
 the seed (about one group per 400 cells), none within 8 cells of the spawn, and a group stays
 inside one chunk, so no two groups share a cell. They hold their
-ground and have no behaviour of their own: they react only when pushed. A marble pushed onto an
-obstacle is a refused push; pushed onto no cell (the edge of the world) it is out for good.
+ground and have no behaviour of their own: they react only when pushed. A pushed enemy is
+ejected when the cell beyond the line is water or off the world (the edge of the world): the last
+enemy of the line falls, the others shift one cell. A push into a tree, boulder, wall or peak, or
+into a marble (troop or enemy), is refused. Enemies never push, so nothing ejects the hero yet.
 
 ## 4. The hero and the troop
 
@@ -63,13 +65,20 @@ obstacle is a refused push; pushed onto no cell (the edge of the world) it is ou
   one before it in the trail, and the first takes the cell the hero left. No decision of the player.
 - **Automatic attack**: after its step, the troop attacks when a line of 2 or 3 of its marbles,
   hero included, is next to a smaller line of enemy marbles along that line's axis and the push is
-  legal under `rules.md`. It then plays that push. Several are legal: the one that ejects the most
-  enemies, then the lowest cell index, so the result is deterministic and testable.
+  legal under `rules.md`. It then plays that push. The enemy line is the run of enemies right in
+  front of the pushing line, 1 or 2 marbles and fewer than the pushing line (2 pushes 1, 3 pushes
+  1 or 2). The push is refused when the cell beyond the enemy run is a tree, boulder, wall or peak,
+  or holds a marble; it ejects the last enemy when that cell is water or off the world, and
+  otherwise every enemy of the run shifts one cell. Several pushes can be legal: the one that
+  ejects the most enemies, then the lowest `(r, q)` of the back marble of the pushing line, then
+  the lowest direction index (E, W, NE, SW, NW, SE), so the result is deterministic and testable.
+  The rule is built in `crates/abalone-core/src/worldfight.rs` (`best_push`, `apply_push`).
 - **Animation**: the push is drawn as a short lunge of the pushing line (about 400 ms, as the
   board's push), the pushed marbles slide one cell, an ejected one falls. Reduced motion: no
   lunge, the marbles jump.
-- **Loss**: the hero ejected ends the walk (the world is kept, the hero starts again at the spawn,
-  the troop at 6). A troop marble ejected is lost.
+- **Loss** (deferred, not built): the hero ejected ends the walk (the world is kept, the hero
+  starts again at the spawn, the troop at 6). It cannot happen yet, because enemies never push;
+  it is specified here for when they do. A troop marble ejected is lost, with the same deferral.
 
 ## 5. Saving
 
