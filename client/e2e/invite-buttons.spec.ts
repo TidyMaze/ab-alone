@@ -17,6 +17,7 @@ test.describe('a phone held sideways', () => {
       return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     });
     await page.mouse.click(at.x, at.y);
+    await page.getByRole('button', { name: 'Lobby' }).click(); // the invite link and Copy sit in the lobby sheet (#1044)
     await expect(page.locator('#invite')).toBeVisible();
 
     const covered = await page.evaluate(() =>
