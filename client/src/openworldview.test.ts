@@ -16,6 +16,7 @@ import {
   HI_RADIUS,
   loadModels,
   LOOK,
+  MARBLE_LOOK,
   MAX_REACH,
   MAX_ZOOM,
   MOST,
@@ -1936,5 +1937,38 @@ describe('the particles of the Open world (#1110)', () => {
     const dispose = vi.spyOn(sparks(view).geometry, 'dispose');
     view.dispose();
     expect(dispose).toHaveBeenCalled();
+  });
+});
+
+describe('the refined look of the Open world (#1138)', () => {
+  it('draws every ground with the hex edge material: a dark seam on land, a light line on the water', () => {
+    const view = new OpenWorldView(new World(terrain(() => WATER_CODE)));
+    for (const ground of GROUNDS) {
+      const material = mesh(view, `terrain-${ground}`).material as THREE.MeshStandardNodeMaterial;
+      expect(material.isMeshStandardNodeMaterial, ground).toBe(true);
+      expect(material.colorNode, ground).not.toBeNull();
+      expect(material.map, ground).toBeNull(); // no texture
+    }
+  });
+
+  it('keeps the terrain tones close to before, a little calmer', () => {
+    expect(LOOK.grass.color).toBe(0x3f7d5f);
+    expect(LOOK.rock.color).toBe(0x4f565f);
+    expect(WATER).toEqual({ shore: 0x4aa8c4, deep: 0x1a5a8c });
+    expect(BIOME_LOOK.desert.ground).toBe(0xc2a468);
+    expect(BIOME_LOOK.tundra.ground).toBe(0xd6e2ea);
+  });
+
+  it('gives the marbles their ring colours: cyan on the hero and the troop, amber on the foes, all glossy', () => {
+    expect(MARBLE_LOOK.hero.stripe).toBe(0x6fa8dc);
+    expect(MARBLE_LOOK.troop.stripe).toBe(0x6fa8dc);
+    expect(MARBLE_LOOK.foes.stripe).toBe(0xffb000);
+    const view = new OpenWorldView(new World(bytes));
+    for (const [name, look] of [['hero', MARBLE_LOOK.hero], ['troop', MARBLE_LOOK.troop], ['enemies', MARBLE_LOOK.foes]] as const) {
+      const material = (view.scene.getObjectByName(name) as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      expect(material.color.getHex(), name).toBe(look.base);
+      expect(material.roughness, name).toBe(look.roughness);
+      expect(look.roughness, name).toBeLessThanOrEqual(0.15);
+    }
   });
 });
