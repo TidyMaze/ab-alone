@@ -58,12 +58,34 @@ describe('the save of the camera yaw (#1026)', () => {
   });
 });
 
+describe('the save of the broken obstacles (#1147)', () => {
+  it('saves the broken cells with the world and loads them back', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [[2, 0], [-3, 4]]);
+    expect((await saves.load(7))!.broken).toEqual([[2, 0], [-3, 4]]);
+  });
+
+  it('loads a record with no broken cells, saved before them, as none broken', async () => {
+    const store = memoryStore();
+    store.data.set('openworld:7', { ...record(7), record: 2 });
+    expect((await worldSaves(store, 1).load(7))!.broken).toEqual([]);
+  });
+
+  it('discards a record whose broken cells are not cells', async () => {
+    for (const broken of ['x', [[1]], [[1.5, 0]]]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', { ...record(7), record: 2, broken });
+      expect(await worldSaves(store, 1).load(7)).toBeNull();
+    }
+  });
+});
+
 describe('worldSaves', () => {
   it('saves a world under its seed and loads it back with its hero, troop and fight', async () => {
     const saves = worldSaves(memoryStore(), 1);
     expect(await saves.put(7, hero, troop, fightWithPush(), 0)).toBe(true);
     const back = await saves.load(7);
-    expect(back).toEqual({ ...record(7), savedAt: expect.any(Number) });
+    expect(back).toEqual({ ...record(7), broken: [], savedAt: expect.any(Number) });
     expect(back!.fight.beaten).toBe(1);
   });
 

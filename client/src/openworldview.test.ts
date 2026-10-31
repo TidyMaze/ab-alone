@@ -1921,6 +1921,68 @@ describe('the particles of the Open world (#1110)', () => {
     expect(view.sparkle(2016, false)).toBe(false);
   });
 
+  // #1147: a boulder on (1, 0) and an isolated tree on (0, 2) of the badlands; the cell is broken in the world first, as the hero does.
+  describe('breaking an obstacle', () => {
+    const withProps = (cx: number, cy: number) => {
+      const out = biomeOf(4)(cx, cy); // the badlands: no pollen in the way of the count
+      if (cx === 0 && cy === 0) {
+        out.set([1, 5, 4], 1 * 3);
+        out.set([1, 6, 4], 2 * CHUNK * 3); // (0, 2): a tree with no tree beside it
+      }
+      return out;
+    };
+    const standing = (models = false) => {
+      const world = new World(withProps);
+      const view = new OpenWorldView(world);
+      if (models) view.useModels({ low: {}, high: { boulder: new THREE.BoxGeometry(), tree: new THREE.BoxGeometry() } });
+      view.show([0, 0]);
+      return { world, view };
+    };
+
+    it('takes the prop out of the scene, from the low-poly mesh', () => {
+      const { world, view } = standing();
+      expect(mesh(view, 'prop-boulder').count).toBe(1);
+      world.smash(1, 0);
+      view.smash([1, 0], 'boulder', 100, false);
+      expect(mesh(view, 'prop-boulder').count).toBe(0);
+    });
+
+    it('takes it out of the detailed mesh near the hero, and a tree too', () => {
+      const { world, view } = standing(true);
+      expect(mesh(view, 'prop-boulder-hi').count).toBe(1);
+      world.smash(1, 0);
+      view.smash([1, 0], 'boulder', 100, false);
+      expect(mesh(view, 'prop-boulder-hi').count).toBe(0);
+      world.smash(0, 2);
+      view.smash([0, 2], 'tree', 100, false);
+      expect(mesh(view, 'prop-tree-hi').count).toBe(0);
+    });
+
+    it('throws shards of its colour that fall away, and only a fade under reduced motion', () => {
+      const { world, view } = standing();
+      world.smash(1, 0);
+      view.smash([1, 0], 'boulder', 100, false);
+      expect(view.sparkle(120, false)).toBe(true);
+      expect(sparks(view).count).toBe(6);
+      expect(run(view, 1200, false, 136)).toBe(false); // gone in under a second
+      const still = standing();
+      still.world.smash(1, 0);
+      still.view.smash([1, 0], 'boulder', 100, true);
+      expect(still.view.sparkle(120, true)).toBe(true);
+      expect(sparks(still.view).count).toBe(1); // the prop fades in place: reduced motion does not clear it
+      expect(run(still.view, 1200, true, 136)).toBe(false);
+    });
+
+    it('throws no shards past ROLL_ZOOM', () => {
+      const { world, view } = standing();
+      view.resize(1600, 900);
+      view.zoomBy(MAX_ZOOM);
+      world.smash(1, 0);
+      view.smash([1, 0], 'boulder', 100, false);
+      expect(view.sparkle(120, false)).toBe(false);
+    });
+  });
+
   it('allocates nothing in a frame: the mesh and its buffers are the same objects', () => {
     const view = new OpenWorldView(new World(biomeOf(0)));
     view.show([0, 0]);

@@ -25,6 +25,17 @@ export interface Tile {
 
 export const blocked = (tile: Tile): boolean => BLOCKED.has(tile.terrain);
 
+/** What a broken obstacle leaves: the plain ground it stood on (#1147). */
+const LEFT: Partial<Record<Terrain, Terrain>> = { boulder: 'rock', tree: 'grass' };
+
+/** Whether the hero breaks the obstacle on a cell by rolling into it (#1147, docs/specs/openworld.md section 2): a boulder, or a tree
+ * with no tree on its six neighbours. Buildings, mountains, water and forests stay in the way. */
+export function breakable(world: Pick<World, 'tile'>, q: number, r: number): boolean {
+  const terrain = world.tile(q, r)?.terrain;
+  if (terrain === 'boulder') return true;
+  return terrain === 'tree' && neighbours([q, r]).every(([nq, nr]) => world.tile(nq, nr)?.terrain !== 'tree');
+}
+
 /** The chunk a cell is in. */
 export const chunkOf = ([q, r]: Axial): Axial => [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
 
@@ -66,6 +77,8 @@ function remember<T>(cache: Map<number, T>, key: number, value: T, limit: number
 export class World {
   private readonly chunks = new Map<number, Tile[]>();
   private readonly groups = new Map<number, Axial[]>();
+  /** The cells the hero has broken, by chunk: applied on top of a chunk each time it is read from the engine (#1147). */
+  private readonly smashed = new Map<number, Axial[]>();
   /** How many chunks, and how many enemy lists, are kept at once. */
   limit = CACHE_LIMIT;
   /** How many chunks and enemy lists are cached now. */
@@ -84,9 +97,37 @@ export class World {
     let tiles = touch(this.chunks, key);
     if (!tiles) {
       tiles = parseChunk(this.load(cx, cy));
+      for (const [q, r] of this.smashed.get(key) ?? []) this.leave(tiles, q, r);
       remember(this.chunks, key, tiles, this.limit);
     }
     return tiles;
+  }
+
+  /** The tile of a cell in `tiles` (its chunk) turns to the ground its obstacle stood on. */
+  private leave(tiles: Tile[], q: number, r: number): void {
+    const [cx, cy] = chunkOf([q, r]);
+    const tile = tiles[(r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)]!;
+    tile.terrain = LEFT[tile.terrain] ?? tile.terrain;
+  }
+
+  /** Breaks the obstacle on a cell for good: the cell is plain ground now, and stays so when its chunk is read again (#1147). */
+  smash(q: number, r: number): void {
+    this.restore([[q, r]]);
+  }
+
+  /** Breaks the cells given, as a saved world kept them. Call it before the cells are read; a chunk already read is changed too. */
+  restore(cells: readonly Axial[]): void {
+    for (const [q, r] of cells) {
+      const key = keyOf(...chunkOf([q, r]));
+      this.smashed.set(key, [...(this.smashed.get(key) ?? []), [q, r]]);
+      const tiles = this.chunks.get(key);
+      if (tiles) this.leave(tiles, q, r);
+    }
+  }
+
+  /** Every cell broken so far, for the save. */
+  get broken(): Axial[] {
+    return [...this.smashed.values()].flat();
   }
 
   /** The enemy marbles that start in the chunk `(cx, cy)`. */
@@ -140,17 +181,26 @@ export class Hero {
   at: Axial = SPAWN;
   /** The troop starts around the spawn; after a step each marble takes the place of the one before it, the first the hero's. */
   troop: Axial[] = neighbours(SPAWN);
+  /** The obstacle the last step broke (#1147), `null` when it broke none. */
+  smashed: Terrain | null = null;
   /** `fight` holds the enemies as they are now, the pushed ones included (openworldfight.ts). */
   constructor(
     private readonly world: World,
     private readonly fight: FightState,
   ) {}
 
-  /** Rolls to `to` when it is a neighbour that is on the world, not blocked and free of enemies; reports whether it moved. */
+  /** Rolls to `to` when it is a neighbour that is on the world, free of enemies and either open or an obstacle it breaks
+   * (`breakable`, #1147); reports whether it moved. */
   step(to: Axial): boolean {
+    this.smashed = null;
     if (!neighbours(this.at).some((n) => same(n, to))) return false;
     const tile = this.world.tile(to[0], to[1]);
-    if (!tile || blocked(tile) || this.fight.occupied(this.world, to[0], to[1])) return false;
+    if (!tile || this.fight.occupied(this.world, to[0], to[1])) return false;
+    if (blocked(tile)) {
+      if (!breakable(this.world, to[0], to[1])) return false;
+      this.smashed = tile.terrain;
+      this.world.smash(to[0], to[1]);
+    }
     this.troop = [this.at, ...this.troop.filter((c) => !same(c, to))].slice(0, TROOP);
     this.at = to;
     return true;

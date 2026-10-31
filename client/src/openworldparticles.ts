@@ -37,6 +37,15 @@ export const PUFF = {
   look: { rate: 0, life: 350, lift: 0, spread: 0, rise: 0.25, sway: 0, size: 0.08, colour: 0xcdbf9e } satisfies Look,
 };
 
+/** The shards of a broken obstacle (#1147): `count` flakes of the prop's colour thrown outward, falling, gone within `life` ms. */
+export const SHARDS = {
+  count: 6,
+  speed: 1.5,
+  look: { rate: 0, life: 700, lift: 0, spread: 0, rise: -0.9, sway: 0, size: 0.14, colour: 0xffffff } satisfies Look,
+};
+/** Reduced motion: the prop just fades where it stood, as one particle of its size that does not move. */
+export const FADE: Look = { rate: 0, life: 300, lift: 0, spread: 0, rise: 0, sway: 0, size: 0.3, colour: 0xffffff };
+
 /** How far from the hero the ambient particles are born, in cells (the spec's radius of 6). */
 const RADIUS = 6;
 /** The longest gap between two frames that owes particles, in ms: a hidden tab does not burst on return. */
@@ -67,6 +76,8 @@ export class ParticlePool {
   private readonly colour: Uint32Array;
   private readonly born: Float64Array;
   private readonly life: Float32Array;
+  /** The slots that hold a fade (#1147): reduced motion keeps them while it clears the rest. */
+  private readonly fades: Uint8Array;
   private last = -Infinity;
   private owed = 0;
   private warm = false;
@@ -85,6 +96,7 @@ export class ParticlePool {
     this.colour = new Uint32Array(cap);
     this.born = new Float64Array(cap).fill(-Infinity); // no slot is alive at any time, past times included
     this.life = new Float32Array(cap);
+    this.fades = new Uint8Array(cap);
   }
 
   /** The next number in `[0, 1)`: a xorshift, so a pool is the same every run and allocates nothing. */
@@ -120,7 +132,7 @@ export class ParticlePool {
   }
 
   /** Puts a particle of `look` at the place and speed given, in the first free slot; false (nothing born) when the pool is full. */
-  private spawn(look: Look, x: number, y: number, z: number, now: number, vx: number, vz: number): boolean {
+  private spawn(look: Look, x: number, y: number, z: number, now: number, vx: number, vz: number, colour = look.colour, fade = 0): boolean {
     for (let i = 0; i < this.cap; i++) {
       if (now - this.born[i]! < this.life[i]!) continue;
       this.ox[i] = x;
@@ -132,7 +144,8 @@ export class ParticlePool {
       this.sway[i] = look.sway;
       this.phase[i] = this.random() * 2 * Math.PI;
       this.size[i] = look.size;
-      this.colour[i] = look.colour;
+      this.colour[i] = colour;
+      this.fades[i] = fade;
       this.born[i] = now;
       this.life[i] = look.life;
       return true;
@@ -174,9 +187,21 @@ export class ParticlePool {
     }
   }
 
-  /** Ends every particle at once: reduced motion and a far zoom draw none. */
-  clear(): void {
-    this.life.fill(0);
+  /** A broken prop of `colour` at (`x`, `y`, `z`), at `now` (ms) (#1147): shards thrown outward, or under `reduced` motion one fade. */
+  shatter(x: number, y: number, z: number, now: number, colour: number, reduced: boolean): void {
+    if (reduced) {
+      this.spawn(FADE, x, y, z, now, 0, 0, colour, 1);
+      return;
+    }
+    for (let k = 0; k < SHARDS.count; k++) {
+      const angle = ((k + this.random()) / SHARDS.count) * 2 * Math.PI;
+      this.spawn(SHARDS.look, x, y, z, now, Math.cos(angle) * SHARDS.speed, Math.sin(angle) * SHARDS.speed, colour);
+    }
+  }
+
+  /** Ends every particle at once: a far zoom draws none, and reduced motion none but the fades (`keepFades`). */
+  clear(keepFades = false): void {
+    for (let i = 0; i < this.cap; i++) if (!keepFades || !this.fades[i]) this.life[i] = 0;
     this.owed = 0;
     this.warm = false;
   }

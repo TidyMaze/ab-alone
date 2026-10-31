@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AMBIENT, capFor, PUFF, ParticlePool, type Look } from './openworldparticles';
+import { AMBIENT, capFor, FADE, PUFF, ParticlePool, SHARDS, type Look } from './openworldparticles';
 
 const hero = { x: 0, y: 1, z: 0 };
 /** A look that spends the warm start and spawns nothing. */
@@ -124,6 +124,35 @@ describe('ParticlePool', () => {
     expect(Math.hypot(pose.x - 2, pose.z - 3)).toBeGreaterThan(0.01);
     expect(PUFF.look.life).toBeLessThan(500);
     expect(pool.alive(100 + PUFF.look.life + 1)).toBe(0);
+  });
+
+  it('shatters a prop into shards of its colour that fly outward, fall, and are gone in under a second (#1147)', () => {
+    const pool = new ParticlePool(64);
+    pool.shatter(2, 1, 3, 100, 0x6b7480, false);
+    expect(pool.alive(100)).toBe(SHARDS.count);
+    pool.pose(0, 400, pose);
+    expect(Math.hypot(pose.x - 2, pose.z - 3)).toBeGreaterThan(0.1);
+    expect(pose.y).toBeLessThan(1);
+    expect(pose.colour).toBe(0x6b7480);
+    expect(SHARDS.look.life).toBeLessThan(1000);
+    expect(pool.alive(100 + SHARDS.look.life + 1)).toBe(0);
+  });
+
+  it('fades a prop in place under reduced motion: one still particle that clear() spares only when asked to keep fades (#1147)', () => {
+    const pool = new ParticlePool(64);
+    pool.shatter(2, 1, 3, 100, 0x2fb5a0, true);
+    expect(pool.alive(100)).toBe(1);
+    pool.pose(0, 200, pose);
+    expect([pose.x, pose.y, pose.z]).toEqual([2, 1, 3]);
+    expect(pose.s).toBeGreaterThan(0);
+    expect(FADE.life).toBeLessThan(500);
+    pool.clear(true);
+    expect(pool.alive(100)).toBe(1);
+    pool.clear();
+    expect(pool.alive(100)).toBe(0);
+    pool.shatter(0, 0, 0, 100, 0, false);
+    pool.clear(true);
+    expect(pool.alive(100)).toBe(0); // shards are not fades
   });
 
   it('clears every particle at once', () => {

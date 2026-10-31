@@ -644,7 +644,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     fight.apply([], [[3, 0]], [[9, 9]]);
     return fight.toJSON();
   };
-  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, savedAt: 1 });
+  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, broken: [], savedAt: 1 });
   const withSaves = (store = memoryStore()) => {
     const saves = worldSaves(store, 1);
     return { store, saves, m: mode(undefined, undefined, undefined, undefined, undefined, saves) };
@@ -1300,5 +1300,57 @@ describe('the particles in the mode frame (#1110)', () => {
     } finally {
       delete (navigator as { webdriver?: boolean }).webdriver;
     }
+  });
+});
+
+// #1147: the hero breaks the boulder on (0, 1): the prop leaves the scene, the shards play, and the broken cell is saved and restored.
+describe('the hero breaks a boulder in the mode (#1147)', () => {
+  const settle = () => new Promise((done) => setTimeout(done));
+  const beside = (reduced = false, saves = worldSaves(memoryStore(), 1)): OpenWorldMode => {
+    const m = mode(undefined, undefined, () => reduced, undefined, noPush, saves);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [1, 1], troop: [[2, 1], [3, 1]], enemies: [] });
+    return m;
+  };
+  afterEach(() => vi.restoreAllMocks());
+
+  it('rolls onto the boulder, takes its prop out of the scene and plays the shards at the time of the step', () => {
+    const smash = vi.spyOn(OpenWorldView.prototype, 'smash');
+    const m = beside();
+    expect(JSON.parse(body().openworldDrawn!)['prop-boulder']).toBe(1);
+    expect(tap(m, 'ArrowLeft')).toBe(true);
+    expect(m.hero!.at).toEqual([0, 1]);
+    expect(smash).toHaveBeenCalledWith([0, 1], 'boulder', expect.any(Number), false);
+    expect(JSON.parse(body().openworldDrawn!)['prop-boulder']).toBe(0);
+    expect(body().openworldBroken).toBe('1');
+  });
+
+  it('plays the fade of reduced motion', () => {
+    const smash = vi.spyOn(OpenWorldView.prototype, 'smash');
+    tap(beside(true), 'ArrowLeft');
+    expect(smash).toHaveBeenCalledWith([0, 1], 'boulder', expect.any(Number), true);
+  });
+
+  it('a step that breaks nothing plays no shards', () => {
+    const smash = vi.spyOn(OpenWorldView.prototype, 'smash');
+    tap(beside(), 'ArrowRight');
+    expect(smash).not.toHaveBeenCalled();
+  });
+
+  it('saves the broken cell with the world, and a world entered from that save has it broken', async () => {
+    const store = memoryStore();
+    const saves = worldSaves(store, 1);
+    const m = beside(false, saves);
+    tap(m, 'ArrowLeft');
+    m.frame(vi.fn());
+    await settle();
+    expect(store.data.get('openworld:1')).toMatchObject({ broken: [[0, 1]] });
+    const back = (await saves.load(1))!;
+    const again = mode(undefined, undefined, undefined, undefined, noPush, saves);
+    again.enter(1, 800, 600, back);
+    expect(JSON.parse(body().openworldDrawn!)['prop-boulder']).toBe(0);
+    expect(body().openworldBroken).toBe('1');
+    again.leave();
+    expect(body().openworldBroken).toBeUndefined();
   });
 });
