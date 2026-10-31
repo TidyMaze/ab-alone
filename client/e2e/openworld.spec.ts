@@ -601,3 +601,17 @@ test('a step hops the hero: it rises mid-step and lands on its cell, #1100', asy
   expect(heights.length).toBeGreaterThan(5);
   expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.04); // up to 0.08 cell at mid-step
 });
+
+// #1138: the HUD plate is the dark plate with rivets (four radial gradients), whatever the system theme.
+test('the Open world HUD plate is dark with four rivets, #1138', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const plate = page.locator('#openworld-hud');
+  await expect(plate).toBeVisible();
+  await expect(plate).toHaveCSS('background-color', 'rgb(22, 26, 29)');
+  const image = await plate.evaluate((el) => getComputedStyle(el).backgroundImage);
+  expect(image.match(/radial-gradient/g)).toHaveLength(4);
+});
