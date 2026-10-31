@@ -11,8 +11,8 @@ import type { WorldSave, WorldSaves } from './openworldsave';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
 /** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
- * the enemies near the hero, all `q, r` pairs; its answer is empty when no push is legal (`readPush`). */
-export type TroopPush = (seed: number, troop: Int32Array, enemies: Int32Array) => Int32Array;
+ * the enemies near the hero, the broken cells (#1154), all `q, r` pairs; its answer is empty when no push is legal (`readPush`). */
+export type TroopPush = (seed: number, troop: Int32Array, enemies: Int32Array, broken: Int32Array) => Int32Array;
 
 /** The enemies within this many cells of the hero are the ones a push can reach. */
 export const PUSH_REACH = 10;
@@ -440,7 +440,7 @@ export class OpenWorldMode {
   private troopPush(): Played | null {
     const enemies = this.enemies();
     const from = [this.hero!.at, ...this.hero!.troop];
-    const pushed = readPush(this.push(this.seed, flat(from), flat(enemies)));
+    const pushed = readPush(this.push(this.seed, flat(from), flat(enemies), flat(this.world!.broken)));
     if (!pushed) return null;
     this.fight.apply(enemies, pushed.enemies, pushed.ejected);
     const [hero, ...troop] = pushed.troop;

@@ -28,7 +28,7 @@ function sea(_seed: number, cx: number, cy: number): Uint8Array {
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0, 0], i * 3);
   return out;
 }
-type PushBridge = (seed: number, troop: Int32Array, enemies: Int32Array) => Int32Array;
+type PushBridge = (seed: number, troop: Int32Array, enemies: Int32Array, broken: Int32Array) => Int32Array;
 const noPush: PushBridge = () => new Int32Array();
 const mode = (
   models: () => Promise<PropModels> = async () => ({ low: {}, high: {} }),
@@ -1335,6 +1335,19 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
     const smash = vi.spyOn(OpenWorldView.prototype, 'smash');
     tap(beside(), 'ArrowRight');
     expect(smash).not.toHaveBeenCalled();
+  });
+
+  it('gives the broken cells to the troop push, so a push into one is legal (#1154)', () => {
+    const push = vi.fn<PushBridge>(() => new Int32Array());
+    const m = mode(undefined, undefined, () => true, undefined, push);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [1, 1], troop: [[2, 1], [3, 1]], enemies: [] });
+    tap(m, 'ArrowRight');
+    expect(Array.from(push.mock.calls.at(-1)![3])).toEqual([]);
+    tap(m, 'ArrowLeft');
+    tap(m, 'ArrowLeft');
+    expect(m.hero!.at).toEqual([0, 1]);
+    expect(Array.from(push.mock.calls.at(-1)![3])).toEqual([0, 1]);
   });
 
   it('saves the broken cell with the world, and a world entered from that save has it broken', async () => {
