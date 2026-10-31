@@ -765,3 +765,7 @@ body[data-openworld] #openworld-hud { display: block; }
 #joystick[hidden] { display: none; }
 #joystick-knob { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: var(--accent); }
 body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group, #support) { display: none !important; }
+/* Bug #1051: with the dock hidden the column is alone in the top bar and would sit at its left edge, so the cog and its menu open off
+   the screen. The column goes back to the right, where it is in a normal game. Landscape only: held upright the column is a row
+   that stretches, and an auto margin would shrink it. */
+@media (orientation: landscape) { body[data-openworld] #online { margin-left: auto; } }
