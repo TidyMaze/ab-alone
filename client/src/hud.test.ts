@@ -11,6 +11,36 @@ const blocks = {
   lightForced: css.match(/:root\[data-theme='light'\]\s*\{([^}]*)\}/)![1]!,
 };
 
+describe('refined play screen tokens, #1136', () => {
+  const root = css.match(/:root\s*\{[^}]*--plate:[^}]*\}/)?.[0] ?? '';
+  const tokens: Record<string, string> = {
+    plate: '#f2efe3', 'plate-edge': '#cfc9b4', 'plate-ink': '#1b1d1f', 'plate-ink-2': '#4a4f52', amber: '#ffb000', steel: '#1b1f23',
+    'r-card': '6px', 'r-button': '6px', space: '8px', target: '48px',
+  };
+  for (const [name, value] of Object.entries(tokens)) {
+    it(`defines --${name} as ${value}`, () => {
+      expect(root).toContain(`--${name}: ${value};`);
+    });
+  }
+
+  it('keeps the rivets and gives the plates the cream fill, the 6 px radius and the amber accent', () => {
+    expect(css).toContain('--rivet: radial-gradient');
+    expect(css).toMatch(/:is\(#hud, #boss-bar, #eval, #dock\) \{[^}]*--panel: var\(--plate\);[^}]*--edge: var\(--plate-edge\);[^}]*border-radius: var\(--r-card\);/);
+    expect(css).toMatch(/:root\[data-palette='default'\] :is\(#hud, #boss-bar, #eval, #dock\) \{ --accent: var\(--amber\); \}/);
+  });
+
+  it('draws the dock as a cream bar of 48 px buttons, the icon above the label, the active one filled dark, no blur', () => {
+    expect(css).toMatch(/#dock > button, #dock-replay button \{[^}]*height: var\(--target\);[^}]*border-radius: var\(--r-button\);/);
+    expect(css).toMatch(/#dock > button \{[^}]*flex-direction: column;/);
+    expect(css).toMatch(/#dock > button::before \{[^}]*mask: var\(--icon\)/);
+    expect(css).toMatch(/#dock > button\[aria-pressed='true'\], #dock > button\[aria-expanded='true'\] \{[^}]*background: var\(--steel\);/);
+    for (const id of ['new-game', 'reset-view', 'hint', 'replay', 'modes', 'auto-play', 'boss-retry', 'rematch', 'boss-goal', 'royale-hold', 'lobby']) {
+      expect(css, id).toMatch(new RegExp(`#dock #${id} \\{ --icon: url\\(`));
+    }
+    expect(css).not.toContain('backdrop-filter');
+  });
+});
+
 describe('palette tokens', () => {
   for (const [name, block] of Object.entries(blocks)) {
     it(`defines every token in the ${name} block`, () => {
