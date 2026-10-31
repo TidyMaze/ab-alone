@@ -16,6 +16,8 @@ import {
   HI_RADIUS,
   loadModels,
   LOOK,
+  SHIP_BLACK,
+  SODIUM,
   MARBLE_LOOK,
   MAX_REACH,
   MAX_ZOOM,
@@ -1198,16 +1200,16 @@ describe('the biomes look (openworld-terrain.md section 4, #984)', () => {
   });
 
   it('gives each biome its own low ground, the meadow the grass of before', () => {
-    expect(BIOME_LOOK.meadow.ground).toBe(0x3f7d5f);
+    expect(BIOME_LOOK.meadow.ground).toBe(LOOK.grass.color);
     expect(new Set(BIOMES.map((biome) => BIOME_LOOK[biome].ground)).size).toBe(BIOMES.length);
   });
 
   it('tints the trees and the boulders: whitish in tundra, warm in desert and badlands, neutral elsewhere', () => {
     expect(BIOME_LOOK.meadow.prop).toBe(0xffffff);
     expect(BIOME_LOOK.forest.prop).toBe(0xffffff);
-    expect(BIOME_LOOK.tundra.prop).toBe(0xe4f0f8);
-    expect(BIOME_LOOK.desert.prop).toBe(0xffd39a);
-    expect(BIOME_LOOK.badlands.prop).toBe(0xff9f7a);
+    expect(BIOME_LOOK.tundra.prop).toBe(0xdde8ee);
+    expect(BIOME_LOOK.desert.prop).toBe(0xf0d4ae);
+    expect(BIOME_LOOK.badlands.prop).toBe(0xe8aa90);
   });
 
   it('paints the low ground and the props of each cell with its biome, one colour per instance', () => {
@@ -2013,12 +2015,31 @@ describe('the refined look of the Open world (#1138)', () => {
     }
   });
 
-  it('keeps the terrain tones close to before, a little calmer', () => {
-    expect(LOOK.grass.color).toBe(0x3f7d5f);
-    expect(LOOK.rock.color).toBe(0x4f565f);
-    expect(WATER).toEqual({ shore: 0x4aa8c4, deep: 0x1a5a8c });
-    expect(BIOME_LOOK.desert.ground).toBe(0xc2a468);
-    expect(BIOME_LOOK.tundra.ground).toBe(0xd6e2ea);
+  it('grades the terrain toward the ship (#1173): low saturation on every ground and biome, the lake glow dimmed', () => {
+    const saturation = (hex: number): number => {
+      const [r, g, b] = [hex >> 16, (hex >> 8) & 255, hex & 255].map((v) => v / 255) as [number, number, number];
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const l = (max + min) / 2;
+      return max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+    };
+    for (const ground of GROUNDS) if (ground !== 'water') expect(saturation(LOOK[ground].color), ground).toBeLessThanOrEqual(0.3);
+    for (const biome of BIOMES) expect(saturation(BIOME_LOOK[biome].ground), biome).toBeLessThanOrEqual(0.35);
+    expect(saturation(WATER.shore)).toBeLessThanOrEqual(0.4);
+    expect(saturation(WATER.deep)).toBeLessThanOrEqual(0.5);
+    expect(LOOK.grass.color).toBe(0x446957);
+    expect(LOOK.rock.color).toBe(0x4b4f55);
+    expect(LOOK.water.emissive).toBe(0x052a34);
+    expect(WATER).toEqual({ shore: 0x5392a5, deep: 0x2a516e });
+    expect(BIOME_LOOK.desert.ground).toBe(0xaa9469);
+    expect(BIOME_LOOK.tundra.ground).toBe(0xc4d0d8);
+  });
+
+  it('fogs toward the ship\'s black and edges the walls in the one hazard colour, sodium (#1173)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    expect(view.scene.fog!.color.getHex()).toBe(SHIP_BLACK);
+    expect((view.scene.background as THREE.Color).getHex()).toBe(SHIP_BLACK);
+    expect(SODIUM).toBe(0xd9822b);
   });
 
   it('gives the marbles their ring colours: cyan on the hero and the troop, amber on the foes, all glossy', () => {

@@ -176,24 +176,27 @@ export const GROUND: Record<Terrain, Ground> = {
   tree: 'grass',
   wall: 'rock',
 };
+/** The ship's black (`--bg`) the fog and the sky fade to, and the ship's one hazard colour, sodium (`--hazard`), on the wall edges (#1173). */
+export const SHIP_BLACK = 0x0b0d0f;
+export const SODIUM = 0xd9822b;
 export const LOOK: Record<Ground, { color: number; emissive: number }> = {
-  water: { color: 0xffffff, emissive: 0x0a5568 }, // coolant lakes glow a little; the colour comes per cell (waterColor)
-  sand: { color: 0x9c8c64, emissive: 0x000000 },
-  grass: { color: 0x3f7d5f, emissive: 0x000000 },
-  rock: { color: 0x4f565f, emissive: 0x000000 },
-  peak: { color: 0x4a525c, emissive: 0x000000 },
+  water: { color: 0xffffff, emissive: 0x052a34 }, // coolant lakes glow a little; the colour comes per cell (waterColor)
+  sand: { color: 0x877d65, emissive: 0x000000 },
+  grass: { color: 0x446957, emissive: 0x000000 },
+  rock: { color: 0x4b4f55, emissive: 0x000000 },
+  peak: { color: 0x474c52, emissive: 0x000000 },
 };
 /** The lake colours: the shore, lighter and greener, and the deep middle of a lake. */
-export const WATER = { shore: 0x4aa8c4, deep: 0x1a5a8c };
+export const WATER = { shore: 0x5392a5, deep: 0x2a516e };
 /** The looks of the biomes (openworld-terrain.md section 4): the ground of the low grass (heights 3 and 4), and the tint of the
  * trees and the boulders, multiplied into their colour per instance. The meadow keeps the grass of `LOOK`; the rest is neutral
  * white. Shore, uplands, peaks and water keep their colours in every biome. */
 export const BIOME_LOOK: Record<Biome, { ground: number; prop: number }> = {
-  meadow: { ground: 0x3f7d5f, prop: 0xffffff },
-  forest: { ground: 0x2e6a4c, prop: 0xffffff },
-  tundra: { ground: 0xd6e2ea, prop: 0xe4f0f8 },
-  desert: { ground: 0xc2a468, prop: 0xffd39a },
-  badlands: { ground: 0x7a3a2c, prop: 0xff9f7a },
+  meadow: { ground: 0x446957, prop: 0xffffff },
+  forest: { ground: 0x345846, prop: 0xffffff },
+  tundra: { ground: 0xc4d0d8, prop: 0xdde8ee },
+  desert: { ground: 0xaa9469, prop: 0xf0d4ae },
+  badlands: { ground: 0x643d35, prop: 0xe8aa90 },
 };
 /** The colour of a cell's ground, per instance: the low grass by its biome, every other ground by `LOOK` (the water's colour
  * comes from `waterColor`). */
@@ -211,7 +214,7 @@ const PROPS = {
   tree: { geometry: new THREE.ConeGeometry(0.34, 1, 5), color: 0x2fb5a0, emissive: 0x0b3d36, flat: true },
   boulder: { geometry: new THREE.DodecahedronGeometry(0.34), color: 0x6b7480, emissive: 0x000000, flat: true },
   wall: { geometry: new THREE.CylinderGeometry(0.5, 0.5, 1, 6), color: 0x14171b, emissive: 0x000000, flat: false },
-  cap: { geometry: new THREE.CylinderGeometry(0.52, 0.52, 1, 6), color: 0xe6a06a, emissive: 0x7a4a1e, flat: false },
+  cap: { geometry: new THREE.CylinderGeometry(0.52, 0.52, 1, 6), color: SODIUM, emissive: 0x6c4115, flat: false },
 } as const;
 type Prop = keyof typeof PROPS;
 const PROP_NAMES = Object.keys(PROPS) as Prop[];
@@ -354,7 +357,7 @@ type Timing = Pick<Move, 'start' | 'span' | 'fall' | 'lunge'>;
 export class OpenWorldView {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
-  private readonly fog = new THREE.Fog(0x0b1220);
+  private readonly fog = new THREE.Fog(SHIP_BLACK);
   private level = 1;
   /** The zoom drawn at the current turn: `level`, or less where a narrow window of turns would pass MAX_REACH (`fitZoom`). */
   private drawnLevel = 1;
@@ -429,7 +432,7 @@ export class OpenWorldView {
     private readonly world: World,
     private readonly fight: FightState = new FightState(),
   ) {
-    this.scene.background = new THREE.Color(0x0b1220);
+    this.scene.background = new THREE.Color(SHIP_BLACK);
     this.scene.fog = this.fog;
     this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 1.6));
     const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);

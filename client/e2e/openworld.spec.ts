@@ -631,8 +631,8 @@ test('the Open world HUD plate folds after 3 steps and the chip reopens it, #113
   await expect(chip).toBeHidden();
 });
 
-// #1138: the HUD plate is the dark plate with rivets (four radial gradients), whatever the system theme.
-test('the Open world HUD plate is dark with four rivets, #1138', async ({ page }) => {
+// #1138 and #1172: the HUD plate has four rivets and takes the shared tokens: dark in the dark theme, light in the light one.
+test('the Open world HUD plate follows the theme with four rivets, #1138, #1172', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
@@ -640,9 +640,12 @@ test('the Open world HUD plate is dark with four rivets, #1138', async ({ page }
   await page.locator('#openworld').click();
   const plate = page.locator('#openworld-hud');
   await expect(plate).toBeVisible();
-  await expect(plate).toHaveCSS('background-color', 'rgb(22, 26, 29)');
+  await expect(plate).toHaveCSS('background-color', 'rgb(243, 240, 230)');
+  await expect(plate).toHaveCSS('border-radius', '6px');
   const image = await plate.evaluate((el) => getComputedStyle(el).backgroundImage);
   expect(image.match(/radial-gradient/g)).toHaveLength(4);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(plate).toHaveCSS('background-color', 'rgb(22, 26, 29)');
 });
 
 // #1137: a held direction goes round an obstacle by itself. An enemy stands on the cell right of the hero (the loaded state comes
