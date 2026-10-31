@@ -4,6 +4,7 @@ import {
   auditPresets,
   auditViewport,
   checkLayoutProblems,
+  afterTwoFrames,
   extractViewportInput,
   formatReport,
   main,
@@ -156,7 +157,6 @@ describe('check-layout-bounds', () => {
             name: 'Logs',
             tag: 'BUTTON',
             box: { left: 50, top: 110, right: 105, bottom: 154 },
-            isSettingsButton: true,
           },
         ],
       };
@@ -166,6 +166,22 @@ describe('check-layout-bounds', () => {
       expect(overlap?.elementName).toBe('Logs');
       expect(overlap?.targetName).toBe('cell 0,-4');
       expect(overlap?.overlapPx).toBe(3);
+    });
+
+    it('lets an item of the open settings menu lie over a cell, the owner choice of e2e/phone-layout.spec.ts (#1134)', () => {
+      const input: ViewportCheckInput = {
+        ...defaultInput,
+        elements: [
+          {
+            name: 'Logs',
+            tag: 'BUTTON',
+            box: { left: 50, top: 110, right: 105, bottom: 154 },
+            isSettingsButton: true,
+            inSettingsMenu: true,
+          },
+        ],
+      };
+      expect(checkLayoutProblems(input)).toEqual([]);
     });
 
     it('detects touch targets under 44px for settings buttons on touch devices', () => {
@@ -250,6 +266,7 @@ describe('check-layout-bounds', () => {
       hud.getBoundingClientRect = () => ({ left: 10, top: 10, right: 100, bottom: 40, width: 90, height: 30 } as any);
 
       for (const btn of document.querySelectorAll('button')) {
+        btn.scrollIntoView = vi.fn();
         btn.getBoundingClientRect = () => ({ left: 20, top: 50, right: 70, bottom: 95, width: 50, height: 45 } as any);
         btn.getClientRects = () => (btn.id === 'hidden-btn' ? [] : [{}]) as any;
       }
@@ -257,6 +274,7 @@ describe('check-layout-bounds', () => {
       const evalEl = document.getElementById('eval')!;
       evalEl.getBoundingClientRect = () => ({ left: 5, top: 5, right: 50, bottom: 25, width: 45, height: 20 } as any);
       evalEl.getClientRects = () => [{}] as any;
+      evalEl.scrollIntoView = vi.fn();
 
       (window as any).__cellToScreen = (q: number, r: number) => ({ x: 100 + q * 20, y: 100 + r * 20 });
 
@@ -267,6 +285,7 @@ describe('check-layout-bounds', () => {
       expect(res.hud).toEqual({ left: 10, top: 10, right: 100, bottom: 40 });
       expect(res.cells.length).toBe(61);
       expect(res.elements).toHaveLength(5);
+      expect(res.elements.map((e) => e.inSettingsMenu)).toEqual([true, true, true, true, false]);
       expect(res.elements[0].name).toBe('Sound');
       expect(res.elements[1].name).toBe('Aria Button');
       expect(res.elements[2].name).toBe('btn-id-only');
@@ -294,6 +313,33 @@ describe('check-layout-bounds', () => {
       const res = await auditViewport(mockPage, preset);
       expect(mockPage.setViewportSize).toHaveBeenCalledWith({ width: 360, height: 780 });
       expect(res.viewport).toBe('test-preset');
+    });
+
+    it('waits two rendered frames after the resize, so the camera matrices fit the new size (#1134)', async () => {
+      const order: string[] = [];
+      const mockPage: EvaluatorPage = {
+        setViewportSize: vi.fn().mockImplementation(async () => void order.push('resize')),
+        evaluate: vi.fn().mockImplementation(async (fn) => {
+          order.push(fn.name);
+          return fn === extractViewportInput ? { innerWidth: 1, innerHeight: 1, hud: { left: 0, top: 0, right: 0, bottom: 0 }, cells: [], elements: [] } : undefined;
+        }),
+      };
+      await auditViewport(mockPage, { name: 'p', width: 360, height: 780, isTouch: true });
+      expect(order).toEqual(['resize', 'afterTwoFrames', 'extractViewportInput']);
+    });
+
+    it('afterTwoFrames resolves once two animation frames have run', async () => {
+      const frames: FrameRequestCallback[] = [];
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => void frames.push(cb));
+      let done = false;
+      const waiting = afterTwoFrames().then(() => (done = true));
+      frames.shift()!(0);
+      await Promise.resolve();
+      expect(done).toBe(false);
+      frames.shift()!(0);
+      await waiting;
+      expect(done).toBe(true);
+      vi.unstubAllGlobals();
     });
 
     it('auditPresets runs across all given presets', async () => {
