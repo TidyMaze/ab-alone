@@ -9,7 +9,7 @@ const doc = new DOMParser().parseFromString(page, 'text/html');
 const children = (id: string): string[] => [...doc.getElementById(id)!.children].map((el) => el.id);
 
 describe('The page controls', () => {
-  it('the thumb dock holds the game controls in order: Retry, Rematch, Goal, New game, View, Hint, Replay, the replay steps, Modes, Auto-play', () => {
+  it('the thumb dock holds the game controls in order: Retry, Rematch, Goal, New game, View, Hint, Replay, the replay steps, Hold, Lobby, Modes, Auto-play', () => {
     expect(children('dock')).toEqual([
       'boss-retry',
       'rematch',
@@ -19,18 +19,23 @@ describe('The page controls', () => {
       'hint',
       'replay',
       'dock-replay',
+      'royale-hold',
+      'lobby',
       'modes',
       'auto-play',
     ]);
+  });
+
+  it('the lobby sheet above the dock holds Start, Invite, Back to the ship and the invite link (#1044)', () => {
+    expect(children('lobby-sheet')).toEqual(['royale-start', 'royale-invite', 'ship-back', 'invite-label', 'invite-row']);
   });
 
   it('the replay steps are the dock review: First, Previous, Next, Last, Live', () => {
     expect(children('dock-replay')).toEqual(['replay-first', 'replay-prev', 'replay-next', 'replay-last', 'replay-live']);
   });
 
-  it('the top column keeps the cog, the Hold, Start, Invite and Back to the ship controls, and the invite link', () => {
-    expect(children('online')).toEqual(['settings-box', 'group-game', 'auto-reason', 'import-file', 'invite-label', 'invite-row']);
-    expect(children('group-game')).toEqual(['royale-hold', 'royale-start', 'royale-invite', 'ship-back']);
+  it('the top column keeps the cog, the auto-play reason and the game file input (the lobby controls moved to the sheet, #1044)', () => {
+    expect(children('online')).toEqual(['settings-box', 'auto-reason', 'import-file']);
   });
 
   it('the Game modes sheet starts with the update banner, then the modes', () => {

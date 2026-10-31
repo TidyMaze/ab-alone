@@ -222,6 +222,7 @@ test('online status: creator waits with the invite, joiner joins, both see each 
   await openModes(a);
   await a.locator('#play-online').click();
   await expect(status(a)).toHaveText('You are Black. Waiting for an opponent...');
+  await a.getByRole('button', { name: 'Lobby' }).click(); // the invite link sits in the lobby sheet (#1044)
   await expect(a.locator('#invite')).toBeVisible();
   await expect(a.getByText('Invite link: send it to your opponent')).toBeVisible();
   const invite = await a.locator('#invite').inputValue();

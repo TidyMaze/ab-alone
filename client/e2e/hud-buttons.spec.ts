@@ -47,6 +47,7 @@ test('Copy looks like Reset view and is as tall as the link beside it, #839', as
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.getByRole('button', { name: 'Play online', exact: true }).click();
+  await page.getByRole('button', { name: 'Lobby' }).click(); // the invite link and Copy sit in the lobby sheet (#1044)
   await expect(page.getByRole('button', { name: 'Copy', exact: true })).toBeVisible();
   // #1032: Reset view is a thumb dock button (its label is a short word there), so Copy is no longer compared to it.
   const copy = await look(page, 'invite-copy');

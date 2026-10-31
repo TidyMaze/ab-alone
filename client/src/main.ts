@@ -948,12 +948,18 @@ motionQuery.addEventListener('change', () => {
   paintMenu();
 });
 applyView(); // camera and fog
+// The lobby sheet's state (#1044) is declared with the other sheets: the Game modes and Settings buttons close it, and
+// they can be pressed while the module still waits on a top-level await.
+const lobbyButton = document.getElementById('lobby') as HTMLButtonElement;
+const lobbySheet = document.getElementById('lobby-sheet')!;
+let lobbyOpen = false;
 let menuIsOpen = false;
 const moveMenu = (event: MenuEvent): void => {
   menuIsOpen = menuOpen(menuIsOpen, event);
   if (menuIsOpen) {
     moveModes('outside'); // one sheet at a time (#1032)
     closeGoal();
+    closeLobby(); // one sheet at a time (#1044)
   }
   menu.hidden = !menuIsOpen;
   delete menu.dataset.page; // the menu opens on its items again
@@ -983,6 +989,7 @@ const moveModes = (event: MenuEvent): void => {
   if (modesOpen) {
     moveMenu('outside'); // one sheet at a time (#1032)
     closeGoal();
+    closeLobby(); // one sheet at a time (#1044)
   }
 };
 modeButton.addEventListener('click', () => moveModes('button'));
@@ -2899,7 +2906,12 @@ function medalNote(boss: { id: string }): string {
   return medalSeen.note;
 }
 
+// The HUD, and the lobby controls after it: their state (shown, a lobby waiting) is set while the HUD is drawn (#1044).
 function hud(extra = ''): void {
+  drawHud(extra);
+  syncLobby();
+}
+function drawHud(extra = ''): void {
   syncReplay();
   backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
   if (hub || royale) document.getElementById('boss-bar')!.hidden = true; // no boss there (#814)
@@ -4271,6 +4283,7 @@ goalButton.addEventListener('click', () => {
   if (goalOpen) {
     moveModes('outside'); // one sheet at a time (#1032)
     moveMenu('outside');
+    closeLobby(); // one sheet at a time (#1044)
   }
   hud();
 });
@@ -4460,8 +4473,12 @@ function showInvite(url: string, caption: string): void {
   inviteBox.hidden = inviteLabel.hidden = inviteCopy.hidden = false;
   inviteLabel.textContent = caption;
   document.getElementById('online')!.scrollTop = 0;
+  syncLobby(); // the link sits in the lobby sheet (#1044)
 }
-const hideInvite = (): void => void (inviteBox.hidden = inviteLabel.hidden = inviteCopy.hidden = true);
+const hideInvite = (): void => {
+  inviteBox.hidden = inviteLabel.hidden = inviteCopy.hidden = true;
+  syncLobby();
+};
 // Copy (#839): the link goes to the clipboard and the link, its label and Copy close. When the browser refuses, the link
 // stays, selected, to copy by hand.
 inviteCopy.addEventListener('click', async () => {
@@ -5200,6 +5217,45 @@ royaleInviteButton.addEventListener('click', () => {
 // Used by the browser checks to count each seat's glyphs drawn on the arena, in seat order (#558).
 (window as unknown as Record<string, unknown>).__seatGlyphs = () =>
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
+// The lobby sheet (#1044, docs/specs/thumb-dock.md section 1): Start, Invite, Back to the ship and the invite link sit above
+// the dock. The Lobby control toggles it, and carries an accent while a lobby waits. It shows only with a control to show,
+// and one sheet at a time: Esc and a tap outside close it, and the focus goes back to Lobby.
+const lobbyControls = (): HTMLElement[] => [startButton, royaleInviteButton, backButton, inviteBox, inviteCopy];
+/** A lobby waits: the creator's Start shows, or the invite link shows while the other seat is waiting. */
+const lobbyWaiting = (): boolean => !startButton.hidden || (!inviteBox.hidden && document.body.dataset.opponent === 'waiting');
+function paintLobby(): void {
+  lobbySheet.hidden = !lobbyOpen;
+  lobbyButton.setAttribute('aria-expanded', String(lobbyOpen));
+}
+function openLobby(): void {
+  if (!lobbyControls().some((el) => !el.hidden)) return;
+  lobbyOpen = true;
+  moveModes('outside'); // one sheet at a time (#1032, #1044)
+  moveMenu('outside');
+  closeGoal();
+  paintLobby();
+}
+function closeLobby(): void {
+  lobbyOpen = false;
+  paintLobby();
+}
+/** Draws the Lobby control from the controls it holds. While a lobby waits it carries an accent, and the sheet stays shut
+ * until the player taps Lobby: the board is never covered by itself (#1044). */
+function syncLobby(): void {
+  lobbyButton.hidden = !lobbyControls().some((el) => !el.hidden);
+  if (lobbyButton.hidden) lobbyOpen = false;
+  lobbyButton.dataset.waiting = String(lobbyWaiting());
+  paintLobby();
+}
+lobbyButton.addEventListener('click', () => (lobbyOpen ? closeLobby() : openLobby()));
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !lobbyOpen) return;
+  closeLobby();
+  lobbyButton.focus();
+});
+addEventListener('pointerdown', (e) => {
+  if (lobbyOpen && !within(lobbySheet, e.target) && !within(lobbyButton, e.target)) closeLobby();
+});
 function syncConnectivity(): void {
   const state = playOnlineState(navigator.onLine, playReady);
   playOnlineButton.disabled = coopButton.disabled = rankedButton.disabled = royaleInviteButton.disabled = state.disabled;

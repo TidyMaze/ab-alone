@@ -62,19 +62,8 @@
           </button>
           <div id="settings-menu" role="group" aria-label="Settings" hidden></div>
         </div>
-        <div id="group-game" class="group">
-          <button id="royale-hold" type="button" hidden>Hold</button>
-          <button id="royale-start" type="button" hidden>Start</button>
-          <button id="royale-invite" type="button" hidden>Invite</button>
-          <button id="ship-back" type="button" hidden>Back to the ship</button>
-        </div>
         <span id="auto-reason" hidden></span>
         <input id="import-file" type="file" accept=".json,application/json" hidden aria-label="Game file" />
-        <label id="invite-label" for="invite" hidden>Invite link: send it to your opponent</label>
-        <div id="invite-row">
-          <input id="invite" type="text" readonly hidden aria-label="Invite link" />
-          <button id="invite-copy" type="button" hidden>Copy</button>
-        </div>
       </div>
       <div id="log" role="region" aria-label="Audio log">
         <p id="transcript" aria-live="polite" hidden></p>
@@ -99,6 +88,8 @@
           <button id="replay-last" type="button" aria-label="Last position" title="Last position">&#9197;</button>
           <button id="replay-live" type="button" title="Back to the live game (Esc)">Live</button>
         </div>
+        <button id="royale-hold" type="button" data-label="Hold" aria-label="Hold" hidden>Hold</button>
+        <button id="lobby" type="button" data-label="Lobby" aria-label="Lobby" aria-expanded="false" aria-controls="lobby-sheet" hidden>Lobby</button>
         <button id="modes" type="button" data-label="Modes" aria-label="Game modes" title="Game modes" aria-haspopup="true" aria-expanded="false" aria-controls="mode-menu" disabled></button>
         <button id="auto-play" type="button" data-label="Auto" aria-label="Auto-play" aria-pressed="false" aria-describedby="auto-reason" hidden>Auto-play</button>
       </nav>
@@ -116,6 +107,16 @@
         <button id="stalker" type="button" disabled>Stalker</button>
         <button id="openworld" type="button" disabled>Open world</button>
         <button id="ship" type="button" disabled>Ship</button>
+      </div>
+      <div id="lobby-sheet" role="group" aria-label="Lobby" hidden>
+        <button id="royale-start" type="button" hidden>Start</button>
+        <button id="royale-invite" type="button" hidden>Invite</button>
+        <button id="ship-back" type="button" hidden>Back to the ship</button>
+        <label id="invite-label" for="invite" hidden>Invite link: send it to your opponent</label>
+        <div id="invite-row">
+          <input id="invite" type="text" readonly hidden aria-label="Invite link" />
+          <button id="invite-copy" type="button" hidden>Copy</button>
+        </div>
       </div>
       <div id="goal-sheet" role="status" hidden></div>
       <div id="daily-card" hidden>

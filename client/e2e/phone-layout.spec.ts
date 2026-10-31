@@ -284,7 +284,9 @@ for (const { name, viewport, mobile } of sizes) {
       await openModes(page);
       await page.getByRole('button', { name: 'Play online' }).click();
       await expect(hud).toContainText('Waiting for an opponent');
-      await expect(page.locator('#invite')).toBeVisible();
+      // The invite link sits in the lobby sheet, shut until Lobby opens it: it covers no cell (#1044).
+      await expect(page.getByRole('button', { name: 'Lobby' })).toBeVisible();
+      await expect(page.locator('#invite')).toBeHidden();
       await check(page, testInfo, 'waiting for an opponent');
 
       // Turning the device around keeps the layout right.
