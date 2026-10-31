@@ -2950,7 +2950,6 @@ function hud(extra = ''): void {
     document.getElementById('hud')!.insertAdjacentHTML(
       'beforeend',
       bossHtml({
-        name: boss.name(),
         phase: boss.phase(),
         phases: boss.phases(),
         result: end ? 0 : boss.result(), // the end banner already says Victory or Defeat, one line less in the plate

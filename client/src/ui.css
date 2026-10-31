@@ -495,9 +495,6 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
   #boss-bar .name { flex: none; font-size: 0.8125rem; }
   #boss-bar .frags { flex: 1; margin-top: 0; }
 }
-@media (orientation: portrait) {
-  #hud .boss strong { display: none; }
-}
 @media (orientation: landscape) and (min-width: 1101px) and (min-height: 501px) {
   #chrome { flex-wrap: wrap; }
   #boss-bar { flex: 1 0 100%; justify-content: center; }
