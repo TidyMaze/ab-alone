@@ -20,6 +20,7 @@ test('the FPS readout is off by default, shows a rate once switched on, and surv
   await page.reload();
   await page.locator('canvas').waitFor();
   await expect(readout).toBeVisible();
+  await page.getByRole('button', { name: 'Settings' }).click(); // the clipboard is the last row of the settings list (#1032)
   await page.getByRole('button', { name: 'Copy diagnostics' }).click();
   const diagnostics = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(diagnostics.environment.fps).toBeGreaterThan(0);

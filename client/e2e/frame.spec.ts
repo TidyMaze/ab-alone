@@ -24,6 +24,9 @@ test('the cells sit on a steel frame that never takes a click meant for a cell, 
   const d = 0.68 / (Math.sqrt(3) / 2);
   await clickAt(page, -d / 2, 4 + d);
   expect(await rings(page)).toEqual([]);
+  // At 1280x720 the dock lies on this rim point (#1032): the press reached a dock button, which may open a sheet.
+  // Esc closes it, so the next press is the cell's.
+  await page.keyboard.press('Escape');
   await clickAt(page, 0, 4);
   expect(await rings(page)).toEqual([[0, 4]]);
 });
