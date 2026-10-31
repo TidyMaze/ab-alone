@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BASE_RADIUS, bindJoystick, DEAD_ZONE, heldKeys, STEP_MS } from './openworldjoystick';
+import { BASE_RADIUS, bindJoystick, DEAD_ZONE, heldKeys } from './openworldjoystick';
 import { heldCell } from './openworldmode';
+import { GLIDE_MS } from './openworldglide';
 
 // The virtual joystick of the Open world on a touch screen (#1025, #1026): a touch on the left half of the canvas holds the arrow
-// keys of the hex direction its drag points to, in the yaw of the camera; the hero walks on while it is held, and it stops when
-// the thumb lifts or a second finger comes down (a pinch or a twist of the camera).
+// keys of the hex direction its drag points to, in the yaw of the camera. The stick holds them and lets go; the hero walks on the
+// cadence of the held arrows (#1059, no timer of the stick's own), and it stops when the thumb lifts or a second finger comes down
+// (a pinch or a twist of the camera).
 const pad = () => document.getElementById('joystick') as HTMLElement;
 const knob = () => document.getElementById('joystick-knob') as HTMLElement;
 const canvas = () => document.querySelector('canvas') as HTMLCanvasElement;
@@ -19,11 +21,11 @@ function pointer(type: string, target: EventTarget, at: { x: number; y: number; 
   target.dispatchEvent(event);
 }
 
-const stick = (active = true, yaw = 0) => ({ active, yaw, step: vi.fn((_keys: readonly string[]) => {}) });
+const stick = (active = true, yaw = 0) => ({ active, yaw, hold: vi.fn((_keys: readonly string[]) => {}) });
 
 let dispose: () => void = () => {};
-const bind = (s = stick(), step = STEP_MS) => {
-  dispose = bindJoystick(document, s, step);
+const bind = (s = stick()) => {
+  dispose = bindJoystick(document, s);
   return s;
 };
 
@@ -68,43 +70,42 @@ describe('heldKeys: the drag direction as the arrow keys of a hex step (#1025)',
   });
 });
 
-describe('bindJoystick: a touch on the left half holds the direction, the hero walks while it is held (#1025)', () => {
-  it('shows the base under the thumb and steps the hero the way the drag points, once at once', () => {
+describe('bindJoystick: a touch on the left half holds the direction, the hero walks while it is held (#1025, #1059)', () => {
+  it('shows the base under the thumb and holds the arrows the drag points to, at once', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);
     expect(pad().hidden).toBe(false);
     expect(pad().style.left).toBe('100px');
     expect(pad().style.top).toBe('300px');
     pointer('pointermove', canvas(), { x: 150, y: 300 }); // 50 px to the right: 0 degrees
-    expect(s.step).toHaveBeenCalledWith(['ArrowRight']);
+    expect(s.hold).toHaveBeenLastCalledWith(['ArrowRight']);
   });
 
-  it('keeps stepping while the thumb is held on the direction, one step per interval', () => {
+  it('keeps the keys held while the thumb stays on the direction, with no timer of its own: the cadence is the mode\'s', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 150, y: 300 });
-    s.step.mockClear();
-    vi.advanceTimersByTime(STEP_MS * 3);
-    expect(s.step).toHaveBeenCalledTimes(3);
-    expect(s.step).toHaveBeenLastCalledWith(['ArrowRight']);
+    expect(vi.getTimerCount()).toBe(0);
+    s.hold.mockClear();
+    vi.advanceTimersByTime(GLIDE_MS * 3);
+    expect(s.hold).not.toHaveBeenCalled();
   });
 
-  it('a diagonal drag steps by both of its keys at once: one roll on the diagonal', () => {
+  it('a diagonal drag holds both of its keys', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 125, y: 257 }); // up-right
-    expect(s.step).toHaveBeenLastCalledWith(['ArrowUp', 'ArrowRight']);
-    expect(s.step).toHaveBeenCalledTimes(1);
+    expect(s.hold).toHaveBeenLastCalledWith(['ArrowUp', 'ArrowRight']);
   });
 
-  it('a change of direction steps the new way at once, and a move in the same direction does not step again', () => {
+  it('a change of direction holds the new keys, and a move in the same direction holds the same keys again', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 150, y: 300 }); // right
     pointer('pointermove', canvas(), { x: 160, y: 300 }); // still right
-    expect(s.step).toHaveBeenCalledTimes(1);
+    expect(s.hold).toHaveBeenLastCalledWith(['ArrowRight']);
     pointer('pointermove', canvas(), { x: 50, y: 300 }); // left
-    expect(s.step).toHaveBeenLastCalledWith(['ArrowLeft']);
+    expect(s.hold).toHaveBeenLastCalledWith(['ArrowLeft']);
   });
 
   it('the drag is read in the yaw of the camera at the time of the move', () => {
@@ -112,7 +113,7 @@ describe('bindJoystick: a touch on the left half holds the direction, the hero w
     dispose = bindJoystick(document, s);
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 150, y: 300 });
-    expect(s.step).toHaveBeenCalledWith(['ArrowRight']);
+    expect(s.hold).toHaveBeenCalledWith(['ArrowRight']);
   });
 
   it('the knob follows the thumb and is kept inside the base', () => {
@@ -124,24 +125,21 @@ describe('bindJoystick: a touch on the left half holds the direction, the hero w
     expect(knob().style.transform).toBe(`translate(${BASE_RADIUS}px, 0px)`);
   });
 
-  it('inside the dead zone the knob moves and the hero does not', () => {
+  it('inside the dead zone the knob moves and the stick holds nothing', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 105, y: 300 });
     expect(knob().style.transform).toBe('translate(5px, 0px)');
-    vi.advanceTimersByTime(STEP_MS * 2);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).toHaveBeenLastCalledWith([]);
   });
 
-  it('lifting the thumb hides the base and stops the steps', () => {
+  it('lifting the thumb hides the base and lets the keys go', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 150, y: 300 });
     pointer('pointerup', canvas(), LEFT);
     expect(pad().hidden).toBe(true);
-    s.step.mockClear();
-    vi.advanceTimersByTime(STEP_MS * 3);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).toHaveBeenLastCalledWith([]);
   });
 
   it('a cancelled touch stops the stick the same way', () => {
@@ -150,19 +148,15 @@ describe('bindJoystick: a touch on the left half holds the direction, the hero w
     pointer('pointermove', canvas(), { x: 150, y: 300 });
     pointer('pointercancel', canvas(), LEFT);
     expect(pad().hidden).toBe(true);
-    s.step.mockClear();
-    vi.advanceTimersByTime(STEP_MS * 2);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).toHaveBeenLastCalledWith([]);
   });
 
   it('a drag back into the dead zone holds nothing: the hero stops at once', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 150, y: 300 });
-    s.step.mockClear();
     pointer('pointermove', canvas(), { x: 102, y: 300 }); // 2 px from the touch: inside the dead zone
-    vi.advanceTimersByTime(STEP_MS * 2);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).toHaveBeenLastCalledWith([]);
     expect(pad().hidden).toBe(false);
   });
 
@@ -172,9 +166,7 @@ describe('bindJoystick: a touch on the left half holds the direction, the hero w
     pointer('pointermove', canvas(), { x: 150, y: 300 });
     pointer('pointerdown', canvas(), { x: 200, y: 300, id: 3, kind: 'mouse' });
     expect(pad().hidden).toBe(false);
-    s.step.mockClear();
-    vi.advanceTimersByTime(STEP_MS);
-    expect(s.step).toHaveBeenCalledWith(['ArrowRight']);
+    expect(s.hold).not.toHaveBeenCalledWith([]);
   });
 
   it('a move of another finger is not the stick', () => {
@@ -182,7 +174,7 @@ describe('bindJoystick: a touch on the left half holds the direction, the hero w
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 150, y: 300, id: 2 });
     pointer('pointerup', canvas(), { ...LEFT, id: 2 });
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).not.toHaveBeenCalled();
     expect(pad().hidden).toBe(false);
   });
 
@@ -195,10 +187,10 @@ describe('bindJoystick: a touch on the left half holds the direction, the hero w
     pointer('pointerdown', canvas(), { x: 200, y: 300, id: 2 }); // the second finger, on the left half too
     expect(pad().hidden).toBe(true);
     expect(onCanvas).toHaveBeenCalled(); // it is the canvas's press: the twist and the pinch
-    s.step.mockClear();
+    expect(s.hold).toHaveBeenLastCalledWith([]);
+    s.hold.mockClear();
     pointer('pointermove', canvas(), { x: 170, y: 300 });
-    vi.advanceTimersByTime(STEP_MS * 2);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).not.toHaveBeenCalled();
   });
 
   it('the touch is the stick alone: the canvas does not get the press, so it does not roll the hero (#962)', () => {
@@ -209,35 +201,26 @@ describe('bindJoystick: a touch on the left half holds the direction, the hero w
     expect(onCanvas).not.toHaveBeenCalled();
   });
 
-  it('the stick stops when the Open world is left under the thumb', () => {
-    const s = bind();
-    pointer('pointerdown', canvas(), LEFT);
-    pointer('pointermove', canvas(), { x: 150, y: 300 });
-    s.active = false;
-    vi.advanceTimersByTime(STEP_MS);
-    expect(pad().hidden).toBe(true);
-    expect(s.step).toHaveBeenCalledTimes(1); // only the step of the drag itself
-  });
-
   it('disposing removes the stick: a touch is no stick any more, and a held thumb is let go', () => {
     const s = bind();
     pointer('pointerdown', canvas(), LEFT);
     pointer('pointermove', canvas(), { x: 150, y: 300 });
     dispose();
     expect(pad().hidden).toBe(true);
-    s.step.mockClear();
-    vi.advanceTimersByTime(STEP_MS * 2);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).toHaveBeenLastCalledWith([]);
+    s.hold.mockClear();
     const onCanvas = vi.fn();
     canvas().addEventListener('pointerdown', onCanvas);
     pointer('pointerdown', canvas(), LEFT);
     expect(onCanvas).toHaveBeenCalled();
+    expect(s.hold).not.toHaveBeenCalled();
   });
 
   it('disposing with no touch down only removes the listeners', () => {
-    bind();
+    const s = bind();
     dispose();
     expect(pad().hidden).toBe(true);
+    expect(s.hold).not.toHaveBeenCalled();
   });
 });
 
@@ -249,7 +232,7 @@ describe('bindJoystick: what is not the stick is left to the page (#1025)', () =
     pointer('pointerdown', canvas(), { x: 900, y: 300 });
     expect(onCanvas).toHaveBeenCalled();
     expect(pad().hidden).toBe(true);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).not.toHaveBeenCalled();
   });
 
   it('a mouse or a pen never shows the stick: it is for touch screens only', () => {
@@ -257,7 +240,7 @@ describe('bindJoystick: what is not the stick is left to the page (#1025)', () =
     pointer('pointerdown', canvas(), { ...LEFT, kind: 'mouse' });
     pointer('pointerdown', canvas(), { ...LEFT, kind: 'pen' });
     expect(pad().hidden).toBe(true);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).not.toHaveBeenCalled();
   });
 
   it('a touch on something other than the canvas (a button, the HUD) is left to that element', () => {
@@ -272,6 +255,6 @@ describe('bindJoystick: what is not the stick is left to the page (#1025)', () =
     const s = bind(stick(false));
     pointer('pointerdown', canvas(), LEFT);
     expect(pad().hidden).toBe(true);
-    expect(s.step).not.toHaveBeenCalled();
+    expect(s.hold).not.toHaveBeenCalled();
   });
 });

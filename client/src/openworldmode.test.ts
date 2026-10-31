@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours, World } from './openworld';
@@ -57,6 +57,12 @@ const screen = (from: Axial, to: Axial): [number, number] => {
   return [Math.sign(Math.round((b.x - a.x) * 100)), Math.sign(Math.round((b.z - a.z) * 100))];
 };
 const held = (...keys: string[]) => new Set(keys);
+// One press of an arrow: the key goes down, its step is made at once, and the key comes up (#1059).
+const tap = (m: OpenWorldMode, key: string): boolean => {
+  const pressed = m.key(key);
+  m.release(key);
+  return pressed;
+};
 
 describe('heldCell', () => {
   it('gives the diagonal neighbour of each pair of a vertical and a horizontal arrow, on every row', () => {
@@ -132,12 +138,12 @@ describe('the Open world mode', () => {
   it('rolls the hero on an arrow key, and keeps it before a boulder', () => {
     const m = mode();
     m.enter(1, 800, 600);
-    expect(m.key('ArrowRight')).toBe(true);
+    expect(tap(m, 'ArrowRight')).toBe(true);
     expect(m.hero!.at).toEqual([1, 0]);
     expect(body().openworldAt).toBe('1,0');
-    expect(m.key('ArrowLeft')).toBe(true);
-    expect(m.key('ArrowDown')).toBe(true); // down from the even row 0: (-1, 1) or (0, 1)
-    expect(m.key('ArrowDown')).toBe(true);
+    expect(tap(m, 'ArrowLeft')).toBe(true);
+    expect(tap(m, 'ArrowDown')).toBe(true); // down from the even row 0: (-1, 1) or (0, 1)
+    expect(tap(m, 'ArrowDown')).toBe(true);
     expect(m.key('a')).toBe(false);
   });
 
@@ -162,38 +168,52 @@ describe('the Open world mode', () => {
   });
 
   it('rolls the hero on the diagonal of two held arrows, and keeps walking while they are held', () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
     const m = mode();
     m.enter(1, 800, 600);
     expect(m.key('ArrowLeft')).toBe(true);
     expect(m.hero!.at).toEqual([-1, 0]);
-    expect(m.key('ArrowUp')).toBe(true); // Left and Up held: up-left from (-1, 0)
-    expect(m.hero!.at).toEqual([-1, -1]);
-    expect(m.key('ArrowUp')).toBe(true); // the key repeats: up-left again
-    expect(m.hero!.at).toEqual([-1, -2]);
+    expect(m.key('ArrowUp')).toBe(true); // Left and Up held: the diagonal rolls on the next step, not at once (#1059)
+    expect(m.hero!.at).toEqual([-1, 0]);
+    clock = GLIDE_MS;
+    m.frame(vi.fn(), clock);
+    expect(m.hero!.at).toEqual([-1, -1]); // up-left
+    clock = 2 * GLIDE_MS;
+    m.frame(vi.fn(), clock);
+    expect(m.hero!.at).toEqual([-1, -2]); // up-left again, the arrows still held
+    vi.restoreAllMocks();
   });
 
   it('does nothing for opposite arrows held together, and a release drops the key', () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
     const m = mode();
     m.enter(1, 800, 600);
     expect(m.key('ArrowLeft')).toBe(true);
     expect(m.hero!.at).toEqual([-1, 0]);
-    expect(m.key('ArrowRight')).toBe(true); // Left and Right: nothing
+    expect(m.key('ArrowRight')).toBe(true); // Left and Right: nothing, on the cadence either
+    clock = GLIDE_MS;
+    m.frame(vi.fn(), clock);
     expect(m.hero!.at).toEqual([-1, 0]);
     m.release('ArrowLeft');
-    expect(m.key('ArrowRight')).toBe(true); // Right alone rolls again
-    expect(m.hero!.at).toEqual([0, 0]);
+    clock = 2 * GLIDE_MS;
+    m.frame(vi.fn(), clock);
+    expect(m.hero!.at).toEqual([0, 0]); // Right alone rolls again
+    vi.restoreAllMocks();
   });
 
   it('forgets the held keys when the window loses focus or the mode is left', () => {
     const m = mode();
     m.enter(1, 800, 600);
-    m.key('ArrowUp'); // (1, -1) from the even spawn row
+    m.key('ArrowUp'); // (1, -1) from the even spawn row, Up held
     m.release(); // blur: no key is held any more
-    expect(m.key('ArrowLeft')).toBe(true);
+    expect(tap(m, 'ArrowLeft')).toBe(true);
     expect(m.hero!.at).toEqual([0, -1]); // a single arrow, not a diagonal with Up
+    m.key('ArrowUp'); // held again
     m.key('Escape'); // leaving clears the held keys too
     m.enter(1, 800, 600);
-    expect(m.key('ArrowUp')).toBe(true);
+    expect(tap(m, 'ArrowUp')).toBe(true);
     expect(m.hero!.at).toEqual([1, -1]); // single Up from the spawn, Left is not held
   });
 
@@ -325,7 +345,7 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
     m.enter(1, 800, 600);
     expect(body().openworldPush).toBe('0');
-    expect(m.key('ArrowRight')).toBe(true);
+    expect(tap(m, 'ArrowRight')).toBe(true);
     expect(m.hero!.at).toEqual([2, 0]);
     expect(body().openworldAt).toBe('2,0');
     expect(body().openworldTroop).toBe('1,0 0,0');
@@ -344,11 +364,11 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     push.mockImplementationOnce((_seed, troop) => echo(troop));
     const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
     m.enter(1, 800, 600);
-    m.key('ArrowRight'); // the step pushes the enemy from (2,0) to (3,0)
+    tap(m, 'ArrowRight'); // the step pushes the enemy from (2,0) to (3,0)
     expect(body().openworldAt).toBe('1,0');
-    expect(m.key('ArrowRight')).toBe(true); // onto (2,0), its old cell: free
+    expect(tap(m, 'ArrowRight')).toBe(true); // onto (2,0), its old cell: free
     expect(body().openworldAt).toBe('2,0');
-    m.key('ArrowRight'); // onto (3,0): the pushed enemy stands there
+    tap(m, 'ArrowRight'); // onto (3,0): the pushed enemy stands there
     expect(body().openworldAt).toBe('2,0');
     expect(push).toHaveBeenCalledTimes(2); // the refused step asks the bridge for nothing
   });
@@ -356,7 +376,7 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
   it('plays nothing when the bridge gives no push: the enemies stay and no push is counted', () => {
     const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()));
     m.enter(1, 800, 600);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     expect(body().openworldAt).toBe('1,0');
     expect(body().openworldPush).toBe('0');
     expect(body().openworldEnemies).toBe('1');
@@ -369,12 +389,12 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     push.mockImplementationOnce((_seed, troop) => Int32Array.of(2, 0, 1, troop.length / 2, ...troop, 0, 1, 0));
     const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
     m.enter(1, 800, 600);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     expect(body().openworldBeaten).toBe('1');
     expect(body().openworldPush).toBe('1');
     expect(body().openworldEnemies).toBe('0');
     expect(m.enemies()).toEqual([]);
-    expect(m.key('ArrowRight')).toBe(true);
+    expect(tap(m, 'ArrowRight')).toBe(true);
     expect(body().openworldAt).toBe('2,0');
   });
 
@@ -382,9 +402,9 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     const push = vi.fn<PushBridge>(() => new Int32Array());
     const m = mode(undefined, undefined, undefined, undefined, push);
     m.enter(1, 800, 600);
-    m.key('ArrowUp'); // one step
-    m.key('ArrowRight'); // Up and Right held: the diagonal step
-    expect(push).toHaveBeenCalledTimes(2);
+    m.hold(['ArrowUp', 'ArrowRight']); // the stick's diagonal: one step, and the push after it
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(body().openworldAt).toBe('1,-1');
   });
 
   it('starts a fresh fight on each entry: the pushed enemies and the counts are the generated ones again', () => {
@@ -392,7 +412,7 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     push.mockImplementationOnce((_seed, troop) => echo(troop));
     const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
     m.enter(1, 800, 600);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     expect(body().openworldPush).toBe('1');
     m.leave();
     expect(body().openworldPush).toBeUndefined();
@@ -487,7 +507,7 @@ describe('the camera eases up a cliff (#988)', () => {
     m.enter(1, 800, 600);
     const render = vi.fn();
     m.frame(render, 0);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     m.release('ArrowRight');
     expect(body().openworldAt).toBe('1,0');
     const drawn: boolean[] = [];
@@ -507,7 +527,7 @@ describe('the camera eases up a cliff (#988)', () => {
     const render = vi.fn();
     m.frame(render, 0);
     render.mockClear();
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     m.release('ArrowRight');
     for (let frame = 1; frame <= 60; frame++) m.frame(render, (frame * 1000) / 60);
     expect(render).toHaveBeenCalledTimes(1);
@@ -538,12 +558,12 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
 
   it('plays the animation of the push, and reduced motion plays none', () => {
     const play = vi.spyOn(OpenWorldView.prototype, 'playPush');
-    pushing().key('ArrowRight');
+    tap(pushing(), 'ArrowRight');
     expect(play).toHaveBeenCalledTimes(1);
     expect(play.mock.calls[0]![0].push.enemies).toEqual([[3, 0]]);
     expect(play.mock.calls[0]![2]).toBe(1);
     play.mockClear();
-    pushing(true).key('ArrowRight');
+    tap(pushing(true), 'ArrowRight');
     expect(play).not.toHaveBeenCalled();
   });
 
@@ -552,7 +572,7 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     const m = pushing();
     const render = vi.fn();
     m.frame(render, 0);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     expect(body().openworldAnim).toBe('1');
     render.mockClear();
     for (const now of [100, 200, 300, 400]) m.frame(render, now);
@@ -571,10 +591,10 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     snap.mockClear(); // the fixture snaps too
     play.mockClear();
     m.frame(vi.fn(), 0);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     m.frame(vi.fn(), 100);
     m.release('ArrowRight');
-    m.key('ArrowLeft'); // the hero rolls back (the enemy on (3,0) blocks the way on): the bridge pushes again
+    tap(m, 'ArrowLeft'); // the hero rolls back (the enemy on (3,0) blocks the way on): the bridge pushes again
     expect(snap).toHaveBeenCalledTimes(2);
     expect(play).toHaveBeenCalledTimes(2);
     expect(snap.mock.invocationCallOrder[1]).toBeLessThan(play.mock.invocationCallOrder[1]!);
@@ -585,7 +605,7 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     const m = pushing();
     snap.mockClear(); // the fixture snaps too
     m.frame(vi.fn(), 0);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     snap.mockClear();
     m.zoom(1.2);
     expect(snap).toHaveBeenCalledTimes(1);
@@ -597,7 +617,7 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     const m = pushing();
     const render = vi.fn();
     m.frame(render, 0);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     m.key('Escape');
     expect(body().openworldAnim).toBeUndefined();
     render.mockClear();
@@ -608,7 +628,7 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
   it('stretches the animation by the slow factor of the page, read when it starts (a webdriver check)', () => {
     const play = vi.spyOn(OpenWorldView.prototype, 'playPush');
     (window as { __openworldSlow?: number }).__openworldSlow = 10;
-    pushing().key('ArrowRight');
+    tap(pushing(), 'ArrowRight');
     expect(play.mock.calls[0]![2]).toBe(10);
   });
 });
@@ -644,7 +664,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     delete body().openworldSaved;
     const { m, store } = withSaves();
     m.enter(7, 800, 600);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     expect(store.data.has('openworld:7')).toBe(false); // not before the frame
     frameOf(m);
     await settle();
@@ -665,9 +685,9 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     const { m, saves } = withSaves();
     const put = vi.spyOn(saves, 'put');
     m.enter(7, 800, 600);
-    m.key('ArrowRight');
-    m.key('ArrowRight');
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
+    tap(m, 'ArrowRight');
+    tap(m, 'ArrowRight');
     frameOf(m);
     frameOf(m);
     await settle();
@@ -680,7 +700,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     const m = mode(undefined, undefined, undefined, undefined, shove, worldSaves(store, 1));
     m.enter(7, 800, 600);
     m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     frameOf(m);
     await settle();
     const saved = store.data.get('openworld:7') as WorldSave;
@@ -691,7 +711,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
   it('leaving saves the final state at once, before any frame', async () => {
     const { m, store } = withSaves();
     m.enter(7, 800, 600);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     m.leave();
     await settle();
     expect((store.data.get('openworld:7') as WorldSave).hero).toEqual([1, 0]);
@@ -700,7 +720,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
   it('entering another world saves the one entered before', async () => {
     const { m, store } = withSaves();
     m.enter(7, 800, 600);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     m.enter(8, 800, 600);
     await settle();
     expect((store.data.get('openworld:7') as WorldSave).hero).toEqual([1, 0]);
@@ -719,7 +739,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     );
     const m = mode(undefined, undefined, undefined, undefined, undefined, broken);
     m.enter(7, 800, 600);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     frameOf(m);
     await settle();
     expect(body().openworldSaved).toBeUndefined();
@@ -877,13 +897,24 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
     expect(twistOf(-3, 3)).toBeCloseTo(6 - 2 * Math.PI);
   });
 
-  it('the stick rolls the hero by the keys it holds in one step: a diagonal of two keys is one roll', () => {
+  it('the stick holds the keys it reads: a diagonal of two keys is one roll at once, then on the cadence until it lets go (#1059)', () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
     const m = mode();
     m.enter(7, 800, 600);
-    m.step(['ArrowUp', 'ArrowRight']);
+    m.hold(['ArrowUp', 'ArrowRight']);
     expect(body().openworldAt).toBe('1,-1'); // the diagonal of the spawn's even row, as the keyboard rolls it
-    m.step([]);
+    m.hold(['ArrowUp', 'ArrowRight']); // the same keys again: no step of their own
     expect(body().openworldAt).toBe('1,-1');
+    clock = GLIDE_MS;
+    m.frame(vi.fn(), clock);
+    expect(body().openworldAt).not.toBe('1,-1'); // the cadence steps the held stick
+    m.hold([]);
+    const stopped = body().openworldAt;
+    clock = 3 * GLIDE_MS;
+    m.frame(vi.fn(), clock);
+    expect(body().openworldAt).toBe(stopped);
+    vi.restoreAllMocks();
   });
 
   it('the turn is saved with the world: a frame writes it, and opening the world again applies it', async () => {
@@ -914,7 +945,7 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
 
   it('glides the step: the view is shown with the time of the step and the span of the glide', () => {
     const show = vi.spyOn(OpenWorldView.prototype, 'show');
-    standing().key('ArrowRight');
+    tap(standing(), 'ArrowRight');
     expect(show.mock.calls.at(-1)![0]).toEqual([1, 0]);
     expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS });
   });
@@ -922,7 +953,7 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
   it('stretches the glide by the slow factor of the page, read when the step starts (a webdriver check)', () => {
     const show = vi.spyOn(OpenWorldView.prototype, 'show');
     (window as { __openworldSlow?: number }).__openworldSlow = 10;
-    standing().key('ArrowRight');
+    tap(standing(), 'ArrowRight');
     expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS * 10 });
   });
 
@@ -930,7 +961,7 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     vi.spyOn(performance, 'now').mockReturnValue(0);
     const m = standing();
     m.frame(vi.fn(), 0);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     m.frame(vi.fn(), 60);
     expect(body().openworldGlide).toBeUndefined(); // navigator.webdriver is not set here
     Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
@@ -947,7 +978,7 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true });
     const m = standing();
     m.frame(vi.fn(), 0);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     const render = vi.fn();
     m.frame(render, 60);
     expect(body().openworldGlide).toMatch(/^-?\d/); // the hero's drawn place, mid-glide
@@ -962,7 +993,7 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     const show = vi.spyOn(OpenWorldView.prototype, 'show');
     const m = standing(true);
     show.mockClear();
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     expect(show.mock.calls.at(-1)![2]).toBeUndefined();
     m.frame(vi.fn(), 10);
     expect(body().openworldGlide).toBeUndefined();
@@ -972,7 +1003,7 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     vi.spyOn(performance, 'now').mockReturnValue(0);
     const m = standing();
     m.frame(vi.fn(), 0);
-    m.key('ArrowRight');
+    tap(m, 'ArrowRight');
     const render = vi.fn();
     m.frame(render, GLIDE_MS + 10); // the frame that lands the hero draws its last place
     expect(render).toHaveBeenCalledTimes(1);
@@ -981,32 +1012,143 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     expect(render).not.toHaveBeenCalled();
   });
 
-  it('keeps the loop drawing a blocked lean only while the key repeats into the wall, and idle after its last 120 ms', () => {
+  it('keeps the loop drawing a blocked lean on the cadence while the key is held, and idle after its last 120 ms (#1059)', () => {
     let clock = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => clock);
-    const m = standing(false, [[1, 0]]); // an enemy on (1,0): a Right press into the wall leans the hero
+    const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
+    const m = standing(false, [[1, 0]]); // an enemy on (1,0): a Right key into the wall leans the hero, each step of the cadence
     m.frame(vi.fn(), 0);
-    for (let i = 0; i < 5; i++) {
-      clock = i * 33; // the key repeat, every 33 ms
-      m.key('ArrowRight');
-    }
-    m.release('ArrowRight'); // the last press was at 132 ms: its lean is over at 252 ms
+    m.key('ArrowRight'); // at 0 ms: the first lean at once
     const render = vi.fn();
-    m.frame(render, 200);
-    expect(render).toHaveBeenCalledTimes(1);
-    m.frame(render, 260); // the frame that ends the lean draws its last place
-    expect(render).toHaveBeenCalledTimes(2);
+    m.frame(render, GLIDE_MS); // the cadence leans it again
+    m.frame(render, 2 * GLIDE_MS);
+    expect(nudge).toHaveBeenCalledTimes(3);
+    m.release('ArrowRight'); // the last lean began at 280 ms: it is over at 400 ms
+    m.frame(render, 2 * GLIDE_MS + NUDGE_MS); // the frame that ends the lean draws its last place
     render.mockClear();
-    m.frame(render, 300);
+    m.frame(render, 2 * GLIDE_MS + NUDGE_MS + 40);
     expect(render).not.toHaveBeenCalled();
+    expect(nudge).toHaveBeenCalledTimes(3); // and no lean after the release
   });
 
   it('leans the hero toward a cell a blocked step names, for the nudge time, and not under reduced motion', () => {
     const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
-    standing(false, [[1, 0]]).key('ArrowRight'); // an enemy on (1,0) blocks it
+    tap(standing(false, [[1, 0]]), 'ArrowRight'); // an enemy on (1,0) blocks it
     expect(nudge).toHaveBeenCalledWith([0, 0], [1, 0], expect.any(Number), NUDGE_MS);
     nudge.mockClear();
-    standing(true, [[1, 0]]).key('ArrowRight');
+    tap(standing(true, [[1, 0]]), 'ArrowRight');
     expect(nudge).not.toHaveBeenCalled();
+  });
+});
+
+// #1059: a held arrow walks on its own. The keydown steps at once; while the arrows are held the frame loop steps one cell per
+// GLIDE_MS, from the frame and not from the system's key repeat, which is ignored. A release, a blur or a leave stops the walk.
+describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', () => {
+  let clock = 0;
+  beforeEach(() => {
+    clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  const at = () => body().openworldAt;
+
+  it('steps on the keydown, then on each GLIDE_MS frame while the key is held, and not between them', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    expect(at()).toBe('1,0'); // the first step, on the keydown itself
+    m.frame(vi.fn(), GLIDE_MS - 1);
+    expect(at()).toBe('1,0');
+    m.frame(vi.fn(), GLIDE_MS);
+    expect(at()).toBe('2,0');
+    m.frame(vi.fn(), 2 * GLIDE_MS - 1);
+    expect(at()).toBe('2,0');
+    m.frame(vi.fn(), 2 * GLIDE_MS);
+    expect(at()).toBe('3,0');
+  });
+
+  it('walks one cell per GLIDE_MS on the frames of a long hold: ten frames, ten cells', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    for (let i = 1; i <= 10; i++) m.frame(vi.fn(), i * GLIDE_MS);
+    expect(at()).toBe('11,0');
+  });
+
+  it('draws each step of the cadence: the frame that steps renders the hero on its new cell', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    const render = vi.fn();
+    m.frame(render, GLIDE_MS);
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores the system key repeat: a repeat steps nothing and does not restart the cadence', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    clock = 100;
+    expect(m.key('ArrowRight', true)).toBe(true); // the repeat is the mode's key, and no step
+    expect(at()).toBe('1,0');
+    m.frame(vi.fn(), GLIDE_MS); // the cadence of the keydown, not one from the repeat at 100 ms
+    expect(at()).toBe('2,0');
+  });
+
+  it('a second arrow pressed during a hold rolls the diagonal on the next step, with no step of its own', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    clock = 50;
+    m.key('ArrowUp');
+    expect(at()).toBe('1,0');
+    m.frame(vi.fn(), GLIDE_MS);
+    expect(at()).toBe(heldCell([1, 0], held('ArrowRight', 'ArrowUp')).join(','));
+  });
+
+  it('a release stops the walk at the end of the step under way: no step after it', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    clock = 60;
+    m.release('ArrowRight');
+    m.frame(vi.fn(), GLIDE_MS);
+    m.frame(vi.fn(), 3 * GLIDE_MS);
+    expect(at()).toBe('1,0');
+  });
+
+  it('a blur (no key given) stops the walk at once', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    m.release();
+    m.frame(vi.fn(), GLIDE_MS);
+    expect(at()).toBe('1,0');
+  });
+
+  it('leaving the mode stops the walk, and a world entered again starts with no key held', () => {
+    const m = mode();
+    m.enter(1, 800, 600);
+    m.key('ArrowRight');
+    m.leave();
+    m.frame(vi.fn(), GLIDE_MS); // left: nothing steps
+    m.enter(1, 800, 600);
+    m.frame(vi.fn(), 2 * GLIDE_MS);
+    expect(at()).toBe('0,0');
+  });
+
+  it('a lean into a wall is kept on the cadence too, and the next key down leans at once again', () => {
+    const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
+    const m = mode(undefined, undefined, () => false, undefined, noPush);
+    m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[1, 0]] }); // an enemy on (1,0): a wall
+    m.key('ArrowRight');
+    expect(nudge).toHaveBeenCalledTimes(1);
+    m.release('ArrowRight');
+    clock = 10;
+    m.key('ArrowRight');
+    expect(nudge).toHaveBeenCalledTimes(2);
   });
 });
