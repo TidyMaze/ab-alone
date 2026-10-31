@@ -7,6 +7,7 @@ import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, type Vec } from './openworldglide';
+import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
 import { stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
@@ -409,6 +410,11 @@ export class OpenWorldView {
   /** The time the glide of a step lands, in ms: a push's lunge starts then. Whether a marble glides or leans on the last tick. */
   private landed = 0;
   private moving = false;
+  /** The particles (#1110): one pool, drawn as one instanced mesh, and the holders the frame reuses. */
+  private readonly particles = new ParticlePool(capFor());
+  private readonly sparks: THREE.InstancedMesh;
+  private readonly sparkPose = new THREE.Object3D();
+  private readonly sparkLook = { x: 0, y: 0, z: 0, s: 0, colour: 0 };
 
   /** `fight` holds the enemies as they are now: the generated ones, with the pushes of the troop on top (openworldfight.ts). */
   constructor(
@@ -447,6 +453,7 @@ export class OpenWorldView {
     this.ejected.name = 'ejected';
     this.ejected.visible = false;
     this.scene.add(this.ejected);
+    this.sparks = this.instances('particles', this.particles.cap, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }));
   }
 
   /** An instanced mesh of `capacity` instances, each with its own colour (3 floats, white until a build sets it, #984). Its geometry
@@ -509,6 +516,44 @@ export class OpenWorldView {
   /** Whether a lake is drawn, so its glow moves. */
   get hasWater(): boolean {
     return this.grounds.water.count > 0;
+  }
+
+  /** Moves the particles to `now` (ms) and writes them to the mesh: the ambient ones of the hero's biome (docs/specs/openworld-animation.md
+   * section 6), born round the hero. None under reduced motion or past `ROLL_ZOOM`. Returns whether the frame must draw them: some are
+   * alive, or were on the last call and are erased now. */
+  sparkle(now: number, reduced: boolean): boolean {
+    const { particles, sparks, sparkPose, sparkLook } = this;
+    if (reduced || this.drawnLevel > ROLL_ZOOM) particles.clear();
+    else particles.step(now, this.hero.position, AMBIENT[this.world.tile(this.heroCell[0], this.heroCell[1])!.biome]);
+    let n = 0;
+    for (let i = 0; i < particles.cap; i++) {
+      if (!particles.pose(i, now, sparkLook)) continue;
+      sparkPose.position.set(sparkLook.x, sparkLook.y, sparkLook.z);
+      sparkPose.scale.setScalar(sparkLook.s);
+      sparkPose.updateMatrix();
+      sparks.setMatrixAt(n, sparkPose.matrix);
+      sparks.setColorAt(n, this.colour.setHex(sparkLook.colour));
+      n++;
+    }
+    const drawn = n > 0 || sparks.count > 0;
+    sparks.count = n;
+    if (n > 0) {
+      sparks.instanceMatrix.needsUpdate = true;
+      sparks.instanceColor!.needsUpdate = true;
+    }
+    return drawn;
+  }
+
+  /** The particles drawn now. */
+  get sparkCount(): number {
+    return this.sparks.count;
+  }
+
+  /** The dust puff of a step, thrown up from the cell the hero leaves at `now` (ms); none past `ROLL_ZOOM`. */
+  puff(now: number): void {
+    if (this.drawnLevel > ROLL_ZOOM) return;
+    const { x, y, z } = this.hero.position;
+    this.particles.puff(x, y - MARBLE + 0.05, z, now);
   }
 
   /** The glow of the water breathes slowly: `ms` is the time, 0 holds it still (reduced motion). */
