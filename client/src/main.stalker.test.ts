@@ -3,6 +3,7 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Axial } from './board';
 import { SLIDE_MS } from './slide';
+import { IDBFactory } from 'fake-indexeddb';
 import { boot, type Game } from './test/harness';
 import { BLOCKED, HIDDEN, PLIES, SEEN } from './test/stalker-game';
 
@@ -42,6 +43,24 @@ function startStalker(game: Game): void {
 }
 
 describe('main.ts Stalker (#998)', () => {
+  it('is still fogged after a reload: the save remembers the Stalker game (#1009)', async () => {
+    const indexedDB = new IDBFactory();
+    const first = await boot('/', { indexedDB });
+    startStalker(first);
+    const move = first.hook<{ cells: Axial[]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
+    first.click(...move.cells[0]!); // a real move, so the game is saved (the __playMoves hook saves nothing)
+    first.click(...first.hook<{ cell: Axial; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell);
+    first.frame(SLIDE_MS + 1);
+    await first.settle();
+    const plies = first.hook<number>('__plies');
+    expect(plies).toBeGreaterThan(0);
+    expect(shown(first)).not.toBeNull();
+    const again = await boot('/', { indexedDB });
+    expect(again.hook('__plies')).toBe(plies); // the same game, not the Ship
+    expect(shown(again)).not.toBeNull();
+    expect(again.hud()).toContain(NOTE);
+  });
+
   it('starts against the bot from the mode menu: the HUD says the bot is not fogged, the cells out of range are dark', async () => {
     const scene = catchScene();
     const game = await boot('/');

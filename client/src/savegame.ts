@@ -12,6 +12,8 @@ export const LOCAL_GAME = 'local';
 export interface LocalGame {
   bot: boolean;
   moves: number[][];
+  /** A Stalker game (#1009): the fog is back on after a reload. Absent for the others. */
+  stalker?: boolean;
 }
 
 /** The stored form, also the export file of #219. */
@@ -21,10 +23,11 @@ export interface SavedGame {
   layout: 'standard';
   bot: boolean;
   moves: number[][];
+  stalker?: true;
 }
 
-export function encodeGame({ bot, moves }: LocalGame): SavedGame {
-  return { version: SAVE_VERSION, mode: 'local', layout: 'standard', bot, moves: moves.map((mv) => [...mv]) };
+export function encodeGame({ bot, moves, stalker }: LocalGame): SavedGame {
+  return { version: SAVE_VERSION, mode: 'local', layout: 'standard', bot, moves: moves.map((mv) => [...mv]), ...(stalker ? { stalker: true } : {}) };
 }
 
 /** A move record of the bridge: `MOVE_STRIDE` 32-bit integers. The engine judges the rest. */
@@ -37,7 +40,7 @@ export function decodeGame(raw: unknown): LocalGame | null {
   const save = raw as Record<keyof SavedGame, unknown>;
   if (save.version !== SAVE_VERSION || save.mode !== 'local' || save.layout !== 'standard') return null;
   if (typeof save.bot !== 'boolean' || !Array.isArray(save.moves) || !save.moves.every(isRecord)) return null;
-  return { bot: save.bot, moves: save.moves.map((mv) => [...mv]) };
+  return { bot: save.bot, moves: save.moves.map((mv) => [...mv]), ...(save.stalker === true ? { stalker: true } : {}) };
 }
 
 export interface ReplayEngine {
@@ -112,7 +115,7 @@ export class LocalSaves {
   async load<E extends ReplayEngine>(
     bot: boolean | undefined,
     make: () => E,
-  ): Promise<{ engine: E; moves: number[][]; bot: boolean } | null> {
+  ): Promise<{ engine: E; moves: number[][]; bot: boolean; stalker?: boolean } | null> {
     try {
       const raw = await this.store.get(LOCAL_GAME);
       if (raw === undefined) return null;
@@ -120,7 +123,7 @@ export class LocalSaves {
       if (game && bot !== undefined && game.bot !== bot) return null;
       const engine = game && replay(game.moves, make);
       this.mine = engine !== null;
-      if (engine) return { engine, moves: game.moves, bot: game.bot };
+      if (engine) return { engine, moves: game.moves, bot: game.bot, ...(game.stalker ? { stalker: true } : {}) };
       await this.store.delete(LOCAL_GAME);
     } catch {
       // Storage blocked: a new game.
