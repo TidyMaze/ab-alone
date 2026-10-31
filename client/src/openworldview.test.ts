@@ -1544,3 +1544,31 @@ describe('the step glide of the hero and the troop (docs/specs/openworld.md sect
     expect(inCell(placeOf(view, 'hero'), [0, 0])).toBe(true);
   });
 });
+
+describe('the stripe of the marbles fades with the zoom, and the materials keep it (#1043)', () => {
+  it('draws the stripe at full strength up to zoom 2.5, half at 2.75, and none at 3 where the roll stops', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    expect(view.stripeFade).toBe(1);
+    view.zoomBy(2.75);
+    expect(view.zoom).toBeCloseTo(2.75);
+    expect(view.stripeFade).toBeCloseTo(0.5);
+    view.zoomBy(3 / 2.75);
+    expect(view.stripeFade).toBe(0);
+    expect(view.drawnZoom).toBeCloseTo(ROLL_ZOOM);
+  });
+
+  it('gives the hero, the troop, the foes and the ejected marble a stripe in their own material, with no swap when the zoom changes', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.show([0, 0]);
+    const names = ['hero', 'troop', 'enemies'];
+    const before = names.map((name) => (view.scene.getObjectByName(name) as THREE.Mesh).material);
+    const all = [...before, view.ejected.material];
+    for (const material of all) expect((material as THREE.MeshStandardNodeMaterial).colorNode).not.toBeNull();
+    expect(new Set(all).size).toBe(4);
+    view.zoomBy(2);
+    const after = names.map((name) => (view.scene.getObjectByName(name) as THREE.Mesh).material);
+    after.forEach((material, i) => expect(material).toBe(before[i]));
+  });
+});
