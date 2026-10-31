@@ -7,6 +7,7 @@ import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, ROLL_ZOOM, type Vec } from './openworldglide';
+import { stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
 /** The most chunks loaded on each side of the hero's chunk, at the widest zoom: the instanced meshes hold all of them (#976).
  * Raised or lowered by measure (the rebuild time, the frame time, the memory), never by dropping detail. Ten covers the
@@ -35,6 +36,12 @@ export const CAPACITY = {
  * `groundRadius`): the radius in chunks, rounded up, plus one chunk of margin for a hero standing at a chunk corner. Every
  * cell of the ground in view then lies in the loaded square, so the edge of the loaded area is never on screen (#976). */
 export const reachFor = (radius: number): number => Math.ceil(radius / CHUNK) + 1;
+
+/** Whether the square of `reach` chunks around the chunk `centre` covers every cell of the hex ball of `radius` cells around
+ * `hero`: the ball's box lies in the square (a chunk is a 16 x 16 block of the axial grid). The ground in view lies in that ball
+ * (`groundRadius`), so a square that covers the ball shows no edge (#1046). */
+const covers = (centre: Axial, reach: number, hero: Axial, radius: number): boolean =>
+  [0, 1].every((i) => hero[i]! - radius >= (centre[i]! - reach) * CHUNK && hero[i]! + radius < (centre[i]! + reach + 1) * CHUNK);
 
 /** The four corners of the screen cast on the ground plane (y = 0): the ground the camera sees is the quadrilateral between
  * them. A corner that looks past the horizon gets a point far away on its ray, so the footprint is always four points. */
@@ -328,7 +335,7 @@ export class OpenWorldView {
   private drawnLevel = 1;
   /** The widest zoom on the screen's aspect, see `maxZoomFor`. */
   private limit = maxZoomFor(1);
-  /** The chunk the hero is in, and the key of the chunks drawn: rebuilt when either changes. */
+  /** The chunk the loaded square is centred on: kept while the square covers the hero's ball, else the hero's chunk (#1046). */
   private centre: Axial = [0, 0];
   /** The chunks drawn (the centre and the reach): a change lays every mesh again. `drawnKey` adds the hero's cell, which only
    * the props depend on, so a step lays the props alone (#1034). */
@@ -375,6 +382,8 @@ export class OpenWorldView {
   private yawGoal = 0;
   /** The hero (the first marble) and the troop's marbles: where each is drawn, and the glide of a step under way (#1040). */
   private readonly marbles: Marble[] = [new Marble(MARBLE)];
+  /** The strength of the marbles' stripe at the drawn zoom (openworldstripe.ts), one uniform for every marble material (#1043). */
+  private readonly stripe = stripeFadeNode();
   /** Holds the drawn pose of a marble, apart from `dummy`: a build leaves its turn as it is, a marble's is set by its glide. */
   private readonly drawnPose = new THREE.Object3D();
   /** The time the glide of a step lands, in ms: a push's lunge starts then. Whether a marble glides or leans on the last tick. */
@@ -408,13 +417,13 @@ export class OpenWorldView {
       this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop));
       this.managed.push(this.detailed[prop]!);
     }
-    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), new THREE.MeshStandardMaterial({ color: 0xcfe8ff, roughness: 0.1 }));
+    this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial({ base: 0xcfe8ff, stripe: 0x8fb4dc, roughness: 0.1 }, this.stripe));
     this.hero.name = 'hero';
     this.scene.add(this.hero);
     const marble = new THREE.SphereGeometry(MARBLE, 16, 12);
-    this.troop = this.instances('troop', CAPACITY.troop, marble, new THREE.MeshStandardMaterial({ color: 0x8fc4f5, roughness: 0.2 }));
-    this.foes = this.instances('enemies', CAPACITY.enemies, marble, new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
-    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.25 }));
+    this.troop = this.instances('troop', CAPACITY.troop, marble, stripedMaterial({ base: 0x8fc4f5, stripe: 0x5f93c8, roughness: 0.2 }, this.stripe));
+    this.foes = this.instances('enemies', CAPACITY.enemies, marble, stripedMaterial({ base: 0x15171c, stripe: 0x3a3f4a, roughness: 0.25 }, this.stripe));
+    this.ejected = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 16, 12), stripedMaterial({ base: 0x15171c, stripe: 0x3a3f4a, roughness: 0.25 }, this.stripe));
     this.ejected.name = 'ejected';
     this.ejected.visible = false;
     this.scene.add(this.ejected);
@@ -486,10 +495,9 @@ export class OpenWorldView {
     (this.grounds.water.material as THREE.MeshStandardMaterial).emissiveIntensity = 1 + 0.15 * Math.sin(ms / 1200);
   }
 
-  /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero enters another chunk, the hero and the
-   * camera follow every step. */
+  /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero's ball leaves the loaded square (`frame`),
+   * the hero and the camera follow every step. */
   show(at: Axial, troop: readonly Axial[] = [], glide?: { now: number; span: number }): void {
-    this.centre = chunkOf(at);
     this.heroCell = [at[0], at[1]];
     if (glide && this.placed) this.glideTo(at, troop, glide);
     else this.snapTo(at, troop);
@@ -616,8 +624,7 @@ export class OpenWorldView {
     this.settle();
     const begin = Math.max(now, this.landed); // the lunge starts once the step's glide has landed (#1040)
     const [hero] = push.troop;
-    this.centre = chunkOf(hero!); // the chunks follow the hero to the cell the push ends on
-    this.heroCell = hero!;
+    this.heroCell = hero!; // the chunks follow the hero to the cell the push ends on, when its ball leaves the square (`frame`)
     const at = (ms: number): number => ms * slow;
     const moves: Move[] = [];
     const lunge: Timing = { start: begin, span: at(LUNGE_MS), fall: 0, lunge: true };
@@ -732,6 +739,12 @@ export class OpenWorldView {
     return this.loadedReach;
   }
 
+  /** The chunk the loaded square is centred on: the hero's chunk, or the one it was centred on while the square still covers
+   * the hero's ball (#1046). */
+  get centreChunk(): Axial {
+    return this.centre;
+  }
+
   /** The instances drawn per mesh, by name: the ground columns, the props, the troop and the enemies (the browser checks read it). */
   get drawn(): Record<string, number> {
     const meshes = this.scene.children.filter((o): o is THREE.InstancedMesh => o instanceof THREE.InstancedMesh);
@@ -803,12 +816,18 @@ export class OpenWorldView {
     return this.drawnLevel;
   }
 
+  /** The strength of the marbles' stripe at the drawn zoom, 1 to 0 (openworldstripe.ts): the browser checks and the tests read it. */
+  get stripeFade(): number {
+    return this.stripe.value;
+  }
+
   /** Puts the camera at the zoom's distance from the hero, looking down at it, and the fog and the planes of the camera with
    * the zoom. The chunks loaded follow the ground the camera sees: rebuilt when the hero's chunk or the reach changes. */
   private frame(): void {
     const at = this.focus;
     this.drawnLevel = this.fitZoom(at);
     const k = this.drawnLevel;
+    this.stripe.value = stripeStrength(k);
     lookAtHero(this.camera, at, k, this.yawNow);
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
     const corners = footprint(this.camera);
@@ -821,6 +840,8 @@ export class OpenWorldView {
     const hero = cellAtPoint(at.x, at.z);
     const radius = Math.max(...corners.map((p) => hexDistance(cellAtPoint(p.x, p.z), hero)));
     const reach = Math.min(MAX_REACH, reachFor(radius));
+    // The centre is kept while the square still covers the hero's ball: a step across a chunk line then lays the props alone (#1046).
+    if (!covers(this.centre, reach, hero, radius)) this.centre = chunkOf(hero);
     const chunks = `${this.centre},${reach}`;
     const key = `${chunks},${hero}`; // the hero's cell too: it sets which props are detailed (#989)
     if (chunks !== this.drawnChunks) {

@@ -210,13 +210,13 @@ export class OpenWorldMode {
    * enemies of the loaded square replaced by `enemies`, none pushed. */
   fixture({ hero, troop, enemies }: { hero: Axial; troop: Axial[]; enemies: Axial[] }): void {
     this.view!.snap();
-    const [cx, cy] = chunkOf(hero);
+    this.hero!.at = hero;
+    this.hero!.troop = troop;
+    this.view!.show(hero, troop); // first: the loaded square may keep its centre, which the enemies are hidden around (#1046)
+    const [cx, cy] = this.view!.centreChunk;
     this.fight.reset();
     this.fight.hide(this.world!, cx, cy, MAX_REACH);
     this.fight.apply([], enemies, []);
-    this.hero!.at = hero;
-    this.hero!.troop = troop;
-    this.view!.show(hero, troop);
     this.view!.updateEnemies();
     this.dirty = true;
     this.mark(document.body.dataset.openworld!);
