@@ -35,6 +35,8 @@ describe('main.ts refined room (#1138)', () => {
     expect(scene().getObjectByName('fill')).toBeInstanceOf(THREE.HemisphereLight);
     for (const name of ['wall', 'hazard-stripe', 'strip-1', 'crate-0']) expect(scene().getObjectByName(name), name).toBeDefined();
     expect(scene().getObjectByName('ring-lamp')).toBeUndefined();
+    for (const name of ['console-screen', 'log-recorder']) expect(scene().getObjectByName(name), name).toBeDefined(); // gameplay stays
+    expect(scene().getObjectByName('machinery-stack-main')).toBeUndefined(); // decor goes
   });
 
   it('adds the amber rim in a boss fight, two point lights in all', async () => {

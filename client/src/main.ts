@@ -180,7 +180,7 @@ import { LIGHT } from './light';
 import { ROOM_SURFACE, spaceshipArchitecture, spaceshipLights } from './room';
 import { readRoom } from './roomrefined';
 import { buildRefinedRoom } from './roomscene';
-import { flatBay } from './roomdecor';
+import { KEPT_PROPS, flatBay } from './roomdecor';
 import { createCanvasTexture, drawHazardStripes, drawWallPanel } from './roomart';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, meshoptLoader, type SpaceshipBayAssets } from './roomloader';
 import { OpenWorldMode, twistOf } from './openworldmode';
@@ -1800,7 +1800,8 @@ drawProps = (): void => {
   propMeshes = [];
   propsGroup.clear();
   const sLights = spaceshipLights(deck);
-  for (const def of refined ? [] : spaceshipArchitecture(tier)) {
+  for (const def of spaceshipArchitecture(tier)) {
+    if (refined && !KEPT_PROPS.has(def.id)) continue; // the refined room keeps the lore console and the log recorder only (#1138)
     let mat: THREE.Material;
     const screen = def.id === 'console-screen';
     if (screen) {

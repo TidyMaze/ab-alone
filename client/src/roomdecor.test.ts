@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DECK_NAMES } from './deck';
 import { ROOM_SURFACE } from './room';
 import { DECK_TINTS } from './roomrefined';
-import { AMBER, DARK_FLOOR, HIDDEN_BAY, STEEL, cornerCrates, flatBay, hazardStripe, wallStrips } from './roomdecor';
+import { AMBER, DARK_FLOOR, HIDDEN_BAY, KEPT_PROPS, STEEL, cornerCrates, flatBay, hazardStripe, wallStrips } from './roomdecor';
 
 describe('the refined room decor (#1138)', () => {
   it('has four lit wall strips: three in the deck tint, one amber', () => {
@@ -29,9 +29,9 @@ describe('the refined room decor (#1138)', () => {
   });
 
   it('hides what the refined room does not keep and keeps the frame, the chevrons, the walls of the room and the floor', () => {
-    for (const gone of ['Console_Screen', 'Console_Kiosk_Stand', 'East_Hollow_Viewport', 'Hollow_Moon_Disc', 'Crane_Rail_Port', 'Bulkhead_Column_EN', 'Bulkhead_Wall_North', 'Radial_Floor_Conduits', 'Airlock_Bulkhead_Doors', 'Pedestal_Grate_Trench'])
+    for (const gone of ['East_Hollow_Viewport', 'Hollow_Moon_Disc', 'Crane_Rail_Port', 'Bulkhead_Column_EN', 'Bulkhead_Wall_North', 'Radial_Floor_Conduits', 'Airlock_Bulkhead_Doors', 'Pedestal_Grate_Trench'])
       expect(HIDDEN_BAY.test(gone), gone).toBe(true);
-    for (const kept of ['Airlock_Gantry_Frame', 'Airlock_Hazard_Chevrons', 'Ship_Deck_Floor']) expect(HIDDEN_BAY.test(kept), kept).toBe(false);
+    for (const kept of ['Airlock_Gantry_Frame', 'Airlock_Hazard_Chevrons', 'Ship_Deck_Floor', 'Console_Kiosk_Stand']) expect(HIDDEN_BAY.test(kept), kept).toBe(false);
   });
 
   it('restyles the bay: flat steel without maps, the bay floor kept darker, the chevrons amber', () => {
@@ -40,7 +40,7 @@ describe('the refined room decor (#1138)', () => {
     const m = { deck: mat(), bulkhead: mat(), grate: mat(), hazard: mat() };
     const deckMap = m.deck.map;
     const root = new THREE.Group();
-    const hidden = Object.assign(new THREE.Mesh(), { name: 'Console_Screen' });
+    const hidden = Object.assign(new THREE.Mesh(), { name: 'Hollow_Moon_Disc' });
     const kept = Object.assign(new THREE.Mesh(), { name: 'Airlock_Gantry_Frame' });
     root.add(hidden, kept);
     flatBay(root, m);
@@ -58,5 +58,9 @@ describe('the refined room decor (#1138)', () => {
     const bare = { deck: mat(), bulkhead: mat(), grate: mat() }; // no hazard material
     flatBay(new THREE.Group(), bare);
     expect(bare.grate.color.getHex()).toBe(STEEL.frame);
+  });
+
+  it('keeps the lore console and the log recorder, which are gameplay', () => {
+    expect([...KEPT_PROPS].sort()).toEqual(['console-desk', 'console-screen', 'log-recorder']);
   });
 });

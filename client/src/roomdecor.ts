@@ -47,9 +47,13 @@ export function cornerCrates(): DecorPart[] {
   }));
 }
 
-/** The meshes of the bay the refined room does not keep: the console, the viewport and the moon, the crane rails, the bulkhead
+/** The props of room.ts the refined room keeps, for they are gameplay and not decor: the lore console's screen and desk (#511) and
+ * the audio log recorder (#517), at the same place and size so the clicks and the reader camera keep working. */
+export const KEPT_PROPS: ReadonlySet<string> = new Set(['console-desk', 'console-screen', 'log-recorder']);
+
+/** The meshes of the bay the refined room does not keep: the viewport and the moon, the crane rails, the bulkhead
  * columns and walls, the radial conduits, the airlock doors and the pedestal. */
-export const HIDDEN_BAY = /^(console|east_hollow|hollow_moon|crane|bulkhead_|radial_floor|airlock_bulkhead|pedestal)/i;
+export const HIDDEN_BAY = /^(east_hollow|hollow_moon|crane|bulkhead_|radial_floor|airlock_bulkhead|pedestal)/i;
 
 type Looks = Record<'deck' | 'bulkhead' | 'grate', THREE.MeshStandardMaterial> & Partial<Record<'hazard', THREE.MeshStandardMaterial>>;
 
