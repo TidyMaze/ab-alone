@@ -64,6 +64,10 @@ export interface Game {
 // at every boot, a search of ~80 ms. They are kept for the whole test file, keyed by the request but its id (#1079).
 const answers = new Map<string, BotResponse>();
 
+// RoundedBoxGeometry is the page's costliest build at boot (~30 ms of vertex maths for the props): the first one of each
+// size is kept and the next boots clone it.
+const boxes = new Map<string, import('three').BufferGeometry & { parameters?: object }>();
+
 const body = /<body>([\s\S]*)<\/body>/.exec(page)![1]!;
 // Taken before any boot wraps them: a second boot in the same test (a reload) wraps these, not the first wrappers.
 const addListener = window.addEventListener.bind(window);
@@ -98,6 +102,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     vi.doUnmock('three/webgpu');
     vi.doUnmock('abalone-wasm');
     vi.doUnmock('../p2p');
+    vi.doUnmock('three/examples/jsm/geometries/RoundedBoxGeometry.js');
     vi.doUnmock('three/examples/jsm/loaders/KTX2Loader.js');
     vi.doUnmock('three/examples/jsm/loaders/GLTFLoader.js');
   });
@@ -227,6 +232,27 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     };
   });
 
+  vi.doMock('three/examples/jsm/geometries/RoundedBoxGeometry.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('three/examples/jsm/geometries/RoundedBoxGeometry.js')>();
+    const { BufferGeometry } = await vi.importActual<typeof import('three')>('three');
+    return {
+      RoundedBoxGeometry: class extends actual.RoundedBoxGeometry {
+        constructor(...args: ConstructorParameters<typeof actual.RoundedBoxGeometry>) {
+          const key = args.join();
+          const kept = boxes.get(key);
+          if (kept) {
+            super(1, 1, 1, 0, 0); // a unit box, replaced by the kept one below
+            this.copy(kept);
+            Object.assign(this, { parameters: kept.parameters });
+          } else {
+            super(...args);
+            boxes.set(key, Object.assign(new BufferGeometry().copy(this), { parameters: this.parameters }));
+          }
+        }
+      },
+    };
+  });
+
   // The online room: main.ts gets one end of a local pair, the test holds the other.
   let peer: Transport | null = null;
   let room: string | null = null;
@@ -251,7 +277,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       onmessage: ((e: MessageEvent<BotResponse>) => void) | null = null;
       postMessage(req: BotRequest): void {
         setTimeout(() => {
-          if (options.fails === 'worker') return void this.onmessage?.({ data: { id: req.id, error: 'Error: boom' } } as MessageEvent<BotResponse>);
+          if (options.fails === 'worker') return void this.onmessage?.({ data: { id: req.id, error: 'Error: boom' } } as never);
           const { id, ...query } = req;
           const key = JSON.stringify(query);
           let response = answers.get(key);
