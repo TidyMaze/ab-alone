@@ -78,6 +78,21 @@ describe('the thumb dock', () => {
     expect(byId('goal-sheet').hidden).toBe(true);
   });
 
+  it('a press whose target is not a node (the window) counts as outside, and throws nothing (CI, #1032)', async () => {
+    const game = await boot('?bot=off');
+    startFight(game);
+    playFirstMove(game);
+    byId('boss-goal').click();
+    window.dispatchEvent(new PointerEvent('pointerdown'));
+    expect(byId('goal-sheet').hidden).toBe(true);
+    game.openSettings();
+    window.dispatchEvent(new PointerEvent('pointerdown'));
+    expect(byId('settings-menu').hidden).toBe(true);
+    game.openModes();
+    window.dispatchEvent(new PointerEvent('pointerdown'));
+    expect(byId('mode-menu').hidden).toBe(true);
+  });
+
   it('a tap outside does nothing while no Goal sheet is open', async () => {
     const game = await boot('?bot=off');
     startFight(game);

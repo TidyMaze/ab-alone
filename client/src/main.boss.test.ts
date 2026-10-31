@@ -408,6 +408,16 @@ describe('main.ts daily challenge', () => {
     expect(card.hidden).toBe(true);
   });
 
+  it('a press on the window (no node) closes the daily result card, and throws nothing (CI, #1032)', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(DAY);
+    const game = await boot('?bot=off', { reducedMotion: true });
+    byId('daily').click();
+    loseByRepetition(game);
+    expect(byId('daily-card').hidden).toBe(false);
+    window.dispatchEvent(new PointerEvent('pointerdown'));
+    expect(byId('daily-card').hidden).toBe(true);
+  });
+
   it('Esc closes the daily result card', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(DAY);
     const game = await boot('?bot=off', { reducedMotion: true });

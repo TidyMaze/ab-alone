@@ -706,6 +706,8 @@ function applyLook(): void {
 // The settings menu: one button per item, its icon then its label, opened by the cog only. Escape, a press outside
 // and the cog close it. A toggle shows its state in aria-pressed.
 const cog = document.getElementById('settings') as HTMLButtonElement;
+// Whether a press lies in an element. A press on the window (no node) lies in none of them: it counts as outside (#1032).
+const within = (el: Element, target: EventTarget | null): boolean => target instanceof Node && el.contains(target);
 const menu = document.getElementById('settings-menu')!;
 const toggles: Record<string, () => void> = {
   'clear-board': () => {
@@ -941,7 +943,7 @@ addEventListener('keydown', (e) => {
   cog.focus();
 });
 addEventListener('pointerdown', (e) => {
-  if (menuIsOpen && !menu.contains(e.target as Node) && !cog.contains(e.target as Node)) moveMenu('outside');
+  if (menuIsOpen && !within(menu, e.target) && !within(cog, e.target)) moveMenu('outside');
 });
 cog.disabled = false; // listener ready (#146)
 // The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
@@ -967,7 +969,7 @@ addEventListener('keydown', (e) => {
   modeButton.focus();
 });
 addEventListener('pointerdown', (e) => {
-  if (modesOpen && !modeMenu.contains(e.target as Node) && !modeButton.contains(e.target as Node)) moveModes('outside');
+  if (modesOpen && !within(modeMenu, e.target) && !within(modeButton, e.target)) moveModes('outside');
 });
 modeButton.disabled = false; // listener ready (#146)
 
@@ -4204,7 +4206,7 @@ addEventListener('keydown', (e) => {
   goalButton.focus();
 });
 addEventListener('pointerdown', (e) => {
-  if (goalOpen && !goalSheet.contains(e.target as Node) && !goalButton.contains(e.target as Node)) closeGoal();
+  if (goalOpen && !within(goalSheet, e.target) && !within(goalButton, e.target)) closeGoal();
 });
 retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
 
@@ -4312,7 +4314,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeResultCard();
 });
 addEventListener('pointerdown', (e) => {
-  if (!resultCard.contains(e.target as Node)) closeResultCard();
+  if (!within(resultCard, e.target)) closeResultCard();
 });
 document.getElementById('daily-copy')!.addEventListener('click', async () => {
   if (await copyText(resultText.value, navigator.clipboard)) return hud(' · result copied');
