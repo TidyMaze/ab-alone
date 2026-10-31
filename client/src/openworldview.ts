@@ -252,6 +252,8 @@ export class OpenWorldView {
   private readonly detailedReady = new Set<Prop>();
   /** The meshes a build lays: the ground columns, the props and the detailed props. */
   private readonly managed: THREE.InstancedMesh[] = [];
+  /** What a build or a model swap replaced, freed by `drain` after the next frame (#1017). */
+  private readonly retired: { dispose(): void }[] = [];
   private readonly hero: THREE.Mesh;
   /** The cell the hero is on, the centre of the pick. */
   private heroCell: Axial = [0, 0];
@@ -338,10 +340,9 @@ export class OpenWorldView {
   /** Gives a prop's mesh a model's geometry. A model that paints itself (vertex colours from Blender) is drawn as painted: no tint
    * hides it. */
   private paint(mesh: THREE.InstancedMesh, geometry: THREE.BufferGeometry): void {
-    mesh.geometry.dispose(); // the mesh's own copy of the last geometry it had (#991)
-    mesh.geometry = geometry.clone();
+    const painted = this.replace(mesh, geometry.clone(), mesh.instanceMatrix.count);
     if (geometry.hasAttribute('color')) {
-      const material = mesh.material as THREE.MeshStandardMaterial;
+      const material = painted.material as THREE.MeshStandardMaterial;
       material.vertexColors = true;
       material.color.set(0xffffff);
       material.emissive.set(0x000000);
@@ -478,15 +479,23 @@ export class OpenWorldView {
   private fit(mesh: THREE.InstancedMesh, needed: number): THREE.InstancedMesh {
     if (needed <= mesh.instanceMatrix.count) return mesh;
     const capacity = Math.min(MOST, Math.max(needed, Math.ceil(mesh.instanceMatrix.count * 1.5)));
-    const grown = new THREE.InstancedMesh(mesh.geometry.clone(), mesh.material, capacity);
+    return this.replace(mesh, mesh.geometry.clone(), capacity);
+  }
+
+  /** The mesh that takes the place of `mesh`, with `geometry` and `capacity` instances (#1010, #1017). It has a geometry and a material
+   * of its own: three keeps the instance buffers of a mesh in its material's shader nodes and frees them with its geometry, so a
+   * shared material or geometry would free buffers the mesh still draws. The replaced mesh, its geometry and its material are
+   * retired until the next draw. */
+  private replace(mesh: THREE.InstancedMesh, geometry: THREE.BufferGeometry, capacity: number): THREE.InstancedMesh {
+    const material = (mesh.material as THREE.Material).clone();
+    const grown = new THREE.InstancedMesh(geometry, material, capacity);
     grown.name = mesh.name;
     grown.count = 0;
     grown.frustumCulled = false;
     grown.instanceColor = whiteColours(capacity); // the build writes every colour it places (#984)
     this.scene.remove(mesh);
     this.scene.add(grown);
-    mesh.dispose();
-    mesh.geometry.dispose(); // the old mesh's own copy: the grown mesh has its own (#991)
+    this.retire(mesh, mesh.geometry, mesh.material as THREE.Material);
     this.swap(mesh, grown);
     return grown;
   }
@@ -497,6 +506,7 @@ export class OpenWorldView {
     for (const prop of PROP_NAMES) if (this.props[prop] === old) this.props[prop] = grown;
     if (this.troop === old) this.troop = grown;
     if (this.foes === old) this.foes = grown;
+    for (const prop of MODELLED) if (this.detailed[prop] === old) this.detailed[prop] = grown;
     const at = this.managed.indexOf(old);
     if (at >= 0) this.managed[at] = grown;
   }
@@ -549,8 +559,21 @@ export class OpenWorldView {
     return best;
   }
 
-  /** Frees the GPU objects of the view: each geometry and material of its scene, once. The view is not drawn after. */
+  /** Frees what a build or a model swap replaced, once the frame drawn after it is rendered (#1017): the frame in flight may still
+   * use it. Called by the mode after each render. */
+  drain(): void {
+    for (const replaced of this.retired.splice(0)) replaced.dispose();
+  }
+
+  /** Holds a geometry or a mesh a build or a model swap replaced, until `drain` (#1017). */
+  private retire(...replaced: { dispose(): void }[]): void {
+    this.retired.push(...replaced);
+  }
+
+  /** Frees the GPU objects of the view: each geometry and material of its scene, once, and what it replaced and has not drained.
+   * The view is not drawn after. */
   dispose(): void {
+    this.drain();
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {

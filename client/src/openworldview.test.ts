@@ -753,6 +753,7 @@ describe('the Open world view frees its GPU objects (#981)', () => {
     view.show([0, 0]);
     const { geometries, materials } = objectsOf(view);
     expect(geometries.size).toBeGreaterThan(5);
+    view.drain(); // a frame has drawn since the models came: what they replaced is freed (#1017)
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
     const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
     view.dispose();
@@ -800,8 +801,98 @@ describe('the Open world view frees the instance buffers of each mesh (#991)', (
     view.zoomBy(MAX_ZOOM);
     expect(mesh(view, 'prop-mountain').count).toBe(MOST);
     expect(mesh(view, 'prop-mountain').geometry).not.toBe(before);
+    view.drain();
     expect(disposeGeometry.mock.contexts).toContain(before);
     expect(new Set(instanced(view).map((m) => m.geometry)).size).toBe(instanced(view).length);
+    vi.restoreAllMocks();
+  });
+});
+
+describe('a replaced geometry is freed after the frame that may use it, not at once (#1017)', () => {
+  it('keeps a model geometry that replaces a procedural one until the next draw, then frees it', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    expect(disposeGeometry.mock.contexts).not.toContain(procedural);
+    view.drain();
+    expect(disposeGeometry.mock.contexts).toContain(procedural);
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the geometry and the mesh that a growth replaces until the next draw, then frees them', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    const disposeMesh = vi.spyOn(THREE.InstancedMesh.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain')).not.toBe(old);
+    expect(disposeGeometry.mock.contexts).not.toContain(old.geometry);
+    expect(disposeMesh.mock.contexts).not.toContain(old);
+    view.drain();
+    expect(disposeGeometry.mock.contexts).toContain(old.geometry);
+    expect(disposeMesh.mock.contexts).toContain(old);
+    vi.restoreAllMocks();
+  });
+
+  it('a model swap replaces the mesh, with a material of its own, so the geometry it frees holds no buffer of a mesh still drawn (#1017)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    expect(mesh(view, 'prop-mountain')).not.toBe(old);
+    expect(mesh(view, 'prop-mountain').material).not.toBe(old.material);
+  });
+
+  it('a growth replaces the mesh with a material of its own, and frees the replaced material after the draw (#1017)', () => {
+    const peaks = (cx: number, cy: number): Uint8Array => {
+      if (Math.abs(cx) > 40 || Math.abs(cy) > 40) return new Uint8Array();
+      const out = new Uint8Array(CHUNK * CHUNK * 3);
+      for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 4, 0], i * 3);
+      return out;
+    };
+    const view = new OpenWorldView(new World(peaks));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const old = mesh(view, 'prop-mountain');
+    const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
+    view.zoomBy(MAX_ZOOM);
+    expect(mesh(view, 'prop-mountain').material).not.toBe(old.material);
+    expect(disposeMaterial.mock.contexts).not.toContain(old.material);
+    view.drain();
+    expect(disposeMaterial.mock.contexts).toContain(old.material);
+    vi.restoreAllMocks();
+  });
+
+  it('frees what it still holds when it is disposed before any draw', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.dispose();
+    expect(disposeGeometry.mock.contexts).toContain(procedural);
+    vi.restoreAllMocks();
+  });
+
+  it('frees a replaced geometry once, however often it is drained', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([0, 0]);
+    const procedural = mesh(view, 'prop-mountain').geometry;
+    view.useModels({ low: { mountain: new THREE.BoxGeometry() }, high: {} });
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
+    view.drain();
+    view.drain();
+    expect(disposeGeometry.mock.contexts.filter((g) => g === procedural)).toHaveLength(1);
     vi.restoreAllMocks();
   });
 });

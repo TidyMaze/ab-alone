@@ -293,6 +293,19 @@ describe('the Open world mode', () => {
   });
 });
 
+describe('a frame frees what it replaced only after its render (#1017)', () => {
+  it('drains the view after the frame is rendered, never before', () => {
+    const drain = vi.spyOn(OpenWorldView.prototype, 'drain');
+    const m = mode();
+    m.enter(1, 800, 600);
+    const render = vi.fn();
+    m.frame(render);
+    expect(drain).toHaveBeenCalledTimes(1);
+    expect(drain.mock.invocationCallOrder[0]).toBeGreaterThan(render.mock.invocationCallOrder[0]!);
+    vi.restoreAllMocks();
+  });
+});
+
 describe('leaving the Open world frees its view, every time (#981)', () => {
   it('enters and leaves 30 times: each view is disposed, with each of its geometries and materials once', () => {
     const disposeView = vi.spyOn(OpenWorldView.prototype, 'dispose');
