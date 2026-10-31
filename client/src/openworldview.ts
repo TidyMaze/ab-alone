@@ -732,6 +732,12 @@ export class OpenWorldView {
     return this.loadedReach;
   }
 
+  /** The chunk the loaded square is centred on: the hero's chunk, or the one it was centred on while the square still covers
+   * the hero's ball (#1046). */
+  get centreChunk(): Axial {
+    return this.centre;
+  }
+
   /** The instances drawn per mesh, by name: the ground columns, the props, the troop and the enemies (the browser checks read it). */
   get drawn(): Record<string, number> {
     const meshes = this.scene.children.filter((o): o is THREE.InstancedMesh => o instanceof THREE.InstancedMesh);
