@@ -331,3 +331,29 @@ test('New world confirms in the page, discards the save of the world left and st
   await page.locator('#openworld').click();
   await expect.poll(at).toBe('0,0');
 });
+
+// #1025: on a touch screen a touch on the left half shows the virtual joystick under the thumb; dragging right holds the right key,
+// the hero walks on while the thumb is held and stops when it lifts. Touch is emulated through CDP (hasTouch).
+test.describe('the touch joystick', () => {
+  test.use({ hasTouch: true });
+  test('a drag on the left half walks the hero right until the thumb lifts, #1025', async ({ page }) => {
+    await page.goto('./?bot=off&openworld=7');
+    await page.locator('canvas').waitFor();
+    await openModes(page);
+    await page.locator('#openworld').click();
+    const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+    await expect.poll(at).toBe('0,0');
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, y: number) =>
+      cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    await touch('touchStart', 150, 300);
+    await expect(page.locator('#joystick')).toBeVisible();
+    await touch('touchMove', 200, 300); // 50 px to the right: the right key is held
+    await expect.poll(at).not.toBe('0,0');
+    await touch('touchEnd', 200, 300);
+    await expect(page.locator('#joystick')).toBeHidden();
+    const stopped = await at();
+    await page.evaluate(() => new Promise((done) => setTimeout(done, 600))); // a held stick would have stepped by now
+    expect(await at()).toBe(stopped);
+  });
+});
