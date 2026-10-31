@@ -38,7 +38,8 @@
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
         </button>
       </div>
-      <div id="openworld-hud" role="status">
+      <div id="openworld-hud" role="group" aria-label="Open world">
+        <p id="openworld-live" role="status" class="sr-only"></p>
         <p>Open world: arrows or a click on a next cell to roll, Esc to leave.</p>
         <p>Seed <output id="openworld-seed"></output>, shared as <code>?openworld=&lt;seed&gt;</code>.</p>
         <button id="openworld-new" type="button">New world</button>
