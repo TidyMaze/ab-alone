@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { EASE, MOTION, reducedMotion } from './motion';
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EASE, MOTION, reducedMotion, cue } from './motion';
 import { SLIDE_MS } from './slide';
 import css from './ui.css?raw';
 
@@ -53,5 +54,41 @@ describe('reducedMotion', () => {
   it('follows data-motion on the root', () => {
     expect(reducedMotion({ dataset: {} })).toBe(false);
     expect(reducedMotion({ dataset: { motion: 'reduced' } })).toBe(true);
+  });
+});
+
+describe('cue (#1097)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('adds the class, restarts it when called again, and removes it after the duration', () => {
+    vi.useFakeTimers();
+    const el = document.createElement('div');
+    cue(el, 'refused', MOTION.fast);
+    expect(el.classList.contains('refused')).toBe(true);
+    vi.advanceTimersByTime(MOTION.fast - 20);
+    cue(el, 'refused', MOTION.fast); // a second refusal restarts the cue
+    vi.advanceTimersByTime(MOTION.fast - 20);
+    expect(el.classList.contains('refused')).toBe(true);
+    vi.advanceTimersByTime(20);
+    expect(el.classList.contains('refused')).toBe(false);
+  });
+});
+
+describe('refusal, hint and copy motion (#1097, #1098)', () => {
+  const block = css.match(/\/\* Refusal, hint and copy motion \(#1097[^]*$/)![0];
+
+  it('shakes the turn line of a refused move once on the fast token', () => {
+    expect(block).toMatch(/body\.refused #hud \.turn \{[^}]*animation: refuse var\(--motion-fast\) var\(--ease-out\)/);
+    expect(block).toMatch(/@keyframes refuse \{[^}]*translateX/);
+  });
+
+  it('draws the Hint button in on the base token when its move is shown', () => {
+    expect(block).toMatch(/body\[data-hint='shown'\] #hint \{[^}]*animation: hint-in var\(--motion-base\) var\(--ease-out\)/);
+    expect(block).toMatch(/@keyframes hint-in/);
+  });
+
+  it('draws a check mark on Copied on the fast token', () => {
+    expect(block).toMatch(/#daily-copy\.copied::before \{[^}]*content: '\\2713'[^}]*animation: check-in var\(--motion-fast\) var\(--ease-out\)/);
+    expect(block).toMatch(/@keyframes check-in \{[^}]*clip-path/);
   });
 });

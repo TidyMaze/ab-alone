@@ -46,7 +46,7 @@ import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
-import { MOTION } from './motion';
+import { MOTION, cue } from './motion';
 import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
@@ -3717,6 +3717,11 @@ function click(q: number, r: number): void {
     // The engine is the only judge: a click that is not a legal move changes nothing.
     const mv = moveForClick(legalMoves(), selected, [q, r]);
     if (mv) play(mv);
+    else if (selected.length > 0) {
+      refresh();
+      cue(document.body, 'refused', MOTION.fast); // the turn line shakes (#1097); the text says why nothing moved
+      return hud(' · not a legal move');
+    }
   }
   refresh();
   void botTurn();
@@ -4461,6 +4466,7 @@ addEventListener('keydown', (e) => {
 // box to copy by hand. It is only set when it changes, so a HUD update keeps the selection.
 const resultCard = document.getElementById('daily-card')!;
 const resultText = document.getElementById('daily-result') as HTMLTextAreaElement;
+const dailyCopy = document.getElementById('daily-copy')!;
 function showResultCard(): void {
   const text =
     fight?.daily && engine instanceof Encounter
@@ -4475,7 +4481,11 @@ function showResultCard(): void {
   const shown = text !== '' && text !== closedCard; // a card the player closed stays closed until its text changes
   if (shown && resultCard.hidden) cardOpener = document.activeElement as HTMLElement | null;
   resultCard.hidden = !shown;
-  if (resultText.value !== text) resultText.value = text;
+  if (resultText.value !== text) {
+    resultText.value = text;
+    dailyCopy.textContent = 'Copy result'; // a new result is not copied yet
+    dailyCopy.classList.remove('copied');
+  }
 }
 // The card is a sheet above the dock (#1032): Esc or a tap outside closes it, and the focus goes back to what had it.
 let closedCard = '';
@@ -4492,8 +4502,12 @@ addEventListener('keydown', (e) => {
 addEventListener('pointerdown', (e) => {
   if (!within(resultCard, e.target)) closeResultCard();
 });
-document.getElementById('daily-copy')!.addEventListener('click', async () => {
-  if (await copyText(resultText.value, navigator.clipboard)) return hud(' · result copied');
+dailyCopy.addEventListener('click', async () => {
+  if (await copyText(resultText.value, navigator.clipboard)) {
+    dailyCopy.textContent = 'Copied';
+    dailyCopy.classList.add('copied'); // the check mark draws in (#1098)
+    return hud(' · result copied');
+  }
   resultText.focus();
   resultText.select();
   hud(' · result selected: copy it by hand');
