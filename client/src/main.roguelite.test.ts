@@ -262,6 +262,20 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     else expect(line()).toBe(before);
   });
 
+  it('a fight starts with 10 enemy marbles, its front row gone, and an elite with all 14, #1145', async () => {
+    const whites = async (node: number, path: number[]): Promise<string[]> => {
+      const game = await boot('?bot=off');
+      await game.hook('__run', pick({ ...newRun(3, 3), path }, node));
+      playMove(game); // White to move: its legal moves show the marbles it has
+      const cells = game.hook<Move[]>('__legal').flatMap((m) => m.cells.map((c) => c.join(',')));
+      return [...new Set(cells)];
+    };
+    const fight = await whites(0, []);
+    expect(fight).toContain('0,-3');
+    expect(fight.some((c) => ['0,-2', '1,-2', '2,-2', '-1,-3'].includes(c))).toBe(false);
+    expect(await whites(2, [0])).toContain('0,-2'); // an elite: the standard 14
+  });
+
   it('an elite is a fight against the bot on the army board', async () => {
     const game = await boot('?nodes=50');
     await game.hook('__run', pick({ ...newRun(3, 3), path: [0] }, 2));

@@ -29,7 +29,7 @@ describe('bot.worker', () => {
   it("plays a rogue-lite fight on its army's engine, #798", async () => {
     const records = (flat: Int32Array): string[] => Array.from({ length: flat.length / 8 }, (_, i) => String(flat.slice(i * 8, i * 8 + 8)));
     const standard = new Set(records(new Engine().legal_moves()));
-    const only = records(Engine.with_army(4).legal_moves()).find((mv) => !standard.has(mv))!; // legal with 4 marbles only
+    const only = records(Engine.with_army(4, 14).legal_moves()).find((mv) => !standard.has(mv))!; // legal with 4 marbles only
     const reply = await ask({ id: 12, history: [only.split(',').map(Number)], nodes: 50, army: 4 });
     expect((reply as { move: number[] }).move).toHaveLength(8);
   });
