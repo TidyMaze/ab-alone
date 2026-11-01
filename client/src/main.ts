@@ -359,10 +359,12 @@ const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
+// The left HUD panel is folded (#957, #1269): upright, the board then sits at the middle of the window.
+let hudIsFolded = false;
 const fightView = (): View => {
   if (hub) return resetView(innerWidth < innerHeight ? 3.4 : 3.6); // the hub's deck plan (#1249): its 37 cells and their plates, a little closer than a board, closer still upright
-  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
-  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
+  if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight, hudIsFolded);
+  if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight, hudIsFolded);
   return resetView(activeRadius());
 };
 // The view last set by a fight start or Reset view (#696): while it is still the view, the player has not moved the
@@ -592,7 +594,7 @@ let reflections: THREE.Texture | null = null;
 
 // The whole board fits the window, held upright too, below the HUD and the buttons (#227).
 function frameCamera(): void {
-  sceneRenderer.frameCamera(innerWidth, innerHeight);
+  sceneRenderer.frameCamera(innerWidth, innerHeight, hudIsFolded);
 }
 frameCamera();
 let view = resetView();
@@ -4196,6 +4198,9 @@ document.getElementById('reset-view')!.addEventListener('click', () => {
 // The left HUD panel folds to a tab with its button alone (#957), saved. Folded, it stays in the page for screen readers.
 const hudFold = document.getElementById('hud-fold') as HTMLButtonElement;
 function foldHud(folded: boolean): void {
+  hudIsFolded = folded;
+  if (view === fitted) view = fitted = fightView(); // a Pulsar or Dual fit follows the board's new place
+  frameCamera();
   document.getElementById('hud-dock')!.toggleAttribute('data-folded', folded);
   hudFold.setAttribute('aria-expanded', String(!folded));
   hudFold.title = folded ? 'Unfold the panel' : 'Fold the panel';
@@ -4205,6 +4210,7 @@ hudFold.addEventListener('click', () => {
   const folded = hudFold.getAttribute('aria-expanded') === 'true';
   writeHudFolded(store, folded);
   foldHud(folded);
+  applyView();
 });
 hudFold.disabled = false;
 

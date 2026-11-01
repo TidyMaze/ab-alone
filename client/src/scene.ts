@@ -291,8 +291,8 @@ export class SceneRenderer {
     this.particlePositions[i * 3 + 2] = Math.sin(angle) * radius;
   }
 
-  frameCamera(width: number, height: number): void {
-    const { fov, shift } = framing(width, height);
+  frameCamera(width: number, height: number, folded = false): void {
+    const { fov, shift } = framing(width, height, folded);
     this.camera.aspect = width / height;
     this.camera.fov = fov;
     this.camera.setViewOffset(width, height, 0, -shift, width, height);
