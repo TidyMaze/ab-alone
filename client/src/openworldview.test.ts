@@ -68,6 +68,11 @@ const someYawReaches = (aspect: number, k: number): boolean => {
   for (let deg = 0; deg < 360; deg++) if (reachAt(aspect, k, (deg * Math.PI) / 180) > MAX_REACH) return true;
   return false;
 };
+// Zooms by `scale` and lands the drawn zoom on it at once, as reduced motion does: the follow is tested on its own (#1333).
+const zoomed = (view: OpenWorldView, scale: number): void => {
+  view.zoomBy(scale);
+  view.follow(0, true);
+};
 const ground = (view: OpenWorldView) => GROUNDS.reduce((sum, g) => sum + mesh(view, `terrain-${g}`).count, 0);
 // `expect(a).not.toBe(b)` deep-compares two scene objects to word its hint (seconds on a mesh): identity is all that is asked.
 const isNot = (a: unknown, b: unknown): void => expect(Object.is(a, b)).toBe(false);
@@ -311,7 +316,7 @@ describe('the chunks of the view stay cached after a far walk (#1034)', () => {
     const load = vi.fn((_cx: number, _cy: number) => water());
     const view = new OpenWorldView(new World(load));
     view.resize(1600, 900);
-    view.zoomBy(MAX_ZOOM * 2);
+    zoomed(view, MAX_ZOOM * 2);
     for (let step = 0; step < 12; step++) view.show([step * 4 * CHUNK, 0]); // 12 jumps of 4 chunks: 441 + 11 * 84 chunks seen, more than the cache holds
     load.mockClear();
     view.show([0, 0]); // back to the spawn: a full rebuild around it
@@ -500,7 +505,7 @@ describe('a step moves only the props near the hero (#1054)', () => {
     const view = new OpenWorldView(new World(holed));
     view.resize(1600, 900);
     view.useModels({ low: { mountain: box() }, high: { mountain: box() } });
-    view.zoomBy(MAX_ZOOM * 2); // the widest zoom: the square is MAX_REACH chunks around the origin, and its build sizes the mesh exactly
+    zoomed(view, MAX_ZOOM * 2); // the widest zoom: the square is MAX_REACH chunks around the origin, and its build sizes the mesh exactly
     view.show([0, 0]);
     const laid = mesh(view, 'prop-mountain');
     expect(view.reach).toBe(MAX_REACH);
@@ -567,15 +572,15 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(view.zoom).toBe(1);
     expect(view.camera.position.y).toBeCloseTo(14 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(11);
-    view.zoomBy(0.5); // closer than the default: no
+    zoomed(view, 0.5); // closer than the default: no
     expect(view.zoom).toBe(1);
-    view.zoomBy(1.5);
+    zoomed(view, 1.5);
     expect(view.zoom).toBeCloseTo(1.5);
     expect(view.camera.position.y).toBeCloseTo(21 + view.focusHeight);
-    view.zoomBy(2 / 1.5);
+    zoomed(view, 2 / 1.5);
     expect(view.camera.position.y).toBeCloseTo(28 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(22);
-    view.zoomBy(1e9);
+    zoomed(view, 1e9);
     expect(view.zoom).toBe(maxZoomFor(1)); // the default screen is square: its own widest zoom (#1027)
   });
 
@@ -588,7 +593,7 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(fog.far).toBeGreaterThan(fog.near);
     expect(view.camera.far).toBeGreaterThan(fog.far);
     expect(view.camera.near).toBeCloseTo(0.1);
-    view.zoomBy(2);
+    zoomed(view, 2);
     expect(fog.near).toBeCloseTo(2 * Math.hypot(14, 11));
     expect(view.camera.far).toBeGreaterThan(fog.far);
     expect(view.camera.near).toBeCloseTo(0.2); // the near plane too: the depth precision stays
@@ -597,7 +602,7 @@ describe('the zoom of the Open world camera (#976)', () => {
   it('keeps the camera behind the hero as it walks, at the zoom it has', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([2, 1]);
-    view.zoomBy(2);
+    zoomed(view, 2);
     view.show([3, 1]);
     expect(view.camera.position.y).toBeCloseTo(28 + view.focusHeight); // the camera rides the height it looks at (#988)
     expect(back(view)).toBeCloseTo(22);
@@ -609,7 +614,7 @@ describe('the zoom of the Open world camera (#976)', () => {
       const view = new OpenWorldView(world);
       view.resize(800, 600);
       view.show([2, 1]);
-      view.zoomBy(level);
+      zoomed(view, level);
       for (const cell of [[2, 1], ...neighbours([2, 1])] as Axial[]) {
         const p = axialTo3D(cell[0], cell[1]);
         const tile = world.tile(cell[0], cell[1])!;
@@ -630,7 +635,7 @@ describe('the zoom of the Open world camera (#976)', () => {
           const view = new OpenWorldView(new World(stepped(new Map([[`${d[0]},${d[1]}`, 3 + k]]), 3, 1)));
           view.resize(800, 600);
           view.show([0, 0]);
-          view.zoomBy(zoom);
+          zoomed(view, zoom);
           const p = axialTo3D(d[0], d[1]);
           const ndc = new THREE.Vector3(p.x, topOf('grass', 3 + k), p.z).project(view.camera);
           expect(view.pick(ndc.x, ndc.y), `${d} at level ${3 + k}, zoom ${zoom}`).toEqual(d);
@@ -645,7 +650,7 @@ describe('the zoom of the Open world camera (#976)', () => {
       const view = new OpenWorldView(world);
       view.resize(800, 600);
       view.show([2, 1]);
-      view.zoomBy(zoom);
+      zoomed(view, zoom);
       for (const cell of [[6, 1], [-3, -2], [2, 5], [4, -1]] as Axial[]) {
         const p = axialTo3D(cell[0], cell[1]);
         const tile = world.tile(cell[0], cell[1])!;
@@ -690,7 +695,7 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(view.pick(0, 0)).toEqual([2, 1]);
   });
 
-  it('eases the camera height to a step up a cliff: not at once, on the top within 0.6 s, never past it (#988)', () => {
+  it('follows the camera height to a step up a cliff: not at once, on the top within 0.6 s, never past it (#988, #1333)', () => {
     const view = new OpenWorldView(new World(stepped(new Map([['1,0', 3]]), 0)));
     view.resize(800, 600);
     view.show([0, 0]);
@@ -699,26 +704,26 @@ describe('the zoom of the Open world camera (#976)', () => {
     const top = view.scene.getObjectByName('hero')!.position.y;
     expect(top - view.focusHeight).toBeCloseTo(3 * STEP);
     const start = view.focusHeight;
-    expect(view.ease(1 / 60, false)).toBe(true);
+    expect(view.follow(1 / 60, false)).toBe(true);
     expect(view.focusHeight).toBeGreaterThan(start);
     expect(view.focusHeight).toBeLessThan(top - 0.1); // not at its target at once
     let highest = view.focusHeight;
-    // At 0.6 s the gap is 3 * STEP * exp(-5), 0.01 for STEP 0.5: it is on the top within 40 frames (0.67 s).
+    // The spring of rate 25 closes all but (1 + 25 t) exp(-25 t) of the gap: on the top well within 40 frames (0.67 s).
     for (let frame = 1; frame < 40; frame++) {
-      view.ease(1 / 60, false);
+      view.follow(1 / 60, false);
       highest = Math.max(highest, view.focusHeight);
     }
     expect(Math.abs(view.focusHeight - top)).toBeLessThanOrEqual(0.01); // on the top after 0.67 s
-    expect(highest).toBeLessThanOrEqual(top); // the ease never overshoots
-    expect(view.ease(1 / 60, false)).toBe(false); // settled: nothing to draw
+    expect(highest).toBeLessThanOrEqual(top); // the follow never overshoots
+    expect(view.follow(1 / 60, false)).toBe(false); // settled: nothing to draw
     expect(view.focusHeight).toBe(top);
   });
 
-  it('jumps to the top at once when the ease is instant (reduced motion, #988)', () => {
+  it('jumps to the top at once when the follow is instant (reduced motion, #988)', () => {
     const view = new OpenWorldView(new World(stepped(new Map([['1,0', 3]]), 0)));
     view.show([0, 0]);
     view.show([1, 0]);
-    expect(view.ease(1 / 60, true)).toBe(true);
+    expect(view.follow(1 / 60, true)).toBe(true);
     expect(view.focusHeight).toBe(view.scene.getObjectByName('hero')!.position.y);
   });
 });
@@ -738,7 +743,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
           const view = new OpenWorldView(new World(grass));
           view.resize(width, height);
           view.show(hero);
-          view.zoomBy(zoom); // a wide screen stops sooner: the zoom is the widest it allows
+          zoomed(view, zoom); // a wide screen stops sooner: the zoom is the widest it allows
           const [hq, hr] = view.centreChunk; // the square is around its centre, which the hero's chunk may not be (#1046)
           for (const p of footprint(view.camera)) {
             const [cq, cr] = chunkOf(cellAtPoint(p.x, p.z));
@@ -762,7 +767,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(1e9);
+    zoomed(view, 1e9);
     expect(view.zoom).toBe(MAX_ZOOM);
     expect(view.maxZoom).toBe(MAX_ZOOM);
   });
@@ -778,7 +783,7 @@ describe('the loaded chunks cover the ground in view, at every aspect and zoom (
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(1e9);
+    zoomed(view, 1e9);
     const wide = view.zoom;
     view.resize(3840, 1080);
     expect(view.zoom).toBeLessThan(wide);
@@ -824,7 +829,7 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
     const view = new OpenWorldView(new World(peaks));
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(MAX_ZOOM); // the widest view holds more peaks than the mountains' capacity: the mesh grows
+    zoomed(view, MAX_ZOOM); // the widest view holds more peaks than the mountains' capacity: the mesh grows
     expect(mesh(view, 'prop-mountain').count).toBe(MOST);
     expect(view.drawn['prop-mountain']).toBe(MOST);
   });
@@ -849,7 +854,7 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
     const view = new OpenWorldView(new World(filled(0))); // code 0: water
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     const side = 2 * view.reach + 1;
     expect(view.drawn['terrain-water']).toBe(side * side * CHUNK * CHUNK);
     expect(view.drawn['terrain-water']).toBeGreaterThan(CAPACITY.water);
@@ -860,7 +865,7 @@ describe('the instance capacity of each mesh (#976): no waste, and no write past
     const view = new OpenWorldView(new World(filled(6))); // code 6: tree
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     const side = 2 * view.reach + 1;
     expect(view.drawn['prop-tree']).toBe(side * side * CHUNK * CHUNK);
     expect(view.drawn['prop-tree']).toBeGreaterThan(CAPACITY.tree);
@@ -887,7 +892,7 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
   it('keeps the chunks, the props, the fog and the hero drawn at the widest zoom', () => {
     const view = new OpenWorldView(new World(bytes));
     view.show([2, 1]);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     expect(view.scene.fog).not.toBeNull();
     expect(mesh(view, 'terrain-grass').visible).toBe(true);
     expect(mesh(view, 'prop-tree').visible).toBe(true);
@@ -901,9 +906,9 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     expect(view.reach).toBe(3);
     expect(ground(view)).toBe((2 * 3 + 1) ** 2 * CHUNK * CHUNK);
     const version = mesh(view, 'terrain-grass').instanceMatrix.version;
-    view.zoomBy(1.01); // the reach is still two chunks: the same chunks, not rebuilt
+    zoomed(view, 1.01); // the reach is still two chunks: the same chunks, not rebuilt
     expect(mesh(view, 'terrain-grass').instanceMatrix.version).toBe(version);
-    view.zoomBy(4);
+    zoomed(view, 4);
     expect(view.reach).toBeGreaterThan(2);
     expect(ground(view)).toBe((2 * view.reach + 1) ** 2 * CHUNK * CHUNK);
   });
@@ -912,7 +917,7 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     expect(reachFor(groundRadius(view.camera, hero(view).position))).toBeLessThanOrEqual(MAX_REACH);
     expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
     // every cell of the square is grass here: the grass mesh grows to hold all of them, and no more than the most
@@ -926,7 +931,7 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(4);
+    zoomed(view, 4);
     const reach = view.reach;
     const version = mesh(view, 'terrain-grass').instanceMatrix.version;
     const propVersion = mesh(view, 'prop-tree').instanceMatrix.version;
@@ -951,7 +956,7 @@ describe('the far zoom is real 3D, with no overview (#976)', () => {
     const radius = groundRadius(view.camera, hero(view).position);
     expect(radius).toBeGreaterThan(CHUNK);
     expect(radius).toBeLessThan(2 * CHUNK);
-    view.zoomBy(4);
+    zoomed(view, 4);
     expect(groundRadius(view.camera, hero(view).position) / radius).toBeCloseTo(4, 0); // the camera stands at the hero's height, so almost linear
   });
 
@@ -1107,7 +1112,7 @@ describe('the Open world view frees the instance buffers of each mesh (#991)', (
     view.show([0, 0]);
     const before = mesh(view, 'prop-mountain').geometry;
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     expect(mesh(view, 'prop-mountain').count).toBe(MOST);
     isNot(mesh(view, 'prop-mountain').geometry, before);
     view.drain();
@@ -1143,7 +1148,7 @@ describe('a replaced geometry is freed after the frame that may use it, not at o
     const old = mesh(view, 'prop-mountain');
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose');
     const disposeMesh = vi.spyOn(THREE.InstancedMesh.prototype, 'dispose');
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     isNot(mesh(view, 'prop-mountain'), old);
     expect(disposeGeometry.mock.contexts).not.toContain(old.geometry);
     expect(disposeMesh.mock.contexts).not.toContain(old);
@@ -1174,7 +1179,7 @@ describe('a replaced geometry is freed after the frame that may use it, not at o
     view.show([0, 0]);
     const old = mesh(view, 'prop-mountain');
     const disposeMaterial = vi.spyOn(THREE.Material.prototype, 'dispose');
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     isNot(mesh(view, 'prop-mountain').material, old.material);
     expect(disposeMaterial.mock.contexts).not.toContain(old.material);
     view.drain();
@@ -1265,7 +1270,7 @@ describe('the biomes look (openworld-terrain.md section 4, #984)', () => {
     view.resize(1600, 900);
     view.show([0, 0]);
     const before = mesh(view, 'terrain-grass').instanceMatrix.count;
-    view.zoomBy(MAX_ZOOM); // the widest zoom
+    zoomed(view, MAX_ZOOM); // the widest zoom
     view.show([0, 0]);
     const grounds = mesh(view, 'terrain-grass');
     expect(grounds.instanceMatrix.count).toBeGreaterThanOrEqual(before);
@@ -1433,9 +1438,15 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
   it('the camera follows the hero where it is drawn: the point it looks at moves with the lunge and ends on the hero cell', () => {
     const view = settled(pushOf());
     view.playPush(pushOf(), 0);
-    view.tick(200);
+    const frames = (from: number, to: number): void => {
+      for (let t = from; t <= to; t += 16) {
+        view.tick(t);
+        view.follow(0.016, false);
+      }
+    };
+    frames(16, 200);
     expect(between(view.focusPoint.x, axialTo3D(1, 0).x, axialTo3D(2, 0).x)).toBe(true);
-    view.tick(400);
+    frames(216, 800);
     expect(inCell(view.focusPoint, [2, 0])).toBe(true);
   });
 
@@ -1511,7 +1522,7 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     }
   });
 
-  it('eases the yaw to its goal, one frame at a time, and settles on it; a goal wraps into (-pi, pi]', () => {
+  it('follows the yaw to its goal, one frame at a time, and settles on it; a goal wraps into (-pi, pi]', () => {
     const view = new OpenWorldView(new World(grass));
     view.resize(1600, 900);
     view.show([0, 0]);
@@ -1520,10 +1531,10 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     view.turn(Math.PI / 2 + 0.1); // 3pi/2 + 0.1 wraps to -pi/2 + 0.1
     expect(view.yaw).toBeCloseTo(-Math.PI / 2 + 0.1);
     const before = view.camera.position.x;
-    expect(view.easeYaw(0.05, false)).toBe(true); // moving toward the goal
+    expect(view.follow(0.05, false)).toBe(true); // moving toward the goal
     expect(view.camera.position.x).not.toBeCloseTo(before);
-    while (view.easeYaw(0.5, false));
-    expect(view.easeYaw(0.5, false)).toBe(false);
+    while (view.follow(0.5, false));
+    expect(view.follow(0.5, false)).toBe(false);
     expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(-Math.PI / 2 + 0.1, 6);
   });
 
@@ -1532,10 +1543,10 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     view.resize(1600, 900);
     view.show([0, 0]);
     view.turn(1);
-    expect(view.easeYaw(0.016, true)).toBe(true);
+    expect(view.follow(0.016, true)).toBe(true);
     expect(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z)).toBeCloseTo(1, 6);
     view.turn(-view.yaw);
-    view.easeYaw(0.016, true);
+    view.follow(0.016, true);
     expect(view.yaw).toBe(0);
     expect(view.camera.position.x).toBeCloseTo(view.focusPoint.x, 6);
   });
@@ -1549,7 +1560,7 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
       const view = new OpenWorldView(new World(grass));
       view.resize(width, height);
       view.show([0, 0]);
-      view.zoomBy(1e9);
+      zoomed(view, 1e9);
       for (let deg = 0; deg < 360; deg += 1) {
         view.turnTo(deg * DEG);
         expect(reachAt(width / height, view.drawnZoom, view.yaw)).toBeLessThanOrEqual(MAX_REACH);
@@ -1563,7 +1574,7 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
     view.show([0, 0]);
     for (const yaw of [0, 30 * DEG, 60 * DEG, 90 * DEG]) {
       view.turnTo(yaw);
-      view.zoomBy(1e9);
+      zoomed(view, 1e9);
       expect(view.reach).toBeLessThanOrEqual(MAX_REACH);
     }
   });
@@ -1662,7 +1673,7 @@ describe('the step glide of the hero and the troop (docs/specs/openworld.md sect
   it('draws no roll and no squash at the far zoom: the hero only slides there', () => {
     const view = new OpenWorldView(new World(GRASS));
     view.resize(1600, 900);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     expect(view.drawnZoom).toBeGreaterThan(ROLL_ZOOM);
     view.show([0, 0], [[-1, 0], [-2, 0]]);
     view.show([1, 0], [[0, 0], [-1, 0]], { now: 0, span: GLIDE_MS });
@@ -1694,6 +1705,7 @@ describe('the step glide of the hero and the troop (docs/specs/openworld.md sect
     view.show([1, 0], [[0, 0], [-1, 0], [-2, 0]]);
     view.playPush(pushLine(), 0);
     view.tick(10_000);
+    view.follow(10, false); // a long frame: the camera is on the hero
     expect(view.pick(0, 0)).toEqual([2, 0]);
   });
 
@@ -1761,10 +1773,10 @@ describe('the stripe of the marbles fades with the zoom, and the materials keep 
     view.resize(1600, 900);
     view.show([0, 0]);
     expect(view.stripeFade).toBe(1);
-    view.zoomBy(2.75);
+    zoomed(view, 2.75);
     expect(view.zoom).toBeCloseTo(2.75);
     expect(view.stripeFade).toBeCloseTo(0.5);
-    view.zoomBy(3 / 2.75);
+    zoomed(view, 3 / 2.75);
     expect(view.stripeFade).toBe(0);
     expect(view.drawnZoom).toBeCloseTo(ROLL_ZOOM);
   });
@@ -1777,7 +1789,7 @@ describe('the stripe of the marbles fades with the zoom, and the materials keep 
     const all = [...before, view.ejected.material];
     for (const material of all) expect((material as THREE.MeshStandardNodeMaterial).colorNode).not.toBeNull();
     expect(new Set(all).size).toBe(4);
-    view.zoomBy(2);
+    zoomed(view, 2);
     const after = names.map((name) => (view.scene.getObjectByName(name) as THREE.Mesh).material);
     after.forEach((material, i) => expect(material).toBe(before[i]));
   });
@@ -1820,7 +1832,7 @@ describe('the loaded chunks keep their centre while the hero paces along a chunk
     const view = new OpenWorldView(new World(load));
     view.resize(1600, 900);
     view.show([0, 0]);
-    view.zoomBy(1e9);
+    zoomed(view, 1e9);
     const loaded = load.mock.calls.length;
     const version = mesh(view, 'terrain-grass').instanceMatrix.version;
     for (let i = 0; i < 10; i++) {
@@ -1868,7 +1880,7 @@ describe('the loaded chunks keep their centre while the hero paces along a chunk
         const view = new OpenWorldView(new World(grass));
         view.resize(1600, 900);
         view.turnTo(deg * DEG);
-        view.zoomBy(zoom);
+        zoomed(view, zoom);
         for (const hero of heroes) {
           view.show(hero);
           const [cq, cr] = view.centreChunk;
@@ -1901,6 +1913,7 @@ describe('the loaded chunks keep their centre while the hero paces along a chunk
     };
     view.playPush(played, 0);
     view.tick(10_000);
+    view.follow(10, false); // the chunks follow the point the camera looks at
     expect(view.centreChunk).toEqual(chunkOf([edge, 0]));
   });
 });
@@ -1956,7 +1969,7 @@ describe('the particles of the Open world (#1110)', () => {
     view.resize(1600, 900);
     view.show([0, 0]);
     expect(run(view, 2000)).toBe(true);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     expect(view.drawnZoom).toBeGreaterThan(ROLL_ZOOM);
     expect(view.sparkle(2100, false)).toBe(true); // the frame that erases them
     expect(sparks(view).count).toBe(0);
@@ -1981,7 +1994,7 @@ describe('the particles of the Open world (#1110)', () => {
     expect(sparks(view).count).toBe(5);
     expect(run(view, 600, false, 136)).toBe(false); // gone after 350 ms
     expect(sparks(view).count).toBe(0);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     view.puff(2000);
     expect(view.sparkle(2016, false)).toBe(false);
   });
@@ -2028,22 +2041,10 @@ describe('the particles of the Open world (#1110)', () => {
       expect(view.camera.view?.enabled).toBe(false);
     });
 
-    it('lags the follow behind the walk and settles on the hero', () => {
-      const view = lit();
-      const base = pos(view);
-      view.panFor([0, 0], [1, 0], 0);
-      view.offsets(0);
-      expect(pos(view)[0]).toBeLessThan(base[0]!); // behind the hero, which goes toward +x
-      view.panEnd(1000);
-      view.offsets(1000);
-      expect(pos(view)[0]).toBeGreaterThan(base[0]!); // a little ahead of it
-      view.offsets(1300);
-      expect(pos(view)).toEqual(base);
-    });
-
     it('tells what it draws: the punched zoom, the shake in pixels, the chunk centre', () => {
       const view = lit();
       const rest = view.probe();
+      expect(rest.eye).toEqual(view.camera.position.toArray()); // where the camera is (#1333)
       expect(rest.shake).toBe(0);
       expect(rest.zoom).toBe(view.drawnZoom);
       view.punch(0);
@@ -2121,7 +2122,7 @@ describe('the particles of the Open world (#1110)', () => {
     it('throws no shards past ROLL_ZOOM', () => {
       const { world, view } = standing();
       view.resize(1600, 900);
-      view.zoomBy(MAX_ZOOM);
+      zoomed(view, MAX_ZOOM);
       world.smash(1, 0);
       view.smash([1, 0], 'boulder', 100, false);
       expect(view.sparkle(120, false)).toBe(false);
@@ -2283,5 +2284,113 @@ describe('the flat tops of the low tier (#1234)', () => {
     view.show([0, 0]);
     expect(ground(view)).toBeGreaterThan(0);
     expect(flats(view)).toBeGreaterThan(0);
+  });
+});
+
+describe('the camera follows the hero butter-smooth, on the frame clock (#1333)', () => {
+  /** The frame times of a busy page, in ms: 21, 13 and 16.7 in turn. */
+  const DTS = [21, 13, 16.7];
+
+  /** The worst change of the camera's acceleration from a frame to the next, in units per second cubed: 0 for a camera whose
+   * speed changes smoothly, large for a step in its speed (a snap, a hard start) or its acceleration. */
+  const jerk = (eyes: THREE.Vector3[], ts: number[]): number => {
+    const velocity = (i: number) => eyes[i]!.clone().sub(eyes[i - 1]!).divideScalar((ts[i]! - ts[i - 1]!) / 1000);
+    const acceleration = (i: number) => velocity(i).sub(velocity(i - 1)).divideScalar((ts[i]! - ts[i - 2]!) / 2000);
+    let worst = 0;
+    for (let i = 3; i < eyes.length; i++) worst = Math.max(worst, acceleration(i).sub(acceleration(i - 1)).length() / ((ts[i]! - ts[i - 1]!) / 1000));
+    return worst;
+  };
+
+  /** Runs `count` frames of the view from `t` ms, as the mode does: `before(now)` (the steps), the follow, the marbles; returns the
+   * camera's place and the time of each frame. */
+  const run = (view: OpenWorldView, count: number, before: (now: number) => void = () => {}, instant = false, t = 0) => {
+    const eyes = [view.camera.position.clone()];
+    const ts = [t];
+    for (let i = 0; i < count; i++) {
+      const dt = DTS[i % DTS.length]!;
+      t += dt;
+      before(t);
+      view.follow(dt / 1000, instant);
+      view.tick(t);
+      eyes.push(view.camera.position.clone());
+      ts.push(t);
+    }
+    return { eyes, ts };
+  };
+
+  it('follows a walk that speeds up to the cruise pace with no step: the camera keeps a small jerk while the hero speed jumps', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    // the steps of a held walk (#1290): from rest, then at 140, 125, 110, 95 and 80 ms a step, end to end
+    const spans = [140, 140, 125, 110, 95, 80, 80, 80, 80];
+    let due = 5;
+    let cell = 0;
+    const { eyes, ts } = run(view, 80, (now) => {
+      while (cell < spans.length && now >= due) {
+        const span = spans[cell]!;
+        cell++;
+        view.show([cell, 0], [], { now: due, span, pace: cell === 1 ? 'start' : 'walk' });
+        due += span;
+      }
+    });
+    expect(cell).toBe(spans.length);
+    expect(jerk(eyes, ts)).toBeLessThan(10_000); // about 50 000 when the camera was on the hero itself
+    expect(view.focusPoint.x).toBeCloseTo(axialTo3D(spans.length, 0).x, 2); // it lands on the hero once the walk is over
+  });
+
+  it('starts from rest on a tap, whose glide starts at full speed: the first frame barely moves', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const start = view.camera.position.clone();
+    const { eyes, ts } = run(view, 40, (now) => now === 21 && view.show([1, 0], [], { now: 0, span: GLIDE_MS, pace: 'tap' }));
+    expect(eyes[2]!.distanceTo(start)).toBeLessThan(0.05 * axialTo3D(1, 0).x); // the hero is a third of a cell on
+    expect(jerk(eyes, ts)).toBeLessThan(10_000);
+  });
+
+  it('eases the zoom from rest to its goal and lands on it exactly; reduced motion lands at once', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.zoomBy(2);
+    expect(view.zoom).toBe(2); // the goal, at once
+    const { eyes, ts } = run(view, 60);
+    expect(eyes[1]!.distanceTo(eyes[0]!)).toBeLessThan(0.05 * 18); // the camera goes back 18 units, all at once before #1333
+    expect(jerk(eyes, ts)).toBeLessThan(50_000);
+    expect(view.drawnZoom).toBe(2);
+    expect(view.follow(0.016, false)).toBe(false); // settled
+    view.zoomBy(0.5);
+    expect(view.follow(0.016, true)).toBe(true);
+    expect(view.drawnZoom).toBe(1);
+  });
+
+  it('turns 60 degrees from rest and lands on the yaw exactly; reduced motion lands at once', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const angle = () => Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z);
+    view.turn(Math.PI / 3);
+    const { eyes, ts } = run(view, 60);
+    expect(eyes[1]!.distanceTo(eyes[0]!)).toBeLessThan(0.05 * 11); // the arc is 11 units: 1.8 on the first frame with the ease of #1026
+    expect(jerk(eyes, ts)).toBeLessThan(50_000);
+    expect(angle()).toBeCloseTo(Math.PI / 3, 9);
+    expect(view.follow(0.016, false)).toBe(false); // settled
+    view.turn(-Math.PI / 3);
+    expect(view.follow(0.016, true)).toBe(true);
+    expect(angle()).toBeCloseTo(0, 9);
+  });
+
+  it('a turn the long way round goes the short way: from 170 degrees to -170 it turns 20 degrees, through 180', () => {
+    const view = new OpenWorldView(new World(grass));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    const DEG = Math.PI / 180;
+    view.turnTo(170 * DEG);
+    view.turn(20 * DEG);
+    const angles: number[] = [];
+    run(view, 60, () => angles.push(Math.abs(Math.atan2(view.camera.position.x - view.focusPoint.x, view.camera.position.z - view.focusPoint.z))));
+    expect(Math.min(...angles)).toBeGreaterThan(169 * DEG);
+    expect(view.yaw).toBeCloseTo(-170 * DEG, 9);
   });
 });

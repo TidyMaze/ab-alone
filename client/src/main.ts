@@ -5375,7 +5375,7 @@ if (navigator.webdriver) {
   const hooks = window as unknown as Record<string, unknown>;
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldEnemies = () => openWorld.enemies();
-  hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake and chunk centre the camera draws (#1103)
+  hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');
@@ -5900,7 +5900,7 @@ renderer.setAnimationLoop((now) => {
     const drew = openWorld.frame((scene, camera) => {
       renderer.info.reset();
       renderer.render(scene, camera);
-    });
+    }, now); // the frame's own time, not the moment its callback runs: the camera moves by even steps (#1333)
     if (fpsOn) {
       // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.
       if (drew) stampDrawn(fpsStamps, now);

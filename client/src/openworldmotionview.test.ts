@@ -9,6 +9,11 @@ import { FOAM_GAIN } from './openworldmotion';
 import { MAX_ZOOM, OpenWorldView, type Played } from './openworldview';
 
 // The water and the trees move (#1101, #1102, docs/specs/openworld-animation.md sections 3 and 4).
+// Zooms by `scale` and lands the drawn zoom on it at once, as reduced motion does: the follow is tested on its own (#1333).
+const zoomed = (view: OpenWorldView, scale: number): void => {
+  view.zoomBy(scale);
+  view.follow(0, true);
+};
 const WATER_CODE = 0;
 const GRASS_CODE = 2;
 const TREE_CODE = 6;
@@ -99,7 +104,7 @@ describe('the water and the trees move (#1101, #1102)', () => {
     view.animate(16, true);
     expect([view.uniforms.shimmer.value, view.alive]).toEqual([0, '']);
     view.animate(32, false);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     view.animate(48, false);
     expect(view.uniforms.shimmer.value).toBe(0);
   });
@@ -126,7 +131,7 @@ describe('the water and the trees move (#1101, #1102)', () => {
   it('is off past ROLL_ZOOM, and draws once more to erase it', () => {
     const view = forest();
     view.animate(0, false);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     expect(view.drawnZoom).toBeGreaterThan(ROLL_ZOOM);
     expect(view.animate(16, false)).toBe(true);
     expect([view.uniforms.foam.value, view.uniforms.sway.value]).toEqual([0, 0]);
@@ -157,7 +162,7 @@ describe('the water and the trees move (#1101, #1102)', () => {
     dry.ripple([0, 0], [1, 0], 0, false);
     expect(dry.ripples).toBe(0);
     const wide = lake();
-    wide.zoomBy(MAX_ZOOM);
+    zoomed(wide, MAX_ZOOM);
     wide.ripple([1, 0], [2, 0], 0, false);
     expect(wide.ripples).toBe(0);
   });
@@ -185,7 +190,7 @@ describe('the water and the trees move (#1101, #1102)', () => {
     expect(mesh(view, 'particles').count).toBe(6);
     view.sparkle(1100, false);
     expect(mesh(view, 'particles').count).toBe(0);
-    view.zoomBy(MAX_ZOOM);
+    zoomed(view, MAX_ZOOM);
     view.playPush(played, 2000);
     view.sparkle(2430, false);
     expect(mesh(view, 'particles').count).toBe(0);
