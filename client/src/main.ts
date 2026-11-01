@@ -3454,6 +3454,7 @@ function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
   mesh.geometry = kit.geometry;
   mesh.material = kit.material;
   mesh.rotation.set(0, 0, 0);
+  mesh.userData.terrace = true; // a mark, not a marble
   mesh.position.y = y - TERRACE_LIFT; // the marbles' group stands 0.11 higher on the terrace
 }
 const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
@@ -3627,6 +3628,7 @@ function refresh(): void {
       // one flat disc under each marble, instanced with the others (the kit's pedestal, 0.04 high): the marble stands on it
       const pedestal = new THREE.Mesh(terraceKit.pedestal.geometry, terraceKit.pedestal.material);
       pedestal.position.set(p.x, -TERRACE_LIFT, p.z);
+      pedestal.userData.terrace = true;
       marbles.add(pedestal);
     }
     onMarble(i, marble);
@@ -4569,7 +4571,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
     const c = axialTo3D(q, r);
     return boxOf(ring(c.x, c.z, 0.46, 0.05));
   });
-  const boardMarbles = marbles.children.map((o) => {
+  const boardMarbles = marbles.children.filter((o) => !o.userData.terrace).map((o) => { // not the terrace's pedestals and rings (#1314)
     const bb = new THREE.Box3().setFromObject(o, true); // precise: a turned marble's box is not its turned bounding cube (#346)
     const corners = [bb.min.x, bb.max.x].flatMap((x) => [bb.min.y, bb.max.y].flatMap((y) => [bb.min.z, bb.max.z].map((z) => px(x, y, z))));
     return boxOf(corners);

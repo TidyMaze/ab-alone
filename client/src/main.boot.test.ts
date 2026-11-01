@@ -258,6 +258,7 @@ describe('the renderer and its textures', () => {
     game.click(1, 2); // played: the last move's ring where it landed
     game.frame(1000);
     expect(rested(0.108)).toBeGreaterThanOrEqual(1);
+    expect(game.hook<{ marbles: unknown[] }>('__bloodAt', 0).marbles).toHaveLength(28); // the marbles alone: not a pedestal nor a ring
   });
 
   it('keeps the last drawn frame cost over the idle frames that follow it (the draw calls read 0 before)', async () => {
