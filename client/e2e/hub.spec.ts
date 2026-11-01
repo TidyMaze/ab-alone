@@ -211,14 +211,16 @@ test('the battle royale lobby door starts battle royale, and Back to the hub lan
   await page.screenshot({ path: testInfo.outputPath('royale-after.png') });
 });
 
-/** The colour of the lift glyph at the centre of `cell` and of the floor next to it, after a draw asked now: under
+/** The colour of the lift's arrow at the centre of `cell` and of the cage beside it, after a draw asked now: under
  * automation the page skips draws (#216, #365), and an asked draw is not held by the throttle (#435, #892). */
 async function liftPixels(page: Page, [q, r]: [number, number], path: string): Promise<[RGB, RGB]> {
   const draws = await page.evaluate(() => (window as any).__drawNext() as number);
   await page.waitForFunction((n) => (window as any).__draws() > n, draws);
+  // The arrow lies on top of the cage (#1374), so it is sampled at its own height: its centre, and a point 0.24 east of it
+  // in the picture, beside the arrow's head (0.18 across) and clear of it.
+  const lift = await page.evaluate(([cq, cr]) => (window as any).__liftArrowY(cq, cr) as number, [q, r]);
   const png = await page.screenshot({ path });
-  // The floor 0.28 west and 0.1 north of the centre: inside the ring, clear of the arrow and the bar.
-  const floor: [number, number] = [q - 0.28 + 0.1 / Math.sqrt(3), r - 0.2 / Math.sqrt(3)];
+  const beside: [number, number, number] = [q + 0.24, r, lift];
   return page.evaluate(
     async ([b64, cells]) => {
       const img = new Image();
@@ -228,13 +230,13 @@ async function liftPixels(page: Page, [q, r]: [number, number], path: string): P
       [c.width, c.height] = [img.width, img.height];
       const g = c.getContext('2d')!;
       g.drawImage(img, 0, 0);
-      return cells.map(([cq, cr]) => {
-        const { x, y } = (window as any).__cellToScreen(cq, cr);
+      return cells.map(([cq, cr, height]) => {
+        const { x, y } = (window as any).__cellToScreen(cq, cr, height);
         const [red, green, blue] = g.getImageData(Math.round(x), Math.round(y), 1, 1).data;
         return [red, green, blue];
       }) as [RGB, RGB];
     },
-    [png.toString('base64'), [[q, r], floor]] as const,
+    [png.toString('base64'), [[q, r, lift], beside]] as const,
   );
 }
 

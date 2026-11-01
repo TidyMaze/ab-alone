@@ -87,8 +87,9 @@ function part(geometry: THREE.BufferGeometry, material: THREE.Material, [x, y, z
 }
 
 /** The near-black arrow flat on a lift's floor, up the map toward the deck above or down toward the one below (#523). */
-function liftArrow(cell?: Axial, y = 0): THREE.Mesh {
-  const arrow = new THREE.Mesh(arrowGeo, lockedBarMaterial);
+function liftArrow(cell?: Axial, y = 0, paint: THREE.Material = lockedBarMaterial): THREE.Mesh {
+  const arrow = new THREE.Mesh(arrowGeo, paint);
+  if (cell) arrow.userData.cell = `${cell[0]},${cell[1]}`; // the e2e checks find it by its cell (__liftArrowY, #523)
   arrow.position.y = y;
   const cellY = cell?.[1] ?? 0;
   arrow.rotation.set(-Math.PI / 2, ((cellY < 0 ? 1 : -1) * Math.PI) / 2, 0, 'YXZ');
@@ -291,7 +292,8 @@ export function createKitGlyph(kit: HubKit, door: Door, options: GlyphOptions = 
     seal.name = 'beaten-seal';
     group.add(seal);
   }
-  if (door.kind === 'lift') group.add(liftArrow(options.cell, cageTop(kit) + ARROW_GAP)); // the file's cage has none: the arrow says which way it goes, on top of the cage
+  // the file's cage has none: the arrow says which way it goes, on top of the cage, in bone white to read against the cage (#1374)
+  if (door.kind === 'lift') group.add(liftArrow(options.cell, cageTop(kit) + ARROW_GAP, materials.lift));
   if (door.kind === 'lift' && options.open === false && kit.lockbar) {
     const bar = kit.lockbar.clone();
     bar.name = 'locked-bar';

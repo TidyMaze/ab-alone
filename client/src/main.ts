@@ -4518,6 +4518,14 @@ addEventListener('resize', () => {
   applyView(); // the reader fits the screen to the new window
 });
 
+// Used by the browser checks to aim at a lift's arrow (#523, #1374): its world height, on top of the cage on the terrace.
+(window as unknown as Record<string, unknown>).__liftArrowY = (q: number, r: number): number | null => {
+  let arrow: THREE.Object3D | undefined;
+  sceneRenderer.marbles.traverse((o) => {
+    if (!arrow && o.userData.cell === `${q},${r}`) arrow = o;
+  });
+  return arrow ? arrow.getWorldPosition(new THREE.Vector3()).y : null;
+};
 // Used by the browser checks to click a cell by its axial coordinates.
 (window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number, lift = 0) => {
   return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1, lift);

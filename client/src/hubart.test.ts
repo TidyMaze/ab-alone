@@ -243,6 +243,11 @@ describe('the hub props of the Blender file on the rooms of the game (#1374)', (
     expect(low.position.y).toBeCloseTo(0.02);
   });
 
+  it('paints the terrace lift arrow bone white, so it reads on the cage (#523, #1374)', () => {
+    const arrowOf = (props: HubKit): THREE.Mesh => createKitGlyph(props, { kind: 'lift', to: 'cargo' }, { cell: [1, -2] }).children.find((c) => (c as THREE.Mesh).geometry instanceof THREE.ShapeGeometry) as THREE.Mesh;
+    expect((arrowOf(kit).material as THREE.MeshBasicMaterial).color.getHex()).toBe(GLYPH_COLORS.lift);
+  });
+
   it('draws a room whose prop the file lacks as an empty group', () => {
     expect(createKitGlyph(kit, { kind: 'bot' }).children).toHaveLength(0);
   });

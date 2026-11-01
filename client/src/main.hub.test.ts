@@ -744,6 +744,13 @@ describe('main.ts, the lift gate (#523)', () => {
     expect(game.hud()).toBe('Hub · Mess');
   });
 
+  it('reports the height of a lift arrow for the e2e checks, and none for a cell without a lift (#523)', async () => {
+    const game = await boot('?bot=off');
+    shipAt(game, [1, -1]);
+    expect(game.hook<number>('__liftArrowY', 1, -2)).toBeGreaterThan(0); // the arrow's height, over the floor of its room
+    expect(game.hook<number | null>('__liftArrowY', 0, 0)).toBeNull();
+  });
+
   it('on a middle deck the lift down is open and the lift up waits for this deck\'s boss', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
