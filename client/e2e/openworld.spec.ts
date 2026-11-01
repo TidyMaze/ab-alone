@@ -799,6 +799,45 @@ test('a push punches the camera in and back, without moving the chunk centre, #1
   await page.screenshot({ path: test.info().outputPath('camera-after.png') });
 });
 
+// #1333: the camera follows a walk butter-smooth: from rest, up to the cruise pace (#1290) and back to rest, its speed never jumps from a
+// frame to the next. The page samples where the camera is (`__openworldCamera`) on every animation frame, at the frame's own time.
+test('the camera follows a walk with no step in its speed, from its start to its stop, #1333', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe('7');
+  const samples = await page.evaluate(async () => {
+    const w = window as unknown as { __openworldFixture: (f: object) => void; __openworldCamera: () => { eye: number[] } };
+    w.__openworldFixture({ hero: [0, 0], troop: [], enemies: [] });
+    const out: { t: number; eye: number[] }[] = [];
+    await new Promise<void>((done) => {
+      let start = 0;
+      const sample = (t: number): void => {
+        if (start === 0) {
+          start = t;
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' })); // held: the walk speeds up to the cruise pace
+        }
+        if (t - start > 1200 && t - start < 1300) window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight' }));
+        out.push({ t, eye: w.__openworldCamera().eye });
+        if (t - start < 1800) requestAnimationFrame(sample);
+        else done();
+      };
+      requestAnimationFrame(sample);
+    });
+    return out;
+  });
+  const velocity = (i: number) => samples[i]!.eye.map((x, k) => (x - samples[i - 1]!.eye[k]!) / ((samples[i]!.t - samples[i - 1]!.t) / 1000));
+  let worst = 0;
+  for (let i = 2; i < samples.length; i++) {
+    const [a, b] = [velocity(i), velocity(i - 1)];
+    const dt = (samples[i]!.t - samples[i - 2]!.t) / 2000;
+    worst = Math.max(worst, Math.hypot(...a.map((x, k) => x - b[k]!)) / dt);
+  }
+  expect(Math.hypot(...samples.at(-1)!.eye.map((x, k) => x - samples[0]!.eye[k]!))).toBeGreaterThan(5); // it walked
+  expect(worst).toBeLessThan(300); // units/s/s: about 100, and about 1000 when the camera was on the hero itself (before #1333)
+});
+
 // #1273: at the default view a Right press from an odd row walks forward (up-right), as Left does, not back down-right.
 test('Right from an odd row walks forward in the Open world, #1273', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');

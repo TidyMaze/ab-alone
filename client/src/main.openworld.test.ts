@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { indexedDbStore } from './idb';
 import { GLIDE_MS } from './openworldglide';
@@ -301,6 +301,18 @@ describe('the Open world mode', () => {
     release('ArrowRight');
     for (let i = 0; i < 6; i++) game.frame(20);
     expect(byId('fps').textContent).toBe('50 FPS');
+  });
+
+  it('moves the Open world on the time of the animation frame, not the moment its callback runs, #1333', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const { OpenWorldMode } = await import('./openworldmode'); // the page's own module: the harness loads a fresh one at each boot
+    const frame = vi.spyOn(OpenWorldMode.prototype, 'frame');
+    const at = performance.now();
+    game.frame(16);
+    expect(frame).toHaveBeenLastCalledWith(expect.any(Function), at + 16);
   });
 
   it('reads idle in its FPS readout when a still scene draws nothing, and the diagnostics follow, #1064', async () => {

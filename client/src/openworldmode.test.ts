@@ -519,7 +519,7 @@ function cliff(_seed: number, cx: number, cy: number): Uint8Array {
 }
 
 describe('the camera eases up a cliff (#988)', () => {
-  it('draws every frame while the camera eases to the top of the cliff, then draws nothing once it has settled', () => {
+  it('draws every frame while the camera follows to the top of the cliff, then draws nothing once it has settled', () => {
     const clock = vi.spyOn(performance, 'now').mockReturnValue(0); // the step starts at the press, on the frames' clock
     const m = mode(undefined, cliff, () => false);
     m.enter(1, 800, 600);
@@ -535,8 +535,8 @@ describe('the camera eases up a cliff (#988)', () => {
       drawn.push(render.mock.calls.length > before);
     }
     clock.mockRestore();
-    expect(drawn.slice(0, 30).every(Boolean)).toBe(true); // every frame of the first half second
-    expect(drawn.slice(50).some(Boolean)).toBe(false); // settled: nothing left to draw
+    expect(drawn.slice(0, 20).every(Boolean)).toBe(true); // every frame of the first third of a second
+    expect(drawn.slice(40).some(Boolean)).toBe(false); // settled: nothing left to draw
   });
 
   it('jumps to the top of the cliff at once with reduced motion: one draw, then none', () => {
@@ -600,33 +600,10 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     expect(shake).toHaveBeenCalledWith(1000 + GLIDE_MS);
   });
 
-  it('keeps the camera still under reduced motion: no punch, no shake, no pan (#1103)', () => {
-    const calls = [
-      vi.spyOn(OpenWorldView.prototype, 'punch'),
-      vi.spyOn(OpenWorldView.prototype, 'shake'),
-      vi.spyOn(OpenWorldView.prototype, 'panFor'),
-      vi.spyOn(OpenWorldView.prototype, 'panEnd'),
-    ];
+  it('keeps the camera still under reduced motion: no punch, no shake (#1103)', () => {
+    const calls = [vi.spyOn(OpenWorldView.prototype, 'punch'), vi.spyOn(OpenWorldView.prototype, 'shake')];
     tap(pushing(true), 'ArrowRight');
     for (const call of calls) expect(call).not.toHaveBeenCalled();
-  });
-
-  it('eases the follow in at the first step of a walk and out at its end, not on a tap of the screen (#1103)', () => {
-    const panFor = vi.spyOn(OpenWorldView.prototype, 'panFor');
-    const panEnd = vi.spyOn(OpenWorldView.prototype, 'panEnd');
-    vi.spyOn(performance, 'now').mockReturnValue(500);
-    const m = pushing();
-    m.key('ArrowRight');
-    expect(panFor).toHaveBeenCalledWith([0, 0], [1, 0], 500);
-    m.release('ArrowRight');
-    expect(panEnd).toHaveBeenCalledWith(500);
-    panFor.mockClear();
-    panEnd.mockClear();
-    const tapped = pushing();
-    tapped.press(400, 300, 800, 600); // a press on the screen: a tap, not a walk
-    tapped.release();
-    expect(panFor).not.toHaveBeenCalled();
-    expect(panEnd).not.toHaveBeenCalled();
   });
 
   it('draws the frames of the camera offsets, then stops drawing (#1103)', () => {
@@ -635,9 +612,9 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     const render = vi.fn();
     m.frame(render, 0);
     tap(m, 'ArrowRight');
-    for (const now of [200, 300, 400, 500, 600]) m.frame(render, now);
+    for (const now of [200, 300, 400, 500, 600, 800, 1000]) m.frame(render, now); // the follow settles on the hero after the push
     render.mockClear();
-    m.frame(render, 700);
+    m.frame(render, 1100);
     expect(render).not.toHaveBeenCalled();
   });
 
@@ -653,8 +630,9 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     expect(render).toHaveBeenCalledTimes(4);
     m.frame(render, 560); // the step glides 140 ms, the push lunges from its landing and ends at 550 ms: that frame draws the final cells
     expect(body().openworldAnim).toBeUndefined();
+    for (const now of [800, 1000]) m.frame(render, now); // the follow settles on the hero
     render.mockClear();
-    m.frame(render, 570);
+    m.frame(render, 1010);
     expect(render).not.toHaveBeenCalled();
   });
 

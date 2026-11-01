@@ -33,8 +33,8 @@ const make = (reduced: boolean, walled = false): OpenWorldMode => {
   m.enter(1, 800, 600);
   return m;
 };
-/** The camera's x, which follows the hero's drawn place. */
-const focusX = (m: OpenWorldMode): number => ((m as unknown as { view: OpenWorldView }).view.focusPoint).x;
+/** The hero's drawn x, which the camera follows (#1333). */
+const focusX = (m: OpenWorldMode): number => ((m as unknown as { view: OpenWorldView }).view.scene.getObjectByName('hero')!).position.x;
 const CELL = axialTo3D(1, 0).x - axialTo3D(0, 0).x;
 const FRAME = 1000 / 60;
 
