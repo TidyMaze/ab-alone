@@ -214,6 +214,13 @@ describe('SceneRenderer (#632)', () => {
     }
   });
 
+  it('puts the board centre at the middle of a phone held upright with the HUD folded, #1269', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    sr.frameCamera(390, 844, true);
+    sr.applyView(resetView(), null, { tier: 'high', clear: false, deck: 'mess' });
+    expect(sr.cellToScreen(0, 0, 390, 844).y).toBeCloseTo(422, 6);
+  });
+
   it('updates atmospheric fog based on tier, clear board, and deck', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });
