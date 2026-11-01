@@ -930,6 +930,8 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
 #trainer-text p { margin: 0; }
 #trainer-card #trainer-next[hidden] { display: none; }
 #dock-wrap #trainer-card button { min-height: 44px; min-width: 44px; }
+/* A boss list needs the room: the Console entry steps aside while one is open, so the menu never scrolls at 1280x720 (#1407). */
+#dock-wrap #mode-menu:has(> [aria-expanded='true']) #console-entry { display: none; }
 #dock-wrap #mode-menu { display: flex; flex-direction: column; flex-flow: column nowrap; justify-content: flex-start; gap: 4px; align-items: stretch; min-width: 0; }
 #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 44px; min-width: 44px; }
 #dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { flex: none; width: 100%; overflow-x: auto; margin: 0; padding: 0; }

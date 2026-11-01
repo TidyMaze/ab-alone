@@ -10,7 +10,7 @@ const until = (check: () => boolean): Promise<void> =>
 import * as THREE from 'three/webgpu';
 import type { PeerNet } from './p2p';
 import { generateKeys } from './moverecord';
-import { signBreak } from './worldevents';
+import { signBeaten, signBreak } from './worldevents';
 import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
 import { WorldPeersHost, type NetStatus } from './worldnet';
 
@@ -47,6 +47,7 @@ function setup(allowed = true) {
   const clock = { now: 0 };
   const reports: NetStatus[] = [];
   const applied: (readonly [number, number])[] = [];
+  const beaten: (readonly [number, number])[] = [];
   const keysOnce = generateKeys();
   const me = { name: '' };
   const root = document.createElement('div');
@@ -66,11 +67,11 @@ function setup(allowed = true) {
     root,
     (status) => reports.push(status),
     () => me.name,
-    { keys: () => keysOnce, canBreak: (_seed, q) => q >= 0, apply: (cell) => applied.push(cell) },
+    { keys: () => keysOnce, canBreak: (_seed, q) => q >= 0, apply: (cell) => applied.push(cell), canBeaten: (_seed, q) => q >= 0, beat: (cell) => beaten.push(cell) },
     () => clock.now,
   );
   const enter = (seed = PUBLIC_SEED) => host.enter(seed, scene, camera, world as never);
-  return { host, nets, rooms, clock, root, scene, enter, reports, me, applied, keysOnce };
+  return { host, nets, rooms, clock, root, scene, enter, reports, me, applied, beaten, keysOnce };
 }
 
 describe('WorldPeersHost', () => {
@@ -177,7 +178,7 @@ describe('WorldPeersHost', () => {
 
   it('reads the page clock when none is given', () => {
     const net = new FakeNet();
-    const host = new WorldPeersHost(() => net, () => true, document.createElement('div'), () => {}, () => '', { keys: () => generateKeys(), canBreak: () => true, apply: () => {} });
+    const host = new WorldPeersHost(() => net, () => true, document.createElement('div'), () => {}, () => '', { keys: () => generateKeys(), canBreak: () => true, apply: () => {}, canBeaten: () => true, beat: () => {} });
     const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
     host.enter(PUBLIC_SEED, new THREE.Scene(), camera, { tile: () => undefined });
     net.data(encodeHello(), 'p');
@@ -268,6 +269,7 @@ describe('WorldPeersHost', () => {
 
   describe('the broken cells (#1305)', () => {
     const sentBreaks = (net: FakeNet) => net.sent.filter(([d]) => d[1] === 3);
+    const sentBeaten = (net: FakeNet) => net.sent.filter(([d]) => d[1] === 5);
 
     it('signs the cell the hero broke and sends it to every peer', async () => {
       const { nets, host, enter, keysOnce } = setup();
@@ -333,6 +335,32 @@ describe('WorldPeersHost', () => {
       await until(() => applied.length === 1);
       await flush();
       expect(applied).toEqual([[8, 8]]);
+    });
+
+    it('sends a beaten enemy signed as type 5 to every peer, and only one the rules allow', async () => {
+      const { nets, host, enter, keysOnce } = setup();
+      enter();
+      host.beaten([4, -2]);
+      host.beaten([-1, 0]); // canBeaten says no
+      await until(() => sentBeaten(nets[0]!).length === 1);
+      const [bytes, to] = sentBeaten(nets[0]!)[0]!;
+      expect(to).toBeUndefined();
+      expect(decode(bytes!)).toMatchObject({ t: 'break', event: { kind: 'beaten', seed: PUBLIC_SEED, q: 4, r: -2, pub: (await keysOnce).pub } });
+    });
+
+    it('applies a valid beaten enemy from a peer once, and refuses one that is no enemy', async () => {
+      const { nets, beaten, enter, keysOnce, clock } = setup();
+      enter();
+      const keys = await keysOnce;
+      nets[0]!.data(encodeBreak(await signBeaten(keys, PUBLIC_SEED, -3, 5)), 'p'); // canBeaten says no
+      clock.now = 1000;
+      nets[0]!.data(encodeBreak(await signBeaten(keys, PUBLIC_SEED, 3, 5)), 'p');
+      await until(() => beaten.length === 1);
+      expect(beaten).toEqual([[3, 5]]);
+      clock.now = 2000;
+      nets[0]!.data(encodeBreak(await signBeaten(keys, PUBLIC_SEED, 3, 5)), 'q'); // the same enemy from another peer
+      await flush();
+      expect(beaten).toEqual([[3, 5]]);
     });
 
     it('a break that arrives after the room closed is dropped', async () => {

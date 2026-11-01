@@ -7,7 +7,7 @@ import type { World } from './openworld';
 import type { PeerNet } from './p2p';
 import { joinErrorCause } from './netcounters';
 import type { Keys } from './moverecord';
-import { BreakSet, SYNC_MAX, SYNC_MS, signBreak, verifyBreak } from './worldevents';
+import { BreakSet, SYNC_MAX, SYNC_MS, signBeaten, signBreak, verifyBreak } from './worldevents';
 import { type BreakEvent, decode, encodeBreak, encodeHello, Peers, PUBLIC_SEED, roomOf, Sender } from './worldpeers';
 import { PeersLayer } from './worldpeersview';
 
@@ -21,14 +21,18 @@ export interface PeerHost {
   leave(): void;
   /** The hero broke the obstacle on `cell`: told to the others, signed. */
   broke(cell: Axial): void;
+  /** The hero ejected the generated enemy that starts on `cell` (#1305): told to the others when the rule allows it, signed. */
+  beaten(cell: Axial): void;
 }
 
-/** What the signed break events need of the page: the player's key, the rule of the world (`world_can_break`) and what happens to a
- * cell another hero broke (the world opens it and the view smashes its prop). */
+/** What the signed events need of the page: the player's key, the rules of the world (`world_can_break`, `world_is_enemy`) and what
+ * happens to a cell another hero broke (the world opens it and the view smashes its prop) or to an enemy another hero ejected. */
 export interface BreakHooks {
   keys: () => Promise<Keys>;
   canBreak: (seed: number, q: number, r: number) => boolean;
   apply: (cell: Axial) => void;
+  canBeaten: (seed: number, q: number, r: number) => boolean;
+  beat: (cell: Axial) => void;
 }
 
 /** Breaks from one peer closer together than this are dropped (flood guard; the sync of a newcomer goes at SYNC_MS). */
@@ -141,28 +145,37 @@ export class WorldPeersHost implements PeerHost {
 
   /** The hero broke the obstacle on `cell`: signs it, holds it and tells every peer. */
   broke(cell: Axial): void {
-    void this.announce(cell);
+    void this.announce('break', cell);
   }
 
-  private async announce([q, r]: Axial): Promise<void> {
+  /** The hero ejected the enemy on `cell`: signed and told to the peers, only when a generated enemy starts there (`world_is_enemy`). */
+  beaten([q, r]: Axial): void {
+    if (this.hooks.canBeaten(PUBLIC_SEED, q, r)) void this.announce('beaten', [q, r]);
+  }
+
+  private async announce(kind: BreakEvent['kind'], [q, r]: Axial): Promise<void> {
     const run = this.running;
     if (!run) return;
-    const event = await signBreak(await this.hooks.keys(), PUBLIC_SEED, q, r);
+    const sign = kind === 'beaten' ? signBeaten : signBreak;
+    const event = await sign(await this.hooks.keys(), PUBLIC_SEED, q, r);
     if (this.running !== run) return; // the room closed while the key signed
     this.held.add(event);
     run.net.send(encodeBreak(event));
   }
 
-  /** A break from `peer`: checked (this world, a cell that can break, not too fast, a signature that verifies), then held and applied. */
+  /** A break or a beaten enemy from `peer`: checked (this world, a cell the rules allow, not too fast, a signature that verifies), then
+   * held and applied. */
   private async receive(peer: string, event: BreakEvent): Promise<void> {
     const run = this.running;
     if (event.seed !== PUBLIC_SEED || this.held.has(event.q, event.r)) return;
     const now = this.clock();
     if (now - (this.lastBreak.get(peer) ?? -Infinity) < BREAK_GAP_MS) return;
     this.lastBreak.set(peer, now);
-    if (!this.hooks.canBreak(event.seed, event.q, event.r) || !(await verifyBreak(event))) return;
+    const allowed = event.kind === 'beaten' ? this.hooks.canBeaten : this.hooks.canBreak;
+    if (!allowed(event.seed, event.q, event.r) || !(await verifyBreak(event))) return;
     if (this.running !== run || !this.held.add(event)) return; // the room closed meanwhile, or the same cell came first
-    this.hooks.apply([event.q, event.r]);
+    if (event.kind === 'beaten') this.hooks.beat([event.q, event.r]);
+    else this.hooks.apply([event.q, event.r]);
   }
 
   /** The public name changed: tells the peers here. */
