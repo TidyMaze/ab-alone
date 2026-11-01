@@ -31,8 +31,8 @@ const MARBLE = 13;
 
 const cell = (x: number, y: number): string => `<circle cx="${x}" cy="${y}" r="${CELL}" fill="#0f1214" stroke="#3a4248"/>`;
 const marble = (x: number, y: number, side: 'glass' | 'shell', ghost = false): string =>
-  `<circle cx="${x}" cy="${y}" r="${MARBLE}" fill="url(#guide-${side})"${ghost ? ' opacity="0.35"' : ''}/>`;
-/** A row of cells from `x0`, `step` apart: G a glass marble, S a shell, g and s their ghosts where they go, . empty. */
+  `<circle cx="${x}" cy="${y}" r="${MARBLE}" fill="url(#guide-${side})"${ghost ? ' opacity="0.6" stroke="#d8d4c8" stroke-width="1.5" stroke-dasharray="4 3"' : ''}/>`;
+/** A row of cells from `x0`, `step` apart: G a glass marble, S a shell, g and s their ghosts (dashed) where they go, . empty. */
 const row = (y: number, marks: string, x0: number, step = 40): string =>
   [...marks]
     .map((mark, i) => {
@@ -57,10 +57,10 @@ const svg = (body: string): string =>
 
 // The goal: three glass push the last shell over the rim, the first of the six to win.
 const goalArt = svg(
-  `<path d="M212 16V104" stroke="${SODIUM}" stroke-width="3" stroke-dasharray="6 4"/>` +
-    row(60, 'GGGS', 70) +
-    marble(238, 60, 'shell', true) +
-    arrow(70, 26, 238) +
+  `<path d="M192 16V104" stroke="${SODIUM}" stroke-width="3" stroke-dasharray="6 4"/>` +
+    row(60, 'GGGS', 50) +
+    marble(222, 60, 'shell', true) +
+    arrow(50, 26, 222) +
     [0, 1, 2, 3, 4, 5].map((i) => `<circle cx="${20 + i * 14}" cy="104" r="5" ${i ? 'fill="none" stroke="#9aa3a8"' : 'fill="url(#guide-shell)"'}/>`).join(''),
 );
 // A move: a line of three glass rolls one cell along its line, to an empty cell.
