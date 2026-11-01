@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOSS_IDS, tallyLine } from './tally';
+import { BOSS_IDS, endingLine, tallyLine } from './tally';
 
 describe('tallyLine', () => {
   it('has a non-empty line for every mode', () => {
@@ -35,5 +35,11 @@ describe('tallyLine', () => {
       expect(line).not.toContain('\n');
       expect(line.length).toBeLessThanOrEqual(72);
     }
+  });
+});
+
+describe('endingLine (#1175)', () => {
+  it('names the open clamp and the crew attached, in one line', () => {
+    expect(endingLine(6)).toBe('Variance noted. Clamp: open. Crew attached: 6.');
   });
 });

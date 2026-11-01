@@ -181,7 +181,7 @@ hero, the troop and the enemies of the loaded square (the generated ones are hid
 
 ## 7. Boss lairs (#1170, #1171, epic #1177)
 
-The Open world has a goal: one landmark lair per boss of the roster (14 today, the length of `boss_ids()`), each a normal boss fight.
+The Open world has a goal: one landmark lair per boss of the roster (15 today, the length of `boss_ids()`), each a normal boss fight.
 
 - **Placement** is seeded world generation in Rust (`world::lairs(seed, count)`, bridge `world_lairs(seed)` passes the roster size, `q, r` pairs, lair 0 first).
   Lair `k` is drawn in the `k`-th `count`-th of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
@@ -202,3 +202,6 @@ The Open world has a goal: one landmark lair per boss of the roster (14 today, t
   store, total the roster size. Read when a world opens, so it is right after "Back to the Open world".
 - **Tally's line.** The first time a player opens an Open world the HUD shows "Claim 0412: unworked." (`#openworld-tally`), once: the
   flag `ab-alone.tally0412` is kept next to the medals. Reduced motion changes nothing.
+- **Ending (#1175).** When every lair of the world is in `lairs` (beaten), the world counts as beaten: whenever it opens, `#openworld-tally`
+  shows "Variance noted. Clamp: open. Crew attached: 6." (the crew is the Trainer's `MARBLES`), in place of the claim line. One line, no
+  speech, nothing gated, no new save field (a save from before reads as not over). `__openworldFixture` takes `beaten: [n, ...]` to set the lairs beaten.

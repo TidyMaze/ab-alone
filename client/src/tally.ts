@@ -36,3 +36,6 @@ export function tallyLine({ mode, boss = '' }: { mode: TallyMode; boss?: string 
   if (mode === 'boss') return BOSS_LINES[boss as (typeof BOSS_IDS)[number]] ?? '';
   return MODE_LINES[mode];
 }
+
+/** Tally's line once the hero has entered every lair of the Open world (#1175): one line, no speech. `crew` is the crew attached. */
+export const endingLine = (crew: number): string => `Variance noted. Clamp: open. Crew attached: ${crew}.`;

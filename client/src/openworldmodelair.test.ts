@@ -154,3 +154,71 @@ describe("Tally's line in the Open world HUD (#1171)", () => {
     out.remove();
   });
 });
+
+describe('the ending line of the Open world (#1175)', () => {
+  const ENDING = 'Variance noted. Clamp: open. Crew attached: 6.';
+  const hud = () => {
+    const out = document.createElement('p');
+    out.id = 'openworld-tally';
+    document.body.append(out);
+    return out;
+  };
+  const fightOf = async () => (await import('./openworldfight')).FightState.fromJSON({ removed: [], added: [], beaten: 0 });
+
+  it('shows the ending line instead of the claim line once a world opens with every lair beaten, and the claim line before', async () => {
+    const out = hud();
+    const { m, saves } = setup();
+    await saves.put(7, [0, 0], [], await fightOf(), 0, [], [0]);
+    await m.open(7, 800, 600);
+    expect(out.textContent).toBe(''); // one lair of two: not over
+    m.leave();
+    await saves.put(7, [0, 0], [], await fightOf(), 0, [], [1, 0]);
+    await m.open(7, 800, 600);
+    expect(out.textContent).toBe(ENDING);
+    out.remove();
+  });
+
+  it('does not use up the claim line when the world is over', async () => {
+    const out = hud();
+    const tally = vi.fn(() => 'Claim 0412: unworked.');
+    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => LAIRS, () => {}, undefined, undefined, tally);
+    m.enter(7, 800, 600, null);
+    m.fixture({ hero: [0, 0], troop: [], enemies: [], beaten: [0, 1] });
+    expect(tally).toHaveBeenCalledTimes(1);
+    expect(out.textContent).toBe(ENDING);
+    out.remove();
+  });
+
+  it('a world with no lair is never over', () => {
+    const out = hud();
+    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, () => new Int32Array(), worldSaves(memoryStore(), 1), () => new Int32Array());
+    m.enter(7, 800, 600);
+    expect(out.textContent).toBe('');
+    out.remove();
+  });
+
+  it('the fixture sets the beaten lairs, draws them and saves them; without them it keeps the lairs as they were', async () => {
+    const out = hud();
+    const { m, saves } = setup();
+    m.enter(7, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [], enemies: [] });
+    expect(body().openworldLairsBeaten).toBe('');
+    m.fixture({ hero: [0, 0], troop: [], enemies: [], beaten: [0] });
+    expect(body().openworldLairsBeaten).toBe('0');
+    expect(out.textContent).toBe('');
+    m.fixture({ hero: [0, 0], troop: [], enemies: [], beaten: [0, 1] });
+    expect(out.textContent).toBe(ENDING);
+    m.leave();
+    for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
+    expect((await saves.load(7))!.lairs).toEqual([0, 1]);
+    out.remove();
+  });
+
+  it('an old save with no lairs still loads, not over', async () => {
+    const out = hud();
+    const { m } = setup();
+    m.enter(7, 800, 600, null);
+    expect(out.textContent).toBe('');
+    out.remove();
+  });
+});
