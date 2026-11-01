@@ -236,6 +236,26 @@ describe('world_visit', () => {
     expect(t.time.now - 1000).toBe(walked.steps * SEND_MS);
   });
 
+  test('a push of the troop that moves the hero sends the cell the hero is on after it, as a browser does', async () => {
+    // A fight whose first push moves the hero one cell east of the cell it stepped to.
+    let pushed: number[] = [];
+    class Pushing extends rules.WorldFight {
+      override troop_push(_seed: number, troop: Int32Array) {
+        if (pushed.length > 0) return undefined;
+        pushed = [troop[0]! + 1, troop[1]!];
+        return { troop: Int32Array.from([...pushed, ...troop.slice(2)]), ejected: new Int32Array(), dir: Int32Array.of(1, 0) } as never;
+      }
+    }
+    const room = fakeNet();
+    const t = fakeTime();
+    const pushing = { ...rules, WorldFight: Pushing };
+    const worldRoom = new WorldRoom(new OpenWorld(pushing, bossIds), pushing, () => room.net, { clock: t.clock, sleep: t.sleep, every: t.every });
+    value(worldRoom.join({}));
+    value(await worldRoom.visit({ q: 1, r: 0 }));
+    const places = room.sent.filter((s) => !s.to).map((s) => posOf(s.data));
+    expect(places[1]).toEqual(pushed);
+  });
+
   test('walks to a hero by its id and stops next to it, following it when it moves', async () => {
     const { worldRoom, room } = setup();
     value(worldRoom.join({}));
