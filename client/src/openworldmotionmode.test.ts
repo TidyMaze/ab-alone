@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import './test/openworldwasm';
 import { CHUNK } from './openworld';
 import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';

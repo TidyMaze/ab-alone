@@ -2,8 +2,7 @@
 // thing main.ts switches on and off. It draws itself with the page's renderer while it is on, and the page's board stays
 // untouched.
 import type * as THREE from 'three/webgpu';
-import { DIRECTIONS, type Axial } from './board';
-import { arrowCell } from './hubview';
+import type { Axial } from './board';
 import { blocked, breakable, chunkOf, Hero, neighbours, same, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
@@ -11,6 +10,7 @@ import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
 import { endingLine } from './tally';
 import { MARBLES } from './trainer';
+import { heroStep } from './openworldstep';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
 /** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
@@ -32,26 +32,6 @@ export const PUSH_REACH = 10;
 /** The cells as the bridge takes them: `q, r` pairs. */
 const flat = (cells: readonly Axial[]): Int32Array => Int32Array.from(cells.flat());
 
-/** The diagonal cell of each vertical arrow and horizontal arrow held together, in the axial steps of `neighbours`: up is
- * -z on screen (the camera looks down the -z way), so these are the four diagonals of the hex grid. */
-const DIAGONAL: Record<string, Record<string, Axial>> = {
-  ArrowUp: { ArrowLeft: [0, -1], ArrowRight: [1, -1] },
-  ArrowDown: { ArrowLeft: [-1, 1], ArrowRight: [0, 1] },
-};
-
-/** The cell a diagonal of two held arrows rolls to: one vertical and one horizontal arrow, both held; `null` otherwise. */
-export function heldCell([q, r]: Axial, held: ReadonlySet<string>): Axial | null {
-  const vertical = ['ArrowUp', 'ArrowDown'].filter((k) => held.has(k));
-  const horizontal = ['ArrowLeft', 'ArrowRight'].filter((k) => held.has(k));
-  if (vertical.length !== 1 || horizontal.length !== 1) return null;
-  const [dq, dr] = DIAGONAL[vertical[0]!]![horizontal[0]!]!;
-  return [q + dq, r + dr];
-}
-
-/** Whether two opposite arrows are held together: they cancel, so the hero stays put. */
-const opposed = (held: ReadonlySet<string>): boolean =>
-  (held.has('ArrowUp') && held.has('ArrowDown')) || (held.has('ArrowLeft') && held.has('ArrowRight'));
-
 /** The camera turns by a step of Q or E, and by a px of a right-button drag, in radians (#1026). */
 export const TURN_STEP = Math.PI / 3;
 /** The camera rests at this angle plus a multiple of TURN_STEP, so screen up runs along a straight line of hexes, not the zigzag between
@@ -67,80 +47,8 @@ const TURNS = new Map<string, number>([
   ['e', -TURN_STEP],
   ['E', -TURN_STEP],
 ]);
-/** The screen direction of each arrow key, x to the right and y up: a diagonal is the sum of its two. */
-const SCREEN = new Map<string, [number, number]>([
-  ['ArrowUp', [0, 1]],
-  ['ArrowDown', [0, -1]],
-  ['ArrowLeft', [-1, 0]],
-  ['ArrowRight', [1, 0]],
-]);
-
-/** The angle of a step on the ground, in radians, from the x axis towards the far side (the layout of `axialTo3D`, where screen up
- * is -z, so the screen is the ground at yaw 0). */
-const groundAngle = ([dq, dr]: Axial): number => Math.atan2(-((Math.sqrt(3) / 2) * dr), dq + dr / 2);
-/** The gap between two angles in radians, from 0 to pi. */
-const gapOf = (a: number, b: number): number => {
-  const d = Math.abs(a - b) % (2 * Math.PI);
-  return Math.min(d, 2 * Math.PI - d);
-};
-
-/** The intent of the held arrows: their ground angle at the camera's yaw (radians, as `groundAngle`); `null` for no arrow or for
- * opposite arrows. */
-function intentOf(held: ReadonlySet<string>, yaw: number): number | null {
-  const arrows = [...held].filter((key) => SCREEN.has(key));
-  if (arrows.length === 0 || opposed(held)) return null;
-  const [x, y] = arrows.reduce(([sx, sy], key) => [sx + SCREEN.get(key)![0], sy + SCREEN.get(key)![1]], [0, 0]);
-  return Math.atan2(y, x) + yaw;
-}
-
-/** The hex step of the held arrows in the yaw of the camera (#1026, docs/specs/openworld.md section 4). The held arrows are a screen
- * direction (the sum of the two of a diagonal), and the hero rolls to the neighbour of the hex grid that the camera shows nearest to
- * it: a neighbour at ground angle `a` shows at `a - yaw`, so the one nearest to `direction + yaw` is taken. A tie (the zigzag of an
- * odd or even row, or a yaw at the middle of two neighbours) takes the step the keyboard takes at yaw 0, as it always did; for Left or
- * Right alone it takes the neighbour that leans up on the screen (#1273). `null`
- * for no arrow or for opposite arrows. */
-export function stepOf(at: Axial, held: ReadonlySet<string>, yaw: number): Axial | null {
-  const want = intentOf(held, yaw);
-  if (want === null) return null;
-  const arrows = [...held].filter((key) => SCREEN.has(key));
-  const fallback = arrows.length === 1 ? arrowCell(at, arrows[0]!)! : heldCell(at, held)!;
-  const fallbackAngle = groundAngle([fallback[0] - at[0], fallback[1] - at[1]]);
-  // A pure sideways intent (Left or Right alone) breaks a tie toward the neighbour that leans up on the screen (#1273).
-  const sideways = arrows.length === 1 && (arrows[0] === 'ArrowLeft' || arrows[0] === 'ArrowRight');
-  let best = DIRECTIONS[0]!;
-  let bestScore = [Infinity, Infinity];
-  for (const dir of DIRECTIONS) {
-    const tie = sideways ? -Math.sin(groundAngle(dir) - yaw) : gapOf(groundAngle(dir), fallbackAngle);
-    const score = [Math.round(gapOf(groundAngle(dir), want) * 1e9), Math.round(tie * 1e9)];
-    if (score[0]! < bestScore[0]! || (score[0] === bestScore[0] && score[1]! < bestScore[1]!)) {
-      best = dir;
-      bestScore = score;
-    }
-  }
-  return [at[0] + best[0], at[1] + best[1]];
-}
-
-/** The semi-auto step (#1137, docs/specs/openworld.md section 4): the cell of `stepOf` when `free` takes it, else the free one of its
- * two side neighbours (60 degrees off) that the intent follows best, a tie going to the lower direction index; the blocked straight cell when none is
- * free (a wall, a lake, a cliff), and then the hero leans as before; `null` for no intent. `free` tells whether the hero can enter a cell. */
-export function steerStep(at: Axial, held: ReadonlySet<string>, yaw: number, free: (cell: Axial) => boolean): Axial | null {
-  const straight = stepOf(at, held, yaw);
-  if (!straight || free(straight)) return straight;
-  const ahead = groundAngle([straight[0] - at[0], straight[1] - at[1]]);
-  const want = intentOf(held, yaw)!;
-  let best = straight;
-  let bestGap = Infinity;
-  for (const dir of DIRECTIONS) {
-    const side = Math.abs(gapOf(groundAngle(dir), ahead) - Math.PI / 3) < 1e-6;
-    const cell: Axial = [at[0] + dir[0], at[1] + dir[1]];
-    const gap = Math.round(gapOf(groundAngle(dir), want) * 1e9);
-    if (side && gap < bestGap && free(cell)) {
-      best = cell;
-      bestGap = gap;
-    }
-  }
-  return best;
-}
+/** The keys that step the hero. */
+const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 /** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
 export const twistOf = (prev: number, next: number): number => wrapPi(next - prev);
@@ -379,7 +287,7 @@ export class OpenWorldMode {
     if (key === 'r' || key === 'R') return this.turn(DEFAULT_YAW - this.view!.yaw), true; // back to the default angle (#1026)
     const turn = TURNS.get(key);
     if (turn !== undefined) return this.turn(turn), true;
-    if (!SCREEN.has(key)) return false;
+    if (!ARROWS.has(key)) return false;
     if (!repeat) this.arrows(() => this.held.add(key));
     return true;
   }
@@ -534,7 +442,7 @@ export class OpenWorldMode {
     this.stepHeld(due);
   }
 
-  /** One step in the direction of the arrows held now (`stepOf`), made at `at` (ms): a blocked one slides round the obstacle (`steerStep`), and leans
+  /** One step in the direction of the arrows held now (`heroStep`), made at `at` (ms): a blocked one slides round the obstacle, and leans
    * the hero (`lean`) only when no side is free; arrows that cancel stop the walk. */
   private stepHeld(at: number): void {
     if (this.held.size === 0 && this.pad.length === 0) return this.stepRoute(at);
@@ -543,7 +451,7 @@ export class OpenWorldMode {
       return !!tile && (!blocked(tile) || breakable(this.world!, q, r)) && !this.fight.occupied(this.world!, q, r);
     };
     const keys = new Set([...this.held, ...this.pad]);
-    const to = this.steering() ? steerStep(this.hero!.at, keys, this.view!.yaw, free) : stepOf(this.hero!.at, keys, this.view!.yaw);
+    const to = heroStep(this.hero!.at, keys, this.view!.yaw, this.steering(), free);
     if (to) this.roll(to, at, this.cruising ? 'walk' : 'start');
     else this.stop(at);
   }

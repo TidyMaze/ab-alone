@@ -83,7 +83,7 @@ describe('roomloader PBR pipeline', () => {
     expect(pbr!.albedo.colorSpace).toBe(THREE.SRGBColorSpace);
     expect(pbr!.albedo.wrapS).toBe(THREE.RepeatWrapping);
     expect(pbr!.albedo.repeat.x).toBe(3);
-    expect(pbr!.normal.wrapS).toBe(THREE.RepeatWrapping);
+    expect(pbr!.normal!.wrapS).toBe(THREE.RepeatWrapping);
     // Every map ships as KTX2 (#700).
     expect(vi.mocked(mockLoader.loadAsync).mock.calls.map(([url]) => url)).toEqual([
       '/assets/pbr/bulkhead-albedo.ktx2',
@@ -108,6 +108,20 @@ describe('roomloader PBR pipeline', () => {
     const mat = createPbrStandardMaterial(pbr!);
     expect(mat.displacementMap).toBeNull();
     expect(mat.aoMap).not.toBeNull();
+  });
+
+  it('fetches no normal map when asked not to, the low tier (#849)', async () => {
+    const mockLoader = {
+      loadAsync: vi.fn(async (url: string) => Object.assign(new THREE.Texture(), { name: url })),
+    } as unknown as THREE.TextureLoader;
+    const pbr = await loadPbrMaterial(mockLoader, '/assets/pbr/', 'deck-pbr', 0, 0.2, ['ao'], false);
+    expect(vi.mocked(mockLoader.loadAsync).mock.calls.map(([url]) => url)).toEqual([
+      '/assets/pbr/deck-pbr-albedo.ktx2',
+      '/assets/pbr/deck-pbr-roughness.ktx2',
+      '/assets/pbr/deck-pbr-ao.ktx2',
+    ]);
+    expect(pbr!.normal).toBeUndefined();
+    expect(createPbrStandardMaterial(pbr!).normalMap).toBeNull();
   });
 
   it('loads the extra maps a set ships, tiled like the others and linear', async () => {

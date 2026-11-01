@@ -214,6 +214,13 @@ describe('SceneRenderer (#632)', () => {
     }
   });
 
+  it('puts the board centre at the middle of a phone held upright with the HUD folded, #1269', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    sr.frameCamera(390, 844, true);
+    sr.applyView(resetView(), null, { tier: 'high', clear: false, deck: 'mess' });
+    expect(sr.cellToScreen(0, 0, 390, 844).y).toBeCloseTo(422, 6);
+  });
+
   it('updates atmospheric fog based on tier, clear board, and deck', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });
@@ -453,6 +460,20 @@ describe('SceneRenderer (#632)', () => {
     expect((pipeline.outputNode as any).node.bNode.getResolutionScale()).toBe(0.25);
   });
 
+  it('draws no bloom pass when asked not to, FXAA stays (#849)', () => {
+    const camera = new THREE.PerspectiveCamera();
+    const smooth = createBloomPipeline(createMockRenderer(), new THREE.Scene(), camera, true, 2, false)!;
+    expect(smooth.bloom).toBeNull();
+    expect((smooth.outputNode as any).constructor.name).toBe('FXAANode');
+    expect(createBloomPipeline(createMockRenderer(), new THREE.Scene(), camera, false, 2, false)).toBeNull();
+  });
+
+  it('builds no bloom pass for a low tier renderer (#849)', () => {
+    const low = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false, bloom: false });
+    expect(low.pipeline!.bloom).toBeNull();
+    expect(new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false }).pipeline!.bloom).not.toBeNull();
+  });
+
   it('ends with FXAA on the tone-mapped picture when asked: no MSAA, the edges stay smooth (#857)', () => {
     const smooth = createBloomPipeline(createMockRenderer(), new THREE.Scene(), new THREE.PerspectiveCamera(), true)!;
     expect(smooth.outputColorTransform).toBe(false);
@@ -482,7 +503,7 @@ describe('SceneRenderer (#632)', () => {
     const ran: boolean[] = [];
     for (let i = 0; i < 5; i++) {
       const before = blur.mock.calls.length;
-      bloom.updateBefore({} as never);
+      bloom!.updateBefore({} as never);
       ran.push(blur.mock.calls.length > before);
     }
     expect(ran).toEqual([true, false, true, false, true]);
@@ -494,7 +515,7 @@ describe('SceneRenderer (#632)', () => {
     const runs = (webdriver: boolean) => {
       const { pipeline } = new SceneRenderer({ renderer: createMockRenderer(), webdriver });
       const before = blur.mock.calls.length;
-      for (let i = 0; i < 4; i++) pipeline!.bloom.updateBefore({} as never);
+      for (let i = 0; i < 4; i++) pipeline!.bloom!.updateBefore({} as never);
       return blur.mock.calls.length - before;
     };
     expect(runs(true)).toBe(4);

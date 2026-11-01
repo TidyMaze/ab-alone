@@ -1,6 +1,6 @@
 // The Open world's virtual joystick (#1025, #1026, docs/specs/openworld.md): on a touch screen a touch on the left half of the canvas
 // shows a floating base under the thumb. Dragging from it points the hero's step: the arrows of the drag's screen direction, read in
-// the yaw of the camera, so the hero rolls to the hex the drag points to on the screen (`heldKeys`, `stepOf`, openworldmode.ts). The
+// the yaw of the camera, so the hero rolls to the hex the drag points to on the screen (`heldKeys`, `heroStep`, openworldstep.ts). The
 // stick holds those arrows while the thumb is off the dead zone, and lets them go when the thumb lifts or a second finger comes
 // down: a pinch or a twist of the camera (#976, #1026) is the canvas's, not the stick's. The hero walks on the cadence of the held
 // arrows (#1059), not on a timer of the stick's own.
@@ -38,7 +38,7 @@ const keysAt = (angle: number): string[] => KEYS[(((Math.round(angle / (Math.PI 
 
 /** The keys a drag of `dx`, `dy` px holds, in the camera's yaw (radians, 0 at the default angle): the hex of the ground the drag
  * points to on the screen, which a neighbour shows at its ground angle minus the yaw, is the one nearest to the drag plus the yaw;
- * the keys of its screen direction are then the step (the hero rolls the way the keys do, `stepOf`). None inside the dead zone.
+ * the keys of its screen direction are then the step (the hero rolls the way the keys do, `heroStep`). None inside the dead zone.
  * Screen y goes down, so the angle is taken on -dy. */
 export function heldKeys(dx: number, dy: number, yaw = 0): string[] {
   if (Math.hypot(dx, dy) < DEAD_ZONE) return [];

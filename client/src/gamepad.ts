@@ -78,9 +78,9 @@ export function gamepad(act: (action: PadAction) => void): (now: number) => void
 
 const shown = (el: HTMLElement): boolean => !el.closest('[hidden]') && (el.checkVisibility?.() ?? true); // jsdom has no checkVisibility
 /** The next (`step` 1) or previous tab stop from `from` in page order, shown and enabled, wrapping at both ends; the
- * body when there is none. */
-export function nextFocus(from: Element | null, step: 1 | -1): HTMLElement {
-  const stops = [...document.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]')].filter(
+ * body when there is none. Only the stops in `root`: an open dialog keeps the focus (#1293). */
+export function nextFocus(from: Element | null, step: 1 | -1, root: ParentNode = document): HTMLElement {
+  const stops = [...root.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]')].filter(
     (el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled && shown(el),
   );
   const at = stops.indexOf(from as HTMLElement);

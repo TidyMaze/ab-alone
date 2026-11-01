@@ -890,6 +890,43 @@ Reply time (release build, native, the turtle's 10 fights, 237 boss replies, the
 cores, ms): 82 average, 135 at the 95th percentile, 182 at most (1500 nodes). Before the rule, on
 another run: 232 / 446 / 600. The Dual Room measured 228 / 312 / 383 at 3000 nodes.
 
+### The Swarm (#1266): the evac clock, the centre start, arrivals on every edge, 3, 3, 4
+
+#1266 (owner): the evac comes when the boss replies done plus 2 per swarm marble the player
+ejected reach 40; P2 and P3 come at 15 and 30 swarm marbles landed; the player starts as one
+group of 11 around the centre; the swarm lands on any empty rim cell, on all 6 edges. The player
+search and the boss search read the clock (`search_clocked`: a swarm marble the player ejects in
+the tree takes 2 turns off it, for both). Gate (#1266): the pro (10x) wins 14 to 18 of 20 seeds,
+the 1x player fewer. 20 seeds, `LADDER_SEEDS=20 LADDER_X=<1|10> cargo run --release --example
+ladder -- swarm`. Tries with a temporary env override of the arrivals, the start, the boss budget
+(not kept).
+
+| Try | 1x wins | 10x wins | Median plies (1x / 10x) | Deaths (1x / 10x) |
+|---|---|---|---|---|
+| Before #1266 (30 turns, standard rows, far rim, 1, 1, 2) | 20/20 | 19/20 | 60 / 60 | none / push 1 |
+| The rules of #1266, arrivals 1, 1, 2 | 20/20 | 20/20 | 64.5 / 53 | none / none |
+| Arrivals 2, 2, 3 (10 seeds) | 10/10 | | 46.5 / | |
+| Start 8 marbles, 1, 1, 2 (10 seeds) | 10/10 | | 70 / | |
+| Boss budget 6000, 1, 1, 2 (10 seeds, the player 1500) | 10/10 | | 66 / | |
+| Arrivals 3, 3, 4 (10 seeds at 1x) | 8/10 | | 41 / | push 2 / |
+| Arrivals 3, 3, 3 | | 18/20 | / 40.5 | / push 2 |
+| Arrivals 2, 3, 4 | 18/20 | 17/20 | 44 / 42 | push 2 / push 3 |
+| Arrivals 4, 4, 5 | | 13/20 | / 42 | / push 7 |
+| **Arrivals 3, 3, 4** | **15/20** | **17/20** | 41 / 43 | push 5 / push 3 |
+
+A centre group is 4 pushes from the rim, and each swarm marble on the rim is 2 turns for the
+player: with 1 or 2 a turn the swarm never threatens it (the player keeps 10 or 11 marbles and
+ejects 2 to 8 swarm marbles, the fight lasts 24 to 36 turns). More arrivals feed the player
+(2, 2, 3 ends the fight sooner, still won), but from 3 a turn the swarm forms lines of 3 that push.
+**Adopted: arrivals 3, 3, 4**, the only row in the gate with 1x below 10x (2, 3, 4 has 1x above).
+A won fight now lasts 18 to 24 turns (36 to 49 plies): the player ejects 8 to 11 swarm marbles. The
+Ballast Mind keeps the old 1, 1, 2 (`BALLAST_WAVE`) and its own rim: its ladder is the same game for
+game (1x, 20 seeds, 7 of 20 before and after, the attempt lines identical).
+
+The scripted turtle of #795 (`cargo run --release --example swarm_sim`) loses 10 of 10 (lost on
+turns 20 to 27, 9 marbles left). Reply time (its 225 boss replies, ms): 95 average, 150 at the
+95th percentile, 231 at most (1500 nodes).
+
 ### The Dual Room: the rooms are played in turn, 18 of 20 at 10x, not tuned (#992)
 
 **Change.** Until the bridge the rooms are played in turn by pairs of plies, the south room first
@@ -930,7 +967,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
 | chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753, recorded again for #810) | 44 |
 | dual-ladder | 0 | 30000 (10x, the ladder pro player, #982, recorded again for #992; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 39 |
-| swarm | 0 | 15000 (10x, the ladder pro player, #795, recorded again for the 2-ejection win) | 60 |
+| swarm | 0 | 20000 (the ladder player, recorded again for #1266: the 10x run lost seed 0, which the wasm, client and e2e tests read) | 53 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
 

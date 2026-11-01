@@ -20,6 +20,7 @@ export const ICONS = {
   render: 'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12l-9-5',
   steer: 'M6 16a2 2 0 1 0 0 4a2 2 0 1 0 0-4M18 4a2 2 0 1 0 0 4a2 2 0 1 0 0-4M8 18h5a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h5',
   camera: 'M3 7h4l2-3h6l2 3h4v13H3zM12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7',
+  guide: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01',
 } as const;
 
 export type IconName = keyof typeof ICONS;

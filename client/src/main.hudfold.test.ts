@@ -34,4 +34,11 @@ describe('main.ts the HUD panel folds (#957)', () => {
     expect(fold().getAttribute('aria-expanded')).toBe('false');
     expect(byId('hud-dock').dataset.folded).toBe('');
   });
+
+  it('refits the view the player has not moved when the panel folds, #1269', async () => {
+    await boot('?bot=off');
+    byId('reset-view').click(); // the view is the fitted one
+    fold().click();
+    expect(fold().getAttribute('aria-expanded')).toBe('false');
+  });
 });

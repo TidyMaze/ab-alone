@@ -469,6 +469,49 @@ The hub (game-design.md section 3.5) reads at a glance, with no hover:
   board, radius 3.4 held upright, so no edge plate is cut off at 360 px wide. A game the hub starts frames its own board.
 - Hidden while the terminal reader or the Open world has the screen.
 
+### 4.6 One mode at a time (#1275)
+
+A mode switch starts from a clean base: nothing of the mode left stays on screen, in `body` data, in the scene or in a
+timer.
+
+- **What `enter()` adds, `exit()` removes.** A mode's start (`ModeController.enter()` in `client/src/controller.ts` for
+  the hub, the start functions of `main.ts` for the others) adds its HUD blocks, `body` data, meshes, listeners and
+  timers; its leave (`exit()`, `leaveRun`, `leaveTrainer`, `leaveRoyale`, `leaveOnline`) removes them all.
+- **One cleanup path.** Every mode's start calls `leaveMode()` first (`main.ts`): the menu, a hub door, an Open world
+  lair, Back, Retry, the Trainer's Next wave and a game resumed after a reload all go through it. It leaves whatever mode
+  is on, then clears the stray state no mode owns: the fight's controls and sheets and the board's `body` data, from the
+  lists of `client/src/modeswitch.ts`.
+- **The Open world opens over the page** (#1063): Esc gives the game beneath back as it was, and the world hides all of it,
+  its boss bar, notes and end light included. The next mode's start leaves the world.
+- **Guard.** `client/src/main.modeswitch.test.ts` enters every mode of the README table, plays it and leaves it for the
+  Ship hub, which must show what it showed after the boot. A new mode, a HUD element or a `body` data key that stays
+  fails it: remove it in the mode's leave, or add it to the lists of `modeswitch.ts`.
+
+### 4.7 First-launch guide (#1293)
+
+A new player meets a short guide before anything else: five pages over the dimmed game, one at a time
+(`client/src/guide.ts`).
+
+- **Pages.** The goal (push six of their black shells off, lose six of yours and you lose), a move (one to three
+  marbles in a line, one cell, six directions), a push, the 3:2 rule (a line pushes only a shorter line, equal lines never
+  push) and the controls. Each page has an inline SVG of the game's marbles, pale glass and black shell, on deck cells,
+  with amber arrows and dashed ghosts where the marbles go; it sits on the dark deck colour in both themes, as the 3D deck
+  does. No external asset.
+- **Controls of the input in use.** The controls page holds one paragraph per input and `ui.css` shows one: the mouse and
+  keys by default, touch on a coarse pointer, the pad's buttons once the pad is in use (`body[data-pad]`, #1252).
+- **Plate.** The card is a plate of the ship chrome (panel, edge, rivets, the amber accent stripe), at most 26 rem wide
+  and 16 px from the window's edges, its buttons 48 px high: Skip at the left, Back and Next at the right; Next reads Play
+  on the last page. Each page's art fades in on `--motion-base`, a hard cut under Reduced motion.
+- **Shown once.** It opens at the first launch. Skip, Escape (B on the pad) or Play close it and store
+  `ab-alone.guide = seen` (localStorage, as the other settings), so it never opens by itself again. The settings menu's
+  Guide, the second button of the Steering item, opens it again on its first page.
+- **A modal.** A dialog (`role="dialog"`, `aria-modal`): its Next button takes the focus, Tab and the pad's focus walk
+  keep to its buttons, a key pressed in it never reaches the board or the menus, and Start leaves the settings shut. The
+  focus goes back where it was (the cog when the menu opened it).
+- **Tests.** An automated browser (`navigator.webdriver`) does not open it, so the e2e specs boot on a fresh profile as
+  before; `?guide` makes it a first launch (`client/e2e/guide.spec.ts`).
+- **Language.** English, as the rest of the UI, which has no translations.
+
 ## 5. Board framing
 
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one

@@ -435,7 +435,7 @@ describe('main.ts, the hub doors (#522)', () => {
     shipAt(game, [1, 0]);
     game.click(2, 0);
     ship(game);
-    expect(byId('boss-retry').hidden).toBe(false);
+    expect(byId('boss-retry').hidden).toBe(true); // the hub leaves the fight (#1275)
     for (const [q, r] of [[1, 0], [0, 0], [-1, 0], [-2, 0]] as const) game.click(q, r);
     expect(hub()).toBeUndefined();
     expect(data().boss).toBeUndefined();

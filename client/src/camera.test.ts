@@ -153,6 +153,12 @@ describe('framing, bug #227', () => {
     expect(framing(375, 812).shift).toBe((812 - 375) / 4);
     expect(framing(768, 1024).shift).toBe(64);
   });
+
+  it('with every panel folded the board sits at the middle of the window, not low (#1269)', () => {
+    expect(framing(390, 844, true).shift).toBe(0);
+    expect(framing(390, 844, true).fov).toBe(framing(390, 844).fov);
+    expect(framing(1280, 720, true)).toEqual({ fov: FOV, shift: 0 });
+  });
 });
 
 describe('screenView, the terminal reader (#512)', () => {

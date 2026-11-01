@@ -22,6 +22,7 @@ describe('settingsList', () => {
       { id: 'render-mode', label: 'Render: Normal', icon: 'render' },
       { id: 'free-cam', label: 'Free camera', icon: 'camera', on: false },
       { id: 'steering', label: 'Steering', icon: 'steer', on: true },
+      { id: 'guide', label: 'Guide', icon: 'guide' }, // the first-launch guide again (#1293)
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'difficulty', label: '100%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
@@ -39,14 +40,15 @@ describe('settingsList', () => {
       { id: 'render-mode', label: 'Render: Clay', icon: 'render' },
       { id: 'free-cam', label: 'Free camera', icon: 'camera', on: true },
       { id: 'steering', label: 'Steering', icon: 'steer', on: false },
+      { id: 'guide', label: 'Guide', icon: 'guide' },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'difficulty', label: '200%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
   });
 
-  it('keeps the menu at fifteen items, including difficulty setting, render mode, the free camera and steering', () => {
-    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toHaveLength(15);
+  it('keeps the menu at sixteen items, including difficulty setting, render mode, the free camera, steering and the guide', () => {
+    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toHaveLength(16);
   });
 
   it('names the four volume sliders, one per bus (#438)', () => {
