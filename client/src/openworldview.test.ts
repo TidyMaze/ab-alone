@@ -4,6 +4,7 @@ import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
+import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import {
   BIOME_LOOK,
   CAPACITY,
@@ -2194,5 +2195,14 @@ describe('the refined look of the Open world (#1138)', () => {
       expect(material.roughness, name).toBe(look.roughness);
       expect(look.roughness, name).toBeLessThanOrEqual(0.15);
     }
+  });
+});
+
+describe('the light budget of the Open world (#849, #1234)', () => {
+  it('lights the scene with a hemisphere and a sun, and no more point lights than the budget', () => {
+    const view = new OpenWorldView(new World(() => new Uint8Array(CHUNK * CHUNK)));
+    let points = 0;
+    view.scene.traverse((o) => void ((o as THREE.PointLight).isPointLight && points++));
+    expect(points).toBeLessThanOrEqual(OPEN_WORLD_POINT_LIGHTS);
   });
 });

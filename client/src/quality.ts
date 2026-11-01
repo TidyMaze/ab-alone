@@ -37,6 +37,10 @@ const FOLD_KEY = 'ab-alone.hud-folded';
 const TRANSCRIPT_KEY = 'ab-alone.transcript';
 const STEERING_KEY = 'ab-alone.steering';
 
+// The point lights the Open world may draw, on every tier (#849, #1234): its scene is lit by a hemisphere and a sun only. The
+// ship's scene (76 point lights) is not drawn there, and the render-cost readout counts the scene that is.
+export const OPEN_WORLD_POINT_LIGHTS = 0;
+
 // The same rule on a phone as on a desktop (#882): only a weak device or reduced motion drops to the low tier.
 export function tierFromHints({ cores, memory, reducedMotion }: Hints): Tier {
   if (reducedMotion) return 'low';

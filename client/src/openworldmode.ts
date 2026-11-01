@@ -238,10 +238,15 @@ export class OpenWorldMode {
     this.modelsOnce ??= this.models();
     void this.modelsOnce.then((models) => {
       if (this.view !== view) return; // left before the models arrived
-      view.useModels(models);
+      view.useModels(this.lowTier() ? { ...models, high: {} } : models); // the low tier draws the low-poly props everywhere, no detailed set (#1234)
       this.dirty = true;
       this.mark(String(seed)); // the detailed props drawn now are published too (#989)
     });
+  }
+
+  /** The scene drawn now, none outside the mode: the render-cost readout counts its lights (#1234). */
+  get scene(): THREE.Scene | null {
+    return this.view?.scene ?? null;
   }
 
   leave(): void {
@@ -452,7 +457,7 @@ export class OpenWorldMode {
     if (this.view!.offsets(now)) this.dirty = true; // the camera's punch, pan ease and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();
-    const moving = !reduced && this.view!.hasWater;
+    const moving = !reduced && !this.lowTier() && this.view!.hasWater; // the low tier holds the glow of the lake still: no frame drawn for it (#1234)
     const loops = this.view!.animate(now, reduced || this.lowTier()); // the foam, the ripples and the trees' sway (#1101, #1102)
     this.countMotion();
     if (!this.dirty && !moving && !sparks && !loops) return false;
