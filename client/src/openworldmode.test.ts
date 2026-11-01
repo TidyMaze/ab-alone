@@ -600,33 +600,13 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     expect(shake).toHaveBeenCalledWith(1000 + GLIDE_MS);
   });
 
-  it('keeps the camera still under reduced motion: no punch, no shake, no pan (#1103)', () => {
+  it('keeps the camera still under reduced motion: no punch, no shake (#1103)', () => {
     const calls = [
       vi.spyOn(OpenWorldView.prototype, 'punch'),
       vi.spyOn(OpenWorldView.prototype, 'shake'),
-      vi.spyOn(OpenWorldView.prototype, 'panFor'),
-      vi.spyOn(OpenWorldView.prototype, 'panEnd'),
     ];
     tap(pushing(true), 'ArrowRight');
     for (const call of calls) expect(call).not.toHaveBeenCalled();
-  });
-
-  it('eases the follow in at the first step of a walk and out at its end, not on a tap of the screen (#1103)', () => {
-    const panFor = vi.spyOn(OpenWorldView.prototype, 'panFor');
-    const panEnd = vi.spyOn(OpenWorldView.prototype, 'panEnd');
-    vi.spyOn(performance, 'now').mockReturnValue(500);
-    const m = pushing();
-    m.key('ArrowRight');
-    expect(panFor).toHaveBeenCalledWith([0, 0], [1, 0], 500);
-    m.release('ArrowRight');
-    expect(panEnd).toHaveBeenCalledWith(500);
-    panFor.mockClear();
-    panEnd.mockClear();
-    const tapped = pushing();
-    tapped.press(400, 300, 800, 600); // a press on the screen: a tap, not a walk
-    tapped.release();
-    expect(panFor).not.toHaveBeenCalled();
-    expect(panEnd).not.toHaveBeenCalled();
   });
 
   it('draws the frames of the camera offsets, then stops drawing (#1103)', () => {
@@ -635,9 +615,9 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     const render = vi.fn();
     m.frame(render, 0);
     tap(m, 'ArrowRight');
-    for (const now of [200, 300, 400, 500, 600]) m.frame(render, now);
+    for (let now = 200; now <= 1500; now += 100) m.frame(render, now); // the camera closes on the hero in about half a second (#1333)
     render.mockClear();
-    m.frame(render, 700);
+    m.frame(render, 1600);
     expect(render).not.toHaveBeenCalled();
   });
 
@@ -653,8 +633,9 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     expect(render).toHaveBeenCalledTimes(4);
     m.frame(render, 560); // the step glides 140 ms, the push lunges from its landing and ends at 550 ms: that frame draws the final cells
     expect(body().openworldAnim).toBeUndefined();
+    for (let now = 660; now <= 1600; now += 100) m.frame(render, now); // the camera settles on the hero (#1333)
     render.mockClear();
-    m.frame(render, 570);
+    m.frame(render, 1700);
     expect(render).not.toHaveBeenCalled();
   });
 

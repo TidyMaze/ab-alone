@@ -108,17 +108,17 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 | What moves | Duration, easing | Trigger | Cut |
 |---|---|---|---|
 | Zoom punch: the zoom factor goes in 3 % then back | `motion.base` (250 ms max), ease-out then ease-in | a successful troop push (#967) | not cut |
-| Pan ease: the camera's follow starts and stops with a smooth ease, not a hard start | `motion.base` (250 ms max), ease-in-out | the first step of a walk, and the end of a held walk | not cut |
+| Follow: the camera closes on the hero, on the turn goal and on the wheel's zoom critically damped, by the frame's time (#1333) | no fixed duration: omega 30, 16 and 18 rad/s, at rest in about 0.5 s | any change of the hero's place, a turn, a wheel step | instant (reduced motion) |
 | Shake: 2 px decaying offset, 3 oscillations | `motion.shake` (200 ms [proposal]) | an enemy ejected | not cut |
 
 - **Budget**: only the camera uniforms change, no scene rebuild. Every camera motion lasts at most 250 ms. The punch and the
   shake never change `reach`, the chunk centre or the zoom the player set: they are an offset applied on top and removed at the
-  end. The existing height and yaw easing (`ease`, `easeYaw`) is kept. The held walk keeps its speed: the pan ease cannot lag the
-  hero by more than the existing follow lag, and the end of a walk is not delayed.
-- **Built (#1103)**: `client/src/openworldcamera.ts`. The punch and the shake start when the push lands (after the step's glide); the
-  pan lags 0.15 cell behind the hero at the first step of a walk and carries 0.15 cell on at its end, both over `motion.base`. The
+  end. The existing height and yaw easing (`ease`, `easeYaw`) is kept. The follow (#1333) lags a walk at the cruise pace by under a
+  cell and never passes the hero: it has no overshoot and no step in its speed whatever the steps' cadence or the refresh rate.
+- **Built (#1103)**: `client/src/openworldcamera.ts`. The punch and the shake start when the push lands (after the step's glide). The
+  follow (`Damped`, #1333) replaced the 0.15 cell pan of #1103, which jumped by 0.15 cell at the start and the end of a walk. The
   shake is horizontal, 2 px over 200 ms. Offsets are applied to the camera only (look-at point, zoom factor, view offset).
-- **Reduced**: no punch, pan ease or shake; the camera follows as today.
+- **Reduced**: no punch or shake; the camera follows the hero at once.
 - **Static**: the camera on a refused step; zoom and yaw set by the player.
 - **Acceptance**: at the end of each (250 ms later) the camera offset and zoom factor are exactly the base values (unit);
   a shake on a frame with a resize snaps to base; `reachAt` is the same before, during and after (unit).

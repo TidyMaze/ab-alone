@@ -410,7 +410,8 @@ export class OpenWorldMode {
     if (!this.view) return false; // the step walked onto a lair and left the mode
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
-    if (this.view!.offsets(now)) this.dirty = true; // the camera's punch, pan ease and shake, on top of the follow (#1103)
+    if (this.view!.follow(seconds, reduced)) this.dirty = true; // the camera closes on the hero by the frame's time, not the steps' (#1333)
+    if (this.view!.offsets(now)) this.dirty = true; // the camera's punch and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();
     const moving = !reduced && !this.lowTier() && this.view!.hasWater; // the low tier holds the glow of the lake still: no frame drawn for it (#1234)
@@ -442,7 +443,6 @@ export class OpenWorldMode {
   /** The walk stops at `now` (ms), by a release, a blocked step or arrows that cancel: the next step starts from rest, and the glide
    * under way slows to a rest on its cell, on time (#1065). */
   private stop(now: number): void {
-    if (this.cruising && !this.reduced()) this.view!.panEnd(now); // the follow settles with the walk (#1103)
     this.cruising = false;
     this.walked = 0;
     this.view!.brake(now);
@@ -500,7 +500,6 @@ export class OpenWorldMode {
     if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair), false;
     const from = this.hero!.at;
     if (!this.hero!.step(to)) return this.lean(to, at), false;
-    if (pace === 'start' && !this.reduced()) this.view!.panFor(from, to, at); // the follow eases in at the first step of a walk (#1103)
     this.cruising = pace !== 'tap';
     const span = pace === 'tap' ? GLIDE_MS : stepMs(this.walked);
     this.walked = pace === 'tap' ? 0 : this.walked + 1;

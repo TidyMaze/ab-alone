@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { BIOMES, type Biome, cellAtPoint, CHUNK, chunkOf, neighbours, type Terrain, type Tile, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
-import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY } from './openworldglide';
+import { GLIDE_MS, NUDGE_MS, ROLL_ZOOM, TROOP_DELAY, stepMs } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import {
   BIOME_LOOK,
@@ -2028,17 +2028,91 @@ describe('the particles of the Open world (#1110)', () => {
       expect(view.camera.view?.enabled).toBe(false);
     });
 
-    it('lags the follow behind the walk and settles on the hero', () => {
+    it('lags the follow behind the walk and settles on the hero, never past it (#1333)', () => {
       const view = lit();
       const base = pos(view);
-      view.panFor([0, 0], [1, 0], 0);
+      view.show([1, 0], [], { now: 0, span: 140, pace: 'start' });
+      let behind = false;
+      for (let t = 16; t <= 1500; t += 16) {
+        view.tick(t);
+        view.follow(0.016, false);
+        view.offsets(t);
+        behind ||= pos(view)[0]! < view.focusPoint.x + base[0]! - 0.01;
+        expect(pos(view)[0]! - base[0]!).toBeLessThanOrEqual(view.focusPoint.x + 1e-9); // the camera never passes the hero
+      }
+      expect(behind).toBe(true);
+      expect(pos(view)[0]!).toBeCloseTo(view.focusPoint.x + base[0]!, 9);
+      expect(view.follow(0.016, false)).toBe(false); // at rest: nothing to draw
+    });
+
+    // A held walk as the mode makes it (#1290): the steps ramp from 140 ms to 80 ms, and the release brakes the step under way.
+    const starts = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].reduce<number[]>((all, n) => [...all, (all[n - 1] ?? 0) + (n > 0 ? stepMs(n - 1) : 0)], []);
+    const release = starts[11]! + 30;
+    const walked = (fps: number): { camera: number[]; hero: number[] } => {
+      const view = lit();
+      const xs: number[] = [];
+      const hero: number[] = [];
+      const dt = 1 / fps;
+      let step = 0;
+      for (let frame = 0; frame <= 2.5 * fps; frame++) {
+        const ms = frame * dt * 1000;
+        while (step < 12 && starts[step]! <= ms + 1e-6) {
+          view.show([step + 1, 0], [], { now: starts[step]!, span: stepMs(step), pace: step === 0 ? 'start' : 'walk' });
+          step++;
+        }
+        if (ms >= release && ms < release + dt * 1000) view.brake(release);
+        view.tick(ms);
+        view.follow(dt, false);
+        view.offsets(ms);
+        xs.push(view.camera.position.x);
+        hero.push(view.focusPoint.x);
+      }
+      return { camera: xs, hero };
+    };
+
+    const jumpsOf = (xs: number[], fps: number): number[] => {
+      const speeds = xs.slice(1).map((x, i) => (x - xs[i]!) * fps);
+      return speeds.slice(1).map((v, i) => Math.abs(v - speeds[i]!));
+    };
+
+    it('moves with no step in its speed: a frame changes the speed by under half what the hero does, at the start and the stop (#1333)', () => {
+      const { camera, hero } = walked(60);
+      expect(Math.max(...jumpsOf(camera, 60))).toBeLessThan(Math.max(...jumpsOf(hero, 60)) / 2);
+      expect(Math.max(...jumpsOf(camera, 60).slice(0, 40))).toBeLessThan(1.5); // the ramp of the first steps: cells a second, a frame
+    });
+
+    it('is the same at 30, 60 and 144 frames a second: the camera follows the frame clock, not the steps (#1333)', () => {
+      const at60 = walked(60).camera;
+      for (const fps of [30, 144]) expect(Math.abs(walked(fps).camera[Math.round(0.6 * fps)]! - at60[Math.round(0.6 * 60)]!)).toBeLessThan(0.1);
+    });
+
+    it('follows the hero at once under reduced motion, with no lag (#1333)', () => {
+      const view = lit();
+      const base = pos(view);
+      view.show([1, 0], [], { now: 0, span: 140, pace: 'start' });
+      view.tick(70);
+      view.follow(0.016, true);
+      view.offsets(70);
+      expect(pos(view)[0]!).toBeCloseTo(view.focusPoint.x + base[0]!, 9);
+    });
+
+    it('eases the zoom of the wheel from rest, and ends exactly on the drawn zoom (#1333)', () => {
+      const view = lit();
+      const dist = (): number => view.camera.position.distanceTo(view.focusPoint);
+      const near = dist();
+      view.zoomBy(2);
+      const goal = near * (view.drawnZoom / 1);
+      view.follow(0.016, false);
       view.offsets(0);
-      expect(pos(view)[0]).toBeLessThan(base[0]!); // behind the hero, which goes toward +x
-      view.panEnd(1000);
-      view.offsets(1000);
-      expect(pos(view)[0]).toBeGreaterThan(base[0]!); // a little ahead of it
-      view.offsets(1300);
-      expect(pos(view)).toEqual(base);
+      const first = dist();
+      expect(first).toBeGreaterThan(near);
+      expect(first).toBeLessThan(near + (goal - near) * 0.2); // the first frame has hardly moved: it eases from rest
+      for (let t = 16; t <= 1500; t += 16) {
+        view.follow(0.016, false);
+        view.offsets(t);
+      }
+      expect(dist()).toBeCloseTo(goal, 6);
+      expect(view.follow(0.016, false)).toBe(false);
     });
 
     it('tells what it draws: the punched zoom, the shake in pixels, the chunk centre', () => {

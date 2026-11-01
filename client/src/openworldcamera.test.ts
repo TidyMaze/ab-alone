@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { CameraLife, PAN, PAN_MS, PUNCH, PUNCH_MS, SHAKE_MS, SHAKE_PX } from './openworldcamera';
+import { CameraLife, Damped, PUNCH, PUNCH_MS, SHAKE_MS, SHAKE_PX } from './openworldcamera';
 
 describe('the camera offsets of the Open world (docs/specs/openworld-animation.md section 5, #1103)', () => {
   it('lasts 250 ms at most, each one', () => {
-    for (const ms of [PUNCH_MS, PAN_MS, SHAKE_MS]) expect(ms).toBeLessThanOrEqual(250);
+    for (const ms of [PUNCH_MS, SHAKE_MS]) expect(ms).toBeLessThanOrEqual(250);
   });
 
   it('is at the base values when nothing was started', () => {
     const life = new CameraLife();
     expect(life.at(1000)).toBe(false);
-    expect([life.zoom, life.panX, life.panZ, life.shakeX]).toEqual([1, 0, 0, 0]);
+    expect([life.zoom, life.shakeX]).toEqual([1, 0]);
   });
 
   it('punches the zoom in by 3 % at the middle and is exactly back at the end', () => {
@@ -45,46 +45,70 @@ describe('the camera offsets of the Open world (docs/specs/openworld-animation.m
     expect(life.shakeX).toBe(0);
   });
 
-  it('lags the follow at the start of a walk and eases to the hero', () => {
-    const life = new CameraLife();
-    life.pan(1000, 1, 0, -1);
-    life.at(1000);
-    expect(life.panX).toBeCloseTo(-PAN, 9); // behind the hero, which goes toward +x
-    expect(life.panZ).toBeCloseTo(0, 9);
-    life.at(1000 + PAN_MS / 2);
-    expect(Math.abs(life.panX)).toBeLessThan(PAN);
-    expect(life.at(1000 + PAN_MS)).toBe(false);
-    expect([life.panX, life.panZ]).toEqual([0, 0]);
-  });
-
-  it('carries on a little at the end of a walk, in the direction it went, and settles', () => {
-    const life = new CameraLife();
-    life.pan(1000, 0, 1, -1);
-    life.at(1000 + PAN_MS);
-    life.panEnd(2000);
-    life.at(2000);
-    expect(life.panZ).toBeCloseTo(PAN, 9);
-    expect(life.at(2000 + PAN_MS)).toBe(false);
-    expect(life.panZ).toBe(0);
-  });
-
-  it('runs the three together and stays active until the last one ends', () => {
+  it('runs the two together and stays active until the last one ends', () => {
     const life = new CameraLife();
     life.punch(0);
     life.shake(0);
-    life.pan(0, 1, 0, -1);
     expect(life.at(PUNCH_MS - 1)).toBe(true);
-    expect(life.at(Math.max(PUNCH_MS, SHAKE_MS, PAN_MS))).toBe(false);
+    expect(life.at(Math.max(PUNCH_MS, SHAKE_MS))).toBe(false);
   });
 
   it('is cut by reset: the base values at once', () => {
     const life = new CameraLife();
     life.punch(0);
     life.shake(0);
-    life.pan(0, 1, 0, -1);
     life.at(50);
     life.reset();
     expect(life.at(60)).toBe(false);
-    expect([life.zoom, life.panX, life.shakeX]).toEqual([1, 0, 0]);
+    expect([life.zoom, life.shakeX]).toEqual([1, 0]);
+  });
+});
+
+describe('the critically damped follow of the camera (#1333)', () => {
+  const run = (offset: number, speed: number, omega: number, fps: number, seconds: number): Damped => {
+    const d = new Damped();
+    d.offset = offset;
+    d.speed = speed;
+    for (let i = 0; i < Math.round(fps * seconds); i++) d.step(omega, 1 / fps);
+    return d;
+  };
+
+  it('starts from rest with no jump in speed and closes on zero without crossing it', () => {
+    const d = new Damped();
+    d.offset = 1;
+    d.step(20, 1 / 10000);
+    expect(Math.abs(d.speed)).toBeLessThan(0.05); // a first-order ease would start at 20 a second
+    let lowest = d.offset;
+    for (let i = 0; i < 240; i++) {
+      d.step(20, 1 / 60);
+      lowest = Math.min(lowest, d.offset);
+    }
+    expect(lowest).toBeGreaterThanOrEqual(0);
+    expect(d.offset).toBe(0); // settled: exactly on it
+    expect(d.speed).toBe(0);
+  });
+
+  it('is the same at 30, 60 and 144 frames a second', () => {
+    const at60 = run(1, 0.5, 20, 60, 0.5);
+    for (const fps of [30, 144, 240]) {
+      const d = run(1, 0.5, 20, fps, 0.5);
+      expect(d.offset).toBeCloseTo(at60.offset, 9);
+      expect(d.speed).toBeCloseTo(at60.speed, 9);
+    }
+  });
+
+  it('keeps the speed it has when the target moves, and reports whether it moves', () => {
+    const d = new Damped();
+    d.offset = 0;
+    d.speed = 3;
+    expect(d.step(20, 1 / 60)).toBe(true);
+    expect(d.offset).toBeGreaterThan(0.03);
+    expect(new Damped().step(20, 1 / 60)).toBe(false);
+  });
+
+  it('can be cut to rest at once', () => {
+    const d = run(1, 1, 20, 60, 0.05);
+    d.rest();
+    expect([d.offset, d.speed]).toEqual([0, 0]);
   });
 });

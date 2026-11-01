@@ -5,7 +5,7 @@
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
-import { CameraLife } from './openworldcamera';
+import { CameraLife, Damped } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
@@ -300,9 +300,12 @@ export const topOf = (terrain: Terrain, height: number): number => (terrain === 
 /** The camera's height eases to the hero's column top with this time constant, in seconds, and snaps within `SETTLED` (#988). */
 const EASE = 0.12;
 const SETTLED = 0.01;
-/** The camera's turn round the hero eases the same way, with its own time constant, and snaps within `SETTLED_YAW` (radians, #1026). */
-const EASE_YAW = 0.12;
-const SETTLED_YAW = 0.001;
+/** The camera's follow of the hero, its turn and its zoom close on their targets the critically damped way (#1333, openworldcamera.ts
+ * `Damped`), with these natural frequencies in rad/s. The follow lags a walk at the cruise pace (12.5 cells a second) by 2 * speed /
+ * omega, 0.8 cell; the turn of 60 degrees is within 0.1 degree in 0.7 s. */
+const FOLLOW_OMEGA = 30;
+const TURN_OMEGA = 16;
+const ZOOM_OMEGA = 18;
 
 /** A stable 0 to 1 draw per cell, so the mountains and the trees differ in height but never change between draws. */
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
@@ -426,8 +429,17 @@ export class OpenWorldView {
   /** The point the camera looks at: the hero's x and z, its height eased to the hero's column top (#988). The first show puts it
    * there at once (`placed`): the camera does not glide in from the origin. */
   private readonly focus = new THREE.Vector3();
-  /** The camera's offsets (punch, pan ease, shake, #1103) and the point they look at: never the focus, which the chunks follow. */
+  /** The camera's offsets (punch, shake, #1103) and the point they look at: never the focus, which the chunks follow. */
   private readonly life = new CameraLife();
+  /** The camera's follow (#1333): the point it looks at, minus the focus, in x and z, and the focus the offset was last measured from. */
+  private readonly lagX = new Damped();
+  private readonly lagZ = new Damped();
+  private seenX = 0;
+  private seenZ = 0;
+  /** The zoom the wheel set, still on its way: the log of the zoom drawn over the zoom of the frame (#1333). */
+  private readonly zoomLag = new Damped();
+  /** The camera's turn: its `yawNow` minus its goal. */
+  private readonly turning = new Damped();
   private readonly lifeAt = new THREE.Vector3();
   private lifeOn = false;
   private screen = { width: 800, height: 600 };
@@ -581,6 +593,9 @@ export class OpenWorldView {
   resize(width: number, height: number): void {
     this.camera.aspect = width / height;
     this.screen = { width, height };
+    this.lagX.rest();
+    this.lagZ.rest();
+    this.zoomLag.rest();
     this.endLife();
     this.limit = maxZoomFor(this.camera.aspect);
     this.level = Math.min(this.level, this.limit);
@@ -597,27 +612,36 @@ export class OpenWorldView {
     this.life.shake(now);
   }
 
-  /** The follow eases from `now` (ms) as the hero goes from cell `from` to cell `to` (a walk starts: the follow lags behind it). */
-  panFor(from: Axial, to: Axial, now: number): void {
-    const a = axialTo3D(from[0], from[1]);
-    const b = axialTo3D(to[0], to[1]);
-    const d = Math.hypot(b.x - a.x, b.z - a.z);
-    this.life.pan(now, (b.x - a.x) / d, (b.z - a.z) / d, -1);
-  }
-
-  /** The walk ends at `now` (ms): the follow settles with a little carry (#1103). */
-  panEnd(now: number): void {
-    this.life.panEnd(now);
+  /** The camera's follow, `dt` seconds on (#1333): the point it looks at closes on the hero's drawn place the critically damped way, and
+   * the zoom of the wheel on the zoom of the frame. It is driven by the frame's time and nothing else: a step of the hero or a chunk
+   * change makes no step in it. `instant` (reduced motion) follows at once. Returns whether it moved, so the frame is drawn. */
+  follow(dt: number, instant: boolean): boolean {
+    const { focus, lagX, lagZ } = this;
+    lagX.offset -= focus.x - this.seenX; // the hero moved on: the camera stays where it was
+    lagZ.offset -= focus.z - this.seenZ;
+    this.seenX = focus.x;
+    this.seenZ = focus.z;
+    if (instant) {
+      const was = lagX.offset !== 0 || lagZ.offset !== 0 || this.zoomLag.offset !== 0;
+      lagX.rest();
+      lagZ.rest();
+      this.zoomLag.rest();
+      return was;
+    }
+    const x = lagX.step(FOLLOW_OMEGA, dt);
+    const z = lagZ.step(FOLLOW_OMEGA, dt);
+    return this.zoomLag.step(ZOOM_OMEGA, dt) || x || z;
   }
 
   /** Draws the camera's offsets at `now` (ms) on top of the base camera, which `frame` set: the punch scales the zoom, the pan moves the
    * point looked at, the shake shifts the image. The chunks, the focus and the player's zoom are not touched. Returns whether the camera
    * moved this call, the last one included (it puts the base back exactly). */
   offsets(now: number): boolean {
-    if (this.life.at(now)) {
-      const { focus, lifeAt, life } = this;
-      lifeAt.set(focus.x + life.panX, focus.y, focus.z + life.panZ);
-      lookAtHero(this.camera, lifeAt, this.drawnLevel * life.zoom, this.yawNow);
+    const lit = this.life.at(now);
+    const { focus, lifeAt, life, lagX, lagZ, zoomLag } = this;
+    if (lit || lagX.offset !== 0 || lagZ.offset !== 0 || zoomLag.offset !== 0) {
+      lifeAt.set(focus.x + lagX.offset, focus.y, focus.z + lagZ.offset);
+      lookAtHero(this.camera, lifeAt, this.drawnLevel * life.zoom * Math.exp(zoomLag.offset), this.yawNow);
       const { width, height } = this.screen;
       this.camera.setViewOffset(width, height, -life.shakeX, 0, width, height);
       this.lifeOn = true;
@@ -629,7 +653,7 @@ export class OpenWorldView {
   /** What the camera draws now, for the browser checks (#1103): the zoom with the punch, the image shake in pixels, the chunk centre
    * and the reach loaded. */
   probe(): { zoom: number; shake: number; centre: Axial; reach: number } {
-    return { zoom: this.drawnLevel * this.life.zoom, shake: this.camera.view?.enabled ? -this.camera.view.offsetX : 0, centre: this.centre, reach: this.loadedReach };
+    return { zoom: this.drawnLevel * this.life.zoom * Math.exp(this.zoomLag.offset), shake: this.camera.view?.enabled ? -this.camera.view.offsetX : 0, centre: this.centre, reach: this.loadedReach };
   }
 
   /** Cuts the offsets: the base camera at once. Returns whether there were some to cut. */
@@ -769,6 +793,10 @@ export class OpenWorldView {
     this.marbleAt(0).place(this.standing(at));
     troop.forEach((cell, i) => this.marbleAt(i + 1).place(this.standing(cell)));
     this.draw(0);
+    this.lagX.rest(); // placed, not walked: the camera is on the hero
+    this.lagZ.rest();
+    this.seenX = this.focus.x;
+    this.seenZ = this.focus.z;
     if (!this.placed) {
       this.focus.y = this.hero.position.y;
       this.placed = true;
@@ -1032,8 +1060,10 @@ export class OpenWorldView {
 
   /** Zooms the camera by `scale`, more than 1 further out and less than 1 closer, between the closest view and the widest. */
   zoomBy(scale: number): void {
+    const before = this.drawnLevel;
     this.level = Math.min(this.limit, Math.max(1, this.level * scale));
     this.frame();
+    this.zoomLag.offset += Math.log(before / this.drawnLevel); // the zoom drawn stays where it was and eases to the new one (#1333)
   }
 
   /** The yaw the camera turns to, in radians: 0 is the default angle (#1026). */
@@ -1050,16 +1080,20 @@ export class OpenWorldView {
   turnTo(yaw: number): void {
     this.yawGoal = wrapPi(yaw);
     this.yawNow = this.yawGoal;
+    this.turning.rest();
     this.frame();
   }
 
-  /** Eases the camera's yaw to its goal, `dt` seconds on, the shortest way round, as the height eases (`ease`): the gap closes by
-   * `1 - exp(-dt / EASE_YAW)` of itself, and it snaps when `instant` (reduced motion) or within `SETTLED_YAW`. Returns whether the
-   * camera moved, so the frame is drawn; false once it has settled. */
+  /** Eases the camera's yaw to its goal, `dt` seconds on, the shortest way round, the critically damped way (#1333): it starts from rest
+   * and never passes the goal. It snaps when `instant` (reduced motion). Returns whether the camera moved, so the frame is drawn;
+   * false once it has settled. */
   easeYaw(dt: number, instant: boolean): boolean {
-    const gap = wrapPi(this.yawGoal - this.yawNow);
-    if (gap === 0) return false;
-    this.yawNow = instant || Math.abs(gap) <= SETTLED_YAW ? this.yawGoal : wrapPi(this.yawNow + gap * (1 - Math.exp(-dt / EASE_YAW)));
+    const { turning } = this;
+    turning.offset = wrapPi(this.yawNow - this.yawGoal);
+    if (turning.offset === 0 && turning.speed === 0) return false;
+    if (instant) turning.rest();
+    else turning.step(TURN_OMEGA, dt);
+    this.yawNow = wrapPi(this.yawGoal + turning.offset);
     this.frame();
     return true;
   }
