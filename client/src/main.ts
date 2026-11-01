@@ -188,7 +188,7 @@ import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMa
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { toleranceWindow } from './matchmaking';
-import { boardHtml, buildBoard, loadRivals, ratingHistory } from './leaderboard';
+import { boardHtml, buildBoard, loadRivals, ratingHistory, visitBoard } from './leaderboard';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
@@ -1183,7 +1183,8 @@ const closeBoard = (): void => {
 boardButton.addEventListener('click', () => {
   moveModes('outside');
   const profile = loadRankedProfile(store);
-  document.getElementById('board-body')!.innerHTML = boardHtml(buildBoard(profile.rating1v1, loadRivals(store)), ratingHistory(profile.matches));
+  const rows = buildBoard(profile.rating1v1, loadRivals(store));
+  document.getElementById('board-body')!.innerHTML = boardHtml(rows, ratingHistory(profile.matches), visitBoard(store, rows));
   boardBox.hidden = false;
   document.getElementById('board-close')!.focus();
 });

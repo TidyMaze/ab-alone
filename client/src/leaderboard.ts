@@ -56,7 +56,45 @@ export function ratingHistory(matches: readonly { readonly mode: string; readonl
   return matches.filter((m) => m.mode === '1v1').slice(-max).map((m) => m.newRating);
 }
 
-export function boardHtml(rows: readonly BoardRow[], history: readonly number[] = []): string {
+/** Where you stood when you last opened the board, saved here (#1287). */
+export const BOARD_VISIT_STORAGE_KEY = 'ab-alone.ranked.board';
+
+export function loadLastRank(store: RankedStore): number | null {
+  try {
+    const parsed = JSON.parse(store?.getItem(BOARD_VISIT_STORAGE_KEY) ?? 'null') as { version?: number; rank?: unknown } | null;
+    if (parsed?.version === 1 && typeof parsed.rank === 'number') return parsed.rank;
+  } catch {
+    // Malformed JSON or blocked storage: no earlier visit known
+  }
+  return null;
+}
+
+export interface RankMove {
+  readonly move: 'up' | 'down' | 'same';
+  readonly places: number;
+}
+
+/** Saves your position as this visit, and returns how it moved since the last one (null on a first visit). */
+export function visitBoard(store: RankedStore, rows: readonly BoardRow[]): RankMove | null {
+  const rank = rows.find((r) => r.me)!.rank;
+  const previous = loadLastRank(store);
+  try {
+    store?.setItem(BOARD_VISIT_STORAGE_KEY, JSON.stringify({ version: 1, rank }));
+  } catch {}
+  if (previous === null) return null;
+  return { move: rank < previous ? 'up' : rank > previous ? 'down' : 'same', places: Math.abs(previous - rank) };
+}
+
+function moveHtml(move: RankMove | null): string {
+  if (!move) return '';
+  const text =
+    move.move === 'same'
+      ? 'Unchanged since your last visit'
+      : `${move.move === 'up' ? 'Up' : 'Down'} ${move.places} ${move.places === 1 ? 'place' : 'places'} since your last visit`;
+  return `<p id="board-move" data-move="${move.move}">${text}</p>`;
+}
+
+export function boardHtml(rows: readonly BoardRow[], history: readonly number[] = [], move: RankMove | null = null): string {
   const mine = rows.find((r) => r.me)!;
   const body = rows
     .map(
@@ -68,5 +106,5 @@ export function boardHtml(rows: readonly BoardRow[], history: readonly number[] 
   const trail = history.length
     ? `<ol id="board-history" aria-label="Your rating over your last matches">${history.map((r) => `<li>${r}</li>`).join('')}</ol>`
     : '';
-  return `<p id="board-position">Your position: ${mine.rank} of ${rows.length}</p><table><thead><tr><th>#</th><th>Player</th><th>Rating</th></tr></thead><tbody>${body}</tbody></table>${empty}${trail}`;
+  return `<p id="board-position">Your position: ${mine.rank} of ${rows.length}</p>${moveHtml(move)}<table><thead><tr><th>#</th><th>Player</th><th>Rating</th></tr></thead><tbody>${body}</tbody></table>${empty}${trail}`;
 }
