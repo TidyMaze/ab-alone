@@ -230,7 +230,7 @@ describe('main.ts The Pulsar (#675)', () => {
     fightPulsar(game); // Retry by the menu while the move slides
     game.frame(1000);
     expect(shock(game)).toBeNull();
-    expect(body().pulses).toBe('1'); // only the first fight's
+    expect(body().pulses).toBeUndefined(); // none of the new fight's: the switch drops the first fight's count (#1275)
     expect(marbleAt(game, 4, -4)).not.toBeNull(); // the start position
   });
 

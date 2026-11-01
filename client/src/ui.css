@@ -819,7 +819,11 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #joystick { position: fixed; z-index: 1; width: 96px; height: 96px; margin: -48px 0 0 -48px; box-sizing: border-box; border: 5px solid #8a949c; border-radius: 50%; background: rgba(22, 26, 29, 0.25); box-shadow: 0 0 0 1px #2a3034, inset 0 0 0 1px #2a3034; opacity: 0.9; pointer-events: none; }
 #joystick[hidden] { display: none; }
 #joystick-knob { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: var(--accent); }
-body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group, #support) { display: none !important; }
+/* The Open world opens over the page (#1063): nothing of the game beneath shows over it, its boss bar, its notes and its end
+   light included (#1275). */
+body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group, #support, #boss-bar, #auto-reason) { display: none !important; }
+body[data-openworld] canvas { filter: none; }
+body[data-openworld]::before { display: none; }
 
 /* The thumb dock (#1032, docs/specs/thumb-dock.md): the main controls at the bottom of the window, one row of 44 px
    buttons on a phone held upright, a right-hand column held sideways, a centred bar on a desktop. The buttons are the

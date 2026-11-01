@@ -469,6 +469,24 @@ The hub (game-design.md section 3.5) reads at a glance, with no hover:
   board, radius 3.4 held upright, so no edge plate is cut off at 360 px wide. A game the hub starts frames its own board.
 - Hidden while the terminal reader or the Open world has the screen.
 
+### 4.6 One mode at a time (#1275)
+
+A mode switch starts from a clean base: nothing of the mode left stays on screen, in `body` data, in the scene or in a
+timer.
+
+- **What `enter()` adds, `exit()` removes.** A mode's start (`ModeController.enter()` in `client/src/controller.ts` for
+  the hub, the start functions of `main.ts` for the others) adds its HUD blocks, `body` data, meshes, listeners and
+  timers; its leave (`exit()`, `leaveRun`, `leaveTrainer`, `leaveRoyale`, `leaveOnline`) removes them all.
+- **One cleanup path.** Every mode's start calls `leaveMode()` first (`main.ts`): the menu, a hub door, an Open world
+  lair, Back, Retry, the Trainer's Next wave and a game resumed after a reload all go through it. It leaves whatever mode
+  is on, then clears the stray state no mode owns: the fight's controls and sheets and the board's `body` data, from the
+  lists of `client/src/modeswitch.ts`.
+- **The Open world opens over the page** (#1063): Esc gives the game beneath back as it was, and the world hides all of it,
+  its boss bar, notes and end light included. The next mode's start leaves the world.
+- **Guard.** `client/src/main.modeswitch.test.ts` enters every mode of the README table, plays it and leaves it for the
+  Ship hub, which must show what it showed after the boot. A new mode, a HUD element or a `body` data key that stays
+  fails it: remove it in the mode's leave, or add it to the lists of `modeswitch.ts`.
+
 ## 5. Board framing
 
 The canvas fills the window. A window taller than wide keeps the horizontal view of a square one
