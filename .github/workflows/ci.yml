@@ -187,6 +187,11 @@ jobs:
         working-directory: mcp
       - run: bun run test
         working-directory: mcp
+      # tsc follows the mcp imports into client/src, which needs the client's packages (#1404).
+      - run: bun install --frozen-lockfile
+        working-directory: client
+      - run: bunx tsc --noEmit
+        working-directory: mcp
 
   # On push to main, finds what changed since the last successful CI run on main (not just this push: a cancelled run
   # never tested its commits); on a ready PR, what the PR changes. A manual dispatch always runs everything. Only
