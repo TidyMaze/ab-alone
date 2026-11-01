@@ -639,6 +639,10 @@ event and from the export, so it may be pasted into a public issue. Boss analyti
 local `attempt` table. No third-party SDK, no data leaves the browser unless the player exports
 it.
 
+### Closed bugs
+
+- #1226 (three sound e2e specs red, bus gains read 0): environmental, the headless AudioContext clock of one Mac stalled; no code change, `e2e/sound.spec.ts` 11 passed on main 836fc723 and the full run of PR #1256 had no sound failure (512 passed).
+
 ## 11. Trending tech considered
 
 | Tech | Verdict | Why |
