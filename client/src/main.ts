@@ -3442,6 +3442,13 @@ const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
 const terraceMarks = (): NonNullable<typeof terraceKit.marks> | null => (sceneRenderer.terraceOn ? terraceKit.marks : null);
+let hintMaterial: THREE.MeshStandardMaterial | null = null;
+/** The kit's selection ring in Glyph Cyan: the vertex colours are bone, the material colour multiplies them. */
+const terraceHintMaterial = (from: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial => {
+  hintMaterial ??= Object.assign(from.clone(), { name: 'terrace_hint_ring' });
+  hintMaterial.color.setRGB(0.3, 0.9, 1.3);
+  return hintMaterial;
+};
 /** A mark of the kit on the cell of a mesh the game made: the kit's geometry and vertex colours, flat on the dish, no rotation. */
 function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
   mesh.geometry = kit.geometry;
@@ -3525,7 +3532,8 @@ function refresh(): void {
   }
   const fog = fogged() ? sightOf(board) : null;
   const lit = replaying ? new Set<number>() : revealed; // a replayed position shows what was seen then
-  ringed = [...selected, ...hint.marked(here())]; // the selection, or the marbles the hint takes (#301)
+  const hinted = hint.marked(here());
+  ringed = [...selected, ...hinted]; // the selection, or the marbles the hint takes (#301)
   const cracks = engine instanceof Encounter ? parseCracks(engine.cracks()) : [];
   const left = crackLeft(cracks);
   const converted = engine instanceof Encounter ? parseCells(engine.converted()) : [];
@@ -3627,7 +3635,14 @@ function refresh(): void {
       ring.rotation.x = Math.PI / 2;
       ring.position.set(p.x, 0.02, p.z);
       const kit = terraceMarks();
-      if (kit) wearKit(ring, kit.select, 0.078);
+      if (kit) {
+        wearKit(ring, kit.select, 0.078);
+        // The hint (#301): the glTF has no hint ring, so the selection ring wears a cyan material, a colour apart from the selection's bone.
+        if (hinted.some(([hq, hr]) => hq === q && hr === r)) {
+          ring.material = terraceHintMaterial(kit.select.material as THREE.MeshStandardMaterial);
+          ring.name = 'hint-ring';
+        }
+      }
       marbles.add(ring);
       marble.position.y = 0.5;
     }

@@ -208,6 +208,19 @@ describe('the renderer and its textures', () => {
     expect(document.body.dataset.scene).toBe('table-zero');
   });
 
+  it('shows the hint on the terrace: the marbles it takes wear the kit\'s ring in cyan, a colour apart from the selection\'s, which clears the hint (#301, #1314)', async () => {
+    const game = await boot('?bot=off&nodes=50');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    byId('hint').click();
+    await game.settle();
+    expect(document.body.dataset.hint).toBe('shown');
+    const { scene } = await drawn(game);
+    const rings: THREE.Mesh[] = [];
+    scene.traverse((o) => void (o.name === 'hint-ring' && rings.push(o as THREE.Mesh)));
+    expect(rings.length).toBeGreaterThan(0);
+    expect((rings[0]!.material as THREE.MeshStandardMaterial).color.b).toBeGreaterThan(1); // cyan: more blue than the bone it multiplies
+  });
+
   it('keeps the room in a 1v1 game when the arena file is missing: the page still plays (#1314)', async () => {
     await boot('?bot=off', { missing: ['arena.glb'] });
     await vi.waitFor(() => expect(document.body.dataset.scene).toBe('room'));
