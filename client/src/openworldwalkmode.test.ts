@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import './test/openworldwasm';
 import { axialTo3D } from './board';
 import { CHUNK } from './openworld';
-import { GLIDE_MS } from './openworldglide';
+import { CRUISE_MS, GLIDE_MS } from './openworldglide';
 import { OpenWorldMode } from './openworldmode';
 import { worldSaves } from './openworldsave';
 import { memoryStore } from './savegame';
@@ -61,12 +62,12 @@ describe('a held arrow in the Open world, #1065', () => {
     const m = make(false);
     m.frame(vi.fn(), 0);
     expect(m.key('ArrowRight')).toBe(true);
-    const xs = frames(m, FRAME, 10 * GLIDE_MS);
+    const xs = frames(m, FRAME, 20 * GLIDE_MS);
     const steps = xs.slice(1).map((x, i) => x - xs[i]!);
-    const steady = steps.slice(Math.ceil(GLIDE_MS / FRAME) + 1);
+    const steady = steps.slice(Math.ceil(800 / FRAME) + 1); // past the speed-up to the cruise pace (#1290)
     expect(steady.length).toBeGreaterThan(50);
     expect((Math.max(...steady) - Math.min(...steady)) / Math.min(...steady)).toBeLessThan(0.1);
-    expect(Math.min(...steady)).toBeGreaterThan(0.9 * ((CELL * FRAME) / GLIDE_MS));
+    expect(Math.min(...steady)).toBeGreaterThan(0.9 * ((CELL * FRAME) / CRUISE_MS));
     expect(m.hero!.at[0]).toBeGreaterThanOrEqual(9);
   });
 
@@ -129,7 +130,7 @@ describe('a held arrow in the Open world, #1065', () => {
     m.key('ArrowLeft');
     clock = 6 * GLIDE_MS + 5;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([1, 0]);
+    expect(m.hero!.at).toEqual([2, -1]); // Left leans forward, up-left (#1273)
     expect(focusX(m)).toBeGreaterThan(axialTo3D(2, 0).x - 0.03 * CELL); // a start from rest: it has hardly moved
   });
 

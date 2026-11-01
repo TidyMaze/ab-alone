@@ -2,8 +2,9 @@
 // tool returns JSON as text content, a failure sets `isError` with the error object of section 6.
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import { bossIds } from './engine';
+import { bossIds, worldRules } from './engine';
 import type { Result, Session } from './game';
+import { OpenWorld } from './world';
 
 const NOTATION =
   'A move is the selected cells, then ">", then the direction: "(-1,2)(0,2)>E", "(0,0)>SE". A cell is (q,r). ' +
@@ -15,7 +16,12 @@ export function toolResult(result: Result<unknown>): CallToolResult {
     : { isError: true, content: [{ type: 'text', text: JSON.stringify(result.error) }] };
 }
 
-export function createServer(session: Session): McpServer {
+const WINDOW =
+  'The window is a hex of cells round the hero, one row per r, each row from the cell q0 along q. H hero, T troop, E enemy, L lair, ' +
+  '? off the world, else the terrain: ~ water, s sand, g grass, r rock, P peak, o boulder, t tree, W wall. Water, peaks, walls, ' +
+  'enemies and lairs cannot be entered; a boulder, or a tree with no tree beside it, is broken by rolling into it.';
+
+export function createServer(session: Session, world: OpenWorld = new OpenWorld(worldRules(), bossIds)): McpServer {
   const server = new McpServer({ name: 'ab-alone', version: '0.1.0' });
 
   server.registerTool(
@@ -115,6 +121,51 @@ export function createServer(session: Session): McpServer {
       }),
     },
     async (input) => toolResult(await session.waitForOpponentMove(input)),
+  );
+
+  server.registerTool(
+    'new_world',
+    {
+      description:
+        'Start the Open world of a seed and drop the world in progress: the hero on the spawn (0,0), the troop round it. Same seed, ' +
+        'same world as the client. Returns the world state (see world_state). Walk to a lair and step onto it, then fight its boss ' +
+        `with new_game. ${WINDOW}`,
+      inputSchema: z.strictObject({ seed: z.int().min(0).max(4294967295).optional().describe('Seed of the world, default 0.') }),
+    },
+    (input) => toolResult(world.newWorld(input)),
+  );
+
+  server.registerTool(
+    'world_state',
+    {
+      description:
+        'The Open world state: seed, hero, troop, obstacles broken, the enemies in the window, every boss lair with its distance ' +
+        `from the hero, and a short window of cells round the hero (never the whole map). ${WINDOW}`,
+      inputSchema: z.strictObject({ radius: z.int().min(1).max(8).optional().describe('Cells of the window out from the hero, default 3.') }),
+    },
+    (input) => toolResult(world.state(input)),
+  );
+
+  server.registerTool(
+    'world_step',
+    {
+      description:
+        'Roll the hero one cell. Refused (blocked) by water, a peak, a wall, an enemy or an unbreakable tree, and nothing changes. ' +
+        'Onto a lair the hero stays, moved is false and lair names the boss: start that fight with new_game.',
+      inputSchema: z.strictObject({ direction: z.enum(['E', 'W', 'NE', 'SW', 'NW', 'SE']).describe('Direction of the step.') }),
+    },
+    (input) => toolResult(world.step(input)),
+  );
+
+  server.registerTool(
+    'world_walk',
+    {
+      description:
+        'Walk the hero to a cell, round the obstacles and the enemies, by the shortest path of the engine, up to 40 cells away. ' +
+        'no_path when there is none (the hero cell, a lair, an enemy, off the world, too far, walled in).',
+      inputSchema: z.strictObject({ q: z.int().describe('Column of the cell.'), r: z.int().describe('Row of the cell.') }),
+    },
+    (input) => toolResult(world.walk(input)),
   );
 
   return server;

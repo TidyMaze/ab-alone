@@ -13,6 +13,7 @@ import { openModes } from './modes';
 // #583: no game is on in the hub: the evaluation bar and Hint are hidden there.
 // #589: Export game and Import game are hidden there too.
 // #1249: every room wears a label plate, always shown; a lift-shaft rail lists the five decks and boss pips the progress.
+// Every boss has its door on its deck and every mode with no table its room, on the gallery ring of a radius 3 map.
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
@@ -353,7 +354,7 @@ test('on a phone every plate and the rail fit the window, short labels only, #12
   const boxes = await page.locator('#hub-labels .hub-label, #hub-rail, #hub-pips').evaluateAll((els) =>
     els.map((el) => el.getBoundingClientRect().toJSON() as DOMRect),
   );
-  expect(boxes.length).toBe(12); // the nine rooms of the Mess, YOU, the rail and the pips
+  expect(boxes.length).toBe(15); // the twelve rooms of the Mess, YOU, the rail and the pips
   for (const box of boxes) {
     expect(box.left).toBeGreaterThanOrEqual(0);
     expect(box.right).toBeLessThanOrEqual(390);
@@ -363,4 +364,30 @@ test('on a phone every plate and the rail fit the window, short labels only, #12
   await expect(page.locator('#hub-labels [data-cell="2,0"] .short')).toBeVisible();
   await expect(page.locator('#hub-labels [data-cell="2,0"] b')).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath('1249-hub-plan-phone.png') });
+});
+
+/** Ship, with the marble saved on `cell` of `deck` and the Echo beaten. */
+async function shipOn(page: Page, deck: string, cell: [number, number]): Promise<void> {
+  await page.evaluate(([deck, cell]) => {
+    localStorage.setItem('ab-alone.progress', JSON.stringify({ version: 1, deck, cell, beaten: ['echo'] }));
+  }, [deck, cell] as const);
+  await ship(page);
+  await expect(page.locator('body')).toHaveAttribute('data-hub', `${deck} ${cell[0]},${cell[1]}`);
+}
+
+test('a gallery boss door starts its own boss, and a mode room opens its mode, #1249', async ({ page }, testInfo) => {
+  await page.goto('./?bot=off');
+  await page.locator('canvas').waitFor();
+  const body = page.locator('body');
+  await shipOn(page, 'cargo', [2, -2]);
+  await expect(page.locator('#hub-labels [data-cell="3,-2"]')).toContainText('The Alien');
+  await page.screenshot({ path: testInfo.outputPath('1249-cargo-gallery.png') });
+  await hookClick(page, 3, -2);
+  await expect(body).not.toHaveAttribute('data-hub');
+  await expect(body).toHaveAttribute('data-boss', 'alien');
+
+  await shipOn(page, 'cargo', [-1, 3]);
+  await hookClick(page, 0, 3); // the Rogue-lite run
+  await expect(body).not.toHaveAttribute('data-hub');
+  await expect(page.locator('#run-map')).toBeVisible();
 });

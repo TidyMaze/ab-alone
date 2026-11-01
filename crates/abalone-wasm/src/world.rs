@@ -3,6 +3,7 @@
 
 use abalone_core::world::{self, Terrain};
 use abalone_core::worldfight::{self, Fall, Outcome};
+use abalone_core::worldstep::{self, Entry};
 use wasm_bindgen::prelude::*;
 
 /// Bytes per cell: `[height, terrain, biome]`.
@@ -20,6 +21,22 @@ fn terrain_code(terrain: Terrain) -> u8 {
         Terrain::Tree => 6,
         Terrain::Wall => 7,
     }
+}
+
+/// The terrain of a bridge code, `None` for `-1` (off the world) or an unknown code.
+fn terrain_of_code(code: i32) -> Option<Terrain> {
+    [
+        Terrain::Water,
+        Terrain::Sand,
+        Terrain::Grass,
+        Terrain::Rock,
+        Terrain::Peak,
+        Terrain::Boulder,
+        Terrain::Tree,
+        Terrain::Wall,
+    ]
+    .into_iter()
+    .find(|&terrain| i32::from(terrain_code(terrain)) == code)
 }
 
 /// The version of the generated world (`WORLD_VERSION` of the core): a save of another version is not loaded (#968).
@@ -101,6 +118,79 @@ pub fn world_path(
     .into_iter()
     .flat_map(|(q, r)| [q, r])
     .collect()
+}
+
+/// The walk to the nearest tower of the world `seed` (the Dungeon button, #1291) from `(from_q, from_r)`: `beaten` holds the numbers of
+/// the lairs beaten (tried last), `blocked` the enemy cells and the lairs, `broken` the broken obstacles (`q, r` pairs). Empty when no
+/// tower has a way within the search budget; else `[lair, ...q, r pairs]`: the tower's number, then the cells to walk, the tower's last.
+#[wasm_bindgen]
+pub fn world_dungeon(
+    seed: u32,
+    from_q: i32,
+    from_r: i32,
+    beaten: Vec<i32>,
+    blocked: Vec<i32>,
+    broken: Vec<i32>,
+) -> Vec<i32> {
+    let lairs = world::lairs(u64::from(seed), crate::encounter::boss_ids().len());
+    let beaten: Vec<usize> = beaten.iter().map(|&k| k as usize).collect();
+    let Some((lair, path)) = world::dungeon_walk(
+        u64::from(seed),
+        (from_q, from_r),
+        &lairs,
+        &beaten,
+        &pairs(&broken),
+        &pairs(&blocked),
+    ) else {
+        return Vec::new();
+    };
+    std::iter::once(lair as i32)
+        .chain(path.into_iter().flat_map(|(q, r)| [q, r]))
+        .collect()
+}
+
+/// The direction of the hero's step (docs/specs/openworld.md section 4), the index of `DIRECTIONS` (E, W, NE, SW, NW, SE), `-1` for no
+/// step: `row` is the row of the hero, `keys` the held arrows (bit 0 up, 1 down, 2 left, 3 right), `yaw` the camera's in radians,
+/// `steering` whether the step slides round obstacles (#1137), `free` the bits of the directions whose cell the hero can enter.
+#[wasm_bindgen]
+pub fn world_step(row: i32, keys: u32, yaw: f64, steering: bool, free: u32) -> i32 {
+    worldstep::hero_dir(row, keys as u8, yaw, steering, free as u8).map_or(-1, |dir| dir as i32)
+}
+
+/// What the hero's step from `(q, r)` to `(tq, tr)` does: `0` refused, `1` rolls, `2` breaks the obstacle (#1147). `terrain` is the
+/// bridge code of the target cell (`-1` or an unknown code: off the world), `occupied` whether an enemy stands on it, `trees_near`
+/// whether a tree stands on one of its neighbours.
+#[wasm_bindgen]
+pub fn world_enter(
+    q: i32,
+    r: i32,
+    tq: i32,
+    tr: i32,
+    terrain: i32,
+    occupied: bool,
+    trees_near: bool,
+) -> i32 {
+    let entry = worldstep::entry(
+        (q, r),
+        (tq, tr),
+        terrain_of_code(terrain),
+        occupied,
+        trees_near,
+    );
+    match entry {
+        Entry::Refused => 0,
+        Entry::Rolls => 1,
+        Entry::Breaks => 2,
+    }
+}
+
+/// The troop after the hero steps from `(q, r)` to `(tq, tr)`: `q, r` pairs, the cell the hero left first.
+#[wasm_bindgen]
+pub fn world_trail(troop: Vec<i32>, q: i32, r: i32, tq: i32, tr: i32) -> Vec<i32> {
+    worldstep::trail(&pairs(&troop), (q, r), (tq, tr))
+        .into_iter()
+        .flat_map(|(q, r)| [q, r])
+        .collect()
 }
 
 /// The terrain of a cell of the world `seed`, `None` off the world.
@@ -201,6 +291,33 @@ mod tests {
     }
 
     #[test]
+    fn the_dungeon_walk_is_a_lair_number_then_q_r_pairs_that_match_the_core() {
+        let lairs = world_lairs(3);
+        let blocked = lairs.clone();
+        let flat = world_dungeon(3, 0, 0, vec![], blocked.clone(), vec![]);
+        let pairs: Vec<(i32, i32)> = lairs.chunks(2).map(|c| (c[0], c[1])).collect();
+        let (lair, path) = world::dungeon_walk(3, (0, 0), &pairs, &[], &[], &pairs).unwrap();
+        assert_eq!(flat[0], lair as i32);
+        assert_eq!(
+            flat[1..],
+            path.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
+        );
+        let walled: Vec<i32> = pairs
+            .iter()
+            .flat_map(|&(q, r)| {
+                [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)]
+                    .into_iter()
+                    .flat_map(move |(a, b)| [q + a, r + b])
+            })
+            .collect();
+        assert!(world_dungeon(3, 0, 0, vec![], walled, vec![]).is_empty());
+        assert_ne!(
+            world_dungeon(3, 0, 0, vec![lair as i32], blocked, vec![])[0],
+            lair as i32
+        );
+    }
+
+    #[test]
     fn a_path_is_q_r_pairs_that_match_the_core() {
         assert_eq!(
             world_path(9, 0, 0, 3, 0, vec![], vec![]),
@@ -210,6 +327,39 @@ mod tests {
         assert_eq!(round.len(), 8);
         assert_eq!(round[6..], [3, 0]);
         assert!(world_path(9, 0, 0, 0, 0, vec![], vec![]).is_empty());
+    }
+
+    #[test]
+    fn an_entry_is_zero_refused_one_rolls_two_breaks() {
+        assert_eq!(world_enter(0, 0, 1, 0, 2, false, false), 1); // grass
+        assert_eq!(world_enter(0, 0, 1, 0, 5, false, false), 2); // boulder
+        assert_eq!(world_enter(0, 0, 1, 0, 6, false, true), 0); // tree in a grove
+        assert_eq!(world_enter(0, 0, 1, 0, 0, false, false), 0); // water
+        assert_eq!(world_enter(0, 0, 1, 0, 2, true, false), 0); // enemy
+        assert_eq!(world_enter(0, 0, 3, 0, 2, false, false), 0); // not a neighbour
+        assert_eq!(world_enter(0, 0, 1, 0, -1, false, false), 0); // off the world
+        assert_eq!(world_enter(0, 0, 1, 0, 99, false, false), 0); // unknown code
+    }
+
+    #[test]
+    fn every_terrain_code_gives_its_entry() {
+        let codes: Vec<i32> = (0..8)
+            .map(|t| world_enter(0, 0, 1, 0, t, false, false))
+            .collect();
+        assert_eq!(codes, vec![0, 1, 1, 1, 0, 2, 2, 0]);
+    }
+
+    #[test]
+    fn a_trail_is_the_old_cell_then_the_troop_without_the_new_one() {
+        let out = world_trail(vec![1, 0, -1, 0], 0, 0, 1, 0);
+        assert_eq!(out, vec![0, 0, -1, 0]);
+    }
+
+    #[test]
+    fn a_step_is_a_direction_index_or_minus_one() {
+        assert_eq!(world_step(0, 8, 0.0, true, 0b11_1111), 0);
+        assert_eq!(world_step(0, 8, 0.0, true, 0b11_1110), 2);
+        assert_eq!(world_step(0, 0, 0.0, true, 0b11_1111), -1);
     }
 
     #[test]

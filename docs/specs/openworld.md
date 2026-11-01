@@ -19,6 +19,8 @@ A-light Explore (#720 to #725), which it does not touch.
 - **Entry**: "Open world" in the mode menu, for everyone, no flag (#1000). A click rolls a random
   seed; `?openworld=<seed>` fixes it (tests, sharing a world). Leave returns to where the player
   came from.
+- **Delivered (#963)**: the spec (#964), the map (#965), the enemies and troop (#966), the attack (#967) and the save (#968) are merged; the mode is reachable without a flag.
+- **A-light dropped**: #720 and its slices #722 to #725, parked since 2026-10-26, are superseded by this mode and the boss lairs (#1170, #1171). The hero rule and Rewind (#723, #724) were not built.
 - **Delta to Abalone**: none to the move, the push or the legality (`rules.md`). The mode adds a
   map, obstacles and an automatic troop whose only attack is a legal Abalone push (pillar 1).
 - **Not now**: HP, damage, levels, items, economy, real-time fights (each needs a Decision, #313).
@@ -88,6 +90,12 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 - **Hero**: one glass marble (#1176: in the skin the player wears on the ship, as the troop; the enemies wear the worn shell skin, and the stripe ring is the only team cue), moved one cell at a time (click a neighbour, or the arrow keys, as
   in the hub, section 3.5 of `game-design.md`). A held arrow keeps walking: the first cell is taken on the
   keydown, then one cell per glide (140 ms) while the arrow is held, whatever the system's key repeat (#1059).
+- **Gamepad** (#1252, `game-design.md` section 2 item 7): the left stick or the D-pad walks the hero as the touch stick does,
+  read in the yaw of the camera, and the walk goes on while it is held. LB and RB turn the camera one step (Q and E), R3 resets it
+  (R), the triggers zoom (the wheel's path, RT in, LT out), B leaves (Esc). The right stick does nothing here. While the focus is
+  on a control (after Start, say) the stick and LB RB walk the focus instead, and the hero stays. A walk onto a lair starts the
+  boss fight, played with the pad (A, B, LB RB, the stick) and left with Back, as with the keyboard. The help and the HUD name
+  the pad's buttons while the pad is in use.
 - **Camera turn** (#1026, #1251, #1254): Q and E turn the camera round the hero by 60 degrees, one step per hex direction, so six
   presses make a full turn. The grid is pointy-top, so at yaw 0 screen up falls between two neighbours (the zigzag of an odd and an
   even row). The camera therefore rests at 30 degrees plus a multiple of 60 (`REST_OFFSET`): at every resting angle screen up runs
@@ -96,6 +104,9 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   or a two-finger twist turns freely while held, and on release it settles on the nearest resting angle. The yaw is saved with the
   world; a saved yaw that is not a resting angle (an older save) is read back at the nearest one. At every resting yaw each arrow
   and diagonal still steps to the neighbour the camera shows nearest to it.
+  A pure sideways intent (Left alone, Right alone, the stick near horizontal) sits exactly between two neighbours, up and down
+  on the screen; the tie goes to the one that leans forward (up on the screen), so at every resting angle Left steps up-left and
+  Right up-right (#1273). Up, Down and the diagonals keep their steps; Down with Left or Right still steps back.
 - **Steering** (#1137): a held direction (arrow, stick) is an *intent*, an angle on the ground. Each step takes the cell of
   that direction when the hero can enter it. When it cannot (a rock, a tree, water, a wall, a cliff, an enemy), the hero takes
   the free one of the two neighbours 60 degrees to the side that the intent follows best; if both follow it equally, the lower

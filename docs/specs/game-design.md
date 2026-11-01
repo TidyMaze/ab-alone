@@ -72,7 +72,8 @@ peer re-validates online moves (see `tech.md`).
    step (Esc), Start opens the settings menu, LB and RB walk the legal groups (Shift+Tab, Tab), the right stick orbits
    the camera and the triggers zoom (RT in, LT out). A held aim, LB or RB repeats. The first press switches the HUD hints
    to the pad's buttons and rings the focused control; a key press or a mouse move switches back. A pad that disconnects
-   changes nothing in the game. The Open world comes next (#1252).
+   changes nothing in the game. In the Open world the left stick walks the hero (as the touch stick, in the camera's
+   yaw), LB and RB turn the camera one step, R3 resets it and the triggers zoom it (`openworld.md` section 4).
 8. **Not now.** Voice, haptics.
 
 Accessibility: legal-move highlight can be forced on, colorblind-safe palette, the "clear board"
@@ -136,7 +137,7 @@ See section 6.
 | Item | Rule |
 |---|---|
 | Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Ship hub (Mess deck, #602). A "Ship" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
-| Space | One small hex map per deck (`client/src/hub.ts`): 19 cells (radius 2), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
+| Space | One small hex map per deck (`client/src/hub.ts`): 37 cells (radius 3), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
 | Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
 | Rooms | Cells with a prop and a label plate, at least 6 per deck. Rolling onto a room enters it; standing on it again (Ship, Back to the ship) does not |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
@@ -150,7 +151,7 @@ the five decks (beaten, open, locked, and where the marble is) and boss pips cou
 
 | Room | Prop | Plate (short on a phone) |
 |---|---|---|
-| Boss | A blast door in a crimson frame with an amber core; open with a gold seal once its boss is beaten | Boss door, the boss's name and `beaten` once it is (the boss's name) |
+| Boss | A blast door in a crimson frame with an amber core; open with a gold seal once its boss is beaten | Boss door, the boss's name, and once beaten its medal's best turns, or `beaten` with no medal (the boss's name without "The") |
 | Hot-seat | A table with two amber chairs | Hot-seat, 2 players (Hot-seat) |
 | Bot | A cyan robot | Bot table, vs the ship AI (Bot) |
 | Online | An antenna with two signal arcs | Online, 1v1 peer room (Online) |
@@ -158,12 +159,19 @@ the five decks (beaten, open, locked, and where the marble is) and boss pips cou
 | Terminal | A CRT, its screen green | Terminal, lore entry (Terminal) |
 | Medal room | A gold medal on a plinth | Medal room, best turns (Medals) |
 | Lift | A cage of four posts around its arrow, a bar across while locked | Lift ▲ or ▼ and its deck, open or locked (▲ and the deck, or ▲ Locked) |
+| Daily | A calendar with a sky-blue header | Daily, boss of the day (Daily) |
+| Rogue-lite | A map table with three grape route nodes | Rogue-lite, 3-act run (Run) |
+| Together | Two pink marbles on one plinth | Together, co-op vs a boss (Co-op) |
+| Ranked | A podium of three steps, the first one lime | Ranked, Elo ladder (Ranked) |
+| Open world | An indigo globe of Hollow on a stand | Open world, walk Hollow (World) |
+| Trainer | A target dummy: a post and a tan target disc | Trainer, bot waves (Trainer) |
 
 Room kinds:
 
 | Room | Enters |
 |---|---|
-| Boss | The deck's door boss, one of the five lore-slot bosses of section 7 (the other bosses of the roster are in the boss menu; every boss has an Open world lair): the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
+| Boss | That boss's fight, as the boss menu starts it. Every boss of the roster has one door, on its deck (README "The game", `deck.ts`, #1249). The deck's lore-slot boss of section 7 keeps the east door: the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge). The other bosses stand in the gallery ring: the Dual Room (Mess); the Alien, the Rail Yard, the Assembly Line, the Swarm (Cargo); the Magnetizer, the Unstable Core (Furnace); the Overseer, the Stalker (Chapel); the Pulsar (Bridge). Only the lore-slot boss opens the lift |
+| Mode rooms | A mode with no table of its own, the same as its mode menu entry (#1249): the Daily challenge and the Open world on the Mess, the Rogue-lite run on the Cargo, Fight together on the Furnace (it opens the mode menu on its boss list), Ranked and the Trainer on the Bridge (Ranked offline opens nothing, as the online table). Every entry of the mode menu has its room. Back to the ship comes back from the daily and a ranked game; from a run, the Trainer and the Open world, Ship in the mode menu does |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
 | Medal room | On the Mess only (0, 2), a gold medal prop (#812, #1249). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |
@@ -171,10 +179,18 @@ Room kinds:
 | BR lobby | Shown closed until battle royale ships (Phase 4): a bar across its glyph, the HUD says closed, the marble may stand on it. Every deck has one |
 
 Layout, the same on every deck so it is learned once: the centre and its 6 neighbours are floor,
-the rooms sit on the outer ring. Lift up at the top (q 1, r -2), lift down at the bottom (-1, 2),
+the rooms sit on the two outer rings. Lift up at the top (q 1, r -2), lift down at the bottom (-1, 2),
 boss at the east corner (2, 0) between the two terminals (2, -1) and (1, 1), the tables on the
 west side: hot-seat (-1, -1), bot (-2, 0), online (-2, 1), and the BR lobby on the south-west corner (-2, 2)
-next to them, and the Mess alone has the Medal room at the south cell (0, 2). The Mess has no lift down, the Bridge no lift up, so every deck has 8 or 9 rooms.
+next to them, and the Mess alone has the Medal room at the south cell (0, 2). The Mess has no lift down, the Bridge no lift up.
+
+The gallery ring (#1249): with a boss door for every boss and a room for every mode, the Cargo needs 14 rooms, more
+than the 12 cells of the ring of radius 2. So the map grows by one ring, the simplest way that still frames on a phone
+(37 cells, ui.md section 4.5), and the rooms of radius 2 stay where they were: a saved spot still loads, and the test
+hooks see the same cells. The gallery rooms take these cells in order: (3, -2) by the boss door, the north corners
+(3, -3) and (0, -3), then the south-west corner (-3, 3) and the south corner (0, 3); each deck lists its other bosses in
+roster order, then its mode rooms. No gallery room has a room next to it in its row, so no two plates overlap, and every
+other cell of the ring is floor that the marble walks around. Every deck has 11 to 14 rooms.
 
 Lobbies without a matchmaker: a PvP table or BR lobby is a public peer-to-peer room (Trystero)
 where waiting players are listed and pick each other, plus invite links. Invite-first. With no
@@ -503,10 +519,11 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
     the board settles: opposite neighbours repel, as for the Magnetizer.
   - **the Chaplain's conversion check**: every marble touching 4 or more marbles of the other
     side flips, both sides (threshold 4, no martyr), as for the Chaplain.
-  - **the Swarm's wave** (#1197): the arrivals of the phase (1, 1, 2) land at once on the empty rim
-    cells away from the player's start side (`r <= 0`), picked by the hook seed, as for the Swarm
-    (a taken cell sends its marble to the nearest empty allowed cell, none left and it does not
-    arrive). The Swarm's 2-ejection win is never borrowed, the fight keeps its 12.
+  - **the Swarm's wave** (#1197): 1, 1, 2 marbles by the phase (`BALLAST_WAVE`, the Swarm's
+    arrivals before #1266) land at once on the empty rim cells away from the player's start side
+    (`r <= 0`), picked by the hook seed (a taken cell sends its marble to the nearest empty
+    allowed cell, none left and it does not arrive). The Swarm itself lands 3, 3, 4 on the whole
+    rim since #1266; the Ballast keeps this rule, its player does not start in the middle. The Swarm's 2-ejection win is never borrowed, the fight keeps its 12.
   Left out, not simple on this board: the trains, belts, eggs, armies, the martyr, the cores and
   the echo. The old mix (Hull rim crack, Chaplain threshold 3, Echo of the previous move) is gone.
 - **Announce**: the HUD names the effect one turn ahead, during the turn before it lands
@@ -960,58 +977,74 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door.
 
-### 7.14 The Swarm: survive 30 turns of arriving waves
+### 7.14 The Swarm: hold out until the evac, which every swarm marble you eject brings closer
 
-- **Concept**: the Cargo hold's vermin. A swarm pours in from the far side of the hold, wave
-  after wave; there is no queen to kill. Hold out until the evac lifts you out.
-- **Board and sides** (owner, #795): standard radius 4 board, standard moves and sumito. The
-  player starts with the standard layout **minus its 3 marbles nearest the centre** (the row
-  `r = 2`): **11** marbles, rows `r = 3` and `r = 4`. The boss starts with **no marble**.
+- **Concept**: the Cargo hold's vermin. A swarm pours in from every side of the hold, wave
+  after wave; there is no queen to kill. Hold out until the evac lifts you out, and fight back:
+  every swarm marble thrown out brings the evac closer.
+- **Board and sides** (owner, #795, #1266): standard radius 4 board, standard moves and sumito.
+  The player starts in the **middle**: **11** marbles in one compact group, the centre cell, its
+  6 neighbours, the 3 cells of the row `r = 2` nearest the centre (`(-2, 2)`, `(-1, 2)`,
+  `(0, 2)`) and `(1, -2)`, mirrored about the column of the centre (`SWARM_START`). The boss
+  starts with **no marble**.
 - **Turn**: one turn is one player move, then one boss reply: (a) the swarm marbles announced for
   that turn **arrive**, then (b) the swarm plays one standard move with its marbles, or **passes**
   when it has none (no marble, or every one boxed in, as the Choir's pass). A player boxed in by
   a full board passes too (`rules.md` section 7): the next reply starts at once.
-- **Arrivals** (calibrated, #795): turns 1 to 24, **1** marble a turn; turns 25 to 30, **2**
-  (36 in all; the board can still fill when the player ejects none). They land on the **allowed rim
-  cells**: the 13 rim cells with `r <= 0` (never on the player's start side, `r > 0`). The cells of
-  a turn are **announced one turn ahead**: at the start for turn 1, then at the end of each boss
-  reply for the next turn, picked at random among the empty allowed rim cells. A cell taken when
-  its marble is due sends it to the **nearest empty allowed rim cell** (hex distance, then the
-  lowest `q`, then the lowest `r`); with no empty allowed rim cell, that marble does not arrive.
-  Fewer empty allowed cells than the turn's count at the announce: only those are announced. No
-  cap on the swarm (owner, #795).
-- **Phases by turn**, not by ejections: P1 turns 1 to 14, P2 from turn **15**, P3 from turn **25**.
-- **Win and loss** (owner; the boss's line decided by the lead on 2026-10-30, #795): the win at 6
-  ejections is **off for both sides**. The player **wins** when the boss's 30th reply is done (the
-  evac arrives). The boss **wins** the moment it has ejected **2** of the player's marbles
-  (`SWARM_EJECTIONS`, a calibration knob), or every one when fewer are left. An ejected swarm
-  marble scores nothing, it is simply gone; the HUD still counts the ejections of both sides.
-- **No draw**: 30 turns are 60 plies, under the 100-ply no-ejection cap, and the fight turns both
+- **Arrivals** (calibrated, #1266): **3** marbles a turn in P1 and P2, **4** in P3
+  (`SWARM_ARRIVALS`; 1, 1, 2 before #1266). They land on **any empty rim cell**, on all 6 edges
+  (24 cells, the player's start side too). The cells of a turn are **announced one turn ahead**:
+  at the start for turn 1, then at the end of each boss reply for the next turn, picked at random
+  among the empty rim cells. A cell taken when its marble is due sends it to the **nearest empty
+  rim cell** (hex distance, then the lowest `q`, then the lowest `r`); with no empty rim cell,
+  that marble does not arrive. Fewer empty rim cells than the turn's count at the announce: only
+  those are announced. No cap on the swarm (owner, #795).
+- **Phases by arrivals** (owner, #1266), not by ejections: P1 at the start, P2 once **15** swarm
+  marbles have landed, P3 once **30** have (`SWARM_PHASE_ARRIVALS`). A landed marble counts
+  whether it is still on the board or the player has ejected it. The phase is read at the start
+  of the boss reply, like the other bosses: it sets the count of the wave announced for the next
+  turn. With 3 a turn, P2 comes on turn 6 and P3 on turn 11.
+- **The evac clock** (owner, #1266): the player **wins** when the boss replies done plus **2 per
+  swarm marble the player ejected** reach **40** (`SWARM_TURNS`, `SWARM_EVAC_PER_EJECTION`). It is
+  read after each boss reply and after each player move: an ejection that reaches 40 brings the
+  evac at once, with no boss reply. Only the player's ejections of swarm marbles move it.
+- **Loss** (the lead's decision of 2026-10-30, #795): the win at 6 ejections is **off for both
+  sides**. The boss **wins** the moment it has ejected **2** of the player's marbles
+  (`SWARM_EJECTIONS`, a calibration knob), or every one when fewer are left. The HUD still counts
+  the ejections of both sides.
+- **No draw**: 40 turns are 80 plies, under the 100-ply no-ejection cap, and the fight turns both
   draw rules off (a full rim with no arrival could repeat a position): a draw would be a loss
   (section 3.3), so it never happens here.
 - **Deterministic, for P2P**: the announced cells are splitmix64 of the fight seed and the ply.
   No `Math.random`, no clock: a Retry, the daily, a replayed game file and every peer get the same
   waves.
-- **Tell**: an announce mark (a ring) on each cell where a swarm marble arrives next turn; a turn
-  counter from 30 down to 0 and the loss line on the HUD ("the swarm wins after it ejects 2 of your
-  marbles"); the health bar of #788 holds the 30 turns, one fragment per boss reply. The player's
+- **Tell**: an announce mark (a ring) on each cell where a swarm marble arrives next turn, on any
+  edge; the turns left on the evac clock, from 40 down to 0, and the loss line on the HUD ("the
+  swarm wins after it ejects 2 of your marbles"); after a player move that ejected a swarm marble,
+  a short "(-2)" next to the turns ("28 turns to the evac (-2)"), until the next player move. The
+  health bar of #788 holds the 40 turns of the clock, one fragment per boss reply and two per
+  swarm ejection, with no phase step (the phases go by arrivals, not by the clock). The player's
   ejection count has no limit on the HUD (`win_ejections` is `0`, #1008).
-- **Look**: Cargo deck. The marbles drop in on their marks; at the end of turn 30 the **evac
+- **Look**: Cargo deck. The marbles drop in on their marks; once the clock runs out the **evac
   lights the whole board** and lifts the surviving marbles. Reduced motion: a fade.
 - **Turn it against the boss** (owner design rule): every swarm marble lands on the rim, where
-  a 2 to 1 push sends it off, so push it off before the next one lands beside it; the announce
-  marks say where it lands one turn ahead, so stand next to the mark with a line ready. The swarm
-  needs only 2 ejections, so its marbles on the rim are the danger as much as the prey: never
-  leave a marble on the rim in front of a swarm line. The boss search sees the arrivals: every
-  player ply of its tree lands the next wave where the announce would put it.
-- **The Ballast Mind** (owner rule, section 7.5, #1197): it borrows the wave as its fifth effect,
-  a one-shot hook: the arrivals of its phase land at once on the empty rim cells of its radius 5
-  board away from the player's start side. The 2-ejection win is never borrowed: it is the Swarm's
-  own end line, and the Ballast fight keeps its 12.
-- **Calibrate**: knobs = the boss's ejections to win (2), the arrival counts (1, 1, 2), the turns
-  (30), the start (11), AI budget. Adopted: 2 ejections and arrivals 1, 1, 2 meet the gate.
-  Gate (#795): the ladder's pro player wins 7 to 9 of 10 seeds at 10x, and a scripted turtle (it
-  never moves a marble outward and never pushes) loses at least 8 of 10. Ladder:
+  a 2 to 1 push sends it off and brings the evac 2 turns closer, so go out and push it off before
+  the next ones land beside it; the announce marks say where it lands one turn ahead, so stand
+  next to the mark with a line ready. The swarm needs only 2 ejections, so a marble you send to
+  the rim is the danger as much as the prey: never leave one there in front of a swarm line, and
+  keep the group in the middle, where the swarm must push it 4 times. The boss search sees the
+  arrivals and the clock: every player ply of its tree lands the next wave where the announce
+  would put it, and each swarm marble it loses there costs it 2 turns.
+- **The Ballast Mind** (owner rule, section 7.5, #1197, #1266): it borrows the wave as its fifth
+  effect, a one-shot hook, with its own rule, unchanged by #1266: 1, 1, 2 marbles in its P1, P2,
+  P3 (`BALLAST_WAVE`, the Swarm's counts before #1266), landing at once on the empty rim cells of
+  its radius 5 board away from the player's start side (`r <= 0`), since its player does not
+  start in the middle. The 2-ejection win and the evac clock are never borrowed: they are the
+  Swarm's own end lines, and the Ballast fight keeps its 12.
+- **Calibrate**: knobs = the boss's ejections to win (2), the arrival counts (3, 3, 4), the
+  clock (40 turns, 2 per ejection), the phase counts (15, 30), the start (11), AI budget (1500).
+  Gate (#1266): the ladder's pro player (10x) wins 14 to 18 of 20 seeds, and the equal-budget
+  player (1x) fewer. Adopted: arrivals 3, 3, 4 (17 of 20 at 10x, 15 of 20 at 1x). Ladder:
   `boss-balance.md` section 3.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()` in part 2, so the daily
   pick of the days after it ships changes, section 7.6). No hub door.

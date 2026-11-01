@@ -133,7 +133,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.turns_left()` (`-1` is no clock) | `tell` with `kind: "neurotoxin"` and the player turns left in `text`, with the pull of the vents (The Overseer) |
 | `Encounter.ballast_next()` (`-1` is none) | `tell` with `kind: "borrowed"` and the effect The Ballast Mind borrows at the end of this turn in `text` (the Hull's crack, the Pulsar's pulse, the Magnetizer's polarity, the Chaplain's conversion check, the Swarm's wave) |
 | `Encounter.belts()` | `marks` with `kind: "belt"` on every cell of a running belt and `value` = `1` toward +q, `-1` toward -q; `kind: "strike"` on the cell of an announced strike slot; and `tell` with `kind: "belt_reverse"` and the player turns left before the centre belt reverses in `text` (The Assembly Line) |
-| `Encounter.swarm()` | `marks` with `kind: "arrival"` on each cell where a swarm marble lands after the player's move; `tell` with `kind: "arrival"`, those cells, and the boss turns before the evac and a pass in `text` (The Swarm) |
+| `Encounter.swarm()` | `marks` with `kind: "arrival"` on each cell where a swarm marble lands after the player's move; `tell` with `kind: "arrival"`, those cells, and the turns left on the evac clock (2 fewer per swarm marble the agent ejects, and the jump its last move made), and a pass in `text` (The Swarm) |
 | `Encounter.converted()` | `marks` with `kind: "converted"` |
 | `Encounter.armies()` | `marks` with `kind: "army"` and `value` = `0` Alto, `1` Tenor, `2` Bass |
 | `Encounter.tell()` id (`-1` is none, `0` is an id: the end of a player turn) | `tell.kind` = `"special"` when no more specific kind applies, the id in `text` |
@@ -143,7 +143,7 @@ Rules for the generic shape:
 - When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `pulse`, then `neurotoxin`, then `borrowed`, then `special`.
 - An unknown `kind` is not an error: an agent that does not know it ignores it and still plays legally. The tell is information, not a rule.
 - `kind` values are stable once published. A new boss may add kinds, never rename one.
-- The Ballast Mind's pillars show as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded. A `win_ejections` of `0` means that side does not win by ejections (the agent against The Swarm survives 30 turns instead).
+- The Ballast Mind's pillars show as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded. A `win_ejections` of `0` means that side does not win by ejections (the agent against The Swarm holds out until its 40-turn evac clock runs out instead).
 
 ## 5. Tools
 
@@ -289,6 +289,24 @@ Input: none.
 
 Output: the `get_state` object. Errors: `no_game`, `game_over`, `not_supported`.
 
+### Open world tools (#1292, first slice)
+
+An agent walks the Open world (`openworld.md`) with four tools. The map, the enemies, the lairs and the path are the Rust core's (`world_chunk`, `world_enemies`, `world_lairs`, `world_path` of `abalone-wasm`), so the same seed and the same moves give the client's world; the server only holds the hero, the troop trail (`Hero.step`) and the broken cells. The world is separate from the game of `new_game`: both can be open at once. Cells are written `(q,r)` as in section 3.
+
+| Tool | Input | Output |
+|---|---|---|
+| `new_world` | `seed` 0 to 4294967295, default 0 | the world state, the hero on the spawn `(0,0)`, the troop round it; drops the world in progress |
+| `world_state` | `radius` 1 to 8, default 3 | the world state |
+| `world_step` | `direction` E, W, NE, SW, NW, SE | `{ moved, smashed, lair?, state }` |
+| `world_walk` | `q`, `r` | `{ steps, state }` |
+
+World state: `seed`, `hero`, `troop` (the hero's trail, 6 cells), `broken` (obstacles broken), `enemies` (the marbles inside the window), `lairs` (`{ boss, cell, distance }` for each boss lair, the 15 of the roster, lair `k` is boss `k`) and `window`: `{ radius, rows }`, a hex of cells round the hero (never the whole map), one row per `r`, each `{ r, q0, cells }` from the cell `q0` along `q`. A cell letter is `H` hero, `T` troop, `E` enemy, `L` lair, `?` off the world, else its terrain: `~` water, `s` sand, `g` grass, `r` rock, `P` peak, `o` boulder, `t` tree, `W` wall.
+
+- `world_step` rolls the hero one cell by the core's path rule (`world_path` with the enemy cells and the lairs blocked): water, peaks, walls, enemies and trees beside a tree refuse it (`blocked`, nothing changes); a boulder, or a tree with no tree beside it, is broken (`smashed`) and the cell is plain ground after. A step onto a lair does not move the hero: `moved` is `false` and `lair` is `{ index, boss }`; start that fight with `new_game` and `boss`.
+- `world_walk` takes the shortest path of `world_path` (within 40 cells) one step at a time, the same rules as `world_step`. `no_path` when the cell is the hero's, a lair, an enemy, off the world, farther than 40 cells or walled in.
+
+Not in this slice, as the Rust lands (#1164): the troop's automatic attack and the enemy overlay (the enemies stay where the seed puts them and nothing is pushed), the world save and resume, the loss state, and `world_step` from the core (#1272), where the trail and the breaking are the server's today.
+
 ## 6. Errors
 
 An error is `{ "code": "...", "message": "..." }`. `message` is the engine's reason or the `ParseError` text when there is one.
@@ -304,6 +322,9 @@ An error is `{ "code": "...", "message": "..." }`. `message` is the engine's rea
 | `no_room`, `already_in_room`, `room_full`, `room_not_found` | Room state |
 | `transport_failed` | The P2P layer could not start |
 | `not_supported` | Online resign |
+| `no_world` | No Open world started (`new_world` first) |
+| `blocked` | `world_step`: the hero cannot enter the cell. `message` says why |
+| `no_path` | `world_walk`: no way to the cell |
 
 ## 7. Online rooms
 

@@ -34,8 +34,12 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 - **Props near the hero** (#1058): the loaded 441 chunks are not rebuilt or re-uploaded by an animation. Per-prop motion is a
   term of the shader driven by one uniform (`uTime`), never an instance-matrix rewrite; the hi-detail props near the hero
   keep their set. No animation changes the chunk centre, `reach` or the loaded instances.
-- **Held walk** (#1065): the walk keeps one speed. No animation lengthens a step, delays the next, or adds a pause: the step
-  is `motion.step` (140 ms, `GLIDE_MS`) in `tap`, `start` and `walk` paces alike; squash and turn ride inside it.
+- **Held walk** (#1065, #1290): within a step the pace is steady. No animation lengthens a step, delays the next, or adds a pause.
+  A tap or a short walk steps at `motion.step` (140 ms, `GLIDE_MS`). A held key, a held stick or a far tap keeps 140 ms for its
+  first 2 steps, then each step is 15 ms shorter down to the cruise pace of 80 ms (`CRUISE_MS`, `stepMs(n)`: 140, 140, 125, 110,
+  95, 80...). The glide of a step lasts as long as the cadence to the next step (the marble never pauses), the troop delay stays
+  at most half of it. A release stops at once, a new press starts at 140 ms again. Reduced motion has the same cadence (no glide).
+  A 150-cell held walk lasts 12.2 s instead of 21.0 s; squash and turn ride inside the step.
 - **Per-frame cost**: no allocation in the frame (pools and reused vectors, as `Marble` poses). Each story measures the frame
   time and CPU before/after in its PR (budget #1034); the allowed increase is 0.3 ms median per frame at the widest zoom with
   441 chunks, 0 on a frame where nothing is live.
@@ -57,7 +61,7 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 - **Reduced**: no hop, squash, settle, breath or turn; the marble jumps to its cell facing the new way.
 - **Static**: enemies (they only move when pushed, #967), the troop's idle (no breath), the ejected marble (its own fall).
 - **Acceptance**: with the fixed clock, a step at `t = 0` has the marble on the old cell, at `t = 140 ms` on the new cell with
-  scale 1 (unit); a held walk of 5 steps lasts 5 x 140 ms, to the ms; idle for 800 ms starts the breath, the next step stops it;
+  scale 1 (unit); a held walk of 5 steps lasts 140 + 140 + 125 + 110 + 95 ms (`stepMs`), to the ms; idle for 800 ms starts the breath, the next step stops it;
   with `reduced()` true the pose is the rest pose at once.
 
 ## 3. Story 3: water
@@ -160,3 +164,47 @@ Named and used: `motion.step`, `motion.settle`, `motion.base`, `motion.fast`, `m
 `motion.md` is the place to add them, not this spec: `motion.slow` (600 ms), `motion.shake` (200 ms), and two **looping**
 tokens that are periods, not durations, `motion.breathe` (2400 ms) and `motion.ambient` (3000 to 6000 ms). `motion.step` must
 equal `GLIDE_MS` (140). Open point for the lead: if `motion.md` has no loop notion, loops keep their period here.
+
+## 9. Measures: frame time and CPU before and after (#1035)
+
+Method (#1035, 2026-11-01): headed Chromium (`--enable-gpu`) on an Apple laptop with a 60 Hz display, `vite build --mode e2e` of each
+commit served by `vite preview` on port 5995, one run at a time through `heavy.sh`, load average (1 minute) 3 to 4 at each
+start (14 at the end of the leak run). "Before" = a4c7d8e2, the commit just before the first animation task (#1106, PR #1114);
+"after" = `main` at 8d4f4988, which also holds unrelated later changes (the Dungeon button, the 80 ms step, the guide). Each
+scenario runs 12 s after a 4 s settle: Open world `?openworld=7` with the hero walking (arrow keys, 600 ms down, 150 ms up,
+right/down/left/up in turn), normal zoom 1, widest zoom 6 (wheel), and idle; a boss fight against The Echo (medal set,
+`?nodes=50`) with Auto-play on, 32 plies at 1280x720; the same two at a phone viewport 390x844, touch, device ratio 2.
+`navigator.webdriver` is hidden so the ambience particles run. Measured in the page: the rAF interval of an extra loop, the
+time spent in the page's own rAF callbacks per frame (draw cost on the main thread, not the GPU), `longtask` entries, and the
+CDP `TaskDuration` per second. Two runs of "before" and two of "after" (four for the board fight and phone board, after a
+132 and 182 ms frames appeared once, in the first "after" run, and not in three others).
+
+**The 60 Hz cap hides the difference.** The rAF interval is the same in every run: mean 16.67 ms, 95th percentile 18.2 to 18.6
+ms (vsync steps), 0 long tasks in all 32 runs, 0 page errors, adaptive pixel ratio never stepped down (1 on desktop, 1.5 on the
+phone viewport). So frame time cannot show a difference smaller than the 16.7 ms frame; the callback cost can, and is the number
+to read (it is the CPU part only: the GPU time is not measured, the display waits for it). Mean callback ms per frame
+(95th percentile in brackets), mean of the runs:
+
+| Scenario | Before | After | Change |
+|---|---|---|---|
+| Open world walk, zoom 1 | 1.31 (2.5) | 1.86 (2.8) | +0.55 |
+| Open world walk, widest zoom 6 | 1.81 (2.9) | 1.96 (3.2) | +0.15 |
+| Open world idle, zoom 1 | 1.46 (1.9) | 1.57 (2.1) | +0.11 |
+| Open world walk, phone 390x844 | 1.55 (2.5) | 1.41 (2.1) | -0.14 |
+| Boss fight, auto-play, 1280x720 | 2.65 (3.8) | 2.06 (2.8) | -0.59 |
+| Boss fight, widest board zoom | 2.66 (3.8) | 2.35 (3.2) | -0.31 |
+| Boss fight, phone 390x844 | 2.50 (3.5) | 1.87 (2.8) | -0.63 |
+
+TaskDuration per second (main thread, ms, mean of the runs): Open world walk 106 / 147 at normal zoom, 147 / 156 widest, 112 / 118
+idle; board fight 197 / 157 (desktop), 198 / 178 (widest), phone 126 / 114 (Open world), 182 / 140 (board).
+
+Reading for this spec (section 1, per-frame cost: at most 0.3 ms median per frame at the widest zoom, 0 where nothing is live):
+at the widest zoom the walk costs +0.15 ms on the mean (within 0.3). At normal zoom the walk costs +0.55 ms and the idle world
++0.11 ms; the Open world is never "nothing live" (water, sway, pollen run), so the 0 case does not apply, but the normal-zoom
+walk figure is above 0.3 and no budget is set for it. Two runs each differ by up to 0.3 ms between runs of the same build
+(before, idle: 1.36 and 1.56), so the walk figure is likely real, the idle one is inside the noise. Median is not reported
+(means and 95th percentile only). The widest zoom reached is 6 (`data-openworld-zoom`); the "441 chunks" case was not
+checked. GPU leak (enter and leave the Open world three times, `__renderCost`, after build only): board 41 geometries / 53
+textures; Open world 64 / 57 on each of the three entries; back on the board 41 / 55 after the first leave and after the
+second and third. Two textures stay after the first visit and nothing grows afterwards. Not done: the same count on the "before"
+commit, a WebGPU-specific run (the backend was not recorded), the Playwright MCP check, a phone CPU.

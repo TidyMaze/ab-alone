@@ -50,12 +50,14 @@
       </div>
       <div id="openworld-hud" role="group" aria-label="Open world">
         <p id="openworld-live" role="status" class="sr-only"></p>
-        <p>Open world: arrows or a click on a next cell to roll, Esc to leave.</p>
+        <p>Open world: <span class="keys-hint">arrows or a click on a next cell to roll, Q E to turn the camera, R to reset it, Esc to leave.</span><span class="pad-hint">left stick to walk, LB RB to turn the camera, R3 to reset it, triggers to zoom, B to leave.</span></p>
         <p id="openworld-mode"></p>
         <p>Seed <output id="openworld-seed"></output>, shared as <code>?openworld=&lt;seed&gt;</code>.</p>
         <p><output id="openworld-medals"></output></p>
         <p id="openworld-tally"></p>
+        <button id="openworld-dungeon" type="button">Dungeon</button>
         <button id="openworld-new" type="button">New world</button>
+        <p id="openworld-dungeon-note" role="status"></p>
         <div id="openworld-confirm" hidden>
           <p>Discard this world's save?</p>
           <button id="openworld-keep" type="button">Keep this world</button>
@@ -151,6 +153,20 @@
     <div id="run-map" role="region" aria-label="Rogue-lite map" hidden></div>
     <div id="bubble" hidden><span id="bubble-text" aria-hidden="true"></span><span id="bubble-line" role="status"></span></div>
     <div id="reader" role="region" aria-label="Terminal" aria-live="polite" hidden></div>
+    <!-- The first-launch guide (#1293): a page at a time, over the game, opened again from the settings menu. -->
+    <div id="guide" role="dialog" aria-modal="true" aria-labelledby="guide-title" aria-describedby="guide-text" tabindex="-1" hidden>
+      <div class="card">
+        <p id="guide-count"></p>
+        <div id="guide-art"></div>
+        <h2 id="guide-title"></h2>
+        <div id="guide-text" aria-live="polite"></div>
+        <div class="actions">
+          <button id="guide-skip" type="button">Skip</button>
+          <button id="guide-back" type="button">Back</button>
+          <button id="guide-next" type="button">Next</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

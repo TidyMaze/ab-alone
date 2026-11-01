@@ -9,7 +9,7 @@ const pkg = ['abalone_wasm.js', 'abalone_wasm_bg.wasm'].map((file) => new URL(`.
 
 test('rewriting the wasm package during a run does not reload the page under test, bug #185', async ({ page }) => {
   test.skip(!!process.env.E2E_BASE_URL, 'the live site has no dev server and no local wasm package');
-  await page.goto('./?bot=off');
+  await page.goto(new URL('./?bot=off', process.env.E2E_DEV_URL).href);
   await page.locator('canvas').waitFor();
   // A watching dev server reloads the page about a second after the files change: wait well past that.
   const reloaded = page.waitForEvent('framenavigated', { timeout: 5_000 }).then(
@@ -31,7 +31,7 @@ test('the e2e page loads nothing from another host, bug #585', async ({ page }) 
     const { protocol, hostname } = new URL(request.url());
     if (protocol.startsWith('http') && hostname !== 'localhost') remote.push(request.url()); // data: and blob: are local
   });
-  await page.goto('./?bot=off');
+  await page.goto(new URL('./?bot=off', process.env.E2E_DEV_URL).href);
   await page.locator('canvas').waitFor();
   expect(remote).toEqual([]);
 });

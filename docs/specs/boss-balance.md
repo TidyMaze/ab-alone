@@ -644,6 +644,28 @@ down, hatch; the lay is a seeded pick, left out) and an egg weight of 50 in the 
 The bot still loses every fight to the pro-budget ladder player (as in #667); the fights last a
 little longer. No further tuning.
 
+Remainder of #826 (reply time, 10x cell, `spares_eggs`), nothing tuned, no code change:
+
+- `spares_eggs` is not in the boss search any more: it only lives in the test module of
+  `encounter/alien.rs`, where `old_move` rebuilds the pre-#826 search as the baseline of the test
+  `the_alien_crushes_its_own_egg_to_save_a_marble_the_old_filter_left_to_die`, and `quiet` uses it
+  to play a move that crushes no egg. It stays: removing it would remove the test's baseline.
+- 10x cell, `ALIEN_X=10 ALIEN_SEEDS=20 cargo run --release -p abalone-core --example alien_sim`,
+  seeds 0 to 19, one run of about 15 minutes (the 15 minute kill in #1130 was too early): the player
+  wins 20/20, median 72 plies, median eggs crushed 1, median hatched 18.5, median Alien peak 20.5,
+  count only goes up in 0/20. The pre-#826 10x row (50 seeds, #667) is 50/50, 75 plies, 2 crushed,
+  17 hatched, peak 20.5. Not re-run before the change at 10x (20 seeds are 15 minutes on all cores),
+  so that comparison is across different seed counts. The bot wins every fight before and after,
+  far from 7 to 9 of 10; the egg search does not move that and the owner kept the Alien as is
+  (#667), so nothing is retuned.
+- Reply time through wasm (nodejs release build, `alien`, 6 seeds of up to 80 plies, the player side
+  plays its auto-play search, boss replies only, ms average / 95th percentile / maximum), two runs
+  each on a machine loaded by other agents. Before (`e409f890~1`): 539 / 1502 / 5497 and 190 / 371 /
+  1471 (260 replies). After (main): 218 / 455 / 890 and 230 / 588 / 2516 (268 replies). Fights
+  diverge, so positions differ; the two runs of the same build differ more than before and after.
+  No measurable slowdown at the 3000 node budget, in line with the other bosses (the Unstable Core
+  198 to 203 average after #915).
+
 ### The Overseer: its AI plays the neurotoxin clock and its phases (#828), not tuned
 
 Before (the ladder row only, 402b79f): the boss search burned on every ply but kept the phase of
@@ -868,6 +890,43 @@ Reply time (release build, native, the turtle's 10 fights, 237 boss replies, the
 cores, ms): 82 average, 135 at the 95th percentile, 182 at most (1500 nodes). Before the rule, on
 another run: 232 / 446 / 600. The Dual Room measured 228 / 312 / 383 at 3000 nodes.
 
+### The Swarm (#1266): the evac clock, the centre start, arrivals on every edge, 3, 3, 4
+
+#1266 (owner): the evac comes when the boss replies done plus 2 per swarm marble the player
+ejected reach 40; P2 and P3 come at 15 and 30 swarm marbles landed; the player starts as one
+group of 11 around the centre; the swarm lands on any empty rim cell, on all 6 edges. The player
+search and the boss search read the clock (`search_clocked`: a swarm marble the player ejects in
+the tree takes 2 turns off it, for both). Gate (#1266): the pro (10x) wins 14 to 18 of 20 seeds,
+the 1x player fewer. 20 seeds, `LADDER_SEEDS=20 LADDER_X=<1|10> cargo run --release --example
+ladder -- swarm`. Tries with a temporary env override of the arrivals, the start, the boss budget
+(not kept).
+
+| Try | 1x wins | 10x wins | Median plies (1x / 10x) | Deaths (1x / 10x) |
+|---|---|---|---|---|
+| Before #1266 (30 turns, standard rows, far rim, 1, 1, 2) | 20/20 | 19/20 | 60 / 60 | none / push 1 |
+| The rules of #1266, arrivals 1, 1, 2 | 20/20 | 20/20 | 64.5 / 53 | none / none |
+| Arrivals 2, 2, 3 (10 seeds) | 10/10 | | 46.5 / | |
+| Start 8 marbles, 1, 1, 2 (10 seeds) | 10/10 | | 70 / | |
+| Boss budget 6000, 1, 1, 2 (10 seeds, the player 1500) | 10/10 | | 66 / | |
+| Arrivals 3, 3, 4 (10 seeds at 1x) | 8/10 | | 41 / | push 2 / |
+| Arrivals 3, 3, 3 | | 18/20 | / 40.5 | / push 2 |
+| Arrivals 2, 3, 4 | 18/20 | 17/20 | 44 / 42 | push 2 / push 3 |
+| Arrivals 4, 4, 5 | | 13/20 | / 42 | / push 7 |
+| **Arrivals 3, 3, 4** | **15/20** | **17/20** | 41 / 43 | push 5 / push 3 |
+
+A centre group is 4 pushes from the rim, and each swarm marble on the rim is 2 turns for the
+player: with 1 or 2 a turn the swarm never threatens it (the player keeps 10 or 11 marbles and
+ejects 2 to 8 swarm marbles, the fight lasts 24 to 36 turns). More arrivals feed the player
+(2, 2, 3 ends the fight sooner, still won), but from 3 a turn the swarm forms lines of 3 that push.
+**Adopted: arrivals 3, 3, 4**, the only row in the gate with 1x below 10x (2, 3, 4 has 1x above).
+A won fight now lasts 18 to 24 turns (36 to 49 plies): the player ejects 8 to 11 swarm marbles. The
+Ballast Mind keeps the old 1, 1, 2 (`BALLAST_WAVE`) and its own rim: its ladder is the same game for
+game (1x, 20 seeds, 7 of 20 before and after, the attempt lines identical).
+
+The scripted turtle of #795 (`cargo run --release --example swarm_sim`) loses 10 of 10 (lost on
+turns 20 to 27, 9 marbles left). Reply time (its 225 boss replies, ms): 95 average, 150 at the
+95th percentile, 231 at most (1500 nodes).
+
 ### The Dual Room: the rooms are played in turn, 18 of 20 at 10x, not tuned (#992)
 
 **Change.** Until the bridge the rooms are played in turn by pairs of plies, the south room first
@@ -908,7 +967,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
 | chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753, recorded again for #810) | 44 |
 | dual-ladder | 0 | 30000 (10x, the ladder pro player, #982, recorded again for #992; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 39 |
-| swarm | 0 | 15000 (10x, the ladder pro player, #795, recorded again for the 2-ejection win) | 60 |
+| swarm | 0 | 20000 (the ladder player, recorded again for #1266: the 10x run lost seed 0, which the wasm, client and e2e tests read) | 53 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
 
@@ -1491,3 +1550,45 @@ Reply time through wasm (nodejs release build, `core`, 6 seeds of 80 plies at mo
 boss replies only, ms, average / max): 198 to 203 / 386 to 400 after (54 replies), 169 to 174 / 294 to 329 before (60
 replies), two runs each. The fights differ after the first changed reply, so the positions are not the same: about 15
 to 20 % slower, the maximum stays under 400 ms.
+
+## #930 closeout: one line per boss
+
+Checked on `main` at a01ff8c (2026-11-01). Test = a position where the move with the rule differs from the move
+without it (the "without" is the pre-fix search rebuilt in the test, or a plain search); the 15 tests run for this check pass
+(`cargo test -p abalone-core --lib`, by name). "Ladder" = `LADDER_X=<1|10> LADDER_SEEDS=20`, wins /20, 1x / 10x,
+see the section named. `LadderBoss::ALL` (`encounter/ladder.rs:66`) holds all 12 (and Dual, Stalker, Swarm).
+Node budgets are the `*_NODE_BUDGET` constants of `encounter/<boss>.rs`. Not redone today: the red-by-revert of each
+test (done in each task's PR), and the ladder rows (taken from the sections below).
+
+| Boss | Unit test (file:line) | Ladder before / after (section) | Budget | Reply time (where) |
+|---|---|---|---|---|
+| Echo | `echo.rs:832` `the_boss_search_sees_the_bonus_it_gives_away` | 14 / 16 of 20 at 1x / 10x, no AI change (#1116) | 100 | wasm 61 / 108 / 125 ms at 400 nodes (#859, line 97); native 2.9 / 4.7 / 13.9 ms at 100 (#951); native today 1.3 / 1.6 / 2.0; **wasm at 100 today 1.5 / 2.0 / 2.1 (two runs, #930 measure)** |
+| Hull | `hull.rs:522`, `hull.rs:553` | 6 / 12 of 20 (#823, #1116, same rows) | 3000 | wasm 157 / 232 / 442 (#823, line 124) |
+| Choir | `choir.rs:998` `the_tree_plays_the_army_cycle_not_any_marble` | 1x 0 to 2, 10x 20 to 8 (#825) | 1500 | wasm 53 / 74 / 104 (#825) |
+| Chaplain | `chaplain.rs:996` `the_phase_reached_in_the_tree_changes_the_best_move` | 5 / 5 at 1x, 17 / 17 at 10x (#1112) | 300 | wasm 196 / 404 / 458 at 2000 nodes (line 304); native at 300, loaded machine, 6 seeds of 80 plies: 60 / 118 / 181 and 50 / 100 / 223 ms (this PR); **wasm at 300 today 46.6 / 68.6 / 86.5 and 46.2 / 68.2 / 70.1 (#930 measure)** |
+| Ballast Mind | `ballast.rs:1009` (phase), `ballast.rs:726` (pulse due this turn, plain search does not see it), `ballast.rs:764`, `:783`, `:805` (conversion, Hull tick, Swarm wave) | 0 / 0 at 1x, 1 / 1 at 10x (#1115), then 15 of 20 at 10x (#1209) | 100 | wasm 128 / 219 / 408 (#833, line 325); native today 3.1 / 5.7 / 40 ms (this PR); **wasm at 100 today 2.3 / 3.8 / 5.5 and 2.3 / 3.8 / 5.6 (#930 measure)** |
+| Alien | `alien.rs:624` `the_alien_crushes_its_own_egg_to_save_a_marble_the_old_filter_left_to_die` | `alien_sim` 20 / 20 before and after at 1x, 20 / 20 at 10x; outside the gate by owner decision #667 | 3000 | wasm 218 / 455 / 890 and 230 / 588 / 2516 (#826, line 660) |
+| Rail Yard | `railyard.rs:601` `a_train_five_turns_out_does_not_stop_the_boss_from_winning_but_one_about_to_pass_does` | 2 / 4 at 1x, 1 / 4 at 10x (#827) | 3000 | wasm 111 / 142 / 253 (#827) |
+| Magnetizer | `magnetizer.rs:965` `the_tree_sees_the_assignment_at_the_start_of_turn_3_and_avoids_its_repulsion` | 7 / 2 at 1x, 16 / 7 at 10x (#916); later rows in #1237 | 3000 | wasm 187 / 485 / 652 (#916) |
+| Pulsar | `pulsar.rs:667` `the_phase_reached_in_the_tree_changes_the_best_move` | 2 / 2 at 1x, 4 / 4 at 10x (#913); 18 of 20 at 10x after #1231 | 3000 | wasm 143 / 191 / 423 (#913) |
+| Overseer | `overseer.rs:319` `the_boss_stalls_when_the_neurotoxin_wins_before_the_player_can_burn_the_6th_core` (asserts the move differs from the pre-#828 search) | 0 / 0 at 1x, 1 / 1 at 10x of 10 seeds (#828); 2 of 20 at 10x (#1117), 17 of 20 after #1241 | 3000 | wasm 315 / 679 / 7382 loaded machine (#828) |
+| Assembly Line | `assembly.rs:759` `the_phase_reached_in_the_tree_changes_the_best_move` | 0 / 0 at 1x and 10x (#914); 18 of 20 at 10x after #1228 | 3000 | wasm 143 / 245 / 375 (#914) |
+| Unstable Core | `unstable.rs:846`, `unstable.rs:887` | 8 / 8 at 1x, 18 / 17 at 10x (#915) | 3000 | wasm 198 to 203 / 386 to 400 (#915) |
+
+Reply times are ms, average / 95th percentile / max, wasm = nodejs release build; the Chaplain, Ballast and Echo
+native rows were run on a machine with a load average of 15 to 50, so they are upper bounds on an idle one. No
+Overseer or Chaplain figure above is a pass/fail gate: the repo sets none.
+
+Wasm reply time at today's budgets (#930, last open measure; `main` at 8d4f4988, 2026-11-01): `wasm-pack build --target nodejs
+--release`, `Encounter(boss, seed)` for seeds 1 to 6, up to 80 plies, the player plays `player_move()`, only `boss_move()` timed
+(`process.hrtime`), ms average / 95th percentile / maximum, two runs each, one run at a time through `heavy.sh`, load average
+2 to 3 (one minute) at the start, so close to idle. The fights end before 80 plies, hence
+the reply counts. The Chaplain (300 nodes): 102 replies, 46.6 / 68.6 / 86.5 and 46.2 / 68.2 / 70.1. The Ballast Mind (100):
+406 replies, 2.3 / 3.8 / 5.5 and 2.3 / 3.8 / 5.6. The Echo (100): 396 replies, 1.5 / 2.0 / 2.1 twice. All under 100 ms
+at the 95th percentile; the Chaplain's older 196 / 404 / 458 was at 2000 nodes (line 304), and the Ballast's 128 / 219 / 408
+is from before today's budget of 100, so those rows are not today's. Not measured: a mobile CPU (wasm in Node on an Apple laptop; a phone is
+slower by a factor nobody here measured), and the 10x difficulty (3x to 10x the nodes, not asked).
+
+## Closed umbrellas
+
+- #829 (boss AIs track the phase in the tree): children #912 (PR #1205), #913 (#1221), #914 (#1227), #915 (#1256), #916 (#1236) all merged and closed; ladder numbers above and in each child PR.

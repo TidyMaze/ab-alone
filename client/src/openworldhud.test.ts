@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import html from '../index.html?raw';
 import css from './ui.css?raw';
 
 // The Open world plate and joystick (#1138): the dark plate with rivets and the amber accent, whatever the system theme.
@@ -63,5 +64,14 @@ describe('the Open world HUD plate (#1138)', () => {
     const pad = rule('#joystick');
     expect(pad).toContain('border: 5px solid #8a949c');
     expect(pad).not.toContain('background: var(--panel)');
+  });
+});
+
+describe('the Open world help (#1252)', () => {
+  it('names the keys, and the pad\'s buttons while the pad is in use (body[data-pad])', () => {
+    expect(css).toContain('.pad-hint, body[data-pad] .keys-hint { display: none; }');
+    expect(css).toContain('body[data-pad] .pad-hint { display: inline; }');
+    expect(html).toMatch(/<span class="keys-hint">arrows[^<]*Q E[^<]*Esc to leave\.<\/span>/);
+    expect(html).toMatch(/<span class="pad-hint">left stick to walk, LB RB[^<]*R3[^<]*B to leave\.<\/span>/);
   });
 });

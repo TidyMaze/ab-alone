@@ -46,13 +46,17 @@ test('clear board and the low tier keep the frame, #292', async ({ page }) => {
 
 const SODIUM = 0xd9822b;
 const CYAN = 0x7fd6e8;
-// The middle of the rim's top on its left side at each end, clear of any marble: the side facing 150 degrees for the
-// near half (+z, side 1's end), 210 degrees for the far half (-z, side 2's), on the screen.
+// A point on the rim's top, 2 cells from the middle of its left side at each end toward the corner on the x axis, clear
+// of any marble: the side facing 150 degrees for the near half (+z, side 1's end), 210 degrees for the far half (-z,
+// side 2's), on the screen. Mid-side the near half's bare metal mirrors the bay's cyan strips (contrast 1.7 against its
+// own light, #1309); toward the corner it does not (4.5).
 const rimPoint = (page: Page, end: 'near' | 'far') => {
   const d = 4 * (Math.sqrt(3) / 2) + FRAME.margin + FRAME.rim / 2;
   const a = ((end === 'near' ? 150 : 210) * Math.PI) / 180;
-  const r = (d * Math.sin(a)) / (Math.sqrt(3) / 2);
-  return page.evaluate(([q, rr]) => (window as any).__cellToScreen(q, rr) as { x: number; y: number }, [d * Math.cos(a) - r / 2, r]);
+  const along = end === 'near' ? 2 : -2; // toward the corner at 180 degrees
+  const z = d * Math.sin(a) + along * Math.cos(a);
+  const r = z / (Math.sqrt(3) / 2);
+  return page.evaluate(([q, rr]) => (window as any).__cellToScreen(q, rr) as { x: number; y: number }, [d * Math.cos(a) - along * Math.sin(a) - r / 2, r]);
 };
 const pixel = (page: Page, png: Buffer, p: { x: number; y: number }) =>
   page.evaluate(
@@ -71,7 +75,6 @@ const pixel = (page: Page, png: Buffer, p: { x: number; y: number }) =>
   );
 
 test('the rim half at the end of the side to move lights in its colour, then goes out at the end, #300', async ({ page }) => {
-  test.slow(); // under automation a loaded machine can skip draws for seconds after the move (quality.ts drawDue)
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('./?bot=off'); // hot-seat: Black, side 1, wears the shell and starts at the near end
   await page.locator('canvas').waitFor();
@@ -98,7 +101,7 @@ test('the rim half at the end of the side to move lights in its colour, then goe
         contrastRatio(await pixel(page, blackTurn, near), await pixel(page, whiteTurn, near)),
         contrastRatio(await pixel(page, whiteTurn, far), await pixel(page, blackTurn, far)),
       );
-    }, { timeout: 30_000 })
+    }, { timeout: 10_000 })
     .toBeGreaterThanOrEqual(3);
 
   await page.locator('#import-file').setInputFiles({

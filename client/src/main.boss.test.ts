@@ -444,6 +444,32 @@ describe('main.ts daily challenge', () => {
     expect(localStorage.getItem('ab-alone.daily')).toBe('2027-03-31 1');
   });
 
+  it('the result copied note stays when the last bonus slide ends after Copy (#1295)', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(DAY);
+    const game = await boot('?bot=off');
+    byId('daily').click();
+    for (const [i, [q, r, tq, tr]] of ECHO_DRAW.entries()) {
+      game.click(q, r);
+      game.click(tq, tr);
+      if (i < ECHO_DRAW.length - 1) for (let k = 0; k < 4; k++) game.frame(SLIDE_MS); // the last move keeps its slides running
+    }
+    expect(body().sliding).toBe('1');
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    try {
+      byId('daily-copy').click();
+      await game.settle();
+    } finally {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
+    expect(game.hud()).toContain(' · result copied');
+    for (let i = 0; i < 4; i++) game.frame(SLIDE_MS); // the slides end and redraw the HUD
+    expect(body().sliding).toBeUndefined();
+    expect(game.hud()).toContain(' · result copied');
+    byId('boss-retry').click();
+    expect(game.hud()).not.toContain(' · result copied'); // a new attempt has nothing copied
+  });
+
   it('a finished daily shows its result card, and Copy puts the text on the clipboard', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(DAY);
     const game = await boot('?bot=off', { reducedMotion: true });

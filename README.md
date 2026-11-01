@@ -30,56 +30,31 @@ You are the last one with a clear visor. Six of them over the edge, and you walk
 
 ## The game
 
-Real Abalone underneath. 61 cells, 14 marbles each, push 1 to 3 in a line, out-number to shove.
-First to eject 6 wins.
+Real Abalone underneath: 61 cells, 14 marbles each, push 1 to 3 in a line, out-number to shove.
+First to eject 6 wins. On top of it, the ship:
 
-On top of it, the ship:
+- **Play alone or together**: hot-seat on one screen, versus TALLY's bot (alpha-beta, in a Web Worker),
+  online 1v1 peer to peer with an invite link, ranked online (Elo), a gamepad.
+- **15 souls-like bosses**, each bends one rule, tells you one move ahead and has an answer on the
+  board: The Echo, The Hull, The Choir, The Chaplain, The Ballast Mind, The Alien, The Rail Yard,
+  The Magnetizer, The Pulsar, The Overseer, The Assembly Line, The Unstable Core, The Dual Room,
+  The Stalker and The Swarm. A medal per beaten boss, with your fewest turns. Die, read the tell,
+  retry with the same seed. Rules per boss: [docs/specs/boss-balance.md](docs/specs/boss-balance.md).
+- **Daily challenge**: one boss and one seed for everyone each UTC day.
+- **Rogue-lite run**: 3 acts of a branching map of fights, your army carried from fight to fight,
+  every marble lost is lost for the run ([spec](docs/specs/roguelite.md)).
+- **Trainer**: waves against the bot, one more marble each wave.
+- **Stalker mode**: a fog of war against the bot.
+- **Fight together**: two players share one army against a boss, online.
+- **Battle royale** on the Furnace deck: up to 6 seats, hidden orders, bots fill empty seats.
+- **Ship hub**: walk five decks, a door per boss, a room per mode, lore terminals. New players land there,
+  after a short illustrated guide to the rules and the controls of their device (Guide in the cog menu opens it again).
+- **Open world**: a generated hex map, a hero marble you walk and a troop that fights on its own
+  ([spec](docs/specs/openworld.md)).
+- **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)).
 
-| | Mode | State |
-|---|---|---|
-| 🕹️ | **Hot-seat** on one screen | ✅ playable |
-| 🎮 | **Gamepad**: menus, HUD and the board fights with a standard pad (A confirm, B back, LB RB groups, stick to aim), the Open world next | ✅ playable |
-| 🤖 | **Versus TALLY's bot** (alpha-beta, runs in a Web Worker); an Auto-play toggle lets the bot play your side in any offline fight, a boss needs its medal | ✅ playable |
-| 📡 | **Online 1v1**, peer to peer, invite link, signed move log | ✅ playable |
-| 💀 | **Souls-like bosses**, fifteen of them (below), from the Boss fight menu, a medal per beaten boss with your fewest turns | ✅ playable |
-| 📅 | **Daily challenge**: one boss and one seed for everyone each UTC day, a result to share | ✅ playable |
-| 🗺️ | **Rogue-lite run**: 3 acts of a branching map of fights against the bot (10 marbles to your 14), elites (a stronger bot, marbles back), rests (the army back to 14) and events (a trade between marbles and special marbles), each act ending on a boss of the roster at the act's strength; your army of 14 marbles carried from fight to fight, every marble lost is lost for the run; a won fight rewards a marble or a special marble (Heavy, Anchor, Spark) you place before the next fight; each run ends on its summary, and the acts you win unlock the Anchor and the Spark in rewards and other starting armies of 14 marbles (variety, never power) | ✅ playable |
-| 🌫️ | **Stalker** against the bot: a fog of war where you see the enemy marbles within 2 cells of yours, a move that runs into a hidden marble reveals it (the bot is not fogged) | ✅ playable |
-| 🤝 | **Fight together**: two players share one army against a boss online, turn about | ✅ playable |
-| 🔥 | **Battle royale** on the Furnace deck: up to 6 seats, hidden orders (commit-reveal), the hull breach closes in, bots fill empty seats | ✅ playable, offline vs 5 bots and online |
-| 🛰️ | **Ship hub**: walk five decks, lifts that open as you beat each deck's boss, game tables, lore terminals, an audio log per deck, a Medal room on the Mess deck | ✅ playable, new players land there |
-| 🏆 | **Ranked** online, Elo and rank tiers | ✅ playable |
-| 🌍 | **Open world**: a generated hex map, a hero marble you walk and a troop that fights on its own, with the same rules ([spec](docs/specs/openworld.md)) | 🚧 behind the flag `openworld` |
-| 🧠 | **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)) | ✅ runs on your machine |
-
-Each boss bends one rule, tells you one move ahead, and has a positional answer on the board.
-Die, read the tell, retry with the same seed.
-
-| Deck | Boss | The rule it bends |
-|---|---|---|
-| Mess | **The Echo** | when a move's mirror through the centre is legal, the other side gets it as a free bonus move, both ways: the Echo plays the mirror of yours at once, and you are offered the mirror of its own, to play before your move or decline with any other move; after 3 ejections it also mirrors an older move |
-| Cargo | **The Hull** | one announced cell at a time cracks, then falls away under both sides |
-| Furnace | **The Choir** | three armies of six in triangles, one sings (moves) per turn; the weakest army is removed after 3 and 5 ejections, and the last one sings twice |
-| Chapel | **The Chaplain** | a marble touching four foes changes side, a boss marble won costs it health and one lost heals it, and at four ejections a martyr explodes and converts its neighbours, who wear its glyph and a cracked shell |
-| Bridge | **The Ballast Mind** | the final exam: a bigger board, void pillars, 16 marbles each, 12 ejections to win or to lose, and every 2 turns an effect borrowed from the Hull, the Pulsar, the Magnetizer, the Chaplain or the Swarm, which its search plays, announced a turn ahead and ringed on the board when it fires |
-| Cargo | **The Alien** | lays eggs near your marbles that hatch into new marbles unless you crush them |
-| Cargo | **The Rail Yard** | freight trains, the first on turn 2, sweep a whole line, edge to edge, either side |
-| Furnace | **The Magnetizer** | charges marbles of both sides, + then − in turn, and opposite charges side by side throw each other apart |
-| Bridge | **The Pulsar** | six beacons pulse, pushing every line like a sumito |
-| Chapel | **The Overseer** | burn its cores on the incinerators before the neurotoxin, at your 40th turn; an empty vent pulls in a core next to it; it talks back in typed bubbles, its vents turn toxic, and its marble explodes with a farewell when you win |
-| Cargo | **The Assembly Line** | three conveyor belts between the armies carry every marble off the board, then their presses strike |
-| Furnace | **The Unstable Core** | the centre cells charge your marbles, a charged marble weighs more in a push and four charges blow it off; later the core collapses and shockwaves shove the busiest wedge |
-| Mess | **The Dual Room** | two small rooms split by a void, played in turn: you then the boss in the south room, then both in the north room; a marble of either side ejected over the rim or into the void comes back one turn later in the other room, on the mirror of its cell (after 3 ejections, on a rim cell of the emptier room); its marbles start near the void, so push them in and pick where they land, a boss marble lands just before your move in that room; at five ejections a bridge fills the void, ejected marbles stay out and both rooms are free |
-| Chapel | **The Stalker** | the night watch sees your whole army; you see its marbles only near your own (3 cells, then 2, then 1 as you eject), and a move may be stopped by a marble you cannot see: it is refused, the marble is revealed and you play again |
-| Cargo | **The Swarm** | no queen to kill: you start with 11 marbles and it with none, a wave lands on its marks on the far rim every turn and moves on you; survive 30 turns until the evac, and the swarm wins once it ejects 2 of yours |
-
-## What it looks like
-
-Rusted deck plates, cold light, fog at the rim of the board. Your marbles are glass with a warm
-core. Theirs are black shell. When one goes over the edge it slides off and the air goes with it.
-Each deck has its own light, fog and drift in the air: dust, ore, steam, smoke, or nothing on the Bridge.
-
-The camera orbits and zooms. A **Clear board** setting (in the settings menu, behind the cog) drops the fog for pure readability.
+Rusted deck plates, cold light, fog at the rim. The camera orbits and zooms; a **Clear board**
+setting (cog menu) drops the fog.
 
 ## Under the hull
 
@@ -105,7 +80,8 @@ mcp/                  MCP server: an AI agent plays the bot or a boss over stdio
 cd client && bun install && bun run dev
 ```
 
-`bun run dev` builds the WASM engine first, so it needs Rust and `wasm-pack`. Full gate before a push:
+Needs [bun](https://bun.sh), Rust and `wasm-pack`: `bun run dev` builds the WASM engine first.
+Full gate before a push:
 
 ```bash
 scripts/verify.sh
@@ -152,7 +128,7 @@ Online, the agent plays a human or another agent over the same P2P rooms as the 
 `wait_for_opponent_move` and `play_move` in turn. The server imports the client's online code, so
 run `bun install` in `client/` too.
 
-## Crew manifest
+## Contribute
 
 - Built by two co-developers: [@TidyMaze](https://github.com/TidyMaze) and
   [@Varadiell](https://github.com/Varadiell)

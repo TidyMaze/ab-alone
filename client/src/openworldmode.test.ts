@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import './test/openworldwasm';
 import * as THREE from 'three/webgpu';
-import { axialTo3D, type Axial } from './board';
-import { CHUNK, neighbours, World } from './openworld';
-import { DEFAULT_YAW, heldCell, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, stepOf, steerStep, TURN_STEP, twistOf } from './openworldmode';
-import { arrowCell } from './hubview';
+import type { Axial } from './board';
+import { CHUNK, World } from './openworld';
+import { DEFAULT_YAW, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, TURN_STEP, twistOf } from './openworldmode';
 import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
-import { GLIDE_MS, NUDGE_MS } from './openworldglide';
+import { CRUISE_MS, GLIDE_MS, NUDGE_MS, stepMs } from './openworldglide';
 
 // Grass at height 1 everywhere in the square -3..3 of chunks, a boulder on (0, 1). The badlands have no particles (#1110), so a frame
 // with motion on is idle when nothing moves; `meadow` is the same world with pollen.
@@ -52,45 +52,12 @@ afterEach(() => {
   delete body().openworldPush;
 });
 
-// Screen direction of a step, `[-1 | 0 | 1, -1 | 0 | 1]` for left/right and up/down, from the ground layout of `axialTo3D`.
-const screen = (from: Axial, to: Axial): [number, number] => {
-  const a = axialTo3D(...from);
-  const b = axialTo3D(...to);
-  return [Math.sign(Math.round((b.x - a.x) * 100)), Math.sign(Math.round((b.z - a.z) * 100))];
-};
-const held = (...keys: string[]) => new Set(keys);
 // One press of an arrow: the key goes down, its step is made at once, and the key comes up (#1059).
 const tap = (m: OpenWorldMode, key: string): boolean => {
   const pressed = m.key(key);
   m.release(key);
   return pressed;
 };
-
-describe('heldCell', () => {
-  it('gives the diagonal neighbour of each pair of a vertical and a horizontal arrow, on every row', () => {
-    for (const at of [[0, 0], [2, 3], [-1, -4]] as Axial[]) {
-      const up = heldCell(at, held('ArrowUp', 'ArrowLeft'))!;
-      const upRight = heldCell(at, held('ArrowUp', 'ArrowRight'))!;
-      const down = heldCell(at, held('ArrowDown', 'ArrowLeft'))!;
-      const downRight = heldCell(at, held('ArrowDown', 'ArrowRight'))!;
-      expect(screen(at, up)).toEqual([-1, -1]);
-      expect(screen(at, upRight)).toEqual([1, -1]);
-      expect(screen(at, down)).toEqual([-1, 1]);
-      expect(screen(at, downRight)).toEqual([1, 1]);
-      for (const cell of [up, upRight, down, downRight]) expect(neighbours(at).some((n) => n[0] === cell[0] && n[1] === cell[1])).toBe(true);
-    }
-  });
-
-  it('gives nothing for a single arrow, for opposite arrows, or for three arrows', () => {
-    const at: Axial = [0, 0];
-    expect(heldCell(at, held('ArrowUp'))).toBeNull();
-    expect(heldCell(at, held('ArrowLeft', 'ArrowRight'))).toBeNull();
-    expect(heldCell(at, held('ArrowUp', 'ArrowDown'))).toBeNull();
-    expect(heldCell(at, held('ArrowUp', 'ArrowDown', 'ArrowLeft'))).toBeNull();
-    expect(heldCell(at, held('ArrowUp', 'ArrowLeft', 'ArrowRight'))).toBeNull();
-    expect(heldCell(at, held())).toBeNull();
-  });
-});
 
 describe('the Open world mode', () => {
   it('enters on the spawn: marked on the page, drawn once, drawn again only when something changed', () => {
@@ -154,6 +121,23 @@ describe('the Open world mode', () => {
     }
   });
 
+  it('draws the ground cells with no lower neighbour as flat tops on the low tier only (#1234)', () => {
+    const flat = () => Object.entries(JSON.parse(body().openworldDrawn!) as Record<string, number>).filter(([k]) => k.endsWith('-flat'));
+    const sum = () => flat().reduce((total, [, n]) => total + n, 0);
+    const high = mode();
+    high.enter(1, 800, 600);
+    expect(sum()).toBe(0);
+    high.leave();
+    document.body.dataset.tier = 'low';
+    try {
+      const low = mode();
+      low.enter(1, 800, 600);
+      expect(sum()).toBeGreaterThan(0);
+    } finally {
+      delete document.body.dataset.tier;
+    }
+  });
+
   it('rolls the hero on an arrow key, and keeps it before a boulder', () => {
     const m = mode();
     m.enter(1, 800, 600);
@@ -192,15 +176,15 @@ describe('the Open world mode', () => {
     const m = mode();
     m.enter(1, 800, 600);
     expect(m.key('ArrowLeft')).toBe(true);
-    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.hero!.at).toEqual([0, -1]); // Left leans forward, up-left (#1273)
     expect(m.key('ArrowUp')).toBe(true); // Left and Up held: the diagonal rolls on the next step, not at once (#1059)
-    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.hero!.at).toEqual([0, -1]);
     clock = GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([-1, -1]); // up-left
+    expect(m.hero!.at).toEqual([0, -2]); // up-left
     clock = 2 * GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([-1, -2]); // up-left again, the arrows still held
+    expect(m.hero!.at).toEqual([0, -3]); // up-left again, the arrows still held
     vi.restoreAllMocks();
   });
 
@@ -210,15 +194,15 @@ describe('the Open world mode', () => {
     const m = mode();
     m.enter(1, 800, 600);
     expect(m.key('ArrowLeft')).toBe(true);
-    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.hero!.at).toEqual([0, -1]);
     expect(m.key('ArrowRight')).toBe(true); // Left and Right: nothing, on the cadence either
     clock = GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([-1, 0]);
+    expect(m.hero!.at).toEqual([0, -1]);
     m.release('ArrowLeft');
     clock = 2 * GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(m.hero!.at).toEqual([0, 0]); // Right alone rolls again
+    expect(m.hero!.at).toEqual([1, -1]); // Right alone rolls again
     vi.restoreAllMocks();
   });
 
@@ -228,7 +212,7 @@ describe('the Open world mode', () => {
     m.key('ArrowUp'); // (1, -1) from the even spawn row, Up held
     m.release(); // blur: no key is held any more
     expect(tap(m, 'ArrowLeft')).toBe(true);
-    expect(m.hero!.at).toEqual([0, -1]); // a single arrow, not a diagonal with Up
+    expect(m.hero!.at).toEqual([1, -2]); // a single arrow, not a diagonal with Up
     m.key('ArrowUp'); // held again
     m.key('Escape'); // leaving clears the held keys too
     m.enter(1, 800, 600);
@@ -893,119 +877,13 @@ describe('the New world control (#1021)', () => {
 });
 
 const DEG = Math.PI / 180;
-// The angle of a set of arrow keys on the screen, in degrees counter-clockwise from the right, and the gap between two angles.
-const KEY_VECTOR: Record<string, [number, number]> = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
-const keyAngle = (keys: string[]): number => {
-  const [x, y] = keys.reduce(([sx, sy], k) => [sx + KEY_VECTOR[k]![0], sy + KEY_VECTOR[k]![1]], [0, 0]);
-  return Math.atan2(y, x) / DEG;
-};
-const gapOf = (a: number, b: number): number => {
-  const d = (((a - b) % 360) + 360) % 360;
-  return Math.min(d, 360 - d);
-};
-
-describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026)', () => {
-  const SINGLE = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-  const PAIRS = [
-    ['ArrowUp', 'ArrowLeft'],
-    ['ArrowUp', 'ArrowRight'],
-    ['ArrowDown', 'ArrowLeft'],
-    ['ArrowDown', 'ArrowRight'],
-  ];
-  const ROWS: Axial[] = [
-    [0, 0],
-    [2, 1],
-    [-3, 4],
-    [1, -2],
-  ];
-
-  it('at yaw 0 is the step of the keyboard as it was, on every row: a single arrow, or a diagonal of two', () => {
-    for (const at of ROWS) {
-      for (const key of SINGLE) expect(stepOf(at, held(key), 0)).toEqual(arrowCell(at, key));
-      for (const keys of PAIRS) expect(stepOf(at, held(...keys), 0)).toEqual(heldCell(at, held(...keys)));
-    }
-  });
-
-  it('up alone walks a straight line of hexes at each of the 6 resting angles, from an even or an odd row (#1254)', () => {
-    for (let k = 0; k < 6; k++) {
-      const yaw = restYaw(DEFAULT_YAW + k * TURN_STEP);
-      for (const start of [[0, 0], [0, 1]] as Axial[]) {
-        let at = start;
-        const first = stepOf(at, held('ArrowUp'), yaw)!;
-        const dir = [first[0] - at[0], first[1] - at[1]];
-        for (let i = 0; i < 6; i++) {
-          const next = stepOf(at, held('ArrowUp'), yaw)!;
-          expect([next[0] - at[0], next[1] - at[1]]).toEqual(dir);
-          at = next;
-        }
-      }
-    }
-  });
-
+describe('the resting angles of the camera (#1254)', () => {
   it('the rest offset is 30 degrees, the default is -30, and restYaw gives the nearest resting angle (#1254)', () => {
     expect(REST_OFFSET).toBeCloseTo(Math.PI / 6);
     expect(DEFAULT_YAW).toBeCloseTo(-Math.PI / 6);
     expect(restYaw(0) / DEG).toBeCloseTo(30);
     expect(restYaw(-1.3) / DEG).toBeCloseTo(-90);
     expect(restYaw(80 * DEG) / DEG).toBeCloseTo(90);
-  });
-
-  it('gives nothing for no key, or for opposite keys', () => {
-    expect(stepOf([0, 0], held(), 0.5)).toBeNull();
-    expect(stepOf([0, 0], held('ArrowUp', 'ArrowDown'), 0.5)).toBeNull();
-    expect(stepOf([0, 0], held('ArrowLeft', 'ArrowRight'), 0.5)).toBeNull();
-  });
-
-  it('rolls the hero to the cell the camera shows in the direction of each key, at each yaw', () => {
-    const world = new World(bytes);
-    for (const yaw of [15, 30, 45, 60, 90, 120, 135, 180, -30, -60, -70].map((d) => d * DEG)) {
-      const view = new OpenWorldView(world);
-      view.resize(1600, 900);
-      view.turnTo(yaw);
-      view.show([0, 0]);
-      const onScreen = (cell: Axial) => {
-        const p = axialTo3D(cell[0], cell[1]);
-        return new THREE.Vector3(p.x, 0, p.z).project(view.camera);
-      };
-      const from = onScreen([0, 0]);
-      for (const keys of [...SINGLE.map((k) => [k]), ...PAIRS]) {
-        const there = onScreen(stepOf([0, 0], held(...keys), yaw)!);
-        const shown = (Math.atan2(there.y - from.y, there.x - from.x) / DEG);
-        // The neighbours of the hex grid are 60 degrees apart, so the nearest one lies within 30 degrees of the key on the ground, and
-        // the camera's perspective bends the screen angle by some ten degrees more. A sign error would miss by 60 or more.
-        expect(gapOf(shown, keyAngle(keys))).toBeLessThanOrEqual(45);
-      }
-    }
-  });
-});
-
-describe('steerStep: the semi-auto step round an obstacle (#1137)', () => {
-  const freeExcept = (...walls: Axial[]) => (cell: Axial) => !walls.some((w) => w[0] === cell[0] && w[1] === cell[1]);
-  const E: Axial = [1, 0];
-  const NE: Axial = [1, -1];
-  const SE: Axial = [0, 1];
-  it('takes the straight cell when it is free', () => {
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept())).toEqual(E);
-  });
-  it('goes round a rock ahead by the free side, the first direction when both are free', () => {
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E))).toEqual(NE);
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, NE))).toEqual(SE);
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, SE))).toEqual(NE);
-  });
-  it('slides to the side the intent follows best', () => {
-    // Right and Up together: the intent leans to the NE side of the east cell, so with the straight cell (NE) shut it takes E.
-    const up = held('ArrowRight', 'ArrowUp');
-    expect(stepOf([0, 0], up, 0)).toEqual(NE);
-    expect(steerStep([0, 0], up, 0, freeExcept(NE))).toEqual(E);
-    expect(steerStep([0, 0], up, 0, freeExcept(NE, E))).toEqual([0, -1]);
-  });
-  it('gives the blocked straight cell in a dead end (water, a wall, a cliff), so the hero leans, and nothing without an intent', () => {
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, NE, SE))).toEqual(E);
-    expect(steerStep([0, 0], held(), 0, freeExcept())).toBeNull();
-    expect(steerStep([0, 0], held('ArrowLeft', 'ArrowRight'), 0, freeExcept())).toBeNull();
-  });
-  it('never steps back: the cells behind the intent are not taken', () => {
-    expect(steerStep([0, 0], held('ArrowRight'), 0, (c) => c[0] < 0 || (c[0] === 0 && c[1] === -1))).toEqual(E);
   });
 });
 
@@ -1151,6 +1029,28 @@ describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1
     tap(standing(), 'ArrowRight');
     expect(show.mock.calls.at(-1)![0]).toEqual([1, 0]);
     expect(show.mock.calls.at(-1)![2]).toEqual({ now: expect.any(Number), span: GLIDE_MS, pace: 'start' }); // the first step of a held arrow (#1065)
+  });
+
+  it('a held walk speeds up to the cruise pace, each glide lasting until the next step (#1290)', () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    const show = vi.spyOn(OpenWorldView.prototype, 'show');
+    const m = standing();
+    const span = (): number => (show.mock.calls.at(-1)![2] as { span: number }).span;
+    m.key('ArrowRight');
+    const spans = [span()];
+    for (let i = 1; i < 8; i++) {
+      clock += spans.at(-1)!;
+      m.frame(vi.fn(), clock);
+      spans.push(span());
+    }
+    expect(spans).toEqual([0, 1, 2, 3, 4, 5, 6, 7].map(stepMs));
+    expect(spans.at(-1)).toBe(CRUISE_MS);
+    m.release('ArrowRight');
+    clock += 1;
+    m.frame(vi.fn(), clock);
+    m.key('ArrowRight'); // a new press starts from the first pace again
+    expect(span()).toBe(GLIDE_MS);
   });
 
   it('stretches the glide by the slow factor of the page, read when the step starts (a webdriver check)', () => {
@@ -1335,7 +1235,7 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     m.key('ArrowUp');
     expect(at()).toBe('1,0');
     m.frame(vi.fn(), GLIDE_MS);
-    expect(at()).toBe(stepOf([1, 0], held('ArrowRight', 'ArrowUp'), DEFAULT_YAW)!.join(','));
+    expect(at()).toBe('2,0');
   });
 
   it('a release stops the walk at the end of the step under way: no step after it', () => {
@@ -1467,7 +1367,7 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
   const beside = (reduced = false, saves = worldSaves(memoryStore(), 1)): OpenWorldMode => {
     const m = mode(undefined, undefined, () => reduced, undefined, noPush, saves);
     m.enter(1, 800, 600);
-    m.fixture({ hero: [1, 1], troop: [[2, 1], [3, 1]], enemies: [] });
+    m.fixture({ hero: [0, 2], troop: [[1, 2], [2, 2]], enemies: [] });
     return m;
   };
   afterEach(() => vi.restoreAllMocks());
@@ -1499,10 +1399,9 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
     const push = vi.fn<PushBridge>(() => new Int32Array());
     const m = mode(undefined, undefined, () => true, undefined, push);
     m.enter(1, 800, 600);
-    m.fixture({ hero: [1, 1], troop: [[2, 1], [3, 1]], enemies: [] });
+    m.fixture({ hero: [-1, 2], troop: [[-2, 2], [-3, 2]], enemies: [] });
     tap(m, 'ArrowRight');
     expect(Array.from(push.mock.calls.at(-1)![3])).toEqual([]);
-    tap(m, 'ArrowLeft');
     tap(m, 'ArrowLeft');
     expect(m.hero!.at).toEqual([0, 1]);
     expect(Array.from(push.mock.calls.at(-1)![3])).toEqual([0, 1]);
@@ -1730,5 +1629,63 @@ describe('tap to walk and the steering setting (#1137, docs/specs/openworld.md s
     tapFar(m);
     m.leave();
     expect(body().openworldRoute).toBeUndefined();
+  });
+});
+
+describe('the scene of a world is released to the renderer (#1258)', () => {
+  const releasing = (release: (scene: THREE.Scene) => void) =>
+    new OpenWorldMode(
+      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, noPush,
+      worldSaves(memoryStore(), 1), undefined, undefined, undefined, undefined, undefined, undefined, undefined, release,
+    );
+
+  it('releases the scene on leave, and the scene replaced by another seed entered over it', () => {
+    const released: THREE.Scene[] = [];
+    const m = releasing((scene) => released.push(scene));
+    m.enter(1, 800, 600);
+    const first = m.scene;
+    m.enter(2, 800, 600);
+    expect(released).toEqual([first]);
+    const second = m.scene;
+    m.leave();
+    expect(released).toEqual([first, second]);
+  });
+});
+
+describe('the Dungeon button walks to the nearest tower (#1291)', () => {
+  type Bridge = (seed: number, from: Axial, beaten: Int32Array, blocked: Int32Array, broken: Int32Array) => Int32Array;
+  const dungeoner = (dungeon?: Bridge, foes = new Int32Array(), lairs = new Int32Array()) =>
+    new OpenWorldMode(
+      (_seed, cx, cy) => bytes(cx, cy), (_seed, cx, cy) => (cx === 0 && cy === 0 ? foes : new Int32Array()), async () => ({ low: {}, high: {} }), () => true, noPush,
+      worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, undefined, undefined, undefined, dungeon,
+    );
+  beforeEach(() => {
+    document.body.innerHTML = '<output id="openworld-mode"></output><p id="openworld-dungeon-note"></p>';
+  });
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('asks for the tower with the beaten lairs, the enemies and lairs as blocked, and walks the cells after the lair number', () => {
+    const dungeon = vi.fn<Bridge>(() => Int32Array.of(2, 1, 0, 2, 0, 3, 0));
+    const m = dungeoner(dungeon, Int32Array.of(0, 4), Int32Array.of(9, 9));
+    m.enter(5, 800, 600);
+    expect(m.dungeon()).toBe(true);
+    expect(dungeon).toHaveBeenCalledWith(5, [0, 0], new Int32Array(), Int32Array.of(0, 4, 9, 9), new Int32Array());
+    expect(m.hero!.at).toEqual([1, 0]);
+    expect(body().openworldRoute).toBe('2');
+    expect(document.getElementById('openworld-dungeon-note')!.textContent).toBe('');
+    m.key('Shift'); // a key cancels it, as for tap to walk
+    expect(body().openworldRoute).toBe('0');
+  });
+
+  it('says so when no tower is in reach, and does not move', () => {
+    const m = dungeoner(); // the default bridge knows no tower
+    m.enter(5, 800, 600);
+    expect(m.dungeon()).toBe(false);
+    expect(document.getElementById('openworld-dungeon-note')!.textContent).toBe('No tower in reach: walk on and try again.');
+    expect(m.hero!.at).toEqual([0, 0]);
+    document.getElementById('openworld-dungeon-note')!.remove();
+    expect(m.dungeon()).toBe(false); // no note in the page: nothing to write to
   });
 });

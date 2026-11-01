@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { REPEAT_DELAY } from './gamepad';
 import { boot, type Game } from './test/harness';
@@ -7,7 +7,7 @@ import { boot, type Game } from './test/harness';
 // The gamepad on main.ts (#1252): it drives the keyboard's paths, the focus walk of the menus and the board's keys.
 
 type Move = { cells: Axial[]; dir: number };
-const A = 0, B = 1, LB = 4, RB = 5, RT = 7, START = 9, DOWN = 13, LEFT = 14, RIGHT = 15;
+const A = 0, B = 1, LB = 4, RB = 5, LT = 6, RT = 7, START = 9, R3 = 11, DOWN = 13, LEFT = 14, RIGHT = 15;
 const canvas = (): HTMLCanvasElement => document.querySelector('canvas')!;
 const rings = (game: Game): Axial[] => game.hook<Axial[]>('__rings');
 const plies = (game: Game): number => game.hook<number>('__plies');
@@ -35,6 +35,145 @@ function plugPad(game: Game): { hold: (buttons: number[], axes?: number[], value
     },
   };
 }
+
+// The Open world (#1252): the walk, the camera and the zoom on the Open world's own paths.
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
+};
+const data = (): DOMStringMap => document.body.dataset;
+async function openWorldOn(game: Game): Promise<void> {
+  game.openModes();
+  byId('openworld').click();
+  await settle();
+}
+
+describe('the gamepad in the Open world', () => {
+  it('the left stick walks the hero and lets go when it rests, the D-pad and LB RB leave the focus alone', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    const focused = document.activeElement;
+    expect(data().openworldAt).toBe('0,0');
+    pad.hold([], [1, 0, 0, 0]);
+    expect(data().openworldAt).not.toBe('0,0');
+    pad.hold([]);
+    expect(document.activeElement).toBe(focused);
+    pad.unplug();
+  });
+
+  it('the stick is read in the yaw of the camera: the same push goes elsewhere after a turn', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    pad.hold([], [0, -1, 0, 0]);
+    pad.hold([]);
+    const first = data().openworldAt;
+    pad.tap(RB);
+    pad.tap(RB);
+    pad.tap(RB);
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [], enemies: [] });
+    pad.hold([], [0, -1, 0, 0]);
+    pad.hold([]);
+    expect(data().openworldAt).not.toBe(first);
+    pad.unplug();
+  });
+
+  it('LB and RB turn the camera one step (Q and E), R3 resets it, and none of them moves the focus', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    const focused = document.activeElement;
+    pad.tap(LB);
+    expect(data().openworldYaw).toBe('30');
+    pad.tap(RB);
+    pad.tap(RB);
+    expect(data().openworldYaw).toBe('-90');
+    pad.tap(R3);
+    expect(data().openworldYaw).toBe('-30');
+    expect(document.activeElement).toBe(focused);
+    pad.unplug();
+  });
+
+  it('the triggers zoom the Open world, the right stick does not touch the board view', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    const view = JSON.stringify(game.hook('__view'));
+    const zoom = Number(data().openworldZoom);
+    pad.hold([], [0, 0, 1, 0]);
+    pad.hold([], undefined, { [LT]: 1 }); // out: the closest the camera goes is 1
+    expect(Number(data().openworldZoom)).toBeGreaterThan(zoom);
+    expect(JSON.stringify(game.hook('__view'))).toBe(view);
+    pad.unplug();
+  });
+
+  it('with the focus on a control, the stick and LB RB walk the focus and the hero stays', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    byId('openworld-new').focus();
+    pad.hold([], [1, 0, 0, 0]);
+    pad.hold([]);
+    pad.tap(RB);
+    expect(data().openworldAt).toBe('0,0');
+    expect(data().openworldYaw).toBe('-30');
+    expect(document.activeElement).not.toBe(byId('openworld-new'));
+    pad.tap(R3); // a reset off the canvas is still the camera's
+    pad.unplug();
+  });
+
+  it('the stick walks onto a lair, the pad plays the fight, and Back to the Open world is reached and pressed with the pad', async () => {
+    const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+    const { Encounter } = await import('abalone-wasm');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as [number, number];
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] });
+    pad.hold([], [0.9, -0.5, 0, 0]); // right and up in the default camera: the east step
+    pad.hold([]);
+    expect(data().boss).toBeTruthy();
+    const won = (): number => (plies(game) > 0 ? 1 : 0);
+    vi.spyOn(Encounter.prototype, 'result').mockImplementation(won);
+    vi.spyOn(Encounter.prototype, 'status').mockImplementation(won);
+    canvas().focus();
+    pad.tap(RB);
+    const mv = game.hook<Move[]>('__legal').find((m) => m.cells.join() === rings(game).join())!;
+    const angle = [0, 180, 60, 240, 120, 300][mv.dir]! * (Math.PI / 180);
+    pad.hold([], [Math.cos(angle), -Math.sin(angle), 0, 0]);
+    pad.hold([]);
+    pad.tap(A);
+    expect(byId('ship-back').hidden).toBe(false);
+    const walkTo = (id: string): void => {
+      for (let i = 0; i < 60 && document.activeElement !== byId(id); i++) pad.tap(RB);
+      expect(document.activeElement).toBe(byId(id));
+    };
+    walkTo('lobby'); // Back to the Open world sits in the Lobby sheet
+    pad.tap(A);
+    walkTo('ship-back');
+    pad.tap(A);
+    await settle();
+    expect(data().openworldAt).toBe(`${q - 1},${r}`);
+    vi.restoreAllMocks();
+    pad.unplug();
+  });
+
+  it('B leaves the Open world, as Esc does', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    pad.tap(B);
+    expect(data().openworld).toBeUndefined();
+    pad.unplug();
+  });
+
+  it('R3 on the board does nothing', async () => {
+    const game = await boot('?bot=off');
+    const pad = plugPad(game);
+    pad.tap(R3);
+    expect(plies(game)).toBe(0);
+    pad.unplug();
+  });
+});
 
 describe('the gamepad', () => {
   it('Start opens the settings menu and gives the focus to its button, B closes it', async () => {

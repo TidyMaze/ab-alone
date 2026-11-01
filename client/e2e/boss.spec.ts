@@ -15,13 +15,15 @@ const freshDraw = async (page: Page) => {
 // the shell it sits on (world.md section 5, Tell marks). For each cell, the contrast (WCAG 2) of the brightest to the
 // darkest pixel of a small box where the top of its marble is drawn, read from one screenshot. The box follows the
 // cell spacing, so it holds at any window size.
-// `path` keeps the screenshot read, for the report (#429).
-const topContrasts = async (page: Page, cells: [number, number][], path?: string): Promise<number[]> => {
+// `path` keeps the screenshot read, for the report (#429). `lift` is the height of the tell above the board: the box then
+// sits where the tell is drawn, which for a cell far from the centre is not above its centre (bug #1259: a Choir glyph
+// of the outer column sat 12 px out of the box, which read the glyph's edge or nothing, 2.26 to 4.9 from run to run).
+const topContrasts = async (page: Page, cells: [number, number][], path?: string, lift?: number): Promise<number[]> => {
   // A frame drawn after this call sees the marks the caller just waited for (#383): two rAF can miss it.
   await freshDraw(page);
   const png = (await page.screenshot({ path })).toString('base64');
   return page.evaluate(
-    async ([b64, list]) => {
+    async ([b64, list, lift]) => {
       const img = new Image();
       img.src = `data:image/png;base64,${b64}`;
       await img.decode();
@@ -35,7 +37,8 @@ const topContrasts = async (page: Page, cells: [number, number][], path?: string
         const c = toScreen(q, r);
         const step = toScreen(q + 1, r).x - c.x; // one cell to the right, same row
         const half = Math.round(step * 0.12);
-        const d = g.getImageData(Math.round(c.x) - half, Math.round(c.y - step * 0.55) - half, 2 * half, 2 * half).data;
+        const at = lift === undefined ? { x: c.x, y: c.y - step * 0.55 } : toScreen(q, r, lift);
+        const d = g.getImageData(Math.round(at.x) - half, Math.round(at.y) - half, 2 * half, 2 * half).data;
         const lum: number[] = [];
         for (let i = 0; i < d.length; i += 4) {
           lum.push(0.2126 * linear(d[i]!) + 0.7152 * linear(d[i + 1]!) + 0.0722 * linear(d[i + 2]!));
@@ -43,9 +46,12 @@ const topContrasts = async (page: Page, cells: [number, number][], path?: string
         return (Math.max(...lum) + 0.05) / (Math.min(...lum) + 0.05);
       });
     },
-    [png, cells] as const,
+    [png, cells, lift] as const,
   );
 };
+
+// The height of the Choir army glyphs above the board (main.ts, the glyph's y).
+const CHOIR_GLYPH_LIFT = 0.76;
 
 // #358: every boss tell has a sound twin, played when the tell appears or changes. window.__tellCues() lists the cues
 // played so far. The clicks that open the fight are the gesture that starts the audio.
@@ -392,7 +398,7 @@ test('start The Choir: the boss moves the army in turn, the next army is marked,
   await page.screenshot({ path: testInfo.outputPath('choir-start.png') });
 
   const before = await armies();
-  for (const c of await topContrasts(page, before.map((m) => m.cell))) expect(c).toBeGreaterThanOrEqual(3); // #326
+  for (const c of await topContrasts(page, before.map((m) => m.cell), undefined, CHOIR_GLYPH_LIFT)) expect(c).toBeGreaterThanOrEqual(3); // #326
   const mv = await page.evaluate(() =>
     (window as any).__legal().find((m: any) => m.cells.length === 1 && (m.dir === 4 || m.dir === 2)),
   );
@@ -422,7 +428,7 @@ for (const skin of ['hex', 'riveted']) {
     await page.locator('#boss-list').getByRole('button', { name: 'The Choir' }).click();
     await expect(page.locator('body')).toHaveAttribute('data-armies', '18');
     const armies = (await page.evaluate(() => (window as any).__armies())) as { cell: [number, number] }[];
-    for (const c of await topContrasts(page, armies.map((m) => m.cell))) expect(c).toBeGreaterThanOrEqual(3);
+    for (const c of await topContrasts(page, armies.map((m) => m.cell), undefined, CHOIR_GLYPH_LIFT)) expect(c).toBeGreaterThanOrEqual(3);
   });
 
   test(`The Chaplain's converted marble reads 3:1 on the ${skin} shell, task #377`, async ({ page }, testInfo) => {

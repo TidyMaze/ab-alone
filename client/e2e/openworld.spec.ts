@@ -52,7 +52,7 @@ test('the arrows in the Open world do not open the board replay, and leaving the
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   await page.keyboard.press('ArrowLeft');
-  await expect.poll(at).toBe('-1,0');
+  await expect.poll(at).toBe('0,-1'); // up-left (#1273)
   await expect(page.locator('#replay-bar')).toHaveJSProperty('hidden', true); // the attribute, not the CSS: the HUD is hidden here anyway
   await page.keyboard.press('Escape');
   expect(await page.evaluate(() => document.body.dataset.openworld)).toBeUndefined();
@@ -141,7 +141,7 @@ test('a held arrow walks the Open world on its own and stops on keyup, #1059', a
   await expect.poll(at).toBe('0,0');
   await page.keyboard.down('ArrowRight');
   await expect.poll(at).toBe('1,0'); // the keydown's own step
-  await expect.poll(at, { timeout: 3000 }).toBe('3,0'); // the frames walk on: no key repeat is sent for a key held down
+  await expect.poll(async () => Number((await at())!.split(',')[0]), { timeout: 3000 }).toBeGreaterThanOrEqual(3); // the frames walk on: no key repeat is sent for a key held down (the walk speeds up, #1290: a poll may skip cell 3)
   await page.keyboard.up('ArrowRight');
   const stopped = await at();
   await page.evaluate(() => new Promise((done) => setTimeout(done, 400)));
@@ -547,7 +547,7 @@ test('a held arrow walks the hero at a steady speed from cell to cell, #1065', a
   await page.waitForTimeout(2200);
   await page.keyboard.up('ArrowUp');
   const samples = await page.evaluate(() => (window as unknown as { __walk: [number, number, number][] }).__walk);
-  const walking = samples.filter(([t]) => t > samples[0]![0] + 600 && t < samples.at(-1)![0] - 400); // past the start, before the stop
+  const walking = samples.filter(([t]) => t > samples[0]![0] + 900 && t < samples.at(-1)![0] - 400); // past the start and the speed-up to the cruise pace (#1290), before the stop
   // The path walked, not the chord: a hex grid zigzags going "up", and a window that spans a turn would read slower by its chord.
   const speeds: number[] = [];
   for (let i = 0; i + 6 < walking.length; i++) {
@@ -797,4 +797,19 @@ test('a push punches the camera in and back, without moving the chunk centre, #1
   const punched = samples.filter((s) => s.camera.zoom !== base.zoom);
   expect(punched.at(-1)!.t - punched[0]!.t).toBeLessThanOrEqual(260); // at most 250 ms, a frame of slack
   await page.screenshot({ path: test.info().outputPath('camera-after.png') });
+});
+
+// #1273: at the default view a Right press from an odd row walks forward (up-right), as Left does, not back down-right.
+test('Right from an odd row walks forward in the Open world, #1273', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  await expect.poll(at).toBe('0,0');
+  await page.evaluate(() => {
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 1], troop: [[-1, 1]], enemies: [] });
+  });
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(at).toBe('1,1'); // up-right (it was down-right, 0,2)
 });

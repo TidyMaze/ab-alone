@@ -67,8 +67,8 @@ full e2e suite run locally before every merge (decision #445).
 9. **This repo is public.** Never commit a secret. See section 12.
 10. **Every bug goes through an issue first.** No fix, not even a one-liner, without a `bug` issue
     created from the form. See section 6.7.
-11. **Bugs before features.** A `Ready` bug is always picked before any `Ready` task of the same
-    or lower priority, and an open bug is never below `P1`.
+11. **Priority, mainly FIFO.** Tickets are taken by importance and age (section 6.3). An open bug
+    is never below `P1`.
 12. **Test in a real browser regularly.** The full Playwright suite runs locally on every PR before
     it merges (CI runs it only on a manual dispatch, decision #445), and a manual Chrome check before merging a
     player-facing change. See section 11.
@@ -209,9 +209,10 @@ the triager does exactly one of:
 
 ### 6.3 Doing a Task
 
-1. Pick the next item in this order: **`Ready` bugs first** (highest `Priority` first), then
-   `Ready` tasks by `Priority`. You may skip one only with a comment saying why. Bugs follow the
-   same steps below, with "Task" meaning "Task or Bug".
+1. Pick the next item by priority, mainly FIFO (owner, 2026-11-01). `P0` and a red `main` come
+   first. Then the oldest `Ready` issue by creation date, where a bug or a `P1` counts as 3 days
+   older and a `P3` as 3 days younger. You may skip one only with a comment saying why. Bugs follow
+   the same steps below, with "Task" meaning "Task or Bug".
 2. Assign yourself, comment `taking it`, move it to `In Progress`.
    **WIP limit: one unfinished Task per contributor, at most 4 in progress overall** (rule 7; an
    agent counts as a contributor).
@@ -454,6 +455,11 @@ rebases on `main` without conflict (section 6.4, merge gate). It runs the CI che
   uploads its own `playwright-report-<n>` artifact. On CI the browser window is 960x540, not
   1280x720: software WebGL cost follows the pixels.
 
+- **Pages deploy** (`.github/workflows/pages.yml`): runs on a push to `main` that changes the built
+  game. The build always checks out the head of `main`, not the commit of the run, so a run that
+  finishes late still deploys the newest code (#1267). To redeploy the head of `main` by hand (for
+  example after a failed run): `gh workflow run pages.yml --ref main`.
+
 **WASM build:** the client loads the engine from `crates/abalone-wasm/pkg`, which is git-ignored.
 After pulling main, rebuild it from the repo root:
 
@@ -503,9 +509,13 @@ and write its result in the PR body ("Full e2e suite run locally: N passed"). CI
 manual dispatch (`gh workflow run ci.yml --ref <branch>`, decision #445). No full `scripts/verify.sh` while developing and no `--repeat-each` beyond what a
 flake needs.
 
-**e2e:** from `client/`, run `bun run e2e` (Chromium project). Playwright starts the dev server
-itself, with `--mode e2e`: that server does not watch files, so a wasm rebuild or an edit during a
-run never reloads a page under test (bug #185). It also serves the page without its Google Fonts links, so a
+**e2e:** from `client/`, run `bun run e2e` (Chromium project). Playwright builds the page
+(`vite build --mode e2e`, 2 to 3 s, into `client/dist-e2e/`) and serves it with `vite preview`: most specs
+run on that build, which is lighter than the dev server (it transforms every module again on each page
+load, #1289). Locally it runs 4 workers at most, so the machine stays usable. Playwright also starts the
+dev server itself, with `--mode e2e`, for the specs that test the dev server (`dev-server`, `lights-panel`,
+the dev case of `offline`, they read `E2E_DEV_URL`): that server does not watch files, so a wasm rebuild or an edit during a
+run never reloads a page under test (bug #185). `E2E_SERVER=dev` runs every spec on the dev server, for a spec being written. It also serves the page without its Google Fonts links, so a
 network outage never holds a page load (bug #585). Start a new run to test a change.
 
 - The port comes from `E2E_PORT` (default 5173). Pick a random free port and never use 5173:

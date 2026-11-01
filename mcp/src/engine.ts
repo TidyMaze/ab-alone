@@ -1,6 +1,7 @@
 // Loads the Node build of abalone-wasm (`bun run wasm`, in engine/), the only judge of the game.
 import { createRequire } from 'node:module';
 import type { EncounterLike, EngineLike } from './game';
+import type { WorldRules } from './world';
 
 type Wasm = typeof import('../engine/abalone_wasm');
 
@@ -25,4 +26,14 @@ export function engineVersion(): number {
 /** The boss ids of the engine, in play order. */
 export function bossIds(): string[] {
   return wasm.boss_ids();
+}
+
+/** The Open world rules of the engine (docs/specs/openworld.md): the map, the enemies, the lairs and the walk. */
+export function worldRules(): WorldRules {
+  return {
+    world_chunk: wasm.world_chunk,
+    world_enemies: wasm.world_enemies,
+    world_lairs: wasm.world_lairs,
+    world_path: wasm.world_path,
+  };
 }
