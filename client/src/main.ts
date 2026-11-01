@@ -5111,7 +5111,7 @@ async function enterOpenWorld(): Promise<void> {
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
   const hooks = window as unknown as Record<string, unknown>;
-  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][] }) => openWorld.fixture(fixture);
+  hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldEnemies = () => openWorld.enemies();
   hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake and chunk centre the camera draws (#1103)
 }

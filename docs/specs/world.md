@@ -57,7 +57,7 @@ Written as facts the player can piece together, not as a story told in order.
   optional and never gate anything. Rogue-lite run over: "Run voided. Audit reopened." (lost) or
   "Reconciled: 14." (won, with the army left). Trainer wave start: "Drill: wave 5. Opponents: five.
   Seated." Trainer result: "Wave 7 filed. Best on record: 9." No new rule, no HP, no damage: the lines
-  only name what the player already sees.
+  only name what the player already sees. Open world with every lair beaten (#1175): "Variance noted. Clamp: open. Crew attached: 6."
 - **What the player wants.** The docking clamp release. Tally grants it only to a winner who
   has beaten the five "seats" (the senior crew, see section 3).
 - **Tone.** Cosmic dread, grief, bureaucracy. Never gore for its own sake: the horror is that the

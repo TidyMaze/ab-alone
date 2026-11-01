@@ -9,6 +9,8 @@ import { FightState, readPush } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
+import { endingLine } from './tally';
+import { MARBLES } from './trainer';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
 /** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
@@ -214,8 +216,7 @@ export class OpenWorldMode {
       const { have, total } = this.medals();
       medals.textContent = `Medals ${have} / ${total}`;
     }
-    const tally = document.getElementById('openworld-tally');
-    if (tally) tally.textContent = this.tally();
+    this.showTally(true);
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));
@@ -277,10 +278,25 @@ export class OpenWorldMode {
     return this.fight.enemiesAround(this.world!, this.hero!.at, PUSH_REACH);
   }
 
+  /** Tally's line in the HUD (#1171): the ending once every lair is beaten (#1175), else the page's line (`fresh`: asked for, which
+   * may use it up). */
+  private showTally(fresh: boolean): void {
+    const tally = document.getElementById('openworld-tally');
+    if (!tally) return;
+    const over = this.lairs.length > 0 && this.beaten.length >= this.lairs.length;
+    tally.textContent = over ? endingLine(MARBLES) : fresh ? this.tally() : '';
+  }
+
   /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the
-   * enemies of the loaded square replaced by `enemies`, none pushed. */
-  fixture({ hero, troop, enemies }: { hero: Axial; troop: Axial[]; enemies: Axial[] }): void {
+   * enemies of the loaded square replaced by `enemies`, none pushed; `beaten` (#1175) sets the lairs beaten. */
+  fixture({ hero, troop, enemies, beaten }: { hero: Axial; troop: Axial[]; enemies: Axial[]; beaten?: number[] }): void {
     this.view!.snap();
+    if (beaten) {
+      this.beaten = [...beaten];
+      this.view!.setLairs(this.lairs, this.beaten);
+      this.showTally(false);
+      this.persist();
+    }
     this.hero!.at = hero;
     this.hero!.troop = troop;
     this.view!.show(hero, troop); // first: the loaded square may keep its centre, which the enemies are hidden around (#1046)
