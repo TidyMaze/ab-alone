@@ -10,6 +10,7 @@ import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
 import { endingLine } from './tally';
 import { MARBLES } from './trainer';
+import { drawMinimap, RADIUS as MAP_RADIUS, windowCells } from './openworldminimap';
 import { enter, heroStep } from './openworldstep';
 import type { PeerHost } from './worldnet';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
@@ -212,6 +213,7 @@ export class OpenWorldMode {
     this.active = false;
     this.held.clear();
     this.freeView();
+    document.getElementById('openworld-minimap')?.remove(); // the minimap goes with the world (#1275)
     this.view = null;
     this.world = null;
     this.dirty = false;
@@ -643,8 +645,37 @@ export class OpenWorldMode {
     if (document.body.dataset.openworldParticles !== count) document.body.dataset.openworldParticles = count;
   }
 
+  /** The minimap's canvas, made on the first draw and left at the end of the body: the page's own canvas stays the first one (`querySelector('canvas')`). */
+  private mapCanvas(): HTMLCanvasElement {
+    let canvas = document.getElementById('openworld-minimap') as HTMLCanvasElement | null;
+    if (!canvas) {
+      canvas = Object.assign(document.createElement('canvas'), { id: 'openworld-minimap', width: 288, height: 288 });
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', 'Minimap of the Open world');
+      document.body.append(canvas);
+    }
+    return canvas;
+  }
+
+  /** Draws the minimap (#1410) from the world as it is: called by `mark`, so on a step, a push and a camera turn, never on a frame. */
+  private drawMap(): void {
+    const canvas = this.mapCanvas();
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { world, hero } = this;
+    drawMinimap(ctx, canvas.width, {
+      cells: windowCells((q, r) => world!.tile(q, r)?.terrain, hero!.at),
+      hero: hero!.at,
+      troop: hero!.troop,
+      enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS),
+      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i) })),
+      yaw: this.view!.yaw,
+    });
+  }
+
   private mark(seed: string): void {
     this.anim();
+    this.drawMap();
     document.body.dataset.openworld = seed;
     const shown = document.getElementById('openworld-seed'); // the HUD's seed, to read or share (#1021)
     if (shown) shown.textContent = seed;

@@ -6,6 +6,7 @@ import type { Axial } from './board';
 import { CHUNK, World } from './openworld';
 import { DEFAULT_YAW, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, TURN_STEP, twistOf } from './openworldmode';
 import { FightState } from './openworldfight';
+import { COLOURS, terrainColour } from './openworldminimap';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
 import { world_chunk } from 'abalone-wasm';
@@ -1801,3 +1802,84 @@ describe('the Open world mode and the online peers (#1305)', () => {
   });
 });
 
+
+describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 8)', () => {
+  type Ctx = { fillStyle: string; clearRect: ReturnType<typeof vi.fn>; fills: string[] };
+  /** A canvas in the page whose 2D context records its clears and the colours it fills with. */
+  const withCanvas = (): Ctx => {
+    const fills: string[] = [];
+    const ctx: Ctx = { fillStyle: '', clearRect: vi.fn(), fills };
+    const blank = () => {};
+    Object.assign(ctx, {
+      save: blank, restore: blank, beginPath: blank, arc: blank, moveTo: blank, lineTo: blank, closePath: blank, clip: blank, stroke: blank,
+      fill() { fills.push(ctx.fillStyle); },
+      fillRect() { fills.push(ctx.fillStyle); },
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    return ctx;
+  };
+  const lairer = (lairs: Int32Array) =>
+    new OpenWorldMode((_s, cx, cy) => bytes(cx, cy), (_s, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(5, 5) : new Int32Array()), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1), () => lairs);
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('is drawn when a world opens: the grass, the hero, the troop, an enemy and a lair in the window', () => {
+    const ctx = withCanvas();
+    lairer(Int32Array.of(8, 0, 40, 0)).enter(42, 800, 600);
+    expect(ctx.clearRect).toHaveBeenCalledTimes(1);
+    for (const colour of [terrainColour('grass'), COLOURS.hero, COLOURS.troop, COLOURS.enemy, COLOURS.lair]) expect(ctx.fills, colour).toContain(colour);
+  });
+
+  it('is redrawn on a step and on a camera turn, never on a frame', () => {
+    const ctx = withCanvas();
+    const m = mode();
+    m.enter(42, 800, 600);
+    ctx.clearRect.mockClear();
+    const render = vi.fn();
+    m.frame(render, 0);
+    m.frame(render, 16);
+    expect(ctx.clearRect).not.toHaveBeenCalled();
+    tap(m, 'ArrowRight');
+    expect(ctx.clearRect).toHaveBeenCalledTimes(1);
+    m.turn(TURN_STEP);
+    expect(ctx.clearRect).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a beaten lair in its own colour', () => {
+    const ctx = withCanvas();
+    const m = lairer(Int32Array.of(8, 0));
+    m.enter(42, 800, 600, { version: 1, seed: 42, hero: [0, 0], troop: [[1, 0]], fight: { removed: [], added: [], beaten: 0 }, yaw: 0, broken: [], lairs: [0], savedAt: 1 });
+    expect(ctx.fills).toContain(COLOURS.lairBeaten);
+    expect(ctx.fills).not.toContain(COLOURS.lair);
+  });
+
+  it('is gone when the mode is left', () => {
+    withCanvas();
+    const m = mode();
+    m.enter(42, 800, 600);
+    expect(document.getElementById('openworld-minimap')).not.toBeNull();
+    m.key('Escape');
+    expect(document.getElementById('openworld-minimap')).toBeNull();
+  });
+
+  it('leaves out the cells off the world', () => {
+    const ctx = withCanvas();
+    new OpenWorldMode((_s, cx, cy) => (cx > 0 ? new Uint8Array() : bytes(cx, cy)), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1)).enter(42, 800, 600);
+    expect(ctx.fills).toContain(terrainColour('grass'));
+  });
+
+  it('makes its canvas at the end of the body, once, and draws nothing when it has no 2D context', () => {
+    document.body.innerHTML = '<canvas id="page"></canvas>';
+    const m = mode();
+    m.enter(42, 800, 600);
+    m.enter(43, 800, 600);
+    expect(document.querySelectorAll('#openworld-minimap')).toHaveLength(1);
+    expect(document.querySelector('canvas')!.id).toBe('page');
+    expect(document.body.lastElementChild!.id).toBe('openworld-minimap');
+    document.body.innerHTML = '';
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    expect(() => mode().enter(42, 800, 600)).not.toThrow();
+  });
+});

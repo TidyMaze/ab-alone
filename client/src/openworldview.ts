@@ -236,7 +236,7 @@ function shell(): THREE.BufferGeometry {
 }
 
 /** The props on top of the ground: its height, its look and its geometry. */
-const PROPS = {
+export const PROPS = {
   mountain: { geometry: new THREE.ConeGeometry(0.62, 1, 6), color: 0x5d6978, emissive: 0x2a1f0c, flat: true },
   tree: { geometry: new THREE.ConeGeometry(0.34, 1, 5), color: 0x2fb5a0, emissive: 0x000000, flat: true }, // a slag-glass outcrop, matte: no glow on a prop (#1315)
   boulder: { geometry: shell(), color: 0x3a3631, emissive: 0x000000, flat: true }, // a frozen crew's shell: 20 triangles, warm charcoal, matte (#1315)

@@ -96,3 +96,13 @@ describe('the Hub button of the Open world (#1373)', () => {
     expect(css).toContain('body[data-pad] .tap-hint { display: none; }');
   });
 });
+
+describe('the minimap of the Open world (#1410)', () => {
+  it('is a canvas in the top right corner under the settings cog, which ignores the pointer', () => {
+    const map = rule('#openworld-minimap');
+    expect(map).toContain('position: fixed');
+    expect(map).toContain('top: calc(16px + 2.75rem + 0.5rem)');
+    expect(map).toContain('right: 16px');
+    expect(map).toContain('pointer-events: none');
+  });
+});
