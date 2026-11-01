@@ -6240,9 +6240,8 @@ function moving(): boolean {
   );
 }
 
-/** Shows the canvas once a frame was drawn that is not the room's (#1389): the terrace, its plain background, or the Open world. */
+/** Shows the canvas: called after a frame that is not the room's (#1389), the terrace, its plain background, or the Open world. */
 function unveil(): void {
-  if (!document.body.dataset.veil || !(sceneRenderer.terraceOn || openWorld.active)) return;
   renderer.domElement.style.opacity = '';
   delete document.body.dataset.veil;
 }
@@ -6318,7 +6317,7 @@ renderer.setAnimationLoop((now) => {
   syncPedestals?.();
   renderer.info.reset();
   sceneRenderer.render();
-  unveil();
+  if (sceneRenderer.terraceOn) unveil();
   draws++;
   drawAsked = false;
   dirty = Math.max(0, dirty - 1);
