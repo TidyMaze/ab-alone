@@ -870,3 +870,30 @@ to 19, 300 plies at most, run alone, before (`main`, 1d2b364) and after:
 Reading: no change on the ladder, as the shallow tree predicts, so no knob moved. The earlier rows of this section
 (18 of 20 and 6 of 20 in #821) were taken on older code; 17 and 5 are the numbers of `main` today. Not done: a
 ladder at a higher boss budget, more than 20 seeds.
+
+### The Echo and the Hull "ignore the rule" tests (#1116), not tuned
+
+Both AIs were already audited as modelled (#930). Each rule now has a test that builds a position where the plain
+search plays a different move from the boss AI, and asserts the boss AI plays the rule:
+
+| Boss | Rule | Test | Plain search | Boss AI |
+|---|---|---|---|---|
+| The Echo | free mirror bonus, both ways | `the_boss_search_sees_the_bonus_it_gives_away` (`echo.rs`) | takes the west push, which hands the player a mirror push that ejects a boss marble | takes the south push, which gives no mirror |
+| The Hull | cracks vanish a cell with its marble | `the_hull_moves_its_marble_off_a_crack_about_to_vanish` (`hull.rs`) | leaves its marble on the crack | moves it off |
+| The Hull | same, against the player | `the_hull_pushes_a_player_marble_onto_an_announced_crack` (`hull.rs`, #1116) | plays another move | pushes a Black marble onto a crack when Black has one other marble on a crack and saves only one |
+
+No gap was found, so no AI code changed. Not tested: the Echo's P2 older-move bonus in the search tree (the step
+test `the_step_remembers_an_illegal_mirror_and_plays_an_older_one_in_p2` covers `echo_step`, but no position was
+found where it changes the boss move).
+
+Ladder, `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- <echo|hull>`, seeds 0 to 19, 300
+plies at most, run alone on `main` at 2a0f7cb. Nothing tuned.
+
+| Boss | Player budget | Wins /20 | Median plies | Highest phase | Deaths |
+|---|---|---|---|---|---|
+| The Echo (boss 100) | 100 (1x) | 14 | 104 | P1 | push 3, draw 3 |
+| The Echo (boss 100) | 1000 (10x) | 16 | 81.5 | P1 | draw 4 |
+| The Hull (boss 3000) | 3000 (1x) | 6 | 95 | P2 | push 12, rim_ejection 2 |
+| The Hull (boss 3000) | 30000 (10x) | 12 | 99.5 | P2 | push 4, rim_ejection 4 |
+
+The Hull rows equal those of #823. The Echo at 10x (16 of 20) is above the 7 to 9 of 10 target; the owner decides.
