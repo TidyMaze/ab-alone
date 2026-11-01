@@ -123,6 +123,11 @@ describe('fogSettings', () => {
       });
     }
   }
+  // #896: a span of 52 left the bay haze nearly invisible (mean RGB diff 0.0076 < 0.01): a shorter span thickens it.
+  it('the bay haze is thick enough to show, a span of at most 36 on high (#896)', () => {
+    const fog = fogSettings('high', false, resetView(), 4, 1)!;
+    expect(fog.far - fog.near).toBeLessThanOrEqual(36);
+  });
   it('is lighter on low than on high', () => {
     const low = fogSettings('low', false, resetView(), 4, 1)!;
     const high = fogSettings('high', false, resetView(), 4, 1)!;
