@@ -1034,8 +1034,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_16_since_the_stalker_joins_the_roster() {
-        assert_eq!(engine_version(), 16);
+    fn the_engine_version_is_17_since_the_swarm_joins_the_roster() {
+        assert_eq!(engine_version(), 17);
     }
 
     #[test]
@@ -1083,7 +1083,8 @@ mod tests {
                 "assembly".to_string(),
                 "core".to_string(),
                 "dual".to_string(),
-                "stalker".to_string()
+                "stalker".to_string(),
+                "swarm".to_string()
             ]
         );
         assert_eq!(boss_name("echo"), Some("The Echo".to_string()));
@@ -1100,6 +1101,7 @@ mod tests {
         assert_eq!(boss_name("core"), Some("The Unstable Core".to_string()));
         assert_eq!(boss_name("dual"), Some("The Dual Room".to_string()));
         assert_eq!(boss_name("stalker"), Some("The Stalker".to_string()));
+        assert_eq!(boss_name("swarm"), Some("The Swarm".to_string()));
         assert_eq!(boss_name("nobody"), None);
     }
 
@@ -2583,5 +2585,112 @@ mod tests {
         }
         assert!(fight().dual().is_empty() && fight().last_return().is_empty());
         assert!(choir().dual().is_empty() && choir().last_return().is_empty());
+    }
+
+    /// The plies of the recorded Swarm win (the core fixture), the way the client replays a game.
+    fn swarm_plies() -> (u32, Vec<Vec<i32>>) {
+        let text = include_str!("../../abalone-core/tests/fixtures/swarm.txt");
+        let fixture = Fixture::parse(text).unwrap();
+        let plies = fixture.moves.iter().map(|m| encode(m).to_vec()).collect();
+        (fixture.seed as u32, plies)
+    }
+
+    /// The Swarm after the first `plies` plies of the recorded win.
+    fn swarm(plies: usize) -> Encounter {
+        let (seed, moves) = swarm_plies();
+        let mut f = Encounter::new("swarm", seed).unwrap();
+        for mv in &moves[..plies] {
+            f.play(mv).unwrap();
+        }
+        f
+    }
+
+    #[test]
+    fn the_swarm_starts_with_11_player_marbles_and_its_first_wave_announced() {
+        let f = swarm(0);
+        assert_eq!(f.name(), "The Swarm");
+        assert!(f.goal().contains("ejects 2 of your marbles"));
+        assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (11, 0));
+        assert_eq!(
+            (f.phase(), f.phases(), f.phase_ejections()),
+            (0, 3, vec![14, 24])
+        );
+        assert!(f.phase_notches().is_empty(), "its phases go by turns");
+        let tell = f.swarm();
+        assert_eq!(tell[..2], [30, 0], "30 turns left, no pass");
+        assert_eq!(tell.len(), 4, "one announced cell");
+        assert!(f.swarm_landed().is_empty());
+        assert_eq!(
+            (f.win_ejections(1), f.win_ejections(2)),
+            (0, 2),
+            "the player does not win by ejections"
+        );
+        assert_eq!((f.tell(), f.turns_left(), f.next_army()), (-1, -1, -1));
+        assert!(f.tell_move(&first_move(&f)).is_empty() && f.free_moves().is_empty());
+        assert_eq!(f.free_taken(), 0);
+        assert!(f.flips().is_empty() && f.assigned().is_empty() && f.removed().is_empty());
+        assert!(fight().swarm().is_empty() && fight().swarm_landed().is_empty());
+        assert!(choir().swarm().is_empty());
+        assert_eq!(fight().win_ejections(1), 6);
+    }
+
+    #[test]
+    fn the_swarm_lands_its_announced_wave_and_counts_the_turns_down() {
+        let f = swarm(0);
+        let announced = f.swarm()[2..].to_vec();
+        let f = swarm(1);
+        assert_eq!(f.swarm_landed(), announced, "the wave lands on its mark");
+        assert_eq!(at(&f.board(), announced[0], announced[1]), 2);
+        assert_eq!(f.to_move(), 2);
+        let f = swarm(2);
+        assert_eq!(f.swarm()[0], 29);
+        assert!(!f.boss_move().is_empty() || f.to_move() == 1);
+        assert!(f.boss_move().is_empty(), "the player's turn");
+        assert!(!f.player_move().is_empty());
+    }
+
+    #[test]
+    fn the_recorded_swarm_win_replays_the_same_through_wasm() {
+        // The daily, a Retry and every co-op peer replay the same waves (#795).
+        let (_, moves) = swarm_plies();
+        let (a, b) = (swarm(moves.len()), swarm(moves.len()));
+        assert_eq!(a.result(), 1, "the evac after the 30th reply");
+        assert_eq!(a.swarm(), vec![0, 0], "no turn left, nothing announced");
+        assert_eq!((a.board(), a.swarm_landed()), (b.board(), b.swarm_landed()));
+        for plies in [7, 21] {
+            let (a, b) = (swarm(plies), swarm(plies));
+            assert_eq!((a.swarm(), a.board()), (b.swarm(), b.board()));
+        }
+        assert!(
+            Encounter::new("swarm", 1).unwrap().swarm() != swarm(0).swarm()
+                || Encounter::new("swarm", 2).unwrap().swarm() != swarm(0).swarm()
+        );
+    }
+
+    #[test]
+    fn a_swarm_with_no_move_passes_through_wasm() {
+        use abalone_core::encounter::swarm::{allowed_rim, Swarm};
+        let mut board = Board::empty();
+        for &(q, r) in allowed_rim().iter().chain([(0, 0)].iter()) {
+            board.set(q, r, Cell::Black);
+        }
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut f = Encounter {
+            fight: Fight::Swarm(Swarm::from_position(game, 7, 0)),
+            entry: boss_entry("swarm").unwrap(),
+            bonuses: Vec::new(),
+        };
+        let mv = f
+            .legal_moves()
+            .chunks(MOVE_STRIDE)
+            .find(|m| m[0] == 1 && m[2] == 0 && m[3] == 0)
+            .unwrap()
+            .to_vec();
+        f.play(&mv).unwrap();
+        assert_eq!(f.to_move(), 1, "the swarm passed");
+        assert_eq!(f.swarm()[..2], [29, 1]);
+        f.scale_node_budget(50);
+        assert_eq!(f.result(), 0);
+        assert!(f.play(&[0; 3]).is_err());
     }
 }

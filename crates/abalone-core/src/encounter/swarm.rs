@@ -489,7 +489,27 @@ mod tests {
         assert_eq!(s.game().to_move(), Player::Black);
         assert_eq!((s.turn(), s.result()), (1, None));
         assert!(s.landed().is_empty());
+        assert!(s.passed(), "the reply was a pass");
         assert_eq!(s.boss_move(), None);
+    }
+
+    #[test]
+    fn a_reply_with_a_swarm_move_is_no_pass() {
+        let mut s = Swarm::start(3);
+        assert!(!s.passed(), "no reply yet");
+        let first = legal_moves(s.game().board(), Player::Black)[0].clone();
+        s.play(&first).unwrap();
+        assert!(!s.passed(), "the landed marble can move");
+    }
+
+    #[test]
+    fn the_boss_budget_scales_by_a_percentage() {
+        let mut s = Swarm::start(3);
+        assert_eq!(s.budget, SWARM_NODE_BUDGET);
+        s.scale_node_budget(50);
+        assert_eq!(s.budget, SWARM_NODE_BUDGET / 2);
+        s.scale_node_budget(0);
+        assert_eq!(s.budget, 1, "floor of 1");
     }
 
     #[test]
