@@ -578,9 +578,13 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   count down and the hatch (your ply) or the lay (the Alien's ply), so a crushed egg never hatches.
   The Alien avoids its own eggs: its search keeps to the moves that leave every egg empty, unless
   every move lands on one.
+- **Look of an egg**: an egg is the Alien's colour, the one of its marbles in the worn shell skin, the
+  terrace and the tonal look (never the pale of your marbles). Its shell carries speckles and veins in a
+  tint of that colour (3:1 on it in every shell skin), so it is not mistaken for an Alien marble either.
+  The glow under it takes the same tint.
 - **Tell**: each egg shows a counter above it, the number of your turns left before it hatches
   (4, 3, 2, 1), facing the camera and readable at 3:1 (the pale digit on a near-black plate, drawn
-  over the marbles). On 1 a pale glow under the egg pulses once a second, held still under reduced
+  over the marbles). On 1 a glow in the shell's tint under the egg pulses once a second, held still under reduced
   motion: it hatches after your next move. The HUD line reads "Eggs hatch: 1 in 1 turn · 2 in 4 turns".
 - **Counter**: walk or push a marble onto an egg to crush it before it hatches, and press the
   Alien early, while it has few marbles. Every turn spent on eggs is a turn not spent pushing.
