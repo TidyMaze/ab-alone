@@ -3,14 +3,14 @@
 // untouched.
 import type * as THREE from 'three/webgpu';
 import type { Axial } from './board';
-import { blocked, breakable, chunkOf, Hero, neighbours, same, World } from './openworld';
+import { chunkOf, Hero, neighbours, same, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
 import { endingLine } from './tally';
 import { MARBLES } from './trainer';
-import { heroStep } from './openworldstep';
+import { enter, heroStep } from './openworldstep';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
 /** The push of a step, the bridge's `world_push` (docs/specs/openworld.md section 4): the seed, the hero's cell then the troop's,
@@ -474,10 +474,7 @@ export class OpenWorldMode {
    * the hero (`lean`) only when no side is free; arrows that cancel stop the walk. */
   private stepHeld(at: number): void {
     if (this.held.size === 0 && this.pad.length === 0) return this.stepRoute(at);
-    const free = ([q, r]: Axial): boolean => {
-      const tile = this.world!.tile(q, r);
-      return !!tile && (!blocked(tile) || breakable(this.world!, q, r)) && !this.fight.occupied(this.world!, q, r);
-    };
+    const free = (to: Axial): boolean => enter(this.world!, this.fight, this.hero!.at, to) !== 'refused';
     const keys = new Set([...this.held, ...this.pad]);
     const to = heroStep(this.hero!.at, keys, this.view!.yaw, this.steering(), free);
     if (to) this.roll(to, at, this.cruising ? 'walk' : 'start');

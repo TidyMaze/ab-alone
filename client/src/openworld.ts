@@ -2,6 +2,7 @@
 // at a time, and the hero that walks them one cell at a time. Pure data and rules: no DOM, no three.js.
 import { DIRECTIONS, type Axial } from './board';
 import type { FightState } from './openworldfight';
+import { enter, trail } from './openworldstep';
 
 /** A chunk is CHUNK x CHUNK cells; the world is WORLD_CHUNKS x WORLD_CHUNKS chunks centred on the spawn. */
 export const CHUNK = 16;
@@ -14,27 +15,14 @@ export type Terrain = (typeof TERRAINS)[number];
 /** The biome codes of the bridge (`world_chunk`), by code: the order of `Biome` in the engine (openworld-terrain.md section 4). */
 export const BIOMES = ['meadow', 'forest', 'tundra', 'desert', 'badlands'] as const;
 export type Biome = (typeof BIOMES)[number];
-/** The terrains a marble cannot enter. */
-const BLOCKED: ReadonlySet<Terrain> = new Set(['water', 'peak', 'boulder', 'tree', 'wall']);
-
 export interface Tile {
   height: number;
   terrain: Terrain;
   biome: Biome;
 }
 
-export const blocked = (tile: Tile): boolean => BLOCKED.has(tile.terrain);
-
 /** What a broken obstacle leaves: the plain ground it stood on (#1147). */
 const LEFT: Partial<Record<Terrain, Terrain>> = { boulder: 'rock', tree: 'grass' };
-
-/** Whether the hero breaks the obstacle on a cell by rolling into it (#1147, docs/specs/openworld.md section 2): a boulder, or a tree
- * with no tree on its six neighbours. Buildings, mountains, water and forests stay in the way. */
-export function breakable(world: Pick<World, 'tile'>, q: number, r: number): boolean {
-  const terrain = world.tile(q, r)?.terrain;
-  if (terrain === 'boulder') return true;
-  return terrain === 'tree' && neighbours([q, r]).every(([nq, nr]) => world.tile(nq, nr)?.terrain !== 'tree');
-}
 
 /** The chunk a cell is in. */
 export const chunkOf = ([q, r]: Axial): Axial => [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
@@ -189,19 +177,17 @@ export class Hero {
     private readonly fight: FightState,
   ) {}
 
-  /** Rolls to `to` when it is a neighbour that is on the world, free of enemies and either open or an obstacle it breaks
-   * (`breakable`, #1147); reports whether it moved. */
+  /** Rolls to `to` when the engine allows the step (`enter`, abalone-core `worldstep`: a neighbour that is on the world, free of enemies and
+   * either open or an obstacle it breaks, #1147); reports whether it moved. */
   step(to: Axial): boolean {
     this.smashed = null;
-    if (!neighbours(this.at).some((n) => same(n, to))) return false;
-    const tile = this.world.tile(to[0], to[1]);
-    if (!tile || this.fight.occupied(this.world, to[0], to[1])) return false;
-    if (blocked(tile)) {
-      if (!breakable(this.world, to[0], to[1])) return false;
-      this.smashed = tile.terrain;
+    const entry = enter(this.world, this.fight, this.at, to);
+    if (entry === 'refused') return false;
+    if (entry === 'breaks') {
+      this.smashed = this.world.tile(to[0], to[1])!.terrain;
       this.world.smash(to[0], to[1]);
     }
-    this.troop = [this.at, ...this.troop.filter((c) => !same(c, to))].slice(0, TROOP);
+    this.troop = trail(this.troop, this.at, to);
     this.at = to;
     return true;
   }

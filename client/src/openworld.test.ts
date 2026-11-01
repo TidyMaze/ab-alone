@@ -1,7 +1,9 @@
+import './test/openworldwasm';
 import { describe, expect, it, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
-import { BIOMES, blocked, breakable, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
+import { BIOMES, CACHE_LIMIT, CHUNK, cellAtPoint, chunkOf, Hero, neighbours, parseChunk, same, SPAWN, TERRAINS, TROOP, World } from './openworld';
 import { FightState } from './openworldfight';
+import { enter, type Entry } from './openworldstep';
 
 /** A hero on the world with no enemy pushed: the fight is the generated enemies. */
 const heroOn = (world: World) => new Hero(world, new FightState());
@@ -29,11 +31,6 @@ describe('the Open world cells (docs/specs/openworld.md section 2)', () => {
       { height: 2, terrain: 'rock', biome: 'badlands' },
     ]);
     expect(parseChunk(new Uint8Array())).toEqual([]);
-  });
-
-  it('blocks water, peaks, boulders, trees and walls only', () => {
-    const blockedBy = TERRAINS.filter((terrain) => blocked({ height: 1, terrain, biome: 'meadow' }));
-    expect(blockedBy).toEqual(['water', 'peak', 'boulder', 'tree', 'wall']);
   });
 
   it('finds the chunk of a cell, below zero too', () => {
@@ -135,14 +132,16 @@ describe('what the hero can break (#1147)', () => {
   const world = new World(cells);
 
   it('is an isolated boulder or an isolated tree, nothing else', () => {
-    expect(breakable(world, 3, 3)).toBe(true); // a boulder
-    expect(breakable(world, 5, 5)).toBe(true); // a tree with no tree beside it
-    expect(breakable(world, 8, 5)).toBe(false); // a forest: a tree beside a tree
-    expect(breakable(world, 9, 5)).toBe(false);
-    expect(breakable(world, 5, 8)).toBe(false); // a wall
-    expect(breakable(world, 8, 8)).toBe(false); // a peak
-    expect(breakable(world, 1, 1)).toBe(false); // open grass
-    expect(breakable(world, 99 * CHUNK, 0)).toBe(false); // off the world
+    const fight = new FightState();
+    const from = (q: number, r: number): Entry => enter(world, fight, [q - 1, r], [q, r]);
+    expect(from(3, 3)).toBe('breaks'); // a boulder
+    expect(from(5, 5)).toBe('breaks'); // a tree with no tree beside it
+    expect(from(8, 5)).toBe('refused'); // a forest: a tree beside a tree
+    expect(from(9, 5)).toBe('refused');
+    expect(from(5, 8)).toBe('refused'); // a wall
+    expect(from(8, 8)).toBe('refused'); // a peak
+    expect(from(1, 1)).toBe('rolls'); // open grass
+    expect(enter(new World(() => new Uint8Array()), fight, [0, 0], [1, 0])).toBe('refused'); // off the world
   });
 
   it('turns an isolated tree to grass when broken, and keeps a forest standing', () => {
