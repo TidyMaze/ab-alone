@@ -4,6 +4,7 @@
 import { WorldFight } from 'abalone-wasm';
 import type { Axial } from './board';
 import { chunkOf, type World } from './openworld';
+import type { Played } from './openworldview';
 
 const key = ([q, r]: Axial): string => `${q},${r}`;
 
@@ -28,28 +29,13 @@ export function decodeFight(raw: unknown): FightSave | null {
   return { removed: save.removed as string[], added: save.added as Axial[], beaten: save.beaten as number };
 }
 
-/** What `world_push` gave: the new troop cells (the hero's first), the new enemy cells, the enemy ejected (none or one) and the
+/** What `WorldFight.troop_push` gave: the new troop cells (the hero's first), the new enemy cells, the enemy ejected (none or one) and the
  * direction of the push. */
 export interface Pushed {
   troop: Axial[];
   enemies: Axial[];
   ejected: Axial[];
   dir: Axial;
-}
-
-/** The read form of a push of the bridge (`world_push`, docs/specs/openworld.md section 4): `null` when no push was legal. */
-export function readPush(out: ArrayLike<number>): Pushed | null {
-  if (out.length === 0) return null;
-  const pairs = (from: number, n: number): Axial[] => Array.from({ length: n }, (_, i): Axial => [out[from + 2 * i]!, out[from + 2 * i + 1]!]);
-  const troopCount = out[3]!;
-  const enemyCount = out[4 + 2 * troopCount]!;
-  const dirAt = 5 + 2 * troopCount + 2 * enemyCount;
-  return {
-    troop: pairs(4, troopCount),
-    enemies: pairs(5 + 2 * troopCount, enemyCount),
-    ejected: out[2] === 0 ? [] : [[out[0]!, out[1]!]],
-    dir: [out[dirAt]!, out[dirAt + 1]!],
-  };
 }
 
 /** The flat `q, r` list of cells, for the bridge. */
@@ -84,8 +70,8 @@ export class FightState {
     return cellsOf(this.fight.chunk_enemies(flat(world.enemies(cx, cy)), cx, cy));
   }
 
-  /** The enemies within `radius` cells (hex distance) of `cell`, on the chunks that reach them. */
-  enemiesAround(world: World, cell: Axial, radius: number): Axial[] {
+  /** The generated enemies of the chunks that reach the cells within `radius` of `cell`, in the bridge's chunk list (`cx, cy, n`, the `n` cells). */
+  private chunksAround(world: World, cell: Axial, radius: number): Int32Array {
     const [x0, y0] = chunkOf([cell[0] - radius, cell[1] - radius]);
     const [x1, y1] = chunkOf([cell[0] + radius, cell[1] + radius]);
     const chunks: number[] = [];
@@ -95,7 +81,27 @@ export class FightState {
         chunks.push(cx, cy, generated.length, ...generated.flat());
       }
     }
-    return cellsOf(this.fight.around(Int32Array.from(chunks), cell[0], cell[1], radius));
+    return Int32Array.from(chunks);
+  }
+
+  /** The enemies within `radius` cells (hex distance) of `cell`, on the chunks that reach them. */
+  enemiesAround(world: World, cell: Axial, radius: number): Axial[] {
+    return cellsOf(this.fight.around(this.chunksAround(world, cell, radius), cell[0], cell[1], radius));
+  }
+
+  /** The enemies a push can reach: the ones near the hero's `cell`. */
+  nearHero(world: World, cell: Axial): Axial[] {
+    return this.enemiesAround(world, cell, WorldFight.push_reach());
+  }
+
+  /** The troop's attack (`WorldFight.troop_push`, abalone-core `worldoverlay`): the best legal push of `troop` (the hero's cell first) in
+   * the world `seed`, with the `broken` cells, played on the fight. The push as it was played, from the cells before it; `null` when none
+   * is legal. */
+  troopPush(world: World, seed: number, troop: readonly Axial[], broken: readonly Axial[]): Played | null {
+    const out = this.fight.troop_push(seed, flat(troop), this.chunksAround(world, troop[0]!, WorldFight.push_reach()), flat(broken));
+    if (!out) return null;
+    const push: Pushed = { troop: cellsOf(out.troop), enemies: cellsOf(out.enemies), ejected: cellsOf(out.ejected), dir: [out.dir[0]!, out.dir[1]!] };
+    return { from: [...troop], foes: cellsOf(out.foes), push };
   }
 
   /** Whether an enemy marble stands on the cell `(q, r)` now. */

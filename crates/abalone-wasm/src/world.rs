@@ -2,8 +2,7 @@
 //! crate for its encoding.
 
 use abalone_core::world::{self, Terrain};
-use abalone_core::worldfight::{self, Fall, Outcome};
-use abalone_core::worldoverlay::Overlay;
+use abalone_core::worldoverlay::{Overlay, PUSH_REACH};
 use abalone_core::worldstep::{self, Entry};
 use wasm_bindgen::prelude::*;
 
@@ -75,25 +74,6 @@ pub fn world_lairs(seed: u32) -> Vec<i32> {
         .into_iter()
         .flat_map(|(q, r)| [q, r])
         .collect()
-}
-
-/// The troop's push of the Open world (docs/specs/openworld.md section 4) on the world `seed`: `troop`
-/// is the hero's cell then the troop's, `enemies` the enemy marbles near the hero, all `q, r` pairs.
-/// Empty when no push is legal; else `[ejected_q, ejected_r, ejected_kind, ntroop, ...troop, nenemies,
-/// ...enemies, dir_q, dir_r]`: the new troop cells in the order of the input (the hero's first), the
-/// new enemy cells in the order of the input without the ejected one, `ejected_kind` `0` none, `1`
-/// water, `2` edge, with the ejected enemy's cell before the push (`0, 0` when none), and the push's
-/// direction as an axial step. `broken` holds the `q, r` pairs of the obstacles the hero has broken
-/// (#1154): they are plain ground, not blocked.
-#[wasm_bindgen]
-pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>, broken: Vec<i32>) -> Vec<i32> {
-    let broken = pairs(&broken);
-    let terrain = |q, r| match terrain_at(u64::from(seed), q, r) {
-        Some(Terrain::Boulder) if broken.contains(&(q, r)) => Some(Terrain::Rock),
-        Some(Terrain::Tree) if broken.contains(&(q, r)) => Some(Terrain::Grass),
-        other => other,
-    };
-    push_encoded(&pairs(&troop), &pairs(&enemies), &terrain)
 }
 
 /// The walk of the hero from `(from_q, from_r)` to `(to_q, to_r)` in the world `seed` (docs/specs/openworld.md section 4): `q, r`
@@ -204,6 +184,36 @@ fn flat_of(cells: &[(i32, i32)]) -> Vec<i32> {
     cells.iter().flat_map(|&(q, r)| [q, r]).collect()
 }
 
+/// A chunk and the generated enemies that start in it.
+type Block = ((i32, i32), Vec<(i32, i32)>);
+
+/// The chunks of a flat list: `cx, cy, n` then the `n` generated enemies of that chunk as `q, r` pairs, chunk after chunk.
+fn blocks_of(chunks: &[i32]) -> Vec<Block> {
+    let mut blocks = Vec::new();
+    let mut rest = chunks;
+    while let [cx, cy, n, tail @ ..] = rest {
+        let (cells, tail) = tail.split_at(2 * *n as usize);
+        blocks.push(((*cx, *cy), cells_of_flat(cells)));
+        rest = tail;
+    }
+    blocks
+}
+
+/// A push of the troop as it was played (`WorldFight.troop_push`), cells as flat `q, r` pairs.
+#[wasm_bindgen(getter_with_clone)]
+pub struct PushResult {
+    /// The troop after the push, the hero first.
+    pub troop: Vec<i32>,
+    /// The enemies near the hero before the push.
+    pub foes: Vec<i32>,
+    /// The same enemies after it.
+    pub enemies: Vec<i32>,
+    /// The enemy ejected, none or one.
+    pub ejected: Vec<i32>,
+    /// The direction of the push, `q, r`.
+    pub dir: Vec<i32>,
+}
+
 /// The enemies of the Open world fight as the pushes of the troop left them (abalone-core `worldoverlay`). The generated enemies of a
 /// chunk come in with each call, so the object holds only what the pushes changed.
 #[wasm_bindgen]
@@ -255,14 +265,36 @@ impl WorldFight {
     /// The enemies within `radius` cells of `(q, r)`. `chunks` lists the chunks to look in, in order: `cx, cy, n` then the `n` generated
     /// enemies of that chunk as `q, r` pairs, chunk after chunk.
     pub fn around(&self, chunks: Vec<i32>, q: i32, r: i32, radius: i32) -> Vec<i32> {
-        let mut blocks = Vec::new();
-        let mut rest = chunks.as_slice();
-        while let [cx, cy, n, tail @ ..] = rest {
-            let (cells, tail) = tail.split_at(2 * *n as usize);
-            blocks.push(((*cx, *cy), cells_of_flat(cells)));
-            rest = tail;
-        }
+        let blocks = blocks_of(&chunks);
         flat_of(&self.overlay.around(&blocks, (q, r), radius))
+    }
+
+    /// The troop's attack after a step: the best legal push of `troop` (the hero's cell first) in the world `seed` against the enemies
+    /// within `world_push_reach` of the hero, `chunks` being the chunks that reach them (`around`), `broken` the broken cells. The push is
+    /// played on the fight; `undefined` when none is legal.
+    pub fn troop_push(
+        &mut self,
+        seed: u32,
+        troop: Vec<i32>,
+        chunks: Vec<i32>,
+        broken: Vec<i32>,
+    ) -> Option<PushResult> {
+        let terrain = broken_terrain(seed, &broken);
+        let played = self
+            .overlay
+            .troop_push(&blocks_of(&chunks), &pairs(&troop), terrain)?;
+        Some(PushResult {
+            troop: flat_of(&played.troop),
+            foes: flat_of(&played.foes),
+            enemies: flat_of(&played.enemies),
+            ejected: flat_of(&played.ejected),
+            dir: vec![played.dir.0, played.dir.1],
+        })
+    }
+
+    /// How far from the hero the enemies are that a push can reach.
+    pub fn push_reach() -> i32 {
+        PUSH_REACH
     }
 
     /// Plays a push: the enemies `old` leave, the enemies `new` stand, `ejected` of them are beaten.
@@ -293,6 +325,16 @@ impl Default for WorldFight {
     }
 }
 
+/// The terrain of a cell of the world `seed` as the hero left it: a broken boulder is rock, a broken tree grass (#1147).
+fn broken_terrain(seed: u32, broken: &[i32]) -> impl Fn(i32, i32) -> Option<Terrain> {
+    let broken = pairs(broken);
+    move |q, r| match terrain_at(u64::from(seed), q, r) {
+        Some(Terrain::Boulder) if broken.contains(&(q, r)) => Some(Terrain::Rock),
+        Some(Terrain::Tree) if broken.contains(&(q, r)) => Some(Terrain::Grass),
+        other => other,
+    }
+}
+
 /// The terrain of a cell of the world `seed`, `None` off the world.
 fn terrain_at(seed: u64, q: i32, r: i32) -> Option<Terrain> {
     let cell = world::cell(seed, q, r)?;
@@ -303,32 +345,6 @@ fn terrain_at(seed: u64, q: i32, r: i32) -> Option<Terrain> {
 fn pairs(flat: &[i32]) -> Vec<(i32, i32)> {
     let (chunks, _) = flat.as_chunks::<2>();
     chunks.iter().map(|&[q, r]| (q, r)).collect()
-}
-
-/// The encoding of `world_push` for any terrain (`None` off the world).
-fn push_encoded(
-    troop: &[(i32, i32)],
-    enemies: &[(i32, i32)],
-    terrain: &dyn Fn(i32, i32) -> Option<Terrain>,
-) -> Vec<i32> {
-    let Some(push) = worldfight::best_push(troop, enemies, terrain) else {
-        return Vec::new();
-    };
-    let (mut troop, mut enemies) = (troop.to_vec(), enemies.to_vec());
-    let gone = worldfight::apply_push(&mut troop, &mut enemies, &push);
-    let ejected = gone.first().copied().unwrap_or((0, 0));
-    let kind = match push.last {
-        Outcome::Slides(_) => 0,
-        Outcome::Ejected(Fall::Water) => 1,
-        Outcome::Ejected(Fall::Edge) => 2,
-    };
-    let (dq, dr) = push.dir.vector();
-    let mut out = vec![ejected.0, ejected.1, kind, troop.len() as i32];
-    out.extend(troop.iter().flat_map(|&(q, r)| [q, r]));
-    out.push(enemies.len() as i32);
-    out.extend(enemies.iter().flat_map(|&(q, r)| [q, r]));
-    out.extend([dq, dr]);
-    out
 }
 
 #[cfg(test)]
@@ -482,32 +498,51 @@ mod tests {
         assert_eq!(all.map(terrain_code), [0, 1, 2, 3, 4, 5, 6, 7]);
     }
 
+    /// The chunk list of `fight.troop_push` for the enemies the test lays: only the chunk `(cx, 0)`, no generated enemy.
+    fn chunk_of_row(cx: i32) -> Vec<i32> {
+        vec![cx, 0, 0]
+    }
+
     #[test]
     fn a_slide_keeps_the_order_of_the_troop_and_moves_the_enemy() {
         // The hero (0,0) and the marble (-1,0) push the enemy (1,0) east to (2,0), on the spawn clearing.
-        let out = world_push(9, vec![0, 0, -1, 0], vec![1, 0], vec![]);
-        assert_eq!(out, vec![0, 0, 0, 2, 1, 0, 0, 0, 1, 2, 0, 1, 0]);
+        let mut fight = WorldFight::new();
+        let chunks = vec![0, 0, 1, 1, 0];
+        let out = fight
+            .troop_push(9, vec![0, 0, -1, 0], chunks, vec![])
+            .unwrap();
+        assert_eq!(out.troop, vec![1, 0, 0, 0]);
+        assert_eq!(out.foes, vec![1, 0]);
+        assert_eq!(out.enemies, vec![2, 0]);
+        assert!(out.ejected.is_empty());
+        assert_eq!(out.dir, vec![1, 0]);
+        assert_eq!(fight.added(), vec![2, 0]);
+        assert_eq!(WorldFight::push_reach(), 10);
     }
 
     #[test]
-    fn a_push_into_water_ejects_the_last_enemy_as_kind_one() {
-        // Only the cell beyond the enemy is asked for: it is water.
-        let water = |_q: i32, _r: i32| Some(Terrain::Water);
-        let out = push_encoded(&[(2, 0), (1, 0), (0, 0)], &[(3, 0), (4, 0)], &water);
-        assert_eq!(out, vec![4, 0, 1, 3, 3, 0, 2, 0, 1, 0, 1, 4, 0, 1, 0]);
-    }
-
-    #[test]
-    fn a_push_off_the_world_ejects_the_last_enemy_as_kind_two() {
+    fn a_push_off_the_world_ejects_the_last_enemy() {
         // The world ends at q = 511: the enemy (511,0) is pushed onto (512,0), which is off it.
-        let out = world_push(9, vec![509, 0, 510, 0], vec![511, 0], vec![]);
-        assert_eq!(out, vec![511, 0, 2, 2, 510, 0, 511, 0, 0, 1, 0]);
+        let mut fight = WorldFight::new();
+        fight.apply(vec![], vec![511, 0], 0);
+        let out = fight
+            .troop_push(9, vec![509, 0, 510, 0], chunk_of_row(31), vec![])
+            .unwrap();
+        assert_eq!(out.ejected, vec![511, 0]);
+        assert!(out.enemies.is_empty());
+        assert_eq!(fight.beaten(), 1);
     }
 
     #[test]
-    fn no_legal_push_is_empty() {
-        assert!(world_push(9, vec![0, 0, -1, 0], vec![], vec![]).is_empty());
-        assert!(world_push(9, vec![0, 0], vec![1, 0], vec![]).is_empty());
+    fn no_legal_push_is_undefined_and_leaves_the_fight() {
+        let mut fight = WorldFight::new();
+        assert!(fight
+            .troop_push(9, vec![0, 0, -1, 0], vec![0, 0, 0], vec![])
+            .is_none());
+        assert!(fight
+            .troop_push(9, vec![0, 0], vec![0, 0, 1, 1, 0], vec![])
+            .is_none());
+        assert_eq!(fight.added(), Vec::<i32>::new());
     }
 
     /// A boulder or a tree of the seed 9 with a free cell on its west to start a line from, found in the world itself.
@@ -524,13 +559,18 @@ mod tests {
             let (q, r) = obstacle(kind);
             // Two marbles push the enemy next to the obstacle east, onto it.
             let troop = vec![q - 2, r, q - 3, r];
-            let enemies = vec![q - 1, r];
-            let refused = world_push(9, troop.clone(), enemies.clone(), vec![]);
-            assert!(refused.is_empty(), "{kind:?} blocks");
-            let elsewhere = world_push(9, troop.clone(), enemies.clone(), vec![q + 1, r]);
-            assert!(elsewhere.is_empty(), "another broken cell changes nothing");
-            let out = world_push(9, troop, enemies, vec![q, r]);
-            assert_eq!(out[..3], [0, 0, 0], "{kind:?} broken: the enemy slides");
+            let (cx, cy) = ((q - 1).div_euclid(16), r.div_euclid(16));
+            let chunks = vec![cx, cy, 1, q - 1, r];
+            let push = |broken: Vec<i32>| {
+                WorldFight::new().troop_push(9, troop.clone(), chunks.clone(), broken)
+            };
+            assert!(push(vec![]).is_none(), "{kind:?} blocks");
+            assert!(
+                push(vec![q + 1, r]).is_none(),
+                "another broken cell changes nothing"
+            );
+            let out = push(vec![q, r]).unwrap();
+            assert!(out.ejected.is_empty(), "{kind:?} broken: the enemy slides");
         }
     }
 

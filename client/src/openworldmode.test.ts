@@ -8,6 +8,7 @@ import { DEFAULT_YAW, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, TURN_ST
 import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
+import { world_chunk } from 'abalone-wasm';
 import { MAX_ZOOM, maxZoomFor, OpenWorldView, type PropModels, topOf } from './openworldview';
 import { CRUISE_MS, GLIDE_MS, NUDGE_MS, stepMs } from './openworldglide';
 
@@ -28,17 +29,14 @@ function sea(_seed: number, cx: number, cy: number): Uint8Array {
   for (let i = 0; i < CHUNK * CHUNK; i++) out.set([1, 0, 0], i * 3);
   return out;
 }
-type PushBridge = (seed: number, troop: Int32Array, enemies: Int32Array, broken: Int32Array) => Int32Array;
-const noPush: PushBridge = () => new Int32Array();
 const mode = (
   models: () => Promise<PropModels> = async () => ({ low: {}, high: {} }),
   load: (seed: number, cx: number, cy: number) => Uint8Array = (_seed, cx, cy) => bytes(cx, cy),
   reduced: () => boolean = () => true,
   foes: (seed: number, cx: number, cy: number) => Int32Array = (_seed, cx, cy) =>
     cx === 0 && cy === 0 ? Int32Array.of(5, 5, 6, 5, 7, 5) : new Int32Array(),
-  push: PushBridge = noPush,
   saves: WorldSaves = worldSaves(memoryStore(), 1),
-) => new OpenWorldMode(load, foes, models, reduced, push, saves);
+) => new OpenWorldMode(load, foes, models, reduced, saves);
 const body = () => document.body.dataset;
 
 afterEach(() => {
@@ -352,47 +350,53 @@ describe('a frame frees what it replaced only after its render (#1017)', () => {
   });
 });
 
-// The bridge's push of a step, echoing the troop it is given (the hero's cell first) and moving the enemy (3,0) to nowhere: the
-// hero stays where it is, the troop too; one enemy is left, at (3,0), and nothing is ejected (docs/specs/openworld.md section 4).
-const echo = (troop: Int32Array): Int32Array => Int32Array.of(0, 0, 0, troop.length / 2, ...troop, 1, 3, 0, 1, 0);
+// The troop's push is the engine's (abalone-core `worldoverlay`): these tests play it on the seed 1, whose spawn is a clearing, with the
+// generated enemy (2,0) of the loader below.
+const enemyAt2 = (_seed: number, cx: number, cy: number): Int32Array => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array());
+/** The terrain code of a cell of the world `seed` (`-1` off the world). */
+function terrainOf(seed: number, q: number, r: number): number {
+  const [cx, cy] = [Math.floor(q / CHUNK), Math.floor(r / CHUNK)];
+  const chunk = world_chunk(seed, cx, cy);
+  return chunk.length === 0 ? -1 : chunk[((r - cy * CHUNK) * CHUNK + (q - cx * CHUNK)) * 3 + 1]!;
+}
+/** A water cell of the seed with five open cells (sand, grass, rock) to its west, found in the world itself. */
+function shore(seed: number): Axial {
+  for (let r = -60; r < 60; r++) {
+    for (let q = -60; q < 60; q++) {
+      if (terrainOf(seed, q, r) === 0 && [1, 2, 3, 4, 5].every((k) => [1, 2, 3].includes(terrainOf(seed, q - k, r)))) return [q, r];
+    }
+  }
+  throw new Error('no shore');
+}
+const real = (seed: number, cx: number, cy: number): Uint8Array => world_chunk(seed, cx, cy);
 
 describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967)', () => {
-  it('plays the push of a step: the hero and the troop move to the cells of the bridge, the enemy moves and the counts are published', () => {
-    const push = vi.fn<PushBridge>(() => new Int32Array());
-    push.mockImplementationOnce(() => Int32Array.of(0, 0, 0, 3, 2, 0, 1, 0, 0, 0, 1, 3, 0, 1, 0));
-    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
+  it('plays the push of a step: the hero and the troop move to the cells of the engine, the enemy moves and the counts are published', () => {
+    const m = mode(undefined, undefined, undefined, enemyAt2);
     m.enter(1, 800, 600);
     expect(body().openworldPush).toBe('0');
     expect(tap(m, 'ArrowRight')).toBe(true);
-    expect(m.hero!.at).toEqual([2, 0]);
+    expect(m.hero!.at).toEqual([2, 0]); // the line (1,0) (0,0) (-1,0) pushed the enemy east, the hero with it
     expect(body().openworldAt).toBe('2,0');
-    expect(body().openworldTroop).toBe('1,0 0,0');
+    expect(body().openworldTroop).toBe('1,0 0,0 1,-1 -1,1 0,-1 0,1');
     expect(body().openworldEnemies).toBe('1');
+    expect(m.enemies()).toEqual([[3, 0]]);
     expect(body().openworldPush).toBe('1');
     expect(body().openworldBeaten).toBe('0');
-    const [seed, troop, enemies] = push.mock.calls[0]!;
-    expect(seed).toBe(1);
-    expect(Array.from(troop.slice(0, 4))).toEqual([1, 0, 0, 0]); // the hero's cell, then the troop's: the cell it left first
-    expect(troop).toHaveLength(14);
-    expect(Array.from(enemies)).toEqual([2, 0]); // the enemies within 10 cells of the hero
   });
 
   it('blocks the hero on the cell a pushed enemy now stands on, and frees the cell it stood on', () => {
-    const push = vi.fn<PushBridge>(() => new Int32Array());
-    push.mockImplementationOnce((_seed, troop) => echo(troop));
-    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
+    const m = mode(undefined, undefined, undefined, enemyAt2);
     m.enter(1, 800, 600);
-    tap(m, 'ArrowRight'); // the step pushes the enemy from (2,0) to (3,0)
-    expect(body().openworldAt).toBe('1,0');
-    expect(tap(m, 'ArrowRight')).toBe(true); // onto (2,0), its old cell: free
-    expect(body().openworldAt).toBe('2,0');
-    tap(m, 'ArrowRight'); // (3,0) holds the pushed enemy: the hero goes round it by (2,1), never onto it (#1137)
-    expect(body().openworldAt).toBe('2,1');
-    expect(push).toHaveBeenCalledTimes(3);
+    tap(m, 'ArrowRight'); // the step pushes the enemy from (2,0) to (3,0), the hero to (2,0)
+    expect(m.enemies()).toEqual([[3, 0]]);
+    tap(m, 'ArrowRight'); // (3,0) holds the pushed enemy: the hero never rolls onto it (#1137)
+    expect(body().openworldAt).not.toBe('3,0');
+    expect(m.enemies().length).toBe(1);
   });
 
-  it('plays nothing when the bridge gives no push: the enemies stay and no push is counted', () => {
-    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()));
+  it('plays nothing when no push is legal: the enemies stay and no push is counted', () => {
+    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(-9, 9) : new Int32Array()));
     m.enter(1, 800, 600);
     tap(m, 'ArrowRight');
     expect(body().openworldAt).toBe('1,0');
@@ -402,33 +406,28 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
   });
 
   it('counts an ejected enemy as beaten, and its cell is free', () => {
-    const push = vi.fn<PushBridge>(() => new Int32Array());
-    // The enemy (2,0) falls into water: the bridge's ejected cell, kind 1, no enemy left, the hero stays at (1,0).
-    push.mockImplementationOnce((_seed, troop) => Int32Array.of(2, 0, 1, troop.length / 2, ...troop, 0, 1, 0));
-    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
+    const [wq, wr] = shore(1);
+    const m = mode(undefined, real, () => true, () => new Int32Array());
     m.enter(1, 800, 600);
-    tap(m, 'ArrowRight');
+    m.fixture({ hero: [wq - 3, wr], troop: [[wq - 4, wr], [wq - 5, wr]], enemies: [[wq - 1, wr]] });
+    tap(m, 'ArrowRight'); // the line pushes the enemy on to the water
     expect(body().openworldBeaten).toBe('1');
     expect(body().openworldPush).toBe('1');
     expect(body().openworldEnemies).toBe('0');
     expect(m.enemies()).toEqual([]);
-    expect(tap(m, 'ArrowRight')).toBe(true);
-    expect(body().openworldAt).toBe('2,0');
   });
 
   it('pushes after a diagonal step too', () => {
-    const push = vi.fn<PushBridge>(() => new Int32Array());
-    const m = mode(undefined, undefined, undefined, undefined, push);
+    const m = mode();
     m.enter(1, 800, 600);
+    m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
     m.hold(['ArrowUp', 'ArrowRight']); // the stick's diagonal: one step, and the push after it
-    expect(push).toHaveBeenCalledTimes(1);
-    expect(body().openworldAt).toBe('1,0'); // the default camera (-30 degrees) shows the east cell nearest to up-right
+    expect(body().openworldPush).toBe('1');
+    expect(body().openworldAt).toBe('2,0'); // the default camera (-30 degrees) shows the east cell nearest to up-right
   });
 
   it('starts a fresh fight on each entry: the pushed enemies and the counts are the generated ones again', () => {
-    const push = vi.fn<PushBridge>(() => new Int32Array());
-    push.mockImplementationOnce((_seed, troop) => echo(troop));
-    const m = mode(undefined, undefined, undefined, (_seed, cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(2, 0) : new Int32Array()), push);
+    const m = mode(undefined, undefined, undefined, enemyAt2);
     m.enter(1, 800, 600);
     tap(m, 'ArrowRight');
     expect(body().openworldPush).toBe('1');
@@ -552,19 +551,10 @@ describe('the camera eases up a cliff (#988)', () => {
   });
 });
 
-// The bridge's push of the e2e fixture (#967): the hero's line (the hero and the first two troop marbles, the first two pairs) moves
-// one cell right, the enemy (2,0) goes to (3,0), the third marble stays. The troop keeps its order.
-const shove: PushBridge = (_seed, troop) => {
-  const moved = Int32Array.from(troop);
-  moved[0]! += 1;
-  moved[2]! += 1;
-  return Int32Array.of(0, 0, 0, troop.length / 2, ...moved, 1, 3, 0, 1, 0);
-};
-
 describe("the troop's push animation in the mode (docs/specs/openworld.md section 4, #967)", () => {
   // The fixture of the e2e push: the hero (0,0), the troop (-1,0) and (-2,0), the enemy (2,0). A Right press pushes it on to (3,0).
   const pushing = (reduced = false): OpenWorldMode => {
-    const m = mode(undefined, undefined, () => reduced, undefined, shove);
+    const m = mode(undefined, undefined, () => reduced);
     m.enter(1, 800, 600);
     m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
     return m;
@@ -592,10 +582,10 @@ describe("the troop's push animation in the mode (docs/specs/openworld.md sectio
     tap(pushing(), 'ArrowRight');
     expect(punch).toHaveBeenCalledWith(1000 + GLIDE_MS);
     expect(shake).not.toHaveBeenCalled();
-    const eject: PushBridge = (_seed, troop) => Int32Array.of(2, 0, 1, troop.length / 2, ...troop, 0, 1, 0);
-    const m = mode(undefined, undefined, () => false, undefined, eject);
+    const [wq, wr] = shore(1);
+    const m = mode(undefined, real, () => false, () => new Int32Array());
     m.enter(1, 800, 600);
-    m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[2, 0]] });
+    m.fixture({ hero: [wq - 3, wr], troop: [[wq - 4, wr], [wq - 5, wr]], enemies: [[wq - 1, wr]] });
     tap(m, 'ArrowRight');
     expect(shake).toHaveBeenCalledWith(1000 + GLIDE_MS);
   });
@@ -697,7 +687,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
   const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, broken: [], lairs: [], savedAt: 1 });
   const withSaves = (store = memoryStore()) => {
     const saves = worldSaves(store, 1);
-    return { store, saves, m: mode(undefined, undefined, undefined, undefined, undefined, saves) };
+    return { store, saves, m: mode(undefined, undefined, undefined, undefined, saves) };
   };
 
   it('a saved world is applied before the first draw: the hero, the troop, the fight and the beaten count', () => {
@@ -749,7 +739,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
 
   it('a push is saved with the step: the enemy pushed on to (3,0) is in the save', async () => {
     const store = memoryStore();
-    const m = mode(undefined, undefined, undefined, undefined, shove, worldSaves(store, 1));
+    const m = mode(undefined, undefined, undefined, undefined, worldSaves(store, 1));
     m.enter(7, 800, 600);
     m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[2, 0]] });
     tap(m, 'ArrowRight');
@@ -789,7 +779,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
       },
       1,
     );
-    const m = mode(undefined, undefined, undefined, undefined, undefined, broken);
+    const m = mode(undefined, undefined, undefined, undefined, broken);
     m.enter(7, 800, 600);
     tap(m, 'ArrowRight');
     frameOf(m);
@@ -827,7 +817,7 @@ describe('the New world control (#1021)', () => {
   it('discards the save of the world left, enters a random seed on the spawn and remembers it as the last one', async () => {
     const store = memoryStore();
     const saves = worldSaves(store, 1);
-    const m = mode(undefined, undefined, undefined, undefined, undefined, saves);
+    const m = mode(undefined, undefined, undefined, undefined, saves);
     store.data.set('openworld:7', { version: 1, seed: 7, hero: [2, 0], troop: [], fight: { removed: [], added: [], beaten: 0 }, savedAt: 1 });
     await m.open(7, 800, 600);
     expect(body().openworldAt).toBe('2,0');
@@ -869,7 +859,7 @@ describe('a held arrow slides round an obstacle instead of leaning (#1137)', () 
   afterEach(() => vi.restoreAllMocks());
   it('goes round an enemy ahead without a lean, and leans only when the sides are shut too', () => {
     const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
-    const m = mode(undefined, undefined, () => false, undefined, noPush);
+    const m = mode(undefined, undefined, () => false, undefined);
     m.enter(1, 800, 600);
     m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[1, 0]] });
     m.key('ArrowRight');
@@ -883,7 +873,7 @@ describe('a held arrow slides round an obstacle instead of leaning (#1137)', () 
     expect(nudge).toHaveBeenCalledTimes(1);
   });
   it('goes round a boulder and stops at the edge of the world', () => {
-    const m = mode(undefined, undefined, () => true, undefined, noPush);
+    const m = mode(undefined, undefined, () => true, undefined);
     m.enter(1, 800, 600);
     m.fixture({ hero: [0, 0], troop: [], enemies: [] });
     m.key('ArrowDown'); // the boulder of the test world is on (0, 1); down-right-ish steps round it
@@ -971,14 +961,14 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
   it('a saved yaw of 0 (an old save) opens at the nearest resting angle, 30 degrees (#1254)', async () => {
     const saves = worldSaves(memoryStore(), 1);
     await saves.put(7, [0, 0], [[0, 0]], new FightState(), 0);
-    const m = mode(undefined, undefined, undefined, undefined, undefined, saves);
+    const m = mode(undefined, undefined, undefined, undefined, saves);
     await m.open(7, 800, 600);
     expect(body().openworldYaw).toBe('30');
   });
 
   it('the turn is saved with the world: a frame writes it, and opening the world again applies it', async () => {
     const saves = worldSaves(memoryStore(), 1);
-    const m = mode(undefined, undefined, undefined, undefined, undefined, saves);
+    const m = mode(undefined, undefined, undefined, undefined, saves);
     m.enter(7, 800, 600);
     m.key('q');
     m.frame(() => {}, 0);
@@ -992,7 +982,7 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
 describe('the glide of a step in the mode (docs/specs/openworld.md section 4, #1040)', () => {
   // The hero (0,0) with the troop behind it; the cell (1,0) is free, so a Right press steps onto it.
   const standing = (reduced = false, foes: Axial[] = []): OpenWorldMode => {
-    const m = mode(undefined, undefined, () => reduced, undefined, noPush);
+    const m = mode(undefined, undefined, () => reduced, undefined);
     m.enter(1, 800, 600);
     m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: foes });
     return m;
@@ -1259,7 +1249,7 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
 
   it('a lean into a wall is kept on the cadence too, and the next key down leans at once again', () => {
     const nudge = vi.spyOn(OpenWorldView.prototype, 'nudge');
-    const m = mode(undefined, undefined, () => false, undefined, noPush);
+    const m = mode(undefined, undefined, () => false, undefined);
     m.enter(1, 800, 600);
     m.fixture({ hero: [0, 0], troop: [[-1, 0], [-2, 0]], enemies: [[1, 0], [1, -1], [0, 1]] }); // enemies ahead: a wall
     m.key('ArrowRight');
@@ -1309,13 +1299,13 @@ describe('the particles in the mode frame (#1110)', () => {
 
   it('puffs dust at a step with motion on, none under reduced motion', () => {
     const puff = vi.spyOn(OpenWorldView.prototype, 'puff');
-    const live = mode(undefined, meadow, () => false, undefined, noPush);
+    const live = mode(undefined, meadow, () => false, undefined);
     live.enter(1, 800, 600);
     live.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [] });
     tap(live, 'ArrowRight');
     expect(puff).toHaveBeenCalledTimes(1);
     puff.mockClear();
-    const still = mode(undefined, meadow, () => true, undefined, noPush);
+    const still = mode(undefined, meadow, () => true, undefined);
     still.enter(1, 800, 600);
     still.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [] });
     tap(still, 'ArrowRight');
@@ -1343,7 +1333,7 @@ describe('the particles in the mode frame (#1110)', () => {
 describe('the hero breaks a boulder in the mode (#1147)', () => {
   const settle = () => new Promise((done) => setTimeout(done));
   const beside = (reduced = false, saves = worldSaves(memoryStore(), 1)): OpenWorldMode => {
-    const m = mode(undefined, undefined, () => reduced, undefined, noPush, saves);
+    const m = mode(undefined, undefined, () => reduced, undefined, saves);
     m.enter(1, 800, 600);
     m.fixture({ hero: [0, 2], troop: [[1, 2], [2, 2]], enemies: [] });
     return m;
@@ -1373,18 +1363,6 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
     expect(smash).not.toHaveBeenCalled();
   });
 
-  it('gives the broken cells to the troop push, so a push into one is legal (#1154)', () => {
-    const push = vi.fn<PushBridge>(() => new Int32Array());
-    const m = mode(undefined, undefined, () => true, undefined, push);
-    m.enter(1, 800, 600);
-    m.fixture({ hero: [-1, 2], troop: [[-2, 2], [-3, 2]], enemies: [] });
-    tap(m, 'ArrowRight');
-    expect(Array.from(push.mock.calls.at(-1)![3])).toEqual([]);
-    tap(m, 'ArrowLeft');
-    expect(m.hero!.at).toEqual([0, 1]);
-    expect(Array.from(push.mock.calls.at(-1)![3])).toEqual([0, 1]);
-  });
-
   it('saves the broken cell with the world, and a world entered from that save has it broken', async () => {
     const store = memoryStore();
     const saves = worldSaves(store, 1);
@@ -1394,7 +1372,7 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
     await settle();
     expect(store.data.get('openworld:1')).toMatchObject({ broken: [[0, 1]] });
     const back = (await saves.load(1))!;
-    const again = mode(undefined, undefined, undefined, undefined, noPush, saves);
+    const again = mode(undefined, undefined, undefined, undefined, saves);
     again.enter(1, 800, 600, back);
     expect(JSON.parse(body().openworldDrawn!)['prop-boulder']).toBe(0);
     expect(body().openworldBroken).toBe('1');
@@ -1418,7 +1396,7 @@ describe('the marbles wear the skins of the ship (#1176)', () => {
     const skins = worn();
     const asked = vi.fn(async () => skins);
     const m = new OpenWorldMode(
-      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, noPush,
+      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true,
       worldSaves(memoryStore(), 1), undefined, undefined, asked,
     );
     await m.open(1, 800, 600);
@@ -1440,7 +1418,7 @@ describe('tap to walk and the steering setting (#1137, docs/specs/openworld.md s
   let clock = 0;
   const walker = (path: PathBridge, steering: () => boolean = () => true, foes: Int32Array = new Int32Array(), lairs = new Int32Array()) =>
     new OpenWorldMode(
-      (_seed, cx, cy) => bytes(cx, cy), (_seed, cx, cy) => (cx === 0 && cy === 0 ? foes : new Int32Array()), async () => ({ low: {}, high: {} }), () => true, noPush,
+      (_seed, cx, cy) => bytes(cx, cy), (_seed, cx, cy) => (cx === 0 && cy === 0 ? foes : new Int32Array()), async () => ({ low: {}, high: {} }), () => true,
       worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, path, steering,
     );
   const along = (...cells: Axial[]): PathBridge => () => Int32Array.from(cells.flat());
@@ -1590,7 +1568,7 @@ describe('tap to walk and the steering setting (#1137, docs/specs/openworld.md s
     far([3, 0]);
     const onLair = vi.fn();
     const m = new OpenWorldMode(
-      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, noPush,
+      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true,
       worldSaves(memoryStore(), 1), () => Int32Array.of(2, 0), onLair, undefined, undefined, undefined, along([1, 0], [2, 0]),
     );
     m.enter(1, 800, 600);
@@ -1613,7 +1591,7 @@ describe('tap to walk and the steering setting (#1137, docs/specs/openworld.md s
 describe('the scene of a world is released to the renderer (#1258)', () => {
   const releasing = (release: (scene: THREE.Scene) => void) =>
     new OpenWorldMode(
-      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, noPush,
+      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true,
       worldSaves(memoryStore(), 1), undefined, undefined, undefined, undefined, undefined, undefined, undefined, release,
     );
 
@@ -1634,7 +1612,7 @@ describe('the Dungeon button walks to the nearest tower (#1291)', () => {
   type Bridge = (seed: number, from: Axial, beaten: Int32Array, blocked: Int32Array, broken: Int32Array) => Int32Array;
   const dungeoner = (dungeon?: Bridge, foes = new Int32Array(), lairs = new Int32Array()) =>
     new OpenWorldMode(
-      (_seed, cx, cy) => bytes(cx, cy), (_seed, cx, cy) => (cx === 0 && cy === 0 ? foes : new Int32Array()), async () => ({ low: {}, high: {} }), () => true, noPush,
+      (_seed, cx, cy) => bytes(cx, cy), (_seed, cx, cy) => (cx === 0 && cy === 0 ? foes : new Int32Array()), async () => ({ low: {}, high: {} }), () => true,
       worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, undefined, undefined, undefined, dungeon,
     );
   beforeEach(() => {
