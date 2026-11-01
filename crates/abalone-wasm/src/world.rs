@@ -56,6 +56,12 @@ pub fn world_chunk(seed: u32, cx: i32, cy: i32) -> Vec<u8> {
         .collect()
 }
 
+/// Whether the cell `(q, r)` of the world `seed` is a boulder or a tree, so a peer's signed "broken" event for it can be true (#1305).
+#[wasm_bindgen]
+pub fn world_can_break(seed: u32, q: i32, r: i32) -> bool {
+    world::can_break(u64::from(seed), q, r)
+}
+
 /// The enemy marbles that start in chunk `(cx, cy)` of the world `seed`: `q, r` pairs, the groups one
 /// after the other; empty off the world.
 #[wasm_bindgen]
@@ -443,6 +449,17 @@ mod tests {
         assert_eq!(round.len(), 8);
         assert_eq!(round[6..], [3, 0]);
         assert!(world_path(9, 0, 0, 0, 0, vec![], vec![]).is_empty());
+    }
+
+    #[test]
+    fn can_break_matches_the_generated_terrain() {
+        let breakable = (-40..40)
+            .flat_map(|q| (-40..40).map(move |r| (q, r)))
+            .filter(|&(q, r)| world_can_break(5, q, r))
+            .count();
+        assert!(breakable > 0 && breakable < 6400);
+        assert!(!world_can_break(5, 0, 0)); // the spawn clearing
+        assert!(!world_can_break(5, 100_000, 0)); // off the world
     }
 
     #[test]

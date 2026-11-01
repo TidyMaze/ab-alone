@@ -1,0 +1,95 @@
+{
+ "sun": {
+  "color": "#ffd9a8",
+  "energy": 3.9,
+  "azimuth_left_deg": 25,
+  "elevation_deg": 28,
+  "rotation_euler": [
+   1.0821040868759155,
+   -4.412963150457472e-08,
+   -2.7052602767944336
+  ]
+ },
+ "rim": {
+  "color": "#7fd6e8",
+  "energy": 1.2000000476837158
+ },
+ "sky_ambient": {
+  "sky": "#9db8d8",
+  "ground": "#5a4636"
+ },
+ "camera": {
+  "fov_vertical": 40,
+  "default_pitch_deg": 50,
+  "default_distance": 13.6,
+  "dist_min": 6,
+  "dist_max": 18
+ },
+ "materials": {
+  "kit_mat_alpha_haze": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_alpha_shadow": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_emissive": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_marble_black": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_marble_blue": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_marble_gold": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_marble_green": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_marble_red": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_marble_white": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_sky": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_sun": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_vertexcolor": [
+   0,
+   0,
+   0
+  ],
+  "kit_mat_vertexcolor_cull": [
+   0,
+   0,
+   0
+  ]
+ }
+}

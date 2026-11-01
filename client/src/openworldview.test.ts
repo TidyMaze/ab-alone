@@ -202,7 +202,7 @@ describe('loading the Blender models (client/models/openworld.glb, openworld-hi.
     expect(loader.loadAsync).toHaveBeenCalledWith(urls.low);
     expect(loader.loadAsync).toHaveBeenCalledWith(urls.high);
     expect(Object.keys(models.low).sort()).toEqual(['mountain', 'tree', 'wall']);
-    expect(Object.keys(models.high).sort()).toEqual(['boulder', 'mountain', 'tree', 'wall']);
+    expect(Object.keys(models.high).sort()).toEqual(['mountain', 'tree', 'wall']); // the boulder is the 20-triangle shell, whatever the file holds (#1315)
   });
 
   it('keeps the low-poly models when only the detailed file fails: the low-poly props draw every cell', async () => {
@@ -1035,16 +1035,32 @@ describe('the water (docs/specs/openworld.md section 2): depth, a glossy surface
     expect(wet.hasWater).toBe(true);
   });
 
-  it('breathes the glow of the water slowly with time, and holds it still at 0', () => {
+  it('lakes have no glow of their own: a black emissive, and nothing breathes it (#1315)', () => {
+    expect(LOOK.water.emissive).toBe(0x000000);
     const view = new OpenWorldView(new World(terrain(() => WATER_CODE)));
     view.show([0, 0]);
     const water = mesh(view, 'terrain-water').material as THREE.MeshStandardMaterial;
-    view.glow(0);
-    expect(water.emissiveIntensity).toBeCloseTo(1);
-    view.glow((1200 * Math.PI) / 2);
-    expect(water.emissiveIntensity).toBeCloseTo(1.15);
-    view.glow(Math.PI * 1200 * 1.5);
-    expect(water.emissiveIntensity).toBeCloseTo(0.85);
+    expect(water.emissive.getHex()).toBe(0x000000);
+    expect(water.emissiveIntensity).toBe(1);
+    expect('glow' in view).toBe(false);
+  });
+
+  it('draws a boulder as a black 20-triangle shell sphere, with no glow (#1315)', () => {
+    const view = new OpenWorldView(new World(terrain(() => GRASS_CODE)));
+    const boulder = mesh(view, 'prop-boulder');
+    const position = boulder.geometry.getAttribute('position');
+    expect((boulder.geometry.index?.count ?? position.count) / 3).toBe(20);
+    const material = boulder.material as THREE.MeshStandardMaterial;
+    expect(material.emissive.getHex()).toBe(0x000000);
+    expect(material.color.getHex()).toBe(0x3a3631); // warm charcoal: shows on slate, never a black marble
+    expect(material.roughness).toBe(1); // matte
+    expect(material.vertexColors).toBe(true);
+    const shade = boulder.geometry.getAttribute('color');
+    const normal = boulder.geometry.getAttribute('normal');
+    const ups = Array.from({ length: shade.count }, (_, i) => [normal.getY(i) > 0.5, shade.getX(i)] as const);
+    expect(ups.some(([up]) => up)).toBe(true);
+    for (const [up, value] of ups) expect(value).toBeCloseTo(up ? 1.15 : 1); // the top faces are 15 % lighter
+    expect(mesh(view, 'prop-boulder-hi').geometry.getAttribute('position').count).toBe(position.count); // near the hero it is the same shell
   });
 });
 
@@ -2093,6 +2109,19 @@ describe('the particles of the Open world (#1110)', () => {
       expect(mesh(view, 'prop-boulder').count).toBe(0);
     });
 
+    it('says whether the prop of a cell is drawn: a boulder or a tree laid, not one broken, none on open ground, none off the laid chunks', () => {
+      const { world, view } = standing(true);
+      expect(view.hasProp([1, 0], 'boulder')).toBe(true);
+      expect(view.hasProp([0, 2], 'tree')).toBe(true);
+      expect(view.hasProp([2, 0], 'boulder')).toBe(false); // nothing there
+      expect(view.hasProp([1, 0], 'grass')).toBe(false); // open ground has no prop
+      expect(view.hasProp([900, 900], 'boulder')).toBe(false); // far from every chunk laid
+      world.smash(1, 0);
+      view.smash([1, 0], 'boulder', 100, false);
+      expect(view.hasProp([1, 0], 'boulder')).toBe(false);
+      expect(new OpenWorldView(new World(withProps)).hasProp([1, 0], 'boulder')).toBe(false); // nothing shown yet
+    });
+
     it('takes it out of the detailed mesh near the hero, and a tree too', () => {
       const { world, view } = standing(true);
       expect(mesh(view, 'prop-boulder-hi').count).toBe(1);
@@ -2159,7 +2188,7 @@ describe('the refined look of the Open world (#1138)', () => {
     }
   });
 
-  it('grades the terrain toward the ship (#1173): low saturation on every ground and biome, the lake glow dimmed', () => {
+  it('grades the terrain toward the ship (#1173): low saturation on every ground and biome, the lake without a glow', () => {
     const saturation = (hex: number): number => {
       const [r, g, b] = [hex >> 16, (hex >> 8) & 255, hex & 255].map((v) => v / 255) as [number, number, number];
       const max = Math.max(r, g, b);
@@ -2173,7 +2202,7 @@ describe('the refined look of the Open world (#1138)', () => {
     expect(saturation(WATER.deep)).toBeLessThanOrEqual(0.5);
     expect(LOOK.grass.color).toBe(0x446957);
     expect(LOOK.rock.color).toBe(0x4b4f55);
-    expect(LOOK.water.emissive).toBe(0x052a34);
+    expect(LOOK.water.emissive).toBe(0x000000); // no glow (#1315)
     expect(WATER).toEqual({ shore: 0x5392a5, deep: 0x2a516e });
     expect(BIOME_LOOK.desert.ground).toBe(0xaa9469);
     expect(BIOME_LOOK.tundra.ground).toBe(0xc4d0d8);
@@ -2262,14 +2291,11 @@ describe('the flat tops of the low tier (#1234)', () => {
     expect(ground(view)).toBe(49 * CHUNK * CHUNK);
   });
 
-  it('still knows the lake and the glow of the water when every cell is a flat top', () => {
+  it('still knows the lake when every cell is a flat top', () => {
     const wet = lowView(terrain(() => WATER_CODE));
     wet.show([0, 0]);
     expect(mesh(wet, 'terrain-water').count).toBe(EDGE_RING);
     expect(wet.hasWater).toBe(true);
-    wet.glow((1200 * Math.PI) / 2);
-    expect((mesh(wet, 'terrain-water-flat').material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(1.15);
-    expect((mesh(wet, 'terrain-water').material as THREE.MeshStandardMaterial).emissiveIntensity).toBeCloseTo(1.15);
   });
 
   it('draws sand as flat tops when no sand cell has a lower neighbour', () => {

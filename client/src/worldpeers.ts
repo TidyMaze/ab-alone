@@ -2,6 +2,7 @@
 // what it keeps of the others. Pure code, no network. Messages are small and unsigned: a peer lies only about itself, so a
 // position is cosmetic. Everything received is untrusted bytes, checked here before it is used.
 import type { Axial } from './board';
+import { b64, unb64 } from './moverecord';
 import { read, write, type Store } from './quality';
 
 /** The seed of the one public world every player lands in by default (lead decision on #1305). New world stays private. */
@@ -13,8 +14,33 @@ export const roomOf = (seed: number): string => `ow:${seed}:0`;
 const VERSION = 2;
 const HELLO = 1;
 const POS = 2;
+const BREAK = 3;
 
-export type Message = { t: 'hello'; name: string } | { t: 'pos'; q: number; r: number; seq: number };
+/** A hero broke the obstacle on a cell of the world `seed` (#1305): signed by its key (`pub`, `sig` in base64url), see worldevents.ts. */
+export interface BreakEvent {
+  seed: number;
+  q: number;
+  r: number;
+  pub: string;
+  sig: string;
+}
+
+/** A break event on the wire: version, type, seed (u32), q and r (int16), the 32-byte key, the 64-byte signature. */
+export const BREAK_BYTES = 2 + 4 + 2 + 2 + 32 + 64;
+
+export function encodeBreak(e: BreakEvent): Uint8Array {
+  const out = new Uint8Array(BREAK_BYTES);
+  const view = new DataView(out.buffer);
+  out.set([VERSION, BREAK]);
+  view.setUint32(2, e.seed);
+  view.setInt16(6, int16(e.q));
+  view.setInt16(8, int16(e.r));
+  out.set(unb64(e.pub), 10);
+  out.set(unb64(e.sig), 42);
+  return out;
+}
+
+export type Message = { t: 'break'; event: BreakEvent } | { t: 'hello'; name: string } | { t: 'pos'; q: number; r: number; seq: number };
 
 /** At most 4 positions a second. */
 export const SEND_MS = 250;
@@ -76,8 +102,13 @@ export function encodePos(q: number, r: number, seq: number): Uint8Array {
 export function decode(data: unknown): Message | null {
   if (!(data instanceof Uint8Array) || data.length < 2 || data[0] !== VERSION) return null;
   if (data[1] === HELLO) return data.length <= 2 + 4 * MAX_NAME ? { t: 'hello', name: nameOf(data.subarray(2)) } : null;
-  if (data[1] !== POS || data.length !== 7) return null;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  if (data[1] === BREAK) {
+    if (data.length !== BREAK_BYTES) return null;
+    const event = { seed: view.getUint32(2), q: view.getInt16(6), r: view.getInt16(8), pub: b64(data.slice(10, 42).buffer), sig: b64(data.slice(42).buffer) };
+    return { t: 'break', event };
+  }
+  if (data[1] !== POS || data.length !== 7) return null;
   return { t: 'pos', q: view.getInt16(2), r: view.getInt16(4), seq: data[6]! };
 }
 

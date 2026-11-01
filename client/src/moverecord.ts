@@ -20,13 +20,13 @@ export interface Keys {
 /** `prev` of the first record of a game. */
 export const GENESIS = '0'.repeat(64);
 
-const ED = { name: 'Ed25519' } as const;
+export const ED = { name: 'Ed25519' } as const;
 
-const b64 = (bytes: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint8Array(bytes)))
+export const b64 = (bytes: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint8Array(bytes)))
   .replace(/\+/g, '-')
   .replace(/\//g, '_')
   .replace(/=+$/, '');
-const unb64 = (s: string): Uint8Array<ArrayBuffer> =>
+export const unb64 = (s: string): Uint8Array<ArrayBuffer> =>
   Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
 /** Join message: the sender's key and the seat it asks for. The creator's Hello also carries the roster, the keys by seat. */
@@ -116,7 +116,7 @@ const reportPayload = (r: Omit<Report, 'sig'>): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify(['report', r.game, r.hash, r.status, r.side, r.rating, r.pub]));
 
 /** Whether `sig` is `pub`'s signature of `bytes`. Malformed base64 or key bytes are a refusal, never a throw. */
-async function signedBy(pub: string, sig: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean> {
+export async function signedBy(pub: string, sig: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean> {
   try {
     const key = await crypto.subtle.importKey('raw', unb64(pub), ED, false, ['verify']);
     return await crypto.subtle.verify(ED, key, unb64(sig), bytes);

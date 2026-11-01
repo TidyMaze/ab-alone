@@ -281,8 +281,7 @@ describe('the Open world mode', () => {
     expect(m.active).toBe(false);
   });
 
-  it('draws every frame while a lake is in view and motion is on, and moves the glow of the water', () => {
-    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+  it('draws every frame while a lake is in view and motion is on, and the water keeps no glow of its own (#1315)', () => {
     const m = mode(undefined, sea, () => false);
     m.enter(1, 800, 600);
     const glow: number[] = [];
@@ -290,14 +289,11 @@ describe('the Open world mode', () => {
       const water = scene.getObjectByName('terrain-water') as THREE.InstancedMesh;
       glow.push((water.material as THREE.MeshStandardMaterial).emissiveIntensity);
     });
-    m.frame(render);
-    now.mockReturnValue((1200 * Math.PI) / 2);
-    m.frame(render);
-    m.frame(render);
+    m.frame(render, 0);
+    m.frame(render, 1000);
+    m.frame(render, 2000);
     expect(render).toHaveBeenCalledTimes(3);
-    expect(glow[0]).toBeCloseTo(1);
-    expect(glow[1]).toBeCloseTo(1.15);
-    now.mockRestore();
+    expect(glow).toEqual([1, 1, 1]);
   });
 
   it('holds the lake still on the low tier: a lake alone draws no frame after the first (#1234)', () => {
@@ -1363,6 +1359,47 @@ describe('the hero breaks a boulder in the mode (#1147)', () => {
     expect(smash).not.toHaveBeenCalled();
   });
 
+  it('a break of another hero (#1305) opens the cell, takes its prop out and plays the shards, and a cell that is no obstacle does nothing', () => {
+    const smash = vi.spyOn(OpenWorldView.prototype, 'smash');
+    const m = beside();
+    const render = vi.fn();
+    m.frame(render, 1000);
+    m.remoteBreak([1, 2]); // open ground
+    m.remoteBreak([900, 900]); // off the loaded world
+    expect(smash).not.toHaveBeenCalled();
+    m.remoteBreak([0, 1]);
+    expect(smash).toHaveBeenCalledWith([0, 1], 'boulder', expect.any(Number), false);
+    expect(JSON.parse(body().openworldDrawn!)['prop-boulder']).toBe(0);
+    expect(body().openworldBroken).toBe('1');
+    m.frame(render, 1016);
+    expect(render).toHaveBeenCalledTimes(2); // the break is drawn
+    m.remoteBreak([0, 1]); // twice: it is open now
+    expect(smash).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens a cell whose prop is not drawn without the shards, and does nothing before a world is entered', () => {
+    const m = beside(true);
+    vi.spyOn(OpenWorldView.prototype, 'hasProp').mockReturnValue(false);
+    const smash = vi.spyOn(OpenWorldView.prototype, 'smash');
+    m.remoteBreak([0, 1]);
+    expect(smash).not.toHaveBeenCalled();
+    expect(body().openworldBroken).toBe('1'); // opened all the same
+    expect(m.hero!.at).toEqual([0, 2]);
+    expect(() => mode().remoteBreak([0, 1])).not.toThrow();
+  });
+
+  it('tells the peers host which cell the hero broke, and none when it broke nothing', () => {
+    const peers = { enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn() };
+    const quiet = beside();
+    quiet.peers = peers;
+    tap(quiet, 'ArrowRight');
+    expect(peers.broke).not.toHaveBeenCalled();
+    const m = beside();
+    m.peers = peers;
+    tap(m, 'ArrowLeft');
+    expect(peers.broke).toHaveBeenCalledWith([0, 1]);
+  });
+
   it('saves the broken cell with the world, and a world entered from that save has it broken', async () => {
     const store = memoryStore();
     const saves = worldSaves(store, 1);
@@ -1647,7 +1684,7 @@ describe('the Dungeon button walks to the nearest tower (#1291)', () => {
 });
 
 describe('the Open world mode and the online peers (#1305)', () => {
-  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn() });
+  const host = () => ({ enter: vi.fn(), frame: vi.fn(() => false), leave: vi.fn(), broke: vi.fn() });
 
   it('hands the world entered to the peers host, and tells it when the world is left, by Escape or by another world', () => {
     const m = mode();

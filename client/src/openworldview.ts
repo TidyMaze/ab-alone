@@ -192,7 +192,7 @@ export const GROUND: Record<Terrain, Ground> = {
 export const SHIP_BLACK = 0x0b0d0f;
 export const SODIUM = 0xd9822b;
 export const LOOK: Record<Ground, { color: number; emissive: number }> = {
-  water: { color: 0xffffff, emissive: 0x052a34 }, // coolant lakes glow a little; the colour comes per cell (waterColor)
+  water: { color: 0xffffff, emissive: 0x000000 }, // the lakes have no glow of their own (#1315); the colour comes per cell (waterColor)
   sand: { color: 0x877d65, emissive: 0x000000 },
   grass: { color: 0x446957, emissive: 0x000000 },
   rock: { color: 0x4b4f55, emissive: 0x000000 },
@@ -224,11 +224,21 @@ export function waterColor(world: World, q: number, r: number): THREE.Color {
   return new THREE.Color(WATER.shore).lerp(new THREE.Color(WATER.deep), wet);
 }
 
+/** The frozen crew's shell: a 20-triangle sphere whose top faces are 15 % lighter than the rest (vertex colours, a ratio of the material colour). */
+function shell(): THREE.BufferGeometry {
+  const geometry = new THREE.IcosahedronGeometry(0.34);
+  const normal = geometry.getAttribute('normal');
+  const shade = new Float32Array(normal.count * 3);
+  for (let i = 0; i < normal.count; i++) shade.fill(normal.getY(i) > 0.5 ? 1.15 : 1, i * 3, i * 3 + 3);
+  geometry.setAttribute('color', new THREE.BufferAttribute(shade, 3));
+  return geometry;
+}
+
 /** The props on top of the ground: its height, its look and its geometry. */
 const PROPS = {
   mountain: { geometry: new THREE.ConeGeometry(0.62, 1, 6), color: 0x5d6978, emissive: 0x2a1f0c, flat: true },
   tree: { geometry: new THREE.ConeGeometry(0.34, 1, 5), color: 0x2fb5a0, emissive: 0x0b3d36, flat: true },
-  boulder: { geometry: new THREE.DodecahedronGeometry(0.34), color: 0x6b7480, emissive: 0x000000, flat: true },
+  boulder: { geometry: shell(), color: 0x3a3631, emissive: 0x000000, flat: true }, // a frozen crew's shell: 20 triangles, warm charcoal, matte (#1315)
   wall: { geometry: new THREE.CylinderGeometry(0.5, 0.5, 1, 6), color: 0x14171b, emissive: 0x000000, flat: false },
   cap: { geometry: new THREE.CylinderGeometry(0.52, 0.52, 1, 6), color: SODIUM, emissive: 0x6c4115, flat: false },
 } as const;
@@ -237,6 +247,8 @@ const PROP_NAMES = Object.keys(PROPS) as Prop[];
 /** The props that have a model in Blender: the low-poly one in `client/models/openworld.glb` (`ow_<prop>`) and the detailed one
  * in `openworld-hi.glb` (`ow_<prop>_hi`), drawn near the hero (#989). */
 const MODELLED = ['mountain', 'tree', 'boulder', 'wall'] as const;
+/** The props read from the files: the boulder stays the 20-triangle shell sphere of `PROPS` (#1315), whatever the files hold. */
+const FROM_FILES = MODELLED.filter((prop) => prop !== 'boulder');
 /** The landmark of a boss lair (#1171), in `openworld-lair.glb`: the open one and the beaten one, painted by vertex colours. */
 const LAIR_MODELS = ['lair', 'lair_beaten'] as const;
 export type PropGeometries = Partial<Record<Prop | (typeof LAIR_MODELS)[number], THREE.BufferGeometry>>;
@@ -249,7 +261,7 @@ async function readModels(
   url: string,
   loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> },
   suffix: string,
-  names: readonly (Prop | (typeof LAIR_MODELS)[number])[] = MODELLED,
+  names: readonly (Prop | (typeof LAIR_MODELS)[number])[] = FROM_FILES,
 ): Promise<PropGeometries> {
   try {
     const { scene } = await loader.loadAsync(url);
@@ -312,7 +324,7 @@ export const variety = (q: number, r: number): number => (((Math.imul(q, 7385609
 /** The material of a prop's mesh: its look, the same for its low-poly and its detailed mesh. */
 const propMaterial = (prop: Prop, sway: THREE.Node): THREE.Material => {
   const { color, emissive, flat } = PROPS[prop];
-  const look = { color, emissive, roughness: 0.8, flatShading: flat };
+  const look = { color, emissive, roughness: prop === 'boulder' ? 1 : 0.8, flatShading: flat, vertexColors: prop === 'boulder' };
   if (prop !== 'tree') return new THREE.MeshStandardMaterial(look);
   const material = new THREE.MeshStandardNodeMaterial(look); // the trees lean in the wind with a term of their vertex shader (#1102)
   material.positionNode = sway;
@@ -644,7 +656,7 @@ export class OpenWorldView {
     return this.limit;
   }
 
-  /** Whether a lake is drawn, so its glow moves. */
+  /** Whether a lake is drawn, so its foam and ripples move. */
   get hasWater(): boolean {
     return this.grounds.water.count + this.flats.water.count > 0;
   }
@@ -686,6 +698,14 @@ export class OpenWorldView {
     if (this.drawnLevel > ROLL_ZOOM) return;
     const { x, y, z } = this.hero.position;
     this.particles.puff(x, y - MARBLE + 0.05, z, now);
+  }
+
+  /** Whether the prop of `terrain` stands drawn on `cell` now: a break of another hero (#1305) plays its shards only then, the prop
+   * of a cell on a chunk not laid is not in a mesh to take out. */
+  hasProp([q, r]: Axial, terrain: Terrain): boolean {
+    const prop = PROP_OF[terrain];
+    if (!prop || !this.laidHero) return false;
+    return this.slots.get(this.route(prop, hexDistance([q, r], this.laidHero) <= HI_RADIUS))!.at.has(cellKey(q, r));
   }
 
   /** The hero broke the `terrain` obstacle on `cell` at `now` (ms) (#1147): the world has the cell open already. Its prop leaves its mesh,
@@ -741,11 +761,6 @@ export class OpenWorldView {
     if (!neighbours(from).some(wet) && !neighbours(to).some(wet)) return;
     const p = axialTo3D(to[0], to[1]);
     this.ripplePool.spawn(p.x, p.z, now);
-  }
-
-  /** The glow of the water breathes slowly: `ms` is the time, 0 holds it still (reduced motion). */
-  glow(ms: number): void {
-    for (const mesh of [this.grounds.water, this.flats.water]) (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 1 + 0.15 * Math.sin(ms / 1200);
   }
 
   /** Draws the world around the hero at `at`: the chunks are rebuilt when the hero's ball leaves the loaded square (`frame`),

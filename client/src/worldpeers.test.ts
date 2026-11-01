@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cleanName, decode, encodeHello, encodePos, hexDistance, KEEPALIVE_MS, MAX_NAME, MAX_PEERS, MIN_GAP_MS, PEER_TTL_MS, Peers, PUBLIC_SEED, readName, roomOf, SEND_MS, Sender, writeName } from './worldpeers';
+import { b64 } from './moverecord';
+import { BREAK_BYTES, cleanName, decode, encodeBreak, encodeHello, encodePos, hexDistance, KEEPALIVE_MS, MAX_NAME, MAX_PEERS, MIN_GAP_MS, PEER_TTL_MS, Peers, PUBLIC_SEED, readName, roomOf, SEND_MS, Sender, writeName } from './worldpeers';
 
 describe('the wire format', () => {
   it('names one room for the public world', () => {
@@ -63,6 +64,24 @@ describe('the stored public name', () => {
     expect(readName(store)).toBe('b'.repeat(16)); // a stored value is cleaned too
     expect(readName(null)).toBe('');
     expect(() => writeName(null, 'x')).not.toThrow();
+  });
+});
+
+describe('the broken-cell event on the wire', () => {
+  const event = { seed: 1305, q: -7, r: 300, pub: b64(new Uint8Array(32).fill(7).buffer), sig: b64(new Uint8Array(64).fill(9).buffer) };
+
+  it('is 106 bytes: version, type 3, seed, q, r, the 32-byte key and the 64-byte signature', () => {
+    const bytes = encodeBreak(event);
+    expect(bytes).toHaveLength(BREAK_BYTES);
+    expect(BREAK_BYTES).toBe(106);
+    expect([...bytes.subarray(0, 2)]).toEqual([2, 3]);
+    expect(decode(bytes)).toEqual({ t: 'break', event });
+  });
+
+  it('refuses a break of another length', () => {
+    const bytes = encodeBreak(event);
+    expect(decode(bytes.subarray(0, 105))).toBeNull();
+    expect(decode(Uint8Array.of(...bytes, 0))).toBeNull();
   });
 });
 
