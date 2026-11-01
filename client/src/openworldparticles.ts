@@ -20,6 +20,8 @@ export interface Look {
   sway: number;
   size: number;
   colour: number;
+  /** A pull down, in cells a second squared (the splash's droplets fall back); none when absent. */
+  gravity?: number;
 }
 
 /** The ambient particles by biome, born within `RADIUS` cells of the hero. The badlands have none. */
@@ -35,6 +37,14 @@ export const PUFF = {
   count: 5,
   speed: 0.7,
   look: { rate: 0, life: 350, lift: 0, spread: 0, rise: 0.25, sway: 0, size: 0.08, colour: 0xcdbf9e } satisfies Look,
+};
+
+/** The splash of an enemy that falls into the water (#1101): `count` droplets that rise 0.3 and fall back in 600 ms (thrown up at 2 cells a second against a
+ * gravity of 20/3, the top is 0.3 above the water at 300 ms). */
+export const SPLASH = {
+  count: 6,
+  speed: 0.4,
+  look: { rate: 0, life: 600, lift: 0, spread: 0, rise: 2, sway: 0, size: 0.05, colour: 0xbfe8f2, gravity: 20 / 3 } satisfies Look,
 };
 
 /** The shards of a broken obstacle (#1147): `count` flakes of the prop's colour thrown outward, falling, gone within `life` ms. */
@@ -70,6 +80,7 @@ export class ParticlePool {
   private readonly vx: Float32Array;
   private readonly vy: Float32Array;
   private readonly vz: Float32Array;
+  private readonly grav: Float32Array;
   private readonly sway: Float32Array;
   private readonly phase: Float32Array;
   private readonly size: Float32Array;
@@ -90,6 +101,7 @@ export class ParticlePool {
     this.vx = new Float32Array(cap);
     this.vy = new Float32Array(cap);
     this.vz = new Float32Array(cap);
+    this.grav = new Float32Array(cap);
     this.sway = new Float32Array(cap);
     this.phase = new Float32Array(cap);
     this.size = new Float32Array(cap);
@@ -120,11 +132,11 @@ export class ParticlePool {
   pose(i: number, now: number, out: ParticlePose): boolean {
     const age = now - this.born[i]!;
     const life = this.life[i]!;
-    if (!(age < life)) return false;
+    if (!(age >= 0 && age < life)) return false; // not born yet (a splash waits for the fall), or over
     const fade = Math.min(1, age / (life * FADE_IN), (life - age) / (life * FADE_OUT));
     const t = age / 1000;
     out.x = this.ox[i]! + this.vx[i]! * t + this.sway[i]! * Math.sin(this.phase[i]! + age / 700);
-    out.y = this.oy[i]! + this.vy[i]! * t;
+    out.y = this.oy[i]! + this.vy[i]! * t - 0.5 * this.grav[i]! * t * t;
     out.z = this.oz[i]! + this.vz[i]! * t;
     out.s = this.size[i]! * fade;
     out.colour = this.colour[i]!;
@@ -140,6 +152,7 @@ export class ParticlePool {
       this.oz[i] = z;
       this.vx[i] = vx;
       this.vy[i] = look.rise;
+      this.grav[i] = look.gravity ?? 0;
       this.vz[i] = vz;
       this.sway[i] = look.sway;
       this.phase[i] = this.random() * 2 * Math.PI;
@@ -187,6 +200,15 @@ export class ParticlePool {
     }
   }
 
+  /** The splash of the water at (`x`, `y`, `z`): `SPLASH.count` droplets that start at `at` (ms), maybe in the future (the fall of an ejected
+   * marble starts after the step and the slide). */
+  splash(x: number, y: number, z: number, at: number): void {
+    for (let k = 0; k < SPLASH.count; k++) {
+      const angle = ((k + this.random()) / SPLASH.count) * 2 * Math.PI;
+      this.spawn(SPLASH.look, x, y, z, at, Math.cos(angle) * SPLASH.speed, Math.sin(angle) * SPLASH.speed);
+    }
+  }
+
   /** A broken prop of `colour` at (`x`, `y`, `z`), at `now` (ms) (#1147): shards thrown outward, or under `reduced` motion one fade. */
   shatter(x: number, y: number, z: number, now: number, colour: number, reduced: boolean): void {
     if (reduced) {
@@ -201,7 +223,11 @@ export class ParticlePool {
 
   /** Ends every particle at once: a far zoom draws none, and reduced motion none but the fades (`keepFades`). */
   clear(keepFades = false): void {
-    for (let i = 0; i < this.cap; i++) if (!keepFades || !this.fades[i]) this.life[i] = 0;
+    for (let i = 0; i < this.cap; i++) {
+      if (keepFades && this.fades[i]) continue;
+      this.life[i] = 0;
+      this.born[i] = -Infinity; // a droplet not yet born goes too
+    }
     this.owed = 0;
     this.warm = false;
   }

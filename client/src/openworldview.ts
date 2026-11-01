@@ -8,7 +8,8 @@ import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type 
 import { CameraLife } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
-import { Marble, type Pace, ROLL_ZOOM, TROOP_DELAY, type Vec } from './openworldglide';
+import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
+import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
@@ -203,6 +204,10 @@ export const BIOME_LOOK: Record<Biome, { ground: number; prop: number }> = {
  * comes from `waterColor`). */
 export const groundColour = (tile: Tile, ground: Ground): number =>
   ground === 'grass' && (tile.height === 3 || tile.height === 4) ? BIOME_LOOK[tile.biome].ground : LOOK[ground].color;
+/** The red of a lone water cell and of a cell in the middle of a lake, as the instance colour holds them: the shore foam reads where on
+ * that way a cell lies (#1101). */
+const SHORE_RED = new THREE.Color(WATER.shore).r;
+const DEEP_RED = new THREE.Color(WATER.deep).r;
 /** The colour of a water cell: the share of its six neighbours that are water sets how far it lies from the shore. */
 export function waterColor(world: World, q: number, r: number): THREE.Color {
   const wet = neighbours([q, r]).filter(([nq, nr]) => world.tile(nq, nr)?.terrain === 'water').length / 6;
@@ -294,9 +299,13 @@ const SETTLED_YAW = 0.001;
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
 
 /** The material of a prop's mesh: its look, the same for its low-poly and its detailed mesh. */
-const propMaterial = (prop: Prop): THREE.MeshStandardMaterial => {
+const propMaterial = (prop: Prop, sway: THREE.Node): THREE.Material => {
   const { color, emissive, flat } = PROPS[prop];
-  return new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.8, flatShading: flat });
+  const look = { color, emissive, roughness: 0.8, flatShading: flat };
+  if (prop !== 'tree') return new THREE.MeshStandardMaterial(look);
+  const material = new THREE.MeshStandardNodeMaterial(look); // the trees lean in the wind with a term of their vertex shader (#1102)
+  material.positionNode = sway;
+  return material;
 };
 /** The instance colours of a mesh of `capacity` instances, all white: the colour of an instance a build does not set. */
 const whiteColours = (capacity: number): THREE.InstancedBufferAttribute => new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3).fill(1), 3);
@@ -446,6 +455,14 @@ export class OpenWorldView {
   private readonly sparks: THREE.InstancedMesh;
   private readonly sparkPose = new THREE.Object3D();
   private readonly sparkLook = { x: 0, y: 0, z: 0, s: 0, colour: 0 };
+  /** What the water's and the trees' shaders read (#1101, #1102): the clock, the amplitudes and the ripples. No mesh or instance is written. */
+  readonly uniforms = motionUniforms();
+  private readonly sway = swayPosition(this.uniforms);
+  private readonly ripplePool = new RipplePool();
+  /** The time of the last `animate` (ms), whether a loop was drawn then, and what moved. */
+  private motionNow = 0;
+  private looping = false;
+  private motionKinds = '';
 
   /** `fight` holds the enemies as they are now: the generated ones, with the pushes of the troop on top (openworldfight.ts). */
   constructor(
@@ -466,15 +483,15 @@ export class OpenWorldView {
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land }));
+      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined }));
       this.managed.push(this.grounds[ground]);
     }
     for (const prop of PROP_NAMES) {
-      this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], PROPS[prop].geometry, propMaterial(prop));
+      this.props[prop] = this.instances(`prop-${prop}`, CAPACITY[prop], PROPS[prop].geometry, propMaterial(prop, this.sway));
       this.managed.push(this.props[prop]);
     }
     for (const prop of MODELLED) {
-      this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop));
+      this.detailed[prop] = this.instances(`prop-${prop}-hi`, HI_CAPACITY, PROPS[prop].geometry, propMaterial(prop, this.sway));
       this.managed.push(this.detailed[prop]!);
     }
     this.hero = new THREE.Mesh(new THREE.SphereGeometry(MARBLE, 24, 16), stripedMaterial(MARBLE_LOOK.hero, this.stripe, skins?.player));
@@ -670,6 +687,48 @@ export class OpenWorldView {
     this.particles.shatter(p.x, topOf(GROUND[tile.terrain], tile.height) + 0.2, p.z, now, PROPS[prop].color, reduced);
   }
 
+  /** Moves what the shaders move to `now` (ms) (docs/specs/openworld-animation.md sections 3 and 4): the shore foam and the sway of the trees
+   * are loops of the materials, the ripples were born by `ripple`. Nothing under `calm` (reduced motion, the low tier) or past
+   * `ROLL_ZOOM`. Returns whether the frame must draw: a lake or trees are in view and it moves, or it moved on the last call and is
+   * stilled now. */
+  animate(now: number, calm: boolean): boolean {
+    const u = this.uniforms;
+    const on = !calm && this.drawnLevel <= ROLL_ZOOM;
+    const water = on && this.hasWater;
+    const trees = on && (this.props.tree.count > 0 || this.detailed.tree!.count > 0);
+    u.time.value = now;
+    u.foam.value = on ? FOAM_GAIN : 0;
+    u.sway.value = on ? 1 : 0;
+    u.span.value = RIPPLE_MS * slowBy();
+    this.motionNow = now;
+    if (!on) this.ripplePool.clear();
+    writeRipples(this.ripplePool, u);
+    this.motionKinds = water ? (trees ? 'water,trees' : 'water') : trees ? 'trees' : '';
+    const drawn = this.looping || this.motionKinds !== '';
+    this.looping = this.motionKinds !== '';
+    return drawn;
+  }
+
+  /** What moves now, for the browser checks: `water`, `trees`, both, or nothing. */
+  get alive(): string {
+    return this.motionKinds;
+  }
+
+  /** The ripples alive at the last `animate`. */
+  get ripples(): number {
+    return this.ripplePool.live(this.motionNow, slowBy());
+  }
+
+  /** The hero steps from `from` to `to` at `now` (ms): a ring spreads from its cell when either is next to water. None under `calm`, with no
+   * lake in view, or past `ROLL_ZOOM`. */
+  ripple(from: Axial, to: Axial, now: number, calm: boolean): void {
+    if (calm || this.drawnLevel > ROLL_ZOOM || !this.hasWater) return;
+    const wet = ([q, r]: Axial): boolean => this.world.tile(q, r)?.terrain === 'water';
+    if (!neighbours(from).some(wet) && !neighbours(to).some(wet)) return;
+    const p = axialTo3D(to[0], to[1]);
+    this.ripplePool.spawn(p.x, p.z, now);
+  }
+
   /** The glow of the water breathes slowly: `ms` is the time, 0 holds it still (reduced motion). */
   glow(ms: number): void {
     (this.grounds.water.material as THREE.MeshStandardMaterial).emissiveIntensity = 1 + 0.15 * Math.sin(ms / 1200);
@@ -836,6 +895,10 @@ export class OpenWorldView {
     if (ejected) {
       const beyond: Axial = [ejected[0] + push.dir[0], ejected[1] + push.dir[1]];
       moves.push(this.move('ejected', 0, ejected, beyond, { start: begin + at(CONTACT), span: at(SLIDE_MS), fall: at(FALL_MS), lunge: false }));
+      if (this.drawnLevel <= ROLL_ZOOM) {
+        const p = axialTo3D(beyond[0], beyond[1]);
+        this.particles.splash(p.x, topOf('water', 0) + 0.05, p.z, begin + at(CONTACT) + at(SLIDE_MS)); // the droplets rise as the fall starts (#1101)
+      }
     }
     this.moves = moves;
     this.end = Math.max(...moves.map((m) => m.start + m.span + m.fall));

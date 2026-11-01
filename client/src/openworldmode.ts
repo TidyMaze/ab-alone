@@ -255,6 +255,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldAnim;
     delete document.body.dataset.openworldGlide;
     delete document.body.dataset.openworldParticles;
+    delete document.body.dataset.openworldMotion;
   }
 
   /** The New world control (#1021): the world entered is left without its save, which is discarded, and a random world is entered
@@ -397,7 +398,9 @@ export class OpenWorldMode {
     const sparks = this.view!.sparkle(now, reduced); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();
     const moving = !reduced && this.view!.hasWater;
-    if (!this.dirty && !moving && !sparks) return false;
+    const loops = this.view!.animate(now, reduced || this.lowTier()); // the foam, the ripples and the trees' sway (#1101, #1102)
+    this.countMotion();
+    if (!this.dirty && !moving && !sparks && !loops) return false;
     this.dirty = false;
     this.view!.glow(moving ? now : 0);
     render(this.view!.scene, this.view!.camera);
@@ -471,6 +474,7 @@ export class OpenWorldMode {
     this.view!.snap(); // a step during a push's animation ends it first (#967)
     const now = this.reduced() ? null : at;
     if (now !== null) this.view!.puff(now); // dust from the cell it leaves (#1110)
+    if (now !== null) this.view!.ripple(from, this.hero!.at, now, this.lowTier()); // a ring on the water next to it (#1101)
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: GLIDE_MS * slowBy(), pace }); // the step glides (#1040)
     const played = this.troopPush();
     this.view!.updateEnemies();
@@ -540,6 +544,17 @@ export class OpenWorldMode {
     if (!navigator.webdriver) return;
     if (this.view?.gliding) document.body.dataset.openworldGlide = `${this.view.focusPoint.x.toFixed(2)},${this.view.focusPoint.z.toFixed(2)},${this.view.heroY.toFixed(3)}`;
     else delete document.body.dataset.openworldGlide;
+  }
+
+  /** Whether the page is on the low quality tier, where the effects of the water and the trees are off (#1101). */
+  private lowTier(): boolean {
+    return document.body.dataset.tier === 'low';
+  }
+
+  /** What moves (`openworldMotion`: `water`, `trees`, both or empty), for the browser checks only. */
+  private countMotion(): void {
+    if (!navigator.webdriver) return;
+    if (document.body.dataset.openworldMotion !== this.view!.alive) document.body.dataset.openworldMotion = this.view!.alive;
   }
 
   /** The particles drawn (`openworldParticles`), for the browser checks only: written when the count changes. */
