@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
 import { REPEAT_DELAY } from './gamepad';
 import { boot, type Game } from './test/harness';
@@ -119,6 +119,41 @@ describe('the gamepad in the Open world', () => {
     expect(data().openworldYaw).toBe('-30');
     expect(document.activeElement).not.toBe(byId('openworld-new'));
     pad.tap(R3); // a reset off the canvas is still the camera's
+    pad.unplug();
+  });
+
+  it('the stick walks onto a lair, the pad plays the fight, and Back to the Open world is reached and pressed with the pad', async () => {
+    const game = await boot('?bot=off&openworld=7', { reducedMotion: true });
+    const { Encounter } = await import('abalone-wasm');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    const [q, r] = data().openworldLairs!.split(' ')[0]!.split(',').map(Number) as [number, number];
+    (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] });
+    pad.hold([], [0.9, -0.5, 0, 0]); // right and up in the default camera: the east step
+    pad.hold([]);
+    expect(data().boss).toBeTruthy();
+    const won = (): number => (plies(game) > 0 ? 1 : 0);
+    vi.spyOn(Encounter.prototype, 'result').mockImplementation(won);
+    vi.spyOn(Encounter.prototype, 'status').mockImplementation(won);
+    canvas().focus();
+    pad.tap(RB);
+    const mv = game.hook<Move[]>('__legal').find((m) => m.cells.join() === rings(game).join())!;
+    const angle = [0, 180, 60, 240, 120, 300][mv.dir]! * (Math.PI / 180);
+    pad.hold([], [Math.cos(angle), -Math.sin(angle), 0, 0]);
+    pad.hold([]);
+    pad.tap(A);
+    expect(byId('ship-back').hidden).toBe(false);
+    const walkTo = (id: string): void => {
+      for (let i = 0; i < 60 && document.activeElement !== byId(id); i++) pad.tap(RB);
+      expect(document.activeElement).toBe(byId(id));
+    };
+    walkTo('lobby'); // Back to the Open world sits in the Lobby sheet
+    pad.tap(A);
+    walkTo('ship-back');
+    pad.tap(A);
+    await settle();
+    expect(data().openworldAt).toBe(`${q - 1},${r}`);
+    vi.restoreAllMocks();
     pad.unplug();
   });
 

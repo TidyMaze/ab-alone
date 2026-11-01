@@ -72,7 +72,8 @@ peer re-validates online moves (see `tech.md`).
    step (Esc), Start opens the settings menu, LB and RB walk the legal groups (Shift+Tab, Tab), the right stick orbits
    the camera and the triggers zoom (RT in, LT out). A held aim, LB or RB repeats. The first press switches the HUD hints
    to the pad's buttons and rings the focused control; a key press or a mouse move switches back. A pad that disconnects
-   changes nothing in the game. The Open world comes next (#1252).
+   changes nothing in the game. In the Open world the left stick walks the hero (as the touch stick, in the camera's
+   yaw), LB and RB turn the camera one step, R3 resets it and the triggers zoom it (`openworld.md` section 4).
 8. **Not now.** Voice, haptics.
 
 Accessibility: legal-move highlight can be forced on, colorblind-safe palette, the "clear board"
