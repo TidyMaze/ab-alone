@@ -4,7 +4,7 @@
 // words. Resign is the one thing the engine does not model (rules.md OPEN-12).
 import { randomUUID } from 'node:crypto';
 import { SITE } from '../../client/src/daily';
-import { inviteUrl, newRoomId, roomFromHash } from '../../client/src/invite';
+import { creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash } from '../../client/src/invite';
 import { generateKeys, type Keys } from '../../client/src/moverecord';
 import { SIGNALING_TIMEOUT_MS } from '../../client/src/netcounters';
 import type { Judge } from '../../client/src/session';
@@ -236,9 +236,10 @@ export class Session {
 
   /** Joins a room made by a human or by another agent, once its creator gave the agent a seat. */
   joinRoom({ room }: JoinRoomInput): Promise<Result<RoomInfo>> {
-    const id = room.includes('#') ? roomFromHash(room.slice(room.indexOf('#'))) : room;
+    const hash = room.includes('#') ? room.slice(room.indexOf('#')) : '';
+    const id = hash ? roomFromHash(hash) : room;
     if (!id) return Promise.resolve(fail('room_not_found', `not a room code or an invite link: ${room}`));
-    return this.openRoom(id, JOINER);
+    return this.openRoom(id, JOINER, creatorFromHash(hash)); // seat 1 binds only to the link's key (#1323)
   }
 
   /** Waits until the opponent moved, the game ended, the opponent left or a desync, or `timeout_s` passed. */
@@ -331,7 +332,7 @@ export class Session {
   }
 
   /** A joiner waits for the creator to seat it. Until the room is open, the game in progress stays. */
-  private async openRoom(id: string, side: number): Promise<Result<RoomInfo>> {
+  private async openRoom(id: string, side: number, creator?: string): Promise<Result<RoomInfo>> {
     if (this.game?.room) return fail('already_in_room', 'already in a room: call new_game to leave it');
     this.keys ??= await generateKeys();
     let transport: Transport;
@@ -342,7 +343,7 @@ export class Session {
     }
     const engine = this.newEngine();
     const game: Game = { id, engine, reply: null, boss: null, room: null, resigned: false, plies: [] };
-    const room = (game.room = new Room(id, side, this.keys, transport, judge(game)));
+    const room = (game.room = new Room(id, side, this.keys, transport, judge(game), creator));
     if (side === JOINER) {
       const seated = () => (room.session.role === 'pending' ? undefined : room.session.role);
       const role = await room.until(seated, SIGNALING_TIMEOUT_MS);
@@ -355,7 +356,7 @@ export class Session {
       }
     }
     this.replace(game);
-    return ok({ room: id, invite: inviteUrl(SITE, id), you: sideName(room.session.side), pub: this.keys.pub });
+    return ok({ room: id, invite: inviteUrl(SITE, id, undefined, side === CREATOR ? await fingerprint(this.keys.pub) : creator), you: sideName(room.session.side), pub: this.keys.pub });
   }
 }
 

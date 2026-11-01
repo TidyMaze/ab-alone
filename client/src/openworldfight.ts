@@ -7,9 +7,6 @@ import { chunkOf, type World } from './openworld';
 
 const key = ([q, r]: Axial): string => `${q},${r}`;
 
-/** The hex distance of two cells. */
-const distance = ([q1, r1]: Axial, [q2, r2]: Axial): number => (Math.abs(q1 - q2) + Math.abs(r1 - r2) + Math.abs(q1 - q2 + r1 - r2)) / 2;
-
 /** The saved form of a fight: the generated enemies gone (cell keys), the enemies on other cells, the enemies ejected. */
 export interface FightSave {
   removed: string[];
@@ -91,13 +88,14 @@ export class FightState {
   enemiesAround(world: World, cell: Axial, radius: number): Axial[] {
     const [x0, y0] = chunkOf([cell[0] - radius, cell[1] - radius]);
     const [x1, y1] = chunkOf([cell[0] + radius, cell[1] + radius]);
-    const out: Axial[] = [];
+    const chunks: number[] = [];
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
-        for (const enemy of this.chunkEnemies(world, cx, cy)) if (distance(enemy, cell) <= radius) out.push(enemy);
+        const generated = world.enemies(cx, cy);
+        chunks.push(cx, cy, generated.length, ...generated.flat());
       }
     }
-    return out;
+    return cellsOf(this.fight.around(Int32Array.from(chunks), cell[0], cell[1], radius));
   }
 
   /** Whether an enemy marble stands on the cell `(q, r)` now. */
