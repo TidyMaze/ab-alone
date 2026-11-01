@@ -7,7 +7,7 @@ import { GLIDE_MS } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import { SLIDE_MS } from './slide';
 import './test/openworldwasm';
-import { world_can_break, world_is_enemy } from 'abalone-wasm';
+import { world_can_break } from 'abalone-wasm';
 import { boot, type Game } from './test/harness';
 import { signBeaten, signBreak } from './worldevents';
 import { generateKeys } from './moverecord';
@@ -670,8 +670,9 @@ describe('the public Open world online', () => {
   it('a peer beats an enemy of the world: it is gone here, once (#1305)', async () => {
     const game = await joined();
     const room = game.world()!;
+    const isEnemy = (window as unknown as { __openworldIsEnemy: (seed: number, q: number, r: number) => boolean }).__openworldIsEnemy; // the test hook of the e2e
     let cell: [number, number] | undefined;
-    for (let q = -40; q <= 40 && !cell; q++) for (let r = -40; r <= 40 && !cell; r++) if (world_is_enemy(PUBLIC_SEED, q, r)) cell = [q, r];
+    for (let q = -40; q <= 40 && !cell; q++) for (let r = -40; r <= 40 && !cell; r++) if (isEnemy(PUBLIC_SEED, q, r)) cell = [q, r];
     const event = await signBeaten(await generateKeys(), PUBLIC_SEED, cell![0], cell![1]);
     room.data(encodeBreak(event), 'p');
     for (let i = 0; i < 40 && data().openworldBeaten !== '1'; i++) await new Promise((done) => setTimeout(done, 10));
