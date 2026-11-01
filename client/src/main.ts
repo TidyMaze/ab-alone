@@ -3479,8 +3479,9 @@ const showBoard = (): void => {
 /** The props of the boss kit (kit_boss.glb) the fights wear on the terrace: the Pulsar's pylon and its core, the Assembly press, the Rail Yard's buffer stop. */
 let bossKit: Record<'pylon' | 'core' | 'press' | 'buffer', THREE.Mesh> | null = null;
 const terraceProp = (name: keyof NonNullable<typeof bossKit>): THREE.Mesh | null => (sceneRenderer.terraceOn && bossKit ? bossKit[name] : null);
-// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation only, so the room specs and its code live on.
-const keepRoom = navigator.webdriver && new URLSearchParams(location.search).get('scene') === 'room';
+// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation (`navigator.webdriver`, the e2e
+// build) and in a dev build, so the room specs and its code live on. A production page ignores it.
+const keepRoom = (navigator.webdriver || import.meta.env.DEV) && new URLSearchParams(location.search).get('scene') === 'room';
 let terraceFailed = false; // the arena files did not load: the board stands on a plain background, the discs drawn as they are
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last' | 'hint', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
@@ -3549,9 +3550,9 @@ function syncTableZero(): void {
     applyView();
   }
   if (on === sceneRenderer.terraceOn) return;
-  sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364)
-  for (const cells of [...boardDrawn, ...arenaDrawn]) cells.visible = !on || terraceFailed; // the dishes of the glTF are drawn; the discs stay for picking only
-  marbles.position.y = on ? TERRACE_LIFT : 0; // the marbles stand on their pedestals, 0.11 over the board plane
+  sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364); the room never comes back once the terrace is on (#1374)
+  for (const cells of [...boardDrawn, ...arenaDrawn]) cells.visible = terraceFailed; // the dishes of the glTF are drawn; the discs stay for picking only
+  marbles.position.y = TERRACE_LIFT; // the marbles stand on their pedestals, 0.11 over the board plane
   updateFog();
 }
 function refresh(): void {
@@ -4586,8 +4587,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__frame = () => ({
   radius: frame?.radius,
   holes: frame?.holes.length,
-  dishes: sceneRenderer.terraceOn ? dishesOf(terraceBoards[boardOf()])!.count : undefined, // the terrace draws one dish per cell in play: a hole is one dish fewer (#1374)
-  drawn: sceneRenderer.terraceOn ? dishesOf(terraceBoards[boardOf()])!.count > 0 : [plate, rim.near, rim.far].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
+  dishes: sceneRenderer.terraceOn ? dishesOf(terraceBoards[boardOf()])?.count : undefined, // the terrace draws one dish per cell in play: a hole is one dish fewer (#1374)
+  drawn: sceneRenderer.terraceOn ? (dishesOf(terraceBoards[boardOf()])?.count ?? 0) > 0 : [plate, rim.near, rim.far].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
   lit: { near: rim.near.material.emissive.getHex(), far: rim.far.material.emissive.getHex() }, // #300
 });
 // Used by the browser checks and tests to mount the high-fidelity PBR spaceship bay (#648).
@@ -5792,7 +5793,7 @@ function leaveRoyale(): void {
   arena.visible = false;
   arenaMarbles.clear(); // its marbles' instances are drawn from the group, the hidden arena or not (instancedcells.ts)
   fogRadius = frame?.radius ?? RADIUS;
-  for (const mesh of [plate, rim.near, rim.far]) mesh.visible = true;
+  for (const mesh of [plate, rim.near, rim.far]) mesh.visible = !sceneRenderer.terraceOn; // the terrace has the slab of the glTF (#1374)
   holdButton.hidden = true;
   delete document.body.dataset.royale;
   delete document.body.dataset.reveal;

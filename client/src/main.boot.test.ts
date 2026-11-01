@@ -222,9 +222,21 @@ describe('the renderer and its textures', () => {
     expect(Math.abs(rings[0]!.position.y - (0.091 - 0.11))).toBeLessThan(1e-6); // the kit's hint ring, flat on the dish
   });
 
-  it('keeps the room in a 1v1 game when the arena file is missing: the page still plays (#1314)', async () => {
-    await boot('?bot=off', { missing: ['arena.glb'] });
-    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('room'));
+  it('never shows the room to a player: a missing arena file leaves the board on a plain background, the discs drawn (#1374)', async () => {
+    const game = await boot('?bot=off', { missing: ['arena.glb'] });
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { scene } = await drawn(game);
+    expect(scene.getObjectByName('terrace')?.visible).toBe(true);
+    expect(game.hook('__frame')).toMatchObject({ drawn: false }); // no dishes of the glTF, the room's plate and rim are away too
+    const cells: THREE.InstancedMesh[] = [];
+    scene.traverse((o) => void ((o as THREE.InstancedMesh).isInstancedMesh && cells.push(o as THREE.InstancedMesh)));
+    expect(cells.some((c) => c.visible && c.count > 0 && c.geometry.attributes.position!.count > 0)).toBe(true);
+  });
+
+  it('honours ?scene=room under automation or in a dev build only, a production page for a player ignores it (#1374)', async () => {
+    vi.stubEnv('DEV', false);
+    await boot('?bot=off&scene=room', { webdriver: false });
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
   });
 
   it('keeps the room in a 1v1 game when ?scene=room asks for it (#1314)', async () => {

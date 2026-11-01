@@ -58,6 +58,8 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 skin-Marble025-roughness.ktx2',
     '200 slab-ballast.glb', // the Ballast Mind's board (#1374)
     '200 slab-dual.glb', // the Dual Room's board (#1374)
+    '200 slab-hub.glb', // the hub's deck (#1374)
+    '200 slab-royale.glb', // the Battle royale's board (#1374)
     '200 spaceship-bay.glb',
   ]);
 });
