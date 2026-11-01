@@ -3,6 +3,7 @@
 import { CELLS, VANISHED, type Axial } from './board';
 import { DECK_NAMES, type Deck } from './deck';
 import { medalLabel } from './medals';
+import { isTouch } from './touchwording';
 import { canEnter, HUB_CELLS, neighbours, roomAt, roomsOf, type Door, type Spot } from './hub';
 
 /** The bridge board with a hole on every cell off the hub map: the frame shrinks to the map, the other discs hide. */
@@ -84,7 +85,7 @@ const DESCRIPTORS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, string> = {
 export function reachabilityText(from: Axial, target: Axial): string {
   if (from[0] === target[0] && from[1] === target[1]) return 'Current position';
   const isNeighbour = neighbours(from).some(([q, r]) => q === target[0] && r === target[1]);
-  return isNeighbour ? 'Click to move' : 'Out of reach (roll closer)';
+  return isNeighbour ? (isTouch() ? 'Tap to move' : 'Click to move') : 'Out of reach (roll closer)';
 }
 
 /** Name, purpose subtitle and reachability affordance of any hub cell hovered by the player (#628). */
