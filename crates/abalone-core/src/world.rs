@@ -546,8 +546,6 @@ pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
     placed
 }
 
-/// The boss lairs of the world: this many, one in each third of the map round the spawn.
-pub const LAIRS: usize = 3;
 /// A lair stands at least this many cells from the spawn.
 pub const LAIR_MIN: i32 = 150;
 /// The salt of the lair draws (the terrain uses 30 to 39, the enemies 12 to 21).
@@ -556,22 +554,22 @@ const LAIR_SALT: u64 = 40;
 const LAIR_NEAR: f64 = 160.0;
 const LAIR_FAR: f64 = 420.0;
 
-/// The cells of the boss lairs of the world `seed` (docs/specs/openworld.md section 7): lair `k` is drawn in the `k`-th third of
-/// the circle round the spawn, the first draw whose cell and six neighbours are open ground on the world, and at least `LAIR_MIN`
+/// The cells of the `count` boss lairs of the world `seed` (docs/specs/openworld.md section 7), one per boss of the roster: lair `k`
+/// is drawn in the `k`-th `count`-th of the circle round the spawn, the first draw whose cell and six neighbours are open ground on the world, and at least `LAIR_MIN`
 /// cells from the spawn. From the seed alone, so the order of visit of the chunks does not matter.
-pub fn lairs(seed: u64) -> Vec<(i32, i32)> {
-    (0..LAIRS as i32)
+pub fn lairs(seed: u64, count: usize) -> Vec<(i32, i32)> {
+    (0..count as i32)
         .map(|k| {
             (0..)
-                .find_map(|n| lair_try(seed, k, n))
+                .find_map(|n| lair_try(seed, count, k, n))
                 .expect("an endless search")
         })
         .collect()
 }
 
 /// The `n`-th try of lair `k`: its cell when it is a fit one.
-fn lair_try(seed: u64, k: i32, n: i32) -> Option<(i32, i32)> {
-    let third = std::f64::consts::TAU / LAIRS as f64;
+fn lair_try(seed: u64, count: usize, k: i32, n: i32) -> Option<(i32, i32)> {
+    let third = std::f64::consts::TAU / count as f64;
     let angle = (f64::from(k) + 0.1 + 0.8 * unit(seed, LAIR_SALT, k, n)) * third;
     let reach = LAIR_NEAR + (LAIR_FAR - LAIR_NEAR) * unit(seed, LAIR_SALT + 1, k, n);
     // The pointy-top layout of the client's `cellAtPoint`: x runs along q, z along the rows.
