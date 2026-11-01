@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { CHUNK, neighbours, World } from './openworld';
-import { heldCell, OpenWorldMode, ORBIT_PER_PX, stepOf, steerStep, TURN_STEP, twistOf } from './openworldmode';
+import { DEFAULT_YAW, heldCell, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, stepOf, steerStep, TURN_STEP, twistOf } from './openworldmode';
 import { arrowCell } from './hubview';
 import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
@@ -402,8 +402,8 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     expect(body().openworldAt).toBe('1,0');
     expect(tap(m, 'ArrowRight')).toBe(true); // onto (2,0), its old cell: free
     expect(body().openworldAt).toBe('2,0');
-    tap(m, 'ArrowRight'); // (3,0) holds the pushed enemy: the hero goes round it by (3,-1), never onto it (#1137)
-    expect(body().openworldAt).toBe('3,-1');
+    tap(m, 'ArrowRight'); // (3,0) holds the pushed enemy: the hero goes round it by (2,1), never onto it (#1137)
+    expect(body().openworldAt).toBe('2,1');
     expect(push).toHaveBeenCalledTimes(3);
   });
 
@@ -438,7 +438,7 @@ describe('the troop pushes after a step (docs/specs/openworld.md section 4, #967
     m.enter(1, 800, 600);
     m.hold(['ArrowUp', 'ArrowRight']); // the stick's diagonal: one step, and the push after it
     expect(push).toHaveBeenCalledTimes(1);
-    expect(body().openworldAt).toBe('1,-1');
+    expect(body().openworldAt).toBe('1,0'); // the default camera (-30 degrees) shows the east cell nearest to up-right
   });
 
   it('starts a fresh fight on each entry: the pushed enemies and the counts are the generated ones again', () => {
@@ -926,6 +926,30 @@ describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026
     }
   });
 
+  it('up alone walks a straight line of hexes at each of the 6 resting angles, from an even or an odd row (#1254)', () => {
+    for (let k = 0; k < 6; k++) {
+      const yaw = restYaw(DEFAULT_YAW + k * TURN_STEP);
+      for (const start of [[0, 0], [0, 1]] as Axial[]) {
+        let at = start;
+        const first = stepOf(at, held('ArrowUp'), yaw)!;
+        const dir = [first[0] - at[0], first[1] - at[1]];
+        for (let i = 0; i < 6; i++) {
+          const next = stepOf(at, held('ArrowUp'), yaw)!;
+          expect([next[0] - at[0], next[1] - at[1]]).toEqual(dir);
+          at = next;
+        }
+      }
+    }
+  });
+
+  it('the rest offset is 30 degrees, the default is -30, and restYaw gives the nearest resting angle (#1254)', () => {
+    expect(REST_OFFSET).toBeCloseTo(Math.PI / 6);
+    expect(DEFAULT_YAW).toBeCloseTo(-Math.PI / 6);
+    expect(restYaw(0) / DEG).toBeCloseTo(30);
+    expect(restYaw(-1.3) / DEG).toBeCloseTo(-90);
+    expect(restYaw(80 * DEG) / DEG).toBeCloseTo(90);
+  });
+
   it('gives nothing for no key, or for opposite keys', () => {
     expect(stepOf([0, 0], held(), 0.5)).toBeNull();
     expect(stepOf([0, 0], held('ArrowUp', 'ArrowDown'), 0.5)).toBeNull();
@@ -934,7 +958,7 @@ describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026
 
   it('rolls the hero to the cell the camera shows in the direction of each key, at each yaw', () => {
     const world = new World(bytes);
-    for (const yaw of [15, 30, 45, 60, 90, 120, 135, 180, -60, -70].map((d) => d * DEG)) {
+    for (const yaw of [15, 30, 45, 60, 90, 120, 135, 180, -30, -60, -70].map((d) => d * DEG)) {
       const view = new OpenWorldView(world);
       view.resize(1600, 900);
       view.turnTo(yaw);
@@ -994,7 +1018,7 @@ describe('a held arrow slides round an obstacle instead of leaning (#1137)', () 
     m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[1, 0]] });
     m.key('ArrowRight');
     m.release('ArrowRight');
-    expect(m.hero!.at).toEqual([1, -1]);
+    expect(m.hero!.at).toEqual([0, 1]); // at the default camera the intent leans to the south-east side
     expect(nudge).not.toHaveBeenCalled();
     m.fixture({ hero: [0, 0], troop: [[-1, 0]], enemies: [[1, 0], [1, -1], [0, 1]] });
     m.key('ArrowRight');
@@ -1016,30 +1040,30 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
   it('Q and E turn the view a step each way, R goes back to the default angle, and the yaw is published in degrees', () => {
     const m = mode();
     m.enter(7, 800, 600);
-    expect(body().openworldYaw).toBe('0');
+    expect(body().openworldYaw).toBe('-30'); // the default faces a straight line of hexes (#1254)
     expect(m.key('q')).toBe(true);
-    expect(body().openworldYaw).toBe(String(Math.round((TURN_STEP * 180) / Math.PI)));
+    expect(body().openworldYaw).toBe('30');
     m.key('q');
     m.key('e');
-    expect(body().openworldYaw).toBe(String(Math.round((TURN_STEP * 180) / Math.PI)));
+    expect(body().openworldYaw).toBe('30');
     m.key('r');
-    expect(body().openworldYaw).toBe('0');
+    expect(body().openworldYaw).toBe('-30');
     expect(m.key('x')).toBe(false); // not the mode's
   });
 
   it('the stick reads the yaw of the camera: the goal of the turn, which the keys and the drag set', () => {
     const m = mode();
     m.enter(7, 800, 600);
-    expect(m.yaw).toBe(0);
+    expect(m.yaw).toBeCloseTo(DEFAULT_YAW);
     m.key('q');
-    expect(m.yaw).toBeCloseTo(TURN_STEP);
+    expect(m.yaw).toBeCloseTo(DEFAULT_YAW + TURN_STEP);
   });
 
   it('a drag of the right button turns the view by ORBIT_PER_PX a px, and a twist turns it by its angle, the shortest way', () => {
     const m = mode();
     m.enter(7, 800, 600);
     m.orbit(100);
-    expect(body().openworldYaw).toBe(String(Math.round((100 * ORBIT_PER_PX * 180) / Math.PI)));
+    expect(body().openworldYaw).toBe(String(Math.round((100 * ORBIT_PER_PX * 180) / Math.PI) - 30));
     expect(twistOf(0, 3)).toBe(3);
     expect(twistOf(-3, 3)).toBeCloseTo(6 - 2 * Math.PI);
   });
@@ -1050,12 +1074,12 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
     const m = mode();
     m.enter(7, 800, 600);
     m.hold(['ArrowUp', 'ArrowRight']);
-    expect(body().openworldAt).toBe('1,-1'); // the diagonal of the spawn's even row, as the keyboard rolls it
+    expect(body().openworldAt).toBe('1,0'); // the diagonal at the default camera
     m.hold(['ArrowUp', 'ArrowRight']); // the same keys again: no step of their own
-    expect(body().openworldAt).toBe('1,-1');
+    expect(body().openworldAt).toBe('1,0');
     clock = GLIDE_MS;
     m.frame(vi.fn(), clock);
-    expect(body().openworldAt).not.toBe('1,-1'); // the cadence steps the held stick
+    expect(body().openworldAt).not.toBe('1,0'); // the cadence steps the held stick
     m.hold([]);
     const stopped = body().openworldAt;
     clock = 3 * GLIDE_MS;
@@ -1073,27 +1097,27 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
       m.key('q');
       seen.push(body().openworldYaw!);
     }
-    expect(seen).toEqual(['60', '120', '180', '-120', '-60', '0']);
+    expect(seen).toEqual(['30', '90', '150', '-150', '-90', '-30']);
   });
 
   it('a drag turns freely while held, then settles on the nearest multiple of 60 degrees on release (#1251)', () => {
     const m = mode();
     m.enter(7, 800, 600);
-    m.orbit(100); // 50 degrees
-    expect(body().openworldYaw).toBe('50');
+    m.orbit(100); // 50 degrees: from -30 to 20
+    expect(body().openworldYaw).toBe('20');
     m.settle();
-    expect(body().openworldYaw).toBe('60');
-    m.orbit(-100); // 10 degrees
+    expect(body().openworldYaw).toBe('30');
+    m.orbit(-100); // -20
     m.settle();
-    expect(body().openworldYaw).toBe('0');
+    expect(body().openworldYaw).toBe('-30');
   });
 
-  it('a saved yaw of 30 degrees opens at the nearest multiple of 60 degrees (#1251)', async () => {
+  it('a saved yaw of 0 (an old save) opens at the nearest resting angle, 30 degrees (#1254)', async () => {
     const saves = worldSaves(memoryStore(), 1);
-    await saves.put(7, [0, 0], [[0, 0]], new FightState(), Math.PI / 6);
+    await saves.put(7, [0, 0], [[0, 0]], new FightState(), 0);
     const m = mode(undefined, undefined, undefined, undefined, undefined, saves);
     await m.open(7, 800, 600);
-    expect(body().openworldYaw).toBe('60');
+    expect(body().openworldYaw).toBe('30');
   });
 
   it('the turn is saved with the world: a frame writes it, and opening the world again applies it', async () => {
@@ -1103,9 +1127,9 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
     m.key('q');
     m.frame(() => {}, 0);
     await new Promise((done) => setTimeout(done));
-    expect((await saves.load(7))!.yaw).toBeCloseTo(TURN_STEP);
+    expect((await saves.load(7))!.yaw).toBeCloseTo(DEFAULT_YAW + TURN_STEP);
     await m.open(7, 800, 600);
-    expect(body().openworldYaw).toBe(String(Math.round((TURN_STEP * 180) / Math.PI)));
+    expect(body().openworldYaw).toBe('30');
   });
 });
 
@@ -1311,7 +1335,7 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     m.key('ArrowUp');
     expect(at()).toBe('1,0');
     m.frame(vi.fn(), GLIDE_MS);
-    expect(at()).toBe(heldCell([1, 0], held('ArrowRight', 'ArrowUp'))!.join(','));
+    expect(at()).toBe(stepOf([1, 0], held('ArrowRight', 'ArrowUp'), DEFAULT_YAW)!.join(','));
   });
 
   it('a release stops the walk at the end of the step under way: no step after it', () => {
