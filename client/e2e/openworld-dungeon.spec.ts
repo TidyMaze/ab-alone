@@ -5,7 +5,7 @@ import { openModes } from './modes';
 // walk); the press walks the rest and the step onto the lair starts the boss fight.
 test('the Dungeon button walks the hero to the nearest tower and the fight starts, #1291', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   const lairs = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ');
   const [q, r] = lairs[0]!.split(',').map(Number) as [number, number];

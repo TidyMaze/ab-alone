@@ -5,7 +5,7 @@ import { openModes } from './modes';
 // reduced motion draws none. The page marks the count it draws (`data-openworld-particles`, webdriver pages only).
 async function enter(page: Page): Promise<void> {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
 }
 const count = (page: Page) => page.evaluate(() => Number(document.body.dataset.openworldParticles ?? 0));

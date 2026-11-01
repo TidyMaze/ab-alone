@@ -5,7 +5,7 @@ import { openModes } from './modes';
 // onto the lair starts the normal boss fight.
 test('walking onto a lair of the Open world starts a boss fight, #1170', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   const lairs = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ');
   expect(lairs.length).toBeGreaterThanOrEqual(14); // one lair per boss of the roster (#1171), which grows
@@ -26,7 +26,7 @@ test('walking onto a lair of the Open world starts a boss fight, #1170', async (
 // #1175: every lair beaten ends the Open world with one line from Tally. The hook loads the beaten lairs (no 15 boss fights).
 test("Tally's ending line shows once every lair is beaten, #1175", async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   await page.evaluate(() => localStorage.setItem('ab-alone.tally0412', 'seen')); // the claim line is spent
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   const count = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ').length;

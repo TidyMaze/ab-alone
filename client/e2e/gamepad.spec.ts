@@ -40,7 +40,7 @@ test('a gamepad alone plays a move: Start and B, the D-pad to the board, RB, the
 
   const onCanvas = () => page.evaluate(() => document.activeElement?.tagName === 'CANVAS');
   for (let i = 0; i < 40 && !(await onCanvas()); i++) await tap(page, DOWN);
-  await expect(page.locator('canvas')).toBeFocused();
+  await expect(page.locator('canvas:not(#openworld-minimap)')).toBeFocused();
 
   await tap(page, RB);
   await expect(page.locator('#hud')).toContainText('LB RB to switch');
@@ -67,7 +67,7 @@ test('a gamepad walks the Open world, turns its camera and enters a lair', async
     Object.defineProperty(navigator, 'getGamepads', { value: () => [pad] });
   });
   await page.goto('./?bot=off&openworld=7');
-  await page.locator('canvas').waitFor();
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
