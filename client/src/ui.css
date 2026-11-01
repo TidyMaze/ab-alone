@@ -1113,11 +1113,11 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
 #hub-pips .pip[data-state='beaten'] { background: var(--hazard); border-color: var(--hazard); }
 #hub-pips .pip[data-state='open'] { border-color: var(--danger); }
 #hub-pips .pip[data-state='locked'] { border-style: dotted; }
-/* Held upright the deck is centred (camera.ts framing): the pips and the rail, a row of the five decks, take the band above it, under
-   the plate and the cog (with room for a Tally line), and the plates show their short label. */
+/* Held upright the deck is centred (camera.ts framing): the pips and the rail, a row of the five decks, take the band above it, right under
+   the plate and the cog (8 px below their bottom edge, #1388), and the plates show their short label. */
 @media (orientation: portrait) {
-  #hub-pips { top: 200px; right: 16px; padding: 4px 8px; }
-  #hub-rail { top: 236px; left: 16px; right: 16px; width: auto; transform: none; padding: 4px; }
+  #hub-pips { top: 135px; right: 16px; padding: 4px 8px; }
+  #hub-rail { top: 168px; left: 16px; right: 16px; width: auto; transform: none; padding: 4px; }
   #hub-rail h2, #hub-rail .n, #hub-rail small { display: none; }
   #hub-rail ul { flex-direction: row; }
   #hub-rail li { flex: 1 1 0; min-width: 0; grid-template-columns: 1fr; justify-items: center; padding: 4px 2px; }
