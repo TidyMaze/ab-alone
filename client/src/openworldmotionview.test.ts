@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import './test/openworldwasm';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
