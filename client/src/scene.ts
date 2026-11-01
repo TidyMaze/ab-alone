@@ -12,13 +12,11 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
-import { addSun } from './tablezero';
+import { TERRACE_EXPOSURE, addSun } from './tablezero';
 
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
 export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
-/** AgX, the Blender render's own view transform, at the exposure that lands the dish on #b6ab82 and the gap on #2d3539. */
-const TERRACE_EXPOSURE = 1.5;
 /** What AgX takes out of the palette is given back (art director: about 8 to 10 percent). */
 export const TERRACE_SATURATION = 1.35;
 /** The radius of the rounded edges of the board's plate and rim. */

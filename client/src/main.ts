@@ -3397,7 +3397,7 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
   .catch(() => undefined);
 // The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
 // clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
-const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x101317, roughness: 0.3, metalness: 0, specularIntensity: 0.35, envMapIntensity: 2.5 }); // the sky's reflection leads, the sun's dot is kept small
+const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x101317, roughness: 0.4, metalness: 0, specularIntensity: 0.35, envMapIntensity: 1.25 }); // the sky's reflection leads, the sun's dot is kept small
 const terraceGlass = new THREE.MeshStandardMaterial({ color: 0xe0d6bc, roughness: 0.6, metalness: 0 }); // warm ivory, no reflection: the whites take no blue fill
 function terraceMarbles(on: boolean): void {
   marbleMaterials[1] = on && skin === DEFAULT_SKIN ? terraceShell : shellMaterial(skin);

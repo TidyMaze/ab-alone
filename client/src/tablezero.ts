@@ -21,6 +21,9 @@ export const PALETTE = {
   ridges: [0x2c5a63, 0x4a7480, 0x7f9fac],
 } as const;
 
+/** AgX, the Blender render's own view transform, at the exposure that lands the dish near #b6ab82 and the gap on #2d3539. */
+export const TERRACE_EXPOSURE = 1.5;
+
 /** One sun, elevation 28 (the Blender render's, lights_camera.json), 25 degrees left of the camera axis at yaw 0, fixed in the world; a hemisphere; no point light. */
 export const SUN = { colour: 0xffd9a8, intensity: 4.6, elevation: 28, azimuth: 25, sky: 0x9db8d8, ground: 0x8a7a66, hemisphere: 1.9 } as const;
 
@@ -63,7 +66,8 @@ export function terraceMaterial(material: THREE.Material, geometry: THREE.Buffer
   const colour = geometry.attributes.color;
   let blended = false;
   for (let i = 0; colour && colour.itemSize === 4 && i < colour.count && !blended; i++) blended = colour.getW(i) < 0.999;
-  if (!unlit.has(blended)) unlit.set(blended, new THREE.MeshBasicMaterial({ name: blended ? 'terrace_blended' : 'terrace_solid', vertexColors: true, fog: false, side: THREE.DoubleSide, transparent: blended }));
+  if (!unlit.has(blended)) unlit.set(blended, new THREE.MeshBasicMaterial({ name: blended ? 'terrace_blended' : 'terrace_solid', vertexColors: true, fog: false, side: THREE.DoubleSide, transparent: blended, color: new THREE.Color().setScalar(1 / TERRACE_EXPOSURE) }));
+  // the exposure lights the lit meshes up; an unlit colour is the render's own, so it is scaled back down by it
   return unlit.get(blended)!;
 }
 

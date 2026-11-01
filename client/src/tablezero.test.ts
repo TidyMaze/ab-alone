@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, terraceSky, isDefaultView, TERRACE_VIEW } from './tablezero';
+import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, terraceSky, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE } from './tablezero';
 
 describe('Table Zero is the scene of a 1v1 game only', () => {
   const on = { hub: false, fight: false, royale: false, run: false, room: false, ready: true };
@@ -87,6 +87,7 @@ describe('the unlit materials of the arena file', () => {
   it('draw their vertex colours, not the white of their emissive factor, one material for the solid ones', () => {
     const sky = terraceMaterial(lamp(), colours([1, 1])) as THREE.MeshBasicMaterial;
     expect([sky.isMeshBasicMaterial, sky.vertexColors, sky.transparent]).toEqual([true, true, false]);
+    expect(sky.color.r).toBeCloseTo(1 / TERRACE_EXPOSURE); // the exposure does not brighten what is already a colour of the render
     expect(terraceMaterial(lamp(), colours([1], 3))).toBe(sky);
     expect(terraceMaterial(lamp(), new THREE.BufferGeometry())).toBe(sky);
   });
