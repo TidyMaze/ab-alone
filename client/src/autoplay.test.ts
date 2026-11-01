@@ -26,6 +26,10 @@ describe('autoPlayState, #792', () => {
     expect(autoPlayState({ online: false, boss: null, run: true }, false)).toEqual({ shown: true, reason: 'Not in a rogue-lite run' });
   });
 
+  it('is greyed in the Trainer: the score is the player\'s own, #1159', () => {
+    expect(autoPlayState({ online: false, boss: null, trainer: true }, false)).toEqual({ shown: true, reason: 'Not in the Trainer' });
+  });
+
   it('plays one move per short delay', () => {
     expect(AUTO_DELAY_MS).toBeGreaterThan(0);
     expect(AUTO_DELAY_MS).toBeLessThanOrEqual(1000);

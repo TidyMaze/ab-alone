@@ -94,6 +94,7 @@ describe('main.ts, Trainer mode (#1159)', () => {
     game.hook('__playMoves', await playOut(14, 6, 'draw', 'random'));
     expect(card()).toBe('Wave 14 stalled: a draw costs a marbleWaves survived: 14Marbles left: 5/6Best: 14');
     expect(game.hud()).toContain('Marbles left 5/6');
+    expect(game.hud()).toContain('StalledA draw costs a marble.'); // not "You win"
     expect(byId('trainer-next').hidden).toBe(false);
     byId('trainer-next').click();
     expect(document.body.dataset.trainer).toBe('15');
@@ -127,6 +128,7 @@ describe('main.ts, Trainer mode (#1159)', () => {
     game.hook('__trainer', 20);
     expect(whites(game)).toBe(14);
     expect(game.hud()).toContain('Trainer · wave 20');
+    expect(byId('auto-reason').textContent).toBe('Not in the Trainer'); // no Auto-play with a bot (#1159)
     const move = game.hook<{ cells: [number, number][]; dir: number }[]>('__legal').find((m) => m.cells.length === 1)!;
     game.click(...move.cells[0]!);
     game.click(...game.hook<{ cell: [number, number]; dir: number }[]>('__targets').find((t) => t.dir === move.dir)!.cell);

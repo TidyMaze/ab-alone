@@ -2200,7 +2200,7 @@ function stopAuto(): void {
 }
 function syncAuto(): void {
   const boss = engine instanceof Encounter ? engine.name() : null;
-  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null || trainer !== null }, fight !== null && hasMedal(store, fight.id));
+  const state = autoPlayState({ online: Boolean(hub) || online !== null || botWorker === null, boss, run: run !== null, trainer: trainer !== null }, fight !== null && hasMedal(store, fight.id));
   const over = royale ? royale.placement().length > 0 : engine.status() !== 0;
   const reason = state.shown ? state.reason : null;
   const usable = state.shown && reason === null && !over;
@@ -3010,6 +3010,7 @@ function drawHud(extra = ''): void {
     glass: glassOf(),
   });
   if (end?.anim === 'win' && fight) end.line = `${end.line} ${medalNote(fight)}`; // a won fight: Black is the player's side
+  if (end && trainer && status === 1 && engine.draw_reason() !== 0) Object.assign(end, { title: 'Stalled', line: 'A draw costs a marble.' }); // not "You win" (#1159)
   if (end) document.body.dataset.over = end.anim;
   else delete document.body.dataset.over;
   document.getElementById('hud')!.innerHTML = hudHtml({
