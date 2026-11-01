@@ -934,7 +934,7 @@ describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026
 
   it('rolls the hero to the cell the camera shows in the direction of each key, at each yaw', () => {
     const world = new World(bytes);
-    for (const yaw of [15, 30, 45, 60, 90, 135, -70].map((d) => d * DEG)) {
+    for (const yaw of [15, 30, 45, 60, 90, 120, 135, 180, -60, -70].map((d) => d * DEG)) {
       const view = new OpenWorldView(world);
       view.resize(1600, 900);
       view.turnTo(yaw);
@@ -1062,6 +1062,38 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
     m.frame(vi.fn(), clock);
     expect(body().openworldAt).toBe(stopped);
     vi.restoreAllMocks();
+  });
+
+  it('a turn takes 60 degrees, one per hex direction: six presses go all the way round (#1251)', () => {
+    expect(TURN_STEP).toBeCloseTo(Math.PI / 3);
+    const m = mode();
+    m.enter(7, 800, 600);
+    const seen: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      m.key('q');
+      seen.push(body().openworldYaw!);
+    }
+    expect(seen).toEqual(['60', '120', '180', '-120', '-60', '0']);
+  });
+
+  it('a drag turns freely while held, then settles on the nearest multiple of 60 degrees on release (#1251)', () => {
+    const m = mode();
+    m.enter(7, 800, 600);
+    m.orbit(100); // 50 degrees
+    expect(body().openworldYaw).toBe('50');
+    m.settle();
+    expect(body().openworldYaw).toBe('60');
+    m.orbit(-100); // 10 degrees
+    m.settle();
+    expect(body().openworldYaw).toBe('0');
+  });
+
+  it('a saved yaw of 30 degrees opens at the nearest multiple of 60 degrees (#1251)', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, [0, 0], [[0, 0]], new FightState().toJSON(), Math.PI / 6);
+    const m = mode(undefined, undefined, undefined, undefined, undefined, saves);
+    await m.open(7, 800, 600);
+    expect(body().openworldYaw).toBe('60');
   });
 
   it('the turn is saved with the world: a frame writes it, and opening the world again applies it', async () => {
