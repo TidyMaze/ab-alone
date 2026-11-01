@@ -1,4 +1,4 @@
-// The particles of the Open world (#1110, docs/specs/openworld-animation.md sections 1 and 6): leaves and snow
+// The particles of the Open world (#1110, docs/specs/openworld-animation.md sections 1 and 6): pollen, leaves, snow and heat dust
 // drifting round the hero by biome, and the dust puff under a step. One pool of a fixed size, each slot a particle whose pose is a pure
 // function of the time (its origin, its speed and its birth), so it is unit-tested; the view draws the pool as one instanced mesh.
 import type { Biome } from './openworld';
@@ -24,11 +24,12 @@ export interface Look {
   gravity?: number;
 }
 
-/** The ambient particles by biome (#1104), born within `RADIUS` cells of the hero: 8 leaves live in a forest (8 over a 6 s fall), 16 flakes in
- * the tundra (16 over 5 s). The meadow and the badlands have none, and the desert has a shimmer of the ground instead (openworldmotion.ts). */
+/** The ambient particles by biome, born within `RADIUS` cells of the hero. The badlands have none. */
 export const AMBIENT: Partial<Record<Biome, Look>> = {
-  forest: { rate: 8 / 6, life: 6000, lift: 2.2, spread: 0.8, rise: -0.35, sway: 0.5, size: 0.15, colour: 0xe08a2e },
-  tundra: { rate: 16 / 5, life: 5000, lift: 2.4, spread: 1.0, rise: -0.45, sway: 0.25, size: 0.17, colour: 0xffffff },
+  meadow: { rate: 12, life: 4000, lift: 0.2, spread: 1.4, rise: 0.12, sway: 0.35, size: 0.14, colour: 0xfff0a0 },
+  forest: { rate: 8, life: 6000, lift: 2.2, spread: 0.8, rise: -0.35, sway: 0.5, size: 0.15, colour: 0xe08a2e },
+  tundra: { rate: 11, life: 5000, lift: 2.4, spread: 1.0, rise: -0.45, sway: 0.25, size: 0.17, colour: 0xffffff },
+  desert: { rate: 14, life: 3000, lift: 0.1, spread: 0.8, rise: 0.15, sway: 0.4, size: 0.14, colour: 0xf0c888 },
 };
 
 /** The dust puff of a step: `count` grains thrown outward from the cell the hero leaves, gone within `life` ms. */
@@ -176,9 +177,7 @@ export class ParticlePool {
     }
     // The first look of a pool (after a clear too) starts the world already alive: the particles a steady state holds, at random
     // points of their life.
-    // spread evenly over the life (one in each share of it), so the live count stays at the steady number instead of bunching (#1104)
-    const warm = this.warm ? 0 : Math.round((look.rate * look.life) / 1000);
-    for (let k = warm; k > 0; k--) this.bear(look, hero, now - ((k - this.random()) / warm) * look.life * 0.9);
+    for (let k = this.warm ? 0 : Math.floor((look.rate * look.life) / 1000); k > 0; k--) this.bear(look, hero, now - this.random() * look.life * 0.9);
     this.warm = true;
     this.owed += (look.rate * gap) / 1000;
     for (; this.owed >= 1; this.owed--) {

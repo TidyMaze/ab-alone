@@ -14,12 +14,10 @@ const count = (page: Page) => page.evaluate(() => Number(document.body.dataset.o
 
 test('particles drift near the hero in the Open world, #1110', async ({ page }) => {
   await enter(page);
-  // A forest of seed 7 (the meadow has no ambient particle since #1104).
-  await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [-58, 70], troop: [], enemies: [] }));
   await expect.poll(() => count(page)).toBeGreaterThan(2);
   expect(await count(page)).toBeLessThanOrEqual(64);
   await page.keyboard.press('ArrowRight'); // a step kicks up dust on top of the ambient particles
-  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('-57,70');
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('1,0');
 });
 
 test('no particle is drawn under reduced motion, #1110', async ({ page }) => {

@@ -1874,7 +1874,7 @@ describe('the loaded chunks keep their centre while the hero paces along a chunk
 });
 
 describe('the particles of the Open world (#1110)', () => {
-  // A grass world whose biome code is `code` (0 meadow, 1 forest, 3 desert, 4 badlands) everywhere in the square -3..3 of chunks.
+  // A grass world whose biome code is `code` (0 meadow, 4 badlands) everywhere in the square -3..3 of chunks.
   const biomeOf = (code: number) => (cx: number, cy: number) => {
     if (Math.abs(cx) > 3 || Math.abs(cy) > 3) return new Uint8Array();
     const out = new Uint8Array(CHUNK * CHUNK * 3);
@@ -1889,31 +1889,17 @@ describe('the particles of the Open world (#1110)', () => {
     return live;
   };
 
-  it('drifts leaves near the hero in a forest: some instances are drawn, 8 live (9 for the frame of a birth before a death), never past the pool (#1104)', () => {
-    const view = new OpenWorldView(new World(biomeOf(1)));
+  it('drifts pollen near the hero in a meadow: some instances are drawn, never past the pool', () => {
+    const view = new OpenWorldView(new World(biomeOf(0)));
     view.show([0, 0]);
     expect(run(view, 3000)).toBe(true);
-    expect(sparks(view).count).toBeGreaterThan(4);
-    expect(sparks(view).count).toBeLessThanOrEqual(9);
+    expect(sparks(view).count).toBeGreaterThan(5);
     expect(sparks(view).count).toBeLessThanOrEqual(sparks(view).instanceMatrix.count);
     expect(view.scene.children).toContain(sparks(view));
   });
 
-  it('drifts 16 flakes at most in the tundra, and none in the meadow or the desert: the biomes differ (#1104)', () => {
-    const count = (code: number): number => {
-      const view = new OpenWorldView(new World(biomeOf(code)));
-      view.show([0, 0]);
-      run(view, 3000);
-      return sparks(view).count;
-    };
-    const [meadow, forest, tundra, desert] = [0, 1, 2, 3].map(count);
-    expect([meadow, desert]).toEqual([0, 0]);
-    expect(tundra).toBeGreaterThan(forest!);
-    expect(tundra).toBeLessThanOrEqual(17);
-  });
-
   it('draws no ambient particle on the low tier, and a step still puffs its dust (#1104)', () => {
-    const view = new OpenWorldView(new World(biomeOf(1)));
+    const view = new OpenWorldView(new World(biomeOf(0)));
     view.show([0, 0]);
     expect(view.sparkle(0, false, true)).toBe(false);
     expect(sparks(view).count).toBe(0);
@@ -1927,14 +1913,14 @@ describe('the particles of the Open world (#1110)', () => {
     bad.show([0, 0]);
     expect(run(bad, 3000)).toBe(false);
     expect(sparks(bad).count).toBe(0);
-    const still = new OpenWorldView(new World(biomeOf(1)));
+    const still = new OpenWorldView(new World(biomeOf(0)));
     still.show([0, 0]);
     expect(run(still, 3000, true)).toBe(false);
     expect(sparks(still).count).toBe(0);
   });
 
   it('empties the pool past ROLL_ZOOM, and draws once more to erase the last particles', () => {
-    const view = new OpenWorldView(new World(biomeOf(1)));
+    const view = new OpenWorldView(new World(biomeOf(0)));
     view.resize(1600, 900);
     view.show([0, 0]);
     expect(run(view, 2000)).toBe(true);
@@ -1946,7 +1932,7 @@ describe('the particles of the Open world (#1110)', () => {
   });
 
   it('clears the particles at once when reduced motion comes on', () => {
-    const view = new OpenWorldView(new World(biomeOf(1)));
+    const view = new OpenWorldView(new World(biomeOf(0)));
     view.show([0, 0]);
     run(view, 1000);
     expect(sparks(view).count).toBeGreaterThan(0);
