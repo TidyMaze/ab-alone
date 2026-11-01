@@ -1334,3 +1334,37 @@ games and none is lost to a repulsion. The HUD never reads "Polarity every turn"
 is now `a_fifth_ejection_in_the_tree_switches_the_cadence_from_3_to_2`, at the P2 to P3 switch, since P1 and P2 share
 their cadence. Not repeated on 40 seeds: 15 is inside the target and a 10x run of this boss
 takes about 30 minutes.
+
+### The Overseer: the vents pull in a core next to them and burn the boss in every phase (#1241), 17 of 20 at 10x
+
+Target of #753 and #833: the pro player (10x) wins 14 to 18 of 20, the 1x player fewer. Method:
+`LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- overseer`, seeds 0 to 19, 300 plies at most,
+one ladder run at a time, main after #1242 (the ladder player reads the incinerators). The lead's plan: try the layout
+first, then a rule, and keep the smallest change that lands. Every try on the same 20 seeds:
+
+| Try | 1x (3000) | 10x (30000) |
+|---|---|---|
+| before, main after #1242 | `3000 \| 1/20 \| 79 \| 2 \| push 13, rim_ejection 6` | `30000 \| 9/20 \| 77 \| 2 \| push 9, rim_ejection 1, draw 1` |
+| 1. cores start one cell nearer their vents (`(-2,-1)`, `(3,-1)`, `(-3,0)`, `(3,0)`, `(-3,1)`, `(2,1)`) | `3000 \| 4/20 \| 79 \| 2 \| push 11, rim_ejection 3, draw 2` | `30000 \| 8/20 \| 79 \| 2 \| push 9, rim_ejection 3` |
+| 2. the pull: an empty vent pulls in a core next to it at the end of every ply | not run | `30000 \| 10/20 \| 76 \| 2 \| push 8, rim_ejection 1, draw 1` |
+| 3. the vents burn the boss's marbles in P3 too, no pull | not run | `30000 \| 10/20 \| 79 \| 2 \| push 9, draw 1` |
+| 4. the pull and the boss burnt in P3 too | `3000 \| 6/20 \| 79 \| 2 \| push 8, rim_ejection 5, draw 1` | `30000 \| 17/20 \| 59 \| 2 \| push 2, rim_ejection 1` |
+| 5. the pull in P3 only, the boss burnt in P3 too | `3000 \| 14/20 \| 60 \| 2 \| push 4, rim_ejection 2` | `30000 \| 12/20 \| 64.5 \| 2 \| push 7, draw 1` |
+| **shipped**: the pull, P3 dropped (P2 after 2 burns both sides to the end) | `3000 \| 6/20 \| 79 \| 1 \| push 8, rim_ejection 5, draw 1` | `30000 \| 17/20 \| 59 \| 1 \| push 2, rim_ejection 1` |
+
+**Reading.** Try 1 keeps the jam of #1230: the boss reads the vents too and pushes the cores away from them, so a
+start one cell nearer gains nothing (8 of 20). Try 2 removes the jam of two cores side by side on the line of a vent
+(the first is next to it and is pulled in), but a probe of its 10 losses at 10x shows a new one: in 6 of them a boss
+marble stands on a vent in P3, where the vents spare it, right in front of a core that the pull would take. Try 3
+alone frees the vents but keeps the jam (10 of 20). Together (try 4) they land at 17 of 20, and the 1x player stays far
+below (6 of 20); try 5 (the pull only from P3) lets the 1x player win more than the 10x one, refused. With the boss
+burnt in P3 too, P3 burns the same as P2, so the shipped change drops P3 instead (`OVERSEER_PHASE_EJECTIONS` is `[2]`):
+the same burns on every ply, so the same games as try 4, the max phase column reads 1. `engine_version` 21.
+
+**The client and the MCP.** A core a vent pulls in rolls one cell onto that vent, then sinks (`ventOf` and
+`burnTrack` in `client/src/overseer.ts`; reduced motion: it fades on the vent). The goal line reads "Push its cores
+onto or next to the vents."; the MCP `neurotoxin` tell adds "an empty vent pulls in a core next to it at the end of
+every ply". The e2e fixture wins at ply 22 instead of 24: the cores the player and the boss push next to a vent are
+pulled in one push earlier.
+
+**The Ballast Mind** does not borrow the pull: it has no cores and no vents, and the pull is no one-shot effect.

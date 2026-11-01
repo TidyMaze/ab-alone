@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { axialTo3D } from './board';
 import { EJECT_MS, FADE_MS, trackAt } from './eject';
-import { HAZE_PER_VENT, TAUNTS, TOXIN_TURNS, VENT_NOTE, burnTrack, burnsPlayer, hazeAt, parseBurns, startsBurningPlayer, tauntIndex, toxinText, ventNote } from './overseer';
+import { HAZE_PER_VENT, TAUNTS, TOXIN_TURNS, VENT_NOTE, burnTrack, burnsPlayer, hazeAt, parseBurns, startsBurningPlayer, tauntIndex, toxinText, ventNote, ventOf } from './overseer';
 
 describe('The Overseer helpers (#635, game-design.md section 7.11)', () => {
   it('splits the [q, r, code] records of removed()', () => {
@@ -33,6 +33,24 @@ describe('The Overseer helpers (#635, game-design.md section 7.11)', () => {
     expect([end.x, end.z, end.drop > 0, end.opacity]).toEqual([p.x, p.z, true, 0]);
     expect(burnTrack([3, 1], true)).toMatchObject({ kind: 'fade', durationMs: FADE_MS });
   });
+
+  it('rolls a core a vent pulls in from the next cell onto that vent, then sinks it, or fades it on the vent (#1241)', () => {
+    const vents: [number, number][] = [[-3, -1], [4, -1], [-4, 0], [4, 0], [-4, 1], [3, 1]];
+    expect(ventOf([3, 1], vents)).toEqual([3, 1]); // on a vent: that one
+    expect(ventOf([-4, 0], vents)).toEqual([-4, 0]); // even next to another
+    expect(ventOf([2, 1], vents)).toEqual([3, 1]);
+    expect(ventOf([-3, 0], vents)).toEqual([-3, -1]); // next to three: the first, as the engine pulls
+    expect(ventOf([0, 0], vents)).toEqual([0, 0]); // next to none: where it stands
+    const from = axialTo3D(2, 1);
+    const to = axialTo3D(3, 1);
+    const track = burnTrack([2, 1], false, [3, 1]);
+    expect(track.dir.x).toBeCloseTo(to.x - from.x);
+    expect(track.dir.z).toBeCloseTo(to.z - from.z);
+    const rolled = trackAt(track, 200); // the push part: one cell, onto the vent
+    expect([rolled.x, rolled.z]).toEqual([to.x, to.z]);
+    const faded = trackAt(burnTrack([2, 1], true, [3, 1]), 0);
+    expect([faded.x, faded.z]).toEqual([to.x, to.z]);
+  });
 });
 
 describe('The Overseer speech and vents (#741)', () => {
@@ -42,10 +60,10 @@ describe('The Overseer speech and vents (#741)', () => {
     for (const left of [40, 25, 10, 1]) expect(toxinText(left)).toContain(TAUNTS[tauntIndex(left)]!);
   });
 
-  it('burns the boss in P1 and P2 and the player in P2 and P3', () => {
-    expect([0, 1, 2].map(burnsPlayer)).toEqual([false, true, true]);
+  it('burns the boss in every phase and the player in P2', () => {
+    expect([0, 1].map(burnsPlayer)).toEqual([false, true]);
     expect(startsBurningPlayer(0, 1)).toBe(true);
-    expect(startsBurningPlayer(1, 2)).toBe(false);
+    expect(startsBurningPlayer(1, 1)).toBe(false);
     expect(startsBurningPlayer(0, 0)).toBe(false);
   });
 

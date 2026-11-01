@@ -761,25 +761,32 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
     push that would take a core off the board over the rim is refused: only an incinerator takes it.
   - **6 incinerators**, the rim cells of the 3 middle rows, each 2 steps beyond a core:
     `(-3,-1)`, `(4,-1)`, `(-4,0)`, `(4,0)`, `(-4,1)`, `(3,1)`. A normal cell for moves.
-- **Burn**: at the end of every ply, yours and the boss's, every core on an incinerator burns
-  (removed) and counts as **one ejection for you, whoever pushed it**. The incinerators also burn,
-  by phase: the boss's marbles in P1 and P2, yours in P2 and P3; a burnt marble counts for the
-  other side, as the Hull's voids. The phase of a ply is the one before it.
+- **Pull** (#1241): at the end of every ply, yours and the boss's, each empty incinerator first
+  pulls in a core from a cell next to it (the first in direction order `E, W, NE, SW, NW, SE`,
+  the incinerators in the order above; a core already on an incinerator stays there). An
+  incinerator with a marble on it pulls nothing.
+- **Burn**: then every core on an incinerator burns (removed) and counts as **one ejection for
+  you, whoever pushed it**. The incinerators also burn, by phase: the boss's marbles in every
+  phase, yours in P2; a burnt marble counts for the other side, as the Hull's voids. The phase of
+  a ply is the one before it.
 - **Win and lose**: win at **6** ejections as usual (`rules.md` §10.3): the 6 cores burnt win, and a
   boss marble ejected or burnt counts too. Lose at 6 of yours, a draw, or the **neurotoxin**: at
   the end of your turn **40**, if you have not won, the boss wins. Your 40th move still wins if it
   brings your 6th ejection.
-- **Phases**: P1 at the start, **P2 after 2 ejections** credited to you, **P3 after 4**, one change
-  each: P2 burns your marbles too, P3 stops burning the boss's (the Overseer reroutes the vents to
-  spare its guards, so a boss marble may stand on an incinerator in front of a core).
+- **Phases**: P1 at the start, **P2 after 2 ejections** credited to you: P2 burns your marbles too.
+  The P3 of #635 (after 4, the vents spared the boss's marbles) is dropped (#1241): a boss marble
+  safe on a vent plugged it in front of the last cores, and the ladder's pro player could not
+  free them (docs/specs/boss-balance.md, #1241).
 - **Deterministic, for P2P**: nothing is random. The burns, the clock and the boss search are pure
   functions of the position; a Retry, the daily, a replayed game file and every peer get the same
   fight.
-- **Moves never change** except the three rules above (the Overseer blocks, a core never crosses
-  the rim, the burns between plies, `rules.md` §10).
+- **Moves never change** except the rules above (the Overseer blocks, a core never crosses the
+  rim, the pulls and the burns between plies, `rules.md` §10).
 - **Tell**: the Overseer is a dark hexagonal pedestal with a pale eye; a core is a pale marble with
   a dark eye on top, a shape and not a colour (3:1 on both glass skins). Each incinerator wears a
-  warm disc crossed by 3 dark slots on its cell. A burning marble sinks into its vent and fades (reduced motion: a fade).
+  warm disc crossed by 3 dark slots on its cell. A burning marble sinks into its vent and fades (reduced motion: a fade);
+  a core a vent pulls in rolls one cell onto it first (reduced motion: it fades on the vent). The goal line reads
+  "Push its cores onto or next to the vents."
   **Vents by phase** (#741): from P2, when the vents start burning your marbles too, a toxic green
   haze rises from them (reduced motion: a faint still haze) and the HUD adds "The vents now burn
   your marbles too." for 2 plies.
@@ -799,16 +806,18 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   that changes with the level, every 20 %: "Take your time. The neurotoxin will wait.", "The
   neurotoxin is now at a level we call festive.", "You are doing very well. For a corpse.", "Most
   test subjects stop moving around now.", "Goodbye. I mean it this time."
-- **Counter, turn it against the boss**: the boss's own push burns a core when it puts one on an
-  incinerator, and the vents burn its marbles in P1 and P2: push a boss marble one cell onto an
-  incinerator instead of two cells off the board. The boss search sees the burns (every ply of its
+- **Counter, turn it against the boss**: the boss's own push burns a core when it puts one on or
+  next to an empty incinerator, which pulls it in, and the vents burn its marbles in every phase:
+  push a boss marble one cell onto an incinerator instead of two cells off the board, and it
+  cannot plug a vent in front of a core. The boss search sees the burns (every ply of its
   tree burns, in the phase the credits so far give), plays the neurotoxin clock (the player's last
   turn is a boss win in the tree) and keeps cores and its marbles off the vents; it never
   pushes a core in unless every other move costs it more.
 - **Winnable** (`cargo run --release --example overseer_sim`): the bot ladder's player (4x the boss
   budget, its search sees the burns) wins about half of 20 seeded fights inside the 40 turns. The
   example fails when it wins none.
-- **Calibrate**: knobs = the clock (40), phase ejections (2, 4), AI depth (the Hull's 3000 nodes).
+- **Calibrate**: knobs = the clock (40), phase ejections (2), AI depth (the Hull's 3000 nodes). The
+  ladder (#1241, 20 seeds): the pro player (10x) wins 17 of 20, the 1x player 6.
   Fail if most fights end with fewer than 2 cores burnt (nobody learns the counter).
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door: each deck keeps its one boss.

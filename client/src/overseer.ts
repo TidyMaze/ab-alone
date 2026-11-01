@@ -42,7 +42,7 @@ export function toxinText(left: number): string {
   return `Neurotoxin ${level} % · ${left} ${left === 1 ? 'turn' : 'turns'} left · ${TAUNTS[tauntIndex(left)]}`;
 }
 
-/** Whether the vents burn the player's marbles in phase `phase` (0 is P1): in P2 and P3; the boss's burn in P1 and P2. */
+/** Whether the vents burn the player's marbles in phase `phase` (0 is P1): in P2; the boss's burn in every phase. */
 export const burnsPlayer = (phase: number): boolean => phase >= 1;
 
 /** Whether the change from phase `from` to `to` is the one that starts burning the player's marbles. */
@@ -66,13 +66,24 @@ export function hazeAt(nowMs: number, k: number, reduced: boolean): { y: number;
 /** Where the Overseer's bubble points: over its pedestal and eye, on the centre cell. */
 export const BUBBLE_SPOT = { x: 0, y: 1.2, z: 0 };
 
-/** The effect of a burning marble: it sinks into its vent where it stands, or fades with reduced motion. */
-export function burnTrack(cell: Axial, reduced: boolean): EjectTrack {
+/** The vent a burnt marble goes into: its own cell, or the first of `vents` next to it, the one that pulled the core in
+ * (#1241); its own cell when none is. */
+export function ventOf(cell: Axial, vents: readonly Axial[]): Axial {
+  const [q, r] = cell;
+  const on = vents.some(([a, b]) => a === q && b === r);
+  const near = vents.find(([a, b]) => Math.max(Math.abs(a - q), Math.abs(b - r), Math.abs(a - q + b - r)) === 1);
+  return on ? cell : (near ?? cell);
+}
+
+/** The effect of a burning marble: it sinks into its vent where it stands, or rolls one cell into `vent` first when the
+ * vent pulled it in (#1241); with reduced motion it fades on the vent. */
+export function burnTrack(cell: Axial, reduced: boolean, vent: Axial = cell): EjectTrack {
   const p = axialTo3D(cell[0], cell[1]);
+  const v = axialTo3D(vent[0], vent[1]);
   return {
     kind: reduced ? 'fade' : 'tumble',
     from: { x: p.x, z: p.z },
-    dir: { x: 0, z: 0 },
+    dir: { x: v.x - p.x, z: v.z - p.z },
     durationMs: reduced ? FADE_MS : EJECT_MS,
   };
 }
