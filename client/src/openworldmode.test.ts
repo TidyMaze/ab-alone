@@ -154,6 +154,23 @@ describe('the Open world mode', () => {
     }
   });
 
+  it('draws the ground cells with no lower neighbour as flat tops on the low tier only (#1234)', () => {
+    const flat = () => Object.entries(JSON.parse(body().openworldDrawn!) as Record<string, number>).filter(([k]) => k.endsWith('-flat'));
+    const sum = () => flat().reduce((total, [, n]) => total + n, 0);
+    const high = mode();
+    high.enter(1, 800, 600);
+    expect(sum()).toBe(0);
+    high.leave();
+    document.body.dataset.tier = 'low';
+    try {
+      const low = mode();
+      low.enter(1, 800, 600);
+      expect(sum()).toBeGreaterThan(0);
+    } finally {
+      delete document.body.dataset.tier;
+    }
+  });
+
   it('rolls the hero on an arrow key, and keeps it before a boulder', () => {
     const m = mode();
     m.enter(1, 800, 600);
