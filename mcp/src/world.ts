@@ -1,9 +1,11 @@
 // The Open world tools of docs/specs/mcp.md section 5: start a world from a seed, read a short window of it, walk a step or to a
-// cell. Every rule is the Rust core's, called in the client's order (`OpenWorldMode.roll` of client/src/openworldmode.ts): the map,
-// the enemies, the lairs and the path (`world_chunk`, `world_enemies`, `world_lairs`, `world_path`), the step (`world_enter`,
-// `world_trail`) and the troop's push after it (`WorldFight`). This holds the hero, the troop, the broken cells, the fight and the lairs
+// cell, teleport. Every rule is the Rust core's, called in the client's order (`OpenWorldMode.roll` of client/src/openworldmode.ts):
+// the map, the enemies, the lairs, the teleporters and the path (`world_chunk`, `world_enemies`, `world_lairs`, `world_teleporters`,
+// `world_path`), the step (`world_enter`, `world_trail`) and the troop's push after it (`WorldFight`); the teleport is the client's
+// own code (client/src/openworldteleport.ts). This holds the hero, the troop, the broken cells, the fight and the lairs
 // beaten and the cells discovered, saves them in the client's format (client/src/openworldsave.ts), and turns the engine's codes into words.
 import { decodeDiscovered, Discovered, type DiscoveredSave } from '../../client/src/openworlddiscovered';
+import { teleport } from '../../client/src/openworldteleport';
 import { endingLine } from '../../client/src/tally';
 import { DIRECTIONS } from './notation';
 import type { ErrorCode, Result } from './game';
@@ -16,6 +18,8 @@ export interface WorldRules {
   world_enemies(seed: number, cx: number, cy: number): Int32Array;
   /** `q, r` pairs of the boss lairs, lair 0 first. */
   world_lairs(seed: number): Int32Array;
+  /** `q, r` pairs of the teleporters, the spawn's first (#1412). */
+  world_teleporters(seed: number): Int32Array;
   /** The walk from a cell to a cell: `q, r` pairs, the start left out, empty when there is none. */
   world_path(seed: number, fromQ: number, fromR: number, toQ: number, toR: number, blocked: Int32Array, broken: Int32Array): Int32Array;
   /** What the step from `(q, r)` to `(tq, tr)` does: 0 refused, 1 rolls, 2 breaks. `terrain` is the code of the cell, -1 off the world. */
@@ -105,6 +109,8 @@ export interface WorldState {
   /** The enemy marbles inside the window. */
   enemies: string[];
   lairs: { boss: string; cell: string; distance: number; beaten: boolean }[];
+  /** The teleporters discovered (#1412), the only ones `world_teleport` goes to, and their distance from the hero (0: it stands on it). */
+  teleporters: { cell: string; distance: number }[];
   /** Tally's line of the client once every lair is beaten (#1175), the world's end; absent before. */
   ending?: string;
   window: { radius: number; rows: Row[] };
@@ -153,6 +159,8 @@ const BOULDER = 5;
 const TREE = 6;
 const ROCK = 3;
 const GRASS = 2;
+/** The ground a marble stands on: sand, grass and rock. */
+const OPEN = [1, GRASS, ROCK];
 /** The answers of `world_enter`. */
 const REFUSED = 0;
 const BREAKS = 2;
@@ -185,6 +193,7 @@ export class OpenWorld {
   private readonly chunks = new Map<string, Uint8Array>();
   private readonly groups = new Map<string, Cell[]>();
   private lairCells: Cell[] = [];
+  private teleporterCells: Cell[] = [];
   /** The lair the hero last stepped onto, its boss and the session's game then: a fight of that boss won since beats the lair. */
   private entered: { lair: number; boss: string; before: string | null } | null = null;
 
@@ -213,6 +222,7 @@ export class OpenWorld {
     }
     this.play.discovered.reveal(this.play.hero); // a save from before the discovery: the cells round the hero, as the client
     this.lairCells = pairs(this.rules.world_lairs(this.play.seed));
+    this.teleporterCells = pairs(this.rules.world_teleporters(this.play.seed));
     return ok(this.view(RADIUS));
   }
 
@@ -267,6 +277,21 @@ export class OpenWorld {
       if (rolled.push) pushes.push(rolled.push);
     }
     return ok({ steps, pushes, state: this.view(RADIUS) });
+  }
+
+  /** Teleports the hero from the teleporter it stands on to the discovered one on `(q, r)`, the troop on the free cells round it and
+   * no push, by the client's rules (`teleport` of client/src/openworldteleport.ts). A refused teleport changes nothing. */
+  teleport({ q, r }: WalkInput): Result<WorldState> {
+    const play = this.play;
+    if (!play) return this.none();
+    this.back();
+    const free = ([q, r]: Readonly<Cell>): boolean => OPEN.includes(this.terrain(q, r)!) && !this.occupied([q, r]) && !this.lairCells.some((l) => same(l, [q, r]));
+    const moved = teleport(this.teleporterCells, (cq, cr) => play.discovered.has(cq, cr), play.hero, [q, r], play.troop.length, free);
+    if ('refused' in moved) return fail('blocked', moved.refused);
+    play.hero = [...moved.hero];
+    play.troop = moved.troop.map(([q, r]): Cell => [q, r]);
+    play.discovered.reveal(play.hero);
+    return ok(this.view(RADIUS));
   }
 
   /** The boss of lair `k`: boss `k` of the roster, round it, as the client's (client/src/main.ts). */
@@ -393,6 +418,7 @@ export class OpenWorld {
       discovered: discovered.count,
       enemies: enemies.map(text),
       lairs: this.lairCells.map((cell, k) => ({ boss: this.bossOf(k), cell: text(cell), distance: hex(hero, cell), beaten: lairs.includes(k) })),
+      teleporters: this.teleporterCells.filter(([q, r]) => discovered.has(q, r)).map((cell) => ({ cell: text(cell), distance: hex(hero, cell) })),
       // The client's ending (`OpenWorldMode.showTally`): every lair beaten, counted as the client counts them.
       ...(this.lairCells.length > 0 && lairs.length >= this.lairCells.length ? { ending: endingLine(CREW) } : {}),
       window: { radius: size, rows },

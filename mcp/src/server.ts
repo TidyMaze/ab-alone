@@ -173,7 +173,7 @@ export function createServer(
     {
       description:
         'The Open world state: seed, hero, troop, obstacles broken, enemies beaten (ejected), cells discovered (within 10 of the hero so far), the enemies in the window as the pushes ' +
-        'left them, every boss lair with its distance from the hero and whether it is beaten, ending (the end line) once every lair is ' +
+        'left them, every boss lair with its distance from the hero and whether it is beaten, the teleporters discovered with their distance (0: the hero stands on it), ending (the end line) once every lair is ' +
         'beaten, and a short window of cells round the hero (never the whole map). There is no loss state: the hero cannot lose, as in ' +
         `the client. ${WINDOW}`,
       inputSchema: z.strictObject({ radius: z.int().min(1).max(8).optional().describe('Cells of the window out from the hero, default 3.') }),
@@ -215,6 +215,18 @@ export function createServer(
       inputSchema: z.strictObject({ q: z.int().describe('Column of the cell.'), r: z.int().describe('Row of the cell.') }),
     },
     (input) => toolResult(world.walk(input)),
+  );
+
+  server.registerTool(
+    'world_teleport',
+    {
+      description:
+        'Teleport the hero from the teleporter it stands on to another teleporter already discovered (world_state lists them), as in ' +
+        'the client: the troop arrives on the free cells round it, and there is no push on arrival. Refused (blocked, nothing changes) ' +
+        'off a teleporter, onto no teleporter, the same one, one not discovered yet, one with an enemy on it, or with no room for the troop.',
+      inputSchema: z.strictObject({ q: z.int().describe('Column of the teleporter.'), r: z.int().describe('Row of the teleporter.') }),
+    },
+    (input) => toolResult(world.teleport(input)),
   );
 
   server.registerTool(

@@ -28,13 +28,14 @@ export function bossIds(): string[] {
   return wasm.boss_ids();
 }
 
-/** The Open world rules of the engine (docs/specs/openworld.md): the map, the enemies, the lairs, the walk, the step, the
- * troop's push and the world version of a save. */
+/** The Open world rules of the engine (docs/specs/openworld.md): the map, the enemies, the lairs, the teleporters, the walk, the
+ * step, the troop's push and the world version of a save. */
 export function worldRules(): WorldRules {
   return {
     world_chunk: wasm.world_chunk,
     world_enemies: wasm.world_enemies,
     world_lairs: wasm.world_lairs,
+    world_teleporters: wasm.world_teleporters,
     world_path: wasm.world_path,
     world_enter: wasm.world_enter,
     world_trail: wasm.world_trail,
