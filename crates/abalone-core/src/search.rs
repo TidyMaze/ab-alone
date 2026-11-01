@@ -1149,6 +1149,73 @@ mod tests {
         assert_eq!(position_score(&game, 500), 0);
     }
 
+    fn searcher() -> Searcher<'static> {
+        Searcher {
+            weights: DEFAULT_WEIGHTS,
+            step: None,
+            budget: 1000,
+            nodes: 0,
+            win: [WIN_EJECTIONS; 2],
+            turns: None,
+            deadline: None,
+        }
+    }
+
+    #[test]
+    fn a_blocked_side_passes_in_the_tree() {
+        // White's corner marble is walled in: it passes, and Black's pair pushes it off for the
+        // sixth ejection on the ply after.
+        let board = game_from(
+            &[(2, -4), (3, -4), (3, -3), (4, -3)],
+            &[(4, -4)],
+            Player::White,
+            [0, 0],
+        );
+        let node = Node {
+            board: board.board().clone(),
+            to_move: Player::White,
+            ejected: [5, 0],
+        };
+        assert!(legal_moves(&node.board, Player::White).is_empty());
+        assert_eq!(searcher().negamax(&node, 2, 0, -INF, INF), Some(2 - WIN));
+    }
+
+    #[test]
+    fn both_sides_blocked_in_the_tree_score_a_draw() {
+        // A line of four cells, the rest void: Black, White, Black, White.
+        let mut board = game_from(&[(0, 0), (2, 0)], &[(1, 0), (3, 0)], Player::White, [0, 0])
+            .board()
+            .clone();
+        for q in -4..=4 {
+            for r in -4..=4 {
+                if r != 0 || !(0..=3).contains(&q) {
+                    board.void(q, r);
+                }
+            }
+        }
+        let node = Node {
+            board,
+            to_move: Player::White,
+            ejected: [0, 0],
+        };
+        assert_eq!(searcher().negamax(&node, 3, 0, -INF, INF), Some(0));
+    }
+
+    #[test]
+    fn a_side_with_no_marble_in_the_tree_keeps_its_static_score() {
+        let node = Node {
+            board: game_from(&[], &[(0, 0)], Player::Black, [0, 0])
+                .board()
+                .clone(),
+            to_move: Player::Black,
+            ejected: [0, 0],
+        };
+        assert_eq!(
+            searcher().negamax(&node, 2, 0, -INF, INF),
+            Some(-DEFAULT_WEIGHTS.marbles)
+        );
+    }
+
     #[test]
     fn position_score_with_no_legal_move_is_the_static_score() {
         let game = game_from(&[], &[(0, 0)], Player::Black, [0, 0]);

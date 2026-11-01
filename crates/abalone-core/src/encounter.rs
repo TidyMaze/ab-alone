@@ -904,6 +904,32 @@ mod tests {
         enc.play(&mv(&[(0, 0)], E)).unwrap();
         assert_eq!(enc.result(), Some(PveResult::Won));
     }
+    /// Fills (4,-3) with a Black marble: a White marble in the corner is walled in.
+    fn wall_in(board: &Board, _id: u8, _seed: u64) -> Board {
+        let mut out = board.clone();
+        out.set(4, -3, Cell::Black);
+        out
+    }
+
+    #[test]
+    fn a_side_the_hook_walls_in_passes_after_the_hook() {
+        let game = position(
+            &[(3, -4), (3, -3), (-4, 4)],
+            &[(4, -4)],
+            Player::Black,
+            [0, 0],
+        );
+        let mut boss = boss(every_ply);
+        boss.hook = wall_in;
+        let mut enc = Encounter::new(game, boss, 0);
+        enc.play(&mv(&[(-4, 4)], E)).unwrap();
+        assert_eq!(enc.game().to_move(), Player::Black, "the boss passed");
+        assert_eq!(enc.game().passed(), Some(Player::White));
+        assert_eq!(enc.result(), None);
+        assert_eq!(enc.boss_search(), None);
+        assert!(enc.player_search().is_some());
+    }
+
     #[test]
     fn a_side_with_no_marble_left_loses() {
         // Black's pair pushes the lone White marble off the rim: White has none left.

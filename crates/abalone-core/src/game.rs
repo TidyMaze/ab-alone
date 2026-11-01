@@ -988,6 +988,70 @@ mod tests {
         assert_eq!(won.play_bonus(&push), Err(GameError::GameOver));
     }
 
+    /// White's lone marble in the corner: walled in once Black's (4,-2) steps to (4,-3).
+    fn corner() -> Game {
+        game_from(&[(3, -4), (3, -3), (4, -2)], &[(4, -4)], Player::Black)
+    }
+
+    #[test]
+    fn a_side_with_marbles_but_no_legal_move_passes_its_turn() {
+        let mut game = corner();
+        game.play(&mv(&[(4, -2)], NW)).unwrap();
+        assert!(legal_moves(game.board(), Player::White).is_empty());
+        assert_eq!(game.to_move(), Player::Black, "White passed");
+        assert_eq!(game.passed(), Some(Player::White));
+        assert_eq!(game.outcome(), None);
+        assert_eq!(game.history().len(), 1, "a pass is no ply");
+        assert_eq!(
+            game.history()[0].hash,
+            position_hash(game.board(), Player::Black)
+        );
+        game.play(&mv(&[(4, -3)], SE)).unwrap();
+        assert_eq!(game.to_move(), Player::White, "White can move again");
+        assert_eq!(game.passed(), None, "the next ply clears the pass");
+    }
+
+    #[test]
+    fn a_side_with_no_marble_left_does_not_pass() {
+        let mut game = game_from(&[(0, 0)], &[], Player::Black);
+        game.play(&mv(&[(0, 0)], E)).unwrap();
+        assert_eq!(game.to_move(), Player::White);
+        assert_eq!(game.passed(), None);
+    }
+
+    /// A line of four cells, the rest void: Black, White, Black, White. No side can move.
+    fn jammed(draw_to: Option<Player>) -> Game {
+        let mut game = game_from(&[(0, 0), (2, 0)], &[(1, 0), (3, 0)], Player::Black);
+        for q in -4..=4 {
+            for r in -4..=4 {
+                if r != 0 || !(0..=3).contains(&q) {
+                    game.board.void(q, r);
+                }
+            }
+        }
+        game.draw_to = draw_to;
+        game
+    }
+
+    #[test]
+    fn both_sides_blocked_end_the_game_in_a_draw() {
+        let mut game = jammed(None);
+        assert!(legal_moves(game.board(), Player::Black).is_empty());
+        assert!(legal_moves(game.board(), Player::White).is_empty());
+        game.pass_when_blocked();
+        assert_eq!(game.outcome(), Some(Outcome::Draw));
+        assert_eq!(game.draw_reason(), Some(DrawReason::Blocked));
+        assert_eq!((game.to_move(), game.passed()), (Player::Black, None));
+        let mut trainer = jammed(Some(Player::Black));
+        trainer.pass_when_blocked();
+        assert_eq!(
+            trainer.outcome(),
+            Some(Outcome::Win(Player::Black)),
+            "the mode's own draw rule"
+        );
+        assert_eq!(trainer.draw_reason(), Some(DrawReason::Blocked));
+    }
+
     #[test]
     fn pass_gives_the_move_back_and_rehashes_the_last_ply() {
         let mut game = lone();

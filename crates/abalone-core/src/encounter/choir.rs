@@ -817,6 +817,7 @@ mod tests {
         );
         c.play(&mv(&[(-4, 4)], E)).unwrap();
         assert_eq!(c.game().to_move(), Player::Black, "the boss passed");
+        assert_eq!(c.game().passed(), Some(Player::White));
         assert_eq!(c.result(), None);
         assert_eq!(c.boss_move(), None, "player's turn");
         c.play(&mv(&[(-3, 4)], E)).unwrap();

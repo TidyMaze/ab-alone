@@ -625,6 +625,11 @@ mod tests {
         assert_eq!((s.turn(), s.result()), (1, None));
         assert!(s.landed().is_empty());
         assert!(s.passed(), "the reply was a pass");
+        assert_eq!(
+            s.game().passed(),
+            Some(Player::White),
+            "the shared pass (#1301)"
+        );
         assert_eq!(s.boss_move(), None);
     }
 
@@ -657,6 +662,11 @@ mod tests {
         s.play(&mv(&[(-3, -1)], SW)).unwrap();
         assert!(legal_moves(s.game().board(), Player::Black).is_empty());
         assert_eq!(s.game().to_move(), Player::White);
+        assert_eq!(
+            s.game().passed(),
+            Some(Player::Black),
+            "the shared pass (#1301)"
+        );
         assert_eq!(s.turn(), 6);
         assert_eq!(s.landed().len(), 3, "turn 7's wave landed");
         assert!(s.boss_move().is_some());

@@ -1104,8 +1104,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_24_since_the_swarm_has_its_evac_clock() {
-        assert_eq!(engine_version(), 24);
+    fn the_engine_version_is_25_since_a_blocked_side_passes() {
+        assert_eq!(engine_version(), 25);
     }
 
     #[test]
@@ -2807,8 +2807,10 @@ mod tests {
             .find(|m| m[0] == 1 && m[2] == 0 && m[3] == 0)
             .unwrap()
             .to_vec();
+        assert_eq!(f.passed(), 0);
         f.play(&mv).unwrap();
         assert_eq!(f.to_move(), 1, "the swarm passed");
+        assert_eq!(f.passed(), 2, "the HUD names the side that passed (#1301)");
         assert_eq!(f.swarm()[..3], [39, 1, 0]);
         f.scale_node_budget(50);
         assert_eq!(f.result(), 0);

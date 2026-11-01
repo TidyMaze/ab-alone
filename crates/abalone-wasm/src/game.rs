@@ -357,6 +357,24 @@ mod tests {
     }
 
     #[test]
+    fn a_side_with_no_legal_move_passes_and_the_bridge_says_which() {
+        use abalone_core::board::Cell;
+        let mut board = Board::empty();
+        for (q, r) in [(3, -4), (3, -3), (4, -2)] {
+            board.set(q, r, Cell::Black);
+        }
+        board.set(4, -4, Cell::White);
+        let mut engine = Engine {
+            game: Game::from_position(board, Player::Black, [0, 0]),
+        };
+        assert_eq!(engine.passed(), 0);
+        // (4,-2) steps NW to (4,-3): White's corner marble is walled in and passes.
+        engine.play(&[1, 4, 4, -2, 0, 0, 0, 0]).unwrap();
+        assert_eq!((engine.to_move(), engine.passed()), (1, 2));
+        assert_eq!(engine.status(), 0);
+    }
+
+    #[test]
     fn ejected_counts_start_at_zero_for_both_sides() {
         let engine = Engine::new();
         assert_eq!(engine.ejected(1), 0);

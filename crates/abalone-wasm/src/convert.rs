@@ -176,6 +176,7 @@ mod tests {
         assert_eq!(draw_reason_code(None), 0);
         assert_eq!(draw_reason_code(Some(DrawReason::Repetition)), 1);
         assert_eq!(draw_reason_code(Some(DrawReason::NoEjectionCap)), 2);
+        assert_eq!(draw_reason_code(Some(DrawReason::Blocked)), 3);
     }
 
     #[test]
