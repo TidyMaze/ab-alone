@@ -23,6 +23,8 @@ pub const SWARM_PHASE_TURNS: [u32; 2] = [15, 25];
 pub const SWARM_ARRIVALS: [u8; 3] = [1, 2, 3];
 /// Player marbles of the standard layout left out at the start, the nearest the centre. TUNE.
 pub const SWARM_LEFT_OUT: usize = 3;
+/// Player marbles the swarm must eject to win (#795, the lead's decision of 2026-10-30). TUNE.
+pub const SWARM_EJECTIONS: u8 = 4;
 /// Positions the boss search may visit per move (the Choir's budget). TUNE.
 pub const SWARM_NODE_BUDGET: u32 = 1500;
 /// The swarm pushes toward the rim: ejections and the opponent's distance from the centre count
@@ -520,7 +522,7 @@ mod tests {
 
     #[test]
     fn the_player_with_1_marble_after_the_30th_reply_wins() {
-        let mut s = swarm(&[(0, 2)], &[], [0, 10], 29);
+        let mut s = swarm(&[(0, 2)], &[], [0, 0], 29);
         assert_eq!(s.phase(), 2);
         s.play(&mv(&[(0, 2)], E)).unwrap();
         assert_eq!(s.landed().len(), 3, "turn 30 lands 3");
@@ -539,7 +541,7 @@ mod tests {
 
     #[test]
     fn the_player_with_no_marble_left_on_turn_12_loses() {
-        let mut s = swarm(&[(-4, 4)], &[(-1, 2), (-2, 3)], [0, 5], 11);
+        let mut s = swarm(&[(-4, 4)], &[(-1, 2), (-2, 3)], [0, 0], 11);
         s.play(&mv(&[(-4, 4)], E)).unwrap();
         s.play(&mv(&[(-1, 2), (-2, 3)], SW)).unwrap();
         assert_eq!(s.turn(), 12);
@@ -551,18 +553,31 @@ mod tests {
     }
 
     #[test]
-    fn ejections_never_end_the_fight_before_the_last_player_marble() {
+    fn the_player_ejecting_swarm_marbles_never_ends_the_fight() {
         // The player ejects a 6th swarm marble: nothing ends.
         let mut s = swarm(&[(2, 0), (3, 0)], &[(4, 0)], [5, 0], 4);
         s.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
         assert_eq!(s.game().ejected(Player::Black), 6);
         assert_eq!(s.result(), None);
-        // The swarm ejects a 6th player marble, one is left: nothing ends.
-        let mut s = swarm(&[(-4, 4), (2, -1)], &[(-1, 2), (-2, 3)], [0, 5], 4);
+    }
+
+    #[test]
+    fn the_boss_wins_once_it_has_ejected_its_count_of_player_marbles() {
+        // One ejection short: the fight goes on.
+        let black = [(-4, 4), (2, -1), (2, 0), (3, -1)];
+        let mut s = swarm(&black, &[(-1, 2), (-2, 3)], [0, SWARM_EJECTIONS - 2], 4);
         s.play(&mv(&[(-4, 4)], E)).unwrap();
         s.play(&mv(&[(-1, 2), (-2, 3)], SW)).unwrap();
-        assert_eq!(s.game().ejected(Player::White), 6);
+        assert_eq!(s.game().ejected(Player::White), SWARM_EJECTIONS - 1);
         assert_eq!(s.result(), None);
+        // The ejection that reaches the count wins, with player marbles still on the board.
+        let mut s = swarm(&black, &[(-1, 2), (-2, 3)], [0, SWARM_EJECTIONS - 1], 4);
+        s.play(&mv(&[(-4, 4)], E)).unwrap();
+        s.play(&mv(&[(-1, 2), (-2, 3)], SW)).unwrap();
+        assert_eq!(s.game().ejected(Player::White), SWARM_EJECTIONS);
+        assert_eq!(marbles(s.game().board(), Cell::Black), 3);
+        assert_eq!(s.result(), Some(PveResult::Lost));
+        assert!(s.announced().is_empty(), "nothing more arrives");
     }
 
     #[test]
