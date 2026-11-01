@@ -594,6 +594,13 @@ pub const PATH_EXPANSIONS: usize = 6000;
 /// The six steps of the hex grid in the order of the client (E, W, NE, SW, NW, SE): the order that breaks the ties of a path.
 const STEPS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
 
+/// Whether a peer's claim that the hero broke the cell `(q, r)` of the world `seed` can be true (#1305): the generated cell is a
+/// boulder or a tree. The rule that a tree with a tree beside it holds (`entry`) is not checked: it depends on which neighbours were
+/// already broken, so on the order the events arrive in, and a refused event is never asked for again.
+pub fn can_break(seed: u64, q: i32, r: i32) -> bool {
+    cell(seed, q, r).is_some_and(|c| matches!(c.terrain, Terrain::Boulder | Terrain::Tree))
+}
+
 /// The axial distance between two cells.
 pub fn hex_distance(a: (i32, i32), b: (i32, i32)) -> i32 {
     let (dq, dr) = (a.0 - b.0, a.1 - b.1);
@@ -757,6 +764,34 @@ fn path_over(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_boulder_or_a_tree_of_the_generated_world_can_break() {
+        let mut seen = Vec::new();
+        for q in -40..40 {
+            for r in -40..40 {
+                let terrain = cell(5, q, r).unwrap().terrain;
+                assert_eq!(
+                    can_break(5, q, r),
+                    matches!(terrain, Terrain::Boulder | Terrain::Tree),
+                    "cell {q},{r} is {terrain:?}"
+                );
+                seen.push(terrain);
+            }
+        }
+        assert!(
+            seen.contains(&Terrain::Boulder)
+                && seen.contains(&Terrain::Tree)
+                && seen.contains(&Terrain::Grass)
+        );
+    }
+
+    #[test]
+    fn a_cell_off_the_world_cannot_break() {
+        let edge = WORLD_CHUNKS / 2 * CHUNK;
+        assert!(!can_break(5, edge, 0));
+        assert!(!can_break(5, 0, -edge - 1));
+    }
 
     #[test]
     fn a_chunk_holds_every_cell_of_its_square_in_any_order_of_visit() {
@@ -1157,7 +1192,7 @@ mod tests {
     #[test]
     fn every_group_stays_in_its_chunk_and_no_cell_holds_two_marbles() {
         for seed in 0..12 {
-            let mut seen = std::collections::HashSet::new();
+            let mut seen = Vec::new();
             for cx in -8..8 {
                 for cy in -8..8 {
                     for group in enemy_groups(seed, cx, cy) {
