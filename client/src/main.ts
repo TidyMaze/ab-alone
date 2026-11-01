@@ -4885,6 +4885,9 @@ shipButton.addEventListener('click', () => {
   enterHub(loadProgress(store).at);
 });
 shipButton.disabled = false; // listener ready (#146)
+// The Open world's own Ship button (#1373): its dock is hidden and a phone has no Esc. Same path as the dock's Ship, which leaves
+// the world (saved, as Esc does) for the hub.
+document.getElementById('openworld-ship')!.addEventListener('click', () => shipButton.click());
 function enterHub(at: HubSpot): void {
   leaveMode();
   roomOf = null;
