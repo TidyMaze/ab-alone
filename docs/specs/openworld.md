@@ -244,3 +244,19 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
 - **Ending (#1175).** When every lair of the world is in `lairs` (beaten), the world counts as beaten: whenever it opens, `#openworld-tally`
   shows "Variance noted. Clamp: open. Crew attached: 6." (the crew is the Trainer's `MARBLES`), in place of the claim line. One line, no
   speech, nothing gated, no new save field (a save from before reads as not over). `__openworldFixture` takes `beaten: [n, ...]` to set the lairs beaten.
+
+## 8. Minimap (#1410)
+
+- **Place.** A round canvas, `#openworld-minimap` (9 rem, drawn at 288 px), fixed in the top right corner under the settings cog (16 px from
+  the top, the cog's height and half a rem below it), never over a button on a desktop or a phone width. It ignores the pointer, and
+  shows only while `body[data-openworld]` is set, so every other mode (and a world left) has none (#1275).
+- **Window.** The hex disc of 24 cells round the hero (three chunks across), each cell a square in the colour the 3D view draws its terrain in (`terrainColour`: `LOOK`, `WATER`, `PROPS`, no palette of its own), read
+  with `World.tile`: the same chunks as the 3D view, no second copy of the rules. The hero is in the middle (white), the troop (gold) and
+  the enemies near the hero (red) are dots.
+- **Turn.** The map is turned by the camera's yaw (`screenOffset`: the ground layout of `axialTo3D`, screen up `(-sin yaw, -cos yaw)`), so up
+  on the map is up on screen, and Q, E, R and a drag turn it.
+- **Lairs.** A lair in the window is a purple diamond, a beaten one grey. A lair out of the window gets an arrow on the map's edge pointing to it only
+  for the 3 nearest unbeaten ones; the others have none.
+- **Cost.** `openworldminimap.ts` draws from plain data (`drawMinimap`) and is redrawn by `mark`: when a world opens and on a step, a push, a
+  broken obstacle or a camera turn, never on a frame.
+

@@ -822,6 +822,8 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #openworld-chip:active { border-color: var(--plate-accent); }
 /* The Hub button (#1373): the dock is hidden in the Open world and a phone has no Esc, so a touch screen gets a 44 px way out at the
    bottom right, away from the stick (left half) and the HUD plate (bottom left), above the peers arrows (z-index 2 over their 1). */
+/* The minimap (#1410): top right, under the settings cog (16px from the top, 2.75rem high), over nothing else; the settings menu opens above it. The mode adds the canvas when a world opens and removes it when it is left. */
+#openworld-minimap { position: fixed; z-index: 0; top: calc(16px + 2.75rem + 0.5rem); right: 16px; width: 9rem; height: 9rem; pointer-events: none; zoom: var(--ui-scale); }
 #openworld-ship { display: none; position: fixed; right: 1rem; bottom: 1rem; z-index: 2; min-width: var(--target); min-height: var(--target); place-items: center; padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; zoom: var(--ui-scale); }
 @media (pointer: coarse) { body[data-openworld] #openworld-ship { display: grid; } }
 /* Held upright the plate spans the width: it stands above the button, not under it. */
