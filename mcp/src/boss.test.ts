@@ -92,7 +92,7 @@ const CASES: Record<string, () => void> = {
     // Every 3 turns it borrows an effect of another boss, announced during the turn before it shows.
     // Both sides play their first legal move: the boss search of this deck is far too slow for a test.
     while (ballast.ballast_next() < 0) ballast.play(ballast.legal_moves().slice(0, 8));
-    const borrowed = ["the Hull's crack", "the Pulsar's pulse", "the Magnetizer's polarity", "the Chaplain's conversion check"];
+    const borrowed = ["the Hull's crack", "the Pulsar's pulse", "the Magnetizer's polarity", "the Chaplain's conversion check", "the Swarm's wave"];
     expect(bossState('ballast', ballast).tell).toEqual({
       kind: 'borrowed',
       cells: [],

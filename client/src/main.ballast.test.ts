@@ -36,9 +36,10 @@ function plies(game: Game, n: number): void {
 describe('main.ts The Ballast Mind announce (#749)', () => {
   it.each([
     [0, "Next turn: the Magnetizer's polarity"],
-    [2, "Next turn: the Hull's crack"],
-    [3, "Next turn: the Pulsar's pulse"],
-    [4, "Next turn: the Chaplain's conversion check"],
+    [3, "Next turn: the Hull's crack"],
+    [5, "Next turn: the Pulsar's pulse"],
+    [2, "Next turn: the Chaplain's conversion check"],
+    [6, "Next turn: the Swarm's wave"],
   ])('fight seed %i names its effect during turn 3 only', async (seed, text) => {
     const game = await boot('?bot=off');
     fightBallast(game, seed);
@@ -54,7 +55,7 @@ describe('main.ts The Ballast Mind announce (#749)', () => {
 
   it('plays the borrowed pulse with the Pulsar shockwave', async () => {
     const game = await boot('?bot=off');
-    fightBallast(game, 3);
+    fightBallast(game, 5);
     plies(game, 5);
     expect(document.body.dataset.pulses).toBeUndefined();
     plies(game, 1);
@@ -67,7 +68,7 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
 
   it('shows the announced pulse on its pulsar, rippling, one turn ahead', async () => {
     const game = await boot('?bot=off');
-    fightBallast(game, 3);
+    fightBallast(game, 5);
     plies(game, 3);
     expect(game.hook('__pulsar')).toBeNull();
     expect(document.body.dataset.ripples).toBe('0');
@@ -82,10 +83,11 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
   });
 
   it.each([
-    [3, 1, "Fired: the Pulsar's pulse"],
-    [2, 0, "Fired: the Hull's crack"],
-    [4, 3, "Fired: the Chaplain's conversion check"],
+    [5, 1, "Fired: the Pulsar's pulse"],
+    [3, 0, "Fired: the Hull's crack"],
+    [2, 3, "Fired: the Chaplain's conversion check"],
     [0, 2, "Fired: the Magnetizer's polarity"],
+    [6, 4, "Fired: the Swarm's wave"],
   ])('fight seed %i fires effect %i, named in the HUD with a mark on each cell it touched', async (seed, effect, text) => {
     const game = await boot('?bot=off');
     fightBallast(game, seed);
