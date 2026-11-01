@@ -8,12 +8,12 @@ import { arrowCell, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labe
 // the HUD plate.
 
 describe('the hub board', () => {
-  it('is floor on the 19 map cells and a hole everywhere else, so the frame shrinks to the map', () => {
+  it('is floor on the 37 map cells and a hole everywhere else, so the frame shrinks to the map', () => {
     expect(HUB_BOARD).toHaveLength(CELLS.length);
     CELLS.forEach(([q, r], i) =>
       expect(HUB_BOARD[i]).toBe(HUB_CELLS.some(([hq, hr]) => hq === q && hr === r) ? 0 : VANISHED),
     );
-    expect(frameShape(HUB_BOARD)).toMatchObject({ radius: 2, holes: [] });
+    expect(frameShape(HUB_BOARD)).toMatchObject({ radius: 3, holes: [] });
   });
 });
 
@@ -153,6 +153,20 @@ describe('hub target inspection and reachability (#628)', () => {
       desc: 'Transit to Cargo',
       reach: 'Out of reach (roll closer)',
     });
+    expect(hubTargetText(at, [3, -2])).toEqual({
+      name: 'Boss door',
+      desc: 'The Dual Room (Mess boss)',
+      reach: 'Out of reach (roll closer)',
+    });
+    const target = (deck: Spot['deck'], cell: Axial): string => {
+      const { name, desc } = hubTargetText({ deck, cell: [0, 0] }, cell);
+      return `${name} · ${desc}`;
+    };
+    expect(target('mess', [3, -3])).toBe('Daily challenge · One boss and one seed a day');
+    expect(target('mess', [0, -3])).toBe('Open world · A generated hex world');
+    expect(target('cargo', [0, 3])).toBe('Rogue-lite run · Three acts, one army of 14');
+    expect(target('furnace', [0, -3])).toBe('Fight together · Two players, one army, a boss');
+    expect(target('bridge', [3, -3])).toBe('Ranked · Online 1v1, Elo and tiers');
     expect(hubTargetText(at, [1, 0])).toEqual({
       name: 'Deck floor',
       desc: 'Open transit corridor',
@@ -186,16 +200,42 @@ describe('the room labels (#1249)', () => {
     expect(roomLabel('mess', { kind: 'royale' }, [])).toEqual({ name: 'Royale', state: 'battle royale', short: 'Royale', mark: '' });
     expect(roomLabel('mess', { kind: 'terminal', lore: 'mess-house-rule' }, [])).toEqual({ name: 'Terminal', state: 'lore entry', short: 'Terminal', mark: '' });
     expect(roomLabel('mess', { kind: 'medals' }, [])).toEqual({ name: 'Medal room', state: 'best turns', short: 'Medals', mark: '' });
+    expect(roomLabel('mess', { kind: 'daily' }, [])).toEqual({ name: 'Daily', state: 'boss of the day', short: 'Daily', mark: '' });
+    expect(roomLabel('cargo', { kind: 'run' }, [])).toEqual({ name: 'Rogue-lite', state: '3-act run', short: 'Run', mark: '' });
+    expect(roomLabel('cargo', { kind: 'world' }, [])).toEqual({ name: 'Open world', state: 'walk Hollow', short: 'World', mark: '' });
+    expect(roomLabel('furnace', { kind: 'together' }, [])).toEqual({ name: 'Together', state: 'co-op vs a boss', short: 'Co-op', mark: '' });
+    expect(roomLabel('bridge', { kind: 'ranked' }, [])).toEqual({ name: 'Ranked', state: 'Elo ladder', short: 'Ranked', mark: '' });
   });
 
   it('name the boss behind the door, marked once beaten', () => {
-    expect(roomLabel('cargo', { kind: 'boss', boss: 'hull' }, [])).toEqual({ name: 'Boss door', state: 'The Hull', short: 'The Hull', mark: '' });
+    expect(roomLabel('cargo', { kind: 'boss', boss: 'hull' }, [])).toEqual({ name: 'Boss door', state: 'The Hull', short: 'Hull', mark: '' });
     expect(roomLabel('mess', { kind: 'boss', boss: 'echo' }, ['echo'])).toEqual({
       name: 'Boss door',
       state: 'The Echo · beaten',
-      short: 'The Echo',
+      short: 'Echo',
       mark: 'beaten',
     });
+  });
+
+  it('name every boss of the roster, its phone label without "The" (#1249)', () => {
+    const names = ['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker', 'swarm'].map(bossTitle);
+    expect(names).toEqual([
+      'The Echo', 'The Hull', 'The Choir', 'The Chaplain', 'The Ballast Mind', 'The Alien', 'The Rail Yard', 'The Magnetizer',
+      'The Pulsar', 'The Overseer', 'The Assembly Line', 'The Unstable Core', 'The Dual Room', 'The Stalker', 'The Swarm',
+    ]);
+    expect(roomLabel('cargo', { kind: 'boss', boss: 'assembly' }, []).short).toBe('Assembly Line');
+  });
+
+  it('show the medal of a beaten boss: its best turns (#1249)', () => {
+    expect(roomLabel('cargo', { kind: 'boss', boss: 'alien' }, ['alien'], { alien: 22 })).toEqual({
+      name: 'Boss door',
+      state: 'The Alien · Medal: 22 turns',
+      short: 'Alien',
+      mark: 'beaten',
+    });
+    expect(roomLabel('mess', { kind: 'boss', boss: 'echo' }, ['echo'], { echo: 1 }).state).toBe('The Echo · Medal: 1 turn');
+    expect(roomLabel('cargo', { kind: 'boss', boss: 'alien' }, [], { echo: 3 }).state).toBe('The Alien');
+    expect(labelsHtml({ deck: 'cargo', cell: [0, 0] }, ['alien'], { alien: 22 })).toContain('<small>The Alien · Medal: 22 turns</small>');
   });
 
   it('point a lift up or down to its deck, marked while it is locked', () => {
@@ -211,9 +251,9 @@ describe('the room labels (#1249)', () => {
 
   it('put one plate on the cell of each room of the deck, and YOU on the marble', () => {
     const html = labelsHtml({ deck: 'mess', cell: [0, 0] }, []);
-    expect(html.match(/class="hub-label"/g)).toHaveLength(9); // the eight rooms and the lift up of the Mess
+    expect(html.match(/class="hub-label"/g)).toHaveLength(12); // the eleven rooms and the lift up of the Mess
     expect(html).toContain(
-      '<div class="hub-label" data-cell="2,0" data-kind="boss"><b>Boss door</b><small>The Echo</small><span class="short">The Echo</span></div>',
+      '<div class="hub-label" data-cell="2,0" data-kind="boss"><b>Boss door</b><small>The Echo</small><span class="short">Echo</span></div>',
     );
     expect(html).toContain('<div class="hub-label" data-cell="1,-2" data-kind="lift" data-mark="locked"><b>Lift ▲ Cargo</b>');
     expect(html).toContain('<div class="hub-label you" data-cell="0,0">You</div>');

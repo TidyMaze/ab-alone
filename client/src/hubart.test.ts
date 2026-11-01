@@ -13,6 +13,26 @@ describe('hub door 3D glyphs (#628)', () => {
     expect(GLYPH_COLORS.royale).toBe(0xfd7e14); // Industrial orange
     expect(GLYPH_COLORS.terminal).toBe(0x20c997); // Phosphor CRT green
     expect(GLYPH_COLORS.lift).toBe(0xe9ecef); // Bone white
+    const kinds = ['boss', 'bot', 'hotseat', 'online', 'royale', 'terminal', 'medals', 'lift', 'daily', 'run', 'together', 'ranked', 'world'] as const;
+    expect(new Set(kinds.map((k) => GLYPH_COLORS[k])).size).toBe(kinds.length); // one colour per room kind (#1249)
+  });
+
+  // #1249: a room for each mode with no table: each its own prop and colour.
+  it('builds a prop in its own colour for each mode room', () => {
+    const props: [Door, string][] = [
+      [{ kind: 'daily' }, 'a calendar'],
+      [{ kind: 'run' }, 'a map table'],
+      [{ kind: 'together' }, 'two marbles'],
+      [{ kind: 'ranked' }, 'a podium'],
+      [{ kind: 'world' }, 'a globe'],
+    ];
+    for (const [door, what] of props) {
+      const glyph = createDoorGlyph(door);
+      expect(glyph.name, what).toBe(`door-${door.kind}`);
+      expect(glyph.children.length, what).toBeGreaterThanOrEqual(3);
+      const colors = glyph.children.map((c) => ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex());
+      expect(colors, what).toContain(GLYPH_COLORS[door.kind as keyof typeof GLYPH_COLORS]);
+    }
   });
 
   it('builds an angular horned ring with glowing inner core for boss door', () => {
@@ -140,6 +160,11 @@ describe('hub door 3D glyphs (#628)', () => {
       { kind: 'terminal', lore: 'mess-house-rule' },
       { kind: 'medals' },
       { kind: 'lift', to: 'cargo' },
+      { kind: 'daily' },
+      { kind: 'run' },
+      { kind: 'together' },
+      { kind: 'ranked' },
+      { kind: 'world' },
     ];
     for (const door of doors) {
       const top = new THREE.Box3().setFromObject(createDoorGlyph(door, { open: true })).max.y;

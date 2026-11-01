@@ -29,7 +29,7 @@ describe('hub progress', () => {
     ['null', 'null'],
     ['another version', JSON.stringify({ version: 2, deck: 'mess', cell: [0, 0], beaten: [] })],
     ['an unknown deck', JSON.stringify({ version: 1, deck: 'attic', cell: [0, 0], beaten: [] })],
-    ['a cell off the map', JSON.stringify({ version: 1, deck: 'mess', cell: [3, 0], beaten: [] })],
+    ['a cell off the map', JSON.stringify({ version: 1, deck: 'mess', cell: [4, 0], beaten: [] })],
     ['a cell that is no pair', JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0, 0], beaten: [] })],
     ['a cell that is no array', JSON.stringify({ version: 1, deck: 'mess', cell: '0,0', beaten: [] })],
     ['no boss list', JSON.stringify({ version: 1, deck: 'mess', cell: [0, 0] })],
