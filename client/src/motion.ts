@@ -20,3 +20,10 @@ export function cue(el: Element, cls: string, ms: number): void {
   clearTimeout(cueTimers.get(el));
   cueTimers.set(el, setTimeout(() => el.classList.remove(cls), ms));
 }
+
+/** The Hint ghost's share of its opacity `ms` after it appears (motion.md story 7): clear to whole over `--motion-base`, easing out; reduced motion shows it whole. */
+export function ghostFade(ms: number, reduced: boolean): number {
+  if (reduced) return 1;
+  const t = Math.min(Math.max(ms / MOTION.base, 0), 1);
+  return 1 - (1 - t) ** 3;
+}

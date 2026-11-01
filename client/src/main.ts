@@ -46,7 +46,7 @@ import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
-import { MOTION, cue } from './motion';
+import { MOTION, cue, ghostFade } from './motion';
 import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
@@ -3670,6 +3670,18 @@ function animatePasses(now: number): void {
 }
 
 
+const GHOST_OPACITY = 0.45;
+let hintShownKey = '';
+let ghostFadeStart = 0;
+/** The ghost materials at `now`: the Hint's ghost rises from clear (ghostFade), any other ghost is whole. */
+function fadeGhosts(now: number): void {
+  const k = hintShownKey ? ghostFade(now - ghostFadeStart, reducedMotion()) : 1;
+  for (const m of [...Object.values(ghostMaterials), ghostCore]) m.opacity = GHOST_OPACITY * k;
+}
+
+/** Whether the Hint's ghost is still rising, so the frame keeps drawing. */
+const ghostFading = (): boolean => hintShownKey !== '' && !reducedMotion() && performance.now() - ghostFadeStart < MOTION.base;
+
 function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
   if (royale) return; // no ghost over the arena
   const mv = keyDir >= 0 ? moveFor(moves, selected, keyDir) : hover ? moveForClick(moves, selected, hover) : null;
@@ -3681,6 +3693,10 @@ function refreshGhosts(moves: ReturnType<typeof parseMoves>): void {
     if (reply.length) list.push(...ghostMarbles([...history, record], reply, makeGame));
   }
   ghosts.clear();
+  const hintKey = !mv && record ? record.join() : ''; // a hint that just appeared fades in, a hovered move shows at once
+  if (hintKey !== hintShownKey) ghostFadeStart = performance.now();
+  hintShownKey = hintKey;
+  fadeGhosts(performance.now());
   for (const { cell, side } of list) {
     const p = axialTo3D(cell[0], cell[1]);
     const marble = marbleMesh(side, ghostMaterials, ghostCore);
@@ -4199,6 +4215,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__view = () => view;
 
 // Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
+(window as unknown as Record<string, unknown>).__ghostOpacity = () => ghostMaterials[1]!.opacity; // the Hint ghost's fade (#1097)
 (window as unknown as Record<string, unknown>).__hint = () => hint.shown(here());
 (window as unknown as Record<string, unknown>).__rings = () => ringed;
 // Used by the browser checks to read the opacity and scale of the last move's ring (#1092).
@@ -5617,7 +5634,7 @@ function animateParticles(now: number): void {
 }
 // An effect that moves on screen by itself, frame after frame: while one is shown a player's page draws every frame.
 function moving(): boolean {
-  const effects = [slide, reveal, shock, blast, sweep, blinking, unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop, evac && !evac.done];
+  const effects = [slide, reveal, shock, blast, sweep, blinking, ghostFading(), unstableShown?.core, unstableShown && unstableShown.wedge >= 0, lowering, drop, evac && !evac.done];
   const lists = [fading, ejecting, bleeding, passing, slams, bursts, hazes, beltRibs, ripples];
   return (
     effects.some(Boolean) ||
@@ -5653,6 +5670,7 @@ renderer.setAnimationLoop((now) => {
   }
   animateSlides(now);
   fadeGlyphs(now);
+  fadeGhosts(now);
   animateReveal(now);
   animateEjections(now);
   animatePasses(now);
