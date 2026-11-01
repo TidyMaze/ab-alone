@@ -378,6 +378,9 @@ function summaryHtml(map: MapNode[], run: Run): string {
     .join('');
 }
 
+/** Tally's closing line of a run over (#1174): the audit reconciled with the army left, or voided. Optional flavour. */
+export const auditLine = (run: Run): string => (run.end === 'won' ? `Reconciled: ${run.army}.` : 'Run voided. Audit reopened.');
+
 /** The line that says where the run stands, on the map and in the HUD of its fights. */
 export function runLine(map: MapNode[], run: Run): string {
   if (run.end === 'won') return `Run won with ${run.army} marbles`;
@@ -435,7 +438,7 @@ export function eventHtml(run: Run): string {
  * is over, its summary and New run. */
 export function mapHtml(map: MapNode[], run: Run): string {
   const head = `<p class="run-line">${runLine(map, run)}</p>`;
-  if (run.end) return `${head}${summaryHtml(map, run)}<button type="button" id="run-new">New run</button>`;
+  if (run.end) return `${head}${summaryHtml(map, run)}<p class="run-tally">${auditLine(run)}</p><button type="button" id="run-new">New run</button>`;
   const open = choices(map, run);
   const rows = Math.max(...map.map((n) => n.row)) + 1;
   const total = (lastAct(map) + 1) * rows;

@@ -50,6 +50,14 @@ Written as facts the player can piece together, not as a story told in order.
   keeps the ship running only for matches. It speaks rarely, in short accounting phrases
   ("Mess: one remaining."). It is the final boss and also the only thing that can open the
   docking clamp.
+- **The Hollow Survey (canon, #1174).** The survey office that charted Hollow before the crew arrived. Its
+  paperwork outlived it: Tally treats every rogue-lite run as an open **audit** of the books and every
+  Trainer run as the crew's **drill**. The drill is held at **table zero** of the Mess, the table nobody
+  sat at, with **crew attached: 6** (the Trainer's pool of 6 marbles, #1159). Tally's lines are short,
+  optional and never gate anything. Rogue-lite run over: "Run voided. Audit reopened." (lost) or
+  "Reconciled: 14." (won, with the army left). Trainer wave start: "Drill: wave 5. Opponents: five.
+  Seated." Trainer result: "Wave 7 filed. Best on record: 9." No new rule, no HP, no damage: the lines
+  only name what the player already sees.
 - **What the player wants.** The docking clamp release. Tally grants it only to a winner who
   has beaten the five "seats" (the senior crew, see section 3).
 - **Tone.** Cosmic dread, grief, bureaucracy. Never gore for its own sake: the horror is that the

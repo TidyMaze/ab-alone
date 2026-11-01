@@ -27,6 +27,7 @@ test('the rogue-lite run: the start shows the unlocks, a run over its summary, #
     'Army at the end: 3 marbles, 1 Heavy',
     'Unlocked: Anchor marbles, Bulwark army',
   ]);
+  await expect(map.locator('.run-tally')).toHaveText('Run voided. Audit reopened.');
   expect(await page.evaluate(() => localStorage.getItem('ab-alone.roguelite'))).toBe('1');
   await page.screenshot({ path: 'test-results/roguelite-summary.png' });
 });

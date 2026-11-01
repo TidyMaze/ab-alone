@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readBest, recordBest, resultText, trainerBudget, waveLine, waveResult } from './trainer';
+import { drillLine, filedLine, readBest, recordBest, resultText, trainerBudget, waveLine, waveResult } from './trainer';
 
 const memory = (): Pick<Storage, 'getItem' | 'setItem'> => {
   const data = new Map<string, string>();
@@ -49,8 +49,17 @@ describe('Trainer mode, #1159', () => {
   });
 
   it('writes the result card', () => {
-    expect(resultText({ kind: 'lost', survived: 4, lost: 6 }, 5, 7)).toEqual(['Fell on wave 5', 'Waves survived: 4', 'Marbles left: 0/6', 'Best: 7']);
-    expect(resultText({ kind: 'won', survived: 5, lost: 0 }, 5, 5)).toEqual(['Wave 5 cleared', 'Waves survived: 5', 'Marbles left: 6/6', 'Best: 5']);
+    expect(resultText({ kind: 'lost', survived: 4, lost: 6 }, 5, 7)).toEqual(['Fell on wave 5', 'Waves survived: 4', 'Marbles left: 0/6', 'Best: 7', 'Wave 4 filed. Best on record: 7.']);
+    expect(resultText({ kind: 'won', survived: 5, lost: 0 }, 5, 5)).toEqual(['Wave 5 cleared', 'Waves survived: 5', 'Marbles left: 6/6', 'Best: 5', 'Wave 5 filed. Best on record: 5.']);
     expect(resultText({ kind: 'drawn', survived: 5, lost: 1 }, 5, 5)[0]).toBe('Wave 5 stalled: a draw costs a marble');
+  });
+
+  it('Tally files the drill: the opponents in words up to twelve, then digits, and the wave on record', () => {
+    expect(drillLine(5)).toBe('Drill: wave 5. Opponents: five. Seated.');
+    expect(drillLine(1)).toBe('Drill: wave 1. Opponents: one. Seated.');
+    expect(drillLine(13)).toBe('Drill: wave 13. Opponents: 13. Seated.');
+    expect(drillLine(30)).toBe('Drill: wave 30. Opponents: 14. Seated.');
+    expect(filedLine(7, 9)).toBe('Wave 7 filed. Best on record: 9.');
+    expect(filedLine(0, 0)).toBe('No wave filed. Best on record: 0.');
   });
 });
