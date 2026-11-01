@@ -1942,6 +1942,7 @@ drawProps = (): void => {
     applyDeckAtmosphere(currentBay, deck as DeckId);
     propsGroup.add(currentBay.scene);
   }
+  placeBay();
   refreshLights();
 };
 // The Pulsar's fight is drawn in space (#1146): the bay's meshes leave the camera's layer (the lamps stay lit), a field of
@@ -1977,7 +1978,11 @@ function syncSpace(): void {
   inSpace = wanted;
   space.visible = wanted;
   sceneRenderer.scene.background = wanted ? spaceBackdrop : bayBackdrop;
-  const layer = wanted ? BAY_LAYER : 0;
+  placeBay();
+}
+// The bay's meshes on their layer for the current state: also after every rebuild of the props (drawProps, #1189).
+function placeBay(): void {
+  const layer = inSpace ? BAY_LAYER : 0;
   sceneRenderer.roomDeck.layers.set(layer);
   propsGroup.traverse((o) => void ((o as THREE.Mesh).isMesh && o.layers.set(layer)));
 }
@@ -4590,10 +4595,14 @@ const hideInvite = (): void => {
   inviteBox.hidden = inviteLabel.hidden = inviteCopy.hidden = true;
   syncLobby();
 };
-// Copy (#839): the link goes to the clipboard and the link, its label and Copy close. When the browser refuses, the link
-// stays, selected, to copy by hand.
+// Copy (#839): the link goes to the clipboard and the link, its label and Copy close: the HUD says so, and the focus goes
+// to Game modes, not to the page (#1190). When the browser refuses, the link stays, selected, to copy by hand.
 inviteCopy.addEventListener('click', async () => {
-  if (await copyText(inviteBox.value, navigator.clipboard)) return hideInvite();
+  if (await copyText(inviteBox.value, navigator.clipboard)) {
+    document.getElementById('modes')!.focus();
+    hideInvite();
+    return hud(' · invite link copied');
+  }
   inviteBox.focus();
   inviteBox.select();
   hud(' · invite link selected: copy it by hand');

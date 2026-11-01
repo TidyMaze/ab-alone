@@ -363,6 +363,16 @@ describe('Copy on the invite link (#839)', () => {
     expect(shown()).toEqual([false, false, false]);
   });
 
+  it('says the link was copied and gives the focus to Game modes (#1190)', async () => {
+    clipboard(async () => {});
+    const game = await invited();
+    byId('invite-copy').focus();
+    byId('invite-copy').click();
+    await until(game, () => byId('invite').hidden === true);
+    expect(game.hud()).toContain('invite link copied');
+    expect(document.activeElement).toBe(byId('modes'));
+  });
+
   it('keeps the link shown, selected, when the browser refuses the clipboard', async () => {
     clipboard(async () => {
       throw new Error('denied');
