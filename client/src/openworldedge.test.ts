@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeMaterial } from './openworldedge';
+import { EDGE_GAIN, EDGE_WIDTH, HEX_APOTHEM, HEX_RADIUS, edgeDistance, edgeFade, edgeMaterial } from './openworldedge';
 
 describe('the hex edge of an Open world ground (#1138)', () => {
   it('is 0 on an edge of the prism, the apothem at the centre, and the same on the six edges of the hex', () => {
@@ -33,5 +33,15 @@ describe('the hex edge of an Open world ground (#1138)', () => {
     expect(material.emissive.getHex()).toBe(0x0a5568);
     expect(material.color.getHex()).toBe(0xffffff);
     expect(material.map).toBeNull();
+  });
+
+  it('fades the band out as it gets thinner than a pixel, so a wide zoom shows a flat colour (#1347)', () => {
+    expect(edgeFade(0)).toBe(0);
+    expect(edgeFade(0.75)).toBe(0); // a band under a pixel beats against the pixel grid
+    expect(edgeFade(2)).toBe(1); // a close zoom keeps the whole band
+    expect(edgeFade(100)).toBe(1);
+    expect(edgeFade(1.4)).toBeGreaterThan(0);
+    expect(edgeFade(1.4)).toBeLessThan(1);
+    expect(edgeFade(1.6)).toBeGreaterThan(edgeFade(1.2));
   });
 });
