@@ -40,3 +40,15 @@ describe('the Open world link (#1361)', () => {
     expect(document.body.dataset.openworld).toBeUndefined();
   });
 });
+
+describe('the Ship button of the Open world (#1373)', () => {
+  it('leaves the world, saved as Esc does, for the Ship hub', async () => {
+    await boot('?bot=off&openworld=7');
+    await settle();
+    expect(document.body.dataset.openworld).toBe('7');
+    document.getElementById('openworld-ship')!.click();
+    await settle();
+    expect(document.body.dataset.openworld).toBeUndefined();
+    expect(document.body.dataset.hub).toBeDefined();
+  });
+});
