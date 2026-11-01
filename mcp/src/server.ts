@@ -4,7 +4,9 @@ import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
 import { bossIds, worldRules } from './engine';
 import type { Result, Session } from './game';
+import { p2pPeers } from '../../client/src/p2p';
 import { OpenWorld } from './world';
+import { WorldRoom } from './worldroom';
 
 const NOTATION =
   'A move is the selected cells, then ">", then the direction: "(-1,2)(0,2)>E", "(0,0)>SE". A cell is (q,r). ' +
@@ -21,7 +23,11 @@ const WINDOW =
   '? off the world, else the terrain: ~ water, s sand, g grass, r rock, P peak, o boulder, t tree, W wall. Water, peaks, walls, ' +
   'enemies and lairs cannot be entered; a boulder, or a tree with no tree beside it, is broken by rolling into it.';
 
-export function createServer(session: Session, world: OpenWorld = new OpenWorld(worldRules(), bossIds)): McpServer {
+export function createServer(
+  session: Session,
+  world: OpenWorld = new OpenWorld(worldRules(), bossIds),
+  worldRoom: WorldRoom = new WorldRoom(world, worldRules(), p2pPeers),
+): McpServer {
   const server = new McpServer({ name: 'ab-alone', version: '0.1.0' });
 
   server.registerTool(
@@ -173,6 +179,49 @@ export function createServer(session: Session, world: OpenWorld = new OpenWorld(
       inputSchema: z.strictObject({ q: z.int().describe('Column of the cell.'), r: z.int().describe('Row of the cell.') }),
     },
     (input) => toolResult(world.walk(input)),
+  );
+
+  server.registerTool(
+    'join_world_room',
+    {
+      description:
+        'Join the public Open world as a hero other players see: the world of seed 1305, room ow:1305:0, the hero on the spawn (0,0). ' +
+        'Browsers show you as a named hero. This connects you to other players (their browsers see your IP address and your moves) and ' +
+        'drops the world in progress: only call it when your user asked you to be in the public world. Then call world_heroes.',
+      inputSchema: z.strictObject({ name: z.string().optional().describe('Your public name, up to 16 characters, default Claude.') }),
+    },
+    (input) => toolResult(worldRoom.join(input)),
+  );
+
+  server.registerTool(
+    'world_heroes',
+    {
+      description:
+        'The heroes in the public world room with a known place, the nearest to you first: id, name, cell (q,r) and distance in cells. ' +
+        'A hero silent for 10 s is gone. problem says when the connection has an error. Empty when nobody else is here.',
+    },
+    () => toolResult(worldRoom.heroes()),
+  );
+
+  server.registerTool(
+    'world_visit',
+    {
+      description:
+        'Walk to a hero (its id from world_heroes) and stop next to it, following it if it moves, or walk to a cell (q and r). One cell every ' +
+        '250 ms, the pace of a browser, at most 40 steps a call: arrived is false when that was not enough, call again. The room sees each step.',
+      inputSchema: z.strictObject({
+        hero: z.string().optional().describe('The id of the hero to walk to.'),
+        q: z.int().optional().describe('Column of the cell, with r, when no hero.'),
+        r: z.int().optional().describe('Row of the cell.'),
+      }),
+    },
+    async (input) => toolResult(await worldRoom.visit(input)),
+  );
+
+  server.registerTool(
+    'leave_world_room',
+    { description: 'Leave the public world room: the players stop seeing you after about 10 s. Do it when you are done.' },
+    () => toolResult(worldRoom.leave()),
   );
 
   return server;

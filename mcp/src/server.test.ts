@@ -5,6 +5,11 @@ import { localPair } from '../../client/src/transport';
 import { newEncounter, newEngine } from './engine';
 import { Session } from './game';
 import { createServer, toolResult } from './server';
+import type { PeerNet } from '../../client/src/p2p';
+import { encodeHello, encodePos } from '../../client/src/worldpeers';
+import { bossIds, worldRules } from './engine';
+import { OpenWorld } from './world';
+import { WorldRoom } from './worldroom';
 
 let client: Client | undefined;
 
@@ -14,9 +19,9 @@ afterEach(async () => {
 });
 
 /** A client connected in memory to a fresh server, as an MCP host would be over stdio. Its rooms are local pairs. */
-async function connect(): Promise<Client> {
+async function connect(room?: WorldRoom, world?: OpenWorld): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await createServer(new Session(newEngine, newEncounter, () => localPair()[0])).connect(serverSide);
+  await createServer(new Session(newEngine, newEncounter, () => localPair()[0]), world, room).connect(serverSide);
   client = new Client({ name: 'test', version: '0.0.0' });
   await client.connect(clientSide);
   return client;
@@ -65,6 +70,35 @@ describe('the Open world tools', () => {
   });
 });
 
+describe('the public Open world tools (#1365)', () => {
+  /** A room over a fake PeerNet: `say` makes a peer talk, `sent` is what the browsers would receive. */
+  function room() {
+    const sent: Uint8Array[] = [];
+    let data: (bytes: Uint8Array, peer: string) => void = () => {};
+    const net: PeerNet = { send: (bytes) => void sent.push(bytes), onData: (cb) => (data = cb), onJoin: () => {}, onLeave: () => {}, onError: () => {}, close: () => {} };
+    const world = new OpenWorld(worldRules(), bossIds);
+    return { world, sent, say: (peer: string, bytes: Uint8Array) => data(bytes, peer), worldRoom: new WorldRoom(world, worldRules(), () => net, { sleep: async () => {} }) };
+  }
+
+  test('join, list the heroes, walk to one, leave: each a tool, errors as tool errors', async () => {
+    const { world, say, worldRoom, sent } = room();
+    await connect(worldRoom, world);
+    expect((await call('world_heroes')).isError).toBe(true);
+    expect(JSON.parse((await call('world_heroes')).text).code).toBe('no_world_room');
+    const joined = JSON.parse((await call('join_world_room', { name: 'Claude' })).text);
+    expect(joined).toMatchObject({ room: 'ow:1305:0', name: 'Claude', hero: '(0,0)' });
+    expect(JSON.parse((await call('join_world_room')).text).code).toBe('already_in_world_room');
+    say('p', encodeHello('Ada'));
+    say('p', encodePos(1, 0, 1));
+    expect(JSON.parse((await call('world_heroes')).text).heroes).toEqual([{ id: 'p', name: 'Ada', cell: '(1,0)', distance: 1 }]);
+    expect(JSON.parse((await call('world_visit', { hero: 'p' })).text)).toMatchObject({ steps: 0, arrived: true });
+    expect(JSON.parse((await call('world_visit', {})).text).code).toBe('bad_target');
+    expect((await call('world_visit', { hero: 'p', q: 1 })).isError).toBe(false); // a hero wins over a cell
+    expect(sent.length).toBeGreaterThan(0);
+    expect(JSON.parse((await call('leave_world_room')).text)).toEqual({ left: true });
+  });
+});
+
 describe('the MCP server', () => {
   test('lists the tools of a local game and of an online room, with their input schemas', async () => {
     const { tools } = await (await connect()).listTools();
@@ -81,6 +115,10 @@ describe('the MCP server', () => {
       'world_state',
       'world_step',
       'world_walk',
+      'join_world_room',
+      'world_heroes',
+      'world_visit',
+      'leave_world_room',
     ]);
     for (const tool of tools) expect(tool.description).toBeTruthy();
     const schema = (name: string) => tools.find((tool) => tool.name === name)!.inputSchema;
