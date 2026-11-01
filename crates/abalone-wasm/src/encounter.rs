@@ -29,7 +29,7 @@ use abalone_core::encounter::railyard::{
     railyard_boss, railyard_move, railyard_start, track_cells,
 };
 use abalone_core::encounter::stalker::{stalker_boss, stalker_start};
-use abalone_core::encounter::swarm::{Swarm, SWARM_PHASE_TURNS};
+use abalone_core::encounter::swarm::{Swarm, SWARM_PHASE_ARRIVALS};
 use abalone_core::encounter::unstable::{
     last_events, unstable_boss, unstable_move, unstable_start, unstable_tell,
 };
@@ -155,7 +155,7 @@ fn swarm_boss() -> BossDef {
     }
 }
 
-/// The Swarm starts with 11 player marbles and its first wave announced.
+/// The Swarm starts with 11 player marbles around the centre and its first wave announced.
 fn swarm_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Swarm(Swarm::start(seed))
 }
@@ -316,7 +316,7 @@ const BOSSES: [BossEntry; 15] = [
     },
     BossEntry {
         id: "swarm",
-        goal: "No swarm marble at the start: a wave lands on its marks on the far rim every turn, and the swarm moves. Survive 30 turns to win; the swarm wins once it ejects 2 of your marbles.",
+        goal: "You start in the centre, no swarm marble yet: a wave lands on its marks on the rim every turn, and the swarm moves. Survive 40 turns to win, each swarm marble you eject brings the evac 2 turns closer; the swarm wins once it ejects 2 of your marbles.",
         def: swarm_boss,
         start: swarm_fight,
         reply: search_reply,
@@ -370,7 +370,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    23 // 23: The Dual Room's rooms are played in turn by pairs until the bridge (#992); 22: The Unstable Core enters P2 after 1 ejection and P3 after 2, a shockwave every 4 turns (#1229); 21: The Overseer's vents pull in a core next to them and burn the boss's marbles in every phase, P3 dropped (#1241); 20: The Magnetizer assigns a polarity every 3rd turn in P2 and every 2nd in P3 (#1237); 19: The Ballast Mind borrows an effect every 2 turns and wins at 12 ejections, as the player (#1209); 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    24 // 24: The Swarm's evac clock (40 turns, 2 off per swarm marble ejected), phases by arrivals, centre start, arrivals on every edge (#1266); 23: The Dual Room's rooms are played in turn by pairs until the bridge (#992); 22: The Unstable Core enters P2 after 1 ejection and P3 after 2, a shockwave every 4 turns (#1229); 21: The Overseer's vents pull in a core next to them and burn the boss's marbles in every phase, P3 dropped (#1241); 20: The Magnetizer assigns a polarity every 3rd turn in P2 and every 2nd in P3 (#1237); 19: The Ballast Mind borrows an effect every 2 turns and wins at 12 ejections, as the player (#1209); 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -444,7 +444,7 @@ impl Encounter {
                 def.phase_marbles.len() + def.phase_ejections.len()
             }
             Fight::Choir(_) => PHASE_EJECTIONS.len(),
-            Fight::Swarm(_) => SWARM_PHASE_TURNS.len(),
+            Fight::Swarm(_) => SWARM_PHASE_ARRIVALS.len(),
         };
         steps as u8 + 1
     }
@@ -465,12 +465,13 @@ impl Encounter {
     }
 
     /// The ejections that begin each phase after the first, in order (the boss health bar of the
-    /// HUD marks them, #788). The Swarm's phases go by turns: the boss replies done when each begins.
+    /// HUD marks them, #788). None for the Swarm: its phases go by the swarm marbles landed, not by
+    /// the evac clock its bar holds (#1266).
     pub fn phase_ejections(&self) -> Vec<u8> {
         match &self.fight {
             Fight::Plain(_) => (self.entry.def)().phase_ejections,
             Fight::Choir(_) => PHASE_EJECTIONS.to_vec(),
-            Fight::Swarm(_) => SWARM_PHASE_TURNS.iter().map(|&t| t as u8 - 1).collect(),
+            Fight::Swarm(_) => Vec::new(),
         }
     }
 
@@ -1033,17 +1034,22 @@ impl Encounter {
         }
     }
 
-    /// The Swarm's tell as `[turns_left, passed, q, r, ...]`: the boss replies left before the
-    /// evac, `1` when its last reply was a pass, then the cells where the next wave lands. Empty for
+    /// The Swarm's tell as `[turns_left, passed, jump, q, r, ...]`: the turns left on the evac
+    /// clock, `1` when its last reply was a pass, the turns the player's last move took off the
+    /// clock (2 per swarm marble it ejected), then the cells where the next wave lands. Empty for
     /// the other bosses.
     pub fn swarm(&self) -> Vec<i32> {
         let Fight::Swarm(s) = &self.fight else {
             return Vec::new();
         };
-        [s.turns_left() as i32, i32::from(s.passed())]
-            .into_iter()
-            .chain(cell_list(s.announced()))
-            .collect()
+        [
+            s.turns_left() as i32,
+            i32::from(s.passed()),
+            s.jump() as i32,
+        ]
+        .into_iter()
+        .chain(cell_list(s.announced()))
+        .collect()
     }
 
     /// The cells where the Swarm's last wave landed, `[q, r]` pairs. Empty for the other bosses.
@@ -1098,8 +1104,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_23_since_the_dual_rooms_are_played_in_turn() {
-        assert_eq!(engine_version(), 23);
+    fn the_engine_version_is_24_since_the_swarm_has_its_evac_clock() {
+        assert_eq!(engine_version(), 24);
     }
 
     #[test]
@@ -2701,15 +2707,18 @@ mod tests {
         let f = swarm(0);
         assert_eq!(f.name(), "The Swarm");
         assert!(f.goal().contains("ejects 2 of your marbles"));
+        assert!(f.goal().contains("40 turns"));
         assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (11, 0));
+        assert_eq!(at(&f.board(), 0, 0), 1, "the player starts in the centre");
         assert_eq!(
             (f.phase(), f.phases(), f.phase_ejections()),
-            (0, 3, vec![14, 24])
+            (0, 3, vec![]),
+            "its phases go by the marbles landed, not by the clock of the bar"
         );
-        assert!(f.phase_notches().is_empty(), "its phases go by turns");
+        assert!(f.phase_notches().is_empty(), "its phases go by arrivals");
         let tell = f.swarm();
-        assert_eq!(tell[..2], [30, 0], "30 turns left, no pass");
-        assert_eq!(tell.len(), 4, "one announced cell");
+        assert_eq!(tell[..3], [40, 0, 0], "40 turns left, no pass, no jump");
+        assert_eq!(tell.len(), 9, "three announced cells");
         assert!(f.swarm_landed().is_empty());
         assert_eq!(
             (f.win_ejections(1), f.win_ejections(2)),
@@ -2728,13 +2737,13 @@ mod tests {
     #[test]
     fn the_swarm_lands_its_announced_wave_and_counts_the_turns_down() {
         let f = swarm(0);
-        let announced = f.swarm()[2..].to_vec();
+        let announced = f.swarm()[3..].to_vec();
         let f = swarm(1);
         assert_eq!(f.swarm_landed(), announced, "the wave lands on its mark");
         assert_eq!(at(&f.board(), announced[0], announced[1]), 2);
         assert_eq!(f.to_move(), 2);
         let f = swarm(2);
-        assert_eq!(f.swarm()[0], 29);
+        assert_eq!(f.swarm()[0], 39);
         assert!(!f.boss_move().is_empty() || f.to_move() == 1);
         assert!(f.boss_move().is_empty(), "the player's turn");
         assert!(!f.player_move().is_empty());
@@ -2745,8 +2754,9 @@ mod tests {
         // The daily, a Retry and every co-op peer replay the same waves (#795).
         let (_, moves) = swarm_plies();
         let (a, b) = (swarm(moves.len()), swarm(moves.len()));
-        assert_eq!(a.result(), 1, "the evac after the 30th reply");
-        assert_eq!(a.swarm(), vec![0, 0], "no turn left, nothing announced");
+        assert_eq!(a.result(), 1, "the evac");
+        assert_eq!(a.swarm()[..2], [0, 0], "no turn left, no pass");
+        assert_eq!(a.swarm().len(), 3, "nothing announced");
         assert_eq!((a.board(), a.swarm_landed()), (b.board(), b.swarm_landed()));
         for plies in [7, 21] {
             let (a, b) = (swarm(plies), swarm(plies));
@@ -2761,10 +2771,28 @@ mod tests {
     }
 
     #[test]
-    fn a_swarm_with_no_move_passes_through_wasm() {
-        use abalone_core::encounter::swarm::{allowed_rim, Swarm};
+    fn a_swarm_ejection_brings_the_evac_2_turns_closer_through_wasm() {
+        use abalone_core::encounter::swarm::Swarm;
         let mut board = Board::empty();
-        for &(q, r) in allowed_rim().iter().chain([(0, 0)].iter()) {
+        board.set(2, 0, Cell::Black);
+        board.set(3, 0, Cell::Black);
+        board.set(4, 0, Cell::White);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut f = Encounter {
+            fight: Fight::Swarm(Swarm::from_position(game, 7, 10)),
+            entry: boss_entry("swarm").unwrap(),
+            bonuses: Vec::new(),
+        };
+        assert_eq!(f.swarm()[..3], [30, 0, 0]);
+        f.play(&[2, 0, 2, 0, 3, 0, 0, 0]).unwrap();
+        assert_eq!(f.swarm()[..3], [28, 0, 2], "the clock jumped by 2");
+    }
+
+    #[test]
+    fn a_swarm_with_no_move_passes_through_wasm() {
+        use abalone_core::encounter::swarm::{rim, Swarm};
+        let mut board = Board::empty();
+        for &(q, r) in rim().iter().chain([(0, 0)].iter()) {
             board.set(q, r, Cell::Black);
         }
         let game = Game::from_position(board, Player::Black, [0, 0]);
@@ -2781,7 +2809,7 @@ mod tests {
             .to_vec();
         f.play(&mv).unwrap();
         assert_eq!(f.to_move(), 1, "the swarm passed");
-        assert_eq!(f.swarm()[..2], [29, 1]);
+        assert_eq!(f.swarm()[..3], [39, 1, 0]);
         f.scale_node_budget(50);
         assert_eq!(f.result(), 0);
         assert!(

@@ -266,6 +266,7 @@ import { loadProgress, recordWin, saveProgress } from './progress';
 import { roomAt, type Door, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
 import { labelsHtml, pipsHtml, railHtml } from './hubview';
+import { clearStray } from './modeswitch';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
@@ -1398,8 +1399,8 @@ const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 const fogMaterial = new THREE.MeshBasicMaterial({ color: tonal ? TONAL.veiled : 0x000000, transparent: true, opacity: tonal ? 1 : 0.9, depthWrite: false });
 const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
-// The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the 30th
-// reply is done the evac lights the whole board, one draw call, and lifts the player's marbles (a fade with reduced motion).
+// The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the evac
+// clock runs out the evac lights the whole board, one draw call, and lifts the player's marbles (a fade with reduced motion).
 const arrivalMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
 const evacMaterial = new THREE.MeshBasicMaterial({ color: 0xfff1c1, transparent: true, opacity: 0, depthWrite: false });
 const evacGlow = Object.assign(new THREE.InstancedMesh(crackGeometry, evacMaterial, 61), { name: 'swarm-evac' }); // one, reused
@@ -3035,6 +3036,7 @@ function medalNote(boss: { id: string }): string {
 
 // The HUD, and the lobby controls after it: their state (shown, a lobby waiting) is set while the HUD is drawn (#1044).
 let hudEjected: readonly [number, number] | undefined; // ejected counts of the last HUD render (#1095)
+let copiedNote: { game: unknown } | undefined; // Copy of the daily result card was pressed on this game: every HUD redraw keeps the note (#1295)
 function hud(extra = ''): void {
   drawHud(extra);
   syncLobby();
@@ -3074,7 +3076,7 @@ function drawHud(extra = ''): void {
     score: formatScore(ejected, win, status, engine.draw_reason(), glassOf()),
     ejected,
     win,
-    note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}`, // the other notes start with ' · '
+    note: `${run ? runLine(run.map, run.state) : ''}${trainer ? ` · ${trainerNote(trainer)}` : ''}${stalkerBoss() ? sightNote() : ''}${onlineNote}${online ? '' : offlineNotice}${extra}${copiedNote?.game === engine ? ' · result copied' : ''}`, // the other notes start with ' · '
     online: onlineLine,
     // Co-op (#530): a seated player's human ply is its own or the partner's, the boss turn reads as in solo.
     turn: online?.role === 'player' && fight && engine.to_move() === COOP_SIDE ? coopTurn(online.ourTurn()) : undefined,
@@ -3148,7 +3150,7 @@ function drawHud(extra = ''): void {
       }),
     );
   }
-  // The Swarm's bar holds its 30 turns, one fragment breaks per boss reply (#1008).
+  // The Swarm's bar holds the 40 turns of its evac clock, one fragment breaks per boss reply, two per swarm ejection (#1266).
   const turns = boss && parseSwarm(boss.swarm());
   const health = turns ? { ejected: SWARM_TURNS - turns.left, win: SWARM_TURNS } : { ejected: engine.ejected(1), win: engine.win_ejections(1) };
   drawBossBar(document.getElementById('boss-bar')!, boss ? { name: boss.name(), ...health, steps: Array.from(boss.phase_ejections()), phase: boss.phase() } : null);
@@ -4503,8 +4505,8 @@ const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
 function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }, lair: typeof lairFrom = null): void {
+  leaveMode();
   lairFrom = lair; // a fight picked in a menu, a door or the daily is no lair's (#1170)
-  leaveHub();
   worker = botWorker; // the boss answers, after the hub's hot-seat table too (#522)
   stopAnalysis();
   fight = { id, seed, daily };
@@ -4515,7 +4517,6 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   replaying = null;
   selected = [];
   thinking = false;
-  leaveRoyale();
   if (!resumeFrom && stalkerSaved()) void saves.save(savedGame(), false); // a new Stalker fight replaces the saved one (#1122)
   bossList.hidden = true;
   bossButton.setAttribute('aria-expanded', 'false');
@@ -4602,12 +4603,11 @@ retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.
 const shipButton = document.getElementById('ship') as HTMLButtonElement;
 shipButton.addEventListener('click', () => {
   moveModes('pick');
-  leaveOnline();
-  leaveRoyale();
   enterHub(loadProgress(store).at);
 });
 shipButton.disabled = false; // listener ready (#146)
 function enterHub(at: HubSpot): void {
+  leaveMode();
   roomOf = null;
   hub = new HubController(at);
   hub.enter(at);
@@ -4658,16 +4658,12 @@ function enterModeRoom(door: Door | undefined): void {
   }
 }
 function startLocal(bot: boolean): void {
+  leaveMode();
+  applyDeck(deckOf('local'));
   worker = bot ? botWorker : null;
-  fight = null; // a boss fight the hub was opened from
-  delete document.body.dataset.boss;
-  retryButton.hidden = true;
-  newGameButton.hidden = false;
   newGame();
 }
 backButton.addEventListener('click', () => {
-  leaveOnline();
-  leaveRoyale();
   if (lairFrom) {
     const { seed } = lairFrom;
     lairFrom = null;
@@ -4676,6 +4672,24 @@ backButton.addEventListener('click', () => {
   }
   enterHub(roomOf!);
 });
+// One mode at a time (#1275, docs/specs/ui.md): every mode's start leaves the mode on first, the hub by its controller's
+// exit(), each other mode by its leave, then clears what no mode owns (modeswitch.ts). Nothing of a mode stays in the next.
+// The Open world opens over the page instead (#1063): Esc gives the game beneath back as it was, and the next mode leaves it.
+function leaveMode(): void {
+  if (openWorld.active) openWorld.leave();
+  leaveRun();
+  leaveTrainer();
+  leaveRoyale(); // first: its room is the page's online session too
+  leaveOnline();
+  leaveHub();
+  fight = null;
+  lairFrom = null;
+  goalOpen = false;
+  speech = null;
+  skipEjections(); // the effects of the mode's last move end with it
+  clearStray(document);
+  newGameButton.hidden = false;
+}
 function leaveHub(): void {
   if (!hub) return;
   hub.exit();
@@ -4738,7 +4752,8 @@ dailyCopy.addEventListener('click', async () => {
   if (await copyText(resultText.value, navigator.clipboard)) {
     dailyCopy.textContent = 'Copied';
     dailyCopy.classList.add('copied'); // the check mark draws in (#1098)
-    return hud(' · result copied');
+    copiedNote = { game: engine };
+    return hud();
   }
   resultText.focus();
   resultText.select();
@@ -4785,6 +4800,10 @@ exportButton.disabled = importButton.disabled = false; // listeners ready (#146)
 // ?net=hook swaps the Trystero transport for the page hook the e2e test wires (no public relays).
 // Once the game is over, Rematch starts a new game in the same room with the colours swapped (#186).
 let online: OnlineSession | null = null;
+// The heartbeat of the room's session (#359), stopped when the room is left (#1275).
+const beats: ReturnType<typeof setInterval>[] = [];
+const beatEvery = (fn: () => void, ms: number): void => void beats.push(setInterval(fn, ms));
+const stopBeats = (): void => beats.splice(0).forEach((id) => clearInterval(id));
 let onlineNote = '';
 let offlineNotice = ''; // no connection: Play online is disabled, a game in progress keeps its own status (#194)
 let playReady = false;
@@ -4857,7 +4876,7 @@ function roomTransport(room: string): Transport {
 }
 /** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. */
 async function goOnline(room: string, side: number, coop?: CoopFight): Promise<void> {
-  leaveHub();
+  leaveMode();
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
   // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
@@ -4865,15 +4884,12 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
   rematchButton.textContent = again;
   rematchButton.setAttribute('aria-label', again);
   rematchButton.dataset.label = again;
-  delete document.body.dataset.boss;
   applyDeck(deckOf('online'));
-  retryButton.hidden = true;
   newGameButton.hidden = true;
   engine = makeGame();
   history.length = 0;
   replaying = null;
   selected = [];
-  leaveRoyale();
   diag.connecting();
   const net = roomTransport(room);
   link = net;
@@ -4935,7 +4951,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
     onRole: note,
     onPresence: note,
     onCoordinator: note,
-    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: (fn, ms) => void setInterval(fn, ms) },
+    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: beatEvery },
     onRematchAsk: note,
     onRematch: () => {
       selected = [];
@@ -4954,6 +4970,7 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
 function playOnline(coop?: CoopFight): void {
   rankedMode = null;
   moveModes('pick');
+  leaveMode(); // the room left first: its invite link goes, the new one shows below
   const room = newRoomId((b) => crypto.getRandomValues(b));
   showInvite(inviteUrl(location.href, room, coop), `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`);
   void goOnline(room, 1, coop);
@@ -5010,6 +5027,7 @@ coopButton.addEventListener('click', () => {
 function leaveOnline(): void {
   if (!online) return;
   online = null;
+  stopBeats();
   link!.close();
   onlineNote = '';
   onlineLine = undefined;
@@ -5036,14 +5054,9 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
   run = null; // its save is overwritten below, not deleted by leaveRun
   armed = 0;
   moveModes('pick');
-  leaveOnline();
-  leaveRoyale();
-  leaveHub();
+  leaveMode();
   applyDeck(deckOf('local'));
   worker = botWorker;
-  fight = null; // a boss fight the run was started from
-  delete document.body.dataset.boss;
-  retryButton.hidden = true;
   engine = new Engine(); // the board under the map: the saved local game is left alone, as by a boss fight
   history.length = 0;
   replaying = null;
@@ -5164,13 +5177,9 @@ const trainerNext = document.getElementById('trainer-next') as HTMLButtonElement
 function startTrainer(wave: number, lost = 0): void {
   trainer = null; // moveModes('pick') below leaves the old one
   moveModes('pick');
-  leaveOnline();
-  leaveRoyale();
-  leaveHub();
+  leaveMode();
   applyDeck(deckOf('local'));
   worker = botWorker;
-  fight = null;
-  delete document.body.dataset.boss;
   trainer = { wave, lost };
   engine = Engine.trainer(wave, MARBLES - lost);
   history.length = 0;
@@ -5190,6 +5199,7 @@ function leaveTrainer(): void {
   if (!trainer) return;
   trainer = null;
   delete document.body.dataset.trainer;
+  trainerCard.hidden = true;
   retryButton.hidden = true;
   newGameButton.hidden = false;
 }
@@ -5280,8 +5290,8 @@ if (navigator.webdriver) {
 }
 openWorldButton.addEventListener('click', () => {
   moveModes('pick');
+  leaveRoyale(); // first: its room is the page's online session too (#1275)
   leaveOnline();
-  leaveRoyale();
   void enterOpenWorld();
   openWorldButton.blur(); // the menu's arrow keys would take the hero's
 });
@@ -5316,12 +5326,9 @@ const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
 const startButton = document.getElementById('royale-start') as HTMLButtonElement; // the creator's, online (#504)
 const royaleInviteButton = document.getElementById('royale-invite') as HTMLButtonElement; // offline: opens a room (#504)
 function startRoyale(file: RoyaleFile): void {
+  leaveMode();
   stopAuto();
-  leaveHub();
   stopAnalysis();
-  fight = null;
-  delete document.body.dataset.boss;
-  delete document.body.dataset.over;
   engine = new Engine(); // a bot reply to the old game is dropped (botTurn)
   history.length = 0;
   replaying = null;
@@ -5341,14 +5348,18 @@ function leaveRoyale(): void {
   if (royaleNet) {
     royaleNet = null;
     clearInterval(ticking);
+    stopBeats();
     online = null;
     link!.close();
+    hideInvite();
+    window.history.replaceState(null, '', location.pathname + location.search); // no room in the address
   }
   startButton.hidden = royaleInviteButton.hidden = true;
   for (const key of ['net', 'desync', 'online', 'seat']) delete document.body.dataset[key];
   royale = null;
   reveal = null;
   arena.visible = false;
+  arenaMarbles.clear(); // its marbles' instances are drawn from the group, the hidden arena or not (instancedcells.ts)
   fogRadius = frame?.radius ?? RADIUS;
   for (const mesh of [plate, rim.near, rim.far]) mesh.visible = true;
   holdButton.hidden = true;
@@ -5598,7 +5609,7 @@ async function goRoyale(room: string, side: number): Promise<void> {
     },
     onRole: refresh,
     onPresence: refresh,
-    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: (fn, ms) => void setInterval(fn, ms) },
+    beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: beatEvery },
     onOther: (m, key, peer) => {
       const message = parseRoyale(m);
       if (message) return ours.receive(message, key, peer);
