@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_can_break, world_chunk, world_enemies, world_dungeon, world_lairs, world_path, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -5682,7 +5682,13 @@ const peersHost = new WorldPeersHost(
   },
   () => readName(store),
   // The signed events of the public world (#1305): the player's key, the engine's rule of what can break, and what a break of another hero does.
-  { keys: () => worldKeys(store), canBreak: (seed, q, r) => world_can_break(seed, q, r), apply: (cell) => openWorld.remoteBreak(cell) },
+  {
+    keys: () => worldKeys(store),
+    canBreak: (seed, q, r) => world_can_break(seed, q, r),
+    apply: (cell) => openWorld.remoteBreak(cell),
+    canBeaten: (seed, q, r) => world_is_enemy(seed, q, r),
+    beat: (cell) => openWorld.remoteBeaten(cell),
+  },
 );
 openWorld.peers = peersHost;
 netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peersHost.show() : peersHost.hide()));
@@ -5714,6 +5720,7 @@ if (navigator.webdriver) {
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldEnemies = () => openWorld.enemies();
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
+  hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
   hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {

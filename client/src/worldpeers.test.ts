@@ -68,7 +68,7 @@ describe('the stored public name', () => {
 });
 
 describe('the broken-cell event on the wire', () => {
-  const event = { seed: 1305, q: -7, r: 300, pub: b64(new Uint8Array(32).fill(7).buffer), sig: b64(new Uint8Array(64).fill(9).buffer) };
+  const event = { kind: 'break' as const, seed: 1305, q: -7, r: 300, pub: b64(new Uint8Array(32).fill(7).buffer), sig: b64(new Uint8Array(64).fill(9).buffer) };
 
   it('is 106 bytes: version, type 3, seed, q, r, the 32-byte key and the 64-byte signature', () => {
     const bytes = encodeBreak(event);
@@ -76,6 +76,14 @@ describe('the broken-cell event on the wire', () => {
     expect(BREAK_BYTES).toBe(106);
     expect([...bytes.subarray(0, 2)]).toEqual([2, 3]);
     expect(decode(bytes)).toEqual({ t: 'break', event });
+  });
+
+  it('a beaten enemy has the same 106 bytes under type 5, and comes back with its kind', () => {
+    const beaten = { ...event, kind: 'beaten' as const };
+    const bytes = encodeBreak(beaten);
+    expect(bytes).toHaveLength(BREAK_BYTES);
+    expect([...bytes.subarray(0, 2)]).toEqual([2, 5]);
+    expect(decode(bytes)).toEqual({ t: 'break', event: beaten });
   });
 
   it('refuses a break of another length', () => {

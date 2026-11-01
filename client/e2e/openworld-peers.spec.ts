@@ -123,6 +123,7 @@ test('a public name goes out in the Hello and shows over a near hero, Hide leave
 // #1305: the signed break event. The test signs as another hero (WebCrypto in the page) and plays the room through the hook.
 type Break = Hook & {
   __openworldCanBreak: (seed: number, q: number, r: number) => boolean;
+  __openworldIsEnemy: (seed: number, q: number, r: number) => boolean;
   __openworldFixture: (f: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][] }) => void;
 };
 const props = (page: Page) => page.evaluate(() => { const d = JSON.parse(document.body.dataset.openworldDrawn!) as Record<string, number>; return (d['prop-boulder'] ?? 0) + (d['prop-tree'] ?? 0) + (d['prop-boulder-hi'] ?? 0) + (d['prop-tree-hi'] ?? 0); });
@@ -185,6 +186,50 @@ test('a break signed by another hero opens the cell here, once, and a forged one
   // a newcomer is given the held break, 106 bytes, to it alone
   await page.evaluate(() => (window as unknown as Hook).__netPeerJoin('q'));
   await expect.poll(() => page.evaluate(() => (window as unknown as Hook).__out.filter((m) => m.length === 106).length)).toBe(1);
+});
+
+test('an enemy beaten by another hero is gone here, once, and a forged one does nothing, #1305', async ({ page }) => {
+  await enter(page, PUBLIC);
+  // the first generated enemy near the spawn: the rule of the engine says which cells start one
+  const enemy = await page.evaluate(() => {
+    const w = window as unknown as Break & { __openworldIsEnemy: (seed: number, q: number, r: number) => boolean };
+    for (let d = 1; d < 80; d++) for (let q = -d; q <= d; q++) for (let r = -d; r <= d; r++) if (w.__openworldIsEnemy(1305, q, r)) return [q, r];
+    return null;
+  });
+  expect(enemy).not.toBeNull();
+  const send = (forge: boolean) =>
+    page.evaluate(
+      async ([seed, q, r, forged]) => {
+        const w = window as unknown as Hook;
+        const pair = (await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify'])) as CryptoKeyPair;
+        const bytes = new Uint8Array(10);
+        const view = new DataView(bytes.buffer);
+        bytes.set([1, 2]); // kind 2: beaten
+        view.setUint32(2, seed as number);
+        view.setInt16(6, q as number);
+        view.setInt16(8, r as number);
+        const sig = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, pair.privateKey, bytes));
+        const pub = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
+        const msg = new Uint8Array(106);
+        const mv = new DataView(msg.buffer);
+        msg.set([2, 5]); // type 5: beaten
+        mv.setUint32(2, seed as number);
+        mv.setInt16(6, (q as number) + (forged ? 1 : 0)); // a signature for another cell
+        mv.setInt16(8, r as number);
+        msg.set(pub, 10);
+        msg.set(sig, 42);
+        w.__netPeerIn(Array.from(msg), 'p');
+      },
+      [PUBLIC, enemy![0]!, enemy![1]!, forge] as const,
+    );
+  await send(true);
+  await page.waitForTimeout(300);
+  await expect(page.locator('body')).not.toHaveAttribute('data-openworld-beaten', '1');
+  await send(false);
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-beaten', '1');
+  await send(false); // the same enemy again
+  await page.waitForTimeout(300);
+  await expect(page.locator('body')).toHaveAttribute('data-openworld-beaten', '1');
 });
 
 test('the obstacle the hero breaks goes out signed, 106 bytes, #1305', async ({ page }) => {

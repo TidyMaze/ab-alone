@@ -301,6 +301,16 @@ export class OpenWorldMode {
     if (line) line.textContent = on ? 'Steering on: the hero goes round obstacles, tap a far cell to walk there.' : 'Steering off: one step at a time.';
   }
 
+  /** Another hero ejected the enemy that starts on `cell` (#1305, a signed event checked by the peers host): it is beaten for the visit,
+   * as a push of this hero would have left it. No enemy on the cell does nothing. */
+  remoteBeaten(cell: Axial): void {
+    if (!this.world || !this.view || !this.fight.occupied(this.world, cell[0], cell[1])) return;
+    this.fight.apply([cell], [], [cell]);
+    this.view.updateEnemies();
+    this.dirty = true;
+    this.mark(document.body.dataset.openworld!);
+  }
+
   /** Another hero broke the obstacle on `cell` (#1305, a signed event checked by the peers host): the cell is open for good, its prop
    * leaves the scene and the shards fly when it is drawn. A cell that holds no boulder or tree (broken already) does nothing. */
   remoteBreak(cell: Axial): void {
@@ -585,6 +595,7 @@ export class OpenWorldMode {
     this.hero!.at = hero!;
     this.hero!.troop = troop;
     this.pushes++;
+    for (const cell of played.push.ejected) this.peers?.beaten(cell); // an enemy beaten is told to the other heroes (#1305)
     return played;
   }
 

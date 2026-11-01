@@ -601,6 +601,13 @@ pub fn can_break(seed: u64, q: i32, r: i32) -> bool {
     cell(seed, q, r).is_some_and(|c| matches!(c.terrain, Terrain::Boulder | Terrain::Tree))
 }
 
+/// Whether a peer's claim that the enemy marble of the generated world `seed` on the cell `(q, r)` was beaten can be true (#1305):
+/// a generated enemy starts on that cell. The fight that beat it is not checked (no proof of the push for now), only the place.
+pub fn is_enemy(seed: u64, q: i32, r: i32) -> bool {
+    let (cx, cy) = (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
+    enemy_groups(seed, cx, cy).iter().flatten().any(|&cell| cell == (q, r))
+}
+
 /// The axial distance between two cells.
 pub fn hex_distance(a: (i32, i32), b: (i32, i32)) -> i32 {
     let (dq, dr) = (a.0 - b.0, a.1 - b.1);
@@ -1268,6 +1275,19 @@ mod tests {
                 assert!(g.iter().all(|&(q, r)| distance(q, r) > SAFE));
             }
         }
+    }
+
+    #[test]
+    fn only_a_generated_enemy_cell_can_be_beaten() {
+        let first = enemy_groups(5, 0, 0)
+            .into_iter()
+            .flatten()
+            .next()
+            .or_else(|| (0..WORLD_CHUNKS).find_map(|cx| enemy_groups(5, cx, 0).into_iter().flatten().next()))
+            .expect("seed 5 holds an enemy");
+        assert!(is_enemy(5, first.0, first.1));
+        assert!(!is_enemy(5, 0, 0)); // the spawn clearing
+        assert!(!is_enemy(5, WORLD_CHUNKS * CHUNK, 0)); // off the world
     }
 
     /// The 5 x 5 chunks around the spawn chunk, as cell coordinates `[-2 * CHUNK, 3 * CHUNK)`.
