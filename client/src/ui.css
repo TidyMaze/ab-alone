@@ -60,6 +60,7 @@
 
 html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 canvas { display: block; touch-action: none; }
+body[data-veil] { background: #2c3438; } /* the terrace's sky colour while the canvas waits for it (#1389), in both themes */
 /* Fog at the rim, never over the cells. Fixed near-black: the 3D deck is dark in both themes. */
 body::after {
   content: ''; position: fixed; inset: 0; pointer-events: none;

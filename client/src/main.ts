@@ -6208,6 +6208,11 @@ if (serviceWorker) {
 refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
+// Until the terrace is drawn the room would show (#1389): the canvas stays hidden on a plain dark page, and shows after a terrace frame.
+if (!keepRoom) {
+  renderer.domElement.style.visibility = 'hidden';
+  document.body.dataset.veil = 'on';
+}
 document.body.appendChild(renderer.domElement);
 if (resumed?.boss) startBoss(resumed.boss.id, resumed.boss.seed, undefined, resumed); // a Stalker fight comes back under its fog (#1122)
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
@@ -6240,6 +6245,12 @@ function moving(): boolean {
   );
 }
 
+/** Shows the canvas once a frame was drawn that is not the room's (#1389): the terrace, its plain background, or the Open world. */
+function unveil(): void {
+  if (!document.body.dataset.veil || !(sceneRenderer.terraceOn || openWorld.active)) return;
+  renderer.domElement.style.visibility = '';
+  delete document.body.dataset.veil;
+}
 renderer.setAnimationLoop((now) => {
   pollPad(now); // the gamepad, read once per frame (#1252)
   lastDraw = timeDraw(lastDraw, now);
@@ -6249,6 +6260,7 @@ renderer.setAnimationLoop((now) => {
       sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
       renderer.render(scene, camera);
     }, now); // the frame's own time, not the moment its callback runs: the camera moves by even steps (#1333)
+    unveil();
     if (fpsOn) {
       // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.
       if (drew) stampDrawn(fpsStamps, now);
@@ -6311,6 +6323,7 @@ renderer.setAnimationLoop((now) => {
   syncPedestals?.();
   renderer.info.reset();
   sceneRenderer.render();
+  unveil();
   draws++;
   drawAsked = false;
   dirty = Math.max(0, dirty - 1);
