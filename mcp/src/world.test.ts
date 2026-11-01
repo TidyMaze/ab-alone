@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'vitest';
+import { FightState } from '../../client/src/openworldfight';
+import { decodeWorld, RECORD, worldSaves } from '../../client/src/openworldsave';
+import { memoryStore } from '../../client/src/savegame';
+import { endingLine } from '../../client/src/tally';
+import { MARBLES } from '../../client/src/trainer';
 import { bossIds, worldRules } from './engine';
 import type { Result, ToolError } from './game';
-import { OpenWorld, type WorldRules } from './world';
+import { OpenWorld, type Outcome, type WorldSave, type WorldRules } from './world';
 
 function value<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(`expected a value, got ${JSON.stringify(result.error)}`);
@@ -13,10 +18,10 @@ function failure(result: Result<unknown>): ToolError {
   return result.error;
 }
 
-/** The real rules of the engine, with the lairs of the world put at `lairs` (q, r pairs) when given. */
-function world(lairs?: number[]): OpenWorld {
+/** The real rules of the engine, with the lairs of the world put at `lairs` (q, r pairs) when given, and the game of `games`. */
+function world(lairs?: number[], games?: { outcome(): Outcome | null }): OpenWorld {
   const rules: WorldRules = lairs ? { ...worldRules(), world_lairs: () => Int32Array.from(lairs) } : worldRules();
-  return new OpenWorld(rules, bossIds);
+  return new OpenWorld(rules, bossIds, games);
 }
 
 const chunks = new Map<string, Uint8Array>();
@@ -70,7 +75,7 @@ function standBeside(codes: number[], keep?: (seed: number) => (q: number, r: nu
 describe('before a world is started', () => {
   test('every tool says there is no world', () => {
     const open = world();
-    for (const result of [open.state({}), open.step({ direction: 'E' }), open.walk({ q: 1, r: 0 })]) {
+    for (const result of [open.state({}), open.step({ direction: 'E' }), open.walk({ q: 1, r: 0 }), open.save()]) {
       expect(failure(result).code).toBe('no_world');
     }
   });
@@ -85,7 +90,8 @@ describe('a new world', () => {
     expect(state.troop).toEqual(['(1,0)', '(-1,0)', '(1,-1)', '(-1,1)', '(0,-1)', '(0,1)']);
     expect(state.broken).toBe(0);
     expect(state.lairs).toHaveLength(15);
-    expect(state.lairs[0]).toEqual({ boss: bossIds()[0], cell: '(373,51)', distance: 424 });
+    expect(state.lairs[0]).toEqual({ boss: bossIds()[0], cell: '(373,51)', distance: 424, beaten: false });
+    expect(state.ending).toBeUndefined();
   });
 
   test('the seed defaults to 0 and the same seed gives the same world', () => {
@@ -282,5 +288,134 @@ describe('the same seed and moves as the client', () => {
     expect(walked.steps).toBe(11);
     expect(walked.pushes).toEqual([{ direction: 'E', ejected: [] }]);
     expect(walked.state).toMatchObject(PUSHED);
+  });
+});
+
+const VERSION = worldRules().world_version();
+
+/** Seed 1 walked to (5,6): the troop pushed the enemy group on the way, so the fight has enemies removed and added (see above). */
+function pushed(): OpenWorld {
+  const open = world();
+  value(open.newWorld({ seed: 1 }));
+  value(open.walk({ q: 5, r: 6 }));
+  return open;
+}
+
+describe("a save and its resume, in the client's format (client/src/openworldsave.ts)", () => {
+  test('save_world gives the world as the client saves it, and the client reads it back', () => {
+    const save = value(pushed().save());
+    expect(save.record).toBe(RECORD);
+    expect(save.version).toBe(VERSION);
+    expect(Number.isFinite(save.savedAt)).toBe(true);
+    expect(save.fight.removed.length).toBeGreaterThan(0);
+    expect(save.fight.added.length).toBeGreaterThan(0);
+    expect(decodeWorld(save, 1, VERSION)).toEqual({
+      version: VERSION,
+      seed: 1,
+      hero: [6, 6],
+      troop: [[5, 6], [4, 6], [2, 6], [1, 6], [0, 6], [0, 5]],
+      fight: save.fight,
+      yaw: 0,
+      broken: [],
+      lairs: [],
+      savedAt: save.savedAt,
+    });
+    expect(FightState.fromJSON(save.fight).toJSON()).toEqual(save.fight);
+  });
+
+  test('new_world with a save resumes the world: the same state, and the same moves give the same results after', () => {
+    const open = pushed();
+    const resumed = world();
+    expect(value(resumed.newWorld({ save: value(open.save()) }))).toEqual(value(open.state({})));
+    for (const direction of ['NE', 'NE', 'W', 'SE', 'E'] as const) expect(resumed.step({ direction })).toEqual(open.step({ direction }));
+    expect(resumed.walk({ q: 0, r: 0 })).toEqual(open.walk({ q: 0, r: 0 }));
+  });
+
+  test('a save the client wrote resumes as it was, and saves back to the same record', async () => {
+    const store = memoryStore();
+    const fight = FightState.fromJSON({ removed: ['6,6'], added: [[7, 6]], beaten: 1 });
+    await worldSaves(store, VERSION).put(1, [6, 6], [[5, 6], [4, 6]], fight, 0.75, [[2, 3]], [0, 2]);
+    const record = store.data.get('openworld:1') as WorldSave;
+    const open = world();
+    const state = value(open.newWorld({ save: record }));
+    expect(state).toMatchObject({ seed: 1, hero: '(6,6)', troop: ['(5,6)', '(4,6)'], broken: 1, beaten: 1 });
+    expect(state.enemies).toContain('(7,6)');
+    expect(state.enemies).not.toContain('(6,6)');
+    expect(state.lairs.map((lair) => lair.beaten)).toEqual(state.lairs.map((_, k) => k === 0 || k === 2));
+    expect({ ...value(open.save()), savedAt: 0 }).toEqual({ ...record, savedAt: 0 });
+  });
+
+  test('a save of another world version is refused and the world in progress is kept', () => {
+    const open = pushed();
+    const before = value(open.state({}));
+    const error = failure(open.newWorld({ save: { ...value(open.save()), version: VERSION + 1 } }));
+    expect(error.code).toBe('bad_save');
+    expect(error.message).toContain(`version ${VERSION + 1}`);
+    expect(value(open.state({}))).toEqual(before);
+  });
+});
+
+/** The session's game as a test sets it. */
+function games(): { now: Outcome | null; outcome(): Outcome | null } {
+  return {
+    now: null,
+    outcome() {
+      return this.now;
+    },
+  };
+}
+
+// The client's "Back to the Open world" (client/src/main.ts, #1170): a boss fight started from a lair and won beats that lair.
+describe('a lair fight won, back in the world', () => {
+  const BOSS = bossIds()[0]!;
+
+  test('a fight of the lair boss started after the step onto it and won beats that lair once the agent is back', () => {
+    const session = games();
+    const open = world([1, 0, 9, 0], session);
+    value(open.newWorld({ seed: 0 }));
+    session.now = { game: 'before', boss: null };
+    expect(value(open.step({ direction: 'E' })).lair?.boss).toBe(BOSS);
+    session.now = { game: 'fight', boss: null }; // started, not won yet
+    expect(value(open.state({})).lairs.map((lair) => lair.beaten)).toEqual([false, false]);
+    session.now = { game: 'fight', boss: BOSS };
+    expect(value(open.state({})).lairs.map((lair) => lair.beaten)).toEqual([true, false]);
+    expect(value(open.save()).lairs).toEqual([0]);
+  });
+
+  test('a fight won before the step, a fight of another boss, or no game beats nothing', () => {
+    const session = games();
+    const open = world([1, 0, 9, 0], session);
+    value(open.newWorld({ seed: 0 }));
+    session.now = { game: 'won', boss: BOSS };
+    value(open.step({ direction: 'E' }));
+    expect(value(open.state({})).lairs[0]!.beaten).toBe(false);
+    session.now = { game: 'other', boss: bossIds()[1]! };
+    expect(value(open.walk({ q: 2, r: 1 })).state.lairs[0]!.beaten).toBe(false);
+    session.now = null;
+    expect(value(open.step({ direction: 'W' })).state.lairs[0]!.beaten).toBe(false);
+  });
+
+  test('a world with no session never beats a lair', () => {
+    const open = world([1, 0]);
+    value(open.newWorld({ seed: 0 }));
+    value(open.step({ direction: 'E' }));
+    expect(value(open.state({})).lairs[0]!.beaten).toBe(false);
+  });
+
+  test("every lair beaten: the ending, Tally's line of the client (#1175); a lair beaten again counts once", () => {
+    const session = games();
+    const open = world([1, 0], session);
+    value(open.newWorld({ seed: 0 }));
+    for (const game of ['first', 'again']) {
+      value(open.step({ direction: 'E' }));
+      expect(value(open.state({})).ending).toBe(game === 'first' ? undefined : endingLine(MARBLES));
+      session.now = { game, boss: BOSS };
+      expect(value(open.state({})).ending).toBe(endingLine(MARBLES));
+    }
+    expect(value(open.save()).lairs).toEqual([0]);
+  });
+
+  test('a world with no lair has no ending', () => {
+    expect(value(world([]).newWorld({ seed: 0 })).ending).toBeUndefined();
   });
 });
