@@ -144,7 +144,7 @@ describe('the renderer and its textures', () => {
     expect(deck.roughnessMap!.colorSpace).not.toBe('srgb');
     expect(document.body.lastElementChild).toBeInstanceOf(HTMLCanvasElement); // the renderer's canvas
     expect(camera.aspect).toBe(innerWidth / innerHeight);
-    expect(camera.fov).toBe(framing(innerWidth, innerHeight).fov);
+    expect(camera.fov).toBe(framing(innerWidth, innerHeight));
     expect(camera.position.length()).toBeGreaterThan(0); // the reset view, looking at the board
     expect(game.hook('__draws')).toBe(1);
   });
