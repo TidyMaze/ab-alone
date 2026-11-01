@@ -170,6 +170,8 @@ export class OpenWorldMode {
     private readonly skins?: () => Promise<MarbleSkins>,
     /** The medals the player holds and the bosses there are, read from the shared medal store when a world opens (#1171). */
     private readonly medals: () => { have: number; total: number } = () => ({ have: 0, total: 0 }),
+    /** Tally's line for the HUD when a world opens, empty when it has been shown already (#1171). */
+    private readonly tally: () => string = () => '',
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -212,6 +214,8 @@ export class OpenWorldMode {
       const { have, total } = this.medals();
       medals.textContent = `Medals ${have} / ${total}`;
     }
+    const tally = document.getElementById('openworld-tally');
+    if (tally) tally.textContent = this.tally();
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));

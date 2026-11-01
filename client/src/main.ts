@@ -222,6 +222,8 @@ import {
   hasReflections,
   meshDetail,
   nextPixelRatio,
+  read,
+  write,
   renderPixelRatio,
   smoothEdges,
   writeClearBoard,
@@ -4969,6 +4971,12 @@ const openWorld = new OpenWorldMode(
     return { player: marbleMaterials[2]!, shell: marbleMaterials[1]! };
   },
   () => ({ have: boss_ids().filter((id) => hasMedal(store, id)).length, total: boss_ids().length }), // one medal per boss, from the shared store (#1171)
+  () => {
+    // Tally's claim line, once per player (#1171): the flag sits in the same store as the medals.
+    if (read(store, 'ab-alone.tally0412') === 'seen') return '';
+    write(store, 'ab-alone.tally0412', 'seen');
+    return 'Claim 0412: unworked.';
+  },
 );
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
 async function enterOpenWorld(): Promise<void> {

@@ -12,6 +12,7 @@ test('walking onto a lair of the Open world starts a boss fight, #1170', async (
   const lairs = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ');
   expect(lairs).toHaveLength(14); // one lair per boss of the roster (#1171)
   await expect(page.locator('#openworld-medals')).toHaveText('Medals 0 / 14');
+  await expect(page.locator('#openworld-tally')).toHaveText('Claim 0412: unworked.'); // Tally's line, once per player (#1171)
   const [q, r] = lairs[0]!.split(',').map(Number) as [number, number];
   await page.evaluate(
     ([q, r]) => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [q - 1, r], troop: [], enemies: [] }),

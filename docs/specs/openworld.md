@@ -197,3 +197,5 @@ The Open world has a goal: one landmark lair per boss of the roster (14 today, t
   the numbers beaten; `__openworldFixture` stands the hero next to a lair.
 - **Medal count.** The HUD shows `Medals N / total` (`#openworld-medals`): N the bosses with a medal in the shared `ab-alone.medals`
   store, total the roster size. Read when a world opens, so it is right after "Back to the Open world".
+- **Tally's line.** The first time a player opens an Open world the HUD shows "Claim 0412: unworked." (`#openworld-tally`), once: the
+  flag `ab-alone.tally0412` is kept next to the medals. Reduced motion changes nothing.
