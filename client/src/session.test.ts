@@ -7,10 +7,12 @@ import {
   signHello,
   signMove,
   signRematch,
+  signReport,
   type Keys,
   type Missed,
   type MoveRecord,
   type Rematch,
+  type Report,
   type Sync,
   type Wire,
 } from './moverecord';
@@ -95,6 +97,7 @@ async function player(transport: Transport, side: number, seatCount = 2, engine 
   const seen: string[] = []; // presence of the other seat, at each change
   const asks: number[] = []; // calls of onRematchAsk
   const rematches: number[] = []; // our side at each new game
+  const reports: Report[] = []; // the verified match reports of the other seat (#1317)
   const keys = await generateKeys();
   const session: OnlineSession = new WatchedSession({
     game: 'g',
@@ -111,8 +114,9 @@ async function player(transport: Transport, side: number, seatCount = 2, engine 
     onPresence: () => seen.push(session.presenceOf(3 - side)),
     onRematchAsk: () => asks.push(asks.length + 1),
     onRematch: () => rematches.push(session.side),
+    onReport: (r) => reports.push(r),
   });
-  return { judge, moves, refused, states, roles, seen, asks, rematches, keys, session };
+  return { judge, moves, refused, states, roles, seen, asks, rematches, reports, keys, session };
 }
 type Player = Awaited<ReturnType<typeof player>>;
 
@@ -1491,5 +1495,57 @@ describe('OnlineSession in a battle royale room, #504', () => {
     );
     expect(a.refused).toEqual([]);
     expect([a.session.coordinator, b.session.coordinator]).toEqual([a.keys.pub, a.keys.pub]);
+  });
+});
+
+describe('OnlineSession match reports, #1317', { timeout: 30_000 }, () => {
+  const ours = { hash: 'b1', status: 1, rating: 1250 };
+
+  it('signs our report with our key for this game and delivers it to the other seat only', async () => {
+    const { black, white } = await ready();
+    const sent = await black.session.report(ours);
+    expect(sent).toMatchObject({ kind: 'report', game: 'g', side: 1, pub: black.keys.pub, ...ours });
+    await until(() => expect(white.reports).toEqual([sent]));
+    expect(black.reports).toEqual([]);
+    expect([black.refused, white.refused]).toEqual([[], []]);
+    const back = await white.session.report({ hash: 'b1', status: 1, rating: 1180 });
+    expect(back?.side).toBe(2);
+    await until(() => expect(black.reports).toEqual([back]));
+  });
+
+  it('sends no report from a spectator', async () => {
+    const r = room();
+    const watcher = await player(r.transport, 2);
+    expect(await watcher.session.report(ours)).toBeNull();
+    expect(r.sent.some((m) => kindOf(m) === 'report')).toBe(false);
+  });
+
+  it('refuses a forged report, one for another game, one from a key without a seat, one with the wrong colour, our own echo, and a malformed one', async () => {
+    const { r, black, white } = await hostWithWhite();
+    const good = await signReport(white, { game: 'g', ...ours, side: 2 });
+    r.from('b', { ...good, rating: 3000 });
+    r.from('b', await signReport(white, { game: 'other', ...ours, side: 2 }));
+    r.from('c', await signReport(await generateKeys(), { game: 'g', ...ours, side: 2 }));
+    r.from('b', await signReport(white, { game: 'g', ...ours, side: 1 }));
+    r.from('b', await signReport(black.keys, { game: 'g', ...ours, side: 1 }));
+    r.from('b', { kind: 'report', game: 1 } as unknown as Wire);
+    await until(() => expect(black.refused).toEqual(['bad-report', 'stale-report', 'wrong-key', 'bad-report', 'wrong-key', 'bad-report']));
+    expect(black.reports).toEqual([]);
+    r.from('b', good);
+    await until(() => expect(black.reports).toEqual([good]));
+  });
+
+  it('ignores a report when the session has no onReport', async () => {
+    const r = room();
+    const black = new OnlineSession({
+      game: 'g', side: 1, engine: ENGINE, keys: await generateKeys(), transport: r.transport, judge: new FakeJudge(),
+      onMove: () => {}, onRefuse: () => {},
+    });
+    const white = await generateKeys();
+    r.from('b', await hello(white, 2));
+    await black.settled;
+    r.from('b', await signReport(white, { game: 'g', ...ours, side: 2 }));
+    await black.settled;
+    expect(black.role).toBe('player');
   });
 });

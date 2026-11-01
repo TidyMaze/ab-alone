@@ -50,6 +50,19 @@ export interface Rematch {
   sig: string;
 }
 
+/** What one player says of a finished 1v1 ranked game, signed by that player's key (#1317): the board hash it ended on,
+ * the status it reads (1 or 2 the winner's colour, 3 a draw), its own colour and its own rating. */
+export interface Report {
+  kind: 'report';
+  game: string;
+  hash: string;
+  status: number;
+  side: number;
+  rating: number;
+  pub: string;
+  sig: string;
+}
+
 /** Catch-up request, sent after Hello (docs/specs/tech.md section 6, Reconnection, #226): the game of the room
  * the sender is in, how many of its moves it has, and the keys whose rematch ask of it it holds. Not signed:
  * it changes nothing, and everything that answers it is signed. */
@@ -82,7 +95,7 @@ export interface Coordinator {
 }
 
 /** Anything a transport carries: the messages of the battle royale rounds too (royale-net.ts, #504). */
-export type Wire = MoveRecord | Hello | Rematch | Sync | Missed | Beat | Coordinator | RoyaleMessage;
+export type Wire = MoveRecord | Hello | Rematch | Report | Sync | Missed | Beat | Coordinator | RoyaleMessage;
 
 type Unsigned = Omit<MoveRecord, 'sig'>;
 
@@ -98,6 +111,9 @@ const coordinatorPayload = (c: Omit<Coordinator, 'sig'>): Uint8Array<ArrayBuffer
 
 const rematchPayload = (r: Omit<Rematch, 'sig'>): Uint8Array<ArrayBuffer> =>
   new TextEncoder().encode(JSON.stringify(['rematch', r.game, r.pub]));
+
+const reportPayload = (r: Omit<Report, 'sig'>): Uint8Array<ArrayBuffer> =>
+  new TextEncoder().encode(JSON.stringify(['report', r.game, r.hash, r.status, r.side, r.rating, r.pub]));
 
 /** Whether `sig` is `pub`'s signature of `bytes`. Malformed base64 or key bytes are a refusal, never a throw. */
 async function signedBy(pub: string, sig: string, bytes: Uint8Array<ArrayBuffer>): Promise<boolean> {
@@ -152,6 +168,15 @@ export function verifyHello(h: Hello): Promise<boolean> {
 export async function signRematch(keys: Keys, fields: { game: string }): Promise<Rematch> {
   const unsigned = { kind: 'rematch' as const, ...fields, pub: keys.pub };
   return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, rematchPayload(unsigned))) };
+}
+
+export async function signReport(keys: Keys, fields: Omit<Report, 'kind' | 'pub' | 'sig'>): Promise<Report> {
+  const unsigned = { kind: 'report' as const, ...fields, pub: keys.pub };
+  return { ...unsigned, sig: b64(await crypto.subtle.sign(ED, keys.priv, reportPayload(unsigned))) };
+}
+
+export function verifyReport(r: Report): Promise<boolean> {
+  return signedBy(r.pub, r.sig, reportPayload(r));
 }
 
 export function verifyRematch(r: Rematch): Promise<boolean> {
@@ -222,6 +247,23 @@ export function parseRematch(x: unknown): Rematch | null {
   const r = x as Record<string, unknown>;
   const ok = r.kind === 'rematch' && typeof r.game === 'string' && typeof r.pub === 'string' && typeof r.sig === 'string';
   return ok ? { kind: 'rematch', game: r.game as string, pub: r.pub as string, sig: r.sig as string } : null;
+}
+
+/** Shape check for a Report off the wire. Returns a clean copy or null. */
+export function parseReport(x: unknown): Report | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const r = x as Record<string, unknown>;
+  const ok =
+    r.kind === 'report' &&
+    typeof r.game === 'string' &&
+    typeof r.hash === 'string' &&
+    Number.isInteger(r.status) &&
+    Number.isInteger(r.side) &&
+    Number.isFinite(r.rating) &&
+    typeof r.pub === 'string' &&
+    typeof r.sig === 'string';
+  if (!ok) return null;
+  return { kind: 'report', game: r.game as string, hash: r.hash as string, status: r.status as number, side: r.side as number, rating: r.rating as number, pub: r.pub as string, sig: r.sig as string };
 }
 
 /** Shape check for a Sync off the wire. Returns a clean copy or null. */

@@ -9,17 +9,21 @@ import {
   parseMissed,
   parseRecord,
   parseRematch,
+  parseReport,
   parseSync,
   signHello,
   signRematch,
+  signReport,
   verifyHello,
   verifyRematch,
+  verifyReport,
   type Hello,
   type Keys,
   type Missed,
   type MoveRecord,
   type Coordinator,
   type Rematch,
+  type Report,
   type Sync,
   type Wire,
 } from './moverecord';
@@ -62,6 +66,8 @@ export interface SessionOptions {
   onRole?(role: Role): void;
   onPresence?(): void; // a key said Hello or its peer left: read presenceOf again
   onRematchAsk?(): void; // a seated key asked for a rematch: read askedRematch again
+  /** The other seat's signed match report of this game arrived and checked out: key, game and colour are theirs (#1317). */
+  onReport?(report: Report): void;
   onRematch?(): void; // every seat asked: the judge restarted for the new game, read side again
   /** Heartbeat and coordinator migration (docs/specs/tech.md section 6, #359). `every` runs `fn` each `ms`. Off without it. */
   beat?: { ms: number; now(): number; every(fn: () => void, ms: number): void };
@@ -235,6 +241,19 @@ export class OnlineSession {
     return this.queue;
   }
 
+  /** Signs what we say of the finished game (board hash, status, our rating) with our key and sends it to the other
+   * seat (#1317). Returns it, or null for a spectator. */
+  async report(fields: { hash: string; status: number; rating: number }): Promise<Report | null> {
+    let sent: Report | null = null;
+    this.queue = this.queue.then(async () => {
+      if (this.current !== 'player') return;
+      sent = await signReport(this.o.keys, { game: this.now.id, side: this.o.side, ...fields });
+      this.o.transport.send(sent);
+    });
+    await this.queue;
+    return sent;
+  }
+
   /** The caller already applied `move` to its own engine. A spectator sends nothing. In the message queue: a move the
    * engine already has may still be hashed into the log, and ours chains to that hash (bug #952). */
   send(move: number[]): Promise<void> {
@@ -309,6 +328,7 @@ export class OnlineSession {
     if (kind === 'sync') return this.answer(parseSync(raw), peer);
     if (kind === 'missed') return this.receiveMissed(parseMissed(raw));
     if (kind === 'rematch') return this.receiveRematch(parseRematch(raw), true);
+    if (kind === 'report') return this.receiveReport(parseReport(raw));
     if (kind !== undefined && this.o.onOther) return this.o.onOther(raw, this.presence.keyOf(peer), peer);
     return this.receiveRecord(parseRecord(raw), true);
   }
@@ -344,6 +364,16 @@ export class OnlineSession {
     }
     if (this.seats.seatOf(r.pub) === 0) return this.o.onRefuse('wrong-key');
     await this.asked(r);
+  }
+
+  /** The other seat's report: only its own key, for this game and for the colour it plays, is passed on. */
+  private async receiveReport(r: Report | null): Promise<void> {
+    if (!r || !(await verifyReport(r))) return this.o.onRefuse('bad-report');
+    if (r.game !== this.now.id) return this.o.onRefuse('stale-report');
+    const seat = this.seats.seatOf(r.pub);
+    if (seat === 0 || r.pub === this.o.keys.pub) return this.o.onRefuse('wrong-key');
+    if (r.side !== colourOf(seat, this.games.length - 1, this.seats.count)) return this.o.onRefuse('bad-report');
+    this.o.onReport?.(r);
   }
 
   /** A record or an ask we missed: checked exactly as a live one. One we already have came from another

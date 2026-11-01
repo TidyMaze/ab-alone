@@ -1,5 +1,6 @@
 import { DEFAULT_RATING, formatRating, getRankTier, update1v1Elo, updateBattleRoyaleElo } from './elo';
-import { verifyMatchOutcome, type MatchWinner } from './matchmaking';
+import { verifyMatchOutcome, type MatchReport, type MatchWinner } from './matchmaking';
+import type { Report } from './moverecord';
 
 export const RANKED_STORAGE_KEY = 'ab-alone.ranked';
 export const MAX_MATCH_HISTORY = 50;
@@ -109,32 +110,45 @@ export function formatDelta(delta: number): string {
 }
 
 /** Renders the ranked HUD line: rank badge, optional queue window, and optional post-match Elo delta (#711). */
-export function rankedHudHtml(rating: number, options: { queueWindow?: number; delta?: number } = {}): string {
+export function rankedHudHtml(
+  rating: number,
+  options: { queueWindow?: number; delta?: number; result?: 'waiting' | 'refused' } = {},
+): string {
+  const result =
+    options.result === 'waiting'
+      ? ' <span class="rank-result" data-result="waiting">Waiting for the opponent report</span>'
+      : options.result === 'refused'
+        ? ' <span class="rank-result" data-result="refused">Not rated: the reports differ</span>'
+        : '';
   const queue = options.queueWindow !== undefined ? ` <span class="rank-queue">Queue ±${options.queueWindow}</span>` : '';
   const delta =
     options.delta !== undefined
       ? ` <span class="rank-delta" data-sign="${options.delta >= 0 ? 'up' : 'down'}">${formatDelta(options.delta)}</span>`
       : '';
-  return `<div class="ranked">${renderRankBadge(rating)}${queue}${delta}</div>`;
+  return `<div class="ranked">${renderRankBadge(rating)}${queue}${delta}${result}</div>`;
 }
 
-/** Settles a finished 1v1 ranked match after verifying outcome reports and updates stored 1v1 Elo (#711). */
+/** What a signed report says, from its own seat: who won, as the reporter or the opponent. */
+function reportOf(r: Report, other: Report): MatchReport {
+  const winner: MatchWinner = r.status === 3 ? 'draw' : r.status === r.side ? 'reporter' : 'opponent';
+  return { matchId: r.game, reporterPeerId: r.pub, opponentPeerId: other.pub, stateHash: r.hash, winner };
+}
+
+/**
+ * Settles a finished 1v1 ranked match from the two signed reports, ours and the opponent's (#1317). Both must agree
+ * (same game, board and result, two colours, two keys) and ours must carry our stored rating. A mismatch rates nothing
+ * and returns null. The opponent's own rating, as it signed it, sets our Elo change.
+ */
 export function settleRanked1v1(
   store: RankedStore,
-  side: number,
-  status: number,
-  stateHash: string,
-  opponentRating = DEFAULT_RATING,
-): { profile: RankedProfile; delta: number } {
+  mine: Report,
+  theirs: Report,
+): { profile: RankedProfile; delta: number } | null {
   const current = loadRankedProfile(store);
-  const ourWinner: MatchWinner = status === 3 ? 'draw' : status === side ? 'reporter' : 'opponent';
-  const theirWinner: MatchWinner = status === 3 ? 'draw' : status === side ? 'opponent' : 'reporter';
-  verifyMatchOutcome(
-    { matchId: stateHash, reporterPeerId: 'self', opponentPeerId: 'peer', stateHash, winner: ourWinner },
-    { matchId: stateHash, reporterPeerId: 'peer', opponentPeerId: 'self', stateHash, winner: theirWinner },
-  );
-  const actualScore = status === 3 ? 0.5 : status === side ? 1 : 0;
-  const elo = update1v1Elo(current.rating1v1, opponentRating, actualScore);
+  if (mine.rating !== current.rating1v1 || mine.side === theirs.side || mine.pub === theirs.pub) return null;
+  if (!verifyMatchOutcome(reportOf(mine, theirs), reportOf(theirs, mine))) return null;
+  const actualScore = mine.status === 3 ? 0.5 : mine.status === mine.side ? 1 : 0;
+  const elo = update1v1Elo(current.rating1v1, theirs.rating, actualScore);
   const profile = recordRankedMatch(store, {
     mode: '1v1',
     delta: elo.deltaA,
