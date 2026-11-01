@@ -1,0 +1,11 @@
+{
+ "act1": "mess",
+ "act2": "furnace",
+ "act3": "bridge",
+ "stakes_meshes": [
+  "kit_stakes_1",
+  "kit_stakes_2",
+  "kit_stakes_3"
+ ],
+ "note": "act 1/2/3 use the deck ramps of deck_ramps.json; N stakes on the parapet posts tell the act; empty terrace, no props, free band for the DOM map"
+}

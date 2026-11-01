@@ -1,0 +1,167 @@
+{
+ "note": "sky dome vertex-colour ramp: colour per elevation (degrees above horizon, dome radius 95 centred z=-3); ground tint blends plateau and map column colours toward ground_tint by strength; mess = base arena",
+ "decks": {
+  "mess": {
+   "deck": "Mess",
+   "elevation_deg": [
+    -40,
+    -3,
+    0,
+    2.5,
+    7,
+    16,
+    35,
+    65
+   ],
+   "sky_hex": [
+    "#9db8c4",
+    "#9db8c4",
+    "#e8a870",
+    "#b4b4b4",
+    "#7b97a2",
+    "#3d6e78",
+    "#2f5f68",
+    "#3a717a"
+   ],
+   "ground_tint": "#877d65",
+   "ground_tint_strength": 0.0,
+   "sun_color": "#ffd9a8",
+   "sun_energy": 3.9
+  },
+  "cargo": {
+   "deck": "Cargo",
+   "elevation_deg": [
+    -40,
+    -3,
+    0,
+    2.5,
+    7,
+    16,
+    35,
+    65
+   ],
+   "sky_hex": [
+    "#b5b6aa",
+    "#b9b6a4",
+    "#c9b48a",
+    "#b7b6a7",
+    "#af9e7d",
+    "#a8987a",
+    "#8d8a78",
+    "#737e80"
+   ],
+   "ground_tint": "#a89a70",
+   "ground_tint_strength": 0.75,
+   "sun_color": "#ffd9a8",
+   "sun_energy": 3.9
+  },
+  "furnace": {
+   "deck": "Furnace",
+   "elevation_deg": [
+    -40,
+    -3,
+    0,
+    2.5,
+    7,
+    16,
+    35,
+    65
+   ],
+   "sky_hex": [
+    "#bea092",
+    "#c49b85",
+    "#d9822b",
+    "#c19d8c",
+    "#9e5121",
+    "#8a3d1e",
+    "#5a2414",
+    "#3c1b11"
+   ],
+   "ground_tint": "#643d35",
+   "ground_tint_strength": 0.6,
+   "sun_color": "#ffd9a8",
+   "sun_energy": 3.9
+  },
+  "chapel": {
+   "deck": "Chapel",
+   "elevation_deg": [
+    -40,
+    -3,
+    0,
+    2.5,
+    7,
+    16,
+    35,
+    65
+   ],
+   "sky_hex": [
+    "#8fb8ba",
+    "#8cb8b8",
+    "#7fb8b0",
+    "#8eb8b9",
+    "#477578",
+    "#2c5a63",
+    "#24505a",
+    "#204a55"
+   ],
+   "ground_tint": "#2f5a3a",
+   "ground_tint_strength": 0.55,
+   "sun_color": "#ffd9a8",
+   "sun_energy": 3.9
+  },
+  "bridge": {
+   "deck": "Bridge",
+   "elevation_deg": [
+    -40,
+    -3,
+    0,
+    2.5,
+    7,
+    16,
+    35,
+    65
+   ],
+   "sky_hex": [
+    "#b2c4ce",
+    "#b6c7d0",
+    "#c4d0d8",
+    "#b4c6cf",
+    "#98aebf",
+    "#8aa4b8",
+    "#5f7e94",
+    "#4d6e85"
+   ],
+   "ground_tint": "#b9c4c8",
+   "ground_tint_strength": 0.6,
+   "sun_color": "#ffd9a8",
+   "sun_energy": 3.9
+  },
+  "stalker_night": {
+   "deck": "Chapel night (Stalker), zenith base #0b0d0f",
+   "elevation_deg": [
+    -40,
+    -3,
+    0,
+    2.5,
+    7,
+    16,
+    35,
+    65
+   ],
+   "sky_hex": [
+    "#778e98",
+    "#6e848d",
+    "#34484e",
+    "#738993",
+    "#213238",
+    "#1a2a30",
+    "#10191d",
+    "#0c0e10"
+   ],
+   "ground_tint": "#2f5a3a",
+   "ground_tint_strength": 0.6,
+   "sun_color": "#ffd9a8",
+   "sun_energy": 1.6
+  }
+ }
+}
