@@ -865,9 +865,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Turn it against the boss** (owner design rule): push boss marbles onto a belt that runs toward
   the rim, or onto an announced strike slot, and let the belt and the press eject them for you;
   keep your own marbles off the belts' ends, and off a blinking slot. The boss search sees the
-  belts and the presses (every player ply of its tree goes through the hook, with seed 0 for the
-  strike draws, so it does not see announcements still to come) and avoids them the same way. Its
-  budget is the Hull's (3000 nodes).
+  belts and the presses (every player ply of its tree goes through the hook, in the phase the
+  ejections of the tree so far reach, #914, with seed 0 for the strike draws, so it does not see
+  announcements still to come) and avoids them the same way. Its budget is the Hull's (3000 nodes).
 - **Calibrate**: knobs = the reversal (5 turns), the strike rhythm (2 turns), phase ejections (3,
   5), AI depth. Fail if most fights end with no boss marble ejected by a belt or a press (nobody
   learns the counter).
