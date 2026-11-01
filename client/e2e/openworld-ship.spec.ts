@@ -31,8 +31,8 @@ for (const { name, viewport } of viewports) {
       expect(box.x).toBeGreaterThan(viewport.width / 2); // not in the stick's half
       expect(await clearOf(page, '#openworld-hud')).toBe(true);
       expect(await clearOf(page, '#settings')).toBe(true);
-      await expect(page.locator('#openworld-hud .touch-hint')).toBeVisible();
-      await expect(page.locator('#openworld-hud .esc-hint')).toBeHidden();
+      await expect(page.locator('#openworld-hud .tap-hint')).toBeVisible();
+      await expect(page.locator('#openworld-hud .keys-hint')).toBeHidden();
       await ship.tap();
       await expect(page.locator('body')).not.toHaveAttribute('data-openworld', /.+/);
       await expect(page.locator('body')).toHaveAttribute('data-hub', /.+/);

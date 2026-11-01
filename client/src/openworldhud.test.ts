@@ -69,9 +69,9 @@ describe('the Open world HUD plate (#1138)', () => {
 
 describe('the Open world help (#1252)', () => {
   it('names the keys, and the pad\'s buttons while the pad is in use (body[data-pad])', () => {
-    expect(css).toContain('.pad-hint, body[data-pad] .keys-hint { display: none; }');
+    expect(css).toContain('.pad-hint, .tap-hint, body[data-pad] .keys-hint { display: none; }');
     expect(css).toContain('body[data-pad] .pad-hint { display: inline; }');
-    expect(html).toMatch(/<span class="keys-hint">arrows[^<]*Q E[^<]*<span class="esc-hint">Esc<\/span><span class="touch-hint">the Ship button<\/span> to leave\.<\/span>/);
+    expect(html).toMatch(/<span class="keys-hint">arrows[^<]*Q E[^<]*Esc to leave\.<\/span>/);
     expect(html).toMatch(/<span class="pad-hint">left stick to walk, LB RB[^<]*R3[^<]*B to leave\.<\/span>/);
   });
 });
@@ -89,8 +89,10 @@ describe('the Ship button of the Open world (#1373)', () => {
     expect(css).toContain('@media (pointer: coarse) and (orientation: portrait) { #openworld-hud { bottom: calc(1.5rem + var(--target)); } }');
   });
 
-  it('asks for Esc on a keyboard only; a touch screen reads the Ship button', () => {
-    expect(css).toContain('.touch-hint { display: none; }');
-    expect(css).toContain('@media (pointer: coarse) { .esc-hint { display: none; } .touch-hint { display: inline; } }');
+  it('names the keys on a keyboard only; a touch screen reads the stick, the tap and the Ship button (#1379)', () => {
+    expect(html).toMatch(/<span class="tap-hint">[^<]*stick[^<]*tap[^<]*twist[^<]*the Ship button to leave\.<\/span>/);
+    expect(html).not.toMatch(/class="tap-hint">[^<]*\b(arrows|Q E|Esc|click)\b/);
+    expect(css).toContain('@media (pointer: coarse) { .keys-hint { display: none; } .tap-hint { display: inline; } }');
+    expect(css).toContain('body[data-pad] .tap-hint { display: none; }');
   });
 });

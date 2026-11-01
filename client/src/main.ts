@@ -20,6 +20,7 @@ import {
   type Move,
 } from './board';
 import { extendPath, releaseDir } from './drag';
+import { keyTip } from './touchwording';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consent';
@@ -2484,6 +2485,11 @@ for (const step of ['first', 'prev', 'next', 'last'] as const) {
   document.getElementById(`replay-${step}`)!.addEventListener('click', () => stepReplay(step));
 }
 document.getElementById('replay-live')!.addEventListener('click', liveAgain);
+for (const [id, label, key] of [['replay-prev', 'Previous move', 'Left'], ['replay-next', 'Next move', 'Right'], ['replay-live', 'Back to the live game', 'Esc']] as const) {
+  const button = document.getElementById(id)!;
+  button.title = keyTip(label, key); // a key is named on a keyboard only (#1379)
+  if (id !== 'replay-live') button.setAttribute('aria-label', button.title);
+}
 replaySlider.addEventListener('input', () => showPly(Number(replaySlider.value)));
 addEventListener('keydown', (e) => {
   const step = replayKey(e.key, replaying !== null, history.length > 0);
