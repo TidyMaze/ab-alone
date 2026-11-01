@@ -245,6 +245,32 @@ const CASES: Record<string, () => void> = {
     });
     expect(bossState('stalker', withData(stalker, { stalker: [1, -1] })).tell!.text).toBe('you see the boss marbles only within 1 cell of your own');
   },
+
+  swarm() {
+    // The announced wave is the tell and a mark per cell; the turns left until the evac, and a pass, in the text.
+    const swarm = newEncounter('swarm', 0);
+    const [left, , q, r] = Array.from(swarm.swarm());
+    expect(left).toBe(30);
+    expect(bossState('swarm', swarm)).toMatchObject({
+      name: 'The Swarm',
+      phases: 3,
+      tell: { kind: 'arrival', cells: [`(${q},${r})`], text: `a swarm marble lands on (${q},${r}) after your move; the evac comes in 30 boss turns` },
+      marks: [{ kind: 'arrival', cell: `(${q},${r})` }],
+    });
+    const state = (data: number[]) => bossState('swarm', withData(swarm, { swarm: data })).tell;
+    expect(state([1, 1, 0, -4, 1, -4])).toEqual({
+      kind: 'arrival',
+      cells: ['(0,-4)', '(1,-4)'],
+      text: 'swarm marbles land on (0,-4), (1,-4) after your move; the evac comes in 1 boss turn; the swarm passed its last turn',
+    });
+    expect(state([0, 0])).toEqual({ kind: 'arrival', cells: [], text: 'the evac has come' });
+    expect(state([3, 0])!.text).toBe('the evac comes in 3 boss turns'); // a full rim: no arrival
+    // MCP plays it: the boss replies, and its first wave landed.
+    swarm.play(swarm.legal_moves().slice(0, 8));
+    expect(Array.from(swarm.swarm_landed())).toEqual([q, r]);
+    swarm.play(swarm.boss_move());
+    expect(swarm.swarm()[0]).toBe(29);
+  },
 };
 
 describe('boss state (docs/specs/mcp.md section 4.3)', () => {
@@ -253,7 +279,7 @@ describe('boss state (docs/specs/mcp.md section 4.3)', () => {
   });
 
   test('The Ballast Mind joins the boss list (#572), The Alien (#588), The Rail Yard (#626), The Magnetizer (#645), The Pulsar (#675), The Overseer (#635) The Assembly Line (#744), The Unstable Core (#751) and The Dual Room (#947) are in', () => {
-    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker']);
+    expect(bossIds()).toEqual(['echo', 'hull', 'choir', 'chaplain', 'ballast', 'alien', 'railyard', 'magnetizer', 'pulsar', 'overseer', 'assembly', 'core', 'dual', 'stalker', 'swarm']);
   });
 
   test('every boss of the engine has its case', () => {
