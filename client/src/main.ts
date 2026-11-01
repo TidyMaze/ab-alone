@@ -55,7 +55,7 @@ import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
-import { COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
+import { COUNTER_MAX, drawCounter, drawShell, eggGlow, eggText, parseEggs, shellTint } from './alien';
 import {
   CHEVRON_COLOR,
   CHEVRON_SHAPE,
@@ -184,7 +184,7 @@ import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
 import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, type HubKit } from './tablezero';
-import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
+import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { toleranceWindow } from './matchmaking';
@@ -419,6 +419,9 @@ const store = (() => {
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
+// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation (`navigator.webdriver`, the e2e
+// build) and in a dev build, so the room specs and its code live on. A production page ignores it.
+const keepRoom = (navigator.webdriver || import.meta.env.DEV) && new URLSearchParams(location.search).get('scene') === 'room';
 // Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
@@ -457,7 +460,7 @@ const loader = new KTX2Loader().detectSupport(renderer);
 // as soon as the scene is. mountBay takes them when the scene exists.
 const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader, hasNormalMaps(tier));
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
-  if (!loadsTexture(tonal ? 'tonal' : 'pbr', name)) return null;
+  if (!loadsTexture(tonal ? 'tonal' : 'pbr', name, keepRoom)) return null; // the terrace draws no board or plate (#1370)
   if (/-normal\.ktx2$/.test(name) && !hasNormalMaps(tier)) return null; // the low tier fetches and draws no normal map (#849)
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
@@ -484,6 +487,8 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
 // the scene, and takes these requests. Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of
 // skins.ts and glassskins.ts, ambientCG PBR materials (CC0), opaque and in their own colours. The maps are square and turn
 // once round the sphere, whose circumference is twice the way from pole to pole.
+// The default skins, drawn on the terrace by its own marbles (#1314): their maps are asked for when the room opens only (#1370).
+const TERRACE_SKINS: readonly string[] = [DEFAULT_SKIN, DEFAULT_GLASS_SKIN];
 const SKIN_MAPS = {
   albedo: ['map', true],
   normal: ['normalMap', false],
@@ -500,7 +505,7 @@ const skinMap = (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Pro
       return map;
     }),
   );
-for (const s of [skinById(skin), glassSkinById(glass)]) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
+for (const s of [skinById(skin), glassSkinById(glass)]) if (asksSkinMaps(keepRoom, s.id, TERRACE_SKINS)) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
 const [
   deckAlbedo,
   deckRoughness,
@@ -1430,10 +1435,10 @@ applyDeck(deck);
 // A skin's material is built flat the first time it is worn and dressed in every map its asset ships as they load: a press
 // never waits, and a page that keeps the default skins loads two sets of maps, not twenty (the requests are made above).
 const dressed = new WeakMap<THREE.Material, Promise<void>>(); // when a skin's maps are on
-function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset: string; tile: number; extra: readonly Extra[] }): void {
+function dress(look: THREE.MeshStandardMaterial, { id, asset, tile, extra }: { id: string; asset: string; tile: number; extra: readonly Extra[] }): void {
   dressed.set(
     look,
-    Promise.all(skinKinds(extra).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
+    Promise.all((asksSkinMaps(keepRoom, id, TERRACE_SKINS) ? skinKinds(extra) : []).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
       Object.assign(look, Object.fromEntries(loaded));
       if (tonal) return; // one tone and a soft highlight, no map to wait for (#1138)
       if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
@@ -1751,11 +1756,11 @@ function ventAt(p: { x: number; z: number }): THREE.Group {
   return vent;
 }
 
-// The Alien tell (#588, game-design.md section 7.7): a pale egg on its cell and, above it, a counter of the player turns
+// The Alien tell (#588, game-design.md section 7.7): an egg on its cell and, above it, a counter of the player turns
 // left before it hatches: a sprite, so it always faces the camera, drawn over the marbles (alien.ts, 3:1 and more). On 1
 // a glow under the egg pulses once a second, held still under reduced motion (the animation loop sets it).
 const eggGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).translate(0, 0.23, 0);
-const eggMaterial = new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.55 });
+const eggMaterial = new THREE.MeshStandardMaterial({ roughness: 0.55 });
 const eggGlowGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
 const eggGlowMaterial = new THREE.MeshBasicMaterial({ color: BONE, transparent: true, depthWrite: false });
 const counterMaterials = Array.from({ length: Math.max(COUNTER_MAX, TRAIN_LEAD) }, (_, i) => {
@@ -1765,6 +1770,22 @@ const counterMaterials = Array.from({ length: Math.max(COUNTER_MAX, TRAIN_LEAD) 
   map.colorSpace = THREE.SRGBColorSpace;
   return new THREE.SpriteMaterial({ map, depthTest: false });
 });
+// The egg is the Alien's colour, the worn shell skin's (#1402), speckled and veined so it is no marble: its map is drawn again
+// when that colour changes, and the glow takes the marks' tint.
+const eggShellCanvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+const eggShellMap = new THREE.CanvasTexture(eggShellCanvas);
+eggShellMap.colorSpace = THREE.SRGBColorSpace;
+eggMaterial.map = eggShellMap;
+let eggShade = -1;
+function dressEggs(): void {
+  const c = marbleMaterials[1]!.color.getHex(); // the Alien is the shell side in a fight
+  const shade = c === 0xffffff ? skinById(skin).color : c; // a mapped skin is white until its albedo: the mean colour stands for it
+  if (shade === eggShade) return;
+  eggShade = shade;
+  drawShell(eggShellCanvas.getContext('2d')!, shade, 128);
+  eggShellMap.needsUpdate = true;
+  eggGlowMaterial.color.setHex(shellTint(shade));
+}
 let eggsDrawn: { cell: Axial; left: number; glow: boolean }[] = []; // read by the e2e tests
 // The Rail Yard tell (#626, game-design.md section 7.8): rails under each announced line, out past both edges onto the
 // deck, an amber chevron on both edges and on every cell of the line, pointing the way the train runs (railyard.ts, 3:1
@@ -3492,9 +3513,6 @@ const showBoard = (): void => {
 /** The props of the boss kit (kit_boss.glb) the fights wear on the terrace: the Pulsar's pylon and its core, the Assembly press, the Rail Yard's buffer stop. */
 let bossKit: Record<'pylon' | 'core' | 'press' | 'buffer', THREE.Mesh> | null = null;
 const terraceProp = (name: keyof NonNullable<typeof bossKit>): THREE.Mesh | null => (sceneRenderer.terraceOn && bossKit ? bossKit[name] : null);
-// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation (`navigator.webdriver`, the e2e
-// build) and in a dev build, so the room specs and its code live on. A production page ignores it.
-const keepRoom = (navigator.webdriver || import.meta.env.DEV) && new URLSearchParams(location.search).get('scene') === 'room';
 let terraceFailed = false; // the arena files did not load: the board stands on a plain background, the discs drawn as they are
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last' | 'hint', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
@@ -3841,6 +3859,7 @@ function refresh(): void {
     onMarble(cellIndex(...cell), ring);
     blinking = { materials: fadable(marbleAt.get(cellIndex(...cell))![0]!), ring };
   }
+  dressEggs();
   eggsDrawn = eggs.map(({ cell: [q, r], left }) => {
     const p = axialTo3D(q, r);
     const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg' });
@@ -4740,6 +4759,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__crackDecalShown = (shown: boolean) => (crackMaterial.visible = shown);
 // Used by the browser checks to find The Alien's eggs as drawn: their cell, counter and glow on 1 (#588), and the glow.
 (window as unknown as Record<string, unknown>).__eggs = () => eggsDrawn;
+(window as unknown as Record<string, unknown>).__eggShade = () => eggShade;
 (window as unknown as Record<string, unknown>).__eggGlow = () => eggGlowMaterial.opacity;
 // Used by the browser checks to find The Rail Yard's trains as drawn (#626): each line, its cells from the entry and
 // its counter, and the trains passing now, with where their front is.

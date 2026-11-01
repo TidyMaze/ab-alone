@@ -24,7 +24,7 @@ test('the tonal look requests no skin, cell or plate map and draws the board (#1
 });
 
 test('the pbr look still requests the skin maps and has more textures than the tonal one (#1138)', async ({ page, browser }) => {
-  const pbr = await filesLoaded(page, 'look=pbr');
+  const pbr = await filesLoaded(page, 'look=pbr&scene=room'); // the room's skin maps wait for the room (#1370)
   expect(pbr.files).toContain('skin-Leather027-albedo.ktx2');
   const other = await (await browser.newContext()).newPage();
   const tonal = await filesLoaded(other, 'look=tonal');

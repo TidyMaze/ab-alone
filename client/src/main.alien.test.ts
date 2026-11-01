@@ -3,6 +3,8 @@ import * as THREE from 'three/webgpu';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Axial } from './board';
 import { boot, type Game } from './test/harness';
+import { SKINS } from './skins';
+import { tonalMarble } from './look';
 
 // The Alien on the harness (#588, game-design.md section 7.7): its eggs drawn on their cells with a counter above
 // each, facing the camera, the pulse on 1, the crush and the hatch. ?bot=off plays both sides from a fixture: fight
@@ -89,6 +91,27 @@ describe('main.ts The Alien (#588)', () => {
     expect(egg).toHaveLength(1);
     expect(counters[0]!.position.y).toBeGreaterThan(egg[0]!.position.y);
     expect([counters[0]!.position.x, counters[0]!.position.z]).toEqual([egg[0]!.position.x, egg[0]!.position.z]);
+  });
+
+  it('lays an egg in the Alien colour of the worn shell skin, with a shell map of its own, never the pale of my marbles (#1402)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off&scene=room', { reducedMotion: true });
+    fightAlien(game);
+    plies(game, 4);
+    const egg = scene().getObjectByName('egg') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+    expect(egg.material.map).toBeInstanceOf(THREE.CanvasTexture);
+    expect(game.hook<number>('__eggShade')).toBe(SKINS.find((s) => s.id === 'scarab')!.color);
+    game.openSettings();
+    byId('setting-shell-skin').click(); // Black porcelain
+    game.settle();
+    expect(game.hook<number>('__eggShade')).toBe(SKINS.find((s) => s.id === 'obsidian')!.color);
+  });
+
+  it('takes the tonal tone of the Alien in the tonal look (#1402)', async () => {
+    const game = await boot('?bot=off&scene=room&look=tonal', { reducedMotion: true });
+    fightAlien(game);
+    plies(game, 4);
+    expect(game.hook<number>('__eggShade')).toBe(tonalMarble(1, SKINS.find((s) => s.id === 'scarab')!.color));
   });
 
   it('the counter goes down after each player move, pulses on 1, then the egg hatches into an Alien marble', async () => {
