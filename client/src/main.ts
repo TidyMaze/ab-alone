@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_dungeon, world_lairs, world_path, world_push, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_dungeon, world_lairs, world_path, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -5379,7 +5379,6 @@ const openWorld = new OpenWorldMode(
       meshoptLoader(),
     ),
   () => reducedMotion(),
-  (seed, troop, enemies, broken) => world_push(seed, troop, enemies, broken),
   openWorldSaves,
   (seed) => Int32Array.from(world_lairs(seed)),
   (seed, lair) => {

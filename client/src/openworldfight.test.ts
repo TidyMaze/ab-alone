@@ -2,7 +2,7 @@ import './test/openworldwasm';
 import { describe, expect, it } from 'vitest';
 import { type Axial } from './board';
 import { CHUNK, World } from './openworld';
-import { FightState, readPush } from './openworldfight';
+import { FightState } from './openworldfight';
 
 // Grass at height 1 in the square -3..3 of chunks; the generated enemies (5,5) and (6,5) start in chunk (0,0).
 function grass(cx: number, cy: number): Uint8Array {
@@ -108,26 +108,22 @@ describe('the enemies of the fight', () => {
     expect(back.beaten).toBe(1);
   });
 
-  it('reads the push of the bridge: no push, a slide, a water and an edge ejection', () => {
-    expect(readPush([])).toBeNull();
-    expect(readPush(Int32Array.of(0, 0, 0, 2, 1, 0, 0, 0, 1, 2, 0, 1, 0))).toEqual({
-      troop: [[1, 0], [0, 0]],
-      enemies: [[2, 0]],
-      ejected: [],
-      dir: [1, 0],
+  it('plays the troop push on the overlay: no push, a slide, an ejection off the world', () => {
+    const w = new World(grass, (cx, cy) => (cx === 0 && cy === 0 ? Int32Array.of(1, 0) : new Int32Array()));
+    const fight = new FightState();
+    expect(fight.troopPush(w, 9, [[0, 0]], [])).toBeNull();
+    const slid = fight.troopPush(w, 9, [[0, 0], [-1, 0], [-2, 0]], []);
+    expect(slid).toEqual({
+      from: [[0, 0], [-1, 0], [-2, 0]],
+      foes: [[1, 0]],
+      push: { troop: [[1, 0], [0, 0], [-1, 0]], enemies: [[2, 0]], ejected: [], dir: [1, 0] },
     });
-    expect(readPush([4, 0, 1, 3, 3, 0, 2, 0, 1, 0, 1, 4, 0, 1, 0])).toEqual({
-      troop: [[3, 0], [2, 0], [1, 0]],
-      enemies: [[4, 0]],
-      ejected: [[4, 0]],
-      dir: [1, 0],
-    });
-    expect(readPush([511, 0, 2, 2, 510, 0, 511, 0, 0, 1, 0])).toEqual({
-      troop: [[510, 0], [511, 0]],
-      enemies: [],
-      ejected: [[511, 0]],
-      dir: [1, 0],
-    });
+    expect(fight.chunkEnemies(w, 0, 0)).toEqual([[2, 0]]);
+    expect(fight.nearHero(w, [0, 0])).toEqual([[2, 0]]);
+    // The world ends at q = 511: the enemy on (511,0) is pushed off it.
+    const edge = new World(grass, (cx, cy) => (cx === 31 && cy === 0 ? Int32Array.of(511, 0) : new Int32Array()));
+    const out = new FightState().troopPush(edge, 9, [[510, 0], [509, 0]], []);
+    expect(out!.push.ejected).toEqual([[511, 0]]);
   });
 
   it('an enemy on a cell no generated enemy starts on is added to the overlay', () => {

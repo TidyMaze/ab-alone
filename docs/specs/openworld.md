@@ -148,9 +148,11 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   blocked by the current enemies (not by the generated ones of its own chunk), the view draws them,
   and a push redraws them. The overlay is plain data: `toJSON` and `FightState.fromJSON` (the save).
   A new entry starts a fresh overlay.
-- **Bridge**: `world_push(seed, troop, enemies, broken)` (`crates/abalone-wasm/src/world.rs`, encoding in
-  `crates/abalone-wasm/src/lib.rs`) plays the push after each step on the hero and the troop, with the
-  enemies within 10 cells of the hero. Its answer is empty when no push is legal.
+- **Bridge**: `WorldFight.troop_push(seed, troop, chunks, broken)` (`crates/abalone-wasm/src/world.rs`, rule in
+  `Overlay::troop_push`, `crates/abalone-core/src/worldoverlay.rs`) plays the push after each step on the hero,
+  the troop and the overlay, with the enemies within `WorldFight.push_reach()` (10) cells of the hero. It
+  gives the troop, the enemies before and after, the ejected one and the direction, or nothing when no push
+  is legal.
 - **Data attributes** of `body`, next to `openworldAt` and `openworldTroop`: `openworldEnemies` (the
   enemies drawn in the loaded chunks), `openworldBeaten` (the ejected enemies) and `openworldPush`
   (the pushes played, one more at each push).

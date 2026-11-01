@@ -475,7 +475,23 @@ test('Q and E turn the Open world camera round the hero, R goes back, and the tu
   await expect.poll(yaw).toBe('-30');
   await page.keyboard.press('q');
   await expect.poll(yaw).toBe('30');
-  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBeDefined(); // written after the frame
+  // The save of this turn is written after the frame: wait for the stored yaw itself, not for any earlier save (#1340).
+  const stored = () =>
+    page.evaluate(
+      () =>
+        new Promise<number | null>((done, fail) => {
+          const open = indexedDB.open('ab-alone', 1);
+          open.onerror = () => fail(open.error);
+          open.onsuccess = () => {
+            const get = open.result.transaction('game', 'readonly').objectStore('game').get('openworld:7');
+            get.onsuccess = () => {
+              open.result.close();
+              done(get.result ? Math.round(((get.result as { yaw: number }).yaw * 180) / Math.PI) : null);
+            };
+          };
+        }),
+    );
+  await expect.poll(stored).toBe(30);
   await page.reload();
   await page.locator('canvas').waitFor();
   await openModes(page);
