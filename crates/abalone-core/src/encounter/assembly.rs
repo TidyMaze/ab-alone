@@ -232,17 +232,14 @@ pub fn last_belts(enc: &Encounter) -> Vec<Carry> {
 }
 
 /// What the boss search sees after `mover` played from `before` to `after`: on a player ply, the
-/// belts in the phase of the root; nothing on a boss ply. Seed 0 for the strikes.
-fn assembly_step(
-    enc: &Encounter,
-    _before: &Board,
-    mover: Player,
-    after: Board,
-) -> (Board, [u8; 2]) {
+/// belts in the phase the tree's credits reach at the start of that ply (`Encounter::phase_after`,
+/// as the encounter takes the phase at the start of the turn); nothing on a boss ply. Seed 0 for
+/// the strikes.
+fn assembly_step(enc: &Encounter, before: &Board, mover: Player, after: Board) -> (Board, [u8; 2]) {
     if mover == Player::White {
         return (after, [0, 0]);
     }
-    let out = hook(&after, enc.phase() as u8, 0);
+    let out = hook(&after, enc.phase_after(before) as u8, 0);
     let [black, white] = crate::encounter::losses(&after, &out);
     (out, [white, black])
 }
