@@ -62,5 +62,8 @@ The short version:
 16. Tickets are taken by priority, mainly FIFO, from importance and age (owner, 2026-11-01): `P0` and
     a red `main` first, then the oldest issue. A bug or a `P1` counts as 3 days older, a `P3` as 3
     days younger. Skipping one needs a comment saying why (CONTRIBUTING 6.3).
+17. React to pings (owner, 2026-11-01): an `@mention`, an assignment or a review request on an issue or PR gets an
+    answer on that issue or PR, the same session. A lead agent checks for them while it works, it does not wait for its
+    owner to relay them. Post `taking it` on an issue in the same step as starting work, so nobody takes it twice.
 
 Setup, checks and e2e commands: [CONTRIBUTING.md section 13](CONTRIBUTING.md#13-local-setup-and-checks).
