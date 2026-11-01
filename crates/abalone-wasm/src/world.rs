@@ -50,6 +50,15 @@ pub fn world_enemies(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
         .collect()
 }
 
+/// The boss lairs of the world `seed`: `q, r` pairs, lair 0 first (docs/specs/openworld.md section 7).
+#[wasm_bindgen]
+pub fn world_lairs(seed: u32) -> Vec<i32> {
+    world::lairs(u64::from(seed))
+        .into_iter()
+        .flat_map(|(q, r)| [q, r])
+        .collect()
+}
+
 /// The troop's push of the Open world (docs/specs/openworld.md section 4) on the world `seed`: `troop`
 /// is the hero's cell then the troop's, `enemies` the enemy marbles near the hero, all `q, r` pairs.
 /// Empty when no push is legal; else `[ejected_q, ejected_r, ejected_kind, ntroop, ...troop, nenemies,
@@ -152,6 +161,17 @@ mod tests {
         }
         assert!(found);
         assert!(world_enemies(5, 32, 0).is_empty());
+    }
+
+    #[test]
+    fn the_lairs_are_q_r_pairs_that_match_the_core() {
+        let flat = world_lairs(7);
+        let lairs: Vec<(i32, i32)> = world::lairs(7);
+        assert_eq!(flat.len(), 6);
+        assert_eq!(
+            flat,
+            lairs.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
+        );
     }
 
     #[test]

@@ -4,7 +4,7 @@
 import type * as THREE from 'three/webgpu';
 import { DIRECTIONS, type Axial } from './board';
 import { arrowCell } from './hubview';
-import { blocked, breakable, chunkOf, Hero, World } from './openworld';
+import { blocked, breakable, chunkOf, Hero, neighbours, same, World } from './openworld';
 import { FightState, readPush } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
@@ -133,6 +133,9 @@ export class OpenWorldMode {
   private seed = 0;
   private fight = new FightState();
   private pushes = 0;
+  /** The boss lairs of the world entered, by number, and the numbers of the ones beaten (#1170). */
+  private lairs: Axial[] = [];
+  private beaten: number[] = [];
   private dirty = false;
   /** Whether the world changed since its last save, and how many saves the page has stored (`openworldSaved`, #968). */
   private unsaved = false;
@@ -159,6 +162,9 @@ export class OpenWorldMode {
     private readonly reduced: () => boolean,
     private readonly push: TroopPush,
     private readonly saves: WorldSaves,
+    /** The boss lairs of a seed's world: `q, r` pairs (the bridge's `world_lairs`), and what starts a lair, given its seed and number. */
+    private readonly lairsOf: (seed: number) => Int32Array = () => new Int32Array(),
+    private readonly onLair: (seed: number, lair: number) => void = () => {},
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -182,6 +188,9 @@ export class OpenWorldMode {
     if (saved) world.restore(saved.broken); // before any cell is read: the broken obstacles stay broken (#1147)
     this.fight = saved ? FightState.fromJSON(saved.fight) : new FightState();
     this.pushes = 0;
+    const flatLairs = this.lairsOf(seed);
+    this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
+    this.beaten = saved ? [...saved.lairs] : [];
     const view = new OpenWorldView(world, this.fight);
     this.hero = new Hero(world, this.fight);
     if (saved) {
@@ -192,6 +201,7 @@ export class OpenWorldMode {
     view.resize(width, height);
     if (saved) view.turnTo(saved.yaw); // the camera opens at the angle the world was left at (#1026)
     view.show(this.hero.at, this.hero.troop);
+    view.setLairs(this.lairs, this.beaten);
     this.active = true;
     this.dirty = true;
     this.mark(String(seed));
@@ -224,6 +234,8 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldZoom;
     delete document.body.dataset.openworldYaw;
     delete document.body.dataset.openworldBroken;
+    delete document.body.dataset.openworldLairs;
+    delete document.body.dataset.openworldLairsBeaten;
     delete document.body.dataset.openworldDrawn;
     delete document.body.dataset.openworldAnim;
     delete document.body.dataset.openworldGlide;
@@ -412,6 +424,8 @@ export class OpenWorldMode {
   /** The hero steps to `to`, at `at` (ms); `pace` is the pace of its glide: a `tap` (a press on the screen) eases out, the steps of
    * the held arrows keep one speed (#1065). */
   private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): void {
+    const lair = this.lairs.findIndex((cell) => same(cell, to));
+    if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair);
     if (!this.hero!.step(to)) return this.lean(to, at);
     this.cruising = pace !== 'tap';
     if (this.hero!.smashed) this.view!.smash(to, this.hero!.smashed, at, this.reduced()); // an obstacle broken on the way (#1147)
@@ -426,6 +440,15 @@ export class OpenWorldMode {
     this.dirty = true;
     this.persist();
     this.mark(document.body.dataset.openworld!);
+  }
+
+  /** The hero walks onto the lair `lair` (#1170): the world is saved with the hero on the lair's entrance, the cell it came from, and
+   * left; the page starts the boss fight. */
+  private enterLair(lair: number): void {
+    const seed = this.seed;
+    this.persist();
+    this.leave();
+    this.onLair(seed, lair);
   }
 
   /** A blocked step leans the hero toward the cell it cannot take, and back: nothing under reduced motion (#1040). */
@@ -461,7 +484,7 @@ export class OpenWorldMode {
     if (!this.unsaved) return;
     this.unsaved = false;
     const { at, troop } = this.hero!;
-    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken).then((stored) => {
+    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten).then((stored) => {
       if (stored) document.body.dataset.openworldSaved = String(++this.writes);
     });
   }
@@ -495,6 +518,8 @@ export class OpenWorldMode {
     document.body.dataset.openworldPush = String(this.pushes);
     document.body.dataset.openworldZoom = String(this.view!.zoom);
     document.body.dataset.openworldBroken = String(this.world!.broken.length); // the obstacles broken (#1147)
+    document.body.dataset.openworldLairs = this.lairs.map((c) => c.join(',')).join(' ');
+    document.body.dataset.openworldLairsBeaten = this.beaten.join(' ');
     document.body.dataset.openworldYaw = String(Math.round((this.view!.yaw * 180) / Math.PI)); // the turn, in degrees (#1026)
     document.body.dataset.openworldDrawn = JSON.stringify(this.view!.drawn);
   }

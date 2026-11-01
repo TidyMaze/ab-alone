@@ -644,7 +644,7 @@ describe('the Open world save in the mode (docs/specs/openworld.md section 5, #9
     fight.apply([], [[3, 0]], [[9, 9]]);
     return fight.toJSON();
   };
-  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, broken: [], savedAt: 1 });
+  const savedWorld = (): WorldSave => ({ version: 1, seed: 7, hero: [2, 0], troop: [[1, 0], [0, 0]], fight: fightSaved(), yaw: 0, broken: [], lairs: [], savedAt: 1 });
   const withSaves = (store = memoryStore()) => {
     const saves = worldSaves(store, 1);
     return { store, saves, m: mode(undefined, undefined, undefined, undefined, undefined, saves) };

@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_push, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_lairs, world_push, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -2079,6 +2079,7 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPale
 let hover: Axial | null = null;
 let hub: HubController | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
+let lairFrom: { seed: number; lair: number } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170)
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
 
 // The bot thinks in a worker so the page never freezes. ?bot=off gives the two-player board back
@@ -2963,6 +2964,7 @@ function medalNote(boss: { id: string }): string {
     const turns = playerTurns(history.length);
     const result: MedalResult = recordMedal(store, boss.id, turns);
     medalSeen = { game: engine, note: medalLine(result, result === 'kept' ? bestTurns(store, boss.id)! : turns) };
+    if (lairFrom) void openWorldSaves.beat(lairFrom.seed, lairFrom.lair); // the lair is beaten in the Open world too (#1170)
   }
   return medalSeen.note;
 }
@@ -2975,7 +2977,8 @@ function hud(extra = ''): void {
 }
 function drawHud(extra = ''): void {
   syncReplay();
-  backButton.hidden = !roomOf || engine.status() === 0; // once the game a hub room started is over (#522)
+  backButton.hidden = !(roomOf || lairFrom) || engine.status() === 0; // once the game a hub room or a lair started is over (#522, #1170)
+  backButton.textContent = lairFrom ? 'Back to the Open world' : 'Back to the ship';
   if (hub || royale) document.getElementById('boss-bar')!.hidden = true; // no boss there (#814)
   if (hub) {
     delete document.body.dataset.over; // no end light over the hub
@@ -4293,7 +4296,8 @@ newGameButton.disabled = false; // listener ready (#146)
 const bossButton = document.getElementById('boss-fight')!;
 const bossList = document.getElementById('boss-list')!;
 const retryButton = document.getElementById('boss-retry')!;
-function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }): void {
+function startBoss(id: string, seed: number, daily?: { day: string; attempt: number }, resumeFrom?: { engine: Engine | Encounter; moves: number[][] }, lair: typeof lairFrom = null): void {
+  lairFrom = lair; // a fight picked in a menu, a door or the daily is no lair's (#1170)
   leaveHub();
   worker = botWorker; // the boss answers, after the hub's hot-seat table too (#522)
   stopAnalysis();
@@ -4384,7 +4388,7 @@ addEventListener('keydown', (e) => {
 addEventListener('pointerdown', (e) => {
   if (goalOpen && !within(goalSheet, e.target) && !within(goalButton, e.target)) closeGoal();
 });
-retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
+retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom))); // a lair's retry stays the lair's (#1170)
 
 // The hub (#521, game-design.md section 3.5): Ship draws the map of the saved deck, in that deck's look, with the
 // player's glass marble on the saved cell. A click on a neighbour cell or an arrow key rolls it one cell (hub.ts step),
@@ -4441,6 +4445,12 @@ function startLocal(bot: boolean): void {
 backButton.addEventListener('click', () => {
   leaveOnline();
   leaveRoyale();
+  if (lairFrom) {
+    const { seed } = lairFrom;
+    lairFrom = null;
+    void openWorld.open(seed, innerWidth, innerHeight); // the world as the lair left it: the hero on the entrance (#1170)
+    return;
+  }
   enterHub(roomOf!);
 });
 function leaveHub(): void {
@@ -4924,6 +4934,11 @@ const openWorld = new OpenWorldMode(
   () => reducedMotion(),
   (seed, troop, enemies, broken) => world_push(seed, troop, enemies, broken),
   openWorldSaves,
+  (seed) => Int32Array.from(world_lairs(seed)),
+  (seed, lair) => {
+    const ids = boss_ids();
+    startBoss(ids[lair % ids.length]!, crypto.getRandomValues(new Uint32Array(1))[0]!, undefined, undefined, { seed, lair }); // a lair starts the normal boss fight (#1170)
+  },
 );
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
 async function enterOpenWorld(): Promise<void> {
@@ -5124,7 +5139,7 @@ function royaleHud(game: Royale): void {
   }
   holdButton.disabled = end !== null || !canOrder();
   royaleInviteButton.hidden = royaleNet !== null;
-  backButton.hidden = !roomOf || end === null;
+  backButton.hidden = !(roomOf || lairFrom) || end === null;
 }
 // A press on one of the player's marbles selects it, a press on a target locks that move as the order and plays the
 // round (#611). Once the game is over a press does nothing.

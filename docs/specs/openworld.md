@@ -144,7 +144,7 @@ The world (seed), the hero and troop cells, and the enemy groups beaten are save
 `ab-alone` database next to the local game and the run (`client/src/openworldsave.ts`, #968). No library: the `idb.ts` store.
 
 **What is saved.** One record per seed, under the key `openworld:<seed>`:
-`{ version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], savedAt }`, where `fight` is the
+`{ record, version, seed, hero: [q, r], troop: [[q, r], ...], fight: { removed, added, beaten }, broken: [[q, r], ...], lairs: [n, ...], yaw, savedAt }`, where `fight` is the
 `FightState` of `openworldfight.ts` (the generated enemies a push moved away, the enemies on other cells, the beaten count).
 The last world played is kept apart under `openworld:last` (`{ seed }`).
 
@@ -163,6 +163,10 @@ openworld-terrain.md section 6) is not loaded: its cells would mean something el
 shape, cells that are not integers, more troop marbles than the troop holds, another seed under the key) is not loaded
 either (a bad `fight` makes a bad record). Both are deleted, and the world starts on the spawn.
 
+**Record versions.** `record` 3 adds `lairs`, the numbers of the boss lairs beaten (section 7). A record of version 1 (no `record`
+field) or 2 loads with no lair beaten, so an old save is kept; an unknown later version, or a `lairs` that is not a list of
+whole numbers, is deleted like any garbage.
+
 ## 6. Tests
 
 Engine (`abalone-core`): the same seed gives the same chunk in any order; the spawn clearing is
@@ -174,3 +178,20 @@ with the Playwright MCP before its PR, with a screenshot.
 Test hooks, on a webdriver page only: `window.__openworldFixture({ hero, troop, enemies })` puts the
 hero, the troop and the enemies of the loaded square (the generated ones are hidden), and
 `window.__openworldEnemies()` gives the enemies near the hero. The e2e push test uses them.
+
+## 7. Boss lairs (#1170, epic #1177)
+
+The Open world has a goal: three landmark lairs, each a normal boss fight.
+
+- **Placement** is seeded world generation in Rust (`world::lairs(seed)`, bridge `world_lairs(seed)`, `q, r` pairs, lair 0 first).
+  Lair `k` is drawn in the `k`-th third of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
+  six neighbours are open ground on the world and it is at least 150 cells from the spawn (`LAIR_MIN`). It reads the terrain, never
+  changes it, so `WORLD_VERSION` does not move.
+- **Look.** A tall pillar on a plinth on the lair's cell, gold while the lair is unbeaten, green once beaten.
+- **Enter.** Rolling onto the lair's cell from a neighbour starts the boss fight of the same number in the roster (`boss_ids()`),
+  the normal fight with a random seed. The world is left with the hero on the entrance (the cell it came from).
+- **Win.** The medal is recorded in `ab-alone.medals` as for any boss win, and the lair is added to `lairs` of the world's save.
+  "Back to the Open world" resumes the world on the entrance with the lair shown beaten.
+- **Loss.** "Back to the Open world" returns the hero to the lair's entrance, the lair unbeaten. Retry stays the lair's fight.
+- **Browser checks.** `body[data-openworld-lairs]` lists the lair cells (`q,r` separated by spaces) and `data-openworld-lairs-beaten`
+  the numbers beaten; `__openworldFixture` stands the hero next to a lair.
