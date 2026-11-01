@@ -48,12 +48,12 @@ const SODIUM = 0xd9822b;
 const CYAN = 0x7fd6e8;
 // A point on the rim's top, 2 cells from the middle of its left side at each end toward the corner on the x axis, clear
 // of any marble: the side facing 150 degrees for the near half (+z, side 1's end), 210 degrees for the far half (-z,
-// side 2's), on the screen. Mid-side the near half's bare metal mirrors the bay's cyan strips (contrast 1.7 against its
-// own light, #1309); toward the corner it does not (4.5).
-const rimPoint = (page: Page, end: 'near' | 'far') => {
+// side 2's), on the screen. `middle` is the middle of the side itself: the near half's unlit metal there glowed with the
+// bloom of the pedestal's cyan bars (contrast 1.7 against its own light, #1311), where toward the corner it did not (4.5).
+const rimPoint = (page: Page, end: 'near' | 'far', middle = false) => {
   const d = 4 * (Math.sqrt(3) / 2) + FRAME.margin + FRAME.rim / 2;
   const a = ((end === 'near' ? 150 : 210) * Math.PI) / 180;
-  const along = end === 'near' ? 2 : -2; // toward the corner at 180 degrees
+  const along = middle ? 0 : end === 'near' ? 2 : -2; // toward the corner at 180 degrees
   const z = d * Math.sin(a) + along * Math.cos(a);
   const r = z / (Math.sqrt(3) / 2);
   return page.evaluate(([q, rr]) => (window as any).__cellToScreen(q, rr) as { x: number; y: number }, [d * Math.cos(a) - along * Math.sin(a) - r / 2, r]);
@@ -94,13 +94,18 @@ test('the rim half at the end of the side to move lights in its colour, then goe
 
   // By place, not colour alone (world.md section 8): each half is 3:1 brighter lit than dark.
   const [near, far] = [await rimPoint(page, 'near'), await rimPoint(page, 'far')];
+  const [nearMiddle, farMiddle] = [await rimPoint(page, 'near', true), await rimPoint(page, 'far', true)];
   await expect
     .poll(async () => {
       const whiteTurn = await page.screenshot({ type: 'png' });
-      return Math.min(
-        contrastRatio(await pixel(page, blackTurn, near), await pixel(page, whiteTurn, near)),
-        contrastRatio(await pixel(page, whiteTurn, far), await pixel(page, blackTurn, far)),
-      );
+      let worst = Infinity;
+      for (const [n, f] of [[near, far], [nearMiddle, farMiddle]] as const)
+        worst = Math.min(
+          worst,
+          contrastRatio(await pixel(page, blackTurn, n), await pixel(page, whiteTurn, n)),
+          contrastRatio(await pixel(page, whiteTurn, f), await pixel(page, blackTurn, f)),
+        );
+      return worst;
     }, { timeout: 10_000 })
     .toBeGreaterThanOrEqual(3);
 
