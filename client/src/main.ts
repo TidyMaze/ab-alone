@@ -143,8 +143,11 @@ import {
   bridgeAt,
   dropAt,
   dualText,
+  otherRoom,
+  outOfTurn,
   parseDual,
   parseReturn,
+  roomTurn,
   type DualState,
 } from './dual';
 import { SWARM_TURNS, evacAt, parseSwarm, swarmText, type SwarmState } from './swarm';
@@ -1701,6 +1704,11 @@ const markGeometry = new THREE.RingGeometry(0.3, 0.42, 32).rotateX(-Math.PI / 2)
 const markMaterials = [RIM_LIGHT.glass, RIM_LIGHT.shell].map(
   (color) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }),
 );
+// The room out of turn under a dark veil until the bridge (#992), one draw call.
+const roomDim = Object.assign(
+  new THREE.InstancedMesh(crackGeometry, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6, depthWrite: false }), 37),
+  { name: 'dual-dim' },
+);
 let dualShown: DualState | null = null; // the bridge and the announced return of the last refresh
 let lowering: { start: number } | null = null; // the bridge coming down
 let bridgeY = 0; // the bridge cells' height over their place
@@ -2770,6 +2778,15 @@ function drawDual(state: DualState | null): void {
   placeBridge(lowering ? bridgeAt(performance.now() - lowering.start, false).y : 0);
   if (state) document.body.dataset.bridge = state.bridged ? (lowering ? 'lowering' : 'up') : 'void'; // read by the e2e tests
   else delete document.body.dataset.bridge;
+  const dim = otherRoom(state);
+  dim.forEach(([q, r], k) => {
+    const p = axialTo3D(q, r);
+    roomDim.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, 0.004, p.z)); // on the disc's top face, as the Stalker's veil
+  });
+  roomDim.instanceMatrix.needsUpdate = true;
+  if (dim.length > 0) marbles.add(roomDim);
+  if (state?.room != null) document.body.dataset.dualRoom = state.room === 0 ? 'south' : 'north'; // read by the e2e tests
+  else delete document.body.dataset.dualRoom;
   if (!state?.coming) return;
   const p = axialTo3D(...state.coming.cell);
   const mark = Object.assign(new THREE.Mesh(markGeometry, markMaterials[state.coming.side === glassOf() ? 0 : 1]), { name: 'return-mark' });
@@ -3804,6 +3821,11 @@ function click(q: number, r: number): void {
   if (armed) return placeAt(q, r); // only during a placement
   if (blocked(() => click(q, r))) return;
   const side = engine.board()[cellIndex(q, r)];
+  if (side === engine.to_move() && outOfTurn(dualShown, [q, r])) {
+    // The Dual Room (#992): the marbles of the room out of turn are not this turn's.
+    cue(document.body, 'refused', MOTION.fast);
+    return hud(` · ${roomTurn(dualShown!.room!)}`);
+  }
   if (side === engine.to_move()) {
     selected = toggleSelection(selected, [q, r]);
     keyDir = -1;

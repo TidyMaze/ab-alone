@@ -1,7 +1,7 @@
 // The Dual Room (#796, #947, #955, game-design.md section 7.15): two radius 3 rooms, the south one on the rows r >= 1
 // and the north one on r <= -1, the void on the row r = 0 between them, holes in the plate that the bridge's 5 cells
 // fill at the 5th ejection, coming down into place; the mark of an announced return and the returning marble dropping
-// onto its cell. Pure helpers over the bridge's records.
+// onto its cell; the room out of turn dimmed until the bridge (#992). Pure helpers over the bridge's records.
 import { cellsFor, type Axial } from './board';
 
 /** The centres of the two rooms, south then north (crates/abalone-core encounter/dual.rs). */
@@ -38,13 +38,30 @@ export const BRIDGE_MS = 1200;
 export interface DualState {
   bridged: boolean;
   coming: { side: number; cell: Axial } | null;
+  room: number | null; // the room the side to move plays in (#992), null once the bridge is up
 }
 
-/** `Encounter.dual()`: `[bridged, side, q, r]`, null for the other bosses. */
+/** `Encounter.dual()`: `[bridged, side, q, r, room]`, null for the other bosses. */
 export function parseDual(flat: ArrayLike<number>): DualState | null {
   if (flat.length === 0) return null;
-  const [bridged, side, q, r] = Array.from(flat) as [number, number, number, number];
-  return { bridged: bridged === 1, coming: side === 0 ? null : { side, cell: [q, r] } };
+  const [bridged, side, q, r, room] = Array.from(flat) as [number, number, number, number, number];
+  return { bridged: bridged === 1, coming: side === 0 ? null : { side, cell: [q, r] }, room: room < 0 ? null : room };
+}
+
+/** The cells of the room out of turn (#992), dimmed; none once the bridge is up or outside the fight. */
+export function otherRoom(state: DualState | null): Axial[] {
+  const room = state?.room ?? null;
+  return room === null ? [] : DUAL_CELLS.filter((c) => roomOf(c) !== room);
+}
+
+/** Whether `cell` is in the room out of turn: a click on its marbles is refused (#992). */
+export function outOfTurn(state: DualState | null, cell: Axial): boolean {
+  return otherRoom(state).some(([q, r]) => q === cell[0] && r === cell[1]);
+}
+
+/** Why a click in the other room is refused. */
+export function roomTurn(room: number): string {
+  return `the ${room === 0 ? 'south' : 'north'} room plays this turn`;
 }
 
 /** `Encounter.last_return()`: `[side, q, r]` of the marble that landed at the end of the last ply, null when none. */
