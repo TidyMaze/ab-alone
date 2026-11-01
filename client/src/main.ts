@@ -165,7 +165,7 @@ import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
 import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, drillLine, trainerBudget, waveLine, waveResult } from './trainer';
-import { generateKeys } from './moverecord';
+import { generateKeys, type Report } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { beatPeriod } from './coordinator';
 import { OnlineSession } from './session';
@@ -181,7 +181,7 @@ import { skinKinds, startOnce } from './skinmaps';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
-import { findMatch, toleranceWindow } from './matchmaking';
+import { toleranceWindow } from './matchmaking';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
@@ -3226,13 +3226,19 @@ function drawHud(extra = ''): void {
       .insertAdjacentHTML('beforeend', flatHudHtml({ side: engine.to_move(), status, glass: glassOf(), ejected, win, boss: boss ? flat : undefined }));
   }
   if (rankedMode === '1v1') {
-    if (status !== 0 && !rankedDone) {
-      rankedDelta = settleRanked1v1(store, online!.side, status, Array.from(engine.board()).join(','), rankedOpponentRating).delta;
-      rankedDone = true;
+    // Our report is signed and sent once, the opponent's comes over the session; the result is rated when both are in (#1317).
+    if (status !== 0 && !rankedSent && online) {
+      rankedSent = true;
+      const board = Array.from(engine.board()).join(',');
+      void online.report({ hash: board, status, rating: loadRankedProfile(store).rating1v1 }).then((report) => {
+        rankedMine = report;
+        settleRankedPair();
+      });
     }
+    const result = rankedDone ? rankedResult : status !== 0 ? 'waiting' : undefined;
     const waiting = online?.presenceOf(3 - online.side) === 'waiting';
     const queueWindow = waiting ? toleranceWindow(Date.now() - rankedQueuedAt) : undefined;
-    document.getElementById('hud')!.insertAdjacentHTML('beforeend', rankedHudHtml(loadRankedProfile(store).rating1v1, { queueWindow, delta: rankedDelta }));
+    document.getElementById('hud')!.insertAdjacentHTML('beforeend', rankedHudHtml(loadRankedProfile(store).rating1v1, { queueWindow, delta: rankedDelta, result }));
   }
   showResultCard();
   showTrainerCard();
@@ -4878,7 +4884,19 @@ let rankedMode: RankedMode | null = null;
 let rankedQueuedAt = 0;
 let rankedDelta: number | undefined;
 let rankedDone = false;
-let rankedOpponentRating = DEFAULT_RATING;
+let rankedSent = false;
+let rankedMine: Report | null = null;
+let rankedTheirs: Report | null = null;
+let rankedResult: 'refused' | undefined;
+/** Rates the 1v1 once both signed reports are in; reports that differ rate nothing (#1317). */
+function settleRankedPair(): void {
+  if (rankedMode !== '1v1' || rankedDone || !rankedMine || !rankedTheirs) return;
+  rankedDone = true;
+  const settled = settleRanked1v1(store, rankedMine, rankedTheirs);
+  rankedDelta = settled?.delta;
+  rankedResult = settled ? undefined : 'refused';
+  hud();
+}
 const inviteBox = document.getElementById('invite') as HTMLInputElement;
 const inviteLabel = document.getElementById('invite-label')!;
 const inviteCopy = document.getElementById('invite-copy') as HTMLButtonElement;
@@ -5018,6 +5036,10 @@ async function goOnline(room: string, side: number, coop?: CoopFight): Promise<v
     onCoordinator: note,
     beat: { ms: beatPeriod(location.search, navigator.webdriver), now: Date.now, every: beatEvery },
     onRematchAsk: note,
+    onReport: (report) => {
+      rankedTheirs = report;
+      settleRankedPair();
+    },
     onRematch: () => {
       selected = [];
       note();
@@ -5045,6 +5067,9 @@ const rankedButton = document.getElementById('ranked') as HTMLButtonElement;
 rankedButton.addEventListener('click', () => {
   rankedDelta = undefined;
   rankedDone = false;
+  rankedSent = false;
+  rankedMine = rankedTheirs = null;
+  rankedResult = undefined;
   rankedQueuedAt = Date.now();
   if (royale) {
     rankedMode = 'royale';
@@ -5052,13 +5077,6 @@ rankedButton.addEventListener('click', () => {
     hud();
     return;
   }
-  const rating = loadRankedProfile(store).rating1v1;
-  const matched = findMatch(
-    { peerId: 'self', rating, queuedAt: rankedQueuedAt },
-    [{ peerId: 'peer', rating: DEFAULT_RATING, queuedAt: rankedQueuedAt }],
-    rankedQueuedAt,
-  );
-  rankedOpponentRating = matched!.rating;
   playOnline();
   rankedMode = '1v1';
   hud();

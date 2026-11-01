@@ -12,6 +12,8 @@ import {
   settleRankedRoyale,
   type RankedProfile,
 } from './ranked';
+import { update1v1Elo } from './elo';
+import type { Report } from './moverecord';
 
 describe('ranked profile and badges (#687)', () => {
   let store: Storage;
@@ -178,19 +180,53 @@ describe('ranked profile and badges (#687)', () => {
       expect(rankedHudHtml(1184, { delta: -16 })).toContain('<span class="rank-delta" data-sign="down">-16 Elo</span>');
     });
 
-    it('settles a 1v1 ranked match (win, loss, draw) once state hashes agree', () => {
-      const win = settleRanked1v1(store, 1, 1, 'hash_1');
-      expect(win.delta).toBe(16);
-      expect(win.profile.rating1v1).toBe(1216);
+    it('says when a ranked result waits for the opponent report or was refused (#1317)', () => {
+      expect(rankedHudHtml(1200, { result: 'waiting' })).toContain('<span class="rank-result" data-result="waiting">Waiting for the opponent report</span>');
+      expect(rankedHudHtml(1200, { result: 'refused' })).toContain('<span class="rank-result" data-result="refused">Not rated: the reports differ</span>');
+      expect(rankedHudHtml(1200)).not.toContain('rank-result');
+    });
 
-      const loss = settleRanked1v1(store, 1, 2, 'hash_2');
-      expect(loss.delta).toBeLessThan(0);
-      expect(loss.profile.rating1v1).toBe(1216 + loss.delta);
+    const report = (side: number, status: number, rating: number, hash = 'h', game = 'g'): Report => ({
+      kind: 'report',
+      game,
+      hash,
+      status,
+      side,
+      rating,
+      pub: `key${side}`,
+      sig: 's',
+    });
 
-      const beforeDraw = loss.profile.rating1v1;
-      const draw = settleRanked1v1(store, 2, 3, 'hash_3', beforeDraw);
-      expect(draw.delta).toBe(0);
-      expect(draw.profile.rating1v1).toBe(beforeDraw);
+    it('settles a 1v1 ranked match (win, loss, draw) from both sides reports, with the opponent real rating (#1317)', () => {
+      const win = settleRanked1v1(store, report(1, 1, 1200), report(2, 1, 1200));
+      expect(win!.delta).toBe(16);
+      expect(win!.profile.rating1v1).toBe(1216);
+
+      // A stronger opponent: the loss costs less than 16.
+      const loss = settleRanked1v1(store, report(1, 2, 1216), report(2, 2, 1400));
+      expect(loss!.delta).toBe(update1v1Elo(1216, 1400, 0).deltaA);
+      expect(loss!.delta).toBeGreaterThan(-16);
+      expect(loss!.profile.rating1v1).toBe(1216 + loss!.delta);
+
+      const before = loss!.profile.rating1v1;
+      const draw = settleRanked1v1(store, report(2, 3, before), report(1, 3, before));
+      expect(draw!.delta).toBe(0);
+      expect(draw!.profile.rating1v1).toBe(before);
+    });
+
+    it('rates nothing when the two reports differ: hash, game, result, same colour, same key, or a rating that is not our stored one', () => {
+      const mine = report(1, 1, 1200);
+      for (const theirs of [
+        report(2, 1, 1200, 'other'),
+        report(2, 1, 1200, 'h', 'other'),
+        report(2, 2, 1200), // they say they won too
+        report(1, 1, 1200), // the same colour
+        { ...report(2, 1, 1200), pub: 'key1' }, // the same key
+      ]) {
+        expect(settleRanked1v1(store, mine, theirs)).toBeNull();
+      }
+      expect(settleRanked1v1(store, report(1, 1, 999), report(2, 1, 1200))).toBeNull();
+      expect(loadRankedProfile(store)).toEqual(defaultRankedProfile());
     });
 
     it('settles a Battle Royale ranked match from final standings', () => {

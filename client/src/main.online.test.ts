@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { encodeMove, moveForClick, parseMoves, type Axial } from './board';
-import { generateKeys, signCoordinator, signHello, type Wire } from './moverecord';
+import { generateKeys, signCoordinator, signHello, type Report, type Wire } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { OnlineSession } from './session';
 import { boot, type Game } from './test/harness';
@@ -27,6 +27,7 @@ async function opponent(transport: Transport, room: string, side: number, versio
   const { Engine, engine_version } = await import('abalone-wasm');
   let engine = new Engine();
   const keys = await generateKeys();
+  const reports: Report[] = []; // the page's match reports (#1317)
   const session = new OnlineSession({
     game: room,
     side,
@@ -41,6 +42,7 @@ async function opponent(transport: Transport, room: string, side: number, versio
     },
     onMove: () => {},
     onRefuse: () => {},
+    onReport: (r) => reports.push(r),
     beat: { ms: 5000, now: Date.now, every: () => {} }, // sends the join order the coordinator migration needs
   });
   const play = async (from: Axial, to: Axial): Promise<void> => {
@@ -48,7 +50,9 @@ async function opponent(transport: Transport, room: string, side: number, versio
     engine.play(Int32Array.from(record));
     await session.send(record);
   };
-  return { session, keys, play };
+  // What this player says of the finished game: the board it sees, unless the test lies about it.
+  const report = (rating: number, hash = Array.from(engine.board()).join(',')) => session.report({ hash, status: engine.status(), rating });
+  return { session, keys, play, reports, report };
 }
 
 /** Plays a move on the page by its two clicks, then lets its slide end. */
@@ -67,6 +71,31 @@ async function hosted(url = '?bot=off') {
   const white = await opponent(game.peer()!, game.room()!, 2);
   await until(game, () => data().opponent === 'here');
   return { game, white };
+}
+
+/** Presses Ranked and seats a White opponent (#1317). */
+async function rankedHosted() {
+  const game = await boot('?bot=off');
+  game.openModes();
+  byId('ranked').click();
+  await until(game, () => data().seat === 'player');
+  const white = await opponent(game.peer()!, game.room()!, 2);
+  await until(game, () => data().opponent === 'here');
+  return { game, white };
+}
+
+/** Ends the game by threefold repetition, a draw, and waits for the page's report to reach `white`. */
+async function drawGame(game: Game, white: Awaited<ReturnType<typeof opponent>>): Promise<void> {
+  const there: Axial[][] = [[[0, 2], [0, 1]], [[0, -2], [0, -1]], [[0, 1], [0, 2]], [[0, -1], [0, -2]]];
+  for (let ply = 0; ply < 8; ply += 2) {
+    const [mine, theirs] = [there[ply % 4]!, there[(ply + 1) % 4]!];
+    click(game, mine[0]!, mine[1]!);
+    await until(game, () => white.session.signedLog.length === ply + 1);
+    await white.play(theirs[0]!, theirs[1]!);
+    await until(game, () => game.hook('__plies') === ply + 2 && game.turn() !== 'White to move'); // the HUD too (#952)
+    game.frame(5000);
+  }
+  await until(game, () => white.reports.length === 1);
 }
 
 /** The other end of the hook transport (?net=hook): what the page sends to `__netOut`, what it gets on `__netIn`. */
@@ -194,18 +223,35 @@ describe('Play online', () => {
     await until(game, () => data().opponent === 'here');
     expect(byId('hud').querySelector('.rank-queue')).toBeNull();
 
-    // End the game by threefold repetition (draw -> +0 Elo recorded in ranked profile)
-    const there: Axial[][] = [[[0, 2], [0, 1]], [[0, -2], [0, -1]], [[0, 1], [0, 2]], [[0, -1], [0, -2]]];
-    for (let ply = 0; ply < 8; ply += 2) {
-      const [mine, theirs] = [there[ply % 4]!, there[(ply + 1) % 4]!];
-      click(game, mine[0]!, mine[1]!);
-      await until(game, () => white.session.signedLog.length === ply + 1);
-      await white.play(theirs[0]!, theirs[1]!);
-      await until(game, () => game.hook('__plies') === ply + 2 && game.turn() !== 'White to move'); // the HUD too (#952)
-      game.frame(5000);
-    }
+    await drawGame(game, white);
+    // Rated only once the opponent's signed report is in (#1317).
+    expect(byId('hud').querySelector('.rank-delta')).toBeNull();
+    expect(byId('hud').querySelector('.rank-result')?.textContent).toBe('Waiting for the opponent report');
+    expect(localStorage.getItem('ab-alone.ranked')).toBeNull();
+    await white.report(1200);
+    await until(game, () => byId('hud').querySelector('.rank-delta') !== null);
     expect(byId('hud').querySelector('.rank-delta')?.textContent).toBe('+0 Elo');
+    expect(byId('hud').querySelector('.rank-result')).toBeNull();
     expect(JSON.parse(localStorage.getItem('ab-alone.ranked')!).matches).toHaveLength(1);
+    expect(white.reports).toMatchObject([{ side: 1, status: 3, rating: 1200 }]); // ours reached the opponent, signed by our key
+  });
+
+  it('Ranked rates against the opponent real rating from its report, not a default (#1317)', async () => {
+    const { game, white } = await rankedHosted();
+    await drawGame(game, white);
+    await white.report(1400);
+    await until(game, () => byId('hud').querySelector('.rank-delta') !== null);
+    const delta = Number(/^[+-]\d+/.exec(byId('hud').querySelector('.rank-delta')!.textContent!)![0]);
+    expect(delta).toBeGreaterThan(0); // a draw against a 1400 opponent pays a 1200 player
+  });
+
+  it('Ranked refuses a report that differs from ours and rates nothing (#1317)', async () => {
+    const { game, white } = await rankedHosted();
+    await drawGame(game, white);
+    await white.report(1200, 'another board');
+    await until(game, () => byId('hud').querySelector('.rank-result')?.textContent === 'Not rated: the reports differ');
+    expect(byId('hud').querySelector('.rank-delta')).toBeNull();
+    expect(localStorage.getItem('ab-alone.ranked')).toBeNull();
   });
 
   it('Ranked in Battle royale shows rank badge and updates Battle Royale Elo on placement (#711)', async () => {

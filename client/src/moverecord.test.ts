@@ -8,16 +8,51 @@ import {
   parseMissed,
   parseRecord,
   parseRematch,
+  parseReport,
   parseSync,
   signCoordinator,
   signHello,
   signMove,
   signRematch,
+  signReport,
   verifyCoordinator,
   verifyHello,
   verifyRecord,
   verifyRematch,
+  verifyReport,
 } from './moverecord';
+
+describe('signReport / verifyReport / parseReport (#1317)', () => {
+  const fields = { game: 'g', hash: '1,2,0', status: 1, side: 1, rating: 1200 };
+
+  it('signs a match report and verifies it', async () => {
+    const keys = await generateKeys();
+    const rep = await signReport(keys, fields);
+    expect(rep).toMatchObject({ kind: 'report', ...fields, pub: keys.pub });
+    expect(await verifyReport(rep)).toBe(true);
+    expect(parseReport(JSON.parse(JSON.stringify(rep)))).toEqual(rep);
+  });
+
+  it('refuses a report with any field changed, or signed by another key', async () => {
+    const keys = await generateKeys();
+    const other = await generateKeys();
+    const rep = await signReport(keys, fields);
+    for (const change of [{ game: 'h' }, { hash: 'x' }, { status: 2 }, { side: 2 }, { rating: 1300 }, { pub: other.pub }]) {
+      expect(await verifyReport({ ...rep, ...change })).toBe(false);
+    }
+  });
+
+  it('parses only well-formed reports', async () => {
+    const rep = await signReport(await generateKeys(), fields);
+    expect(parseReport(null)).toBeNull();
+    expect(parseReport('x')).toBeNull();
+    expect(parseReport({ ...rep, kind: 'rematch' })).toBeNull();
+    for (const key of ['game', 'hash', 'pub', 'sig']) expect(parseReport({ ...rep, [key]: 1 })).toBeNull();
+    for (const key of ['status', 'side', 'rating']) expect(parseReport({ ...rep, [key]: 'x' })).toBeNull();
+    expect(parseReport({ ...rep, status: 1.5 })).toBeNull();
+    expect(parseReport({ ...rep, rating: Number.NaN })).toBeNull();
+  });
+});
 
 const MOVE = [1, 0, 0, 2, 0, 0, 0, 0];
 
