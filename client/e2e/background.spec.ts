@@ -8,7 +8,8 @@ test.describe("Background luminance and decor (#432)", () => {
     await page.addInitScript(() => {
       localStorage.setItem("ab-alone.theme", "dark");
     });
-    await page.goto("./?bot=off");
+    // The room's floor behind the board: the terrace (#1314) has a sky there, so this asks for the room.
+    await page.goto("./?bot=off&scene=room");
     await page.locator("canvas").waitFor();
     await expect(page.locator("body")).toHaveAttribute("data-bay", "ready"); // the room is complete (#661)
     const draws = await page.evaluate(

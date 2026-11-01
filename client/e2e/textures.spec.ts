@@ -18,6 +18,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
   expect(transcoder.sort()).toEqual([`200 ${origin} basis_transcoder.js`, `200 ${origin} basis_transcoder.wasm`]);
   // Every texture ships as KTX2 (#700).
   expect(loaded.sort()).toEqual([
+    '200 arena.glb', // the terrace (#1314)
     '200 backdrop.ktx2',
     '200 board-albedo.ktx2', // the PBR board (#876)
     '200 board-metalness.ktx2',
@@ -43,6 +44,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 grate-metalness.ktx2',
     '200 grate-normal.ktx2',
     '200 grate-roughness.ktx2',
+    '200 kit-arena.glb', // the terrace's marks and pedestal (#1314)
     '200 plate-albedo.ktx2', // the board's plate (#772)
     '200 plate-normal.ktx2',
     '200 plate-roughness.ktx2',
