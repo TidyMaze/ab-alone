@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE, SUN, addSun, mergeByMaterial, needsRoom, sunPosition, tableZeroActive, terraceMaterial, aimSunShadow, SUN_SHADOW, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
+import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, aimSunShadow, SUN_SHADOW, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
 
 describe('Table Zero is the scene of a 1v1 game only', () => {
-  const on = { hub: false, fight: false, royale: false, run: false, room: false, ready: true };
+  const on = { hub: false, royale: false, run: false, room: false, ready: true };
   it('is on for a plain game once the arena has loaded', () => expect(tableZeroActive(on)).toBe(true));
   it('waits for the arena file', () => expect(tableZeroActive({ ...on, ready: false })).toBe(false));
-  it.each(['hub', 'fight', 'royale', 'run', 'room'] as const)('is off in %s', (k) => expect(tableZeroActive({ ...on, [k]: true })).toBe(false));
+  it.each(['hub', 'royale', 'run', 'room'] as const)('is off in %s', (k) => expect(tableZeroActive({ ...on, [k]: true })).toBe(false));
 });
 
 describe('the light of the terrace', () => {
@@ -179,11 +179,6 @@ describe('the sun soft shadow (#1364)', () => {
 });
 
 describe('the boss fights on the terrace (#1374)', () => {
-  it('keeps the room only for the boards without a slab yet: Ballast Mind and the Dual Room', () => {
-    expect(['ballast', 'dual'].map(needsRoom)).toEqual([true, true]);
-    expect(['echo', 'hull', 'swarm', 'stalker', 'pulsar'].map(needsRoom)).toEqual([false, false, false, false, false]);
-    expect(needsRoom(undefined)).toBe(false); // no fight
-  });
   it('draws the dishes as one instanced mesh that drops the vanished cells', () => {
     const material = new THREE.MeshStandardMaterial();
     const root = new THREE.Group();
@@ -203,5 +198,23 @@ describe('the boss fights on the terrace (#1374)', () => {
     dishes.getMatrixAt(1, m);
     expect(new THREE.Vector3().setFromMatrixPosition(m).x).toBe(4); // compacted: the third cell took the second place
     expect(mergeByMaterial(new THREE.Group()).getObjectByName('terrace_dishes')).toBeUndefined();
+  });
+  it('draws the slab, the plinth shadow, the posts and the dishes as a board of their own, for a bigger board to replace', () => {
+    const material = new THREE.MeshStandardMaterial();
+    const root = new THREE.Group();
+    const piece = (name: string, x: number): THREE.Mesh => {
+      const geometry = new THREE.BoxGeometry(1, 1, 1);
+      geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geometry.attributes.position!.count * 3).fill(0.5), 3));
+      const mesh = Object.assign(new THREE.Mesh(geometry, material), { name });
+      mesh.position.x = x;
+      return mesh;
+    };
+    root.add(piece('scene_slab_arena', 0), piece('scene_post_0', 1), piece('scene_cell_00', 2), piece('scene_tower_body_0', 3));
+    const merged = mergeByMaterial(root, true);
+    const board = merged.getObjectByName('terrace_board')!;
+    expect(board.children.map((c) => c.name)).toEqual(['', 'terrace_dishes']); // the slab and posts as one mesh, then the dishes
+    expect(merged.children).toHaveLength(2); // the rest of the scene, and the board
+    expect((board.children[0] as THREE.Mesh).geometry.attributes.position!.count).toBe(48); // the slab and the post
+    expect(material.color.r).toBeCloseTo(TERRACE_TINT.r); // tinted once, though it is in both groups
   });
 });

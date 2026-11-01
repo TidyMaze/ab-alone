@@ -1,452 +1,388 @@
 {
-"units": "1 = one cell spacing at the radius-4 scale; blender xy, three.js x=x z=-y; board top y=0",
+"units": "blender xy; three.js x=x z=-y; cell centres exactly x=q+r/2, y=0.866r (game coordinates), offset 0",
+"rooms": [
+[
+-2,
+4
+],
+[
+2,
+-4
+]
+],
+"void_row": "r=0 empty, bridge cells not drawn",
 "cell_mesh": "kit_cell_hex",
 "count": 74,
 "cells": [
 {
 "name": "scene_dual_cell_000",
 "x": -3.0,
-"y": 3.9141,
-"scale": 1.0
+"y": 3.4641
 },
 {
 "name": "scene_dual_cell_001",
 "x": -2.5,
-"y": 4.78013,
-"scale": 1.0
+"y": 4.33013
 },
 {
 "name": "scene_dual_cell_002",
 "x": -2.0,
-"y": 5.64615,
-"scale": 1.0
+"y": 5.19615
 },
 {
 "name": "scene_dual_cell_003",
 "x": -1.5,
-"y": 6.51218,
-"scale": 1.0
+"y": 6.06218
 },
 {
 "name": "scene_dual_cell_004",
 "x": -2.5,
-"y": 3.04808,
-"scale": 1.0
+"y": 2.59808
 },
 {
 "name": "scene_dual_cell_005",
 "x": -2.0,
-"y": 3.9141,
-"scale": 1.0
+"y": 3.4641
 },
 {
 "name": "scene_dual_cell_006",
 "x": -1.5,
-"y": 4.78013,
-"scale": 1.0
+"y": 4.33013
 },
 {
 "name": "scene_dual_cell_007",
 "x": -1.0,
-"y": 5.64615,
-"scale": 1.0
+"y": 5.19615
 },
 {
 "name": "scene_dual_cell_008",
 "x": -0.5,
-"y": 6.51218,
-"scale": 1.0
+"y": 6.06218
 },
 {
 "name": "scene_dual_cell_009",
 "x": -2.0,
-"y": 2.18205,
-"scale": 1.0
+"y": 1.73205
 },
 {
 "name": "scene_dual_cell_010",
 "x": -1.5,
-"y": 3.04808,
-"scale": 1.0
+"y": 2.59808
 },
 {
 "name": "scene_dual_cell_011",
 "x": -1.0,
-"y": 3.9141,
-"scale": 1.0
+"y": 3.4641
 },
 {
 "name": "scene_dual_cell_012",
 "x": -0.5,
-"y": 4.78013,
-"scale": 1.0
+"y": 4.33013
 },
 {
 "name": "scene_dual_cell_013",
 "x": 0.0,
-"y": 5.64615,
-"scale": 1.0
+"y": 5.19615
 },
 {
 "name": "scene_dual_cell_014",
 "x": 0.5,
-"y": 6.51218,
-"scale": 1.0
+"y": 6.06218
 },
 {
 "name": "scene_dual_cell_015",
 "x": -1.5,
-"y": 1.31603,
-"scale": 1.0
+"y": 0.86603
 },
 {
 "name": "scene_dual_cell_016",
 "x": -1.0,
-"y": 2.18205,
-"scale": 1.0
+"y": 1.73205
 },
 {
 "name": "scene_dual_cell_017",
 "x": -0.5,
-"y": 3.04808,
-"scale": 1.0
+"y": 2.59808
 },
 {
 "name": "scene_dual_cell_018",
 "x": 0.0,
-"y": 3.9141,
-"scale": 1.0
+"y": 3.4641
 },
 {
 "name": "scene_dual_cell_019",
 "x": 0.5,
-"y": 4.78013,
-"scale": 1.0
+"y": 4.33013
 },
 {
 "name": "scene_dual_cell_020",
 "x": 1.0,
-"y": 5.64615,
-"scale": 1.0
+"y": 5.19615
 },
 {
 "name": "scene_dual_cell_021",
 "x": 1.5,
-"y": 6.51218,
-"scale": 1.0
+"y": 6.06218
 },
 {
 "name": "scene_dual_cell_022",
 "x": -0.5,
-"y": 1.31603,
-"scale": 1.0
+"y": 0.86603
 },
 {
 "name": "scene_dual_cell_023",
 "x": 0.0,
-"y": 2.18205,
-"scale": 1.0
+"y": 1.73205
 },
 {
 "name": "scene_dual_cell_024",
 "x": 0.5,
-"y": 3.04808,
-"scale": 1.0
+"y": 2.59808
 },
 {
 "name": "scene_dual_cell_025",
 "x": 1.0,
-"y": 3.9141,
-"scale": 1.0
+"y": 3.4641
 },
 {
 "name": "scene_dual_cell_026",
 "x": 1.5,
-"y": 4.78013,
-"scale": 1.0
+"y": 4.33013
 },
 {
 "name": "scene_dual_cell_027",
 "x": 2.0,
-"y": 5.64615,
-"scale": 1.0
+"y": 5.19615
 },
 {
 "name": "scene_dual_cell_028",
 "x": 0.5,
-"y": 1.31603,
-"scale": 1.0
+"y": 0.86603
 },
 {
 "name": "scene_dual_cell_029",
 "x": 1.0,
-"y": 2.18205,
-"scale": 1.0
+"y": 1.73205
 },
 {
 "name": "scene_dual_cell_030",
 "x": 1.5,
-"y": 3.04808,
-"scale": 1.0
+"y": 2.59808
 },
 {
 "name": "scene_dual_cell_031",
 "x": 2.0,
-"y": 3.9141,
-"scale": 1.0
+"y": 3.4641
 },
 {
 "name": "scene_dual_cell_032",
 "x": 2.5,
-"y": 4.78013,
-"scale": 1.0
+"y": 4.33013
 },
 {
 "name": "scene_dual_cell_033",
 "x": 1.5,
-"y": 1.31603,
-"scale": 1.0
+"y": 0.86603
 },
 {
 "name": "scene_dual_cell_034",
 "x": 2.0,
-"y": 2.18205,
-"scale": 1.0
+"y": 1.73205
 },
 {
 "name": "scene_dual_cell_035",
 "x": 2.5,
-"y": 3.04808,
-"scale": 1.0
+"y": 2.59808
 },
 {
 "name": "scene_dual_cell_036",
 "x": 3.0,
-"y": 3.9141,
-"scale": 1.0
+"y": 3.4641
 },
 {
 "name": "scene_dual_cell_n000",
 "x": -3.0,
-"y": -3.9141,
-"scale": 1.0
+"y": -3.4641
 },
 {
 "name": "scene_dual_cell_n001",
 "x": -2.5,
-"y": -3.04808,
-"scale": 1.0
+"y": -2.59808
 },
 {
 "name": "scene_dual_cell_n002",
 "x": -2.0,
-"y": -2.18205,
-"scale": 1.0
+"y": -1.73205
 },
 {
 "name": "scene_dual_cell_n003",
 "x": -1.5,
-"y": -1.31603,
-"scale": 1.0
+"y": -0.86603
 },
 {
 "name": "scene_dual_cell_n004",
 "x": -2.5,
-"y": -4.78013,
-"scale": 1.0
+"y": -4.33013
 },
 {
 "name": "scene_dual_cell_n005",
 "x": -2.0,
-"y": -3.9141,
-"scale": 1.0
+"y": -3.4641
 },
 {
 "name": "scene_dual_cell_n006",
 "x": -1.5,
-"y": -3.04808,
-"scale": 1.0
+"y": -2.59808
 },
 {
 "name": "scene_dual_cell_n007",
 "x": -1.0,
-"y": -2.18205,
-"scale": 1.0
+"y": -1.73205
 },
 {
 "name": "scene_dual_cell_n008",
 "x": -0.5,
-"y": -1.31603,
-"scale": 1.0
+"y": -0.86603
 },
 {
 "name": "scene_dual_cell_n009",
 "x": -2.0,
-"y": -5.64615,
-"scale": 1.0
+"y": -5.19615
 },
 {
 "name": "scene_dual_cell_n010",
 "x": -1.5,
-"y": -4.78013,
-"scale": 1.0
+"y": -4.33013
 },
 {
 "name": "scene_dual_cell_n011",
 "x": -1.0,
-"y": -3.9141,
-"scale": 1.0
+"y": -3.4641
 },
 {
 "name": "scene_dual_cell_n012",
 "x": -0.5,
-"y": -3.04808,
-"scale": 1.0
+"y": -2.59808
 },
 {
 "name": "scene_dual_cell_n013",
 "x": 0.0,
-"y": -2.18205,
-"scale": 1.0
+"y": -1.73205
 },
 {
 "name": "scene_dual_cell_n014",
 "x": 0.5,
-"y": -1.31603,
-"scale": 1.0
+"y": -0.86603
 },
 {
 "name": "scene_dual_cell_n015",
 "x": -1.5,
-"y": -6.51218,
-"scale": 1.0
+"y": -6.06218
 },
 {
 "name": "scene_dual_cell_n016",
 "x": -1.0,
-"y": -5.64615,
-"scale": 1.0
+"y": -5.19615
 },
 {
 "name": "scene_dual_cell_n017",
 "x": -0.5,
-"y": -4.78013,
-"scale": 1.0
+"y": -4.33013
 },
 {
 "name": "scene_dual_cell_n018",
 "x": 0.0,
-"y": -3.9141,
-"scale": 1.0
+"y": -3.4641
 },
 {
 "name": "scene_dual_cell_n019",
 "x": 0.5,
-"y": -3.04808,
-"scale": 1.0
+"y": -2.59808
 },
 {
 "name": "scene_dual_cell_n020",
 "x": 1.0,
-"y": -2.18205,
-"scale": 1.0
+"y": -1.73205
 },
 {
 "name": "scene_dual_cell_n021",
 "x": 1.5,
-"y": -1.31603,
-"scale": 1.0
+"y": -0.86603
 },
 {
 "name": "scene_dual_cell_n022",
 "x": -0.5,
-"y": -6.51218,
-"scale": 1.0
+"y": -6.06218
 },
 {
 "name": "scene_dual_cell_n023",
 "x": 0.0,
-"y": -5.64615,
-"scale": 1.0
+"y": -5.19615
 },
 {
 "name": "scene_dual_cell_n024",
 "x": 0.5,
-"y": -4.78013,
-"scale": 1.0
+"y": -4.33013
 },
 {
 "name": "scene_dual_cell_n025",
 "x": 1.0,
-"y": -3.9141,
-"scale": 1.0
+"y": -3.4641
 },
 {
 "name": "scene_dual_cell_n026",
 "x": 1.5,
-"y": -3.04808,
-"scale": 1.0
+"y": -2.59808
 },
 {
 "name": "scene_dual_cell_n027",
 "x": 2.0,
-"y": -2.18205,
-"scale": 1.0
+"y": -1.73205
 },
 {
 "name": "scene_dual_cell_n028",
 "x": 0.5,
-"y": -6.51218,
-"scale": 1.0
+"y": -6.06218
 },
 {
 "name": "scene_dual_cell_n029",
 "x": 1.0,
-"y": -5.64615,
-"scale": 1.0
+"y": -5.19615
 },
 {
 "name": "scene_dual_cell_n030",
 "x": 1.5,
-"y": -4.78013,
-"scale": 1.0
+"y": -4.33013
 },
 {
 "name": "scene_dual_cell_n031",
 "x": 2.0,
-"y": -3.9141,
-"scale": 1.0
+"y": -3.4641
 },
 {
 "name": "scene_dual_cell_n032",
 "x": 2.5,
-"y": -3.04808,
-"scale": 1.0
+"y": -2.59808
 },
 {
 "name": "scene_dual_cell_n033",
 "x": 1.5,
-"y": -6.51218,
-"scale": 1.0
+"y": -6.06218
 },
 {
 "name": "scene_dual_cell_n034",
 "x": 2.0,
-"y": -5.64615,
-"scale": 1.0
+"y": -5.19615
 },
 {
 "name": "scene_dual_cell_n035",
 "x": 2.5,
-"y": -4.78013,
-"scale": 1.0
+"y": -4.33013
 },
 {
 "name": "scene_dual_cell_n036",
 "x": 3.0,
-"y": -3.9141,
-"scale": 1.0
+"y": -3.4641
 }
-],
-"room_gap_note": "rooms drawn 0.45 cells further from the void row each side (0.9 total) than spec; south room y offset +0.45, north -0.45"
+]
 }

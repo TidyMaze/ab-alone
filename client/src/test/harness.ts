@@ -276,6 +276,9 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
               }
             }
           }
+          if (url.endsWith('kit-boss.glb')) scene.add(...['kit_prop_pylon', 'kit_prop_pylon_core', 'kit_prop_press_gantry', 'kit_prop_buffer_stop'].map(piece));
+          if (url.endsWith('slab-ballast.glb')) scene.add(piece('scene_ballast_slab'), piece('scene_ballast_cell_000'));
+          if (url.endsWith('slab-dual.glb')) scene.add(piece('scene_dual_slab_n'), piece('scene_dual_cell_000'));
           if (url.endsWith('kit-arena.glb')) scene.add(...['kit_pedestal_flat', 'kit_ring_target', 'kit_arrow_target', 'kit_ring_select', 'kit_ring_lastmove'].map(piece));
           if (url.endsWith('kit-ring-hint.glb')) scene.add(piece('kit_ring_hint'));
           return { scene };

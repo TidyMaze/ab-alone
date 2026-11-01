@@ -63,6 +63,12 @@ describe('main.ts boss accents (#507)', () => {
     }
   });
 
+  it('against The Hull on the terrace the boss side keeps the plain shell: the cracking cell is the tell (#1374)', async () => {
+    const game = await boot('?bot=off');
+    fightBoss(game, 'The Hull');
+    expect(game.hook('__accents')).toEqual([]);
+  });
+
   it('The Echo, The Choir and a game outside boss mode keep the plain shell', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
@@ -76,7 +82,7 @@ describe('main.ts boss accents (#507)', () => {
 
   it('stays upright on its shell whatever the shell turn, at rest and while the shell rolls', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     fightBoss(game, 'The Hull');
     const drawn = accents(scene());
     expect(drawn.every(upright)).toBe(true);

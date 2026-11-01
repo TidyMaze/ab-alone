@@ -143,9 +143,9 @@ describe('main.ts The Assembly Line (#744)', () => {
     expect(body().beltCounter).toBe('');
   });
 
-  it('runs the side belts from P2 against the centre belt, then announces a strike per belt from P3 and slams on it', async () => {
+  it.each(['&scene=room', ''])('runs the side belts from P2 against the centre belt, then announces a strike per belt from P3 and slams on it %s', async (look) => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot(`?bot=off${look}`);
     fightAssembly(game);
     plies(game, 0, 19);
     expect(phase()).toBe('P2');
@@ -165,7 +165,7 @@ describe('main.ts The Assembly Line (#744)', () => {
     expect(body().burns).toBe('1');
     expect(body().slams).toBe('1');
     const [press] = named(scene(), 'belt-slam');
-    expect(press!.position.y).toBeGreaterThan(1);
+    expect(press!.position.y + press!.userData.base).toBeGreaterThan(1); // the gantry of the terrace stands on its base (#1374)
     game.frame(SLAM_MS / 3);
     expect(press!.position.y).toBeLessThan(0.5);
     game.frame(SLAM_MS);
