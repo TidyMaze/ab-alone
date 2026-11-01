@@ -469,3 +469,37 @@ describe('a side with no legal move passes its turn (#1301, rules.md section 7)'
     expect(value(game.legalMoves()).count).toBeGreaterThan(0);
   });
 });
+
+describe('the outcome the Open world reads for its lairs (#1292)', () => {
+  /** A real encounter whose status is Black's win. */
+  function won(boss: string, seed: number): EncounterLike {
+    const encounter = newEncounter(boss, seed);
+    return new Proxy(encounter, {
+      get(target, key) {
+        if (key === 'status') return () => 1;
+        const member = Reflect.get(target, key);
+        return typeof member === 'function' ? member.bind(target) : member;
+      },
+    });
+  }
+
+  test('no game, no outcome', () => {
+    expect(session().outcome()).toBeNull();
+  });
+
+  test('a game against the bot or a boss fight not won has the game id and no boss', () => {
+    const game = session();
+    const bot = value(game.newGame({}));
+    expect(game.outcome()).toEqual({ game: bot.game_id, boss: null });
+    const fight = value(game.newGame({ boss: 'hull' }));
+    expect(game.outcome()).toEqual({ game: fight.game_id, boss: null });
+    value(game.resign());
+    expect(game.outcome()).toEqual({ game: fight.game_id, boss: null });
+  });
+
+  test('a boss fight the agent won names its boss', () => {
+    const game = new Session(engines().factory, won, noNetwork);
+    const fight = value(game.newGame({ boss: 'choir' }));
+    expect(game.outcome()).toEqual({ game: fight.game_id, boss: 'choir' });
+  });
+});

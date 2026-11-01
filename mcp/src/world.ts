@@ -1,8 +1,9 @@
 // The Open world tools of docs/specs/mcp.md section 5: start a world from a seed, read a short window of it, walk a step or to a
 // cell. Every rule is the Rust core's, called in the client's order (`OpenWorldMode.roll` of client/src/openworldmode.ts): the map,
 // the enemies, the lairs and the path (`world_chunk`, `world_enemies`, `world_lairs`, `world_path`), the step (`world_enter`,
-// `world_trail`) and the troop's push after it (`WorldFight`). This holds the hero, the troop, the broken cells and the fight, and
-// turns the engine's codes into words.
+// `world_trail`) and the troop's push after it (`WorldFight`). This holds the hero, the troop, the broken cells, the fight and the lairs
+// beaten, saves them in the client's format (client/src/openworldsave.ts), and turns the engine's codes into words.
+import { endingLine } from '../../client/src/tally';
 import { DIRECTIONS } from './notation';
 import type { ErrorCode, Result } from './game';
 
@@ -20,8 +21,10 @@ export interface WorldRules {
   world_enter(q: number, r: number, tq: number, tr: number, terrain: number, occupied: boolean, treesNear: boolean): number;
   /** The troop after the hero steps from `(q, r)` to `(tq, tr)`: `q, r` pairs. */
   world_trail(troop: Int32Array, q: number, r: number, tq: number, tr: number): Int32Array;
-  /** The enemies of a fight as the pushes left them: a new one has no push. */
-  WorldFight: { new (): Fight; push_reach(): number };
+  /** The version of the world generator: a save of another version does not hold this world. */
+  world_version(): number;
+  /** The enemies of a fight as the pushes left them: a new one has no push, `restore` gives the fight of a save. */
+  WorldFight: { new (): Fight; restore(removed: Int32Array, added: Int32Array, beaten: number): Fight; push_reach(): number };
 }
 
 /** What the Open world uses of the bridge's `WorldFight` (abalone-core `worldoverlay`). */
@@ -29,14 +32,41 @@ export interface Fight {
   occupied(generated: Int32Array, q: number, r: number): boolean;
   around(chunks: Int32Array, q: number, r: number, radius: number): Int32Array;
   troop_push(seed: number, troop: Int32Array, chunks: Int32Array, broken: Int32Array): { troop: Int32Array; ejected: Int32Array; dir: Int32Array } | undefined;
+  removed(): Int32Array;
+  added(): Int32Array;
   beaten(): number;
+}
+
+/** The game of the session, as the lairs read it: its id, and the boss of a local boss fight the agent won, else `null`. */
+export interface Outcome {
+  game: string;
+  boss: string | null;
 }
 
 type Cell = [q: number, r: number];
 export type Direction = (typeof DIRECTIONS)[number];
 
+/** A world as the client saves it (`worldSaves().put` of client/src/openworldsave.ts, record 3), cells as `[q, r]`. */
+export interface WorldSave {
+  record?: number;
+  version: number;
+  seed: number;
+  hero: Cell;
+  troop: Cell[];
+  /** The enemies the pushes moved: the generated ones gone (`"q,r"`), the ones on other cells, the number ejected. */
+  fight: { removed: string[]; added: Cell[]; beaten: number };
+  /** The camera's turn in the client, kept as it was. */
+  yaw: number;
+  broken: Cell[];
+  /** The numbers of the lairs beaten. */
+  lairs: number[];
+  savedAt?: number;
+}
+
 export interface NewWorldInput {
   seed?: number;
+  /** Resume this save instead, its seed included. */
+  save?: WorldSave;
 }
 
 export interface WorldStateInput {
@@ -69,7 +99,9 @@ export interface WorldState {
   beaten: number;
   /** The enemy marbles inside the window. */
   enemies: string[];
-  lairs: { boss: string; cell: string; distance: number }[];
+  lairs: { boss: string; cell: string; distance: number; beaten: boolean }[];
+  /** Tally's line of the client once every lair is beaten (#1175), the world's end; absent before. */
+  ending?: string;
   window: { radius: number; rows: Row[] };
 }
 
@@ -108,6 +140,10 @@ const DELTAS: Cell[] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
 /** The terrain codes of the bridge by letter, the window's legend: water, sand, grass, rock, peak, boulder, tree, wall. */
 const LETTERS = '~sgrPotW';
 const NAMES = ['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall'];
+/** The record of the client's save (`RECORD` of client/src/openworldsave.ts) and the crew of its ending line (`MARBLES` of
+ * client/src/trainer.ts). */
+const RECORD = 3;
+const CREW = 6;
 const BOULDER = 5;
 const TREE = 6;
 const ROCK = 3;
@@ -133,6 +169,8 @@ interface Play {
   troop: Cell[];
   broken: Cell[];
   fight: Fight;
+  lairs: number[];
+  yaw: number;
 }
 
 /** The one Open world of the server. */
@@ -141,23 +179,48 @@ export class OpenWorld {
   private readonly chunks = new Map<string, Uint8Array>();
   private readonly groups = new Map<string, Cell[]>();
   private lairCells: Cell[] = [];
+  /** The lair the hero last stepped onto, its boss and the session's game then: a fight of that boss won since beats the lair. */
+  private entered: { lair: number; boss: string; before: string | null } | null = null;
 
   constructor(
     private readonly rules: WorldRules,
     private readonly bossIds: () => string[],
+    private readonly games: { outcome(): Outcome | null } = { outcome: () => null },
   ) {}
 
-  /** Starts the world of `seed`, the hero on the spawn and the troop round it, no push yet, and drops the world in progress. */
-  newWorld({ seed = 0 }: NewWorldInput): Result<WorldState> {
+  /** Starts the world of `seed`, the hero on the spawn and the troop round it, no push yet, or resumes `save`, and drops the world in
+   * progress. A save of another world version is refused and the world in progress kept. */
+  newWorld({ seed = 0, save }: NewWorldInput): Result<WorldState> {
+    const version = this.rules.world_version();
+    if (save && save.version !== version) return fail('bad_save', `the save is of world version ${save.version}, this world is version ${version}: start a new world`);
     this.chunks.clear();
     this.groups.clear();
-    this.lairCells = pairs(this.rules.world_lairs(seed));
-    this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight() };
+    this.entered = null;
+    if (save) {
+      const { removed, added, beaten } = save.fight;
+      const fight = this.rules.WorldFight.restore(Int32Array.from(removed.flatMap((key) => key.split(',').map(Number))), flat(added), beaten);
+      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw };
+    } else {
+      this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0 };
+    }
+    this.lairCells = pairs(this.rules.world_lairs(this.play.seed));
     return ok(this.view(RADIUS));
   }
 
   state({ radius = RADIUS }: WorldStateInput): Result<WorldState> {
-    return this.play ? ok(this.view(radius)) : this.none();
+    if (!this.play) return this.none();
+    this.back();
+    return ok(this.view(radius));
+  }
+
+  /** The world in the client's save format: `new_world` with it, or the client, resumes it. */
+  save(): Result<WorldSave> {
+    const play = this.play;
+    if (!play) return this.none();
+    this.back();
+    const { seed, hero, troop, broken, fight, lairs, yaw } = play;
+    const removed = pairs(fight.removed()).map(([q, r]) => `${q},${r}`);
+    return ok({ record: RECORD, version: this.rules.world_version(), seed, hero, troop, fight: { removed, added: pairs(fight.added()), beaten: fight.beaten() }, yaw, broken: [...broken], lairs: [...lairs], savedAt: Date.now() });
   }
 
   /** Rolls the hero one cell, then the troop pushes. An enemy, a wall, water or a tree beside a tree refuses it; a boulder, or a tree
@@ -165,10 +228,12 @@ export class OpenWorld {
   step({ direction }: StepInput): Result<Stepped> {
     const play = this.play;
     if (!play) return this.none();
+    this.back();
     const to = toward(play.hero, direction);
     const lair = this.lairCells.findIndex((cell) => same(cell, to));
     if (lair >= 0) {
       const boss = this.bossOf(lair);
+      this.entered = { lair, boss, before: this.games.outcome()?.game ?? null };
       return ok({ moved: false, smashed: null, push: null, lair: { index: lair, boss, start: `new_game ${JSON.stringify({ boss })}` }, state: this.view(RADIUS) });
     }
     const rolled = this.roll(to);
@@ -180,6 +245,7 @@ export class OpenWorld {
    * as the client's walk: the troop pushes after each step, and a step a push made impossible ends the walk there. */
   walk({ q, r }: WalkInput): Result<Walked> {
     if (!this.play) return this.none();
+    this.back();
     const route = this.route([q, r]);
     if (route.length === 0) return fail('no_path', `no way to ${text([q, r])}: it is the hero's cell, a lair, an enemy, off the world, farther than ${PATH_REACH} cells or walled in`);
     const pushes: Push[] = [];
@@ -197,6 +263,17 @@ export class OpenWorld {
   private bossOf(k: number): string {
     const ids = this.bossIds();
     return ids[k % ids.length]!;
+  }
+
+  /** The agent is back in the world (the client's "Back to the Open world", #1170): a fight of the lair's boss started after the step
+   * onto the lair and won beats that lair. */
+  private back(): void {
+    const entered = this.entered;
+    if (!entered) return;
+    const now = this.games.outcome();
+    if (!now || now.game === entered.before || now.boss !== entered.boss) return;
+    this.entered = null;
+    if (!this.play!.lairs.includes(entered.lair)) this.play!.lairs.push(entered.lair);
   }
 
   private none(): Result<never> {
@@ -285,7 +362,7 @@ export class OpenWorld {
   }
 
   private view(radius: number): WorldState {
-    const { seed, hero, troop, broken, fight } = this.play!;
+    const { seed, hero, troop, broken, fight, lairs } = this.play!;
     const size = Math.min(Math.max(radius, 1), 8);
     const enemies = this.enemiesAround(hero, size);
     const rows: Row[] = [];
@@ -302,7 +379,9 @@ export class OpenWorld {
       broken: broken.length,
       beaten: fight.beaten(),
       enemies: enemies.map(text),
-      lairs: this.lairCells.map((cell, k) => ({ boss: this.bossOf(k), cell: text(cell), distance: hex(hero, cell) })),
+      lairs: this.lairCells.map((cell, k) => ({ boss: this.bossOf(k), cell: text(cell), distance: hex(hero, cell), beaten: lairs.includes(k) })),
+      // The client's ending (`OpenWorldMode.showTally`): every lair beaten, counted as the client counts them.
+      ...(this.lairCells.length > 0 && lairs.length >= this.lairCells.length ? { ending: endingLine(CREW) } : {}),
       window: { radius: size, rows },
     };
   }

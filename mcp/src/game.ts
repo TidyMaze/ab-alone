@@ -11,6 +11,7 @@ import type { Judge } from '../../client/src/session';
 import type { Transport } from '../../client/src/transport';
 import { ascii, boardText } from './board';
 import { bossState, type BossLike, type BossState } from './boss';
+import type { Outcome } from './world';
 import { formatMove, fromRecord, fromRecords, parseMove, toRecord } from './notation';
 import { Room, type RoomEvent } from './online';
 
@@ -89,6 +90,7 @@ export type ErrorCode =
   | 'no_world'
   | 'blocked'
   | 'no_path'
+  | 'bad_save'
   | 'no_world_room'
   | 'already_in_world_room'
   | 'world_changed'
@@ -269,6 +271,13 @@ export class Session {
 
   getState(): Result<State> {
     return this.withGame((game) => ok(state(game)));
+  }
+
+  /** The game's id and, for a local boss fight the agent won, its boss: the Open world reads it for its lairs (#1292). */
+  outcome(): Outcome | null {
+    if (!this.game) return null;
+    const { game_id, mode, status, boss } = state(this.game);
+    return { game: game_id, boss: mode === 'boss' && status === 'black_won' ? boss!.id : null };
   }
 
   legalMoves(): Result<LegalMoves> {
