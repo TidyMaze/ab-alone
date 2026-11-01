@@ -127,6 +127,7 @@ describe('the terrace camera and its sky', () => {
   });
   it('saturates colours away from their grey and leaves the grey alone', () => {
     const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
     g.setAttribute('color', new THREE.BufferAttribute(new Float32Array([0.8, 0.4, 0.2, 0.5, 0.5, 0.5]), 3));
     saturateColours(g, 1.5);
     const c = g.attributes.color!;
@@ -134,15 +135,22 @@ describe('the terrace camera and its sky', () => {
     expect([c.getX(1), c.getY(1), c.getZ(1)].every((v) => Math.abs(v - 0.5) < 1e-6)).toBe(true);
     saturateColours(g, 5); // never below zero
     expect(c.getZ(0)).toBeGreaterThanOrEqual(0);
+    const h = new THREE.BufferGeometry();
+    h.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 1, 0, 0, 30, 0]), 3));
+    h.setAttribute('color', new THREE.BufferAttribute(new Float32Array([0.8, 0.4, 0.2, 0.8, 0.4, 0.2]), 3));
+    saturateColours(h, 0.5, 20, Infinity);
+    expect([h.attributes.color!.getX(0), h.attributes.color!.getX(1) < 0.8]).toEqual([0.800000011920929, true]); // only the vertex above 20 moved
   });
   it('tints the lit material once when merged, and saturates the dome', () => {
     const lit = new THREE.MeshStandardMaterial({ color: 0xffffff });
     const dome = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), lit), { name: 'scene_sky_dome' });
     dome.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(24 * 3).fill(0.3), 3));
+    const slab = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), lit), { name: 'scene_slab_arena' });
+    slab.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(24 * 3).fill(0.3), 3));
     const root = new THREE.Group();
     const lamp = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ emissive: 0xffffff }));
     lamp.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(24 * 4).fill(1), 4));
-    root.add(dome, lamp);
+    root.add(dome, slab, lamp);
     const solid = (mergeByMaterial(root).children as THREE.Mesh[]).find((m) => (m.material as THREE.Material).name === 'terrace_solid')!;
     expect((solid.material as THREE.MeshBasicMaterial).color.g).toBeCloseTo(1 / TERRACE_EXPOSURE); // the unlit colour is not tinted
     expect(lit.color.g).toBeCloseTo(TERRACE_TINT.g);

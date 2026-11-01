@@ -85,7 +85,11 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
     if (TURN_BAR.test(o.name)) return void bars.push(mesh);
     const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
     g.deleteAttribute('uv');
-    if (o.name === 'scene_sky_dome') saturateColours(g, SKY_SATURATION);
+    if (o.name === 'scene_sky_dome') {
+      saturateColours(g, SKY_SATURATION, -Infinity, ZENITH_FROM); // the horizon band
+      saturateColours(g, ZENITH_SATURATION, ZENITH_FROM, Infinity); // the zenith
+    }
+    if (o.name === 'scene_slab_arena') saturateColours(g, RIM_SATURATION); // the rim and the plinth read brown against Blender's grey-taupe
     const material = terraceMaterial(mesh.material as THREE.Material, mesh.geometry);
     byMaterial.set(material, [...(byMaterial.get(material) ?? []), g]);
   });
@@ -143,14 +147,21 @@ export function terraceEnvironment(): THREE.Scene {
 }
 
 /** The lit material is multiplied by this: AgX leans the dish pink and the plateau tan; a little green puts the Moss and the dish back (art director). */
-export const TERRACE_TINT = new THREE.Color(0.99, 1.08, 0.97);
+export const TERRACE_TINT = new THREE.Color(0.965, 1.08, 0.96);
 /** The horizon band of the sky dome, 30 percent more saturated (art director): the dome's own vertex colours. */
 export const SKY_SATURATION = 1.3;
+/** Above this height the dome is the zenith: 20 percent less saturated, the teal read too cyan (art director). */
+const ZENITH_FROM = 20;
+const ZENITH_SATURATION = 0.8;
+/** The slab (rim, plinth steps): 25 percent less saturated (art director). */
+const RIM_SATURATION = 0.75;
 
-/** Pushes the colours of a geometry away from their grey by `k` (1 leaves them). */
-export function saturateColours(geometry: THREE.BufferGeometry, k: number): void {
+/** Pushes the colours of a geometry away from their grey by `k` (1 leaves them), for the vertices whose height is in [`from`, `to`). */
+export function saturateColours(geometry: THREE.BufferGeometry, k: number, from = -Infinity, to = Infinity): void {
   const colour = geometry.attributes.color!;
   for (let i = 0; i < colour.count; i++) {
+    const y = geometry.attributes.position!.getY(i);
+    if (y < from || y >= to) continue;
     const grey = 0.2126 * colour.getX(i) + 0.7152 * colour.getY(i) + 0.0722 * colour.getZ(i);
     colour.setXYZ(i, Math.max(0, grey + (colour.getX(i) - grey) * k), Math.max(0, grey + (colour.getY(i) - grey) * k), Math.max(0, grey + (colour.getZ(i) - grey) * k));
   }
