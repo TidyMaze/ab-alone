@@ -171,6 +171,10 @@ pub struct Swarm {
     announced: Vec<P>,
     /// The cells where the last boss reply's marbles arrived.
     landed: Vec<P>,
+    /// The last boss reply was a pass.
+    passed: bool,
+    /// Positions the boss search may visit per move.
+    budget: u32,
 }
 
 impl Swarm {
@@ -198,6 +202,8 @@ impl Swarm {
             turn,
             announced: Vec::new(),
             landed: Vec::new(),
+            passed: false,
+            budget: SWARM_NODE_BUDGET,
         };
         swarm.announce_next();
         swarm
@@ -232,6 +238,21 @@ impl Swarm {
         &self.landed
     }
 
+    /// The last boss reply was a pass: the swarm had no move.
+    pub fn passed(&self) -> bool {
+        self.passed
+    }
+
+    /// Positions the boss search may visit per move.
+    pub fn budget(&self) -> u32 {
+        self.budget
+    }
+
+    /// Scales the boss search budget by a percentage of the baseline (the difficulty).
+    pub fn scale_node_budget(&mut self, percent: u32) {
+        self.budget = (u64::from(SWARM_NODE_BUDGET) * u64::from(percent) / 100).max(1) as u32;
+    }
+
     /// `None` while the fight runs.
     pub fn result(&self) -> Option<PveResult> {
         self.game.outcome().map(|o| match o {
@@ -258,7 +279,8 @@ impl Swarm {
         self.landed = landed;
         self.announced.clear();
         self.game.replace_board(board);
-        if legal_moves(self.game.board(), Player::White).is_empty() {
+        self.passed = legal_moves(self.game.board(), Player::White).is_empty();
+        if self.passed {
             // No swarm move: the boss passes (rules.md section 7), as the Choir's.
             self.game.pass();
             self.end_reply();
@@ -299,15 +321,7 @@ impl Swarm {
         let ply = self.game.history().len() as u64 + 1;
         let step = swarm_step(ply_seed(self.seed, ply), arrivals(self.turn + 2));
         let allow = |_: &Move| true;
-        search_phased(
-            &self.game,
-            SWARM_NODE_BUDGET,
-            SWARM_WEIGHTS,
-            &allow,
-            &step,
-            None,
-        )
-        .map(|r| r.mv)
+        search_phased(&self.game, self.budget, SWARM_WEIGHTS, &allow, &step, None).map(|r| r.mv)
     }
 
     /// The player search with `budget` nodes (the ladder, auto-play): its tree lands the announced

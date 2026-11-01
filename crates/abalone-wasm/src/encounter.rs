@@ -29,6 +29,7 @@ use abalone_core::encounter::railyard::{
     railyard_boss, railyard_move, railyard_start, track_cells,
 };
 use abalone_core::encounter::stalker::{stalker_boss, stalker_start};
+use abalone_core::encounter::swarm::{Swarm, SWARM_PHASE_TURNS};
 use abalone_core::encounter::unstable::{
     last_events, unstable_boss, unstable_move, unstable_start, unstable_tell,
 };
@@ -42,11 +43,12 @@ fn army_code(army: Army) -> i32 {
     CYCLE.iter().position(|&a| a == army).expect("in the cycle") as i32
 }
 
-/// What an [`Encounter`] runs: a boss on the standard board with its hooks, or the Choir, which
-/// has its own board, armies and move rules.
+/// What an [`Encounter`] runs: a boss on the standard board with its hooks, the Choir, which
+/// has its own board, armies and move rules, or the Swarm, with its waves and its pass.
 enum Fight {
     Plain(CoreEncounter),
     Choir(Choir),
+    Swarm(Swarm),
 }
 
 impl Fight {
@@ -54,6 +56,7 @@ impl Fight {
         match self {
             Fight::Plain(e) => e.game(),
             Fight::Choir(c) => c.game(),
+            Fight::Swarm(s) => s.game(),
         }
     }
 }
@@ -143,6 +146,20 @@ fn stalker_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(stalker_start(seed))
 }
 
+/// The Swarm runs its own fight: only the name of its definition is read.
+fn swarm_boss() -> BossDef {
+    BossDef {
+        name: "The Swarm",
+        phase_ejections: Vec::new(),
+        ..choir_boss()
+    }
+}
+
+/// The Swarm starts with 11 player marbles and its first wave announced.
+fn swarm_fight(_def: BossDef, seed: u64) -> Fight {
+    Fight::Swarm(Swarm::start(seed))
+}
+
 /// The Echo plays its bonus mirrors inside `play`.
 fn echo_fight(_def: BossDef, seed: u64) -> Fight {
     Fight::Plain(echo_start(seed))
@@ -166,7 +183,7 @@ fn no_flips(_enc: &CoreEncounter) -> Vec<(i32, i32)> {
     Vec::new()
 }
 
-const BOSSES: [BossEntry; 14] = [
+const BOSSES: [BossEntry; 15] = [
     BossEntry {
         id: "echo",
         goal: "Every move is mirrored for free for the other side: the Echo plays yours at once, you may take its mirror before your own move; after 3 ejections older moves too. Eject 6 to win; lose 6 or draw to lose.",
@@ -297,6 +314,15 @@ const BOSSES: [BossEntry; 14] = [
         announce: no_announce,
         flips: no_flips,
     },
+    BossEntry {
+        id: "swarm",
+        goal: "No swarm marble at the start: a wave lands on its marks on the far rim every turn, and the swarm moves. Survive 30 turns to win; the swarm wins once it ejects 2 of your marbles.",
+        def: swarm_boss,
+        start: swarm_fight,
+        reply: search_reply,
+        announce: no_announce,
+        flips: no_flips,
+    },
 ];
 
 /// The polarity of every cell of `board`, in the board order: `0` none, `1` +, `-1` −.
@@ -343,7 +369,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    16 // 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    17 // 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -405,6 +431,7 @@ impl Encounter {
         match &self.fight {
             Fight::Plain(e) => e.phase() as u8,
             Fight::Choir(c) => c.phase() as u8,
+            Fight::Swarm(s) => s.phase() as u8,
         }
     }
 
@@ -416,6 +443,7 @@ impl Encounter {
                 def.phase_marbles.len() + def.phase_ejections.len()
             }
             Fight::Choir(_) => PHASE_EJECTIONS.len(),
+            Fight::Swarm(_) => SWARM_PHASE_TURNS.len(),
         };
         steps as u8 + 1
     }
@@ -431,15 +459,17 @@ impl Encounter {
                 ejection_notches(e.game(), &(self.entry.def)().phase_ejections, phase)
             }
             Fight::Choir(c) => ejection_notches(c.game(), &PHASE_EJECTIONS, phase),
+            Fight::Swarm(_) => Vec::new(),
         }
     }
 
     /// The ejections that begin each phase after the first, in order (the boss health bar of the
-    /// HUD marks them, #788).
+    /// HUD marks them, #788). The Swarm's phases go by turns: the boss replies done when each begins.
     pub fn phase_ejections(&self) -> Vec<u8> {
         match &self.fight {
             Fight::Plain(_) => (self.entry.def)().phase_ejections,
             Fight::Choir(_) => PHASE_EJECTIONS.to_vec(),
+            Fight::Swarm(_) => SWARM_PHASE_TURNS.iter().map(|&t| t as u8 - 1).collect(),
         }
     }
 
@@ -447,7 +477,7 @@ impl Encounter {
     pub fn tell(&self) -> i32 {
         match &self.fight {
             Fight::Plain(e) => e.tell().map_or(-1, i32::from),
-            Fight::Choir(_) => -1,
+            _ => -1,
         }
     }
 
@@ -456,7 +486,7 @@ impl Encounter {
     pub fn tell_move(&self, mv: &[i32]) -> Vec<i32> {
         let enc = match &self.fight {
             Fight::Plain(e) => Some(e),
-            Fight::Choir(_) => None,
+            _ => None,
         };
         decode(mv)
             .ok()
@@ -468,12 +498,11 @@ impl Encounter {
     /// Legal moves of the side to move, flat records. Empty once the fight is over. On the Choir's
     /// turn, only the moves of the army in turn.
     pub fn legal_moves(&self) -> Vec<i32> {
+        let game = self.fight.game();
         let moves = match &self.fight {
-            Fight::Plain(e) if e.game().outcome().is_none() => {
-                legal_moves(e.game().board(), e.game().to_move())
-            }
-            Fight::Plain(_) => Vec::new(),
             Fight::Choir(c) => c.legal_moves(),
+            _ if game.outcome().is_none() => legal_moves(game.board(), game.to_move()),
+            _ => Vec::new(),
         };
         moves.iter().flat_map(encode).collect()
     }
@@ -488,6 +517,7 @@ impl Encounter {
                 ChoirError::Game(e) => format!("{e:?}"),
                 other => format!("{other:?}"),
             }),
+            Fight::Swarm(s) => s.play(&mv).map_err(|e| format!("{e:?}")),
         }?;
         self.bonuses = self.fight.game().history()[before + 1..]
             .iter()
@@ -555,7 +585,7 @@ impl Encounter {
     pub fn free_moves(&self) -> Vec<i32> {
         match &self.fight {
             Fight::Plain(e) => echo_free_moves(e).iter().flat_map(encode).collect(),
-            Fight::Choir(_) => Vec::new(),
+            _ => Vec::new(),
         }
     }
 
@@ -564,7 +594,7 @@ impl Encounter {
     pub fn free_taken(&self) -> u32 {
         match &self.fight {
             Fight::Plain(e) => echo_free_taken(e) as u32,
-            Fight::Choir(_) => 0,
+            _ => 0,
         }
     }
 
@@ -590,6 +620,7 @@ impl Encounter {
         let mv = match &self.fight {
             Fight::Plain(e) => (self.entry.reply)(e),
             Fight::Choir(c) => c.boss_move(),
+            Fight::Swarm(s) => s.boss_move(),
         };
         mv.map(|m| encode(&m).to_vec()).unwrap_or_default()
     }
@@ -600,6 +631,7 @@ impl Encounter {
         let mv = match &self.fight {
             Fight::Plain(e) => e.player_search().map(|r| r.mv),
             Fight::Choir(c) => c.player_move(),
+            Fight::Swarm(s) => s.player_search(s.budget(), &|_| true).map(|r| r.mv),
         };
         mv.map(|m| encode(&m).to_vec()).unwrap_or_default()
     }
@@ -609,6 +641,7 @@ impl Encounter {
         match &mut self.fight {
             Fight::Plain(e) => e.scale_node_budget(percent),
             Fight::Choir(c) => c.scale_node_budget(percent),
+            Fight::Swarm(s) => s.scale_node_budget(percent),
         }
     }
 
@@ -877,7 +910,7 @@ impl Encounter {
     pub fn flips(&self) -> Vec<i32> {
         match &self.fight {
             Fight::Plain(e) => cell_list(&(self.entry.flips)(e)),
-            Fight::Choir(_) => Vec::new(),
+            _ => Vec::new(),
         }
     }
 
@@ -923,7 +956,7 @@ impl Encounter {
     pub fn assigned(&self) -> Vec<i32> {
         match &self.fight {
             Fight::Plain(e) => cell_list(e.assigned()),
-            Fight::Choir(_) => Vec::new(),
+            _ => Vec::new(),
         }
     }
 
@@ -940,6 +973,7 @@ impl Encounter {
             Fight::Choir(c) => c.last_removal().map_or_else(Vec::new, |(_, cells)| {
                 cells.iter().map(|&cell| (cell, Cell::White)).collect()
             }),
+            Fight::Swarm(_) => Vec::new(),
         };
         removed
             .iter()
@@ -952,7 +986,7 @@ impl Encounter {
     pub fn turns_left(&self) -> i32 {
         match &self.fight {
             Fight::Plain(e) => e.turns_left().map_or(-1, |n| n as i32),
-            Fight::Choir(_) => -1,
+            _ => -1,
         }
     }
 
@@ -977,7 +1011,7 @@ impl Encounter {
     pub fn next_army(&self) -> i32 {
         match &self.fight {
             Fight::Choir(c) => c.tell().map_or(-1, army_code),
-            Fight::Plain(_) => -1,
+            _ => -1,
         }
     }
 
@@ -986,9 +1020,34 @@ impl Encounter {
         self.fight.game().ejected(player(side))
     }
 
-    /// Ejections a side needs to win: `1` Black, `2` White.
+    /// Ejections a side needs to win: `1` Black, `2` White. `0` when that side does not win by
+    /// ejections (the player against The Swarm).
     pub fn win_ejections(&self, side: u8) -> u8 {
-        self.fight.game().win_ejections(player(side))
+        match self.fight.game().win_ejections(player(side)) {
+            u8::MAX => 0,
+            n => n,
+        }
+    }
+
+    /// The Swarm's tell as `[turns_left, passed, q, r, ...]`: the boss replies left before the
+    /// evac, `1` when its last reply was a pass, then the cells where the next wave lands. Empty for
+    /// the other bosses.
+    pub fn swarm(&self) -> Vec<i32> {
+        let Fight::Swarm(s) = &self.fight else {
+            return Vec::new();
+        };
+        [s.turns_left() as i32, i32::from(s.passed())]
+            .into_iter()
+            .chain(cell_list(s.announced()))
+            .collect()
+    }
+
+    /// The cells where the Swarm's last wave landed, `[q, r]` pairs. Empty for the other bosses.
+    pub fn swarm_landed(&self) -> Vec<i32> {
+        let Fight::Swarm(s) = &self.fight else {
+            return Vec::new();
+        };
+        cell_list(s.landed())
     }
 
     /// Game status, see the module docs.
@@ -1006,6 +1065,7 @@ impl Encounter {
         let result = match &self.fight {
             Fight::Plain(e) => e.result(),
             Fight::Choir(c) => c.result(),
+            Fight::Swarm(s) => s.result(),
         };
         result_code(result)
     }
