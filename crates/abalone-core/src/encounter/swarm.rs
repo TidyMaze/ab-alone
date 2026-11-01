@@ -519,11 +519,11 @@ mod tests {
     #[test]
     fn the_boss_budget_scales_by_a_percentage() {
         let mut s = Swarm::start(3);
-        assert_eq!(s.budget, SWARM_NODE_BUDGET);
+        assert_eq!(s.budget(), SWARM_NODE_BUDGET);
         s.scale_node_budget(50);
-        assert_eq!(s.budget, SWARM_NODE_BUDGET / 2);
+        assert_eq!(s.budget(), SWARM_NODE_BUDGET / 2);
         s.scale_node_budget(0);
-        assert_eq!(s.budget, 1, "floor of 1");
+        assert_eq!(s.budget(), 1, "floor of 1");
     }
 
     #[test]
