@@ -611,12 +611,17 @@ describe('RoyaleNet trust (#1322)', () => {
     const seats = [forged.pub, '', '', ''];
     await b.net.receive({ kind: 'played', game: ROOM, seats, rounds: [], open: null }, '', 'x');
     await b.net.receive({ kind: 'played', game: ROOM, seats, rounds: [], open: null }, forged.pub, 'x');
+    await b.net.receive({ kind: 'played', game: ROOM, seats: [a.keys.pub + ',' + b.keys.pub + ',', ''], rounds: [], open: null }, '', 'x'); // the roster joined
+    await b.net.receive({ kind: 'hash', game: ROOM, round: 1, hash: 'x' }, a.keys.pub, 'a'); // no seats yet: no hash counts
     expect(b.net.phase).toBe('lobby');
     expect(b.net.seats).toBeNull();
     await a.net.start();
     await room.settle();
     expect(b.net.seats).toEqual([a.keys.pub, b.keys.pub, '', '']);
     expect(b.net.phase).toBe('choosing');
+    for (const p of [a, b]) await p.net.play([]);
+    await room.settle();
+    expect([b.net.round, b.net.desync]).toEqual([2, 0]); // the hash heard in the lobby was not kept
   });
 
   it('a played with the roster in the lobby, or with the seats of the start, is believed', async () => {

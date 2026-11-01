@@ -264,7 +264,7 @@ export class RoyaleNet<G extends NetGame> {
     if (m.kind === 'start') return this.started(m, from);
     if (m.kind === 'behind') return this.answer(m, peer);
     if (m.kind === 'played') return this.catchUp(m);
-    if (m.kind === 'hash') return this.compare(m);
+    if (m.kind === 'hash') return this.compare(m, from);
     return this.order(m, from);
   }
 
@@ -364,7 +364,9 @@ export class RoyaleNet<G extends NetGame> {
     this.o.onChange?.();
   }
 
-  private compare(h: Hash): void {
+  /** Only a seated key's hash counts: a peer with no key or no seat cannot raise a desync (#1322). */
+  private compare(h: Hash, from: string): void {
+    if (from === '' || !this.seats?.includes(from)) return;
     this.heard.push(h);
     this.check();
     this.o.onChange?.();
@@ -386,9 +388,10 @@ export class RoyaleNet<G extends NetGame> {
   }
 
   /** Replays the rounds we missed, then opens the round open on the peer that answered, if it is not open here yet, and
-   * takes what that peer kept of it. */
+   * takes what that peer kept of it. Any peer may answer, so its seats are believed only when they are the coordinator's
+   * start, or in the lobby the roster of the session: anything else changes nothing (#1322). */
   private async catchUp(m: Played): Promise<void> {
-    if (m.seats.length !== this.o.roster().length) return;
+    if (JSON.stringify(m.seats) !== JSON.stringify(this.lineup)) return;
     this.seats ??= m.seats;
     const from = this.round;
     for (const s of m.rounds) {
