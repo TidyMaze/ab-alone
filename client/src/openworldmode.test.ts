@@ -281,8 +281,7 @@ describe('the Open world mode', () => {
     expect(m.active).toBe(false);
   });
 
-  it('draws every frame while a lake is in view and motion is on, and moves the glow of the water', () => {
-    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+  it('draws every frame while a lake is in view and motion is on, and the water keeps no glow of its own (#1315)', () => {
     const m = mode(undefined, sea, () => false);
     m.enter(1, 800, 600);
     const glow: number[] = [];
@@ -290,14 +289,11 @@ describe('the Open world mode', () => {
       const water = scene.getObjectByName('terrain-water') as THREE.InstancedMesh;
       glow.push((water.material as THREE.MeshStandardMaterial).emissiveIntensity);
     });
-    m.frame(render);
-    now.mockReturnValue((1200 * Math.PI) / 2);
-    m.frame(render);
-    m.frame(render);
+    m.frame(render, 0);
+    m.frame(render, 1000);
+    m.frame(render, 2000);
     expect(render).toHaveBeenCalledTimes(3);
-    expect(glow[0]).toBeCloseTo(1);
-    expect(glow[1]).toBeCloseTo(1.15);
-    now.mockRestore();
+    expect(glow).toEqual([1, 1, 1]);
   });
 
   it('holds the lake still on the low tier: a lake alone draws no frame after the first (#1234)', () => {
