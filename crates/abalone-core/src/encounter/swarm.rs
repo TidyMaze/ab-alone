@@ -384,16 +384,16 @@ mod tests {
     }
 
     #[test]
-    fn the_arrivals_are_1_then_2_from_turn_15_then_3_from_turn_25() {
+    fn the_arrivals_are_1_a_turn_then_2_from_turn_25() {
         let counts: Vec<u8> = [0, 1, 14, 15, 24, 25, 30, 31]
             .into_iter()
             .map(arrivals)
             .collect();
-        assert_eq!(counts, [0, 1, 1, 2, 2, 3, 3, 0]);
+        assert_eq!(counts, [0, 1, 1, 1, 1, 2, 2, 0]);
         let phases: Vec<usize> = [1, 14, 15, 24, 25, 30].into_iter().map(phase).collect();
         assert_eq!(phases, [0, 0, 1, 1, 2, 2]);
         let total: u32 = (1..=SWARM_TURNS).map(|t| u32::from(arrivals(t))).sum();
-        assert_eq!(total, 52);
+        assert_eq!(total, 36);
     }
 
     #[test]
@@ -529,7 +529,7 @@ mod tests {
         let mut s = swarm(&[(0, 2)], &[], [0, 0], 29);
         assert_eq!(s.phase(), 2);
         s.play(&mv(&[(0, 2)], E)).unwrap();
-        assert_eq!(s.landed().len(), 3, "turn 30 lands 3");
+        assert_eq!(s.landed().len(), 2, "turn 30 lands 2");
         assert_eq!(s.result(), None, "not before the 30th reply");
         reply(&mut s);
         assert_eq!((s.turn(), s.turns_left()), (30, 0));
@@ -567,6 +567,10 @@ mod tests {
 
     #[test]
     fn the_boss_wins_once_it_has_ejected_its_count_of_player_marbles() {
+        assert_eq!(
+            SWARM_EJECTIONS, 2,
+            "the gate's calibration, boss-balance.md section 3"
+        );
         // One ejection short: the fight goes on.
         let black = [(-4, 4), (2, -1), (2, 0), (3, -1)];
         let mut s = swarm(&black, &[(-1, 2), (-2, 3)], [0, SWARM_EJECTIONS - 2], 4);
