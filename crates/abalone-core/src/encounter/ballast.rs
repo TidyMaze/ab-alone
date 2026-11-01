@@ -486,12 +486,13 @@ mod tests {
     }
 
     #[test]
-    fn the_pick_covers_the_four_effects_and_the_six_pulse_directions() {
+    fn the_pick_covers_the_five_effects_and_the_six_pulse_directions() {
         let picks: Vec<Borrowed> = (0..400).map(borrowed).collect();
         assert_eq!(picks, (0..400).map(borrowed).collect::<Vec<_>>());
         assert!(picks.contains(&Borrowed::HullCrack));
         assert!(picks.contains(&Borrowed::MagnetizerPolarity));
         assert!(picks.contains(&Borrowed::ChaplainConversion));
+        assert!(picks.contains(&Borrowed::SwarmWave));
         for dir in 0..6 {
             assert!(
                 picks.contains(&Borrowed::PulsarPulse(dir)),
@@ -520,6 +521,31 @@ mod tests {
                 assert_eq!(is_rim(&out, out.cracks()[0].0), rim, "phase {phase}");
             }
         }
+    }
+
+    #[test]
+    fn the_swarm_wave_lands_the_phase_count_on_empty_rim_cells_away_from_the_player_side() {
+        let seed = seed_of(|b| b == Borrowed::SwarmWave);
+        for (phase, count) in [(0, 1), (1, 1), (2, 2)] {
+            let out = hook(&open_board(), BALLAST_FIRE + phase, seed);
+            let landed: Vec<P> = touched(&open_board(), &out);
+            assert_eq!(landed.len(), count, "phase {phase}");
+            for &(q, r) in &landed {
+                assert_eq!(out.get(q, r), Some(Cell::White), "phase {phase}");
+                assert!(r <= 0 && is_rim(&out, (q, r)), "{q}, {r}");
+                assert_eq!(open_board().get(q, r), Some(Cell::Empty));
+            }
+        }
+    }
+
+    #[test]
+    fn the_swarm_wave_of_a_full_allowed_rim_does_not_arrive() {
+        let mut board = open_board();
+        for (q, r) in crate::encounter::swarm::allowed_rim_of(BALLAST_RADIUS) {
+            board.set(q, r, Cell::White);
+        }
+        let seed = seed_of(|b| b == Borrowed::SwarmWave);
+        assert_eq!(hook(&board, BALLAST_FIRE + 2, seed), board);
     }
 
     #[test]
@@ -762,6 +788,26 @@ mod tests {
     }
 
     #[test]
+    fn the_search_plays_the_swarm_wave_due_this_turn() {
+        let seed = fight_seed(|b| b == Borrowed::SwarmWave);
+        let mut enc = Encounter::new(
+            Game::from_position(open_board(), Player::Black, [0, 0]),
+            ballast_boss(),
+            seed,
+        )
+        .counting_by_colour();
+        enc.boss.node_budget = 300;
+        while enc.game().history().len() < 5 {
+            let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
+            enc.play(&m).unwrap();
+        }
+        let before = count(enc.game().board(), Cell::White);
+        let hooked = ballast_move(&enc).unwrap();
+        enc.play(&hooked).unwrap();
+        assert_eq!(count(enc.game().board(), Cell::White), before + 1);
+    }
+
+    #[test]
     fn the_search_is_for_the_boss_turn_only() {
         assert_eq!(ballast_move(&ballast_start(0)), None);
     }
@@ -803,6 +849,11 @@ mod tests {
             vec![(0, 0)],
             "the flipped marble"
         );
+        let wave = seed_of(|b| b == Borrowed::SwarmWave);
+        let landed = hook(&open_board(), BALLAST_FIRE, wave);
+        let cells = touched(&open_board(), &landed);
+        assert_eq!(cells.len(), 1, "the cell the swarm marble landed on");
+        assert_eq!(landed.get(cells[0].0, cells[0].1), Some(Cell::White));
         let idle = hook(&open_board(), BALLAST_FIRE, flip);
         assert_eq!(
             touched(&open_board(), &idle),

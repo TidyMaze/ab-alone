@@ -423,6 +423,16 @@ mod tests {
     }
 
     #[test]
+    fn the_allowed_rim_of_a_bigger_board_is_its_rim_with_r_at_most_0() {
+        assert_eq!(allowed_rim_of(4), allowed_rim());
+        let rim = allowed_rim_of(5);
+        assert_eq!(rim.len(), 16);
+        assert!(rim
+            .iter()
+            .all(|&(q, r)| r <= 0 && distance((q, r), (0, 0)) == 5));
+    }
+
+    #[test]
     fn the_player_starts_with_11_marbles_and_the_boss_with_none() {
         let s = Swarm::start(3);
         let black = cells_of(s.game().board(), Cell::Black);
