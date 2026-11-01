@@ -929,8 +929,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   that turn **arrive**, then (b) the swarm plays one standard move with its marbles, or **passes**
   when it has none (no marble, or every one boxed in, as the Choir's pass). A player boxed in by
   a full board passes too (`rules.md` section 7): the next reply starts at once.
-- **Arrivals**: turns 1 to 14, **1** marble a turn; turns 15 to 24, **2**; turns 25 to 30, **3**
-  (52 in all, more than the 50 free cells: the board can fill). They land on the **allowed rim
+- **Arrivals** (calibrated, #795): turns 1 to 24, **1** marble a turn; turns 25 to 30, **2**
+  (36 in all; the board can still fill when the player ejects none). They land on the **allowed rim
   cells**: the 13 rim cells with `r <= 0` (never on the player's start side, `r > 0`). The cells of
   a turn are **announced one turn ahead**: at the start for turn 1, then at the end of each boss
   reply for the next turn, picked at random among the empty allowed rim cells. A cell taken when
@@ -939,10 +939,11 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   Fewer empty allowed cells than the turn's count at the announce: only those are announced. No
   cap on the swarm (owner, #795).
 - **Phases by turn**, not by ejections: P1 turns 1 to 14, P2 from turn **15**, P3 from turn **25**.
-- **Win and loss** (owner): the win at 6 ejections is **off for both sides**. The player **wins**
-  when the boss's 30th reply is done and at least 1 of its marbles is on the board (the evac
-  arrives). The boss **wins** the moment the player has no marble left. An ejected swarm marble
-  scores nothing, it is simply gone; the HUD still counts the ejections of both sides.
+- **Win and loss** (owner; the boss's line decided by the lead on 2026-10-30, #795): the win at 6
+  ejections is **off for both sides**. The player **wins** when the boss's 30th reply is done (the
+  evac arrives). The boss **wins** the moment it has ejected **2** of the player's marbles
+  (`SWARM_EJECTIONS`, a calibration knob), or every one when fewer are left. An ejected swarm
+  marble scores nothing, it is simply gone; the HUD still counts the ejections of both sides.
 - **No draw**: 30 turns are 60 plies, under the 100-ply no-ejection cap, and the fight turns both
   draw rules off (a full rim with no arrival could repeat a position): a draw would be a loss
   (section 3.3), so it never happens here.
@@ -955,12 +956,16 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   lights the whole board** and lifts the surviving marbles. Reduced motion: a fade.
 - **Turn it against the boss** (owner design rule): every swarm marble lands on the rim, where
   a 2 to 1 push sends it off, so push it off before the next one lands beside it; the announce
-  marks say where it lands one turn ahead, so stand next to the mark with a line ready. The boss search sees the arrivals: every player ply of its tree lands the next wave where
-  the announce would put it.
+  marks say where it lands one turn ahead, so stand next to the mark with a line ready. The swarm
+  needs only 2 ejections, so its marbles on the rim are the danger as much as the prey: never
+  leave a marble on the rim in front of a swarm line. The boss search sees the arrivals: every
+  player ply of its tree lands the next wave where the announce would put it.
 - **The Ballast Mind** (owner rule, section 7.5): it fits as a one-shot hook (the wave of the
   phase lands at once on the empty rim cells away from the player's start side), and is borrowed
-  with part 2 of #795, with its HUD line: part 1 adds no effect to the pick.
-- **Calibrate**: knobs = the arrival counts (1, 2, 3), the turns (30), the start (11), AI budget.
+  with part 2 of #795, with its HUD line: part 1 adds no effect to the pick. The 2-ejection win is
+  not borrowed: it is the Swarm's own end line, and the Ballast fight keeps its 6.
+- **Calibrate**: knobs = the boss's ejections to win (2), the arrival counts (1, 1, 2), the turns
+  (30), the start (11), AI budget. Adopted: 2 ejections and arrivals 1, 1, 2 meet the gate.
   Gate (#795): the ladder's pro player wins 7 to 9 of 10 seeds at 10x, and a scripted turtle (it
   never moves a marble outward and never pushes) loses at least 8 of 10. Ladder:
   `boss-balance.md` section 3.

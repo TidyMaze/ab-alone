@@ -20,11 +20,11 @@ pub const SWARM_TURNS: u32 = 30;
 /// The first turn of P2 and of P3. TUNE.
 pub const SWARM_PHASE_TURNS: [u32; 2] = [15, 25];
 /// Swarm marbles that arrive each turn in P1, P2 and P3. TUNE.
-pub const SWARM_ARRIVALS: [u8; 3] = [1, 2, 3];
+pub const SWARM_ARRIVALS: [u8; 3] = [1, 1, 2];
 /// Player marbles of the standard layout left out at the start, the nearest the centre. TUNE.
 pub const SWARM_LEFT_OUT: usize = 3;
 /// Player marbles the swarm must eject to win (#795, the lead's decision of 2026-10-30). TUNE.
-pub const SWARM_EJECTIONS: u8 = 4;
+pub const SWARM_EJECTIONS: u8 = 2;
 /// Positions the boss search may visit per move (the Choir's budget). TUNE.
 pub const SWARM_NODE_BUDGET: u32 = 1500;
 /// The swarm pushes toward the rim: ejections and the opponent's distance from the centre count
