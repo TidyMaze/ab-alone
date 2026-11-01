@@ -85,7 +85,7 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 
 ## 4. The hero and the troop
 
-- **Hero**: one glass marble, moved one cell at a time (click a neighbour, or the arrow keys, as
+- **Hero**: one glass marble (#1176: in the skin the player wears on the ship, as the troop; the enemies wear the worn shell skin, and the stripe ring is the only team cue), moved one cell at a time (click a neighbour, or the arrow keys, as
   in the hub, section 3.5 of `game-design.md`). A held arrow keeps walking: the first cell is taken on the
   keydown, then one cell per glide (140 ms) while the arrow is held, whatever the system's key repeat (#1059).
 - **Steering** (#1137): a held direction (arrow, stick) is an *intent*, an angle on the ground. Each step takes the cell of
