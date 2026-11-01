@@ -267,7 +267,7 @@ const CASES: Record<string, () => void> = {
     expect(state([3, 0])!.text).toBe('the evac comes in 3 boss turns'); // a full rim: no arrival
     // MCP plays it: the boss replies, and its first wave landed.
     swarm.play(swarm.legal_moves().slice(0, 8));
-    expect(Array.from(swarm.swarm_landed())).toEqual([q, r]);
+    expect(swarm.board()[BOARD_CELLS.findIndex(([cq, cr]) => cq === q && cr === r)]).toBe(2); // White, on its mark
     swarm.play(swarm.boss_move());
     expect(swarm.swarm()[0]).toBe(29);
   },
