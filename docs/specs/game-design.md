@@ -950,8 +950,10 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Deterministic, for P2P**: the announced cells are splitmix64 of the fight seed and the ply.
   No `Math.random`, no clock: a Retry, the daily, a replayed game file and every peer get the same
   waves.
-- **Tell**: an announce mark on each cell where a swarm marble arrives next turn; a turn counter
-  from 30 down to 0 (the health bar of #788 shows the turns left).
+- **Tell**: an announce mark (a ring) on each cell where a swarm marble arrives next turn; a turn
+  counter from 30 down to 0 and the loss line on the HUD ("the swarm wins after it ejects 2 of your
+  marbles"); the health bar of #788 holds the 30 turns, one fragment per boss reply. The player's
+  ejection count has no limit on the HUD (`win_ejections` is `0`, #1008).
 - **Look**: Cargo deck. The marbles drop in on their marks; at the end of turn 30 the **evac
   lights the whole board** and lifts the surviving marbles. Reduced motion: a fade.
 - **Turn it against the boss** (owner design rule): every swarm marble lands on the rim, where
@@ -961,9 +963,10 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   leave a marble on the rim in front of a swarm line. The boss search sees the arrivals: every
   player ply of its tree lands the next wave where the announce would put it.
 - **The Ballast Mind** (owner rule, section 7.5): it fits as a one-shot hook (the wave of the
-  phase lands at once on the empty rim cells away from the player's start side), and is borrowed
-  with part 2 of #795, with its HUD line: part 1 adds no effect to the pick. The 2-ejection win is
-  not borrowed: it is the Swarm's own end line, and the Ballast fight keeps its 6.
+  phase lands at once on the empty rim cells away from the player's start side), but it is not
+  borrowed yet: a fifth effect changes the pick from 4 effects to 5, so every Ballast fight, its
+  fixture and its balance change with it. Task #1197. The 2-ejection win is never borrowed: it is
+  the Swarm's own end line, and the Ballast fight keeps its 12.
 - **Calibrate**: knobs = the boss's ejections to win (2), the arrival counts (1, 1, 2), the turns
   (30), the start (11), AI budget. Adopted: 2 ejections and arrivals 1, 1, 2 meet the gate.
   Gate (#795): the ladder's pro player wins 7 to 9 of 10 seeds at 10x, and a scripted turtle (it
