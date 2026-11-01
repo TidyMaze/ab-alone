@@ -185,6 +185,7 @@ import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from '.
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { toleranceWindow } from './matchmaking';
+import { boardHtml, buildBoard, loadRivals } from './leaderboard';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
@@ -1124,6 +1125,30 @@ async function onlineAllowed(): Promise<boolean> {
   if (location.hash) window.history.replaceState(null, '', location.pathname + location.search);
   return false;
 }
+// The ranked leaderboard (#1287): you among the opponents of your settled 1v1 matches, from what is saved here.
+const boardBox = document.getElementById('board')!;
+const boardButton = document.getElementById('leaderboard')!;
+const closeBoard = (): void => {
+  boardBox.hidden = true;
+  boardButton.focus();
+};
+boardButton.addEventListener('click', () => {
+  moveModes('outside');
+  document.getElementById('board-body')!.innerHTML = boardHtml(buildBoard(loadRankedProfile(store).rating1v1, loadRivals(store)));
+  boardBox.hidden = false;
+  document.getElementById('board-close')!.focus();
+});
+document.getElementById('board-close')!.addEventListener('click', closeBoard);
+boardBox.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // the board and the menus never see it
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeBoard();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    document.getElementById('board-close')!.focus(); // the close button is the only stop
+  }
+});
 // Where the pad walks the focus: in the guide or the opt-in while one is open.
 const padScope = (): ParentNode => (!consentBox.hidden ? consentBox : guideBox.hidden ? document : guideBox);
 if (guideDue(store, location.search, navigator.webdriver)) openGuide(null);
