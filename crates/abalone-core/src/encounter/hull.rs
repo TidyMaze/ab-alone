@@ -531,6 +531,43 @@ mod tests {
         assert_eq!(mv.cells, vec![(0, 0)], "the Hull saves its marble");
     }
 
+    /// White to move with a two-marble push west that lands a Black marble on a crack, Black
+    /// already having another marble on a crack that vanishes after its next move: it can save
+    /// only one of them. The lone White marble gives the plain search another good move.
+    fn push_onto_crack() -> Encounter {
+        let mut board = Board::empty();
+        board.set(3, 0, Cell::White);
+        board.set(2, 0, Cell::White);
+        board.set(1, 0, Cell::Black);
+        board.set(-1, 0, Cell::White);
+        board.set(0, -4, Cell::Black);
+        board.set_cracks(vec![((0, 0), 1), ((0, -4), 1)]);
+        Encounter::new(
+            Game::from_position(board, Player::White, [0, 0]),
+            hull_boss(),
+            1,
+        )
+    }
+
+    #[test]
+    fn the_hull_pushes_a_player_marble_onto_an_announced_crack() {
+        let enc = push_onto_crack();
+        let push = Move {
+            cells: vec![(2, 0), (3, 0)],
+            dir: W,
+        };
+        assert_ne!(
+            enc.boss_search().unwrap().mv,
+            push,
+            "the plain search ignores the crack"
+        );
+        assert_eq!(
+            hull_move(&enc),
+            Some(push),
+            "the Hull pushes it onto the crack"
+        );
+    }
+
     #[test]
     fn the_hull_does_not_reply_on_the_player_turn() {
         let enc = encounter(&[], &block(3), 0);
