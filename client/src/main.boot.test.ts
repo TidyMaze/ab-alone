@@ -184,7 +184,7 @@ describe('the renderer and its textures', () => {
     expect(report.renderCost).toMatch(/^draw calls: \d+\ntriangles: \d+\ngeometries: \d+\ntextures: \d+\npoint lights: \d+\ntier: \w+\npixel ratio: [\d.]+$/);
     expect(cost.text).toBe(report.renderCost);
     expect(cost).toMatchObject({ calls: 7, triangles: 300, geometries: 5, textures: 2, tier: 'high' });
-    expect(cost.pointLights).toBeGreaterThan(0);
+    expect(cost.pointLights).toBeGreaterThan(0); // the room's lamps: this test boots the room, the terrace has none (#1314)
   });
 
   it('keeps the last drawn frame cost over the idle frames that follow it (the draw calls read 0 before)', async () => {

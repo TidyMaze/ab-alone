@@ -4480,6 +4480,12 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to read the boss, seed and daily attempt of the running fight.
 (window as unknown as Record<string, unknown>).__fight = () => fight;
 (window as unknown as Record<string, unknown>).__view = () => view;
+// A browser check sets the camera exactly (the Blender views of the terrace, #1314): the view, then the camera and the fog follow.
+(window as unknown as Record<string, unknown>).__setView = (next: Partial<View>) => {
+  Object.assign(view, next);
+  applyView();
+  dirty = CHANGE_DRAWS;
+};
 
 // Used by the browser checks to read the hinted move and the marbles that wear the selection ring (#301).
 (window as unknown as Record<string, unknown>).__ghostOpacity = () => ghostMaterials[1]!.opacity; // the Hint ghost's fade (#1097)
@@ -5894,7 +5900,7 @@ menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 const renderCost = (): RenderCost => {
   let pointLights = 0;
-  (openWorld.scene ?? sceneRenderer.scene).traverse((o) => void ((o as THREE.PointLight).isPointLight && pointLights++));
+  (openWorld.scene ?? sceneRenderer.scene).traverseVisible((o) => void ((o as THREE.PointLight).isPointLight && pointLights++)); // a hidden lamp lights nothing
   const { render, memory } = renderer.info;
   return { calls: render.drawCalls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pointLights, tier, pixelRatio };
 };
