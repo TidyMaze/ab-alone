@@ -447,6 +447,7 @@ export class OpenWorldMode {
     }
     this.nextStep = due + stepMs(this.walked); // the next step is due when this one's glide ends (#1290)
     this.stepHeld(due);
+    if (this.walked === 0 && this.nextStep !== Infinity) this.nextStep = due + GLIDE_MS; // a blocked step restarts the walk: the retry is at the first pace
   }
 
   /** One step in the direction of the arrows held now (`heroStep`), made at `at` (ms): a blocked one slides round the obstacle, and leans
