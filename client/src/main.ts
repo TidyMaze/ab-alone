@@ -4406,11 +4406,7 @@ addEventListener('keydown', (e) => {
 addEventListener('pointerdown', (e) => {
   if (goalOpen && !within(goalSheet, e.target) && !within(goalButton, e.target)) closeGoal();
 });
-<<<<<<< HEAD
-retryButton.addEventListener('click', () => (fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom))); // a lair's retry stays the lair's (#1170)
-=======
-retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed)));
->>>>>>> d9c34f4 (feat(client): Trainer mode, 1 vs 1 against a bot that gets one more marble each wave (#1159))
+retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom))); // a lair's retry stays the lair's (#1170)
 
 // The hub (#521, game-design.md section 3.5): Ship draws the map of the saved deck, in that deck's look, with the
 // player's glass marble on the saved cell. A click on a neighbour cell or an arrow key rolls it one cell (hub.ts step),
