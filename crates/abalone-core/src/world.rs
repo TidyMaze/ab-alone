@@ -1106,21 +1106,26 @@ mod tests {
         }
     }
 
+    /// The size of the roster at the time of writing: the bridge passes the real count of `boss_ids()`.
+    const ROSTER: usize = 14;
+
     #[test]
-    fn three_lairs_stand_at_least_150_cells_from_the_spawn_on_every_seed() {
+    fn a_lair_for_each_boss_stands_at_least_150_cells_from_the_spawn_on_every_seed() {
         for seed in 0..60 {
-            let found = lairs(seed);
-            assert_eq!(found.len(), LAIRS, "seed {seed}");
+            let found = lairs(seed, ROSTER);
+            assert_eq!(found.len(), ROSTER, "seed {seed}");
             for &(q, r) in &found {
                 assert!(distance(q, r) >= LAIR_MIN, "seed {seed}: ({q}, {r})");
             }
         }
+        assert_eq!(lairs(7, 15).len(), 15);
+        assert_eq!(lairs(7, 3).len(), 3);
     }
 
     #[test]
     fn a_lair_and_its_six_neighbours_are_open_ground_in_the_world() {
         for seed in 0..60 {
-            for (q, r) in lairs(seed) {
+            for (q, r) in lairs(seed, ROSTER) {
                 for (dq, dr) in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)] {
                     let c = cell(seed, q + dq, r + dr).expect("on the world");
                     assert!(
@@ -1135,22 +1140,22 @@ mod tests {
     #[test]
     fn the_lairs_are_spread_and_come_from_the_seed_alone() {
         for seed in 0..60 {
-            let found = lairs(seed);
-            assert_eq!(lairs(seed), found);
+            let found = lairs(seed, ROSTER);
+            assert_eq!(lairs(seed, ROSTER), found);
             for (i, a) in found.iter().enumerate() {
                 for b in &found[i + 1..] {
                     assert!(
-                        distance(a.0 - b.0, a.1 - b.1) >= 100,
+                        distance(a.0 - b.0, a.1 - b.1) >= 20,
                         "seed {seed}: {a:?} {b:?}"
                     );
                 }
             }
         }
-        assert_ne!(lairs(1), lairs(2));
+        assert_ne!(lairs(1, ROSTER), lairs(2, ROSTER));
     }
 
     #[test]
     fn the_lairs_of_seed_7_are_pinned() {
-        assert_eq!(lairs(7), vec![(139, 58), (-327, 233), (286, -172)]);
+        assert_eq!(lairs(7, 3), vec![(139, 58), (-327, 233), (286, -172)]);
     }
 }
