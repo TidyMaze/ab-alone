@@ -25,6 +25,8 @@ export type DungeonPath = (seed: number, from: Axial, beaten: Int32Array, blocke
 
 /** The enemies near the hero that a walk goes round: the radius of the path search. */
 const PATH_REACH = 40;
+/** How often a hidden tab hands the peers host the hero (#1371): the host sends no more than its own caps allow. */
+const KEEPALIVE_TICK_MS = 1000;
 
 
 /** The cells as the bridge takes them: `q, r` pairs. */
@@ -56,6 +58,8 @@ export class OpenWorldMode {
   hero: Hero | null = null;
   /** The online layer of the public world (#1305): told of each world entered and left, and of each frame. None draws solo. */
   peers: PeerHost | null = null;
+  /** The timer that keeps the hero alive for the room while the tab is hidden (#1371). */
+  private keepalive: ReturnType<typeof setInterval> | null = null;
   private view: OpenWorldView | null = null;
   private world: World | null = null;
   /** The seed of the world entered, the enemies as the pushes left them, and the pushes played so far. */
@@ -152,6 +156,7 @@ export class OpenWorldMode {
     view.show(this.hero.at, this.hero.troop);
     view.setLairs(this.lairs, this.beaten);
     this.peers?.enter(seed, view.scene, view.camera, world);
+    this.keepAlive();
     const medals = document.getElementById('openworld-medals'); // the HUD's medal count (#1171)
     if (medals) {
       const { have, total } = this.medals();
@@ -183,8 +188,26 @@ export class OpenWorldMode {
     this.releaseScene(this.view.scene);
   }
 
+  /**
+   * A hidden tab gets no animation frame, and the frame is what sends the place and the keepalive, so the other heroes dropped
+   * it after 10 s (#1371). While hidden, a timer (a hidden tab's runs at least once a second) hands the host the hero instead:
+   * the host's own cap and keepalive decide what is sent, so a hidden tab sends no more than a visible one.
+   */
+  private keepAlive(): void {
+    this.stopKeepAlive();
+    this.keepalive = setInterval(() => {
+      if (document.hidden) this.peers?.frame(performance.now(), this.hero!.at);
+    }, KEEPALIVE_TICK_MS);
+  }
+
+  private stopKeepAlive(): void {
+    if (this.keepalive !== null) clearInterval(this.keepalive);
+    this.keepalive = null;
+  }
+
   leave(): void {
     this.flush();
+    this.stopKeepAlive();
     this.peers?.leave();
     this.active = false;
     this.held.clear();
@@ -423,7 +446,7 @@ export class OpenWorldMode {
     if (!this.view) return false; // the step walked onto a lair and left the mode
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
-    if (this.peers?.frame(now, this.hero!.at)) this.dirty = true; // the other heroes: sent, received, drawn (#1305)
+    if (this.peers?.frame(now, this.hero!.at, this.hero!.troop)) this.dirty = true; // the other heroes: sent, received, drawn (#1305)
     if (this.view!.offsets(now)) this.dirty = true; // the camera's punch and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();

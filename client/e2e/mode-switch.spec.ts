@@ -35,8 +35,6 @@ test('a boss fight and a battle royale left for the Ship hub leave no control an
 test('an Open world lair fight lost, Back to the Open world: nothing of the fight shows over the world, #1275', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   const [q, r] = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ')[0]!.split(',').map(Number) as [number, number];
   await page.evaluate(

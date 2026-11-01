@@ -1707,7 +1707,7 @@ describe('the Open world mode and the online peers (#1305)', () => {
     m.enter(42, 800, 600);
     const render = vi.fn();
     m.frame(render, 1000);
-    expect(peers.frame).toHaveBeenLastCalledWith(1000, [0, 0]);
+    expect(peers.frame).toHaveBeenLastCalledWith(1000, [0, 0], expect.any(Array));
     m.frame(render, 1016);
     expect(render).toHaveBeenCalledTimes(1); // nothing changed
     peers.frame.mockReturnValueOnce(true);
@@ -1721,6 +1721,55 @@ describe('the Open world mode and the online peers (#1305)', () => {
     m.frame(vi.fn(), 1000);
     m.key('Escape');
     expect(m.active).toBe(false);
+  });
+
+  describe('a hidden tab keeps its place alive (#1371)', () => {
+    const hidden = (value: boolean) => Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
+    afterEach(() => {
+      vi.useRealTimers();
+      hidden(false);
+    });
+
+    it('a hidden tab gets no animation frame: a timer gives the host the hero every second, and a visible tab leaves it to the frames', () => {
+      vi.useFakeTimers();
+      const m = mode();
+      const peers = host();
+      m.peers = peers;
+      m.enter(42, 800, 600);
+      hidden(false);
+      vi.advanceTimersByTime(3000);
+      expect(peers.frame).not.toHaveBeenCalled(); // visible: the animation loop sends
+      hidden(true);
+      vi.advanceTimersByTime(3000);
+      expect(peers.frame).toHaveBeenCalledTimes(3);
+      expect(peers.frame).toHaveBeenLastCalledWith(expect.any(Number), [0, 0]);
+    });
+
+    it('stops with the world: nothing is sent after Escape, nor twice after another world is entered', () => {
+      vi.useFakeTimers();
+      hidden(true);
+      const m = mode();
+      const peers = host();
+      m.peers = peers;
+      m.enter(42, 800, 600);
+      m.enter(43, 800, 600);
+      vi.advanceTimersByTime(1000);
+      expect(peers.frame).toHaveBeenCalledTimes(1); // one timer, not one per world
+      m.key('Escape');
+      peers.frame.mockClear();
+      vi.advanceTimersByTime(5000);
+      expect(peers.frame).not.toHaveBeenCalled();
+    });
+
+    it('is idle with no host', () => {
+      vi.useFakeTimers();
+      hidden(true);
+      const m = mode();
+      m.enter(42, 800, 600);
+      vi.advanceTimersByTime(2000);
+      m.key('Escape');
+      expect(m.active).toBe(false);
+    });
   });
 });
 

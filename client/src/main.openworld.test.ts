@@ -11,7 +11,7 @@ import { world_can_break } from 'abalone-wasm';
 import { boot, type Game } from './test/harness';
 import { signBreak } from './worldevents';
 import { generateKeys } from './moverecord';
-import { BREAK_BYTES, encodeBreak } from './worldpeers';
+import { BREAK_BYTES, encodeBreak, encodeTroop } from './worldpeers';
 import { decode, encodeHello, encodePos, PUBLIC_SEED } from './worldpeers';
 
 // The Open world mode (#962, docs/specs/openworld.md): its entry is in the mode menu for everyone (#1000), ?openworld=<seed>
@@ -470,22 +470,29 @@ describe('the public Open world online', () => {
     expect(data().openworld).toBe(String(PUBLIC_SEED));
     game.frame(16); // the hero's place goes out
     room.join('p');
-    expect(room.sent.map(([d, to]) => [decode(d), to])).toEqual([
-      [{ t: 'pos', q: 0, r: 0, seq: 0 }, undefined],
-      [{ t: 'hello', name: '' }, 'p'],
-      [{ t: 'pos', q: 0, r: 0, seq: 0 }, 'p'],
-    ]);
+    const sent = room.sent.map(([d, to]) => [decode(d), to] as const);
+    expect(sent.map(([m, to]) => [m!.t, to])).toEqual([['pos', undefined], ['troop', undefined], ['hello', 'p'], ['pos', 'p'], ['troop', 'p']]);
+    expect(sent[0]![0]).toEqual({ t: 'pos', q: 0, r: 0, seq: 0 });
+    expect((sent[1]![0] as { offsets: unknown[] }).offsets).toHaveLength(6); // the six marbles round the spawn, 15 bytes
+    expect(room.sent[1]![0]).toHaveLength(15);
+    room.data(encodeHello(), 'p');
     room.data(encodeHello(), 'p');
     room.data(encodePos(200, 0, 0), 'p');
     game.frame(16);
     expect(peersRoot().hidden).toBe(false);
     expect(peersRoot().dataset.edges).toBe('200');
     expect(peersRoot().children[0]!.getAttribute('aria-label')).toBe('Another hero, 200 tiles away');
+    room.data(encodeHello(), 'q');
+    room.data(encodePos(1, 0, 0), 'q');
+    room.data(encodeTroop([[1, 0], [0, 1]]), 'q'); // the army of a second hero, next to ours
+    game.frame(16);
+    expect(peersRoot().dataset.peers).toBe('2'); // two heroes, however many marbles
     press('ArrowRight');
     game.frame(300);
     const [q, r] = data().openworldAt!.split(',').map(Number) as [number, number]; // the step, maybe carried on by the troop's push
     expect(q).toBeGreaterThan(0);
-    expect(decode(room.sent.at(-1)![0])).toEqual({ t: 'pos', q, r, seq: 1 });
+    expect(decode(room.sent.filter(([d]) => d[1] === 2).at(-1)![0])).toEqual({ t: 'pos', q, r, seq: 1 });
+    expect(decode(room.sent.filter(([d]) => d[1] === 4).at(-1)![0])).toMatchObject({ t: 'troop' }); // the troop followed the hero
     expect(peersRoot().dataset.edges).toBe(String(Math.max(Math.abs(200 - q), Math.abs(r), Math.abs(200 - q + r))));
     press('Escape'); // leaving the world leaves the room and clears the screen
     expect(room.closed).toBe(true);
@@ -522,21 +529,6 @@ describe('the public Open world online', () => {
     const private7 = await enter('?bot=off&consent&openworld=7');
     expect(byId('consent').hidden).toBe(true);
     expect(private7.world()).toBeNull();
-  });
-
-  it('New world leaves the room: the new seed is private', async () => {
-    const game = await boot('?bot=off&consent');
-    game.openModes();
-    byId('openworld').click();
-    await settle();
-    byId('consent-accept').click();
-    await settle();
-    const room = game.world()!;
-    byId('openworld-new').click();
-    byId('openworld-discard').click();
-    await settle();
-    expect(room.closed).toBe(true);
-    expect(data().openworld).not.toBe(String(PUBLIC_SEED));
   });
 
   it('under ?net=hook the test page drives the room: Hello out on a join, a far hero in, no network', async () => {

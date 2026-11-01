@@ -818,12 +818,10 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 /* The New world control (#1021): the confirmation sits under the button, and each button shows its focus. */
 #openworld-hud p { margin: 0 0 0.5rem; }
 #openworld-hud code { font-size: 0.8125rem; }
-#openworld-new[hidden], #openworld-confirm[hidden] { display: none; }
 /* The Dungeon button (#1291) is a HUD button (44 px target); its note shows only when a press found no tower. */
 #openworld-dungeon-note:empty { display: none; }
 /* #1038: text for a screen reader only, such as the one live status of a sheet that is read as a group. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-#openworld-confirm { margin-top: 0.5rem; }
 #openworld-hud button { margin: 0 0.5rem 0.25rem 0; min-height: var(--target); padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 #openworld-hud button:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
 #openworld-hud button:active { border-color: var(--plate-accent); background: var(--bg); }
@@ -1223,5 +1221,4 @@ body:not([data-openworld], [data-over]) canvas { animation: screen-in var(--moti
    first frame, so no layout shift and the focus and hit areas are final at once). The fold leaves on the fast token (above). Reduced
    motion: the tokens are 0ms and the rule above cuts the animation, so both appear at once. */
 body[data-openworld] #openworld-hud { animation: sheet-in var(--motion-base) var(--ease-out); }
-#openworld-confirm:not([hidden]) { animation: sheet-in var(--motion-base) var(--ease-out); }
 

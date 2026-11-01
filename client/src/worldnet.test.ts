@@ -11,7 +11,7 @@ import * as THREE from 'three/webgpu';
 import type { PeerNet } from './p2p';
 import { generateKeys } from './moverecord';
 import { signBreak } from './worldevents';
-import { decode, encodeBreak, encodeHello, encodePos, PUBLIC_SEED, roomOf } from './worldpeers';
+import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, PUBLIC_SEED, roomOf } from './worldpeers';
 import { WorldPeersHost, type NetStatus } from './worldnet';
 
 class FakeNet implements PeerNet {
@@ -383,6 +383,48 @@ describe('WorldPeersHost', () => {
       nets[2]!.join('p');
       host.frame(0, [0, 0]);
       expect(sentBreaks(nets[2]!)).toEqual([]);
+    });
+  });
+
+  describe('the armies (#1305)', () => {
+    const troops = (net: FakeNet) => net.sent.filter(([d]) => d[1] === 4);
+
+    it('sends the offsets of the hero troop when they change, 4 Hz at most, to every peer', () => {
+      const { nets, host, enter } = setup();
+      enter();
+      host.frame(0, [0, 0], [[1, 0], [-1, 0]]);
+      host.frame(100, [1, 0], [[2, 0], [0, 0]]); // the same offsets: nothing
+      host.frame(300, [1, 0], [[2, 0]]);
+      expect(troops(nets[0]!).map(([d, to]) => [decode(d), to])).toEqual([
+        [{ t: 'troop', offsets: [[1, 0], [-1, 0]] }, undefined],
+        [{ t: 'troop', offsets: [[1, 0]] }, undefined],
+      ]);
+    });
+
+    it('gives a newcomer the troop with the hello and the place', () => {
+      const { nets, host, enter } = setup();
+      enter();
+      host.frame(0, [0, 0], [[1, 0]]);
+      nets[0]!.sent.length = 0;
+      nets[0]!.join('p');
+      expect(nets[0]!.sent.map(([d, to]) => [d[1], to])).toEqual([[1, 'p'], [2, 'p'], [4, 'p']]);
+      nets[0]!.sent.length = 0;
+      const fresh = setup();
+      fresh.enter();
+      fresh.nets[0]!.join('q'); // no place or troop known yet: the hello alone
+      expect(fresh.nets[0]!.sent.map(([d]) => d[1])).toEqual([1]);
+    });
+
+    it('draws the troop a peer sends, and nothing for a troop before its hello', () => {
+      const { nets, host, scene, enter } = setup();
+      enter();
+      const marbles = () => (scene.getObjectByName('peers') as THREE.InstancedMesh).count;
+      nets[0]!.data(encodeTroop([[1, 0]]), 'p'); // no hello: refused
+      nets[0]!.data(encodeHello(), 'p');
+      nets[0]!.data(encodePos(1, 1, 0), 'p');
+      nets[0]!.data(encodeTroop([[1, 0], [0, 1]]), 'p');
+      host.frame(0, [0, 0]);
+      expect(marbles()).toBe(3);
     });
   });
 });

@@ -199,7 +199,6 @@ import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, loadSpaceshipBay, m
 import { OpenWorldMode, twistOf } from './openworldmode';
 import { bindJoystick, heldKeys } from './openworldjoystick';
 import { bindHudFold } from './openworldfold';
-import { bindNewWorld } from './openworldnew';
 import { worldSaves } from './openworldsave';
 import { loadModels } from './openworldview';
 import { DECK_PARTICLES, deckOf, type Deck } from './deck';
@@ -5545,8 +5544,10 @@ trainerButton.disabled = false; // listener ready (#146)
 // random world; else a click resumes the last world played when it has a save (#968), or rolls a new seed.
 const openWorldButton = document.getElementById('openworld') as HTMLButtonElement;
 const openWorldParam = (new URLSearchParams(location.search).get('openworld') ?? '').trim();
-const openWorldFresh = openWorldParam === 'new';
-const openWorldFixedSeed = openWorldParam === '' || openWorldFresh ? NaN : Number(openWorldParam);
+// #1361, owner's choice: for now a player cannot change the seed, everybody plays together in the public world. The seed of the
+// URL is read only under automation (navigator.webdriver), so the e2e specs and test hooks keep their private worlds.
+const openWorldFresh = navigator.webdriver && openWorldParam === 'new';
+const openWorldFixedSeed = !navigator.webdriver || openWorldParam === '' || openWorldFresh ? NaN : Number(openWorldParam);
 const openWorldSaves = worldSaves(gameStore, world_version());
 const openWorld = new OpenWorldMode(
   (seed, cx, cy) => world_chunk(seed, cx, cy),
@@ -5629,12 +5630,11 @@ async function enterWorld(seed: number, resume = true): Promise<void> {
   worldOnline = seed === PUBLIC_SEED && (await publicWorldOnline());
   return openWorld.open(seed, innerWidth, innerHeight, resume);
 }
-/** The world the menu opens: the seed of the URL, else the last world played when it has a save, else the public world. */
+/** The world the menu opens: the public world, or the seed of the URL under automation. */
 async function enterOpenWorld(): Promise<void> {
   if (openWorldFresh) return enterWorld(crypto.getRandomValues(new Uint32Array(1))[0]!, false);
   if (Number.isFinite(openWorldFixedSeed)) return enterWorld(openWorldFixedSeed);
-  const last = await openWorldSaves.last();
-  return enterWorld(last !== null && (await openWorldSaves.load(last)) ? last : PUBLIC_SEED);
+  return enterWorld(PUBLIC_SEED); // an older private save stays in its store, untouched
 }
 if (navigator.webdriver) {
   // The test hooks of the Open world (docs/specs/openworld.md section 6): a fixture sets the hero, the troop and the enemies.
@@ -5652,7 +5652,6 @@ openWorldButton.addEventListener('click', () => {
   openWorldButton.blur(); // the menu's arrow keys would take the hero's
 });
 openWorldButton.disabled = false; // listener ready (#146)
-bindNewWorld(document, openWorld.newWorld.bind(openWorld)); // the HUD's New world, with its confirmation (#1021)
 bindHudFold(document); // the HUD plate folds to its chip after a few steps (#1138)
 bindJoystick(document, openWorld); // the touch stick of the Open world, on the left half of the canvas (#1025)
 addEventListener('keydown', (e) => {
@@ -6239,3 +6238,6 @@ renderer.setAnimationLoop((now) => {
   dirty = Math.max(0, dirty - 1);
   lastDraw = { start: now, cost: performance.now() - now, timed: false };
 });
+// A link with any ?openworld=<value> opens the public world at the load (#1361), the online notice first. The saved fight stays
+// in its store: the click does the same, and a world only replaces the board on screen.
+if (openWorldParam !== '') openWorldButton.click(); // last: the whole page is ready

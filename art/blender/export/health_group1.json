@@ -1,0 +1,194 @@
+{
+"ballast": {
+"file": "scene_ballast_slab.glb",
+"bytes": 53216,
+"nodes": 168,
+"tris": 6065,
+"bad": [],
+"meshes": 18,
+"health": {
+"kit_mindcore_ring_1": {
+"tris": 32,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_cell_hex": {
+"tris": 28,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_mindcore_ring_0": {
+"tris": 32,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_ring_swarm": {
+"tris": 96,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_crack_last": {
+"tris": 21,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_marble_black": {
+"tris": 80,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 0
+},
+"kit_marble_white": {
+"tris": 80,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pedestal_flat": {
+"tris": 16,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pillar_void_old.162": {
+"tris": 16,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pillar_void_old.163": {
+"tris": 16,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pillar_void_old.165": {
+"tris": 16,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pillar_void_old.166": {
+"tris": 16,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pillar_void": {
+"tris": 16,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pit_void": {
+"tris": 28,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_digit_plate_big_2": {
+"tris": 20,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_prop_mindcore": {
+"tris": 64,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_slab_r5": {
+"tris": 84,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pillar_void_old.164": {
+"tris": 16,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+}
+}
+},
+"dual": {
+"file": "scene_dual_slab.glb",
+"bytes": 33364,
+"nodes": 136,
+"tris": 5002,
+"bad": [],
+"meshes": 8,
+"health": {
+"kit_marble_white": {
+"tris": 80,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_return_dot": {
+"tris": 4,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_ring_return_white": {
+"tris": 96,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_marble_black": {
+"tris": 80,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 0
+},
+"kit_cell_hex": {
+"tris": 28,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_pedestal_flat": {
+"tris": 16,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_prop_galleyplank": {
+"tris": 70,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+},
+"kit_slab_r3": {
+"tris": 84,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+}
+}
+},
+"hint": {
+"file": "kit_ring_hint.glb",
+"bytes": 3432,
+"nodes": 1,
+"tris": 72,
+"bad": [],
+"meshes": 1,
+"health": {
+"kit_ring_hint": {
+"tris": 72,
+"nonmanifold": 0,
+"loose": 0,
+"colors": 1
+}
+}
+}
+}

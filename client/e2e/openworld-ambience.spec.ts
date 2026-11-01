@@ -10,8 +10,6 @@ async function enter(page: Page, query = ''): Promise<void> {
   await page.setViewportSize({ width: 480, height: 270 }); // software WebGL: a frame costs by its pixels
   await page.goto(`./?bot=off&openworld=1${query}`);
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
 }
 async function stand(page: Page, biome: Biome): Promise<void> {

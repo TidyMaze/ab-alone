@@ -325,6 +325,7 @@ An error is `{ "code": "...", "message": "..." }`. `message` is the engine's rea
 | `not_your_turn` | Online, it is the opponent's turn |
 | `no_room`, `already_in_room`, `room_full`, `room_not_found` | Room state |
 | `transport_failed` | The P2P layer could not start |
+| `no_world_room`, `already_in_world_room`, `world_changed`, `unknown_hero`, `bad_target` | The public world room (section 7.2) |
 | `not_supported` | Online resign |
 | `no_world` | No Open world started (`new_world` first) |
 | `blocked` | `world_step`: the hero cannot enter the cell. `message` says why |
@@ -350,6 +351,24 @@ A room can be a duel on a boss: seat 1 plays Black, seat 2 plays the boss as Whi
 - `get_state` shows the `boss` block to both seats. `legal_moves` lists `announces` and `free` only on a Black turn.
 - The boss's moves are not searched by the server: the agent chooses them, `engine.boss_move()` is not used.
 - Not yet: a Retry or rematch in a duel (the client hides the button).
+
+### 7.2 The public Open world room (#1365)
+
+An agent can be a hero in the public Open world (seed 1305, room `ow:1305:0`, multiplayer.md section 7), seen by the players as a named hero. Four tools, in `mcp/src/worldroom.ts`, apart from the local world tools of section 5.2 (which they call but do not change):
+
+| Tool | Input | Output |
+|---|---|---|
+| `join_world_room` | `name`, up to 16 characters, default `Claude` | `{ room, name, hero, heroes }`; enters the world of seed 1305 with the hero on the spawn, drops the world in progress, joins the room |
+| `world_heroes` | none | `{ you, heroes: [{ id, name, cell, distance }], problem? }`, the nearest first; `problem` when the connection has an error |
+| `world_visit` | `hero` (an `id`), or `q` and `r` | `{ steps, hero, target, arrived }`; walks to the hero and stops next to it, following it, or to the cell |
+| `leave_world_room` | none | `{ left: true }`; closes the room |
+
+- **The wire is the browser's.** The agent uses `p2pPeers` of `client/src/p2p.ts` and the format of `client/src/worldpeers.ts` as it is: a version 2 `Hello` with the name for each peer that joins, then its position (7 bytes, signed by nobody), at most 4 a second (`SEND_MS`) and a keepalive every 5 s (`KEEPALIVE_MS`) while it stands still. The others are kept in the client's own `Peers` table, so a message of another version, a position without a `Hello`, one that comes faster than `MIN_GAP_MS` and a peer silent for 10 s are refused or dropped as in a browser. A browser shows the agent as a hero with its name and the normal marker.
+- **A walk is paced.** `world_visit` takes one cell, with the path of the core (`world_path`) and the move of the server's world (`world_walk` of the local world, section 5.2, one cell at a time), then waits 250 ms: one position message per cell, never faster than a browser. At most 40 steps a call (`arrived` false: call again). The agent follows a hero by re-reading its place each step, and stops next to it.
+- **Consent.** Joining connects the agent's host to other players: their browsers, the STUN servers and the Nostr relays see its IP address and its moves (docs/privacy.md, the same as a browser). The MCP agent acts for its own user, so `join_world_room` is that user's explicit call: an agent must not call it unless its user asked for it. The server shows no dialog, the call is the consent, and the tool description says so. Nothing is joined at start.
+- **Leaving.** `leave_world_room` closes the room; a host that exits leaves too, and the players drop the hero after 10 s. `new_world` while in the room is `world_changed` for `world_heroes` and `world_visit`: leave and join again.
+- Errors: `no_world_room`, `already_in_world_room`, `transport_failed`, `unknown_hero`, `bad_target`, `no_path`, `blocked`, `world_changed`.
+- **Run it on demand.** Nothing runs by itself and the server hosts nothing. To see a Claude in the world, from the repo root (needs `bun install` and `bun run wasm` in `mcp/`, and the `claude` CLI): `timeout 660 claude -p "$(cat mcp/walker-prompt.md)" --mcp-config mcp/walker.mcp.json --strict-mcp-config --allowedTools mcp__ab-alone__join_world_room mcp__ab-alone__world_heroes mcp__ab-alone__world_visit mcp__ab-alone__leave_world_room --max-budget-usd 2`. It joins as Claude, walks to the nearest hero, then the next nearest, for about 10 minutes (the `timeout` is the hard stop), and leaves. Running it is the user's consent.
 
 ## 8. Agent flag in `Hello`
 

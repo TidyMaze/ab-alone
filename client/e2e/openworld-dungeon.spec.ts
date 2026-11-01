@@ -6,8 +6,6 @@ import { openModes } from './modes';
 test('the Dungeon button walks the hero to the nearest tower and the fight starts, #1291', async ({ page }) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   const lairs = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ');
   const [q, r] = lairs[0]!.split(',').map(Number) as [number, number];

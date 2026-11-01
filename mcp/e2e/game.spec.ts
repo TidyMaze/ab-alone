@@ -45,14 +45,18 @@ test('a scripted client plays a full game against the bot over stdio', async () 
     'create_room',
     'get_state',
     'join_room',
+    'join_world_room',
+    'leave_world_room',
     'legal_moves',
     'new_game',
     'new_world',
     'play_move',
     'resign',
     'wait_for_opponent_move',
+    'world_heroes',
     'world_state',
     'world_step',
+    'world_visit',
     'world_walk',
   ]);
 

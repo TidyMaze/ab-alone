@@ -88,7 +88,12 @@ export type ErrorCode =
   | 'not_supported'
   | 'no_world'
   | 'blocked'
-  | 'no_path';
+  | 'no_path'
+  | 'no_world_room'
+  | 'already_in_world_room'
+  | 'world_changed'
+  | 'unknown_hero'
+  | 'bad_target';
 
 export interface ToolError {
   code: ErrorCode;

@@ -122,10 +122,6 @@ describe('Open world UI motion (#1105)', () => {
     expect(block).toMatch(/body\[data-openworld\] #openworld-hud \{[^}]*animation: sheet-in var\(--motion-base\) var\(--ease-out\)/);
   });
 
-  it('slides the New world sheet in on the base token', () => {
-    expect(block).toMatch(/#openworld-confirm:not\(\[hidden\]\) \{[^}]*animation: sheet-in var\(--motion-base\) var\(--ease-out\)/);
-  });
-
   it('folds the HUD away on the fast token, with transform and opacity only', () => {
     const folded = css.match(/#openworld-hud\[data-folded\] \{([^}]*)\}/)![1]!;
     expect(folded).toContain('transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out), visibility 0s var(--motion-fast)');

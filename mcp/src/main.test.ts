@@ -16,6 +16,10 @@ vi.mock('../../client/src/p2p', () => ({
     io.rooms.push(room);
     throw new Error('no relay in the unit tests');
   },
+  p2pPeers: (room: string) => {
+    io.rooms.push(room);
+    throw new Error('no relay in the unit tests');
+  },
 }));
 
 const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
@@ -39,6 +43,13 @@ describe('main', () => {
     const result = await client.callTool({ name: 'create_room', arguments: {} });
     expect(result.isError).toBe(true);
     expect(io.rooms).toHaveLength(1);
+    expect((result.content as { text: string }[])[0]!.text).toContain('transport_failed');
+  });
+
+  test("opens the public world room over the browser client's peer transport (#1365)", async () => {
+    const result = await client.callTool({ name: 'join_world_room', arguments: {} });
+    expect(result.isError).toBe(true);
+    expect(io.rooms.at(-1)).toBe('ow:1305:0');
     expect((result.content as { text: string }[])[0]!.text).toContain('transport_failed');
   });
 });
