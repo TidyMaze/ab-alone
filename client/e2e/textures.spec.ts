@@ -16,14 +16,10 @@ test('textures are requested and the board still renders', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready'); // the room is complete: the bay loads after the page (#661)
   const { origin } = new URL(page.url());
   expect(transcoder.sort()).toEqual([`200 ${origin} basis_transcoder.js`, `200 ${origin} basis_transcoder.wasm`]);
-  // Every texture ships as KTX2 (#700).
+  // Every texture ships as KTX2 (#700). The room's board, plate and default skin maps are not asked for on the terrace (#1370).
   expect(loaded.sort()).toEqual([
     '200 arena.glb', // the terrace (#1314)
     '200 backdrop.ktx2',
-    '200 board-albedo.ktx2', // the PBR board (#876)
-    '200 board-metalness.ktx2',
-    '200 board-normal.ktx2',
-    '200 board-roughness.ktx2',
     '200 bulkhead-albedo.ktx2',
     '200 bulkhead-ao.ktx2',
     '200 bulkhead-displacement.ktx2',
@@ -47,15 +43,6 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 kit-arena.glb', // the terrace's marks and pedestal (#1314)
     '200 kit-boss.glb', // the bosses' props (#1374)
     '200 kit-ring-hint.glb', // the terrace's hint ring (#1364)
-    '200 plate-albedo.ktx2', // the board's plate (#772)
-    '200 plate-normal.ktx2',
-    '200 plate-roughness.ktx2',
-    '200 skin-Leather027-albedo.ktx2', // the default shell skin, the other skins load when picked
-    '200 skin-Leather027-normal.ktx2',
-    '200 skin-Leather027-roughness.ktx2',
-    '200 skin-Marble025-albedo.ktx2', // the default glass skin
-    '200 skin-Marble025-normal.ktx2',
-    '200 skin-Marble025-roughness.ktx2',
     '200 slab-ballast.glb', // the Ballast Mind's board (#1374)
     '200 slab-dual.glb', // the Dual Room's board (#1374)
     '200 slab-hub.glb', // the hub's deck (#1374)
@@ -64,7 +51,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
   ]);
 });
 
-// Bug #925: the skin maps are asked for with the first maps, not after them. The first map of the first wave is held until
+// Bug #925: the skin maps are asked for with the first maps, not after them. The room's default skins (#1370): `?scene=room`. The first map of the first wave is held until
 // the six maps of the two default skins are asked for, or 3 s pass: a skin wave that waits for the first wave never asks.
 test('the skin maps are asked for with the first wave, not after it (bug #925)', async ({ page }) => {
   const skinFiles = new Set<string>();
@@ -81,7 +68,7 @@ test('the skin maps are asked for with the first wave, not after it (bug #925)',
     skinsAskedWhenWaveEnded = skinFiles.size;
     return route.continue();
   });
-  await page.goto('./?bot=on');
+  await page.goto('./?bot=on&scene=room');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-bay', 'ready');
   expect(skinsAskedWhenWaveEnded).toBe(6);

@@ -50,7 +50,15 @@ export const MARBLE_LOOK = { roughness: 0.4, metalness: 0 } as const;
 
 /** Whether a texture file loads in this look: the tonal one loads none of the board's, the marbles' or the cells' maps,
  * only the backdrop and the crack decal, which carry the room and a boss tell. */
-export const loadsTexture = (look: Look, name: string): boolean => look === 'pbr' || name === 'backdrop.ktx2' || name === 'crack-decal.ktx2';
+/** The board's and the plate's maps: the room's, hidden on the terrace (#1370). */
+const ROOM_PLATE = /^pbr\/(board|plate)-/;
+/** Whether a texture file loads in this look, on the room (`room`) or on the terrace (#1370): the terrace draws no board or plate. */
+export const loadsTexture = (look: Look, name: string, room = true): boolean =>
+  (look === 'pbr' || name === 'backdrop.ktx2' || name === 'crack-decal.ktx2') && (room || !ROOM_PLATE.test(name));
+
+/** Whether a skin's maps are asked for (#1370): the terrace draws its default skins with its own marbles, so their maps wait for
+ * the room, and a skin the player picked always has them. */
+export const asksSkinMaps = (room: boolean, skinId: string, terraceSkins: readonly string[]): boolean => room || !terraceSkins.includes(skinId);
 
 /** How much a tonal material lights itself with its own colour: the room's lamps are dim, and a flat tone of the palette would
  * otherwise draw far darker than its swatch (cell #32353a drew as #14171a). */

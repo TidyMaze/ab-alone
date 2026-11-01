@@ -282,7 +282,7 @@ describe('main.ts, the deck textures', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     const plates: Mesh[] = [];
     scene!.traverse((o) => (o as Mesh).material?.metalnessMap?.name === 'board-metalness.ktx2' && plates.push(o as Mesh));
     expect(plates).toHaveLength(1);
@@ -296,7 +296,7 @@ describe('main.ts, the deck textures', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     const maps: THREE.Texture[] = [];
     scene!.traverse((o) => {
       const m = (o as Mesh).material;
