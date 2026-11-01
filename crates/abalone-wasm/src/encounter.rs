@@ -1095,8 +1095,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_19_since_the_ballast_mind_borrows_every_2_turns_and_wins_at_12() {
-        assert_eq!(engine_version(), 19);
+    fn the_engine_version_is_20_since_the_magnetizer_assigns_every_3rd_turn_in_p2() {
+        assert_eq!(engine_version(), 20);
     }
 
     #[test]

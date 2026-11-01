@@ -99,7 +99,7 @@ test('The Magnetizer: the phase changes after 3 ejections, #645', async ({ page 
   await startMagnetizer(page);
   await plies(page, 0, 23);
   await expect(page.locator('#hud')).toContainText('3/6');
-  await expect(page.locator('#hud .boss .tell')).toHaveText('Polarity in 2 turns');
+  await expect(page.locator('#hud .boss .tell')).toHaveText('Polarity in 3 turns'); // turn 12 of P2: the next one is turn 15 (#1237)
 });
 
 test('The Magnetizer: the announced marble blinks in opacity, with reduced motion it wears a steady outline, #741', async ({ page }, testInfo) => {
