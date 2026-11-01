@@ -973,7 +973,8 @@ mod tests {
         // The search before #916: the polarities follow the moves and settle, no assignment.
         let blind = |before: &Board, _: Player, mv: &Move, mut after: Board| {
             after.set_polarities(carried_poles(before, mv, &after));
-            settle(&after, 0, &mut |_, _| {})
+            let (out, credits, _) = settled(&after, 0);
+            (out, credits)
         };
         let old = search_hooked(
             enc.game(),
@@ -1025,10 +1026,11 @@ mod tests {
         assert_eq!(p1.magnetizer_ply(), Some(4), "the clock moves on");
         assert_eq!(credits, [0, 0]);
         let (p2, _) = step(true);
-        assert!(
-            matches!(p2.announce(), Some((Some(_), 1))),
-            "P2 after a third ejection in the tree: turn 4 is announced"
-        );
+        let (cell, sign) = p2
+            .announce()
+            .expect("P2 after a third ejection in the tree: turn 4 is announced");
+        assert!(cell.is_some());
+        assert_eq!(sign, 1, "the first sign, +");
     }
 
     #[test]
