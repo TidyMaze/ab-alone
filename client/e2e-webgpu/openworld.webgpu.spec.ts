@@ -80,9 +80,9 @@ async function runWorld(page: Page, seed: string): Promise<string[]> {
   await page.mouse.wheel(0, 5000); // as far out as the screen allows: MAX_ZOOM is 6 on a 16:9 screen
   await expect.poll(async () => Number(await data('openworldZoom'))).toBeGreaterThan(5);
   await page.keyboard.press('q');
-  await expect.poll(() => data('openworldYaw')).toBe('60');
+  await expect.poll(() => data('openworldYaw')).toBe('30'); // rests at -30 (#1254), a turn is 60 (#1253)
   await page.keyboard.press('e');
-  await expect.poll(() => data('openworldYaw')).toBe('0');
+  await expect.poll(() => data('openworldYaw')).toBe('-30');
   await page.keyboard.press('Escape');
   await expect(page.locator('#hud')).toBeVisible();
   await enter(page);
@@ -166,10 +166,8 @@ test('the Open world on WebGPU, entered and left 25 times: the geometries stay f
   expect(errors).toEqual([]);
 });
 
-// Measured on main (2026-11-01): the textures grow by 2 per entry (56 -> 106 over 25). A bug, tracked in #1258: this test is
-// expected to fail until it is fixed (test.fail), and then reports as unexpectedly passing, so the annotation goes with the fix.
-test('the Open world on WebGPU, entered and left 25 times: the textures stay flat, #1023', async ({ page }) => {
-  test.fail(true, '#1258: the textures grow by 2 per Open world entry');
+// Each entry used to leave the scene's two ClusteredLightsNode textures alive, 56 -> 106 over 25 (#1258).
+test('the Open world on WebGPU, entered and left 25 times: the textures stay flat, #1023, #1258', async ({ page }) => {
   const { start, end } = await enterAndLeave(page);
   expect(end.textures, `textures ${start.textures} -> ${end.textures}`).toBeLessThanOrEqual(start.textures + SLACK);
 });

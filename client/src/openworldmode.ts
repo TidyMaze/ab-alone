@@ -198,6 +198,8 @@ export class OpenWorldMode {
     private readonly path: WalkPath = () => new Int32Array(),
     /** Whether steering is on (the Settings item, #1137): the held arrows slide round obstacles and a far tap walks there. */
     private readonly steering: () => boolean = () => true,
+    /** Called with the scene of a world left, after its view is freed: the renderer frees what it keeps per scene, the lights node's textures (#1258). */
+    private readonly releaseScene: (scene: THREE.Scene) => void = () => {},
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -211,7 +213,7 @@ export class OpenWorldMode {
   /** Enters the world of `seed` with the hero, the troop and the fight of `saved` (a save of this seed), or on the spawn. */
   enter(seed: number, width: number, height: number, saved: WorldSave | null = null, skins?: MarbleSkins): void {
     this.flush(); // the world left (another seed entered over it) is saved first
-    this.view?.dispose();
+    this.freeView();
     this.seed = seed;
     const world = new World(
       (cx, cy) => this.load(seed, cx, cy),
@@ -260,11 +262,18 @@ export class OpenWorldMode {
     return this.view?.scene ?? null;
   }
 
+  /** Frees the view drawn now, if any, and hands its scene to the renderer to release (#1258). */
+  private freeView(): void {
+    if (!this.view) return;
+    this.view.dispose();
+    this.releaseScene(this.view.scene);
+  }
+
   leave(): void {
     this.flush();
     this.active = false;
     this.held.clear();
-    this.view?.dispose();
+    this.freeView();
     this.view = null;
     this.world = null;
     this.dirty = false;
