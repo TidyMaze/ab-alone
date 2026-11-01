@@ -414,6 +414,42 @@ the games still end on rim ejections by the borrowed effects the ladder player r
 ahead. The target of #833 (14 to 18 of 20 at 10x) still needs a stronger or smarter ladder player or a
 change of the effects, the owner's call.
 
+### The Ballast Mind: the phase follows the ejections inside the tree (#1115), no change on the ladder
+
+Audit #930 row 5: the effects borrowed from the Hull, Pulsar, Magnetizer and Chaplain were read
+(`hook` runs their own code, the Chaplain conversion is a loss credit, the Magnetizer polarity is
+carried, each with a test), but the effect due this turn took the phase of the root. A move that
+ejects a third (fifth) marble reaches P2 (P3) before the effect answers it, so the pulse is force 3
+(infinite) and not 2. `ballast_search` now uses `search_phased` and takes the highest of the root
+phase and the one the player's credits reach (`tree_phase`, P2 at 3, P3 at 5). No rule, knob or
+`engine_version` change. Only the ply that fires the effect looks at it: the boss reply fires at its
+root ply (the boss's own moves credit nothing to the player), so the boss reply is unchanged, and
+the ladder player search (the effect answers its move) is the one that reads it. Deeper boss plies
+still fire no effect (the tree does not know which turn they are, out of scope).
+
+Best-move change, measured on 3000 random positions (4 to 9 marbles each, 4 random plies, player
+to move with 2 or 4 ejections, a pulse due on the boss reply), same search before and after:
+
+| Search budget | Positions where the best move changed |
+|---|---|
+| 100 (boss, and the 1x player) | 0 of 3000 |
+| 300 | 8 of 3000 |
+| 1000 (the 10x player) | 8 of 3000 |
+
+So the change shows only above the 100 nodes the boss uses: the boss reply is identical at the
+shipped budget. The test `the_phase_reached_in_the_tree_changes_the_best_move` uses a built
+position at 1000 nodes (seed 20709, seed index 668 of the scan). Ladder,
+`LADDER_X=<x> LADDER_SEEDS=20 cargo run --release --example ladder -- ballast`, run alone, main
+4c1477c before:
+
+| Player budget | Wins /20 before | Wins /20 after | Median plies before / after | Deaths after |
+|---|---|---|---|---|
+| 100 (1x) | 0 | 0 | 112 / 112 | rim ejection 18, draw 2 |
+| 1000 (10x) | 1 | 1 | 127 / 127 | rim ejection 13, draw 6 |
+
+Identical rows: the run is deterministic, not rerun. The #833 target (14 to 18 of 20 at 10x) is
+still not met, the owner's call.
+
 #### Earlier: NOT measured at pro level, 0 of 10 at 1x
 
 #### Attempt to measure it cheaply (#208): no result, the machine was too loaded
