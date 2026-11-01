@@ -282,7 +282,7 @@ describe('main.ts, the deck textures', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     const plates: Mesh[] = [];
     scene!.traverse((o) => (o as Mesh).material?.metalnessMap?.name === 'board-metalness.ktx2' && plates.push(o as Mesh));
     expect(plates).toHaveLength(1);
@@ -296,7 +296,7 @@ describe('main.ts, the deck textures', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     const maps: THREE.Texture[] = [];
     scene!.traverse((o) => {
       const m = (o as Mesh).material;
@@ -309,7 +309,7 @@ describe('main.ts, the deck textures', () => {
 
   it('without its own set, a deck keeps the shared steel albedo and no normal map', async () => {
     const cells = catchCells();
-    const game = await boot('?bot=off', {
+    const game = await boot('?bot=off&scene=room', {
       missing: ['deck-mess.ktx2', 'deck-mess-normal.ktx2', 'deck-mess-roughness.ktx2', 'deck-cargo.ktx2'],
     });
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('steel'));
