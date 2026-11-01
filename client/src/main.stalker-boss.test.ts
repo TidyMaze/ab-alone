@@ -18,12 +18,12 @@ function pickStalker(): void {
 }
 
 describe('main.ts The Stalker boss (#1111)', () => {
-  it('is the last entry of the Boss fight list, fogged at sight 3, with the sight on the HUD', async () => {
+  it('is in the Boss fight list, fogged at sight 3, with the sight on the HUD', async () => {
     const game = await boot('/');
     expect(shown(game)).toBeNull();
     byId('boss-fight').click();
     const entries = [...byId('boss-list').querySelectorAll('button')];
-    expect(entries[entries.length - 1]!.textContent).toBe('The Stalker');
+    expect(entries[entries.length - 2]!.textContent).toBe('The Stalker'); // before The Swarm (#1008)
     pickStalker();
     expect(byId('boss-list').hidden).toBe(true);
     const s = shown(game)!;
