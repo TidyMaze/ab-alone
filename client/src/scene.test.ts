@@ -403,6 +403,19 @@ describe('SceneRenderer (#632)', () => {
     expect(p.y).toBeLessThan(800);
   });
 
+  it('projects a point lifted above the board higher on the screen and, off the centre, further out (#1259)', () => {
+    const renderer = createMockRenderer();
+    const sr = new SceneRenderer({ renderer });
+    sr.frameCamera(1000, 800);
+    sr.applyView(resetView(), null, { tier: 'high', clear: false, deck: 'mess' });
+
+    const flat = sr.cellToScreen(-4, 0, 1000, 800);
+    const lifted = sr.cellToScreen(-4, 0, 1000, 800, 1, 0.76);
+    expect(lifted.y).toBeLessThan(flat.y);
+    expect(Math.abs(lifted.x - 500)).toBeGreaterThan(Math.abs(flat.x - 500));
+    expect(sr.cellToScreen(-4, 0, 1000, 800, 1, 0)).toEqual(flat);
+  });
+
   it('executes render pass', () => {
     const renderer = createMockRenderer();
     const sr = new SceneRenderer({ renderer });

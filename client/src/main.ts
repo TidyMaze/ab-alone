@@ -261,9 +261,9 @@ import { FRAME, RIM_LIGHT, frameShape, rimHalves, rimLight, type FrameShape, typ
 import { notchRow } from './notches';
 import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
-import { bestTurns, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
+import { bestTurns, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
-import { roomAt, type Spot as HubSpot } from './hub';
+import { roomAt, type Door, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
 import { labelsHtml, pipsHtml, railHtml } from './hubview';
 import { indexedDbStore } from './idb';
@@ -356,7 +356,7 @@ const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 const fightView = (): View => {
-  if (hub) return resetView(innerWidth < innerHeight ? 2.4 : 3); // the hub's deck plan (#1249): its 19 cells and their plates, closer than a board, closer still upright
+  if (hub) return resetView(innerWidth < innerHeight ? 3.4 : 3.6); // the hub's deck plan (#1249): its 37 cells and their plates, a little closer than a board, closer still upright
   if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
   if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
   return resetView(activeRadius());
@@ -3263,7 +3263,7 @@ function refresh(): void {
   if (hub) {
     const { beaten } = loadProgress(store);
     hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim);
-    hubLabels.innerHTML = labelsHtml(hub.at, beaten);
+    hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store)); // a beaten boss's door shows its medal (#1249)
     document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten);
     document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten);
     placeHubLabels();
@@ -4151,8 +4151,8 @@ addEventListener('resize', () => {
 });
 
 // Used by the browser checks to click a cell by its axial coordinates.
-(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number) => {
-  return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1);
+(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number, lift = 0) => {
+  return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1, lift);
 };
 // Used by the browser checks to see the console screen (#512) and the recorder (#517) on the window: the box around its
 // corners, in pixels.
@@ -4634,8 +4634,22 @@ function enterRoom(at: HubSpot): void {
   else if (door?.kind === 'hotseat' || door?.kind === 'bot') startLocal(door.kind === 'bot');
   else if (door?.kind === 'online' && !playOnlineButton.disabled) playOnline();
   else if (door?.kind === 'royale') startRoyale({ seed: crypto.getRandomValues(new Uint32Array(1))[0]!, rounds: [] });
-  else return;
+  else if (door?.kind === 'daily') startDaily();
+  else if (door?.kind === 'ranked' && !rankedButton.disabled) rankedButton.click();
+  else return enterModeRoom(door);
   roomOf = at;
+}
+// The other mode rooms (#1249) do what their menu entry does, and keep no room for Back to the ship: Ship in the mode
+// menu takes the player back from a run, the Trainer and the Open world, and Fight together opens the mode menu on its
+// boss list.
+function enterModeRoom(door: Door | undefined): void {
+  if (door?.kind === 'run') runButton.click();
+  else if (door?.kind === 'trainer') trainerButton.click();
+  else if (door?.kind === 'world') openWorldButton.click();
+  else if (door?.kind === 'together') {
+    if (!modesOpen) moveModes('button');
+    showCoopList(true);
+  }
 }
 function startLocal(bot: boolean): void {
   worker = bot ? botWorker : null;
