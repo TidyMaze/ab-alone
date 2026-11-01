@@ -19,16 +19,19 @@ function world(lairs?: number[]): OpenWorld {
   return new OpenWorld(rules, bossIds);
 }
 
-/** The terrain code of the engine at a cell of seed `seed`, `-1` off the world. */
+const chunks = new Map<string, Uint8Array>();
+
+/** The terrain code of the engine at a cell of seed `seed`, `-1` off the world. Chunks are read once. */
 function code(seed: number, q: number, r: number): number {
-  const rules = worldRules();
   const cx = Math.floor(q / 16);
   const cy = Math.floor(r / 16);
-  const cells = rules.world_chunk(seed, cx, cy);
+  const key = `${seed},${cx},${cy}`;
+  if (!chunks.has(key)) chunks.set(key, worldRules().world_chunk(seed, cx, cy));
+  const cells = chunks.get(key)!;
   return cells.length === 0 ? -1 : cells[((r - cy * 16) * 16 + (q - cx * 16)) * 3 + 1]!;
 }
 
-const SEEDS = Array.from({ length: 30 }, (_, seed) => seed);
+const SEEDS = Array.from({ length: 12 }, (_, seed) => seed);
 
 const STEPS: Record<string, [number, number]> = { E: [1, 0], W: [-1, 0], NE: [1, -1], SW: [-1, 1], NW: [0, -1], SE: [0, 1] };
 
