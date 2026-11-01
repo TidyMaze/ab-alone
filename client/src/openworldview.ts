@@ -3,10 +3,11 @@
 // pines, boulders, gantry walls with a gold edge), the hero marble, and the camera that follows it. It has its own
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
 import * as THREE from 'three/webgpu';
+import { uniform } from 'three/tsl';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
 import { CameraLife, Spring } from './openworldcamera';
-import { EDGE_GAIN, edgeMaterial, HEX_RADIUS } from './openworldedge';
+import { EDGE_GAIN, edgeMaterial, gapFill, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
 import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
@@ -464,6 +465,8 @@ export class OpenWorldView {
   private readonly marbles: Marble[] = [new Marble(MARBLE)];
   /** The strength of the marbles' stripe at the drawn zoom (openworldstripe.ts), one uniform for every marble material (#1043). */
   private readonly stripe = stripeFadeNode();
+  /** The share the ground prisms widen by at the drawn zoom, closing the gap between them (openworldedge.ts, #1347): one uniform for every ground material. */
+  private readonly widen = uniform(0);
   /** Holds the drawn pose of a marble, apart from `dummy`: a build leaves its turn as it is, a marble's is set by its glide. */
   private readonly drawnPose = new THREE.Object3D();
   /** The time the glide of a step lands, in ms: a push's lunge starts then. Whether a marble glides or leans on the last tick. */
@@ -503,7 +506,7 @@ export class OpenWorldView {
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined });
+      const material = () => edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined, widen: this.widen });
       this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, material());
       this.managed.push(this.grounds[ground]);
       this.flats[ground] = this.instances(`terrain-${ground}-flat`, 1, top, material()); // grows on the first low build (`fit`)
@@ -1082,6 +1085,7 @@ export class OpenWorldView {
     this.drawnLevel = this.fitZoom(at);
     const k = this.drawnLevel;
     this.stripe.value = stripeStrength(k);
+    this.widen.value = gapFill(k);
     lookAtHero(this.camera, at, k, this.yawNow);
     // The fog starts at the hero's depth and ends past the farthest corner of the footprint, which is the far horizon.
     const corners = footprint(this.camera);
