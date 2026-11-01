@@ -209,7 +209,7 @@ describe('the renderer and its textures', () => {
     expect(document.body.dataset.scene).toBe('table-zero');
   });
 
-  it('shows the hint on the terrace: the marbles it takes wear the kit\'s ring in cyan, a colour apart from the selection\'s, which clears the hint (#301, #1314)', async () => {
+  it('shows the hint on the terrace: the marbles it takes wear the kit\'s hint ring, apart from the selection ring, which clears the hint (#301, #1314)', async () => {
     const game = await boot('?bot=off&nodes=50');
     await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
     byId('hint').click();
@@ -219,7 +219,7 @@ describe('the renderer and its textures', () => {
     const rings: THREE.Mesh[] = [];
     scene.traverse((o) => void (o.name === 'hint-ring' && rings.push(o as THREE.Mesh)));
     expect(rings.length).toBeGreaterThan(0);
-    expect((rings[0]!.material as THREE.MeshStandardMaterial).color.b).toBeGreaterThan(1); // cyan: more blue than the bone it multiplies
+    expect(Math.abs(rings[0]!.position.y - (0.091 - 0.11))).toBeLessThan(1e-6); // the kit's hint ring, flat on the dish
   });
 
   it('keeps the room in a 1v1 game when the arena file is missing: the page still plays (#1314)', async () => {
@@ -281,6 +281,7 @@ describe('the renderer and its textures', () => {
         WebGPURenderer: class {
           domElement = document.createElement('canvas');
           backend = { isWebGPUBackend: true };
+          shadowMap = { enabled: false, type: 0 };
           samples: number;
           info = { autoReset: true, reset(): void {}, render: { calls: 7, triangles: 300 }, memory: { geometries: 5, textures: 2 } };
           constructor(o: unknown) {

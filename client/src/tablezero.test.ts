@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
+import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, aimSunShadow, SUN_SHADOW, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
 
 describe('Table Zero is the scene of a 1v1 game only', () => {
   const on = { hub: false, fight: false, royale: false, run: false, room: false, ready: true };
@@ -154,5 +154,26 @@ describe('the terrace camera and its sky', () => {
     const solid = (mergeByMaterial(root).children as THREE.Mesh[]).find((m) => (m.material as THREE.Material).name === 'terrace_solid')!;
     expect((solid.material as THREE.MeshBasicMaterial).color.g).toBeCloseTo(1 / TERRACE_EXPOSURE); // the unlit colour is not tinted
     expect(lit.color.g).toBeCloseTo(TERRACE_TINT.g);
+  });
+});
+
+describe('the sun soft shadow (#1364)', () => {
+  it('aims the shadow camera over the board and its plinth, and switches off with the tier', () => {
+    const sun = new THREE.DirectionalLight();
+    aimSunShadow(sun, true);
+    expect([sun.castShadow, sun.shadow.mapSize.x, sun.shadow.camera.right, sun.shadow.camera.left]).toEqual([true, SUN_SHADOW.size, SUN_SHADOW.extent, -SUN_SHADOW.extent]);
+    expect([sun.shadow.bias, sun.shadow.intensity]).toEqual([SUN_SHADOW.bias, SUN_SHADOW.intensity]);
+    aimSunShadow(sun, false);
+    expect(sun.castShadow).toBe(false);
+  });
+  it('lets the lit board cast and receive, and not the unlit sky', () => {
+    const lit = new THREE.MeshStandardMaterial();
+    const lamp = new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+    const [a, b] = [new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), lit), new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), lamp)];
+    for (const m of [a, b]) m.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(24 * 4).fill(1), 4));
+    const root = new THREE.Group();
+    root.add(a, b);
+    const [first, second] = mergeByMaterial(root).children as THREE.Mesh[];
+    expect([first!.castShadow, first!.receiveShadow, second!.castShadow]).toEqual([true, true, false]);
   });
 });

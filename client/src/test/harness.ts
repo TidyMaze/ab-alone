@@ -220,6 +220,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
         },
       };
       toneMappingExposure = 1;
+      shadowMap = { enabled: false, type: 0 }; // the sun's soft shadow on the terrace (#1364)
       initialized = false;
       init = async (): Promise<void> => {
         if (options.fails === 'renderer') throw new Error('no GPU');
@@ -265,6 +266,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           const scene = new Group();
           if (url.endsWith('arena.glb') && !url.endsWith('kit-arena.glb')) scene.add(piece('scene_slab_arena'));
           if (url.endsWith('kit-arena.glb')) scene.add(...['kit_pedestal_flat', 'kit_ring_target', 'kit_arrow_target', 'kit_ring_select', 'kit_ring_lastmove'].map(piece));
+          if (url.endsWith('kit-ring-hint.glb')) scene.add(piece('kit_ring_hint'));
           return { scene };
         };
       },

@@ -12,7 +12,7 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
-import { TERRACE_EXPOSURE, addSun } from './tablezero';
+import { TERRACE_EXPOSURE, addSun, aimSunShadow } from './tablezero';
 
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
@@ -142,6 +142,8 @@ export class SceneRenderer {
   /** The terrace (#1314): the arena's glTF and its sun, shown in place of the room and of the plate and rim in a 1v1 game. */
   readonly terrace: THREE.Group;
   terraceOn = false;
+  /** The terrace's sun: it casts the soft shadow on the high tier (#1364). */
+  readonly sun: THREE.DirectionalLight;
   private roomBackground: THREE.Color | THREE.Texture | null = null;
 
   readonly notches: THREE.Group;
@@ -263,7 +265,7 @@ export class SceneRenderer {
     this.terrace = new THREE.Group();
     this.terrace.name = 'terrace';
     this.terrace.visible = false;
-    addSun(this.terrace);
+    this.sun = addSun(this.terrace)[1];
 
     this.notches = new THREE.Group();
     this.tallies = [new THREE.Group(), new THREE.Group()] as const;
@@ -478,7 +480,7 @@ export class SceneRenderer {
   }
 
   /** The terrace in place of the room, or the room back (#1314). The room and its lamps are hidden, not freed; so are the plate and the rim, the glTF carries the slab. */
-  setTerrace(on: boolean, background = 0x2c3438): void {
+  setTerrace(on: boolean, shadows = false, background = 0x2c3438): void {
     if (on === this.terraceOn) return;
     this.terraceOn = on;
     this.terrace.visible = on;
@@ -493,6 +495,15 @@ export class SceneRenderer {
     // The sky dome of the arena file is 95 away from the board and the camera 6 to 18 from it: the room's far plane at 100 cut its far wall.
     this.camera.far = on ? 300 : 100;
     this.camera.updateProjectionMatrix();
+    this.setShadows(on && shadows);
+  }
+
+  /** The sun's soft shadow, on the high tier only: the low tier draws none (#1364). */
+  setShadows(on: boolean): void {
+    if (this.renderer.shadowMap.enabled === on && this.sun.castShadow === on) return; // already so: the Open world asks on every draw
+    this.renderer.shadowMap.enabled = on;
+    this.renderer.shadowMap.type = THREE.VSMShadowMap;
+    aimSunShadow(this.sun, on);
   }
 
   /** Where the point `lift` above the cell is drawn: a mark on top of a marble is not under the cell's centre (#1259). */

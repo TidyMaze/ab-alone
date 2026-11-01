@@ -33,6 +33,24 @@ export function sunPosition(distance = 30): [number, number, number] {
   return [-distance * Math.cos(el) * Math.sin(az), distance * Math.sin(el), distance * Math.cos(el) * Math.cos(az)];
 }
 
+/**
+ * The sun's soft shadow (#1364), the render's: a 2048 map over the board and two rings round it (7 cells each way: the far ring and the ridges stay unshaded), very soft and light (the art director's values).
+ * The posts, the walls, the plinth and its steps cast it, not the marbles (their pedestal is their contact); the baked ambient occlusion of the vertex colours stays under it.
+ */
+export const SUN_SHADOW = { size: 1024, extent: 7, near: 1, far: 90, bias: -0.0005, normalBias: 0.04, radius: 9, blurSamples: 8, intensity: 0.3 } as const;
+
+/** Sets the sun's shadow camera and map, on or off (the low tier draws none). */
+export function aimSunShadow(sun: THREE.DirectionalLight, on: boolean, reach: number = SUN_SHADOW.extent): void {
+  sun.castShadow = on;
+  if (!on) return;
+  const { size, near, far, bias, normalBias, radius, blurSamples, intensity } = SUN_SHADOW;
+  const extent = reach;
+  sun.shadow.mapSize.set(size, size);
+  Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent, near, far });
+  sun.shadow.camera.updateProjectionMatrix();
+  Object.assign(sun.shadow, { bias, normalBias, radius, blurSamples, intensity });
+}
+
 /** Adds the sun and the hemisphere to `group`; both are returned. */
 export function addSun(group: THREE.Object3D): [THREE.HemisphereLight, THREE.DirectionalLight] {
   const hemisphere = new THREE.HemisphereLight(SUN.sky, SUN.ground, SUN.hemisphere);
@@ -100,6 +118,7 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
     else if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) (material as THREE.MeshStandardMaterial).color.multiply(TERRACE_TINT);
     const merged = new THREE.Mesh(mergeGeometries(geometries, false), material);
     merged.frustumCulled = false; // the arena is always in view
+    merged.castShadow = merged.receiveShadow = (material as THREE.MeshStandardMaterial).isMeshStandardMaterial === true; // the lit board: posts, plinth and plateau shade each other (#1364)
     merged.renderOrder = blended ? 1 : 0;
     out.add(merged);
   }
