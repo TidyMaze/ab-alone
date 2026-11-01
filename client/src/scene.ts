@@ -12,6 +12,7 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
+import { addSun } from './tablezero';
 
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
@@ -131,6 +132,10 @@ export class SceneRenderer {
   };
   readonly roomDeck: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   readonly propsGroup: THREE.Group;
+  /** The terrace (#1314): the arena's glTF and its sun, shown in place of the room and of the plate and rim in a 1v1 game. */
+  readonly terrace: THREE.Group;
+  terraceOn = false;
+  private roomBackground: THREE.Color | THREE.Texture | null = null;
 
   readonly notches: THREE.Group;
   readonly tallies: readonly [THREE.Group, THREE.Group];
@@ -248,6 +253,10 @@ export class SceneRenderer {
     this.roomDeck = new THREE.Mesh(new THREE.BoxGeometry(ROOM_SURFACE.width, 0.4, ROOM_SURFACE.depth), roomMaterial);
     this.roomDeck.position.set(0, ROOM_SURFACE.y - 0.2, 0);
     this.propsGroup = new THREE.Group();
+    this.terrace = new THREE.Group();
+    this.terrace.name = 'terrace';
+    this.terrace.visible = false;
+    addSun(this.terrace);
 
     this.notches = new THREE.Group();
     this.tallies = [new THREE.Group(), new THREE.Group()] as const;
@@ -266,6 +275,7 @@ export class SceneRenderer {
       this.particles,
       this.roomDeck,
       this.propsGroup,
+      this.terrace,
       this.plate,
       this.rim.near,
       this.rim.far,
@@ -317,7 +327,7 @@ export class SceneRenderer {
 
   updateFog(tier: Tier, clear: boolean, view: View, fogRadius: number, deck: Deck): void {
     const fog = fogSettings(tier, clear, view, fogRadius, DECKS[deck].fog);
-    if (!fog) {
+    if (!fog || this.terraceOn) {
       this.scene.fog = null;
     } else {
       this.fogObj.near = fog.near;
@@ -453,6 +463,18 @@ export class SceneRenderer {
     } else {
       this.roomDeck.visible = true;
     }
+  }
+
+  /** The terrace in place of the room, or the room back (#1314). The room and its lamps are hidden, not freed; so are the plate and the rim, the glTF carries the slab. */
+  setTerrace(on: boolean, background = 0x2c3438): void {
+    if (on === this.terraceOn) return;
+    this.terraceOn = on;
+    this.terrace.visible = on;
+    this.propsGroup.visible = !on;
+    this.roomDeck.visible = !on && !this.currentBay;
+    this.plate.visible = this.rim.near.visible = this.rim.far.visible = !on;
+    if (on) this.roomBackground = this.scene.background as THREE.Color | THREE.Texture | null;
+    this.scene.background = on ? new THREE.Color(background) : this.roomBackground;
   }
 
   /** Where the point `lift` above the cell is drawn: a mark on top of a marble is not under the cell's centre (#1259). */

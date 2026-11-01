@@ -87,7 +87,8 @@ describe('SceneRenderer (#632)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
     const lights: THREE.Light[] = [];
     sr.scene.traverse((o) => void ((o as THREE.Light).isLight && lights.push(o as THREE.Light)));
-    expect(lights).toEqual([]);
+    expect(lights.every((l) => l.parent === sr.terrace)).toBe(true); // the terrace's sun and hemisphere only (#1314), hidden in the room
+    expect(lights.map((l) => l.type).sort()).toEqual(['DirectionalLight', 'HemisphereLight']);
   });
 
   it('draws the plate and the rim as flat tonal materials in the tonal look, whatever maps it is given (#1138)', () => {
@@ -521,5 +522,17 @@ describe('SceneRenderer (#632)', () => {
     expect(runs(true)).toBe(4);
     expect(runs(false)).toBe(2);
     blur.mockRestore();
+  });
+
+  it('shows the terrace in place of the room, the plate and the rim, and gives them back (#1314)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const room = sr.scene.background;
+    expect([sr.terrace.visible, sr.plate.visible]).toEqual([false, true]);
+    sr.setTerrace(true);
+    expect([sr.terrace.visible, sr.propsGroup.visible, sr.roomDeck.visible, sr.plate.visible, sr.rim.near.visible, sr.rim.far.visible]).toEqual([true, false, false, false, false, false]);
+    sr.setTerrace(true); // nothing redone
+    sr.setTerrace(false);
+    expect([sr.terrace.visible, sr.propsGroup.visible, sr.roomDeck.visible, sr.plate.visible]).toEqual([false, true, true, true]);
+    expect(sr.scene.background).toBe(room);
   });
 });

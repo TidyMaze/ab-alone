@@ -179,6 +179,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
+import { tableZeroActive } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -1858,7 +1859,7 @@ const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   scene.add(disc);
   return disc;
 });
-instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
+const boardDrawn = instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
 const placeBridge = (y: number): void => {
   bridgeY = y;
   for (const [q, r] of BRIDGE) discs[cellIndex(q, r)]!.position.y = -0.05 + y;
@@ -3373,7 +3374,28 @@ function sightNote(): string {
 /** The cells the player sees: within the range of its marbles, the sight of the Stalker boss by its phase. */
 const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, PLAYER, (engine as Encounter).sight());
 
+// The terrace (#1314): the arena's glTF from Blender, in place of the room in a 1v1 game. A page whose file is missing or broken
+// keeps the room; the hub, the boss rooms, the royale and a run keep it too, until their own PRs; `?scene=room` asks for it.
+let terraceReady = false;
+const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
+void meshoptLoader()
+  .loadAsync(`${import.meta.env.BASE_URL}assets/pbr/arena.glb`)
+  .then((model) => {
+    sceneRenderer.terrace.add(model.scene);
+    terraceReady = true;
+    refresh();
+  })
+  .catch(() => undefined);
+function syncTableZero(): void {
+  const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
+  document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
+  if (on === sceneRenderer.terraceOn) return;
+  sceneRenderer.setTerrace(on);
+  for (const cells of boardDrawn) cells.visible = !on; // the dishes of the glTF are drawn; the discs stay for picking only
+  updateFog();
+}
 function refresh(): void {
+  syncTableZero();
   dirty = CHANGE_DRAWS;
   syncSpace();
   syncAuto();
