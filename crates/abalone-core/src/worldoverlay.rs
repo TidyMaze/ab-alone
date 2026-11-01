@@ -81,6 +81,12 @@ impl Overlay {
         self.added.contains(&cell) || (!self.removed.contains(&cell) && generated.contains(&cell))
     }
 
+    /// The enemies within `radius` cells (hex distance) of `cell`, chunk by chunk in the order given: `chunks` pairs a chunk with the
+    /// generated enemies that start in it (`chunk_enemies` of each).
+    pub fn around(&self, chunks: &[(Cell, Vec<Cell>)], cell: Cell, radius: i32) -> Vec<Cell> {
+        todo!()
+    }
+
     /// Plays a push: the enemies `old` leave their cells, the enemies `new` stand on theirs, and the `ejected` ones count as beaten.
     /// A generated enemy that comes back to its cell is that generated enemy again.
     pub fn apply(&mut self, old: &[Cell], new: &[Cell], ejected: usize) {
@@ -166,6 +172,31 @@ mod tests {
             overlay.chunk_enemies(&[(9, 9)], (0, 0)),
             [(9, 9), (3, 0), (2, 0)]
         );
+    }
+
+    #[test]
+    fn around_keeps_the_enemies_within_the_radius_chunk_by_chunk() {
+        let mut overlay = Overlay::new();
+        overlay.apply(&[(2, 0)], &[(0, 3)], 0);
+        let chunks = [
+            ((0, 0), vec![(1, 0), (2, 0), (9, 0)]),
+            ((1, 0), vec![(16, 0), (30, 0)]),
+        ];
+        assert_eq!(overlay.around(&chunks, (0, 0), 3), [(1, 0), (0, 3)]);
+        assert_eq!(
+            overlay.around(&chunks, (0, 0), 20),
+            [(1, 0), (9, 0), (0, 3), (16, 0)]
+        );
+        assert!(overlay.around(&[], (0, 0), 5).is_empty());
+    }
+
+    #[test]
+    fn the_distance_is_the_hex_distance() {
+        let overlay = Overlay::new();
+        let chunks = [((0, 0), vec![(2, -1), (2, 2), (-1, -1), (3, 0)])];
+        // (2,-1) is 2 away, (2,2) is 4, (-1,-1) is 2, (3,0) is 3.
+        assert_eq!(overlay.around(&chunks, (0, 0), 2), [(2, -1), (-1, -1)]);
+        assert_eq!(overlay.around(&chunks, (0, 0), 3).len(), 3);
     }
 
     #[test]
