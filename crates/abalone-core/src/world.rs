@@ -1480,11 +1480,8 @@ mod tests {
             let found = teleporters(seed, &[]);
             assert_eq!(teleporters(seed, &[]), found);
             // 17 x 17 squares of 4 x 4 chunks, the edge ones half off the world: most of them hold one.
-            assert!(
-                found.len() >= 200 && found.len() <= 289,
-                "seed {seed}: {}",
-                found.len()
-            );
+            let count = found.len();
+            assert!((200..=289).contains(&count), "seed {seed}: {count}");
             for (i, a) in found.iter().enumerate() {
                 for b in &found[i + 1..] {
                     assert!(hex_distance(*a, *b) >= 32, "seed {seed}: {a:?} {b:?}");
