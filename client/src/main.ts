@@ -3338,8 +3338,9 @@ const steelRoom = { map: steel.map, normalMap: steel.normalMap, roughnessMap: st
 // 116,000 of the 145,000 triangles). Its edge is the gap to the next cell, down to the near-black plate: no bevel is drawn.
 // e2e/contrast.spec.ts reads a cell's edge at 0.44 (the Dust top) against 0.52 (the plate), where today it reads the bright bevel.
 const tzDiscGeometry = cellGeometry(0.46);
+const keepRoom = new URLSearchParams(location.search).get('scene') === 'room'; // the fallback: the room as it was
 function syncTableZero(): void {
-  const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null });
+  const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null, room: keepRoom });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
   if (on === sceneRenderer.tableZeroOn) return;
   sceneRenderer.setTableZero(on);

@@ -537,7 +537,7 @@ describe('the frame loop', () => {
   });
 
   it('draws every frame for a player', async () => {
-    const game = await boot('?bot=off', { webdriver: false });
+    const game = await boot('?bot=off&scene=room', { webdriver: false });
     game.frame();
     game.frame();
     game.frame();
@@ -546,7 +546,7 @@ describe('the frame loop', () => {
   });
 
   it('keeps drawing every frame while the dust of the high tier drifts (#443, #848)', async () => {
-    const game = await boot('?bot=off&quality=high', { webdriver: false });
+    const game = await boot('?bot=off&quality=high&scene=room', { webdriver: false });
     game.frame();
     game.frame();
     game.frame();

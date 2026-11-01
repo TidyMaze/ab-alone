@@ -175,6 +175,12 @@ describe('the renderer and its textures', () => {
     expect(document.body.dataset.scene).toBe('table-zero');
   });
 
+  it('keeps the room in a 1v1 game when ?scene=room asks for it, the fallback (#1314)', async () => {
+    const game = await boot('?bot=off&scene=room');
+    const { scene } = await drawn(game);
+    expect([document.body.dataset.scene, scene.getObjectByName('table-zero')!.visible]).toEqual(['room', false]);
+  });
+
   it('keeps the room, its steel and its lamps, in the hub (#1314)', async () => {
     const game = await boot('');
     const { scene } = await drawn(game);

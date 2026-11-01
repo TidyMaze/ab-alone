@@ -139,9 +139,9 @@ describe('main.ts, the lights of the room (#845)', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     const named: string[] = [];
-    scene!.traverse((o) => void ((o as THREE.Light).isLight && !o.name.includes('neon') && !o.name.startsWith('ring-lamp') && named.push(o.name)));
+    scene!.traverse((o) => void ((o as THREE.Light).isLight && !o.name.includes('neon') && !o.name.startsWith('ring-lamp') && o.parent?.name !== 'table-zero' && named.push(o.name))); // Table Zero's sun is hidden here (#1314)
     expect(named.sort()).toEqual(['kioskGreenLight', 'viewportRimLight']);
   });
 });
@@ -248,7 +248,7 @@ describe('main.ts, the deck textures', () => {
 
   it('the cells wear the Mess texture set when it loads', async () => {
     const cells = catchCells();
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
     expect(name(cells().map)).toBe('deck-mess.ktx2');
     expect(name(cells().normalMap)).toBe('deck-mess-normal.ktx2');
@@ -256,7 +256,7 @@ describe('main.ts, the deck textures', () => {
 
   it('the Mess cells wear the concrete roughness, the other decks the shared one', async () => {
     const cells = catchCells();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
     expect(name(cells().roughnessMap)).toBe('deck-mess-roughness.ktx2');
     expect(cells().roughnessMap!.wrapS).toBe(THREE.RepeatWrapping);
@@ -270,7 +270,7 @@ describe('main.ts, the deck textures', () => {
 
   it('the Mess cells keep the shared roughness when the concrete one does not load', async () => {
     const cells = catchCells();
-    await boot('?bot=off', { missing: ['deck-mess-roughness.ktx2'] });
+    await boot('?bot=off&scene=room', { missing: ['deck-mess-roughness.ktx2'] });
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('mess'));
     expect(name(cells().roughnessMap)).toBe('deck-roughness.ktx2');
   });
@@ -282,7 +282,7 @@ describe('main.ts, the deck textures', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     const plates: Mesh[] = [];
     scene!.traverse((o) => (o as Mesh).material?.metalnessMap?.name === 'board-metalness.ktx2' && plates.push(o as Mesh));
     expect(plates).toHaveLength(1);
@@ -296,7 +296,7 @@ describe('main.ts, the deck textures', () => {
       if (this instanceof THREE.Scene) scene ??= this;
       return add.apply(this, objects);
     });
-    await boot('?bot=off');
+    await boot('?bot=off&scene=room');
     const maps: THREE.Texture[] = [];
     scene!.traverse((o) => {
       const m = (o as Mesh).material;
@@ -309,7 +309,7 @@ describe('main.ts, the deck textures', () => {
 
   it('without its own set, a deck keeps the shared steel albedo and no normal map', async () => {
     const cells = catchCells();
-    const game = await boot('?bot=off', {
+    const game = await boot('?bot=off&scene=room', {
       missing: ['deck-mess.ktx2', 'deck-mess-normal.ktx2', 'deck-mess-roughness.ktx2', 'deck-cargo.ktx2'],
     });
     await vi.waitFor(() => expect(document.body.dataset.deckSet).toBe('steel'));
@@ -333,7 +333,7 @@ describe('main.ts, the airborne particles', () => {
       points ??= (objects.find((o) => o instanceof THREE.Points) as THREE.Points) ?? null;
       return add.apply(this, objects);
     });
-    const game = await boot('?bot=off', { webdriver: false });
+    const game = await boot('?bot=off&scene=room', { webdriver: false });
     game.hook('__deck', 'furnace'); // steam, rising: drift [0.02, 0.12, -0.02]
     const pos = points!.geometry.getAttribute('position') as THREE.BufferAttribute;
     pos.setXYZ(0, 10, 7.45, 0); // just under the top of the volume

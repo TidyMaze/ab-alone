@@ -28,9 +28,9 @@ export function addSun(scene: THREE.Object3D): [THREE.HemisphereLight, THREE.Dir
   return [hemisphere, sun];
 }
 
-/** What Table Zero replaces: the 1v1 default scene. The hub, the boss rooms, the battle royale and a roguelite run keep the room. */
-export function tableZeroActive(s: { hub: boolean; fight: boolean; royale: boolean; run: boolean }): boolean {
-  return !(s.hub || s.fight || s.royale || s.run);
+/** What Table Zero replaces: the 1v1 default scene. The hub, the boss rooms, the battle royale and a roguelite run keep the room, and so does `?scene=room` (the fallback). */
+export function tableZeroActive(s: { hub: boolean; fight: boolean; royale: boolean; run: boolean; room: boolean }): boolean {
+  return !(s.hub || s.fight || s.royale || s.run || s.room);
 }
 
 const paint = (g: THREE.BufferGeometry, color: number): THREE.BufferGeometry => {

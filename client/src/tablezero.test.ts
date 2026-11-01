@@ -5,9 +5,9 @@ import { PALETTE, SUN, addSun, cellGeometry, hexPrism, tableZeroActive, windowSt
 const triangles = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.attributes.position!.count) / 3;
 
 describe('Table Zero is the scene of a 1v1 game only', () => {
-  const none = { hub: false, fight: false, royale: false, run: false };
+  const none = { hub: false, fight: false, royale: false, run: false, room: false };
   it('is on for a plain game', () => expect(tableZeroActive(none)).toBe(true));
-  it.each(['hub', 'fight', 'royale', 'run'] as const)('is off in %s', (k) => expect(tableZeroActive({ ...none, [k]: true })).toBe(false));
+  it.each(['hub', 'fight', 'royale', 'run', 'room'] as const)('is off in %s (room: ?scene=room asks for the old room)', (k) => expect(tableZeroActive({ ...none, [k]: true })).toBe(false));
 });
 
 describe('the shared kit', () => {

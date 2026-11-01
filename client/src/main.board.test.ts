@@ -138,7 +138,7 @@ describe('main.ts board and HUD', () => {
 
   it('dresses the cells, the frame and the enemy shells in the loaded textures, and the glass', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     await game.settle(); // the skins' maps load after the first frame
     const { discs, plate, near } = parts(scene());
     expect(discs).toHaveLength(169); // the 61, then ring 5 for The Ballast Mind (#564), rings 6 and 7 for The Dual Room (#947, #955)
@@ -239,7 +239,7 @@ describe('main.ts board and HUD', () => {
 
   it('swaps the cells normal map with the albedo on a deck change (#440)', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { discs } = parts(scene());
     const initialNormal = discs[0]!.material.normalMap;
     expect(initialNormal).toBeInstanceOf(THREE.Texture);
@@ -257,7 +257,7 @@ describe('main.ts board and HUD', () => {
 
   it('draws airborne particles outside the board volume per deck, off under clear board (#443)', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off', { webdriver: false });
+    const game = await boot('?bot=off&scene=room', { webdriver: false });
     const points = scene().children.find((c): c is THREE.Points => c instanceof THREE.Points)!;
     expect(points).toBeDefined();
     expect(points.visible).toBe(true);
@@ -296,7 +296,7 @@ describe('main.ts board and HUD', () => {
       },
     });
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const { discs, plate, near } = parts(scene());
     expect(discs[0]!.material.map).toBeNull();
     expect(discs[0]!.material.normalMap).toBeNull();
