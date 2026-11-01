@@ -44,14 +44,13 @@ export const BLINK_MS = 1000;
 /** The opacity of the announced marble `nowMs` into the page, 1 down to 0.3 and back; steady with reduced motion. */
 export const blinkAt = (nowMs: number, reduced: boolean): number => (reduced ? 1 : 0.65 + 0.35 * Math.cos((2 * Math.PI * nowMs) / BLINK_MS));
 
-/** Player turns between two polarities, per phase: turns 3, 6, 9... in P1, the even turns in P2, every turn in P3. */
-const EVERY = [3, 2, 1];
+/** Player turns between two polarities, per phase: turns 3, 6, 9... in P1 and P2, the even turns in P3 (#1237). */
+const EVERY = [3, 3, 2];
 
 /** HUD line of the tell: the player turns to the next polarity, which comes at the start of a turn. `plies` is the
  * plies played, so the player's turn now is `floor(plies / 2) + 1`. */
 export function polarityText(phase: number, plies: number): string {
   const every = EVERY[phase]!;
-  if (every === 1) return 'Polarity every turn';
   const n = every - ((Math.floor(plies / 2) + 1) % every);
   return n === 1 ? 'Polarity next turn' : `Polarity in ${n} turns`;
 }

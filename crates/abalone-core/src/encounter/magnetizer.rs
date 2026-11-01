@@ -16,9 +16,9 @@ type P = (i32, i32);
 
 /// P2 and P3 start after this many ejections credited to the player. TUNE.
 pub const MAGNETIZER_PHASE_EJECTIONS: [u8; 2] = [3, 5];
-/// Player turns between two assignments, per phase: turns 3, 6, 9... in P1, the even turns in
-/// P2, every turn in P3. TUNE.
-pub const MAGNETIZER_ASSIGN_EVERY: [u32; 3] = [3, 2, 1];
+/// Player turns between two assignments, per phase: turns 3, 6, 9... in P1 and P2, the even
+/// turns in P3 (#1237: the ladder's pro won 12 of 20 with [3, 2, 1], 15 with these). TUNE.
+pub const MAGNETIZER_ASSIGN_EVERY: [u32; 3] = [3, 3, 2];
 /// Repulsions per settle at most, a safety bound the fights never reach.
 pub const MAGNETIZER_SETTLE_CAP: usize = 64;
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
