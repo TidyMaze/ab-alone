@@ -644,6 +644,28 @@ down, hatch; the lay is a seeded pick, left out) and an egg weight of 50 in the 
 The bot still loses every fight to the pro-budget ladder player (as in #667); the fights last a
 little longer. No further tuning.
 
+Remainder of #826 (reply time, 10x cell, `spares_eggs`), nothing tuned, no code change:
+
+- `spares_eggs` is not in the boss search any more: it only lives in the test module of
+  `encounter/alien.rs`, where `old_move` rebuilds the pre-#826 search as the baseline of the test
+  `the_alien_crushes_its_own_egg_to_save_a_marble_the_old_filter_left_to_die`, and `quiet` uses it
+  to play a move that crushes no egg. It stays: removing it would remove the test's baseline.
+- 10x cell, `ALIEN_X=10 ALIEN_SEEDS=20 cargo run --release -p abalone-core --example alien_sim`,
+  seeds 0 to 19, one run of about 15 minutes (the 15 minute kill in #1130 was too early): the player
+  wins 20/20, median 72 plies, median eggs crushed 1, median hatched 18.5, median Alien peak 20.5,
+  count only goes up in 0/20. The pre-#826 10x row (50 seeds, #667) is 50/50, 75 plies, 2 crushed,
+  17 hatched, peak 20.5. Not re-run before the change at 10x (20 seeds are 15 minutes on all cores),
+  so that comparison is across different seed counts. The bot wins every fight before and after,
+  far from 7 to 9 of 10; the egg search does not move that and the owner kept the Alien as is
+  (#667), so nothing is retuned.
+- Reply time through wasm (nodejs release build, `alien`, 6 seeds of up to 80 plies, the player side
+  plays its auto-play search, boss replies only, ms average / 95th percentile / maximum), two runs
+  each on a machine loaded by other agents. Before (`e409f890~1`): 539 / 1502 / 5497 and 190 / 371 /
+  1471 (260 replies). After (main): 218 / 455 / 890 and 230 / 588 / 2516 (268 replies). Fights
+  diverge, so positions differ; the two runs of the same build differ more than before and after.
+  No measurable slowdown at the 3000 node budget, in line with the other bosses (the Unstable Core
+  198 to 203 average after #915).
+
 ### The Overseer: its AI plays the neurotoxin clock and its phases (#828), not tuned
 
 Before (the ladder row only, 402b79f): the boss search burned on every ply but kept the phase of
