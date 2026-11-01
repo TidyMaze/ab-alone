@@ -139,6 +139,9 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 
 - **Budget**: `transform` and `opacity` only, no layout change, no canvas redraw; it matches the thumb dock (`thumb-dock.md`,
   #1032) and reuses the tokens as is.
+- **Built (#1105)**: CSS only (`ui.css`). The plate slides in from its corner on `motion.base` at each entry; folding it out takes `motion.fast`
+  with the in easing, the unfold keeps `motion.base`. The New world confirmation slides up and fades on `motion.base` (the `sheet-in` of the dock
+  sheets). Not done: a slide out when the mode is left or the confirmation closes (they go at once; the canvas cross-fade of #1099 covers the exit).
 - **Reduced**: the HUD and the sheet appear and vanish at once (`prefers-reduced-motion` and the in-game setting).
 - **Static**: the content of the HUD, the focus order, hit areas during the slide (they take the final place at once).
 - **Acceptance**: a slide measured on the compositor shows no layout shift (CLS 0); with reduced motion the end state is set

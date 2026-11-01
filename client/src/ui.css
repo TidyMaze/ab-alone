@@ -792,7 +792,7 @@ body[data-reading] #log { visibility: visible; }
 #openworld-hud { --accent: var(--plate-accent); --rivet: radial-gradient(circle, var(--edge) 2px, transparent 2.5px); display: none; position: fixed; bottom: 1rem; left: 1rem; right: 1rem; max-width: 22rem; padding: 0.75rem 1rem; color: var(--text); background-color: var(--panel); background-image: var(--rivet), var(--rivet), var(--rivet), var(--rivet); background-position: left 4px top 4px, right 4px top 4px, left 4px bottom 4px, right 4px bottom 4px; background-size: 6px 6px; background-repeat: no-repeat; border: 1px solid var(--edge); border-radius: var(--r-card); font: 0.875rem/1.4 var(--ui); zoom: var(--ui-scale); transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s; }
 body[data-openworld] #openworld-hud { display: block; }
 /* Folded (#1138, openworldfold.ts): the plate leaves the screen and its reach, the chip takes its corner. The delay of `visibility` lets the fade end first. */
-#openworld-hud[data-folded] { opacity: 0; transform: translateY(0.5rem) scale(0.96); transform-origin: bottom left; visibility: hidden; pointer-events: none; transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s var(--motion-base); }
+#openworld-hud[data-folded] { opacity: 0; transform: translateY(0.5rem) scale(0.96); transform-origin: bottom left; visibility: hidden; pointer-events: none; }
 #openworld-chip { display: none; position: fixed; left: 1rem; bottom: 1rem; min-width: var(--target); min-height: var(--target); place-items: center; padding: 0; cursor: pointer; color: var(--plate-accent); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-card); font: 700 1.125rem/1 var(--display); zoom: var(--ui-scale); }
 body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #openworld-chip:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
@@ -1010,3 +1010,12 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
 @keyframes screen-in-world { from { opacity: 0; } }
 body[data-openworld] canvas { animation: screen-in-world var(--motion-base) var(--ease-out); }
 body:not([data-openworld], [data-over]) canvas { animation: screen-in var(--motion-base) var(--ease-out); }
+
+/* Open world UI motion (#1105, docs/specs/openworld-animation.md story 7): the plate slides in from its corner on --motion-base when the mode
+   is entered and folds out on --motion-fast with the in easing (the unfold keeps the base transition of the plate); the New world confirmation
+   slides up and fades on --motion-base. transform and opacity only: the boxes keep their place, so the hit areas are live from the first
+   frame and nothing shifts. Leaving the mode and closing the confirmation are at once. Reduced motion: the tokens are 0ms, no motion. */
+@keyframes ow-hud-in { from { opacity: 0; transform: translateY(0.5rem) scale(0.96); } }
+body[data-openworld] #openworld-hud { animation: ow-hud-in var(--motion-base) var(--ease-out); transform-origin: bottom left; }
+#openworld-hud[data-folded] { transition: opacity var(--motion-fast) var(--ease-in), transform var(--motion-fast) var(--ease-in), visibility 0s var(--motion-fast); }
+#openworld-confirm:not([hidden]) { animation: sheet-in var(--motion-base) var(--ease-out); }

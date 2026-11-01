@@ -94,7 +94,7 @@ describe('refusal, hint and copy motion (#1097, #1098)', () => {
 });
 
 describe('screen transitions (#1099)', () => {
-  const block = css.match(/\/\* Screen transitions \(#1099[^]*$/)![0];
+  const block = css.match(/\/\* Screen transitions \(#1099[^]*?(?=\/\* Open world UI motion|$)/)![0];
 
   it('fades the canvas in on the base token when the Open world is entered', () => {
     expect(block).toMatch(/body\[data-openworld\] canvas \{[^}]*animation: screen-in-world var\(--motion-base\) var\(--ease-out\)/);
@@ -112,5 +112,26 @@ describe('screen transitions (#1099)', () => {
 
   it('moves opacity only, so the game stays live under the fade', () => {
     expect(block).not.toMatch(/pointer-events|visibility|display/);
+  });
+});
+
+describe('Open world UI motion (#1105)', () => {
+  const block = css.match(/\/\* Open world UI motion \(#1105[^]*$/)![0];
+
+  it('slides the plate in from its corner on the base token when the mode is entered', () => {
+    expect(block).toMatch(/body\[data-openworld\] #openworld-hud \{[^}]*animation: ow-hud-in var\(--motion-base\) var\(--ease-out\)/);
+    expect(block).toMatch(/@keyframes ow-hud-in \{ from \{ opacity: 0; transform: translateY\(0\.5rem\) scale\(0\.96\); \} \}/);
+  });
+
+  it('folds the plate out on the fast token with the in easing, its visibility waiting for the fade', () => {
+    expect(block).toMatch(/#openworld-hud\[data-folded\] \{[^}]*transition: opacity var\(--motion-fast\) var\(--ease-in\), transform var\(--motion-fast\) var\(--ease-in\), visibility 0s var\(--motion-fast\)/);
+  });
+
+  it('slides the New world confirmation up and fades it on the base token', () => {
+    expect(block).toMatch(/#openworld-confirm:not\(\[hidden\]\) \{[^}]*animation: sheet-in var\(--motion-base\) var\(--ease-out\)/);
+  });
+
+  it('moves transform and opacity only: no layout property, no pointer change', () => {
+    expect(block).not.toMatch(/\b(width|height|top|left|right|bottom|margin|padding|display|pointer-events)\s*:/);
   });
 });
