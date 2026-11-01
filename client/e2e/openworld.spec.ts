@@ -490,6 +490,7 @@ test('a right-button drag turns the Open world camera and settles on a step of 6
   await openModes(page);
   await page.locator('#openworld').click();
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
+  await expect.poll(yaw).toBe('0'); // the world is open: the drag is the Open world's
   await page.mouse.move(300, 300);
   await page.mouse.down({ button: 'right' });
   await page.mouse.move(400, 300, { steps: 5 }); // 100 px: 50 degrees
