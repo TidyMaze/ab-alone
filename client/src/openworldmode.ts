@@ -215,6 +215,7 @@ export class OpenWorldMode {
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
     this.beaten = saved ? [...saved.lairs] : [];
     const view = new OpenWorldView(world, this.fight, skins);
+    view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
     this.hero = new Hero(world, this.fight);
     if (saved) {
       this.hero.at = saved.hero;
