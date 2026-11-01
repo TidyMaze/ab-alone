@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AMBIENT, capFor, FADE, PUFF, ParticlePool, SHARDS, type Look } from './openworldparticles';
+import { AMBIENT, capFor, FADE, PUFF, ParticlePool, SHARDS, SPLASH, type Look } from './openworldparticles';
 
 const hero = { x: 0, y: 1, z: 0 };
 /** A look that spends the warm start and spawns nothing. */
@@ -167,5 +167,29 @@ describe('ParticlePool', () => {
   it('has a look for every biome that moves and none for the badlands, each within the desktop cap', () => {
     expect(Object.keys(AMBIENT).sort()).toEqual(['desert', 'forest', 'meadow', 'tundra']);
     for (const look of Object.values(AMBIENT)) expect(look.rate * (look.life / 1000)).toBeLessThanOrEqual(56);
+  });
+});
+
+describe('the splash of the water (#1101)', () => {
+  const at = (pool: ParticlePool, i: number, now: number) => (pool.pose(i, now, pose) ? { ...pose } : null);
+
+  it('throws 6 droplets up 0.3 and back down into the cell, in 600 ms, from a start in the future', () => {
+    const pool = new ParticlePool(24);
+    pool.splash(2, 0.1, 3, 1000);
+    expect(at(pool, 0, 900)).toBeNull(); // not born yet
+    expect(pool.alive(1000)).toBe(SPLASH.count);
+    const peak = Math.max(...Array.from({ length: 60 }, (_, k) => at(pool, 0, 1000 + k * 10)?.y ?? -9));
+    expect(peak - 0.1).toBeGreaterThan(0.2);
+    expect(peak - 0.1).toBeLessThan(0.4);
+    expect(at(pool, 0, 1590)!.y).toBeLessThan(0.15); // back at the water
+    expect(pool.alive(1600)).toBe(0);
+  });
+
+  it('forgets a droplet that has not been born yet when it is cleared', () => {
+    const pool = new ParticlePool(24);
+    pool.splash(0, 0, 0, 5000);
+    pool.clear();
+    expect(pool.alive(4000)).toBe(0);
+    expect(at(pool, 0, 5100)).toBeNull();
   });
 });

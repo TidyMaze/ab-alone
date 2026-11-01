@@ -72,6 +72,9 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 - **Budget**: at most 4 ripples and 2 splashes live (pool of 6 quads, one draw); foam is a shader term (cell phase from its
   coordinates), no per-cell JS. The water already forces a draw every frame while a lake is in view (`frame`, `moving`):
   the foam and ripples ride that frame and add no draw of their own. With no lake in view and no ripple live, nothing draws.
+- **Built (#1101)**: `client/src/openworldmotion.ts`. The foam and the ripples are the water material's emissive (TSL), the foam read from the
+  instance colour (a cell with a land neighbour), the ripples from 4 uniforms; the splash is 6 particles of the #1110 pool with a gravity, born
+  when the fall starts. No mesh, no draw call, no instance write. Off under reduced motion, on the low tier (`body.dataset.tier`) and past `ROLL_ZOOM`.
 - **Reduced**: no ripple, foam or splash; the glow stays held at 1 (today).
 - **Static**: still water far from the hero, deep water, the cell colours (`waterColor`).
 - **Acceptance**: a step next to water spawns one ripple that is gone after 600 ms; a fifth ripple replaces the oldest; an
@@ -88,6 +91,9 @@ today's value or my proposal for a token `motion.md` may lack (section 8).
 - **Budget**: sway is `uTime` in the prop material's vertex shader: **no chunk rebuild, no instance write per frame**, no new
   draw. Grass reaction is a per-prop shader input for at most 7 marbles (positions in one uniform array). Puffs use the pool of
   section 6. A tree or bush never moves its collision or its cell.
+- **Built (#1102, partly)**: the trees (low and detailed mesh, one material) lean by `positionNode`, the phase from `instanceIndex`. Not built:
+  the grass bend (the grass is a ground column, not a prop) and the boulder dust (a boulder is broken by the hero since #1147, so no push is
+  refused; the shards already fly).
 - **Reduced**: `uTime` held at 0, no bend, no puff.
 - **Static**: boulders, walls, peaks, the hi-detail set near the hero if its mesh has no vertex term (note in the PR).
 - **Acceptance**: two frames 1 s apart differ only in the vertex term and the instance buffers are byte-identical; no chunk is
