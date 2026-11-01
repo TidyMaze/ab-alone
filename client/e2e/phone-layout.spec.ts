@@ -173,14 +173,12 @@ const sizes = [
   { name: 'a window 1024 by 600', viewport: { width: 1024, height: 600 }, mobile: false },
 ];
 
-// #1269: with the HUD panel folded, a phone held upright shows the board at the middle of the window, clear of the thumb dock.
-test.describe('a phone 390 by 844 held upright, HUD folded', () => {
+// #1387: a phone held upright shows the board at the middle of the window, clear of the thumb dock.
+test.describe('a phone 390 by 844 held upright', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  test('the board is vertically centred above the dock, #1269', async ({ page }) => {
+  test('the board is vertically centred above the dock, #1387', async ({ page }) => {
     await page.goto('./?bot=off&net=hook');
     await page.locator('canvas').waitFor();
-    await page.locator('#hud-fold[aria-expanded="true"]').click();
-    await expect(page.locator('#hud-fold')).toHaveAttribute('aria-expanded', 'false');
     const seen = await page.evaluate(() => {
       const toScreen = (q: number, r: number) => (window as any).__cellToScreen(q, r) as { y: number };
       return { centre: toScreen(0, 0).y, bottom: toScreen(0, 4).y, dock: document.getElementById('dock')!.getBoundingClientRect().top, height: innerHeight };
@@ -189,6 +187,34 @@ test.describe('a phone 390 by 844 held upright, HUD folded', () => {
     expect(seen.bottom).toBeLessThan(seen.dock);
   });
 });
+
+// #1388: on the Hub, held upright, the five-section rail and the Bosses strip sit just under the plate and the cog, clear of the board.
+for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 640 }]) {
+  test.describe(`the Hub on a phone ${viewport.width} by ${viewport.height} held upright`, () => {
+    test.use({ viewport, isMobile: true, hasTouch: true });
+    test('the rail and the Bosses strip sit under the cog and above the board, #1388', async ({ page }) => {
+      await page.goto('./?bot=off&net=hook');
+      await page.locator('canvas').waitFor();
+      await openModes(page);
+      await page.getByRole('button', { name: 'Hub' }).click();
+      await expect(page.locator('body')).toHaveAttribute('data-hub', /^\w+ /);
+      await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+      const seen = await page.evaluate(() => {
+        const box = (id: string) => document.getElementById(id)!.getBoundingClientRect();
+        const toScreen = (window as any).__cellToScreen as (q: number, r: number) => { y: number };
+        let board = Infinity;
+        for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) if (Math.abs(q + r) <= 3) board = Math.min(board, toScreen(q, r).y);
+        return { cog: box('chrome').bottom, pips: box('hub-pips').top, pipsBottom: box('hub-pips').bottom, rail: box('hub-rail').top, railBottom: box('hub-rail').bottom, board };
+      });
+      console.log(`1388 ${viewport.width}x${viewport.height}`, JSON.stringify(seen));
+      expect(seen.pips).toBeGreaterThanOrEqual(seen.cog); // under the plate and the cog,
+      expect(seen.pips - seen.cog).toBeLessThan(24); // right under them,
+      expect(seen.rail).toBeGreaterThanOrEqual(seen.pipsBottom); // the rail under the strip
+      expect(seen.board).toBeGreaterThan(seen.railBottom);
+      expect(seen.board).toBeGreaterThan(seen.pipsBottom);
+    });
+  });
+}
 
 for (const { name, viewport, mobile } of sizes) {
   test.describe(name, () => {

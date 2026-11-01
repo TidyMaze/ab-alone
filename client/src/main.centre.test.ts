@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import { framing } from './camera';
 import { boot, type Game } from './test/harness';
 
 // Bug #957: the board's centre sits in the middle of the window on every view a fight opens on and on Reset view, the
 // HUD plate does not push it aside (#695 is gone): the player folds the plate instead. The Dual Room's two rooms lie
-// either side of the origin. Held upright the board sits lower by framing's shift, leaving the top to the HUD and
-// the buttons (#227).
+// either side of the origin. Held upright it is centred too (#1387).
 
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const SIZES = [
@@ -37,7 +35,7 @@ describe('main.ts the board centred in the window (#957)', () => {
     it(`a fight opens, and Reset view goes back, on the board centre in the middle of a ${width}x${height} window`, async () => {
       windowOf(width, height);
       const game = await boot('?bot=off');
-      const centreY = height / 2 + framing(width, height).shift;
+      const centreY = height / 2;
       for (const boss of ['The Choir', 'The Pulsar', 'The Dual Room']) {
         // The plate as Chromium lays it out: before #957 the view slid aside off it.
         vi.spyOn(byId('hud'), 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ x: 16, y: 16, width: 230, height: 175 }));

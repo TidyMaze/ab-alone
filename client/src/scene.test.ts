@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { RADIUS, VANISHED, cellIndex } from './board';
-import { framing, resetView, type View } from './camera';
+import { resetView, type View } from './camera';
 import { DECK_PARTICLES } from './deck';
 import { DECKS } from './light';
 import { DECK_ATMOSPHERES } from './roomloader';
@@ -200,7 +200,7 @@ describe('SceneRenderer (#632)', () => {
     expect(sr.camera.position.x).toBeLessThan(0);
   });
 
-  // Held upright the board sits lower by framing's shift, leaving the top to the HUD and the buttons (#227).
+  // Held upright too, the board is centred in the window (#1387).
   it('puts the board centre in the middle of the window at any size, bug #957', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
     for (const [width, height] of [
@@ -209,18 +209,10 @@ describe('SceneRenderer (#632)', () => {
       [812, 375], // phone sideways
     ] as const) {
       sr.frameCamera(width, height);
-      const middle = height / 2 + framing(width, height).shift;
       sr.applyView(resetView(), null, { tier: 'high', clear: false, deck: 'mess' });
       expect(sr.cellToScreen(0, 0, width, height).x).toBeCloseTo(width / 2, 6);
-      expect(sr.cellToScreen(0, 0, width, height).y).toBeCloseTo(middle, 6);
+      expect(sr.cellToScreen(0, 0, width, height).y).toBeCloseTo(height / 2, 6);
     }
-  });
-
-  it('puts the board centre at the middle of a phone held upright with the HUD folded, #1269', () => {
-    const sr = new SceneRenderer({ renderer: createMockRenderer() });
-    sr.frameCamera(390, 844, true);
-    sr.applyView(resetView(), null, { tier: 'high', clear: false, deck: 'mess' });
-    expect(sr.cellToScreen(0, 0, 390, 844).y).toBeCloseTo(422, 6);
   });
 
   it('updates atmospheric fog based on tier, clear board, and deck', () => {
