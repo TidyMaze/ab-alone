@@ -1387,6 +1387,69 @@ mod tests {
         assert_eq!(lairs(7, 3), vec![(139, 58), (-327, 233), (286, -172)]);
     }
 
+    #[test]
+    fn the_first_teleporter_stands_next_to_the_spawn_in_its_clearing() {
+        for seed in 0..8 {
+            let first = teleporters(seed, &[])[0];
+            assert_eq!(first, SPAWN_TELEPORTER);
+            assert!(distance(first.0, first.1) < CLEARING, "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn a_teleporter_and_its_six_neighbours_are_open_ground_with_no_enemy_near() {
+        for seed in 0..6 {
+            for (q, r) in teleporters(seed, &[]) {
+                for (dq, dr) in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)] {
+                    let c = cell(seed, q + dq, r + dr).expect("on the world");
+                    assert!(
+                        !c.terrain.blocked(),
+                        "seed {seed}: ({q}, {r}) + ({dq}, {dr})"
+                    );
+                }
+                let (cx, cy) = (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
+                for kx in cx - 1..=cx + 1 {
+                    for ky in cy - 1..=cy + 1 {
+                        for enemy in enemy_groups(seed, kx, ky).concat() {
+                            assert!(hex_distance(enemy, (q, r)) > 2, "seed {seed}: ({q}, {r})");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_teleporters_are_spread_one_a_square_of_chunks_and_come_from_the_seed_alone() {
+        for seed in 0..6 {
+            let found = teleporters(seed, &[]);
+            assert_eq!(teleporters(seed, &[]), found);
+            // 17 x 17 squares of 4 x 4 chunks, the edge ones half off the world: most of them hold one.
+            assert!(found.len() >= 200 && found.len() <= 289, "seed {seed}: {}", found.len());
+            for (i, a) in found.iter().enumerate() {
+                for b in &found[i + 1..] {
+                    assert!(hex_distance(*a, *b) >= 32, "seed {seed}: {a:?} {b:?}");
+                }
+            }
+        }
+        assert_ne!(teleporters(1, &[]), teleporters(2, &[]));
+    }
+
+    #[test]
+    fn a_teleporter_keeps_off_the_cells_it_is_told_to_avoid() {
+        let free = teleporters(7, &[]);
+        let taken = free[1];
+        let moved = teleporters(7, &[taken]);
+        assert_eq!(moved.len(), free.len());
+        assert!(hex_distance(moved[1], taken) > 3);
+        assert_eq!(moved[2..], free[2..]);
+    }
+
+    #[test]
+    fn the_teleporters_of_seed_7_are_pinned() {
+        assert_eq!(teleporters(7, &[])[..3], [(2, -1), (-501, -505), (-453, -507)]);
+    }
+
     /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
     fn walks(from: (i32, i32), path: &[(i32, i32)], avoid: &[(i32, i32)]) -> bool {
         let mut at = from;

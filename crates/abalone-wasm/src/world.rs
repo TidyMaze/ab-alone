@@ -420,6 +420,15 @@ mod tests {
     }
 
     #[test]
+    fn the_teleporters_are_q_r_pairs_that_match_the_core_and_keep_off_the_lairs() {
+        let flat = world_teleporters(7);
+        let lairs = world::lairs(7, crate::encounter::boss_ids().len());
+        let cells = world::teleporters(7, &lairs);
+        assert_eq!(flat, cells.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>());
+        assert!(cells.iter().all(|&t| lairs.iter().all(|&l| world::hex_distance(t, l) > 3)));
+    }
+
+    #[test]
     fn the_dungeon_walk_is_a_lair_number_then_q_r_pairs_that_match_the_core() {
         let lairs = world_lairs(3);
         let blocked = lairs.clone();
