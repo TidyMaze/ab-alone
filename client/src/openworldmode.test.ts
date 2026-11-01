@@ -1708,3 +1708,23 @@ describe('tap to walk and the steering setting (#1137, docs/specs/openworld.md s
     expect(body().openworldRoute).toBeUndefined();
   });
 });
+
+describe('the scene of a world is released to the renderer (#1258)', () => {
+  const releasing = (release: (scene: THREE.Scene) => void) =>
+    new OpenWorldMode(
+      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, noPush,
+      worldSaves(memoryStore(), 1), undefined, undefined, undefined, undefined, undefined, undefined, undefined, release,
+    );
+
+  it('releases the scene on leave, and the scene replaced by another seed entered over it', () => {
+    const released: THREE.Scene[] = [];
+    const m = releasing((scene) => released.push(scene));
+    m.enter(1, 800, 600);
+    const first = m.scene;
+    m.enter(2, 800, 600);
+    expect(released).toEqual([first]);
+    const second = m.scene;
+    m.leave();
+    expect(released).toEqual([first, second]);
+  });
+});
