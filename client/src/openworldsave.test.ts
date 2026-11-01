@@ -45,7 +45,7 @@ describe('the save of the camera yaw (#1026)', () => {
 
   it('discards a record of a record version this build does not know, a later one', async () => {
     const store = memoryStore();
-    store.data.set('openworld:7', { ...record(7), record: 3, yaw: 0 });
+    store.data.set('openworld:7', { ...record(7), record: 4, yaw: 0 });
     expect(await worldSaves(store, 1).load(7)).toBeNull();
     expect(store.data.has('openworld:7')).toBe(false);
   });
@@ -80,12 +80,67 @@ describe('the save of the broken obstacles (#1147)', () => {
   });
 });
 
+describe('the save of the beaten lairs (#1170)', () => {
+  it('saves the beaten lairs with the world and loads them back', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, hero, troop, new FightState(), 0, [], [2, 0]);
+    expect((await saves.load(7))!.lairs).toEqual([2, 0]);
+  });
+
+  it('loads a record of the record version 2 or none, saved before the lairs, as none beaten: old saves still load', async () => {
+    for (const old of [{ ...record(7), record: 2 }, record(7)]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', old);
+      expect((await worldSaves(store, 1).load(7))!.lairs).toEqual([]);
+    }
+  });
+
+  it('discards a record of this record version whose lairs are not a list of lair numbers', async () => {
+    for (const lairs of [undefined, 'x', [-1], [1.5], ['a']]) {
+      const store = memoryStore();
+      store.data.set('openworld:7', { ...record(7), record: 3, yaw: 0, lairs });
+      expect(await worldSaves(store, 1).load(7)).toBeNull();
+      expect(store.data.has('openworld:7')).toBe(false);
+    }
+  });
+
+  it('beat adds a lair to the beaten ones of the saved world, once, and does nothing without a save', async () => {
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.beat(7, 1);
+    expect(await saves.load(7)).toBeNull();
+    await saves.put(7, hero, troop, new FightState(), 0, [], [0]);
+    await saves.beat(7, 1);
+    await saves.beat(7, 1);
+    expect((await saves.load(7))!.lairs).toEqual([0, 1]);
+    expect((await saves.load(7))!.hero).toEqual(hero);
+  });
+
+  it('beat keeps an old save loadable: a record of the first version gets its yaw written', async () => {
+    const store = memoryStore();
+    const { yaw: _yaw, ...old } = record(7);
+    store.data.set('openworld:7', old);
+    await worldSaves(store, 1).beat(7, 2);
+    const back = await worldSaves(store, 1).load(7);
+    expect(back!.lairs).toEqual([2]);
+    expect(back!.yaw).toBe(0);
+  });
+
+  it('beat leaves a store that fails alone', async () => {
+    const store = memoryStore();
+    await worldSaves(store, 1).put(7, hero, troop, new FightState(), 0);
+    store.put = async () => {
+      throw new Error('full');
+    };
+    await expect(worldSaves(store, 1).beat(7, 1)).resolves.toBeUndefined();
+  });
+});
+
 describe('worldSaves', () => {
   it('saves a world under its seed and loads it back with its hero, troop and fight', async () => {
     const saves = worldSaves(memoryStore(), 1);
     expect(await saves.put(7, hero, troop, fightWithPush(), 0)).toBe(true);
     const back = await saves.load(7);
-    expect(back).toEqual({ ...record(7), broken: [], savedAt: expect.any(Number) });
+    expect(back).toEqual({ ...record(7), broken: [], lairs: [], savedAt: expect.any(Number) });
     expect(back!.fight.beaten).toBe(1);
   });
 

@@ -253,6 +253,9 @@ export const HI_CAPACITY = 3 * HI_RADIUS * (HI_RADIUS + 1) + 1;
 
 const RADIUS = HEX_RADIUS; // a hex of side 0.56 tiles a grid of spacing 1 with a thin gap
 export const MARBLE = 0.3;
+
+/** The landmark of a boss lair (#1170): a tall pillar on a flat plinth, gold while the lair is unbeaten, green once beaten. */
+export const LAIR_LOOK = { open: 0xffb020, beaten: 0x4caf6a, height: 5 };
 /** The looks of the marbles (#1138): glossy, with the ring colours of the interface, cyan on the hero and the troop (the last move), amber
  * on the foes (revealed). The stripe is the ring that shows the roll. */
 export const MARBLE_LOOK = {
@@ -1087,6 +1090,33 @@ export class OpenWorldView {
     });
     geometries.forEach((geometry) => geometry.dispose());
     materials.forEach((material) => material.dispose());
+  }
+
+  /** Stands the landmark of each boss lair on its cell (#1170): `cells` in lair order, `beaten` the numbers of the lairs beaten. The
+   * landmarks of an earlier call are replaced, and freed with the next draw. */
+  setLairs(cells: readonly Axial[], beaten: readonly number[]): void {
+    for (const old of this.scene.children.filter((child) => child.name.startsWith('lair-'))) {
+      this.scene.remove(old);
+      old.traverse((part) => {
+        const mesh = part as THREE.Mesh;
+        if (mesh.isMesh) this.retire(mesh.geometry, mesh.material as THREE.Material);
+      });
+    }
+    cells.forEach(([q, r], i) => {
+      const colour = beaten.includes(i) ? LAIR_LOOK.beaten : LAIR_LOOK.open;
+      const material = new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.6, roughness: 0.5 });
+      const group = new THREE.Group();
+      group.name = `lair-${i}`;
+      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, LAIR_LOOK.height, 6), material);
+      pillar.position.y = LAIR_LOOK.height / 2;
+      const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.15, 6), material);
+      plinth.position.y = 0.075;
+      group.add(pillar, plinth);
+      const p = axialTo3D(q, r);
+      const tile = this.world.tile(q, r)!;
+      group.position.set(p.x, topOf(GROUND[tile.terrain], tile.height), p.z);
+      this.scene.add(group);
+    });
   }
 
   /** Lays the enemy marbles of the loaded chunks as the fight has them now: the generated ones not moved, and the pushed ones.

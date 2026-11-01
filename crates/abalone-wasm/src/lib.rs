@@ -85,6 +85,8 @@
 //!   `terrain` `0` water, `1` sand, `2` grass, `3` rock, `4` peak, `5` boulder, `6` tree, `7` wall;
 //!   all but sand, grass and rock are blocked; `biome` `0` meadow, `1` forest, `2` tundra, `3` desert,
 //!   `4` badlands (docs/specs/openworld.md section 2, openworld-terrain.md section 4).
+//! - Open world lairs (`world_lairs(seed)`): the three boss lairs, `q, r` pairs, lair 0 first, each at least 150 cells from the
+//!   spawn on open ground (docs/specs/openworld.md section 7).
 //! - Open world push (`world_push(seed, troop, enemies, broken)`): `troop` is the hero's cell then the troop's,
 //!   `enemies` the enemy marbles near the hero, `q, r` pairs. Empty when no push is legal, else
 //!   `[ejected_q, ejected_r, ejected_kind, ntroop, ...troop, nenemies, ...enemies, dir_q, dir_r]`:
@@ -105,7 +107,7 @@ pub use encounter::{boss_goal, boss_ids, boss_name, engine_version, Encounter};
 pub use game::Engine;
 pub use royale::Royale;
 pub use run::run_map;
-pub use world::{world_chunk, world_version};
+pub use world::{world_chunk, world_lairs, world_version};
 
 #[cfg(test)]
 mod tests {
