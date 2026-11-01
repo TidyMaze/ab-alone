@@ -118,8 +118,8 @@ test('the fog shows smoothly across the bay, not on board cells nor as a brutal 
   // Under automation the page skips draws while the last one was slow (#216): two animation frames do not prove the board
   // was drawn again after a flip. Each shot waits for a draw that began after it was asked for (bug #365), then two
   // frames, in one call to the page (#429).
-  const shot = async (name: string) => {
-    await page.evaluate(
+  const drawn = () =>
+    page.evaluate(
       () =>
         new Promise((done) => {
           const draws = (window as any).__draws as () => number;
@@ -128,8 +128,15 @@ test('the fog shows smoothly across the bay, not on board cells nor as a brutal 
           requestAnimationFrame(wait);
         }),
     );
+  const shot = async (name: string) => {
+    await drawn();
     return page.screenshot({ path: testInfo.outputPath(name), type: 'png' });
   };
+  // The first draws after the room mounts are not the steady picture: the shot of the 2nd draw differs from every later one
+  // (mean 1.49 over the page, soft edges everywhere), and all draws from the 3rd on are identical (0). Two draws pass
+  // before the first shot, so the still check compares steady frames (#1248).
+  await drawn();
+  await drawn();
   await expect(page.locator('body')).toHaveAttribute('data-clear', 'off');
   const fogOn = await shot('fog-on.png');
   await flip();
