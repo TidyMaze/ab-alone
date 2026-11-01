@@ -5,7 +5,7 @@
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
-import { CameraLife } from './openworldcamera';
+import { CameraLife, Spring } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
@@ -297,12 +297,13 @@ const CAP = 0.07;
 export const STEP = 0.5;
 /** The height of the top of a cell's ground: water lies low. */
 export const topOf = (terrain: Terrain, height: number): number => (terrain === 'water' ? 0.08 : 0.2 + STEP * height);
-/** The camera's height eases to the hero's column top with this time constant, in seconds, and snaps within `SETTLED` (#988). */
-const EASE = 0.12;
-const SETTLED = 0.01;
-/** The camera's turn round the hero eases the same way, with its own time constant, and snaps within `SETTLED_YAW` (radians, #1026). */
-const EASE_YAW = 0.12;
-const SETTLED_YAW = 0.001;
+/** The rate of the camera's follow of the hero (#1333), in 1/s (`Spring`): about a cell behind it at the cruise pace, on it 0.2 s after
+ * it stops. The height follows the hero's column top with it (#988). */
+const FOLLOW = 25;
+/** The rate of the camera's turn round the hero (#1026) and of its zoom: a 60 degree turn in about 0.35 s. */
+const TURN = 13;
+/** Moves `spring` `dt` seconds on toward `goal`, or onto it at once when `instant`. Returns whether it moved. */
+const chase = (spring: Spring, goal: number, dt: number, instant: boolean): boolean => (instant ? spring.place(goal) : spring.step(goal, dt));
 
 /** A stable 0 to 1 draw per cell, so the mountains and the trees differ in height but never change between draws. */
 export const variety = (q: number, r: number): number => (((Math.imul(q, 73856093) ^ Math.imul(r, 19349663)) >>> 0) % 100) / 100;
@@ -392,7 +393,7 @@ export class OpenWorldView {
   readonly camera = new THREE.PerspectiveCamera(40, 1, NEAR, CAMERA_FAR);
   private readonly fog = new THREE.Fog(SHIP_BLACK);
   private level = 1;
-  /** The zoom drawn at the current turn: `level`, or less where a narrow window of turns would pass MAX_REACH (`fitZoom`). */
+  /** The zoom drawn at the current turn: `level` as followed, or less where a narrow window of turns would pass MAX_REACH (`fitZoom`). */
   private drawnLevel = 1;
   /** The widest zoom on the screen's aspect, see `maxZoomFor`. */
   private limit = maxZoomFor(1);
@@ -423,12 +424,13 @@ export class OpenWorldView {
   private readonly hero: THREE.Mesh;
   /** The cell the hero is on, the centre of the pick. */
   private heroCell: Axial = [0, 0];
-  /** The point the camera looks at: the hero's x and z, its height eased to the hero's column top (#988). The first show puts it
-   * there at once (`placed`): the camera does not glide in from the origin. */
+  /** The point the camera looks at: it follows the hero's drawn place, its x, its height (the hero's column top, #988) and its z, each
+   * a spring (`follow`, #1333). A show with no glide puts it on the hero at once, the height only at the first one (`placed`): the
+   * camera does not glide in from the origin. */
   private readonly focus = new THREE.Vector3();
-  /** The camera's offsets (punch, pan ease, shake, #1103) and the point they look at: never the focus, which the chunks follow. */
+  private readonly follows: [Spring, Spring, Spring] = [new Spring(0, FOLLOW), new Spring(0, FOLLOW), new Spring(0, FOLLOW)];
+  /** The camera's offsets (punch, shake, #1103): never the focus, which the chunks follow. */
   private readonly life = new CameraLife();
-  private readonly lifeAt = new THREE.Vector3();
   private lifeOn = false;
   private screen = { width: 800, height: 600 };
   private placed = false;
@@ -451,9 +453,13 @@ export class OpenWorldView {
   /** The marbles of the push being drawn (none when there is no animation), and the time it ends in ms. */
   private moves: Move[] = [];
   private end = 0;
-  /** The turn of the camera round the hero, in radians: `yawNow` eases to `yawGoal`, which the keys, a drag and a twist set (#1026). */
+  /** The turn of the camera round the hero, in radians: `yawNow` follows `yawGoal`, which the keys, a drag and a twist set (#1026), by
+   * the spring of the gap between them (#1333). */
   private yawNow = 0;
   private yawGoal = 0;
+  private readonly yawGap = new Spring(0, TURN, 1e-4);
+  /** The zoom drawn follows the zoom set (`level`) by a spring (#1333). */
+  private readonly zoomNow = new Spring(1, TURN, 1e-4);
   /** The hero (the first marble) and the troop's marbles: where each is drawn, and the glide of a step under way (#1040). */
   private readonly marbles: Marble[] = [new Marble(MARBLE)];
   /** The strength of the marbles' stripe at the drawn zoom (openworldstripe.ts), one uniform for every marble material (#1043). */
@@ -597,27 +603,13 @@ export class OpenWorldView {
     this.life.shake(now);
   }
 
-  /** The follow eases from `now` (ms) as the hero goes from cell `from` to cell `to` (a walk starts: the follow lags behind it). */
-  panFor(from: Axial, to: Axial, now: number): void {
-    const a = axialTo3D(from[0], from[1]);
-    const b = axialTo3D(to[0], to[1]);
-    const d = Math.hypot(b.x - a.x, b.z - a.z);
-    this.life.pan(now, (b.x - a.x) / d, (b.z - a.z) / d, -1);
-  }
-
-  /** The walk ends at `now` (ms): the follow settles with a little carry (#1103). */
-  panEnd(now: number): void {
-    this.life.panEnd(now);
-  }
-
-  /** Draws the camera's offsets at `now` (ms) on top of the base camera, which `frame` set: the punch scales the zoom, the pan moves the
-   * point looked at, the shake shifts the image. The chunks, the focus and the player's zoom are not touched. Returns whether the camera
-   * moved this call, the last one included (it puts the base back exactly). */
+  /** Draws the camera's offsets at `now` (ms) on top of the base camera, which `frame` set: the punch scales the zoom, the shake shifts
+   * the image. The chunks, the focus and the player's zoom are not touched. Returns whether the camera moved this call, the last one
+   * included (it puts the base back exactly). */
   offsets(now: number): boolean {
     if (this.life.at(now)) {
-      const { focus, lifeAt, life } = this;
-      lifeAt.set(focus.x + life.panX, focus.y, focus.z + life.panZ);
-      lookAtHero(this.camera, lifeAt, this.drawnLevel * life.zoom, this.yawNow);
+      const { life } = this;
+      lookAtHero(this.camera, this.focus, this.drawnLevel * life.zoom, this.yawNow);
       const { width, height } = this.screen;
       this.camera.setViewOffset(width, height, -life.shakeX, 0, width, height);
       this.lifeOn = true;
@@ -626,10 +618,10 @@ export class OpenWorldView {
     return this.endLife();
   }
 
-  /** What the camera draws now, for the browser checks (#1103): the zoom with the punch, the image shake in pixels, the chunk centre
-   * and the reach loaded. */
-  probe(): { zoom: number; shake: number; centre: Axial; reach: number } {
-    return { zoom: this.drawnLevel * this.life.zoom, shake: this.camera.view?.enabled ? -this.camera.view.offsetX : 0, centre: this.centre, reach: this.loadedReach };
+  /** What the camera draws now, for the browser checks (#1103): the zoom with the punch, the image shake in pixels, the chunk centre,
+   * the reach loaded and where the camera is (`eye`, #1333). */
+  probe(): { zoom: number; shake: number; centre: Axial; reach: number; eye: number[] } {
+    return { zoom: this.drawnLevel * this.life.zoom, shake: this.camera.view?.enabled ? -this.camera.view.offsetX : 0, centre: this.centre, reach: this.loadedReach, eye: this.camera.position.toArray() };
   }
 
   /** Cuts the offsets: the base camera at once. Returns whether there were some to cut. */
@@ -769,10 +761,13 @@ export class OpenWorldView {
     this.marbleAt(0).place(this.standing(at));
     troop.forEach((cell, i) => this.marbleAt(i + 1).place(this.standing(cell)));
     this.draw(0);
-    if (!this.placed) {
-      this.focus.y = this.hero.position.y;
-      this.placed = true;
-    }
+    const [x, y, z] = this.follows;
+    const { position } = this.hero;
+    x.place(position.x);
+    z.place(position.z);
+    if (!this.placed) y.place(position.y);
+    this.placed = true;
+    this.focus.set(x.x, y.x, z.x);
   }
 
   /** The hero and each troop marble glide from where they are at `now` to the cells of a step (#1040): the hero, then the troop, each
@@ -820,10 +815,7 @@ export class OpenWorldView {
   private glideMarbles(now: number): boolean {
     const roll = this.drawnLevel <= ROLL_ZOOM;
     const hero = this.marbleAt(0).tick(now, roll);
-    if (hero) {
-      this.draw(0);
-      this.frame();
-    }
+    if (hero) this.draw(0);
     let troop = false;
     for (let i = 1; i < this.marbles.length; i++) {
       if (!this.marbles[i]!.tick(now, roll)) continue;
@@ -835,15 +827,13 @@ export class OpenWorldView {
   }
 
   /** Writes the drawn pose of marble `i` (0 the hero, then the troop) to its mesh: the hero itself, or the troop's instance. The camera
-   * follows the hero's place (`focus`). */
+   * follows the hero's place (`follow`). */
   private draw(i: number): void {
     const { x, y, z, q, sx, sy } = this.marbles[i]!.pose;
     if (i === 0) {
       this.hero.position.set(x, y, z);
       this.hero.quaternion.copy(q);
       this.hero.scale.set(sx, sy, sx);
-      this.focus.x = x;
-      this.focus.z = z;
       return;
     }
     const { drawnPose } = this;
@@ -855,19 +845,26 @@ export class OpenWorldView {
     this.troop.instanceMatrix.needsUpdate = true;
   }
 
-  /** The height the camera looks at: the hero's column top, eased to it by `ease` (the browser checks and the tests read it). */
+  /** The height the camera looks at: the hero's column top, followed by `follow` (the browser checks and the tests read it). */
   get focusHeight(): number {
     return this.focus.y;
   }
 
-  /** Eases the camera's height to the hero's column top, `dt` seconds on: the gap closes by `1 - exp(-dt / EASE)` of itself, so it
-   * never overshoots. It snaps when `instant` (reduced motion) or within `SETTLED` of the top. Returns whether the camera moved,
-   * so the frame is drawn; false once it has settled (#988). */
-  ease(dt: number, instant: boolean): boolean {
-    const target = this.hero.position.y;
-    const gap = target - this.focus.y;
-    if (gap === 0) return false;
-    this.focus.y = instant || Math.abs(gap) <= SETTLED ? target : this.focus.y + gap * (1 - Math.exp(-dt / EASE));
+  /** The camera follows its goals `dt` seconds on, on the frame clock (#1333): the point it looks at the hero's drawn place (its height
+   * the hero's column top, #988), its turn the yaw set (#1026), its zoom the zoom set, each by a critically damped spring (`Spring`).
+   * So its speed never jumps, whatever the steps, the turns or the zooms do. Each lands on its goal at once when `instant` (reduced
+   * motion). Returns whether the camera moved, so the frame is drawn; false once all have settled. */
+  follow(dt: number, instant: boolean): boolean {
+    const { position } = this.hero;
+    const [x, y, z] = this.follows;
+    let moved = chase(x, position.x, dt, instant);
+    moved = chase(y, position.y, dt, instant) || moved;
+    moved = chase(z, position.z, dt, instant) || moved;
+    moved = chase(this.yawGap, 0, dt, instant) || moved;
+    moved = chase(this.zoomNow, this.level, dt, instant) || moved;
+    if (!moved) return false;
+    this.focus.set(x.x, y.x, z.x);
+    this.yawNow = wrapPi(this.yawGoal + this.yawGap.x);
     this.frame();
     return true;
   }
@@ -950,17 +947,9 @@ export class OpenWorldView {
     this.ejected.visible = false;
   }
 
-  /** Writes every marble of the push at `now`. The hero is written first: the camera follows its drawn place, and the frame may
-   * rebuild the enemies as they stand, so the others are written after it. */
+  /** Writes every marble of the push at `now`: the camera follows the hero's drawn place (`follow`). */
   private play(now: number): void {
-    let heroMoves = false;
-    for (const m of this.moves) {
-      if (m.mesh !== 'hero') continue;
-      this.write(m, now);
-      heroMoves = true;
-    }
-    if (heroMoves) this.frame();
-    for (const m of this.moves) if (m.mesh !== 'hero') this.write(m, now);
+    for (const m of this.moves) this.write(m, now);
   }
 
   /** Writes one marble of a push at `now` (ms): its place between the cells, and its size and sinking when it falls. */
@@ -1032,8 +1021,7 @@ export class OpenWorldView {
 
   /** Zooms the camera by `scale`, more than 1 further out and less than 1 closer, between the closest view and the widest. */
   zoomBy(scale: number): void {
-    this.level = Math.min(this.limit, Math.max(1, this.level * scale));
-    this.frame();
+    this.level = Math.min(this.limit, Math.max(1, this.level * scale)); // the drawn zoom follows it (`follow`)
   }
 
   /** The yaw the camera turns to, in radians: 0 is the default angle (#1026). */
@@ -1041,27 +1029,18 @@ export class OpenWorldView {
     return this.yawGoal;
   }
 
-  /** Turns the goal of the camera's yaw by `by` radians round the hero; the camera eases to it (`easeYaw`). */
+  /** Turns the goal of the camera's yaw by `by` radians round the hero; the camera follows it the shortest way round (`follow`). */
   turn(by: number): void {
     this.yawGoal = wrapPi(this.yawGoal + by);
+    this.yawGap.x = wrapPi(this.yawNow - this.yawGoal); // the turn under way keeps its speed
   }
 
   /** Turns the camera to `yaw` at once: the goal and the view, as a world is entered with its saved angle. */
   turnTo(yaw: number): void {
     this.yawGoal = wrapPi(yaw);
     this.yawNow = this.yawGoal;
+    this.yawGap.place(0);
     this.frame();
-  }
-
-  /** Eases the camera's yaw to its goal, `dt` seconds on, the shortest way round, as the height eases (`ease`): the gap closes by
-   * `1 - exp(-dt / EASE_YAW)` of itself, and it snaps when `instant` (reduced motion) or within `SETTLED_YAW`. Returns whether the
-   * camera moved, so the frame is drawn; false once it has settled. */
-  easeYaw(dt: number, instant: boolean): boolean {
-    const gap = wrapPi(this.yawGoal - this.yawNow);
-    if (gap === 0) return false;
-    this.yawNow = instant || Math.abs(gap) <= SETTLED_YAW ? this.yawGoal : wrapPi(this.yawNow + gap * (1 - Math.exp(-dt / EASE_YAW)));
-    this.frame();
-    return true;
   }
 
   /** The reach the camera needs at zoom `k` and the current yaw, from its footprint (`groundRadius`, unclipped). */
@@ -1074,9 +1053,10 @@ export class OpenWorldView {
   /** The zoom drawn at the turn: the zoom of the user, or less where the reach at this turn would pass `MAX_REACH` (a narrow window
    * of turns that `maxZoomFor` does not sample, #1026). The loaded chunks then always cover the ground in view. */
   private fitZoom(at: THREE.Vector3): number {
-    if (this.reachOf(at, this.level) <= MAX_REACH) return this.level;
+    const zoom = this.zoomNow.x;
+    if (this.reachOf(at, zoom) <= MAX_REACH) return zoom;
     let low = 1;
-    let high = this.level;
+    let high = zoom;
     for (let i = 0; i < 24; i++) {
       const mid = (low + high) / 2;
       if (this.reachOf(at, mid) <= MAX_REACH) low = mid;
@@ -1085,7 +1065,7 @@ export class OpenWorldView {
     return low;
   }
 
-  /** The zoom the frame draws: the user's zoom (`zoom`) or less at a narrow turn (`fitZoom`). */
+  /** The zoom the frame draws: the user's zoom (`zoom`) as followed (`follow`), or less at a narrow turn (`fitZoom`). */
   get drawnZoom(): number {
     return this.drawnLevel;
   }

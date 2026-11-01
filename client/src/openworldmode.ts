@@ -395,8 +395,9 @@ export class OpenWorldMode {
     this.mark(document.body.dataset.openworld!);
   }
 
-  /** Eases the camera toward the hero's column top, then draws the scene when something changed since the last draw (the ease
-   * included, until it settles), and every frame while a lake is in view and motion is on. `now` is the frame time in ms. Returns
+  /** Moves the camera after the hero (`follow`), then draws the scene when something changed since the last draw (the follow
+   * included, until it settles), and every frame while a lake is in view and motion is on. `now` is the frame time in ms: the page
+   * passes the animation frame's own time, so every frame is drawn at an even step of the clock (#1333). Returns
    * whether it drew: the FPS readout counts the frames really rendered (#1064). */
   frame(render: (scene: THREE.Scene, camera: THREE.Camera) => void, now = performance.now()): boolean {
     if (!this.view) return false; // left: nothing to draw
@@ -404,13 +405,12 @@ export class OpenWorldMode {
     const seconds = (now - this.clock) / 1000;
     this.clock = now;
     const reduced = this.reduced();
-    if (this.view!.ease(seconds, reduced)) this.dirty = true;
-    if (this.view!.easeYaw(seconds, reduced)) this.dirty = true; // the turn eases to its goal, as the height does (#1026)
+    if (this.view!.follow(seconds, reduced)) this.dirty = true; // the camera follows the hero, its turn and its zoom (#988, #1026, #1333)
     this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
     if (!this.view) return false; // the step walked onto a lair and left the mode
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
-    if (this.view!.offsets(now)) this.dirty = true; // the camera's punch, pan ease and shake, on top of the follow (#1103)
+    if (this.view!.offsets(now)) this.dirty = true; // the camera's punch and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();
     const moving = !reduced && !this.lowTier() && this.view!.hasWater; // the low tier holds the glow of the lake still: no frame drawn for it (#1234)
@@ -442,7 +442,6 @@ export class OpenWorldMode {
   /** The walk stops at `now` (ms), by a release, a blocked step or arrows that cancel: the next step starts from rest, and the glide
    * under way slows to a rest on its cell, on time (#1065). */
   private stop(now: number): void {
-    if (this.cruising && !this.reduced()) this.view!.panEnd(now); // the follow settles with the walk (#1103)
     this.cruising = false;
     this.walked = 0;
     this.view!.brake(now);
@@ -500,7 +499,6 @@ export class OpenWorldMode {
     if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair), false;
     const from = this.hero!.at;
     if (!this.hero!.step(to)) return this.lean(to, at), false;
-    if (pace === 'start' && !this.reduced()) this.view!.panFor(from, to, at); // the follow eases in at the first step of a walk (#1103)
     this.cruising = pace !== 'tap';
     const span = pace === 'tap' ? GLIDE_MS : stepMs(this.walked);
     this.walked = pace === 'tap' ? 0 : this.walked + 1;
