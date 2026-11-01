@@ -26,6 +26,8 @@ export async function loseByRepetition(page: Page): Promise<void> {
     await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(ply + 1);
   }
   await expect(page.locator('#hud')).toContainText('Defeat');
+  // The last move's slides still end with a HUD redraw, which wipes a note written meanwhile ("result copied", #1277).
+  await expect(page.locator('body')).not.toHaveAttribute('data-sliding', '1');
 }
 
 /** Opens the daily challenge of 2027-03-30 (clock fixed), starts it and returns the boss name. */
