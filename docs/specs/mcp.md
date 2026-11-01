@@ -133,7 +133,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.turns_left()` (`-1` is no clock) | `tell` with `kind: "neurotoxin"` and the player turns left in `text`, with the pull of the vents (The Overseer) |
 | `Encounter.ballast_next()` (`-1` is none) | `tell` with `kind: "borrowed"` and the effect The Ballast Mind borrows at the end of this turn in `text` (the Hull's crack, the Pulsar's pulse, the Magnetizer's polarity, the Chaplain's conversion check, the Swarm's wave) |
 | `Encounter.belts()` | `marks` with `kind: "belt"` on every cell of a running belt and `value` = `1` toward +q, `-1` toward -q; `kind: "strike"` on the cell of an announced strike slot; and `tell` with `kind: "belt_reverse"` and the player turns left before the centre belt reverses in `text` (The Assembly Line) |
-| `Encounter.swarm()` | `marks` with `kind: "arrival"` on each cell where a swarm marble lands after the player's move; `tell` with `kind: "arrival"`, those cells, and the boss turns before the evac and a pass in `text` (The Swarm) |
+| `Encounter.swarm()` | `marks` with `kind: "arrival"` on each cell where a swarm marble lands after the player's move; `tell` with `kind: "arrival"`, those cells, and the turns left on the evac clock (2 fewer per swarm marble the agent ejects, and the jump its last move made), and a pass in `text` (The Swarm) |
 | `Encounter.converted()` | `marks` with `kind: "converted"` |
 | `Encounter.armies()` | `marks` with `kind: "army"` and `value` = `0` Alto, `1` Tenor, `2` Bass |
 | `Encounter.tell()` id (`-1` is none, `0` is an id: the end of a player turn) | `tell.kind` = `"special"` when no more specific kind applies, the id in `text` |
@@ -143,7 +143,7 @@ Rules for the generic shape:
 - When several `tell` rows apply, the first one in the table wins: `next_army`, then `flip`, then `pulse`, then `neurotoxin`, then `borrowed`, then `special`.
 - An unknown `kind` is not an error: an agent that does not know it ignores it and still plays legally. The tell is information, not a rule.
 - `kind` values are stable once published. A new boss may add kinds, never rename one.
-- The Ballast Mind's pillars show as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded. A `win_ejections` of `0` means that side does not win by ejections (the agent against The Swarm survives 30 turns instead).
+- The Ballast Mind's pillars show as `x` in `board`. The win threshold is read from `win_ejections` in `get_state`, never hard-coded. A `win_ejections` of `0` means that side does not win by ejections (the agent against The Swarm holds out until its 40-turn evac clock runs out instead).
 
 ## 5. Tools
 
