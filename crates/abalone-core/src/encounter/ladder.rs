@@ -6,19 +6,23 @@
 
 use crate::board::{Board, Cell};
 use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
+use crate::encounter::assembly::{assembly_move, assembly_start, ASSEMBLY_NODE_BUDGET};
 use crate::encounter::ballast::{ballast_move, ballast_search, ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
 use crate::encounter::dual::{dual_move, dual_start, dual_step, DUAL_NODE_BUDGET};
 use crate::encounter::echo::{echo_boss, echo_free_moves, echo_move, echo_search, echo_start};
 use crate::encounter::hull::{hull_boss, hull_move};
+use crate::encounter::magnetizer::{magnetizer_boss, magnetizer_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
+use crate::encounter::pulsar::{pulsar_move, pulsar_start, PULSAR_NODE_BUDGET};
 use crate::encounter::railyard::{railyard_move, railyard_start, RAILYARD_NODE_BUDGET};
 use crate::encounter::stalker::{refuse, stalker_start, STALKER_NODE_BUDGET};
 use crate::encounter::swarm::{Swarm, SWARM_NODE_BUDGET};
 use crate::encounter::telemetry::{
     classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
+use crate::encounter::unstable::{unstable_move, unstable_start, UNSTABLE_NODE_BUDGET};
 use crate::encounter::{marbles, Encounter, PveResult};
 use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
@@ -44,10 +48,14 @@ pub enum LadderBoss {
     RailYard,
     Stalker,
     Swarm,
+    Magnetizer,
+    Pulsar,
+    Assembly,
+    Unstable,
 }
 
 impl LadderBoss {
-    pub const ALL: [LadderBoss; 11] = [
+    pub const ALL: [LadderBoss; 15] = [
         LadderBoss::Echo,
         LadderBoss::Hull,
         LadderBoss::Chaplain,
@@ -59,6 +67,10 @@ impl LadderBoss {
         LadderBoss::RailYard,
         LadderBoss::Stalker,
         LadderBoss::Swarm,
+        LadderBoss::Magnetizer,
+        LadderBoss::Pulsar,
+        LadderBoss::Assembly,
+        LadderBoss::Unstable,
     ];
 
     /// Stable id used in the telemetry.
@@ -75,6 +87,10 @@ impl LadderBoss {
             LadderBoss::RailYard => "railyard",
             LadderBoss::Stalker => "stalker",
             LadderBoss::Swarm => "swarm",
+            LadderBoss::Magnetizer => "magnetizer",
+            LadderBoss::Pulsar => "pulsar",
+            LadderBoss::Assembly => "assembly",
+            LadderBoss::Unstable => "unstable",
         }
     }
 
@@ -97,6 +113,10 @@ impl LadderBoss {
             LadderBoss::RailYard => RAILYARD_NODE_BUDGET,
             LadderBoss::Stalker => STALKER_NODE_BUDGET,
             LadderBoss::Swarm => SWARM_NODE_BUDGET,
+            LadderBoss::Magnetizer => magnetizer_boss().node_budget,
+            LadderBoss::Pulsar => PULSAR_NODE_BUDGET,
+            LadderBoss::Assembly => ASSEMBLY_NODE_BUDGET,
+            LadderBoss::Unstable => UNSTABLE_NODE_BUDGET,
         }
     }
 }
@@ -125,6 +145,10 @@ impl Arena {
             LadderBoss::Dual => Arena::Plain(dual_start(seed), boss),
             LadderBoss::RailYard => Arena::Plain(railyard_start(seed), boss),
             LadderBoss::Stalker => Arena::Plain(stalker_start(seed), boss),
+            LadderBoss::Pulsar => Arena::Plain(pulsar_start(seed), boss),
+            LadderBoss::Assembly => Arena::Plain(assembly_start(seed), boss),
+            LadderBoss::Unstable => Arena::Plain(unstable_start(seed), boss),
+            LadderBoss::Magnetizer => plain(magnetizer_boss()),
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
             LadderBoss::Choir => Arena::Choir(Choir::start(seed)),
@@ -173,6 +197,10 @@ impl Arena {
             Arena::Plain(enc, LadderBoss::Hull) => hull_move(enc),
             Arena::Plain(enc, LadderBoss::Dual) => dual_move(enc),
             Arena::Plain(enc, LadderBoss::RailYard) => railyard_move(enc),
+            Arena::Plain(enc, LadderBoss::Magnetizer) => magnetizer_move(enc),
+            Arena::Plain(enc, LadderBoss::Pulsar) => pulsar_move(enc),
+            Arena::Plain(enc, LadderBoss::Assembly) => assembly_move(enc),
+            Arena::Plain(enc, LadderBoss::Unstable) => unstable_move(enc),
             Arena::Plain(enc, LadderBoss::Stalker) => enc.boss_search().map(|r| r.mv),
             // The Ballast Mind: the Choir is never plain.
             Arena::Plain(enc, _) => ballast_move(enc),
@@ -651,14 +679,30 @@ mod tests {
         assert_eq!(
             ids,
             [
-                "echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer", "dual",
-                "railyard", "stalker", "swarm", "magnetizer", "pulsar", "assembly", "unstable"
+                "echo",
+                "hull",
+                "chaplain",
+                "choir",
+                "ballast",
+                "alien",
+                "overseer",
+                "dual",
+                "railyard",
+                "stalker",
+                "swarm",
+                "magnetizer",
+                "pulsar",
+                "assembly",
+                "unstable"
             ]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
         assert_eq!(
             budgets,
-            [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000, 1500, 3000, 3000, 3000, 3000]
+            [
+                100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000, 1500, 3000, 3000, 3000,
+                3000
+            ]
         );
     }
 
@@ -784,7 +828,9 @@ mod tests {
             assert_eq!(a.kind(), boss);
             let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
             a.play(&mv).unwrap();
-            let reply = a.boss_move().unwrap_or_else(|| panic!("{boss:?} has a reply"));
+            let reply = a
+                .boss_move()
+                .unwrap_or_else(|| panic!("{boss:?} has a reply"));
             a.play(&reply).unwrap();
             let r = play_attempt(boss, 0, 1, 30, 6);
             assert_eq!((r.boss, r.plies), (boss.id(), 6), "{boss:?}");
