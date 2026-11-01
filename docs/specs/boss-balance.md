@@ -815,15 +815,27 @@ a seventh of the time it did (300 nodes against 2000), within the other bosses'.
 
 The ladder now plays it (`LadderBoss::RailYard`). `railyard_move` no longer avoids every announced
 line at the root: each player ply of the search tree counts the trains down and a pass ejects its
-line with credits, so the boss leaves a line only when the train is about to pass. Ladder, 10 seeds,
-player at 1x (3000 nodes); the 10x cell did not finish in 550 s on one machine, so it is not measured.
+line with credits, so the boss leaves a line only when the train is about to pass. The unit test
+`a_train_five_turns_out_does_not_stop_the_boss_from_winning_but_one_about_to_pass_does` is the
+position the old root filter misses. Node budget 3000, the Hull's. `LADDER_SEEDS=20`, seeds 0 to 19,
+300 plies at most, `cargo run --release --example ladder -- railyard` (player at 1x = 3000 nodes,
+10x = 30000):
 
-| | Wins /10 | Median plies | Deaths |
-|---|---|---|---|
-| Before (root filter) | 0 | 76.5 | rim_ejection 10 |
-| After (train in the tree) | 2 | 66 | rim_ejection 8 |
+| | Player | Wins /20 | Median plies | Deaths |
+|---|---|---|---|---|
+| Before (root filter) | 1x | 2 | 69 | rim_ejection 18 |
+| After (train in the tree) | 1x | 4 | 79 | rim_ejection 16 |
+| Before (root filter) | 10x | 1 | 85 | rim_ejection 19 |
+| After (train in the tree) | 10x | 4 | 69 | rim_ejection 16 |
 
-No tuning: no constant changed.
+Reading: the pro player wins as often at 10x as at 1x (4 of 20), so the extra search does not help
+it against the trains; the boss is still far above the owner target of 14 to 18 of 20 at 10x.
+Nothing was tuned here, the knob (budget or train lead) is the owner's.
+
+Reply time through wasm (nodejs release build, 6 seeds of up to 80 plies, boss replies, a loaded
+machine, ms, average / 95th percentile / maximum): The Rail Yard 111 / 142 / 253 after, 85 / 113 / 148
+before; measured in the same run, the Hull 120 / 171 / 210 and the Pulsar 133 / 191 / 254. Within the
+other bosses'. No rule change, `engine_version` unchanged.
 
 ### The Stalker (#1120): the fogged pro player, on target, not tuned
 
@@ -897,3 +909,33 @@ plies at most, run alone on `main` at 2a0f7cb. Nothing tuned.
 | The Hull (boss 3000) | 30000 (10x) | 12 | 99.5 | P2 | push 4, rim_ejection 4 |
 
 The Hull rows equal those of #823. The Echo at 10x (16 of 20) is above the 7 to 9 of 10 target; the owner decides.
+
+### The ladder plays the Magnetizer, Pulsar, Assembly Line, Unstable Core (#912) and the Overseer (#1117): "before" rows, not tuned
+
+`LadderBoss` gains `Magnetizer`, `Pulsar`, `Assembly` and `Unstable` (the Overseer was already in it), so
+`LadderBoss::ALL` plays 15 bosses. Each boss replies through its own move (`magnetizer_move`,
+`pulsar_move`, `assembly_move`, `unstable_move`) at its node budget 3000. The other rows are unchanged. The
+rows below are the "before" numbers for the boss AI tasks (#913 to #916): the phase is frozen at the root
+of the tree for the Pulsar, Assembly Line and Unstable Core, and the Magnetizer assigns no polarity ahead.
+Command: `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- <boss>`, seeds 0 to 19,
+300 plies at most, one run at a time, main at the commit of #912.
+
+| Boss | Player | Wins /20 | Median plies | Highest phase | Deaths |
+|---|---|---|---|---|---|
+| Magnetizer | 1x (3000) | 7 | 176 | P2 | push 4, rim_ejection 3, draw 6 |
+| Magnetizer | 10x (30000) | 16 | 141 | P2 | draw 4 |
+| Pulsar | 1x | 2 | 137 | P2 | push 10, rim_ejection 7, draw 1 |
+| Pulsar | 10x | 4 | 123.5 | P2 | push 5, rim_ejection 10, draw 1 |
+| Assembly Line | 1x | 0 | 111.5 | P1 | push 3, rim_ejection 17 |
+| Assembly Line | 10x | 0 | 88 | P2 | rim_ejection 20 |
+| Unstable Core | 1x | 0 | 27 | P2 | rim_ejection 17, draw 3 |
+| Unstable Core | 10x | 0 | 27 | P1 | rim_ejection 20 |
+| Overseer (#1117) | 1x | 0 | 79 | P2 | push 16, rim_ejection 4 |
+| Overseer (#1117) | 10x | 2 | 79 | P2 | push 13, rim_ejection 4, draw 1 |
+
+Reading: against the owner target of 14 to 18 of 20 at 10x only the Magnetizer is inside (16). The Pulsar
+is far below (4), the Assembly Line and the Unstable Core win nothing (the Unstable Core ends in 27 plies by
+rim ejection). The Overseer is the plain-search player's row: it does not see the incinerators or the clock,
+so the neurotoxin ends the fight at ply 79 (the 40th turn) as in the 10 seed row of #828; 20 seeds give 0 and
+2 wins. The Rail Yard rows are in its own section above. Nothing was tuned, the knobs are the owner's.
+Run times, one machine: 25 s to 66 s at 1x, 104 s to 578 s at 10x.
