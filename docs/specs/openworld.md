@@ -20,6 +20,7 @@ A-light Explore (#720 to #725), which it does not touch.
   seed; `?openworld=<seed>` fixes it (tests, sharing a world). Leave returns to where the player
   came from.
 - **Delivered (#963)**: the spec (#964), the map (#965), the enemies and troop (#966), the attack (#967) and the save (#968) are merged; the mode is reachable without a flag.
+- **A-light dropped**: #720 and its slices #722 to #725, parked since 2026-10-26, are superseded by this mode and the boss lairs (#1170, #1171). The hero rule and Rewind (#723, #724) were not built.
 - **Delta to Abalone**: none to the move, the push or the legality (`rules.md`). The mode adds a
   map, obstacles and an automatic troop whose only attack is a legal Abalone push (pillar 1).
 - **Not now**: HP, damage, levels, items, economy, real-time fights (each needs a Decision, #313).
