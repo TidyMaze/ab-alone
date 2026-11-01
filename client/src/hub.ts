@@ -1,12 +1,13 @@
 // The hub (docs/specs/game-design.md section 3.5): one small hex map per deck, walked one cell at a time by the
-// player's glass marble. Rooms are cells with a glyph on the outer ring, the same layout on every deck. Pure data and
-// rules: no DOM, no three.js.
+// player's glass marble. Rooms are cells with a prop on the two outer rings, the same layout on every deck. Pure data
+// and rules: no DOM, no three.js.
 import { cellsFor, DIRECTIONS, type Axial } from './board';
 import { DECK_NAMES, type Deck } from './deck';
 
 export type Door =
   | { kind: 'boss'; boss: string }
   | { kind: 'hotseat' | 'bot' | 'online' | 'royale' }
+  | { kind: 'daily' | 'run' | 'together' | 'ranked' | 'world' } // a mode with no table (#1249)
   | { kind: 'terminal'; lore: string }
   | { kind: 'medals' } // the Medal room of the Mess (#812)
   | { kind: 'lift'; to: Deck };
@@ -22,7 +23,9 @@ export interface Spot {
   cell: Axial;
 }
 
-export const HUB_CELLS: readonly Axial[] = cellsFor(2);
+// Radius 3 (#1249): the rooms of radius 2 stay where they are, the gallery ring around them holds the other bosses and
+// the modes, and its other cells are floor.
+export const HUB_CELLS: readonly Axial[] = cellsFor(3);
 export const START: Spot = { deck: 'mess', cell: [0, 0] };
 
 // The boss of each deck (world.md section 3, deck.ts).
@@ -42,13 +45,28 @@ const TERMINALS: Record<Deck, readonly [string, string]> = {
   bridge: ['bridge-clamp', 'bridge-last-orders'],
 };
 
+// The gallery ring (#1249): the other bosses of each deck (README "The game", deck.ts) in roster order, then the modes
+// with no table, the Open world on the Mess where every player starts.
+const boss = (id: string): Door => ({ kind: 'boss', boss: id });
+const GALLERY: Record<Deck, Door[]> = {
+  mess: [boss('dual'), { kind: 'daily' }, { kind: 'world' }],
+  cargo: [boss('alien'), boss('railyard'), boss('assembly'), boss('swarm'), { kind: 'run' }],
+  furnace: [boss('magnetizer'), boss('core'), { kind: 'together' }],
+  chapel: [boss('overseer'), boss('stalker')],
+  bridge: [boss('pulsar'), { kind: 'ranked' }],
+};
+// Their cells, filled in this order: the north-east shoulder by the boss door, the north corners, then the south-west
+// and south corners. No room is next to them in their row, so the plates never overlap, each keeps a floor cell
+// next to it, and every floor cell stays reachable (hub.test.ts).
+const GALLERY_SLOTS: readonly Axial[] = [[3, -2], [3, -3], [0, -3], [-3, 3], [0, 3]];
+
 const LIFT_UP: Axial = [1, -2];
 const LIFT_DOWN: Axial = [-1, 2];
 
 function roomsFor(deck: Deck, i: number): Room[] {
   const [first, second] = TERMINALS[deck];
   const rooms: Room[] = [
-    { cell: [2, 0], door: { kind: 'boss', boss: BOSS[deck] } },
+    { cell: [2, 0], door: boss(BOSS[deck]) },
     { cell: [2, -1], door: { kind: 'terminal', lore: first } },
     { cell: [1, 1], door: { kind: 'terminal', lore: second } },
     { cell: [-1, -1], door: { kind: 'hotseat' } },
@@ -57,6 +75,7 @@ function roomsFor(deck: Deck, i: number): Room[] {
     { cell: [-2, 2], door: { kind: 'royale' } }, // the battle royale lobby (#522, #593)
   ];
   if (deck === 'mess') rooms.push({ cell: [0, 2], door: { kind: 'medals' } });
+  rooms.push(...GALLERY[deck].map((door, k) => ({ cell: GALLERY_SLOTS[k]!, door })));
   const up = DECK_NAMES[i + 1];
   const down = DECK_NAMES[i - 1];
   if (up) rooms.push({ cell: LIFT_UP, door: { kind: 'lift', to: up } });

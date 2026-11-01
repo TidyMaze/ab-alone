@@ -47,7 +47,7 @@ On top of it, the ship:
 | 🌫️ | **Stalker** against the bot: a fog of war where you see the enemy marbles within 2 cells of yours, a move that runs into a hidden marble reveals it (the bot is not fogged) | ✅ playable |
 | 🤝 | **Fight together**: two players share one army against a boss online, turn about | ✅ playable |
 | 🔥 | **Battle royale** on the Furnace deck: up to 6 seats, hidden orders (commit-reveal), the hull breach closes in, bots fill empty seats | ✅ playable, offline vs 5 bots and online |
-| 🛰️ | **Ship hub**: walk five decks, lifts that open as you beat each deck's boss, game tables, lore terminals, an audio log per deck, a Medal room on the Mess deck | ✅ playable, new players land there |
+| 🛰️ | **Ship hub**: walk five decks, lifts that open as you beat each deck's boss, a door for every boss on its deck with its medal once beaten, a room for every mode (game tables, daily, rogue-lite run, fight together, ranked, Open world), lore terminals, an audio log per deck, a Medal room on the Mess deck | ✅ playable, new players land there |
 | 🏆 | **Ranked** online, Elo and rank tiers | ✅ playable |
 | 🌍 | **Open world**: a generated hex map, a hero marble you walk and a troop that fights on its own, with the same rules ([spec](docs/specs/openworld.md)) | 🚧 behind the flag `openworld` |
 | 🧠 | **An AI agent plays** over MCP ([below](#let-an-ai-agent-play)) | ✅ runs on your machine |

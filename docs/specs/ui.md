@@ -455,8 +455,8 @@ The hub (game-design.md section 3.5) reads at a glance, with no hover:
 
 - **Label plates.** A plate over each room, always shown, placed on the window just south of its cell and moved with
   the camera: the room's name in its prop colour and a short state (`2 players`, the boss's name, a lift's `open` or
-  `locked`). A narrow or short window (600 px wide or 500 px high and under) shows the short label alone (`Bot`,
-  `The Hull`, `▲ Locked`). The marble's floor cell wears `YOU`; on a room, that room's plate is ringed in amber. The plates
+  `locked`), and once a boss is beaten its medal (`Medal: 22 turns`). A narrow or short window (600 px wide or 500 px
+  high and under) shows the short label alone (`Bot`, `Hull`, `▲ Locked`): a boss's name drops its "The". The marble's floor cell wears `YOU`; on a room, that room's plate is ringed in amber. The plates
   sit on the 3D deck, dark in both themes, so they keep fixed dark colours. The HUD plate still names the room under the
   marble and the hovered target (#628).
 - **Lift-shaft rail.** The five decks from the Bridge down, each beaten (its boss beaten, from the boss menu too), open
@@ -465,8 +465,8 @@ The hub (game-design.md section 3.5) reads at a glance, with no hover:
   plate and the cog.
 - **Boss pips.** `Bosses n/5` and a pip per deck boss in deck order: filled once beaten, a red ring while its deck is
   open, dotted while locked. Top right, left of the cog; held upright, over the rail's right end.
-- The deck is framed closer than a board (Reset view frames it again): distance of a radius 3 board, radius 2.4 held
-  upright, so no edge plate is cut off at 360 px wide. A game the hub starts frames its own board.
+- The deck, radius 3, is framed a little closer than a board (Reset view frames it again): distance of a radius 3.6
+  board, radius 3.4 held upright, so no edge plate is cut off at 360 px wide. A game the hub starts frames its own board.
 - Hidden while the terminal reader or the Open world has the screen.
 
 ## 5. Board framing
