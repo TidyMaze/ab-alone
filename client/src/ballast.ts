@@ -1,4 +1,4 @@
-// The Ballast Mind (docs/specs/game-design.md section 7.5, #749): every 3 turns it borrows one effect of another boss.
+// The Ballast Mind (docs/specs/game-design.md section 7.5, #749): every 2 turns it borrows one effect of another boss.
 // The HUD line names it one turn ahead, and again once it has fired (#838); the effect itself then shows with the tell
 // of its own boss, and a ring on each cell it touched.
 import type { Axial } from './board';

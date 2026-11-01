@@ -165,7 +165,7 @@ describe('main.ts boss fights', () => {
     expect(bar.querySelectorAll('.frag.empty')).toHaveLength(0);
     fightBoss(game, 'The Ballast Mind');
     expect(bar.querySelector('.name')!.textContent).toBe('The Ballast Mind');
-    expect(bar.querySelectorAll('.frag')).toHaveLength(12);
+    expect(bar.querySelectorAll('.frag')).toHaveLength(8);
   });
 
   it('the boss bar goes away when the fight is left for the Ship or a battle royale (#814)', async () => {

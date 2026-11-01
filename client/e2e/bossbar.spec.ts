@@ -70,9 +70,9 @@ test.describe('a 200 % UI scale', () => {
   });
 });
 
-test('The Ballast Mind needs 12 ejections, 12 fragments, #788', async ({ page }) => {
+test('The Ballast Mind needs 8 ejections, 8 fragments, #788', async ({ page }) => {
   await fight(page, 'The Ballast Mind');
-  await expect(page.locator('#boss-bar .frag')).toHaveCount(12);
+  await expect(page.locator('#boss-bar .frag')).toHaveCount(8);
 });
 
 // The recorded Hull win (crates/abalone-core/tests/fixtures/hull.txt): every fragment is empty once it is won.

@@ -24,9 +24,11 @@ use crate::search::{search_hooked, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
 
-/// Ejections the player needs to win against The Ballast Mind (Decision #482). The boss starts
-/// with 16 marbles: win at 12 ejections (4 boss marbles left).
-pub const BALLAST_WIN_EJECTIONS: u8 = 12;
+/// Ejections the player needs to win against The Ballast Mind. The boss starts with 16 marbles: win
+/// at 8 ejections (8 boss marbles left). It was 12 (Decision #482) before #1209. TUNE.
+pub const BALLAST_WIN_EJECTIONS: u8 = 8;
+/// Ejections of its marbles that make the player lose (16 marbles). It was 6 before #1209. TUNE.
+pub const BALLAST_LOSE_EJECTIONS: u8 = 12;
 
 /// Radius of the Ballast board: 91 cells before the pillars.
 pub const BALLAST_RADIUS: i32 = 5;
@@ -81,7 +83,7 @@ pub const BALLAST_PHASE_EJECTIONS: [u8; 2] = [3, 5];
 /// (docs/specs/boss-balance.md section 3). TUNE.
 pub const BALLAST_NODE_BUDGET: u32 = 100;
 /// Boss turns between two borrowed effects. TUNE.
-pub const BALLAST_EVERY: u32 = 3;
+pub const BALLAST_EVERY: u32 = 2;
 /// Special id at the end of a player turn: the Hull's cracks count down.
 pub const BALLAST_TICK: u8 = 0;
 /// Special id at the end of the boss turn of a borrowed effect is this plus the phase.
@@ -175,7 +177,7 @@ pub fn ballast_last_pulse(enc: &Encounter) -> Option<(u8, Board, Vec<P>)> {
     }
 }
 
-/// The Hull tick at the end of a player turn, a borrowed effect at the end of every third boss
+/// The Hull tick at the end of a player turn, a borrowed effect at the end of every second boss
 /// turn (the id carries the phase).
 fn special(ply: u32, phase: usize) -> Option<u8> {
     if ply % 2 == 1 {
@@ -306,7 +308,7 @@ pub fn ballast_start(seed: u64) -> Encounter {
         board.set(q, r, Cell::White);
     }
     let game = Game::from_position(board, Player::Black, [0, 0])
-        .with_win([BALLAST_WIN_EJECTIONS, WIN_EJECTIONS]);
+        .with_win([BALLAST_WIN_EJECTIONS, BALLAST_LOSE_EJECTIONS]);
     Encounter::new(game, ballast_boss(), seed).counting_by_colour()
 }
 
@@ -338,14 +340,17 @@ mod tests {
         }
     }
 
+    /// The ply a borrowed effect fires on first: the end of the second boss turn since #1209.
+    const FIRE: u64 = 2 * BALLAST_EVERY as u64;
+
     /// The first hook seed whose pick satisfies `want`.
     fn seed_of(want: impl Fn(Borrowed) -> bool) -> u64 {
         (0..).find(|&s| want(borrowed(s))).unwrap()
     }
 
-    /// A fight seed whose pick at the end of ply 6 satisfies `want`.
+    /// A fight seed whose pick at the end of the fire ply satisfies `want`.
     fn fight_seed(want: impl Fn(Borrowed) -> bool) -> u64 {
-        (0..).find(|&s| want(borrowed(ply_seed(s, 6)))).unwrap()
+        (0..).find(|&s| want(borrowed(ply_seed(s, FIRE)))).unwrap()
     }
 
     /// A hook seed that picks a pulse, and its direction.
@@ -358,11 +363,11 @@ mod tests {
             .unwrap()
     }
 
-    /// A fight seed whose pick at the end of ply 6 is a pulse, and its direction.
+    /// A fight seed whose pick at the end of the fire ply is a pulse from the west (direction 0).
     fn fight_pulse_seed() -> (u64, u8) {
         (0..)
-            .find_map(|s| match borrowed(ply_seed(s, 6)) {
-                Borrowed::PulsarPulse(dir) => Some((s, dir)),
+            .find_map(|s| match borrowed(ply_seed(s, FIRE)) {
+                Borrowed::PulsarPulse(0) => Some((s, 0)),
                 _ => None,
             })
             .unwrap()
@@ -422,14 +427,19 @@ mod tests {
     }
 
     #[test]
-    fn the_ballast_mind_is_won_at_12_ejections() {
-        assert_eq!(BALLAST_WIN_EJECTIONS, 12);
+    fn the_ballast_mind_is_won_at_8_ejections_and_lost_at_12_1209() {
+        assert_eq!(BALLAST_WIN_EJECTIONS, 8);
+        assert_eq!(BALLAST_LOSE_EJECTIONS, 12);
+        assert_eq!(BALLAST_EVERY, 2);
         let enc = ballast_start(0);
         assert_eq!(
             enc.game().win_ejections(Player::Black),
             BALLAST_WIN_EJECTIONS
         );
-        assert_eq!(enc.game().win_ejections(Player::White), WIN_EJECTIONS);
+        assert_eq!(
+            enc.game().win_ejections(Player::White),
+            BALLAST_LOSE_EJECTIONS
+        );
     }
 
     #[test]
@@ -457,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn a_player_turn_ticks_and_every_third_boss_turn_borrows_in_every_phase() {
+    fn a_player_turn_ticks_and_every_second_boss_turn_borrows_in_every_phase() {
         let boss = ballast_boss();
         for phase in 0..3 {
             let ids: Vec<Option<u8>> = (1..=12).map(|ply| (boss.special)(ply, phase)).collect();
@@ -465,7 +475,7 @@ mod tests {
             let tick = Some(BALLAST_TICK);
             assert_eq!(
                 ids,
-                vec![tick, None, tick, None, tick, fire, tick, None, tick, None, tick, fire],
+                vec![tick, None, tick, fire, tick, None, tick, fire, tick, None, tick, fire],
                 "phase {phase}"
             );
         }
@@ -565,15 +575,15 @@ mod tests {
             seed,
         );
         let mut seen = Vec::new();
-        for _ in 0..8 {
+        for _ in 0..6 {
             seen.push(ballast_next(&enc));
             let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
             enc.play(&m).unwrap();
         }
-        let first = Some(borrowed(ply_seed(seed, 6)));
-        assert_eq!(seen[..4], [None; 4]);
-        assert_eq!(seen[4..6], [first; 2], "plies 4 and 5 lead to ply 6");
-        assert_eq!(seen[6..], [None; 2]);
+        let first = Some(borrowed(ply_seed(seed, FIRE)));
+        assert_eq!(seen[..2], [None; 2]);
+        assert_eq!(seen[2..4], [first; 2], "plies 2 and 3 lead to ply 4");
+        assert_eq!(seen[4..], [None; 2]);
     }
 
     #[test]
@@ -605,9 +615,9 @@ mod tests {
         .counting_by_colour()
     }
 
-    /// Plays 6 plies: Black and White shuffle a marble east and west.
+    /// Plays the plies up to the fire ply: Black and White shuffle a marble east and west.
     fn play_six(enc: &mut Encounter) {
-        for ply in 0..6 {
+        for ply in 0..FIRE {
             let m = match ply % 4 {
                 0 => mv(&[(0, 0)], E),
                 1 => mv(&[(-1, 0)], W),
@@ -648,14 +658,12 @@ mod tests {
         enc
     }
 
-    /// Five plies of `rim_fight`: the boss is to play the ply that fires the effect.
+    /// The plies of `rim_fight` before the fire ply: the boss is to play the ply that fires the effect.
     fn play_rim(enc: &mut Encounter) {
         for m in [
             mv(&[(-4, 5)], E),
             mv(&[(-5, 0)], E),
             mv(&[(-3, 5)], W),
-            mv(&[(-4, 0)], W),
-            mv(&[(-4, 5)], E),
         ] {
             enc.play(&m).unwrap();
         }
@@ -688,12 +696,7 @@ mod tests {
         let game = Game::from_position(board, Player::Black, [0, 0]);
         let mut enc = Encounter::new(game, ballast_boss(), seed).counting_by_colour();
         enc.boss.node_budget = 300;
-        for m in [
-            mv(&[(-4, 5)], E),
-            mv(&[(-5, 0)], E),
-            mv(&[(-3, 5)], W),
-            mv(&[(-4, 0)], W),
-        ] {
+        for m in [mv(&[(-4, 5)], E), mv(&[(-5, 0)], E)] {
             enc.play(&m).unwrap();
         }
         let player = ballast_search(&enc, 300, &|_| true).unwrap();
@@ -827,7 +830,7 @@ mod tests {
                 },
                 seed,
             );
-            (0..8)
+            (0..6)
                 .map(|_| {
                     let tell = ballast_pulse_tell(&enc);
                     let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
@@ -838,19 +841,19 @@ mod tests {
         };
         let (seed, dir) = fight_pulse_seed();
         let seen = play_all(seed);
-        assert_eq!(seen[..4], [None; 4]);
+        assert_eq!(seen[..2], [None; 2]);
         assert_eq!(
-            seen[4..6],
+            seen[2..4],
             [Some((dir, PULSAR_FORCE[0])); 2],
-            "plies 4 and 5 lead to ply 6"
+            "plies 2 and 3 lead to ply 4"
         );
-        assert_eq!(seen[6..], [None; 2]);
+        assert_eq!(seen[4..], [None; 2]);
         let other = fight_seed(|b| b == Borrowed::HullCrack);
-        assert_eq!(play_all(other), vec![None; 8], "another effect");
+        assert_eq!(play_all(other), vec![None; 6], "another effect");
     }
 
     fn play_rest(enc: &mut Encounter) {
-        while enc.game().history().len() < 6 {
+        while enc.game().history().len() < FIRE as usize {
             let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
             enc.play(&m).unwrap();
         }
@@ -868,7 +871,7 @@ mod tests {
     fn same_seed_gives_the_same_game_and_the_seed_changes_it() {
         let run = |seed| {
             let mut enc = corner_fight(seed);
-            for _ in 0..12 {
+            for _ in 0..8 {
                 let m = legal_moves(enc.game().board(), enc.game().to_move())[0].clone();
                 enc.play(&m).unwrap();
             }

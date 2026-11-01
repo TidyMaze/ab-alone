@@ -40,6 +40,7 @@ Before = bosses as on `main` (e25ec9a). The player budget is in nodes per move.
 | The Choir | 1500 | 15000 (10x) | **10** | 118 | P3 | none |
 | The Chaplain | 2000 | 20000 (10x) | **20 of 20** (conversions move its health, #810, see section 3) | 32.5 | P2 | none |
 | The Ballast Mind | 100 (#833; 3000 with #824, was 150000) | 1000 (10x) | **1 of 20** (reading ladder player #834, 0 of 20 at 1x; the player has 16 marbles since #838; below the target, no boss-only knob reaches it, see section 3) | 133 | P2 | rim ejection 14, draw 5 |
+| The Ballast Mind (#1209: every 2 turns, win 8, lose 12) | 100 | 1000 (10x) | **15 of 20** (1x: 12 of 20) | 116 | P2 | rim ejection 3, draw 2 |
 | The Stalker | 3000 | 30000 (10x) | **9** (fogged pro player #1120, see section 3) | 185 | P2 | draw 1 |
 
 Table 2 is the state on `main` before #207 (the Chaplain row changes in section 3). The reasons
@@ -395,6 +396,58 @@ and the centre -3 weight) and the simplest single constant: `BALLAST_NODE_BUDGET
 makes the boss reply about 30 times cheaper than the 3000 nodes of the other bosses. The target
 needs a stronger or smarter ladder player (reading effects beyond the next one) or a change of the
 effects themselves (`BALLAST_EVERY`, forces, a rule change, the owner's call), not a boss knob.
+
+### The Ballast Mind: effects every 2 turns, win at 8, lose at 12 (#1209), 15 of 20 at 10x
+
+Before (main at 7374f49c, the same ladder player): `1000 | 1/20 | 127 | 2 | rim_ejection 13, draw 6`
+at 10x. Method as in #833: `LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder --
+ballast`, seeds 0 to 19, 300 plies at most, each line run alone and the kept ones run twice (same
+line twice: the ladder is deterministic). Target 14 to 18 of 20 at 10x, fewer at 1x. The player has 16
+marbles; it won at 12 ejections and lost at 6 (`WIN_EJECTIONS`), now two constants of `ballast.rs`
+(`BALLAST_WIN_EJECTIONS`, `BALLAST_LOSE_EJECTIONS`). No new move type, no HP, nothing but numbers.
+
+Grid 1, `BALLAST_EVERY` alone (win 12, lose 6), 10x: the target is out of reach.
+
+| `BALLAST_EVERY` | Output line |
+|---|---|
+| 1 | `1000 \| 1/20 \| 70.5 \| 2 \| rim_ejection 19` |
+| 2 | `1000 \| 2/20 \| 116 \| 2 \| rim_ejection 16, draw 2` |
+| 3 (main) | `1000 \| 1/20 \| 127 \| 2 \| rim_ejection 13, draw 6` |
+| 4 | `1000 \| 1/20 \| 117 \| 2 \| rim_ejection 6, draw 12, ply_cap 1` |
+| 5 | `1000 \| 0/20 \| 119 \| 2 \| rim_ejection 6, draw 14` |
+| 6 | `1000 \| 0/20 \| 133.5 \| 2 \| push 1, rim_ejection 7, draw 12` |
+| 8 | `1000 \| 0/20 \| 126.5 \| 2 \| rim_ejection 1, draw 17, ply_cap 2` |
+
+Reading: fewer effects only turn the losses into draws (the boss at 100 nodes never ejects 12 on its
+own, the effects are the only source of ejections on both sides); more effects turn the draws into
+losses. The forces (`PULSAR_FORCE`, `HULL_CRACKS`) are shared with the Pulsar and the Hull, so they
+were not touched. The asymmetry is in the thresholds: the player must eject 12 while losing 5 or
+fewer. Grid 2, win and lose thresholds (10x, `BALLAST_EVERY` 3 unless said):
+
+| Win / lose | Output line |
+|---|---|
+| 10 / 6 | `1000 \| 1/20 \| 127 \| 2 \| rim_ejection 13, draw 6` |
+| 8 / 6 | `1000 \| 6/20 \| 117 \| 2 \| rim_ejection 8, draw 6` |
+| 6 / 6 | `1000 \| 9/20 \| 90.5 \| 2 \| rim_ejection 6, draw 5` |
+| 12 / 8 | `1000 \| 1/20 \| 141 \| 2 \| rim_ejection 13, draw 6` |
+| 12 / 10 | `1000 \| 4/20 \| 155.5 \| 2 \| rim_ejection 9, draw 7` |
+| 12 / 12 | `1000 \| 6/20 \| 161.5 \| 2 \| rim_ejection 6, draw 8` |
+| 8 / 8 | `1000 \| 8/20 \| 121 \| 2 \| rim_ejection 6, draw 6` |
+| 8 / 10 | `1000 \| 8/20 \| 127 \| 2 \| rim_ejection 6, draw 6` |
+| 8 / 12 | `1000 \| 11/20 \| 127 \| 2 \| rim_ejection 3, draw 6` |
+| 6 / 8 | `1000 \| 12/20 \| 90.5 \| 2 \| rim_ejection 3, draw 5` |
+| 6 / 10 | `1000 \| 13/20 \| 90.5 \| 2 \| rim_ejection 2, draw 5` |
+| 6 / 12 | `1000 \| 13/20 \| 90.5 \| 2 \| rim_ejection 2, draw 5` |
+| **`BALLAST_EVERY` 2, 8 / 10** | `1000 \| 12/20 \| 116 \| 2 \| rim_ejection 6, draw 2` |
+| **`BALLAST_EVERY` 2, 8 / 12 (kept)** | `1000 \| 15/20 \| 116 \| 2 \| rim_ejection 3, draw 2` |
+
+Reading: every row has 5 to 8 draws at `BALLAST_EVERY` 3 (a ceiling near 14 wins), and an effect every
+2 turns cuts the draws to 2 while the larger loss threshold keeps the deaths low. Kept:
+`BALLAST_EVERY` 2, `BALLAST_WIN_EJECTIONS` 8, `BALLAST_LOSE_EJECTIONS` 12. 1x with the kept values:
+`100 | 12/20 | 111 | 2 | rim_ejection 6, draw 2` (fewer than 15 at 10x, as wanted). The 10x line was
+run twice, the same. The win threshold 8 still lets P3 (5 ejections) be played for 3 more ejections.
+Decision #482 (win at 12) is superseded by this one by the agents on the owner's delegation of 2026-11-01;
+`engine_version` 18. 20 seeds is a coarse rate (one game is 5 points).
 
 ### The Ballast Mind: the player starts with 16 marbles (#838), not tuned
 
@@ -774,7 +827,7 @@ the Ballast Mind) unless conversions made it grow. The phase thresholds of secti
 - The Hull P3 (5 left): never played. The highest phase in the table is P2. The Echo has no P3 since #859.
 - The Chaplain (#748) has P2 at the 4th ejection, but the pro player wipes the boss by conversion before it (section 3).
 - The Choir was reworked in #747 (standard board, 6 ejections, armies removed at 3 and 5): re-measured at 10x, 10 of 10 won, median 118 plies, P3 reached. The text above about Decision #131 (10 ejections) is history.
-- The Ballast Mind is fixed by Decision #482 (win at 12 ejections, 4 boss marbles left); since #749 its
+- The Ballast Mind was fixed by Decision #482 (win at 12 ejections, 4 boss marbles left) until #1209 (win at 8, lose at 12, section 3); since #749 its
   phases come from the ejections (3 and 5), so P2 and P3 are reached and fought.
 
 ## 6. Follow-ups
