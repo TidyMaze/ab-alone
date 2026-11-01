@@ -397,6 +397,9 @@ const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Mate
 // post-process pipeline instead (scene.ts). A touch screen keeps MSAA (#868): a phone draws 1.5 on a 2.6 to 3x screen,
 // which shows the steps, and its tiled GPU resolves MSAA in tile memory. Fixed when the renderer is made.
 const renderer = new THREE.WebGPURenderer({ antialias: matchMedia('(pointer: coarse)').matches, forceWebGL });
+// The render cost (#851) is the last drawn frame's. three zeroes `info` before every animation frame, so a still frame,
+// which draws nothing, would read 0 draw calls: the counts are zeroed by hand before each real draw instead (#1245).
+renderer.info.autoReset = false;
 await renderer.init().catch(bootFailed);
 // The neon tubes' rows of short lights (neonlight.ts) cost little when each pixel only adds the lights that reach it:
 // clustered (Forward+) lighting, 4x the frame rate of a rect light per tube. It needs compute shaders, so WebGPU only:
@@ -5663,7 +5666,10 @@ function moving(): boolean {
 renderer.setAnimationLoop((now) => {
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
-    const drew = openWorld.frame((scene, camera) => renderer.render(scene, camera));
+    const drew = openWorld.frame((scene, camera) => {
+      renderer.info.reset();
+      renderer.render(scene, camera);
+    });
     if (fpsOn) {
       // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.
       if (drew) stampDrawn(fpsStamps, now);
@@ -5722,6 +5728,7 @@ renderer.setAnimationLoop((now) => {
   if (!navigator.webdriver) adaptResolution(now);
   if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   for (const sync of syncMarbles) sync();
+  renderer.info.reset();
   sceneRenderer.render();
   draws++;
   drawAsked = false;
