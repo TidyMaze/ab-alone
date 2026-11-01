@@ -60,8 +60,8 @@ describe('the hub HUD plate', () => {
   const at = (cell: Axial, deck: 'mess' | 'cargo' | 'bridge' = 'mess') => hubHtml({ deck, cell });
 
   it('names the ship and the deck, and nothing under the marble on a floor cell', () => {
-    expect(at([0, 0])).toBe('<div class="turn"><span>Ship · Mess</span></div><small></small>');
-    expect(at([0, 0], 'cargo')).toContain('Ship · Cargo');
+    expect(at([0, 0])).toBe('<div class="turn"><span>Hub · Mess</span></div><small></small>');
+    expect(at([0, 0], 'cargo')).toContain('Hub · Cargo');
   });
 
   it('names the room the marble stands on', () => {
@@ -93,7 +93,7 @@ describe('a locked lift (#523)', () => {
 
   it("puts Tally's line under the HUD plate", () => {
     expect(hubHtml(below, 'Locked.')).toBe(
-      '<div class="turn"><span>Ship · Mess</span></div><small></small><div class="tally">Locked.</div>',
+      '<div class="turn"><span>Hub · Mess</span></div><small></small><div class="tally">Locked.</div>',
     );
   });
 });
@@ -154,7 +154,7 @@ describe('hub target inspection and reachability (#628)', () => {
     });
     expect(hubTargetText(at, [2, -1])).toEqual({
       name: 'Terminal',
-      desc: 'Ship archive and audio log',
+      desc: 'Hub archive and audio log',
       reach: 'Out of reach (roll closer)',
     });
     expect(hubTargetText(at, [1, -2])).toEqual({

@@ -2303,7 +2303,7 @@ function applyPalette(): void {
 applyPalette();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPalette); // System theme follows the OS (#923)
 let hover: Axial | null = null;
-let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
+let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the hub (#522)
 let lairFrom: { seed: number; lair: number } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170)
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
 
@@ -3221,7 +3221,7 @@ function hud(extra = ''): void {
 function drawHud(extra = ''): void {
   syncReplay();
   backButton.hidden = !(roomOf || lairFrom) || engine.status() === 0; // once the game a hub room or a lair started is over (#522, #1170)
-  backButton.textContent = lairFrom ? 'Back to the Open world' : 'Back to the ship';
+  backButton.textContent = lairFrom ? 'Back to the Open world' : 'Back to the hub';
   if (hub || royale) document.getElementById('boss-bar')!.hidden = true; // no boss there (#814)
   if (hub) {
     delete document.body.dataset.over; // no end light over the hub
@@ -4876,7 +4876,7 @@ addEventListener('pointerdown', (e) => {
 });
 retryButton.addEventListener('click', () => (trainer ? startTrainer(1) : fight!.daily ? startDaily() : startBoss(fight!.id, fight!.seed, undefined, undefined, lairFrom))); // a lair's retry stays the lair's (#1170)
 
-// The hub (#521, game-design.md section 3.5): Ship draws the map of the saved deck, in that deck's look, with the
+// The hub (#521, game-design.md section 3.5): Hub draws the map of the saved deck, in that deck's look, with the
 // player's glass marble on the saved cell. A click on a neighbour cell or an arrow key rolls it one cell (hub.ts step),
 // and the spot is saved (progress.ts). A new game, a boss fight or Play online leaves it.
 const shipButton = document.getElementById('ship') as HTMLButtonElement;
@@ -4885,7 +4885,7 @@ shipButton.addEventListener('click', () => {
   enterHub(loadProgress(store).at);
 });
 shipButton.disabled = false; // listener ready (#146)
-// The Open world's own Ship button (#1373): its dock is hidden and a phone has no Esc. Same path as the dock's Ship, which leaves
+// The Open world's own Hub button (#1373): its dock is hidden and a phone has no Esc. Same path as the dock's Hub, which leaves
 // the world (saved, as Esc does) for the hub.
 document.getElementById('openworld-ship')!.addEventListener('click', () => shipButton.click());
 function enterHub(at: HubSpot): void {
@@ -4912,7 +4912,7 @@ function walk(to: Axial): void {
   enterRoom(at);
 }
 // The doors (#522): rolling onto a boss door or a table starts the same game as its mode menu entry, and the room is
-// kept for Back to the ship. A terminal opens its lore entry in the reader, and Esc leaves it to the hub on the same
+// kept for Back to the hub. A terminal opens its lore entry in the reader, and Esc leaves it to the hub on the same
 // cell (#524). A lift starts nothing here.
 function enterRoom(at: HubSpot): void {
   const door = roomAt(at.deck, at.cell);
@@ -4927,7 +4927,7 @@ function enterRoom(at: HubSpot): void {
   else return enterModeRoom(door);
   roomOf = at;
 }
-// The other mode rooms (#1249) do what their menu entry does, and keep no room for Back to the ship: Ship in the mode
+// The other mode rooms (#1249) do what their menu entry does, and keep no room for Back to the hub: Hub in the mode
 // menu takes the player back from a run, the Trainer and the Open world, and Fight together opens the mode menu on its
 // boss list.
 function enterModeRoom(door: Door | undefined): void {
@@ -5091,7 +5091,7 @@ let onlineNote = '';
 let offlineNotice = ''; // no connection: Play online is disabled, a game in progress keeps its own status (#194)
 let playReady = false;
 let onlineLine: OnlineStatus | undefined;
-let link: Transport | null = null; // the transport of the online room, closed by Back to the ship (#522)
+let link: Transport | null = null; // the transport of the online room, closed by Back to the hub (#522)
 let rankedMode: RankedMode | null = null;
 let rankedQueuedAt = 0;
 let rankedDelta: number | undefined;
@@ -5336,7 +5336,7 @@ coopButton.addEventListener('click', () => {
   listIsDuel = false;
   showCoopList(open); // hidden or opened by Boss duel: open it
 });
-// Back to the ship from an online table (#522): the room is closed and the page is a local one again.
+// Back to the hub from an online table (#522): the room is closed and the page is a local one again.
 function leaveOnline(): void {
   if (!online) return;
   online = null;
@@ -5378,7 +5378,7 @@ function startRun(state: Run, map: MapNode[], resumed: Engine | Encounter | null
   thinking = false; // a bot reply to the old game is dropped (botTurn)
   view = resetView(4);
   applyView();
-  roomOf = null; // no Back to the ship: the mode menu leaves a run
+  roomOf = null; // no Back to the hub: the mode menu leaves a run
   stopAnalysis(); // no bar and no hint in a run, as in a boss fight (fair play, #164)
   newGameButton.hidden = true;
   run = { map, state };
@@ -5677,8 +5677,8 @@ addEventListener('blur', () => openWorld.release()); // no key stays held once t
 // The offline battle royale (#502, rules.md section 10.4): Battle royale starts 1 player against 5 bots on the radius 8
 // arena, at the Furnace. The player presses a target on the arena, as a move, which locks the order (#611), or holds;
 // the bots' orders come from the round-start state, and the round resolves. The HUD plate shows the next round's
-// initiative order before its reveal, and the reveal of the last round. A boss fight, Play online or Ship leaves it,
-// and it leaves Ship.
+// initiative order before its reveal, and the reveal of the last round. A boss fight, Play online or Hub leaves it,
+// and it leaves the Hub.
 const holdButton = document.getElementById('royale-hold') as HTMLButtonElement;
 const startButton = document.getElementById('royale-start') as HTMLButtonElement; // the creator's, online (#504)
 const royaleInviteButton = document.getElementById('royale-invite') as HTMLButtonElement; // offline: opens a room (#504)
@@ -6016,7 +6016,7 @@ royaleInviteButton.addEventListener('click', () => {
 // Used by the browser checks to count each seat's glyphs drawn on the arena, in seat order (#558).
 (window as unknown as Record<string, unknown>).__seatGlyphs = () =>
   seatGlyphs.map((g) => arenaMarbles.children.filter((m) => (m as THREE.Mesh).geometry === g).length);
-// The lobby sheet (#1044, docs/specs/thumb-dock.md section 1): Start, Invite, Back to the ship and the invite link sit above
+// The lobby sheet (#1044, docs/specs/thumb-dock.md section 1): Start, Invite, Back to the hub and the invite link sit above
 // the dock. The Lobby control toggles it, and carries an accent while a lobby waits. It shows only with a control to show,
 // and one sheet at a time: Esc and a tap outside close it, and the focus goes back to Lobby.
 const lobbyControls = (): HTMLElement[] => [startButton, royaleInviteButton, backButton, inviteBox, inviteCopy];
@@ -6075,7 +6075,7 @@ else if (royaleInvite) void goRoyale(royaleInvite, 2, creator);
 else if (duelInvite && boss_ids().includes(duelInvite.boss)) void goOnline(duelInvite.room, 2, duelInvite, creator, true); // the joiner plays the boss (#1316)
 else if (coopInvite && boss_ids().includes(coopInvite.boss)) void goOnline(coopInvite.room, 2, coopInvite, creator); // an unknown boss starts nothing
 else if (resumedRun) resumeRun(resumedRun); // a run saved in progress, over the local game; an invite link wins
-else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Ship hub (#602)
+else if (!resumed && !location.search && !location.hash) enterHub(loadProgress(store).at); // a new player arrives on the Hub (#602)
 else analyse(); // the start position
 
 // Copy diagnostics: the events, the counters, the build and the game go to the clipboard, or are selected in a

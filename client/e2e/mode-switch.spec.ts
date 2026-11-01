@@ -5,9 +5,9 @@ import { openModes } from './modes';
 // One mode at a time (#1275, docs/specs/ui.md): a mode left for another leaves nothing of itself on screen. The modes load
 // through the test hooks (a royale file, the Open world fixture); src/main.modeswitch.test.ts covers every mode.
 
-test('a boss fight and a battle royale left for the Ship hub leave no control and no marble behind, #1275', async ({ page }) => {
+test('a boss fight and a battle royale left for the Hub leave no control and no marble behind, #1275', async ({ page }) => {
   await page.goto('./');
-  await expect(page.locator('#hud')).toContainText('Ship');
+  await expect(page.locator('#hud')).toContainText('Hub');
   await openModes(page);
   await page.locator('#boss-fight').click();
   await page.locator('#boss-list button').first().click();
@@ -15,7 +15,7 @@ test('a boss fight and a battle royale left for the Ship hub leave no control an
   await expect(page.locator('#boss-bar')).toBeVisible();
   await openModes(page);
   await page.locator('#ship').click();
-  await expect(page.locator('#hud')).toContainText('Ship');
+  await expect(page.locator('#hud')).toContainText('Hub');
   for (const id of ['#boss-retry', '#boss-goal', '#boss-bar']) await expect(page.locator(id)).toBeHidden();
   await expect(page.locator('#new-game')).toBeVisible();
   expect(await page.evaluate(() => document.body.dataset.boss)).toBeUndefined();
@@ -23,7 +23,7 @@ test('a boss fight and a battle royale left for the Ship hub leave no control an
   await expect(page.locator('#royale-hold')).toBeVisible();
   await openModes(page);
   await page.locator('#ship').click();
-  await expect(page.locator('#hud')).toContainText('Ship');
+  await expect(page.locator('#hud')).toContainText('Hub');
   await expect(page.locator('#royale-hold')).toBeHidden();
   // The arena's marbles are drawn from their group, hidden arena or not: none is left to draw.
   expect(await page.evaluate(() => (window as unknown as { __seatGlyphs: () => number[] }).__seatGlyphs())).toEqual([0, 0, 0, 0, 0, 0]);

@@ -2,10 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { contrastRatio, type RGB } from '../src/contrast';
 import { inviteLink, openModes } from './modes';
 
-// #521: the Ship entry of the mode menu draws the deck's hub map (docs/specs/game-design.md section 3.5) and the glass
+// #521: the Hub entry of the mode menu draws the deck's hub map (docs/specs/game-design.md section 3.5) and the glass
 // marble, which rolls one cell at a time by a click on a neighbour or an arrow key. body[data-hub] names its deck and
 // cell. The spot is saved: after a reload, Ship lands on the same cell.
-// #522: rolling onto a boss door or a table starts its game, and once that game is over Back to the ship puts the
+// #522: rolling onto a boss door or a table starts its game, and once that game is over Back to the hub puts the
 // marble back on the door. The battle royale lobby is shown closed.
 // #523: a lift wears an arrow toward its deck, with a bar across while it is locked. A locked lift keeps the marble out
 // and Tally says one short line; a boss win opens it. body[data-lifts] lists the lifts of the deck.
@@ -17,7 +17,7 @@ import { inviteLink, openModes } from './modes';
 
 async function ship(page: Page): Promise<void> {
   await openModes(page);
-  await page.getByRole('button', { name: 'Ship' }).click();
+  await page.getByRole('button', { name: 'Hub' }).click();
 }
 
 /** Opens `url`, then Ship with the marble saved on `cell` of the Mess. */
@@ -42,11 +42,11 @@ async function hookClick(page: Page, q: number, r: number): Promise<void> {
   await page.evaluate(([q, r]) => (window as any).__click(q, r), [q, r]);
 }
 
-test('a new player opening the main URL lands directly on the Ship hub, #602', async ({ page }) => {
+test('a new player opening the main URL lands directly on the Hub, #602', async ({ page }) => {
   await page.goto('./');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-hub', 'mess 0,0');
-  await expect(page.locator('#hud')).toContainText('Ship · Mess');
+  await expect(page.locator('#hud')).toContainText('Hub · Mess');
   await expect(page.locator('#eval')).toBeHidden();
   await expect(page.locator('#hint')).toBeHidden();
 });
@@ -58,7 +58,7 @@ test('the marble walks the Mess past its rooms, and a reload lands it on the sam
   const hud = page.locator('#hud');
   await ship(page);
   await expect(body).toHaveAttribute('data-hub', 'mess 0,0');
-  await expect(hud).toContainText('Ship · Mess');
+  await expect(hud).toContainText('Hub · Mess');
 
   const rooms: [number, number, string][] = [
     [1, 1, 'Terminal'],
@@ -86,7 +86,7 @@ test('the marble walks the Mess past its rooms, and a reload lands it on the sam
   await expect(body).toHaveAttribute('data-hub', 'mess 0,1');
 });
 
-test('the boss door starts the Echo, and Back to the ship after the defeat lands on the door, #522', async ({ page }, testInfo) => {
+test('the boss door starts the Echo, and Back to the hub after the defeat lands on the door, #522', async ({ page }, testInfo) => {
   await shipAt(page, './?bot=off', [1, 0]);
   await page.screenshot({ path: testInfo.outputPath('hub-before-door.png') });
   await hookClick(page, 2, 0);
@@ -102,8 +102,8 @@ test('the boss door starts the Echo, and Back to the ship after the defeat lands
     await expect.poll(() => page.evaluate(() => (window as any).__plies())).toBe(ply + 1);
   }
   await expect(page.locator('#hud')).toContainText('Defeat');
-  await page.getByRole('button', { name: 'Lobby' }).click(); // Back to the ship sits in the lobby sheet (#1044)
-  const back = page.getByRole('button', { name: 'Back to the ship' });
+  await page.getByRole('button', { name: 'Lobby' }).click(); // Back to the hub sits in the lobby sheet (#1044)
+  const back = page.getByRole('button', { name: 'Back to the hub' });
   await expect(back).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('back-to-the-ship.png') });
   await back.click();
@@ -176,7 +176,7 @@ test('the online table opens a room with its invite link, as Play online does, #
   await expect(page.locator('#hud')).toContainText('You are Black');
 });
 
-test('the battle royale lobby door starts battle royale, and Back to the ship lands on the door, #593', async ({ page }, testInfo) => {
+test('the battle royale lobby door starts battle royale, and Back to the hub lands on the door, #593', async ({ page }, testInfo) => {
   await shipAt(page, './?bot=off', [-1, 1]);
   const body = page.locator('body');
   await hookClick(page, -2, 2);
@@ -202,8 +202,8 @@ test('the battle royale lobby door starts battle royale, and Back to the ship la
     ],
   }));
   await expect(body).toHaveAttribute('data-over', 'win');
-  await page.getByRole('button', { name: 'Lobby' }).click(); // Back to the ship sits in the lobby sheet (#1044)
-  const back = page.getByRole('button', { name: 'Back to the ship' });
+  await page.getByRole('button', { name: 'Lobby' }).click(); // Back to the hub sits in the lobby sheet (#1044)
+  const back = page.getByRole('button', { name: 'Back to the hub' });
   await expect(back).toBeVisible();
   await back.click();
   await expect(body).toHaveAttribute('data-hub', 'mess -2,2');

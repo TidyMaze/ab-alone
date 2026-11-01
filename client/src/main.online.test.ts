@@ -192,7 +192,7 @@ describe('Play online', () => {
     expect(game.hud()).toContain(' · closed');
   });
 
-  it('returns to the Ship hub at any time via the Ship button, tearing down online session (#773)', async () => {
+  it('returns to the Hub at any time via the Hub button, tearing down online session (#773)', async () => {
     const { game } = await hosted();
     expect(presence()).toBe('You are Black. White is here.');
     expect(data().online).toBe('Black');
@@ -468,7 +468,7 @@ describe('Copy on the invite link (#839)', () => {
   it('closes with the room, and shows again with the next one', async () => {
     const game = await invited();
     game.openModes();
-    byId('ship').click(); // Back to the ship
+    byId('ship').click(); // Back to the hub
     expect(shown()).toEqual([false, false, false]);
     game.openModes();
     byId('play-online').click();

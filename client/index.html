@@ -30,7 +30,7 @@
       <p>The game could not start: <span id="boot-reason"></span></p>
       <button id="boot-reload" type="button">Reload</button>
     </div>
-    <!-- The Ship hub's deck plan (#1249): a label plate over each room, the lift-shaft rail and the boss pips. -->
+    <!-- The Hub's deck plan (#1249): a label plate over each room, the lift-shaft rail and the boss pips. -->
     <div id="hub-plan" hidden>
       <div id="hub-labels"></div>
       <section id="hub-rail" aria-label="Lift shaft"></section>
@@ -50,7 +50,7 @@
       </div>
       <div id="openworld-hud" role="group" aria-label="Open world">
         <p id="openworld-live" role="status" class="sr-only"></p>
-        <p>Open world: <span class="keys-hint">arrows or a click on a next cell to roll, Q E to turn the camera, R to reset it, Esc to leave.</span><span class="tap-hint">drag the stick or tap a next cell to walk, twist two fingers to turn the camera, the Ship button to leave.</span><span class="pad-hint">left stick to walk, LB RB to turn the camera, R3 to reset it, triggers to zoom, B to leave.</span></p>
+        <p>Open world: <span class="keys-hint">arrows or a click on a next cell to roll, Q E to turn the camera, R to reset it, Esc to leave.</span><span class="tap-hint">drag the stick or tap a next cell to walk, twist two fingers to turn the camera, the Hub button to leave.</span><span class="pad-hint">left stick to walk, LB RB to turn the camera, R3 to reset it, triggers to zoom, B to leave.</span></p>
         <p id="openworld-mode"></p>
         <p><output id="openworld-medals"></output></p>
         <p id="openworld-tally"></p>
@@ -65,7 +65,7 @@
       </div>
       <div id="openworld-peers" aria-label="Other heroes out of view" hidden></div>
       <button id="openworld-chip" type="button" aria-label="Open world help" aria-controls="openworld-hud" aria-expanded="false" hidden>i</button>
-      <button id="openworld-ship" type="button">Ship</button>
+      <button id="openworld-ship" type="button">Hub</button>
       <div id="joystick" aria-hidden="true" hidden><span id="joystick-knob"></span></div>
       <div id="fps" aria-hidden="true" hidden></div>
       <!-- The low tier offer (#849): shown once after a sustained slow frame rate, never taken without a press. -->
@@ -127,12 +127,12 @@
         <button id="roguelite" type="button" disabled>Rogue-lite run</button>
         <button id="trainer" type="button" disabled>Trainer</button>
         <button id="openworld" type="button" disabled>Open world</button>
-        <button id="ship" type="button" disabled>Ship</button>
+        <button id="ship" type="button" disabled>Hub</button>
       </div>
       <div id="lobby-sheet" role="group" aria-label="Lobby" hidden>
         <button id="royale-start" type="button" hidden>Start</button>
         <button id="royale-invite" type="button" hidden>Invite</button>
-        <button id="ship-back" type="button" hidden>Back to the ship</button>
+        <button id="ship-back" type="button" hidden>Back to the hub</button>
         <label id="invite-label" for="invite" hidden>Invite link: send it to your opponent</label>
         <div id="invite-row">
           <input id="invite" type="text" readonly hidden aria-label="Invite link" />

@@ -91,7 +91,7 @@ leaves the screen but not the page, so a screen reader still hears the turn and 
 HUD buttons, in groups (#839). The column holds the buttons grouped by what they do, in this order, each group a row
 that wraps, so its buttons share a row when they fit and a group with no visible button takes no room: (1) the
 settings cog; (2) the view, Reset view (Free Cam is the Free camera item of the settings menu, #938); (3) the game, New game, Rematch, Goal, Retry,
-Hold, Start, Invite and Back to the ship (the controls of the running mode, only the ones the mode shows); the daily
+Hold, Start, Invite and Back to the hub (the controls of the running mode, only the ones the mode shows); the daily
 result card when a daily fight ends; (4) the tools, Hint, Replay and Auto-play; (5) Game modes, last of the column, its
 menu under it; (6) the invite link of an open room: its caption, then the link with its Copy button. Held upright the
 groups give their buttons to the rows of the column, in the same order. Every button of a group has the one button
@@ -132,16 +132,16 @@ outside and on the cog again. The cog is labelled "Settings" (`aria-expanded`, `
 button with `aria-pressed`, each item has the visible focus ring of the buttons.
 
 Game modes (#357): the buttons that start a game mode, Play online (its name shown, #839), Fight together (with the boss list it opens under
-it, #530), Battle royale (#502), Boss fight (with the boss list it opens under it), Daily challenge and Ship (the hub,
+it, #530), Battle royale (#502), Boss fight (with the boss list it opens under it), Daily challenge and Hub (the hub,
 game-design.md section 3.5, #521), live in one menu behind an icon-only button, a play triangle of the icon set,
 labelled "Game modes" (`aria-label`, `title`, `aria-expanded`, `aria-controls`). The menu is closed at the start on every screen size; the buttons keep their behaviour and their
 names. The button is the last of the column and the open menu lies under it, so opening or closing it moves no other
 button. Held upright, the menu starts a new row under the buttons, its items side by side; an open boss list is one row
 of its own under Boss fight or Fight together that scrolls sideways, so a new boss adds no row over the board (room for
 12 bosses and more on a phone 360 px wide, #666). In a desktop window (wider than tall, over 1100 px wide, a mouse) the items of the mode menu sit side by side when they fit, and an open boss list takes a row of its own as wide as the column with two bosses a row, each row compact, so 12 bosses and more with Daily challenge fit a 1280x720 or 1280x800 window without a scroll (#653, #699). One boss list is open at a time: opening one closes the other (#615). It closes like the settings menu, on Escape, on a press outside and on its button again,
-and once a mode starts (a boss picked, Daily challenge, Play online, Ship, Battle royale). On a phone each item is at
-least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the ship, Hold, the invite link)
-stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Ship hub (Mess deck, #602). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
+and once a mode starts (a boss picked, Daily challenge, Play online, Hub, Battle royale). On a phone each item is at
+least 44 px tall. The controls of a running mode (Rematch, Goal, Retry, Back to the hub, Hold, the invite link)
+stay in the column, outside the menu. Opening the root URL without query parameters or a saved game in progress lands directly on the Hub (Mess deck, #602). Saved games and query URLs (`?bot=`, `?nodes=`) open their board mode directly.
 
 ```
 +---------------------------------+
@@ -264,7 +264,7 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   then the reveal of the last round in initiative order, one line a seat: "Bot 1: moved, ejected Bot 3", "You:
   fizzled" (in the hazard colour), "Bot 3: held", "Bot 4: out". The player is "You", the bots "Bot 1" to "Bot 5", each
   name after a dot of its tint. These strings are kept verbatim for the e2e tests. Once the game is over, Hold is
-  greyed. A boss fight, Play online or Ship leaves it.
+  greyed. A boss fight, Play online or Hub leaves it.
 - **Battle royale online (#504).** Invite, in the column of an offline battle royale (not a seventh item of the mode
   menu: on a phone held upright its row would cover the board), greyed while offline like Play online. It opens a
   room of 6 seats (tech.md section 6) and shows its invite link, "Invite link: send it to the other players"; each
@@ -317,7 +317,7 @@ stay in the column, outside the menu. Opening the root URL without query paramet
   tests. The card shows only at the end of a daily fight, never in a plain boss fight (#196).
 - **Export game, Import game.** Two items of the settings menu, after Sound (#287), for local
   games only: hidden during online, boss and daily games (#219, file format in tech.md section 8).
-  The hub (Ship) has no game on: it hides them too until a game leaves it, and a file still being
+  The hub (Hub) has no game on: it hides them too until a game leaves it, and a file still being
   read when the player opens the hub is dropped (#589).
   Export game downloads the game, Import game opens the browser's file picker. A refused file adds a
   short note to the HUD, kept verbatim for the e2e tests: "import refused: not a game file", "import
@@ -344,7 +344,7 @@ stay in the column, outside the menu. Opening the root URL without query paramet
 ### 4.1 Evaluation bar
 
 Local hot-seat and bot games show who is ahead, from our own engine (#191). Online and boss games
-never show it (fair play, #164): starting one hides it for good. The hub (Ship) has no game on: it
+never show it (fair play, #164): starting one hides it for good. The hub (Hub) has no game on: it
 hides the bar and drops the evaluation in flight until a game leaves it (#583).
 
 ```
@@ -449,7 +449,7 @@ hidden in the hub and in a battle royale.
   import, Retry and any other new game also close it.
 - The buttons keep their labels "Replay" and "Live" for the e2e tests.
 
-### 4.5 Ship hub deck plan (#1249)
+### 4.5 Hub deck plan (#1249)
 
 The hub (game-design.md section 3.5) reads at a glance, with no hover:
 
@@ -484,7 +484,7 @@ timer.
 - **The Open world opens over the page** (#1063): Esc gives the game beneath back as it was, and the world hides all of it,
   its boss bar, notes and end light included. The next mode's start leaves the world.
 - **Guard.** `client/src/main.modeswitch.test.ts` enters every mode of the README table, plays it and leaves it for the
-  Ship hub, which must show what it showed after the boot. A new mode, a HUD element or a `body` data key that stays
+  Hub, which must show what it showed after the boot. A new mode, a HUD element or a `body` data key that stays
   fails it: remove it in the mode's leave, or add it to the lists of `modeswitch.ts`.
 
 ### 4.7 First-launch guide (#1293)
