@@ -467,7 +467,7 @@ describe('the public Open world online', () => {
     room.join('p');
     expect(room.sent.map(([d, to]) => [decode(d), to])).toEqual([
       [{ t: 'pos', q: 0, r: 0, seq: 0 }, undefined],
-      [{ t: 'hello' }, 'p'],
+      [{ t: 'hello', name: '' }, 'p'],
       [{ t: 'pos', q: 0, r: 0, seq: 0 }, 'p'],
     ]);
     room.data(encodeHello(), 'p');
@@ -543,11 +543,90 @@ describe('the public Open world online', () => {
     byId('openworld').click();
     await settle();
     (w.__netPeerJoin as (p: string) => void)('p');
-    expect(out).toContainEqual([[1, 1], 'p']);
-    (w.__netPeerIn as (d: number[], p: string) => void)([1, 1], 'p');
+    expect(out).toContainEqual([[2, 1], 'p']);
+    (w.__netPeerIn as (d: number[], p: string) => void)([2, 1], 'p');
     (w.__netPeerIn as (d: number[], p: string) => void)(Array.from(encodePos(0, 60, 0)), 'p');
     expect(peersRoot().dataset.edges).toBeUndefined(); // drawn by the next frame
     game.frame(16);
     expect(peersRoot().dataset.edges).toBe('60');
+  });
+
+  // The player's controls (#1305): a public name, Hide, and the connection status, in the HUD of the public world only.
+  const joined = async (): Promise<Game> => {
+    const game = await boot('?bot=off&consent');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    byId('consent-accept').click();
+    await settle();
+    return game;
+  };
+  const netText = () => byId<HTMLElement>('openworld-net').textContent;
+
+  it('shows the connection status and the controls in the public world, and none in a private one', async () => {
+    await joined();
+    expect(byId('openworld-online').hidden).toBe(false);
+    expect(netText()).toBe('Online: nobody else here yet.');
+    expect(byId('openworld-hide').textContent).toBe('Hide');
+    await enter('?bot=off&openworld=7');
+    expect(byId('openworld-online').hidden).toBe(true);
+  });
+
+  it('sends a typed public name in a new Hello, keeps it for the next visit, and cuts it at 16 characters', async () => {
+    const game = await joined();
+    const room = game.world()!;
+    const input = byId<HTMLInputElement>('openworld-name');
+    input.value = '  Ana\u0000  ';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(decode(room.sent.at(-1)![0])).toEqual({ t: 'hello', name: 'Ana' });
+    expect(localStorage.getItem('ab-alone.public-name')).toBe('Ana');
+    input.value = 'x'.repeat(30);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(localStorage.getItem('ab-alone.public-name')).toBe('x'.repeat(16));
+    expect(input.maxLength).toBe(16);
+  });
+
+  it('greets with the stored name and fills the field from it', async () => {
+    const game = await boot('?bot=off&consent');
+    localStorage.setItem('ab-alone.public-name', 'Zed'); // the boot clears the storage
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    byId('consent-accept').click();
+    await settle();
+    expect(byId<HTMLInputElement>('openworld-name').value).toBe('Zed');
+    game.world()!.join('p');
+    expect(decode(game.world()!.sent[0]![0])).toEqual({ t: 'hello', name: 'Zed' });
+    localStorage.removeItem('ab-alone.public-name');
+  });
+
+  it('keys typed in the name field are the field\'s: the hero does not walk, the camera does not turn, Escape does not leave', async () => {
+    await joined();
+    const at = data().openworldAt;
+    const input = byId<HTMLInputElement>('openworld-name');
+    for (const key of ['ArrowRight', 'q', 'Escape']) input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    expect(data().openworldAt).toBe(at);
+    expect(data().openworld).toBe(String(PUBLIC_SEED));
+  });
+
+  it('Hide leaves the room and Show joins a new one', async () => {
+    const game = await joined();
+    const first = game.world()!;
+    byId('openworld-hide').click();
+    expect(first.closed).toBe(true);
+    expect(netText()).toBe('Hidden: nobody sees you and you see nobody.');
+    expect(byId('openworld-hide').textContent).toBe('Show');
+    expect(byId('openworld-hide').getAttribute('aria-pressed')).toBe('true');
+    byId('openworld-hide').click();
+    expect(game.world()).not.toBe(first);
+    expect(game.world()!.closed).toBe(false);
+    expect(byId('openworld-hide').textContent).toBe('Hide');
+    expect(byId('openworld-hide').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('tells the player when the connection to another hero fails', async () => {
+    const game = await joined();
+    game.world()!.error('could not connect to peer p after exchanging SDP');
+    expect(netText()).toContain('the direct connection failed');
   });
 });

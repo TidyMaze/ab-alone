@@ -1,25 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { decode, encodeHello, encodePos, hexDistance, KEEPALIVE_MS, MAX_PEERS, MIN_GAP_MS, PEER_TTL_MS, Peers, PUBLIC_SEED, roomOf, SEND_MS, Sender } from './worldpeers';
+import { cleanName, decode, encodeHello, encodePos, hexDistance, KEEPALIVE_MS, MAX_NAME, MAX_PEERS, MIN_GAP_MS, PEER_TTL_MS, Peers, PUBLIC_SEED, readName, roomOf, SEND_MS, Sender, writeName } from './worldpeers';
 
 describe('the wire format', () => {
   it('names one room for the public world', () => {
     expect(roomOf(PUBLIC_SEED)).toBe(`ow:${PUBLIC_SEED}:0`);
   });
 
-  it('a Hello is 2 bytes and a position 7, versioned', () => {
-    expect(encodeHello()).toEqual(Uint8Array.of(1, 1));
-    expect(encodePos(3, -2, 9)).toEqual(Uint8Array.of(1, 2, 0, 3, 0xff, 0xfe, 9));
-    expect(decode(encodeHello())).toEqual({ t: 'hello' });
+  it('a Hello is 2 bytes plus the name and a position 7, versioned 2', () => {
+    expect(encodeHello()).toEqual(Uint8Array.of(2, 1));
+    expect(encodeHello('Ana')).toEqual(Uint8Array.of(2, 1, 65, 110, 97));
+    expect(encodePos(3, -2, 9)).toEqual(Uint8Array.of(2, 2, 0, 3, 0xff, 0xfe, 9));
+    expect(decode(encodeHello())).toEqual({ t: 'hello', name: '' });
+    expect(decode(encodeHello('Ana'))).toEqual({ t: 'hello', name: 'Ana' });
     expect(decode(encodePos(3, -2, 9))).toEqual({ t: 'pos', q: 3, r: -2, seq: 9 });
     expect(decode(encodePos(-32768, 32767, 255))).toEqual({ t: 'pos', q: -32768, r: 32767, seq: 255 });
   });
 
   it('refuses what is not ours: wrong version, type, length, or not bytes', () => {
-    expect(decode(Uint8Array.of(2, 1))).toBeNull(); // another version
-    expect(decode(Uint8Array.of(1, 9))).toBeNull(); // unknown type
-    expect(decode(Uint8Array.of(1, 1, 0))).toBeNull(); // Hello with a tail
-    expect(decode(Uint8Array.of(1, 2, 0, 3))).toBeNull(); // short position
-    expect(decode(Uint8Array.of(1))).toBeNull();
+    expect(decode(Uint8Array.of(1, 1))).toBeNull(); // the first slice's version
+    expect(decode(Uint8Array.of(2, 9))).toBeNull(); // unknown type
+    const long = new Uint8Array(2 + 4 * MAX_NAME + 1).fill(97);
+    long.set([2, 1]);
+    expect(decode(long)).toBeNull(); // a Hello too long
+    expect(decode(Uint8Array.of(2, 2, 0, 3))).toBeNull(); // short position
+    expect(decode(Uint8Array.of(2))).toBeNull();
     expect(decode('hello')).toBeNull();
     expect(decode({ t: 'pos' })).toBeNull();
     expect(decode(null)).toBeNull();
@@ -27,6 +31,38 @@ describe('the wire format', () => {
 
   it('a position outside the 16-bit range is clamped, never wrapped', () => {
     expect(decode(encodePos(40000, -40000, 300))).toEqual({ t: 'pos', q: 32767, r: -32768, seq: 44 });
+  });
+});
+
+describe('cleanName', () => {
+  it('keeps a plain name, trims it, drops control characters and cuts at 16 characters', () => {
+    expect(MAX_NAME).toBe(16);
+    expect(cleanName('  Ana  ')).toBe('Ana');
+    expect(cleanName('A\u0000n\n\u202ea')).toBe('Ana');
+    expect(cleanName('a'.repeat(40))).toBe('a'.repeat(16));
+    expect(cleanName('\u{1F600}'.repeat(20))).toBe('\u{1F600}'.repeat(16)); // characters, not bytes
+    expect(cleanName('')).toBe('');
+  });
+
+  it('a Hello with a name cut or dirty on the wire is cleaned when decoded', () => {
+    const dirty = Uint8Array.of(2, 1, 32, 66, 7, 111, 98, 32);
+    expect(decode(dirty)).toEqual({ t: 'hello', name: 'Bob' });
+    expect(decode(Uint8Array.of(2, 1, 0xff, 0xfe))).toEqual({ t: 'hello', name: '' }); // not UTF-8
+  });
+});
+
+describe('the stored public name', () => {
+  it('is empty until one is written, then read back cleaned, with or without a store', () => {
+    const data = new Map<string, string>();
+    const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+    expect(readName(store)).toBe('');
+    writeName(store, '  Ana\u0007  ');
+    expect(data.get('ab-alone.public-name')).toBe('Ana');
+    expect(readName(store)).toBe('Ana');
+    data.set('ab-alone.public-name', 'b'.repeat(30));
+    expect(readName(store)).toBe('b'.repeat(16)); // a stored value is cleaned too
+    expect(readName(null)).toBe('');
+    expect(() => writeName(null, 'x')).not.toThrow();
   });
 });
 
@@ -93,7 +129,7 @@ describe('Peers', () => {
     expect(p.cells()).toEqual([]);
     p.hello('a', 0);
     expect(p.position('a', pos(1, 1, 0), 0)).toBe(true);
-    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 1] }]);
+    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 1], name: '' }]);
   });
 
   it('lists no peer that said Hello but has sent no place yet', () => {
@@ -138,12 +174,15 @@ describe('Peers', () => {
     expect(p.position('b', pos(1, 0, 2), 1000)).toBe(true); // 250 -> 2 is forward across the wrap
   });
 
-  it('a second Hello keeps the place and the peer stays one entry', () => {
+  it('a second Hello keeps the place and the peer stays one entry, its name changes', () => {
     const p = new Peers();
-    p.hello('a', 0);
+    p.hello('a', 0, 'Ana');
     p.position('a', pos(1, 0, 0), 0);
-    p.hello('a', 5);
-    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 0] }]);
+    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 0], name: 'Ana' }]);
+    p.hello('a', 5, 'Anna');
+    expect(p.cells()).toEqual([{ peer: 'a', cell: [1, 0], name: 'Anna' }]);
+    p.hello('a', 6);
+    expect(p.cells()[0]!.name).toBe('');
   });
 
   it('shows at most MAX_PEERS, the nearest to a cell first', () => {

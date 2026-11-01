@@ -204,6 +204,17 @@ describe('p2pPeers (the public world, #1305)', () => {
     expect(room.leave).toHaveBeenCalledOnce();
   });
 
+  it('hands a Trystero join error to onError, and drops it when nobody listens', () => {
+    const net = p2pPeers('r');
+    expect(() => joined.callbacks!.onJoinError!({ error: 'nobody listens' })).not.toThrow();
+    const errors: string[] = [];
+    const listening = p2pPeers('r');
+    listening.onError((m) => errors.push(m));
+    joined.callbacks!.onJoinError!({ error: 'could not connect to peer p after exchanging SDP' });
+    expect(errors).toEqual(['could not connect to peer p after exchanging SDP']);
+    expect(net).toBeDefined();
+  });
+
   it('ignores a peer event nobody listens to', () => {
     p2pPeers('r');
     expect(() => {
@@ -220,6 +231,7 @@ describe('hookPeers', () => {
     __netPeerIn?: (data: number[] | Uint8Array, peer: string) => void;
     __netPeerJoin?: (peer: string) => void;
     __netPeerLeave?: (peer: string) => void;
+    __netPeerError?: (message: string) => void;
   }
   afterEach(() => void vi.unstubAllGlobals());
   const page = (): Hook => {
@@ -254,11 +266,13 @@ describe('hookPeers', () => {
     w.__netPeerIn!(Uint8Array.of(1, 1), 'q');
     w.__netPeerJoin!('p');
     w.__netPeerLeave!('p');
+    net.onError((m) => events.push(`error ${m}`));
+    w.__netPeerError!('boom');
     net.close();
     expect(got).toEqual([
       [Uint8Array.of(1, 1), 'p'],
       [Uint8Array.of(1, 1), 'q'],
     ]);
-    expect(events).toEqual(['join p', 'leave p']);
+    expect(events).toEqual(['join p', 'leave p', 'error boom']);
   });
 });

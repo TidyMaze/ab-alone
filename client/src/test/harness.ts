@@ -71,6 +71,7 @@ export interface WorldRoom {
   data(bytes: Uint8Array, peer: string): void;
   join(peer: string): void;
   leave(peer: string): void;
+  error(message: string): void;
 }
 
 // The engine's answers are deterministic (a fixed node budget, bot.ts): the evaluation bar asks the same opening position
@@ -300,6 +301,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
         let onData: (d: Uint8Array, peer: string) => void = () => {};
         let onJoin: (peer: string) => void = () => {};
         let onLeave: (peer: string) => void = () => {};
+        let onError: (message: string) => void = () => {};
         const mine: WorldRoom = {
           room: id,
           sent: [],
@@ -307,6 +309,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           data: (d, peer) => onData(d, peer),
           join: (peer) => onJoin(peer),
           leave: (peer) => onLeave(peer),
+          error: (message) => onError(message),
         };
         world = mine;
         return {
@@ -314,6 +317,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           onData: (cb) => void (onData = cb),
           onJoin: (cb) => void (onJoin = cb),
           onLeave: (cb) => void (onLeave = cb),
+          onError: (cb) => void (onError = cb),
           close: () => void (mine.closed = true),
         };
       },

@@ -6,7 +6,10 @@ import { edgeSpot, PeersLayer } from './worldpeersview';
 
 describe('edgeSpot', () => {
   it('is inside when the point is on screen', () => {
-    expect(edgeSpot(0.2, -0.5, 0.5, 1).inside).toBe(true);
+    const spot = edgeSpot(0.2, -0.5, 0.5, 1);
+    expect(spot.inside).toBe(true);
+    expect(spot.left).toBeCloseTo(60, 5); // where it really is, not pushed to the margin
+    expect(spot.top).toBeCloseTo(75, 5);
     expect(edgeSpot(1, -1, 0.5, 1).inside).toBe(true); // on the border still counts
   });
 
@@ -56,7 +59,7 @@ function setup() {
 describe('PeersLayer', () => {
   it('stands a marker on each peer in view and draws no edge indicator for it', () => {
     const { scene, root, layer } = setup();
-    layer.update([{ peer: 'a', cell: [1, 0] }], [0, 0]);
+    layer.update([{ peer: 'a', cell: [1, 0], name: '' }], [0, 0]);
     const mesh = scene.getObjectByName('peers') as THREE.InstancedMesh;
     expect(mesh.count).toBe(1);
     const m = new THREE.Matrix4();
@@ -71,7 +74,7 @@ describe('PeersLayer', () => {
 
   it('shows an edge indicator with the distance in tiles for a peer out of view, and no marker on unloaded ground', () => {
     const { scene, root, layer } = setup();
-    layer.update([{ peer: 'far', cell: [200, 0] }], [0, 0]);
+    layer.update([{ peer: 'far', cell: [200, 0], name: '' }], [0, 0]);
     expect((scene.getObjectByName('peers') as THREE.InstancedMesh).count).toBe(0); // no tile there: no marker
     expect(root.hidden).toBe(false);
     expect(root.children).toHaveLength(1);
@@ -81,15 +84,55 @@ describe('PeersLayer', () => {
     expect(edge.style.left).not.toBe('');
   });
 
+  it('names a hero: a tag over its marker in view, its name before the distance at the edge, and no tag when anonymous', () => {
+    const { root, layer } = setup();
+    layer.update(
+      [
+        { peer: 'a', cell: [1, 0], name: 'Ana' },
+        { peer: 'b', cell: [-1, 0], name: '' },
+        { peer: 'far', cell: [200, 0], name: 'Bob' },
+      ],
+      [0, 0],
+    );
+    const tags = root.querySelectorAll('.peer-tag');
+    expect(tags).toHaveLength(1);
+    expect(tags[0]!.textContent).toBe('Ana');
+    expect((tags[0] as HTMLElement).style.left).toMatch(/%$/);
+    const edge = root.querySelector('.peer-edge')!;
+    expect(edge.textContent).toBe('Bob 200');
+    expect(edge.getAttribute('aria-label')).toBe('Bob, 200 tiles away');
+    expect(root.hidden).toBe(false);
+    layer.update([{ peer: 'a', cell: [1, 0], name: '' }], [0, 0]);
+    expect(root.querySelectorAll('.peer-tag')).toHaveLength(0);
+    expect(root.hidden).toBe(true);
+    layer.update([{ peer: 'a', cell: [1, 0], name: 'Ana' }], [0, 0]);
+    expect(root.querySelectorAll('.peer-tag')).toHaveLength(1);
+    layer.dispose();
+    expect(root.querySelectorAll('.peer-tag')).toHaveLength(0);
+  });
+
+  it('lifts a marker that shares the hero\'s cell above it, so both show (spawn)', () => {
+    const { scene, layer } = setup();
+    const heightOf = (cell: [number, number], hero: [number, number]): number => {
+      layer.update([{ peer: 'a', cell, name: '' }], hero);
+      const m = new THREE.Matrix4();
+      (scene.getObjectByName('peers') as THREE.InstancedMesh).getMatrixAt(0, m);
+      return new THREE.Vector3().setFromMatrixPosition(m).y;
+    };
+    const apart = heightOf([1, 0], [0, 0]);
+    const shared = heightOf([0, 0], [0, 0]);
+    expect(shared).toBeCloseTo(apart + 0.75, 5);
+  });
+
   it('says one tile in the singular, reuses its elements, and drops the ones it no longer needs', () => {
     const { root, layer } = setup();
-    layer.update([{ peer: 'a', cell: [0, -25] }], [0, -24]);
+    layer.update([{ peer: 'a', cell: [0, -25], name: '' }], [0, -24]);
     expect(root.children[0]!.getAttribute('aria-label')).toBe('Another hero, 1 tile away');
     const first = root.children[0];
     layer.update(
       [
-        { peer: 'a', cell: [0, -25] },
-        { peer: 'b', cell: [200, 0] },
+        { peer: 'a', cell: [0, -25], name: '' },
+        { peer: 'b', cell: [200, 0], name: '' },
       ],
       [0, -24],
     );
@@ -104,8 +147,8 @@ describe('PeersLayer', () => {
     const { scene, root, layer } = setup();
     layer.update(
       [
-        { peer: 'a', cell: [1, 0] },
-        { peer: 'b', cell: [200, 0] },
+        { peer: 'a', cell: [1, 0], name: '' },
+        { peer: 'b', cell: [200, 0], name: '' },
       ],
       [0, 0],
     );
@@ -120,8 +163,8 @@ describe('PeersLayer', () => {
 
   it('reports a change of what it draws, and none when the same list comes again', () => {
     const { layer } = setup();
-    expect(layer.update([{ peer: 'a', cell: [1, 0] }], [0, 0])).toBe(true);
-    expect(layer.update([{ peer: 'a', cell: [1, 0] }], [0, 0])).toBe(false);
-    expect(layer.update([{ peer: 'a', cell: [2, 0] }], [0, 0])).toBe(true);
+    expect(layer.update([{ peer: 'a', cell: [1, 0], name: '' }], [0, 0])).toBe(true);
+    expect(layer.update([{ peer: 'a', cell: [1, 0], name: '' }], [0, 0])).toBe(false);
+    expect(layer.update([{ peer: 'a', cell: [2, 0], name: '' }], [0, 0])).toBe(true);
   });
 });

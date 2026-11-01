@@ -99,12 +99,15 @@ export interface PeerNet {
   onData(cb: (data: Uint8Array, peer: string) => void): void;
   onJoin(cb: (peer: string) => void): void;
   onLeave(cb: (peer: string) => void): void;
+  /** Trystero's join errors (an ICE failure among them), for the status the player sees. */
+  onError(cb: (message: string) => void): void;
   close(): void;
 }
 
 /** Serverless P2P for the public world: the same shortlisted relays introduce the peers, the bytes go over WebRTC. */
 export function p2pPeers(room: string): PeerNet {
-  const r = joinRoom({ appId: APP_ID, relayConfig: { urls: RELAY_URLS } }, room);
+  let fail: (message: string) => void = () => {};
+  const r = joinRoom({ appId: APP_ID, relayConfig: { urls: RELAY_URLS } }, room, { onJoinError: (e) => fail(e.error) });
   const world = r.makeAction('world');
   let join: (peer: string) => void = () => {};
   let leave: (peer: string) => void = () => {};
@@ -121,6 +124,9 @@ export function p2pPeers(room: string): PeerNet {
     onLeave: (cb) => {
       leave = cb;
     },
+    onError: (cb) => {
+      fail = cb;
+    },
     close: () => void r.leave(),
   };
 }
@@ -130,11 +136,12 @@ interface PeerHook {
   __netPeerIn?: (data: number[] | Uint8Array, peer: string) => void;
   __netPeerJoin?: (peer: string) => void;
   __netPeerLeave?: (peer: string) => void;
+  __netPeerError?: (message: string) => void;
 }
 
 /**
  * Test peers for the public world: the page hands bytes to `window.__netPeerOut` (with the one peer they are for, if any) and
- * receives them on `window.__netPeerIn` (a plain array of numbers is fine), `__netPeerJoin(peer)` and `__netPeerLeave(peer)`.
+ * receives them on `window.__netPeerIn` (a plain array of numbers is fine), `__netPeerJoin(peer)`, `__netPeerLeave(peer)` and `__netPeerError(message)`.
  */
 export function hookPeers(): PeerNet {
   const w = window as unknown as PeerHook;
@@ -148,6 +155,9 @@ export function hookPeers(): PeerNet {
     },
     onLeave: (cb) => {
       w.__netPeerLeave = cb;
+    },
+    onError: (cb) => {
+      w.__netPeerError = cb;
     },
     close: () => {},
   };

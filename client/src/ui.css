@@ -829,6 +829,11 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
    The elements are placed by percent from the script, over the canvas, never in the way of a touch. */
 #openworld-peers { position: fixed; inset: 0; z-index: 1; display: none; pointer-events: none; }
 body[data-openworld] #openworld-peers:not([hidden]) { display: block; }
+.peer-tag { position: absolute; transform: translate(-50%, -190%); color: #ff7ad9; font: 700 0.875rem/1 var(--ui); text-shadow: 0 0 3px #0b0d0f, 0 0 3px #0b0d0f; white-space: nowrap; }
+#openworld-online label { display: block; margin: 0 0 0.25rem; }
+#openworld-online input { box-sizing: border-box; width: 100%; min-height: var(--target); margin: 0 0 0.5rem; padding: 0 0.75rem; color: var(--text); background: var(--bg); border: 1px solid var(--edge); border-radius: var(--r-button); font: 0.875rem/1 var(--ui); }
+#openworld-online input:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
+#openworld-online button[aria-pressed="true"] { border-color: var(--plate-accent); }
 .peer-edge { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 1px; transform: translate(-50%, -50%); color: #ff7ad9; font: 700 1rem/1 var(--ui); text-shadow: 0 0 3px #0b0d0f, 0 0 3px #0b0d0f; }
 .peer-edge svg { transform: rotate(var(--angle, 0rad)); filter: drop-shadow(0 0 2px #0b0d0f); }
 /* The virtual joystick (#1025): a base under the thumb of a touch on the left half, shown only while the touch lasts, so never on a
