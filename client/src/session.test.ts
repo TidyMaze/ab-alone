@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { fingerprint } from './invite';
 import { OnlineSession, type Judge } from './session';
 import {
   GENESIS,
@@ -577,6 +578,33 @@ describe('OnlineSession', () => {
     await settle();
     expect(joiner.session.role).toBe('player');
     expect(joiner.refused).toEqual([]);
+  });
+
+  it('as a joiner from a link with the creator fingerprint binds seat 1 only to a Hello of that key, bug #1323', async () => {
+    const [x, y] = localPair();
+    const creator = await generateKeys();
+    const rival = await generateKeys();
+    const keys = await generateKeys();
+    const refused: string[] = [];
+    const joiner = new WatchedSession({
+      game: 'g',
+      side: 2,
+      engine: ENGINE,
+      keys,
+      transport: y,
+      judge: new FakeJudge(),
+      creator: await fingerprint(creator.pub),
+      onMove: () => {},
+      onRefuse: (r) => refused.push(r),
+    });
+    x.send(await hello(rival, 1, [rival.pub, ''])); // signed and first, but not the key of the link
+    await settle();
+    expect(joiner.seats.roster()).toEqual(['', '']);
+    x.send(await hello(creator, 1, [creator.pub, keys.pub]));
+    await settle();
+    expect(joiner.seats.roster()).toEqual([creator.pub, keys.pub]);
+    expect(joiner.role).toBe('player');
+    expect(refused).toEqual([]);
   });
 
   it('shows the White seat waiting, here once its key said Hello, gone when its peer leaves, here again on reconnect', async () => {

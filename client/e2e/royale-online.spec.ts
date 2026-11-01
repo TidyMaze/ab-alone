@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openModes } from './modes';
+import { inviteLink, openModes } from './modes';
 
 // The online battle royale (#504, docs/specs/tech.md section 6) between three browser contexts. The transport is the
 // ?net=hook test hook: the test relays every message from one page to the others, so no public Nostr relay is
@@ -51,8 +51,8 @@ test('three players: a round resolves at its deadline, the silent player holds, 
   await a.getByRole('button', { name: 'Battle royale', exact: true }).click();
   await a.getByRole('button', { name: 'Lobby' }).click(); // the lobby sheet (#1044)
   await a.getByRole('button', { name: 'Invite' }).click(); // the offline game becomes a room
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  expect(hash).toMatch(/^#royale=[\w-]+$/);
+  const hash = new URL(await inviteLink(a)).hash;
+  expect(hash).toMatch(/^#royale=[\w-]+&key=[\w-]{8}$/);
   await Promise.all([b, c].map((p) => p.goto(`./?bot=off&net=hook&round=1500${hash}`)));
   // Every session exists before the first page opens: the hook has no peer join, after which a Trystero page says Hello
   // again, so a page whose session came later would never hear the Hello of the pages open before it.

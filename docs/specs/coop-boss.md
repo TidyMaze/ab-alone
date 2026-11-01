@@ -68,13 +68,18 @@ The creator picks the boss with Fight together in the mode menu (ui.md section 4
 unsigned 32-bit seed when it opens the room. The link carries them next to the room id, in this order:
 
 ```
-<page>#room=<room>&boss=<boss id>&seed=<seed>
+<page>#room=<room>&boss=<boss id>&seed=<seed>&key=<fingerprint>
 ```
 
 - `room` and `boss` are url-safe (`[A-Za-z0-9_-]`); `seed` is a decimal number from 0 to 4294967295,
   without leading zeros.
-- A versus invite stays `#room=<room>`, unchanged. A link with any other shape is not a co-op
-  invite, and an unknown boss id starts nothing.
+- `key` is the fingerprint of the creator's public key (#1323): the first 8 base64url characters of
+  the SHA-256 of the key, 48 bits. It comes last in every invite. A joiner binds seat 1 only to a
+  `Hello` of a key with that fingerprint. A link without it (made before #1323) still opens, and
+  the joiner binds seat 1 to the first `Hello` for it, as before.
+- A versus invite is `#room=<room>&key=<fingerprint>`, a battle royale invite
+  `#royale=<room>&key=<fingerprint>`. A link with any other shape is not a co-op invite, and an
+  unknown boss id starts nothing.
 - Format and parse live in `client/src/invite.ts` (#528).
 
 ## 5. Retry

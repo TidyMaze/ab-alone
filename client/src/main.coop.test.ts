@@ -135,19 +135,19 @@ describe('co-op: the encounter judges the room', () => {
     expect(byId('mode-menu').hidden).toBe(true); // picking a boss closes the menu, and the list for next time
     expect(list.hidden).toBe(true);
     expect(button.getAttribute('aria-expanded')).toBe('false');
+    await until(game, () => data().seat === 'player'); // the link shows once the keys are made: it carries their fingerprint (#1323)
     const room = game.room()!;
-    expect(location.hash).toMatch(new RegExp(`^#room=${room}&boss=echo&seed=(0|[1-9]\\d*)$`));
+    expect(location.hash).toMatch(new RegExp(`^#room=${room}&boss=echo&seed=(0|[1-9]\\d*)&key=[\\w-]{8}$`));
     expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(location.hash);
     expect(byId('invite').hidden).toBe(false);
     expect(byId('invite-label').textContent).toBe('Invite link: send it to your partner');
     expect(game.hook('__fight')).toEqual({ id: 'echo', seed: coopFromHash(location.hash)!.seed });
-    await until(game, () => data().seat === 'player');
     expect(data().online).toBe('Black');
     expect(document.getElementById('boss-bar')!.textContent).toContain('The Echo');
     expect(presence()).toBe('Waiting for a partner...');
     expect(game.hud()).toContain('Mirror logged.'); // Tally's line of the boss, as in solo, without the name (#1038)
     byId('play-online').click(); // a versus room after it: the label is the versus one again
-    expect(byId('invite-label').textContent).toBe('Invite link: send it to your opponent');
+    await until(game, () => byId('invite-label').textContent === 'Invite link: send it to your opponent');
     expect(byId('rematch').textContent).toBe('Rematch'); // and its button, Retry in co-op (#531)
     expect(byId('rematch').getAttribute('aria-label')).toBe('Rematch');
     expect(byId('rematch').dataset.label).toBe('Rematch');

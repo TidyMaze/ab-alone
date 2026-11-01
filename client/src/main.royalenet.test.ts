@@ -111,8 +111,8 @@ describe('Battle royale online (#504)', () => {
     button('battle-royale').click();
     byId('online').scrollTop = 40;
     button('royale-invite').click();
+    await until(game, () => data().seat === 'player'); // the link shows once the keys are made
     expect(byId('online').scrollTop).toBe(0);
-    await until(game, () => data().seat === 'player'); // the room is open before the test ends
   });
 
   it('Invite opens a room of 6 seats: its invite link, the arena in the lobby, Start for the creator alone', async () => {
@@ -123,8 +123,8 @@ describe('Battle royale online (#504)', () => {
     button('royale-invite').click();
     await until(game, () => data().seat === 'player'); // once its keys are made, the page is in the room
     const room = game.room()!;
-    expect(location.hash).toBe(`#royale=${room}`);
-    expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(`#royale=${room}`);
+    expect(location.hash).toMatch(new RegExp(`^#royale=${room}&key=[\\w-]{8}$`)); // the creator key's fingerprint (#1323)
+    expect(new URL(byId<HTMLInputElement>('invite').value).hash).toBe(location.hash);
     expect(byId('invite').hidden).toBe(false);
     expect(byId('invite-label').textContent).toBe('Invite link: send it to the other players');
     expect(byId('invite-copy').hidden).toBe(false); // Copy closes the link (#839)

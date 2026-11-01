@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coopFromHash, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl } from './invite';
+import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomFromHash, royaleFromHash, royaleUrl } from './invite';
 
 describe('invite links', () => {
   it('makes a url safe room id from random bytes', () => {
@@ -50,5 +50,35 @@ describe('invite links', () => {
     expect(royaleFromHash(new URL(url).hash)).toBe('abc_DEF-123');
     expect(roomFromHash(new URL(url).hash)).toBeNull();
     for (const hash of ['', '#royale=', '#royale=a b', '#room=r']) expect(royaleFromHash(hash)).toBeNull();
+  });
+
+  it('fingerprints a key with its first 8 base64url characters of SHA-256 (#1323)', async () => {
+    expect(await fingerprint('abc')).toBe('ungWv48B');
+    expect(await fingerprint('abd')).toMatch(/^[\w-]{8}$/);
+    expect(await fingerprint('abd')).not.toBe('ungWv48B');
+  });
+
+  it('puts the fingerprint of the creator key last in every invite and reads it back, apart from the room (#1323)', () => {
+    const page = 'https://x.github.io/ab-alone/#old';
+    const versus = inviteUrl(page, 'abc_DEF-123', undefined, 'ungWv48B');
+    expect(versus).toBe('https://x.github.io/ab-alone/#room=abc_DEF-123&key=ungWv48B');
+    expect(roomFromHash(new URL(versus).hash)).toBe('abc_DEF-123');
+    expect(creatorFromHash(new URL(versus).hash)).toBe('ungWv48B');
+    const coop = inviteUrl(page, 'r', { boss: 'echo', seed: 7 }, 'a-b_cdef');
+    expect(coop).toBe('https://x.github.io/ab-alone/#room=r&boss=echo&seed=7&key=a-b_cdef');
+    expect(coopFromHash(new URL(coop).hash)).toEqual({ room: 'r', boss: 'echo', seed: 7 });
+    expect(creatorFromHash(new URL(coop).hash)).toBe('a-b_cdef');
+    const royale = royaleUrl(page, 'r', 'ungWv48B');
+    expect(royale).toBe('https://x.github.io/ab-alone/#royale=r&key=ungWv48B');
+    expect(royaleFromHash(new URL(royale).hash)).toBe('r');
+    expect(creatorFromHash(new URL(royale).hash)).toBe('ungWv48B');
+  });
+
+  it('finds no fingerprint in an older link, and no invite with a malformed one (#1323)', () => {
+    for (const hash of ['', '#room=r', '#room=r&boss=echo&seed=7', '#royale=r']) expect(creatorFromHash(hash)).toBeUndefined();
+    expect(roomFromHash('#room=r&key=short')).toBeNull();
+    expect(roomFromHash('#room=r&key=ungWv48B9')).toBeNull();
+    expect(coopFromHash('#room=r&key=ungWv48B&boss=echo&seed=7')).toBeNull();
+    expect(royaleFromHash('#royale=r&key=a+b/cdef')).toBeNull();
   });
 });

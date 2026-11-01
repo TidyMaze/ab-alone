@@ -498,9 +498,9 @@ describe('main.ts, the hub doors (#522)', () => {
     shipAt(game, [-1, 1]);
     game.click(-2, 1);
     expect(hub()).toBeUndefined();
-    expect(byId('invite').hidden).toBe(false);
-    expect(location.hash).toBe(`#room=${game.room()}`);
     await until(game, () => data().seat === 'player');
+    expect(byId('invite').hidden).toBe(false);
+    expect(location.hash).toMatch(new RegExp(`^#room=${game.room()}&key=[\\w-]{8}$`));
     const white = await opponent(game);
     await until(game, () => data().opponent === 'here');
     await repeat(game, white);
@@ -633,7 +633,7 @@ const END_ROYALE = {
     game.click(2, -3);
     game.click(3, -3);
     expect(hub()).toBeUndefined();
-    expect(byId('invite').hidden).toBe(false);
+    await until(game, () => !byId('invite').hidden); // once the room's keys are made
     expect(byId('hud').querySelector('.rank-badge')).not.toBeNull();
   });
 

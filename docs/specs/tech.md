@@ -250,6 +250,10 @@ a different network. Measure the failure rate with local telemetry (section 10) 
 **Identity and integrity.**
 - Each browser creates an Ed25519 keypair per session (WebCrypto) kept in memory plus
   IndexedDB. `Hello` binds the key to a display name and seat.
+- The invite link carries the fingerprint of the creator's key (8 base64url characters of its
+  SHA-256, coop-boss.md section 4, #1323): a joiner binds seat 1 only to a `Hello` of that key, so
+  a peer that knows the room code cannot take the creator's seat by saying `Hello` first. Finding
+  another key with the same 48 bits takes about 2^48 key pairs, far longer than a link waits.
 - Every move is a signed message `{game_id, seq, prev_hash, move, sig}`. `prev_hash` chains
   moves, so the log is tamper-evident and any peer can prove who played what.
 - After every move each peer checks `hash(state)` equals the sender's claimed post-state hash.
@@ -345,10 +349,12 @@ answer: only a `Sync` does.
   at the reveal deadline (`RoundBook`, #500). It forwards every commit and reveal it keeps. The
   coordinator starts the next round once the round resolved on its screen. After each round a peer
   sends `hash {round, hash}`; one that differs from its own is a desync, shown on the plate (the
-  game goes on). A peer whose transport is closed when a deadline passes does not resolve that
-  round. A peer whose connection opens again, or that gets a start beyond its next round (or after
+  game goes on). Only the hash of a key in the start's seats counts (#1322). A peer whose
+  transport is closed when a deadline passes does not resolve that round. A peer whose connection opens again, or that gets a start beyond its next round (or after
   such a round), sends `behind {round}`; a peer that has more answers it alone with `played`: the
-  signed commits and reveals it kept of every round from there and of the round open now. The late
+  signed commits and reveals it kept of every round from there and of the round open now. Any peer
+  may answer, so a `played` counts only when its seats are the start's, or in the lobby the
+  session's roster; anything else changes nothing (#1322). The late
   peer replays each round through a fresh book past its deadlines and takes what it lacks of the
   open one, so a peer back after a drop of any length catches up. The two rounds of grace
   (Reconnection below, #674) count missed commits, the same on every peer: a seat with no commit

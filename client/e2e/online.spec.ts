@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openModes } from './modes';
+import { inviteLink, openModes } from './modes';
 
 // Two isolated browser contexts. The transport is the ?net=hook test hook: the test relays records
 // from one page to the other, so no public Nostr relay is involved.
@@ -59,8 +59,8 @@ test('a move played on page A shows up on page B over the signed move log', asyn
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await openModes(a);
   await a.locator('#play-online').click();
-  const invite = await a.locator('#invite').inputValue();
-  expect(invite).toMatch(/#room=[\w-]+$/);
+  const invite = await inviteLink(a);
+  expect(invite).toMatch(/#room=[\w-]+&key=[\w-]{8}$/); // the creator key's fingerprint (#1323)
   await expect(a.locator('#hud')).toContainText('You are Black');
 
   await b.goto(`./?net=hook${new URL(invite).hash}`);
@@ -119,7 +119,7 @@ test('two tabs of the same browser context play an online game, bug #116', async
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await openModes(a);
   await a.locator('#play-online').click();
-  const invite = await a.locator('#invite').inputValue();
+  const invite = await inviteLink(a);
   await b.goto(`./?net=hook${new URL(invite).hash}`, { waitUntil: 'commit' }); // held textures can hold the load event
   await textures; // main.ts runs on page b and waits for its textures (its canvas comes after them, #585)
   await open(a);
@@ -150,7 +150,7 @@ test('a third peer opening the link is not a player: room is full, its move chan
   await expect(a.locator('#hud')).not.toBeEmpty(); // refresh() runs after the play-online listener is wired
   await openModes(a);
   await a.locator('#play-online').click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  const hash = new URL(await inviteLink(a)).hash;
   // The two joiners load at once: their page loads overlap instead of queueing one after the other.
   await Promise.all([b, c].map(async (page) => {
     await page.goto(`./?net=hook${hash}`);
@@ -206,8 +206,7 @@ test('Play online is disabled or works when clicked right after load, bug #127',
     button.click();
     return wasDisabled;
   });
-  const invite = await page.locator('#invite').inputValue();
-  expect(disabledAtClick || /#room=[\w-]+$/.test(invite)).toBe(true);
+  expect(disabledAtClick || /#room=[\w-]+&key=[\w-]{8}$/.test(await inviteLink(page))).toBe(true);
 });
 
 // Issue #121: each player sees its own color and whether the opponent is online, updated live.
@@ -225,7 +224,7 @@ test('online status: creator waits with the invite, joiner joins, both see each 
   await a.getByRole('button', { name: 'Lobby' }).click(); // the invite link sits in the lobby sheet (#1044)
   await expect(a.locator('#invite')).toBeVisible();
   await expect(a.getByText('Invite link: send it to your opponent')).toBeVisible();
-  const invite = await a.locator('#invite').inputValue();
+  const invite = await inviteLink(a);
 
   await b.goto(`./?net=hook${new URL(invite).hash}`);
   await b.locator('canvas').waitFor();
@@ -265,7 +264,7 @@ test('a player cannot move while the opponent is gone, even with a spectator sti
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
   await a.locator('#play-online').click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  const hash = new URL(await inviteLink(a)).hash;
   await Promise.all([b, c].map(async (page) => {
     await page.goto(`./?net=hook${hash}`);
     await page.locator('canvas').waitFor();
@@ -312,7 +311,7 @@ test('a finished online game ends in a rematch: colours swapped, the new Black m
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
   await a.locator('#play-online').click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  const hash = new URL(await inviteLink(a)).hash;
   await b.goto(`./?net=hook${hash}`);
   await b.locator('canvas').waitFor();
   await open(a);
@@ -392,7 +391,7 @@ test('a player back after a drop shows the same ply and side to move as the othe
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
   await a.locator('#play-online').click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  const hash = new URL(await inviteLink(a)).hash;
   await b.goto(`./?net=hook${hash}`);
   await b.locator('canvas').waitFor();
   await open(a);
@@ -450,7 +449,7 @@ test('a spectator joining after an ejection shows the score at once, with no eje
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
   await a.locator('#play-online').click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  const hash = new URL(await inviteLink(a)).hash;
   // The spectator's page loads now, in parallel with b's: the room drops its records until it is opened after the plies.
   await Promise.all([
     b.goto(`./?net=hook${hash}`).then(() => b.locator('canvas').waitFor()),
@@ -562,7 +561,7 @@ test('threefold repetition ends an online game as a draw on both pages, as in ho
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
   await a.locator('#play-online').click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  const hash = new URL(await inviteLink(a)).hash;
   await b.goto(`./?net=hook${hash}`);
   await b.locator('canvas').waitFor();
   await open(a);
@@ -603,7 +602,7 @@ test('the coordinator page closes: the lowest join_seq live peer coordinates on 
   await expect(a.locator('#hud')).not.toBeEmpty();
   await openModes(a);
   await a.locator('#play-online').click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  const hash = new URL(await inviteLink(a)).hash;
   await open(a);
   // White first, so its join_seq is 2 and the spectator's 3.
   const join = async (page: Page) => {
@@ -655,8 +654,8 @@ test('a co-op boss fight from Fight together: the seats take turns, both pages p
   await openModes(a);
   await a.getByRole('button', { name: 'Fight together' }).click();
   await a.locator('#coop-list').getByRole('button', { name: 'The Echo' }).click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
-  expect(hash).toMatch(/^#room=[\w-]+&boss=echo&seed=\d+$/);
+  const hash = new URL(await inviteLink(a)).hash;
+  expect(hash).toMatch(/^#room=[\w-]+&boss=echo&seed=\d+&key=[\w-]{8}$/);
   await b.goto(`./?bot=off&net=hook${hash}`);
   await b.locator('canvas').waitFor();
   await open(a);
@@ -709,7 +708,7 @@ test('a co-op Retry once both seats asked restarts the same fight, attempt 2 on 
   await openModes(a);
   await a.getByRole('button', { name: 'Fight together' }).click();
   await a.locator('#coop-list').getByRole('button', { name: 'The Echo' }).click();
-  const hash = new URL(await a.locator('#invite').inputValue()).hash;
+  const hash = new URL(await inviteLink(a)).hash;
   await b.goto(`./?bot=off&net=hook${hash}`);
   await b.locator('canvas').waitFor();
   await open(a);
