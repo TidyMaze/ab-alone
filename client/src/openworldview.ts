@@ -1217,6 +1217,23 @@ export class OpenWorldView {
     return best;
   }
 
+  /** The cell under a point of the screen on the ground, near or far (#1137): the ray meets the plane of the hero's cell top, then
+   * the plane of the top of the cell it fell in, three times over, so a hill or a lake settles on its own cell. `null` when the ray
+   * misses the ground or lands off the loaded world. */
+  pickGround(x: number, y: number): Axial | null {
+    this.raycaster.setFromCamera(this.pointer.set(x, y), this.camera);
+    const { ray } = this.raycaster;
+    let cell = this.heroCell;
+    for (let i = 0; i < 3; i++) {
+      const tile = this.world.tile(cell[0], cell[1]);
+      if (!tile) return null;
+      this.plane.set(this.up, -topOf(GROUND[tile.terrain], tile.height));
+      if (!ray.intersectPlane(this.plane, this.ground)) return null;
+      cell = cellAtPoint(this.ground.x, this.ground.z);
+    }
+    return cell;
+  }
+
   /** Frees what a build or a model swap replaced, once the frame drawn after it is rendered (#1017): the frame in flight may still
    * use it. Called by the mode after each render. */
   drain(): void {

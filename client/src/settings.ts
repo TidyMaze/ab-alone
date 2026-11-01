@@ -63,6 +63,7 @@ export const settingsList = (
   difficulty: Difficulty = 'normal',
   renderMode: RenderMode = 'normal',
   freeCam = false,
+  steering = true,
 ): Setting[] => [
   { id: 'clear-board', label: 'Clear board', icon: 'fog', on: clear },
   { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: reduced },
@@ -75,6 +76,7 @@ export const settingsList = (
   { id: 'glass-skin', label: glassSkinById(glass).name, icon: 'skin' },
   { id: 'render-mode', label: `Render: ${RENDER_MODE_NAMES[renderMode]}`, icon: 'render' },
   { id: 'free-cam', label: 'Free camera', icon: 'camera', on: freeCam }, // a developer view (#938), shortcut C
+  { id: 'steering', label: 'Steering', icon: 'steer', on: steering }, // Open world: go round obstacles, tap to walk (#1137)
   { id: 'export-game', label: 'Export game', icon: 'export' },
   { id: 'difficulty', label: DIFFICULTY_LABELS[difficulty], icon: 'scale' },
   { id: 'import-game', label: 'Import game', icon: 'import' },

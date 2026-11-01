@@ -672,6 +672,40 @@ test('a held arrow goes round an obstacle instead of stopping, #1137', async ({ 
   expect(await at()).toBe('0,0'); // every side is shut: it stays
 });
 
+// #1137: a tap on a far cell walks the hero there round the obstacles (a Rust A*), a key cancels it, and the Steering setting turns
+// it off.
+test('a tap on a far cell walks the hero there, a key cancels, Steering off keeps it still, #1137', async ({ page }) => {
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas').waitFor();
+  await openModes(page);
+  await page.locator('#openworld').click();
+  const at = () => page.evaluate(() => document.body.dataset.openworldAt);
+  const route = () => page.evaluate(() => document.body.dataset.openworldRoute);
+  await expect.poll(at).toBe('0,0');
+  await expect(page.locator('#openworld-mode')).toContainText('Steering on');
+  const size = page.viewportSize()!;
+  const far = { x: size.width / 2 + 220, y: size.height / 2 - 40 };
+  await page.mouse.click(far.x, far.y);
+  await expect.poll(route).not.toBe('0'); // a walk is on
+  await page.screenshot({ path: test.info().outputPath('tap-walk.png') });
+  await page.keyboard.press('Shift'); // any key cancels
+  await expect.poll(route).toBe('0');
+  const stopped = await at();
+  await page.waitForTimeout(400);
+  expect(await at()).toBe(stopped);
+  expect(stopped).not.toBe('0,0');
+  await page.mouse.click(far.x, far.y); // walk again, to the end
+  await expect.poll(route, { timeout: 8000 }).toBe('0');
+  // Steering off: the same tap does nothing.
+  await page.locator('#settings').click();
+  await page.locator('#setting-steering').click();
+  await expect(page.locator('#openworld-mode')).toContainText('Steering off');
+  const before = await at();
+  await page.mouse.click(size.width / 2 - 260, size.height / 2 - 40);
+  await page.waitForTimeout(400);
+  expect(await at()).toBe(before);
+});
+
 // #1147: the hero breaks an isolated boulder it rolls into. On seed 7 the boulder on (4, 2) stands alone with grass on its left: the
 // move goes through, its prop leaves the scene, shards fly, the cell is counted broken, and the break is still there after a reload.
 test('the hero breaks the isolated boulder it rolls into, and it stays broken after a reload, #1147', async ({ page }) => {

@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_lairs, world_push, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_lairs, world_path, world_push, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -220,6 +220,8 @@ import {
   readTier,
   type Tier,
   readTranscript,
+  readSteering,
+  writeSteering,
   readUiScale,
   hasReflections,
   meshDetail,
@@ -553,6 +555,7 @@ function prefilteredBay(): THREE.Texture {
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
 let flatHud = readFlatHud(store); // the flat HUD fallback (#391): every game-critical value as text on the plate
+let steering = readSteering(store); // the Open world steering (#1137), on by default
 let transcriptOn = readTranscript(store); // the audio log transcript (#516), on by default
 const reducedMotion = (): boolean => motionReduced(motionQuery.matches, savedMotion);
 let tier = readTier(store, {
@@ -811,10 +814,15 @@ const toggles: Record<string, () => void> = {
     cycleRenderMode();
   },
   'free-cam': () => toggleFreeCam(),
+  steering: () => {
+    steering = !steering;
+    writeSteering(store, steering);
+    openWorld.refreshMode(); // the HUD names the mode, and a walk under way ends (#1137)
+  },
 };
 const sliderAt = (bus: Bus): HTMLInputElement => document.getElementById(`volume-${bus}`) as HTMLInputElement;
 const paintMenu = (): void => {
-  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode, freeCam.active)) {
+  for (const { id, label, icon: name, on } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode, freeCam.active, steering)) {
     const row = document.getElementById(`setting-${id}`)!;
     row.innerHTML = `${icon(name)}<span>${label}</span>`;
     const full = id === 'difficulty' ? `Difficulty: ${difficulty} (${DIFFICULTY_PERCENT[difficulty]}%)` : label;
@@ -823,7 +831,7 @@ const paintMenu = (): void => {
     if (on !== undefined) row.setAttribute('aria-pressed', String(on));
   }
 };
-for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode, freeCam.active)) {
+for (const { id } of settingsList(clear, theme, skin, glass, uiScale, safe, reducedMotion(), flatHud, palette, transcriptOn, difficulty, renderMode, freeCam.active, steering)) {
   const row = menu.appendChild(document.createElement('button'));
   row.id = `setting-${id}`;
   row.type = 'button';
@@ -3880,6 +3888,7 @@ canvas.addEventListener('pointermove', (e) => {
       const prevAngle = pointers.size === 2 ? angle() : 0;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (e.pointerId === turning) openWorld.orbit(e.clientX - last.x); // the right button's drag turns the camera (#1026)
+      if (pointers.size === 2 || e.pointerId === turning) openWorld.cancelWalk(); // a drag ends a walk to a far cell (#1137)
       if (pointers.size === 2) {
         openWorld.zoom(pinchScale(prevSpan, span())); // the Open world's camera, not the board's (#976)
         openWorld.turn(twistOf(prevAngle, angle())); // a twist turns it too (#1026)
@@ -5121,6 +5130,8 @@ const openWorld = new OpenWorldMode(
     write(store, 'ab-alone.tally0412', 'seen');
     return 'Claim 0412: unworked.';
   },
+  (seed, from, to, blocked, broken) => Int32Array.from(world_path(seed, from[0], from[1], to[0], to[1], blocked, broken)), // the walk to a far cell (#1137)
+  () => steering,
 );
 /** The world the menu opens: the seed of the URL, else the last world played when it has a save, else a new random seed. */
 async function enterOpenWorld(): Promise<void> {

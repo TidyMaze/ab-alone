@@ -4,6 +4,8 @@
 //! cells change what a marble may do.
 
 use crate::encounter::hull::mix;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap};
 use std::sync::{Mutex, PoisonError};
 
 /// The version of the generated world, saved with each Open world save (#968): bump it with every change of the generator, the
@@ -584,6 +586,112 @@ fn lair_try(seed: u64, count: usize, k: i32, n: i32) -> Option<(i32, i32)> {
     fit.then_some((q, r))
 }
 
+/// The farthest a hero path reaches from its start, in cells (docs/specs/openworld.md section 4).
+pub const PATH_RADIUS: i32 = 40;
+/// The most cells one path search expands before it gives up.
+pub const PATH_EXPANSIONS: usize = 6000;
+
+/// The six steps of the hex grid in the order of the client (E, W, NE, SW, NW, SE): the order that breaks the ties of a path.
+const STEPS: [(i32, i32); 6] = [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)];
+
+/// The axial distance between two cells.
+pub fn hex_distance(a: (i32, i32), b: (i32, i32)) -> i32 {
+    let (dq, dr) = (a.0 - b.0, a.1 - b.1);
+    (dq.abs() + dr.abs() + (dq + dr).abs()) / 2
+}
+
+/// The cells of a shortest walk from `from` to `to`, `from` left out: a bounded A* (docs/specs/openworld.md section 4). `enter`
+/// tells whether a cell can be entered. Empty when `to` is `from`, farther than `PATH_RADIUS`, not enterable or not reached; the
+/// search stops after `max_expanded` cells. Deterministic: the open cell with the lowest estimate goes first, then the one nearest
+/// the goal, then the lowest `(q, r)`, and the steps are tried in the order of `STEPS`.
+pub fn find_path(
+    from: (i32, i32),
+    to: (i32, i32),
+    max_expanded: usize,
+    enter: &mut dyn FnMut(i32, i32) -> bool,
+) -> Vec<(i32, i32)> {
+    if from == to || hex_distance(from, to) > PATH_RADIUS || !enter(to.0, to.1) {
+        return Vec::new();
+    }
+    let mut open = BinaryHeap::from([Reverse((
+        hex_distance(from, to),
+        hex_distance(from, to),
+        from,
+    ))]);
+    let mut cost = HashMap::from([(from, 0)]);
+    let mut came: HashMap<(i32, i32), (i32, i32)> = HashMap::new();
+    let mut expanded = 0;
+    while let Some(Reverse((_, _, at))) = open.pop() {
+        if at == to {
+            let mut path = vec![to];
+            while let Some(&before) = came.get(path.last().unwrap()) {
+                path.push(before);
+            }
+            path.pop(); // the start
+            path.reverse();
+            return path;
+        }
+        expanded += 1;
+        if expanded > max_expanded {
+            break;
+        }
+        let g = cost[&at] + 1;
+        for (dq, dr) in STEPS {
+            let next = (at.0 + dq, at.1 + dr);
+            if hex_distance(from, next) > PATH_RADIUS
+                || cost.get(&next).is_some_and(|&c| c <= g)
+                || !enter(next.0, next.1)
+            {
+                continue;
+            }
+            cost.insert(next, g);
+            came.insert(next, at);
+            let h = hex_distance(next, to);
+            open.push(Reverse((g + h, h, next)));
+        }
+    }
+    Vec::new()
+}
+
+/// The walk of the hero from `from` to `to` over the world `seed` (`find_path`): a cell is entered when it is on the world, not in
+/// `blocked` (the enemies), and open or an obstacle the hero breaks by rolling into it (a boulder, or a tree with no tree on its six
+/// neighbours, #1147). The cells of `broken` are plain ground.
+pub fn walk_path(
+    seed: u64,
+    from: (i32, i32),
+    to: (i32, i32),
+    broken: &[(i32, i32)],
+    blocked: &[(i32, i32)],
+) -> Vec<(i32, i32)> {
+    let mut chunks: HashMap<(i32, i32), Option<Vec<Cell>>> = HashMap::new();
+    let mut terrain = |q: i32, r: i32| -> Option<Terrain> {
+        let (cq, cr) = (q.div_euclid(CHUNK), r.div_euclid(CHUNK));
+        let cells = chunks
+            .entry((cq, cr))
+            .or_insert_with(|| chunk(seed, cq, cr));
+        let found = cells.as_ref()?[((r - cr * CHUNK) * CHUNK + (q - cq * CHUNK)) as usize].terrain;
+        Some(match found {
+            Terrain::Boulder if broken.contains(&(q, r)) => Terrain::Rock,
+            Terrain::Tree if broken.contains(&(q, r)) => Terrain::Grass,
+            other => other,
+        })
+    };
+    let mut enter = |q: i32, r: i32| {
+        if blocked.contains(&(q, r)) {
+            return false;
+        }
+        match terrain(q, r) {
+            Some(Terrain::Boulder) => true,
+            Some(Terrain::Tree) => STEPS
+                .iter()
+                .all(|&(dq, dr)| terrain(q + dq, r + dr) != Some(Terrain::Tree)),
+            Some(other) => !other.blocked(),
+            None => false,
+        }
+    };
+    find_path(from, to, PATH_EXPANSIONS, &mut enter)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1155,5 +1263,110 @@ mod tests {
     #[test]
     fn the_lairs_of_seed_7_are_pinned() {
         assert_eq!(lairs(7, 3), vec![(139, 58), (-327, 233), (286, -172)]);
+    }
+
+    /// Whether `path` is a walk from `from`: each cell next to the one before, none of `avoid`.
+    fn walks(from: (i32, i32), path: &[(i32, i32)], avoid: &[(i32, i32)]) -> bool {
+        let mut at = from;
+        path.iter().all(|&next| {
+            let ok = hex_distance(at, next) == 1 && !avoid.contains(&next);
+            at = next;
+            ok
+        })
+    }
+
+    #[test]
+    fn a_path_over_open_ground_is_straight_and_leaves_the_start_out() {
+        let path = walk_path(3, (0, 0), (3, 0), &[], &[]);
+        assert_eq!(path, vec![(1, 0), (2, 0), (3, 0)]);
+        assert_eq!(
+            walk_path(3, (0, 0), (3, 0), &[], &[]),
+            path,
+            "deterministic"
+        );
+    }
+
+    #[test]
+    fn a_path_goes_round_the_cells_in_the_way() {
+        let path = walk_path(3, (0, 0), (3, 0), &[], &[(1, 0), (2, 0)]);
+        assert_eq!(path.len(), 4);
+        assert_eq!(path.last(), Some(&(3, 0)));
+        assert!(walks((0, 0), &path, &[(1, 0), (2, 0)]));
+    }
+
+    #[test]
+    fn a_wall_is_crossed_where_it_ends_by_the_shortest_way() {
+        // The cells q = 2, r from -3 to 3 are blocked: the way round is 10 cells, either side.
+        let mut wall = |q: i32, r: i32| !(q == 2 && (-3..=3).contains(&r));
+        let path = find_path((0, 0), (4, 0), PATH_EXPANSIONS, &mut wall);
+        assert_eq!(path.len(), 10);
+        assert_eq!(path.last(), Some(&(4, 0)));
+        let avoid: Vec<(i32, i32)> = (-3..=3).map(|r| (2, r)).collect();
+        assert!(walks((0, 0), &path, &avoid));
+    }
+
+    #[test]
+    fn no_path_to_the_start_a_blocked_cell_the_world_edge_or_beyond_the_radius() {
+        assert!(walk_path(3, (0, 0), (0, 0), &[], &[]).is_empty());
+        assert!(walk_path(3, (0, 0), (2, 0), &[], &[(2, 0)]).is_empty());
+        let edge = WORLD_CHUNKS / 2 * CHUNK;
+        assert!(walk_path(3, (edge - 1, 0), (edge, 0), &[], &[]).is_empty());
+        assert!(walk_path(3, (0, 0), (PATH_RADIUS + 1, 0), &[], &[]).is_empty());
+    }
+
+    #[test]
+    fn a_search_that_runs_out_of_expansions_gives_no_path() {
+        let mut open = |_q: i32, _r: i32| true;
+        assert!(find_path((0, 0), (30, 0), 5, &mut open).is_empty());
+        assert_eq!(find_path((0, 0), (30, 0), 500, &mut open).len(), 30);
+        let mut shut = |q: i32, r: i32| (q, r) == (5, 0);
+        assert!(
+            find_path((0, 0), (5, 0), PATH_EXPANSIONS, &mut shut).is_empty(),
+            "no way to it"
+        );
+    }
+
+    /// A cell of the world 9 with the terrain `kind`, and whether a tree stands on one of its neighbours.
+    fn find(kind: Terrain, crowded: bool) -> (i32, i32) {
+        let near = |q: i32, r: i32| {
+            [(1, 0), (-1, 0), (1, -1), (-1, 1), (0, -1), (0, 1)]
+                .iter()
+                .any(|&(dq, dr)| cell(9, q + dq, r + dr).map(|c| c.terrain) == Some(Terrain::Tree))
+        };
+        (-60..60)
+            .flat_map(|q| (-60..60).map(move |r| (q, r)))
+            .find(|&(q, r)| {
+                cell(9, q, r).map(|c| c.terrain) == Some(kind)
+                    && near(q, r) == crowded
+                    && cell(9, q - 1, r).is_some_and(|c| !c.terrain.blocked())
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn a_boulder_is_a_cell_to_walk_to_and_a_lone_tree_too_but_not_a_crowded_one() {
+        let boulder = find(Terrain::Boulder, false);
+        let lone = find(Terrain::Tree, false);
+        let crowded = find(Terrain::Tree, true);
+        for target in [boulder, lone] {
+            let start = (target.0 - 1, target.1);
+            let path = walk_path(9, start, target, &[], &[]);
+            assert_eq!(path.last(), Some(&target), "{target:?}");
+        }
+        let start = (crowded.0 - 1, crowded.1);
+        assert!(walk_path(9, start, crowded, &[], &[]).is_empty());
+        let path = walk_path(9, start, crowded, &[crowded], &[]);
+        assert_eq!(path.last(), Some(&crowded), "a broken tree is grass");
+        let boulder_broken = walk_path(9, (boulder.0 - 1, boulder.1), boulder, &[boulder], &[]);
+        assert_eq!(boulder_broken.last(), Some(&boulder));
+    }
+
+    #[test]
+    fn water_and_walls_are_never_entered() {
+        let water = (-60..60)
+            .flat_map(|q| (-60..60).map(move |r| (q, r)))
+            .find(|&(q, r)| cell(9, q, r).map(|c| c.terrain) == Some(Terrain::Water))
+            .unwrap();
+        assert!(walk_path(9, (water.0 - 1, water.1), water, &[], &[]).is_empty());
     }
 }

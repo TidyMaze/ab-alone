@@ -378,4 +378,36 @@ describe('the board keys in the Open world, #1063', () => {
     canvasKey('Tab');
     expect(game.hook<Axial[]>('__rings').length).toBeGreaterThan(0);
   });
+
+  it('the Steering setting is on by default, names the mode in the HUD, and flips, #1137', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const row = byId('setting-steering');
+    expect(row.getAttribute('aria-pressed')).toBe('true');
+    expect(byId('openworld-mode').textContent).toContain('Steering on');
+    row.click();
+    expect(row.getAttribute('aria-pressed')).toBe('false');
+    expect(byId('openworld-mode').textContent).toContain('Steering off');
+    row.click();
+    expect(byId('openworld-mode').textContent).toContain('Steering on');
+  });
+
+  it('a drag of the camera ends a walk to a far cell without error, #1137', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const canvas = document.querySelector('canvas')!;
+    const at = (type: string, id: number, x: number, y: number, button = 0) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: y, button, bubbles: true, cancelable: true });
+      Object.defineProperty(e, 'pointerId', { value: id });
+      canvas.dispatchEvent(e);
+    };
+    at('pointerdown', 5, 300, 300, 2);
+    at('pointermove', 5, 340, 300, 2);
+    expect(data().openworldRoute).toBe('0');
+    at('pointerup', 5, 340, 300, 2);
+  });
 });
