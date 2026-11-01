@@ -90,7 +90,7 @@ export class PeersLayer {
         const p = axialTo3D(at[0], at[1]);
         const tile = this.world.tile(at[0], at[1]);
         const lift = own.some((o) => o[0] === at[0] && o[1] === at[1]) ? LIFT : 0;
-        point.set(p.x, (tile ? topOf(GROUND[tile.terrain], tile.height) + MARBLE : MARBLE) + lift, p.z);
+        point.set(p.x, (tile ? topOf(GROUND[tile.terrain], tile.height, at[0], at[1]) + MARBLE : MARBLE) + lift, p.z);
         this.mesh.setMatrixAt(marbles, matrix.setPosition(point));
         this.mesh.setColorAt(marbles, colour);
         const ndc = point.clone().project(this.camera);

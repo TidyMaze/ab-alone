@@ -29,6 +29,8 @@ import {
   reachAt,
   reachFor,
   STEP,
+  hexLift,
+  LIFT_MAX,
   topOf,
   variety,
   WATER,
@@ -121,7 +123,7 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
     const p = axialTo3D(2, 1);
     expect(hero.position.x).toBeCloseTo(p.x);
     expect(hero.position.z).toBeCloseTo(p.z);
-    expect(hero.position.y).toBeCloseTo(topOf('grass', 2) + 0.3);
+    expect(hero.position.y).toBeCloseTo(topOf('grass', 2, 2, 1) + 0.3);
     expect(view.camera.position.x).toBeCloseTo(p.x);
     expect(view.camera.position.y).toBeGreaterThan(hero.position.y);
     expect(view.camera.position.z).toBeGreaterThan(p.z);
@@ -137,18 +139,73 @@ describe('the Open world view (docs/specs/openworld.md section 2)', () => {
   });
 
   it('lifts a cell by its height, water lies low, and varies props by cell without chance', () => {
-    expect(topOf('water', 0)).toBeLessThan(topOf('grass', 0));
-    expect(topOf('grass', 3)).toBeGreaterThan(topOf('grass', 1));
+    expect(topOf('water', 0, 0, 0)).toBeLessThan(topOf('grass', 0, 0, 0));
+    expect(topOf('grass', 3, 0, 0)).toBeGreaterThan(topOf('grass', 1, 0, 0));
     // The eight levels 0 to 7 are one step apart: level 0 is 0.2 (land), a peak (level 7) stands 7 steps up, water lies at 0.08.
-    expect(topOf('grass', 0)).toBeCloseTo(0.2);
-    expect(topOf('peak', 7)).toBeCloseTo(0.2 + 7 * STEP);
-    for (let level = 0; level < 7; level++) expect(topOf('sand', level + 1) - topOf('sand', level)).toBeCloseTo(STEP);
-    expect(topOf('water', 7)).toBeCloseTo(0.08);
+    expect(topOf('grass', 0, 0, 0)).toBeCloseTo(0.2 + hexLift(0, 0));
+    expect(topOf('peak', 7, 0, 0)).toBeCloseTo(0.2 + 7 * STEP + hexLift(0, 0));
+    for (let level = 0; level < 7; level++) expect(topOf('sand', level + 1, 3, 4) - topOf('sand', level, 3, 4)).toBeCloseTo(STEP);
+    expect(topOf('water', 7, 3, 4)).toBeCloseTo(0.08); // water stays flat, whatever the cell (#1418)
     expect(variety(3, 4)).toBe(variety(3, 4));
     const draws = new Set([0, 1, 2, 3, 4, 5].map((q) => variety(q, -q)));
     expect(draws.size).toBeGreaterThan(2);
     for (const d of draws) expect(d).toBeGreaterThanOrEqual(0), expect(d).toBeLessThan(1);
     expect(Object.keys(LOOK)).toEqual([...GROUNDS]);
+  });
+
+  it('lifts each land cell by a small, fixed hex lift, the same for the same cell and varied over cells (#1418)', () => {
+    const values = new Set<number>();
+    for (let q = -20; q <= 20; q++) {
+      for (let r = -20; r <= 20; r++) {
+        const lift = hexLift(q, r);
+        expect(hexLift(q, r)).toBe(lift);
+        expect(lift).toBeGreaterThanOrEqual(0);
+        expect(lift).toBeLessThanOrEqual(LIFT_MAX);
+        values.add(lift);
+      }
+    }
+    expect(LIFT_MAX).toBeLessThan(STEP / 4); // uneven ground, never a step
+    expect(values.size).toBeGreaterThan(1000); // 1681 cells, almost all different
+    expect(Math.max(...values)).toBeGreaterThan(LIFT_MAX * 0.9);
+    expect(Math.min(...values)).toBeLessThan(LIFT_MAX * 0.1);
+  });
+
+  it('draws each column to its lifted top, and the props, with the hero, stand on that top: nothing floats or sinks (#1418)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.show([2, 1]);
+    const world = new World(bytes);
+    const matrix = new THREE.Matrix4();
+    const pos = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+    let columns = 0;
+    let trees = 0;
+    for (const g of GROUNDS) {
+      const m = mesh(view, `terrain-${g}`);
+      const cells = cellsOf(view, `terrain-${g}`);
+      for (let i = 0; i < m.count; i++) {
+        m.getMatrixAt(i, matrix);
+        matrix.decompose(pos, new THREE.Quaternion(), scale);
+        const tile = world.tile(cells[i]![0], cells[i]![1])!;
+        expect(scale.y).toBeCloseTo(topOf(GROUND[tile.terrain], tile.height, cells[i]![0], cells[i]![1]), 5);
+        expect(pos.y).toBeCloseTo(scale.y / 2, 5); // the foot stays on the floor of the world
+        columns++;
+      }
+    }
+    const treeMesh = mesh(view, 'prop-tree');
+    const treeCells = cellsOf(view, 'prop-tree');
+    for (let i = 0; i < treeMesh.count; i++) {
+      treeMesh.getMatrixAt(i, matrix);
+      matrix.decompose(pos, new THREE.Quaternion(), scale);
+      const tile = world.tile(treeCells[i]![0], treeCells[i]![1])!;
+      expect(pos.y - scale.y / 2).toBeCloseTo(topOf(GROUND[tile.terrain], tile.height, treeCells[i]![0], treeCells[i]![1]), 5);
+      trees++;
+    }
+    expect(columns).toBeGreaterThan(100);
+    expect(trees).toBeGreaterThan(0);
+    const lifted = [0, 1, 2, 3, 4, 5].map((q) => topOf('grass', 1, q, 7) - topOf('grass', 1, 0, 0));
+    expect(new Set(lifted).size).toBeGreaterThan(1);
+    expect(topOf('water', 1, 5, 5)).toBe(topOf('water', 1, 6, 9)); // water stays flat
+    expect(view.scene.getObjectByName('hero')!.position.y).toBeCloseTo(topOf('grass', 2, 2, 1) + 0.3, 6);
   });
 
   it('is lit by the sun of the arena, which follows the hero and casts its soft shadow on the high tier only (#1364)', () => {
@@ -649,7 +706,7 @@ describe('the zoom of the Open world camera (#976)', () => {
       for (const cell of [[2, 1], ...neighbours([2, 1])] as Axial[]) {
         const p = axialTo3D(cell[0], cell[1]);
         const tile = world.tile(cell[0], cell[1])!;
-        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height, cell[0], cell[1]), p.z).project(view.camera);
         expect(view.pick(ndc.x, ndc.y)).toEqual(cell);
       }
     }
@@ -668,7 +725,7 @@ describe('the zoom of the Open world camera (#976)', () => {
           view.show([0, 0]);
           zoomed(view, zoom);
           const p = axialTo3D(d[0], d[1]);
-          const ndc = new THREE.Vector3(p.x, topOf('grass', 3 + k), p.z).project(view.camera);
+          const ndc = new THREE.Vector3(p.x, topOf('grass', 3 + k, d[0], d[1]), p.z).project(view.camera);
           expect(view.pick(ndc.x, ndc.y), `${d} at level ${3 + k}, zoom ${zoom}`).toEqual(d);
         }
       }
@@ -685,7 +742,7 @@ describe('the zoom of the Open world camera (#976)', () => {
       for (const cell of [[6, 1], [-3, -2], [2, 5], [4, -1]] as Axial[]) {
         const p = axialTo3D(cell[0], cell[1]);
         const tile = world.tile(cell[0], cell[1])!;
-        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height, cell[0], cell[1]), p.z).project(view.camera);
         expect(view.pickGround(ndc.x, ndc.y), `${cell} at zoom ${zoom}`).toEqual(cell);
       }
     }
@@ -733,7 +790,7 @@ describe('the zoom of the Open world camera (#976)', () => {
     expect(view.focusHeight).toBeCloseTo(view.scene.getObjectByName('hero')!.position.y);
     view.show([1, 0]); // a step onto a cell 3 levels up: the top is 3 * STEP higher
     const top = view.scene.getObjectByName('hero')!.position.y;
-    expect(top - view.focusHeight).toBeCloseTo(3 * STEP);
+    expect(top - view.focusHeight).toBeCloseTo(3 * STEP + hexLift(1, 0) - hexLift(0, 0));
     const start = view.focusHeight;
     expect(view.follow(1 / 60, false)).toBe(true);
     expect(view.focusHeight).toBeGreaterThan(start);
@@ -1450,7 +1507,7 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     expect(view.ejected.position.y).toBeLessThan(high);
     view.tick(710);
     expect(view.ejected.scale.x).toBe(0);
-    expect(view.ejected.position.y).toBeLessThan(topOf('grass', 1)); // below the ground
+    expect(view.ejected.position.y).toBeLessThan(0.2 + STEP); // below the ground
     expect(view.ejected.visible).toBe(false);
   });
 
@@ -1463,7 +1520,7 @@ describe("the troop's push animation (docs/specs/openworld.md section 4, #967)",
     const view = settled(played);
     view.playPush(played, 0);
     view.tick(410);
-    const ground = topOf('grass', 1) + MARBLE;
+    const ground = topOf('grass', 1, 63, 0) + MARBLE;
     expect(view.ejected.position.y).toBeCloseTo(ground, 6);
     view.tick(560);
     expect(view.ejected.position.y).toBeLessThan(ground);
@@ -1570,7 +1627,7 @@ describe('the camera turns around the hero by its yaw (#1026)', () => {
       for (const cell of neighbours([0, 0])) {
         const p = axialTo3D(cell[0], cell[1]);
         const tile = world.tile(cell[0], cell[1])!;
-        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height, cell[0], cell[1]), p.z).project(view.camera);
         expect(view.pick(ndc.x, ndc.y)).toEqual(cell);
       }
     }
@@ -2302,6 +2359,19 @@ describe('the flat tops of the low tier (#1234)', () => {
     expect(ground(view)).toBe(1); // the raised cell has six lower neighbours: its sides show
     expect(flats(view)).toBe(cells - 1); // the ring round it is not above any neighbour, the rest is flat
     expect(triangles(view)).toBe(24 + 6 * (cells - 1));
+  });
+
+  it('keeps the low tier flat: no hex lift, so the flat tops keep their cells and triangles, and the high tier lifts again (#1418)', () => {
+    const view = lowView(stepped(new Map(), 1, 4));
+    expect(hexLift(3, 4)).toBe(0);
+    expect(topOf('grass', 1, 3, 4)).toBeCloseTo(0.2 + STEP);
+    view.show([0, 0]);
+    expect(hexLift(3, 4)).toBe(0);
+    view.useFlatTops(false);
+    expect(hexLift(3, 4)).toBeGreaterThan(0);
+    view.useFlatTops(true);
+    new OpenWorldView(new World(bytes));
+    expect(hexLift(3, 4)).toBeGreaterThan(0); // a new view starts lifted
   });
 
   it('keeps the sides of a land cell next to water, water being lower than land', () => {

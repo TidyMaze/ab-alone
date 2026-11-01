@@ -248,7 +248,7 @@ describe('the Open world mode', () => {
       m.frame(render);
       return render.mock.calls[0]![1] as THREE.Camera;
     };
-    const top = topOf('grass', 1) + 0.3; // the spawn is grass at height 1 in this file: its column top and the marble on it (#988)
+    const top = topOf('grass', 1, ...m.hero!.at) + 0.3; // the spawn is grass at height 1 in this file: its column top and the marble on it (#988)
     expect(camera().position.y).toBeCloseTo(28 + top);
     m.enter(1, 800, 600);
     expect(body().openworldZoom).toBe('1');

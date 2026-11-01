@@ -309,8 +309,24 @@ const CAP = 0.07;
 /** The height of one level of the relief: a cell of level `h` stands `0.2 + STEP * h` high, a peak (level 7) `0.2 + 7 * STEP`.
  * Kept by looking at the screenshots of #988 (openworld-terrain.md section 5). */
 export const STEP = 0.5;
-/** The height of the top of a cell's ground: water lies low. */
-export const topOf = (terrain: Terrain, height: number): number => (terrain === 'water' ? 0.08 : 0.2 + STEP * height);
+/** The most a land cell is lifted above its level (#1418), in world units: a small, fixed unevenness, far under a step of the relief
+ * (`STEP`), so the ground reads as uneven and never as stairs. */
+export const LIFT_MAX = 0.08;
+/** Whether the ground is lifted: the low tier draws flat tops with no side, so it stays flat (`useFlatTops`) and keeps its triangles.
+ * One view draws at a time, so the switch is the view's, read by every height (the peers' marbles too). */
+let lifting = true;
+/** The cosmetic lift of the cell `(q, r)`, from 0 to `LIFT_MAX` (#1418): a pure hash of the cell, so it is the same for every player and
+ * every build, with no random and no seed. Only the drawing reads it. */
+export const hexLift = (q: number, r: number): number => {
+  if (!lifting) return 0;
+  let h = Math.imul(q | 0, 0x27d4eb2d) ^ Math.imul(r | 0, 0x165667b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (((h ^ (h >>> 16)) >>> 0) / 0x100000000) * LIFT_MAX;
+};
+/** The height of the top of the ground of the cell `(q, r)`: water lies low and flat, the land is lifted by `hexLift` (#1418). */
+export const topOf = (terrain: Terrain, height: number, q: number, r: number): number =>
+  terrain === 'water' ? 0.08 : 0.2 + STEP * height + hexLift(q, r);
 /** The rate of the camera's follow of the hero (#1333), in 1/s (`Spring`): about a cell behind it at the cruise pace, on it 0.2 s after
  * it stops. The height follows the hero's column top with it (#988). */
 const FOLLOW = 25;
@@ -512,6 +528,7 @@ export class OpenWorldView {
     /** The skins of the ship the marbles wear (#1176); none draws the plain looks. */
     skins?: MarbleSkins,
   ) {
+    lifting = true; // a new view starts on the high tier (#1418)
     this.scene.background = new THREE.Color(SHIP_BLACK);
     this.scene.fog = this.fog;
     this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 0.9));
@@ -727,7 +744,7 @@ export class OpenWorldView {
     if (this.drawnLevel > ROLL_ZOOM) return;
     const p = axialTo3D(q, r);
     const tile = this.world.tile(q, r)!;
-    this.particles.shatter(p.x, topOf(GROUND[tile.terrain], tile.height) + 0.2, p.z, now, PROPS[prop].color, reduced);
+    this.particles.shatter(p.x, topOf(GROUND[tile.terrain], tile.height, q, r) + 0.2, p.z, now, PROPS[prop].color, reduced);
   }
 
   /** Moves what the shaders move to `now` (ms) (docs/specs/openworld-animation.md sections 3 and 4): the shore foam and the sway of the trees
@@ -819,7 +836,7 @@ export class OpenWorldView {
   private standing([q, r]: Axial): Vec {
     const p = axialTo3D(q, r);
     const tile = this.world.tile(q, r)!;
-    return { x: p.x, y: topOf(GROUND[tile.terrain], tile.height) + MARBLE, z: p.z };
+    return { x: p.x, y: topOf(GROUND[tile.terrain], tile.height, q, r) + MARBLE, z: p.z };
   }
 
   /** A blocked step leans the hero toward the cell it cannot take, and back on its own cell over `span` ms (#1040). */
@@ -942,7 +959,7 @@ export class OpenWorldView {
       moves.push(this.move('ejected', 0, ejected, beyond, { start: begin + at(CONTACT), span: at(SLIDE_MS), fall: at(FALL_MS), lunge: false }));
       if (this.drawnLevel <= ROLL_ZOOM) {
         const p = axialTo3D(beyond[0], beyond[1]);
-        this.particles.splash(p.x, topOf('water', 0) + 0.05, p.z, begin + at(CONTACT) + at(SLIDE_MS)); // the droplets rise as the fall starts (#1101)
+        this.particles.splash(p.x, topOf('water', 0, beyond[0], beyond[1]) + 0.05, p.z, begin + at(CONTACT) + at(SLIDE_MS)); // the droplets rise as the fall starts (#1101)
       }
     }
     this.moves = moves;
@@ -1023,7 +1040,7 @@ export class OpenWorldView {
   /** The height of a marble standing on a cell, `undefined` off the loaded world. */
   private rest([q, r]: Axial): number | undefined {
     const tile = this.world.tile(q, r);
-    return tile && topOf(GROUND[tile.terrain], tile.height) + MARBLE;
+    return tile && topOf(GROUND[tile.terrain], tile.height, q, r) + MARBLE;
   }
 
   /** The chunks on each side of the hero's chunk that are drawn: they follow the zoom (#976). */
@@ -1158,7 +1175,7 @@ export class OpenWorldView {
       const [q, r] = cells[i]!;
       const tile = this.world.tile(q, r)!;
       const p = axialTo3D(q, r);
-      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height) + MARBLE, p.z);
+      dummy.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r) + MARBLE, p.z);
       dummy.updateMatrix();
       target.setMatrixAt(i, dummy.matrix);
     }
@@ -1243,7 +1260,7 @@ export class OpenWorldView {
     for (const cell of [this.heroCell, ...neighbours(this.heroCell)]) {
       const tile = this.world.tile(cell[0], cell[1]);
       if (!tile) continue;
-      this.plane.set(this.up, -topOf(GROUND[tile.terrain], tile.height));
+      this.plane.set(this.up, -topOf(GROUND[tile.terrain], tile.height, cell[0], cell[1]));
       if (!ray.intersectPlane(this.plane, this.ground)) continue;
       const [q, r] = cellAtPoint(this.ground.x, this.ground.z);
       if (q !== cell[0] || r !== cell[1]) continue; // the hit is in another cell
@@ -1266,7 +1283,7 @@ export class OpenWorldView {
     for (let i = 0; i < 3; i++) {
       const tile = this.world.tile(cell[0], cell[1]);
       if (!tile) return null;
-      this.plane.set(this.up, -topOf(GROUND[tile.terrain], tile.height));
+      this.plane.set(this.up, -topOf(GROUND[tile.terrain], tile.height, cell[0], cell[1]));
       if (!ray.intersectPlane(this.plane, this.ground)) return null;
       cell = cellAtPoint(this.ground.x, this.ground.z);
     }
@@ -1331,7 +1348,7 @@ export class OpenWorldView {
       }
       const p = axialTo3D(q, r);
       const tile = this.world.tile(q, r)!;
-      group.position.set(p.x, topOf(GROUND[tile.terrain], tile.height), p.z);
+      group.position.set(p.x, topOf(GROUND[tile.terrain], tile.height, q, r), p.z);
       group.traverse((o) => void ((o as THREE.Mesh).isMesh && (o.castShadow = o.receiveShadow = true))); // the tower shades its cell (#1364)
       this.scene.add(group);
     });
@@ -1394,7 +1411,7 @@ export class OpenWorldView {
           const r = ky * CHUNK + Math.floor(i / CHUNK);
           const p = axialTo3D(q, r);
           const ground = GROUND[tile.terrain];
-          const top = topOf(ground, tile.height);
+          const top = topOf(ground, tile.height, q, r);
           if (terrain) {
             const column = this.groundMesh(tile, q, r);
             put(column, p.x, top / 2, p.z, top, groundColour(tile, ground));
@@ -1418,6 +1435,7 @@ export class OpenWorldView {
   useFlatTops(on: boolean): void {
     if (on === this.flatTops) return;
     this.flatTops = on;
+    lifting = !on;
     this.drawnChunks = ''; // the ground is laid again
   }
 
@@ -1426,10 +1444,10 @@ export class OpenWorldView {
   private groundMesh(tile: Tile, q: number, r: number): THREE.InstancedMesh {
     const ground = GROUND[tile.terrain];
     if (!this.flatTops) return this.grounds[ground];
-    const top = topOf(ground, tile.height);
+    const top = topOf(ground, tile.height, q, r);
     const hidden = neighbours([q, r]).every(([nq, nr]) => {
       const next = this.world.tile(nq, nr);
-      return next !== undefined && topOf(GROUND[next.terrain], next.height) >= top;
+      return next !== undefined && topOf(GROUND[next.terrain], next.height, nq, nr) >= top;
     });
     return hidden ? this.flats[ground] : this.grounds[ground];
   }
@@ -1465,7 +1483,7 @@ export class OpenWorldView {
     const key = cellKey(q, r);
     this.removeProp(from, key);
     const spot = { x: 0, y: 0, z: 0, scaleY: 0, colour: WHITE };
-    this.stand(tile, q, r, axialTo3D(q, r), topOf(GROUND[tile.terrain], tile.height), (name, _near, x, y, z, scaleY, colour) => {
+    this.stand(tile, q, r, axialTo3D(q, r), topOf(GROUND[tile.terrain], tile.height, q, r), (name, _near, x, y, z, scaleY, colour) => {
       if (name !== prop) return; // a wall's cap stays where it is
       Object.assign(spot, { x, y, z, scaleY, colour });
     }, near);

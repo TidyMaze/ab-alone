@@ -29,8 +29,8 @@ describe('the landmark of a boss lair (#1170)', () => {
     const p = axialTo3D(4, 1);
     expect(lair(view, 0).position.x).toBeCloseTo(p.x);
     expect(lair(view, 0).position.z).toBeCloseTo(p.z);
-    expect(lair(view, 0).position.y).toBeCloseTo(topOf(GROUND.grass, 5));
-    expect(lair(view, 1).position.y).toBeCloseTo(topOf(GROUND.grass, 2));
+    expect(lair(view, 0).position.y).toBeCloseTo(topOf(GROUND.grass, 5, 4, 1));
+    expect(lair(view, 1).position.y).toBeCloseTo(topOf(GROUND.grass, 2, 0, 3));
     expect(colourOf(lair(view, 0))).toBe(LAIR_LOOK.open);
     expect(colourOf(lair(view, 1))).toBe(LAIR_LOOK.beaten);
   });
