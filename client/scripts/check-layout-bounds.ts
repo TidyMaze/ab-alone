@@ -146,8 +146,9 @@ export function extractViewportInput(preset: ViewportPreset): ViewportCheckInput
   const toScreen = (q: number, r: number) =>
     (window as any).__cellToScreen ? (window as any).__cellToScreen(q, r) : { x: 0, y: 0 };
   const cells: { name: string; centre: { x: number; y: number }; disc: Rect }[] = [];
-  for (let r = -4; r <= 4; r++) {
-    for (let q = Math.max(-4, -4 - r); q <= Math.min(4, 4 - r); q++) {
+  const n = document.body.dataset.hub ? 2 : 4; // the Ship hub draws its 19 cells only, framed closer (#1249)
+  for (let r = -n; r <= n; r++) {
+    for (let q = Math.max(-n, -n - r); q <= Math.min(n, n - r); q++) {
       const p = toScreen(q, r);
       const east = toScreen(q + 1, r);
       const radius = 0.46 * Math.hypot(east.x - p.x, east.y - p.y);

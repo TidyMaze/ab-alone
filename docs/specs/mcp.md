@@ -124,7 +124,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.pulsar()` | `tell` with `kind: "pulse"`, no cells, and the way the next pulse pushes, the player turns left before it and its force in `text` (The Pulsar) |
 | `Encounter.charges()` | `marks` with `kind: "charge"` and `value` = the marble's charges (The Unstable Core: a marble weighs 1 + its charges in a push) |
 | `Encounter.unstable()` | `tell` with `kind: "core"`, no cells, and the next event (collapse, shockwave) in `text` (The Unstable Core) |
-| `Encounter.dual()` | `marks` with `kind: "return"` on the announced landing cell and `value` = the side of the coming marble; `tell` with `kind: "return"` and that cell while a marble is coming, else `kind: "bridge"`, no cells, the void or the bridge in `text` (The Dual Room: its board is 169 cells, the radius 7 scan of its two rooms) |
+| `Encounter.dual()` | `marks` with `kind: "return"` on the announced landing cell and `value` = the side of the coming marble; `tell` with `kind: "return"` and that cell while a marble is coming, else `kind: "bridge"`, no cells, the void or the bridge in `text`, and until the bridge the room this move is played in (The Dual Room: its board is 169 cells, the radius 7 scan of its two rooms; `legal_moves` lists only the moves of that room, #992) |
 | `Encounter.cracks()` | `marks` with `kind: "crack"` and `value` = plies left |
 | `Encounter.eggs()` | `marks` with `kind: "egg"` and `value` = player turns left before it hatches (The Alien) |
 | `Encounter.trains()` | `marks` with `kind: "train"` on every cell of the train's line, from its entry, and `value` = player turns left before it passes (The Rail Yard) |

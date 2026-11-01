@@ -168,6 +168,16 @@ pub struct Dual {
     pub ejected: Option<(Cell, (i32, i32))>,
     /// The announced return: the marble and the cell it lands on at the end of the next ply.
     pub coming: Option<(Cell, (i32, i32))>,
+    /// The plies played before the bridge, modulo 4 (#992): the player then the boss in the south
+    /// room, then both in the north room.
+    pub turn: u8,
+}
+
+impl Dual {
+    /// The room in turn, `turn / 2`; `None` once the bridge is up, when both rooms are free.
+    pub fn room(&self) -> Option<usize> {
+        (!self.bridged).then_some(usize::from(self.turn >= 2))
+    }
 }
 
 /// The room of a cell of the Dual Room's board: `0` south (`r >= 1`, the bridge too), `1` north.

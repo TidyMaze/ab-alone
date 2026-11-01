@@ -66,7 +66,14 @@ peer re-validates online moves (see `tech.md`).
    hexagon), Enter confirms, Esc backs out one step. The group and the direction are announced in the HUD.
    Whole game playable without a mouse.
 6. **Touch.** Tap to select, tap arrow, tap again to confirm. A drag works too (item 1).
-7. **Not now.** Gamepad, voice, haptics.
+7. **Gamepad (#1252).** A pad of the browser's `standard` layout (Xbox, PlayStation) takes the keyboard's paths, no
+   game logic of its own. The D-pad or the left stick moves the focus to the previous (up, left) or next (down, right)
+   control, or on the board picks the nearest of the 6 directions (`Q W E A S D`). A confirms (Enter), B backs out one
+   step (Esc), Start opens the settings menu, LB and RB walk the legal groups (Shift+Tab, Tab), the right stick orbits
+   the camera and the triggers zoom (RT in, LT out). A held aim, LB or RB repeats. The first press switches the HUD hints
+   to the pad's buttons and rings the focused control; a key press or a mouse move switches back. A pad that disconnects
+   changes nothing in the game. The Open world comes next (#1252).
+8. **Not now.** Voice, haptics.
 
 Accessibility: legal-move highlight can be forced on, colorblind-safe palette, the "clear board"
 toggle from `SPEC.md` section 5, reduced motion setting for ejection animations.
@@ -131,11 +138,26 @@ See section 6.
 | Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Ship hub (Mess deck, #602). A "Ship" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
 | Space | One small hex map per deck (`client/src/hub.ts`): 19 cells (radius 2), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
 | Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
-| Rooms | Cells with a glyph, at least 6 per deck. Rolling onto a room enters it; standing on it again (Ship, Back to the ship) does not |
+| Rooms | Cells with a prop and a label plate, at least 6 per deck. Rolling onto a room enters it; standing on it again (Ship, Back to the ship) does not |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
 | Gate | Only the lifts. A lift onto a deck opens once the boss of the deck below it is beaten (the Mess is always open). A locked lift keeps the marble out and Tally says one short line: "Lift to Cargo: locked. This deck's boss is still on the books." |
 | Return | When the game a room started ends, "Back to the ship" puts the marble back on that room's cell. From an online table it leaves the room first |
 | Save | Local storage (`client/src/progress.ts`, key `ab-alone.progress`): deck, cell and bosses beaten as versioned JSON. A save that does not read back (corrupt, another version) starts over on the centre cell of the Mess. Every boss win counts, the boss menu and the daily included. Later a signed export/import file (accounts are out of scope) |
+
+Each room is a small 3D prop on its cell (`hubart.ts`), ringed in its kind's colour, with a label plate always shown over
+it: its name and a short state, or a short label alone on a phone (`hubview.ts`, ui.md section 4.5). A lift-shaft rail lists
+the five decks (beaten, open, locked, and where the marble is) and boss pips count the bosses beaten.
+
+| Room | Prop | Plate (short on a phone) |
+|---|---|---|
+| Boss | A blast door in a crimson frame with an amber core; open with a gold seal once its boss is beaten | Boss door, the boss's name and `beaten` once it is (the boss's name) |
+| Hot-seat | A table with two amber chairs | Hot-seat, 2 players (Hot-seat) |
+| Bot | A cyan robot | Bot table, vs the ship AI (Bot) |
+| Online | An antenna with two signal arcs | Online, 1v1 peer room (Online) |
+| BR lobby | An orange arena ring with six seats | Royale, battle royale (Royale) |
+| Terminal | A CRT, its screen green | Terminal, lore entry (Terminal) |
+| Medal room | A gold medal on a plinth | Medal room, best turns (Medals) |
+| Lift | A cage of four posts around its arrow, a bar across while locked | Lift ▲ or ▼ and its deck, open or locked (▲ and the deck, or ▲ Locked) |
 
 Room kinds:
 
@@ -144,8 +166,8 @@ Room kinds:
 | Boss | The deck's door boss, one of the five lore-slot bosses of section 7 (the other bosses of the roster are in the boss menu; every boss has an Open world lair): the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
-| Medal room | On the Mess only (0, 2), a gold ring and core glyph (#812). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |
-| Lift | The deck above or below. The marble arrives on that deck's lift back. Its glyph holds a near-black arrow up or down the map, toward its deck, with a bar across while it is locked (3:1 on the lit cell, as a target arrow) |
+| Medal room | On the Mess only (0, 2), a gold medal prop (#812, #1249). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |
+| Lift | The deck above or below. The marble arrives on that deck's lift back. Its prop holds a near-black arrow up or down the map, toward its deck, with a bar across while it is locked (3:1 on the lit cell, as a target arrow) |
 | BR lobby | Shown closed until battle royale ships (Phase 4): a bar across its glyph, the HUD says closed, the marble may stand on it. Every deck has one |
 
 Layout, the same on every deck so it is learned once: the centre and its 6 neighbours are floor,
@@ -929,8 +951,10 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Turn it against the boss** (owner design rule): charge your own marbles to break its lines
   with fewer marbles; push a boss marble that sits at 3 charges back onto the core so it
   overloads; crowd the boss into the busiest wedge in P3. The boss search plays the weighted
-  rule and the hooks of both sides (budget 3000 nodes, the Hull's).
-- **Calibrate** (#1229: the pro ladder player at 10x wins 18 of 20, 8 of 20 at 1x, see
+  rule and the hooks of both sides (budget 3000 nodes, the Hull's), follows the phase it reaches
+  inside its tree, and values charges (own minus yours, 30 centi-marbles each, #915), so it fights for
+  the energy cells.
+- **Calibrate** (#1229, #915: the pro ladder player at 10x wins 17 of 20, 8 of 20 at 1x, see
   `boss-balance.md`): knobs = charge per turn, overload at 4, phase ejections (1, 2), the wedge rhythm
   (4 turns), AI depth. Fail if most fights end with no overload.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
@@ -1027,6 +1051,18 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   ```
 
   South room: player `(-5..-2, 7)` and `(-4..-1, 6)`, boss `(-1, 1)`, `(0, 1)`, `(-2..0, 2)`.
+- **Turns** (owner, #992): until the bridge, the rooms are **played in turn, by pairs of plies**:
+  you in the **south** room, the boss in the south room, you in the **north** room, the boss in the
+  north room, and so on. The south room starts. A move of that ply lies **wholly inside its room**:
+  its marbles, and a push stays inside it (the void is still an ejection). The engine lists only
+  those moves and refuses a move in the other room (`GameError::OtherRoom`).
+  - **No legal move in its room**: the side to move plays in the other room for that ply; the
+    order then goes on as if it had played in its room.
+  - **Returns**: a return landing in the other room does not change the order.
+  - **After the bridge** (P3): both sides move freely on the joined board; the order stops at the
+    end of the move that raises it.
+  - The order is the plies played modulo 4 (`Dual::turn`), on the board and in the position hash,
+    so it is the same for every peer.
 - **Mirror**: the cell symmetric to `(q, r)` across the void is `(q + r, -r)`, both ways. Each row
   keeps its distance to the void (the facing edge maps to the facing edge, the far side to the far
   side) and its place across the screen.
@@ -1048,20 +1084,23 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Win and loss** (lead): **every ejection counts**, even when the marble comes back: win at 6,
   lose at 6. A return is not an ejection and credits nothing.
 - **Deterministic, for P2P**: every random pick is splitmix64 of the fight seed and the ply. The
-  bridge, the counted ejections, the marble just ejected and the announced return live on the board
-  and in the position hash. No `Math.random`, no clock.
+  bridge, the counted ejections, the marble just ejected, the announced return and the room in turn
+  live on the board and in the position hash. No `Math.random`, no clock.
 - **Tell**: the announce mark on the landing cell (the colour of the coming marble) during the
-  ply before it lands; the HUD line says where it lands, and that the bridge comes at 5.
+  ply before it lands; the HUD line says where it lands, and that the bridge comes at 5. The room
+  out of turn is dimmed until the bridge, and a click on one of its marbles is refused with the
+  reason ("the south room plays this turn").
 - **Look**: the two rooms under one camera, the void a dark gap, the bridge's 5 cells coming down into
   the gap at P3, the returning marble dropping in on its mark. Reduced motion: no animation, the
   bridge and the marble appear.
 - **Turn it against the boss** (owner design rule): the boss starts near the void, so push its
   marbles into the void; an ejected boss marble lands on the mirror of the cell you push it off
-  from, so pick that cell to drop it into a trap in the other room (onto the rim in front of your
-  line); keep the mirror of your own exposed rim cells covered; in P2 the return goes to the
-  emptier room, so thin out the room you want it out of. The boss search plays the void, the
-  returns of both sides and the bridge (every ply of its tree goes through the hook, seed 0 for
-  the P2 draw).
+  from, at the end of the boss's reply, in the room you play next: pick that cell to drop it onto
+  the rim in front of your line and push it off again before the boss moves there; keep the mirror
+  of your own exposed rim cells covered, a marble of yours the boss ejects lands just before its
+  move in the other room; in P2 the return goes to the emptier room, so thin out the room you want
+  it out of. The boss search plays the void, the returns of both sides, the order of the rooms and
+  the bridge (every ply of its tree goes through the hook, seed 0 for the P2 draw).
 - **The Ballast Mind** (owner rule, section 7.5): not borrowed. A return needs a second room and
   spans two plies (ejected, then back one ply later): it is not a one-shot hook on the Ballast
   board, which has one room.

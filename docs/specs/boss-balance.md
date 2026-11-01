@@ -868,6 +868,30 @@ Reply time (release build, native, the turtle's 10 fights, 237 boss replies, the
 cores, ms): 82 average, 135 at the 95th percentile, 182 at most (1500 nodes). Before the rule, on
 another run: 232 / 446 / 600. The Dual Room measured 228 / 312 / 383 at 3000 nodes.
 
+### The Dual Room: the rooms are played in turn, 18 of 20 at 10x, not tuned (#992)
+
+**Change.** Until the bridge the rooms are played in turn by pairs of plies, the south room first
+(game-design.md section 7.15): the legal moves are those of the room in turn, or of the other room
+when it has none. The boss search and the ladder player read the order in their trees (`dual_step`
+counts it). No knob changed; `engine_version` 23. Gate (#992): the pro at 10x wins 14 to 18 of 20,
+the 1x player fewer. 20 seeds, 300 plies at most.
+
+| Player budget | Before wins /20 | Before P3 /20 | Before median plies | After wins /20 | After P3 /20 | After median plies | Deaths after |
+|---|---|---|---|---|---|---|---|
+| 30000 (10x) | 15 | 20 | 64 | **18** | 20 | 49 | draw 2 |
+| 3000 (1x) | 5 | 15 | 163.5 | 17 | 20 | 70 | draw 3 |
+
+Result: 18 of 20 at 10x, **inside the 14 to 18 target**, and 17 of 20 at 1x, below it: no tuning
+tried. The rule helps the player: after its move the boss answers in the same room, then the
+player moves first in the other one, so a boss marble it ejects lands in the room it plays next,
+before the boss moves there. The 1x player gains the most (5 to 17 of 20): the fights end long
+before the draw cap.
+
+Command: `LADDER_SEEDS=20 LADDER_X=<1|10> cargo run --release --example ladder -- dual`. The fixtures
+are recorded again: `dual-ladder.txt` (seed 0 of the 10x run) and `dual.txt` (fight seed 1, the
+`dual_step` player at 4000 nodes against the boss at 90 nodes, cut at the ply that raises the
+bridge).
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
@@ -883,7 +907,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | choir | 0 | 15000 | 93 |
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
 | chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753, recorded again for #810) | 44 |
-| dual-ladder | 0 | 30000 (10x, the ladder pro player, #982; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 51 |
+| dual-ladder | 0 | 30000 (10x, the ladder pro player, #982, recorded again for #992; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 39 |
 | swarm | 0 | 15000 (10x, the ladder pro player, #795, recorded again for the 2-ejection win) | 60 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
@@ -1438,3 +1462,32 @@ budget (3000) and the weighted rule are unchanged. `engine_version` 22. The fixt
 client harness and `client/e2e/unstable.spec.ts` are the 17-ply fight (overloads on plies 8 and 10, the core
 collapses on ply 11, the shockwave is announced on ply 15 and hits on ply 17). No text of the client or of the
 MCP changed (they read the engine's tell), so no new screenshot.
+
+### The Unstable Core's search follows its phase in the tree and values charges (#915), not tuned
+
+`unstable_search` took `enc.phase()` once at the root; the step now takes the phase of each ply from
+`Encounter::phase_after` (#913): the player's ejections at the root plus the boss marbles missing from the tree board,
+never below the root phase, read on the board at the start of the ply as `Encounter::play` does (unit test
+`the_tree_phase_follows_the_boss_marbles_gone_in_the_tree`). `Weights` gains `charges`: the charges on the side's
+marbles minus the foe's (`Board::unstable`, a charge on an empty cell counts for nobody), `UNSTABLE_CHARGE_WEIGHT` 30
+centi-marbles (TUNE, first value tried, not tuned). Every other weight set has `charges: 0` (a unit test checks all
+of them), so the other bosses play bit for bit the same. The term is symmetric (own minus foe's), and
+`unstable_search` serves the boss and the ladder pro alike, so the pro fights for charges too, as a real player
+reading the pips would. Where it changes a move: `the_boss_steps_onto_the_core_to_charge_where_the_plain_weights_do_not`
+(the plain weights shuffle a far marble, the boss steps onto (1, 0)). Not changed: rules, overload, phases, shock
+rhythm, `UNSTABLE_NODE_BUDGET` (3000), `engine_version`.
+
+Ladder, `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- unstable`, seeds 0 to 19, 300 plies at
+most, one run at a time:
+
+| Player | Before (#1229) | After |
+|---|---|---|
+| 1x (3000) | `8/20 \| 106 \| 2 \| rim_ejection 10, draw 2` | `8/20 \| 106 \| 2 \| push 2, rim_ejection 5, draw 5` |
+| 10x (30000) | `18/20 \| 79 \| 2 \| draw 2` | `17/20 \| 113.5 \| 2 \| draw 3` |
+
+Still inside the 14 to 18 of 20 band at 10x, 1x well below: no further tuning, as the issue says.
+
+Reply time through wasm (nodejs release build, `core`, 6 seeds of 80 plies at most, the player plays its auto-play move,
+boss replies only, ms, average / max): 198 to 203 / 386 to 400 after (54 replies), 169 to 174 / 294 to 329 before (60
+replies), two runs each. The fights differ after the first changed reply, so the positions are not the same: about 15
+to 20 % slower, the maximum stays under 400 ms.

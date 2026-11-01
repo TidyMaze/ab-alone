@@ -21,6 +21,7 @@ import {
 } from './board';
 import { extendPath, releaseDir } from './drag';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
+import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
 import { hasMedal } from './medals';
@@ -143,8 +144,11 @@ import {
   bridgeAt,
   dropAt,
   dualText,
+  otherRoom,
+  outOfTurn,
   parseDual,
   parseReturn,
+  roomTurn,
   type DualState,
 } from './dual';
 import { SWARM_TURNS, evacAt, parseSwarm, swarmText, type SwarmState } from './swarm';
@@ -261,6 +265,7 @@ import { bestTurns, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, 
 import { loadProgress, recordWin, saveProgress } from './progress';
 import { roomAt, type Spot as HubSpot } from './hub';
 import { HubController } from './controller';
+import { labelsHtml, pipsHtml, railHtml } from './hubview';
 import { indexedDbStore } from './idb';
 import { LocalSaves, type LocalGame } from './savegame';
 import { engineAt, replayKey, replayLabel, stepPly, type ReplayStep } from './replay';
@@ -344,12 +349,14 @@ const closeGoal = (): void => {
   hud();
 };
 let fight: { id: string; seed: number; daily?: { day: string; attempt: number } } | null = null;
+let hub: HubController | null = null;
 const activeRadius = (): number => (fight?.id === 'ballast' ? 5 : 4);
 // The view a fight opens on: the whole board of its radius (#573), drawn back in a Pulsar fight until every pulsar and
 // its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 const fightView = (): View => {
+  if (hub) return resetView(innerWidth < innerHeight ? 2.4 : 3); // the hub's deck plan (#1249): its 19 cells and their plates, closer than a board, closer still upright
   if (fight?.id === 'pulsar') return fitView(resetView(), PULSAR_BOUNDS, innerWidth, innerHeight);
   if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
   return resetView(activeRadius());
@@ -600,6 +607,14 @@ function applyView(): void {
   }
   sceneRenderer.fogRadius = fogRadius;
   sceneRenderer.applyView(view, reading, { tier, clear, deck, consoleDef });
+  placeHubLabels();
+}
+// The hub's deck plan (#1249): the label plates over the rooms, the lift-shaft rail and the boss pips, shown in the hub only.
+const hubPlan = document.getElementById('hub-plan')!;
+const hubLabels = document.getElementById('hub-labels')!;
+/** Puts the plates back on their cells: the camera moved, or they were drawn again. */
+function placeHubLabels(): void {
+  hub?.placeLabels(hubLabels, (q, r) => sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight));
 }
 
 const freeCam = new FreeCameraController();
@@ -1701,6 +1716,11 @@ const markGeometry = new THREE.RingGeometry(0.3, 0.42, 32).rotateX(-Math.PI / 2)
 const markMaterials = [RIM_LIGHT.glass, RIM_LIGHT.shell].map(
   (color) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }),
 );
+// The room out of turn under a dark veil until the bridge (#992), one draw call.
+const roomDim = Object.assign(
+  new THREE.InstancedMesh(crackGeometry, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6, depthWrite: false }), 37),
+  { name: 'dual-dim' },
+);
 let dualShown: DualState | null = null; // the bridge and the announced return of the last refresh
 let lowering: { start: number } | null = null; // the bridge coming down
 let bridgeY = 0; // the bridge cells' height over their place
@@ -2109,7 +2129,6 @@ function applyPalette(): void {
 applyPalette();
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyPalette); // System theme follows the OS (#923)
 let hover: Axial | null = null;
-let hub: HubController | null = null;
 let roomOf: HubSpot | null = null; // the hub room that started the game, for Back to the ship (#522)
 let lairFrom: { seed: number; lair: number } | null = null; // the Open world lair that started the fight, for Back to the Open world (#1170)
 const backButton = document.getElementById('ship-back') as HTMLButtonElement;
@@ -2770,6 +2789,15 @@ function drawDual(state: DualState | null): void {
   placeBridge(lowering ? bridgeAt(performance.now() - lowering.start, false).y : 0);
   if (state) document.body.dataset.bridge = state.bridged ? (lowering ? 'lowering' : 'up') : 'void'; // read by the e2e tests
   else delete document.body.dataset.bridge;
+  const dim = otherRoom(state);
+  dim.forEach(([q, r], k) => {
+    const p = axialTo3D(q, r);
+    roomDim.setMatrixAt(k, new THREE.Matrix4().makeTranslation(p.x, 0.004, p.z)); // on the disc's top face, as the Stalker's veil
+  });
+  roomDim.instanceMatrix.needsUpdate = true;
+  if (dim.length > 0) marbles.add(roomDim);
+  if (state?.room != null) document.body.dataset.dualRoom = state.room === 0 ? 'south' : 'north'; // read by the e2e tests
+  else delete document.body.dataset.dualRoom;
   if (!state?.coming) return;
   const p = axialTo3D(...state.coming.cell);
   const mark = Object.assign(new THREE.Mesh(markGeometry, markMaterials[state.coming.side === glassOf() ? 0 : 1]), { name: 'return-mark' });
@@ -3233,7 +3261,12 @@ function refresh(): void {
   syncAuto();
   if (hub || royale) drawDual(null); // no fight, no void (#947)
   if (hub) {
-    hub.draw(sceneRenderer, discs, sfx, loadProgress(store).beaten, marbleMesh(glassOf()), drawFrame, lightRim);
+    const { beaten } = loadProgress(store);
+    hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim);
+    hubLabels.innerHTML = labelsHtml(hub.at, beaten);
+    document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten);
+    document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten);
+    placeHubLabels();
     hud();
     return;
   }
@@ -3804,6 +3837,11 @@ function click(q: number, r: number): void {
   if (armed) return placeAt(q, r); // only during a placement
   if (blocked(() => click(q, r))) return;
   const side = engine.board()[cellIndex(q, r)];
+  if (side === engine.to_move() && outOfTurn(dualShown, [q, r])) {
+    // The Dual Room (#992): the marbles of the room out of turn are not this turn's.
+    cue(document.body, 'refused', MOTION.fast);
+    return hud(` · ${roomTurn(dualShown!.room!)}`);
+  }
   if (side === engine.to_move()) {
     selected = toggleSelection(selected, [q, r]);
     keyDir = -1;
@@ -4005,7 +4043,53 @@ canvas.addEventListener('keydown', (e) => {
     else selected = [];
   } else return;
   refresh();
-  hud(` · ${announce(moves, selected, keyDir)}`);
+  hud(` · ${announce(moves, selected, keyDir, padInUse)}`);
+});
+// The gamepad (#1252): its buttons press the keyboard's keys on the focused control, so the pad takes the keyboard's
+// paths. A Tab no one took, or the D-pad off the board, walks the focus. The first press shows the pad's hints and focus
+// rings (body[data-pad]); a real key or a mouse move gives the keyboard's back.
+let padInUse = false;
+let padKeys = false; // a key the pad presses
+function padKey(key: string, shiftKey = false): boolean {
+  padKeys = true;
+  const kept = document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+  padKeys = false;
+  return kept;
+}
+const keysBack = (): void => {
+  padInUse = false;
+  delete document.body.dataset.pad;
+};
+addEventListener('keydown', () => padKeys || keysBack(), { capture: true });
+addEventListener('mousemove', keysBack);
+const padKeyOf = (dir: number): string => Object.keys(KEY_DIRS).find((k) => KEY_DIRS[k] === dir)!;
+const pollPad = gamepad((action: PadAction) => {
+  padInUse = true;
+  document.body.dataset.pad = '';
+  const focused = document.activeElement as HTMLElement;
+  switch (action.kind) {
+    case 'confirm':
+      if (padKey('Enter') && focused !== canvas) focused.click(); // a button, a toggle
+      return;
+    case 'back':
+      return void padKey('Escape');
+    case 'menu':
+      cog.click();
+      return cog.focus();
+    case 'prev':
+    case 'next':
+      if (padKey('Tab', action.kind === 'prev')) nextFocus(focused, action.kind === 'prev' ? -1 : 1).focus();
+      return;
+    case 'move':
+      if (focused === canvas) return void padKey(padKeyOf(action.hex));
+      return nextFocus(focused, action.step).focus();
+    case 'orbit':
+      view = orbit(view, action.dx, action.dy);
+      return applyView();
+    default:
+      view = zoom(view, action.scale);
+      return applyView();
+  }
 });
 canvas.addEventListener('pointerleave', () => {
   if (hub && hub.onPointerLeave()) {
@@ -4509,6 +4593,9 @@ function enterHub(at: HubSpot): void {
   roomOf = null;
   hub = new HubController(at);
   hub.enter(at);
+  hubPlan.hidden = false;
+  view = fitted = fightView(); // the deck plan, framed closer (#1249)
+  applyView();
   evalBar.hidden = hintButton.hidden = exportButton.hidden = importButton.hidden = true; // no game on in the hub: a new game shows them again (#583, #589)
   analyst.stop();
   applyDeck(at.deck);
@@ -4558,8 +4645,12 @@ backButton.addEventListener('click', () => {
   enterHub(roomOf!);
 });
 function leaveHub(): void {
-  hub?.exit();
+  if (!hub) return;
+  hub.exit();
   hub = null;
+  hubPlan.hidden = true;
+  view = fitted = resetView(4); // a board again, as at the start: the game started from the hub frames its own (#1249)
+  applyView();
 }
 addEventListener('keydown', (e) => {
   // An open terminal reader pages by them, a text field moves its caret.
@@ -5665,6 +5756,7 @@ function moving(): boolean {
 }
 
 renderer.setAnimationLoop((now) => {
+  pollPad(now); // the gamepad, read once per frame (#1252)
   lastDraw = timeDraw(lastDraw, now);
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {

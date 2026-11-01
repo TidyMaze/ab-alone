@@ -35,6 +35,8 @@ pub enum GameError {
     Move(MoveError),
     /// A hidden marble blocks the move (The Stalker): nothing changed, the marble is revealed.
     Hidden,
+    /// The move is in the room out of turn (The Dual Room): nothing changed.
+    OtherRoom,
 }
 
 /// A move played, with the hash of the position it produced.
@@ -839,6 +841,16 @@ mod tests {
         assert_ne!(
             position_hash(&coming, Player::Black),
             position_hash(&walled, Player::Black)
+        );
+        let mut north = walled.clone();
+        north.set_dual(Some(Dual {
+            turn: 2,
+            ..Dual::default()
+        }));
+        assert_ne!(
+            position_hash(&north, Player::Black),
+            position_hash(&walled, Player::Black),
+            "the room in turn"
         );
     }
 

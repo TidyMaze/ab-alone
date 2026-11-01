@@ -55,4 +55,11 @@ describe('keyboard play', () => {
     expect(announce(moves, [[0, 0]], 5)).toBe('group 1 of 3, 1 marble, south-east, Enter to play');
     expect(announce(moves, [[0, 0]], 4)).toBe('group 1 of 3, 1 marble, no move north-west');
   });
+
+  it('with a gamepad in use, the hints name its buttons (#1252)', () => {
+    expect(announce(moves, [], -1, true)).toBe('no group selected, RB for a group');
+    expect(announce(moves, [[0, 0]], -1, true)).toBe('group 1 of 3, 1 marble, stick to aim, LB RB to switch');
+    expect(announce(moves, [[0, 0]], 5, true)).toBe('group 1 of 3, 1 marble, south-east, A to play, B to back out');
+    expect(announce(moves, [[0, 0]], 4, true)).toBe('group 1 of 3, 1 marble, no move north-west');
+  });
 });

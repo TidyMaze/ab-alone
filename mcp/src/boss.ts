@@ -22,7 +22,8 @@ export interface BossLike {
   charges(): Int32Array;
   /** `[core, collapsing, wedge, shock_in]` of The Unstable Core's next events, `-1` for none; empty otherwise. */
   unstable(): Int32Array;
-  /** `[bridged, side, q, r]` of The Dual Room's bridge and announced return, side `0` when none; empty otherwise. */
+  /** `[bridged, side, q, r, room]` of The Dual Room's bridge, announced return and room to play (`0` south, `1` north,
+   * `-1` once the bridge is up), side `0` when none; empty otherwise. */
   dual(): Int32Array;
   /** `[pulsar, player_turns_left, force]` of The Pulsar's next pulse, force `0` for infinite; empty otherwise. */
   pulsar(): Int32Array;
@@ -78,6 +79,8 @@ const RESULTS: BossResult[] = ['playing', 'won', 'lost'];
 const DIRECTIONS = ['E', 'W', 'NE', 'SW', 'NW', 'SE'];
 /** Army codes of the Choir, the order of its cycle. */
 const ARMIES = ['Alto', 'Tenor', 'Bass'];
+/** The Dual Room's rooms, south then north (#992). */
+const ROOMS = ['south room (r >= 1)', 'north room (r <= -1)'];
 const BORROWED = ["the Hull's crack", "the Pulsar's pulse", "the Magnetizer's polarity", "the Chaplain's conversion check", "the Swarm's wave"];
 
 export function resultName(code: number): BossResult {
@@ -177,15 +180,17 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   if (shockIn !== undefined && shockIn >= 0) {
     return { kind: 'core', cells: [], text: `a shockwave hits the busiest wedge after ${shockIn} of your turns` };
   }
-  const [bridged, side, q, r] = Array.from(boss.dual());
+  const [bridged, side, q, r, room] = Array.from(boss.dual());
+  // The rooms are played in turn until the bridge (#992): the legal moves are those of that room.
+  const turn = room! >= 0 ? `; this move is played in the ${ROOMS[room!]}, the rooms take turns by pairs of moves until the bridge` : '';
   if (side) {
     const who = side === 1 ? 'one of your marbles' : 'a boss marble';
-    return { kind: 'return', cells: [cell([q!, r!])], text: `${who} comes back on ${cell([q!, r!])} at the end of the next move` };
+    return { kind: 'return', cells: [cell([q!, r!])], text: `${who} comes back on ${cell([q!, r!])} at the end of the next move${turn}` };
   }
   if (bridged !== undefined) {
     const text = bridged
       ? 'the bridge is up: ejected marbles are gone'
-      : 'a marble ejected over the rim or into the void comes back in the other room one turn later; a bridge fills the void at 5 ejections';
+      : `a marble ejected over the rim or into the void comes back in the other room one turn later; a bridge fills the void at 5 ejections${turn}`;
     return { kind: 'bridge', cells: [], text };
   }
   const turns = boss.turns_left();

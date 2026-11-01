@@ -36,6 +36,7 @@ pub const SWARM_WEIGHTS: Weights = Weights {
     cohesion: 2,
     threat: 0,
     egg: 0,
+    charges: 0,
 };
 
 /// Distance between two cells, in steps.
