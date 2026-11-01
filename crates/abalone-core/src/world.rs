@@ -674,9 +674,9 @@ pub fn walk_path(
     broken: &[(i32, i32)],
     blocked: &[(i32, i32)],
 ) -> Vec<(i32, i32)> {
-    let mut chunks = HashMap::new();
+    let chunks = HashMap::new();
     let reach = (PATH_RADIUS, PATH_EXPANSIONS);
-    path_over(&mut chunks, &mut 0, seed, from, to, reach, broken, blocked)
+    path_over(&mut (chunks, 0), seed, from, to, reach, broken, blocked)
 }
 
 /// The reach of the walk to a tower (the Dungeon button): a lair stands 150 to 420 cells from the spawn.
@@ -700,32 +700,24 @@ pub fn dungeon_walk(
 ) -> Option<(usize, Vec<(i32, i32)>)> {
     let mut order: Vec<usize> = (0..lairs.len()).collect();
     order.sort_by_key(|&k| (beaten.contains(&k), hex_distance(from, lairs[k]), k));
-    let mut chunks = HashMap::new(); // shared by the searches: the world is made once
-    let mut looks = 0;
+    let mut seen = (HashMap::new(), 0); // the world made and the cells looked at, shared by the searches
     order.into_iter().find_map(|k| {
-        if looks >= DUNGEON_LOOKS {
+        if seen.1 >= DUNGEON_LOOKS {
             return None;
         }
         let open: Vec<(i32, i32)> = blocked.iter().copied().filter(|&c| c != lairs[k]).collect();
         let reach = (DUNGEON_RADIUS, DUNGEON_EXPANSIONS);
-        let path = path_over(
-            &mut chunks,
-            &mut looks,
-            seed,
-            from,
-            lairs[k],
-            reach,
-            broken,
-            &open,
-        );
+        let path = path_over(&mut seen, seed, from, lairs[k], reach, broken, &open);
         (!path.is_empty()).then_some((k, path))
     })
 }
 
+/// The chunks made and the cells looked at, shared by the searches of one press.
+type Seen = (HashMap<(i32, i32), Option<Vec<Cell>>>, usize);
+
 /// `walk_path` with its reach `(radius, expansions)`.
 fn path_over(
-    chunks: &mut HashMap<(i32, i32), Option<Vec<Cell>>>,
-    looks: &mut usize,
+    (chunks, looks): &mut Seen,
     seed: u64,
     from: (i32, i32),
     to: (i32, i32),

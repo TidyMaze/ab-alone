@@ -9,7 +9,8 @@ import { createCanvasTexture, drawHollowMoon } from './roomart';
 
 export interface PbrMaterialSet {
   albedo: THREE.Texture;
-  normal: THREE.Texture;
+  /** Absent on the low tier (#849): no normal map is fetched. */
+  normal?: THREE.Texture;
   roughness: THREE.Texture;
   /** Absent when the scale is 0: a map that moves nothing is not fetched (#925). */
   displacement?: THREE.Texture;
@@ -51,12 +52,13 @@ export async function loadPbrMaterial(
   displacementScale = 0.05,
   repeat = 4,
   extras: readonly ExtraMap[] = [],
+  normals = true,
 ): Promise<PbrMaterialSet | null> {
   try {
     const [[albedo, normal, roughness], displacement, more] = await Promise.all([
       Promise.all([
         loader.loadAsync(`${basePath}${prefix}-albedo.ktx2`),
-        loader.loadAsync(`${basePath}${prefix}-normal.ktx2`),
+        normals ? loader.loadAsync(`${basePath}${prefix}-normal.ktx2`) : undefined,
         loader.loadAsync(`${basePath}${prefix}-roughness.ktx2`),
       ]),
       displacementScale === 0 ? undefined : loader.loadAsync(`${basePath}${prefix}-displacement.ktx2`),
@@ -64,7 +66,7 @@ export async function loadPbrMaterial(
     ]);
 
     albedo.colorSpace = THREE.SRGBColorSpace;
-    for (const map of [albedo, normal, roughness, ...(displacement ? [displacement] : []), ...more]) configureTiling(map, repeat);
+    for (const map of [albedo, ...(normal ? [normal] : []), roughness, ...(displacement ? [displacement] : []), ...more]) configureTiling(map, repeat);
 
     return { albedo, normal, roughness, displacement, displacementScale, ...Object.fromEntries(extras.map((name, i) => [name, more[i]])) };
   } catch {
@@ -76,7 +78,7 @@ export async function loadPbrMaterial(
 export function createPbrStandardMaterial(pbr: PbrMaterialSet): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     map: pbr.albedo,
-    normalMap: pbr.normal,
+    ...(pbr.normal ? { normalMap: pbr.normal } : {}),
     roughnessMap: pbr.roughness,
     ...(pbr.displacement ? { displacementMap: pbr.displacement, displacementScale: pbr.displacementScale } : {}),
     ...(pbr.ao ? { aoMap: pbr.ao } : {}),
@@ -100,14 +102,15 @@ export async function loadSpaceshipBay(
   basePath = '/assets/pbr/',
   gltfLoader = meshoptLoader(),
   texLoader: TextureSource,
+  normals = true,
 ): Promise<SpaceshipBayAssets | null> {
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([
       gltfLoader.loadAsync(`${basePath}spaceship-bay.glb`),
       // What each source ships: Tiles072 an AO, blue_metal_plate an AO (its metalness is 0), Metal009 a metalness. None has an emission.
-      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.2, ['ao']),
-      loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1, ['ao']),
-      loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1, ['metalness']),
+      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.2, ['ao'], normals),
+      loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1, ['ao'], normals),
+      loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1, ['metalness'], normals),
     ]);
 
     const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x333b42, roughness: 0.8 });

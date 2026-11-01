@@ -48,6 +48,23 @@ describe('toolResult', () => {
   });
 });
 
+describe('the Open world tools', () => {
+  test('start a world, read it, step and walk, with errors as tool errors', async () => {
+    await connect();
+    expect((await call('world_state')).isError).toBe(true);
+    const started = JSON.parse((await call('new_world', { seed: 3 })).text);
+    expect(started.hero).toBe('(0,0)');
+    expect(started.window.radius).toBe(3);
+    expect(JSON.parse((await call('world_state', { radius: 5 })).text).window.radius).toBe(5);
+    expect(JSON.parse((await call('world_step', { direction: 'E' })).text).state.hero).toBe('(1,0)');
+    expect(JSON.parse((await call('world_walk', { q: 4, r: 0 })).text).steps).toBe(3);
+    const refused = await call('world_walk', { q: 4, r: 0 });
+    expect(refused.isError).toBe(true);
+    expect(JSON.parse(refused.text).code).toBe('no_path');
+    expect((await call('world_step', { direction: 'UP' })).isError).toBe(true);
+  });
+});
+
 describe('the MCP server', () => {
   test('lists the tools of a local game and of an online room, with their input schemas', async () => {
     const { tools } = await (await connect()).listTools();
@@ -60,6 +77,10 @@ describe('the MCP server', () => {
       'create_room',
       'join_room',
       'wait_for_opponent_move',
+      'new_world',
+      'world_state',
+      'world_step',
+      'world_walk',
     ]);
     for (const tool of tools) expect(tool.description).toBeTruthy();
     const schema = (name: string) => tools.find((tool) => tool.name === name)!.inputSchema;

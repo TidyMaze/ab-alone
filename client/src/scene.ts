@@ -42,6 +42,8 @@ export interface SceneRendererOptions {
   rimNormal?: THREE.Texture | null;
   /** The Fluent x Material look (#1138, look.ts): the plate and the rim are flat tonal materials. */
   tonal?: boolean;
+  /** False on the low tier (#849, quality.ts hasBloom): no bloom pass. */
+  bloom?: boolean;
 }
 
 export interface ViewContext {
@@ -60,11 +62,19 @@ export function createBloomPipeline(
   camera: THREE.PerspectiveCamera,
   smooth = false,
   blurEvery = 2,
-): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> }) | null {
+  withBloom = true,
+): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> | null }) | null {
   try {
+    // The low tier (#849) draws no bloom: the scene goes straight to the screen, or through FXAA alone.
+    if (!withBloom && !smooth) return null;
     const pipeline = new THREE.RenderPipeline(renderer);
     const scenePass = pass(scene, camera);
     const colorNode = scenePass.getTextureNode('output');
+    if (!withBloom) {
+      pipeline.outputColorTransform = false;
+      pipeline.outputNode = fxaa(renderOutput(colorNode));
+      return Object.assign(pipeline, { bloom: null });
+    }
     const bloomNode = bloom(colorNode, 0.175, 0.15, 1);
     bloomNode.setResolutionScale(0.25); // a soft glow: a quarter of the resolution is enough (#781, #844)
     const blur = bloomNode.updateBefore.bind(bloomNode);
@@ -266,7 +276,7 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0), webdriver ? 1 : 2);
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0), webdriver ? 1 : 2, options.bloom ?? true);
   }
 
   async init(): Promise<void> {
@@ -281,8 +291,8 @@ export class SceneRenderer {
     this.particlePositions[i * 3 + 2] = Math.sin(angle) * radius;
   }
 
-  frameCamera(width: number, height: number): void {
-    const { fov, shift } = framing(width, height);
+  frameCamera(width: number, height: number, folded = false): void {
+    const { fov, shift } = framing(width, height, folded);
     this.camera.aspect = width / height;
     this.camera.fov = fov;
     this.camera.setViewOffset(width, height, 0, -shift, width, height);

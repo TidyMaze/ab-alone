@@ -191,6 +191,11 @@ describe('the focus step', () => {
     expect(nextFocus($('a'), -1)).toBe($('f'));
     expect(nextFocus(null, 1)).toBe($('a'));
     expect(nextFocus(null, -1)).toBe($('f'));
+    const root = document.createElement('div'); // a dialog keeps the focus in it (#1293)
+    root.innerHTML = '<button id="g">g</button><button id="h">h</button>';
+    document.body.append(root);
+    expect(nextFocus($('h'), 1, root)).toBe($('g'));
+    expect(nextFocus($('a'), -1, root)).toBe($('h'));
     document.body.innerHTML = '';
     expect(nextFocus(document.body, 1)).toBe(document.body);
   });

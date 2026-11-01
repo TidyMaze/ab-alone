@@ -580,7 +580,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
 
 /* The plates are bolted on the frame (ui.md 1): a rivet in each corner, 4 px inside the border, drawn over the
    plate's own colour, so it takes no room and changes no size. */
-#hud, #eval {
+#hud, #eval, #guide .card {
   --rivet: radial-gradient(circle, var(--edge) 2px, transparent 2.5px);
   background-image: var(--rivet), var(--rivet), var(--rivet), var(--rivet);
   background-position: left 4px top 4px, right 4px top 4px, left 4px bottom 4px, right 4px bottom 4px;
@@ -821,7 +821,11 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #joystick { position: fixed; z-index: 1; width: 96px; height: 96px; margin: -48px 0 0 -48px; box-sizing: border-box; border: 5px solid #8a949c; border-radius: 50%; background: rgba(22, 26, 29, 0.25); box-shadow: 0 0 0 1px #2a3034, inset 0 0 0 1px #2a3034; opacity: 0.9; pointer-events: none; }
 #joystick[hidden] { display: none; }
 #joystick-knob { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: var(--accent); }
-body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group, #support) { display: none !important; }
+/* The Open world opens over the page (#1063): nothing of the game beneath shows over it, its boss bar, its notes and its end
+   light included (#1275). */
+body[data-openworld] :is(#hud-dock, #eval, #log, #replay-bar, #online .group, #support, #boss-bar, #auto-reason) { display: none !important; }
+body[data-openworld] canvas { filter: none; }
+body[data-openworld]::before { display: none; }
 
 /* The thumb dock (#1032, docs/specs/thumb-dock.md): the main controls at the bottom of the window, one row of 44 px
    buttons on a phone held upright, a right-hand column held sideways, a centred bar on a desktop. The buttons are the
@@ -1097,6 +1101,43 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
   .hub-label .short { display: block; font-size: 0.6875rem; }
 }
 
+/* The first-launch guide (#1293, ui.md 4.7): a plate bolted over the dimmed game, one page at a time, its art on the dark
+   deck in both themes. The controls page shows the paragraph of the input in use: the mouse and keys, touch on a coarse
+   pointer, the pad's buttons once the pad is in use (body[data-pad]). Above every layer: it opens once the page is up. */
+#guide {
+  position: fixed; inset: 0; z-index: 11; display: flex; align-items: center; justify-content: center; padding: 16px;
+  box-sizing: border-box; background: rgba(11, 13, 15, 0.72); outline: none;
+}
+#guide[hidden] { display: none; }
+#guide .card {
+  box-sizing: border-box; width: min(calc(26rem * var(--ui-scale)), 100%); max-height: 100%; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space); padding: 1rem 1.25rem;
+  color: var(--text); background-color: var(--panel); border: 1px solid var(--edge); border-left: 3px solid var(--plate-accent);
+  border-radius: var(--r-card); box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); font: 1rem/1.45 var(--ui);
+}
+#guide-count { margin: 0; color: var(--muted); font: 600 0.75rem/1 var(--display); letter-spacing: 0.12em; }
+#guide-art svg { display: block; width: 100%; height: auto; animation: guide-in var(--motion-base) var(--ease-out); }
+@keyframes guide-in { from { opacity: 0; transform: translateX(8px); } }
+#guide-title { margin: 0; font: 600 1.375rem/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+#guide-text p { margin: 0; }
+#guide [data-controls] { display: none; }
+#guide [data-controls='mouse'] { display: block; }
+@media (pointer: coarse) {
+  #guide [data-controls='mouse'] { display: none; }
+  #guide [data-controls='touch'] { display: block; }
+}
+body[data-pad] #guide [data-controls] { display: none; }
+body[data-pad] #guide [data-controls='pad'] { display: block; }
+#guide .actions { display: flex; gap: var(--space); margin-top: var(--space); }
+#guide .actions button {
+  min-height: var(--target); padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel);
+  border: 1px solid var(--edge); border-radius: var(--r-button); font: 500 0.9375rem/1.2 var(--ui);
+}
+#guide-skip { margin-right: auto; }
+#guide #guide-next { color: var(--active-ink); background: var(--active-fill); border-color: var(--active-fill); }
+#guide .actions button:disabled { opacity: 0.4; cursor: default; }
+#guide .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* Screen transitions (#1099, docs/specs/motion.md story 9): entering or leaving the Open world cross-fades the canvas in on --motion-base. The
    rule that stops matching swaps the animation for the other keyframes (the same name would not restart), so each change replays the fade. Opacity only: nothing waits, the game takes input from the first frame.
    A game that is over (the loss dim, end-dim) keeps its own animation. Reduced motion: the tokens are 0ms, a hard cut. */
@@ -1111,3 +1152,4 @@ body:not([data-openworld], [data-over]) canvas { animation: screen-in var(--moti
    motion: the tokens are 0ms and the rule above cuts the animation, so both appear at once. */
 body[data-openworld] #openworld-hud { animation: sheet-in var(--motion-base) var(--ease-out); }
 #openworld-confirm:not([hidden]) { animation: sheet-in var(--motion-base) var(--ease-out); }
+

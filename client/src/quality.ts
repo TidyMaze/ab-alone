@@ -211,6 +211,12 @@ export function hasReflections(tier: Tier, automated: boolean): boolean {
   return !automated && tier === 'high';
 }
 
+// The costly passes of the main board room, dropped on the low tier (#849): the bloom's blur passes, and the normal maps
+// (a texture to fetch and a lookup in every lit pixel). The room's clearcoat is not listed: no material of the room sets one
+// (marbles.ts GLASS holds the numbers, nothing reads them), so there is none to drop. High is unchanged.
+export const hasBloom = (tier: Tier): boolean => tier === 'high';
+export const hasNormalMaps = (tier: Tier): boolean => tier === 'high';
+
 // Geometry detail per tier (#424): low tier reduces vertex count on the 61 discs and 28 marbles for mobile fill/vertex savings.
 export interface MeshDetail {
   discSegments: number;

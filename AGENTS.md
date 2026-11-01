@@ -21,7 +21,7 @@ The short version:
    Check player-facing changes in Chrome with Playwright. A PR that changes the UI MUST include a
    screenshot in its description (CONTRIBUTING 6.4).
 4. Every bug gets a `bug` issue before any fix (clear name, exact steps to reproduce, screenshot or
-   visual proof, and expected behaviour once fixed). Bugs are picked before tasks.
+   visual proof, and expected behaviour once fixed).
    Every new feature or improvement must be formulated as a User Story ("As [role] I can [action] because [reason]")
    with proper description, context, and expected outcome.
 5. This repo is public: never commit or print a secret.
@@ -59,5 +59,8 @@ The short version:
 15. Small and simple PRs (KISS), but each one brings something the user can test: no micro PR without a
     visible change. Plumbing (tokens, helpers, a core without its UI) goes into the first feature that
     uses it; a feature is split by what a player can try, not by layer (owner, 2026-10-31).
+16. Tickets are taken by priority, mainly FIFO, from importance and age (owner, 2026-11-01): `P0` and
+    a red `main` first, then the oldest issue. A bug or a `P1` counts as 3 days older, a `P3` as 3
+    days younger. Skipping one needs a comment saying why (CONTRIBUTING 6.3).
 
 Setup, checks and e2e commands: [CONTRIBUTING.md section 13](CONTRIBUTING.md#13-local-setup-and-checks).
