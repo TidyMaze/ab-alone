@@ -1438,3 +1438,32 @@ budget (3000) and the weighted rule are unchanged. `engine_version` 22. The fixt
 client harness and `client/e2e/unstable.spec.ts` are the 17-ply fight (overloads on plies 8 and 10, the core
 collapses on ply 11, the shockwave is announced on ply 15 and hits on ply 17). No text of the client or of the
 MCP changed (they read the engine's tell), so no new screenshot.
+
+### The Unstable Core's search follows its phase in the tree and values charges (#915), not tuned
+
+`unstable_search` took `enc.phase()` once at the root; the step now takes the phase of each ply from
+`Encounter::phase_after` (#913): the player's ejections at the root plus the boss marbles missing from the tree board,
+never below the root phase, read on the board at the start of the ply as `Encounter::play` does (unit test
+`the_tree_phase_follows_the_boss_marbles_gone_in_the_tree`). `Weights` gains `charges`: the charges on the side's
+marbles minus the foe's (`Board::unstable`, a charge on an empty cell counts for nobody), `UNSTABLE_CHARGE_WEIGHT` 30
+centi-marbles (TUNE, first value tried, not tuned). Every other weight set has `charges: 0` (a unit test checks all
+of them), so the other bosses play bit for bit the same. The term is symmetric (own minus foe's), and
+`unstable_search` serves the boss and the ladder pro alike, so the pro fights for charges too, as a real player
+reading the pips would. Where it changes a move: `the_boss_steps_onto_the_core_to_charge_where_the_plain_weights_do_not`
+(the plain weights shuffle a far marble, the boss steps onto (1, 0)). Not changed: rules, overload, phases, shock
+rhythm, `UNSTABLE_NODE_BUDGET` (3000), `engine_version`.
+
+Ladder, `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- unstable`, seeds 0 to 19, 300 plies at
+most, one run at a time:
+
+| Player | Before (#1229) | After |
+|---|---|---|
+| 1x (3000) | `8/20 \| 106 \| 2 \| rim_ejection 10, draw 2` | `8/20 \| 106 \| 2 \| push 2, rim_ejection 5, draw 5` |
+| 10x (30000) | `18/20 \| 79 \| 2 \| draw 2` | `17/20 \| 113.5 \| 2 \| draw 3` |
+
+Still inside the 14 to 18 of 20 band at 10x, 1x well below: no further tuning, as the issue says.
+
+Reply time through wasm (nodejs release build, `core`, 6 seeds of 80 plies at most, the player plays its auto-play move,
+boss replies only, ms, average / max): 198 to 203 / 386 to 400 after (54 replies), 169 to 174 / 294 to 329 before (60
+replies), two runs each. The fights differ after the first changed reply, so the positions are not the same: about 15
+to 20 % slower, the maximum stays under 400 ms.

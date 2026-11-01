@@ -929,8 +929,10 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Turn it against the boss** (owner design rule): charge your own marbles to break its lines
   with fewer marbles; push a boss marble that sits at 3 charges back onto the core so it
   overloads; crowd the boss into the busiest wedge in P3. The boss search plays the weighted
-  rule and the hooks of both sides (budget 3000 nodes, the Hull's).
-- **Calibrate** (#1229: the pro ladder player at 10x wins 18 of 20, 8 of 20 at 1x, see
+  rule and the hooks of both sides (budget 3000 nodes, the Hull's), follows the phase it reaches
+  inside its tree, and values charges (own minus yours, 30 centi-marbles each, #915), so it fights for
+  the energy cells.
+- **Calibrate** (#1229, #915: the pro ladder player at 10x wins 17 of 20, 8 of 20 at 1x, see
   `boss-balance.md`): knobs = charge per turn, overload at 4, phase ejections (1, 2), the wedge rhythm
   (4 turns), AI depth. Fail if most fights end with no overload.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
