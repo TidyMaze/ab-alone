@@ -422,7 +422,7 @@ export class OpenWorldMode {
     if (!this.view) return false; // the step walked onto a lair and left the mode
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
-    if (this.peers?.frame(now, this.hero!.at)) this.dirty = true; // the other heroes: sent, received, drawn (#1305)
+    if (this.peers?.frame(now, this.hero!.at, this.hero!.troop)) this.dirty = true; // the other heroes: sent, received, drawn (#1305)
     if (this.view!.offsets(now)) this.dirty = true; // the camera's punch and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();

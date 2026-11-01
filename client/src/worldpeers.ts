@@ -157,8 +157,8 @@ export class Sender {
   private lastMs = 0;
   private seq = 0;
   private troop: Axial[] = [];
-  private sentTroop: string | null = null;
-  private troopMs = 0;
+  private sentTroop = ''; // what peers know: no marbles, until told
+  private troopMs = -Infinity;
 
   set(q: number, r: number): void {
     this.at = [q, r];
@@ -194,15 +194,16 @@ export class Sender {
   /** The troop to send at `now` (ms): its offsets from the hero changed since the last one and SEND_MS passed; null otherwise. */
   dueTroop(now: number): Uint8Array | null {
     const offsets = this.offsets;
-    if (!offsets || (this.sentTroop !== null && (this.sentTroop === offsets.join() || now - this.troopMs < SEND_MS))) return null;
+    if (!offsets || this.sentTroop === offsets.join() || now - this.troopMs < SEND_MS) return null;
     this.sentTroop = offsets.join();
     this.troopMs = now;
     return encodeTroop(offsets);
   }
 
-  /** The troop now, for a peer that just joined. */
+  /** The troop now, for a peer that just joined; none when there is no marble (a peer starts with none). */
   nowTroop(): Uint8Array | null {
-    return this.offsets ? encodeTroop(this.offsets) : null;
+    const offsets = this.offsets;
+    return offsets && offsets.length > 0 ? encodeTroop(offsets) : null;
   }
 
   /** The place now, for a peer that just joined; it takes no seq of its own (the next send is a newer one). */

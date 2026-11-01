@@ -174,6 +174,7 @@ describe('Sender: the troop, on change only, 4 Hz at most', () => {
     const s = new Sender();
     expect(s.dueTroop(0)).toBeNull(); // nothing known
     s.set(10, 10);
+    expect(s.dueTroop(0)).toBeNull(); // no marble: what peers know already
     s.setTroop([[11, 10], [9, 10]]);
     expect(s.dueTroop(0)).toEqual(encodeTroop([[1, 0], [-1, 0]]));
     expect(s.dueTroop(300)).toBeNull(); // unchanged
@@ -189,6 +190,8 @@ describe('Sender: the troop, on change only, 4 Hz at most', () => {
     s.set(0, 0);
     s.setTroop([[1, 0]]);
     expect(s.nowTroop()).toEqual(encodeTroop([[1, 0]]));
+    s.setTroop([]);
+    expect(s.nowTroop()).toBeNull(); // a peer starts with none
   });
 
   it('drops a marble too far from the hero or on it, so what it sends a peer accepts', () => {
@@ -285,10 +288,10 @@ describe('Peers', () => {
     const p = new Peers();
     expect(p.troop('a', [[1, 0]], 0)).toBe(false); // no Hello
     p.hello('a', 0);
-    p.position('a', { t: 'pos', q: 5, r: 5, seq: 0 }, 0);
+    p.position('a', { q: 5, r: 5, seq: 0 }, 0);
     expect(p.troop('a', [[1, 0], [0, -1]], 1000)).toBe(true);
     expect(p.cells()[0]!.troop).toEqual([[6, 5], [5, 4]]);
-    p.position('a', { t: 'pos', q: 7, r: 5, seq: 1 }, 2000);
+    p.position('a', { q: 7, r: 5, seq: 1 }, 2000);
     expect(p.cells()[0]!.troop).toEqual([[8, 5], [7, 4]]);
     expect(p.troop('a', [], 1001)).toBe(false); // a flood: under MIN_GAP_MS after the last
     expect(p.troop('a', [], 3000)).toBe(true);
