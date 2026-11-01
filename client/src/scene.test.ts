@@ -535,4 +535,16 @@ describe('SceneRenderer (#632)', () => {
     expect([sr.terrace.visible, sr.propsGroup.visible, sr.roomDeck.visible, sr.plate.visible]).toEqual([false, true, true, true]);
     expect(sr.scene.background).toBe(room);
   });
+
+  it('lights the turn bar of the side to move on the terrace, none at the end (#1314)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const [black, white] = ['scene_turnbar_black', 'scene_turnbar_white'].map((name) => Object.assign(new THREE.Mesh(), { name }));
+    sr.terrace.add(black!, white!);
+    sr.lightRim({ end: 'near', color: 0x7fd6e8 });
+    expect([black!.visible, white!.visible]).toEqual([true, false]);
+    sr.lightRim({ end: 'far', color: 0xd9822b });
+    expect([black!.visible, white!.visible]).toEqual([false, true]);
+    sr.lightRim(null);
+    expect([black!.visible, white!.visible]).toEqual([false, false]);
+  });
 });

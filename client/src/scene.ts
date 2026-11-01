@@ -414,6 +414,9 @@ export class SceneRenderer {
   lightRim(light: { end: 'near' | 'far'; color: number } | null): void {
     for (const end of ['near', 'far'] as const) {
       this.rim[end].material.emissive.set(light?.end === end ? light.color : 0);
+      // The terrace's turn bar (#1314): the bar at the side to move, lit in the arena's own colour; black is the near end.
+      const bar = this.terrace.getObjectByName(end === 'near' ? 'scene_turnbar_black' : 'scene_turnbar_white');
+      if (bar) bar.visible = light?.end === end;
     }
   }
 
@@ -475,6 +478,8 @@ export class SceneRenderer {
     this.plate.visible = this.rim.near.visible = this.rim.far.visible = !on;
     if (on) this.roomBackground = this.scene.background as THREE.Color | THREE.Texture | null;
     this.scene.background = on ? new THREE.Color(background) : this.roomBackground;
+    // The Blender render keeps the palette's colours; ACES would wash them toward grey (#1314).
+    this.renderer.toneMapping = on ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
   }
 
   /** Where the point `lift` above the cell is drawn: a mark on top of a marble is not under the cell's centre (#1259). */

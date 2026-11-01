@@ -1886,6 +1886,7 @@ arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
 // The marbles, the board's and the arena's, drawn as one instanced mesh per look, placed before each draw (#885).
 const syncMarbles = [marbles, arenaMarbles].map((group) => instanceMarbles(group, marbleGeometry, scene));
+let syncPedestals: (() => void) | null = null; // made when the arena's kit has loaded (terraceKit)
 const seatLooks = SEATS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: SHELL.roughness, metalness: SHELL.metalness }));
 // Each seat's glyph (#558), flat in the ink on its marbles, never the tint alone: it touches the shell where the shell
 // faces the default view, turned to face it, so it stays inside the marble's outline.
@@ -3378,20 +3379,25 @@ const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, P
 // keeps the room; the hub, the boss rooms, the royale and a run keep it too, until their own PRs; `?scene=room` asks for it.
 let terraceReady = false;
 const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
-void meshoptLoader()
-  .loadAsync(`${import.meta.env.BASE_URL}assets/pbr/arena.glb`)
-  .then((model) => {
-    sceneRenderer.terrace.add(mergeByMaterial(model.scene)); // 5 draw calls, not 1,489 nodes
+const terraceKit: { pedestal: THREE.Mesh | null } = { pedestal: null };
+const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
+void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
+  .then(([arena, kit]) => {
+    sceneRenderer.terrace.add(mergeByMaterial(arena.scene)); // 5 draw calls, not 1,489 nodes
+    terraceKit.pedestal = kit.scene.getObjectByName('kit_pedestal_flat') as THREE.Mesh;
+    syncPedestals = instanceMarbles(marbles, terraceKit.pedestal.geometry, scene);
     terraceReady = true;
     refresh();
   })
   .catch(() => undefined);
+const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
   const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
   if (on === sceneRenderer.terraceOn) return;
   sceneRenderer.setTerrace(on);
   for (const cells of boardDrawn) cells.visible = !on; // the dishes of the glTF are drawn; the discs stay for picking only
+  marbles.position.y = on ? TERRACE_LIFT : 0; // the marbles stand on their pedestals, 0.11 over the board plane
   updateFog();
 }
 function refresh(): void {
@@ -3511,6 +3517,12 @@ function refresh(): void {
     marble.position.set(p.x, 0.36, p.z);
     turnMarble(marble, turnAt(i));
     marbles.add(marble);
+    if (sceneRenderer.terraceOn && terraceKit.pedestal && side !== CORE_CODE) {
+      // one flat disc under each marble, instanced with the others (the kit's pedestal, 0.04 high): the marble stands on it
+      const pedestal = new THREE.Mesh(terraceKit.pedestal.geometry, terraceKit.pedestal.material);
+      pedestal.position.set(p.x, -TERRACE_LIFT, p.z);
+      marbles.add(pedestal);
+    }
     onMarble(i, marble);
     if (ringed.some(([sq, sr]) => sq === q && sr === r)) {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
@@ -6025,6 +6037,7 @@ renderer.setAnimationLoop((now) => {
   if (!navigator.webdriver) adaptResolution(now);
   if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   for (const sync of syncMarbles) sync();
+  syncPedestals?.();
   renderer.info.reset();
   sceneRenderer.render();
   draws++;

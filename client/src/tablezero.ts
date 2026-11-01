@@ -22,7 +22,7 @@ export const PALETTE = {
 } as const;
 
 /** One sun, elevation 28 (the Blender render's, lights_camera.json), 25 degrees left of the camera axis at yaw 0, fixed in the world; a hemisphere; no point light. */
-export const SUN = { colour: 0xffd9a8, intensity: 3.4, elevation: 28, azimuth: 25, sky: 0x9db8d8, ground: 0x5a4636, hemisphere: 1.3 } as const;
+export const SUN = { colour: 0xffd9a8, intensity: 4.6, elevation: 28, azimuth: 25, sky: 0x9db8d8, ground: 0x8a7a66, hemisphere: 1.9 } as const;
 
 /** The sun's position on a sphere of `distance` round the board: x is left of the axis, the camera looks from +z at yaw 0. */
 export function sunPosition(distance = 30): [number, number, number] {
