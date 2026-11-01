@@ -3,7 +3,18 @@ import { expect, test } from '@playwright/test';
 // Issue #1287: the Leaderboard entry of the mode menu shows the player among the opponents of settled 1v1 matches.
 test('the leaderboard shows my position among the opponents I met, my row highlighted', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('ab-alone.ranked', JSON.stringify({ version: 1, rating1v1: 1250, ratingRoyale: 1200, matches: [] }));
+    localStorage.setItem(
+      'ab-alone.ranked',
+      JSON.stringify({
+        version: 1,
+        rating1v1: 1250,
+        ratingRoyale: 1200,
+        matches: [
+          { id: 'm1', timestamp: 1, mode: '1v1', delta: 12, newRating: 1238, opponentsCount: 1 },
+          { id: 'm2', timestamp: 2, mode: '1v1', delta: 12, newRating: 1250, opponentsCount: 1 },
+        ],
+      }),
+    );
     localStorage.setItem(
       'ab-alone.ranked.rivals',
       JSON.stringify({
@@ -23,6 +34,7 @@ test('the leaderboard shows my position among the opponents I met, my row highli
   await expect(board).toBeVisible();
   await expect(board).toContainText('Your position: 3 of 4');
   await expect(board.locator('tr[data-me]')).toContainText('You');
+  await expect(board.locator('#board-history li')).toHaveText(['1238', '1250']);
   await page.keyboard.press('Escape');
   await expect(board).toBeHidden();
 });
