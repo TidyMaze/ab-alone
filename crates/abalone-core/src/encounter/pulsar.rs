@@ -661,6 +661,44 @@ mod tests {
     }
 
     #[test]
+    fn the_phase_reached_in_the_tree_changes_the_best_move() {
+        // Boss to move at 2 ejections (P1), pulsar W at turn 1: no pulse after the next player
+        // turn, one after the turn after it. The Black pair under (1, -4) can push it off the rim,
+        // the third ejection, so that pulse comes at P2, force 3. 5 of 101 random positions of
+        // this kind (a lone boss marble on the rim with a Black pair behind it) gave two moves.
+        let start = board(
+            &[(1, -3), (1, -2), (4, 0)],
+            &[(-4, 0), (-3, -1), (-1, -2), (1, -4), (1, 2)],
+            Some((1, 1)),
+        );
+        let enc = fight(start, Player::White, [2, 0]);
+        assert_eq!(enc.phase(), 0);
+        // The search before #913: every player ply of the tree pulses at the root phase.
+        let frozen = |_: &Board, mover: Player, _: &Move, after: Board| {
+            if mover == Player::White {
+                return (after, [0, 0]);
+            }
+            let out = hook(&after, 0, 0);
+            let [black, white] = losses(&after, &out);
+            (out, [white, black])
+        };
+        let old = search_hooked(
+            enc.game(),
+            PULSAR_NODE_BUDGET,
+            DEFAULT_WEIGHTS,
+            &|_| true,
+            &frozen,
+        )
+        .unwrap();
+        assert_eq!(old.mv, mv(&[(-4, 0), (-3, -1)], Direction::E));
+        assert_eq!(
+            pulsar_move(&enc),
+            Some(mv(&[(1, -4)], Direction::SW)),
+            "the lone marble leaves the rim"
+        );
+    }
+
+    #[test]
     fn the_boss_replies_only_on_its_turn() {
         let mut enc = pulsar_start(0);
         assert_eq!(pulsar_move(&enc), None);
