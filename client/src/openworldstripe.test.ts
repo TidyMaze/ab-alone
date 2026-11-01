@@ -69,4 +69,18 @@ describe('the stripe of an Open world marble (#1043)', () => {
     expect(material.color.getHex()).toBe(0xcfe8ff);
     expect(material.clone().colorNode).toBe(material.colorNode);
   });
+
+  it('wears the skin it is given: its colour, roughness, metalness, maps and emission, with the stripe of the look over them (#1176)', () => {
+    const skin = new THREE.MeshStandardMaterial({ color: 0x336699, roughness: 0.7, metalness: 0.4, emissive: 0x112233, emissiveIntensity: 0.5 });
+    const maps = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'] as const;
+    for (const key of maps) skin[key] = new THREE.Texture();
+    const material = stripedMaterial({ base: 0xcfe8ff, stripe: 0x8fb4dc, roughness: 0.1 }, uniform(1), skin);
+    expect(material.colorNode).not.toBeNull();
+    expect(material.color.getHex()).toBe(0x336699);
+    expect(material.roughness).toBeCloseTo(0.7);
+    expect(material.metalness).toBeCloseTo(0.4);
+    expect(material.emissive.getHex()).toBe(0x112233);
+    expect(material.emissiveIntensity).toBeCloseTo(0.5);
+    for (const key of maps) expect(material[key], key).toBe(skin[key]);
+  });
 });
