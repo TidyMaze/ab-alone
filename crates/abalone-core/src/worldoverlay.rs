@@ -274,7 +274,13 @@ mod tests {
     fn an_enemy_pushed_into_water_is_ejected_and_counted() {
         let mut overlay = Overlay::new();
         let chunks = [((0, 0), vec![(1, 0)])];
-        let water = |q: i32, _r: i32| Some(if q >= 2 { Terrain::Water } else { Terrain::Grass });
+        let water = |q: i32, _r: i32| {
+            Some(if q >= 2 {
+                Terrain::Water
+            } else {
+                Terrain::Grass
+            })
+        };
         let played = overlay
             .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], water)
             .unwrap();
@@ -290,7 +296,10 @@ mod tests {
         let chunks = [((0, 0), vec![(5, 5)])];
         assert_eq!(overlay.troop_push(&chunks, &[(0, 0), (-1, 0)], grass), None);
         assert_eq!(overlay, Overlay::new());
-        assert_eq!(overlay.troop_push(&[], &[(0, 0), (-1, 0), (-2, 0)], grass), None);
+        assert_eq!(
+            overlay.troop_push(&[], &[(0, 0), (-1, 0), (-2, 0)], grass),
+            None
+        );
     }
 
     #[test]
