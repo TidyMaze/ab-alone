@@ -184,7 +184,7 @@ describe('the renderer and its textures', () => {
     expect(report.renderCost).toMatch(/^draw calls: \d+\ntriangles: \d+\ngeometries: \d+\ntextures: \d+\npoint lights: \d+\ntier: \w+\npixel ratio: [\d.]+$/);
     expect(cost.text).toBe(report.renderCost);
     expect(cost).toMatchObject({ calls: 7, triangles: 300, geometries: 5, textures: 2, tier: 'high' });
-    expect(cost.pointLights).toBeGreaterThan(0);
+    expect(cost.pointLights).toBe(0); // Table Zero (#1314): the room's lamps are hidden in a 1v1 game, and a hidden lamp is not counted
   });
 
   it('keeps the last drawn frame cost over the idle frames that follow it (the draw calls read 0 before)', async () => {

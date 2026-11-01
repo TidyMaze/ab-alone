@@ -178,6 +178,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
+import { tableZeroActive, PALETTE } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -1815,7 +1816,7 @@ const discs: THREE.Mesh[] = BOARD_CELLS.map(([q, r], i) => {
   scene.add(disc);
   return disc;
 });
-instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
+const boardDrawn = instanceCells(discs, scene); // drawn in two draw calls, not 182 (#885)
 const placeBridge = (y: number): void => {
   bridgeY = y;
   for (const [q, r] of BRIDGE) discs[cellIndex(q, r)]!.position.y = -0.05 + y;
@@ -3330,8 +3331,36 @@ function sightNote(): string {
 /** The cells the player sees: within the range of its marbles, the sight of the Stalker boss by its phase. */
 const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, PLAYER, (engine as Encounter).sight());
 
+// Table Zero (#1314): the 1v1 default scene. The cells go flat Dust with a dark edge under the Open world's sun; the hub, the
+// boss rooms and the battle royale keep the room and the steel of the decks. Redone on every refresh, a mode change being one.
+const steelRoom = { map: steel.map, normalMap: steel.normalMap, roughnessMap: steel.roughnessMap, color: steel.color.getHex(), roughness: steel.roughness, emissive: steel.emissive.getHex(), glow: steel.emissiveIntensity };
+const edgeRoom = { color: edgeMaterial.color.getHex(), emissive: edgeMaterial.emissive.getHex(), metalness: edgeMaterial.metalness };
+// Table Zero's cell: twelve sides and a twelve-sided edge, 144 triangles where today's is 640 (the cells are a third of the frame).
+const tzDiscGeometry = new THREE.CylinderGeometry(0.46, 0.46, 0.1, 12);
+const tzEdgeGeometry = new THREE.TorusGeometry(0.44, 0.03, 4, 12).rotateX(Math.PI / 2);
+function syncTableZero(): void {
+  const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null });
+  if (on === sceneRenderer.tableZeroOn) return;
+  sceneRenderer.setTableZero(on);
+  steel.map = on ? null : steelRoom.map;
+  steel.normalMap = on ? null : steelRoom.normalMap;
+  steel.roughnessMap = on ? null : (steelRoom.roughnessMap ? cellRoughness(deck) : null);
+  steel.color.setHex(on ? PALETTE.dust : steelRoom.color);
+  steel.roughness = on ? 0.9 : steelRoom.roughness;
+  steel.emissive.setHex(on ? 0 : steelRoom.emissive);
+  steel.emissiveIntensity = on ? 0 : steelRoom.glow;
+  steel.needsUpdate = true;
+  boardDrawn[0]!.geometry = on ? tzDiscGeometry : discGeometry;
+  boardDrawn[1]!.geometry = on ? tzEdgeGeometry : edgeGeometry;
+  edgeMaterial.color.setHex(on ? 0x15171a : edgeRoom.color);
+  edgeMaterial.emissive.setHex(on ? 0x000000 : edgeRoom.emissive);
+  edgeMaterial.metalness = on ? 0 : edgeRoom.metalness;
+  updateFog();
+  document.body.dataset.scene = on ? 'table-zero' : 'room';
+}
 function refresh(): void {
   dirty = CHANGE_DRAWS;
+  syncTableZero();
   syncSpace();
   syncAuto();
   if (hub || royale) drawDual(null); // no fight, no void (#947)
@@ -5816,7 +5845,7 @@ menu.append(copyButton);
 const diagnosticsBox = document.getElementById('diagnostics') as HTMLTextAreaElement;
 const renderCost = (): RenderCost => {
   let pointLights = 0;
-  (openWorld.scene ?? sceneRenderer.scene).traverse((o) => void ((o as THREE.PointLight).isPointLight && pointLights++));
+  (openWorld.scene ?? sceneRenderer.scene).traverseVisible((o) => void ((o as THREE.PointLight).isPointLight && pointLights++)); // a hidden lamp lights nothing
   const { render, memory } = renderer.info;
   return { calls: render.drawCalls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pointLights, tier, pixelRatio };
 };

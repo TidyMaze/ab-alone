@@ -3,8 +3,6 @@ import * as THREE from 'three/webgpu';
 /** The layer of the cell discs: the raycaster tests it for picking, the camera never draws it. */
 export const CELL_LAYER = 1;
 
-const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
-
 /**
  * Draws a set of cell discs, each holding its bevel as its first child, as two instanced meshes beside them (#885): two
  * draw calls instead of two per disc, the third of a phone's frame. The discs stay where they are for picking and for the
@@ -21,12 +19,17 @@ export function instanceCells(discs: THREE.Mesh[], parent: THREE.Object3D): THRE
   const [drawnDiscs, drawnBevels] = drawn as [THREE.InstancedMesh, THREE.InstancedMesh];
   const bevel = new THREE.Matrix4();
   drawnDiscs.onBeforeRender = () => {
+    // Only the cells in play are drawn: the instance count is the visible ones, and the GPU never draws a vanished cell (#1314).
+    let n = 0;
     discs.forEach((disc, i) => {
+      if (!disc.visible) return;
       disc.updateMatrix();
       bevels[i]!.updateMatrix();
-      drawnDiscs.setMatrixAt(i, disc.visible ? disc.matrix : HIDDEN);
-      drawnBevels.setMatrixAt(i, disc.visible ? bevel.multiplyMatrices(disc.matrix, bevels[i]!.matrix) : HIDDEN);
+      drawnDiscs.setMatrixAt(n, disc.matrix);
+      drawnBevels.setMatrixAt(n, bevel.multiplyMatrices(disc.matrix, bevels[i]!.matrix));
+      n++;
     });
+    drawnDiscs.count = drawnBevels.count = n;
     drawnDiscs.instanceMatrix.needsUpdate = true;
     drawnBevels.instanceMatrix.needsUpdate = true;
   };

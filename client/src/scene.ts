@@ -12,6 +12,7 @@ import { FRAME, frameShape, rimHalves, type FrameShape, type Point } from './fra
 import { notchRow } from './notches';
 import { applyDeckAtmosphere, DECK_ATMOSPHERES, type DeckId, type SpaceshipBayAssets } from './roomloader';
 import { ROOM_SURFACE, type StructuralPart } from './room';
+import { PALETTE, addSun, hexPrism, windowStripGeometry } from './tablezero';
 
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
@@ -116,6 +117,7 @@ export class SceneRenderer {
   readonly renderer: THREE.WebGPURenderer;
   readonly backend: 'WebGPU' | 'WebGL2';
   readonly pipeline: ReturnType<typeof createBloomPipeline> = null;
+  readonly flatPipeline: ReturnType<typeof createBloomPipeline> = null;
 
   readonly fogObj: THREE.Fog;
   readonly particles: THREE.Points;
@@ -131,6 +133,11 @@ export class SceneRenderer {
   };
   readonly roomDeck: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   readonly propsGroup: THREE.Group;
+  /** Table Zero (#1314): the plinth, the window strip and the Open world's sun, shown in place of the room in a 1v1 game. */
+  readonly tableZero: THREE.Group;
+  private readonly plinth: THREE.Mesh;
+  tableZeroOn = false;
+  private roomBackground: THREE.Color | THREE.Texture | null = null;
 
   readonly notches: THREE.Group;
   readonly tallies: readonly [THREE.Group, THREE.Group];
@@ -248,6 +255,20 @@ export class SceneRenderer {
     this.roomDeck = new THREE.Mesh(new THREE.BoxGeometry(ROOM_SURFACE.width, 0.4, ROOM_SURFACE.depth), roomMaterial);
     this.roomDeck.position.set(0, ROOM_SURFACE.y - 0.2, 0);
     this.propsGroup = new THREE.Group();
+    this.tableZero = new THREE.Group();
+    this.tableZero.name = 'table-zero';
+    this.tableZero.visible = false;
+    addSun(this.tableZero);
+    const flatVertex = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
+    this.plinth = new THREE.Mesh(hexPrism(1, 0.25, PALETTE.slate).rotateY(Math.PI / 6), flatVertex);
+    this.plinth.position.y = -0.55;
+    // The window onto the Open world: a sill of the wall and, behind it, the map as stepped columns (one draw call each).
+    const sill = new THREE.Mesh(hexPrism(1, 0.5, PALETTE.slate).scale(11, 1, 0.45), flatVertex);
+    sill.position.set(0, -1.2, -8.4);
+    const strip = new THREE.Mesh(windowStripGeometry(), flatVertex);
+    strip.position.set(0, -2.2, -9.8);
+    strip.scale.set(0.9, 0.8, 1);
+    this.tableZero.add(this.plinth, sill, strip);
 
     this.notches = new THREE.Group();
     this.tallies = [new THREE.Group(), new THREE.Group()] as const;
@@ -266,6 +287,7 @@ export class SceneRenderer {
       this.particles,
       this.roomDeck,
       this.propsGroup,
+      this.tableZero,
       this.plate,
       this.rim.near,
       this.rim.far,
@@ -276,7 +298,10 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0), webdriver ? 1 : 2, options.bloom ?? true);
+    const smooth = smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0);
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, webdriver ? 1 : 2, options.bloom ?? true);
+    // Table Zero lights nothing from within, so there is nothing to bloom: FXAA alone, or none under MSAA (#1314).
+    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, 1, false);
   }
 
   async init(): Promise<void> {
@@ -322,14 +347,14 @@ export class SceneRenderer {
     } else {
       this.fogObj.near = fog.near;
       this.fogObj.far = fog.far;
-      this.fogObj.color.setHex(DECK_ATMOSPHERES[deck as DeckId].fogColor);
+      this.fogObj.color.setHex(this.tableZeroOn ? PALETTE.hollow : DECK_ATMOSPHERES[deck as DeckId].fogColor);
       if (this.scene.fog !== this.fogObj) this.scene.fog = this.fogObj;
     }
   }
 
   updateParticles(tier: Tier, clear: boolean, reducedMotion: boolean, webdriver: boolean, forceParticles: boolean, deck: Deck): void {
     const conf = DECK_PARTICLES[deck];
-    const enabled = hasParticles(tier, clear, reducedMotion, webdriver, forceParticles) && conf.count > 0;
+    const enabled = hasParticles(tier, clear, reducedMotion, webdriver, forceParticles) && conf.count > 0 && !this.tableZeroOn;
     this.particles.visible = enabled;
     if (!enabled) return;
     this.particleMaterial.color.setHex(conf.color);
@@ -372,6 +397,8 @@ export class SceneRenderer {
     if (this.frame && JSON.stringify(next) === JSON.stringify(this.frame)) return null;
     this.frame = next;
     this.fogRadius = next.radius;
+    const reach = Math.max(...next.outer.map((p) => Math.hypot(p.x, p.z))) + 0.4; // the plinth steps out past the rim
+    this.plinth.scale.set(reach, 1, reach);
 
     const flat = (points: Point[]): THREE.Vector2[] => points.map((p) => new THREE.Vector2(p.x, -p.z));
     // Rounded edges catch the light where square ones cut it: the bevel stays inside the slab's outline (offset) and
@@ -446,12 +473,51 @@ export class SceneRenderer {
 
   mountBay(bay: SpaceshipBayAssets | null, deck: Deck): void {
     this.currentBay = bay;
-    if (this.currentBay) {
+    if (this.tableZeroOn) {
+      this.roomDeck.visible = false;
+      if (bay) this.propsGroup.add(bay.scene);
+    } else if (this.currentBay) {
       this.roomDeck.visible = false;
       applyDeckAtmosphere(this.currentBay, deck as DeckId);
       this.propsGroup.add(this.currentBay.scene);
     } else {
       this.roomDeck.visible = true;
+    }
+  }
+
+  /**
+   * Table Zero in place of the room, or the room back (#1314). The room, its props and its 76 lights are hidden, not freed: a boss
+   * room or the hub shows them again at once. The plate and the rim turn Slate, the sky Hollow Black.
+   */
+  setTableZero(on: boolean): void {
+    if (on === this.tableZeroOn) return;
+    this.tableZeroOn = on;
+    this.tableZero.visible = on;
+    this.propsGroup.visible = !on;
+    this.roomDeck.visible = !on && !this.currentBay;
+    if (on) this.roomBackground = this.scene.background as THREE.Color | THREE.Texture | null;
+    this.scene.background = on ? new THREE.Color(PALETTE.hollow) : this.roomBackground;
+    const set = (m: THREE.MeshStandardMaterial, color: number, rough: number): void => {
+      m.map = on ? null : m.userData.map ?? m.map;
+      m.color.setHex(color);
+      m.roughness = rough;
+      m.needsUpdate = true;
+    };
+    for (const m of [this.plate.material, this.rim.near.material, this.rim.far.material]) {
+      if (on) {
+        m.userData.map = m.map;
+        m.userData.look = [m.color.getHex(), m.roughness, m.metalness, m.normalMap, m.roughnessMap, m.metalnessMap];
+        m.normalMap = m.roughnessMap = m.metalnessMap = null;
+        m.metalness = 0;
+        set(m, m === this.plate.material ? PALETTE.hollow : PALETTE.slate, 0.9);
+      } else {
+        const [color, rough, metal, normal, rmap, mmap] = m.userData.look as [number, number, number, THREE.Texture | null, THREE.Texture | null, THREE.Texture | null];
+        m.normalMap = normal;
+        m.roughnessMap = rmap;
+        m.metalnessMap = mmap;
+        m.metalness = metal;
+        set(m, color, rough);
+      }
     }
   }
 
@@ -467,9 +533,10 @@ export class SceneRenderer {
   }
 
   render(): void {
-    if (this.pipeline) {
+    const pipeline = this.tableZeroOn ? this.flatPipeline : this.pipeline;
+    if (pipeline) {
       try {
-        this.pipeline.render();
+        pipeline.render();
         return;
       } catch {
         // Fall back to renderer if pipeline fails in mock or test environment
