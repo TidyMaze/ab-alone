@@ -377,3 +377,51 @@ describe('co-op: the view of a Pulsar fight', () => {
     expect(game.hook<View>('__view').distance).toBeGreaterThan(fitted.distance); // upright needs more room
   });
 });
+
+describe('boss duel: the joiner plays the boss (#1316)', () => {
+  it('Boss duel opens the shared list as a duel and Fight together opens it back as a co-op, one list at a time', async () => {
+    const game = await boot('?bot=off', calm);
+    game.openModes();
+    const list = byId('coop-list');
+    byId('boss-duel').click();
+    expect(list.hidden).toBe(false);
+    byId('boss-duel').click(); // pressed again: closes
+    expect(list.hidden).toBe(true);
+    byId('boss-duel').click();
+    byId('fight-together').click(); // opened by Boss duel: Fight together keeps it open, as a co-op list
+    expect(list.hidden).toBe(false);
+    byId('boss-duel').click(); // and Boss duel turns it back into a duel list, still open
+    expect(list.hidden).toBe(false);
+    [...list.querySelectorAll('button')].find((b) => b.textContent === 'The Echo')!.click();
+    await until(game, () => data().seat === 'player');
+    expect(location.hash).toMatch(/&boss=echo&seed=\d+&seat=boss&key=[\w-]{8}$/);
+    expect(byId('invite-label').textContent).toBe('Invite link: send it to your boss player');
+    expect(presence()).toBe('You fight the boss. Waiting for the boss seat...');
+    expect(byId('rematch').hidden).toBe(true);
+    byId('play-online').click(); // a versus room after it: the duel is over
+    await until(game, () => byId('invite-label').textContent === 'Invite link: send it to your opponent');
+    expect(presence()).not.toContain('boss');
+  });
+
+  it('a link with seat=boss seats us as the boss, White: the hero moves, then we answer, no boss reply is computed', async () => {
+    const { game, end, open } = await invited('#room=R1&boss=echo&seed=7&seat=boss');
+    expect(game.hook('__fight')).toEqual({ id: 'echo', seed: 7 });
+    const hero = await partner(end, 'R1', 1);
+    open();
+    await until(game, () => data().seat === 'player' && data().opponent === 'here');
+    expect(presence()).toBe('You are the boss. The hero is here.');
+    expect(game.turn()).toBe("Hero's turn");
+    await hero.send(encodeMove(forward(hero.legal())));
+    await until(game, () => game.hook('__plies') >= 1);
+    expect(game.hook('__plies')).toBe(1); // the boss seat answers: no reply was computed for it (the helper's own engine did, its page does not)
+    expect(game.turn()).toBe('Your turn');
+    expect(byId('rematch').hidden).toBe(true);
+    expect(document.querySelector('#hud .boss')?.textContent).toContain('Boss duel');
+  });
+
+  it('starts nothing for a seat=boss link with an unknown boss', async () => {
+    const game = await boot('?bot=off#room=R0&boss=nobody&seed=7&seat=boss', calm);
+    expect(game.room()).toBeNull();
+    expect(data().seat).toBeUndefined();
+  });
+});

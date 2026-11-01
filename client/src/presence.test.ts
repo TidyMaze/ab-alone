@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coopStatus, onlineStatus, Presence } from './presence';
+import { coopStatus, duelStatus, onlineStatus, Presence } from './presence';
 
 describe('Presence', () => {
   it('knows no key at first, and never the empty key of a free seat', () => {
@@ -83,5 +83,24 @@ describe('coopStatus, #530', () => {
   it('joining the fight until seated, and watching once the room is full', () => {
     expect(coopStatus('pending', 'here', false)).toEqual({ text: 'Joining the fight...', tone: 'waiting' });
     expect(coopStatus('spectator', 'here', false)).toEqual({ text: 'Room is full, watching', tone: 'watching' });
+  });
+});
+
+describe('duelStatus, #1316', () => {
+  it('Black fights the boss, White is the boss: the line names the roles, not the colours', () => {
+    expect(duelStatus(1, 'player', 'here', false)).toEqual({ text: 'You fight the boss. The boss seat is here.', tone: 'here' });
+    expect(duelStatus(2, 'player', 'here', false)).toEqual({ text: 'You are the boss. The hero is here.', tone: 'here' });
+  });
+
+  it('marks an agent, and says when the other seat is missing or gone', () => {
+    expect(duelStatus(1, 'player', 'here', true)).toEqual({ text: 'You fight the boss. The boss seat (agent) is here.', tone: 'here' });
+    expect(duelStatus(2, 'player', 'gone', true).text).toBe('You are the boss. The hero (agent) is disconnected.');
+    expect(duelStatus(1, 'player', 'waiting', false)).toEqual({ text: 'You fight the boss. Waiting for the boss seat...', tone: 'waiting' });
+    expect(duelStatus(2, 'player', 'waiting', false).text).toBe('You are the boss. Waiting for the hero...');
+  });
+
+  it('joining the duel until seated, and watching once the room is full', () => {
+    expect(duelStatus(2, 'pending', 'here', false)).toEqual({ text: 'Joining the duel...', tone: 'waiting' });
+    expect(duelStatus(1, 'spectator', 'here', false)).toEqual({ text: 'Room is full, watching', tone: 'watching' });
   });
 });

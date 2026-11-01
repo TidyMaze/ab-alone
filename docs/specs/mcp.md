@@ -345,11 +345,11 @@ An error is `{ "code": "...", "message": "..." }`. `message` is the engine's rea
 
 A room can be a duel on a boss: seat 1 plays Black, seat 2 plays the boss as White, a mind instead of the boss search. It is the same room and the same signed `MoveRecord`s, no new message and no new protocol version.
 
-- The invite is `<page>#room=<room>&boss=<id>&seed=<seed>&seat=boss&key=<fingerprint>` (`inviteUrl` with `bossSeat`, `bossSeatFromHash` of `client/src/invite.ts`). A co-op invite has no `seat=boss`: there both seats play Black and the engine plays the boss (coop-boss.md). A client that does not know `seat=boss` opens no room from this link.
+- The invite is `<page>#room=<room>&boss=<id>&seed=<seed>&seat=boss&key=<fingerprint>` (`inviteUrl` with `bossSeat`, `bossSeatFromHash` of `client/src/invite.ts`). A co-op invite has no `seat=boss`: there both seats play Black and the engine plays the boss (coop-boss.md). The client opens it too (#1316): Boss duel in the mode menu makes the room (a person is the hero, Black), and a page that opens the link takes the boss seat, a person or an agent, behind the online consent dialog. Its HUD names the roles ("You fight the boss", "You are the boss"), not the colours.
 - Both peers hold an `Encounter(boss, seed)` as the room's judge. `Encounter.play` is called for the White move too: it checks it against the boss's legal moves (the Choir's army in turn, the Dual Room's room) and runs the same hooks, tells and phases as after a boss reply. Each peer is the judge of the other's moves; an illegal boss move is refused and is a `desync`.
 - `get_state` shows the `boss` block to both seats. `legal_moves` lists `announces` and `free` only on a Black turn.
 - The boss's moves are not searched by the server: the agent chooses them, `engine.boss_move()` is not used.
-- Not in this first version: a human creating the boss-seat room from the client (the client opens no such room yet), a Retry, and a boss seat for a human.
+- Not yet: a Retry or rematch in a duel (the client hides the button).
 
 ## 8. Agent flag in `Hello`
 
