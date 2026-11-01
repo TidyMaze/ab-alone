@@ -546,8 +546,6 @@ pub fn enemy_groups(seed: u64, cx: i32, cy: i32) -> Vec<Vec<(i32, i32)>> {
     placed
 }
 
-/// The boss lairs of the world: this many, one in each third of the map round the spawn.
-pub const LAIRS: usize = 3;
 /// A lair stands at least this many cells from the spawn.
 pub const LAIR_MIN: i32 = 150;
 /// The salt of the lair draws (the terrain uses 30 to 39, the enemies 12 to 21).
@@ -556,22 +554,22 @@ const LAIR_SALT: u64 = 40;
 const LAIR_NEAR: f64 = 160.0;
 const LAIR_FAR: f64 = 420.0;
 
-/// The cells of the boss lairs of the world `seed` (docs/specs/openworld.md section 7): lair `k` is drawn in the `k`-th third of
-/// the circle round the spawn, the first draw whose cell and six neighbours are open ground on the world, and at least `LAIR_MIN`
+/// The cells of the `count` boss lairs of the world `seed` (docs/specs/openworld.md section 7), one per boss of the roster: lair `k`
+/// is drawn in the `k`-th `count`-th of the circle round the spawn, the first draw whose cell and six neighbours are open ground on the world, and at least `LAIR_MIN`
 /// cells from the spawn. From the seed alone, so the order of visit of the chunks does not matter.
-pub fn lairs(seed: u64) -> Vec<(i32, i32)> {
-    (0..LAIRS as i32)
+pub fn lairs(seed: u64, count: usize) -> Vec<(i32, i32)> {
+    (0..count as i32)
         .map(|k| {
             (0..)
-                .find_map(|n| lair_try(seed, k, n))
+                .find_map(|n| lair_try(seed, count, k, n))
                 .expect("an endless search")
         })
         .collect()
 }
 
 /// The `n`-th try of lair `k`: its cell when it is a fit one.
-fn lair_try(seed: u64, k: i32, n: i32) -> Option<(i32, i32)> {
-    let third = std::f64::consts::TAU / LAIRS as f64;
+fn lair_try(seed: u64, count: usize, k: i32, n: i32) -> Option<(i32, i32)> {
+    let third = std::f64::consts::TAU / count as f64;
     let angle = (f64::from(k) + 0.1 + 0.8 * unit(seed, LAIR_SALT, k, n)) * third;
     let reach = LAIR_NEAR + (LAIR_FAR - LAIR_NEAR) * unit(seed, LAIR_SALT + 1, k, n);
     // The pointy-top layout of the client's `cellAtPoint`: x runs along q, z along the rows.
@@ -1106,21 +1104,26 @@ mod tests {
         }
     }
 
+    /// The size of the roster at the time of writing: the bridge passes the real count of `boss_ids()`.
+    const ROSTER: usize = 14;
+
     #[test]
-    fn three_lairs_stand_at_least_150_cells_from_the_spawn_on_every_seed() {
+    fn a_lair_for_each_boss_stands_at_least_150_cells_from_the_spawn_on_every_seed() {
         for seed in 0..60 {
-            let found = lairs(seed);
-            assert_eq!(found.len(), LAIRS, "seed {seed}");
+            let found = lairs(seed, ROSTER);
+            assert_eq!(found.len(), ROSTER, "seed {seed}");
             for &(q, r) in &found {
                 assert!(distance(q, r) >= LAIR_MIN, "seed {seed}: ({q}, {r})");
             }
         }
+        assert_eq!(lairs(7, 15).len(), 15);
+        assert_eq!(lairs(7, 3).len(), 3);
     }
 
     #[test]
     fn a_lair_and_its_six_neighbours_are_open_ground_in_the_world() {
         for seed in 0..60 {
-            for (q, r) in lairs(seed) {
+            for (q, r) in lairs(seed, ROSTER) {
                 for (dq, dr) in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)] {
                     let c = cell(seed, q + dq, r + dr).expect("on the world");
                     assert!(
@@ -1135,22 +1138,22 @@ mod tests {
     #[test]
     fn the_lairs_are_spread_and_come_from_the_seed_alone() {
         for seed in 0..60 {
-            let found = lairs(seed);
-            assert_eq!(lairs(seed), found);
+            let found = lairs(seed, ROSTER);
+            assert_eq!(lairs(seed, ROSTER), found);
             for (i, a) in found.iter().enumerate() {
                 for b in &found[i + 1..] {
                     assert!(
-                        distance(a.0 - b.0, a.1 - b.1) >= 100,
+                        distance(a.0 - b.0, a.1 - b.1) >= 20,
                         "seed {seed}: {a:?} {b:?}"
                     );
                 }
             }
         }
-        assert_ne!(lairs(1), lairs(2));
+        assert_ne!(lairs(1, ROSTER), lairs(2, ROSTER));
     }
 
     #[test]
     fn the_lairs_of_seed_7_are_pinned() {
-        assert_eq!(lairs(7), vec![(139, 58), (-327, 233), (286, -172)]);
+        assert_eq!(lairs(7, 3), vec![(139, 58), (-327, 233), (286, -172)]);
     }
 }

@@ -50,10 +50,10 @@ pub fn world_enemies(seed: u32, cx: i32, cy: i32) -> Vec<i32> {
         .collect()
 }
 
-/// The boss lairs of the world `seed`: `q, r` pairs, lair 0 first (docs/specs/openworld.md section 7).
+/// The boss lairs of the world `seed`, one per boss of the roster: `q, r` pairs, lair 0 first (docs/specs/openworld.md section 7).
 #[wasm_bindgen]
 pub fn world_lairs(seed: u32) -> Vec<i32> {
-    world::lairs(u64::from(seed))
+    world::lairs(u64::from(seed), crate::encounter::boss_ids().len())
         .into_iter()
         .flat_map(|(q, r)| [q, r])
         .collect()
@@ -166,8 +166,9 @@ mod tests {
     #[test]
     fn the_lairs_are_q_r_pairs_that_match_the_core() {
         let flat = world_lairs(7);
-        let lairs: Vec<(i32, i32)> = world::lairs(7);
-        assert_eq!(flat.len(), 6);
+        let roster = crate::encounter::boss_ids().len();
+        let lairs: Vec<(i32, i32)> = world::lairs(7, roster);
+        assert_eq!(flat.len(), 2 * roster);
         assert_eq!(
             flat,
             lairs.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()

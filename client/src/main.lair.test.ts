@@ -33,7 +33,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     game.openModes();
     byId('openworld').click();
     await settle();
-    expect(data().openworldLairs!.split(' ')).toHaveLength(3);
+    expect(data().openworldLairs!.split(' ')).toHaveLength((await import('abalone-wasm')).boss_ids().length); // one lair per boss of the roster (#1171)
     expect(data().openworldLairsBeaten).toBe('');
     await walkOnto(game, 0);
     expect(data().openworld).toBeUndefined();
@@ -65,6 +65,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     await settle();
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(data().openworldLairsBeaten).toBe('0');
+    expect(byId('openworld-medals').textContent).toBe(`Medals 1 / ${(await import('abalone-wasm')).boss_ids().length}`); // the HUD reads the shared medal store (#1171)
     expect(JSON.parse(localStorage.getItem('ab-alone.medals')!)).toEqual({ [Object.keys(JSON.parse(localStorage.getItem('ab-alone.medals')!))[0]!]: 1 });
   });
 
@@ -86,6 +87,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
     await settle();
     expect(data().openworldAt).toBe(entrance.join(','));
     expect(data().openworldLairsBeaten).toBe('');
+    expect(byId('openworld-medals').textContent).toBe(`Medals 0 / ${(await import('abalone-wasm')).boss_ids().length}`);
   });
 
   it('a boss picked from the menu is no lair\'s: the back button stays hidden', async () => {
@@ -97,5 +99,23 @@ describe('the boss lairs of the Open world (#1170)', () => {
     vi.spyOn((await import('abalone-wasm')).Encounter.prototype, 'status').mockImplementation(() => 2);
     byId('boss-goal').click();
     expect(byId('ship-back').hidden).toBe(true);
+  });
+});
+
+describe("Tally's line in the Open world (#1171)", () => {
+  it('shows "Claim 0412: unworked." the first time the player opens an Open world, and never again', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(byId('openworld-tally').textContent).toBe('Claim 0412: unworked.');
+    expect(localStorage.getItem('ab-alone.tally0412')).toBe('seen');
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await settle();
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    expect(byId('openworld-tally').textContent).toBe('');
   });
 });

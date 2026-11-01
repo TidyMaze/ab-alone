@@ -179,12 +179,12 @@ Test hooks, on a webdriver page only: `window.__openworldFixture({ hero, troop, 
 hero, the troop and the enemies of the loaded square (the generated ones are hidden), and
 `window.__openworldEnemies()` gives the enemies near the hero. The e2e push test uses them.
 
-## 7. Boss lairs (#1170, epic #1177)
+## 7. Boss lairs (#1170, #1171, epic #1177)
 
-The Open world has a goal: three landmark lairs, each a normal boss fight.
+The Open world has a goal: one landmark lair per boss of the roster (14 today, the length of `boss_ids()`), each a normal boss fight.
 
-- **Placement** is seeded world generation in Rust (`world::lairs(seed)`, bridge `world_lairs(seed)`, `q, r` pairs, lair 0 first).
-  Lair `k` is drawn in the `k`-th third of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
+- **Placement** is seeded world generation in Rust (`world::lairs(seed, count)`, bridge `world_lairs(seed)` passes the roster size, `q, r` pairs, lair 0 first).
+  Lair `k` is drawn in the `k`-th `count`-th of the circle round the spawn, 160 to 420 ground units out, and kept when its cell and its
   six neighbours are open ground on the world and it is at least 150 cells from the spawn (`LAIR_MIN`). It reads the terrain, never
   changes it, so `WORLD_VERSION` does not move.
 - **Look.** A tall pillar on a plinth on the lair's cell, gold while the lair is unbeaten, green once beaten.
@@ -195,3 +195,7 @@ The Open world has a goal: three landmark lairs, each a normal boss fight.
 - **Loss.** "Back to the Open world" returns the hero to the lair's entrance, the lair unbeaten. Retry stays the lair's fight.
 - **Browser checks.** `body[data-openworld-lairs]` lists the lair cells (`q,r` separated by spaces) and `data-openworld-lairs-beaten`
   the numbers beaten; `__openworldFixture` stands the hero next to a lair.
+- **Medal count.** The HUD shows `Medals N / total` (`#openworld-medals`): N the bosses with a medal in the shared `ab-alone.medals`
+  store, total the roster size. Read when a world opens, so it is right after "Back to the Open world".
+- **Tally's line.** The first time a player opens an Open world the HUD shows "Claim 0412: unworked." (`#openworld-tally`), once: the
+  flag `ab-alone.tally0412` is kept next to the medals. Reduced motion changes nothing.

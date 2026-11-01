@@ -141,7 +141,7 @@ Room kinds:
 
 | Room | Enters |
 |---|---|
-| Boss | The deck's door boss, one of the five lore-slot bosses of section 7 (the other nine of the roster of 14 are in the boss menu and the Open world lairs): the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
+| Boss | The deck's door boss, one of the five lore-slot bosses of section 7 (the other nine of the roster of 14 are in the boss menu; every boss has an Open world lair): the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge) |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
 | Medal room | On the Mess only (0, 2), a gold ring and core glyph (#812). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |
@@ -277,7 +277,7 @@ third player less than 1 time in 5. Compare against option A as a baseline.
 
 ## 7. Boss roster
 
-The roster of 14 bosses is canon (#1170, epic #1177). Five of them are mapped to the lore slots of `world.md` (PR #51) and stand behind the deck doors of the hub (section 3.5); the nine extras are in the boss menu, and the Open world gets a lair for them (`openworld.md` section 7). Numbers (marble counts, timers) are **starting values** to tune in playtest.
+The roster of 14 bosses is canon (#1170, epic #1177). Five of them are mapped to the lore slots of `world.md` (PR #51) and stand behind the deck doors of the hub (section 3.5); the nine extras are in the boss menu; the Open world has a lair for every boss of the roster (`openworld.md` section 7). Numbers (marble counts, timers) are **starting values** to tune in playtest.
 Player always starts with 14 marbles on the standard layout unless stated.
 Every boss mechanic can be turned against the boss (owner rule, #645): a new boss's twist must
 also give the player a way to hurt the boss with it.
