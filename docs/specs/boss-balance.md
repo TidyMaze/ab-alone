@@ -1173,3 +1173,47 @@ replies only, ms, average / 95th percentile / max), the old build timed on the s
 machine shared with other builds: 187 / 485 / 652 after, 140 / 341 / 448 before; a second run 293 / 987 / 1499
 after, 220 / 734 / 1177 before. About a third more in both runs: the step carries the announce, computes
 `phase_after` after each boss ply and runs the hook with a second settle.
+
+### The Assembly Line: the ladder player reads the belts (#1228), 18 of 20 at 10x, not tuned
+
+Target of #753 and #833: the pro player (10x) wins 14 to 18 of 20, the 1x player fewer. Method:
+`LADDER_X=<1|10> LADDER_SEEDS=20 cargo run --release --example ladder -- assembly`, seeds 0 to 19,
+300 plies at most, one run at a time, main after #914 (the boss's phase inside its tree).
+
+**Why the player lost.** A local probe replayed the ladder games and split every lost marble by its
+cause: a push of the other side, a belt that carries it off its end, a press. Before, 10x (20 games,
+all lost):
+
+| Cause | Player marbles lost | Boss marbles lost |
+|---|---|---|
+| a belt carries it off | 85 | 4 |
+| a press strikes it | 0 | 0 |
+| a push | 35 (the boss's) | 31 (the player's) |
+
+At 1x: belts 78 and 1, pushes 43 and 25, no strike. The "rim ejection" deaths are these belt falls.
+The boss search runs the belts on every player ply of its tree, the ladder player did not: it played
+the plain search, as the Ballast Mind's player before #834, and walked onto the belts' ends.
+
+**Adopted: the ladder player reads the belts.** `player_move` plays `assembly_search` against the
+Assembly Line, the boss's own hooked search (`assembly_step` on every player ply of the tree, the
+belts and the announced strikes stored on the board, seed 0 for the strikes still to come), as it
+does for the Ballast Mind. The player in the game sees the same: the chevrons, the reversal counter
+and the blinking slot. Unit test `the_player_reads_the_belts_of_the_assembly_line`: a marble on the
+falling end of the centre belt, which the plain search leaves there. No rule, knob or boss change,
+`engine_version` unchanged.
+
+| Player | Before (main at ba8a292, #914) | After (#1228) |
+|---|---|---|
+| 1x (3000) | `3000 \| 0/20 \| 111.5 \| 1 \| push 3, rim_ejection 17` | `3000 \| 10/20 \| 158 \| 2 \| push 4, rim_ejection 1, draw 5` |
+| 10x (30000) | `30000 \| 0/20 \| 88 \| 2 \| rim_ejection 20` | `30000 \| 18/20 \| 91 \| 2 \| push 1, rim_ejection 1` |
+
+Repeated on 40 seeds (0 to 39): 10x `30000 \| 36/40 \| 95 \| 2 \| push 1, rim_ejection 2, draw 1`, 1x
+`3000 \| 19/40 \| 157 \| 2 \| push 8, rim_ejection 3, draw 10`, the same rates. After, 10x on 40 seeds,
+the player lost 69 marbles to pushes, 23 to belts and 6 to presses, the boss 161, 75 and 7: the
+belts now work for the side that reads them, as the "Turn it against the boss" line says.
+
+Reading: one change, in the measuring player only, takes the 10x row from 0 to 18 of 20, the top of
+the target, and 1x to 10 of 20, fewer as wanted. No knob was tried: none is needed to reach the
+target, and each one (the reversal, the strike rhythm, the phases, the budget) changes play, the
+fixture and its e2e test. If the owner wants the 10x row nearer the middle of the target, a boss
+knob is the next step.

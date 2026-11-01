@@ -6,7 +6,9 @@
 
 use crate::board::{Board, Cell};
 use crate::encounter::alien::{alien_move, alien_start, ALIEN_NODE_BUDGET};
-use crate::encounter::assembly::{assembly_move, assembly_start, ASSEMBLY_NODE_BUDGET};
+use crate::encounter::assembly::{
+    assembly_move, assembly_search, assembly_start, ASSEMBLY_NODE_BUDGET,
+};
 use crate::encounter::ballast::{ballast_move, ballast_search, ballast_start, BALLAST_NODE_BUDGET};
 use crate::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_step, chaplain_tell};
 use crate::encounter::choir::Choir;
@@ -258,8 +260,8 @@ fn mix(mut x: u64) -> u64 {
 /// alpha-beta search with `budget` nodes. It plays like a pro who knows draws are losses and reads
 /// the tells: it avoids a position it has already seen and a move that leaves a marble to flip,
 /// takes the Echo's safe free moves that eject and never plays another free move, and plays the
-/// plain search when no move is left. Against the Chaplain and the Ballast Mind the search sees
-/// the hooks. `None` when the player has no move (every marble was converted).
+/// plain search when no move is left. Against the Chaplain, the Ballast Mind and the Assembly Line
+/// the search sees the hooks. `None` when the player has no move (every marble was converted).
 fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) -> Option<Move> {
     let game = arena.game();
     if index < opening {
@@ -301,6 +303,7 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
                 search_with(seen.as_ref().unwrap(), budget, DEFAULT_WEIGHTS, allow).map(|r| r.mv)
             }
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Assembly) => assembly_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
             Arena::Swarm(swarm) => swarm.player_search(budget, allow).map(|r| r.mv),
             Arena::Plain(_, LadderBoss::Dual) => {
@@ -458,7 +461,8 @@ pub fn run_ladder(boss: LadderBoss, player_budget: u32, seeds: u32, ply_cap: u32
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board::{Board, Cell};
+    use crate::board::{Belts, Board, Cell};
+    use crate::encounter::assembly::assembly_boss;
     use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::{echo_boss, echo_fight, mirror_move};
@@ -613,6 +617,40 @@ mod tests {
             after.game().ejected(Player::White),
             0,
             "{mv:?} leaves the cracked cell"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_belts_of_the_assembly_line() {
+        // The centre belt runs toward -q: the Black marble on its west end falls after this turn.
+        // The plain search plays (-3, 4) NE there and loses it.
+        let mut board = Board::empty();
+        for (q, r, cell) in [
+            (-4, 0, Cell::Black),
+            (-2, 2, Cell::Black),
+            (-3, 4, Cell::Black),
+            (1, -3, Cell::Black),
+            (-2, 4, Cell::White),
+            (2, -4, Cell::White),
+        ] {
+            board.set(q, r, cell);
+        }
+        board.set_belts(Some(Belts {
+            first: false,
+            turns: 0,
+            shift: [0; 3],
+            strike: [None; 3],
+        }));
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let enc = Encounter::new(game, assembly_boss(), 0);
+        let a = Arena::Plain(enc.clone(), LadderBoss::Assembly);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.game().ejected(Player::White),
+            0,
+            "{mv:?} keeps the marble on the belt"
         );
     }
 
