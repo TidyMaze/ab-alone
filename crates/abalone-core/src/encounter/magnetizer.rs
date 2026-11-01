@@ -909,4 +909,64 @@ mod tests {
         assert_eq!(enc.game().ejected(Player::White), 1);
         assert_eq!(magnetizer_move(&enc), None, "the player's turn");
     }
+
+    /// A fight at `ejected` with the first `plies` quiet plies played (the boss to move at turn 1
+    /// after 1, at turn 2 after 3), then on board `b`.
+    fn played(b: Board, ejected: u8, plies: usize) -> Encounter {
+        let quiet = [
+            mv(&[(0, 0)], E),
+            mv(&[(0, -3)], E),
+            mv(&[(1, 0)], Direction::W),
+        ];
+        let mut enc = quiet_fight(ejected, 1);
+        for m in &quiet[..plies] {
+            enc.play(m).unwrap();
+        }
+        enc.game.replace_board(b);
+        enc
+    }
+
+    #[test]
+    fn the_tree_sees_the_assignment_at_the_start_of_turn_3_and_avoids_its_repulsion() {
+        // Turn 2 of P1, boss to move: the start of turn 3 gives the announced (0, -3) its −, next
+        // to the + boss marble (-1, -3) on the rim, which the repulsion throws off. 1 of 600 random
+        // positions of this kind (the announced marble next to an opposite pole) gave two moves.
+        let mut b = board(
+            &[(-2, 2), (0, -3), (1, 0), (2, -3), (-1, -2), (3, 1)],
+            &[(1, 1), (-1, 0), (-1, 3), (2, -1), (-1, -3)],
+            &[((-1, -3), 1)],
+        );
+        b.set_announce(Some((Some((0, -3)), -1)));
+        b.set_last_sign(1);
+        let enc = played(b, 0, 3);
+        assert_eq!((enc.phase(), enc.tell()), (0, Some(MAGNETIZER_TURN)));
+        // The search before #916: the polarities follow the moves and settle, no assignment.
+        let blind = |before: &Board, _: Player, mv: &Move, mut after: Board| {
+            after.set_polarities(carried_poles(before, mv, &after));
+            settle(&after, 0, &mut |_, _| {})
+        };
+        let old = search_hooked(
+            enc.game(),
+            MAGNETIZER_NODE_BUDGET,
+            DEFAULT_WEIGHTS,
+            &|_| true,
+            &blind,
+        )
+        .unwrap()
+        .mv;
+        assert_eq!(old, mv(&[(-1, 3)], NE));
+        let new = magnetizer_move(&enc).unwrap();
+        assert_eq!(new, mv(&[(-1, -3)], Direction::SW), "the + leaves the rim");
+        let lost = |m: &Move| {
+            let mut e = enc.clone();
+            e.play(m).unwrap();
+            (e.repulsions().len(), e.game().ejected(Player::Black))
+        };
+        assert_eq!(
+            lost(&old),
+            (1, 1),
+            "the old move loses (-1, -3) to the repulsion"
+        );
+        assert_eq!(lost(&new), (0, 0));
+    }
 }
