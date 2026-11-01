@@ -277,6 +277,20 @@ export class OpenWorldMode {
     if (line) line.textContent = on ? 'Steering on: the hero goes round obstacles, tap a far cell to walk there.' : 'Steering off: one step at a time.';
   }
 
+  /** Another hero broke the obstacle on `cell` (#1305, a signed event checked by the peers host): the cell is open for good, its prop
+   * leaves the scene and the shards fly when it is drawn. A cell that holds no boulder or tree (broken already) does nothing. */
+  remoteBreak(cell: Axial): void {
+    const [world, view] = [this.world, this.view];
+    if (!world || !view) return;
+    const terrain = world.tile(cell[0], cell[1])?.terrain;
+    if (terrain !== 'boulder' && terrain !== 'tree') return;
+    const drawn = view.hasProp(cell, terrain);
+    world.smash(cell[0], cell[1]);
+    if (drawn) view.smash(cell, terrain, performance.now(), this.reduced());
+    this.dirty = true;
+    this.mark(document.body.dataset.openworld!);
+  }
+
   /** A new window size: the view follows it, and the zoom it may have been clamped to is published (#976). */
   resize(width: number, height: number): void {
     this.view?.snap();
@@ -499,7 +513,10 @@ export class OpenWorldMode {
     this.cruising = pace !== 'tap';
     const span = pace === 'tap' ? GLIDE_MS : stepMs(this.walked);
     this.walked = pace === 'tap' ? 0 : this.walked + 1;
-    if (this.hero!.smashed) this.view!.smash(to, this.hero!.smashed, at, this.reduced()); // an obstacle broken on the way (#1147)
+    if (this.hero!.smashed) {
+      this.view!.smash(to, this.hero!.smashed, at, this.reduced()); // an obstacle broken on the way (#1147)
+      this.peers?.broke(to); // and told to the other heroes (#1305)
+    }
     this.view!.snap(); // a step during a push's animation ends it first (#967)
     const now = this.reduced() ? null : at;
     if (now !== null) this.view!.puff(now); // dust from the cell it leaves (#1110)

@@ -6,7 +6,12 @@ import { indexedDbStore } from './idb';
 import { GLIDE_MS } from './openworldglide';
 import { OPEN_WORLD_POINT_LIGHTS } from './quality';
 import { SLIDE_MS } from './slide';
+import './test/openworldwasm';
+import { world_can_break } from 'abalone-wasm';
 import { boot, type Game } from './test/harness';
+import { signBreak } from './worldevents';
+import { generateKeys } from './moverecord';
+import { BREAK_BYTES, encodeBreak } from './worldpeers';
 import { decode, encodeHello, encodePos, PUBLIC_SEED } from './worldpeers';
 
 // The Open world mode (#962, docs/specs/openworld.md): its entry is in the mode menu for everyone (#1000), ?openworld=<seed>
@@ -628,5 +633,45 @@ describe('the public Open world online', () => {
     const game = await joined();
     game.world()!.error('could not connect to peer p after exchanging SDP');
     expect(netText()).toContain('the direct connection failed');
+  });
+
+  // The signed break events (#1305): what the hero breaks goes out signed with its stored key, what a peer broke opens here.
+  const obstacleBeside = (skip = 0): { hero: [number, number]; cell: [number, number] } => {
+    const around: [number, number][] = [[-1, 0], [1, 0]]; // beside it on its row: a plain Right or Left arrow steps onto it
+    for (let q = -30; q <= 30; q++) {
+      for (let r = -30; r <= 30; r++) {
+        if (!world_can_break(PUBLIC_SEED, q, r)) continue;
+        const free = around.map(([dq, dr]): [number, number] => [q + dq, r + dr]).find(([a, b]) => !world_can_break(PUBLIC_SEED, a, b));
+        if (free && skip-- === 0) return { hero: free, cell: [q, r] };
+      }
+    }
+    throw new Error('no boulder or tree near the spawn');
+  };
+
+  it('signs the obstacle the hero breaks with its stored key and sends 106 bytes; a peer applies the same event once', async () => {
+    const game = await joined();
+    const room = game.world()!;
+    const { hero, cell } = obstacleBeside();
+    const canBreak = (window as unknown as { __openworldCanBreak: (seed: number, q: number, r: number) => boolean }).__openworldCanBreak; // the test hook of the e2e
+    expect(canBreak(PUBLIC_SEED, cell[0], cell[1])).toBe(true);
+    expect(canBreak(PUBLIC_SEED, 0, 0)).toBe(false); // the spawn clearing
+    const fixture = () => hooks().__openworldFixture!({ hero, troop: [], enemies: [] });
+    fixture();
+    const key = hero[0] < cell[0] ? 'ArrowRight' : 'ArrowLeft';
+    press(key);
+    release(key);
+    game.frame(300);
+    expect(data().openworldBroken).toBe('1');
+    for (let i = 0; i < 40 && !room.sent.some(([d]) => d.length === BREAK_BYTES); i++) await new Promise((done) => setTimeout(done, 10));
+    const sent = room.sent.find(([d]) => d.length === BREAK_BYTES)!;
+    expect(sent[1]).toBeUndefined();
+    expect(JSON.parse(localStorage.getItem('ab-alone.world-key')!).pub).toHaveLength(43);
+    // a peer breaks another obstacle: it opens here, once
+    const other = obstacleBeside(1).cell;
+    const keys = await generateKeys();
+    const event = await signBreak(keys, PUBLIC_SEED, other[0], other[1]);
+    room.data(encodeBreak(event), 'p');
+    for (let i = 0; i < 40 && data().openworldBroken === '1'; i++) await new Promise((done) => setTimeout(done, 10));
+    expect(data().openworldBroken).toBe('2');
   });
 });

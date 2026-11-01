@@ -2109,6 +2109,19 @@ describe('the particles of the Open world (#1110)', () => {
       expect(mesh(view, 'prop-boulder').count).toBe(0);
     });
 
+    it('says whether the prop of a cell is drawn: a boulder or a tree laid, not one broken, none on open ground, none off the laid chunks', () => {
+      const { world, view } = standing(true);
+      expect(view.hasProp([1, 0], 'boulder')).toBe(true);
+      expect(view.hasProp([0, 2], 'tree')).toBe(true);
+      expect(view.hasProp([2, 0], 'boulder')).toBe(false); // nothing there
+      expect(view.hasProp([1, 0], 'grass')).toBe(false); // open ground has no prop
+      expect(view.hasProp([900, 900], 'boulder')).toBe(false); // far from every chunk laid
+      world.smash(1, 0);
+      view.smash([1, 0], 'boulder', 100, false);
+      expect(view.hasProp([1, 0], 'boulder')).toBe(false);
+      expect(new OpenWorldView(new World(withProps)).hasProp([1, 0], 'boulder')).toBe(false); // nothing shown yet
+    });
+
     it('takes it out of the detailed mesh near the hero, and a tree too', () => {
       const { world, view } = standing(true);
       expect(mesh(view, 'prop-boulder-hi').count).toBe(1);

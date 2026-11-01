@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const flush = (): Promise<void> => new Promise((done) => setTimeout(done, 20));
+/** Waits (a signature takes a while on a loaded machine) until `check` holds. */
+const until = (check: () => boolean): Promise<void> =>
+  vi.waitFor(() => {
+    if (!check()) throw new Error('not yet');
+  });
 import * as THREE from 'three/webgpu';
 import type { PeerNet } from './p2p';
-import { decode, encodeHello, encodePos, PUBLIC_SEED, roomOf } from './worldpeers';
+import { generateKeys } from './moverecord';
+import { signBreak } from './worldevents';
+import { decode, encodeBreak, encodeHello, encodePos, PUBLIC_SEED, roomOf } from './worldpeers';
 import { WorldPeersHost, type NetStatus } from './worldnet';
 
 class FakeNet implements PeerNet {
@@ -37,6 +46,8 @@ function setup(allowed = true) {
   const rooms: string[] = [];
   const clock = { now: 0 };
   const reports: NetStatus[] = [];
+  const applied: (readonly [number, number])[] = [];
+  const keysOnce = generateKeys();
   const me = { name: '' };
   const root = document.createElement('div');
   const scene = new THREE.Scene();
@@ -55,10 +66,11 @@ function setup(allowed = true) {
     root,
     (status) => reports.push(status),
     () => me.name,
+    { keys: () => keysOnce, canBreak: (_seed, q) => q >= 0, apply: (cell) => applied.push(cell) },
     () => clock.now,
   );
   const enter = (seed = PUBLIC_SEED) => host.enter(seed, scene, camera, world as never);
-  return { host, nets, rooms, clock, root, scene, enter, reports, me };
+  return { host, nets, rooms, clock, root, scene, enter, reports, me, applied, keysOnce };
 }
 
 describe('WorldPeersHost', () => {
@@ -165,7 +177,7 @@ describe('WorldPeersHost', () => {
 
   it('reads the page clock when none is given', () => {
     const net = new FakeNet();
-    const host = new WorldPeersHost(() => net, () => true, document.createElement('div'), () => {}, () => '');
+    const host = new WorldPeersHost(() => net, () => true, document.createElement('div'), () => {}, () => '', { keys: () => generateKeys(), canBreak: () => true, apply: () => {} });
     const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
     host.enter(PUBLIC_SEED, new THREE.Scene(), camera, { tile: () => undefined });
     net.data(encodeHello(), 'p');
@@ -252,5 +264,125 @@ describe('WorldPeersHost', () => {
     host.leave();
     host.show(); // the world was left: nothing to join
     expect(rooms).toHaveLength(2);
+  });
+
+  describe('the broken cells (#1305)', () => {
+    const sentBreaks = (net: FakeNet) => net.sent.filter(([d]) => d[1] === 3);
+
+    it('signs the cell the hero broke and sends it to every peer', async () => {
+      const { nets, host, enter, keysOnce } = setup();
+      enter();
+      host.broke([4, -2]);
+      await until(() => sentBreaks(nets[0]!).length === 1);
+      const [bytes, to] = sentBreaks(nets[0]!)[0]!;
+      expect(to).toBeUndefined();
+      const message = decode(bytes!);
+      expect(message).toMatchObject({ t: 'break', event: { seed: PUBLIC_SEED, q: 4, r: -2, pub: (await keysOnce).pub } });
+    });
+
+    it('says nothing when no room is open: private world, declined, hidden or left', async () => {
+      const { nets, host, enter } = setup();
+      host.broke([1, 1]); // nothing entered
+      enter();
+      host.hide();
+      host.broke([1, 1]);
+      await flush();
+      host.show();
+      host.leave();
+      expect(sentBreaks(nets[0]!)).toEqual([]);
+      expect(sentBreaks(nets[1]!)).toEqual([]);
+    });
+
+    it('a room left while the signature is made gets nothing', async () => {
+      const { nets, host, enter } = setup();
+      enter();
+      host.broke([1, 1]);
+      host.leave();
+      await flush();
+      expect(sentBreaks(nets[0]!)).toEqual([]);
+    });
+
+    it('applies a valid break from a peer once, and tells it to nobody else', async () => {
+      const { nets, applied, enter, keysOnce } = setup();
+      enter();
+      const event = await signBreak(await keysOnce, PUBLIC_SEED, 3, 5);
+      nets[0]!.data(encodeBreak(event), 'p');
+      await until(() => applied.length === 1);
+      expect(applied).toEqual([[3, 5]]);
+      nets[0]!.data(encodeBreak(event), 'q'); // the same cell again, from another peer
+      await flush();
+      expect(applied).toEqual([[3, 5]]);
+      expect(sentBreaks(nets[0]!)).toEqual([]);
+    });
+
+    it('refuses a break of another world, one the rules refuse, a forged signature and a flood', async () => {
+      const { nets, applied, clock, enter, keysOnce } = setup();
+      enter();
+      const keys = await keysOnce;
+      nets[0]!.data(encodeBreak(await signBreak(keys, 7, 3, 5)), 'p'); // another seed
+      clock.now = 1000;
+      nets[0]!.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, -3, 5)), 'p'); // canBreak says no
+      clock.now = 2000;
+      const forged = await signBreak(keys, PUBLIC_SEED, 3, 6);
+      nets[0]!.data(encodeBreak({ ...forged, q: 4 }), 'p'); // signed for another cell
+      clock.now = 3000;
+      await flush();
+      expect(applied).toEqual([]);
+      nets[0]!.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 8, 8)), 'p');
+      nets[0]!.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 9, 9)), 'p'); // 0 ms after: dropped
+      await until(() => applied.length === 1);
+      await flush();
+      expect(applied).toEqual([[8, 8]]);
+    });
+
+    it('a break that arrives after the room closed is dropped', async () => {
+      const { nets, host, applied, enter, keysOnce } = setup();
+      enter();
+      nets[0]!.data(encodeBreak(await signBreak(await keysOnce, PUBLIC_SEED, 3, 5)), 'p');
+      host.leave();
+      await flush();
+      expect(applied).toEqual([]);
+    });
+
+    it('gives a newcomer what it holds, newest first, one every 200 ms, and stops when it leaves', async () => {
+      const { nets, host, clock, applied, enter, keysOnce } = setup();
+      enter();
+      const keys = await keysOnce;
+      for (let q = 1; q <= 3; q++) {
+        clock.now = q * 1000;
+        nets[0]!.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, q, 0)), `peer${q}`);
+        await until(() => applied.length === q);
+      }
+      nets[0]!.join('new');
+      nets[0]!.join('gone');
+      nets[0]!.leave('gone');
+      const qs = (): number[] => sentBreaks(nets[0]!).map(([d]) => (decode(d) as { event: { q: number } }).event.q);
+      host.frame(1000, [0, 0]);
+      expect(qs()).toEqual([3]);
+      host.frame(1100, [0, 0]);
+      expect(qs()).toEqual([3]); // too soon
+      host.frame(1200, [0, 0]);
+      host.frame(1400, [0, 0]);
+      host.frame(1600, [0, 0]);
+      expect(qs()).toEqual([3, 2, 1]);
+      expect(sentBreaks(nets[0]!).every(([, to]) => to === 'new')).toBe(true);
+    });
+
+    it('holds its breaks through a Hide, and forgets them when the world is left', async () => {
+      const { nets, host, enter } = setup();
+      enter();
+      host.broke([2, 2]);
+      await until(() => sentBreaks(nets[0]!).length === 1);
+      host.hide();
+      host.show();
+      nets[1]!.join('p');
+      host.frame(0, [0, 0]);
+      expect(sentBreaks(nets[1]!)).toHaveLength(1);
+      host.leave();
+      enter();
+      nets[2]!.join('p');
+      host.frame(0, [0, 0]);
+      expect(sentBreaks(nets[2]!)).toEqual([]);
+    });
   });
 });

@@ -700,6 +700,14 @@ export class OpenWorldView {
     this.particles.puff(x, y - MARBLE + 0.05, z, now);
   }
 
+  /** Whether the prop of `terrain` stands drawn on `cell` now: a break of another hero (#1305) plays its shards only then, the prop
+   * of a cell on a chunk not laid is not in a mesh to take out. */
+  hasProp([q, r]: Axial, terrain: Terrain): boolean {
+    const prop = PROP_OF[terrain];
+    if (!prop || !this.laidHero) return false;
+    return this.slots.get(this.route(prop, hexDistance([q, r], this.laidHero) <= HI_RADIUS))!.at.has(cellKey(q, r));
+  }
+
   /** The hero broke the `terrain` obstacle on `cell` at `now` (ms) (#1147): the world has the cell open already. Its prop leaves its mesh,
    * and its shards fly (a fade under `reduced` motion); the shards are particles, so a break allocates nothing. None past `ROLL_ZOOM`. */
   smash([q, r]: Axial, terrain: Terrain, now: number, reduced: boolean): void {

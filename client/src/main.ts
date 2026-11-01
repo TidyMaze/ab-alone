@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_chunk, world_enemies, world_dungeon, world_lairs, world_path, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_can_break, world_chunk, world_enemies, world_dungeon, world_lairs, world_path, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -163,6 +163,7 @@ import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomF
 import { COOP_SIDE, DUEL_LINE, attemptLine, coopTurn, duelTurn, retryText, seatAfter } from './coop';
 import { hookPeers, hookTransport, p2pPeers, p2pTransport } from './p2p';
 import { WorldPeersHost } from './worldnet';
+import { worldKeys } from './worldevents';
 import { cleanName, PUBLIC_SEED, readName, writeName } from './worldpeers';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
@@ -5502,6 +5503,8 @@ const peersHost = new WorldPeersHost(
     netHide.setAttribute('aria-pressed', String(status.hidden));
   },
   () => readName(store),
+  // The signed events of the public world (#1305): the player's key, the engine's rule of what can break, and what a break of another hero does.
+  { keys: () => worldKeys(store), canBreak: (seed, q, r) => world_can_break(seed, q, r), apply: (cell) => openWorld.remoteBreak(cell) },
 );
 openWorld.peers = peersHost;
 netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peersHost.show() : peersHost.hide()));
@@ -5533,6 +5536,7 @@ if (navigator.webdriver) {
   const hooks = window as unknown as Record<string, unknown>;
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldEnemies = () => openWorld.enemies();
+  hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {
