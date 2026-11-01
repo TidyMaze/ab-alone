@@ -828,9 +828,7 @@ mod tests {
             assert_eq!(a.kind(), boss);
             let mv = legal_moves(a.game().board(), Player::Black)[0].clone();
             a.play(&mv).unwrap();
-            let reply = a
-                .boss_move()
-                .unwrap_or_else(|| panic!("{boss:?} has a reply"));
+            let reply = a.boss_move().expect("a reply");
             a.play(&reply).unwrap();
             let r = play_attempt(boss, 0, 1, 30, 6);
             assert_eq!((r.boss, r.plies), (boss.id(), 6), "{boss:?}");
