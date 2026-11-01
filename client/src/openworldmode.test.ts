@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import './test/openworldwasm';
 import * as THREE from 'three/webgpu';
-import { axialTo3D, type Axial } from './board';
-import { CHUNK, neighbours, World } from './openworld';
-import { DEFAULT_YAW, heldCell, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, stepOf, steerStep, TURN_STEP, twistOf } from './openworldmode';
-import { arrowCell } from './hubview';
+import type { Axial } from './board';
+import { CHUNK, World } from './openworld';
+import { DEFAULT_YAW, OpenWorldMode, ORBIT_PER_PX, REST_OFFSET, restYaw, TURN_STEP, twistOf } from './openworldmode';
 import { FightState } from './openworldfight';
 import { worldSaves, type WorldSaves, type WorldSave } from './openworldsave';
 import { memoryStore } from './savegame';
@@ -52,45 +52,12 @@ afterEach(() => {
   delete body().openworldPush;
 });
 
-// Screen direction of a step, `[-1 | 0 | 1, -1 | 0 | 1]` for left/right and up/down, from the ground layout of `axialTo3D`.
-const screen = (from: Axial, to: Axial): [number, number] => {
-  const a = axialTo3D(...from);
-  const b = axialTo3D(...to);
-  return [Math.sign(Math.round((b.x - a.x) * 100)), Math.sign(Math.round((b.z - a.z) * 100))];
-};
-const held = (...keys: string[]) => new Set(keys);
 // One press of an arrow: the key goes down, its step is made at once, and the key comes up (#1059).
 const tap = (m: OpenWorldMode, key: string): boolean => {
   const pressed = m.key(key);
   m.release(key);
   return pressed;
 };
-
-describe('heldCell', () => {
-  it('gives the diagonal neighbour of each pair of a vertical and a horizontal arrow, on every row', () => {
-    for (const at of [[0, 0], [2, 3], [-1, -4]] as Axial[]) {
-      const up = heldCell(at, held('ArrowUp', 'ArrowLeft'))!;
-      const upRight = heldCell(at, held('ArrowUp', 'ArrowRight'))!;
-      const down = heldCell(at, held('ArrowDown', 'ArrowLeft'))!;
-      const downRight = heldCell(at, held('ArrowDown', 'ArrowRight'))!;
-      expect(screen(at, up)).toEqual([-1, -1]);
-      expect(screen(at, upRight)).toEqual([1, -1]);
-      expect(screen(at, down)).toEqual([-1, 1]);
-      expect(screen(at, downRight)).toEqual([1, 1]);
-      for (const cell of [up, upRight, down, downRight]) expect(neighbours(at).some((n) => n[0] === cell[0] && n[1] === cell[1])).toBe(true);
-    }
-  });
-
-  it('gives nothing for a single arrow, for opposite arrows, or for three arrows', () => {
-    const at: Axial = [0, 0];
-    expect(heldCell(at, held('ArrowUp'))).toBeNull();
-    expect(heldCell(at, held('ArrowLeft', 'ArrowRight'))).toBeNull();
-    expect(heldCell(at, held('ArrowUp', 'ArrowDown'))).toBeNull();
-    expect(heldCell(at, held('ArrowUp', 'ArrowDown', 'ArrowLeft'))).toBeNull();
-    expect(heldCell(at, held('ArrowUp', 'ArrowLeft', 'ArrowRight'))).toBeNull();
-    expect(heldCell(at, held())).toBeNull();
-  });
-});
 
 describe('the Open world mode', () => {
   it('enters on the spawn: marked on the page, drawn once, drawn again only when something changed', () => {
@@ -910,147 +877,13 @@ describe('the New world control (#1021)', () => {
 });
 
 const DEG = Math.PI / 180;
-// The angle of a set of arrow keys on the screen, in degrees counter-clockwise from the right, and the gap between two angles.
-const KEY_VECTOR: Record<string, [number, number]> = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
-const keyAngle = (keys: string[]): number => {
-  const [x, y] = keys.reduce(([sx, sy], k) => [sx + KEY_VECTOR[k]![0], sy + KEY_VECTOR[k]![1]], [0, 0]);
-  return Math.atan2(y, x) / DEG;
-};
-const gapOf = (a: number, b: number): number => {
-  const d = (((a - b) % 360) + 360) % 360;
-  return Math.min(d, 360 - d);
-};
-
-describe('stepOf: the hex step of the held keys, in the yaw of the camera (#1026)', () => {
-  const SINGLE = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-  const PAIRS = [
-    ['ArrowUp', 'ArrowLeft'],
-    ['ArrowUp', 'ArrowRight'],
-    ['ArrowDown', 'ArrowLeft'],
-    ['ArrowDown', 'ArrowRight'],
-  ];
-  const ROWS: Axial[] = [
-    [0, 0],
-    [2, 1],
-    [-3, 4],
-    [1, -2],
-  ];
-
-  it('at yaw 0 is the step of the keyboard as it was, on every row: a single arrow, or a diagonal of two', () => {
-    for (const at of ROWS) {
-      for (const key of SINGLE) expect(stepOf(at, held(key), 0)).toEqual(arrowCell(at, key));
-      for (const keys of PAIRS) expect(stepOf(at, held(...keys), 0)).toEqual(heldCell(at, held(...keys)));
-    }
-  });
-
-  it('up alone walks a straight line of hexes at each of the 6 resting angles, from an even or an odd row (#1254)', () => {
-    for (let k = 0; k < 6; k++) {
-      const yaw = restYaw(DEFAULT_YAW + k * TURN_STEP);
-      for (const start of [[0, 0], [0, 1]] as Axial[]) {
-        let at = start;
-        const first = stepOf(at, held('ArrowUp'), yaw)!;
-        const dir = [first[0] - at[0], first[1] - at[1]];
-        for (let i = 0; i < 6; i++) {
-          const next = stepOf(at, held('ArrowUp'), yaw)!;
-          expect([next[0] - at[0], next[1] - at[1]]).toEqual(dir);
-          at = next;
-        }
-      }
-    }
-  });
-
-  it('left and right alone both lean forward (up on the screen), mirrored, at each of the 6 resting angles (#1273)', () => {
-    const angleOf = (from: Axial, to: Axial): number => {
-      const dr = to[1] - from[1];
-      return Math.atan2(-((Math.sqrt(3) / 2) * dr), to[0] - from[0] + dr / 2);
-    };
-    for (let k = 0; k < 6; k++) {
-      const yaw = restYaw(DEFAULT_YAW + k * TURN_STEP);
-      for (const at of ROWS) {
-        const left = stepOf(at, held('ArrowLeft'), yaw)!;
-        const right = stepOf(at, held('ArrowRight'), yaw)!;
-        expect(Math.sin(angleOf(at, left) - yaw)).toBeCloseTo(0.5);
-        expect(Math.sin(angleOf(at, right) - yaw)).toBeCloseTo(0.5);
-        expect(Math.cos(angleOf(at, left) - yaw)).toBeLessThan(0);
-        expect(Math.cos(angleOf(at, right) - yaw)).toBeGreaterThan(0);
-      }
-    }
-  });
-
-  it('down with left or right still steps back at the resting angles (#1273)', () => {
-    for (let k = 0; k < 6; k++) {
-      const yaw = restYaw(DEFAULT_YAW + k * TURN_STEP);
-      for (const key of ['ArrowLeft', 'ArrowRight']) {
-        const to = stepOf([0, 0], held('ArrowDown', key), yaw)!;
-        expect(Math.sin(Math.atan2(-((Math.sqrt(3) / 2) * to[1]), to[0] + to[1] / 2) - yaw)).toBeLessThan(0);
-      }
-    }
-  });
-
+describe('the resting angles of the camera (#1254)', () => {
   it('the rest offset is 30 degrees, the default is -30, and restYaw gives the nearest resting angle (#1254)', () => {
     expect(REST_OFFSET).toBeCloseTo(Math.PI / 6);
     expect(DEFAULT_YAW).toBeCloseTo(-Math.PI / 6);
     expect(restYaw(0) / DEG).toBeCloseTo(30);
     expect(restYaw(-1.3) / DEG).toBeCloseTo(-90);
     expect(restYaw(80 * DEG) / DEG).toBeCloseTo(90);
-  });
-
-  it('gives nothing for no key, or for opposite keys', () => {
-    expect(stepOf([0, 0], held(), 0.5)).toBeNull();
-    expect(stepOf([0, 0], held('ArrowUp', 'ArrowDown'), 0.5)).toBeNull();
-    expect(stepOf([0, 0], held('ArrowLeft', 'ArrowRight'), 0.5)).toBeNull();
-  });
-
-  it('rolls the hero to the cell the camera shows in the direction of each key, at each yaw', () => {
-    const world = new World(bytes);
-    for (const yaw of [15, 30, 45, 60, 90, 120, 135, 180, -30, -60, -70].map((d) => d * DEG)) {
-      const view = new OpenWorldView(world);
-      view.resize(1600, 900);
-      view.turnTo(yaw);
-      view.show([0, 0]);
-      const onScreen = (cell: Axial) => {
-        const p = axialTo3D(cell[0], cell[1]);
-        return new THREE.Vector3(p.x, 0, p.z).project(view.camera);
-      };
-      const from = onScreen([0, 0]);
-      for (const keys of [...SINGLE.map((k) => [k]), ...PAIRS]) {
-        const there = onScreen(stepOf([0, 0], held(...keys), yaw)!);
-        const shown = (Math.atan2(there.y - from.y, there.x - from.x) / DEG);
-        // The neighbours of the hex grid are 60 degrees apart, so the nearest one lies within 30 degrees of the key on the ground, and
-        // the camera's perspective bends the screen angle by some ten degrees more. A sign error would miss by 60 or more.
-        expect(gapOf(shown, keyAngle(keys))).toBeLessThanOrEqual(45);
-      }
-    }
-  });
-});
-
-describe('steerStep: the semi-auto step round an obstacle (#1137)', () => {
-  const freeExcept = (...walls: Axial[]) => (cell: Axial) => !walls.some((w) => w[0] === cell[0] && w[1] === cell[1]);
-  const E: Axial = [1, 0];
-  const NE: Axial = [1, -1];
-  const SE: Axial = [0, 1];
-  it('takes the straight cell when it is free', () => {
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept())).toEqual(E);
-  });
-  it('goes round a rock ahead by the free side, the first direction when both are free', () => {
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E))).toEqual(NE);
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, NE))).toEqual(SE);
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, SE))).toEqual(NE);
-  });
-  it('slides to the side the intent follows best', () => {
-    // Right and Up together: the intent leans to the NE side of the east cell, so with the straight cell (NE) shut it takes E.
-    const up = held('ArrowRight', 'ArrowUp');
-    expect(stepOf([0, 0], up, 0)).toEqual(NE);
-    expect(steerStep([0, 0], up, 0, freeExcept(NE))).toEqual(E);
-    expect(steerStep([0, 0], up, 0, freeExcept(NE, E))).toEqual([0, -1]);
-  });
-  it('gives the blocked straight cell in a dead end (water, a wall, a cliff), so the hero leans, and nothing without an intent', () => {
-    expect(steerStep([0, 0], held('ArrowRight'), 0, freeExcept(E, NE, SE))).toEqual(E);
-    expect(steerStep([0, 0], held(), 0, freeExcept())).toBeNull();
-    expect(steerStep([0, 0], held('ArrowLeft', 'ArrowRight'), 0, freeExcept())).toBeNull();
-  });
-  it('never steps back: the cells behind the intent are not taken', () => {
-    expect(steerStep([0, 0], held('ArrowRight'), 0, (c) => c[0] < 0 || (c[0] === 0 && c[1] === -1))).toEqual(E);
   });
 });
 
@@ -1380,7 +1213,7 @@ describe('the held arrows step on their own cadence, one per GLIDE_MS (#1059)', 
     m.key('ArrowUp');
     expect(at()).toBe('1,0');
     m.frame(vi.fn(), GLIDE_MS);
-    expect(at()).toBe(stepOf([1, 0], held('ArrowRight', 'ArrowUp'), DEFAULT_YAW)!.join(','));
+    expect(at()).toBe('2,0');
   });
 
   it('a release stops the walk at the end of the step under way: no step after it', () => {
