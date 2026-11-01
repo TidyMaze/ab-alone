@@ -88,6 +88,7 @@ describe('main.ts, the rogue-lite run (#798)', () => {
     expect(document.body.dataset.run).toBe('lost');
     expect(map().hidden).toBe(false);
     expect(line()).toBe('Run lost · 3 marbles left');
+    expect(map().querySelector('.run-tally')!.textContent).toBe('Run voided. Audit reopened.');
     byId('run-new').click();
     expect(document.body.dataset.run).toBe('map');
     expect(line()).toBe('Rogue-lite run · army 14 marbles · pick a fight');

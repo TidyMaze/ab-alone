@@ -159,7 +159,7 @@ import { hookTransport, p2pTransport } from './p2p';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
-import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, trainerBudget, waveLine, waveResult } from './trainer';
+import { readBest as readTrainerBest, recordBest as recordTrainerBest, resultText as trainerResult, MARBLES, drillLine, trainerBudget, waveLine, waveResult } from './trainer';
 import { generateKeys } from './moverecord';
 import { SIGNALING_TIMEOUT_MS } from './netcounters';
 import { beatPeriod } from './coordinator';
@@ -5046,7 +5046,7 @@ const trainerResultNow = (t: { wave: number; lost: number }): ReturnType<typeof 
 function trainerNote(t: { wave: number; lost: number }): string {
   const result = trainerResultNow(t);
   if (engine.status() !== 0) recordTrainerBest(store, result.survived);
-  return waveLine(t.wave, readTrainerBest(store), result.lost);
+  return `${waveLine(t.wave, readTrainerBest(store), result.lost)} · ${drillLine(t.wave)}`;
 }
 /** The result card of a wave that is over, hidden otherwise. */
 function showTrainerCard(): void {

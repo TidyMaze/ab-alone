@@ -43,6 +43,7 @@ describe('main.ts, Trainer mode (#1159)', () => {
     expect(byId('mode-menu').hidden).toBe(true);
     expect(document.body.dataset.trainer).toBe('1');
     expect(game.hud()).toContain('Trainer · wave 1 · best 0 · Marbles left 6/6');
+    expect(game.hud()).toContain('Drill: wave 1. Opponents: one. Seated.');
     expect(whites(game)).toBe(1);
     expect(game.hook<number[]>('__board').filter((c) => c === 1)).toHaveLength(14);
     expect(byId('new-game').hidden).toBe(true);
@@ -58,13 +59,14 @@ describe('main.ts, Trainer mode (#1159)', () => {
     expect(document.body.dataset.trainer).toBe('5');
     expect(whites(game)).toBe(5);
     expect(game.hud()).toContain('Trainer · wave 5 · best 0');
+    expect(game.hud()).toContain('Drill: wave 5. Opponents: five. Seated.');
   });
 
   it('a wave won shows its card, records the best, and Next wave brings one more marble', async () => {
     const game = await start();
     game.hook('__playMoves', WAVE_1_WIN);
     expect(whites(game)).toBe(0);
-    expect(card()).toBe('Wave 1 clearedWaves survived: 1Marbles left: 6/6Best: 1'); // a real clear costs no marble
+    expect(card()).toBe('Wave 1 clearedWaves survived: 1Marbles left: 6/6Best: 1Wave 1 filed. Best on record: 1.'); // a real clear costs no marble
     expect(game.hud()).toContain('Trainer · wave 1 · best 1 · Marbles left 6/6');
     expect(byId('trainer-next').textContent).toBe('Next wave');
     byId('trainer-next').click();
@@ -80,7 +82,7 @@ describe('main.ts, Trainer mode (#1159)', () => {
     const game = await start();
     game.hook('__trainer', 14);
     game.hook('__playMoves', await playOut(14, 6, 'loss', 'bot'));
-    expect(card()).toBe('Fell on wave 14Waves survived: 13Marbles left: 0/6Best: 13');
+    expect(card()).toBe('Fell on wave 14Waves survived: 13Marbles left: 0/6Best: 13Wave 13 filed. Best on record: 13.');
     expect(byId('trainer-next').hidden).toBe(true);
     byId('boss-retry').click();
     expect(card()).toBe('');
@@ -92,7 +94,7 @@ describe('main.ts, Trainer mode (#1159)', () => {
     const game = await start();
     game.hook('__trainer', 14);
     game.hook('__playMoves', await playOut(14, 6, 'draw', 'random'));
-    expect(card()).toBe('Wave 14 stalled: a draw costs a marbleWaves survived: 14Marbles left: 5/6Best: 14');
+    expect(card()).toBe('Wave 14 stalled: a draw costs a marbleWaves survived: 14Marbles left: 5/6Best: 14Wave 14 filed. Best on record: 14.');
     expect(game.hud()).toContain('Marbles left 5/6');
     expect(game.hud()).toContain('StalledA draw costs a marble.'); // not "You win"
     expect(byId('trainer-next').hidden).toBe(false);
@@ -108,7 +110,7 @@ describe('main.ts, Trainer mode (#1159)', () => {
     game.hook('__trainer', 6, 5);
     expect(game.hud()).toContain('Marbles left 1/6');
     game.hook('__playMoves', await playOut(6, 1, 'draw', 'random'));
-    expect(card()).toBe('Fell on wave 6Waves survived: 5Marbles left: 0/6Best: 5');
+    expect(card()).toBe('Fell on wave 6Waves survived: 5Marbles left: 0/6Best: 5Wave 5 filed. Best on record: 5.');
     expect(byId('trainer-next').hidden).toBe(true);
   });
 

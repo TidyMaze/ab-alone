@@ -41,10 +41,22 @@ export function waveResult(wave: number, before: number, ejected: number, drawn:
   return { kind: drawn ? 'drawn' : 'won', survived: wave, lost };
 }
 
+const WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+
+/** Tally's line at the start of a wave (#1174): the drill, the bot's marbles in words up to twelve. Optional flavour. */
+export function drillLine(wave: number): string {
+  const opponents = Math.min(wave, FULL_ARMY);
+  return `Drill: wave ${wave}. Opponents: ${WORDS[opponents - 1] ?? opponents}. Seated.`;
+}
+
+/** Tally's line on the result card (#1174): the waves filed and the best on record. */
+export const filedLine = (survived: number, best: number): string => `${survived > 0 ? `Wave ${survived}` : 'No wave'} filed. Best on record: ${best}.`;
+
 /** The lines of the result card. */
 export const resultText = ({ kind, survived, lost }: WaveResult, wave: number, best: number): string[] => [
   { won: `Wave ${wave} cleared`, drawn: `Wave ${wave} stalled: a draw costs a marble`, lost: `Fell on wave ${wave}` }[kind],
   `Waves survived: ${survived}`,
   `Marbles left: ${Math.max(0, MARBLES - lost)}/${MARBLES}`,
   `Best: ${best}`,
+  filedLine(survived, best),
 ];
