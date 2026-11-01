@@ -19,9 +19,9 @@ afterEach(async () => {
 });
 
 /** A client connected in memory to a fresh server, as an MCP host would be over stdio. Its rooms are local pairs. */
-async function connect(room?: WorldRoom, world?: OpenWorld): Promise<Client> {
+async function connect(room?: WorldRoom, world?: OpenWorld, encounter: typeof newEncounter = newEncounter): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await createServer(new Session(newEngine, newEncounter, () => localPair()[0]), world, room).connect(serverSide);
+  await createServer(new Session(newEngine, encounter, () => localPair()[0]), world, room).connect(serverSide);
   client = new Client({ name: 'test', version: '0.0.0' });
   await client.connect(clientSide);
   return client;
@@ -67,6 +67,36 @@ describe('the Open world tools', () => {
     expect(refused.isError).toBe(true);
     expect(JSON.parse(refused.text).code).toBe('no_path');
     expect((await call('world_step', { direction: 'UP' })).isError).toBe(true);
+  });
+
+  test("save the world and resume it, in the client's save format, a bad save refused", async () => {
+    await connect();
+    await call('new_world', { seed: 3 });
+    await call('world_step', { direction: 'E' });
+    const save = JSON.parse((await call('save_world')).text);
+    expect(save).toMatchObject({ record: 3, seed: 3, hero: [1, 0], lairs: [] });
+    await call('new_world', { seed: 0 });
+    expect(JSON.parse((await call('new_world', { save })).text)).toMatchObject({ seed: 3, hero: '(1,0)' });
+    expect((await call('new_world', { save: { ...save, hero: [1] } })).isError).toBe(true);
+    const stale = await call('new_world', { save: { ...save, version: save.version + 1 } });
+    expect(JSON.parse(stale.text).code).toBe('bad_save');
+  });
+
+  test("the fight of a lair is the session's game: won after the step onto the lair, it beats the lair", async () => {
+    // Every fight of this server is won as it starts: the boss encounter says Black won.
+    const won = (boss: string, seed: number) => {
+      const encounter = newEncounter(boss, seed);
+      return Object.assign(Object.create(encounter), { status: () => 1 }) as ReturnType<typeof newEncounter>;
+    };
+    await connect(undefined, undefined, won);
+    const [q, r] = worldRules().world_lairs(3);
+    const save = JSON.parse((await call('new_world', { seed: 3 }), await call('save_world')).text);
+    await call('new_world', { save: { ...save, hero: [q! - 1, r!], troop: [] } });
+    const { lair } = JSON.parse((await call('world_step', { direction: 'E' })).text);
+    expect(lair).toMatchObject({ index: 0, boss: bossIds()[0] });
+    expect(JSON.parse((await call('world_state')).text).lairs[0].beaten).toBe(false);
+    await call('new_game', { boss: lair.boss });
+    expect(JSON.parse((await call('world_state')).text).lairs[0].beaten).toBe(true);
   });
 });
 
@@ -122,6 +152,7 @@ describe('the MCP server', () => {
       'wait_for_opponent_move',
       'new_world',
       'world_state',
+      'save_world',
       'world_step',
       'world_walk',
       'join_world_room',

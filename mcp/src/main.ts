@@ -13,5 +13,5 @@ import { WorldRoom } from './worldroom';
 Object.assign(globalThis, { RTCPeerConnection });
 
 const session = new Session(newEngine, newEncounter, (room) => p2pTransport(room));
-const world = new OpenWorld(worldRules(), bossIds);
+const world = new OpenWorld(worldRules(), bossIds, session);
 await createServer(session, world, new WorldRoom(world, worldRules(), p2pPeers)).connect(new StdioServerTransport());

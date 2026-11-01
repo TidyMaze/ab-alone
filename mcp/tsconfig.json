@@ -7,7 +7,8 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": { "abalone-wasm": ["./engine/abalone_wasm"] }
   },
   "include": ["src", "e2e", "vitest.config.ts", "vitest.e2e.config.ts"]
 }

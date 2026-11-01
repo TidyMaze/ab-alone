@@ -52,6 +52,7 @@ test('a scripted client plays a full game against the bot over stdio', async () 
     'new_world',
     'play_move',
     'resign',
+    'save_world',
     'wait_for_opponent_move',
     'world_heroes',
     'world_state',
