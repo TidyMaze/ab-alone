@@ -20,3 +20,9 @@ export function cue(el: Element, cls: string, ms: number): void {
   clearTimeout(cueTimers.get(el));
   cueTimers.set(el, setTimeout(() => el.classList.remove(cls), ms));
 }
+
+/** A cross-fade between screens (#1099): the new screen fades in on `MOTION.base` over the old one. Opacity only, so no layout shift; the state has already changed and input is never held. Reduced motion: a hard cut. */
+export function crossFade(el: Element): void {
+  if (reducedMotion() || typeof el.animate !== 'function') return;
+  el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: MOTION.base, easing: EASE.out });
+}

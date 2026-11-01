@@ -46,7 +46,7 @@ import { BLOOD_DROPS, BLOOD_MS, bloodAt, bloodStainAt } from './blood';
 import { ejectTrack, findEjection, trackAt, type EjectTrack } from './eject';
 import { Analyst, evalFill, evalText } from './evalbar';
 import { ghostMarbles } from './ghost';
-import { MOTION, cue } from './motion';
+import { MOTION, crossFade, cue } from './motion';
 import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
@@ -4331,6 +4331,7 @@ function startBoss(id: string, seed: number, daily?: { day: string; attempt: num
   refresh(); // the HUD of the fight first: the view keeps off its plate
   view = fitted = fightView();
   applyView();
+  crossFade(canvas); // the new screen fades in (#1099)
 }
 const bossEntries = new Map<string, HTMLButtonElement>();
 for (const id of boss_ids()) {
@@ -4419,6 +4420,7 @@ function enterHub(at: HubSpot): void {
   analyst.stop();
   applyDeck(at.deck);
   refresh();
+  crossFade(canvas); // #1099
 }
 function walk(to: Axial): void {
   const progress = loadProgress(store);
@@ -4451,6 +4453,7 @@ function startLocal(bot: boolean): void {
   retryButton.hidden = true;
   newGameButton.hidden = false;
   newGame();
+  crossFade(canvas); // #1099
 }
 backButton.addEventListener('click', () => {
   leaveOnline();
@@ -4986,7 +4989,7 @@ openWorldButton.addEventListener('click', () => {
   moveModes('pick');
   leaveOnline();
   leaveRoyale();
-  void enterOpenWorld();
+  void enterOpenWorld().then(() => crossFade(canvas)); // #1099
   openWorldButton.blur(); // the menu's arrow keys would take the hero's
 });
 openWorldButton.disabled = false; // listener ready (#146)
