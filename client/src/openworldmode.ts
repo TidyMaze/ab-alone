@@ -412,12 +412,10 @@ export class OpenWorldMode {
     if (this.view!.offsets(now)) this.dirty = true; // the camera's punch and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();
-    const moving = !reduced && !this.lowTier() && this.view!.hasWater; // the low tier holds the glow of the lake still: no frame drawn for it (#1234)
     const loops = this.view!.animate(now, reduced || this.lowTier()); // the foam, the ripples and the trees' sway (#1101, #1102)
     this.countMotion();
-    if (!this.dirty && !moving && !sparks && !loops) return false;
+    if (!this.dirty && !sparks && !loops) return false;
     this.dirty = false;
-    this.view!.glow(moving ? now : 0);
     render(this.view!.scene, this.view!.camera);
     this.view!.drain(); // what this frame replaced is no longer in use by it (#1017)
     return true;
