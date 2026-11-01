@@ -4151,8 +4151,8 @@ addEventListener('resize', () => {
 });
 
 // Used by the browser checks to click a cell by its axial coordinates.
-(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number) => {
-  return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1);
+(window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number, lift = 0) => {
+  return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1, lift);
 };
 // Used by the browser checks to see the console screen (#512) and the recorder (#517) on the window: the box around its
 // corners, in pixels.

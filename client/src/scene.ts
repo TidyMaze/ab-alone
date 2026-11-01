@@ -445,10 +445,11 @@ export class SceneRenderer {
     }
   }
 
-  cellToScreen(q: number, r: number, width: number, height: number, scale = 1): { x: number; y: number } {
+  /** Where the point `lift` above the cell is drawn: a mark on top of a marble is not under the cell's centre (#1259). */
+  cellToScreen(q: number, r: number, width: number, height: number, scale = 1, lift = 0): { x: number; y: number } {
     const p = axialTo3D(q, r, scale);
     this.camera.updateMatrixWorld();
-    const v = new THREE.Vector3(p.x, 0, p.z).project(this.camera);
+    const v = new THREE.Vector3(p.x, lift, p.z).project(this.camera);
     return {
       x: ((v.x + 1) / 2) * width,
       y: ((1 - v.y) / 2) * height,
