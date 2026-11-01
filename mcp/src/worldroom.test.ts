@@ -2,7 +2,7 @@
 // that records what the room would see. The wire format is the client's own (client/src/worldpeers.ts), read back here with it.
 import { describe, expect, test } from 'vitest';
 import type { PeerNet } from '../../client/src/p2p';
-import { decode, encodeHello, encodePos, KEEPALIVE_MS, MAX_NAME, SEND_MS } from '../../client/src/worldpeers';
+import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, KEEPALIVE_MS, MAX_NAME, SEND_MS } from '../../client/src/worldpeers';
 import { bossIds, worldRules } from './engine';
 import type { Result, ToolError } from './game';
 import { OpenWorld } from './world';
@@ -180,6 +180,18 @@ describe('world_heroes', () => {
     room.say('ghost', encodePos(1, 1, 1)); // no Hello first
     room.say('old', Uint8Array.of(1, 2, 0, 0, 0, 0, 0));
     expect(value(worldRoom.heroes()).heroes).toEqual([]);
+  });
+
+  test('a boulder break or a troop from a browser is not a position: the hero keeps its last cell', () => {
+    const { worldRoom, room, t } = setup();
+    value(worldRoom.join({}));
+    room.say('a', encodeHello('A'));
+    room.say('a', encodePos(2, 1, 1));
+    t.tick(1000); // past the gap a browser keeps between two messages
+    room.say('a', encodeBreak({ kind: 'break', seed: SEED, q: 3, r: 3, pub: 'A'.repeat(43), sig: 'A'.repeat(86) }));
+    t.tick(1000);
+    room.say('a', encodeTroop([[1, 0]]));
+    expect(value(worldRoom.heroes()).heroes).toEqual([{ id: 'a', name: 'A', cell: '(2,1)', distance: 3 }]);
   });
 
   test('a hero that left, or stayed silent for 10 s, is no longer listed', () => {

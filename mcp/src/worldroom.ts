@@ -141,7 +141,7 @@ export class WorldRoom {
     net.onData((data, peer) => {
       const message = decode(data);
       if (message?.t === 'hello') run.peers.hello(peer, this.opts.clock(), message.name);
-      else if (message) run.peers.position(peer, message, this.opts.clock());
+      else if (message?.t === 'pos') run.peers.position(peer, message, this.opts.clock()); // a break or a troop is not a place: the agent's state does not need them
     });
     net.onLeave((peer) => run.peers.leave(peer));
     net.onError(() => (run.problem = PROBLEM));
