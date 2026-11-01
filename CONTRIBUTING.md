@@ -67,8 +67,8 @@ full e2e suite run locally before every merge (decision #445).
 9. **This repo is public.** Never commit a secret. See section 12.
 10. **Every bug goes through an issue first.** No fix, not even a one-liner, without a `bug` issue
     created from the form. See section 6.7.
-11. **Bugs before features.** A `Ready` bug is always picked before any `Ready` task of the same
-    or lower priority, and an open bug is never below `P1`.
+11. **Priority, mainly FIFO.** Tickets are taken by importance and age (section 6.3). An open bug
+    is never below `P1`.
 12. **Test in a real browser regularly.** The full Playwright suite runs locally on every PR before
     it merges (CI runs it only on a manual dispatch, decision #445), and a manual Chrome check before merging a
     player-facing change. See section 11.
@@ -209,9 +209,10 @@ the triager does exactly one of:
 
 ### 6.3 Doing a Task
 
-1. Pick the next item in this order: **`Ready` bugs first** (highest `Priority` first), then
-   `Ready` tasks by `Priority`. You may skip one only with a comment saying why. Bugs follow the
-   same steps below, with "Task" meaning "Task or Bug".
+1. Pick the next item by priority, mainly FIFO (owner, 2026-11-01). `P0` and a red `main` come
+   first. Then the oldest `Ready` issue by creation date, where a bug or a `P1` counts as 3 days
+   older and a `P3` as 3 days younger. You may skip one only with a comment saying why. Bugs follow
+   the same steps below, with "Task" meaning "Task or Bug".
 2. Assign yourself, comment `taking it`, move it to `In Progress`.
    **WIP limit: one unfinished Task per contributor, at most 4 in progress overall** (rule 7; an
    agent counts as a contributor).
