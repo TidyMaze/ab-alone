@@ -52,7 +52,6 @@
         <p id="openworld-live" role="status" class="sr-only"></p>
         <p>Open world: <span class="keys-hint">arrows or a click on a next cell to roll, Q E to turn the camera, R to reset it, Esc to leave.</span><span class="pad-hint">left stick to walk, LB RB to turn the camera, R3 to reset it, triggers to zoom, B to leave.</span></p>
         <p id="openworld-mode"></p>
-        <p>Seed <output id="openworld-seed"></output>, shared as <code>?openworld=&lt;seed&gt;</code>.</p>
         <p><output id="openworld-medals"></output></p>
         <p id="openworld-tally"></p>
         <div id="openworld-online" hidden>
@@ -62,16 +61,10 @@
           <button id="openworld-hide" type="button" aria-pressed="false">Hide</button>
         </div>
         <button id="openworld-dungeon" type="button">Dungeon</button>
-        <button id="openworld-new" type="button">New world</button>
         <p id="openworld-dungeon-note" role="status"></p>
-        <div id="openworld-confirm" hidden>
-          <p>Discard this world's save?</p>
-          <button id="openworld-keep" type="button">Keep this world</button>
-          <button id="openworld-discard" type="button">Discard and start new</button>
-        </div>
       </div>
       <div id="openworld-peers" aria-label="Other heroes out of view" hidden></div>
-      <button id="openworld-chip" type="button" aria-label="Open world help and seed" aria-controls="openworld-hud" aria-expanded="false" hidden>i</button>
+      <button id="openworld-chip" type="button" aria-label="Open world help" aria-controls="openworld-hud" aria-expanded="false" hidden>i</button>
       <div id="joystick" aria-hidden="true" hidden><span id="joystick-knob"></span></div>
       <div id="fps" aria-hidden="true" hidden></div>
       <!-- The low tier offer (#849): shown once after a sustained slow frame rate, never taken without a press. -->

@@ -16,8 +16,9 @@ A-light Explore (#720 to #725), which it does not touch.
 
 ## 1. The mode
 
-- **Entry**: "Open world" in the mode menu, for everyone, no flag (#1000). A click rolls a random
-  seed; `?openworld=<seed>` fixes it (tests, sharing a world). Leave returns to where the player
+- **Entry**: "Open world" in the mode menu, for everyone, no flag (#1000). A click opens the public
+  world, seed 1305 (owner's choice, #1361: a player cannot change the seed for now); any `?openworld=...` link opens it at the
+  load, the online notice first. The seed of the URL is read only under automation (tests). Leave returns to where the player
   came from.
 - **Delivered (#963)**: the spec (#964), the map (#965), the enemies and troop (#966), the attack (#967) and the save (#968) are merged; the mode is reachable without a flag.
 - **A-light dropped**: #720 and its slices #722 to #725, parked since 2026-10-26, are superseded by this mode and the boss lairs (#1170, #1171). The hero rule and Rewind (#723, #724) were not built.
@@ -190,9 +191,10 @@ loop flushes it. The world is saved once more when the mode is left, and when an
 does not wait for the game: a storage that fails (a private window, blocked or full storage) is no game error, the save is
 just not counted. The page counts the stored saves in `body[data-openworld-saved]`, which the e2e test polls.
 
-**Which world opens.** The menu entry (`#openworld`) resumes the last world played when it has a valid save, else rolls a
-new random seed. `?openworld=<n>` opens that seed, resuming its own save if it has one. `?openworld=new` opens a new random
-seed and starts it fresh. There is no visible "New world" control yet (a follow-up). The push count of a session
+**Which world opens.** For a player the menu entry (`#openworld`) and any
+`?openworld=...` link at load open the public world, seed 1305 (#1361); older private saves stay in the store, untouched, and
+there is no New world control. Under automation (`navigator.webdriver`) `?openworld=<n>` opens that seed, resuming its own
+save, and `?openworld=new` opens a new random seed fresh. The push count of a session
 (`openworldPush`) is not saved: it starts at 0 after a reload.
 
 **Versions and garbage.** A record whose `version` is not the `WORLD_VERSION` of the bridge (`world_version()`,

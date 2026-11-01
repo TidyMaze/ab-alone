@@ -111,13 +111,13 @@ describe('the gamepad in the Open world', () => {
     const game = await boot('?bot=off&openworld=7');
     const pad = plugPad(game);
     await openWorldOn(game);
-    byId('openworld-new').focus();
+    byId('openworld-dungeon').focus();
     pad.hold([], [1, 0, 0, 0]);
     pad.hold([]);
     pad.tap(RB);
     expect(data().openworldAt).toBe('0,0');
     expect(data().openworldYaw).toBe('-30');
-    expect(document.activeElement).not.toBe(byId('openworld-new'));
+    expect(document.activeElement).not.toBe(byId('openworld-dungeon'));
     pad.tap(R3); // a reset off the canvas is still the camera's
     pad.unplug();
   });
