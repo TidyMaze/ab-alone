@@ -396,7 +396,6 @@ describe('The invite link', () => {
     const transport = vi.spyOn(p2p, 'p2pTransport');
     game.openModes();
     byId('play-online').click();
-    await until(game, () => transport.mock.calls.length > 0); // the room opens once the page's keys are made
     transport.mock.calls[0]![1]!('ICE failed');
     byId('copy-diagnostics').click();
     await until(game, () => calls() > 0);

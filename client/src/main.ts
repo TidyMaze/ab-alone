@@ -4961,10 +4961,7 @@ function roomTransport(room: string): Transport {
 /** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. A joiner
  * from a link with the creator's fingerprint `creator` takes seat 1 only from that key (#1323). */
 async function goOnline(room: string, side: number, coop?: CoopFight, creator?: string): Promise<void> {
-  const keys = await generateKeys(); // first: the creator's invite link carries their fingerprint
-  const key = await fingerprint(keys.pub);
   leaveMode();
-  if (side === 1) showInvite(inviteUrl(location.href, room, coop, key), `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`);
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
   // co-op: the same fight again, both seats asked (#531). The accessible name and the dock's short label follow the visible one (#1068).
@@ -5002,6 +4999,9 @@ async function goOnline(room: string, side: number, coop?: CoopFight, creator?: 
     onlineNote = netState;
     hud();
   };
+  const keys = await generateKeys();
+  const key = await fingerprint(keys.pub); // the creator's invite link carries it
+  if (side === 1) showInvite(inviteUrl(location.href, room, coop, key), `Invite link: send it to your ${coop ? 'partner' : 'opponent'}`);
   online = new OnlineSession({
     game: room,
     side,
