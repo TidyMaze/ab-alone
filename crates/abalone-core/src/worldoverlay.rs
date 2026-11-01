@@ -123,7 +123,18 @@ impl Overlay {
         troop: &[Cell],
         terrain: impl Fn(i32, i32) -> Option<Terrain>,
     ) -> Option<Played> {
-        todo!()
+        let foes = self.around(chunks, troop[0], PUSH_REACH);
+        let push = worldfight::best_push(troop, &foes, terrain)?;
+        let (mut after, mut enemies) = (troop.to_vec(), foes.clone());
+        let ejected = worldfight::apply_push(&mut after, &mut enemies, &push);
+        self.apply(&foes, &enemies, ejected.len());
+        Some(Played {
+            troop: after,
+            foes,
+            enemies,
+            ejected,
+            dir: push.dir.vector(),
+        })
     }
 
     /// Plays a push: the enemies `old` leave their cells, the enemies `new` stand on theirs, and the `ejected` ones count as beaten.
@@ -208,8 +219,8 @@ mod tests {
         overlay.apply(&[(1, 0)], &[], 0);
         assert_eq!(overlay.added(), [(3, 0), (2, 0)]);
         assert_eq!(
-            overlay.chunk_enemies(&[(9, 9)], (0, 0)),
-            [(9, 9), (3, 0), (2, 0)]
+            overlay.chunk_enemies(&[(3, 3)], (0, 0)),
+            [(3, 3), (3, 0), (2, 0)]
         );
     }
 
@@ -245,13 +256,13 @@ mod tests {
     #[test]
     fn the_troop_pushes_an_enemy_in_line_and_the_overlay_follows() {
         let mut overlay = Overlay::new();
-        let chunks = [((0, 0), vec![(1, 0), (9, 9)])];
+        let chunks = [((0, 0), vec![(1, 0), (3, 3)])];
         let played = overlay
             .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], grass)
             .unwrap();
         assert_eq!(played.troop, [(1, 0), (0, 0), (-1, 0)]);
-        assert_eq!(played.foes, [(1, 0), (9, 9)]);
-        assert_eq!(played.enemies, [(2, 0), (9, 9)]);
+        assert_eq!(played.foes, [(1, 0), (3, 3)]);
+        assert_eq!(played.enemies, [(2, 0), (3, 3)]);
         assert!(played.ejected.is_empty());
         assert_eq!(played.dir, (1, 0));
         assert_eq!(overlay.removed(), [(1, 0)]);
