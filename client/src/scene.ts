@@ -1,6 +1,6 @@
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
-import { pass, renderOutput } from 'three/tsl';
+import { pass, renderOutput, saturation } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { axialTo3D } from './board';
 import { FOV, framing, screenView, viewPosition, type View } from './camera';
@@ -18,7 +18,9 @@ export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
 export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
 /** AgX, the Blender render's own view transform, at the exposure that lands the dish on #b6ab82 and the gap on #2d3539. */
-const TERRACE_EXPOSURE = 1.4;
+const TERRACE_EXPOSURE = 1.5;
+/** What AgX takes out of the palette is given back (art director: about 8 to 10 percent). */
+export const TERRACE_SATURATION = 1.35;
 /** The radius of the rounded edges of the board's plate and rim. */
 const FRAME_BEVEL = 0.03;
 
@@ -66,16 +68,19 @@ export function createBloomPipeline(
   smooth = false,
   blurEvery = 2,
   withBloom = true,
+  /** Colour saturation after the tone map: 1 leaves it (the room), the terrace asks more (AgX washes the palette). */
+  saturate = 1,
 ): (THREE.RenderPipeline & { bloom: ReturnType<typeof bloom> | null }) | null {
   try {
     // The low tier (#849) draws no bloom: the scene goes straight to the screen, or through FXAA alone.
-    if (!withBloom && !smooth) return null;
+    if (!withBloom && !smooth && saturate === 1) return null;
     const pipeline = new THREE.RenderPipeline(renderer);
     const scenePass = pass(scene, camera);
     const colorNode = scenePass.getTextureNode('output');
     if (!withBloom) {
       pipeline.outputColorTransform = false;
-      pipeline.outputNode = fxaa(renderOutput(colorNode));
+      const graded = saturate === 1 ? renderOutput(colorNode) : saturation(renderOutput(colorNode), saturate);
+      pipeline.outputNode = smooth ? fxaa(graded) : graded;
       return Object.assign(pipeline, { bloom: null });
     }
     const bloomNode = bloom(colorNode, 0.175, 0.15, 1);
@@ -119,6 +124,8 @@ export class SceneRenderer {
   readonly renderer: THREE.WebGPURenderer;
   readonly backend: 'WebGPU' | 'WebGL2';
   readonly pipeline: ReturnType<typeof createBloomPipeline> = null;
+  /** The terrace's: no bloom, FXAA when MSAA is off, and the saturation AgX takes out (#1314). */
+  readonly flatPipeline: ReturnType<typeof createBloomPipeline> = null;
 
   readonly fogObj: THREE.Fog;
   readonly particles: THREE.Points;
@@ -288,7 +295,9 @@ export class SceneRenderer {
       this.ghosts,
     );
 
-    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0), webdriver ? 1 : 2, options.bloom ?? true);
+    const smooth = smoothEdges(renderPixelRatio(dpr, webdriver), this.renderer.samples > 0);
+    this.pipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, webdriver ? 1 : 2, options.bloom ?? true);
+    this.flatPipeline = createBloomPipeline(this.renderer, this.scene, this.camera, smooth, 1, false, TERRACE_SATURATION);
   }
 
   async init(): Promise<void> {
@@ -500,9 +509,11 @@ export class SceneRenderer {
   }
 
   render(): void {
-    if (this.pipeline) {
+    // The terrace lights nothing from within: no bloom, only the graded and smoothed picture (#1314).
+    const pipeline = this.terraceOn ? this.flatPipeline : this.pipeline;
+    if (pipeline) {
       try {
-        this.pipeline.render();
+        pipeline.render();
         return;
       } catch {
         // Fall back to renderer if pipeline fails in mock or test environment

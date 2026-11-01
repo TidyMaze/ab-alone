@@ -469,6 +469,15 @@ describe('SceneRenderer (#632)', () => {
     expect(createBloomPipeline(createMockRenderer(), new THREE.Scene(), camera, false, 2, false)).toBeNull();
   });
 
+  it('gives the saturation back after the tone map when asked, with FXAA or without (#1314)', () => {
+    const camera = new THREE.PerspectiveCamera();
+    const [smooth, plain] = [true, false].map((fxaa) => createBloomPipeline(createMockRenderer(), new THREE.Scene(), camera, fxaa, 1, false, 1.12)!);
+    expect(smooth!.bloom).toBeNull();
+    expect((smooth!.outputNode as any).constructor.name).toBe('FXAANode');
+    expect((plain!.outputNode as any).constructor.name).not.toBe('FXAANode'); // the grade alone: no MSAA to replace, no FXAA to ask
+    expect(plain!.outputColorTransform).toBe(false);
+  });
+
   it('builds no bloom pass for a low tier renderer (#849)', () => {
     const low = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false, bloom: false });
     expect(low.pipeline!.bloom).toBeNull();
@@ -535,6 +544,17 @@ describe('SceneRenderer (#632)', () => {
     sr.setTerrace(false);
     expect([sr.terrace.visible, sr.propsGroup.visible, sr.roomDeck.visible, sr.plate.visible]).toEqual([false, true, true, true]);
     expect([sr.scene.background, sr.camera.far]).toEqual([room, 100]);
+  });
+
+  it('draws the terrace through the graded pipeline, with no bloom, and the room through the bloom one (#1314)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
+    const [flat, room] = [vi.fn(), vi.fn()];
+    sr.flatPipeline!.render = flat;
+    sr.pipeline!.render = room;
+    sr.render();
+    sr.setTerrace(true);
+    sr.render();
+    expect([room.mock.calls.length, flat.mock.calls.length]).toEqual([1, 1]);
   });
 
   it('lights the turn bar of the side to move on the terrace, none at the end (#1314)', () => {

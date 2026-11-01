@@ -100,3 +100,18 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
   }
   return out;
 }
+
+/** The terrace's default camera, the Blender brief's: pitch 57 (33 from the vertical), 13.6 away, fov 40 as the game's. */
+export const TERRACE_VIEW = { azimuth: 0, polar: (33 * Math.PI) / 180, distance: 13.6 } as const;
+
+/** Whether a view is the game's default one, which the terrace replaces by its own and nothing else. */
+export function isDefaultView(v: { azimuth: number; polar: number; distance: number }, reset: { azimuth: number; polar: number; distance: number }): boolean {
+  return v.azimuth === reset.azimuth && Math.abs(v.polar - reset.polar) < 1e-6 && Math.abs(v.distance - reset.distance) < 1e-6;
+}
+
+/** The sky of the arena file alone, for the marbles to reflect: the dome, the sun and the planet, not the board nor its haze. */
+export function terraceSky(arena: THREE.Object3D): THREE.Scene {
+  const sky = new THREE.Scene();
+  for (const mesh of arena.children as THREE.Mesh[]) if (mesh.material && (mesh.material as THREE.Material).name === 'terrace_solid' && mesh.name !== 'scene_turnbar_black' && mesh.name !== 'scene_turnbar_white') sky.add(mesh.clone());
+  return sky;
+}

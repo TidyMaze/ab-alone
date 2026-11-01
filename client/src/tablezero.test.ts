@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial } from './tablezero';
+import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, terraceSky, isDefaultView, TERRACE_VIEW } from './tablezero';
 
 describe('Table Zero is the scene of a 1v1 game only', () => {
   const on = { hub: false, fight: false, royale: false, run: false, room: false, ready: true };
@@ -96,5 +96,23 @@ describe('the unlit materials of the arena file', () => {
     expect(terraceMaterial(lamp(), colours([0, 0]))).toBe(haze);
     const lit = new THREE.MeshStandardMaterial();
     expect(terraceMaterial(lit, colours([0]))).toBe(lit);
+  });
+});
+
+describe('the terrace camera and its sky', () => {
+  const reset = { azimuth: 0, polar: 0.6288, distance: 13.6 };
+  it('replaces the default view only', () => {
+    expect(isDefaultView({ ...reset }, reset)).toBe(true);
+    expect(isDefaultView({ ...reset, azimuth: 0.1 }, reset)).toBe(false);
+    expect(isDefaultView({ ...reset, polar: 0.7 }, reset)).toBe(false);
+    expect(isDefaultView({ ...reset, distance: 9 }, reset)).toBe(false);
+    expect([TERRACE_VIEW.distance, Math.round((TERRACE_VIEW.polar * 180) / Math.PI)]).toEqual([13.6, 33]);
+  });
+  it('keeps the solid sky meshes, not the lit board, the haze or the turn bars', () => {
+    const mat = (name: string): THREE.Material => Object.assign(new THREE.MeshBasicMaterial(), { name });
+    const mesh = (name: string, material: THREE.Material): THREE.Mesh => Object.assign(new THREE.Mesh(new THREE.BufferGeometry(), material), { name });
+    const arena = new THREE.Group();
+    arena.add(mesh('', mat('terrace_solid')), mesh('', mat('kit_mat_vertexcolor')), mesh('', mat('terrace_blended')), mesh('scene_turnbar_black', mat('terrace_solid')), mesh('scene_turnbar_white', mat('terrace_solid')), new THREE.Group());
+    expect(terraceSky(arena).children).toHaveLength(1);
   });
 });
