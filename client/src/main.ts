@@ -179,7 +179,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceSky } from './tablezero';
+import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -3385,9 +3385,9 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
   .then(([arena, kit]) => {
     const drawn = mergeByMaterial(arena.scene); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
-    // The black marbles reflect the arena's own sky (a window of light and a cool rim), not the room's lamps.
+    // The black marbles reflect a sky with a window of light and a cool rim, not the room's lamps.
     const pmrem = new THREE.PMREMGenerator(renderer);
-    terraceShell.envMap = pmrem.fromScene(terraceSky(drawn), 0, 0.1, 300).texture;
+    terraceShell.envMap = pmrem.fromScene(terraceEnvironment(), 0, 0.1, 300).texture;
     pmrem.dispose();
     terraceKit.pedestal = kit.scene.getObjectByName('kit_pedestal_flat') as THREE.Mesh;
     syncPedestals = instanceMarbles(marbles, terraceKit.pedestal.geometry, scene);
@@ -3397,19 +3397,20 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
   .catch(() => undefined);
 // The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
 // clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
-const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x101317, roughness: 0.35, metalness: 0, specularIntensity: 0.3, envMapIntensity: 2 }); // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
+const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x101317, roughness: 0.3, metalness: 0, specularIntensity: 0.12, envMapIntensity: 6 }); // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
 const terraceGlass = new THREE.MeshStandardMaterial({ color: 0xe8d9b4, emissive: 0x2a2012, roughness: 0.6, metalness: 0 }); // warm ivory: the emissive keeps the hemisphere's blue fill off it, no reflection: the whites take no blue fill
 function terraceMarbles(on: boolean): void {
   marbleMaterials[1] = on && skin === DEFAULT_SKIN ? terraceShell : shellMaterial(skin);
   marbleMaterials[2] = on && glass === DEFAULT_GLASS_SKIN ? terraceGlass : glassMaterial(glass);
 }
+const PHONE_POLAR = (46 * Math.PI) / 180; // pitch 44 on a phone: the horizon enters the top of the frame
 const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
   const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
   terraceMarbles(on);
   if (on && isDefaultView(view, resetView(4))) {
-    view = { ...TERRACE_VIEW, distance: innerWidth < innerHeight ? 18 : TERRACE_VIEW.distance }; // the Blender brief's camera, drawn back on a phone so the sky and the horizon show, for the terrace only: any view the player chose stays
+    view = innerWidth < innerHeight ? { ...TERRACE_VIEW, polar: PHONE_POLAR, distance: 18 } : { ...TERRACE_VIEW }; // the Blender brief's camera, drawn back on a phone so the sky and the horizon show, for the terrace only: any view the player chose stays
     applyView();
   }
   if (on === sceneRenderer.terraceOn) return;

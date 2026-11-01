@@ -85,6 +85,7 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
     if (TURN_BAR.test(o.name)) return void bars.push(mesh);
     const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
     g.deleteAttribute('uv');
+    if (o.name === 'scene_sky_dome') saturateColours(g, SKY_SATURATION);
     const material = terraceMaterial(mesh.material as THREE.Material, mesh.geometry);
     byMaterial.set(material, [...(byMaterial.get(material) ?? []), g]);
   });
@@ -92,6 +93,7 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
   for (const [material, geometries] of byMaterial) {
     const blended = material.transparent;
     if (blended) material.depthWrite = false;
+    else if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) (material as THREE.MeshStandardMaterial).color.multiply(TERRACE_TINT);
     const merged = new THREE.Mesh(mergeGeometries(geometries, false), material);
     merged.frustumCulled = false; // the arena is always in view
     merged.renderOrder = blended ? 1 : 0;
@@ -113,9 +115,43 @@ export function isDefaultView(v: { azimuth: number; polar: number; distance: num
   return v.azimuth === reset.azimuth && Math.abs(v.polar - reset.polar) < 1e-6 && Math.abs(v.distance - reset.distance) < 1e-6;
 }
 
-/** The sky of the arena file alone, for the marbles to reflect: the dome, the sun and the planet, not the board nor its haze. */
-export function terraceSky(arena: THREE.Object3D): THREE.Scene {
-  const sky = new THREE.Scene();
-  for (const mesh of arena.children as THREE.Mesh[]) if (mesh.material && (mesh.material as THREE.Material).name === 'terrace_solid' && mesh.name !== 'scene_turnbar_black' && mesh.name !== 'scene_turnbar_white') sky.add(mesh.clone());
-  return sky;
+/**
+ * What the black marbles reflect (the room's lamps are gone): a sky ramp from the teal zenith to the orange band, a small white
+ * window high on the left, a faint cyan strip low on the right. No sun disc: it made a warm blotch low on every marble.
+ */
+export function terraceEnvironment(): THREE.Scene {
+  const env = new THREE.Scene();
+  const ramp = new THREE.SphereGeometry(50, 24, 16);
+  const [top, horizon, band, ground] = [0x35676f, 0x9db8c4, 0xe8a870, 0x5a4636].map((c) => new THREE.Color(c)) as [THREE.Color, THREE.Color, THREE.Color, THREE.Color];
+  const n = ramp.attributes.position!.count;
+  const rgb = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const y = ramp.attributes.position!.getY(i) / 50;
+    const c = y > 0.25 ? top.clone().lerp(horizon, 1 - (y - 0.25) / 0.75) : y > 0 ? horizon.clone().lerp(band, 1 - y / 0.25) : band.clone().lerp(ground, Math.min(1, -y * 4));
+    rgb.set([c.r, c.g, c.b], i * 3);
+  }
+  ramp.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+  env.add(new THREE.Mesh(ramp, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const window = new THREE.Mesh(new THREE.PlaneGeometry(14, 9), new THREE.MeshBasicMaterial({ color: new THREE.Color(8, 8, 7.5), side: THREE.DoubleSide }));
+  window.position.set(-20, 24, -28);
+  window.lookAt(0, 0, 0);
+  const rim = new THREE.Mesh(new THREE.PlaneGeometry(40, 1.5), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 0.9, 1.1), side: THREE.DoubleSide }));
+  rim.position.set(30, 6, -25);
+  rim.lookAt(0, 0, 0);
+  env.add(window, rim);
+  return env;
+}
+
+/** The lit material is multiplied by this: AgX leans the dish pink and the plateau tan; a little green puts the Moss and the dish back (art director). */
+export const TERRACE_TINT = new THREE.Color(0.99, 1.08, 0.97);
+/** The horizon band of the sky dome, 30 percent more saturated (art director): the dome's own vertex colours. */
+export const SKY_SATURATION = 1.3;
+
+/** Pushes the colours of a geometry away from their grey by `k` (1 leaves them). */
+export function saturateColours(geometry: THREE.BufferGeometry, k: number): void {
+  const colour = geometry.attributes.color!;
+  for (let i = 0; i < colour.count; i++) {
+    const grey = 0.2126 * colour.getX(i) + 0.7152 * colour.getY(i) + 0.0722 * colour.getZ(i);
+    colour.setXYZ(i, Math.max(0, grey + (colour.getX(i) - grey) * k), Math.max(0, grey + (colour.getY(i) - grey) * k), Math.max(0, grey + (colour.getZ(i) - grey) * k));
+  }
 }

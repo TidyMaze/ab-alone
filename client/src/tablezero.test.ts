@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, terraceSky, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE } from './tablezero';
+import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
 
 describe('Table Zero is the scene of a 1v1 game only', () => {
   const on = { hub: false, fight: false, royale: false, run: false, room: false, ready: true };
@@ -109,11 +109,42 @@ describe('the terrace camera and its sky', () => {
     expect(isDefaultView({ ...reset, distance: 9 }, reset)).toBe(false);
     expect([TERRACE_VIEW.distance, Math.round((TERRACE_VIEW.polar * 180) / Math.PI)]).toEqual([13.6, 33]);
   });
-  it('keeps the solid sky meshes, not the lit board, the haze or the turn bars', () => {
-    const mat = (name: string): THREE.Material => Object.assign(new THREE.MeshBasicMaterial(), { name });
-    const mesh = (name: string, material: THREE.Material): THREE.Mesh => Object.assign(new THREE.Mesh(new THREE.BufferGeometry(), material), { name });
-    const arena = new THREE.Group();
-    arena.add(mesh('', mat('terrace_solid')), mesh('', mat('kit_mat_vertexcolor')), mesh('', mat('terrace_blended')), mesh('scene_turnbar_black', mat('terrace_solid')), mesh('scene_turnbar_white', mat('terrace_solid')), new THREE.Group());
-    expect(terraceSky(arena).children).toHaveLength(1);
+  it('builds the marbles' + "'" + ' environment: a sky ramp, a bright window and a cyan strip, no sun disc', () => {
+    const env = terraceEnvironment();
+    expect(env.children).toHaveLength(3);
+    const ramp = env.children[0] as THREE.Mesh;
+    const colour = ramp.geometry.attributes.color!;
+    let top = 0;
+    let bottom = 0;
+    for (let i = 0; i < colour.count; i++) {
+      const y = ramp.geometry.attributes.position!.getY(i);
+      if (y > 49) top = colour.getZ(i);
+      if (y < -49) bottom = colour.getZ(i);
+    }
+    expect(top).toBeGreaterThan(bottom); // teal blue at the zenith, brown ground below
+    const window = env.children[1] as THREE.Mesh;
+    expect((window.material as THREE.MeshBasicMaterial).color.r).toBeGreaterThan(1); // brighter than white: a window of light
+  });
+  it('saturates colours away from their grey and leaves the grey alone', () => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array([0.8, 0.4, 0.2, 0.5, 0.5, 0.5]), 3));
+    saturateColours(g, 1.5);
+    const c = g.attributes.color!;
+    expect(c.getX(0) - c.getZ(0)).toBeGreaterThan(0.6); // 0.6 before
+    expect([c.getX(1), c.getY(1), c.getZ(1)].every((v) => Math.abs(v - 0.5) < 1e-6)).toBe(true);
+    saturateColours(g, 5); // never below zero
+    expect(c.getZ(0)).toBeGreaterThanOrEqual(0);
+  });
+  it('tints the lit material once when merged, and saturates the dome', () => {
+    const lit = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const dome = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), lit), { name: 'scene_sky_dome' });
+    dome.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(24 * 3).fill(0.3), 3));
+    const root = new THREE.Group();
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ emissive: 0xffffff }));
+    lamp.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(24 * 4).fill(1), 4));
+    root.add(dome, lamp);
+    const solid = (mergeByMaterial(root).children as THREE.Mesh[]).find((m) => (m.material as THREE.Material).name === 'terrace_solid')!;
+    expect((solid.material as THREE.MeshBasicMaterial).color.g).toBeCloseTo(1 / TERRACE_EXPOSURE); // the unlit colour is not tinted
+    expect(lit.color.g).toBeCloseTo(TERRACE_TINT.g);
   });
 });
