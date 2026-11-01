@@ -22,8 +22,6 @@ async function enter(page: Page, seed: number): Promise<void> {
   });
   await page.goto(`./?bot=off&net=hook&openworld=${seed}`);
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworld)).toBe(String(seed));
 }
 

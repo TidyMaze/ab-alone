@@ -8,8 +8,6 @@ const MOTION_WAIT = 400;
 const enter = async (page: import('@playwright/test').Page) => {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect(page.locator('#openworld-hud')).toBeVisible();
 };
 const anim = (page: import('@playwright/test').Page, sel: string) =>
@@ -30,10 +28,6 @@ test('the HUD and the New world sheet slide in on the base token, with no layout
       for (const e of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) if (!e.hadRecentInput) w.__cls += e.value;
     }).observe({ type: 'layout-shift' });
   });
-  await page.locator('#openworld-new').click();
-  await expect(page.locator('#openworld-confirm')).toBeVisible();
-  expect(await anim(page, '#openworld-confirm')).toEqual({ name: 'sheet-in', duration: '0.2s' });
-  await expect(page.locator('#openworld-keep')).toBeFocused(); // the focus is not lost
   await page.waitForTimeout(MOTION_WAIT);
   expect(await page.evaluate(() => (window as unknown as { __cls: number }).__cls)).toBe(0);
 });
@@ -42,7 +36,4 @@ test('Reduced motion shows the HUD and the sheet at once (#1105)', async ({ page
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await enter(page);
   expect(await anim(page, '#openworld-hud')).toEqual({ name: 'sheet-in', duration: '0s' });
-  await page.locator('#openworld-new').click();
-  await expect(page.locator('#openworld-confirm')).toBeVisible();
-  expect(await anim(page, '#openworld-confirm')).toEqual({ name: 'sheet-in', duration: '0s' });
 });

@@ -6,8 +6,6 @@ import { openModes } from './modes';
 async function enter(page: Page): Promise<void> {
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
-  await openModes(page);
-  await page.locator('#openworld').click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
 }
 const count = (page: Page) => page.evaluate(() => Number(document.body.dataset.openworldParticles ?? 0));

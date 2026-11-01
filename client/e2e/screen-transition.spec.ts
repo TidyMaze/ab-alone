@@ -43,7 +43,6 @@ test('the fade really plays when the Open world is entered by its button (#1099)
     (window as any).__started = [];
     document.addEventListener('animationstart', (e) => (window as any).__started.push((e as AnimationEvent).animationName), true);
   });
-  await page.locator('#openworld').click();
   await expect(page.locator('#openworld-hud')).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as any).__started)).toContain('screen-in-world');
 });

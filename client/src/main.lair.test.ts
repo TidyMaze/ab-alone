@@ -104,9 +104,7 @@ describe('the boss lairs of the Open world (#1170)', () => {
 
 describe("Tally's line in the Open world (#1171)", () => {
   it('shows "Claim 0412: unworked." the first time the player opens an Open world, and never again', async () => {
-    const game = await boot('?bot=off&openworld=7');
-    game.openModes();
-    byId('openworld').click();
+    const game = await boot('?bot=off&openworld=7'); // the link opens the world at the load (#1361)
     await settle();
     expect(byId('openworld-tally').textContent).toBe('Claim 0412: unworked.');
     expect(localStorage.getItem('ab-alone.tally0412')).toBe('seen');

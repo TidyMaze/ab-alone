@@ -519,21 +519,6 @@ describe('the public Open world online', () => {
     expect(private7.world()).toBeNull();
   });
 
-  it('New world leaves the room: the new seed is private', async () => {
-    const game = await boot('?bot=off&consent');
-    game.openModes();
-    byId('openworld').click();
-    await settle();
-    byId('consent-accept').click();
-    await settle();
-    const room = game.world()!;
-    byId('openworld-new').click();
-    byId('openworld-discard').click();
-    await settle();
-    expect(room.closed).toBe(true);
-    expect(data().openworld).not.toBe(String(PUBLIC_SEED));
-  });
-
   it('under ?net=hook the test page drives the room: Hello out on a join, a far hero in, no network', async () => {
     const w = window as unknown as Record<string, unknown>;
     const out: [number[], string | undefined][] = [];

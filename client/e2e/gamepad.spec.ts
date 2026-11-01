@@ -67,7 +67,6 @@ test('a gamepad walks the Open world, turns its camera and enters a lair', async
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
   await page.locator('#modes').click();
-  await page.locator('#openworld').click();
   const at = () => page.evaluate(() => document.body.dataset.openworldAt);
   await expect.poll(at).toBe('0,0');
   const yaw = () => page.evaluate(() => document.body.dataset.openworldYaw);
