@@ -7,7 +7,8 @@ test('textures are requested and the board still renders', async ({ page }) => {
     const file = r.url().split('/').pop()!;
     // KTX2Loader's transcoder comes from the app, not a CDN: node_modules in dev, a hashed asset in the build (#700).
     if (file.startsWith('basis_transcoder')) transcoder.push(`${r.status()} ${new URL(r.url()).origin} ${file.replace(/-[\w-]+\./, '.')}`);
-    else if (r.url().includes('/assets/')) loaded.push(`${r.status()} ${file}`);
+    // The build's own files (page, bot worker, engine) are not textures; any other file under /assets/ is.
+    else if (r.url().includes('/assets/') && !/^(index|bot\.worker|abalone_wasm_bg)-[\w-]+\.(js|css|wasm)$/.test(file)) loaded.push(`${r.status()} ${file}`);
   });
   await page.goto('./?bot=on');
   await page.locator('canvas').waitFor();

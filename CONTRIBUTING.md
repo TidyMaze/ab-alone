@@ -509,9 +509,13 @@ and write its result in the PR body ("Full e2e suite run locally: N passed"). CI
 manual dispatch (`gh workflow run ci.yml --ref <branch>`, decision #445). No full `scripts/verify.sh` while developing and no `--repeat-each` beyond what a
 flake needs.
 
-**e2e:** from `client/`, run `bun run e2e` (Chromium project). Playwright starts the dev server
-itself, with `--mode e2e`: that server does not watch files, so a wasm rebuild or an edit during a
-run never reloads a page under test (bug #185). It also serves the page without its Google Fonts links, so a
+**e2e:** from `client/`, run `bun run e2e` (Chromium project). Playwright builds the page
+(`vite build --mode e2e`, 2 to 3 s, into `client/dist-e2e/`) and serves it with `vite preview`: most specs
+run on that build, which is lighter than the dev server (it transforms every module again on each page
+load, #1289). Locally it runs 4 workers at most, so the machine stays usable. Playwright also starts the
+dev server itself, with `--mode e2e`, for the specs that test the dev server (`dev-server`, `lights-panel`,
+the dev case of `offline`, they read `E2E_DEV_URL`): that server does not watch files, so a wasm rebuild or an edit during a
+run never reloads a page under test (bug #185). `E2E_SERVER=dev` runs every spec on the dev server, for a spec being written. It also serves the page without its Google Fonts links, so a
 network outage never holds a page load (bug #585). Start a new run to test a change.
 
 - The port comes from `E2E_PORT` (default 5173). Pick a random free port and never use 5173:
