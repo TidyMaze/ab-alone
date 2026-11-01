@@ -184,7 +184,7 @@ import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
 import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial } from './tablezero';
-import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
+import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { toleranceWindow } from './matchmaking';
@@ -412,6 +412,9 @@ const store = (() => {
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
+// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation (`navigator.webdriver`, the e2e
+// build) and in a dev build, so the room specs and its code live on. A production page ignores it.
+const keepRoom = (navigator.webdriver || import.meta.env.DEV) && new URLSearchParams(location.search).get('scene') === 'room';
 // Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
@@ -450,7 +453,7 @@ const loader = new KTX2Loader().detectSupport(renderer);
 // as soon as the scene is. mountBay takes them when the scene exists.
 const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader, hasNormalMaps(tier));
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
-  if (!loadsTexture(tonal ? 'tonal' : 'pbr', name)) return null;
+  if (!loadsTexture(tonal ? 'tonal' : 'pbr', name, keepRoom)) return null; // the terrace draws no board or plate (#1370)
   if (/-normal\.ktx2$/.test(name) && !hasNormalMaps(tier)) return null; // the low tier fetches and draws no normal map (#849)
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
@@ -477,6 +480,8 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
 // the scene, and takes these requests. Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of
 // skins.ts and glassskins.ts, ambientCG PBR materials (CC0), opaque and in their own colours. The maps are square and turn
 // once round the sphere, whose circumference is twice the way from pole to pole.
+// The default skins, drawn on the terrace by its own marbles (#1314): their maps are asked for when the room opens only (#1370).
+const TERRACE_SKINS: readonly string[] = [DEFAULT_SKIN, DEFAULT_GLASS_SKIN];
 const SKIN_MAPS = {
   albedo: ['map', true],
   normal: ['normalMap', false],
@@ -493,7 +498,7 @@ const skinMap = (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Pro
       return map;
     }),
   );
-for (const s of [skinById(skin), glassSkinById(glass)]) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
+for (const s of [skinById(skin), glassSkinById(glass)]) if (asksSkinMaps(keepRoom, s.id, TERRACE_SKINS)) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
 const [
   deckAlbedo,
   deckRoughness,
@@ -1416,10 +1421,10 @@ applyDeck(deck);
 // A skin's material is built flat the first time it is worn and dressed in every map its asset ships as they load: a press
 // never waits, and a page that keeps the default skins loads two sets of maps, not twenty (the requests are made above).
 const dressed = new WeakMap<THREE.Material, Promise<void>>(); // when a skin's maps are on
-function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset: string; tile: number; extra: readonly Extra[] }): void {
+function dress(look: THREE.MeshStandardMaterial, { id, asset, tile, extra }: { id: string; asset: string; tile: number; extra: readonly Extra[] }): void {
   dressed.set(
     look,
-    Promise.all(skinKinds(extra).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
+    Promise.all((asksSkinMaps(keepRoom, id, TERRACE_SKINS) ? skinKinds(extra) : []).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
       Object.assign(look, Object.fromEntries(loaded));
       if (tonal) return; // one tone and a soft highlight, no map to wait for (#1138)
       if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
@@ -3477,9 +3482,6 @@ const showBoard = (): void => {
 /** The props of the boss kit (kit_boss.glb) the fights wear on the terrace: the Pulsar's pylon and its core, the Assembly press, the Rail Yard's buffer stop. */
 let bossKit: Record<'pylon' | 'core' | 'press' | 'buffer', THREE.Mesh> | null = null;
 const terraceProp = (name: keyof NonNullable<typeof bossKit>): THREE.Mesh | null => (sceneRenderer.terraceOn && bossKit ? bossKit[name] : null);
-// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation (`navigator.webdriver`, the e2e
-// build) and in a dev build, so the room specs and its code live on. A production page ignores it.
-const keepRoom = (navigator.webdriver || import.meta.env.DEV) && new URLSearchParams(location.search).get('scene') === 'room';
 let terraceFailed = false; // the arena files did not load: the board stands on a plain background, the discs drawn as they are
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last' | 'hint', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
