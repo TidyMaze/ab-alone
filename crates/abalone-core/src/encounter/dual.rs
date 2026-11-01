@@ -3,14 +3,15 @@
 //! north room on `r <= -1`, and the void on the row `r = 0`, off the board, so a marble pushed into
 //! it is ejected as over the rim. A marble pushed off comes back one ply later in the other room,
 //! on the mirror of its cell in P1, on a random empty rim cell of the emptier room in P2; in P3 the
-//! bridge fills the void and ejected marbles are gone. Every ejection counts. Every random pick is
-//! splitmix64 of the fight seed and the ply, so every peer gets the same fight.
+//! bridge fills the void and ejected marbles are gone. Every ejection counts. Until the bridge the
+//! rooms are played in turn by pairs of plies, the south room first (#992, `Dual::turn`). Every
+//! random pick is splitmix64 of the fight seed and the ply, so every peer gets the same fight.
 
 use crate::board::{room, Board, Cell, Dual};
 use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
-use crate::game::Game;
-use crate::moves::{Move, Player};
+use crate::game::{Game, GameError};
+use crate::moves::{legal_moves, Move, Player};
 use crate::search::{search_hooked, Weights, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
@@ -134,7 +135,29 @@ pub(crate) fn carried_dual(before: &Board, mv: &Move, _after: &Board) -> Option<
     let mut dual = before.dual()?;
     dual.ejected = pushed_off(before, mv);
     dual.ejections += u8::from(matches!(dual.ejected, Some((Cell::White, _))));
+    if !dual.bridged {
+        dual.turn = (dual.turn + 1) % 4;
+    }
     Some(dual)
+}
+
+/// The room `player` plays in before the bridge (#992): the room in turn, or the other one when it
+/// has no legal move there. `None` once the bridge is up or outside the Dual Room's fight.
+pub fn dual_room(board: &Board, player: Player) -> Option<usize> {
+    let turn = board.dual()?.room()?;
+    Some(
+        legal_moves(board, player)
+            .first()
+            .map_or(turn, |m| room(m.cells[0])),
+    )
+}
+
+/// Refuses a move of the side to move in the room that does not play this ply.
+pub(crate) fn refuse(board: &Board, player: Player, mv: &Move) -> Result<(), GameError> {
+    match (dual_room(board, player), mv.cells.first()) {
+        (Some(turn), Some(&cell)) if room(cell) != turn => Err(GameError::OtherRoom),
+        _ => Ok(()),
+    }
 }
 
 /// Fills the void with the bridge's empty cells.
@@ -255,7 +278,8 @@ pub fn dual_move(enc: &Encounter) -> Option<Move> {
 mod tests {
     use super::*;
     use crate::encounter::{marbles, PveResult};
-    use crate::moves::Direction::{E, NW, SE};
+    use crate::game::GameError;
+    use crate::moves::Direction::{E, NW, SE, W};
     use crate::moves::{apply, legal_moves, Direction, MoveError};
 
     fn board(black: &[P], white: &[P], dual: Dual) -> Board {
@@ -311,6 +335,7 @@ mod tests {
         ejections: 5,
         ejected: None,
         coming: None,
+        turn: 0,
     };
 
     #[test]
@@ -728,6 +753,175 @@ mod tests {
             (enc.game().board().clone(), enc.game().history().len())
         };
         assert_eq!(run(4), run(4));
+    }
+
+    /// The rooms of `moves`, each once, south first.
+    fn rooms(moves: &[Move]) -> Vec<usize> {
+        let mut rooms: Vec<usize> = moves.iter().map(|m| room(m.cells[0])).collect();
+        rooms.sort_unstable();
+        rooms.dedup();
+        rooms
+    }
+
+    #[test]
+    fn the_rooms_are_played_in_turn_by_pairs_the_south_room_first() {
+        let mut enc = dual_start(1);
+        for ply in 0..12 {
+            let mover = enc.game().to_move();
+            let moves = legal_moves(enc.game().board(), mover);
+            let turn = ply / 2 % 2;
+            assert_eq!(rooms(&moves), vec![turn], "ply {ply}");
+            assert_eq!(dual_room(enc.game().board(), mover), Some(turn));
+            enc.play(&moves[moves.len() / 2]).unwrap();
+        }
+        assert_eq!(enc.game().history().len(), 12);
+    }
+
+    #[test]
+    fn a_move_in_the_other_room_is_refused_and_changes_nothing() {
+        let mut enc = dual_start(1);
+        let north = mv(&[(5, -6)], SE);
+        let start = enc.game().board().clone();
+        assert!(
+            apply(&start, Player::Black, &north).is_ok(),
+            "legal on its own"
+        );
+        assert_eq!(enc.play(&north), Err(GameError::OtherRoom));
+        assert_eq!(enc.game().board(), &start);
+        assert!(enc.game().history().is_empty());
+        let south = mv(&[(-1, 6)], NW);
+        enc.play(&south).unwrap();
+        assert_eq!(enc.play(&mv(&[(2, -2)], E)), Err(GameError::OtherRoom));
+        assert_eq!(
+            enc.play(&mv(&[], W)),
+            Err(GameError::Move(MoveError::EmptySelection)),
+            "an empty move has no room"
+        );
+    }
+
+    #[test]
+    fn a_side_with_no_legal_move_in_its_room_plays_in_the_other_and_the_order_goes_on() {
+        // No player marble in the south room, whose turn it is: the player plays in the north.
+        let start = board(&[(2, -7)], &[(-2, 2), (3, -2)], Dual::default());
+        let mut enc = fight(start, Player::Black, [0, 0]);
+        let moves = legal_moves(enc.game().board(), Player::Black);
+        assert_eq!(rooms(&moves), vec![1]);
+        assert_eq!(dual_room(enc.game().board(), Player::Black), Some(1));
+        enc.play(&mv(&[(2, -7)], SE)).unwrap();
+        assert_eq!(state(&enc).turn, 1, "as if it had played in the south");
+        let boss = legal_moves(enc.game().board(), Player::White);
+        assert_eq!(rooms(&boss), vec![0], "the boss still plays the south room");
+        assert_eq!(
+            enc.play(&mv(&[(3, -2)], W)),
+            Err(GameError::OtherRoom),
+            "it has a move in its room"
+        );
+        enc.play(&mv(&[(-2, 2)], W)).unwrap();
+        assert_eq!(state(&enc).turn, 2);
+        assert_eq!(
+            rooms(&legal_moves(enc.game().board(), Player::Black)),
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn a_return_landing_in_the_other_room_does_not_change_the_order() {
+        let start = board(
+            &[(-3, 5), (-3, 6), (2, -6)],
+            &[(-3, 7), (-1, 2)],
+            Dual::default(),
+        );
+        let mut enc = fight(start, Player::Black, [0, 0]);
+        enc.play(&mv(&[(-3, 5), (-3, 6)], SE)).unwrap();
+        assert_eq!(state(&enc).coming, Some((Cell::White, (4, -7))));
+        enc.play(&mv(&[(-1, 2)], W)).unwrap();
+        assert_eq!(
+            enc.game().board().get(4, -7),
+            Some(Cell::White),
+            "landed north"
+        );
+        assert_eq!(state(&enc).turn, 2);
+        assert_eq!(dual_room(enc.game().board(), Player::Black), Some(1));
+    }
+
+    #[test]
+    fn once_the_bridge_is_up_both_sides_move_in_any_room() {
+        let start = board(
+            &[(-3, 5), (2, -6)],
+            &[(-1, 2), (3, -2)],
+            Dual { turn: 2, ..BRIDGED },
+        );
+        let mut enc = fight(start, Player::Black, [5, 0]);
+        let moves = legal_moves(enc.game().board(), Player::Black);
+        assert_eq!(rooms(&moves), vec![0, 1]);
+        assert_eq!(dual_room(enc.game().board(), Player::Black), None);
+        enc.play(&mv(&[(-3, 5)], E)).unwrap();
+        enc.play(&mv(&[(-1, 2)], W)).unwrap();
+        enc.play(&mv(&[(2, -6)], E)).unwrap();
+        assert_eq!(state(&enc).turn, 2, "the order stops at the bridge");
+        assert_eq!(dual_room(&dual_board(), Player::Black), Some(0));
+        assert_eq!(
+            dual_room(&Board::empty(), Player::Black),
+            None,
+            "another board"
+        );
+    }
+
+    #[test]
+    fn the_fifth_ejection_ends_the_order_on_the_ply_it_raises_the_bridge() {
+        let start = board(
+            &[(-3, 5), (-3, 6), (2, -6)],
+            &[(-3, 7), (3, -2)],
+            Dual {
+                ejections: 4,
+                ..Dual::default()
+            },
+        );
+        let mut enc = fight(start, Player::Black, [4, 0]);
+        enc.play(&mv(&[(-3, 5), (-3, 6)], SE)).unwrap();
+        assert!(state(&enc).bridged);
+        assert_eq!(
+            rooms(&legal_moves(enc.game().board(), Player::White)),
+            vec![1],
+            "its only marble"
+        );
+        assert_eq!(dual_room(enc.game().board(), Player::White), None);
+    }
+
+    #[test]
+    fn the_boss_reply_and_the_ladder_search_play_the_room_in_turn() {
+        let mut enc = dual_start(3);
+        enc.scale_node_budget(10);
+        for ply in 0..8 {
+            let next = match enc.game().to_move() {
+                Player::Black => {
+                    search_hooked(enc.game(), 300, DEFAULT_WEIGHTS, &|_| true, &dual_step)
+                        .unwrap()
+                        .mv
+                }
+                Player::White => dual_move(&enc).unwrap(),
+            };
+            assert_eq!(room(next.cells[0]), ply / 2 % 2, "ply {ply}");
+            enc.play(&next).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_search_step_counts_the_order_until_the_bridge() {
+        let before = board(&[(-3, 5)], &[(3, -2)], Dual::default());
+        let step = mv(&[(-3, 5)], E);
+        let after = apply(&before, Player::Black, &step).unwrap().0;
+        let (out, _) = dual_step(&before, Player::Black, &step, after);
+        assert_eq!(out.dual().unwrap().turn, 1);
+        let last = Dual {
+            turn: 3,
+            ..Dual::default()
+        };
+        let before = board(&[(-3, 5)], &[(3, -2)], last);
+        let reply = mv(&[(3, -2)], W);
+        let after = apply(&before, Player::White, &reply).unwrap().0;
+        let (out, _) = dual_step(&before, Player::White, &reply, after);
+        assert_eq!(out.dual().unwrap().turn, 0, "round to the south room");
     }
 
     #[test]

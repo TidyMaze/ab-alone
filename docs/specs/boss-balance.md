@@ -868,6 +868,30 @@ Reply time (release build, native, the turtle's 10 fights, 237 boss replies, the
 cores, ms): 82 average, 135 at the 95th percentile, 182 at most (1500 nodes). Before the rule, on
 another run: 232 / 446 / 600. The Dual Room measured 228 / 312 / 383 at 3000 nodes.
 
+### The Dual Room: the rooms are played in turn, 18 of 20 at 10x, not tuned (#992)
+
+**Change.** Until the bridge the rooms are played in turn by pairs of plies, the south room first
+(game-design.md section 7.15): the legal moves are those of the room in turn, or of the other room
+when it has none. The boss search and the ladder player read the order in their trees (`dual_step`
+counts it). No knob changed; `engine_version` 23. Gate (#992): the pro at 10x wins 14 to 18 of 20,
+the 1x player fewer. 20 seeds, 300 plies at most.
+
+| Player budget | Before wins /20 | Before P3 /20 | Before median plies | After wins /20 | After P3 /20 | After median plies | Deaths after |
+|---|---|---|---|---|---|---|---|
+| 30000 (10x) | 15 | 20 | 64 | **18** | 20 | 49 | draw 2 |
+| 3000 (1x) | 5 | 15 | 163.5 | 17 | 20 | 70 | draw 3 |
+
+Result: 18 of 20 at 10x, **inside the 14 to 18 target**, and 17 of 20 at 1x, below it: no tuning
+tried. The rule helps the player: after its move the boss answers in the same room, then the
+player moves first in the other one, so a boss marble it ejects lands in the room it plays next,
+before the boss moves there. The 1x player gains the most (5 to 17 of 20): the fights end long
+before the draw cap.
+
+Command: `LADDER_SEEDS=20 LADDER_X=<1|10> cargo run --release --example ladder -- dual`. The fixtures
+are recorded again: `dual-ladder.txt` (seed 0 of the 10x run) and `dual.txt` (fight seed 1, the
+`dual_step` player at 4000 nodes against the boss at 90 nodes, cut at the ply that raises the
+bridge).
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
@@ -883,7 +907,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | choir | 0 | 15000 | 93 |
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
 | chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753, recorded again for #810) | 44 |
-| dual-ladder | 0 | 30000 (10x, the ladder pro player, #982; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 51 |
+| dual-ladder | 0 | 30000 (10x, the ladder pro player, #982, recorded again for #992; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 39 |
 | swarm | 0 | 15000 (10x, the ladder pro player, #795, recorded again for the 2-ejection win) | 60 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).

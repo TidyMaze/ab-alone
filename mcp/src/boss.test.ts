@@ -225,17 +225,25 @@ const CASES: Record<string, () => void> = {
       tell: {
         kind: 'bridge',
         cells: [],
-        text: 'a marble ejected over the rim or into the void comes back in the other room one turn later; a bridge fills the void at 5 ejections',
+        text: 'a marble ejected over the rim or into the void comes back in the other room one turn later; a bridge fills the void at 5 ejections; this move is played in the south room (r >= 1), the rooms take turns by pairs of moves until the bridge',
       },
       marks: [],
     });
     const state = (data: number[]) => bossState('dual', withData(dual, { dual: data }));
-    expect(state([0, 2, 0, -2])).toMatchObject({
-      tell: { kind: 'return', cells: ['(0,-2)'], text: 'a boss marble comes back on (0,-2) at the end of the next move' },
+    expect(state([0, 2, 0, -2, 1])).toMatchObject({
+      tell: {
+        kind: 'return',
+        cells: ['(0,-2)'],
+        text: 'a boss marble comes back on (0,-2) at the end of the next move; this move is played in the north room (r <= -1), the rooms take turns by pairs of moves until the bridge',
+      },
       marks: [{ kind: 'return', cell: '(0,-2)', value: 2 }],
     });
-    expect(state([0, 1, 4, -7]).tell!.text).toBe('one of your marbles comes back on (4,-7) at the end of the next move');
-    expect(state([1, 0, 0, 0]).tell).toEqual({ kind: 'bridge', cells: [], text: 'the bridge is up: ejected marbles are gone' });
+    expect(state([0, 1, 4, -7, 0]).tell!.text).toMatch(/^one of your marbles comes back on \(4,-7\) at the end of the next move; this move is played in the south room/);
+    expect(state([1, 0, 0, 0, -1]).tell).toEqual({ kind: 'bridge', cells: [], text: 'the bridge is up: ejected marbles are gone' });
+    // Only the moves of the room in turn are listed (#992): the south room's at the start.
+    const moves = Array.from(dual.legal_moves());
+    expect(moves.length).toBeGreaterThan(0);
+    for (let i = 0; i < moves.length; i += 8) expect(moves[i + 3]).toBeGreaterThan(0);
   },
 
   stalker() {

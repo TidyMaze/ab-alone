@@ -15,7 +15,7 @@ use abalone_core::encounter::ballast::{
 };
 use abalone_core::encounter::chaplain::{chaplain_boss, chaplain_move, chaplain_tell};
 use abalone_core::encounter::choir::{choir_boss, Army, Choir, ChoirError, CYCLE, PHASE_EJECTIONS};
-use abalone_core::encounter::dual::{dual_boss, dual_landed, dual_move, dual_start};
+use abalone_core::encounter::dual::{dual_boss, dual_landed, dual_move, dual_room, dual_start};
 use abalone_core::encounter::echo::{
     echo_bonuses, echo_boss, echo_free_moves, echo_free_taken, echo_move, echo_start, echo_tell,
 };
@@ -370,7 +370,7 @@ fn boss_entry(id: &str) -> Option<&'static BossEntry> {
 /// moves give another game: a rule, a boss reply, a layout.
 #[wasm_bindgen]
 pub fn engine_version() -> u32 {
-    22 // 22: The Unstable Core enters P2 after 1 ejection and P3 after 2, a shockwave every 4 turns (#1229); 21: The Overseer's vents pull in a core next to them and burn the boss's marbles in every phase, P3 dropped (#1241); 20: The Magnetizer assigns a polarity every 3rd turn in P2 and every 2nd in P3 (#1237); 19: The Ballast Mind borrows an effect every 2 turns and wins at 12 ejections, as the player (#1209); 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
+    23 // 23: The Dual Room's rooms are played in turn by pairs until the bridge (#992); 22: The Unstable Core enters P2 after 1 ejection and P3 after 2, a shockwave every 4 turns (#1229); 21: The Overseer's vents pull in a core next to them and burn the boss's marbles in every phase, P3 dropped (#1241); 20: The Magnetizer assigns a polarity every 3rd turn in P2 and every 2nd in P3 (#1237); 19: The Ballast Mind borrows an effect every 2 turns and wins at 12 ejections, as the player (#1209); 18: The Ballast Mind borrows the Swarm's wave as its fifth effect (#1197); 17: The Swarm is the 15th boss, 30 turns of waves (#1008); 16: The Stalker is the 14th boss, a fog the engine knows (#1118); 15: The Dual Room's boss search drops the pull to the centre, the void's middle (#982); 14: The Echo offers the player's bonus, taken by playing it, declined by any other move (#958); 13: The Dual Room's side-4 rooms, a void that ejects and a bridge at 5 (#955); 12: The Echo searches 100 nodes, a win a bonus gives is seen at once, a replaced board checks repetition (#951); 11: The Echo's mirrors are free bonus moves both ways, two phases (#859); 10: The Ballast Mind's player starts with 16 marbles, as many as the boss (#838); 9: The Chaplain's conversions move its health, +1 credit per boss marble won, -1 per player marble lost (#810); 8: The Ballast Mind borrows a boss effect every 3 turns (#749); 7: The Chaplain converts both sides at 4 and sends a martyr at 4 ejections (#748); 6: The Hull cracks one announced cell by turns, the Echo keeps one effect (#745); 5: The Choir's rework (#747); 4: Magnetizer signs alternate, Rail Yard train on turn 2, Alien 7 marbles and near eggs (#740)
 }
 
 /// Ids of the bosses the client can start, in play order.
@@ -820,17 +820,20 @@ impl Encounter {
             .collect()
     }
 
-    /// The Dual Room's bridge and announced return as `[bridged, side, q, r]`, side `0` when no
-    /// marble is coming. Empty for the other bosses.
+    /// The Dual Room's bridge, announced return and room to play as `[bridged, side, q, r, room]`,
+    /// side `0` when no marble is coming, room `0` south, `1` north, `-1` once the bridge is up
+    /// (#992). Empty for the other bosses.
     pub fn dual(&self) -> Vec<i32> {
         let Fight::Plain(e) = &self.fight else {
             return Vec::new();
         };
-        e.game().board().dual().map_or_else(Vec::new, |d| {
+        let board = e.game().board();
+        board.dual().map_or_else(Vec::new, |d| {
             let (side, (q, r)) = d
                 .coming
                 .map_or((0, (0, 0)), |(cell, at)| (i32::from(code(Some(cell))), at));
-            vec![i32::from(d.bridged), side, q, r]
+            let room = dual_room(board, e.game().to_move()).map_or(-1, |r| r as i32);
+            vec![i32::from(d.bridged), side, q, r, room]
         })
     }
 
@@ -1095,8 +1098,8 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_version_is_22_since_the_unstable_core_enters_p2_and_p3_after_1_and_2_ejections() {
-        assert_eq!(engine_version(), 22);
+    fn the_engine_version_is_23_since_the_dual_rooms_are_played_in_turn() {
+        assert_eq!(engine_version(), 23);
     }
 
     #[test]
@@ -1430,11 +1433,14 @@ mod tests {
         f
     }
 
-    /// The player's first forward one-marble move (NE or NW), as the e2e test plays it.
+    /// The player's first forward one-marble move (NE or NW), as the e2e test plays it, else its
+    /// first move (The Dual Room's north room, #992: its marbles face the other way).
     fn forward(f: &Encounter) -> Vec<i32> {
-        f.legal_moves()
-            .chunks(MOVE_STRIDE)
+        let moves = f.legal_moves();
+        let mut all = moves.chunks(MOVE_STRIDE);
+        all.clone()
             .find(|m| m[0] == 1 && (m[1] == 2 || m[1] == 4))
+            .or_else(|| all.next())
             .unwrap()
             .to_vec()
     }
@@ -2545,10 +2551,10 @@ mod tests {
             .collect()
     }
 
-    /// The ply that ejects the first boss marble, announced on (0, -2), and the 5th ejection, which
+    /// The ply that ejects the first boss marble, announced on (1, 1), and the 5th ejection, which
     /// raises the bridge.
-    const DUAL_RETURN_AT: usize = 19;
-    const DUAL_BRIDGE_AT: usize = 41;
+    const DUAL_RETURN_AT: usize = 23;
+    const DUAL_BRIDGE_AT: usize = 43;
 
     /// The Dual Room after the first `plies` plies of the recorded fight.
     fn dual_room(plies: usize) -> Encounter {
@@ -2593,24 +2599,49 @@ mod tests {
             "the boss near the void in the north room"
         );
         assert_eq!(cells[dual_slot(0, 0)], 3, "the void");
-        assert_eq!(f.dual(), vec![0, 0, 0, 0], "no bridge, nothing comes back");
+        assert_eq!(
+            f.dual(),
+            vec![0, 0, 0, 0, 0],
+            "no bridge, nothing comes back, the south room plays"
+        );
         assert!(f.last_return().is_empty());
     }
 
     #[test]
+    fn the_dual_room_says_which_room_plays_and_lists_only_its_moves() {
+        let mut f = Encounter::new("dual", 1).unwrap();
+        for room in [0, 0, 1, 1, 0] {
+            assert_eq!(f.dual()[4], room);
+            let moves = f.legal_moves();
+            assert!(moves
+                .chunks(MOVE_STRIDE)
+                .all(|m| i32::from(m[3] < 0) == room));
+            assert!(f.seen_moves() == moves);
+            f.play(&moves[..MOVE_STRIDE]).unwrap();
+        }
+        let mut south = Encounter::new("dual", 1).unwrap();
+        south.play(&first_move(&south)).unwrap();
+        assert_eq!(
+            south.play(&[1, 5, 2, -2, 0, 0, 0, 0]),
+            Err("OtherRoom".to_string()),
+            "a boss move in the north room"
+        );
+    }
+
+    #[test]
     fn the_dual_room_announces_a_return_and_lands_it_one_ply_later() {
-        assert_eq!(dual_room(DUAL_RETURN_AT - 1).dual(), vec![0, 0, 0, 0]);
+        assert_eq!(dual_room(DUAL_RETURN_AT - 1).dual()[..4], [0, 0, 0, 0]);
         let ejected = dual_room(DUAL_RETURN_AT);
         assert_eq!(ejected.ejected(1), 1);
         assert_eq!(
             ejected.dual(),
-            vec![0, 2, 0, -2],
-            "a boss marble lands on (0, -2)"
+            vec![0, 2, 1, 1, 1],
+            "a boss marble lands on (1, 1), the boss plays the north room"
         );
         assert!(ejected.last_return().is_empty());
         let landed = dual_room(DUAL_RETURN_AT + 1);
-        assert_eq!(landed.last_return(), vec![2, 0, -2]);
-        assert_eq!(landed.board()[dual_slot(0, -2)], 2);
+        assert_eq!(landed.last_return(), vec![2, 1, 1]);
+        assert_eq!(landed.board()[dual_slot(1, 1)], 2);
         assert_eq!(landed.ejected(1), 1, "the ejection still counts");
     }
 
@@ -2620,7 +2651,11 @@ mod tests {
         assert_eq!((before.dual()[0], before.phase()), (0, 1));
         assert_eq!(before.board()[dual_slot(0, 0)], 3);
         let after = dual_room(DUAL_BRIDGE_AT);
-        assert_eq!(after.dual(), vec![1, 0, 0, 0], "up, and the 5th is gone");
+        assert_eq!(
+            after.dual(),
+            vec![1, 0, 0, 0, -1],
+            "up, the 5th is gone, both rooms are free"
+        );
         assert_eq!((after.phase(), after.ejected(1)), (2, 5));
         let board = after.board();
         for q in -2..=2 {

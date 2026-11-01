@@ -83,8 +83,9 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     expect(game.hook<{ azimuth: number; polar: number }>('__view')).toMatchObject({ azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR });
     expect(game.hook<{ radius: number; holes: number }>('__frame')).toMatchObject({ radius: 7, holes: BRIDGE.length });
     const none = BRIDGE.map(() => null);
-    expect(dual(game)).toEqual({ state: { bridged: false, coming: null }, bridge: none, mark: null, drop: null });
+    expect(dual(game)).toEqual({ state: { bridged: false, coming: null, room: 0 }, bridge: none, mark: null, drop: null });
     expect(document.body.dataset.bridge).toBe('void');
+    expect(document.body.dataset.dualRoom).toBe('south');
     expect(tell()).toBe('Ejected marbles come back in the other room · the bridge comes at 5');
   });
 
@@ -129,13 +130,20 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     const scene = catchScene();
     const game = await boot('?bot=off', { reducedMotion: true });
     fightDual(game);
-    // A player marble walks to the south room's rim, (1, 2), and the boss pushes it off from there.
+    // A player marble walks to the south room's rim, (1, 2), and the boss pushes it off from there. The rooms are played
+    // in turn (#992): each side steps back and forth in the north room meanwhile.
     const plies = [
       [1, 4, -1, 6, 0, 0, 0, 0],
+      [1, 1, -2, 2, 0, 0, 0, 0],
+      [1, 5, 5, -6, 0, 0, 0, 0],
       [1, 0, 2, -2, 0, 0, 0, 0],
       [1, 2, -1, 5, 0, 0, 0, 0],
+      [1, 0, -3, 2, 0, 0, 0, 0],
+      [1, 4, 5, -5, 0, 0, 0, 0],
       [1, 1, 3, -2, 0, 0, 0, 0],
       [1, 2, 0, 4, 0, 0, 0, 0],
+      [1, 1, -2, 2, 0, 0, 0, 0],
+      [1, 5, 5, -6, 0, 0, 0, 0],
       [1, 0, 2, -2, 0, 0, 0, 0],
       [1, 4, 1, 3, 0, 0, 0, 0],
       [2, 0, -1, 2, 0, 2, 0, 0],
@@ -187,7 +195,7 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     game.frame(16);
     expect(dual(game).bridge).toEqual([0, 0, 0, 0, 0]);
     expect(document.body.dataset.bridge).toBe('up');
-    expect(dual(game).state).toEqual({ bridged: true, coming: null });
+    expect(dual(game).state).toEqual({ bridged: true, coming: null, room: null });
     expect(tell()).toBe('The bridge is up, ejected marbles are gone');
     byId('boss-retry').click();
     expect(document.body.dataset.bridge).toBe('void');
@@ -241,6 +249,35 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     expect(document.body.dataset.bridge).toBe('lowering');
   });
 
+  it('dims the room out of turn, which changes after each pair of plies, and none once the bridge is up (#992)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightDual(game);
+    const dim = (): THREE.InstancedMesh[] => named(scene(), 'dual-dim') as THREE.InstancedMesh[];
+    expect(dim()).toHaveLength(1);
+    expect(dim()[0]!.count).toBe(37);
+    played(game, 0, 1);
+    expect(document.body.dataset.dualRoom).toBe('south');
+    played(game, 1, 2);
+    expect(document.body.dataset.dualRoom).toBe('north');
+    expect(dual(game).state!.room).toBe(1);
+    played(game, 2, BRIDGE_AT);
+    expect(document.body.dataset.dualRoom).toBeUndefined();
+    expect(dim()).toHaveLength(0);
+  });
+
+  it('refuses a click on a marble of the room out of turn and says which room plays (#992)', async () => {
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightDual(game);
+    game.click(2, -7); // a player marble of the north room
+    expect(game.hook<[number, number][]>('__rings')).toEqual([]);
+    expect(game.hud()).toContain(' · the south room plays this turn');
+    expect(document.body.classList.contains('refused')).toBe(true); // the turn line shakes
+    game.click(-2, 7); // one of the south room
+    expect(game.hook<[number, number][]>('__rings')).toEqual([[-2, 7]]);
+    expect(game.hud()).not.toContain('plays this turn');
+  });
+
   it('another boss, the hub and the battle royale show no void, no bridge and no mark', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     fightDual(game);
@@ -249,6 +286,7 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     [...byId('boss-list').querySelectorAll('button')].find((b) => b.textContent === 'The Echo')!.click();
     expect(dual(game)).toEqual({ state: null, bridge: [0, 0, 0, 0, 0], mark: null, drop: null });
     expect(document.body.dataset.bridge).toBeUndefined();
+    expect(document.body.dataset.dualRoom).toBeUndefined();
     fightDual(game);
     byId('ship').click();
     expect(document.body.dataset.bridge).toBeUndefined();
