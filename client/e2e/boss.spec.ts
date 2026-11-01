@@ -175,10 +175,19 @@ test('Boss fight is disabled or works when clicked right after load, bug #144', 
 // two tests: together they took over 15 s on CI (#431).
 // The fight starts, and Clear board flips, by click events on their buttons, the menus closed: opening them is checked
 // by the Echo test and clear-board.spec.ts, and each real click cost 1.7 to 2.3 s on CI at 1280 x 720 (#429).
-const startHull = async (page: Page, tier: string) => {
+// CRACK_SEED puts the crack on a cell in the open, seen whole (seeds 2, 4 and 6 hide it behind a marble).
+const CRACK_SEED = 1;
+// `seed` fixes the fight (#1195): the cracked cell is the same every run, and ?nodes=200 makes the replies the same, so the
+// decal is not left behind a marble from time to time.
+const startHull = async (page: Page, tier: string, seed?: number) => {
   await page.emulateMedia({ reducedMotion: 'reduce' }); // no animation is checked: slides take no time
   await page.addInitScript((t) => localStorage.setItem('ab-alone.tier', t), tier);
-  await page.goto('./');
+  if (seed !== undefined) {
+    await page.addInitScript((fill) => {
+      crypto.getRandomValues = ((a: Uint32Array) => a.fill(fill)) as typeof crypto.getRandomValues;
+    }, seed);
+  }
+  await page.goto(seed === undefined ? './' : './?nodes=200');
   await page.locator('canvas').waitFor();
   await expect(page.locator('body')).toHaveAttribute('data-tier', tier);
   await page.locator('#boss-list').getByRole('button', { name: 'The Hull', includeHidden: true }).dispatchEvent('click');
@@ -236,7 +245,7 @@ for (const tier of ['high', 'low']) {
   test(`start The Hull (${tier} tier): the cracked cell wears the crack decal, 3:1 with Clear board on, #355`, async ({ page }, testInfo) => {
     const body = page.locator('body');
     await page.setViewportSize({ width: 1280, height: 720 }); // the contrast check's window, as contrast.spec.ts
-    await startHull(page, tier);
+    await startHull(page, tier, CRACK_SEED);
     expect(await page.evaluate(() => (window as any).__playTurns(4, [4, 2]))).toBe(4); // the forward moves to the crack
     // The decals and the cracked cells in one call to the page (#431): one crack, which wears the decal.
     const { decals, cracks } = await page.evaluate(() => {
