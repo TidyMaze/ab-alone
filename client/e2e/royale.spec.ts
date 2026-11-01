@@ -123,7 +123,7 @@ test('battle royale arena is fully visible with fog at arena rim (#503)', async 
   await ready(page);
   // First enter hub to verify entering royale from hub doesn't inherit hub fog radius
   await openModes(page);
-  await page.getByRole('button', { name: 'Ship' }).click();
+  await page.getByRole('button', { name: 'Hub' }).click();
   await expect(page.locator('body')).toHaveAttribute('data-hub');
   // Then enter battle royale
   await openModes(page);

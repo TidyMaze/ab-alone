@@ -136,13 +136,13 @@ See section 6.
 
 | Item | Rule |
 |---|---|
-| Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Ship hub (Mess deck, #602). A "Ship" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
+| Entry | Visiting the root URL without query parameters or an active saved game lands directly on the Hub (Mess deck, #602). A "Hub" entry of the mode menu returns to it from anywhere. The menu itself stays ungated: the daily challenge and the tests need every boss |
 | Space | One small hex map per deck (`client/src/hub.ts`): 37 cells (radius 3), drawn with the board's cell and marble meshes in that deck's look (`deck.ts`) |
 | Walk | One glass marble rolls one cell at a time: click a neighbour cell, or the arrow keys (left and right along the row, up and down in a zigzag that keeps the column). A new save starts on the centre cell of the Mess |
-| Rooms | Cells with a prop and a label plate, at least 6 per deck. Rolling onto a room enters it; standing on it again (Ship, Back to the ship) does not |
+| Rooms | Cells with a prop and a label plate, at least 6 per deck. Rolling onto a room enters it; standing on it again (Hub, Back to the hub) does not |
 | Delta | None to Abalone. The hub is navigation, rooms launch the other modes |
 | Gate | Only the lifts. A lift onto a deck opens once the boss of the deck below it is beaten (the Mess is always open). A locked lift keeps the marble out and Tally says one short line: "Lift to Cargo: locked. This deck's boss is still on the books." |
-| Return | When the game a room started ends, "Back to the ship" puts the marble back on that room's cell. From an online table it leaves the room first |
+| Return | When the game a room started ends, "Back to the hub" puts the marble back on that room's cell. From an online table it leaves the room first |
 | Save | Local storage (`client/src/progress.ts`, key `ab-alone.progress`): deck, cell and bosses beaten as versioned JSON. A save that does not read back (corrupt, another version) starts over on the centre cell of the Mess. Every boss win counts, the boss menu and the daily included. Later a signed export/import file (accounts are out of scope) |
 
 Each room is a small 3D prop on its cell (`hubart.ts`), ringed in its kind's colour, with a label plate always shown over
@@ -171,7 +171,7 @@ Room kinds:
 | Room | Enters |
 |---|---|
 | Boss | That boss's fight, as the boss menu starts it. Every boss of the roster has one door, on its deck (README "The game", `deck.ts`, #1249). The deck's lore-slot boss of section 7 keeps the east door: the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge). The other bosses stand in the gallery ring: the Dual Room (Mess); the Alien, the Rail Yard, the Assembly Line, the Swarm (Cargo); the Magnetizer, the Unstable Core (Furnace); the Overseer, the Stalker (Chapel); the Pulsar (Bridge). Only the lore-slot boss opens the lift |
-| Mode rooms | A mode with no table of its own, the same as its mode menu entry (#1249): the Daily challenge and the Open world on the Mess, the Rogue-lite run on the Cargo, Fight together on the Furnace (it opens the mode menu on its boss list), Ranked and the Trainer on the Bridge (Ranked offline opens nothing, as the online table). Every entry of the mode menu has its room. Back to the ship comes back from the daily and a ranked game; from a run, the Trainer and the Open world, Ship in the mode menu does |
+| Mode rooms | A mode with no table of its own, the same as its mode menu entry (#1249): the Daily challenge and the Open world on the Mess, the Rogue-lite run on the Cargo, Fight together on the Furnace (it opens the mode menu on its boss list), Ranked and the Trainer on the Bridge (Ranked offline opens nothing, as the online table). Every entry of the mode menu has its room. Back to the hub comes back from the daily and a ranked game; from a run, the Trainer and the Open world, Hub in the mode menu does |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
 | Medal room | On the Mess only (0, 2), a gold medal prop (#812, #1249). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |

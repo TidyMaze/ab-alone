@@ -47,7 +47,7 @@ First to eject 6 wins. On top of it, the ship:
 - **Stalker mode**: a fog of war against the bot.
 - **Fight together**: two players share one army against a boss, online.
 - **Battle royale** on the Furnace deck: up to 6 seats, hidden orders, bots fill empty seats.
-- **Ship hub**: walk five decks, a door per boss, a room per mode, lore terminals. New players land there,
+- **Hub**: walk five decks, a door per boss, a room per mode, lore terminals. New players land there,
   after a short illustrated guide to the rules and the controls of their device (Guide in the cog menu opens it again).
 - **Open world**: a generated hex map, a hero marble you walk and a troop that fights on its own
   ([spec](docs/specs/openworld.md)).

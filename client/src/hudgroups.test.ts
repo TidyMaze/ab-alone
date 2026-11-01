@@ -26,7 +26,7 @@ describe('The page controls', () => {
     ]);
   });
 
-  it('the lobby sheet above the dock holds Start, Invite, Back to the ship and the invite link (#1044)', () => {
+  it('the lobby sheet above the dock holds Start, Invite, Back to the hub and the invite link (#1044)', () => {
     expect(children('lobby-sheet')).toEqual(['royale-start', 'royale-invite', 'ship-back', 'invite-label', 'invite-row']);
   });
 

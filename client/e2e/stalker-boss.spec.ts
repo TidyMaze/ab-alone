@@ -4,7 +4,7 @@ import { openModes } from './modes';
 // The Stalker as a boss (#1111): picked in the Boss fight list, fogged at sight 3, the dark veil over what the player's
 // marbles do not see, the sight on the HUD. A move is played and the boss answers under the same fog.
 test('The Stalker is a boss: pick it in the Boss fight list, the veil and the sight show, a move gets a reply, #1121', async ({ page }, testInfo) => {
-  await page.goto('./?bot=on'); // a query: no landing on the Ship hub (#602)
+  await page.goto('./?bot=on'); // a query: no landing on the Hub (#602)
   await page.locator('canvas').waitFor();
   await openModes(page);
   await page.locator('#boss-fight').click();

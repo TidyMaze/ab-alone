@@ -9,7 +9,7 @@ import { OnlineSession } from './session';
 import { boot, slowKeys, type Game } from './test/harness';
 import type { Transport } from './transport';
 
-// Walking the hub (docs/specs/game-design.md section 3.5, #521): the Ship entry of the mode menu draws the deck's map
+// Walking the hub (docs/specs/game-design.md section 3.5, #521): the Hub entry of the mode menu draws the deck's map
 // with the board's cells and the player's glass marble, which rolls one cell by a click on a neighbour or an arrow key.
 // body[data-hub] names the deck and the cell of the marble, read by the e2e tests.
 
@@ -140,11 +140,11 @@ async function opponent(game: Game) {
 }
 
 describe('main.ts, walking the hub (#521)', () => {
-  it('lands directly on the Ship hub when booted with no query string, no hash and no saved game, #602', async () => {
+  it('lands directly on the Hub when booted with no query string, no hash and no saved game, #602', async () => {
     const game = await boot('');
     expect(hub()).toBe('mess 0,0');
     expect(document.body.dataset.deck).toBe('mess');
-    expect(game.hud()).toBe('Ship · Mess');
+    expect(game.hud()).toBe('Hub · Mess');
   });
 
   it('Ship draws the Mess map, its room glyphs and the glass marble on the centre cell, in the HUD too', async () => {
@@ -164,7 +164,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(glass).toHaveLength(1);
     expect(glass[0]!.position.toArray()).toEqual([0, 0.36, 0]);
     expect(glyphs).toBe(12); // eight rooms (with the Medal room), the lift up and the gallery's three: the Mess has no lift down
-    expect(game.hud()).toBe('Ship · Mess');
+    expect(game.hud()).toBe('Hub · Mess');
   });
 
   it('rolls the marble onto a clicked neighbour and saves it there, a far cell keeps it put', async () => {
@@ -180,7 +180,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(hub()).toBe('mess 1,0');
     game.click(2, -1);
     expect(hub()).toBe('mess 2,-1');
-    expect(game.hud()).toBe('Ship · MessTerminal');
+    expect(game.hud()).toBe('Hub · MessTerminal');
   });
 
   it('rolls the marble by the arrow keys in the hub only, never from a text field', async () => {
@@ -225,7 +225,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(document.body.dataset.deck).toBe('cargo');
     expect(saved()).toEqual({ version: 1, deck: 'cargo', cell: [-1, 2], beaten: ['echo'] });
     expect(drawn(scene()).glyphs).toBe(14); // the two lifts and the gallery's five
-    expect(game.hud()).toBe('Ship · CargoLift to Mess');
+    expect(game.hud()).toBe('Hub · CargoLift to Mess');
     press('ArrowRight');
     expect(hub()).toBe('cargo 0,2');
     expect(document.body.dataset.deck).toBe('cargo');
@@ -308,7 +308,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(document.body.dataset.online).toBeUndefined();
   });
 
-  it('returns to the Ship hub at any time from battle royale and daily challenge (#773)', async () => {
+  it('returns to the Hub at any time from battle royale and daily challenge (#773)', async () => {
     const game = await boot('?bot=off');
     game.openModes();
     byId('battle-royale').click();
@@ -360,7 +360,7 @@ describe('main.ts, walking the hub (#521)', () => {
     await game.settle();
     expect(hub()).toBe('mess 0,0'); // the hub stays drawn
     expect(byId<HTMLElement>('eval').hidden).toBe(true);
-    expect(game.hud()).toBe('Ship · Mess');
+    expect(game.hud()).toBe('Hub · Mess');
     byId('new-game').click();
     await game.settle();
     expect(byId('setting-export-game').hidden).toBe(false);
@@ -373,7 +373,7 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(document.body.dataset.over).toBe('loss');
     ship(game);
     expect(document.body.dataset.over).toBeUndefined();
-    expect(game.hud()).toBe('Ship · Mess');
+    expect(game.hud()).toBe('Hub · Mess');
   });
 
   it('resets the tension level to calm in the hub (#586)', async () => {
@@ -389,13 +389,13 @@ describe('main.ts, walking the hub (#521)', () => {
 });
 
 // The doors (#522, game-design.md section 3.5): rolling onto a boss door or a table starts the same game as its mode
-// menu entry. Once that game is over, Back to the ship puts the marble back on the door's cell, in the hub. The battle
+// menu entry. Once that game is over, Back to the hub puts the marble back on the door's cell, in the hub. The battle
 // royale lobby is shown closed, a terminal opens nothing yet (#524).
 describe('main.ts, the hub doors (#522)', () => {
   const back = (): HTMLButtonElement => byId('ship-back');
   const data = (): DOMStringMap => document.body.dataset;
 
-  it('the boss door starts the deck boss; once the fight is lost, Back to the ship lands on the door', async () => {
+  it('the boss door starts the deck boss; once the fight is lost, Back to the hub lands on the door', async () => {
     const game = await boot('?bot=off', { reducedMotion: true });
     shipAt(game, [1, 0]);
     expect(back().hidden).toBe(true);
@@ -408,10 +408,10 @@ describe('main.ts, the hub doors (#522)', () => {
     await loseToTheEcho(game);
     expect(game.hud()).toContain('Defeat');
     expect(back().hidden).toBe(false);
-    expect(back().textContent).toBe('Back to the ship');
+    expect(back().textContent).toBe('Back to the hub');
     back().click();
     expect(hub()).toBe('mess 2,0');
-    expect(game.hud()).toBe('Ship · MessBoss door');
+    expect(game.hud()).toBe('Hub · MessBoss door');
     expect(back().hidden).toBe(true);
     game.click(-2, 0); // not a neighbour: the marble stays on the door, and the door starts nothing again
     expect(hub()).toBe('mess 2,0');
@@ -445,7 +445,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(game.hud()).toContain('Black to move');
   });
 
-  it('the hot-seat table starts a game the bot never answers, Back to the ship after its draw', async () => {
+  it('the hot-seat table starts a game the bot never answers, Back to the hub after its draw', async () => {
     const game = await boot('?nodes=100');
     shipAt(game, [-1, 0]);
     game.click(-1, -1);
@@ -455,7 +455,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(game.turn()).toBe('Draw');
     back().click();
     expect(hub()).toBe('mess -1,-1');
-    expect(game.hud()).toBe('Ship · MessHot-seat table');
+    expect(game.hud()).toBe('Hub · MessHot-seat table');
   });
 
   it('a hot-seat table game is back after a reload, still with no bot (#565)', async () => {
@@ -478,7 +478,7 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(again.turn()).toBe('Black to move');
   });
 
-  it('the bot table brings the bot back after the hot-seat one; Back to the ship after its loss', async () => {
+  it('the bot table brings the bot back after the hot-seat one; Back to the hub after its loss', async () => {
     const game = await boot('?nodes=100');
     shipAt(game, [-1, 0]);
     game.click(-1, -1); // hot-seat
@@ -490,10 +490,10 @@ describe('main.ts, the hub doors (#522)', () => {
     expect(data().over).toBe('loss');
     back().click();
     expect(hub()).toBe('mess -2,0');
-    expect(game.hud()).toBe('Ship · MessBot table');
+    expect(game.hud()).toBe('Hub · MessBot table');
   });
 
-  it('the online table opens a room as Play online does; Back to the ship after the game leaves it', async () => {
+  it('the online table opens a room as Play online does; Back to the hub after the game leaves it', async () => {
     const game = await boot('?bot=off');
     shipAt(game, [-1, 1]);
     game.click(-2, 1);
@@ -509,7 +509,7 @@ describe('main.ts, the hub doors (#522)', () => {
     back().click();
     await game.settle(); // the closed room calls back: the hub stays
     expect(hub()).toBe('mess -2,1');
-    expect(game.hud()).toBe('Ship · MessOnline table');
+    expect(game.hud()).toBe('Hub · MessOnline table');
     expect(location.hash).toBe('');
     expect(byId('invite').hidden).toBe(true);
     expect(byId('invite-label').hidden).toBe(true);
@@ -546,7 +546,7 @@ const END_ROYALE = {
   ],
 };
 
-  it('the battle royale lobby door starts battle royale; Back to the ship lands on the door (#593)', async () => {
+  it('the battle royale lobby door starts battle royale; Back to the hub lands on the door (#593)', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     shipAt(game, [-1, 1]);
@@ -563,7 +563,7 @@ const END_ROYALE = {
     expect(back().hidden).toBe(false);
     back().click();
     expect(hub()).toBe('mess -2,2');
-    expect(game.hud()).toBe('Ship · MessBattle royale lobby');
+    expect(game.hud()).toBe('Hub · MessBattle royale lobby');
     expect(data().royale).toBeUndefined();
   });
 
@@ -647,7 +647,7 @@ const END_ROYALE = {
     expect(data().trainer).toBe('1');
   });
 
-  it('Back to the ship never shows after a game no room started', async () => {
+  it('Back to the hub never shows after a game no room started', async () => {
     const game = await boot('?nodes=100');
     await game.hook<Promise<number>>('__playTurns', 30, [4]);
     expect(data().over).toBe('loss');
@@ -681,7 +681,7 @@ describe('main.ts, the hub terminals (#524)', () => {
     expect(reader().hidden).toBe(true);
     expect(data().reading).toBeUndefined();
     expect(hub()).toBe('mess 1,1');
-    expect(game.hud()).toBe('Ship · MessTerminal');
+    expect(game.hud()).toBe('Hub · MessTerminal');
     expect(game.hook('__cellToScreen', 0, 0)).toEqual(view);
     expect(byId('ship-back').hidden).toBe(true);
     game.frame(16);
@@ -726,13 +726,13 @@ describe('main.ts, the lift gate (#523)', () => {
     press('ArrowUp');
     expect(hub()).toBe('mess 1,-1');
     expect(saved()).toMatchObject({ cell: [1, -1] });
-    expect(game.hud()).toBe("Ship · MessLift to Cargo: locked. This deck's boss is still on the books.");
+    expect(game.hud()).toBe("Hub · MessLift to Cargo: locked. This deck's boss is still on the books.");
     press('ArrowLeft'); // the next roll: the line is gone
-    expect(game.hud()).toBe('Ship · Mess');
+    expect(game.hud()).toBe('Hub · Mess');
     press('ArrowRight');
     press('ArrowUp');
     ship(game); // Ship again: a fresh plate
-    expect(game.hud()).toBe('Ship · Mess');
+    expect(game.hud()).toBe('Hub · Mess');
   });
 
   it('on a middle deck the lift down is open and the lift up waits for this deck\'s boss', async () => {

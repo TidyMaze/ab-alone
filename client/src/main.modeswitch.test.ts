@@ -5,7 +5,7 @@ import type { Axial } from './board';
 import { boot, type Game } from './test/harness';
 
 // One mode at a time (#1275, docs/specs/ui.md): a mode left for another leaves nothing behind, not a HUD block, a body data
-// key, a mesh of the scene, nor a timer. The clean base is the Ship hub, where every mode can be picked: each mode of the
+// key, a mesh of the scene, nor a timer. The clean base is the Hub, where every mode can be picked: each mode of the
 // README's table is entered, played a little and left for the hub, which must show what it showed before. The stray
 // state no mode owns is cleared by the switch from the lists of modeswitch.ts.
 
@@ -117,7 +117,7 @@ async function bootHub(url = '/'): Promise<{ game: Game; probe: Probe }> {
 }
 
 describe('a mode switch leaves nothing of the mode behind (#1275)', () => {
-  it('every mode of the mode menu, left for the Ship hub, leaves the hub as the boot showed it', async () => {
+  it('every mode of the mode menu, left for the Hub, leaves the hub as the boot showed it', async () => {
     const { game, probe } = await bootHub();
     const base = snapshot(probe);
     const { boss_ids } = await import('abalone-wasm');
@@ -157,7 +157,7 @@ describe('a mode switch leaves nothing of the mode behind (#1275)', () => {
     expect(leaks).toEqual([]);
   }, 60_000);
 
-  it('a boss door of the hub, the fight lost and Back to the ship: the hub as it was', async () => {
+  it('a boss door of the hub, the fight lost and Back to the hub: the hub as it was', async () => {
     const { game, probe } = await bootHub();
     game.click(1, 0); // from the spawn to the cell west of the Echo's door
     game.hook('__drawNext');

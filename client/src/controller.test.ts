@@ -125,7 +125,7 @@ describe('ModeController & HubController (#633)', () => {
   it('generates HUD HTML', () => {
     hub.enter(initialSpot);
     const html = hub.hud();
-    expect(html).toContain('Ship · Mess');
+    expect(html).toContain('Hub · Mess');
   });
 
   it('draws hub frame and door glyphs into scene renderer', () => {

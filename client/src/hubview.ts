@@ -71,7 +71,7 @@ const DESCRIPTORS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, string> = {
   hotseat: '2 players, one screen',
   online: 'Peer-to-peer 1v1 match',
   royale: 'Multi-player battle royale',
-  terminal: 'Ship archive and audio log',
+  terminal: 'Hub archive and audio log',
   medals: 'Every boss, its medal and best turns',
   daily: 'One boss and one seed a day',
   run: 'Three acts, one army of 14',
@@ -118,7 +118,7 @@ export function hubHtml({ deck, cell }: Spot, tally = '', hover: Axial | null = 
         return `<div class="hub-preview">Target: ${name} · ${desc} <span class="affordance">(${reach})</span></div>`;
       })()
     : '';
-  return `<div class="turn"><span>Ship · ${title(deck)}</span></div><small>${room}</small>${line}${preview}`;
+  return `<div class="turn"><span>Hub · ${title(deck)}</span></div><small>${room}</small>${line}${preview}`;
 }
 
 /** Tally's line when a roll to `to` bumps a locked lift next to the marble (#523), else ''. */
