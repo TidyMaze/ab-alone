@@ -3,6 +3,7 @@ import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, r
 import {
   BOARD_CELLS,
   CELLS,
+  cellsFor,
   CORE_CODE,
   DIRECTIONS,
   OVERSEER_CODE,
@@ -374,10 +375,15 @@ const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axi
 // The hub and the royale on the terrace are framed from the Blender camera (lights_camera.json), drawn back until their cells and props are on the window (#1374).
 const HUB_POINTS = boardPoints(HUB_CELLS, 1, [0, 0.6]);
 const ROYALE_POINTS = boardPoints(ARENA, ARENA_SCALE, [0, 0.4]);
+const BALLAST_POINTS = boardPoints(cellsFor(5), 1, [0, 0.5]);
+const RUN_POINTS = boardPoints(CELLS, 1, [0, 0.5]);
+const DUAL_BOARD_POINTS = boardPoints(DUAL_CELLS, 1, [0, 0.5]);
+const blenderBoard = (): boolean => fight?.id === 'ballast' || fight?.id === 'dual' || (run !== null && !fight); // the boards framed like the hub's (#1374)
 const terraceFramed = (): boolean => tableZeroActive({ room: keepRoom, ready: terraceReady });
 const fightView = (): View => {
   if (hub && terraceFramed()) return fitTerrace(HUB_POINTS, innerWidth < innerHeight ? 3.4 : 3.6, innerWidth, innerHeight);
   if (royale && terraceFramed()) return fitTerrace(ROYALE_POINTS, 4, innerWidth, innerHeight);
+  if (terraceFramed() && blenderBoard()) return fitTerrace(fight?.id === 'ballast' ? BALLAST_POINTS : fight?.id === 'dual' ? DUAL_BOARD_POINTS : RUN_POINTS, activeRadius(), innerWidth, innerHeight);
   if (hub) return resetView(innerWidth < innerHeight ? 3.4 : 3.6); // the hub's deck plan (#1249): its 37 cells and their plates, a little closer than a board, closer still upright
   if (fight?.id === 'pulsar') return fitView(resetView(), sceneRenderer.terraceOn ? PULSAR_BOUNDS.map((p) => (p.z > 0 ? { ...p, z: p.z * PULSAR_DOCK } : p)) : PULSAR_BOUNDS, innerWidth, innerHeight);
   if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
@@ -3582,7 +3588,7 @@ function syncTableZero(): void {
   document.getElementById('console-entry')!.hidden = !on; // the terrace's console is a Game modes entry, the room's is its screen (#1369)
   terraceMarbles(on);
   showBoard();
-  if (on && isDefaultView(view, resetView(4))) {
+  if (on && !(run !== null && !fight) && isDefaultView(view, resetView(4))) {
     view = innerWidth < innerHeight ? { ...TERRACE_VIEW, polar: PHONE_POLAR, distance: 18 } : { ...TERRACE_VIEW }; // the Blender brief's camera, drawn back on a phone so the sky and the horizon show, for the terrace only: any view the player chose stays
     applyView();
   }
@@ -3590,8 +3596,8 @@ function syncTableZero(): void {
   sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364); the room never comes back once the terrace is on (#1374)
   for (const cells of [...boardDrawn, ...arenaDrawn]) cells.visible = terraceFailed; // the dishes of the glTF are drawn; the discs stay for picking only
   marbles.position.y = TERRACE_LIFT; // the marbles stand on their pedestals, 0.11 over the board plane
-  if ((hub || royale) && view === fitted) {
-    view = fitted = fightView(); // the file came after the hub or the royale: the Blender camera, as if it had been there (#1374)
+  if ((hub || royale || blenderBoard()) && view === fitted) {
+    view = fitted = fightView(); // the file came after the hub, the royale or the board: the Blender camera, as if it had been there (#1374)
     applyView();
   }
   updateFog();

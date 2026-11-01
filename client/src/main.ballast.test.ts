@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { Axial } from './board';
+import type { View } from './camera';
 import { boot, type Game } from './test/harness';
 
 // The Ballast Mind on the harness (#749, game-design.md section 7.5): every 2 turns it borrows an effect of another
@@ -108,5 +109,17 @@ describe('main.ts The Ballast Mind marks (#838)', () => {
     expect(game.hook<Fired>('__fired')).toBeNull();
     expect(document.body.dataset.fired).toBe('0');
     expect(tell()).not.toContain('Fired');
+  });
+});
+
+describe('main.ts The Ballast Mind on the terrace (#1374)', () => {
+  it('opens from the Blender camera, drawn back to a radius 5 board, whenever the terrace comes', async () => {
+    const game = await boot('?bot=off');
+    fightBallast(game, 0);
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const view = game.hook<View>('__view');
+    expect(view.azimuth).toBe(0);
+    expect(view.polar).toBeCloseTo((40 * Math.PI) / 180);
+    expect(view.distance).toBeGreaterThanOrEqual((13.6 * 5) / 4 - 1e-9);
   });
 });
