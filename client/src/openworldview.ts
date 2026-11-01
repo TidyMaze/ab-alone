@@ -9,7 +9,7 @@ import { CameraLife } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, slowBy, TROOP_DELAY, type Vec } from './openworldglide';
-import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
+import { FOAM_GAIN, motionUniforms, RIPPLE_MS, RipplePool, shimmerPosition, swayPosition, waterEmissive, writeRipples } from './openworldmotion';
 import { AMBIENT, capFor, ParticlePool } from './openworldparticles';
 import { type MarbleSkins, stripedMaterial, stripeFadeNode, stripeStrength } from './openworldstripe';
 
@@ -483,7 +483,7 @@ export class OpenWorldView {
       // The colour comes per instance (groundColour), so the material is white: the water's way too. A glossy water surface catches the
       // sun; its cells get a light line along the edge, the land a dark seam (openworldedge.ts, #1138).
       const water = ground === 'water';
-      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined }));
+      this.grounds[ground] = this.instances(`terrain-${ground}`, CAPACITY[ground], prism, edgeMaterial({ emissive, roughness: water ? 0.2 : 0.9, gain: water ? EDGE_GAIN.water : EDGE_GAIN.land, emissiveNode: water ? waterEmissive(this.uniforms, SHORE_RED, DEEP_RED) : undefined, positionNode: ground === 'sand' ? shimmerPosition(this.uniforms) : undefined }));
       this.managed.push(this.grounds[ground]);
     }
     for (const prop of PROP_NAMES) {
@@ -638,13 +638,13 @@ export class OpenWorldView {
   }
 
   /** Moves the particles to `now` (ms) and writes them to the mesh: the ambient ones of the hero's biome (docs/specs/openworld-animation.md
-   * section 6), born round the hero. None under reduced motion or past `ROLL_ZOOM`. Returns whether the frame must draw them: some are
+   * section 6), born round the hero. None under reduced motion, on the low tier (`lowTier`, the puffs of a step stay) or past `ROLL_ZOOM`. Returns whether the frame must draw them: some are
    * alive, or were on the last call and are erased now. */
-  sparkle(now: number, reduced: boolean): boolean {
+  sparkle(now: number, reduced: boolean, lowTier = false): boolean {
     const { particles, sparks, sparkPose, sparkLook } = this;
     if (this.drawnLevel > ROLL_ZOOM) particles.clear();
     else if (reduced) particles.clear(true); // the fade of a broken prop stays (#1147)
-    else particles.step(now, this.hero.position, AMBIENT[this.world.tile(this.heroCell[0], this.heroCell[1])!.biome]);
+    else particles.step(now, this.hero.position, lowTier ? undefined : AMBIENT[this.world.tile(this.heroCell[0], this.heroCell[1])!.biome]);
     let n = 0;
     for (let i = 0; i < particles.cap; i++) {
       if (!particles.pose(i, now, sparkLook)) continue;
@@ -699,11 +699,13 @@ export class OpenWorldView {
     u.time.value = now;
     u.foam.value = on ? FOAM_GAIN : 0;
     u.sway.value = on ? 1 : 0;
+    const shimmer = on && this.world.tile(this.heroCell[0], this.heroCell[1])!.biome === 'desert' && this.grounds.sand.count > 0;
+    u.shimmer.value = shimmer ? 1 : 0;
     u.span.value = RIPPLE_MS * slowBy();
     this.motionNow = now;
     if (!on) this.ripplePool.clear();
     writeRipples(this.ripplePool, u);
-    this.motionKinds = water ? (trees ? 'water,trees' : 'water') : trees ? 'trees' : '';
+    this.motionKinds = [water && 'water', trees && 'trees', shimmer && 'shimmer'].filter(Boolean).join(',');
     const drawn = this.looping || this.motionKinds !== '';
     this.looping = this.motionKinds !== '';
     return drawn;

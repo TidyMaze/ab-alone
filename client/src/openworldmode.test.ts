@@ -1318,6 +1318,20 @@ describe('the particles in the mode frame (#1110)', () => {
     expect(render).toHaveBeenCalledTimes(3);
   });
 
+  it('draws no particles on the low tier: only the first frame is drawn (#1104)', () => {
+    document.body.dataset.tier = 'low';
+    try {
+      const m = mode(undefined, meadow, () => false);
+      m.enter(1, 800, 600);
+      const render = vi.fn();
+      m.frame(render, 0);
+      m.frame(render, 400);
+      expect(render).toHaveBeenCalledTimes(1);
+    } finally {
+      delete document.body.dataset.tier;
+    }
+  });
+
   it('draws only the first frame under reduced motion, as before', () => {
     const m = mode(undefined, meadow, () => true);
     m.enter(1, 800, 600);

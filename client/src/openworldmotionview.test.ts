@@ -11,6 +11,8 @@ import { MAX_ZOOM, OpenWorldView, type Played } from './openworldview';
 const WATER_CODE = 0;
 const GRASS_CODE = 2;
 const TREE_CODE = 6;
+const SAND_CODE = 1;
+const DESERT = 3;
 const mesh = (view: OpenWorldView, name: string) => view.scene.getObjectByName(name) as THREE.InstancedMesh;
 // The square -3..3 of chunks in `biome` (4, the badlands, has no ambient particles), every cell of the terrain code `code(q, r)`.
 const world = (code: (q: number, r: number) => number, biome = 4) => (cx: number, cy: number): Uint8Array => {
@@ -67,6 +69,38 @@ describe('the water and the trees move (#1101, #1102)', () => {
     bare.show([0, 0]);
     expect(bare.animate(10, false)).toBe(false);
     expect(bare.alive).toBe('');
+  });
+
+  it('wobbles the sand of the desert only: a vertex term of the sand ground, no other, and the hero in the desert starts it (#1104)', () => {
+    const sand = (biome: number) => {
+      const view = new OpenWorldView(new World(world(() => SAND_CODE, biome)));
+      view.show([0, 0]);
+      return view;
+    };
+    const view = sand(DESERT);
+    expect((mesh(view, 'terrain-sand').material as THREE.MeshStandardNodeMaterial).positionNode).not.toBeNull();
+    for (const name of ['terrain-grass', 'terrain-rock', 'terrain-peak', 'terrain-water']) {
+      expect((mesh(view, name).material as THREE.MeshStandardNodeMaterial).positionNode ?? null, name).toBeNull();
+    }
+    expect(view.animate(100, false)).toBe(true);
+    expect(view.uniforms.shimmer.value).toBe(1);
+    expect(view.alive).toBe('shimmer');
+    expect(sand(2).animate(100, false)).toBe(false); // sand in a meadow does not shimmer
+    expect(sand(2).alive).toBe('');
+  });
+
+  it('stills the shimmer when calm or past ROLL_ZOOM, and names it after water and trees', () => {
+    const view = new OpenWorldView(new World(world((q, r) => (q >= 3 ? WATER_CODE : (q + r) % 5 === 0 ? TREE_CODE : SAND_CODE), DESERT)));
+    view.resize(1600, 900);
+    view.show([0, 0]);
+    view.animate(0, false);
+    expect(view.alive).toBe('water,trees,shimmer');
+    view.animate(16, true);
+    expect([view.uniforms.shimmer.value, view.alive]).toEqual([0, '']);
+    view.animate(32, false);
+    view.zoomBy(MAX_ZOOM);
+    view.animate(48, false);
+    expect(view.uniforms.shimmer.value).toBe(0);
   });
 
   it('names both when a lake and trees are in view', () => {

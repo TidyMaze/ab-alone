@@ -395,7 +395,7 @@ export class OpenWorldMode {
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
     if (this.view!.offsets(now)) this.dirty = true; // the camera's punch, pan ease and shake, on top of the follow (#1103)
-    const sparks = this.view!.sparkle(now, reduced); // the particles of the biome (#1110): they keep the scene live while any drifts
+    const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();
     const moving = !reduced && this.view!.hasWater;
     const loops = this.view!.animate(now, reduced || this.lowTier()); // the foam, the ripples and the trees' sway (#1101, #1102)

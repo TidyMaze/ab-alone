@@ -1901,6 +1901,16 @@ describe('the particles of the Open world (#1110)', () => {
     expect(view.scene.children).toContain(sparks(view));
   });
 
+  it('draws no ambient particle on the low tier, and a step still puffs its dust (#1104)', () => {
+    const view = new OpenWorldView(new World(biomeOf(0)));
+    view.show([0, 0]);
+    expect(view.sparkle(0, false, true)).toBe(false);
+    expect(sparks(view).count).toBe(0);
+    view.puff(100);
+    expect(view.sparkle(120, false, true)).toBe(true);
+    expect(sparks(view).count).toBe(5);
+  });
+
   it('draws none in the badlands, and none under reduced motion', () => {
     const bad = new OpenWorldView(new World(biomeOf(4)));
     bad.show([0, 0]);
