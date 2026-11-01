@@ -982,6 +982,7 @@ body:has(#dock-wrap :is(#mode-menu, #daily-card, #lobby-sheet):not([hidden])) #s
 /* A desktop window keeps its compact sheet (#1069): the 4 px gaps, so every boss shows without a scroll at 1280x720. */
 @media (orientation: landscape) and (min-width: 1101px) and (pointer: fine) {
   #dock-wrap :is(#mode-menu, #goal-sheet), #dock-wrap #mode-menu :is(#boss-list, #coop-list) { gap: 4px; }
+  #dock-wrap #mode-menu, #dock-wrap #mode-menu :is(#boss-list, #coop-list) { gap: 2px; } /* the Boss duel and Leaderboard entries need the room (#1316) */
 }
 @media (pointer: coarse) {
   #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: var(--target); }
