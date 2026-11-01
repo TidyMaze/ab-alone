@@ -55,7 +55,7 @@ import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
-import { COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
+import { COUNTER_MAX, drawCounter, drawShell, eggGlow, eggText, parseEggs, shellTint } from './alien';
 import {
   CHEVRON_COLOR,
   CHEVRON_SHAPE,
@@ -1744,11 +1744,11 @@ function ventAt(p: { x: number; z: number }): THREE.Group {
   return vent;
 }
 
-// The Alien tell (#588, game-design.md section 7.7): a pale egg on its cell and, above it, a counter of the player turns
+// The Alien tell (#588, game-design.md section 7.7): an egg on its cell and, above it, a counter of the player turns
 // left before it hatches: a sprite, so it always faces the camera, drawn over the marbles (alien.ts, 3:1 and more). On 1
 // a glow under the egg pulses once a second, held still under reduced motion (the animation loop sets it).
 const eggGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).translate(0, 0.23, 0);
-const eggMaterial = new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.55 });
+const eggMaterial = new THREE.MeshStandardMaterial({ roughness: 0.55 });
 const eggGlowGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
 const eggGlowMaterial = new THREE.MeshBasicMaterial({ color: BONE, transparent: true, depthWrite: false });
 const counterMaterials = Array.from({ length: Math.max(COUNTER_MAX, TRAIN_LEAD) }, (_, i) => {
@@ -1758,6 +1758,22 @@ const counterMaterials = Array.from({ length: Math.max(COUNTER_MAX, TRAIN_LEAD) 
   map.colorSpace = THREE.SRGBColorSpace;
   return new THREE.SpriteMaterial({ map, depthTest: false });
 });
+// The egg is the Alien's colour, the worn shell skin's (#1402), speckled and veined so it is no marble: its map is drawn again
+// when that colour changes, and the glow takes the marks' tint.
+const eggShellCanvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+const eggShellMap = new THREE.CanvasTexture(eggShellCanvas);
+eggShellMap.colorSpace = THREE.SRGBColorSpace;
+eggMaterial.map = eggShellMap;
+let eggShade = -1;
+function dressEggs(): void {
+  const c = marbleMaterials[1]!.color.getHex(); // the Alien is the shell side in a fight
+  const shade = c === 0xffffff ? skinById(skin).color : c; // a mapped skin is white until its albedo: the mean colour stands for it
+  if (shade === eggShade) return;
+  eggShade = shade;
+  drawShell(eggShellCanvas.getContext('2d')!, shade, 128);
+  eggShellMap.needsUpdate = true;
+  eggGlowMaterial.color.setHex(shellTint(shade));
+}
 let eggsDrawn: { cell: Axial; left: number; glow: boolean }[] = []; // read by the e2e tests
 // The Rail Yard tell (#626, game-design.md section 7.8): rails under each announced line, out past both edges onto the
 // deck, an amber chevron on both edges and on every cell of the line, pointing the way the train runs (railyard.ts, 3:1
@@ -3823,6 +3839,7 @@ function refresh(): void {
     onMarble(cellIndex(...cell), ring);
     blinking = { materials: fadable(marbleAt.get(cellIndex(...cell))![0]!), ring };
   }
+  dressEggs();
   eggsDrawn = eggs.map(({ cell: [q, r], left }) => {
     const p = axialTo3D(q, r);
     const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg' });
@@ -4714,6 +4731,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__crackDecalShown = (shown: boolean) => (crackMaterial.visible = shown);
 // Used by the browser checks to find The Alien's eggs as drawn: their cell, counter and glow on 1 (#588), and the glow.
 (window as unknown as Record<string, unknown>).__eggs = () => eggsDrawn;
+(window as unknown as Record<string, unknown>).__eggShade = () => eggShade;
 (window as unknown as Record<string, unknown>).__eggGlow = () => eggGlowMaterial.opacity;
 // Used by the browser checks to find The Rail Yard's trains as drawn (#626): each line, its cells from the entry and
 // its counter, and the trains passing now, with where their front is.
