@@ -291,7 +291,11 @@ describe('join_room', () => {
   });
 
   test('a link whose fingerprint is not the key of the first Hello is room_not_found: seat 1 is not bound to it', async () => {
-    const { session, theirs } = agent();
+    const [mine, theirs] = localPair();
+    const pairs = [localPair()[0], mine];
+    const session = new Session(newEngine, newEncounter, () => pairs.shift()!);
+    value(await session.createRoom()); // makes the agent key, so the clock below only runs the wait
+    value(session.newGame({ bot_nodes: 20 })); // leaves that room
     await peer(theirs, 'keyed-room', 1);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     let result: Result<unknown> | undefined;
