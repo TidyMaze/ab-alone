@@ -16,9 +16,9 @@ type P = (i32, i32);
 
 /// P2 and P3 start after this many ejections credited to the player. TUNE.
 pub const MAGNETIZER_PHASE_EJECTIONS: [u8; 2] = [3, 5];
-/// Player turns between two assignments, per phase: turns 3, 6, 9... in P1, the even turns in
-/// P2, every turn in P3. TUNE.
-pub const MAGNETIZER_ASSIGN_EVERY: [u32; 3] = [3, 2, 1];
+/// Player turns between two assignments, per phase: turns 3, 6, 9... in P1 and P2, the even
+/// turns in P3 (#1237: the ladder's pro won 12 of 20 with [3, 2, 1], 15 with these). TUNE.
+pub const MAGNETIZER_ASSIGN_EVERY: [u32; 3] = [3, 3, 2];
 /// Repulsions per settle at most, a safety bound the fights never reach.
 pub const MAGNETIZER_SETTLE_CAP: usize = 64;
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
@@ -263,20 +263,24 @@ pub fn magnetizer_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
+    magnetizer_search(enc, enc.boss.node_budget, &|_| true)
+}
+
+/// The node-limited search of `enc` for the side to move, every ply of its tree through
+/// `magnetizer_step`: the boss reply of [`magnetizer_move`], or the ladder player, who reads the
+/// polarities and the announce on the board.
+pub(crate) fn magnetizer_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<Move> {
     let mut board = enc.game().board().clone();
     board.set_magnetizer_ply(Some(enc.game().history().len() as u32));
     let game = enc.game().clone().with_board(board);
     let step = |before: &Board, _: Player, mv: &Move, after: Board| {
         magnetizer_step(enc, before, mv, after)
     };
-    search_hooked(
-        &game,
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-    )
-    .map(|r| r.mv)
+    search_hooked(&game, budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
 }
 
 #[cfg(test)]
@@ -356,10 +360,11 @@ mod tests {
             ((6, 0), t),
             ((8, 0), a), // turn 5 announces turn 6
             ((3, 1), None),
-            ((2, 1), t),
-            ((4, 1), a), // turn 3 announces turn 4
-            ((2, 2), a),
-            ((4, 2), a),
+            ((2, 1), a), // P2 assigns on turns 3, 6... as P1 (#1237)
+            ((4, 1), t),
+            ((2, 2), t),
+            ((4, 2), a), // P3: turn 3 announces turn 4
+            ((6, 2), t),
         ];
         for ((ply, phase), id) in table {
             assert_eq!(special(ply, phase), id, "ply {ply}, phase {phase}");
@@ -400,14 +405,14 @@ mod tests {
     }
 
     #[test]
-    fn a_polarity_comes_at_the_start_of_turns_3_and_6_in_p1_every_2nd_in_p2_every_one_in_p3() {
+    fn a_polarity_comes_at_the_start_of_turns_3_and_6_in_p1_and_p2_every_2nd_in_p3() {
         assert_eq!(assignment_turns(0, 10), vec![3, 6, 9]);
+        assert_eq!(assignment_turns(3, 10), vec![3, 6, 9], "P2 as P1 (#1237)");
         assert_eq!(
-            assignment_turns(3, 8),
+            assignment_turns(5, 8),
             vec![4, 6, 8],
             "nothing announces turn 2 before turn 1"
         );
-        assert_eq!(assignment_turns(5, 6), vec![3, 4, 5, 6]);
     }
 
     #[test]
@@ -1002,13 +1007,13 @@ mod tests {
     }
 
     #[test]
-    fn a_third_ejection_in_the_tree_switches_the_cadence_from_3_to_2() {
-        // The root: turn 1, boss to move, 2 ejections for the player (P1), 3 boss marbles.
+    fn a_fifth_ejection_in_the_tree_switches_the_cadence_from_3_to_2() {
+        // The root: turn 1, boss to move, 4 ejections for the player (P2), 3 boss marbles.
         let root = board(&[(0, 0), (-4, 4)], &[(0, -4), (4, -4), (-4, 0)], &[]);
-        let enc = played(root.clone(), 2, 1);
-        assert_eq!((enc.phase(), enc.game().history().len()), (0, 1));
+        let enc = played(root.clone(), 4, 1);
+        assert_eq!((enc.phase(), enc.game().history().len()), (1, 1));
         // Boss ply 4 of the tree ends just before turn 3. Its hook announces turn 4, an assignment
-        // turn in P2 and not in P1: the phase at the start of the ply decides.
+        // turn in P3 and not in P2: the phase at the start of the ply decides.
         let boss = mv(&[(0, -4)], E);
         let step = |gone: bool| {
             let mut before = root.clone();
@@ -1022,13 +1027,13 @@ mod tests {
             magnetizer_step(&enc, &before, &boss, after)
         };
         let (p1, credits) = step(false);
-        assert_eq!(p1.announce(), None, "P1: turn 4 assigns nothing");
+        assert_eq!(p1.announce(), None, "P2: turn 4 assigns nothing");
         assert_eq!(p1.magnetizer_ply(), Some(4), "the clock moves on");
         assert_eq!(credits, [0, 0]);
-        let (p2, _) = step(true);
-        let (cell, sign) = p2
+        let (p3, _) = step(true);
+        let (cell, sign) = p3
             .announce()
-            .expect("P2 after a third ejection in the tree: turn 4 is announced");
+            .expect("P3 after a fifth ejection in the tree: turn 4 is announced");
         assert!(cell.is_some());
         assert_eq!(sign, 1, "the first sign, +");
     }

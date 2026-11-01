@@ -53,10 +53,11 @@ describe('polarityText', () => {
     ]);
   });
 
-  it('every 2nd turn in P2, every turn in P3', () => {
-    expect(polarityText(1, 4)).toBe('Polarity next turn'); // turn 3
+  it('every 3rd turn in P2 as in P1, every 2nd turn in P3 (#1237)', () => {
+    expect(polarityText(1, 4)).toBe('Polarity in 3 turns'); // turn 3
     expect(polarityText(1, 6)).toBe('Polarity in 2 turns'); // turn 4
-    expect(polarityText(2, 7)).toBe('Polarity every turn');
+    expect(polarityText(2, 4)).toBe('Polarity next turn'); // turn 3
+    expect(polarityText(2, 7)).toBe('Polarity in 2 turns'); // turn 4
   });
 });
 

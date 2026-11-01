@@ -653,8 +653,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   see the new polarity first; then the board settles, and a new pair may repel at once). Your
   turns count from 1:
   - **P1** (start): turns 3, 6, 9... (every **3rd**).
-  - **P2** after your **3rd** ejection: every **2nd** turn (the even turns).
-  - **P3** after your **5th** ejection: **every** turn.
+  - **P2** after your **3rd** ejection: still every **3rd** turn (#1237: every 2nd made the pro
+    ladder player win 12 of 20 instead of 15, `boss-balance.md`).
+  - **P3** after your **5th** ejection: every **2nd** turn (the even turns).
   The phase is the one before the boss's ply that ends just before that turn.
 - **Deterministic, for P2P**: every random pick (the marble, the pair) is splitmix64 of the fight
   seed mixed with the ply, in the engine, never `Math.random`, floats or the clock; the sign cycle
@@ -666,8 +667,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   ring, and the announced marble itself **blinks in opacity** about once a second until it gets its
   sign (reduced motion: a steady pale outline instead, #741). Repulsions play in the engine's order: the pair slides apart and its glyphs fade out, the
   pushed lines slide, an ejected marble falls; reduced motion jumps to the end. The HUD line reads
-  "Polarity in 2 turns" (P1, P2), "Polarity next turn" when the next turn assigns, and "Polarity
-  every turn" in P3.
+  "Polarity in 2 turns" or "in 3 turns", and "Polarity next turn" when the next turn assigns.
 - **Counter, turn it against the boss**: walk a + marble next to a − marble aimed at a boss line:
   the repulsion shoves 3 or more boss marbles with one marble and can eject the last one, breaking
   a defence sumito never could. Keep opposite marbles apart near your own rim. The boss search sees
@@ -675,7 +675,7 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   marbles out of your repulsion lines. It also plays the assignments in its tree (#916): after each
   boss ply of the tree the announced marble takes its sign and the next one is announced when the
   phase the tree's ejections reach says so, the pick drawn with the seed 0.
-- **Calibrate**: knobs = rhythm (3, 2, 1), phase ejections (3, 5), AI depth (3, the Hull's 3000
+- **Calibrate**: knobs = rhythm (3, 3, 2, #1237), phase ejections (3, 5), AI depth (3, the Hull's 3000
   nodes). Fail if most fights end with no boss marble ejected by a repulsion (nobody learns the
   counter) or most losses come from the player's own repulsions in P3.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
