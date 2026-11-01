@@ -9,7 +9,7 @@ for (const [name, viewport, mobile, height] of [
   test.describe(name, () => {
     test.use({ viewport, isMobile: mobile, hasTouch: mobile });
     test('the Editor and Save buttons stay inside the visible panel', async ({ page }) => {
-      await page.goto('./?bot=off&lights');
+      await page.goto(new URL('./?bot=off&lights', process.env.E2E_DEV_URL).href) // the Save button is dev only;
       const panel = page.locator('#light-panel');
       await panel.waitFor();
       const box = (await panel.boundingBox())!;

@@ -93,7 +93,7 @@ test('after one visit the game loads offline and the bot answers', async ({ page
 
 test('the dev server registers no service worker', async ({ page }) => {
   test.skip(!!process.env.E2E_BASE_URL, 'the live site is the production build');
-  await page.goto('./?bot=off');
+  await page.goto(new URL('./?bot=off', process.env.E2E_DEV_URL).href);
   await page.locator('canvas').waitFor();
   await expect(page.locator('#play-online')).toBeEnabled(); // main.ts ran to its end
   const registered = await page.evaluate(() =>

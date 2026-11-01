@@ -2,6 +2,15 @@ import { defineConfig, type ReporterDescription } from '@playwright/test';
 
 // E2E_PORT lets parallel checkouts each run their own dev server.
 const port = process.env.E2E_PORT ?? '5173';
+// The dev server serves the few specs that test the dev server itself (dev-server, lights-panel).
+process.env.E2E_DEV_URL ??= `http://localhost:${port}/`;
+// The other specs run on a build of the page (`vite build --mode e2e`, no remote fonts, 2 to 3 s) served by `vite preview`:
+// the dev server transforms every module again on each page load (#1289: 10 % less time, 13 % less CPU on 98 tests).
+// E2E_SERVER=dev runs every spec on the dev server, for a spec being written.
+// The workers load this file again: the port is kept in the environment, like the preview port below.
+process.env.E2E_PAGE_PORT ??= String(20_000 + Math.floor(Math.random() * 40_000));
+const e2ePort = process.env.E2E_PAGE_PORT;
+const onDev = process.env.E2E_SERVER === 'dev';
 // E2E_BASE_URL points the suite at a running site, for example the GitHub Pages build.
 const baseURL = process.env.E2E_BASE_URL;
 // The offline spec needs the production build and its service worker (#193): `vite build`, then `vite preview` on
@@ -26,7 +35,8 @@ export default defineConfig({
   reporter,
   // CI runners have no GPU: every page draws with software WebGL on all cores. Two workers starved each other, a frame took
   // 1.5 s and clicks timed out (#216); one worker passes all specs (run 40103771311).
-  workers: process.env.CI ? 1 : undefined,
+  // Locally 4 workers at most: the machine stays usable by a person (owner, 2026-11-01). Playwright's default is half the cores.
+  workers: process.env.CI ? 1 : 4,
   // CI splits the suite across runners with --shard (#257), test by test (scripts/shard-reporter.ts, #333).
   fullyParallel: !!process.env.CI,
   // Every e2e test passes in under 15 s, locally and on CI, and a slower one fails (CONTRIBUTING.md, #349).
@@ -38,7 +48,7 @@ export default defineConfig({
   // On CI the page draws with software WebGL, a frame costs by its pixels and every click waits for one (#216): a 960x540
   // window draws 44 % fewer pixels than the 1280x720 default, and stays above the 768 px width of the low quality tier (#258).
   use: {
-    baseURL: baseURL ?? `http://localhost:${port}`,
+    baseURL: baseURL ?? (onDev ? `http://localhost:${port}` : `http://localhost:${e2ePort}/ab-alone/`),
     trace: 'on-first-retry',
     serviceWorkers: 'block',
     ...(process.env.CI ? { viewport: { width: 960, height: 540 } } : {}),
@@ -72,6 +82,17 @@ export default defineConfig({
           reuseExistingServer: true,
           timeout: 120_000,
         },
+        ...(onDev
+          ? []
+          : [
+              {
+                // Its own outDir: the production build below empties dist/.
+                command: `bunx vite build --mode e2e --outDir dist-e2e --logLevel warn && bunx vite preview --mode e2e --outDir dist-e2e --port ${e2ePort} --strictPort`,
+                url: `http://localhost:${e2ePort}/ab-alone/`,
+                reuseExistingServer: false,
+                timeout: 120_000,
+              },
+            ]),
         {
           command: `bunx vite build --logLevel warn && bunx vite preview --port ${previewPort} --strictPort`,
           url: process.env.E2E_PREVIEW_URL,
