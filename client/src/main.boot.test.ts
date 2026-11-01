@@ -169,6 +169,17 @@ describe('the renderer and its textures', () => {
     expect([made.options.position.x, made.options.position.z]).toEqual([0, 0]);
   });
 
+  it('compiles the shaders of the scene on WebGL before the canvas joins the page (#847)', async () => {
+    const game = await boot('?bot=off&backend=webgl');
+    expect(game.compiles()).toEqual([{ canvasInPage: false }]);
+    expect(document.querySelector('canvas')).not.toBeNull();
+  });
+
+  it('leaves WebGPU to compile its pipelines as they draw (#847)', async () => {
+    const game = await boot('?bot=off', { webgpu: true });
+    expect(game.compiles()).toEqual([]);
+  });
+
   it('reports the WebGL2 backend in the diagnostics', async () => {
     const game = await boot('?bot=off');
     const report = await diagnostics(game);
