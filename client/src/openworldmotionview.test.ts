@@ -47,9 +47,11 @@ describe('the water and the trees move (#1101, #1102)', () => {
     const view = new OpenWorldView(new World(world(() => GRASS_CODE)));
     expect((mesh(view, 'terrain-water').material as THREE.MeshStandardNodeMaterial).emissiveNode).not.toBeNull();
     for (const name of ['prop-tree', 'prop-tree-hi']) expect((mesh(view, name).material as THREE.MeshStandardNodeMaterial).positionNode, name).not.toBeNull();
-    for (const name of ['prop-mountain', 'prop-boulder', 'prop-wall', 'prop-cap', 'terrain-grass']) {
+    for (const name of ['prop-mountain', 'prop-boulder', 'prop-wall', 'prop-cap']) {
       expect((mesh(view, name).material as THREE.MeshStandardNodeMaterial).positionNode ?? null, name).toBeNull();
     }
+    // every ground has a vertex term since #1347: the widening of the prisms that closes their gap (it moves nothing by itself, see the shimmer test)
+    expect((mesh(view, 'terrain-grass').material as THREE.MeshStandardNodeMaterial).positionNode).not.toBeNull();
   });
 
   it('keeps the palette (#1173): the colours of the tree and of the water glow are unchanged', () => {
@@ -85,8 +87,10 @@ describe('the water and the trees move (#1101, #1102)', () => {
     };
     const view = sand(DESERT);
     expect((mesh(view, 'terrain-sand').material as THREE.MeshStandardNodeMaterial).positionNode).not.toBeNull();
+    // the other grounds carry only the widening of the prisms (#1347), a different node from the sand's wobble: the wobble is on the sand's own
+    // node and its uniform below (`shimmer`) is 0 away from the desert
     for (const name of ['terrain-grass', 'terrain-rock', 'terrain-peak', 'terrain-water']) {
-      expect((mesh(view, name).material as THREE.MeshStandardNodeMaterial).positionNode ?? null, name).toBeNull();
+      expect((mesh(view, name).material as THREE.MeshStandardNodeMaterial).positionNode, name).not.toBe((mesh(view, 'terrain-sand').material as THREE.MeshStandardNodeMaterial).positionNode);
     }
     expect(view.animate(100, false)).toBe(true);
     expect(view.uniforms.shimmer.value).toBe(1);
