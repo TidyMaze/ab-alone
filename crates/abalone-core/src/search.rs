@@ -341,12 +341,8 @@ impl Searcher<'_> {
             return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
         }
         let kids = children(node, &self.weights, self.step, self.turns);
-        if kids.is_empty() && node.board.rogue_lite() {
-            // No legal move loses a rogue-lite fight (docs/specs/roguelite.md).
-            return Some(ply - WIN);
-        }
         if kids.is_empty() {
-            return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
+            return self.pass(node, depth, ply, (alpha, beta));
         }
         let (mut best, mut alpha) = (-INF, alpha);
         for kid in &kids {
@@ -358,6 +354,30 @@ impl Searcher<'_> {
             }
         }
         Some(best)
+    }
+
+    /// Score of `node`, whose side to move has no legal move: with marbles it passes and the other
+    /// side moves on the same board, a draw when it is blocked too (rules.md section 7). With no
+    /// marble it keeps its static score.
+    fn pass(
+        &mut self,
+        node: &Node,
+        depth: u32,
+        ply: i32,
+        (alpha, beta): (i32, i32),
+    ) -> Option<i32> {
+        let mover = node.to_move;
+        if shape(&node.board, cell_of(mover)).0 == 0 {
+            return Some(evaluate(&node.board, mover, node.ejected, &self.weights));
+        }
+        let passed = Node {
+            to_move: other(mover),
+            ..node.clone()
+        };
+        if children(&passed, &self.weights, self.step, self.turns).is_empty() {
+            return Some(0);
+        }
+        Some(-self.negamax(&passed, depth - 1, ply + 1, -beta, -alpha)?)
     }
 
     /// Index and score of the best child at `depth`, `None` when the budget ran out inside.

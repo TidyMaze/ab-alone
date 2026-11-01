@@ -322,7 +322,7 @@ impl Encounter {
     }
 
     /// Plays `mv` for the side to move, then settles the polarities, then fires the hook when the
-    /// tell announced it and settles again.
+    /// tell announced it and settles again. Then the side to move passes when it has no legal move.
     pub fn play(&mut self, mv: &Move) -> Result<(), GameError> {
         if self.echo && echo::take_free(self, mv) {
             return Ok(());
@@ -334,7 +334,7 @@ impl Encounter {
         dual::refuse(self.game.board(), self.game.to_move(), mv)?;
         let told = self.tell();
         let before = self.game.board().clone();
-        self.game.play(mv)?;
+        self.game.play_ply(mv)?;
         self.revealed.clear();
         self.carry_marks(&before, mv);
         self.repulsions.clear();
@@ -371,6 +371,7 @@ impl Encounter {
         if self.echo {
             echo::play_bonuses(self, mv);
         }
+        self.game.pass_when_blocked();
         self.latch_phase();
         Ok(())
     }

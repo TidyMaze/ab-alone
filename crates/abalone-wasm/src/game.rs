@@ -121,6 +121,11 @@ impl Engine {
     pub fn draw_reason(&self) -> u8 {
         draw_reason_code(self.game.draw_reason())
     }
+
+    /// The side whose turn passed after the last ply, `0` when none. See the module docs.
+    pub fn passed(&self) -> u8 {
+        self.game.passed().map_or(0, side_code)
+    }
 }
 
 impl Default for Engine {

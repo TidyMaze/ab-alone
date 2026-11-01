@@ -52,6 +52,7 @@ pub fn draw_reason_code(reason: Option<DrawReason>) -> u8 {
         None => 0,
         Some(DrawReason::Repetition) => 1,
         Some(DrawReason::NoEjectionCap) => 2,
+        Some(DrawReason::Blocked) => 3,
     }
 }
 
