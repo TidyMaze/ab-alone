@@ -196,7 +196,8 @@ export class WorldRoom {
       const step = this.world.walk({ q: path[0]!, r: path[1]! });
       if (!step.ok) return fail('blocked', `the way to ${text(target)} is blocked after ${steps} steps: ${step.error.message}`);
       steps++;
-      run.sender.set(path[0]!, path[1]!);
+      const now = this.at()!; // where the step left the hero: the troop's push after it can move it on (world.ts)
+      run.sender.set(now[0], now[1]);
       this.pump(run);
     }
   }

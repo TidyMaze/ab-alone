@@ -281,6 +281,8 @@ body[data-pad] .tap-hint { display: none; }
    text at any UI scale. #reader holds the page shown, for screen readers only, and with the Flat HUD on as a plate at
    the bottom of the window. */
 body[data-reading] :is(#chrome, #support) { visibility: hidden; }
+/* The terrace has no screen to read: its page is the plate at the bottom, so the dock steps aside for it (#1369). */
+body[data-scene='table-zero'][data-reading] #dock-wrap { visibility: hidden; }
 #reader:not(.flat) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #reader.flat {
   position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 1; max-width: calc(40rem * var(--ui-scale)); margin: 0 auto;
@@ -928,6 +930,8 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
 #trainer-text p { margin: 0; }
 #trainer-card #trainer-next[hidden] { display: none; }
 #dock-wrap #trainer-card button { min-height: 44px; min-width: 44px; }
+/* A boss list needs the room: the Console entry steps aside while one is open, so the menu never scrolls at 1280x720 (#1407). */
+#dock-wrap #mode-menu:has(> [aria-expanded='true']) #console-entry { display: none; }
 #dock-wrap #mode-menu { display: flex; flex-direction: column; flex-flow: column nowrap; justify-content: flex-start; gap: 4px; align-items: stretch; min-width: 0; }
 #dock-wrap #mode-menu > button, #dock-wrap #mode-menu #boss-list button, #dock-wrap #mode-menu #coop-list button { min-height: 44px; min-width: 44px; }
 #dock-wrap #mode-menu #boss-list:not([hidden]), #dock-wrap #mode-menu #coop-list:not([hidden]) { flex: none; width: 100%; overflow-x: auto; margin: 0; padding: 0; }
