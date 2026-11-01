@@ -171,7 +171,7 @@ describe('the ending line of the Open world (#1175)', () => {
     const { m, saves } = setup();
     await saves.put(7, [0, 0], [], await fightOf(), 0, [], [0]);
     await m.open(7, 800, 600);
-    expect(out.textContent).toBe(''); // one lair of two: not over
+    expect(out.textContent).toBe('Seats on file: 1 of 2. Slag-glass remembers heat.'); // one lair of two: not over, the ledger line (#1315)
     m.leave();
     await saves.put(7, [0, 0], [], await fightOf(), 0, [], [1, 0]);
     await m.open(7, 800, 600);
@@ -212,6 +212,31 @@ describe('the ending line of the Open world (#1175)', () => {
     m.leave();
     for (let i = 0; i < 10; i++) await new Promise((done) => setTimeout(done));
     expect((await saves.load(7))!.lairs).toEqual([0, 1]);
+    out.remove();
+  });
+
+  it('shows the ledger line of the seats on file once a world opens with some lairs beaten (#1315)', async () => {
+    const out = hud();
+    const { m, saves } = setup();
+    await saves.put(7, [0, 0], [], await fightOf(), 0, [], [0]);
+    await m.open(7, 800, 600);
+    expect(out.textContent).toBe('Seats on file: 1 of 2. Slag-glass remembers heat.');
+    m.leave();
+    await saves.put(7, [0, 0], [], await fightOf(), 0, [], []);
+    await m.open(7, 800, 600);
+    expect(out.textContent).toBe(''); // none beaten: the page gives the line (none here)
+    out.remove();
+  });
+
+  it('does not use up the claim line once a lair is beaten, the ledger line shows instead (#1315)', async () => {
+    const out = hud();
+    const tally = vi.fn(() => 'Claim 0412: unworked.');
+    const saves = worldSaves(memoryStore(), 1);
+    await saves.put(7, [0, 0], [], await fightOf(), 0, [], [0]);
+    const m = new OpenWorldMode(grass, () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, saves, () => LAIRS, () => {}, undefined, undefined, tally);
+    await m.open(7, 800, 600);
+    expect(tally).toHaveBeenCalledTimes(0); // the claim line is not asked for once a lair is beaten
+    expect(out.textContent).toBe('Seats on file: 1 of 2. Slag-glass remembers heat.');
     out.remove();
   });
 
