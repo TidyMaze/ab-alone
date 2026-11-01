@@ -211,6 +211,25 @@ pub fn army_game_against(army: u8, foes: u8) -> Game {
         .with_win([WIN_EJECTIONS, (army - (MIN_ARMY - 1)).min(WIN_EJECTIONS)])
 }
 
+/// Marbles the player can lose over a whole Trainer run (#1159): the 6 of a standard loss.
+pub const TRAINER_MARBLES: u8 = 6;
+
+/// A Trainer wave (#1159): the player's full 14 marbles against the bot's `wave` marbles (clamped
+/// to `1..=FULL_ARMY`), its front ones, on the standard rules. Black wins once every one of them is
+/// out, White once the player has lost the `left` marbles (clamped to `1..=TRAINER_MARBLES`) of the
+/// run's pool. A lone marble can run for ever, so a draw by repetition or idle plies is a win for
+/// Black that still reports its `draw_reason`: the page counts it as a marble lost.
+pub fn trainer_game(wave: u8, left: u8) -> Game {
+    let wave = wave.clamp(1, FULL_ARMY);
+    let mut board = Board::standard();
+    for &(q, r) in &STANDARD_BLACK[..usize::from(FULL_ARMY - wave)] {
+        board.set(-q, -r, Cell::Empty);
+    }
+    Game::from_position(board, Player::Black, [0, 0])
+        .with_win([wave, left.clamp(1, TRAINER_MARBLES)])
+        .with_draw_to(Player::Black)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,6 +384,49 @@ mod tests {
         assert_eq!(
             army_game_against(9, FULL_ARMY).board(),
             army_game(9).board()
+        );
+    }
+
+    #[test]
+    fn a_trainer_wave_has_that_many_white_marbles_and_ends_when_they_are_all_out() {
+        let game = trainer_game(1, 6);
+        assert_eq!(count(game.board(), Cell::Black), 14);
+        assert_eq!(count(game.board(), Cell::White), 1);
+        assert_eq!(game.board().get(0, -2), Some(Cell::White)); // the front marbles stay
+        assert_eq!(game.win_ejections(Player::Black), 1);
+        assert_eq!(game.win_ejections(Player::White), 6);
+        assert!(!game.board().rogue_lite());
+        let game = trainer_game(9, 6);
+        assert_eq!(count(game.board(), Cell::White), 9);
+        assert_eq!(game.win_ejections(Player::Black), 9);
+        assert_eq!(trainer_game(0, 6).board(), trainer_game(1, 6).board());
+        assert_eq!(trainer_game(99, 6).board(), &Board::standard());
+        assert_eq!(trainer_game(99, 6).win_ejections(Player::Black), 14);
+        assert_eq!(trainer_game(3, 2).win_ejections(Player::White), 2); // what is left of the run's pool
+        assert_eq!(trainer_game(3, 0).win_ejections(Player::White), 1);
+        assert_eq!(trainer_game(3, 9).win_ejections(Player::White), 6);
+    }
+
+    #[test]
+    fn a_trainer_wave_repeated_three_times_is_won() {
+        let mut game = trainer_game(1, 6);
+        // Each side plays the move that brings back the position seen most often: it comes round again.
+        for _ in 0..40 {
+            if game.outcome().is_some() {
+                break;
+            }
+            let side = game.to_move();
+            let all = crate::moves::legal_moves(game.board(), side);
+            let seen = all
+                .iter()
+                .max_by_key(|m| game.seen_after(m))
+                .unwrap()
+                .clone();
+            game.play(&seen).unwrap();
+        }
+        assert_eq!(
+            game.outcome(),
+            Some(crate::game::Outcome::Win(Player::Black))
         );
     }
 

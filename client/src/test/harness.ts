@@ -283,7 +283,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           const key = JSON.stringify(query);
           let response = answers.get(key);
           if (!response) {
-            response = answer(req, (army, placed, foes) => engineFor(wasm.Engine, army, placed, foes), (boss, seed) => new wasm.Encounter(boss, seed));
+            response = answer(req, (army, placed, foes, trainer) => engineFor(wasm.Engine, army, placed, foes, trainer), (boss, seed) => new wasm.Encounter(boss, seed));
             answers.set(key, response);
           }
           this.onmessage?.({ data: { ...response, id } } as MessageEvent<BotResponse>);
