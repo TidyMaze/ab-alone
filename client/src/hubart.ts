@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import type { Axial } from './board';
 import type { Door } from './hub';
+import type { HubKit } from './tablezero';
 
 export const GLYPH_COLORS = {
   boss: 0xe03131, // Crimson
@@ -83,6 +84,16 @@ function part(geometry: THREE.BufferGeometry, material: THREE.Material, [x, y, z
   mesh.position.set(x, y, z);
   mesh.rotation.set(rx, 0, rz);
   return mesh;
+}
+
+/** The near-black arrow flat on a lift's floor, up the map toward the deck above or down toward the one below (#523). */
+function liftArrow(cell?: Axial, y = 0, paint: THREE.Material = lockedBarMaterial): THREE.Mesh {
+  const arrow = new THREE.Mesh(arrowGeo, paint);
+  if (cell) arrow.userData.cell = `${cell[0]},${cell[1]}`; // the e2e checks find it by its cell (__liftArrowY, #523)
+  arrow.position.y = y;
+  const cellY = cell?.[1] ?? 0;
+  arrow.rotation.set(-Math.PI / 2, ((cellY < 0 ? 1 : -1) * Math.PI) / 2, 0, 'YXZ');
+  return arrow;
 }
 
 /**
@@ -219,10 +230,7 @@ export function createDoorGlyph(door: Door, options: GlyphOptions = {}): THREE.G
       for (const [x, z] of [[-0.28, -0.28], [0.28, -0.28], [-0.28, 0.28], [0.28, 0.28]] as const) {
         group.add(part(cagePostGeo, accent, [x, 0.17, z]));
       }
-      const arrow = new THREE.Mesh(arrowGeo, lockedBarMaterial);
-      const cellY = options.cell?.[1] ?? 0;
-      arrow.rotation.set(-Math.PI / 2, ((cellY < 0 ? 1 : -1) * Math.PI) / 2, 0, 'YXZ');
-      group.add(arrow);
+      group.add(liftArrow(options.cell));
 
       if (options.open === false) {
         const bar = new THREE.Mesh(lockedBarGeo, lockedBarMaterial);
@@ -234,5 +242,62 @@ export function createDoorGlyph(door: Door, options: GlyphOptions = {}): THREE.G
     }
   }
 
+  return group;
+}
+
+/**
+ * The prop of the Blender file (scene_hub_deck.glb) each kind of room wears on the terrace (#1374): the file draws twelve. The Medal room
+ * stands a podium and the Fight-together room a dummy, which no other room of their deck has (hub.ts).
+ */
+export const KIT_PROP: Record<Door['kind'], string> = {
+  boss: 'door',
+  terminal: 'crt',
+  hotseat: 'table',
+  bot: 'robot',
+  online: 'antenna',
+  royale: 'arena',
+  medals: 'podium',
+  daily: 'calendar',
+  run: 'map',
+  together: 'dummy',
+  ranked: 'podium',
+  world: 'globe',
+  trainer: 'dummy',
+  lift: 'lift',
+};
+
+/** A small gap over the top of the file's lift cage, so the arrow lies on top of it, in view (#523, #1374). */
+const ARROW_GAP = 0.02;
+
+/** The top of the file's lift cage (its box), where the lift's arrow lies. */
+function cageTop(kit: HubKit): number {
+  const cage = kit.parts.lift?.[0];
+  return cage ? new THREE.Box3().setFromObject(cage).max.y : 0;
+}
+
+/** Where a beaten door's gold seal hangs over the file's door: in front of its frame, at its middle. */
+const KIT_SEAL: [number, number, number] = [0, 0.5, 0.06];
+
+/**
+ * A room of the hub in the Blender file's own prop, ring and shadow (the terrace's look, #1374), in place of the procedural glyph: the
+ * game's state still shows, by the gold seal on a beaten boss door and the bar of the file across a locked lift. Same group names as
+ * createDoorGlyph; the caller places it.
+ */
+export function createKitGlyph(kit: HubKit, door: Door, options: GlyphOptions = {}): THREE.Group {
+  const group = new THREE.Group();
+  group.name = `door-${door.kind}`;
+  for (const piece of kit.parts[KIT_PROP[door.kind]] ?? []) group.add(piece.clone());
+  if (options.beaten) {
+    const seal = part(sealGeo, materials.medals, KIT_SEAL, Math.PI / 2);
+    seal.name = 'beaten-seal';
+    group.add(seal);
+  }
+  // the file's cage has none: the arrow says which way it goes, on top of the cage, in bone white to read against the cage (#1374)
+  if (door.kind === 'lift') group.add(liftArrow(options.cell, cageTop(kit) + ARROW_GAP, materials.lift));
+  if (door.kind === 'lift' && options.open === false && kit.lockbar) {
+    const bar = kit.lockbar.clone();
+    bar.name = 'locked-bar';
+    group.add(bar);
+  }
   return group;
 }

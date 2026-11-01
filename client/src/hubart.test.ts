@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import type { Door } from './hub';
-import { createDoorGlyph, GLYPH_COLORS } from './hubart';
+import { createDoorGlyph, createKitGlyph, GLYPH_COLORS, KIT_PROP } from './hubart';
+import type { HubKit } from './tablezero';
 
 describe('hub door 3D glyphs (#628)', () => {
   it('defines distinct contrast-safe accent colors for every door kind', () => {
@@ -186,5 +187,68 @@ describe('hub door 3D glyphs (#628)', () => {
     expect(colors).toContain(GLYPH_COLORS.boss);
     expect(colors).toContain(GLYPH_COLORS.medals);
     expect(colors).not.toContain(GLYPH_COLORS.bossCore);
+  });
+});
+
+describe('the hub props of the Blender file on the rooms of the game (#1374)', () => {
+  const mesh = (name: string): THREE.Mesh => Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()), { name });
+  const kit: HubKit = { parts: { door: [mesh('prop'), mesh('ring')], lift: [mesh('cage')], dummy: [mesh('dummy')] }, lockbar: mesh('bar') };
+
+  it('names a prop of the file for every kind of room, one per kind on a deck', () => {
+    const kinds = ['boss', 'terminal', 'hotseat', 'bot', 'online', 'royale', 'medals', 'daily', 'run', 'together', 'ranked', 'world', 'trainer', 'lift'] as const;
+    expect(Object.keys(KIT_PROP).sort()).toEqual([...kinds].sort());
+    expect(KIT_PROP.boss).toBe('door');
+    // two kinds share a prop only when no deck has both (hub.ts: the Medal room is the Mess's, Ranked the Bridge's, Together the Furnace's, the Trainer the Bridge's)
+    expect([KIT_PROP.medals, KIT_PROP.ranked]).toEqual(['podium', 'podium']);
+    expect([KIT_PROP.together, KIT_PROP.trainer]).toEqual(['dummy', 'dummy']);
+  });
+
+  it('puts a copy of the parts of the kind in a group named as the procedural glyph is', () => {
+    const glyph = createKitGlyph(kit, { kind: 'boss', boss: 'echo' });
+    expect(glyph.name).toBe('door-boss');
+    expect(glyph.children.map((c) => c.name)).toEqual(['prop', 'ring']);
+    expect(glyph.children[0]).not.toBe(kit.parts.door![0]); // a copy: the kit's parts stay where they are
+    expect((glyph.children[0] as THREE.Mesh).geometry).toBe(kit.parts.door![0]!.geometry);
+  });
+
+  it('shows a gold seal on a beaten boss door, and none on a shut one', () => {
+    expect(createKitGlyph(kit, { kind: 'boss', boss: 'echo' }).getObjectByName('beaten-seal')).toBeUndefined();
+    expect(createKitGlyph(kit, { kind: 'boss', boss: 'echo' }, { beaten: true }).getObjectByName('beaten-seal')).toBeDefined();
+  });
+
+  it('bars a locked lift with the bar of the file, and leaves an open one clear', () => {
+    const lift: Door = { kind: 'lift', to: 'cargo' };
+    expect(createKitGlyph(kit, lift, { open: false }).getObjectByName('locked-bar')).toBeDefined();
+    expect(createKitGlyph(kit, lift, { open: true }).getObjectByName('locked-bar')).toBeUndefined();
+    expect(createKitGlyph(kit, lift).getObjectByName('locked-bar')).toBeUndefined();
+    expect(createKitGlyph({ ...kit, lockbar: null }, lift, { open: false }).getObjectByName('locked-bar')).toBeUndefined();
+    expect(createKitGlyph(kit, { kind: 'bot' }, { open: false }).getObjectByName('locked-bar')).toBeUndefined(); // only a lift
+  });
+
+  it('lays the lift arrow on the floor, toward the deck above from the north half of the map and below from the south', () => {
+    const arrowOf = (cell: [number, number]): THREE.Mesh => createKitGlyph(kit, { kind: 'lift', to: 'cargo' }, { cell }).children.find((c) => (c as THREE.Mesh).geometry instanceof THREE.ShapeGeometry) as THREE.Mesh;
+    expect(arrowOf([1, -2]).rotation.y).toBeCloseTo(Math.PI / 2);
+    expect(arrowOf([-1, 2]).rotation.y).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it("lays the lift arrow a small gap over the top of the file's cage, read from its box, not on the floor", () => {
+    const cage = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.4, 1, 0.4), new THREE.MeshBasicMaterial()), { name: 'cage' });
+    cage.position.y = 0.5; // the cage stands from 0 to 1
+    const tall: HubKit = { ...kit, parts: { ...kit.parts, lift: [cage] } };
+    const arrow = createKitGlyph(tall, { kind: 'lift', to: 'cargo' }, { cell: [1, -2] }).children.find((c) => (c as THREE.Mesh).geometry instanceof THREE.ShapeGeometry) as THREE.Mesh;
+    expect(arrow.position.y).toBeGreaterThan(1);
+    expect(arrow.position.y).toBeLessThanOrEqual(1.05);
+    const bare: HubKit = { ...kit, parts: { ...kit.parts, lift: [] } }; // no cage in the file: the gap alone, from the floor
+    const low = createKitGlyph(bare, { kind: 'lift', to: 'cargo' }, { cell: [1, -2] }).children.find((c) => (c as THREE.Mesh).geometry instanceof THREE.ShapeGeometry) as THREE.Mesh;
+    expect(low.position.y).toBeCloseTo(0.02);
+  });
+
+  it('paints the terrace lift arrow bone white, so it reads on the cage (#523, #1374)', () => {
+    const arrowOf = (props: HubKit): THREE.Mesh => createKitGlyph(props, { kind: 'lift', to: 'cargo' }, { cell: [1, -2] }).children.find((c) => (c as THREE.Mesh).geometry instanceof THREE.ShapeGeometry) as THREE.Mesh;
+    expect((arrowOf(kit).material as THREE.MeshBasicMaterial).color.getHex()).toBe(GLYPH_COLORS.lift);
+  });
+
+  it('draws a room whose prop the file lacks as an empty group', () => {
+    expect(createKitGlyph(kit, { kind: 'bot' }).children).toHaveLength(0);
   });
 });

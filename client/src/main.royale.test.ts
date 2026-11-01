@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import type * as THREE from 'three/webgpu';
+import { describe, expect, it, vi } from 'vitest';
 import { axialTo3D, type Axial } from './board';
+import type { View } from './camera';
 import { MARK_MS, STEP_MS } from './royale-reveal';
 import { SLIDE_MS } from './slide';
 import { boot, slowKeys, type Game } from './test/harness';
@@ -370,5 +372,65 @@ describe('main.ts, a battle royale round plays out (#612)', () => {
     game.frame(10_000); // nothing of it plays on over the hub
     expect(document.body.dataset.hub).toBeDefined();
     expect(reveal()).toBeUndefined();
+  });
+});
+
+describe('main.ts, the battle royale looks like the Blender scene (#1374)', () => {
+  // The arena group (half scale) and its marbles' group, from the terrace the page exposes for the browser checks.
+  const arenaOf = (game: Game): THREE.Object3D[] => {
+    const scene = game.hook<THREE.Object3D>('__terrace').parent!;
+    const arena = scene.children.find((c) => c.type === 'Group' && c.scale.x === 0.5)!;
+    return arena.children.find((c) => c.type === 'Group')!.children;
+  };
+  const pedestalsOf = (game: Game): THREE.Mesh[] => arenaOf(game).filter((c): c is THREE.Mesh => c.userData.terrace === true);
+
+  it('stands every marble on a pedestal: the kit disc at the board plane, as wide as Blender\'s half-size one, the marble on top of it', async () => {
+    const game = await seeded(7);
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    game.hook('__royale', { seed: 7, rounds: [] }); // drawn again once the terrace is on
+    const pedestals = pedestalsOf(game);
+    expect(pedestals).toHaveLength(60); // six seats of ten
+    const marbles = arenaOf(game).filter((c): c is THREE.Mesh => c.type === 'Mesh' && !c.userData.terrace && (c as THREE.Mesh).geometry.type === 'SphereGeometry');
+    expect(marbles).toHaveLength(60);
+    const [first] = pedestals;
+    expect(first!.position.y).toBe(0);
+    expect(first!.scale.toArray()).toEqual([1, 2, 1]); // the arena's half scale leaves its height as the kit's
+    for (const marble of marbles) expect(pedestals.some((p) => p.position.x === marble.position.x && p.position.z === marble.position.z)).toBe(true);
+    expect(Math.min(...marbles.map((m) => m.position.y))).toBeCloseTo(0.36 + 0.22); // 0.11 over the plane, in the arena's scale
+  });
+
+  it('keeps the room as it was for the automated tests: no pedestal, the marble on the floor, the room camera', async () => {
+    const game = await boot('?bot=off&scene=room');
+    game.hook('__royale', { seed: 7, rounds: [] });
+    expect(pedestalsOf(game)).toHaveLength(0);
+    expect(Math.min(...arenaOf(game).filter((c) => c.type === 'Mesh').map((m) => m.position.y))).toBeLessThan(0.4);
+    expect(game.hook<View>('__view').polar).not.toBeCloseTo((40 * Math.PI) / 180);
+  });
+
+  it('moves the pedestal with its marble through a slide', async () => {
+    const game = await seeded(7);
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    game.hook('__royale', { seed: 7, rounds: [] });
+    game.click(-2, 6);
+    game.click(-2, 5);
+    game.frame(SLIDE_MS / 2);
+    const mid = drawnAt(game, -2, 5)!;
+    expect(pedestalsOf(game).some((p) => p.position.x === mid.x && p.position.z === mid.z)).toBe(true);
+  });
+
+  it('frames the arena from the Blender camera, 40 degrees from the vertical, and keeps it whole on a phone', async () => {
+    const game = await seeded(7);
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    game.hook('__royale', { seed: 7, rounds: [] });
+    const wide = game.hook<View>('__view');
+    expect(wide.polar).toBeCloseTo((40 * Math.PI) / 180);
+    expect(wide.distance).toBeGreaterThanOrEqual(13.6 - 1e-9);
+    vi.stubGlobal('innerWidth', 390);
+    vi.stubGlobal('innerHeight', 844);
+    window.dispatchEvent(new Event('resize'));
+    const tall = game.hook<View>('__view');
+    vi.unstubAllGlobals();
+    expect(tall.polar).toBeCloseTo(wide.polar);
+    expect(tall.distance).toBeGreaterThanOrEqual(wide.distance); // never closer than the camera of the file; the arena already fits a phone there
   });
 });

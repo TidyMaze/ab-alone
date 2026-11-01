@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_can_break, world_chunk, world_enemies, world_dungeon, world_lairs, world_path, world_version } from 'abalone-wasm';
+import init, { Encounter, Engine, Royale, boss_ids, boss_name, engine_version, run_map, world_can_break, world_chunk, world_enemies, world_is_enemy, world_dungeon, world_lairs, world_path, world_version } from 'abalone-wasm';
 import {
   BOARD_CELLS,
   CELLS,
@@ -55,7 +55,7 @@ import { LAST_MOVE_REST, lastMovePulse } from './lastmove';
 import { boardAfter, freeMarbles, freeText, landing, parseEchoTell } from './echo';
 import { Hint, type Spot } from './hint';
 import { crackLeft, crackText, parseCracks, tickOffsets } from './hull';
-import { COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
+import { COUNTER_MAX, drawCounter, drawShell, eggGlow, eggText, parseEggs, shellTint } from './alien';
 import {
   CHEVRON_COLOR,
   CHEVRON_SHAPE,
@@ -183,12 +183,12 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial } from './tablezero';
-import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
+import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, type HubKit } from './tablezero';
+import { MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
 import { toleranceWindow } from './matchmaking';
-import { boardHtml, buildBoard, loadRivals } from './leaderboard';
+import { boardHtml, buildBoard, loadRivals, ratingHistory } from './leaderboard';
 import { loadRankedProfile, rankedHudHtml, settleRanked1v1, settleRankedRoyale, type RankedMode } from './ranked';
 import { archiveList, LEVEL_NAMES, menuOpen, motionReduced, nextDisplay, settingsList, themeAttribute, VOLUME_NAMES, type MenuEvent, type Theme } from './settings';
 import { icon } from './icons';
@@ -276,7 +276,8 @@ import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
 import { bestTurns, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
-import { roomAt, type Door, type Spot as HubSpot } from './hub';
+import { HUB_CELLS, roomAt, type Door, type Spot as HubSpot } from './hub';
+import { createKitGlyph, type GlyphOptions } from './hubart';
 import { HubController } from './controller';
 import { labelsHtml, pipsHtml, railHtml } from './hubview';
 import { clearStray } from './modeswitch';
@@ -370,7 +371,13 @@ const activeRadius =(): number => (fight?.id === 'ballast' ? 5 : 4);
 // its counter fit the window too (#691). The Dual Room's (#947) looks along its void, the two rooms
 // side by side, drawn back until both fit. The board's centre sits in the middle of the window: the HUD plate folds (#957).
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
+// The hub and the royale on the terrace are framed from the Blender camera (lights_camera.json), drawn back until their cells and props are on the window (#1374).
+const HUB_POINTS = boardPoints(HUB_CELLS, 1, [0, 0.6]);
+const ROYALE_POINTS = boardPoints(ARENA, ARENA_SCALE, [0, 0.4]);
+const terraceFramed = (): boolean => tableZeroActive({ room: keepRoom, ready: terraceReady });
 const fightView = (): View => {
+  if (hub && terraceFramed()) return fitTerrace(HUB_POINTS, innerWidth < innerHeight ? 3.4 : 3.6, innerWidth, innerHeight);
+  if (royale && terraceFramed()) return fitTerrace(ROYALE_POINTS, 4, innerWidth, innerHeight);
   if (hub) return resetView(innerWidth < innerHeight ? 3.4 : 3.6); // the hub's deck plan (#1249): its 37 cells and their plates, a little closer than a board, closer still upright
   if (fight?.id === 'pulsar') return fitView(resetView(), sceneRenderer.terraceOn ? PULSAR_BOUNDS.map((p) => (p.z > 0 ? { ...p, z: p.z * PULSAR_DOCK } : p)) : PULSAR_BOUNDS, innerWidth, innerHeight);
   if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight);
@@ -412,6 +419,9 @@ const store = (() => {
 let skin = readSkin(store); // the dark shell skin (#377), skins.ts, declared before the first wave: its maps start with it (#925)
 let glass = readGlassSkin(store); // the pale glass skin (#377), glassskins.ts
 const tonal = readLook(location.search, store) === 'tonal'; // the Fluent x Material look (#1138, look.ts): no board, cell or skin map
+// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation (`navigator.webdriver`, the e2e
+// build) and in a dev build, so the room specs and its code live on. A production page ignores it.
+const keepRoom = (navigator.webdriver || import.meta.env.DEV) && new URLSearchParams(location.search).get('scene') === 'room';
 // Reduced motion (#379): the setting of the menu once pressed, else the system's prefers-reduced-motion, read live.
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let savedMotion = readReducedMotion(store);
@@ -450,7 +460,7 @@ const loader = new KTX2Loader().detectSupport(renderer);
 // as soon as the scene is. mountBay takes them when the scene exists.
 const bayLoad = loadSpaceshipBay(`${import.meta.env.BASE_URL}assets/pbr/`, undefined, loader, hasNormalMaps(tier));
 async function loadTexture(name: string, srgb: boolean, tiled: boolean): Promise<THREE.Texture | null> {
-  if (!loadsTexture(tonal ? 'tonal' : 'pbr', name)) return null;
+  if (!loadsTexture(tonal ? 'tonal' : 'pbr', name, keepRoom)) return null; // the terrace draws no board or plate (#1370)
   if (/-normal\.ktx2$/.test(name) && !hasNormalMaps(tier)) return null; // the low tier fetches and draws no normal map (#849)
   try {
     const t = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/${name}`);
@@ -477,6 +487,8 @@ const deckNormalMap = (name: Deck): Promise<THREE.Texture | null> => {
 // the scene, and takes these requests. Key 1 is the enemy shell, key 2 the player's marble (marbles.ts): the skins of
 // skins.ts and glassskins.ts, ambientCG PBR materials (CC0), opaque and in their own colours. The maps are square and turn
 // once round the sphere, whose circumference is twice the way from pole to pole.
+// The default skins, drawn on the terrace by its own marbles (#1314): their maps are asked for when the room opens only (#1370).
+const TERRACE_SKINS: readonly string[] = [DEFAULT_SKIN, DEFAULT_GLASS_SKIN];
 const SKIN_MAPS = {
   albedo: ['map', true],
   normal: ['normalMap', false],
@@ -493,7 +505,7 @@ const skinMap = (asset: string, kind: keyof typeof SKIN_MAPS, tile: number): Pro
       return map;
     }),
   );
-for (const s of [skinById(skin), glassSkinById(glass)]) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
+for (const s of [skinById(skin), glassSkinById(glass)]) if (asksSkinMaps(keepRoom, s.id, TERRACE_SKINS)) for (const kind of skinKinds(s.extra)) skinMap(s.asset, kind, s.tile);
 const [
   deckAlbedo,
   deckRoughness,
@@ -623,7 +635,7 @@ function applyView(): void {
     return;
   }
   sceneRenderer.fogRadius = fogRadius;
-  sceneRenderer.applyView(view, reading, { tier, clear, deck, consoleDef });
+  sceneRenderer.applyView(view, sceneRenderer.terraceOn ? null : reading, { tier, clear, deck, consoleDef }); // the room's screen is not framed on the terrace (#1369)
   placeHubLabels();
 }
 // The hub's deck plan (#1249): the label plates over the rooms, the lift-shaft rail and the boss pips, shown in the hub only.
@@ -1169,7 +1181,8 @@ const closeBoard = (): void => {
 };
 boardButton.addEventListener('click', () => {
   moveModes('outside');
-  document.getElementById('board-body')!.innerHTML = boardHtml(buildBoard(loadRankedProfile(store).rating1v1, loadRivals(store)));
+  const profile = loadRankedProfile(store);
+  document.getElementById('board-body')!.innerHTML = boardHtml(buildBoard(profile.rating1v1, loadRivals(store)), ratingHistory(profile.matches));
   boardBox.hidden = false;
   document.getElementById('board-close')!.focus();
 });
@@ -1272,11 +1285,17 @@ const reader = document.getElementById('reader')!;
 reader.classList.toggle('flat', flatHud);
 let consoleScreen!: THREE.Mesh; // set by drawProps
 let recorder!: THREE.Mesh; // set by drawProps
+// The terrace has no console screen (#1369): its Console entry of Game modes opens the same reader, the page as a plate, the camera stays.
+document.getElementById('console-entry')!.addEventListener('click', () => {
+  moveModes('outside'); // the menu closes, as Leaderboard's does
+  openReader();
+});
 function openReader(id?: string): void {
   if (id) layoutConsole(id); // an entry of the log archive (#513)
   if (!consolePages.length) return; // the fonts are not in yet
   reading = view;
   reader.hidden = false;
+  reader.classList.toggle('flat', flatHud || sceneRenderer.terraceOn);
   document.body.dataset.reading = consoleEntry; // read by the e2e tests
   if (consoleEntry !== MEDAL_ROOM) markRead(store, consoleEntry);
   showConsole(0);
@@ -1416,10 +1435,10 @@ applyDeck(deck);
 // A skin's material is built flat the first time it is worn and dressed in every map its asset ships as they load: a press
 // never waits, and a page that keeps the default skins loads two sets of maps, not twenty (the requests are made above).
 const dressed = new WeakMap<THREE.Material, Promise<void>>(); // when a skin's maps are on
-function dress(look: THREE.MeshStandardMaterial, { asset, tile, extra }: { asset: string; tile: number; extra: readonly Extra[] }): void {
+function dress(look: THREE.MeshStandardMaterial, { id, asset, tile, extra }: { id: string; asset: string; tile: number; extra: readonly Extra[] }): void {
   dressed.set(
     look,
-    Promise.all(skinKinds(extra).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
+    Promise.all((asksSkinMaps(keepRoom, id, TERRACE_SKINS) ? skinKinds(extra) : []).map(async (kind) => [SKIN_MAPS[kind][0], await skinMap(asset, kind, tile)] as const)).then((loaded) => {
       Object.assign(look, Object.fromEntries(loaded));
       if (tonal) return; // one tone and a soft highlight, no map to wait for (#1138)
       if (extra.includes('metalness')) look.metalness = 1; // the map says where it is metal
@@ -1737,11 +1756,11 @@ function ventAt(p: { x: number; z: number }): THREE.Group {
   return vent;
 }
 
-// The Alien tell (#588, game-design.md section 7.7): a pale egg on its cell and, above it, a counter of the player turns
+// The Alien tell (#588, game-design.md section 7.7): an egg on its cell and, above it, a counter of the player turns
 // left before it hatches: a sprite, so it always faces the camera, drawn over the marbles (alien.ts, 3:1 and more). On 1
 // a glow under the egg pulses once a second, held still under reduced motion (the animation loop sets it).
 const eggGeometry = new THREE.SphereGeometry(0.17, 24, 16).scale(1, 1.35, 1).translate(0, 0.23, 0);
-const eggMaterial = new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.55 });
+const eggMaterial = new THREE.MeshStandardMaterial({ roughness: 0.55 });
 const eggGlowGeometry = new THREE.CircleGeometry(0.4, 32).rotateX(-Math.PI / 2);
 const eggGlowMaterial = new THREE.MeshBasicMaterial({ color: BONE, transparent: true, depthWrite: false });
 const counterMaterials = Array.from({ length: Math.max(COUNTER_MAX, TRAIN_LEAD) }, (_, i) => {
@@ -1751,6 +1770,22 @@ const counterMaterials = Array.from({ length: Math.max(COUNTER_MAX, TRAIN_LEAD) 
   map.colorSpace = THREE.SRGBColorSpace;
   return new THREE.SpriteMaterial({ map, depthTest: false });
 });
+// The egg is the Alien's colour, the worn shell skin's (#1402), speckled and veined so it is no marble: its map is drawn again
+// when that colour changes, and the glow takes the marks' tint.
+const eggShellCanvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+const eggShellMap = new THREE.CanvasTexture(eggShellCanvas);
+eggShellMap.colorSpace = THREE.SRGBColorSpace;
+eggMaterial.map = eggShellMap;
+let eggShade = -1;
+function dressEggs(): void {
+  const c = marbleMaterials[1]!.color.getHex(); // the Alien is the shell side in a fight
+  const shade = c === 0xffffff ? skinById(skin).color : c; // a mapped skin is white until its albedo: the mean colour stands for it
+  if (shade === eggShade) return;
+  eggShade = shade;
+  drawShell(eggShellCanvas.getContext('2d')!, shade, 128);
+  eggShellMap.needsUpdate = true;
+  eggGlowMaterial.color.setHex(shellTint(shade));
+}
 let eggsDrawn: { cell: Axial; left: number; glow: boolean }[] = []; // read by the e2e tests
 // The Rail Yard tell (#626, game-design.md section 7.8): rails under each announced line, out past both edges onto the
 // deck, an amber chevron on both edges and on every cell of the line, pointing the way the train runs (railyard.ts, 3:1
@@ -1955,7 +1990,7 @@ arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
 // The marbles, the board's and the arena's, drawn as one instanced mesh per look, placed before each draw (#885).
 const syncMarbles = [marbles, arenaMarbles].map((group) => instanceMarbles(group, marbleGeometry, scene));
-let syncPedestals: (() => void) | null = null; // made when the arena's kit has loaded (terraceKit)
+let syncPedestals: (() => void)[] = []; // made when the arena's kit has loaded (terraceKit): the 1v1's and the royale's
 const seatLooks = SEATS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: SHELL.roughness, metalness: SHELL.metalness }));
 // Each seat's glyph (#558), flat in the ink on its marbles, never the tint alone: it touches the shell where the shell
 // faces the default view, turned to face it, so it stays inside the marble's outline.
@@ -3460,6 +3495,7 @@ const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, P
 // The terrace (#1314): the arena's glTF from Blender, in place of the room in a 1v1 game. A page whose file is missing or broken
 // keeps the room; so do the hub, Ballast Mind, the Dual Room, the royale and a run, until their own PRs (#1374); `?scene=room` asks for it.
 let terraceReady = false;
+let hubProps: HubKit | null = null; // the props of the hub file, put on the rooms of the game's deck (#1374)
 /** The boards of the terrace (#1374): the arena's own radius 4 slab, and the slabs of the two bosses whose board is another one. */
 const terraceBoards: Record<'arena' | 'ballast' | 'dual' | 'hub' | 'royale', THREE.Group | null> = { arena: null, ballast: null, dual: null, hub: null, royale: null };
 const boardOf = (): keyof typeof terraceBoards => (hub ? 'hub' : royale ? 'royale' : fight?.id === 'ballast' || fight?.id === 'dual' ? fight.id : 'arena');
@@ -3477,9 +3513,6 @@ const showBoard = (): void => {
 /** The props of the boss kit (kit_boss.glb) the fights wear on the terrace: the Pulsar's pylon and its core, the Assembly press, the Rail Yard's buffer stop. */
 let bossKit: Record<'pylon' | 'core' | 'press' | 'buffer', THREE.Mesh> | null = null;
 const terraceProp = (name: keyof NonNullable<typeof bossKit>): THREE.Mesh | null => (sceneRenderer.terraceOn && bossKit ? bossKit[name] : null);
-// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation (`navigator.webdriver`, the e2e
-// build) and in a dev build, so the room specs and its code live on. A production page ignores it.
-const keepRoom = (navigator.webdriver || import.meta.env.DEV) && new URLSearchParams(location.search).get('scene') === 'room';
 let terraceFailed = false; // the arena files did not load: the board stands on a plain background, the discs drawn as they are
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last' | 'hint', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
@@ -3498,7 +3531,9 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
     const drawn = mergeByMaterial(arena.scene, true); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
     terraceBoards.arena = drawn.getObjectByName('terrace_board') as THREE.Group;
+    hubProps = hubKit(hubDeck.scene);
     for (const [name, file] of [['ballast', ballast], ['dual', dual], ['hub', hubDeck], ['royale', royaleSlab]] as const) {
+      if (name === 'royale') file.scene.add(...arena.scene.children.filter((c) => /^scene_post_\d+$/.test(c.name)).map((c) => c.clone())); // its slab stands in the arena's footprint: the arena's six posts frame it (#1374)
       const board = mergeByMaterial(file.scene);
       board.visible = false;
       sceneRenderer.terrace.add(board);
@@ -3517,7 +3552,8 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
       pmrem.dispose();
     }
     terraceKit.pedestal = kit.scene.getObjectByName('kit_pedestal_flat') as THREE.Mesh;
-    syncPedestals = instanceMarbles(marbles, terraceKit.pedestal.geometry, scene);
+    const pedestals = [marbles, arenaMarbles].map((group) => instanceMarbles(group, terraceKit.pedestal!.geometry, scene)); // the 1v1's and the royale's
+    syncPedestals = pedestals;
     const named = (name: string): THREE.Mesh => kit.scene.getObjectByName(name) as THREE.Mesh;
     terraceKit.marks = { target: named('kit_ring_target'), arrow: named('kit_arrow_target'), select: named('kit_ring_select'), last: named('kit_ring_lastmove'), hint: hint.scene.getObjectByName('kit_ring_hint') as THREE.Mesh };
     terraceReady = true;
@@ -3541,6 +3577,7 @@ const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
   const on = tableZeroActive({ room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
+  document.getElementById('console-entry')!.hidden = !on; // the terrace's console is a Game modes entry, the room's is its screen (#1369)
   terraceMarbles(on);
   showBoard();
   if (on && isDefaultView(view, resetView(4))) {
@@ -3551,6 +3588,10 @@ function syncTableZero(): void {
   sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364); the room never comes back once the terrace is on (#1374)
   for (const cells of [...boardDrawn, ...arenaDrawn]) cells.visible = terraceFailed; // the dishes of the glTF are drawn; the discs stay for picking only
   marbles.position.y = TERRACE_LIFT; // the marbles stand on their pedestals, 0.11 over the board plane
+  if ((hub || royale) && view === fitted) {
+    view = fitted = fightView(); // the file came after the hub or the royale: the Blender camera, as if it had been there (#1374)
+    applyView();
+  }
   updateFog();
 }
 function refresh(): void {
@@ -3561,7 +3602,10 @@ function refresh(): void {
   if (hub || royale) drawDual(null); // no fight, no void (#947)
   if (hub) {
     const { beaten } = loadProgress(store);
-    hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim);
+    const props = sceneRenderer.terraceOn ? hubProps : null;
+    // On the terrace each room is the Blender file's own prop, standing on the board plane (#1374); else the glyph of the room.
+    const glyphOf = props && ((door: Door, options: GlyphOptions) => { const room = createKitGlyph(props, door, options); room.position.y = -TERRACE_LIFT - 0.02; return room; });
+    hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim, glyphOf ?? undefined);
     syncDishes();
     hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store)); // a beaten boss's door shows its medal (#1249)
     document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten);
@@ -3815,6 +3859,7 @@ function refresh(): void {
     onMarble(cellIndex(...cell), ring);
     blinking = { materials: fadable(marbleAt.get(cellIndex(...cell))![0]!), ring };
   }
+  dressEggs();
   eggsDrawn = eggs.map(({ cell: [q, r], left }) => {
     const p = axialTo3D(q, r);
     const egg = Object.assign(new THREE.Mesh(eggGeometry, eggMaterial), { name: 'egg' });
@@ -4499,6 +4544,14 @@ addEventListener('resize', () => {
   applyView(); // the reader fits the screen to the new window
 });
 
+// Used by the browser checks to aim at a lift's arrow (#523, #1374): its world height, on top of the cage on the terrace.
+(window as unknown as Record<string, unknown>).__liftArrowY = (q: number, r: number): number | null => {
+  let arrow: THREE.Object3D | undefined;
+  sceneRenderer.marbles.traverse((o) => {
+    if (!arrow && o.userData.cell === `${q},${r}`) arrow = o;
+  });
+  return arrow ? arrow.getWorldPosition(new THREE.Vector3()).y : null;
+};
 // Used by the browser checks to click a cell by its axial coordinates.
 (window as unknown as Record<string, unknown>).__cellToScreen = (q: number, r: number, lift = 0) => {
   return sceneRenderer.cellToScreen(q, r, innerWidth, innerHeight, royale ? ARENA_SCALE : 1, lift);
@@ -4706,6 +4759,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__crackDecalShown = (shown: boolean) => (crackMaterial.visible = shown);
 // Used by the browser checks to find The Alien's eggs as drawn: their cell, counter and glow on 1 (#588), and the glow.
 (window as unknown as Record<string, unknown>).__eggs = () => eggsDrawn;
+(window as unknown as Record<string, unknown>).__eggShade = () => eggShade;
 (window as unknown as Record<string, unknown>).__eggGlow = () => eggGlowMaterial.opacity;
 // Used by the browser checks to find The Rail Yard's trains as drawn (#626): each line, its cells from the entry and
 // its counter, and the trains passing now, with where their front is.
@@ -5682,7 +5736,13 @@ const peersHost = new WorldPeersHost(
   },
   () => readName(store),
   // The signed events of the public world (#1305): the player's key, the engine's rule of what can break, and what a break of another hero does.
-  { keys: () => worldKeys(store), canBreak: (seed, q, r) => world_can_break(seed, q, r), apply: (cell) => openWorld.remoteBreak(cell) },
+  {
+    keys: () => worldKeys(store),
+    canBreak: (seed, q, r) => world_can_break(seed, q, r),
+    apply: (cell) => openWorld.remoteBreak(cell),
+    canBeaten: (seed, q, r) => world_is_enemy(seed, q, r),
+    beat: (cell) => openWorld.remoteBeaten(cell),
+  },
 );
 openWorld.peers = peersHost;
 netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peersHost.show() : peersHost.hide()));
@@ -5714,6 +5774,7 @@ if (navigator.webdriver) {
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldEnemies = () => openWorld.enemies();
   hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
+  hooks.__openworldIsEnemy = (seed: number, q: number, r: number) => world_is_enemy(seed, q, r); // whether a generated enemy starts on a cell (#1305)
   hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {
@@ -5763,6 +5824,8 @@ function startRoyale(file: RoyaleFile): void {
   selected = [];
   reveal = null;
   royale = loadRoyale(file, (seats, seed) => new Royale(seats, seed));
+  view = fitted = fightView(); // the whole arena on the window (#1374)
+  applyView();
   moveModes('pick');
   for (const control of [newGameButton, retryButton, goalButton, hintButton, exportButton, importButton, resultCard]) control.hidden = true;
   holdButton.hidden = false;
@@ -5865,11 +5928,21 @@ function drawRoyale(game: Royale): void {
     if (seat < 0) return;
     const marble = new THREE.Mesh(marbleGeometry, seatLooks[seat]);
     const picked = ringed.some(([sq, sr]) => sq === q && sr === r);
-    marble.position.set(p.x, picked ? 0.5 : 0.36, p.z);
+    const stand = terraceKit.pedestal && sceneRenderer.terraceOn ? terraceKit.pedestal : null;
+    marble.position.set(p.x, (picked ? 0.5 : 0.36) + (stand ? TERRACE_LIFT / ARENA_SCALE : 0), p.z); // on the terrace the marble stands on its pedestal (#1374)
     const glyph = new THREE.Mesh(seatGlyphs[seat], seatInk);
     glyph.position.copy(marble.position).add(glyphLift);
     arenaMarbles.add(marble, glyph);
     arenaAt.set(i, [marble, glyph]);
+    if (stand) {
+      // the kit's flat disc under the marble, as the 1v1's: Blender's royale half size across, its height unscaled by the arena's half scale
+      const pedestal = new THREE.Mesh(stand.geometry, stand.material);
+      pedestal.scale.set(1, 1 / ARENA_SCALE, 1);
+      pedestal.position.set(p.x, 0, p.z);
+      pedestal.userData.terrace = true;
+      arenaMarbles.add(pedestal);
+      arenaAt.get(i)!.push(pedestal);
+    }
     if (!picked) return;
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
     ring.rotation.x = Math.PI / 2;
@@ -5959,10 +6032,11 @@ function animateReveal(now: number): void {
   }
   for (const track of step.tracks) {
     const p = slideAt(track, ms - step.start);
-    const [marble, glyph] = arenaAt.get(cellIndex(...track.cell, ARENA))!;
+    const [marble, glyph, pedestal] = arenaAt.get(cellIndex(...track.cell, ARENA))!;
     marble!.position.x = p.x;
     marble!.position.z = p.z;
     glyph!.position.copy(marble!.position).add(glyphLift);
+    pedestal?.position.set(p.x, 0, p.z); // the disc goes with its marble
   }
 }
 // A marble the reveal ejects or the breach takes: the ejection fall of a normal game, in the arena.
@@ -6203,6 +6277,11 @@ if (serviceWorker) {
 refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
+// Until the terrace is drawn the room would show (#1389): the canvas stays hidden on a plain dark page, and shows after a terrace frame.
+if (!keepRoom) {
+  renderer.domElement.style.opacity = '0'; // not `visibility`: a hidden canvas takes no click, and a first tap would be lost
+  document.body.dataset.veil = 'on';
+}
 document.body.appendChild(renderer.domElement);
 if (resumed?.boss) startBoss(resumed.boss.id, resumed.boss.seed, undefined, resumed); // a Stalker fight comes back under its fog (#1122)
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
@@ -6235,6 +6314,11 @@ function moving(): boolean {
   );
 }
 
+/** Shows the canvas: called after a frame that is not the room's (#1389), the terrace, its plain background, or the Open world. */
+function unveil(): void {
+  renderer.domElement.style.opacity = '';
+  delete document.body.dataset.veil;
+}
 renderer.setAnimationLoop((now) => {
   pollPad(now); // the gamepad, read once per frame (#1252)
   lastDraw = timeDraw(lastDraw, now);
@@ -6244,6 +6328,7 @@ renderer.setAnimationLoop((now) => {
       sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
       renderer.render(scene, camera);
     }, now); // the frame's own time, not the moment its callback runs: the camera moves by even steps (#1333)
+    unveil();
     if (fpsOn) {
       // Only the frames really rendered count (#1064): a still scene skips its render, and reads idle, not 60.
       if (drew) stampDrawn(fpsStamps, now);
@@ -6303,9 +6388,10 @@ renderer.setAnimationLoop((now) => {
   offerLowTier(!sliding() && !lastMovePlaying); // at a quiet moment: no move animation (the ambient dust and heat pulse always move)
   if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   for (const sync of syncMarbles) sync();
-  syncPedestals?.();
+  for (const sync of syncPedestals) sync();
   renderer.info.reset();
   sceneRenderer.render();
+  if (sceneRenderer.terraceOn) unveil();
   draws++;
   drawAsked = false;
   dirty = Math.max(0, dirty - 1);

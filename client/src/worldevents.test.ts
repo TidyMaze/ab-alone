@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { BreakSet, MAX_HELD, signBreak, verifyBreak, worldKeys } from './worldevents';
+import { BreakSet, MAX_HELD, signBeaten, signBreak, verifyBreak, worldKeys } from './worldevents';
 import type { BreakEvent } from './worldpeers';
 import { generateKeys } from './moverecord';
 
-const ev = (q: number, r = 0): BreakEvent => ({ seed: 1305, q, r, pub: 'k', sig: 's' });
+const ev = (q: number, r = 0): BreakEvent => ({ kind: 'break', seed: 1305, q, r, pub: 'k', sig: 's' });
 
 describe('a signed break', () => {
   it('verifies, and fails as soon as the seed, the cell or the key is changed', async () => {
     const keys = await generateKeys();
     const e = await signBreak(keys, 1305, 4, -9);
-    expect(e).toMatchObject({ seed: 1305, q: 4, r: -9, pub: keys.pub });
+    expect(e).toMatchObject({ kind: 'break', seed: 1305, q: 4, r: -9, pub: keys.pub });
     expect(await verifyBreak(e)).toBe(true);
     expect(await verifyBreak({ ...e, q: 5 })).toBe(false);
     expect(await verifyBreak({ ...e, r: -8 })).toBe(false);
@@ -18,6 +18,14 @@ describe('a signed break', () => {
     expect(await verifyBreak({ ...e, pub: (await generateKeys()).pub })).toBe(false);
     expect(await verifyBreak({ ...e, sig: 'not a signature' })).toBe(false);
     expect(await verifyBreak({ ...e, pub: '!' })).toBe(false);
+  });
+
+  it('a beaten enemy is signed the same way, and its kind is in the signature', async () => {
+    const keys = await generateKeys();
+    const e = await signBeaten(keys, 1305, 4, -9);
+    expect(e).toMatchObject({ kind: 'beaten', seed: 1305, q: 4, r: -9, pub: keys.pub });
+    expect(await verifyBreak(e)).toBe(true);
+    expect(await verifyBreak({ ...e, kind: 'break' })).toBe(false); // a beaten enemy is not a break of the same cell
   });
 });
 

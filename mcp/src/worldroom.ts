@@ -141,7 +141,7 @@ export class WorldRoom {
     net.onData((data, peer) => {
       const message = decode(data);
       if (message?.t === 'hello') run.peers.hello(peer, this.opts.clock(), message.name);
-      else if (message) run.peers.position(peer, message, this.opts.clock());
+      else if (message?.t === 'pos') run.peers.position(peer, message, this.opts.clock()); // a break or a troop is not a place: the agent's state does not need them
     });
     net.onLeave((peer) => run.peers.leave(peer));
     net.onError(() => (run.problem = PROBLEM));
@@ -196,7 +196,8 @@ export class WorldRoom {
       const step = this.world.walk({ q: path[0]!, r: path[1]! });
       if (!step.ok) return fail('blocked', `the way to ${text(target)} is blocked after ${steps} steps: ${step.error.message}`);
       steps++;
-      run.sender.set(path[0]!, path[1]!);
+      const now = this.at()!; // where the step left the hero: the troop's push after it can move it on (world.ts)
+      run.sender.set(now[0], now[1]);
       this.pump(run);
     }
   }

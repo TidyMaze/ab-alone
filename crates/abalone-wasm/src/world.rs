@@ -62,6 +62,13 @@ pub fn world_can_break(seed: u32, q: i32, r: i32) -> bool {
     world::can_break(u64::from(seed), q, r)
 }
 
+/// Whether a generated enemy marble of the world `seed` starts on the cell `(q, r)`, so a peer's signed "beaten" event for it can be
+/// true (#1305).
+#[wasm_bindgen]
+pub fn world_is_enemy(seed: u32, q: i32, r: i32) -> bool {
+    world::is_enemy(u64::from(seed), q, r)
+}
+
 /// The enemy marbles that start in chunk `(cx, cy)` of the world `seed`: `q, r` pairs, the groups one
 /// after the other; empty off the world.
 #[wasm_bindgen]
@@ -460,6 +467,19 @@ mod tests {
         assert!(breakable > 0 && breakable < 6400);
         assert!(!world_can_break(5, 0, 0)); // the spawn clearing
         assert!(!world_can_break(5, 100_000, 0)); // off the world
+    }
+
+    #[test]
+    fn is_enemy_matches_the_generated_enemies() {
+        let enemies: Vec<i32> = (-6..6)
+            .flat_map(|cx| (-6..6).flat_map(move |cy| world_enemies(5, cx, cy)))
+            .collect();
+        assert!(!enemies.is_empty());
+        for pair in enemies.chunks(2) {
+            assert!(world_is_enemy(5, pair[0], pair[1]));
+        }
+        assert!(!world_is_enemy(5, 0, 0));
+        assert!(!world_is_enemy(5, 100_000, 0));
     }
 
     #[test]

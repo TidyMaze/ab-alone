@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { cellsFor } from './board';
+import { DIST_MAX } from './camera';
+import { BLENDER_VIEW, boardPoints, fitTerrace, hubKit } from './tablezero';
 import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, aimSunShadow, SUN_SHADOW, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
 
 describe('Table Zero is the scene of every mode', () => {
@@ -220,5 +223,86 @@ describe('the boss fights on the terrace (#1374)', () => {
     expect(merged.children).toHaveLength(2); // the rest of the scene, and the board
     expect((board.children[0] as THREE.Mesh).geometry.attributes.position!.count).toBe(48); // the slab and the post
     expect(material.color.r).toBeCloseTo(TERRACE_TINT.r); // tinted once, though it is in both groups
+  });
+});
+
+const fs = 'node:fs/promises'; // untyped: the client has no Node types (readme.test.ts)
+const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
+const file = JSON.parse(new TextDecoder().decode(await readFile(new URL('../../art/blender/export/lights_camera.json', import.meta.url)))) as { camera: { default_pitch_deg: number; default_distance: number } };
+
+describe('the Blender camera of the hub and the royale (#1374)', () => {
+  it('is the camera of lights_camera.json: pitch 50 over the horizon, 13.6 away', () => {
+    expect(BLENDER_VIEW.distance).toBe(file.camera.default_distance);
+    expect(Math.round(90 - (BLENDER_VIEW.polar * 180) / Math.PI)).toBe(file.camera.default_pitch_deg);
+    expect(BLENDER_VIEW.azimuth).toBe(0);
+  });
+  it('lists the six corners of each cell, a pointy hex of circumradius a half, at each height', () => {
+    const points = boardPoints([[0, 0], [1, 0]], 0.5, [0, 1]);
+    expect(points).toHaveLength(2 * 6 * 2);
+    expect(points.filter((p) => p.y === 1)).toHaveLength(12);
+    const first = points.filter((p) => p.y === 0).slice(0, 6);
+    expect(Math.max(...first.map((p) => Math.abs(p.z)))).toBeCloseTo(0.25); // a corner straight up, at half the spacing
+    expect(Math.max(...first.map((p) => Math.abs(p.x)))).toBeCloseTo(0.2165);
+    expect(boardPoints([[2, 0]])[0]!.x).toBeGreaterThan(1.4); // one height by default, the cell's place
+  });
+  it('keeps the angle and draws back until the play area is on screen, desktop and phone', () => {
+    const hub = boardPoints(cellsFor(3), 1, [0, 0.6]);
+    for (const [w, h] of [[1280, 720], [390, 844]] as const) {
+      const view = fitTerrace(hub, 3.6, w, h);
+      expect(view.polar).toBe(BLENDER_VIEW.polar);
+      expect(view.distance).toBeGreaterThanOrEqual((BLENDER_VIEW.distance * 3.6) / 4);
+      expect(view.distance).toBeLessThanOrEqual(DIST_MAX);
+    }
+    const [wide, tall] = [fitTerrace(hub, 3.6, 1280, 720), fitTerrace(hub, 3.6, 390, 844)];
+    expect(tall.distance).toBeGreaterThanOrEqual(wide.distance - 1e-9);
+  });
+});
+
+describe("the hub props of the file are the game's to place (#1374)", () => {
+  const prop = (name: string, at: [number, number, number]): THREE.Mesh => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geometry.attributes.position!.count * 4).fill(1), 4));
+    const mesh = Object.assign(new THREE.Mesh(geometry, new THREE.MeshStandardMaterial()), { name });
+    mesh.position.set(...at);
+    return mesh;
+  };
+  const file = (): THREE.Group => {
+    const root = new THREE.Group();
+    root.add(prop('scene_slab_hub', [0, 0, 0]), prop('scene_hub_terminal_0', [1, 0, 1]));
+    root.add(prop('scene_hub_prop_door', [0, 0, -2.6]), prop('scene_hub_ring_door', [0, 0, -2.6]), prop('scene_hub_shadow_door', [0.08, 0, -2.52]));
+    (root.getObjectByName('scene_hub_ring_door') as THREE.Mesh).material = (root.getObjectByName('scene_hub_prop_door') as THREE.Mesh).material; // one material of the file, tinted once
+    root.add(prop('scene_hub_prop_lift', [-3, 0, 0]), prop('scene_row21_lockbar', [-3, 1, 0.1]));
+    return root;
+  };
+  it("are left out of the merged board, with the file's terminals", () => {
+    let vertices = 0;
+    mergeByMaterial(file()).traverse((o) => o instanceof THREE.Mesh && (vertices += o.geometry.attributes.position!.count));
+    expect(vertices).toBe(24); // the slab only
+  });
+  it('are gathered by kind, each part at its place relative to its prop, the lock bar on the lift', () => {
+    const kit = hubKit(file());
+    expect(Object.keys(kit.parts).sort()).toEqual(['door', 'lift']);
+    const door = kit.parts.door!;
+    expect(door.map((m) => m.name)).toEqual(['scene_hub_prop_door', 'scene_hub_ring_door', 'scene_hub_shadow_door']);
+    expect(door.map((m) => m.position.toArray().map((v) => Math.round(v * 100) / 100))).toEqual([[0, 0, 0], [0, 0, 0], [0.08, 0, 0.08]]);
+    expect(door.map((m) => m.renderOrder)).toEqual([0, 0, 0]); // none of this test's meshes is blended
+    expect(door[0]!.castShadow).toBe(true);
+    expect(kit.lockbar!.position.toArray().map((v) => Math.round(v * 100) / 100)).toEqual([0, 1, 0.1]);
+  });
+  it('blends a shadow of the file, and draws it after the solid parts', () => {
+    const root = file();
+    const shadow = root.getObjectByName('scene_hub_shadow_door') as THREE.Mesh;
+    shadow.material = new THREE.MeshStandardMaterial({ emissive: 0xffffff }); // an unlit material of the file
+    shadow.geometry.attributes.color!.setW(0, 0.4);
+    const drawn = hubKit(root).parts.door![2]!;
+    expect([drawn.renderOrder, (drawn.material as THREE.Material).transparent, drawn.castShadow]).toEqual([1, true, false]);
+  });
+  it('leave out a ring with no prop, and a lock bar with no lift', () => {
+    const root = new THREE.Group();
+    root.add(prop('scene_hub_ring_door', [0, 0, 0]), prop('scene_row21_lockbar', [0, 0, 0]));
+    expect(hubKit(root)).toEqual({ parts: {}, lockbar: null });
+  });
+  it('are none in a file without them', () => {
+    expect(hubKit(new THREE.Group())).toEqual({ parts: {}, lockbar: null });
   });
 });

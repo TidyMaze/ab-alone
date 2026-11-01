@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { COUNTER, COUNTER_MAX, drawCounter, eggGlow, eggText, parseEggs } from './alien';
+import { COUNTER, COUNTER_MAX, drawCounter, drawShell, eggGlow, eggText, parseEggs, shellTint } from './alien';
 import { contrastRatio, type RGB } from './contrast';
+import { SKINS } from './skins';
+import { TONAL, tonalMarble } from './look';
 
 const rgb = (hex: number): RGB => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
 
@@ -81,5 +83,47 @@ describe('the counter above an egg', () => {
     expect(g.textAlign).toBe('center');
     expect(g.textBaseline).toBe('middle');
     expect(g.font).toBe('bold 44px sans-serif');
+  });
+});
+
+describe('the shell of an egg', () => {
+  const recorder = () => {
+    const calls: string[] = [];
+    const g = {
+      clearRect: vi.fn(),
+      fillRect: vi.fn((x: number, y: number, w: number, h: number) => calls.push(`rect ${x} ${y} ${w} ${h}`)),
+      beginPath: vi.fn(),
+      arc: vi.fn(() => calls.push('speck')),
+      fill: vi.fn(),
+      moveTo: vi.fn(),
+      quadraticCurveTo: vi.fn(() => calls.push('vein')),
+      stroke: vi.fn(),
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+    };
+    return { g, calls };
+  };
+
+  it('paints the Alien colour over the whole map, then speckles and veins in a tint of it', () => {
+    const { g, calls } = recorder();
+    drawShell(g as unknown as CanvasRenderingContext2D, 0x101010, 128);
+    expect(calls[0]).toBe('rect 0 0 128 128');
+    expect(calls.filter((c) => c === 'speck').length).toBeGreaterThanOrEqual(30);
+    expect(calls.filter((c) => c === 'vein').length).toBeGreaterThanOrEqual(3);
+    expect(g.strokeStyle).toBe('#' + shellTint(0x101010).toString(16).padStart(6, '0'));
+    expect(g.lineWidth).toBeGreaterThan(0);
+  });
+
+  it('is the same shell each time: no random', () => {
+    const [a, b] = [recorder(), recorder()];
+    drawShell(a.g as unknown as CanvasRenderingContext2D, 0x44363f, 64);
+    drawShell(b.g as unknown as CanvasRenderingContext2D, 0x44363f, 64);
+    expect(a.g.arc.mock.calls).toEqual(b.g.arc.mock.calls);
+  });
+
+  it('shows its marks 3:1 on the Alien colour in every shell skin, the terrace shell and the tonal look', () => {
+    const bases = [...SKINS.map((s) => s.color), 0x0a0c0f, tonalMarble(1, 0x000000), TONAL.black.inner, TONAL.black.outer];
+    for (const base of bases) expect(contrastRatio(rgb(shellTint(base)), rgb(base))).toBeGreaterThanOrEqual(3);
   });
 });

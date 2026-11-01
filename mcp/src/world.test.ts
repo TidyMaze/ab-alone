@@ -52,6 +52,21 @@ function beside(
   return null;
 }
 
+/** A world with the hero beside a cell of a terrain in `codes` (`beside`, `keep` made for the seed), on the first seed where the walk
+ * there arrives: a push of the troop on the way can stop it. */
+function standBeside(codes: number[], keep?: (seed: number) => (q: number, r: number) => boolean): { open: OpenWorld; spot: { at: [number, number]; dir: string } } {
+  for (const seed of SEEDS) {
+    const spot = beside(seed, codes, keep?.(seed));
+    if (!spot) continue;
+    const open = world();
+    value(open.newWorld({ seed }));
+    const [q, r] = spot.at;
+    if (q !== 0 || r !== 0) open.walk({ q, r });
+    if (value(open.state({})).hero === `(${q},${r})`) return { open, spot };
+  }
+  throw new Error(`no seed has the hero beside ${codes}`);
+}
+
 describe('before a world is started', () => {
   test('every tool says there is no world', () => {
     const open = world();
@@ -118,55 +133,45 @@ describe('a step', () => {
     value(open.newWorld({ seed: 0 }));
     const moved = value(open.step({ direction: 'E' }));
     expect(moved.moved).toBe(true);
+    expect(moved.push).toBeNull();
     expect(moved.state.hero).toBe('(1,0)');
+    expect(moved.state.beaten).toBe(0);
     expect(moved.state.troop).toEqual(['(0,0)', '(-1,0)', '(1,-1)', '(-1,1)', '(0,-1)', '(0,1)']);
     expect(value(open.state({})).hero).toBe('(1,0)');
   });
 
   test('a cell the hero cannot enter refuses the step and changes nothing', () => {
-    const found = SEEDS.map((seed) => ({ seed, spot: beside(seed, [0, 4, 7]) })).find((s) => s.spot);
-    expect(found).toBeTruthy();
-    const open = world();
-    value(open.newWorld({ seed: found!.seed }));
-    const [q, r] = found!.spot!.at;
-    if (q !== 0 || r !== 0) value(open.walk({ q, r }));
+    const { open, spot } = standBeside([0, 4, 7]);
+    const [q, r] = spot.at;
     const before = value(open.state({}));
-    const error = failure(open.step({ direction: found!.spot!.dir as 'E' }));
+    const error = failure(open.step({ direction: spot.dir as 'E' }));
     expect(error.code).toBe('blocked');
     expect(value(open.state({}))).toEqual(before);
   });
 
   test('a boulder is broken by rolling into it and the cell is rock after', () => {
-    const found = SEEDS.map((seed) => ({ seed, spot: beside(seed, [5]) })).find((s) => s.spot);
-    expect(found).toBeTruthy();
-    const open = world();
-    value(open.newWorld({ seed: found!.seed }));
-    const [q, r] = found!.spot!.at;
-    if (q !== 0 || r !== 0) value(open.walk({ q, r }));
+    const { open, spot } = standBeside([5]);
+    const [q, r] = spot.at;
     const broken = value(open.state({})).broken;
-    const moved = value(open.step({ direction: found!.spot!.dir as 'E' }));
+    const moved = value(open.step({ direction: spot.dir as 'E' }));
     expect(moved.smashed).toBe('boulder');
     expect(moved.state.broken).toBe(broken + 1);
-    const [dq, dr] = STEPS[found!.spot!.dir]!;
+    const [dq, dr] = STEPS[spot.dir]!;
     expect(moved.state.hero).toBe(`(${q + dq},${r + dr})`);
     const here = value(open.state({ radius: 1 })).window.rows.find((row) => row.r === r + dr)!;
     expect(here.cells).toContain('H');
-    expect(value(open.step({ direction: found!.spot!.dir as 'E' })).smashed).toBeNull();
+    expect(value(open.step({ direction: spot.dir as 'E' })).smashed).toBeNull();
   });
 
   test('a tree with no tree beside it is broken, the cell is grass after', () => {
     const lone = (seed: number) => (q: number, r: number) => Object.values(STEPS).every(([dq, dr]) => code(seed, q + dq, r + dr) !== 6);
-    const found = SEEDS.map((seed) => ({ seed, spot: beside(seed, [6], lone(seed)) })).find((s) => s.spot);
-    expect(found).toBeTruthy();
-    const open = world();
-    value(open.newWorld({ seed: found!.seed }));
-    const [q, r] = found!.spot!.at;
-    if (q !== 0 || r !== 0) value(open.walk({ q, r }));
+    const { open, spot } = standBeside([6], lone);
+    const [q, r] = spot.at;
     const broken = value(open.state({})).broken;
-    const moved = value(open.step({ direction: found!.spot!.dir as 'E' }));
+    const moved = value(open.step({ direction: spot.dir as 'E' }));
     expect(moved.smashed).toBe('tree');
     expect(moved.state.broken).toBe(broken + 1);
-    const [dq, dr] = STEPS[found!.spot!.dir]!;
+    const [dq, dr] = STEPS[spot.dir]!;
     // Walk 8 cells away, along the first line that is open, so the troop has left the cell: it shows as grass.
     const away = Object.values(STEPS).map(([sq, sr]) => open.walk({ q: q + dq + 8 * sq, r: r + dr + 8 * sr })).find((walk) => walk.ok);
     expect(away).toBeTruthy();
@@ -176,13 +181,9 @@ describe('a step', () => {
 
   test('a tree next to another tree stays in the way', () => {
     const crowded = (seed: number) => (q: number, r: number) => Object.values(STEPS).some(([dq, dr]) => code(seed, q + dq, r + dr) === 6);
-    const found = SEEDS.map((seed) => ({ seed, spot: beside(seed, [6], crowded(seed)) })).find((s) => s.spot);
-    expect(found).toBeTruthy();
-    const open = world();
-    value(open.newWorld({ seed: found!.seed }));
-    const [q, r] = found!.spot!.at;
-    if (q !== 0 || r !== 0) value(open.walk({ q, r }));
-    expect(failure(open.step({ direction: found!.spot!.dir as 'E' })).code).toBe('blocked');
+    const { open, spot } = standBeside([6], crowded);
+    const [q, r] = spot.at;
+    expect(failure(open.step({ direction: spot.dir as 'E' })).code).toBe('blocked');
   });
 
   test('a cell off the world refuses the step', () => {
@@ -193,26 +194,23 @@ describe('a step', () => {
     expect(error.message).toContain('off the world');
   });
 
-  test('an enemy blocks the step', () => {
-    const open = world();
-    value(open.newWorld({ seed: 1 }));
-    // seed 1 has a group at (6,6), (7,5), (8,4): walk next to it
-    value(open.walk({ q: 5, r: 6 }));
-    const error = failure(open.step({ direction: 'E' }));
-    expect(error.code).toBe('blocked');
-    expect(error.message).toContain('an enemy stands there');
-    expect(value(open.state({ radius: 2 })).enemies).toContain('(6,6)');
-  });
-
-  test('onto a lair does not move: the state names the boss to fight', () => {
+  test('onto a lair does not move: the state names the boss to fight and how to start it', () => {
     const open = world([3, 0, 0, 9, 0, -9]);
     value(open.newWorld({ seed: 0 }));
     value(open.walk({ q: 2, r: 0 }));
     const entered = value(open.step({ direction: 'E' }));
     expect(entered.moved).toBe(false);
-    expect(entered.lair).toEqual({ index: 0, boss: bossIds()[0] });
+    expect(entered.push).toBeNull();
+    expect(entered.lair).toEqual({ index: 0, boss: bossIds()[0], start: `new_game {"boss":"${bossIds()[0]}"}` });
     expect(entered.state.hero).toBe('(2,0)');
     expect(value(open.step({ direction: 'W' })).lair).toBeUndefined();
+  });
+
+  test('a lair past the roster is the boss of its number round the roster, as in the client', () => {
+    const far = Array.from({ length: bossIds().length }, (_, k) => [100 + k, -200]).flat();
+    const open = world([...far, 1, 0]);
+    value(open.newWorld({ seed: 0 }));
+    expect(value(open.step({ direction: 'E' })).lair).toMatchObject({ index: bossIds().length, boss: bossIds()[0] });
   });
 });
 
@@ -227,15 +225,19 @@ describe('a walk', () => {
   });
 
   test('walks over a boulder it breaks on the way', () => {
-    const found = SEEDS.map((seed) => ({ seed, spot: beside(seed, [5]) })).find((s) => s.spot);
-    expect(found).toBeTruthy();
-    const open = world();
-    value(open.newWorld({ seed: found!.seed }));
-    const [q, r] = found!.spot!.at;
-    const [dq, dr] = STEPS[found!.spot!.dir]!;
-    const walked = value(open.walk({ q: q + dq, r: r + dr }));
-    expect(walked.state.hero).toBe(`(${q + dq},${r + dr})`);
-    expect(walked.state.broken).toBeGreaterThanOrEqual(1);
+    // The first seed where the walk onto a boulder arrives: a push of the troop on the way can stop it.
+    const walked = SEEDS.flatMap((seed) => {
+      const spot = beside(seed, [5]);
+      if (!spot) return [];
+      const open = world();
+      value(open.newWorld({ seed }));
+      const [dq, dr] = STEPS[spot.dir]!;
+      const [q, r] = [spot.at[0] + dq, spot.at[1] + dr];
+      const walk = open.walk({ q, r });
+      return walk.ok && walk.value.state.hero === `(${q},${r})` ? [walk.value] : [];
+    })[0];
+    expect(walked).toBeTruthy();
+    expect(walked!.state.broken).toBeGreaterThanOrEqual(1);
   });
 
   test('stays when the cell is the hero, a lair, an enemy, off the world or too far', () => {
@@ -245,5 +247,40 @@ describe('a walk', () => {
       expect(failure(open.walk({ q: q!, r: r! })).code).toBe('no_path');
     }
     expect(value(open.state({})).hero).toBe('(0,0)');
+  });
+});
+
+// Seed 1 has an enemy group at (6,6), (7,5), (8,4). The values below are what the client gives for the same seed and moves:
+// `Hero.step` (client/src/openworld.ts) then `FightState.troopPush` (client/src/openworldfight.ts), as `OpenWorldMode.roll` calls them.
+describe('the same seed and moves as the client', () => {
+  const PUSHED = { hero: '(6,6)', troop: ['(5,6)', '(4,6)', '(2,6)', '(1,6)', '(0,6)', '(0,5)'] };
+
+  test('six steps SE then five E: the fifth E brings the troop beside the group and it pushes it east', () => {
+    const open = world();
+    value(open.newWorld({ seed: 1 }));
+    for (let i = 0; i < 6; i++) value(open.step({ direction: 'SE' }));
+    for (let i = 0; i < 3; i++) expect(value(open.step({ direction: 'E' })).push).toBeNull();
+    const near = value(open.step({ direction: 'E' }));
+    expect(near.state.hero).toBe('(4,6)');
+    expect(near.state.troop).toEqual(['(3,6)', '(2,6)', '(1,6)', '(0,6)', '(0,5)', '(0,4)']);
+    expect(near.state.enemies).toEqual(['(6,6)', '(7,5)']);
+    const pushed = value(open.step({ direction: 'E' }));
+    expect(pushed.moved).toBe(true);
+    expect(pushed.push).toEqual({ direction: 'E', ejected: [] });
+    expect(pushed.state).toMatchObject({ ...PUSHED, beaten: 0, enemies: ['(7,5)', '(8,4)', '(7,6)'] });
+    const row = value(open.state({ radius: 1 })).window.rows.find((r) => r.r === 6)!;
+    expect(row.cells[7 - row.q0]).toBe('E');
+    const refused = failure(open.step({ direction: 'E' }));
+    expect(refused.code).toBe('blocked');
+    expect(refused.message).toContain('an enemy stands there');
+  });
+
+  test('a walk to (5,6) takes the same path and ends on the push, the hero on (6,6)', () => {
+    const open = world();
+    value(open.newWorld({ seed: 1 }));
+    const walked = value(open.walk({ q: 5, r: 6 }));
+    expect(walked.steps).toBe(11);
+    expect(walked.pushes).toEqual([{ direction: 'E', ejected: [] }]);
+    expect(walked.state).toMatchObject(PUSHED);
   });
 });

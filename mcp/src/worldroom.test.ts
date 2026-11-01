@@ -2,7 +2,7 @@
 // that records what the room would see. The wire format is the client's own (client/src/worldpeers.ts), read back here with it.
 import { describe, expect, test } from 'vitest';
 import type { PeerNet } from '../../client/src/p2p';
-import { decode, encodeHello, encodePos, KEEPALIVE_MS, MAX_NAME, SEND_MS } from '../../client/src/worldpeers';
+import { decode, encodeBreak, encodeHello, encodePos, encodeTroop, KEEPALIVE_MS, MAX_NAME, SEND_MS } from '../../client/src/worldpeers';
 import { bossIds, worldRules } from './engine';
 import type { Result, ToolError } from './game';
 import { OpenWorld } from './world';
@@ -182,6 +182,18 @@ describe('world_heroes', () => {
     expect(value(worldRoom.heroes()).heroes).toEqual([]);
   });
 
+  test('a boulder break or a troop from a browser is not a position: the hero keeps its last cell', () => {
+    const { worldRoom, room, t } = setup();
+    value(worldRoom.join({}));
+    room.say('a', encodeHello('A'));
+    room.say('a', encodePos(2, 1, 1));
+    t.tick(1000); // past the gap a browser keeps between two messages
+    room.say('a', encodeBreak({ kind: 'break', seed: SEED, q: 3, r: 3, pub: 'A'.repeat(43), sig: 'A'.repeat(86) }));
+    t.tick(1000);
+    room.say('a', encodeTroop([[1, 0]]));
+    expect(value(worldRoom.heroes()).heroes).toEqual([{ id: 'a', name: 'A', cell: '(2,1)', distance: 3 }]);
+  });
+
   test('a hero that left, or stayed silent for 10 s, is no longer listed', () => {
     const { worldRoom, room, t } = setup();
     value(worldRoom.join({}));
@@ -236,6 +248,26 @@ describe('world_visit', () => {
     expect(t.time.now - 1000).toBe(walked.steps * SEND_MS);
   });
 
+  test('a push of the troop that moves the hero sends the cell the hero is on after it, as a browser does', async () => {
+    // A fight whose first push moves the hero one cell east of the cell it stepped to.
+    let pushed: number[] = [];
+    class Pushing extends rules.WorldFight {
+      override troop_push(_seed: number, troop: Int32Array) {
+        if (pushed.length > 0) return undefined;
+        pushed = [troop[0]! + 1, troop[1]!];
+        return { troop: Int32Array.from([...pushed, ...troop.slice(2)]), ejected: new Int32Array(), dir: Int32Array.of(1, 0) } as never;
+      }
+    }
+    const room = fakeNet();
+    const t = fakeTime();
+    const pushing = { ...rules, WorldFight: Pushing };
+    const worldRoom = new WorldRoom(new OpenWorld(pushing, bossIds), pushing, () => room.net, { clock: t.clock, sleep: t.sleep, every: t.every });
+    value(worldRoom.join({}));
+    value(await worldRoom.visit({ q: 1, r: 0 }));
+    const places = room.sent.filter((s) => !s.to).map((s) => posOf(s.data));
+    expect(places[1]).toEqual(pushed);
+  });
+
   test('walks to a hero by its id and stops next to it, following it when it moves', async () => {
     const { worldRoom, room } = setup();
     value(worldRoom.join({}));
@@ -269,7 +301,7 @@ describe('world_visit', () => {
     const { worldRoom, world } = setup();
     value(worldRoom.join({}));
     const [q, r] = reachable(4);
-    world.walk = () => ({ ok: true, value: { steps: 1, state: {} as never } }); // a hero that never gets there
+    world.walk = () => ({ ok: true, value: { steps: 1, pushes: [], state: {} as never } }); // a hero that never gets there
     expect(value(await worldRoom.visit({ q, r }))).toMatchObject({ steps: 40, arrived: false, hero: '(0,0)' });
   });
 

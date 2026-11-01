@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_LOOK, GLOW, LOOK_KEY, MARBLE_LOOK, TONAL, flat, loadsTexture, mix, readLook, tonalMarble } from './look';
+import { DEFAULT_LOOK, GLOW, LOOK_KEY, MARBLE_LOOK, TONAL, asksSkinMaps, flat, loadsTexture, mix, readLook, tonalMarble } from './look';
 
 const memory = (value?: string) => ({ getItem: (k: string) => (k === LOOK_KEY ? (value ?? null) : null), setItem: () => undefined });
 
@@ -52,6 +52,23 @@ describe('the look (#1138)', () => {
     expect(['backdrop.ktx2', 'crack-decal.ktx2'].map((n) => loadsTexture('tonal', n))).toEqual([true, true]);
     for (const name of ['deck-albedo.ktx2', 'deck-mess.ktx2', 'pbr/skin-Leather027-albedo.ktx2', 'pbr/board-normal.ktx2'])
       expect(loadsTexture('tonal', name)).toBe(false);
+  });
+
+  it('asks for no board or plate map on the terrace, which hides the room (#1370)', () => {
+    for (const name of ['pbr/board-albedo.ktx2', 'pbr/board-metalness.ktx2', 'pbr/plate-normal.ktx2']) {
+      expect(loadsTexture('pbr', name, true)).toBe(true);
+      expect(loadsTexture('pbr', name, false)).toBe(false);
+    }
+    // The cells' deck maps stay: the terrace's discs are drawn with them when the terrace files fail (#1374).
+    for (const name of ['deck-albedo.ktx2', 'backdrop.ktx2', 'crack-decal.ktx2']) expect(loadsTexture('pbr', name, false)).toBe(true);
+  });
+
+  it('asks for the maps of a skin on the terrace only when the skin is not a default one (#1370)', () => {
+    const defaults = ['scarab', 'smoked'];
+    expect(asksSkinMaps(false, 'scarab', defaults)).toBe(false);
+    expect(asksSkinMaps(false, 'smoked', defaults)).toBe(false);
+    expect(asksSkinMaps(false, 'leather', defaults)).toBe(true);
+    expect(asksSkinMaps(true, 'scarab', defaults)).toBe(true);
   });
 
   it('lights a flat material by itself as much as it reads its tone under the dim room', () => {

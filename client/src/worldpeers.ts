@@ -16,12 +16,15 @@ const HELLO = 1;
 const POS = 2;
 const BREAK = 3;
 const TROOP = 4;
+const BEATEN = 5;
 /** The most marbles of a troop on the wire, and how far from its hero one may stand (cells). */
 export const TROOP_MAX = 6;
 export const TROOP_REACH = 8;
 
-/** A hero broke the obstacle on a cell of the world `seed` (#1305): signed by its key (`pub`, `sig` in base64url), see worldevents.ts. */
+/** A signed world event (#1305): `break` (a hero broke the obstacle on the cell) or `beaten` (the enemy marble that starts on the cell was
+ * ejected). Signed by its key (`pub`, `sig` in base64url), see worldevents.ts. */
 export interface BreakEvent {
+  kind: 'break' | 'beaten';
   seed: number;
   q: number;
   r: number;
@@ -29,13 +32,13 @@ export interface BreakEvent {
   sig: string;
 }
 
-/** A break event on the wire: version, type, seed (u32), q and r (int16), the 32-byte key, the 64-byte signature. */
+/** A break or beaten event on the wire: version, type (3 break, 5 beaten), seed (u32), q and r (int16), the 32-byte key, the 64-byte signature. */
 export const BREAK_BYTES = 2 + 4 + 2 + 2 + 32 + 64;
 
 export function encodeBreak(e: BreakEvent): Uint8Array {
   const out = new Uint8Array(BREAK_BYTES);
   const view = new DataView(out.buffer);
-  out.set([VERSION, BREAK]);
+  out.set([VERSION, e.kind === 'beaten' ? BEATEN : BREAK]);
   view.setUint32(2, e.seed);
   view.setInt16(6, int16(e.q));
   view.setInt16(8, int16(e.r));
@@ -128,9 +131,10 @@ export function decode(data: unknown): Message | null {
   if (!(data instanceof Uint8Array) || data.length < 2 || data[0] !== VERSION) return null;
   if (data[1] === HELLO) return data.length <= 2 + 4 * MAX_NAME ? { t: 'hello', name: nameOf(data.subarray(2)) } : null;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  if (data[1] === BREAK) {
+  if (data[1] === BREAK || data[1] === BEATEN) {
     if (data.length !== BREAK_BYTES) return null;
-    const event = { seed: view.getUint32(2), q: view.getInt16(6), r: view.getInt16(8), pub: b64(data.slice(10, 42).buffer), sig: b64(data.slice(42).buffer) };
+    const kind = data[1] === BREAK ? 'break' : 'beaten';
+    const event: BreakEvent = { kind, seed: view.getUint32(2), q: view.getInt16(6), r: view.getInt16(8), pub: b64(data.slice(10, 42).buffer), sig: b64(data.slice(42).buffer) };
     return { t: 'break', event };
   }
   if (data[1] === TROOP) {
