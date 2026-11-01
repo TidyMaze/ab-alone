@@ -656,6 +656,42 @@ mod tests {
     }
 
     #[test]
+    fn a_clock_counts_the_winners_ejections_whoever_moves_at_the_root() {
+        // Black pushes (4, 0) off with 2 to 1: each of its ejections takes turns off the clock.
+        let mut board = Board::empty();
+        for (q, r) in [(2, 0), (3, 0)] {
+            board.set(q, r, Cell::Black);
+        }
+        for (q, r) in [(4, 0), (-4, 4)] {
+            board.set(q, r, Cell::White);
+        }
+        let calm = |_: &Board, _: Player, _: &Move, after: Board, _: [u8; 2]| (after, [0, 0]);
+        let run = |to_move, ejected, turns, per_ejection| {
+            let game = Game::from_position(board.clone(), to_move, ejected);
+            let clock = Clock {
+                winner: Player::Black,
+                turns,
+                per_ejection,
+            };
+            search_clocked(&game, 3000, DEFAULT_WEIGHTS, &|_| true, &calm, clock)
+                .unwrap()
+                .score
+        };
+        assert_eq!(run(Player::Black, [0, 0], 2, 2), WIN - 1, "the ejection ends it");
+        assert_eq!(run(Player::Black, [0, 0], 2, 0), WIN - 4, "two replies");
+        assert_eq!(
+            run(Player::Black, [3, 0], 3, 2),
+            WIN - 2,
+            "the ejections before the root do not count"
+        );
+        assert_eq!(
+            run(Player::White, [0, 0], 1, 0),
+            1 - WIN,
+            "the root move of the winner's opponent ends a reply"
+        );
+    }
+
+    #[test]
     fn an_egg_is_the_white_sides_chance_and_the_blacks_loss() {
         let mut board = Board::empty();
         board.set_eggs(vec![((0, 0), 4), ((1, 0), 2)]);

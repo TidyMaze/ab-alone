@@ -1082,7 +1082,7 @@ mod tests {
         assert_eq!(a.boss_move(), swarm.boss_move());
         assert_eq!((a.phase(), a.result()), (0, None));
         let (record, moves) = play_attempt_moves(LadderBoss::Swarm, 1, 1, 30, 300);
-        assert!(record.plies <= 60, "30 turns at most");
+        assert!(record.plies <= 80, "40 turns at most");
         assert!(
             replay(LadderBoss::Swarm, 1, &moves[1..2]).is_err(),
             "a boss move first"

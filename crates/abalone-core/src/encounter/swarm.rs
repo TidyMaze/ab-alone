@@ -409,22 +409,40 @@ mod tests {
         s.play(&m).unwrap();
     }
 
+    /// The first `n` cells of the inner hexagon (radius 3), off the rim.
+    fn inner(n: usize) -> Vec<P> {
+        (-3..=3)
+            .flat_map(|q| (-3..=3).map(move |r| (q, r)))
+            .filter(|&c| distance(c, (0, 0)) <= 3)
+            .take(n)
+            .collect()
+    }
+
     #[test]
-    fn the_arrivals_are_1_a_turn_then_2_from_turn_25() {
-        let counts: Vec<u8> = [0, 1, 14, 15, 24, 25, 30, 31]
-            .into_iter()
-            .map(arrivals)
-            .collect();
-        assert_eq!(counts, [0, 1, 1, 1, 1, 2, 2, 0]);
-        let phases: Vec<usize> = [1, 14, 15, 24, 25, 30].into_iter().map(phase).collect();
+    fn the_phases_come_at_15_and_30_landed_swarm_marbles() {
+        let phases: Vec<usize> = [0, 14, 15, 29, 30, 50].into_iter().map(phase_of).collect();
         assert_eq!(phases, [0, 0, 1, 1, 2, 2]);
-        let total: u32 = (1..=SWARM_TURNS).map(|t| u32::from(arrivals(t))).sum();
-        assert_eq!(total, 36);
+        let at = |white: usize, ejected: u8| {
+            let s = swarm(&[(0, 4)], &inner(white), [ejected, 0], 3);
+            (s.phase(), s.announced().len())
+        };
+        assert_eq!(at(14, 0), (0, 1), "14 landed: P1");
+        assert_eq!(at(14, 1), (1, 1), "an ejected swarm marble landed too");
+        assert_eq!(at(29, 0), (1, 1));
+        assert_eq!(at(30, 0), (2, 2), "P3 lands 2 a turn");
+    }
+
+    #[test]
+    fn the_rim_is_the_24_cells_of_all_6_edges() {
+        let rim = rim();
+        assert_eq!(rim.len(), 24);
+        assert!(rim.iter().all(|&c| distance(c, (0, 0)) == 4));
+        assert!(rim.iter().any(|&(_, r)| r > 0), "the player's side too");
     }
 
     #[test]
     fn the_allowed_rim_is_the_13_rim_cells_away_from_the_player_side() {
-        let rim = allowed_rim();
+        let rim = allowed_rim_of(4);
         assert_eq!(rim.len(), 13);
         assert!(rim
             .iter()
@@ -436,7 +454,6 @@ mod tests {
 
     #[test]
     fn the_allowed_rim_of_a_bigger_board_is_its_rim_with_r_at_most_0() {
-        assert_eq!(allowed_rim_of(4), allowed_rim());
         let rim = allowed_rim_of(5);
         assert_eq!(rim.len(), 16);
         assert!(rim
@@ -445,21 +462,24 @@ mod tests {
     }
 
     #[test]
-    fn the_player_starts_with_11_marbles_and_the_boss_with_none() {
+    fn the_player_starts_with_11_marbles_around_the_centre_and_the_boss_with_none() {
         let s = Swarm::start(3);
         let black = cells_of(s.game().board(), Cell::Black);
         assert_eq!(black.len(), 11);
-        assert!(black.iter().all(|&(_, r)| r >= 3), "the row r = 2 is gone");
+        assert!(black.iter().all(|&c| distance(c, (0, 0)) <= 2), "{black:?}");
+        let core = [(0, 0), (1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
+        assert!(core.iter().all(|c| black.contains(c)), "the centre and its ring");
         assert!(cells_of(s.game().board(), Cell::White).is_empty());
-        assert_eq!((s.turn(), s.turns_left(), s.phase()), (0, 30, 0));
+        assert_eq!((s.turn(), s.turns_left(), s.phase(), s.jump()), (0, 40, 0, 0));
         assert_eq!(s.announced().len(), 1, "turn 1 is announced at the start");
-        assert!(allowed_rim().contains(&s.announced()[0]));
+        assert!(rim().contains(&s.announced()[0]));
         assert!(s.landed().is_empty());
         assert_eq!(s.result(), None);
     }
 
     #[test]
-    fn no_marble_is_announced_or_lands_on_the_player_side_over_1000_seeds() {
+    fn the_swarm_lands_on_every_edge_over_1000_seeds() {
+        let mut seen = Vec::new();
         for seed in 0..1000 {
             let mut s = Swarm::start(seed);
             let announced = s.announced().to_vec();
@@ -472,37 +492,46 @@ mod tests {
             );
             let next = legal_moves(s.game().board(), Player::White)[0].clone();
             s.play(&next).unwrap();
-            for &cell in s.landed().iter().chain(s.announced()) {
-                assert!(allowed_rim().contains(&cell), "seed {seed}: {cell:?}");
+            for &cell in announced.iter().chain(s.landed()).chain(s.announced()) {
+                assert!(rim().contains(&cell), "seed {seed}: {cell:?}");
+                if !seen.contains(&cell) {
+                    seen.push(cell);
+                }
             }
         }
+        assert_eq!(seen.len(), 24, "every rim cell, on all 6 edges");
     }
 
     #[test]
-    fn a_taken_announced_cell_lands_on_the_nearest_empty_allowed_cell() {
+    fn a_taken_announced_cell_lands_on_the_nearest_empty_rim_cell() {
+        let rim = rim();
         // (2, -4) taken: (1, -4) and (3, -4) are both 1 away, the lowest q wins.
         let b = board(&[(2, -4)], &[]);
-        assert_eq!(land(&b, &[(2, -4)]).1, [(1, -4)]);
+        assert_eq!(land(&b, &rim, &[(2, -4)]).1, [(1, -4)]);
         // (4, -2) taken: (4, -3) and (4, -1) are both 1 away, same q, the lowest r wins.
         let b = board(&[(4, -2)], &[]);
-        let (after, landed) = land(&b, &[(4, -2)]);
+        let (after, landed) = land(&b, &rim, &[(4, -2)]);
         assert_eq!(landed, [(4, -3)]);
         assert_eq!(after.get(4, -3), Some(Cell::White));
         // Two marbles on one taken cell: the second goes one further.
         let b = board(&[(2, -4)], &[]);
-        assert_eq!(land(&b, &[(2, -4), (2, -4)]).1, [(1, -4), (3, -4)]);
+        assert_eq!(land(&b, &rim, &[(2, -4), (2, -4)]).1, [(1, -4), (3, -4)]);
+        // The player's start side is open: (0, 4) taken sends it to (-1, 4).
+        let b = board(&[(0, 4)], &[]);
+        assert_eq!(land(&b, &rim, &[(0, 4)]).1, [(-1, 4)]);
     }
 
     #[test]
-    fn with_no_empty_allowed_cell_no_marble_is_announced_or_lands() {
-        let full = board(&allowed_rim(), &[]);
-        assert_eq!(land(&full, &[(0, -4)]), (full.clone(), Vec::new()));
-        assert!(announce(&full, 5, 3).is_empty());
+    fn with_no_empty_rim_cell_no_marble_is_announced_or_lands() {
+        let rim = rim();
+        let full = board(&rim, &[]);
+        assert_eq!(land(&full, &rim, &[(0, -4)]), (full.clone(), Vec::new()));
+        assert!(announce(&full, &rim, 5, 3).is_empty());
         let mut one = full.clone();
         one.set(4, 0, Cell::Empty);
-        assert_eq!(announce(&one, 5, 3), [(4, 0)], "only the free cell");
+        assert_eq!(announce(&one, &rim, 5, 3), [(4, 0)], "only the free cell");
         let picks: Vec<_> = (0..20)
-            .map(|seed| announce(&Board::empty(), seed, 3))
+            .map(|seed| announce(&Board::empty(), &rim, seed, 3))
             .collect();
         assert!(picks
             .iter()
@@ -515,8 +544,8 @@ mod tests {
 
     #[test]
     fn a_swarm_with_no_marble_passes_and_the_player_moves_again() {
-        // The allowed rim is full of player marbles: nothing arrives, the swarm has no move.
-        let mut black = allowed_rim();
+        // The rim is full of player marbles: nothing arrives, the swarm has no move.
+        let mut black = rim();
         black.push((0, 0));
         let mut s = swarm(&black, &[], [0, 0], 0);
         assert!(s.announced().is_empty());
@@ -566,7 +595,7 @@ mod tests {
     #[test]
     fn the_fight_never_draws() {
         // The same pass position comes back again and again: no draw.
-        let mut black = allowed_rim();
+        let mut black = rim();
         black.push((0, 0));
         let mut s = swarm(&black, &[], [0, 0], 0);
         for i in 0..6 {
@@ -581,22 +610,50 @@ mod tests {
     }
 
     #[test]
-    fn the_player_with_1_marble_after_the_30th_reply_wins() {
-        let mut s = swarm(&[(0, 2)], &[], [0, 0], 29);
-        assert_eq!(s.phase(), 2);
+    fn the_player_with_1_marble_after_the_40th_reply_wins() {
+        assert_eq!((SWARM_TURNS, SWARM_EVAC_PER_EJECTION), (40, 2));
+        let mut s = swarm(&[(0, 2)], &[], [0, 0], 39);
         s.play(&mv(&[(0, 2)], E)).unwrap();
-        assert_eq!(s.landed().len(), 2, "turn 30 lands 2");
-        assert_eq!(s.result(), None, "not before the 30th reply");
+        assert_eq!(s.landed().len(), 1);
+        assert_eq!(s.result(), None, "not before the 40th reply");
         reply(&mut s);
-        assert_eq!((s.turn(), s.turns_left()), (30, 0));
+        assert_eq!((s.turn(), s.turns_left()), (40, 0));
         assert_eq!(s.result(), Some(PveResult::Won));
         assert!(s.announced().is_empty());
-        // A pass on the 30th reply wins too.
-        let mut black = allowed_rim();
+        // A pass on the 40th reply wins too.
+        let mut black = rim();
         black.push((0, 0));
-        let mut s = swarm(&black, &[], [0, 0], 29);
+        let mut s = swarm(&black, &[], [0, 0], 39);
         s.play(&mv(&[(0, 0)], E)).unwrap();
         assert_eq!(s.result(), Some(PveResult::Won));
+    }
+
+    #[test]
+    fn a_swarm_marble_the_player_ejects_brings_the_evac_2_turns_closer() {
+        let mut s = swarm(&[(2, 0), (3, 0), (-2, 2)], &[(4, 0)], [0, 0], 10);
+        assert_eq!(s.turns_left(), 30);
+        s.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!((s.turns_left(), s.jump(), s.result()), (28, 2, None));
+        reply(&mut s);
+        assert_eq!((s.turn(), s.turns_left(), s.jump()), (11, 27, 2));
+        let m = legal_moves(s.game().board(), Player::Black)
+            .into_iter()
+            .find(|m| m.cells == [(-2, 2)])
+            .unwrap();
+        s.play(&m).unwrap();
+        assert_eq!((s.turns_left(), s.jump()), (27, 0), "no ejection, no jump");
+        // Resumed with 3 ejections: the clock holds them.
+        assert_eq!(swarm(&[(0, 0)], &[], [3, 0], 10).turns_left(), 24);
+    }
+
+    #[test]
+    fn the_ejection_that_reaches_the_clock_wins_at_once() {
+        let mut s = swarm(&[(2, 0), (3, 0)], &[(4, 0)], [1, 0], 37);
+        assert_eq!(s.turns_left(), 1);
+        s.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
+        assert_eq!((s.turns_left(), s.result()), (0, Some(PveResult::Won)));
+        assert!(s.announced().is_empty() && s.landed().is_empty(), "no reply");
+        assert_eq!(s.boss_move(), None);
     }
 
     #[test]
@@ -669,7 +726,7 @@ mod tests {
         let (after, credits) = step(&before, Player::Black, &m, before.clone(), [0, 0]);
         assert_eq!(credits, [0, 0]);
         assert_eq!(cells_of(&after, Cell::White), {
-            let mut c = announce(&before, 9, 2);
+            let mut c = announce(&before, &rim(), 9, 2);
             c.sort();
             c
         });
@@ -679,15 +736,24 @@ mod tests {
 
     #[test]
     fn the_player_search_sees_the_evac_and_the_boss_search_plays_the_swarm() {
-        let s = swarm(&[(0, 2), (1, 2)], &[], [0, 0], 29);
+        let s = swarm(&[(0, 2), (1, 2)], &[], [0, 0], 39);
         let read = s.player_search(400, &|_| true).unwrap();
         assert_eq!(read.score, WIN - 2, "the evac after the boss's last reply");
+        let s = swarm(&[(2, 0), (3, 0)], &[(4, 0)], [0, 0], 38);
+        let read = s.player_search(400, &|_| true).unwrap();
+        assert_eq!(read.score, WIN - 1, "the ejection brings the evac at once");
+        assert_eq!(read.mv, mv(&[(2, 0), (3, 0)], E));
         let mut s = Swarm::start(4);
         let first = turtle_move(s.game(), 4, 0).unwrap();
         s.play(&first).unwrap();
         let reply = s.boss_move().unwrap();
         assert!(legal_moves(s.game().board(), Player::White).contains(&reply));
         assert_eq!(s.player_search(50, &|_| true), None, "the boss's turn");
+        // The boss's last reply: whatever it plays, the evac comes after it.
+        let mut s = swarm(&[(0, 2), (1, 2)], &[(0, -4)], [0, 0], 39);
+        s.play(&mv(&[(0, 2), (1, 2)], E)).unwrap();
+        assert_eq!(s.boss_search().unwrap().score, 1 - WIN);
+        assert_eq!(swarm(&[(0, 2)], &[], [0, 0], 3).boss_search(), None);
     }
 
     #[test]

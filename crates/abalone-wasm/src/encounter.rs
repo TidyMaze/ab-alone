@@ -2701,15 +2701,18 @@ mod tests {
         let f = swarm(0);
         assert_eq!(f.name(), "The Swarm");
         assert!(f.goal().contains("ejects 2 of your marbles"));
+        assert!(f.goal().contains("40 turns"));
         assert_eq!((count(&f.board(), 1), count(&f.board(), 2)), (11, 0));
+        assert_eq!(at(&f.board(), 0, 0), 1, "the player starts in the centre");
         assert_eq!(
             (f.phase(), f.phases(), f.phase_ejections()),
-            (0, 3, vec![14, 24])
+            (0, 3, vec![]),
+            "its phases go by the marbles landed, not by the clock of the bar"
         );
-        assert!(f.phase_notches().is_empty(), "its phases go by turns");
+        assert!(f.phase_notches().is_empty(), "its phases go by arrivals");
         let tell = f.swarm();
-        assert_eq!(tell[..2], [30, 0], "30 turns left, no pass");
-        assert_eq!(tell.len(), 4, "one announced cell");
+        assert_eq!(tell[..3], [40, 0, 0], "40 turns left, no pass, no jump");
+        assert_eq!(tell.len(), 5, "one announced cell");
         assert!(f.swarm_landed().is_empty());
         assert_eq!(
             (f.win_ejections(1), f.win_ejections(2)),
@@ -2728,13 +2731,13 @@ mod tests {
     #[test]
     fn the_swarm_lands_its_announced_wave_and_counts_the_turns_down() {
         let f = swarm(0);
-        let announced = f.swarm()[2..].to_vec();
+        let announced = f.swarm()[3..].to_vec();
         let f = swarm(1);
         assert_eq!(f.swarm_landed(), announced, "the wave lands on its mark");
         assert_eq!(at(&f.board(), announced[0], announced[1]), 2);
         assert_eq!(f.to_move(), 2);
         let f = swarm(2);
-        assert_eq!(f.swarm()[0], 29);
+        assert_eq!(f.swarm()[0], 39);
         assert!(!f.boss_move().is_empty() || f.to_move() == 1);
         assert!(f.boss_move().is_empty(), "the player's turn");
         assert!(!f.player_move().is_empty());
@@ -2745,8 +2748,9 @@ mod tests {
         // The daily, a Retry and every co-op peer replay the same waves (#795).
         let (_, moves) = swarm_plies();
         let (a, b) = (swarm(moves.len()), swarm(moves.len()));
-        assert_eq!(a.result(), 1, "the evac after the 30th reply");
-        assert_eq!(a.swarm(), vec![0, 0], "no turn left, nothing announced");
+        assert_eq!(a.result(), 1, "the evac");
+        assert_eq!(a.swarm()[..2], [0, 0], "no turn left, no pass");
+        assert_eq!(a.swarm().len(), 3, "nothing announced");
         assert_eq!((a.board(), a.swarm_landed()), (b.board(), b.swarm_landed()));
         for plies in [7, 21] {
             let (a, b) = (swarm(plies), swarm(plies));
@@ -2761,10 +2765,28 @@ mod tests {
     }
 
     #[test]
-    fn a_swarm_with_no_move_passes_through_wasm() {
-        use abalone_core::encounter::swarm::{allowed_rim, Swarm};
+    fn a_swarm_ejection_brings_the_evac_2_turns_closer_through_wasm() {
+        use abalone_core::encounter::swarm::Swarm;
         let mut board = Board::empty();
-        for &(q, r) in allowed_rim().iter().chain([(0, 0)].iter()) {
+        board.set(2, 0, Cell::Black);
+        board.set(3, 0, Cell::Black);
+        board.set(4, 0, Cell::White);
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let mut f = Encounter {
+            fight: Fight::Swarm(Swarm::from_position(game, 7, 10)),
+            entry: boss_entry("swarm").unwrap(),
+            bonuses: Vec::new(),
+        };
+        assert_eq!(f.swarm()[..3], [30, 0, 0]);
+        f.play(&[2, 0, 2, 0, 3, 0, 0, 0]).unwrap();
+        assert_eq!(f.swarm()[..3], [28, 0, 2], "the clock jumped by 2");
+    }
+
+    #[test]
+    fn a_swarm_with_no_move_passes_through_wasm() {
+        use abalone_core::encounter::swarm::{rim, Swarm};
+        let mut board = Board::empty();
+        for &(q, r) in rim().iter().chain([(0, 0)].iter()) {
             board.set(q, r, Cell::Black);
         }
         let game = Game::from_position(board, Player::Black, [0, 0]);
@@ -2781,7 +2803,7 @@ mod tests {
             .to_vec();
         f.play(&mv).unwrap();
         assert_eq!(f.to_move(), 1, "the swarm passed");
-        assert_eq!(f.swarm()[..2], [29, 1]);
+        assert_eq!(f.swarm()[..3], [39, 1, 0]);
         f.scale_node_budget(50);
         assert_eq!(f.result(), 0);
         assert!(
