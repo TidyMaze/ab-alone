@@ -27,8 +27,9 @@ test('The Swarm: a wave announced on its mark lands there, the clock counts down
   await expect(page.locator('body')).toHaveAttribute('data-deck', 'cargo');
   await expect(tell).toHaveText('40 turns to the evac · 3 marbles land on their marks next turn · the swarm wins after it ejects 2 of your marbles');
   expect(await page.evaluate(() => (window as any).__marbleTurn(0, 0) !== null)).toBe(true); // the player starts in the centre
-  const [mark] = (await swarm(page)).cells;
-  await expect(page.locator('body')).toHaveAttribute('data-swarm-marks', mark!.join(','));
+  const marks = (await swarm(page)).cells;
+  const [mark] = marks;
+  await expect(page.locator('body')).toHaveAttribute('data-swarm-marks', marks.map((c) => c.join(',')).join(' ')); // 3 a turn
   await page.mouse.move(2, 2); // no hover ghost
   await page.screenshot({ path: testInfo.outputPath('swarm-announce.png') });
 
