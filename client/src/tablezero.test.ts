@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, aimSunShadow, SUN_SHADOW, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
 
-describe('Table Zero is the scene of a 1v1 game only', () => {
-  const on = { hub: false, royale: false, run: false, room: false, ready: true };
-  it('is on for a plain game once the arena has loaded', () => expect(tableZeroActive(on)).toBe(true));
+describe('Table Zero is the scene of every mode', () => {
+  const on = { room: false, ready: true };
+  it('is on once the arena has loaded, or has failed to: the board then stands on a plain background', () => expect(tableZeroActive(on)).toBe(true));
   it('waits for the arena file', () => expect(tableZeroActive({ ...on, ready: false })).toBe(false));
-  it.each(['hub', 'royale', 'run', 'room'] as const)('is off in %s', (k) => expect(tableZeroActive({ ...on, [k]: true })).toBe(false));
+  it('is off only when the automated tests ask for the room', () => expect(tableZeroActive({ ...on, room: true })).toBe(false));
 });
 
 describe('the light of the terrace', () => {

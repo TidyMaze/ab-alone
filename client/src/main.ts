@@ -1951,7 +1951,7 @@ const arenaDiscs = ARENA.map(([q, r], i) => {
   arena.add(disc);
   return disc;
 });
-instanceCells(arenaDiscs, arena);
+const arenaDrawn = instanceCells(arenaDiscs, arena);
 arena.add(arenaMarbles);
 arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
@@ -3463,12 +3463,13 @@ const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, P
 // keeps the room; so do the hub, Ballast Mind, the Dual Room, the royale and a run, until their own PRs (#1374); `?scene=room` asks for it.
 let terraceReady = false;
 /** The boards of the terrace (#1374): the arena's own radius 4 slab, and the slabs of the two bosses whose board is another one. */
-const terraceBoards: Record<'arena' | 'ballast' | 'dual', THREE.Group | null> = { arena: null, ballast: null, dual: null };
-const boardOf = (): 'arena' | 'ballast' | 'dual' => (fight?.id === 'ballast' || fight?.id === 'dual' ? fight.id : 'arena');
+const terraceBoards: Record<'arena' | 'ballast' | 'dual' | 'hub' | 'royale', THREE.Group | null> = { arena: null, ballast: null, dual: null, hub: null, royale: null };
+const boardOf = (): keyof typeof terraceBoards => (hub ? 'hub' : royale ? 'royale' : fight?.id === 'ballast' || fight?.id === 'dual' ? fight.id : 'arena');
 const dishesOf = (board: THREE.Group | null): THREE.InstancedMesh | undefined => board?.getObjectByName('terrace_dishes') as THREE.InstancedMesh | undefined;
 /** The dishes of the terrace follow the discs: a vanished cell (Hull's void, a swept Rail Yard line) shows the gap (#1374). */
 const syncDishes = (): void => {
-  const shown = new Set(discs.filter((d) => d.visible).map((d) => `${d.position.x.toFixed(2)},${d.position.z.toFixed(2)}`));
+  const [list, scale] = royale ? [arenaDiscs, ARENA_SCALE] : [discs, 1]; // the royale's discs stand in the arena group, at half spacing
+  const shown = new Set(list.filter((d) => d.visible).map((d) => `${(d.position.x * scale).toFixed(2)},${(d.position.z * scale).toFixed(2)}`));
   dishesOf(terraceBoards[boardOf()])?.userData.show((x: number, z: number) => shown.has(`${x.toFixed(2)},${z.toFixed(2)}`));
 };
 /** Shows the board of the fight, hides the others. */
@@ -3478,7 +3479,9 @@ const showBoard = (): void => {
 /** The props of the boss kit (kit_boss.glb) the fights wear on the terrace: the Pulsar's pylon and its core, the Assembly press, the Rail Yard's buffer stop. */
 let bossKit: Record<'pylon' | 'core' | 'press' | 'buffer', THREE.Mesh> | null = null;
 const terraceProp = (name: keyof NonNullable<typeof bossKit>): THREE.Mesh | null => (sceneRenderer.terraceOn && bossKit ? bossKit[name] : null);
-const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
+// The room is not shown to a player any more (#1374): `?scene=room` is honoured under automation only, so the room specs and its code live on.
+const keepRoom = navigator.webdriver && new URLSearchParams(location.search).get('scene') === 'room';
+let terraceFailed = false; // the arena files did not load: the board stands on a plain background, the discs drawn as they are
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last' | 'hint', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
 const terraceMarks = (): NonNullable<typeof terraceKit.marks> | null => (sceneRenderer.terraceOn ? terraceKit.marks : null);
@@ -3491,12 +3494,12 @@ function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
   mesh.position.y = y - TERRACE_LIFT; // the marbles' group stands 0.11 higher on the terrace
 }
 const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
-void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint'), terraceFile('kit-boss'), terraceFile('slab-ballast'), terraceFile('slab-dual')])
-  .then(([arena, kit, hint, props, ballast, dual]) => {
+void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint'), terraceFile('kit-boss'), terraceFile('slab-ballast'), terraceFile('slab-dual'), terraceFile('slab-hub'), terraceFile('slab-royale')])
+  .then(([arena, kit, hint, props, ballast, dual, hubDeck, royaleSlab]) => {
     const drawn = mergeByMaterial(arena.scene, true); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
     terraceBoards.arena = drawn.getObjectByName('terrace_board') as THREE.Group;
-    for (const [name, file] of [['ballast', ballast], ['dual', dual]] as const) {
+    for (const [name, file] of [['ballast', ballast], ['dual', dual], ['hub', hubDeck], ['royale', royaleSlab]] as const) {
       const board = mergeByMaterial(file.scene);
       board.visible = false;
       sceneRenderer.terrace.add(board);
@@ -3521,7 +3524,11 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
     terraceReady = true;
     refresh();
   })
-  .catch(() => undefined);
+  .catch(() => {
+    terraceFailed = true; // no file, no terrace: never the room (#1374)
+    terraceReady = true;
+    refresh();
+  });
 // The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
 // clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
 const terraceShell = new THREE.MeshPhysicalMaterial({ color: 0x0a0c0f, roughness: 0.3, metalness: 0, specularIntensity: 0.12, envMapIntensity: 6 }); // the arena sky's reflection leads, the sun's highlight stays small (envMap set when the arena has loaded)
@@ -3533,7 +3540,7 @@ function terraceMarbles(on: boolean): void {
 const PHONE_POLAR = (46 * Math.PI) / 180; // pitch 44 on a phone: the horizon enters the top of the frame
 const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
-  const on = tableZeroActive({ hub: hub !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
+  const on = tableZeroActive({ room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
   terraceMarbles(on);
   showBoard();
@@ -3543,7 +3550,7 @@ function syncTableZero(): void {
   }
   if (on === sceneRenderer.terraceOn) return;
   sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364)
-  for (const cells of boardDrawn) cells.visible = !on; // the dishes of the glTF are drawn; the discs stay for picking only
+  for (const cells of [...boardDrawn, ...arenaDrawn]) cells.visible = !on || terraceFailed; // the dishes of the glTF are drawn; the discs stay for picking only
   marbles.position.y = on ? TERRACE_LIFT : 0; // the marbles stand on their pedestals, 0.11 over the board plane
   updateFog();
 }
@@ -3556,6 +3563,7 @@ function refresh(): void {
   if (hub) {
     const { beaten } = loadProgress(store);
     hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim);
+    syncDishes();
     hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store)); // a beaten boss's door shows its medal (#1249)
     document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten);
     document.getElementById('hub-pips')!.innerHTML = pipsHtml(beaten);
@@ -5828,6 +5836,7 @@ function drawRoyale(game: Royale): void {
   ARENA.forEach(([q, r], i) => {
     arenaDiscs[i]!.visible = board[i] !== VANISHED;
     arenaDiscs[i]!.position.y = -0.05; // a disc the breach sank is back once void
+    if (i === ARENA.length - 1) syncDishes();
     const p = axialTo3D(q, r);
     const rounds = left.get(i) ?? 0;
     if (rounds > 0) {
