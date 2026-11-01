@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flatHudHtml, hudHtml } from './hud';
+import { flatHudHtml, hudHtml, passNote } from './hud';
 import css from './ui.css?raw';
 
 const TOKENS = ['bg', 'panel', 'edge', 'text', 'muted', 'accent', 'hazard', 'danger'];
@@ -263,5 +263,14 @@ describe('the end beat (#1093)', () => {
     expect(css).toMatch(/@keyframes end-line \{ from \{[^}]*opacity: 0[^}]*translateY\(/);
     expect(css).toMatch(/body\[data-over\] #hud \.turn span:last-child \{[^}]*animation: end-title var\(--motion-celebrate\) var\(--ease-out\)/);
     expect(css).toMatch(/@keyframes end-title \{.*scale\(1\.0\d\)/);
+  });
+});
+
+describe('passNote (#1301)', () => {
+  it('names the side whose turn passed, in the colours of the glass, and nothing without a pass', () => {
+    expect(passNote(2, 2)).toBe(' · White has no move: turn passed');
+    expect(passNote(1, 2)).toBe(' · Black has no move: turn passed');
+    expect(passNote(1, 1)).toBe(' · White has no move: turn passed');
+    expect(passNote(0, 2)).toBe('');
   });
 });
