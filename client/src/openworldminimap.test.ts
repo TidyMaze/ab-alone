@@ -24,7 +24,9 @@ function fakeContext() {
     lineTo: (x: number, y: number) => path.push(x, y),
     closePath: () => {},
     clip: () => log.push('clip'),
-    stroke: () => log.push('stroke'),
+    stroke() {
+      log.push(this.strokeStyle === COLOURS.chosen ? 'stroke chosen' : 'stroke');
+    },
     fill() {
       fills.push({ colour: this.fillStyle, at: path });
     },
@@ -43,6 +45,7 @@ const data = (over: Partial<MinimapData> = {}): MinimapData => ({
   troop: [],
   enemies: [],
   lairs: [],
+  teleporters: [],
   yaw: 0,
   ...over,
 });
@@ -156,6 +159,18 @@ describe('drawMinimap', () => {
     expect(COLOURS.lair).not.toBe(COLOURS.lairBeaten);
   });
 
+  it('draws the teleporters given in the window as hexagons (#1412), none out of it, and rings the one chosen', () => {
+    const { ctx, fills, log } = fakeContext();
+    drawMinimap(ctx, SIZE, data({ teleporters: [[3, 0], [-2, 1], [200, 0]] }));
+    const drawn = at(fills, COLOURS.teleporter);
+    expect(drawn).toHaveLength(2);
+    expect(drawn[0]!.at).toHaveLength(12); // six points
+    expect(drawn[0]!.at[0]).toBeGreaterThan(MIDDLE);
+    expect(log).not.toContain('stroke chosen');
+    drawMinimap(ctx, SIZE, data({ teleporters: [[3, 0]], chosen: [3, 0] }));
+    expect(log).toContain('stroke chosen');
+  });
+
   it('draws a lair out of the window as an arrow on the edge pointing to it', () => {
     const { ctx, fills } = fakeContext();
     drawMinimap(ctx, SIZE, data({ lairs: [{ cell: [200, 0], beaten: false }, { cell: [100, -200], beaten: false }] }));
@@ -184,6 +199,12 @@ describe('drawMap (#1411): the drawing of the minimap, on a frame of any size, c
     expect(far!.at).toHaveLength(8); // a diamond: four points, off the canvas
     expect(far!.at[0]).toBeCloseTo(200 + 200 * 10);
     expect(at(fills, COLOURS.lairBeaten)).toHaveLength(1);
+  });
+
+  it('draws every teleporter given where it is, however far', () => {
+    const { ctx, fills } = fakeContext();
+    drawMap(ctx, frame, data({ teleporters: [[200, 0]] }));
+    expect(at(fills, COLOURS.teleporter)[0]!.at[0]).toBeCloseTo(200 + 200 * 10 + 5);
   });
 
   it('puts the centre in the middle, the cells `unit` px apart, and the hero where it stands', () => {

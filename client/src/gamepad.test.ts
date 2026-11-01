@@ -98,6 +98,13 @@ describe('the gamepad poller', () => {
     expect(kinds(got)).toEqual(['map']);
   });
 
+  it('Y gives the Teleport action once, on the press, and never repeats (#1412)', () => {
+    const { poll, got } = poller();
+    poll(0, fakePad([3]));
+    poll(REPEAT_DELAY + 10 * REPEAT_EVERY, fakePad([3]));
+    expect(kinds(got)).toEqual(['teleport']);
+  });
+
   it('R3 gives a reset once, on the press', () => {
     const { poll, got } = poller();
     poll(0, fakePad([R3]));

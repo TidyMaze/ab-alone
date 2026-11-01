@@ -706,3 +706,31 @@ describe('the map of the Open world (#1411)', () => {
     expect(data().openworld).toBeUndefined();
   });
 });
+
+describe('the teleporters of the Open world (#1412)', () => {
+  it('the Teleport button shows on the spawn\'s teleporter and opens the map in the choice of a teleporter, T too; it closes it again', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const button = byId('openworld-teleport');
+    expect(button.hidden).toBe(true);
+    hooks().__openworldFixture!({ hero: [2, -1], troop: [], enemies: [] });
+    expect(button.hidden).toBe(false);
+    button.focus();
+    button.click();
+    expect(byId('openworld-map-note').textContent).toBe('Choose a teleporter');
+    expect(document.activeElement).not.toBe(button); // the keys and the pad go back to the world
+    button.click();
+    expect(document.getElementById('openworld-map')).toBeNull();
+    expect(press('t').defaultPrevented).toBe(true);
+    expect(document.getElementById('openworld-map')).not.toBeNull();
+  });
+
+  it('gives the e2e tests every teleporter of a world, the spawn\'s first', async () => {
+    await boot('?bot=off&openworld=7');
+    const all = (window as unknown as { __openworldTeleporters: (seed: number) => number[] }).__openworldTeleporters(7);
+    expect(all.slice(0, 2)).toEqual([2, -1]);
+    expect(all.length).toBeGreaterThan(400);
+  });
+});

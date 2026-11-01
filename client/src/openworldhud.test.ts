@@ -129,9 +129,36 @@ describe('the map of the Open world (#1411)', () => {
     expect(rule('#openworld-map canvas')).toContain('pointer-events: none');
   });
 
+  it('has a caption at the top of the map for the choice of a teleporter, which leaves the pointer to the map (#1412)', () => {
+    const note = rule('#openworld-map-note');
+    expect(note).toContain('position: absolute');
+    expect(note).toContain('pointer-events: none');
+    expect(note).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
+    expect(css).toContain('#openworld-map-note[hidden] { display: none; }');
+  });
+
   it('is named in the help: M on a keyboard, the Map button on a touch screen, View on a pad', () => {
     expect(html).toMatch(/<span class="keys-hint">[^<]*M for the map[^<]*<\/span>/);
     expect(html).toMatch(/<span class="tap-hint">[^<]*the Map button for the map[^<]*<\/span>/);
     expect(html).toMatch(/<span class="pad-hint">[^<]*View for the map[^<]*<\/span>/);
+  });
+});
+
+describe('the teleporters of the Open world (#1412)', () => {
+  it('has a Teleport button under the Map button, shown only in the world while the hero stands on a teleporter', () => {
+    expect(html).toMatch(/<button id="openworld-teleport" type="button" hidden>Teleport<\/button>/);
+    const button = rule('#openworld-teleport');
+    expect(button).toContain('display: none');
+    expect(button).toContain('top: calc(16px + 2.75rem + 0.5rem + 9rem + 0.5rem + var(--target) + 0.5rem)');
+    expect(button).toContain('right: 16px');
+    expect(button).toContain('min-height: var(--target)');
+    expect(button).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
+    expect(css).toContain('body[data-openworld] #openworld-teleport:not([hidden]) { display: grid; }');
+  });
+
+  it('is named in the help: T on a keyboard, the Teleport button on a touch screen, Y on a pad', () => {
+    expect(html).toMatch(/<span class="keys-hint">[^<]*T on a teleporter to teleport[^<]*<\/span>/);
+    expect(html).toMatch(/<span class="tap-hint">[^<]*the Teleport button on a teleporter[^<]*<\/span>/);
+    expect(html).toMatch(/<span class="pad-hint">[^<]*Y on a teleporter to teleport[^<]*<\/span>/);
   });
 });
