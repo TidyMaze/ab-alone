@@ -97,20 +97,21 @@ export function meshoptLoader(): GLTFLoader {
   return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 }
 
-/** Loads monolithic GLB spaceship bay and attaches PBR materials to meshes. */
+/** Loads monolithic GLB spaceship bay and attaches PBR materials to meshes. Without a texture loader (`null`, the terrace, #1370)
+ * the bay asks for no map: its materials keep their fallback colours. */
 export async function loadSpaceshipBay(
   basePath = '/assets/pbr/',
   gltfLoader = meshoptLoader(),
-  texLoader: TextureSource,
+  texLoader: TextureSource | null,
   normals = true,
 ): Promise<SpaceshipBayAssets | null> {
   try {
     const [gltf, pbrDeck, pbrBulkhead, pbrGrate] = await Promise.all([
       gltfLoader.loadAsync(`${basePath}spaceship-bay.glb`),
       // What each source ships: Tiles072 an AO, blue_metal_plate an AO (its metalness is 0), Metal009 a metalness. None has an emission.
-      loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.2, ['ao'], normals),
-      loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1, ['ao'], normals),
-      loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1, ['metalness'], normals),
+      texLoader ? loadPbrMaterial(texLoader, basePath, 'deck-pbr', 0, 0.2, ['ao'], normals) : null,
+      texLoader ? loadPbrMaterial(texLoader, basePath, 'bulkhead', 0.06, 1, ['ao'], normals) : null,
+      texLoader ? loadPbrMaterial(texLoader, basePath, 'grate', 0.05, 1, ['metalness'], normals) : null,
     ]);
 
     const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x333b42, roughness: 0.8 });
