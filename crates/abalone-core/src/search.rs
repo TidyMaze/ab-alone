@@ -386,8 +386,9 @@ pub type Step<'a> = &'a dyn Fn(&Board, Player, &Move, Board) -> (Board, [u8; 2])
 type Hook<'a> = &'a dyn Fn(&Board, Player, &Move, Board, [u8; 2]) -> (Board, [i8; 2]);
 
 /// A [`Step`] whose credits can be negative: a hook that takes a credit back (The Chaplain's
-/// health), never below 0 in total.
-pub type SignedStep<'a> = &'a dyn Fn(&Board, Player, &Move, Board) -> (Board, [i8; 2]);
+/// health), never below 0 in total. It also gets the ejections credited to Black and to White
+/// before the ply, so a boss recomputes its phase inside the tree (#1112).
+pub type SignedStep<'a> = &'a dyn Fn(&Board, Player, &Move, Board, [u8; 2]) -> (Board, [i8; 2]);
 
 /// [`search_with`] where every ply also goes through `step`, so the tree sees the boss hooks.
 pub fn search_hooked(
@@ -442,10 +443,7 @@ pub fn search_signed(
     allow: &dyn Fn(&Move) -> bool,
     step: SignedStep,
 ) -> Option<SearchResult> {
-    let hook = |board: &Board, mover: Player, mv: &Move, after: Board, _: [u8; 2]| {
-        step(board, mover, mv, after)
-    };
-    run(game, node_budget, weights, allow, Some(&hook), None, None)
+    run(game, node_budget, weights, allow, Some(step), None, None)
 }
 
 /// The moves a side may play out of its legal ones, given the board of the tree.
@@ -654,8 +652,11 @@ mod tests {
     #[test]
     fn a_signed_credit_takes_a_credit_back_and_stops_at_zero() {
         let game = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [3, 0]);
-        let back = |_: &Board, _: Player, _: &Move, after: Board| (after, [-1, 1]);
-        let hook = |b: &Board, p: Player, m: &Move, a: Board, _: [u8; 2]| back(b, p, m, a);
+        let seen = std::cell::RefCell::new(Vec::new());
+        let hook = |_: &Board, _: Player, _: &Move, after: Board, ejected: [u8; 2]| {
+            seen.borrow_mut().push(ejected);
+            (after, [-1, 1])
+        };
         let kids = children(&root_of(&game), &DEFAULT_WEIGHTS, Some(&hook), None);
         assert!(kids.iter().all(|k| k.node.ejected == [2, 1]));
         let none = game_from(&[(0, 0)], &[(3, 0)], Player::Black, [0, 0]);
@@ -664,8 +665,10 @@ mod tests {
             kids.iter().all(|k| k.node.ejected == [0, 1]),
             "never below 0"
         );
-        let found = search_signed(&game, 300, DEFAULT_WEIGHTS, &|_| true, &back).unwrap();
+        seen.borrow_mut().clear();
+        let found = search_signed(&game, 300, DEFAULT_WEIGHTS, &|_| true, &hook).unwrap();
         assert_legal(&game, &found.mv);
+        assert_eq!(seen.borrow()[0], [3, 0], "the step sees the root ejections");
     }
 
     #[test]

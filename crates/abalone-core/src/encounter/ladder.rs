@@ -243,8 +243,9 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
         let own = |mv: &Move| !offered.contains(mv);
         let strict = |mv: &Move| own(mv) && game.seen_after(mv) == 1 && arena.tell_safe(mv);
         // The pro reads the hooks, not the health swing: the ladder keeps the player it measured.
-        let step =
-            |b: &Board, p: Player, m: &Move, a: Board| (chaplain_step(0, b, p, m, a).0, [0, 0]);
+        let step = |b: &Board, p: Player, m: &Move, a: Board| {
+            (chaplain_step(0, b, p, m, a, [0, 0]).0, [0, 0])
+        };
         // The Stalker's pro reads the board as seen: hidden marbles are empty cells.
         let seen = match arena {
             Arena::Plain(enc, LadderBoss::Stalker) => Some(Game::from_position(

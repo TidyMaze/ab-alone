@@ -189,17 +189,29 @@ pub fn chaplain_tell(enc: &Encounter) -> Vec<P> {
         .map_or_else(Vec::new, |(before, _)| flipped(before, enc.game().board()))
 }
 
-/// What the Chaplain's search sees after `mover` played `mv` in `phase`: the converted marks follow
-/// the move, then the hook the encounter would fire, and the health swing it credits (the same
-/// credits as `Encounter::play`, the martyr's removal included). The tree keeps the phase of its
-/// root and a martyr picked with seed 0.
+/// The phase at a ply of the tree: the root's phase (it latches, a heal does not take it back) or
+/// the one the player's ejections credited so far reach (#1112).
+fn tree_phase(root: usize, ejected: [u8; 2]) -> usize {
+    let reached = CHAPLAIN_PHASE_EJECTIONS
+        .iter()
+        .filter(|&&t| ejected[0] >= t)
+        .count();
+    reached.max(root)
+}
+
+/// What the Chaplain's search sees after `mover` played `mv`, with `ejected` credited before the
+/// ply: the converted marks follow the move, then the hook the encounter would fire in the phase
+/// those credits reach (at least `root_phase`), and the health swing it credits (the same credits
+/// as `Encounter::play`, the martyr's removal included). A martyr is picked with seed 0.
 pub fn chaplain_step(
-    phase: usize,
+    root_phase: usize,
     before: &Board,
     mover: Player,
     mv: &Move,
     mut after: Board,
+    ejected: [u8; 2],
 ) -> (Board, [i8; 2]) {
+    let phase = tree_phase(root_phase, ejected);
     let kept = carried_marks(before, mv, before.converted())
         .into_iter()
         .filter(|&(q, r)| after.get(q, r) == Some(Cell::White))
@@ -226,7 +238,8 @@ pub fn chaplain_move(enc: &Encounter) -> Option<Move> {
         return None;
     }
     let phase = enc.phase();
-    let step = |b: &Board, p: Player, m: &Move, a: Board| chaplain_step(phase, b, p, m, a);
+    let step =
+        |b: &Board, p: Player, m: &Move, a: Board, e: [u8; 2]| chaplain_step(phase, b, p, m, a, e);
     search_signed(
         enc.game(),
         enc.boss.node_budget,
@@ -847,8 +860,12 @@ mod tests {
             let moves = crate::moves::legal_moves(enc.game().board(), mover);
             let mv = moves[(mix(ply) % moves.len() as u64) as usize].clone();
             let before = enc.game().board().clone();
+            let ejected = [
+                enc.game().ejected(Player::Black),
+                enc.game().ejected(Player::White),
+            ];
             let (after, _) = crate::moves::apply(&before, mover, &mv).unwrap();
-            let (stepped, _) = chaplain_step(0, &before, mover, &mv, after);
+            let (stepped, _) = chaplain_step(enc.phase(), &before, mover, &mv, after, ejected);
             enc.play(&mv).unwrap();
             assert_eq!(&stepped, enc.game().board(), "ply {ply}");
             flips += before.converted().len() + enc.game().board().converted().len();
@@ -861,7 +878,7 @@ mod tests {
     fn credits_of(e: &Encounter, mv: &Move) -> [i8; 2] {
         let mover = e.game().to_move();
         let (after, _) = crate::moves::apply(e.game().board(), mover, mv).unwrap();
-        chaplain_step(e.phase(), e.game().board(), mover, mv, after).1
+        chaplain_step(e.phase(), e.game().board(), mover, mv, after, [0, 0]).1
     }
 
     #[test]
@@ -907,14 +924,99 @@ mod tests {
             dir: crate::moves::Direction::SE,
         };
         let (after, _) = crate::moves::apply(&board, Player::White, &mv).unwrap();
-        let (out, credits) = chaplain_step(1, &board, Player::White, &mv, after);
+        let (out, credits) = chaplain_step(1, &board, Player::White, &mv, after, [4, 0]);
         assert_eq!(out.get(1, 0), Some(Cell::White), "the blast converts");
         assert_eq!(out.get(0, 0), Some(Cell::Empty), "the martyr is gone");
         assert_eq!(credits, [1, 0], "the martyr is an ejection for the player");
     }
 
     #[test]
+    fn the_tree_phase_is_the_root_phase_or_the_one_the_credits_reach() {
+        assert_eq!(tree_phase(0, [3, 0]), 0);
+        assert_eq!(
+            tree_phase(0, [4, 0]),
+            1,
+            "a conversion in the tree reaches P2"
+        );
+        assert_eq!(tree_phase(1, [3, 0]), 1, "the root phase latches");
+        assert_eq!(tree_phase(0, [0, 6]), 0, "only the player's credit counts");
+    }
+
+    #[test]
+    fn the_step_explodes_the_martyr_once_the_tree_credits_reach_p2() {
+        let mut board = Board::empty();
+        for (q, r) in [(1, 0), (0, 3)] {
+            board.set(q, r, Cell::Black);
+        }
+        for (q, r) in [(0, 0), (0, -3)] {
+            board.set(q, r, Cell::White);
+        }
+        board.set_martyr(Some(Some((0, 0))));
+        let mv = Move {
+            cells: vec![(0, -3)],
+            dir: crate::moves::Direction::SE,
+        };
+        let (after, _) = crate::moves::apply(&board, Player::White, &mv).unwrap();
+        let (out, credits) = chaplain_step(0, &board, Player::White, &mv, after.clone(), [3, 0]);
+        assert_eq!(out.get(0, 0), Some(Cell::White), "P1: no blast at 3");
+        assert_eq!(credits, [0, 0]);
+        let (out, credits) = chaplain_step(0, &board, Player::White, &mv, after, [4, 0]);
+        assert_eq!(
+            out.get(0, 0),
+            Some(Cell::Empty),
+            "P2 reached in the tree: blast"
+        );
+        assert_eq!(credits, [1, 0]);
+    }
+
+    #[test]
     fn the_boss_has_no_move_on_the_players_turn() {
         assert_eq!(chaplain_move(&enc(&[], &[])), None);
+    }
+
+    /// White to move at 3 player ejections (P1) with the martyr announced on `(-1, 1)`: the credit
+    /// reaches 4 inside the tree, so only a search that follows the phase sees the blast. At the
+    /// shipped 300 nodes the tree is too shallow to reach it, so the budget is raised (#1112).
+    fn martyr_position() -> Encounter {
+        let mut board = Board::empty();
+        for (q, r) in [(-2, 1), (-1, 0), (0, 2), (1, -1), (1, 0)] {
+            board.set(q, r, Cell::Black);
+        }
+        for (q, r) in [(-1, 1), (-1, 2), (0, -2), (2, -1)] {
+            board.set(q, r, Cell::White);
+        }
+        board.set_martyr(Some(Some((-1, 1))));
+        let game = Game::from_position(board, Player::White, [3, 0]);
+        let mut e = Encounter::new(game, chaplain_boss(), 0);
+        e.boss.node_budget = 2000;
+        e
+    }
+
+    #[test]
+    fn the_phase_reached_in_the_tree_changes_the_best_move() {
+        let e = martyr_position();
+        assert_eq!(e.phase(), 0, "P1 at the root");
+        // The tree that keeps the phase of its root, as before #1112.
+        let frozen = |b: &Board, p: Player, m: &Move, a: Board, _: [u8; 2]| {
+            chaplain_step(0, b, p, m, a, [0, 0])
+        };
+        let old = search_signed(e.game(), 2000, CHAPLAIN_WEIGHTS, &|_| true, &frozen)
+            .unwrap()
+            .mv;
+        let new = chaplain_move(&e).unwrap();
+        assert_eq!(
+            old,
+            Move {
+                cells: vec![(-1, 2)],
+                dir: crate::moves::Direction::NE
+            }
+        );
+        assert_eq!(
+            new,
+            Move {
+                cells: vec![(-1, 1), (-1, 2)],
+                dir: crate::moves::Direction::NW
+            }
+        );
     }
 }

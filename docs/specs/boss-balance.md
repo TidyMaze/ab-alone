@@ -784,3 +784,31 @@ ladder stalker`, 10 seeds, run alone on one machine (8 min 45 s wall).
 Result: 9 of 10 at 10x, inside the 7 to 9 target, so no knob changed (budget 3000, sight and phase ejections stay).
 Not measured: the 1x and 0.5x cells, more seeds, the plain (unfogged) player for comparison. The ladder `replay` of a
 stored Stalker game does not replay a refused move (the refusals are not stored), so no fixture is written for it.
+
+### The Chaplain's search follows its phase in the tree (#1112), not tuned
+
+Until #1112 `chaplain_move` kept the phase of the root for the whole tree. Now `chaplain_step` gets the
+ejections credited before each ply (`search_signed` passes them, as `search_phased` does for the other hooked
+bosses) and takes the highest of the root phase and the phase those credits reach (`tree_phase`, P2 at 4). The
+phase only matters from P2, when the boss turn announces and explodes the martyr, so a tree that crosses 4 sees the
+blast. A heal inside the tree does not take the phase back (the root phase latches, as in `Encounter`). The ladder
+pro player is unchanged (it reads the hooks at phase 0, not the health swing). Not changed: rules, knobs,
+`engine_version`.
+
+Where the phase changes the best move: unit test `the_phase_reached_in_the_tree_changes_the_best_move`. It is a built
+position (3 ejections, martyr already announced, White to move) at a raised budget of 2000 nodes. At the shipped 300
+nodes the tree is too shallow to reach the blast (4 plies): 0 of about 3000 random positions with a martyr and 3
+ejections gave a different move there (release build, same 3000 seeds, not a ladder). seeds 96, 148 and 268
+differed at 2000 nodes (the test uses seed 96; the run was stopped after three, the rate is not measured).
+
+Ladder row, `LADDER_X=10 LADDER_SEEDS=20 cargo run --release --example ladder -- chaplain` and `LADDER_X=1`, seeds 0
+to 19, 300 plies at most, run alone, before (`main`, 1d2b364) and after:
+
+| Player budget | Wins /20 before | Wins /20 after | Median plies before / after | Highest phase | Deaths after |
+|---|---|---|---|---|---|
+| 300 (1x) | 5 | **5** | 94 / 94 | P2 | conversion 9, draw 6 |
+| 3000 (10x) | 17 | **17** | 103 / 103 | P2 | draw 1, ply_cap 2 |
+
+Reading: no change on the ladder, as the shallow tree predicts, so no knob moved. The earlier rows of this section
+(18 of 20 and 6 of 20 in #821) were taken on older code; 17 and 5 are the numbers of `main` today. Not done: a
+ladder at a higher boss budget, more than 20 seeds.
