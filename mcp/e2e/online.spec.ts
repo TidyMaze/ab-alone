@@ -58,3 +58,28 @@ test('two agents in two processes play each other over real WebRTC', async () =>
   expect(b).toEqual({ ...a, you: 'white' });
   expect((await call(black, 'resign')).value.code).toBe('not_supported');
 });
+
+// A boss fight between two minds (#1316): the second agent joins the boss's seat from the invite link. Its moves go over the
+// same signed room and each side judges them with the same Encounter, so both end on the same board and the same boss state.
+test('an agent plays the boss seat against another agent on a boss, over real WebRTC', async () => {
+  const hero = await start();
+  const boss = await start();
+  const room = (await call(hero, 'create_room', { boss: 'hull', seed: 3 })).value;
+  expect(room.invite).toContain(`#room=${room.room}&boss=hull&seed=3&seat=boss&key=`);
+  const joined = await call(boss, 'join_room', { room: room.invite });
+  expect(joined.value).toMatchObject({ room: room.room, you: 'white' });
+  expect((await call(hero, 'wait_for_opponent_move', { timeout_s: 60 })).value).toMatchObject({ event: 'opponent_moved', move: null });
+
+  const players = [hero, boss];
+  for (let ply = 0; ply < 4; ply += 1) {
+    const [mover, other] = [players[ply % 2]!, players[(ply + 1) % 2]!];
+    const legal = (await call(mover, 'legal_moves')).value;
+    const move = legal.moves[(ply * 5) % legal.count];
+    expect((await call(mover, 'play_move', { move })).value).toMatchObject({ played: move, reply: null });
+    expect((await call(other, 'wait_for_opponent_move', { timeout_s: 60 })).value).toMatchObject({ event: 'opponent_moved', move });
+  }
+
+  const [a, b] = [(await call(hero, 'get_state')).value, (await call(boss, 'get_state')).value];
+  expect(a.boss).toMatchObject({ id: 'hull', result: 'playing' });
+  expect(b).toEqual({ ...a, you: 'white' });
+});
