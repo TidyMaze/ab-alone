@@ -683,6 +683,63 @@ void (`r = 2..3`), plain weights: 10 of 10 at 10x (median 53), no change. Screen
 one row back 9 of 10. So the pull to the void decides, the layout and the cohesion do not. The 4x
 and 1x columns before are the rework section of #955 above.
 
+### The Swarm (#795): 2 ejections win for the boss, arrivals 1, 1, 2, gate met
+
+#795 joined `LadderBoss::Swarm` to the ladder (game-design.md section 7.14). Its player search
+lands the announced wave on every player ply of its tree and sees the evac after the 30th boss
+reply as a win (`Swarm::player_search`); the boss search lands the next wave the same way, with its
+own weights (ejections 150, centre 20) and the Choir's budget, 1500 nodes. Gate proposed in #795:
+the pro (10x) wins 7 to 9 of 10, and a scripted turtle (it never pushes and never moves a marble
+away from the centre, `turtle_move`) loses at least 8 of 10. 10 seeds, 30 turns.
+
+**Before** (the boss wins only when every player marble is gone, arrivals 1, 2, 3): the gate is
+not met, both halves. A compact group on its own side is out of reach of a swarm that lands on the
+far rim, gets one move a reply and must eject all 11. Every knob of section 7.14 tried then (boss
+weights, budget 6000, 40 turns, arrivals 2, 2, 3 / 2, 3, 4 / 3, 4, 5, start 8 or 6 marbles, and
+combinations; temporary code, not kept) left the turtle 10 of 10, with 1 to 11 marbles left.
+
+**Decided** (the lead, 2026-10-30, #795): the boss wins once it has ejected N of the player's
+marbles, N a calibration knob (`SWARM_EJECTIONS`) tuned with the arrivals (`SWARM_ARRIVALS`) only.
+Tried (temporary env override, not kept), 10 seeds each:
+
+| Arrivals P1, P2, P3 | N | Turtle wins /10 | Pro 10x wins /10 | Pro marbles left when won |
+|---|---|---|---|---|
+| 1, 2, 3 | all (before) | 10 | 10 | |
+| 1, 2, 3 | 6 | 10 | | |
+| 1, 2, 3 | 4 | 9 | | |
+| 1, 2, 3 | 3 | 6 | 6 | 8 to 10 |
+| 1, 2, 3 | 2 | 2 | 6 | 9 to 10 |
+| **1, 1, 2** | **2** | **0** | **9** | 10 to 11 |
+| 1, 1, 2 | 3 | 4 | 10 | 9 to 11 |
+| 1, 1, 2 | 4 | 8 | 10 | 8 to 11 |
+| 1, 2, 2 | 2 | 2 | 6 | 10 |
+| 1, 2, 2 | 3 | 6 | 6 | 9 to 10 |
+| 1, 2, 2 | 4 | 9 | 7 | 8 to 10 |
+| 1, 1, 1 | 2 | 1 | 10 | 10 to 11 |
+| 1, 1, 1 | 3 | 5 | 10 | 9 to 11 |
+| 1, 1, 1 | 4 | 8 | 10 | 8 to 11 |
+
+The grid stopped once a row met both halves (arrivals 2, 2, 3 and 2, 3, 4 not run). **Adopted:
+N = 2, arrivals 1, 1, 2** (turns 1 to 24 one marble, turns 25 to 30 two). After, the constants in
+the code:
+
+| Player | Wins /10 | Median plies | Player marbles left | Deaths |
+|---|---|---|---|---|
+| Ladder pro, 15000 nodes (10x) | **9** (gate 7 to 9) | 60 | 10 to 11 when won (median 10), 9 in the loss | push 1 |
+| Ladder player, 1500 nodes (1x) | 10 | 60 | 10 to 11 | none |
+| Scripted turtle | **0** (gate: at most 2) | lost on turns 14 to 28 | 9 | 2 ejections, all 10 |
+
+**Gate met**, both halves. The equal-budget player (1x) wins 10 of 10 too: it reads the waves as
+well, and the gate is set on the pro and the turtle only.
+
+Command: `LADDER_X=<1|10> cargo run --release --example ladder -- swarm` and
+`cargo run --release --example swarm_sim` (the turtle; it exits 1 while the turtle wins more than
+2 of 10).
+
+Reply time (release build, native, the turtle's 10 fights, 237 boss replies, the 10 seeds on all
+cores, ms): 82 average, 135 at the 95th percentile, 182 at most (1500 nodes). Before the rule, on
+another run: 232 / 446 / 600. The Dual Room measured 228 / 312 / 383 at 3000 nodes.
+
 ## 4. Recorded wins
 
 `crates/abalone-core/tests/fixtures/<boss>.txt`, replayed by
@@ -699,6 +756,7 @@ sides in order. The replay does not search, so it is deterministic and fast.
 | chaplain | 10040 | 0 (a player taking the move with the most ejections or conversions, a random boss: it reaches P2 and the martyr, which the wasm and e2e tests read; recorded again for #810) | 97 |
 | chaplain-ladder | 0 | 20000 (10x, the ladder pro player, #753, recorded again for #810) | 44 |
 | dual-ladder | 0 | 30000 (10x, the ladder pro player, #982; `dual.txt` stays the bridge game the wasm, client and e2e tests read) | 51 |
+| swarm | 0 | 15000 (10x, the ladder pro player, #795, recorded again for the 2-ejection win) | 60 |
 
 No fixture for the Ballast Mind: no winning game was found (section 3).
 

@@ -57,6 +57,8 @@ pub struct Game {
     draw_reason: Option<DrawReason>,
     /// Ejections each side needs to win, Black then White.
     win: [u8; 2],
+    /// The draw rules end the game: off for a fight with no draw (The Swarm).
+    draws: bool,
 }
 
 fn index(player: Player) -> usize {
@@ -149,6 +151,7 @@ impl Game {
             outcome: None,
             draw_reason: None,
             win: [WIN_EJECTIONS; 2],
+            draws: true,
         }
     }
 
@@ -165,6 +168,7 @@ impl Game {
             outcome: won(ejected, win),
             draw_reason: None,
             win,
+            draws: true,
         }
     }
 
@@ -172,6 +176,12 @@ impl Game {
     pub(crate) fn with_win(mut self, win: [u8; 2]) -> Self {
         self.win = win;
         self.outcome = won(self.ejected, win);
+        self
+    }
+
+    /// The same game where no draw rule ends it, for a fight with no draw (The Swarm).
+    pub(crate) fn without_draws(mut self) -> Self {
+        self.draws = false;
         self
     }
 
@@ -261,7 +271,7 @@ impl Game {
         self.board = board;
         let hash = position_hash(&self.board, self.to_move);
         self.history.last_mut().expect("called after a ply").hash = hash;
-        if self.outcome.is_none() && self.seen(hash) >= REPETITION_LIMIT {
+        if self.draws && self.outcome.is_none() && self.seen(hash) >= REPETITION_LIMIT {
             self.outcome = Some(Outcome::Draw);
             self.draw_reason = Some(DrawReason::Repetition);
         }
@@ -355,7 +365,7 @@ impl Game {
         } else if rogue && legal_moves(&self.board, next).is_empty() {
             // The side to move has no legal move: it loses the fight.
             Some(Outcome::Win(other(next)))
-        } else if repeated || capped {
+        } else if self.draws && (repeated || capped) {
             Some(Outcome::Draw)
         } else {
             None
@@ -410,6 +420,7 @@ mod tests {
             outcome: None,
             draw_reason: None,
             win: [WIN_EJECTIONS; 2],
+            draws: true,
         }
     }
 
@@ -668,6 +679,26 @@ mod tests {
         assert_eq!(game.outcome(), Some(Outcome::Draw));
         assert_eq!(game.draw_reason(), Some(DrawReason::NoEjectionCap));
         assert_eq!(game.play(&mv(&[(4, -4)], W)), Err(GameError::GameOver));
+    }
+
+    #[test]
+    fn a_game_without_draws_ignores_the_repetition_and_the_cap() {
+        let mut game = lone().without_draws();
+        let cycle = [
+            mv(&[(0, 0)], SE),
+            mv(&[(4, -4)], W),
+            mv(&[(0, 1)], NW),
+            mv(&[(3, -4)], E),
+        ];
+        for m in cycle.iter().chain(cycle.iter()).chain(cycle.iter()) {
+            assert_eq!(game.play(m), Ok(()));
+        }
+        let board = game.board().clone();
+        game.replace_board(board);
+        assert_eq!(game.outcome(), None);
+        game.no_ejection_plies = 99;
+        assert_eq!(game.play(&cycle[0]), Ok(()));
+        assert_eq!((game.outcome(), game.draw_reason()), (None, None));
     }
 
     #[test]

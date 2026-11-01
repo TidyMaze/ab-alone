@@ -15,6 +15,7 @@ use crate::encounter::hull::{hull_boss, hull_move};
 use crate::encounter::overseer::{overseer_move, overseer_start, OVERSEER_NODE_BUDGET};
 use crate::encounter::railyard::{railyard_move, railyard_start, RAILYARD_NODE_BUDGET};
 use crate::encounter::stalker::{refuse, stalker_start, STALKER_NODE_BUDGET};
+use crate::encounter::swarm::{Swarm, SWARM_NODE_BUDGET};
 use crate::encounter::telemetry::{
     classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
@@ -42,10 +43,11 @@ pub enum LadderBoss {
     Dual,
     RailYard,
     Stalker,
+    Swarm,
 }
 
 impl LadderBoss {
-    pub const ALL: [LadderBoss; 10] = [
+    pub const ALL: [LadderBoss; 11] = [
         LadderBoss::Echo,
         LadderBoss::Hull,
         LadderBoss::Chaplain,
@@ -56,6 +58,7 @@ impl LadderBoss {
         LadderBoss::Dual,
         LadderBoss::RailYard,
         LadderBoss::Stalker,
+        LadderBoss::Swarm,
     ];
 
     /// Stable id used in the telemetry.
@@ -71,6 +74,7 @@ impl LadderBoss {
             LadderBoss::Dual => "dual",
             LadderBoss::RailYard => "railyard",
             LadderBoss::Stalker => "stalker",
+            LadderBoss::Swarm => "swarm",
         }
     }
 
@@ -92,6 +96,7 @@ impl LadderBoss {
             LadderBoss::Dual => DUAL_NODE_BUDGET,
             LadderBoss::RailYard => RAILYARD_NODE_BUDGET,
             LadderBoss::Stalker => STALKER_NODE_BUDGET,
+            LadderBoss::Swarm => SWARM_NODE_BUDGET,
         }
     }
 }
@@ -106,6 +111,7 @@ pub fn player_budgets(boss: LadderBoss) -> [u32; 3] {
 enum Arena {
     Plain(Encounter, LadderBoss),
     Choir(Choir),
+    Swarm(Swarm),
 }
 
 impl Arena {
@@ -122,6 +128,7 @@ impl Arena {
             LadderBoss::Hull => plain(hull_boss()),
             LadderBoss::Chaplain => plain(chaplain_boss()),
             LadderBoss::Choir => Arena::Choir(Choir::start(seed)),
+            LadderBoss::Swarm => Arena::Swarm(Swarm::start(seed)),
         }
     }
 
@@ -129,6 +136,7 @@ impl Arena {
         match self {
             Arena::Plain(_, kind) => *kind,
             Arena::Choir(_) => LadderBoss::Choir,
+            Arena::Swarm(_) => LadderBoss::Swarm,
         }
     }
 
@@ -136,6 +144,7 @@ impl Arena {
         match self {
             Arena::Plain(enc, _) => enc.game(),
             Arena::Choir(choir) => choir.game(),
+            Arena::Swarm(swarm) => swarm.game(),
         }
     }
 
@@ -143,6 +152,7 @@ impl Arena {
         match self {
             Arena::Plain(enc, _) => enc.phase(),
             Arena::Choir(choir) => choir.phase(),
+            Arena::Swarm(swarm) => swarm.phase(),
         }
     }
 
@@ -150,6 +160,7 @@ impl Arena {
         match self {
             Arena::Plain(enc, _) => enc.result(),
             Arena::Choir(choir) => choir.result(),
+            Arena::Swarm(swarm) => swarm.result(),
         }
     }
 
@@ -166,6 +177,7 @@ impl Arena {
             // The Ballast Mind: the Choir is never plain.
             Arena::Plain(enc, _) => ballast_move(enc),
             Arena::Choir(choir) => choir.boss_move(),
+            Arena::Swarm(swarm) => swarm.boss_move(),
         }
     }
 
@@ -201,6 +213,7 @@ impl Arena {
         match self {
             Arena::Plain(enc, _) => enc.play(mv).map_err(|e| format!("{e:?}")),
             Arena::Choir(choir) => choir.play(mv).map_err(|e| format!("{e:?}")),
+            Arena::Swarm(swarm) => swarm.play(mv).map_err(|e| format!("{e:?}")),
         }
     }
 }
@@ -261,6 +274,7 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
             }
             Arena::Plain(enc, LadderBoss::Ballast) => ballast_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
+            Arena::Swarm(swarm) => swarm.player_search(budget, allow).map(|r| r.mv),
             Arena::Plain(_, LadderBoss::Dual) => {
                 search_hooked(game, budget, DEFAULT_WEIGHTS, allow, &dual_step).map(|r| r.mv)
             }
@@ -638,13 +652,13 @@ mod tests {
             ids,
             [
                 "echo", "hull", "chaplain", "choir", "ballast", "alien", "overseer", "dual",
-                "railyard", "stalker"
+                "railyard", "stalker", "swarm"
             ]
         );
         let budgets: Vec<_> = LadderBoss::ALL.iter().map(|b| b.node_budget()).collect();
         assert_eq!(
             budgets,
-            [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000]
+            [100, 3000, 300, 1500, 100, 3000, 3000, 3000, 3000, 3000, 1500]
         );
     }
 
@@ -793,6 +807,31 @@ mod tests {
         enc.play(&reply).unwrap();
         let read = search_hooked(enc.game(), 200, DEFAULT_WEIGHTS, &|_| true, &dual_step);
         assert_eq!(player_move(&a, 0, 9, 0, 200), read.map(|r| r.mv));
+    }
+
+    #[test]
+    fn the_swarm_answers_through_its_own_move_and_the_player_reads_the_waves() {
+        let mut a = Arena::new(LadderBoss::Swarm, 3);
+        let mut swarm = Swarm::start(3);
+        assert_eq!(a.game().board(), swarm.game().board());
+        let read = swarm.player_search(200, &|_| true).map(|r| r.mv);
+        assert_eq!(player_move(&a, 0, 9, 0, 200), read);
+        let mv = read.unwrap();
+        a.play(&mv).unwrap();
+        swarm.play(&mv).unwrap();
+        assert_eq!(a.boss_move(), swarm.boss_move());
+        assert_eq!((a.phase(), a.result()), (0, None));
+        let (record, moves) = play_attempt_moves(LadderBoss::Swarm, 1, 1, 30, 300);
+        assert!(record.plies <= 60, "30 turns at most");
+        assert!(
+            replay(LadderBoss::Swarm, 1, &moves[1..2]).is_err(),
+            "a boss move first"
+        );
+        assert_eq!(record.result, AttemptResult::Won);
+        assert_eq!(
+            replay(LadderBoss::Swarm, 1, &moves),
+            Ok(Some(PveResult::Won))
+        );
     }
 
     #[test]
