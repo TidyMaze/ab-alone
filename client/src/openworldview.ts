@@ -693,7 +693,7 @@ export class OpenWorldView {
   hasProp([q, r]: Axial, terrain: Terrain): boolean {
     const prop = PROP_OF[terrain];
     if (!prop || !this.laidHero) return false;
-    return this.slots.get(this.route(prop, hexDistance([q, r], this.laidHero) <= HI_RADIUS))?.at.has(cellKey(q, r)) ?? false;
+    return this.slots.get(this.route(prop, hexDistance([q, r], this.laidHero) <= HI_RADIUS))!.at.has(cellKey(q, r));
   }
 
   /** The hero broke the `terrain` obstacle on `cell` at `now` (ms) (#1147): the world has the cell open already. Its prop leaves its mesh,

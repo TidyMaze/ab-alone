@@ -5520,6 +5520,7 @@ if (navigator.webdriver) {
   const hooks = window as unknown as Record<string, unknown>;
   hooks.__openworldFixture = (fixture: { hero: [number, number]; troop: [number, number][]; enemies: [number, number][]; beaten?: number[] }) => openWorld.fixture(fixture);
   hooks.__openworldEnemies = () => openWorld.enemies();
+  hooks.__openworldCanBreak = (seed: number, q: number, r: number) => world_can_break(seed, q, r); // whether a cell holds a boulder or a tree (#1305)
   hooks.__openworldCamera = () => openWorld.camera(); // the zoom, shake, chunk centre and place the camera draws (#1103, #1333)
 }
 openWorldButton.addEventListener('click', () => {

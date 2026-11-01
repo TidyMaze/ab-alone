@@ -637,7 +637,7 @@ describe('the public Open world online', () => {
 
   // The signed break events (#1305): what the hero breaks goes out signed with its stored key, what a peer broke opens here.
   const obstacleBeside = (skip = 0): { hero: [number, number]; cell: [number, number] } => {
-    const around: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
+    const around: [number, number][] = [[-1, 0], [1, 0]]; // beside it on its row: a plain Right or Left arrow steps onto it
     for (let q = -30; q <= 30; q++) {
       for (let r = -30; r <= 30; r++) {
         if (!world_can_break(PUBLIC_SEED, q, r)) continue;
@@ -653,19 +653,16 @@ describe('the public Open world online', () => {
     const room = game.world()!;
     const { hero, cell } = obstacleBeside();
     const fixture = () => hooks().__openworldFixture!({ hero, troop: [], enemies: [] });
-    for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown']) {
-      fixture();
-      press(key);
-      release(key);
-      game.frame(300);
-      if (data().openworldBroken !== '0') break;
-    }
+    fixture();
+    const key = hero[0] < cell[0] ? 'ArrowRight' : 'ArrowLeft';
+    press(key);
+    release(key);
+    game.frame(300);
     expect(data().openworldBroken).toBe('1');
     for (let i = 0; i < 40 && !room.sent.some(([d]) => d.length === BREAK_BYTES); i++) await new Promise((done) => setTimeout(done, 10));
     const sent = room.sent.find(([d]) => d.length === BREAK_BYTES)!;
     expect(sent[1]).toBeUndefined();
     expect(JSON.parse(localStorage.getItem('ab-alone.world-key')!).pub).toHaveLength(43);
-    expect(cell).toBeDefined();
     // a peer breaks another obstacle: it opens here, once
     const other = obstacleBeside(1).cell;
     const keys = await generateKeys();
