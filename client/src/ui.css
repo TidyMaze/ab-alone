@@ -941,7 +941,7 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
 #dock-wrap #daily-card { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 #dock-wrap #daily-card #daily-result { width: auto; max-width: 100%; box-sizing: border-box; }
 #dock-wrap #daily-card #daily-copy { min-height: 44px; }
-/* The lobby sheet (#1044): Start, Invite, Back to the ship and the invite link in one column of 44 px targets. */
+/* The lobby sheet (#1044): Start, Invite, Back to the hub and the invite link in one column of 44 px targets. */
 #dock-wrap #lobby-sheet { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 0; }
 #dock-wrap #lobby-sheet button { min-height: 44px; min-width: 44px; }
 #dock-wrap #lobby-sheet #invite-row { flex: none; width: 100%; }
