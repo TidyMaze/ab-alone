@@ -1090,7 +1090,7 @@ describe('the keys turn the camera by a step, and a drag or a twist turns it too
 
   it('a saved yaw of 30 degrees opens at the nearest multiple of 60 degrees (#1251)', async () => {
     const saves = worldSaves(memoryStore(), 1);
-    await saves.put(7, [0, 0], [[0, 0]], new FightState().toJSON(), Math.PI / 6);
+    await saves.put(7, [0, 0], [[0, 0]], new FightState(), Math.PI / 6);
     const m = mode(undefined, undefined, undefined, undefined, undefined, saves);
     await m.open(7, 800, 600);
     expect(body().openworldYaw).toBe('60');
