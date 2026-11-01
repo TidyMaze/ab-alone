@@ -179,7 +179,7 @@ describe('a move and its slide', () => {
 
 describe('an ejection', () => {
   it('tumbles the marble out and spatters blood past the frame, both ending by themselves', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     pushOffBoard(game);
     expect(plies(game)).toBe(5);
     expect(data().ejections).toBe('1');
@@ -481,7 +481,7 @@ describe('the pointer on the board', () => {
   });
 
   it('zooms on the wheel, and Reset view brings the first view back', async () => {
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     const centre = screen(game, 0, 0);
     const corner = screen(game, 4, -4);
     const wheel = new WheelEvent('wheel', { deltaY: -500, cancelable: true });

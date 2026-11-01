@@ -151,7 +151,7 @@ describe('the renderer and its textures', () => {
 
   it('gives the marbles no reflections under automation (#416), and the bay itself, once it is in, to a player (#864)', async () => {
     const reflection = async (webdriver: boolean): Promise<THREE.Texture | null> => {
-      const game = await boot('?bot=off', { webdriver });
+      const game = await boot('?bot=off&scene=room', { webdriver });
       await vi.waitFor(() => expect(document.body.dataset.bay).toBe('ready'));
       const { scene } = await drawn(game);
       const reflecting = materials(scene).filter((m) => m.envMap);
@@ -169,6 +169,19 @@ describe('the renderer and its textures', () => {
     expect([made.options.position.x, made.options.position.z]).toEqual([0, 0]);
   });
 
+  it('gives the black marbles of the terrace the reflection of its own sky, to a player and not under automation (#1314)', async () => {
+    const reflection = async (webdriver: boolean): Promise<THREE.Texture | null> => {
+      const game = await boot('?bot=off', { webdriver });
+      await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+      const { scene } = await drawn(game);
+      const shell = materials(scene).find((m) => m.color.getHex() === 0x0a0c0f)!;
+      return shell.envMap;
+    };
+    expect(await reflection(true)).toBeNull();
+    const env = await reflection(false);
+    expect((env!.userData as { scene: THREE.Scene }).scene.children).toHaveLength(3); // a sky ramp, a window, a cyan strip: no lamps
+  });
+
   it('reports the WebGL2 backend in the diagnostics', async () => {
     const game = await boot('?bot=off');
     const report = await diagnostics(game);
@@ -184,7 +197,48 @@ describe('the renderer and its textures', () => {
     expect(report.renderCost).toMatch(/^draw calls: \d+\ntriangles: \d+\ngeometries: \d+\ntextures: \d+\npoint lights: \d+\ntier: \w+\npixel ratio: [\d.]+$/);
     expect(cost.text).toBe(report.renderCost);
     expect(cost).toMatchObject({ calls: 7, triangles: 300, geometries: 5, textures: 2, tier: 'high' });
-    expect(cost.pointLights).toBeGreaterThan(0); // the room's lamps: this test boots the room, the terrace has none (#1314)
+    expect(cost.pointLights).toBe(0); // the terrace is lit by a sun alone, and a hidden lamp is not counted (#1314)
+  });
+
+  it('plays a 1v1 game on the terrace, and keeps the room for the hub, a fight or ?scene=room (#1314)', async () => {
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { scene } = await drawn(game);
+    expect(scene.getObjectByName('terrace')!.visible).toBe(true);
+    expect(document.body.dataset.scene).toBe('table-zero');
+  });
+
+  it('keeps the room in a 1v1 game when ?scene=room asks for it (#1314)', async () => {
+    const game = await boot('?bot=off&scene=room');
+    const { scene } = await drawn(game);
+    expect([document.body.dataset.scene, scene.getObjectByName('terrace')!.visible]).toEqual(['room', false]);
+  });
+
+  it('sets the camera to an exact view for a browser check, and shows the terrace to a player at its own default (#1314)', async () => {
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { camera } = await drawn(game);
+    expect(camera.position.length()).toBeCloseTo(13.6); // the terrace's pitch 57 and distance 13.6
+    game.hook('__setView', { azimuth: Math.PI / 2, polar: 1, distance: 6 });
+    expect(camera.position.length()).toBeCloseTo(6);
+    expect(camera.position.x).toBeGreaterThan(5); // from the +x side at 90 degrees of yaw
+  });
+
+  it('draws the marks of a move with the kit on the terrace: selection ring, target ring and arrow, last-move ring (#1314)', async () => {
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const { scene } = await drawn(game);
+    const rested = (y: number): number => {
+      let n = 0;
+      scene.traverse((o) => void ((o as THREE.Mesh).isMesh && Math.abs(o.position.y - (y - 0.11)) < 1e-6 && n++)); // on the lifted marbles' group
+      return n;
+    };
+    game.click(0, 2); // a black marble: selected, its targets shown
+    game.frame(1000);
+    expect([rested(0.078) >= 2, rested(0.08) >= 1]).toEqual([true, true]);
+    game.click(1, 2); // played: the last move's ring where it landed
+    game.frame(1000);
+    expect(rested(0.108)).toBeGreaterThanOrEqual(1);
   });
 
   it('keeps the last drawn frame cost over the idle frames that follow it (the draw calls read 0 before)', async () => {

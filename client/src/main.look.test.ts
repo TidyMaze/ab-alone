@@ -49,7 +49,7 @@ const materialsWith = (scene: THREE.Scene, color: number): THREE.MeshStandardMat
 describe('main.ts tonal look (#1138)', () => {
   it('draws the plate, the cells and the marbles as flat tonal materials, and loads no skin, cell or plate map', async () => {
     const scene = catchScene();
-    await boot('/?bot=off&look=tonal');
+    await boot('/?bot=off&look=tonal&scene=room');
     const maps = mapNames(scene());
     expect([...maps].filter((name) => /skin-|deck-|board-|plate-/.test(name))).toEqual([]);
     expect(materialsWith(scene(), TONAL.plate).length).toBeGreaterThan(0);
@@ -64,7 +64,7 @@ describe('main.ts tonal look (#1138)', () => {
 
   it.each(['/?bot=off', '/?bot=off&look=pbr'])('keeps the maps of today in the pbr look, %s', async (search) => {
     const scene = catchScene();
-    await boot(search);
+    await boot(`${search}&scene=room`); // the room's textures: the terrace draws none (#1314)
     const maps = mapNames(scene());
     expect(maps).toContain('skin-Leather027-albedo.ktx2');
     expect(maps).toContain('skin-Marble025-albedo.ktx2');

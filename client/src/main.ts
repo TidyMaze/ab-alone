@@ -3379,18 +3379,31 @@ const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, P
 // keeps the room; the hub, the boss rooms, the royale and a run keep it too, until their own PRs; `?scene=room` asks for it.
 let terraceReady = false;
 const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
-const terraceKit: { pedestal: THREE.Mesh | null } = { pedestal: null };
+const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last', THREE.Mesh> | null } = { pedestal: null, marks: null };
+/** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
+const terraceMarks = (): NonNullable<typeof terraceKit.marks> | null => (sceneRenderer.terraceOn ? terraceKit.marks : null);
+/** A mark of the kit on the cell of a mesh the game made: the kit's geometry and vertex colours, flat on the dish, no rotation. */
+function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
+  mesh.geometry = kit.geometry;
+  mesh.material = kit.material;
+  mesh.rotation.set(0, 0, 0);
+  mesh.position.y = y - TERRACE_LIFT; // the marbles' group stands 0.11 higher on the terrace
+}
 const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
 void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
   .then(([arena, kit]) => {
     const drawn = mergeByMaterial(arena.scene); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
     // The black marbles reflect a sky with a window of light and a cool rim, not the room's lamps.
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    terraceShell.envMap = pmrem.fromScene(terraceEnvironment(), 0, 0.1, 300).texture;
-    pmrem.dispose();
+    if (hasReflections(tier, navigator.webdriver)) {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      terraceShell.envMap = pmrem.fromScene(terraceEnvironment(), 0, 0.1, 300).texture;
+      pmrem.dispose();
+    }
     terraceKit.pedestal = kit.scene.getObjectByName('kit_pedestal_flat') as THREE.Mesh;
     syncPedestals = instanceMarbles(marbles, terraceKit.pedestal.geometry, scene);
+    const named = (name: string): THREE.Mesh => kit.scene.getObjectByName(name) as THREE.Mesh;
+    terraceKit.marks = { target: named('kit_ring_target'), arrow: named('kit_arrow_target'), select: named('kit_ring_select'), last: named('kit_ring_lastmove') };
     terraceReady = true;
     refresh();
   })
@@ -3505,6 +3518,12 @@ function refresh(): void {
       arrow.rotation.set(-Math.PI / 2, arrowYaw(target.dir), 0, 'YXZ');
       ring.position.set(p.x, 0.005, p.z);
       arrow.position.set(p.x, 0.005, p.z);
+      const kit = terraceMarks();
+      if (kit) {
+        wearKit(ring, kit.target, 0.078);
+        wearKit(arrow, kit.arrow, 0.08);
+        arrow.rotation.y = arrowYaw(target.dir);
+      }
       marbles.add(ring, arrow);
       if (freeTargets.some(({ cell: [fq, fr] }) => fq === q && fr === r)) {
         const diamond = Object.assign(new THREE.Mesh(freeGeometry, echoMaterial), { name: 'echo-free-target' });
@@ -3547,6 +3566,8 @@ function refresh(): void {
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.rotation.x = Math.PI / 2;
       ring.position.set(p.x, 0.02, p.z);
+      const kit = terraceMarks();
+      if (kit) wearKit(ring, kit.select, 0.078);
       marbles.add(ring);
       marble.position.y = 0.5;
     }
@@ -3605,6 +3626,12 @@ function refresh(): void {
     const ring = new THREE.Mesh(outlineGeometry, lastMoveMaterial);
     ring.rotation.x = Math.PI / 2;
     ring.position.set(p.x, 0.36, p.z);
+    const kit = terraceMarks();
+    if (kit) {
+      wearKit(ring, kit.last, 0.108); // Sodium, from the kit's vertex colours; the pulse still scales it
+      ring.position.x = p.x;
+      ring.position.z = p.z;
+    }
     marbles.add(ring);
     onMarble(cellIndex(q, r), ring);
     return ring;
