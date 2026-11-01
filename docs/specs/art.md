@@ -47,6 +47,9 @@ and no new look: each rule names its source (section numbers), and changes when 
   steel and ore dust (online, The Hull). Furnace: orange glow, steam (The Choir). Chapel: candles,
   wood and wire (The Chaplain). Bridge: cold white, too clean (The Ballast Mind). Fog thickens
   toward the rim, never over a cell.
+  The Pulsar's fight is drawn in space (#1146): the bay is hidden, a field of stars and a distant glow take
+  the backdrop, the board and the lamps stay. It holds through a settings toggle, a deck change and a late bay
+  load (#1189); the ship's hub and any other game get the bay back.
 - **Type** (ui.md 3). Chakra Petch 600, uppercase, for the turn and the result; IBM Plex Sans for
   the rest. Sizes in rem, nothing under 0.8125rem.
 - **HUD** (world.md 6). The board, its rim and its frame carry the game, menus are a terminal in
