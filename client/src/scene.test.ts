@@ -87,7 +87,9 @@ describe('SceneRenderer (#632)', () => {
     const sr = new SceneRenderer({ renderer: createMockRenderer() });
     const lights: THREE.Light[] = [];
     sr.scene.traverse((o) => void ((o as THREE.Light).isLight && lights.push(o as THREE.Light)));
-    expect(lights).toEqual([]);
+    // Only Table Zero's sun and hemisphere (#1314), shown in a 1v1 game: no point light, no ambient, none in the room's group.
+    expect(lights.map((l) => l.type).sort()).toEqual(['DirectionalLight', 'HemisphereLight']);
+    expect(lights.every((l) => l.parent === sr.tableZero)).toBe(true);
   });
 
   it('draws the plate and the rim as flat tonal materials in the tonal look, whatever maps it is given (#1138)', () => {
@@ -521,5 +523,75 @@ describe('SceneRenderer (#632)', () => {
     expect(runs(true)).toBe(4);
     expect(runs(false)).toBe(2);
     blur.mockRestore();
+  });
+
+  describe('Table Zero (#1314)', () => {
+    const make = () => new SceneRenderer({ renderer: createMockRenderer(), innerWidth: 1000, innerHeight: 800 });
+    const board = () => new Uint8Array(91);
+
+    it('hides the room and its lamps, shows the sun, the plinth and the window, and goes back', () => {
+      const sr = make();
+      sr.propsGroup.add(new THREE.PointLight());
+      expect(sr.tableZero.visible).toBe(false);
+      sr.setTableZero(true);
+      expect([sr.tableZeroOn, sr.tableZero.visible, sr.propsGroup.visible, sr.roomDeck.visible]).toEqual([true, true, false, false]);
+      expect((sr.scene.background as THREE.Color).getHex()).toBe(0x0b0d0f);
+      let visibleLights = 0;
+      sr.scene.traverseVisible((o) => void ((o as THREE.PointLight).isPointLight && visibleLights++));
+      expect(visibleLights).toBe(0);
+      const before = sr.scene.background;
+      sr.setTableZero(true); // already on: nothing redone
+      sr.setTableZero(false);
+      expect([sr.tableZero.visible, sr.propsGroup.visible, sr.roomDeck.visible]).toEqual([false, true, true]);
+      expect(sr.scene.background).not.toBe(before);
+    });
+
+    it('turns the plate and the rim flat, and gives their maps back', () => {
+      const map = new THREE.Texture();
+      const sr = new SceneRenderer({ renderer: createMockRenderer(), plateAlbedo: map, plateNormal: new THREE.Texture(), rimAlbedo: map, rimNormal: new THREE.Texture() });
+      const [plate, rim] = [sr.plate.material, sr.rim.near.material];
+      const [plateColor, rimColor] = [plate.color.getHex(), rim.color.getHex()];
+      sr.setTableZero(true);
+      expect([plate.map, plate.normalMap, plate.metalness, plate.color.getHex(), rim.color.getHex()]).toEqual([null, null, 0, 0x0b0d0f, 0x4b4f55]);
+      expect(rim.emissiveIntensity).toBe(1.6);
+      sr.setTableZero(false);
+      expect([plate.map, rim.map, plate.color.getHex(), rim.color.getHex()]).toEqual([map, map, plateColor, rimColor]);
+      expect(plate.normalMap).not.toBeNull();
+      expect(rim.emissiveIntensity).toBe(0.6); // the lit half glows 1.6 meanwhile, then 0.6 again
+    });
+
+    it('steps the plinth out past the rim of the frame it draws', () => {
+      const sr = make();
+      sr.drawFrame(board());
+      const plinth = sr.tableZero.children.find((o) => (o as THREE.Mesh).isMesh && o.position.y === -0.55)!;
+      expect(plinth.scale.x).toBeGreaterThan(Math.max(...sr.frame!.outer.map((p) => Math.hypot(p.x, p.z))));
+    });
+
+    it('draws no deck particles and fogs to Hollow Black, the room\'s fog back after', () => {
+      const sr = make();
+      sr.setTableZero(true);
+      sr.updateParticles('high', false, false, false, true, 'furnace');
+      expect(sr.particles.visible).toBe(false);
+      sr.updateFog('high', false, resetView(), 4, 'furnace');
+      expect(sr.fogObj.color.getHex()).toBe(0x0b0d0f);
+      sr.setTableZero(false);
+      sr.updateFog('high', false, resetView(), 4, 'furnace');
+      expect(sr.fogObj.color.getHex()).toBe(DECK_ATMOSPHERES.furnace.fogColor);
+    });
+
+    it('draws through the flat pipeline, with no bloom, and keeps the room mounted behind', () => {
+      const sr = new SceneRenderer({ renderer: createMockRenderer(), devicePixelRatio: 1, webdriver: false });
+      expect(sr.flatPipeline!.bloom).toBeNull();
+      const [flat, room] = [vi.fn(), vi.fn()];
+      sr.flatPipeline!.render = flat;
+      sr.pipeline!.render = room;
+      sr.setTableZero(true);
+      sr.render();
+      expect([flat.mock.calls.length, room.mock.calls.length]).toEqual([1, 0]);
+      sr.mountBay({ scene: new THREE.Group(), materials: {} } as never, 'mess');
+      expect([sr.roomDeck.visible, sr.propsGroup.visible]).toEqual([false, false]);
+      sr.mountBay(null, 'mess');
+      expect(sr.roomDeck.visible).toBe(false);
+    });
   });
 });

@@ -131,17 +131,11 @@ describe('the renderer and its textures', () => {
     expect(hud).toContain('Black to move');
   });
 
-  it('draws the generated textures, and frames the whole board in the window', async () => {
+  it('draws the sky of Table Zero, and frames the whole board in the window', async () => {
     const game = await boot('?bot=off');
     const { scene, camera } = await drawn(game);
-    const backdrop = scene.background as THREE.Texture;
-    expect(backdrop.isTexture).toBe(true);
-    expect(backdrop.colorSpace).toBe('srgb');
-    expect(backdrop.wrapS).not.toBe(1000); // RepeatWrapping: the backdrop is not tiled
-    const deck = materials(scene).find((m) => m.roughnessMap)!;
-    expect(deck.map!.colorSpace).toBe('srgb');
-    expect([deck.map!.wrapS, deck.map!.wrapT, deck.roughnessMap!.wrapS]).toEqual([1000, 1000, 1000]);
-    expect(deck.roughnessMap!.colorSpace).not.toBe('srgb');
+    // Table Zero (#1314): a 1v1 game draws no board texture, the sky is the Hollow Black colour. The room's textures come with the hub.
+    expect((scene.background as THREE.Color).getHex()).toBe(0x0b0d0f);
     expect(document.body.lastElementChild).toBeInstanceOf(HTMLCanvasElement); // the renderer's canvas
     expect(camera.aspect).toBe(innerWidth / innerHeight);
     expect(camera.fov).toBe(framing(innerWidth, innerHeight).fov);
@@ -174,6 +168,18 @@ describe('the renderer and its textures', () => {
     const report = await diagnostics(game);
     expect(report.environment.backend).toBe('WebGL2');
     expect(report.events.find((e) => e.event === 'start')?.data).toMatchObject({ backend: 'WebGL2' });
+  });
+
+  it('plays a 1v1 game on Table Zero and the Ship hub in the room (#1314)', async () => {
+    await boot('?bot=off');
+    expect(document.body.dataset.scene).toBe('table-zero');
+  });
+
+  it('keeps the room, its steel and its lamps, in the hub (#1314)', async () => {
+    const game = await boot('');
+    const { scene } = await drawn(game);
+    expect(document.body.dataset.scene).toBe('room');
+    expect(scene.getObjectByName('table-zero')!.visible).toBe(false);
   });
 
   it('reports the render cost in the diagnostics and on window.__renderCost (#851)', async () => {
@@ -385,7 +391,7 @@ describe('the view and the fog', () => {
     const fog = scene.fog as THREE.Fog;
     expect(fog.near).toBeGreaterThan(0);
     expect(fog.far).toBeGreaterThan(fog.near);
-    expect(fog.color.getHex()).toBe(0x1c1612);
+    expect(fog.color.getHex()).toBe(0x0b0d0f); // Table Zero (#1314): the fog fades to Hollow Black, as the Open world's
     expect(document.body.dataset.clear).toBe('off');
     expect(row('clear-board').getAttribute('aria-pressed')).toBe('false');
     row('clear-board').click();
@@ -395,8 +401,8 @@ describe('the view and the fog', () => {
     expect(localStorage.getItem('ab-alone.clear-board')).toBe('on');
   });
 
-  it('tints the fog to match the active deck atmosphere (#665)', async () => {
-    const game = await boot('?bot=off');
+  it('tints the fog to match the active deck atmosphere (#665), in the room: the hub keeps it (#1314)', async () => {
+    const game = await boot('');
     const { scene } = await drawn(game);
     const fog = scene.fog as THREE.Fog;
     expect(fog.color.getHex()).toBe(0x1c1612);

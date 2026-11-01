@@ -47,6 +47,20 @@ export function hexPrism(radius: number, height: number, color: number): THREE.B
   return paint(new THREE.CylinderGeometry(radius, radius, height, 6).translate(0, height / 2, 0), color);
 }
 
+/** The cell of Table Zero: a twelve-sided disc, 48 triangles, its top Dust and its sides and base a dark Slate, so the edge reads against the plate. */
+export function cellGeometry(radius: number): THREE.BufferGeometry {
+  const g = new THREE.CylinderGeometry(radius, radius, 0.1, 12);
+  const [up, down] = [new THREE.Color(PALETTE.dust), new THREE.Color(0x1f2125)];
+  const normal = g.attributes.normal!;
+  const rgb = new Float32Array(normal.count * 3);
+  for (let i = 0; i < normal.count; i++) {
+    const c = normal.getY(i) > 0.5 ? up : down;
+    rgb.set([c.r, c.g, c.b], i * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+  return g;
+}
+
 export interface Column {
   x: number;
   z: number;

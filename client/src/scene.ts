@@ -17,6 +17,8 @@ import { PALETTE, addSun, hexPrism, windowStripGeometry } from './tablezero';
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
 export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
+/** How much the lit half of the rim glows in Table Zero, where no bloom adds to it. */
+const TURN_GLOW = 1.6;
 /** The radius of the rounded edges of the board's plate and rim. */
 const FRAME_BEVEL = 0.03;
 
@@ -506,12 +508,14 @@ export class SceneRenderer {
     for (const m of [this.plate.material, this.rim.near.material, this.rim.far.material]) {
       if (on) {
         m.userData.map = m.map;
-        m.userData.look = [m.color.getHex(), m.roughness, m.metalness, m.normalMap, m.roughnessMap, m.metalnessMap];
+        m.userData.look = [m.color.getHex(), m.roughness, m.metalness, m.normalMap, m.roughnessMap, m.metalnessMap, m.emissiveIntensity];
         m.normalMap = m.roughnessMap = m.metalnessMap = null;
         m.metalness = 0;
         set(m, m === this.plate.material ? PALETTE.hollow : PALETTE.slate, 0.9);
+        m.emissiveIntensity = TURN_GLOW; // the turn's bar: lit, it reads 3:1 against the dark Slate half (frame.spec.ts)
       } else {
-        const [color, rough, metal, normal, rmap, mmap] = m.userData.look as [number, number, number, THREE.Texture | null, THREE.Texture | null, THREE.Texture | null];
+        const [color, rough, metal, normal, rmap, mmap, glow] = m.userData.look as [number, number, number, THREE.Texture | null, THREE.Texture | null, THREE.Texture | null, number];
+        m.emissiveIntensity = glow;
         m.normalMap = normal;
         m.roughnessMap = rmap;
         m.metalnessMap = mmap;

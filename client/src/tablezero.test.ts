@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE, SUN, addSun, hexPrism, tableZeroActive, windowStrip, windowStripGeometry } from './tablezero';
+import { PALETTE, SUN, addSun, cellGeometry, hexPrism, tableZeroActive, windowStrip, windowStripGeometry } from './tablezero';
 
 const triangles = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.attributes.position!.count) / 3;
 
@@ -26,6 +26,20 @@ describe('the shared kit', () => {
     const g = hexPrism(0.5, 0.2, 0x446957);
     expect(triangles(g)).toBe(24);
     expect(g.attributes.color!.count).toBe(g.attributes.position!.count);
+  });
+  it('makes a cell of 48 triangles: a Dust top over a dark side, read from the vertex colours', () => {
+    const g = cellGeometry(0.46);
+    expect(triangles(g)).toBe(48);
+    const [pos, col, nor] = [g.attributes.position!, g.attributes.color!, g.attributes.normal!];
+    const top = new THREE.Color(PALETTE.dust);
+    let tops = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const isTop = nor.getY(i) > 0.5;
+      tops += isTop ? 1 : 0;
+      const c = new THREE.Color(col.getX(i), col.getY(i), col.getZ(i));
+      expect(c.getHex() === top.getHex()).toBe(isTop); // the stored floats, rounded back to 8 bits
+    }
+    expect(tops).toBeGreaterThan(0);
   });
   it('lays the window strip: deterministic, stepped, under 300 triangles, one geometry', () => {
     expect(windowStrip()).toEqual(windowStrip());

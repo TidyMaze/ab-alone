@@ -2,6 +2,7 @@
 // prisms, lifted by their height and coloured by their terrain, with low-poly props on top (faceted mountains, wire
 // pines, boulders, gantry walls with a gold edge), the hero marble, and the camera that follows it. It has its own
 // scene, drawn by the page's renderer while the mode is on. Relief and terrain are looks only.
+import { addSun } from './tablezero';
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
@@ -486,10 +487,7 @@ export class OpenWorldView {
   ) {
     this.scene.background = new THREE.Color(SHIP_BLACK);
     this.scene.fog = this.fog;
-    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2418, 1.6));
-    const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
-    sun.position.set(-6, 12, 4);
-    this.scene.add(sun);
+    addSun(this.scene); // the arena's light too (tablezero.ts): the room and the map share one sun
     const prism = new THREE.CylinderGeometry(RADIUS, RADIUS, 1, 6);
     const top = topOnly(prism);
     for (const ground of GROUNDS) {

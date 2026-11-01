@@ -8,7 +8,8 @@ test.describe("Background luminance and decor (#432)", () => {
     await page.addInitScript(() => {
       localStorage.setItem("ab-alone.theme", "dark");
     });
-    await page.goto("./?bot=off");
+    // The room is the Ship hub's: a 1v1 game plays on Table Zero, whose sky is Hollow Black by design (#1314).
+    await page.goto("./");
     await page.locator("canvas").waitFor();
     await expect(page.locator("body")).toHaveAttribute("data-bay", "ready"); // the room is complete (#661)
     const draws = await page.evaluate(
