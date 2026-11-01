@@ -274,13 +274,7 @@ mod tests {
     fn an_enemy_pushed_into_water_is_ejected_and_counted() {
         let mut overlay = Overlay::new();
         let chunks = [((0, 0), vec![(1, 0)])];
-        let water = |q: i32, _r: i32| {
-            Some(if q >= 2 {
-                Terrain::Water
-            } else {
-                Terrain::Grass
-            })
-        };
+        let water = |_q: i32, _r: i32| Some(Terrain::Water); // only the cell beyond the enemy is asked for
         let played = overlay
             .troop_push(&chunks, &[(0, 0), (-1, 0), (-2, 0)], water)
             .unwrap();
