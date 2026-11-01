@@ -5723,6 +5723,9 @@ if (serviceWorker) {
 refresh();
 // The canvas joins the page last, once every listener and page hook is set: it draws nothing before the animation loop
 // starts below, and the e2e tests take a canvas in the page for a page that is ready (bug #585).
+// WebGL links every program on the first draw, a freeze of 5.8 to 8.3 s on a cold shader cache (#842): compiled here, in
+// parallel and before the canvas shows. WebGPU builds its pipelines asynchronously as it draws, nothing to wait for.
+if (!clustered) await renderer.compileAsync(sceneRenderer.scene, sceneRenderer.camera).catch(bootFailed);
 document.body.appendChild(renderer.domElement);
 if (resumed?.boss) startBoss(resumed.boss.id, resumed.boss.seed, undefined, resumed); // a Stalker fight comes back under its fog (#1122)
 if (!hub) void botTurn(); // a resumed game saved while the bot was thinking
