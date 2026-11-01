@@ -53,23 +53,47 @@ impl Overlay {
 
     /// Hides generated enemies: a test fixture replaces them with its own.
     pub fn hide(&mut self, cells: &[Cell]) {
-        todo!()
+        for &cell in cells {
+            if !self.removed.contains(&cell) {
+                self.removed.push(cell);
+            }
+        }
     }
 
     /// The enemies on chunk `chunk` now: the `generated` ones of that chunk not moved, then the ones pushed onto it.
     pub fn chunk_enemies(&self, generated: &[Cell], chunk: Cell) -> Vec<Cell> {
-        todo!()
+        let mut cells: Vec<Cell> = generated
+            .iter()
+            .copied()
+            .filter(|cell| !self.removed.contains(cell))
+            .collect();
+        cells.extend(self.added.iter().copied().filter(|&cell| chunk_of(cell) == chunk));
+        cells
     }
 
     /// Whether an enemy stands on `cell` now; `generated` are the generated enemies of its chunk.
     pub fn occupied(&self, generated: &[Cell], cell: Cell) -> bool {
-        todo!()
+        self.added.contains(&cell) || (!self.removed.contains(&cell) && generated.contains(&cell))
     }
 
     /// Plays a push: the enemies `old` leave their cells, the enemies `new` stand on theirs, and the `ejected` ones count as beaten.
     /// A generated enemy that comes back to its cell is that generated enemy again.
     pub fn apply(&mut self, old: &[Cell], new: &[Cell], ejected: usize) {
-        todo!()
+        for &cell in old {
+            if let Some(i) = self.added.iter().position(|&c| c == cell) {
+                self.added.remove(i);
+            } else {
+                self.removed.push(cell);
+            }
+        }
+        for &cell in new {
+            if let Some(i) = self.removed.iter().position(|&c| c == cell) {
+                self.removed.remove(i);
+            } else {
+                self.added.push(cell);
+            }
+        }
+        self.beaten += ejected as u32;
     }
 }
 
