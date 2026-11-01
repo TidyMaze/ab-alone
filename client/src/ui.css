@@ -896,6 +896,9 @@ body:has(#update:not([hidden])) #modes { background-image: radial-gradient(circl
 #dock-wrap #lobby-sheet #invite-row { flex: none; width: 100%; }
 #dock-wrap #lobby-sheet #invite { width: auto; max-width: none; }
 #dock-wrap #lobby-sheet #invite-label { font: 0.875rem/1.4 var(--ui); }
+/* #1194: the sheet slides up 8 px as it opens (sheet-in below), so it starts 8 px lower than it rests. With a rest gap of 8 px its
+   first frames lay over the dock; a 16 px rest gap keeps the 8 px slide clear of the dock all along. The sideways phone sets its own offset after. */
+#dock-wrap #lobby-sheet { bottom: calc(100% + 16px); }
 /* A phone held upright: the dock spans the window, its sheets above it. The cog and the HUD stay at the top. */
 @media (orientation: portrait) {
   #support { bottom: calc(16px + 66px + 8px + env(safe-area-inset-bottom)); }
