@@ -758,6 +758,11 @@ describe('main.ts, the deck plan (#1249)', () => {
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3).distance);
     byId('reset-view').click(); // Reset view in the hub frames the deck
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3).distance);
+    vi.stubGlobal('innerWidth', 390); // a phone held upright: closer still, so the plates read
+    vi.stubGlobal('innerHeight', 844);
+    window.dispatchEvent(new Event('resize'));
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(2.4).distance);
+    vi.unstubAllGlobals();
     game.click(-2, 2); // the battle royale lobby
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);
   });
