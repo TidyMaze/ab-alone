@@ -8,8 +8,8 @@ import { boot, type Game } from './test/harness';
 // The Unstable Core on the harness (#751, game-design.md section 7.13): the glowing energy cells, the pips over the
 // charged marbles, the weighted push, the overload burst, the collapse of the core, the glowing wedge and the shockwave.
 // ?bot=off plays both sides from the fixtures of the core tests: PUSH, a charged pair that pushes three, and FULL, the
-// 25-ply fight (fight seed 2): the boss overloads on plies 8, 10, 16 and 18, the core collapses on ply 19 with its 5th
-// marble on it, and the wedge shockwave hits on ply 25 and shoves 4 of the player's rim marbles off.
+// 17-ply fight (fight seed 2): the boss overloads on plies 8 and 10, the core collapses on ply 11 with its 3rd marble
+// on it, and the wedge shockwave hits on ply 17 and shoves 4 of the player's rim marbles off.
 
 const DIRS: Axial[] = [[1, 0], [-1, 0], [1, -1], [-1, 1], [0, -1], [0, 1]];
 const [E, W, NE, SW, NW, SE] = [0, 1, 2, 3, 4, 5];
@@ -24,8 +24,7 @@ const PUSH: [Axial[], number][] = [
 ];
 const FULL: [number, number, number][] = [
   [1, 3, NE], [0, -2, SE], [2, 2, SW], [2, -2, SW], [1, 3, NE], [0, -3, SE], [2, 2, SW], [3, -3, SW], [1, 3, NE],
-  [1, -2, SW], [2, 2, SW], [2, -2, SW], [1, 3, NE], [1, -3, SE], [2, 2, SW], [4, -3, SW], [1, 3, NE], [0, -2, SE],
-  [2, 2, SW], [3, -2, NE], [1, 3, NE], [4, -3, SW], [2, 2, SW], [3, -2, NE], [1, 3, NE],
+  [1, -2, SW], [2, 2, SW], [2, -2, E], [1, 3, NE], [3, -2, W], [2, 2, SW], [2, -2, E], [1, 3, NE],
 ];
 const byId = (id: string): HTMLElement => document.getElementById(id)!;
 const body = (): DOMStringMap => document.body.dataset;
@@ -162,9 +161,9 @@ describe('main.ts The Unstable Core (#751)', () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     fightCore(game);
-    full(game, 0, 17);
+    full(game, 0, 9);
     expect(unstable(game)).toMatchObject({ core: true, collapsing: false });
-    full(game, 17, 18); // the boss ply of P2 announces
+    full(game, 9, 10); // the boss ply of P2 announces
     expect(unstable(game)).toMatchObject({ core: true, collapsing: true });
     expect(tell()).toBe('The core collapses after your move');
     const material = (named(scene(), 'energy-cell')[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
@@ -174,22 +173,22 @@ describe('main.ts The Unstable Core (#751)', () => {
       seen.add(material.opacity);
     }
     expect(seen.size).toBe(2); // it flickers
-    move(game, [[2, 2]], SW); // ply 19: the core collapses
+    move(game, [[2, 2]], SW); // ply 11: the core collapses
     game.frame(1000);
-    expect(body().bursts).toBe('5'); // plies 8, 10, 16 and 18 overloaded, the 5th marble falls with the core
+    expect(body().bursts).toBe('3'); // plies 8 and 10 overloaded, the 3rd marble falls with the core
     expect(named(scene(), 'energy-cell')).toHaveLength(0);
     expect(marbleAt(game, 0, -1)).toBeNull();
     expect(unstable(game)).toMatchObject({ core: false, collapsing: false, shockIn: 3 });
     expect(tell()).toBe('Shockwave in 3 turns');
     expect(byId('hud').querySelector('.notch.active')!.textContent).toBe('P3');
-    expect(game.hud()).toContain('5/6');
+    expect(game.hud()).toContain('3/6');
   });
 
   it('the announced wedge glows, then its slice sweeps outward and shoves its marbles, the rim ones fall', async () => {
     const scene = catchScene();
     const game = await boot('?bot=off');
     fightCore(game);
-    full(game, 0, 23);
+    full(game, 0, 15);
     expect(named(scene(), 'wedge-glow')).toHaveLength(1);
     expect(tell()).toBe('Shockwave after your move: the glowing wedge');
     expect(unstable(game)).toMatchObject({ wedge: 4, shockIn: 1 });
@@ -198,8 +197,8 @@ describe('main.ts The Unstable Core (#751)', () => {
     const lit = glow.opacity;
     game.frame(300);
     expect(glow.opacity).not.toBe(lit);
-    full(game, 23, 24);
-    move(game, [[1, 3]], NE); // ply 25: the shockwave
+    full(game, 15, 16);
+    move(game, [[1, 3]], NE); // ply 17: the shockwave
     expect(marbleAt(game, -4, 4)).not.toBeNull(); // the move slides first, on the board before the shockwave
     game.frame(1000);
     expect(body().shockwaves).toBe('1');
@@ -215,7 +214,7 @@ describe('main.ts The Unstable Core (#751)', () => {
     expect(sweep(game)).toBeNull();
     expect(named(scene(), 'wedge-glow')).toHaveLength(0);
     expect(game.hud()).toContain('4/6'); // 4 rim marbles of the player fell: the boss's
-    expect(unstable(game)).toMatchObject({ wedge: -1, shockIn: 3 });
+    expect(unstable(game)).toMatchObject({ wedge: -1, shockIn: 4 });
   });
 
   it('under reduced motion the burst and the slice show whole and fade, and a click ends them', async () => {
@@ -232,7 +231,7 @@ describe('main.ts The Unstable Core (#751)', () => {
     expect(burst.scale.x).toBe(size);
     dispatchEvent(new PointerEvent('pointerdown')); // a click skips the effect
     expect(named(scene(), 'burst')).toHaveLength(0);
-    full(game, 8, 24);
+    full(game, 8, 16);
     expect(unstable(game)!.wedge).toBe(4);
     move(game, [[1, 3]], NE);
     expect(body().shockwaves).toBe('1');

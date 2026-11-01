@@ -28,7 +28,9 @@ use crate::encounter::swarm::{Swarm, SWARM_NODE_BUDGET};
 use crate::encounter::telemetry::{
     classify_death, summarize, AttemptRecord, AttemptResult, DeathCause, Losses, Summary,
 };
-use crate::encounter::unstable::{unstable_move, unstable_start, UNSTABLE_NODE_BUDGET};
+use crate::encounter::unstable::{
+    unstable_move, unstable_search, unstable_start, UNSTABLE_NODE_BUDGET,
+};
 use crate::encounter::{marbles, Encounter, PveResult};
 use crate::game::{Game, Outcome};
 use crate::moves::{apply, legal_moves, Move, Player};
@@ -311,6 +313,7 @@ fn player_move(arena: &Arena, seed: u64, index: u32, opening: u32, budget: u32) 
             Arena::Plain(enc, LadderBoss::Assembly) => assembly_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Pulsar) => pulsar_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Echo) => echo_search(enc, budget, allow),
+            Arena::Plain(enc, LadderBoss::Unstable) => unstable_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Overseer) => overseer_search(enc, budget, allow, None),
             Arena::Plain(enc, LadderBoss::RailYard) => railyard_search(enc, budget, allow),
             Arena::Plain(enc, LadderBoss::Magnetizer) => magnetizer_search(enc, budget, allow),
@@ -776,6 +779,37 @@ mod tests {
             after.game().ejected(Player::White),
             0,
             "{mv:?} loses no marble to the pulse"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_charges_of_the_unstable_core() {
+        use crate::board::Unstable;
+        use crate::encounter::unstable::unstable_boss;
+        // The marble next to the centre holds 3 charges: the plain search leaves it to blow.
+        let mut board = Board::empty();
+        for (q, r, c) in [
+            (1, 0, Cell::Black),
+            (-4, 0, Cell::Black),
+            (4, -4, Cell::White),
+            (4, 0, Cell::White),
+        ] {
+            board.set(q, r, c);
+        }
+        board.set_unstable(Some(Unstable {
+            charges: vec![((1, 0), 3)],
+            ..Unstable::default()
+        }));
+        let game = Game::from_position(board, Player::Black, [0, 0]);
+        let a = Arena::Plain(
+            Encounter::new(game, unstable_boss(), 0),
+            LadderBoss::Unstable,
+        );
+        let mv = player_move(&a, 0, 9, 0, 3000).unwrap();
+        assert_eq!(
+            mv.cells,
+            vec![(1, 0)],
+            "{mv:?} moves the charged marble off"
         );
     }
 

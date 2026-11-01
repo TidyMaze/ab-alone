@@ -16,13 +16,13 @@ use crate::search::{search_hooked, DEFAULT_WEIGHTS};
 type P = (i32, i32);
 
 /// P2 and P3 start after this many ejections credited to the player. TUNE.
-pub const UNSTABLE_PHASE_EJECTIONS: [u8; 2] = [3, 5];
+pub const UNSTABLE_PHASE_EJECTIONS: [u8; 2] = [1, 2];
 /// Positions the boss search may visit per move (about depth 3, as the Hull). TUNE.
 pub const UNSTABLE_NODE_BUDGET: u32 = 3000;
 /// A marble that reaches this many charges is ejected. TUNE.
 pub const OVERLOAD: u8 = 4;
 /// Player turns between two wedge shockwaves in P3. TUNE.
-pub const SHOCK_EVERY: u8 = 3;
+pub const SHOCK_EVERY: u8 = 4;
 /// The six corners of the board in turn: the wedge `i` lies between `CORNERS[i]` and the next.
 const CORNERS: [P; 6] = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
 
@@ -159,7 +159,7 @@ fn shove(board: &mut Board, charges: &mut Vec<(P, u8)>, wedge: u8, seed: u64) ->
 /// The end of a ply, `id` its special id: the side that moved charges or discharges its marbles,
 /// an overloaded one is ejected; then the core announces its collapse after a boss ply in P2 and
 /// collapses after the next player ply; in P3 the shockwave clock ticks after a player ply, the
-/// wedge is announced on the 2nd tick and hits on the 3rd. The board after, and what happened.
+/// wedge is announced on the tick before the last and hits on the last. The board after, and what happened.
 fn run(board: &Board, id: u8, seed: u64) -> (Board, UnstableEvents) {
     let Some(marks) = board.unstable() else {
         return (board.clone(), UnstableEvents::default());
@@ -196,7 +196,7 @@ fn run(board: &Board, id: u8, seed: u64) -> (Board, UnstableEvents) {
     }
     if !boss_ply && phase >= 2 {
         next.clock += 1;
-        if next.clock == 2 {
+        if next.clock == SHOCK_EVERY - 1 {
             next.wedge = Some(busiest(&out, mix(seed)));
         } else if next.clock == SHOCK_EVERY {
             let wedge = next.wedge.take().expect("announced");
@@ -275,25 +275,28 @@ fn search_step(
     (out, [white, black])
 }
 
-/// The boss reply: its node-limited search, where every ply of the tree carries the charges and
-/// goes through the hook (seed 0 for the picks), so it plays the weighted rule and sees the
-/// overloads, the collapse and the shockwaves. `None` on the player's turn or when over.
-pub fn unstable_move(enc: &Encounter) -> Option<Move> {
-    if enc.game().to_move() != Player::White {
-        return None;
-    }
+/// The node-limited search of whoever is to move, with `budget` nodes: every ply of the tree
+/// carries the charges and goes through the hook (seed 0 for the picks), so it plays the weighted
+/// rule and sees the overloads, the collapse and the shockwaves. The boss plays it with its own
+/// budget, the ladder's pro with its larger one (the player reads the charges on the HUD, #1229).
+pub(crate) fn unstable_search(
+    enc: &Encounter,
+    budget: u32,
+    allow: &dyn Fn(&Move) -> bool,
+) -> Option<Move> {
     let phase = enc.phase() as u8;
     let step = |before: &Board, mover: Player, mv: &Move, after: Board| {
         search_step(phase, before, mover, mv, after)
     };
-    search_hooked(
-        enc.game(),
-        enc.boss.node_budget,
-        DEFAULT_WEIGHTS,
-        &|_| true,
-        &step,
-    )
-    .map(|r| r.mv)
+    search_hooked(enc.game(), budget, DEFAULT_WEIGHTS, allow, &step).map(|r| r.mv)
+}
+
+/// The boss reply: its node-limited search. `None` on the player's turn or when over.
+pub fn unstable_move(enc: &Encounter) -> Option<Move> {
+    if enc.game().to_move() != Player::White {
+        return None;
+    }
+    unstable_search(enc, enc.boss.node_budget, &|_| true)
 }
 
 #[cfg(test)]
@@ -302,6 +305,7 @@ mod tests {
     use crate::encounter::{marbles, trivial_boss, PveResult};
     use crate::moves::Direction::{E, SE, W};
     use crate::moves::{apply, legal_moves, Direction, MoveError};
+    use crate::search::search_with;
 
     fn board(black: &[P], white: &[P], charges: &[(P, u8)]) -> Board {
         let mut board = Board::empty();
@@ -348,9 +352,9 @@ mod tests {
         let b = unstable_boss();
         assert_eq!(b.name, "The Unstable Core");
         assert!(b.phase_marbles.is_empty());
-        assert_eq!(b.phase_ejections, vec![3, 5], "P2 after 3, P3 after 5");
+        assert_eq!(b.phase_ejections, vec![1, 2], "P2 after 1, P3 after 2");
         assert_eq!(b.node_budget, UNSTABLE_NODE_BUDGET);
-        assert_eq!((OVERLOAD, SHOCK_EVERY), (4, 3));
+        assert_eq!((OVERLOAD, SHOCK_EVERY), (4, 4));
         assert_eq!(special(1, 0), Some(0), "a player ply of P1");
         assert_eq!(special(4, 2), Some(5), "a boss ply of P3");
     }
@@ -599,7 +603,7 @@ mod tests {
         assert_eq!(hook(&plain, 0, 0), plain);
     }
 
-    /// A fight in P2 (3 ejections credited to the player) with a marble of each side on the core,
+    /// A fight in P2 (1 ejection credited to the player) with a marble of each side on the core,
     /// and far marbles that shuffle. It plays one player ply first, so the next one is the boss's.
     fn collapsing_fight() -> Encounter {
         let start = board(
@@ -607,7 +611,7 @@ mod tests {
             &[(-1, 0), (-4, 4)],
             &[((0, 1), 1), ((-1, 0), 1)],
         );
-        let mut enc = fight(start, Player::Black, [3, 0]);
+        let mut enc = fight(start, Player::Black, [1, 0]);
         enc.play(&mv(&[(3, -3)], W)).unwrap();
         enc
     }
@@ -629,7 +633,7 @@ mod tests {
         assert_eq!(cells_of(board, Cell::White), vec![(-3, 4)], "(-1, 0) fell");
         assert_eq!(
             enc.game().ejected(Player::Black),
-            4,
+            2,
             "the boss marble counts for you"
         );
         assert_eq!(enc.game().ejected(Player::White), 1);
@@ -647,7 +651,7 @@ mod tests {
     #[test]
     fn the_core_never_collapses_in_p1_and_charges_stop_once_it_is_gone() {
         let start = board(&[(0, 1), (3, -3)], &[(-1, 0), (-4, 4)], &[]);
-        let mut enc = fight(start, Player::Black, [2, 0]);
+        let mut enc = fight(start, Player::Black, [0, 0]);
         enc.play(&mv(&[(3, -3)], W)).unwrap();
         enc.play(&mv(&[(-4, 4)], E)).unwrap();
         assert!(!unstable_tell(&enc).unwrap().collapsing);
@@ -660,11 +664,11 @@ mod tests {
     /// Black marbles shuffling in wedge 3 and the White marble in it, and `crowd` White marbles in
     /// wedge 0, in P3.
     fn p3_fight(black: &[P], white: &[P]) -> Encounter {
-        fight(board(black, white, &[]), Player::Black, [5, 0])
+        fight(board(black, white, &[]), Player::Black, [2, 0])
     }
 
     #[test]
-    fn in_p3_the_busiest_wedge_is_announced_then_shoved_outward_every_3_turns() {
+    fn in_p3_the_busiest_wedge_is_announced_then_shoved_outward_every_4_turns() {
         // A Black marble on the rim of wedge 0, three White marbles inside it; a Black and a
         // White marble shuffle in wedge 3.
         let mut enc = p3_fight(&[(-3, 0), (4, -2)], &[(2, 0), (3, -1), (2, -1), (-4, 2)]);
@@ -674,18 +678,24 @@ mod tests {
             mv(&[(-2, 0)], W),
             mv(&[(-3, 2)], W),
             mv(&[(-3, 0)], E),
+            mv(&[(-4, 2)], E),
+            mv(&[(-2, 0)], W),
         ];
         let tell = |enc: &Encounter| unstable_tell(enc).unwrap();
-        assert_eq!(tell(&enc).shock_in, Some(3));
+        assert_eq!(tell(&enc).shock_in, Some(4));
         for ply in &shuffle[..2] {
             enc.play(ply).unwrap();
         }
-        assert_eq!((tell(&enc).wedge, tell(&enc).shock_in), (None, Some(2)));
+        assert_eq!((tell(&enc).wedge, tell(&enc).shock_in), (None, Some(3)));
         for ply in &shuffle[2..4] {
             enc.play(ply).unwrap();
         }
+        assert_eq!((tell(&enc).wedge, tell(&enc).shock_in), (None, Some(2)));
+        for ply in &shuffle[4..6] {
+            enc.play(ply).unwrap();
+        }
         assert_eq!((tell(&enc).wedge, tell(&enc).shock_in), (Some(0), Some(1)));
-        enc.play(&shuffle[4]).unwrap();
+        enc.play(&shuffle[6]).unwrap();
         let (before, events) = last_events(&enc).unwrap();
         let (wedge, moved) = events.shock.clone().unwrap();
         assert_eq!(wedge, 0);
@@ -696,7 +706,7 @@ mod tests {
         let board = enc.game().board();
         assert_eq!(
             cells_of(board, Cell::Black),
-            vec![(-2, 0)],
+            vec![(-3, 0)],
             "the rim marble fell"
         );
         assert_eq!(enc.game().ejected(Player::White), 1);
@@ -707,7 +717,7 @@ mod tests {
             .all(|&(from, to)| ring(to) == ring(from) + 1));
         assert_eq!(
             (tell(&enc).wedge, tell(&enc).shock_in),
-            (None, Some(3)),
+            (None, Some(4)),
             "the clock restarts"
         );
     }
@@ -766,7 +776,7 @@ mod tests {
                         &[],
                     );
                     b.set_unstable(Some(Unstable::default()));
-                    Game::from_position(b, Player::Black, [5, 0])
+                    Game::from_position(b, Player::Black, [2, 0])
                 },
                 unstable_boss(),
                 seed,
@@ -777,6 +787,8 @@ mod tests {
                 mv(&[(-2, 0)], W),
                 mv(&[(-3, 2)], W),
                 mv(&[(-3, 0)], E),
+                mv(&[(-4, 2)], E),
+                mv(&[(-2, 0)], W),
             ] {
                 enc.play(&m).unwrap();
             }
@@ -837,6 +849,25 @@ mod tests {
     }
 
     #[test]
+    fn the_player_search_sees_the_overload_the_plain_search_walks_into() {
+        // Your marble next to the centre holds 3 charges: staying one more turn blows it off.
+        let start = board(&[(1, 0), (-4, 0)], &[(4, -4), (4, 0)], &[((1, 0), 3)]);
+        let enc = fight(start, Player::Black, [0, 0]);
+        let kept = |m: &Move| {
+            let after = apply(enc.game().board(), Player::Black, m).unwrap().0;
+            let mut after = after;
+            after.set_unstable(carried_unstable(enc.game().board(), m, &after));
+            marbles(&hook(&after, 0, 0), Cell::Black)
+        };
+        let plain = search_with(enc.game(), 3000, DEFAULT_WEIGHTS, &|_| true)
+            .unwrap()
+            .mv;
+        assert_eq!(kept(&plain), 1, "the plain search leaves it to blow");
+        let read = unstable_search(&enc, 3000, &|_| true).unwrap();
+        assert_eq!(kept(&read), 2, "the reading search moves it off");
+    }
+
+    #[test]
     fn a_ply_hooks_with_the_seed_it_ran_with() {
         let mut enc = unstable_start(9);
         assert_eq!(enc.hook_seed(), 0);
@@ -861,10 +892,10 @@ mod tests {
         (&[(0, -1), (0, 0)], NW),
     ];
 
-    /// `FULL`: the boss walks 5 marbles onto the core one after another and they overload (plies
-    /// 8, 10 and 16, 18), the 5th stands on it when it collapses (ply 19), then P3's shockwave hits
-    /// at the end of the player's 3rd turn of it (ply 25).
-    const FULL: [(P, Direction); 25] = [
+    /// `FULL`: the boss walks 2 marbles onto the core one after another and they overload (plies 8
+    /// and 10), the 3rd stands on it when it collapses (ply 11), then P3's shockwave is announced
+    /// after the player's 3rd turn of it (ply 15) and hits at the end of the 4th (ply 17).
+    const FULL: [(P, Direction); 17] = [
         ((1, 3), NE),
         ((0, -2), SE),
         ((2, 2), SW),
@@ -876,19 +907,11 @@ mod tests {
         ((1, 3), NE),
         ((1, -2), SW),
         ((2, 2), SW),
-        ((2, -2), SW),
+        ((2, -2), E),
         ((1, 3), NE),
-        ((1, -3), SE),
+        ((3, -2), W),
         ((2, 2), SW),
-        ((4, -3), SW),
-        ((1, 3), NE),
-        ((0, -2), SE),
-        ((2, 2), SW),
-        ((3, -2), NE),
-        ((1, 3), NE),
-        ((4, -3), SW),
-        ((2, 2), SW),
-        ((3, -2), NE),
+        ((2, -2), E),
         ((1, 3), NE),
     ];
 
@@ -917,7 +940,7 @@ mod tests {
     }
 
     #[test]
-    fn the_fixture_overloads_three_boss_marbles_collapses_the_core_and_shoves_a_wedge() {
+    fn the_fixture_overloads_two_boss_marbles_collapses_the_core_and_shoves_a_wedge() {
         let mut enc = unstable_start(0);
         let mut ejected = Vec::new();
         for (ply, &((q, r), dir)) in FULL.iter().enumerate() {
@@ -926,27 +949,21 @@ mod tests {
             let at = ply + 1;
             let events = last_events(&enc).map(|e| e.1);
             let overloaded = events.as_ref().map_or(0, |e| e.overloaded.len());
-            assert_eq!(
-                overloaded,
-                usize::from([8, 10, 16, 18].contains(&at)),
-                "ply {at}"
-            );
+            assert_eq!(overloaded, usize::from([8, 10].contains(&at)), "ply {at}");
             assert_eq!(
                 events.as_ref().is_some_and(|e| e.collapsed),
-                at == 19,
+                at == 11,
                 "ply {at}"
             );
             assert_eq!(
                 events.is_some_and(|e| e.shock.is_some()),
-                at == 25,
+                at == 17,
                 "ply {at}"
             );
         }
-        assert_eq!(ejected[7], 1);
-        assert_eq!(ejected[9], 2);
-        assert_eq!(ejected[15], 3, "P2 from here");
-        assert_eq!(ejected[17], 4);
-        assert_eq!(ejected[18], 5, "the 5th fell with the core, P3 from here");
+        assert_eq!(ejected[7], 1, "P2 from here");
+        assert_eq!(ejected[9], 2, "P3 from here");
+        assert_eq!(ejected[10], 3, "the 3rd fell with the core");
         assert_eq!(enc.phase(), 2);
         assert!(!unstable_tell(&enc).unwrap().core);
         let (_, events) = last_events(&enc).unwrap();
