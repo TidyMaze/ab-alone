@@ -502,7 +502,7 @@ describe('the pointer on the board', () => {
       dispatchEvent(new Event('resize'));
       const centre = screen(game, 0, 0);
       expect(centre.x).toBeCloseTo(200);
-      expect(centre.y).toBeGreaterThan(400); // lower, below the HUD (#227)
+      expect(centre.y).toBeCloseTo(400); // centred (#1387)
       expect(screen(game, 4, 0).x).toBeLessThan(400); // the whole width fits
       expect(screen(game, -4, 0).x).toBeGreaterThan(0);
     } finally {

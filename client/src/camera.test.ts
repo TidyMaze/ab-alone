@@ -130,9 +130,9 @@ const halfWidth = (fov: number, width: number, height: number) => Math.tan((fov 
 
 describe('framing, bug #227', () => {
   it('a window at least as wide as tall keeps the default view', () => {
-    expect(framing(1280, 720)).toEqual({ fov: FOV, shift: 0 });
-    expect(framing(812, 375)).toEqual({ fov: FOV, shift: 0 });
-    expect(framing(600, 600)).toEqual({ fov: FOV, shift: 0 });
+    expect(framing(1280, 720)).toBe(FOV);
+    expect(framing(812, 375)).toBe(FOV);
+    expect(framing(600, 600)).toBe(FOV);
   });
 
   it('a window taller than wide sees as wide as a square one, so the whole board fits its width', () => {
@@ -142,23 +142,13 @@ describe('framing, bug #227', () => {
       [768, 1024],
       [599, 600],
     ] as const) {
-      const { fov } = framing(w, h);
+      const fov = framing(w, h);
       expect(fov).toBeGreaterThan(FOV);
       expect(halfWidth(fov, w, h)).toBeCloseTo(square, 9);
     }
-    expect(framing(599, 600).fov).toBeCloseTo(FOV, 0); // no jump at the square
+    expect(framing(599, 600)).toBeCloseTo(FOV, 0); // no jump at the square
   });
 
-  it('a window taller than wide moves the board down by a quarter of the spare height, for the HUD and buttons', () => {
-    expect(framing(375, 812).shift).toBe((812 - 375) / 4);
-    expect(framing(768, 1024).shift).toBe(64);
-  });
-
-  it('with every panel folded the board sits at the middle of the window, not low (#1269)', () => {
-    expect(framing(390, 844, true).shift).toBe(0);
-    expect(framing(390, 844, true).fov).toBe(framing(390, 844).fov);
-    expect(framing(1280, 720, true)).toEqual({ fov: FOV, shift: 0 });
-  });
 });
 
 describe('screenView, the terminal reader (#512)', () => {

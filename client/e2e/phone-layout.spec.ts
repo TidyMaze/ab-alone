@@ -173,14 +173,12 @@ const sizes = [
   { name: 'a window 1024 by 600', viewport: { width: 1024, height: 600 }, mobile: false },
 ];
 
-// #1269: with the HUD panel folded, a phone held upright shows the board at the middle of the window, clear of the thumb dock.
-test.describe('a phone 390 by 844 held upright, HUD folded', () => {
+// #1387: a phone held upright shows the board at the middle of the window, clear of the thumb dock.
+test.describe('a phone 390 by 844 held upright', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  test('the board is vertically centred above the dock, #1269', async ({ page }) => {
+  test('the board is vertically centred above the dock, #1387', async ({ page }) => {
     await page.goto('./?bot=off&net=hook');
     await page.locator('canvas').waitFor();
-    await page.locator('#hud-fold[aria-expanded="true"]').click();
-    await expect(page.locator('#hud-fold')).toHaveAttribute('aria-expanded', 'false');
     const seen = await page.evaluate(() => {
       const toScreen = (q: number, r: number) => (window as any).__cellToScreen(q, r) as { y: number };
       return { centre: toScreen(0, 0).y, bottom: toScreen(0, 4).y, dock: document.getElementById('dock')!.getBoundingClientRect().top, height: innerHeight };

@@ -312,7 +312,7 @@ body[data-opponent='waiting'] #invite { border-color: var(--accent); }
    every button stays reachable. Nothing in it is wider than the column. The padding keeps the focus
    outlines inside the scroll box. It stops above the Copy diagnostics corner (a 2.75rem button, then a 0.5rem
    gap), so its last buttons and the daily result card never scroll under it (#220, #196). Held upright, the
-   column becomes rows of buttons under the plate and the board sits lower (#227). */
+   column becomes rows of buttons under the plate (#227). */
 @media (orientation: landscape) {
   #online {
     max-width: max(8rem, 50vw - 45vh - 1.5rem); max-height: calc(100dvh - 32px - 3.25rem); overflow-y: auto;
@@ -1111,7 +1111,7 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
 #hub-pips .pip[data-state='beaten'] { background: var(--hazard); border-color: var(--hazard); }
 #hub-pips .pip[data-state='open'] { border-color: var(--danger); }
 #hub-pips .pip[data-state='locked'] { border-style: dotted; }
-/* Held upright the deck sits low (camera.ts framing): the pips and the rail, a row of the five decks, take the band above it, under
+/* Held upright the deck is centred (camera.ts framing): the pips and the rail, a row of the five decks, take the band above it, under
    the plate and the cog (with room for a Tally line), and the plates show their short label. */
 @media (orientation: portrait) {
   #hub-pips { top: 200px; right: 16px; padding: 4px 8px; }
