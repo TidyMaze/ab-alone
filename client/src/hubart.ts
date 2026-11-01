@@ -1,5 +1,6 @@
 // 3D props for the hub room cells (#628, #1249): each room kind is a small prop standing on its cell (a blast door, a
-// CRT, a table with chairs, a robot, an antenna, an arena, a lift cage), ringed in its own contrast-safe colour.
+// CRT, a table with chairs, a robot, an antenna, an arena, a lift cage, and for the modes a calendar, a map table, two
+// marbles, a podium, a globe, a target dummy), ringed in its own contrast-safe colour.
 import * as THREE from 'three';
 import type { Axial } from './board';
 import type { Door } from './hub';
@@ -14,6 +15,12 @@ export const GLYPH_COLORS = {
   terminal: 0x20c997, // Phosphor CRT green
   medals: 0xffd43b, // Medal gold
   lift: 0xe9ecef, // Bone white
+  daily: 0x4dabf7, // Sky blue
+  run: 0xda77f2, // Grape
+  together: 0xf783ac, // Pink
+  ranked: 0xa9e34b, // Lime
+  world: 0x748ffc, // Indigo
+  trainer: 0xd8a47f, // Tan
 } as const;
 
 export interface GlyphOptions {
@@ -60,6 +67,15 @@ const arrowShape = new THREE.Shape(
 );
 const arrowGeo = new THREE.ShapeGeometry(arrowShape);
 const lockedBarGeo = new THREE.BoxGeometry(0.84, 0.02, 0.05);
+const calendarGeo = new THREE.BoxGeometry(0.36, 0.3, 0.05);
+const calendarTopGeo = new THREE.BoxGeometry(0.36, 0.07, 0.07);
+const daySquareGeo = new THREE.BoxGeometry(0.1, 0.1, 0.01);
+const mapTopGeo = new THREE.BoxGeometry(0.46, 0.04, 0.32);
+const nodeGeo = new THREE.SphereGeometry(0.045, 10, 8);
+const twinGeo = new THREE.SphereGeometry(0.11, 16, 12);
+const stepGeo = new THREE.BoxGeometry(0.16, 1, 0.2); // scaled to each step's height
+const globeGeo = new THREE.SphereGeometry(0.15, 20, 14);
+const orbitGeo = new THREE.TorusGeometry(0.2, 0.015, 6, 32);
 
 /** A mesh of the prop at (x, y, z), its rotation about x and z. */
 function part(geometry: THREE.BufferGeometry, material: THREE.Material, [x, y, z]: [number, number, number], rx = 0, rz = 0): THREE.Mesh {
@@ -149,6 +165,51 @@ export function createDoorGlyph(door: Door, options: GlyphOptions = {}): THREE.G
         part(medalGeo, accent, [0, 0.27, 0], Math.PI / 2),
         part(coreOctaGeo, accent, [0, 0.27, 0.03]),
       );
+      break;
+    }
+
+    case 'daily': {
+      // A wall calendar on the floor: a blue header and the day's square.
+      group.add(
+        part(calendarGeo, plate, [0, 0.15, 0]),
+        part(calendarTopGeo, accent, [0, 0.3, 0]),
+        part(daySquareGeo, accent, [0.06, 0.12, 0.03]),
+      );
+      break;
+    }
+
+    case 'run': {
+      // A map table: a low top and a branching route of three grape nodes.
+      group.add(part(tableLegGeo, plate, [0, 0.08, 0]), part(mapTopGeo, plate, [0, 0.18, 0]));
+      for (const [x, z] of [[-0.14, 0.08], [0.02, -0.06], [0.15, 0.08]] as const) group.add(part(nodeGeo, accent, [x, 0.24, z]));
+      break;
+    }
+
+    case 'together': {
+      // Two marbles side by side on one plinth: one army, two players.
+      group.add(part(plinthGeo, plate, [0, 0.07, 0]), part(twinGeo, accent, [-0.1, 0.24, 0]), part(twinGeo, accent, [0.1, 0.24, 0]));
+      break;
+    }
+
+    case 'ranked': {
+      // A podium of three steps, the first one lime.
+      for (const [x, h, material] of [[-0.17, 0.2, plate], [0, 0.3, accent], [0.17, 0.12, plate]] as const) {
+        const step = part(stepGeo, material, [x, h / 2, 0]);
+        step.scale.y = h;
+        group.add(step);
+      }
+      break;
+    }
+
+    case 'world': {
+      // A globe of Hollow on its stand, an orbit around it.
+      group.add(part(mastGeo, plate, [0, 0.1, 0]), part(globeGeo, accent, [0, 0.33, 0]), part(orbitGeo, plate, [0, 0.33, 0], Math.PI / 2.4));
+      break;
+    }
+
+    case 'trainer': {
+      // A target dummy: a post and a tan target disc facing the camera, its bullseye in plate.
+      group.add(part(mastGeo, plate, [0, 0.15, 0]), part(medalGeo, accent, [0, 0.3, 0.03], Math.PI / 2), part(coreOctaGeo, plate, [0, 0.3, 0.06]));
       break;
     }
 

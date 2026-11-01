@@ -2,6 +2,7 @@
 // arrow key rolls the marble to, and the HUD plate. Pure: no DOM, no three.js.
 import { CELLS, VANISHED, type Axial } from './board';
 import { DECK_NAMES, type Deck } from './deck';
+import { medalLabel } from './medals';
 import { canEnter, HUB_CELLS, neighbours, roomAt, roomsOf, type Door, type Spot } from './hub';
 
 /** The bridge board with a hole on every cell off the hub map: the frame shrinks to the map, the other discs hide. */
@@ -34,6 +35,12 @@ const DOORS: Record<Exclude<Door['kind'], 'lift'>, string> = {
   online: 'Online table',
   royale: 'Battle royale lobby',
   medals: 'Medal room',
+  daily: 'Daily challenge',
+  run: 'Rogue-lite run',
+  together: 'Fight together',
+  ranked: 'Ranked',
+  world: 'Open world',
+  trainer: 'Trainer',
 };
 
 const BOSS_NAMES: Record<string, string> = {
@@ -42,6 +49,16 @@ const BOSS_NAMES: Record<string, string> = {
   choir: 'The Choir',
   chaplain: 'The Chaplain',
   ballast: 'The Ballast Mind',
+  alien: 'The Alien',
+  railyard: 'The Rail Yard',
+  magnetizer: 'The Magnetizer',
+  pulsar: 'The Pulsar',
+  overseer: 'The Overseer',
+  assembly: 'The Assembly Line',
+  core: 'The Unstable Core',
+  dual: 'The Dual Room',
+  stalker: 'The Stalker',
+  swarm: 'The Swarm',
 };
 
 export function bossTitle(boss: string): string {
@@ -55,6 +72,12 @@ const DESCRIPTORS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, string> = {
   royale: 'Multi-player battle royale',
   terminal: 'Ship archive and audio log',
   medals: 'Every boss, its medal and best turns',
+  daily: 'One boss and one seed a day',
+  run: 'Three acts, one army of 14',
+  together: 'Two players, one army, a boss',
+  ranked: 'Online 1v1, Elo and tiers',
+  world: 'A generated hex world',
+  trainer: 'Waves against the bot, one more each',
 };
 
 /** Reachability hint for a hovered hub cell relative to the marble's position (#628). */
@@ -121,14 +144,23 @@ const LABELS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, [name: string, stat
   royale: ['Royale', 'battle royale', 'Royale'],
   terminal: ['Terminal', 'lore entry', 'Terminal'],
   medals: ['Medal room', 'best turns', 'Medals'],
+  daily: ['Daily', 'boss of the day', 'Daily'],
+  run: ['Rogue-lite', '3-act run', 'Run'],
+  together: ['Together', 'co-op vs a boss', 'Co-op'],
+  ranked: ['Ranked', 'Elo ladder', 'Ranked'],
+  world: ['Open world', 'walk Hollow', 'World'],
+  trainer: ['Trainer', 'bot waves', 'Trainer'],
 };
 
-/** The plate of a room of `deck`: a lift points up or down to its deck, a boss door names its boss. */
-export function roomLabel(deck: Deck, door: Door, beaten: readonly string[]): RoomLabel {
+/** The plate of a room of `deck`: a lift points up or down to its deck, a boss door names its boss, and once it is
+ * beaten its medal's best turns (`medals`, boss id -> turns, medals.ts). A phone shows the boss's name without "The". */
+export function roomLabel(deck: Deck, door: Door, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}): RoomLabel {
   if (door.kind === 'boss') {
     const boss = bossTitle(door.boss);
     const won = beaten.includes(door.boss);
-    return { name: 'Boss door', state: won ? `${boss} · beaten` : boss, short: boss, mark: won ? 'beaten' : '' };
+    const turns = medals[door.boss];
+    const medal = turns === undefined ? 'beaten' : medalLabel(turns);
+    return { name: 'Boss door', state: won ? `${boss} · ${medal}` : boss, short: boss.replace(/^The /, ''), mark: won ? 'beaten' : '' };
   }
   if (door.kind === 'lift') {
     const open = canEnter(door, beaten);
@@ -141,9 +173,9 @@ export function roomLabel(deck: Deck, door: Door, beaten: readonly string[]): Ro
 }
 
 /** The plates of the deck, one per room on its cell, and YOU on the marble's floor cell; on a room its plate is marked. */
-export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[]): string {
+export function labelsHtml({ deck, cell: [mq, mr] }: Spot, beaten: readonly string[], medals: Readonly<Record<string, number>> = {}): string {
   const plates = roomsOf(deck).map(({ cell: [q, r], door }) => {
-    const { name, state, short, mark } = roomLabel(deck, door, beaten);
+    const { name, state, short, mark } = roomLabel(deck, door, beaten, medals);
     const attrs = `${mark ? ` data-mark="${mark}"` : ''}${q === mq && r === mr ? ' data-here' : ''}`;
     return `<div class="hub-label" data-cell="${q},${r}" data-kind="${door.kind}"${attrs}><b>${name}</b><small>${state}</small><span class="short">${short}</span></div>`;
   });
