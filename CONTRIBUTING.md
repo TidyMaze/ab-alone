@@ -213,7 +213,8 @@ the triager does exactly one of:
    first. Then the oldest `Ready` issue by creation date, where a bug or a `P1` counts as 3 days
    older and a `P3` as 3 days younger. You may skip one only with a comment saying why. Bugs follow
    the same steps below, with "Task" meaning "Task or Bug".
-2. Assign yourself, comment `taking it`, move it to `In Progress`.
+2. Assign yourself, comment `taking it` in the same step as starting work, move it to `In Progress`. Answer every ping
+   (`@mention`, assignment, review request) on that issue or PR, in the same session (AGENTS rule 17).
    **WIP limit: one unfinished Task per contributor, at most 4 in progress overall** (rule 7; an
    agent counts as a contributor).
 3. Branch from `main`: `<issue number>-<short-slug>`, for example `23-board-model`.
