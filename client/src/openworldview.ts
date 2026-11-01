@@ -5,6 +5,7 @@
 import * as THREE from 'three/webgpu';
 import { axialTo3D, type Axial } from './board';
 import { type Biome, CHUNK, cellAtPoint, chunkOf, neighbours, same, TROOP, type Terrain, type Tile, type World } from './openworld';
+import { CameraLife } from './openworldcamera';
 import { EDGE_GAIN, edgeMaterial, HEX_RADIUS } from './openworldedge';
 import { FightState, type Pushed } from './openworldfight';
 import { Marble, type Pace, ROLL_ZOOM, TROOP_DELAY, type Vec } from './openworldglide';
@@ -392,6 +393,11 @@ export class OpenWorldView {
   /** The point the camera looks at: the hero's x and z, its height eased to the hero's column top (#988). The first show puts it
    * there at once (`placed`): the camera does not glide in from the origin. */
   private readonly focus = new THREE.Vector3();
+  /** The camera's offsets (punch, pan ease, shake, #1103) and the point they look at: never the focus, which the chunks follow. */
+  private readonly life = new CameraLife();
+  private readonly lifeAt = new THREE.Vector3();
+  private lifeOn = false;
+  private screen = { width: 800, height: 600 };
   private placed = false;
   private troop: THREE.InstancedMesh;
   private foes: THREE.InstancedMesh;
@@ -520,9 +526,68 @@ export class OpenWorldView {
   /** A new screen size: the aspect changes the ground in view, so the widest zoom and the loaded chunks follow (#976). */
   resize(width: number, height: number): void {
     this.camera.aspect = width / height;
+    this.screen = { width, height };
+    this.endLife();
     this.limit = maxZoomFor(this.camera.aspect);
     this.level = Math.min(this.level, this.limit);
     this.frame();
+  }
+
+  /** A troop push lands at `now` (ms): the zoom goes in 3 % and back (#1103). */
+  punch(now: number): void {
+    this.life.punch(now);
+  }
+
+  /** An enemy is ejected at `now` (ms): the image shakes (#1103). */
+  shake(now: number): void {
+    this.life.shake(now);
+  }
+
+  /** The follow eases from `now` (ms) as the hero goes from cell `from` to cell `to` (a walk starts: the follow lags behind it). */
+  panFor(from: Axial, to: Axial, now: number): void {
+    const a = axialTo3D(from[0], from[1]);
+    const b = axialTo3D(to[0], to[1]);
+    const d = Math.hypot(b.x - a.x, b.z - a.z);
+    this.life.pan(now, (b.x - a.x) / d, (b.z - a.z) / d, -1);
+  }
+
+  /** The walk ends at `now` (ms): the follow settles with a little carry (#1103). */
+  panEnd(now: number): void {
+    this.life.panEnd(now);
+  }
+
+  /** Draws the camera's offsets at `now` (ms) on top of the base camera, which `frame` set: the punch scales the zoom, the pan moves the
+   * point looked at, the shake shifts the image. The chunks, the focus and the player's zoom are not touched. Returns whether the camera
+   * moved this call, the last one included (it puts the base back exactly). */
+  offsets(now: number): boolean {
+    if (this.life.at(now)) {
+      const { focus, lifeAt, life } = this;
+      lifeAt.set(focus.x + life.panX, focus.y, focus.z + life.panZ);
+      lookAtHero(this.camera, lifeAt, this.drawnLevel * life.zoom, this.yawNow);
+      const { width, height } = this.screen;
+      this.camera.setViewOffset(width, height, -life.shakeX, 0, width, height);
+      this.lifeOn = true;
+      return true;
+    }
+    return this.endLife();
+  }
+
+  /** What the camera draws now, for the browser checks (#1103): the zoom with the punch, the image shake in pixels, the chunk centre
+   * and the reach loaded. */
+  probe(): { zoom: number; shake: number; centre: Axial; reach: number } {
+    return { zoom: this.drawnLevel * this.life.zoom, shake: this.camera.view?.enabled ? -this.camera.view.offsetX : 0, centre: this.centre, reach: this.loadedReach };
+  }
+
+  /** Cuts the offsets: the base camera at once. Returns whether there were some to cut. */
+  private endLife(): boolean {
+    const was = this.lifeOn;
+    this.life.reset();
+    this.lifeOn = false;
+    if (was) {
+      this.camera.clearViewOffset();
+      this.frame();
+    }
+    return was;
   }
 
   /** The widest zoom on this screen: a wide screen stops sooner, so the loaded chunks always cover the ground in view. */

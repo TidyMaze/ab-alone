@@ -30,7 +30,7 @@ const release = (key: string): void => {
 
 // The test hooks of the Open world, on a webdriver page only (docs/specs/openworld.md section 6).
 type Cells = [number, number][];
-type Hooks = { __openworldFixture?: (f: { hero: [number, number]; troop: Cells; enemies: Cells }) => void; __openworldEnemies?: () => Cells };
+type Hooks = { __openworldFixture?: (f: { hero: [number, number]; troop: Cells; enemies: Cells }) => void; __openworldEnemies?: () => Cells; __openworldCamera?: () => { zoom: number; shake: number; centre: number[]; reach: number } };
 const hooks = () => window as unknown as Hooks;
 
 describe('the Open world mode', () => {
@@ -45,6 +45,17 @@ describe('the Open world mode', () => {
     expect(data().openworldPush).toBe('1');
     expect(data().openworldTroop).toBe('1,0 0,0 -2,0');
     expect(hooks().__openworldEnemies!()).toEqual([[3, 0]]);
+  });
+
+  it('reads what the camera draws through a test hook, at rest: the shake is 0, #1103', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const camera = hooks().__openworldCamera!();
+    expect(camera.shake).toBe(0);
+    expect(camera.zoom).toBeGreaterThan(0);
+    expect(camera.centre).toHaveLength(2);
   });
 
   it('exposes no test hook on a page that is not a webdriver one', async () => {

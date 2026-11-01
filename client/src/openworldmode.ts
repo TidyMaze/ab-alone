@@ -256,6 +256,11 @@ export class OpenWorldMode {
     return seed;
   }
 
+  /** What the camera draws now (the browser checks read it, #1103). */
+  camera(): ReturnType<OpenWorldView['probe']> {
+    return this.view!.probe();
+  }
+
   /** The enemy marbles near the hero now, the pushed ones where they stand (the browser checks read them). */
   enemies(): Axial[] {
     return this.fight.enemiesAround(this.world!, this.hero!.at, PUSH_REACH);
@@ -361,6 +366,7 @@ export class OpenWorldMode {
     this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
+    if (this.view!.offsets(now)) this.dirty = true; // the camera's punch, pan ease and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();
     const moving = !reduced && this.view!.hasWater;
@@ -390,6 +396,7 @@ export class OpenWorldMode {
   /** The walk stops at `now` (ms), by a release, a blocked step or arrows that cancel: the next step starts from rest, and the glide
    * under way slows to a rest on its cell, on time (#1065). */
   private stop(now: number): void {
+    if (this.cruising && !this.reduced()) this.view!.panEnd(now); // the follow settles with the walk (#1103)
     this.cruising = false;
     this.view!.brake(now);
   }
@@ -429,7 +436,9 @@ export class OpenWorldMode {
   private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): void {
     const lair = this.lairs.findIndex((cell) => same(cell, to));
     if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair);
+    const from = this.hero!.at;
     if (!this.hero!.step(to)) return this.lean(to, at);
+    if (pace === 'start' && !this.reduced()) this.view!.panFor(from, to, at); // the follow eases in at the first step of a walk (#1103)
     this.cruising = pace !== 'tap';
     if (this.hero!.smashed) this.view!.smash(to, this.hero!.smashed, at, this.reduced()); // an obstacle broken on the way (#1147)
     this.view!.snap(); // a step during a push's animation ends it first (#967)
@@ -438,8 +447,12 @@ export class OpenWorldMode {
     this.view!.show(this.hero!.at, this.hero!.troop, now === null ? undefined : { now, span: GLIDE_MS * slowBy(), pace }); // the step glides (#1040)
     const played = this.troopPush();
     this.view!.updateEnemies();
-    if (played && now !== null) this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
-    else if (played) this.view!.show(this.hero!.at, this.hero!.troop); // reduced motion: the marbles jump
+    if (played && now !== null) {
+      this.view!.playPush(played, now, slowBy()); // the push lunges once the step has landed
+      const landed = now + GLIDE_MS * slowBy();
+      this.view!.punch(landed); // the camera feels the push (#1103)
+      if (played.push.ejected.length > 0) this.view!.shake(landed); // and shakes when an enemy is ejected
+    } else if (played) this.view!.show(this.hero!.at, this.hero!.troop); // reduced motion: the marbles jump
     this.dirty = true;
     this.persist();
     this.mark(document.body.dataset.openworld!);
