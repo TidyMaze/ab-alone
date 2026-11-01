@@ -92,8 +92,24 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
   that direction when the hero can enter it. When it cannot (a rock, a tree, water, a wall, a cliff, an enemy), the hero takes
   the free one of the two neighbours 60 degrees to the side that the intent follows best; if both follow it equally, the lower
   direction index (E, W, NE, SW, NW, SE). It never steps back or to a cell 120 degrees off. When no side is free, it leans and
-  stops as before (#1040). Only legal steps: the same `Hero.step` rules. Not built yet: the setting to turn it off and the HUD
-  line for the mode, and the tap-to-walk destination (A*), each its own piece.
+  stops as before (#1040). Only legal steps: the same `Hero.step` rules.
+- **Tap to walk** (#1137): with steering on, a tap or a click on a cell that is not next to the hero sets a destination. The cell
+  is found on the ground under the pointer (the ray meets the plane of the hero's cell top, then the top of the cell it fell in,
+  three times over). The path is a game rule, so it lives in Rust (#1164): `world::find_path`, a bounded A* on the hex grid,
+  exported as `world_path(seed, from, to, blocked, broken)` (`q, r` pairs, the start left out, empty when there is no way).
+  A cell is entered when it is on the world, not an enemy or a lair (`blocked`) and open or an obstacle the hero breaks
+  (a boulder, a tree with no tree beside it, #1147), the same rule as `Hero.step`; the cells of `broken` are plain ground. Every
+  step costs 1, the estimate is the hex distance. Bounds: the destination is within 40 cells of the hero, and the search stops after
+  6000 expanded cells, so a walled-in destination costs a bounded time; both give no path and the tap does nothing. Determinism: the
+  open cell with the lowest estimate goes first, then the nearest the destination, then the lowest `(q, r)`, and the steps are tried
+  E, W, NE, SW, NW, SE. The hero takes the path one cell per glide at the steady speed of a held walk (#1065), each cell through
+  `Hero.step` (so the troop trails it and its push plays as for any step). The walk ends at the destination, when a step is
+  refused (an enemy moved in, a push moved the hero off the path), or at once when any key is pressed, the stick is held, the camera
+  is dragged, twisted or pinched, or steering is turned off. A new tap replaces the walk. A lair is a blocked cell: a tap does not
+  walk into a boss fight. `body[data-openworld-route]` holds the cells still to take.
+- **Steering setting** (#1137): the Settings item *Steering*, on by default (team decision), stored under `ab-alone.steering`.
+  Off, a held direction takes only the straight step and leans when it is blocked (#1040), and a far tap does nothing; a tap next
+  to the hero rolls it either way. The Open world HUD line `#openworld-mode` names the mode: "Steering on" or "Steering off".
 - **Troop**: 6 marbles at the start. After each hero step each troop marble takes the place of the
   one before it in the trail, and the first takes the cell the hero left. No decision of the player.
 - **Automatic attack**: after its step, the troop attacks when a line of 2 or 3 of its marbles,

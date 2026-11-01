@@ -35,6 +35,7 @@ const MOTION_KEY = 'ab-alone.reduced-motion';
 const FLAT_KEY = 'ab-alone.flat-hud';
 const FOLD_KEY = 'ab-alone.hud-folded';
 const TRANSCRIPT_KEY = 'ab-alone.transcript';
+const STEERING_KEY = 'ab-alone.steering';
 
 // The same rule on a phone as on a desktop (#882): only a weak device or reduced motion drops to the low tier.
 export function tierFromHints({ cores, memory, reducedMotion }: Hints): Tier {
@@ -149,6 +150,9 @@ export const writeHudFolded = (store: Store, on: boolean): void => write(store, 
 // The audio log transcript (#516): on unless the player turned it off.
 export const readTranscript = (store: Store): boolean => read(store, TRANSCRIPT_KEY) !== 'off';
 export const writeTranscript = (store: Store, on: boolean): void => write(store, TRANSCRIPT_KEY, on ? 'on' : 'off');
+// The Open world steering (#1137): the hero goes round obstacles and a far tap walks there; on unless the player turned it off.
+export const readSteering = (store: Store): boolean => read(store, STEERING_KEY) !== 'off';
+export const writeSteering = (store: Store, on: boolean): void => write(store, STEERING_KEY, on ? 'on' : 'off');
 
 // The dark shell skin (#377): Scarab ridges unless the player picked another one of skins.ts.
 export const readSkin = (store: Store): string => skinById(read(store, SKIN_KEY)).id;

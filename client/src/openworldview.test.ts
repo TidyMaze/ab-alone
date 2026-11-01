@@ -634,6 +634,33 @@ describe('the zoom of the Open world camera (#976)', () => {
     }
   });
 
+  it('picks a far cell under the pointer on the ground, whatever its distance from the hero (#1137)', () => {
+    for (const zoom of [1, 2]) {
+      const world = new World(stepped(new Map([['6,1', 4]]))); // flat, a step up on (6, 1)
+      const view = new OpenWorldView(world);
+      view.resize(800, 600);
+      view.show([2, 1]);
+      view.zoomBy(zoom);
+      for (const cell of [[6, 1], [-3, -2], [2, 5], [4, -1]] as Axial[]) {
+        const p = axialTo3D(cell[0], cell[1]);
+        const tile = world.tile(cell[0], cell[1])!;
+        const ndc = new THREE.Vector3(p.x, topOf(GROUND[tile.terrain], tile.height), p.z).project(view.camera);
+        expect(view.pickGround(ndc.x, ndc.y), `${cell} at zoom ${zoom}`).toEqual(cell);
+      }
+    }
+  });
+
+  it('gives no far cell when the ray misses the ground or lands off the loaded world (#1137)', () => {
+    const view = new OpenWorldView(new World(bytes));
+    view.resize(800, 600);
+    view.show([CHUNK * 4 - 1, 0]);
+    expect(view.pickGround(0.99, 0)).toBeNull(); // chunk 4 is not loaded
+    view.camera.position.set(0, 10, 0);
+    view.camera.lookAt(0, 20, 0); // every ray climbs
+    view.camera.updateMatrixWorld();
+    expect(view.pickGround(0, 0)).toBeNull();
+  });
+
   it('gives the hero its own cell, no move, when the pointer is on no cell of the hero ring', () => {
     const view = new OpenWorldView(new World(bytes));
     view.resize(800, 600);

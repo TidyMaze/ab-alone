@@ -18,6 +18,8 @@ import {
   readFlatHud,
   readHudFolded,
   readTranscript,
+  readSteering,
+  writeSteering,
   readReducedMotion,
   readGlassSkin,
   readSafeMode,
@@ -630,5 +632,25 @@ describe('hasParticles and the pixel ratio', () => {
     it('allows forcing particles on under automation for tests/screenshots', () => {
       expect(hasParticles('low', false, false, true, true)).toBe(true);
     });
+  });
+});
+
+describe('steering storage (#1137): on unless the player turned it off', () => {
+  it('defaults to on', () => {
+    expect(readSteering(memoryStorage())).toBe(true);
+  });
+  it('writes then reads back, under its own key', () => {
+    const s = memoryStorage();
+    writeSteering(s, false);
+    expect(s.data.get('ab-alone.steering')).toBe('off');
+    expect(readSteering(s)).toBe(false);
+    writeSteering(s, true);
+    expect(s.data.get('ab-alone.steering')).toBe('on');
+    expect(readSteering(s)).toBe(true);
+  });
+  it('falls back to on when storage throws or is missing, and does not throw writing', () => {
+    expect(readSteering(throwing)).toBe(true);
+    expect(readSteering(null)).toBe(true);
+    expect(() => writeSteering(throwing, false)).not.toThrow();
   });
 });

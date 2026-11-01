@@ -78,6 +78,31 @@ pub fn world_push(seed: u32, troop: Vec<i32>, enemies: Vec<i32>, broken: Vec<i32
     push_encoded(&pairs(&troop), &pairs(&enemies), &terrain)
 }
 
+/// The walk of the hero from `(from_q, from_r)` to `(to_q, to_r)` in the world `seed` (docs/specs/openworld.md section 4): `q, r`
+/// pairs, the start left out, empty when there is none. `blocked` holds the enemy cells and the lairs, `broken` the obstacles the
+/// hero has broken (#1154), both `q, r` pairs.
+#[wasm_bindgen]
+pub fn world_path(
+    seed: u32,
+    from_q: i32,
+    from_r: i32,
+    to_q: i32,
+    to_r: i32,
+    blocked: Vec<i32>,
+    broken: Vec<i32>,
+) -> Vec<i32> {
+    world::walk_path(
+        u64::from(seed),
+        (from_q, from_r),
+        (to_q, to_r),
+        &pairs(&broken),
+        &pairs(&blocked),
+    )
+    .into_iter()
+    .flat_map(|(q, r)| [q, r])
+    .collect()
+}
+
 /// The terrain of a cell of the world `seed`, `None` off the world.
 fn terrain_at(seed: u64, q: i32, r: i32) -> Option<Terrain> {
     let cell = world::cell(seed, q, r)?;
@@ -173,6 +198,18 @@ mod tests {
             flat,
             lairs.iter().flat_map(|&(q, r)| [q, r]).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn a_path_is_q_r_pairs_that_match_the_core() {
+        assert_eq!(
+            world_path(9, 0, 0, 3, 0, vec![], vec![]),
+            vec![1, 0, 2, 0, 3, 0]
+        );
+        let round = world_path(9, 0, 0, 3, 0, vec![1, 0, 2, 0], vec![]);
+        assert_eq!(round.len(), 8);
+        assert_eq!(round[6..], [3, 0]);
+        assert!(world_path(9, 0, 0, 0, 0, vec![], vec![]).is_empty());
     }
 
     #[test]

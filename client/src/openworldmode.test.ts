@@ -1455,3 +1455,178 @@ describe('the marbles wear the skins of the ship (#1176)', () => {
     expect(lookOf(m, 'hero')[0]!.map).toBeNull();
   });
 });
+
+describe('tap to walk and the steering setting (#1137, docs/specs/openworld.md section 4)', () => {
+  type PathBridge = (seed: number, from: Axial, to: Axial, blocked: Int32Array, broken: Int32Array) => Int32Array;
+  let clock = 0;
+  const walker = (path: PathBridge, steering: () => boolean = () => true, foes: Int32Array = new Int32Array(), lairs = new Int32Array()) =>
+    new OpenWorldMode(
+      (_seed, cx, cy) => bytes(cx, cy), (_seed, cx, cy) => (cx === 0 && cy === 0 ? foes : new Int32Array()), async () => ({ low: {}, high: {} }), () => true, noPush,
+      worldSaves(memoryStore(), 1), () => lairs, undefined, undefined, undefined, undefined, path, steering,
+    );
+  const along = (...cells: Axial[]): PathBridge => () => Int32Array.from(cells.flat());
+  const far = (cell: Axial | null) => vi.spyOn(OpenWorldView.prototype, 'pickGround').mockReturnValue(cell);
+  const tapFar = (m: OpenWorldMode) => m.press(400, 300, 800, 600); // the centre picks the hero's own cell: the far pick decides
+  const frameAt = (m: OpenWorldMode, ms: number) => {
+    clock = ms;
+    m.frame(vi.fn(), clock);
+  };
+  beforeEach(() => {
+    clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    document.body.innerHTML = '<output id="openworld-mode"></output>';
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('asks the path of the far cell with the enemies and the lairs as blocked and the broken cells, and walks it one cell a glide', () => {
+    far([3, 0]);
+    const path = vi.fn<PathBridge>(() => Int32Array.of(1, 0, 2, 0, 3, 0));
+    const m = walker(path, undefined, Int32Array.of(0, 4), Int32Array.of(9, 9));
+    m.enter(5, 800, 600);
+    tapFar(m);
+    expect(path).toHaveBeenCalledWith(5, [0, 0], [3, 0], Int32Array.of(0, 4, 9, 9), new Int32Array());
+    expect(m.hero!.at).toEqual([1, 0]); // the first cell at once
+    expect(body().openworldRoute).toBe('2');
+    frameAt(m, GLIDE_MS);
+    expect(m.hero!.at).toEqual([2, 0]);
+    frameAt(m, 2 * GLIDE_MS);
+    expect(m.hero!.at).toEqual([3, 0]);
+    expect(body().openworldRoute).toBe('0');
+    frameAt(m, 5 * GLIDE_MS);
+    expect(m.hero!.at).toEqual([3, 0]); // arrived: no step follows
+  });
+
+  it('a key cancels the walk, and is itself the next step', () => {
+    far([3, 0]);
+    const m = walker(along([1, 0], [2, 0], [3, 0]));
+    m.enter(1, 800, 600);
+    tapFar(m);
+    m.key('Shift');
+    expect(body().openworldRoute).toBe('0');
+    frameAt(m, GLIDE_MS);
+    expect(m.hero!.at).toEqual([1, 0]);
+  });
+
+  it('a drag (cancelWalk) and the stick cancel the walk; cancelling with no walk does nothing', () => {
+    far([3, 0]);
+    const m = walker(along([1, 0], [2, 0], [3, 0]));
+    m.enter(1, 800, 600);
+    m.cancelWalk();
+    tapFar(m);
+    m.cancelWalk();
+    frameAt(m, GLIDE_MS);
+    expect(m.hero!.at).toEqual([1, 0]);
+    tapFar(m);
+    m.hold(['ArrowLeft']);
+    expect(body().openworldRoute).toBe('0');
+    m.hold([]);
+  });
+
+  it('a new far tap replaces the walk under way', () => {
+    far([3, 0]);
+    let n = 0;
+    const m = walker(() => (n++ === 0 ? Int32Array.of(1, 0, 2, 0, 3, 0) : Int32Array.of(2, 0, 2, -1)));
+    m.enter(1, 800, 600);
+    tapFar(m);
+    tapFar(m);
+    frameAt(m, GLIDE_MS);
+    expect(m.hero!.at).toEqual([2, 0]);
+    frameAt(m, 2 * GLIDE_MS);
+    expect(m.hero!.at).toEqual([2, -1]);
+  });
+
+  it('stops when a step is refused: an enemy on the way, a cell that is no neighbour', () => {
+    far([3, 0]);
+    const m = walker(along([1, 0], [5, 5], [6, 5]));
+    m.enter(1, 800, 600);
+    tapFar(m);
+    frameAt(m, GLIDE_MS);
+    expect(m.hero!.at).toEqual([1, 0]);
+    expect(body().openworldRoute).toBe('0');
+    frameAt(m, 3 * GLIDE_MS);
+    expect(m.hero!.at).toEqual([1, 0]);
+  });
+
+  it('does nothing when the pick or the path is empty, and a press next to the hero still rolls it', () => {
+    const path = vi.fn<PathBridge>(() => new Int32Array());
+    const m = walker(path);
+    m.enter(1, 800, 600);
+    far(null);
+    tapFar(m);
+    expect(path).not.toHaveBeenCalled();
+    far([3, 0]);
+    tapFar(m);
+    expect(path).toHaveBeenCalledTimes(1);
+    expect(m.hero!.at).toEqual([0, 0]);
+    far([1, 0]); // next to the hero: no walk
+    tapFar(m);
+    expect(path).toHaveBeenCalledTimes(1);
+    m.press(400 + 55, 300, 800, 600);
+    expect(m.hero!.at).toEqual([1, 0]);
+  });
+
+  it('with steering off a held arrow leans against an enemy instead of going round, and a far tap does nothing', () => {
+    far([3, 0]);
+    const path = vi.fn<PathBridge>(() => Int32Array.of(1, 0));
+    let on = true;
+    const m = walker(path, () => on, Int32Array.of(1, 0));
+    m.enter(1, 800, 600);
+    on = false;
+    m.refreshMode();
+    tapFar(m);
+    expect(path).not.toHaveBeenCalled();
+    m.key('ArrowRight');
+    expect(m.hero!.at).toEqual([0, 0]); // the enemy on (1,0) blocks, no side step
+    m.release('ArrowRight');
+    on = true;
+    m.refreshMode();
+    m.key('ArrowRight');
+    expect(m.hero!.at).not.toEqual([0, 0]); // on: it slides round
+    m.release('ArrowRight');
+  });
+
+  it('the HUD names the mode, and turning steering off cancels the walk', () => {
+    far([3, 0]);
+    let on = true;
+    const m = walker(along([1, 0], [2, 0], [3, 0]), () => on);
+    m.enter(1, 800, 600);
+    const line = () => document.getElementById('openworld-mode')!.textContent;
+    expect(line()).toContain('Steering on');
+    tapFar(m);
+    on = false;
+    m.refreshMode();
+    expect(line()).toContain('Steering off');
+    expect(body().openworldRoute).toBe('0');
+    m.leave();
+    m.refreshMode(); // left: nothing to show
+    document.body.innerHTML = '';
+    m.enter(1, 800, 600);
+    m.refreshMode(); // no HUD line in the page
+  });
+
+  it('a walk step onto a lair opens the lair, as a step by hand, and the frame ends with the mode', () => {
+    far([3, 0]);
+    const onLair = vi.fn();
+    const m = new OpenWorldMode(
+      (_seed, cx, cy) => bytes(cx, cy), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, noPush,
+      worldSaves(memoryStore(), 1), () => Int32Array.of(2, 0), onLair, undefined, undefined, undefined, along([1, 0], [2, 0]),
+    );
+    m.enter(1, 800, 600);
+    tapFar(m);
+    frameAt(m, GLIDE_MS); // a path that went through the lair anyway: the lair opens, as for a step by hand
+    expect(onLair).toHaveBeenCalledWith(1, 0);
+    expect(m.active).toBe(false);
+  });
+
+  it('leaving clears the walk and its mark', () => {
+    far([3, 0]);
+    const m = walker(along([1, 0], [2, 0]));
+    m.enter(1, 800, 600);
+    tapFar(m);
+    m.leave();
+    expect(body().openworldRoute).toBeUndefined();
+  });
+});

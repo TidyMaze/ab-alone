@@ -15,6 +15,14 @@ import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from '
  * the enemies near the hero, the broken cells (#1154), all `q, r` pairs; its answer is empty when no push is legal (`readPush`). */
 export type TroopPush = (seed: number, troop: Int32Array, enemies: Int32Array, broken: Int32Array) => Int32Array;
 
+/** The walk of the hero to a far cell, the bridge's `world_path` (docs/specs/openworld.md section 4): the seed, the cell the hero
+ * stands on, the cell asked for, the cells it cannot enter (enemies, lairs) and the broken cells (#1154), as `q, r` pairs; its answer
+ * is the cells to walk, the start left out, empty when there is no way. */
+export type WalkPath = (seed: number, from: Axial, to: Axial, blocked: Int32Array, broken: Int32Array) => Int32Array;
+
+/** The enemies near the hero that a walk goes round: the radius of the path search. */
+const PATH_REACH = 40;
+
 /** The enemies within this many cells of the hero are the ones a push can reach. */
 export const PUSH_REACH = 10;
 
@@ -151,6 +159,8 @@ export class OpenWorldMode {
   private nextStep = Infinity;
   /** Whether the last step was one of a held walk, so the next one takes over its speed instead of starting from rest (#1065). */
   private cruising = false;
+  /** The cells of the walk to a far cell (#1137) still to take, the next first; empty when no such walk is on. */
+  private route: Axial[] = [];
   /** The props are read once for the page: every entry reuses them. */
   private modelsOnce?: Promise<PropModels>;
 
@@ -172,6 +182,10 @@ export class OpenWorldMode {
     private readonly medals: () => { have: number; total: number } = () => ({ have: 0, total: 0 }),
     /** Tally's line for the HUD when a world opens, empty when it has been shown already (#1171). */
     private readonly tally: () => string = () => '',
+    /** The path of a walk to a far cell, the bridge's `world_path` (#1137): none gives no way. */
+    private readonly path: WalkPath = () => new Int32Array(),
+    /** Whether steering is on (the Settings item, #1137): the held arrows slide round obstacles and a far tap walks there. */
+    private readonly steering: () => boolean = () => true,
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -217,6 +231,7 @@ export class OpenWorldMode {
     const tally = document.getElementById('openworld-tally');
     if (tally) tally.textContent = this.tally();
     this.active = true;
+    this.refreshMode();
     this.dirty = true;
     this.mark(String(seed));
     this.modelsOnce ??= this.models();
@@ -237,8 +252,10 @@ export class OpenWorldMode {
     this.world = null;
     this.dirty = false;
     this.pad = [];
+    this.route = [];
     this.nextStep = Infinity;
     this.cruising = false;
+    delete document.body.dataset.openworldRoute;
     delete document.body.dataset.openworld;
     delete document.body.dataset.openworldAt;
     delete document.body.dataset.openworldTroop;
@@ -293,6 +310,16 @@ export class OpenWorldMode {
     this.mark(document.body.dataset.openworld!);
   }
 
+  /** Shows the steering mode in the HUD (#1137), and drops a walk when steering is off: called when a world opens and when the
+   * Settings item changes. */
+  refreshMode(): void {
+    if (!this.active) return;
+    const on = this.steering();
+    if (!on) this.cancelWalk();
+    const line = document.getElementById('openworld-mode');
+    if (line) line.textContent = on ? 'Steering on: the hero goes round obstacles, tap a far cell to walk there.' : 'Steering off: one step at a time.';
+  }
+
   /** A new window size: the view follows it, and the zoom it may have been clamped to is published (#976). */
   resize(width: number, height: number): void {
     this.view?.snap();
@@ -306,6 +333,7 @@ export class OpenWorldMode {
    * cadence (`beat`, #1059): the system's key repeat (`repeat`) is ignored. Escape leaves. Reports whether the key was the mode's. */
   key(key: string, repeat = false): boolean {
     if (key === 'Escape') return this.leave(), true;
+    this.cancelWalk(); // any key ends a walk to a far cell (#1137)
     if (key === 'r' || key === 'R') return this.turn(-this.view!.yaw), true; // back to the default angle (#1026)
     const turn = TURNS.get(key);
     if (turn !== undefined) return this.turn(turn), true;
@@ -322,7 +350,16 @@ export class OpenWorldMode {
   /** The stick (#1025, #1026) holds the arrows of its drag, none when the thumb lets go: the hero steps by them on the cadence of the
    * held arrows, as by the keys (#1059). Nothing while the mode is off. */
   hold(keys: readonly string[]): void {
-    if (this.active) this.arrows(() => (this.pad = [...keys]));
+    if (!this.active) return;
+    if (keys.length > 0) this.route = []; // the stick takes over from a walk to a far cell (#1137)
+    this.arrows(() => (this.pad = [...keys]));
+  }
+
+  /** Ends a walk to a far cell (#1137): a key, a drag of the camera or the stick. The step under way finishes. */
+  cancelWalk(): void {
+    if (this.route.length === 0) return;
+    this.arrows(() => (this.route = []));
+    this.mark(document.body.dataset.openworld!);
   }
 
   /** Turns the camera by `by` radians round the hero: the Q and E keys, a right-button drag (`orbit`) and a twist. The view eases to
@@ -350,9 +387,26 @@ export class OpenWorldMode {
     });
   }
 
-  /** A press at `x`, `y` pixels of a `width` x `height` screen rolls the hero onto the cell under it when it is next to it. */
+  /** A press at `x`, `y` pixels of a `width` x `height` screen rolls the hero onto the cell under it when it is next to it; with
+   * steering on, a far cell is walked to, round the obstacles (#1137). */
   press(x: number, y: number, width: number, height: number): void {
-    this.roll(this.view!.pick((x / width) * 2 - 1, 1 - (y / height) * 2));
+    const [nx, ny] = [(x / width) * 2 - 1, 1 - (y / height) * 2];
+    const near = this.view!.pick(nx, ny);
+    if (!this.steering() || !same(near, this.hero!.at)) return void this.roll(near);
+    const target = this.view!.pickGround(nx, ny);
+    if (target && !same(target, this.hero!.at) && !neighbours(this.hero!.at).some((n) => same(n, target))) this.walkTo(target);
+    else this.roll(near);
+  }
+
+  /** Walks the hero to the far cell `to` (#1137): the bridge finds the way round the obstacles, and the hero takes it one cell a
+   * glide, at the steady speed of a held walk. Nothing when there is no way. */
+  private walkTo(to: Axial): void {
+    const hero = this.hero!;
+    const lairs = this.lairs.flat();
+    const blocked = Int32Array.from([...this.fight.enemiesAround(this.world!, hero.at, PATH_REACH).flat(), ...lairs]);
+    const cells = this.path(this.seed, hero.at, to, blocked, flat(this.world!.broken));
+    const route = Array.from({ length: cells.length / 2 }, (_, i): Axial => [cells[2 * i]!, cells[2 * i + 1]!]);
+    if (route.length > 0) this.arrows(() => (this.route = route));
   }
 
   /** Zooms the Open world camera by `scale`: more than 1 further out, less than 1 closer (#976). */
@@ -375,6 +429,7 @@ export class OpenWorldMode {
     if (this.view!.ease(seconds, reduced)) this.dirty = true;
     if (this.view!.easeYaw(seconds, reduced)) this.dirty = true; // the turn eases to its goal, as the height does (#1026)
     this.beat(now); // the held arrows walk on, one step per GLIDE_MS: before the tick, so the step begun is drawn by this frame (#1065)
+    if (!this.view) return false; // the step walked onto a lair and left the mode
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
     if (this.view!.offsets(now)) this.dirty = true; // the camera's punch, pan ease and shake, on top of the follow (#1103)
@@ -414,7 +469,7 @@ export class OpenWorldMode {
 
   /** Whether no arrow is held, by a key or by the stick. */
   private idle(): boolean {
-    return this.held.size === 0 && this.pad.length === 0;
+    return this.held.size === 0 && this.pad.length === 0 && this.route.length === 0;
   }
 
   /** The cadence of the held arrows: one step every GLIDE_MS, made by the frame loop at `now` (ms), never by a key repeat (#1059).
@@ -433,22 +488,36 @@ export class OpenWorldMode {
   /** One step in the direction of the arrows held now (`stepOf`), made at `at` (ms): a blocked one slides round the obstacle (`steerStep`), and leans
    * the hero (`lean`) only when no side is free; arrows that cancel stop the walk. */
   private stepHeld(at: number): void {
+    if (this.held.size === 0 && this.pad.length === 0) return this.stepRoute(at);
     const free = ([q, r]: Axial): boolean => {
       const tile = this.world!.tile(q, r);
       return !!tile && (!blocked(tile) || breakable(this.world!, q, r)) && !this.fight.occupied(this.world!, q, r);
     };
-    const to = steerStep(this.hero!.at, new Set([...this.held, ...this.pad]), this.view!.yaw, free);
+    const keys = new Set([...this.held, ...this.pad]);
+    const to = this.steering() ? steerStep(this.hero!.at, keys, this.view!.yaw, free) : stepOf(this.hero!.at, keys, this.view!.yaw);
     if (to) this.roll(to, at, this.cruising ? 'walk' : 'start');
     else this.stop(at);
   }
 
+  /** The next cell of the walk to a far cell (#1137), at `at` (ms), by the same `Hero.step` as any step: a refused step ends the walk,
+   * and so does its last cell. */
+  private stepRoute(at: number): void {
+    const to = this.route.shift()!;
+    const moved = this.roll(to, at, this.cruising ? 'walk' : 'start');
+    if (!moved) this.route = [];
+    if (this.route.length > 0) return;
+    if (this.active) this.mark(document.body.dataset.openworld!);
+    this.nextStep = Infinity;
+    if (moved) this.stop(at);
+  }
+
   /** The hero steps to `to`, at `at` (ms); `pace` is the pace of its glide: a `tap` (a press on the screen) eases out, the steps of
    * the held arrows keep one speed (#1065). */
-  private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): void {
+  private roll(to: Axial, at = performance.now(), pace: Pace = 'tap'): boolean {
     const lair = this.lairs.findIndex((cell) => same(cell, to));
-    if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair);
+    if (lair >= 0 && neighbours(this.hero!.at).some((n) => same(n, to))) return this.enterLair(lair), false;
     const from = this.hero!.at;
-    if (!this.hero!.step(to)) return this.lean(to, at);
+    if (!this.hero!.step(to)) return this.lean(to, at), false;
     if (pace === 'start' && !this.reduced()) this.view!.panFor(from, to, at); // the follow eases in at the first step of a walk (#1103)
     this.cruising = pace !== 'tap';
     if (this.hero!.smashed) this.view!.smash(to, this.hero!.smashed, at, this.reduced()); // an obstacle broken on the way (#1147)
@@ -467,6 +536,7 @@ export class OpenWorldMode {
     this.dirty = true;
     this.persist();
     this.mark(document.body.dataset.openworld!);
+    return true;
   }
 
   /** The hero walks onto the lair `lair` (#1170): the world is saved with the hero on the lair's entrance, the cell it came from, and
@@ -544,6 +614,7 @@ export class OpenWorldMode {
     document.body.dataset.openworldBeaten = String(this.fight.beaten);
     document.body.dataset.openworldPush = String(this.pushes);
     document.body.dataset.openworldZoom = String(this.view!.zoom);
+    document.body.dataset.openworldRoute = String(this.route.length); // the cells of a walk to a far cell still to take (#1137)
     document.body.dataset.openworldBroken = String(this.world!.broken.length); // the obstacles broken (#1147)
     document.body.dataset.openworldLairs = this.lairs.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldLairsBeaten = this.beaten.join(' ');

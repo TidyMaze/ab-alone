@@ -472,6 +472,7 @@ describe('the settings toggles', () => {
       'setting-glass-skin',
       'setting-render-mode',
       'setting-free-cam',
+      'setting-steering',
       'setting-export-game',
       'setting-difficulty',
       'setting-import-game',

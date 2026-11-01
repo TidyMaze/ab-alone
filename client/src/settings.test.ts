@@ -21,11 +21,12 @@ describe('settingsList', () => {
       { id: 'glass-skin', label: glassSkinById('smoked').name, icon: 'skin' },
       { id: 'render-mode', label: 'Render: Normal', icon: 'render' },
       { id: 'free-cam', label: 'Free camera', icon: 'camera', on: false },
+      { id: 'steering', label: 'Steering', icon: 'steer', on: true },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'difficulty', label: '100%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
-    expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true, 'protan', false, 'hard', 'clay', true)).toEqual([
+    expect(settingsList(true, 'light', 'scarab', 'frost', 200, false, true, true, 'protan', false, 'hard', 'clay', true, false)).toEqual([
       { id: 'clear-board', label: 'Clear board', icon: 'fog', on: true },
       { id: 'reduced-motion', label: 'Reduced motion', icon: 'motion', on: true },
       { id: 'flat-hud', label: 'Flat HUD', icon: 'flat', on: true },
@@ -37,14 +38,15 @@ describe('settingsList', () => {
       { id: 'glass-skin', label: glassSkinById('frost').name, icon: 'skin' },
       { id: 'render-mode', label: 'Render: Clay', icon: 'render' },
       { id: 'free-cam', label: 'Free camera', icon: 'camera', on: true },
+      { id: 'steering', label: 'Steering', icon: 'steer', on: false },
       { id: 'export-game', label: 'Export game', icon: 'export' },
       { id: 'difficulty', label: '200%', icon: 'scale' },
       { id: 'import-game', label: 'Import game', icon: 'import' },
     ]);
   });
 
-  it('keeps the menu at fourteen items, including difficulty setting, render mode and the free camera', () => {
-    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toHaveLength(14);
+  it('keeps the menu at fifteen items, including difficulty setting, render mode, the free camera and steering', () => {
+    expect(settingsList(false, 'system', 'scarab', 'smoked', 100, true, false, false, 'default', true, 'normal')).toHaveLength(15);
   });
 
   it('names the four volume sliders, one per bus (#438)', () => {
