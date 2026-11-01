@@ -61,19 +61,20 @@ export function addSun(group: THREE.Object3D): [THREE.HemisphereLight, THREE.Dir
 }
 
 /**
- * The 1v1 and boss scene (every boss has its slab). The hub, the battle royale and a roguelite run keep the room until their own PRs, and
- * so does `?scene=room` (the fallback), and so does a page whose arena file has not loaded (`ready`).
+ * Every mode is on the terrace (#1374): the room is left for the automated tests, which ask for it with `?scene=room`
+ * (`room`, main.ts honours it under `navigator.webdriver` only). Before the arena file is in, or when it failed (`ready`),
+ * the board is drawn on a plain background, never in the room.
  */
-export function tableZeroActive(s: { hub: boolean; royale: boolean; run: boolean; room: boolean; ready: boolean }): boolean {
-  return s.ready && !(s.hub || s.royale || s.run || s.room);
+export function tableZeroActive(s: { room: boolean; ready: boolean }): boolean {
+  return s.ready && !s.room;
 }
 
 /** What the game draws itself, from its own state: marbles, pedestals, rings and arrows are left out of the arena file. */
-const GAME_DRAWN = /^scene_(marble|pedestal|ring|arrow|shadow)/;
+const GAME_DRAWN = /^scene_(marble|pedestal|ring|arrow|shadow|row21_lockbar|royale_crack)/; // the lock bar and the royale's cracks follow the game's state
 /** The turn bars stay meshes of their own: the game lights the one of the side to move. */
 const TURN_BAR = /^scene_turnbar/;
 /** The dishes: drawn as one instanced mesh, so a cell that vanishes (Hull, Rail Yard) is a hole to the gap and not a dish floating in the air. */
-const DISH = /^scene_(cell|ballast_cell|dual_cell|dual_cell_n)_?\d+$/;
+const DISH = /^scene_(cell|ballast_cell|dual_cell|dual_cell_n|hub_cell|royale_cell)_?\d+$/;
 /** What a bigger board replaces in the arena file (#1374): the slab, its plinth shadow, the posts. They are drawn apart so a variant board can hide them. */
 const BOARD_PART = /^scene_(slab_arena|ao_plinth|post_\d+)$/;
 const SLAB = /^scene_(slab_arena|ballast_slab|dual_slab_[ns])$/;

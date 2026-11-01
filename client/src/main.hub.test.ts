@@ -149,7 +149,7 @@ describe('main.ts, walking the hub (#521)', () => {
 
   it('Ship draws the Mess map, its room glyphs and the glass marble on the centre cell, in the HUD too', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     expect(drawn(scene()).discs).toBe(61);
     expect(document.body.dataset.rim).toBe('near');
     ship(game);
@@ -167,9 +167,18 @@ describe('main.ts, walking the hub (#521)', () => {
     expect(game.hud()).toBe('Hub · Mess');
   });
 
+  it('stands on the terrace: the hub deck draws one dish per cell of the Mess, and a click still walks the marble (#1374)', async () => {
+    const game = await boot('?bot=off');
+    ship(game);
+    expect(document.body.dataset.scene).toBe('table-zero');
+    expect(game.hook('__frame')).toMatchObject({ drawn: true, dishes: 1 }); // the harness's hub deck has one cell, at the middle
+    game.click(1, 0);
+    expect(hub()).toBe('mess 1,0');
+  });
+
   it('rolls the marble onto a clicked neighbour and saves it there, a far cell keeps it put', async () => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     ship(game);
     game.click(1, 0);
     expect(hub()).toBe('mess 1,0');
