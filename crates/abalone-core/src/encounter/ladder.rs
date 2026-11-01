@@ -468,6 +468,8 @@ mod tests {
     use crate::encounter::ballast::{ballast_board, ballast_boss};
     use crate::encounter::chaplain::chaplain_boss;
     use crate::encounter::echo::{echo_boss, echo_fight, mirror_move};
+    use crate::encounter::overseer::{overseer_boss, OVERSEER_INCINERATORS};
+    use crate::encounter::railyard::railyard_boss;
     use crate::encounter::pulsar::pulsar_boss;
     use crate::encounter::stalker::stalker_boss;
     use crate::encounter::telemetry::{AttemptResult, DeathCause};
@@ -620,6 +622,93 @@ mod tests {
             after.game().ejected(Player::White),
             0,
             "{mv:?} leaves the cracked cell"
+        );
+    }
+
+    /// A fight of `boss` on a hand-made position, the player to move with `ejected` credited.
+    fn hand_made(boss: LadderBoss, board: Board, ejected: [u8; 2]) -> (Encounter, Arena) {
+        let game = Game::from_position(board, Player::Black, ejected);
+        let def = match boss {
+            LadderBoss::Overseer => overseer_boss(),
+            LadderBoss::RailYard => railyard_boss(),
+            _ => magnetizer_boss(),
+        };
+        let enc = Encounter::new(game, def, 0);
+        (enc.clone(), Arena::Plain(enc, boss))
+    }
+
+    fn put(board: &mut Board, cells: &[P], cell: Cell) {
+        for &(q, r) in cells {
+            board.set(q, r, cell);
+        }
+    }
+
+    #[test]
+    fn the_player_reads_the_incinerators_of_the_overseer() {
+        // 5 ejections credited: the pair behind the core (2, 1) pushes it onto the incinerator
+        // (3, 1), the 6th. The plain search sees no ejection there and plays elsewhere.
+        let mut board = Board::empty();
+        board.set(0, 0, Cell::Overseer);
+        board.set_incinerators(OVERSEER_INCINERATORS.to_vec());
+        put(&mut board, &[(0, 1), (1, 1), (-1, 2), (-2, 3)], Cell::Black);
+        put(&mut board, &[(1, -3), (2, -3), (0, -2)], Cell::White);
+        board.set(2, 1, Cell::Core);
+        let (enc, a) = hand_made(LadderBoss::Overseer, board, [5, 0]);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.result(),
+            Some(PveResult::Won),
+            "{mv:?} burns the core"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_trains_of_the_rail_yard() {
+        // A train passes on the row r = 0 at the end of this turn: the marble (0, 0) on it goes.
+        let mut board = Board::empty();
+        put(&mut board, &[(0, 0), (-1, 1), (0, 1), (1, 1)], Cell::Black);
+        put(&mut board, &[(-1, -2), (0, -2), (1, -2)], Cell::White);
+        board.set_trains(vec![(8, 1)]);
+        let (enc, a) = hand_made(LadderBoss::RailYard, board, [0, 0]);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        let mut after = enc;
+        after.play(&mv).unwrap();
+        assert_eq!(
+            after.game().ejected(Player::White),
+            0,
+            "{mv:?} leaves the row"
+        );
+    }
+
+    #[test]
+    fn the_player_reads_the_polarities_of_the_magnetizer() {
+        // The boss marble (-2, 0) takes its announced - at the start of the next turn, next to
+        // the + of the player marble (-3, 0), whose repulsion throws (-4, 0) off the rim.
+        let mut board = Board::empty();
+        put(
+            &mut board,
+            &[(-4, 0), (-3, 0), (0, 1), (1, 1), (0, 2)],
+            Cell::Black,
+        );
+        put(
+            &mut board,
+            &[(-2, 0), (1, -2), (2, -2), (1, -3)],
+            Cell::White,
+        );
+        board.set_polarities(vec![((-3, 0), 1)]);
+        board.set_last_sign(1);
+        board.set_announce(Some((Some((-2, 0)), -1)));
+        let (_, mut a) = hand_made(LadderBoss::Magnetizer, board, [0, 0]);
+        let mv = player_move(&a, 0, 9, 0, 300).unwrap();
+        a.play(&mv).unwrap();
+        let reply = a.boss_move().unwrap();
+        a.play(&reply).unwrap();
+        assert_eq!(
+            a.game().ejected(Player::White),
+            0,
+            "{mv:?} keeps the + off the repulsion"
         );
     }
 
