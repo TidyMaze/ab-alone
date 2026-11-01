@@ -231,21 +231,28 @@ pub fn last_belts(enc: &Encounter) -> Vec<Carry> {
         .map_or_else(Vec::new, |(before, phase)| turn(before, *phase, 0).1)
 }
 
+/// What the boss search sees after `mover` played from `before` to `after`: on a player ply, the
+/// belts in the phase the tree's credits reach at the start of that ply (`Encounter::phase_after`,
+/// as the encounter takes the phase at the start of the turn); nothing on a boss ply. Seed 0 for
+/// the strikes.
+fn assembly_step(enc: &Encounter, before: &Board, mover: Player, after: Board) -> (Board, [u8; 2]) {
+    if mover == Player::White {
+        return (after, [0, 0]);
+    }
+    let out = hook(&after, enc.phase_after(before) as u8, 0);
+    let [black, white] = crate::encounter::losses(&after, &out);
+    (out, [white, black])
+}
+
 /// The boss reply: its node-limited search, where every player ply of the tree goes through the
-/// belts (seed 0 for the strikes), so it sees what they carry off and what the presses strike.
-/// `None` on the player's turn or when the game is over.
+/// belts (`assembly_step`), so it sees what they carry off and what the presses strike. `None` on
+/// the player's turn or when the game is over.
 pub fn assembly_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
-    let phase = enc.phase() as u8;
-    let step = |_: &Board, mover: Player, _: &Move, after: Board| {
-        if mover == Player::White {
-            return (after, [0, 0]);
-        }
-        let out = hook(&after, phase, 0);
-        let [black, white] = crate::encounter::losses(&after, &out);
-        (out, [white, black])
+    let step = |before: &Board, mover: Player, _: &Move, after: Board| {
+        assembly_step(enc, before, mover, after)
     };
     search_hooked(
         enc.game(),
@@ -719,6 +726,66 @@ mod tests {
         let b = board(&[(0, 4)], &[(-4, 0), (4, -4)], belts(false, 0));
         let m = assembly_move(&fight(b, Player::White, [0, 0])).unwrap();
         assert_eq!(m.cells, vec![(-4, 0)], "{m:?}");
+    }
+
+    #[test]
+    fn the_tree_step_runs_three_belts_once_a_third_ejection_is_credited() {
+        // The root: boss to move, 2 ejections for the player (P1), 3 boss marbles, Black alone on
+        // a side belt, which runs toward -q once the side belts run (P2).
+        let root = board(&[(0, -1)], &[(-4, 3), (4, -4), (3, 1)], belts(true, 0));
+        let enc = fight(root.clone(), Player::White, [2, 0]);
+        assert_eq!(enc.phase(), 0);
+        // A player ply that starts with the root's boss marbles still belts at P1: only the centre.
+        let (out, credits) = assembly_step(&enc, &root, Player::Black, root.clone());
+        assert_eq!(out.get(0, -1), Some(Cell::Black), "P1: the side belt rests");
+        assert_eq!(credits, [0, 0]);
+        // One boss marble gone from the board at the start of the ply: 3 ejections, P2.
+        let mut gone = root.clone();
+        gone.set(3, 1, Cell::Empty);
+        let (out, credits) = assembly_step(&enc, &gone, Player::Black, gone.clone());
+        assert_eq!(out.get(0, -1), Some(Cell::Empty), "P2: the side belt runs");
+        assert_eq!(out.get(-1, -1), Some(Cell::Black));
+        assert_eq!(credits, [0, 0]);
+        // A boss ply runs no belt.
+        let (out, credits) = assembly_step(&enc, &gone, Player::White, gone.clone());
+        assert_eq!((out, credits), (gone, [0, 0]));
+    }
+
+    #[test]
+    fn the_phase_reached_in_the_tree_changes_the_best_move() {
+        // Boss to move at 2 ejections (P1) with 5 marbles, the centre belt running toward -q: the
+        // boss marble on its west end falls next turn, the third ejection, which opens the side
+        // belts for the turn after. Found among 4000 random positions of this kind (2 gave two
+        // moves) at the shipped 3000 nodes.
+        let start = board(
+            &[(2, 2), (-2, -2)],
+            &[(-1, -1), (-4, 0), (-3, 2), (0, 2), (1, 2)],
+            belts(false, 0),
+        );
+        let enc = fight(start, Player::White, [2, 0]);
+        assert_eq!(enc.phase(), 0);
+        // The search before #914: every player ply of the tree belts at the root phase.
+        let frozen = |_: &Board, mover: Player, _: &Move, after: Board| {
+            if mover == Player::White {
+                return (after, [0, 0]);
+            }
+            let out = hook(&after, 0, 0);
+            let [black, white] = crate::encounter::losses(&after, &out);
+            (out, [white, black])
+        };
+        let old = search_hooked(
+            enc.game(),
+            ASSEMBLY_NODE_BUDGET,
+            DEFAULT_WEIGHTS,
+            &|_| true,
+            &frozen,
+        )
+        .unwrap();
+        assert_eq!(old.mv, mv(&[(-4, 0)], Direction::NE));
+        assert_eq!(
+            assembly_move(&enc),
+            Some(mv(&[(0, 2), (1, 2)], Direction::E))
+        );
     }
 
     #[test]
