@@ -312,11 +312,10 @@ export class SceneRenderer {
     this.particlePositions[i * 3 + 2] = Math.sin(angle) * radius;
   }
 
-  frameCamera(width: number, height: number, folded = false): void {
-    const { fov, shift } = framing(width, height, folded);
+  frameCamera(width: number, height: number): void {
     this.camera.aspect = width / height;
-    this.camera.fov = fov;
-    this.camera.setViewOffset(width, height, 0, -shift, width, height);
+    this.camera.fov = framing(width, height);
+    this.camera.updateProjectionMatrix();
   }
 
   applyView(view: View, reading: View | null, context: ViewContext): void {

@@ -265,8 +265,14 @@ export const KIT_PROP: Record<Door['kind'], string> = {
   lift: 'lift',
 };
 
-/** A little over the top of a dish of the file (0.07), where a flat mark lies in view. */
-const DISH_TOP = 0.09;
+/** A small gap over the top of the file's lift cage, so the arrow lies on top of it, in view (#523, #1374). */
+const ARROW_GAP = 0.02;
+
+/** The top of the file's lift cage (its box), where the lift's arrow lies. */
+function cageTop(kit: HubKit): number {
+  const cage = kit.parts.lift?.[0];
+  return cage ? new THREE.Box3().setFromObject(cage).max.y : 0;
+}
 
 /** Where a beaten door's gold seal hangs over the file's door: in front of its frame, at its middle. */
 const KIT_SEAL: [number, number, number] = [0, 0.5, 0.06];
@@ -285,7 +291,7 @@ export function createKitGlyph(kit: HubKit, door: Door, options: GlyphOptions = 
     seal.name = 'beaten-seal';
     group.add(seal);
   }
-  if (door.kind === 'lift') group.add(liftArrow(options.cell, DISH_TOP)); // the file's cage has none: the arrow says which way it goes, over the dish
+  if (door.kind === 'lift') group.add(liftArrow(options.cell, cageTop(kit) + ARROW_GAP)); // the file's cage has none: the arrow says which way it goes, on top of the cage
   if (door.kind === 'lift' && options.open === false && kit.lockbar) {
     const bar = kit.lockbar.clone();
     bar.name = 'locked-bar';

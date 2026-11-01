@@ -231,6 +231,18 @@ describe('the hub props of the Blender file on the rooms of the game (#1374)', (
     expect(arrowOf([-1, 2]).rotation.y).toBeCloseTo(-Math.PI / 2);
   });
 
+  it("lays the lift arrow a small gap over the top of the file's cage, read from its box, not on the floor", () => {
+    const cage = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.4, 1, 0.4), new THREE.MeshBasicMaterial()), { name: 'cage' });
+    cage.position.y = 0.5; // the cage stands from 0 to 1
+    const tall: HubKit = { ...kit, parts: { ...kit.parts, lift: [cage] } };
+    const arrow = createKitGlyph(tall, { kind: 'lift', to: 'cargo' }, { cell: [1, -2] }).children.find((c) => (c as THREE.Mesh).geometry instanceof THREE.ShapeGeometry) as THREE.Mesh;
+    expect(arrow.position.y).toBeGreaterThan(1);
+    expect(arrow.position.y).toBeLessThanOrEqual(1.05);
+    const bare: HubKit = { ...kit, parts: { ...kit.parts, lift: [] } }; // no cage in the file: the gap alone, from the floor
+    const low = createKitGlyph(bare, { kind: 'lift', to: 'cargo' }, { cell: [1, -2] }).children.find((c) => (c as THREE.Mesh).geometry instanceof THREE.ShapeGeometry) as THREE.Mesh;
+    expect(low.position.y).toBeCloseTo(0.02);
+  });
+
   it('draws a room whose prop the file lacks as an empty group', () => {
     expect(createKitGlyph(kit, { kind: 'bot' }).children).toHaveLength(0);
   });
