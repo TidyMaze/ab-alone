@@ -1,0 +1,50 @@
+{
+"ballast": {
+"file": "scene_ballast_slab.glb",
+"bytes": 34460,
+"nodes": 101,
+"tris": 2856,
+"bad": [],
+"meshes": 12
+},
+"ballast_cells": 85,
+"dual": {
+"file": "scene_dual_slab.glb",
+"bytes": 17068,
+"nodes": 77,
+"tris": 2310,
+"bad": [],
+"meshes": 3
+},
+"dual_cells": 74,
+"royale": {
+"file": "scene_royale_slab.glb",
+"bytes": 52132,
+"nodes": 351,
+"tris": 8444,
+"bad": [],
+"meshes": 6
+},
+"royale_cells": 210,
+"hub": {
+"file": "scene_hub_deck.glb",
+"bytes": 78076,
+"nodes": 86,
+"tris": 2394,
+"bad": [],
+"meshes": 32
+},
+"hub_cells": 37,
+"boss": {
+"file": "kit_boss.glb",
+"bytes": 60676,
+"nodes": 22,
+"tris": 992,
+"bad": [
+"kit_prop_press_gantry",
+"kit_prop_magnetcrane"
+],
+"meshes": 22
+},
+"boss_missing": []
+}
