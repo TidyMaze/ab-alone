@@ -99,6 +99,15 @@ describe('the public Open world tools (#1365)', () => {
   });
 });
 
+describe('a server with no peer transport (#1365)', () => {
+  test('joining the public world room is a transport error, not a crash', async () => {
+    await connect();
+    const result = await call('join_world_room');
+    expect(result.isError).toBe(true);
+    expect(JSON.parse(result.text).code).toBe('transport_failed');
+  });
+});
+
 describe('the MCP server', () => {
   test('lists the tools of a local game and of an online room, with their input schemas', async () => {
     const { tools } = await (await connect()).listTools();

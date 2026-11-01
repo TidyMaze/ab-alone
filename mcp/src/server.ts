@@ -4,9 +4,8 @@ import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
 import { bossIds, worldRules } from './engine';
 import type { Result, Session } from './game';
-import { p2pPeers } from '../../client/src/p2p';
 import { OpenWorld } from './world';
-import { WorldRoom } from './worldroom';
+import { refusePeers, WorldRoom } from './worldroom';
 
 const NOTATION =
   'A move is the selected cells, then ">", then the direction: "(-1,2)(0,2)>E", "(0,0)>SE". A cell is (q,r). ' +
@@ -26,7 +25,7 @@ const WINDOW =
 export function createServer(
   session: Session,
   world: OpenWorld = new OpenWorld(worldRules(), bossIds),
-  worldRoom: WorldRoom = new WorldRoom(world, worldRules(), p2pPeers),
+  worldRoom: WorldRoom = new WorldRoom(world, worldRules(), refusePeers),
 ): McpServer {
   const server = new McpServer({ name: 'ab-alone', version: '0.1.0' });
 

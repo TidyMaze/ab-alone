@@ -89,6 +89,10 @@ const cellOf = (hero: string): Cell => {
   return [Number(q), Number(r)];
 };
 const changed = (): Result<never> => fail('world_changed', 'new_world replaced the public world: call leave_world_room, then join_world_room');
+/** The peer transport of a server started with none (the tests): joining is a transport error. `main.ts` passes `p2pPeers`. */
+export const refusePeers = (): never => {
+  throw new Error('no peer transport: the server was started without one');
+};
 const none = (): Result<never> => fail('no_world_room', 'not in the public world room: call join_world_room first');
 
 export class WorldRoom {
