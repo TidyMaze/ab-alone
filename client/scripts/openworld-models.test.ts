@@ -91,3 +91,63 @@ describe.each([
     expect(statSync(fileURLToPath(new URL(`../models/${file}`, import.meta.url))).size).toBeLessThan(20_000);
   });
 });
+
+// The landmark of a boss lair (#1171): one model each for the open lair (a spire crowned with a gold gem) and the beaten one (a short
+// stump with a green band), in `openworld-lair.glb`: vertex colours, no texture, a few big flat planes, on its base at the origin.
+describe('openworld-lair.glb', () => {
+  const data = read('openworld-lair.glb');
+  const model = json(data);
+  const node = (name: string) => model.nodes.find((n) => n.name === name)!;
+  const primitive = (name: string) => model.meshes[node(name).mesh]!.primitives[0]!;
+  const box = (name: string) => model.accessors[primitive(name).attributes.POSITION!]!;
+  const faces = (name: string) => model.accessors[primitive(name).indices]!.count / 3;
+  const tones = (name: string) => {
+    const a = model.accessors[primitive(name).attributes.COLOR_0!]!;
+    const start = 20 + data.readUInt32LE(12) + 8 + (model.bufferViews[a.bufferView]!.byteOffset ?? 0) + (a.byteOffset ?? 0);
+    expect(a.componentType).toBe(5126);
+    const out = new Set<string>();
+    for (let i = 0; i < a.count; i++) {
+      const [r, g, b] = [0, 1, 2].map((c) => data.readFloatLE(start + (i * 3 + c) * 4)); // linear floats, RGB
+      out.add(`${r!.toFixed(2)},${g!.toFixed(2)},${b!.toFixed(2)}`);
+    }
+    return out;
+  };
+
+  it('holds the open and the beaten landmark, painted by vertex colours, no texture', () => {
+    for (const name of ['ow_lair', 'ow_lair_beaten']) expect(primitive(name).attributes, name).toHaveProperty('COLOR_0');
+    expect(model.images ?? []).toEqual([]);
+  });
+
+  it('draws each in under 72 flat triangles', () => {
+    for (const name of ['ow_lair', 'ow_lair_beaten']) {
+      expect(faces(name), name).toBeLessThanOrEqual(72);
+      expect(box(name).count, name).toBeLessThanOrEqual(faces(name) * 3);
+    }
+  });
+
+  it('stands on its base at the origin, the open one tall and the beaten one a lower stump, both inside a cell wide plinth', () => {
+    expect(box('ow_lair').min![1]).toBeCloseTo(0, 2);
+    expect(box('ow_lair_beaten').min![1]).toBeCloseTo(0, 2);
+    expect(box('ow_lair').max![1]).toBeGreaterThanOrEqual(5);
+    expect(box('ow_lair_beaten').max![1]).toBeLessThan(box('ow_lair').max![1]! / 2 + 0.5);
+    expect(box('ow_lair_beaten').max![1]).toBeGreaterThanOrEqual(2);
+    for (const name of ['ow_lair', 'ow_lair_beaten']) expect(box(name).max![0], name).toBeLessThanOrEqual(0.9);
+  });
+
+  it('is gold while open and green once beaten, in a few flat tones', () => {
+    const open = tones('ow_lair');
+    const beaten = tones('ow_lair_beaten');
+    expect(open.size).toBeLessThanOrEqual(6);
+    expect(beaten.size).toBeLessThanOrEqual(6);
+    const has = (set: Set<string>, test: (r: number, g: number, b: number) => boolean) =>
+      [...set].some((t) => test(...(t.split(',').map(Number) as [number, number, number])));
+    expect(has(open, (r, g, b) => r > 0.8 && g > 0.2 && b < 0.05)).toBe(true);
+    expect(has(open, (r, g) => g > 0.3 && g > r)).toBe(false);
+    expect(has(beaten, (r, g) => g > 0.4 && g > r * 2)).toBe(true);
+    expect(has(beaten, (r, g, b) => r > 0.8 && b < 0.05 && g > 0.2)).toBe(false);
+  });
+
+  it('stays within the art budget of a prop file: under 20 KB', () => {
+    expect(statSync(fileURLToPath(new URL('../models/openworld-lair.glb', import.meta.url))).size).toBeLessThan(20_000);
+  });
+});

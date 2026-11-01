@@ -222,17 +222,24 @@ const PROP_NAMES = Object.keys(PROPS) as Prop[];
 /** The props that have a model in Blender: the low-poly one in `client/models/openworld.glb` (`ow_<prop>`) and the detailed one
  * in `openworld-hi.glb` (`ow_<prop>_hi`), drawn near the hero (#989). */
 const MODELLED = ['mountain', 'tree', 'boulder', 'wall'] as const;
-export type PropGeometries = Partial<Record<Prop, THREE.BufferGeometry>>;
-/** The geometries of both sets of models: `low` the low-poly props, `high` the detailed ones. */
+/** The landmark of a boss lair (#1171), in `openworld-lair.glb`: the open one and the beaten one, painted by vertex colours. */
+const LAIR_MODELS = ['lair', 'lair_beaten'] as const;
+export type PropGeometries = Partial<Record<Prop | (typeof LAIR_MODELS)[number], THREE.BufferGeometry>>;
+/** The geometries of both sets of models: `low` the low-poly props (and the lair landmarks), `high` the detailed ones. */
 export type PropModels = { low: PropGeometries; high: PropGeometries };
-export type ModelUrls = { low: string; high: string };
+export type ModelUrls = { low: string; high: string; lair?: string };
 
-/** The geometries of the models named `ow_<prop><suffix>` in the glTF at `url`; a failed load gives none, the procedural shapes stay. */
-async function readModels(url: string, loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> }, suffix: string): Promise<PropGeometries> {
+/** The geometries of the models named `ow_<name><suffix>` in the glTF at `url`; a failed load gives none, the procedural shapes stay. */
+async function readModels(
+  url: string,
+  loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> },
+  suffix: string,
+  names: readonly (Prop | (typeof LAIR_MODELS)[number])[] = MODELLED,
+): Promise<PropGeometries> {
   try {
     const { scene } = await loader.loadAsync(url);
     const out: PropGeometries = {};
-    for (const prop of MODELLED) {
+    for (const prop of names) {
       const mesh = scene.getObjectByName(`ow_${prop}${suffix}`) as THREE.Mesh | undefined;
       if (mesh) out[prop] = mesh.geometry;
     }
@@ -244,8 +251,12 @@ async function readModels(url: string, loader: { loadAsync(url: string): Promise
 
 /** The models of both files: a failed file leaves its set empty, so the props it would give stay procedural or low-poly. */
 export async function loadModels(urls: ModelUrls, loader: { loadAsync(url: string): Promise<{ scene: THREE.Object3D }> }): Promise<PropModels> {
-  const [low, high] = await Promise.all([readModels(urls.low, loader, ''), readModels(urls.high, loader, '_hi')]);
-  return { low, high };
+  const [low, high, lair] = await Promise.all([
+    readModels(urls.low, loader, ''),
+    readModels(urls.high, loader, '_hi'),
+    urls.lair ? readModels(urls.lair, loader, '', LAIR_MODELS) : {},
+  ]);
+  return { low: { ...low, ...lair }, high };
 }
 
 /** A detailed mesh holds the cells within `HI_RADIUS` of the hero: 3r(r+1)+1 of them, the most a build puts in one. */
@@ -505,10 +516,19 @@ export class OpenWorldView {
       this.paint(this.detailed[prop]!, geometry);
       this.detailedReady.add(prop);
     }
+    if (low.lair && low.lair_beaten) {
+      this.lairModels = { open: low.lair, beaten: low.lair_beaten };
+      this.setLairs(this.lairCells, this.lairsBeaten); // the landmarks already stood are drawn again with the models
+    }
     this.drawnKey = '';
     this.laidHero = undefined; // the next frame lays every prop again: the meshes it replaced are empty
     this.frame();
   }
+
+  /** The lair cells and the beaten ones of the last `setLairs`, and the Blender landmarks once they are in (#1171). */
+  private lairCells: readonly Axial[] = [];
+  private lairsBeaten: readonly number[] = [];
+  private lairModels?: { open: THREE.BufferGeometry; beaten: THREE.BufferGeometry };
 
   /** Gives a prop's mesh a model's geometry. A model that paints itself (vertex colours from Blender) is drawn as painted: no tint
    * hides it. */
@@ -1162,6 +1182,8 @@ export class OpenWorldView {
   /** Stands the landmark of each boss lair on its cell (#1170): `cells` in lair order, `beaten` the numbers of the lairs beaten. The
    * landmarks of an earlier call are replaced, and freed with the next draw. */
   setLairs(cells: readonly Axial[], beaten: readonly number[]): void {
+    this.lairCells = cells;
+    this.lairsBeaten = beaten;
     for (const old of this.scene.children.filter((child) => child.name.startsWith('lair-'))) {
       this.scene.remove(old);
       old.traverse((part) => {
@@ -1170,15 +1192,22 @@ export class OpenWorldView {
       });
     }
     cells.forEach(([q, r], i) => {
-      const colour = beaten.includes(i) ? LAIR_LOOK.beaten : LAIR_LOOK.open;
-      const material = new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.6, roughness: 0.5 });
+      const isBeaten = beaten.includes(i);
       const group = new THREE.Group();
       group.name = `lair-${i}`;
-      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, LAIR_LOOK.height, 6), material);
-      pillar.position.y = LAIR_LOOK.height / 2;
-      const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.15, 6), material);
-      plinth.position.y = 0.075;
-      group.add(pillar, plinth);
+      const model = this.lairModels && (isBeaten ? this.lairModels.beaten : this.lairModels.open);
+      if (model) {
+        // The Blender landmark (#1171): painted by its vertex colours, gold gem while open, a green stump once beaten.
+        group.add(new THREE.Mesh(model.clone(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, flatShading: true })));
+      } else {
+        const colour = isBeaten ? LAIR_LOOK.beaten : LAIR_LOOK.open;
+        const material = new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.6, roughness: 0.5 });
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, LAIR_LOOK.height, 6), material);
+        pillar.position.y = LAIR_LOOK.height / 2;
+        const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.15, 6), material);
+        plinth.position.y = 0.075;
+        group.add(pillar, plinth);
+      }
       const p = axialTo3D(q, r);
       const tile = this.world.tile(q, r)!;
       group.position.set(p.x, topOf(GROUND[tile.terrain], tile.height), p.z);

@@ -10,8 +10,8 @@ test('walking onto a lair of the Open world starts a boss fight, #1170', async (
   await page.locator('#openworld').click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.openworldAt)).toBe('0,0');
   const lairs = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ');
-  expect(lairs).toHaveLength(14); // one lair per boss of the roster (#1171)
-  await expect(page.locator('#openworld-medals')).toHaveText('Medals 0 / 14');
+  expect(lairs.length).toBeGreaterThanOrEqual(14); // one lair per boss of the roster (#1171), which grows
+  await expect(page.locator('#openworld-medals')).toHaveText(`Medals 0 / ${lairs.length}`);
   await expect(page.locator('#openworld-tally')).toHaveText('Claim 0412: unworked.'); // Tally's line, once per player (#1171)
   const [q, r] = lairs[0]!.split(',').map(Number) as [number, number];
   await page.evaluate(
