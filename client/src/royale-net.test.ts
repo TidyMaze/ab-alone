@@ -602,6 +602,56 @@ describe('RoyaleNet catch-up', () => {
   });
 });
 
+describe('RoyaleNet trust (#1322)', () => {
+  it('a played from a key with no seat sets no seats in the lobby: the coordinator start still does', async () => {
+    const room = table();
+    const a = await room.join('a', 0);
+    const b = await room.join('b', 1);
+    const forged = await generateKeys();
+    const seats = [forged.pub, '', '', ''];
+    await b.net.receive({ kind: 'played', game: ROOM, seats, rounds: [], open: null }, '', 'x');
+    await b.net.receive({ kind: 'played', game: ROOM, seats, rounds: [], open: null }, forged.pub, 'x');
+    expect(b.net.phase).toBe('lobby');
+    expect(b.net.seats).toBeNull();
+    await a.net.start();
+    await room.settle();
+    expect(b.net.seats).toEqual([a.keys.pub, b.keys.pub, '', '']);
+    expect(b.net.phase).toBe('choosing');
+  });
+
+  it('a played with the roster in the lobby, or with the seats of the start, is believed', async () => {
+    const room = table();
+    const a = await room.join('a', 0);
+    const b = await room.join('b', 1);
+    await b.net.receive({ kind: 'played', game: ROOM, seats: [...room.roster], rounds: [], open: null }, '', 'x');
+    expect(b.net.seats).toEqual([a.keys.pub, b.keys.pub, '', '']);
+  });
+
+  it('a played with other seats than the start replays nothing', async () => {
+    const { room, a, b, c } = await started();
+    for (const p of [a, b, c]) await p.net.play([]);
+    await room.settle();
+    const watcher = await room.join('w');
+    room.lost.add('w'); // its behind goes nowhere: only the forged answer reaches it
+    await watcher.net.receive({ kind: 'start', game: ROOM, round: 2, seats: [a.keys.pub, b.keys.pub, c.keys.pub, ''] }, a.keys.pub, 'a');
+    await watcher.net.receive({ kind: 'played', game: ROOM, seats: [a.keys.pub, '', '', ''], rounds: [{ round: 1, commits: [], reveals: [] }], open: null }, '', 'x');
+    expect(watcher.net.round).toBe(1);
+    expect(watcher.net.seats).toEqual([a.keys.pub, b.keys.pub, c.keys.pub, '']);
+  });
+
+  it('a hash counts only from a seated key: one with no key or no seat raises no desync', async () => {
+    const { room, a, b, c } = await started();
+    const watcher = await room.join('w');
+    for (const p of [a, b, c]) await p.net.play([]);
+    await room.settle();
+    await a.net.receive({ kind: 'hash', game: ROOM, round: 1, hash: 'x' }, '', 'x');
+    await a.net.receive({ kind: 'hash', game: ROOM, round: 1, hash: 'x' }, watcher.keys.pub, 'w');
+    expect(a.net.desync).toBe(0);
+    await a.net.receive({ kind: 'hash', game: ROOM, round: 1, hash: 'x' }, c.keys.pub, 'c');
+    expect(a.net.desync).toBe(1);
+  });
+});
+
 describe('netStatus', () => {
   it('says what the player can do now, a desync first', () => {
     expect(netStatus('lobby', true, 1, 0)).toEqual({ text: '1 player in. Start: bots take the empty seats', tone: 'waiting' });
