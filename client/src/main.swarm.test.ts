@@ -32,7 +32,10 @@ function catchScene(): () => THREE.Scene {
 
 /** Starts the fight against The Swarm from the mode menu, on the recorded fight's seed 0. */
 function fightSwarm(game: Game): void {
-  vi.spyOn(crypto, 'getRandomValues').mockImplementation((a) => (a as Uint32Array).fill(0));
+  vi.spyOn(crypto, 'getRandomValues').mockImplementation((a) => {
+    (a as Uint32Array).fill(0);
+    return a;
+  });
   game.openModes();
   byId('boss-fight').click();
   const entries = [...byId('boss-list').querySelectorAll('button')];
@@ -88,6 +91,8 @@ describe('main.ts The Swarm (#1008)', () => {
     const done = shown(game)!;
     game.frame(EVAC_MS);
     expect(shown(game)).toEqual(done); // over: it stays lit and still
+    game.hook('__playMoves', []); // a redraw keeps the evac where it is
+    expect(shown(game)).toEqual(done);
     byId('boss-retry').click();
     expect(shown(game)).toMatchObject({ left: 30, evac: false });
     expect(named(scene(), 'swarm-evac')).toHaveLength(0);

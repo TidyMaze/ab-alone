@@ -2,6 +2,7 @@
 // e2e tests: keep them verbatim.
 import type { EndBanner } from './endbanner';
 import { sideName } from './glass';
+import { outOf } from './score';
 import type { OnlineStatus } from './presence';
 
 export interface HudState {
@@ -24,7 +25,7 @@ export interface HudState {
 const marble = (side: number, glass: number): string => (side === glass ? 'pale' : 'dark');
 
 const pips = (out: number, slots: number, was = out): string =>
-  Array.from({ length: slots }, (_, i) => `<span class="pip${i < out ? ' out' : ''}${i >= was && i < out ? ' fresh' : ''}"></span>`).join('');
+  Array.from({ length: Math.max(slots, out) }, (_, i) => `<span class="pip${i < out ? ' out' : ''}${i >= was && i < out ? ' fresh' : ''}"></span>`).join('');
 
 export function hudHtml({ side, status, glass, score, ejected, win, note, online, rematch, end, tally = '', turn: ply, was }: HudState): string {
   const over = status !== 0;
@@ -57,7 +58,7 @@ export interface FlatHud {
 export function flatHudHtml({ side, status, glass, ejected, win, boss }: FlatHud): string {
   const lines = [
     status === 0 ? `Turn: ${sideName(side, glass)}` : 'Turn: game over',
-    `Ejected: ${sideName(1, glass)} ${ejected[0]}/${win[0]}, ${sideName(2, glass)} ${ejected[1]}/${win[1]}`,
+    `Ejected: ${sideName(1, glass)} ${outOf(ejected[0], win[0])}, ${sideName(2, glass)} ${outOf(ejected[1], win[1])}`,
   ];
   if (boss) lines.push(`Boss phase: ${boss.phase + 1} of ${boss.phases}`, `Tell: ${boss.tell || 'none'}`);
   return `<div class="flat">${lines.map((line) => `<div>${line}</div>`).join('')}</div>`;
