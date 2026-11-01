@@ -1133,3 +1133,73 @@ Reply time through wasm (nodejs release build, 6 seeds of 80 plies, the player p
 only, ms, average / 95th percentile / max), the old build timed on the same positions in the same run: the Assembly Line
 143 / 245 / 375 after, 136 / 229 / 402 before (240 replies each, about 5 % more: `phase_after` counts the boss marbles
 of two boards on each player ply of the tree).
+
+### The Unstable Core: the pro reads the charges, P2 after 1 ejection, P3 after 2, a shockwave every 4 turns (#1229)
+
+Target of #753 and #833: the pro (10x) wins 14 to 18 of 20, the 1x player fewer. Before: 0 of 20 at 1x and
+at 10x (section above, #912). Method of #1209: count the player's lost marbles by cause with a probe, boss
+knobs first, a rule change only if the knobs cannot. Commands: `LADDER_X=<1|10> LADDER_SEEDS=20 cargo run
+--release --example ladder -- unstable`, seeds 0 to 19, 300 plies at most. The ladder is node-counted, so the
+numbers do not depend on the load of the machine (it was 20 to 30 during these runs, other agents working;
+the runs were still one ladder at a time).
+
+**Why the player lost.** A local probe replayed the 20 games at 10x and split every lost marble by its cause
+(not committed):
+
+| Cause | Player marbles lost | Boss marbles lost |
+|---|---|---|
+| overload (4 charges) | **116** | 26 |
+| a push | 3 | 12 |
+
+The ladder player searched with the plain search (`search_with`): it did not see the charges, so it left
+marbles on the energy cells until they blew (6 of its marbles in 27 plies, the boss wins at 6). The boss
+search sees the overloads (`unstable_move`, `search_hooked`), so it won 20 of 20. This is the player's
+blindness, not a boss knob: a real player reads the pips over every marble. As for the Ballast Mind (#834)
+the ladder pro now plays the same hooked search as the boss with its own larger budget
+(`unstable_search`, used by `unstable_move` too; unit test
+`the_player_search_sees_the_overload_the_plain_search_walks_into`, ladder test
+`the_player_reads_the_charges_of_the_unstable_core`, red before). Rules and boss unchanged by this step:
+
+| Player | Before (plain search) | The pro reads the charges |
+|---|---|---|
+| 1x (3000) | `0/20 \| 27 \| 2 \| rim_ejection 17, draw 3` | `0/20 \| 34 \| 2 \| rim_ejection 1, draw 19` |
+| 10x (30000) | `0/20 \| 27 \| 1 \| rim_ejection 20` | `6/20 \| 48 \| 2 \| draw 14` |
+
+Now the losses are draws: 14 of 20 at 10x, 19 of 20 at 1x. Neither side ejects, the fight
+stalls with nothing forcing a trade (the draw cause, repetition or the 100 ply cap,
+was not split). The
+levers that force one are the phases (P2 collapses the core, P3 shoves wedges).
+
+**Tries** (10x, 20 seeds, the pro reads the charges; `ejections` = P2 and P3 thresholds, `shock` = player
+turns between two shockwaves, announced the turn before; `T_*` were temporary environment overrides, removed):
+
+| ejections | shock | other | Output line |
+|---|---|---|---|
+| 3, 5 | 3 | (before this change) | `30000 \| 6/20 \| 48 \| 2 \| draw 14` |
+| 3, 5 | 3 | boss budget 1000 (pro 10000) | `10000 \| 3/20 \| 47 \| 2 \| draw 17` |
+| 2, 4 | 3 | | `30000 \| 6/20 \| 49 \| 2 \| rim_ejection 1, draw 13` |
+| 2, 3 | 3 | | `30000 \| 9/20 \| 47 \| 2 \| draw 11` |
+| 1, 3 | 3 | | `30000 \| 9/20 \| 111 \| 2 \| draw 11` |
+| 1, 3 | 2 | | `30000 \| 8/20 \| 111 \| 2 \| push 1, draw 11` |
+| 1, 3 | 3 | overload at 3 | `30000 \| 0/20 \| 39 \| 0 \| draw 20` |
+| 1, 2 | 3 | | `30000 \| 19/20 \| 56 \| 2 \| draw 1` (1x: `3000 \| 12/20 \| 106 \| 2 \| rim_ejection 7, draw 1`) |
+| 1, 2 | 5 | | `30000 \| 19/20 \| 88.5 \| 2 \| draw 1` |
+| **1, 2** | **4** | | `30000 \| 18/20 \| 79 \| 2 \| draw 2` (kept) |
+
+Repeated on 40 seeds (0 to 39) for the kept row: `30000 \| 37/40 \| 92 \| 2 \| draw 3`, 18.5 of 20, a little
+above the 20 seed value and just over the band. 1x of the kept row: `3000 \| 8/20 \| 106 \| 2 \| rim_ejection 10,
+draw 2`. The committed build (no override) gives the same two lines, 18 of 20 at 10x and 8 of 20 at 1x.
+
+Reading: the boss budget does not help (a weaker boss is a weaker pro, the pro is 10 times the boss). An
+overload at 3 stalls everybody (20 draws, the phase column stays at 0, the first phase). What moves the result is the
+number of ejections that start the collapse and the shockwaves: with P3 at 2 the board is shaken from the
+first trade and the draws almost disappear (11 to 2). The 3 values of the shock rhythm (3, 4, 5) give 19, 18
+and 19 of 20: the rhythm is inside the noise of 20 seeds, 4 is kept because it is the one inside the band
+and the 1x pro (8 of 20) stays well below the 10x pro. A rule change was not needed.
+
+**Adopted:** `UNSTABLE_PHASE_EJECTIONS` `[3, 5]` to `[1, 2]`, `SHOCK_EVERY` 3 to 4 (the wedge is announced one
+turn ahead, at the tick before the last), the pro ladder player reads the charges. Overload (4), the node
+budget (3000) and the weighted rule are unchanged. `engine_version` 20. The fixtures of the core tests, the
+client harness and `client/e2e/unstable.spec.ts` are the 17-ply fight (overloads on plies 8 and 10, the core
+collapses on ply 11, the shockwave is announced on ply 15 and hits on ply 17). No text of the client or of the
+MCP changed (they read the engine's tell), so no new screenshot.

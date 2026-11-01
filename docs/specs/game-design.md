@@ -896,12 +896,12 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   your own marble, and the pushed line must end on an empty cell or off the board.
 - **Overload**: a marble that reaches **4** charges is **ejected at once**, counted for the other
   side, like a Hull void.
-- **P2** (after **3** ejections credited to you): the core **vanishes**. After the boss's next
+- **P2** (after **1** ejection credited to you, 3 before #1229): the core **vanishes**. After the boss's next
   turn it is announced (the core flickers, the HUD says so), and at the end of your next turn the
   7 cells vanish for good (void, as the Hull's): marbles standing on them are ejected, counted
   for the other side, and a push into the hole ejects. Charges then only decay.
-- **P3** (after **5** ejections): every **3** of your turns a **wedge shockwave** hits, right
-  after your move. It is announced 1 turn ahead: the wedge glows. The board has 6 wedges around
+- **P3** (after **2** ejections, 5 before #1229): every **4** of your turns (3 before #1229) a **wedge
+  shockwave** hits, right after your move. It is announced 1 turn ahead: the wedge glows. The board has 6 wedges around
   the centre, 10 cells each (the centre belongs to none): the cells `a·c(i) + b·c(i+1)` with
   `a ≥ 1`, `b ≥ 0`, where `c(0..5)` are E, NE, NW, W, SW, SE. The wedge holding the **most marbles**
   (both colours) at the announce is hit, a tie drawn by the PRNG. Every marble in it moves **1 cell
@@ -919,8 +919,9 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   with fewer marbles; push a boss marble that sits at 3 charges back onto the core so it
   overloads; crowd the boss into the busiest wedge in P3. The boss search plays the weighted
   rule and the hooks of both sides (budget 3000 nodes, the Hull's).
-- **Calibrate**: knobs = charge per turn, overload at 4, phase ejections (3, 5), the wedge rhythm
-  (3 turns), AI depth. Fail if most fights end with no overload.
+- **Calibrate** (#1229: the pro ladder player at 10x wins 18 of 20, 8 of 20 at 1x, see
+  `boss-balance.md`): knobs = charge per turn, overload at 4, phase ejections (1, 2), the wedge rhythm
+  (4 turns), AI depth. Fail if most fights end with no overload.
 - **Where**: the boss menu and the daily challenge (it joins `boss_ids()`, so the daily pick of
   the days after it ships changes, section 7.6). No hub door.
 
