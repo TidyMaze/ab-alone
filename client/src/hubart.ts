@@ -87,8 +87,9 @@ function part(geometry: THREE.BufferGeometry, material: THREE.Material, [x, y, z
 }
 
 /** The near-black arrow flat on a lift's floor, up the map toward the deck above or down toward the one below (#523). */
-function liftArrow(cell?: Axial): THREE.Mesh {
+function liftArrow(cell?: Axial, y = 0): THREE.Mesh {
   const arrow = new THREE.Mesh(arrowGeo, lockedBarMaterial);
+  arrow.position.y = y;
   const cellY = cell?.[1] ?? 0;
   arrow.rotation.set(-Math.PI / 2, ((cellY < 0 ? 1 : -1) * Math.PI) / 2, 0, 'YXZ');
   return arrow;
@@ -264,6 +265,9 @@ export const KIT_PROP: Record<Door['kind'], string> = {
   lift: 'lift',
 };
 
+/** A little over the top of a dish of the file (0.07), where a flat mark lies in view. */
+const DISH_TOP = 0.09;
+
 /** Where a beaten door's gold seal hangs over the file's door: in front of its frame, at its middle. */
 const KIT_SEAL: [number, number, number] = [0, 0.5, 0.06];
 
@@ -281,7 +285,7 @@ export function createKitGlyph(kit: HubKit, door: Door, options: GlyphOptions = 
     seal.name = 'beaten-seal';
     group.add(seal);
   }
-  if (door.kind === 'lift') group.add(liftArrow(options.cell)); // the file's cage has none: the arrow says which way it goes
+  if (door.kind === 'lift') group.add(liftArrow(options.cell, DISH_TOP)); // the file's cage has none: the arrow says which way it goes, over the dish
   if (door.kind === 'lift' && options.open === false && kit.lockbar) {
     const bar = kit.lockbar.clone();
     bar.name = 'locked-bar';
