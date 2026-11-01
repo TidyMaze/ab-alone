@@ -969,4 +969,54 @@ mod tests {
         );
         assert_eq!(lost(&new), (0, 0));
     }
+
+    #[test]
+    fn a_third_ejection_in_the_tree_switches_the_cadence_from_3_to_2() {
+        // The root: turn 1, boss to move, 2 ejections for the player (P1), 3 boss marbles.
+        let root = board(&[(0, 0), (-4, 4)], &[(0, -4), (4, -4), (-4, 0)], &[]);
+        let enc = played(root.clone(), 2, 1);
+        assert_eq!((enc.phase(), enc.game().history().len()), (0, 1));
+        // Boss ply 4 of the tree ends just before turn 3. Its hook announces turn 4, an assignment
+        // turn in P2 and not in P1: the phase at the start of the ply decides.
+        let boss = mv(&[(0, -4)], E);
+        let step = |gone: bool| {
+            let mut before = root.clone();
+            if gone {
+                before.set(4, -4, Cell::Empty);
+            }
+            before.set_magnetizer_ply(Some(3));
+            let mut after = before.clone();
+            after.set(0, -4, Cell::Empty);
+            after.set(1, -4, Cell::White);
+            magnetizer_step(&enc, &before, &boss, after)
+        };
+        let (p1, credits) = step(false);
+        assert_eq!(p1.announce(), None, "P1: turn 4 assigns nothing");
+        assert_eq!(p1.magnetizer_ply(), Some(4), "the clock moves on");
+        assert_eq!(credits, [0, 0]);
+        let (p2, _) = step(true);
+        assert!(
+            matches!(p2.announce(), Some((Some(_), 1))),
+            "P2 after a third ejection in the tree: turn 4 is announced"
+        );
+    }
+
+    #[test]
+    fn a_player_ply_of_the_tree_carries_the_announce_and_runs_no_hook() {
+        let mut before = board(&[(0, 0), (-4, 4)], &[(0, -4)], &[]);
+        before.set_announce(Some((Some((0, 0)), 1)));
+        before.set_magnetizer_ply(Some(2));
+        let enc = played(before.clone(), 0, 1);
+        let mut after = before.clone();
+        after.set(0, 0, Cell::Empty);
+        after.set(1, 0, Cell::Black);
+        let (out, _) = magnetizer_step(&enc, &before, &mv(&[(0, 0)], E), after);
+        assert_eq!(
+            out.announce(),
+            Some((Some((1, 0)), 1)),
+            "it follows its marble"
+        );
+        assert!(out.polarities().is_empty(), "ply 3 assigns nothing");
+        assert_eq!(out.magnetizer_ply(), Some(3));
+    }
 }

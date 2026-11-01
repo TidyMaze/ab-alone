@@ -867,4 +867,15 @@ mod tests {
         board.set_choir(None);
         assert_eq!(board, Board::empty());
     }
+
+    #[test]
+    fn the_magnetizer_clock_starts_unset_and_is_part_of_the_board() {
+        let mut board = Board::empty();
+        assert_eq!(board.magnetizer_ply(), None);
+        board.set_magnetizer_ply(Some(3));
+        assert_eq!(board.magnetizer_ply(), Some(3));
+        assert_ne!(board, Board::empty());
+        board.set_magnetizer_ply(None);
+        assert_eq!(board, Board::empty());
+    }
 }
