@@ -14,6 +14,7 @@ import { Discovered } from './openworlddiscovered';
 import { WorldMap } from './openworldmap';
 import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
 import { enter, heroStep } from './openworldstep';
+import { pairs, teleport, teleporterNear } from './openworldteleport';
 import type { PeerHost } from './worldnet';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
 
@@ -54,6 +55,10 @@ const TURNS = new Map<string, number>([
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 /** The keys that open and close the map (#1411); Escape closes it too. */
 const MAP_KEYS = new Set(['m', 'M']);
+/** The keys of the Teleport action (#1412): on a teleporter they open the map in the choice of a teleporter, and close it again. */
+const TELEPORT_KEYS = new Set(['t', 'T']);
+/** The ground a marble can stand on: the troop arrives on it round a teleporter (#1412). */
+const OPEN = new Set(['sand', 'grass', 'rock']);
 
 /** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
 export const twistOf = (prev: number, next: number): number => wrapPi(next - prev);
@@ -74,6 +79,8 @@ export class OpenWorldMode {
   /** The boss lairs of the world entered, by number, and the numbers of the ones beaten (#1170). */
   private lairs: Axial[] = [];
   private beaten: number[] = [];
+  /** The teleporters of the world entered (#1412), the spawn's first. */
+  private teleporters: Axial[] = [];
   private dirty = false;
   /** Whether the world changed since its last save, and how many saves the page has stored (`openworldSaved`, #968). */
   private unsaved = false;
@@ -125,6 +132,8 @@ export class OpenWorldMode {
     private readonly releaseScene: (scene: THREE.Scene) => void = () => {},
     /** The walk to the nearest tower, for the HUD's Dungeon button (#1291). */
     private readonly dungeonPath: DungeonPath = () => new Int32Array(),
+    /** The teleporters of a seed's world: `q, r` pairs (the bridge's `world_teleporters`, #1412). */
+    private readonly teleportersOf: (seed: number) => Int32Array = () => new Int32Array(),
   ) {}
 
   /** Opens the world of `seed`: its saved state when `resume` (the default) and a save of this version is there, else the spawn.
@@ -152,6 +161,7 @@ export class OpenWorldMode {
     const flatLairs = this.lairsOf(seed);
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
     this.beaten = saved ? [...saved.lairs] : [];
+    this.teleporters = pairs(this.teleportersOf(seed));
     this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     const view = new OpenWorldView(world, this.fight, skins);
     view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
@@ -167,6 +177,7 @@ export class OpenWorldMode {
     view.turnTo(saved ? restYaw(saved.yaw) : DEFAULT_YAW); // the camera opens at the angle the world was left at, or the default (#1026, #1254)
     view.show(this.hero.at, this.hero.troop);
     view.setLairs(this.lairs, this.beaten);
+    view.setTeleporters(this.teleporters);
     this.peers?.enter(seed, view.scene, view.camera, world);
     this.keepAlive();
     const medals = document.getElementById('openworld-medals'); // the HUD's medal count (#1171)
@@ -252,6 +263,8 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldParticles;
     delete document.body.dataset.openworldMotion;
     delete document.body.dataset.openworldDiscovered;
+    delete document.body.dataset.openworldTeleporters;
+    this.showTeleport(false);
   }
 
   /** The New world control (#1021): the world entered is left without its save, which is discarded, and a random world is entered
@@ -355,8 +368,10 @@ export class OpenWorldMode {
    * cadence (`beat`, #1059): the system's key repeat (`repeat`) is ignored. Escape leaves. M opens the map (#1411): while it is open,
    * M and Escape close it, and the other keys are not the mode's. Reports whether the key was the mode's. */
   key(key: string, repeat = false): boolean {
-    if (this.mapShown) return (key === 'Escape' || MAP_KEYS.has(key)) && (this.toggleMap(), true);
+    if (this.mapShown && key === 'Enter' && this.worldMap!.choosing) return this.choose(this.worldMap!.chosen), true; // the ringed teleporter (#1412)
+    if (this.mapShown) return (key === 'Escape' || MAP_KEYS.has(key) || TELEPORT_KEYS.has(key)) && (this.toggleMap(), true);
     if (MAP_KEYS.has(key)) return this.toggleMap(), true;
+    if (TELEPORT_KEYS.has(key)) return this.teleport(), true;
     if (key === 'Escape') return this.leave(), true;
     this.cancelWalk(); // any key ends a walk to a far cell (#1137)
     if (key === 'r' || key === 'R') return this.turn(DEFAULT_YAW - this.view!.yaw), true; // back to the default angle (#1026)
@@ -458,11 +473,66 @@ export class OpenWorldMode {
   toggleMap(): void {
     if (!this.active) return;
     if (this.mapShown) return this.closeMap();
+    this.openMap(false);
+  }
+
+  /** The map, made when it first opens, opened on the hero; `choose` for the choice of a teleporter (#1412), where a click picks the
+   * teleporter near the cell under it. */
+  private openMap(choose: boolean): void {
     this.cancelWalk();
     this.release();
-    this.worldMap ??= new WorldMap((centre, radius) => this.mapData(windowCells(this.seen, centre, radius)));
-    this.worldMap.open(this.hero!.at, ...this.size);
+    if (!this.worldMap) {
+      const map = new WorldMap((centre, radius) => this.mapData(windowCells(this.seen, centre, radius)));
+      map.pick = (cell) => void (map.choosing && this.choose(teleporterNear(this.discoveredTeleporters(), cell)));
+      this.worldMap = map;
+    }
+    this.worldMap.open(this.hero!.at, ...this.size, choose);
     document.getElementById('openworld-map-button')?.setAttribute('aria-expanded', 'true');
+  }
+
+  /** The Teleport action (#1412): the HUD's Teleport button, T and the pad's Y. On a teleporter it opens the map in the choice of a
+   * teleporter, and closes it again; nothing off a teleporter or outside a world. */
+  teleport(): void {
+    if (!this.active) return;
+    if (this.mapShown) return this.closeMap();
+    if (this.onTeleporter()) this.openMap(true);
+  }
+
+  /** Whether the hero stands on a teleporter. */
+  private onTeleporter(): boolean {
+    return this.teleporters.some((cell) => same(cell, this.hero!.at));
+  }
+
+  /** The teleporters discovered so far: the ones on a discovered cell (#1411), so the save needs nothing more. */
+  private discoveredTeleporters(): Axial[] {
+    return this.teleporters.filter(([q, r]) => this.discovered.has(q, r));
+  }
+
+  /** The choice of the teleporter `to` on the map (#1412), none for a click on no teleporter: the hero and the troop move there by the
+   * rules of openworldteleport.ts, with no glide and no push, and the map closes; a refused one is said in the map's caption. */
+  private choose(to: Axial | null): void {
+    if (!to) return this.worldMap!.note('No discovered teleporter there');
+    const hero = this.hero!;
+    const moved = teleport(this.teleporters, (q, r) => this.discovered.has(q, r), hero.at, to, hero.troop.length, this.free);
+    if ('refused' in moved) return this.worldMap!.note(moved.refused);
+    this.closeMap();
+    hero.at = moved.hero;
+    hero.troop = moved.troop;
+    this.view!.snap();
+    this.view!.show(hero.at, hero.troop);
+    this.dirty = true;
+    this.persist();
+    this.mark(document.body.dataset.openworld!);
+  }
+
+  /** Whether a marble can stand on `cell` now: open ground, no enemy, no lair (the troop's cells round a teleporter, #1412). */
+  private readonly free = ([q, r]: Axial): boolean =>
+    OPEN.has(this.world!.tile(q, r)?.terrain ?? 'water') && !this.fight.occupied(this.world!, q, r) && !this.lairs.some((cell) => same(cell, [q, r]));
+
+  /** Shows the HUD's Teleport button while the hero stands on a teleporter. */
+  private showTeleport(on: boolean): void {
+    const button = document.getElementById('openworld-teleport');
+    if (button) button.hidden = !on;
   }
 
   /** Whether the map is open. */
@@ -493,6 +563,7 @@ export class OpenWorldMode {
       troop: hero!.troop,
       enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS).filter(([q, r]) => this.discovered.has(q, r)),
       lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i) })),
+      teleporters: this.discoveredTeleporters(),
       yaw: this.view!.yaw,
     };
   }
@@ -748,6 +819,8 @@ export class OpenWorldMode {
     document.body.dataset.openworldBroken = String(this.world!.broken.length); // the obstacles broken (#1147)
     document.body.dataset.openworldLairs = this.lairs.map((c) => c.join(',')).join(' ');
     document.body.dataset.openworldLairsBeaten = this.beaten.join(' ');
+    document.body.dataset.openworldTeleporters = this.discoveredTeleporters().map((c) => c.join(',')).join(' '); // #1412
+    this.showTeleport(this.onTeleporter());
     document.body.dataset.openworldYaw = String(Math.round((this.view!.yaw * 180) / Math.PI)); // the turn, in degrees (#1026)
     document.body.dataset.openworldDrawn = JSON.stringify(this.view!.drawn);
   }

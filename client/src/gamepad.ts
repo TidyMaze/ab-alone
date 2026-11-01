@@ -2,7 +2,7 @@
 // turned into actions that main.ts plays on the keyboard's paths. No game logic here.
 
 export type PadAction =
-  | { kind: 'confirm' | 'back' | 'menu' | 'prev' | 'next' | 'reset' | 'map' }
+  | { kind: 'confirm' | 'back' | 'menu' | 'prev' | 'next' | 'reset' | 'map' | 'teleport' }
   /** The D-pad or the left stick: the nearest board direction (as KEY_DIRS) and a focus step (up and left -1). */
   | { kind: 'move'; hex: number; step: 1 | -1 }
   /** The D-pad or the left stick, every frame it is held: its vector (x right, y down), for the Open world's walk. A
@@ -15,8 +15,8 @@ export type PadAction =
 
 export const REPEAT_DELAY = 400; // ms a held aim, LB or RB waits before it repeats
 export const REPEAT_EVERY = 150;
-const BUTTONS = [['confirm', 0], ['back', 1], ['prev', 4], ['next', 5], ['map', 8], ['menu', 9], ['reset', 11]] as const; // 8: View, the Open world's map (#1411)
-const ONCE = new Set(['confirm', 'back', 'menu', 'reset', 'map']); // these never repeat
+const BUTTONS = [['confirm', 0], ['back', 1], ['prev', 4], ['next', 5], ['map', 8], ['menu', 9], ['reset', 11], ['teleport', 3]] as const; // 8: View, the Open world's map (#1411); 3: Y, its Teleport action (#1412)
+const ONCE = new Set(['confirm', 'back', 'menu', 'reset', 'map', 'teleport']); // these never repeat
 const AIM_DEAD = 0.5; // the left stick aims past half way
 const ORBIT_DEAD = 0.2;
 const ORBIT_PX_PER_MS = 0.3;
