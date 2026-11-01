@@ -41,7 +41,7 @@ function setup(allowed = true) {
   const rooms: string[] = [];
   const clock = { now: 0 };
   const reports: NetStatus[] = [];
-  const applied: [number, number][] = [];
+  const applied: (readonly [number, number])[] = [];
   const keysOnce = generateKeys();
   const me = { name: '' };
   const root = document.createElement('div');
@@ -269,7 +269,7 @@ describe('WorldPeersHost', () => {
       enter();
       host.broke([4, -2]);
       await flush();
-      const [[bytes, to]] = sentBreaks(nets[0]!);
+      const [bytes, to] = sentBreaks(nets[0]!)[0]!;
       expect(to).toBeUndefined();
       const message = decode(bytes!);
       expect(message).toMatchObject({ t: 'break', event: { seed: PUBLIC_SEED, q: 4, r: -2, pub: (await keysOnce).pub } });
