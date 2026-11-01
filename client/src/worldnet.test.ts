@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const flush = (): Promise<void> => new Promise((done) => setTimeout(done, 20));
+/** Waits (a signature takes a while on a loaded machine) until `check` holds. */
+const until = (check: () => boolean): Promise<void> =>
+  vi.waitFor(() => {
+    if (!check()) throw new Error('not yet');
+  });
 import * as THREE from 'three/webgpu';
 import type { PeerNet } from './p2p';
 import { generateKeys } from './moverecord';
@@ -268,7 +273,7 @@ describe('WorldPeersHost', () => {
       const { nets, host, enter, keysOnce } = setup();
       enter();
       host.broke([4, -2]);
-      await flush();
+      await until(() => sentBreaks(nets[0]!).length === 1);
       const [bytes, to] = sentBreaks(nets[0]!)[0]!;
       expect(to).toBeUndefined();
       const message = decode(bytes!);
@@ -302,7 +307,7 @@ describe('WorldPeersHost', () => {
       enter();
       const event = await signBreak(await keysOnce, PUBLIC_SEED, 3, 5);
       nets[0]!.data(encodeBreak(event), 'p');
-      await flush();
+      await until(() => applied.length === 1);
       expect(applied).toEqual([[3, 5]]);
       nets[0]!.data(encodeBreak(event), 'q'); // the same cell again, from another peer
       await flush();
@@ -325,6 +330,7 @@ describe('WorldPeersHost', () => {
       expect(applied).toEqual([]);
       nets[0]!.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 8, 8)), 'p');
       nets[0]!.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, 9, 9)), 'p'); // 0 ms after: dropped
+      await until(() => applied.length === 1);
       await flush();
       expect(applied).toEqual([[8, 8]]);
     });
@@ -339,13 +345,13 @@ describe('WorldPeersHost', () => {
     });
 
     it('gives a newcomer what it holds, newest first, one every 200 ms, and stops when it leaves', async () => {
-      const { nets, host, clock, enter, keysOnce } = setup();
+      const { nets, host, clock, applied, enter, keysOnce } = setup();
       enter();
       const keys = await keysOnce;
       for (let q = 1; q <= 3; q++) {
         clock.now = q * 1000;
         nets[0]!.data(encodeBreak(await signBreak(keys, PUBLIC_SEED, q, 0)), `peer${q}`);
-        await flush();
+        await until(() => applied.length === q);
       }
       nets[0]!.join('new');
       nets[0]!.join('gone');
@@ -366,7 +372,7 @@ describe('WorldPeersHost', () => {
       const { nets, host, enter } = setup();
       enter();
       host.broke([2, 2]);
-      await flush();
+      await until(() => sentBreaks(nets[0]!).length === 1);
       host.hide();
       host.show();
       nets[1]!.join('p');

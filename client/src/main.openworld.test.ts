@@ -652,6 +652,9 @@ describe('the public Open world online', () => {
     const game = await joined();
     const room = game.world()!;
     const { hero, cell } = obstacleBeside();
+    const canBreak = (window as unknown as { __openworldCanBreak: (seed: number, q: number, r: number) => boolean }).__openworldCanBreak; // the test hook of the e2e
+    expect(canBreak(PUBLIC_SEED, cell[0], cell[1])).toBe(true);
+    expect(canBreak(PUBLIC_SEED, 0, 0)).toBe(false); // the spawn clearing
     const fixture = () => hooks().__openworldFixture!({ hero, troop: [], enemies: [] });
     fixture();
     const key = hero[0] < cell[0] ? 'ArrowRight' : 'ArrowLeft';
