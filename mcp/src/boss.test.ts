@@ -89,7 +89,7 @@ const CASES: Record<string, () => void> = {
       tell: { kind: 'special', cells: [], text: 'board special 0 fires after the next ply' },
       marks: [],
     });
-    // Every 3 turns it borrows an effect of another boss, announced during the turn before it shows.
+    // Every 2 turns it borrows an effect of another boss, announced during the turn before it shows.
     // Both sides play their first legal move: the boss search of this deck is far too slow for a test.
     while (ballast.ballast_next() < 0) ballast.play(ballast.legal_moves().slice(0, 8));
     const borrowed = ["the Hull's crack", "the Pulsar's pulse", "the Magnetizer's polarity", "the Chaplain's conversion check", "the Swarm's wave"];
