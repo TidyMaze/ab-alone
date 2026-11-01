@@ -179,6 +179,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
 
   // The renderer draws nothing: it keeps the animation loop for frame() and counts the draws.
   let loop: ((now: number) => void) | null = null;
+  let renderer: { info: { autoReset: boolean; reset(): void } } | null = null;
   let draws = 0;
   vi.resetModules();
   vi.doMock('abalone-wasm', async (importOriginal) => {
@@ -191,7 +192,19 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       domElement = document.createElement('canvas');
       backend = { isWebGPUBackend: options.webgpu ?? false };
       toneMapping = 0;
-      info = { render: { calls: 9000, drawCalls: 7, triangles: 300 }, memory: { geometries: 5, textures: 2 } };
+      constructor() {
+        renderer = this;
+      }
+      // As three's: the animation loop zeroes the frame's counts before each frame unless autoReset is off; a render adds its own.
+      info = {
+        autoReset: true,
+        render: { calls: 9000, drawCalls: 0, triangles: 0 },
+        memory: { geometries: 5, textures: 2 },
+        reset: (): void => {
+          this.info.render.drawCalls = 0;
+          this.info.render.triangles = 0;
+        },
+      };
       toneMappingExposure = 1;
       initialized = false;
       init = async (): Promise<void> => {
@@ -203,6 +216,8 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
       getMaxAnisotropy = (): number => 1;
       render(): void {
         draws++;
+        this.info.render.drawCalls += 7;
+        this.info.render.triangles += 300;
       }
       setAnimationLoop(fn: ((now: number) => void) | null): void {
         loop = fn;
@@ -309,6 +324,7 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
     openModes: () => byId('modes').click(),
     frame: (ms = 16) => {
       clock += ms;
+      renderer?.info.autoReset && renderer.info.reset();
       loop?.(clock);
     },
     settle: async () => {

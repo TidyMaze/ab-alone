@@ -29,7 +29,7 @@ test('each biome drifts its own particles and the desert shimmers, #1104', async
     await expect.poll(() => flakes(page)).toBeGreaterThan(2);
     expect(await flakes(page)).toBeLessThanOrEqual(64);
     if (biome === 'desert') await expect.poll(() => moves(page)).toContain('shimmer');
-    else expect(await moves(page)).not.toContain('shimmer');
+    else await expect.poll(() => moves(page)).not.toContain('shimmer'); // the shimmer clears a frame after the hero leaves the desert
   }
 });
 
