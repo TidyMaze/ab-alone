@@ -1491,3 +1491,7 @@ Reply time through wasm (nodejs release build, `core`, 6 seeds of 80 plies at mo
 boss replies only, ms, average / max): 198 to 203 / 386 to 400 after (54 replies), 169 to 174 / 294 to 329 before (60
 replies), two runs each. The fights differ after the first changed reply, so the positions are not the same: about 15
 to 20 % slower, the maximum stays under 400 ms.
+
+## Closed umbrellas
+
+- #829 (boss AIs track the phase in the tree): children #912 (PR #1205), #913 (#1221), #914 (#1227), #915 (#1256), #916 (#1236) all merged and closed; ladder numbers above and in each child PR.
