@@ -1807,7 +1807,6 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
   type Ctx = { fillStyle: string; clearRect: ReturnType<typeof vi.fn>; fills: string[] };
   /** A canvas in the page whose 2D context records its clears and the colours it fills with. */
   const withCanvas = (): Ctx => {
-    document.body.innerHTML = '<canvas id="openworld-minimap" width="288" height="288"></canvas>';
     const fills: string[] = [];
     const ctx: Ctx = { fillStyle: '', clearRect: vi.fn(), fills };
     const blank = () => {};
@@ -1856,10 +1855,30 @@ describe('the minimap of the Open world (#1410, docs/specs/openworld.md section 
     expect(ctx.fills).not.toContain(COLOURS.lair);
   });
 
-  it('draws nothing when the page has no canvas or the canvas has no 2D context', () => {
+  it('is gone when the mode is left', () => {
+    withCanvas();
+    const m = mode();
+    m.enter(42, 800, 600);
+    expect(document.getElementById('openworld-minimap')).not.toBeNull();
+    m.key('Escape');
+    expect(document.getElementById('openworld-minimap')).toBeNull();
+  });
+
+  it('leaves out the cells off the world', () => {
+    const ctx = withCanvas();
+    new OpenWorldMode((_s, cx, cy) => (cx > 0 ? new Uint8Array() : bytes(cx, cy)), () => new Int32Array(), async () => ({ low: {}, high: {} }), () => true, worldSaves(memoryStore(), 1)).enter(42, 800, 600);
+    expect(ctx.fills).toContain(COLOURS.grass);
+  });
+
+  it('makes its canvas at the end of the body, once, and draws nothing when it has no 2D context', () => {
+    document.body.innerHTML = '<canvas id="page"></canvas>';
+    const m = mode();
+    m.enter(42, 800, 600);
+    m.enter(43, 800, 600);
+    expect(document.querySelectorAll('#openworld-minimap')).toHaveLength(1);
+    expect(document.querySelector('canvas')!.id).toBe('page');
+    expect(document.body.lastElementChild!.id).toBe('openworld-minimap');
     document.body.innerHTML = '';
-    expect(() => mode().enter(42, 800, 600)).not.toThrow();
-    document.body.innerHTML = '<canvas id="openworld-minimap"></canvas>';
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     expect(() => mode().enter(42, 800, 600)).not.toThrow();
   });
