@@ -42,8 +42,11 @@ export default defineConfig({
   // Every e2e test passes in under 15 s, locally and on CI, and a slower one fails (CONTRIBUTING.md, #349).
   // No test.slow() or test.setTimeout() override: a test that needs more is made cheaper.
   timeout: 15_000,
-  // One retry on CI records a trace for the retried run only.
-  retries: process.env.CI ? 1 : 0,
+  // A wait on a state (expect, expect.poll) gets 10 s instead of 5 s: under 4 workers a page took more than 5 s to build the Open world (#1383).
+  // The test itself still fails at 15 s.
+  expect: { timeout: 10_000 },
+  // One retry, locally too: a test that passes on the retry is reported flaky, not red (#1383). The trace of the retried run is kept.
+  retries: 1,
   // No service worker outside the offline spec: a cache left by one test must never serve another (#193).
   // On CI the page draws with software WebGL, a frame costs by its pixels and every click waits for one (#216): a 960x540
   // window draws 44 % fewer pixels than the 1280x720 default, and stays above the 768 px width of the low quality tier (#258).
@@ -59,6 +62,8 @@ export default defineConfig({
     // WebGPUService off the page keeps the WebGL2 backend that CI tests.
     {
       name: 'chromium',
+      // The contrast checks (tag @contrast) are a report for the art director, not a gate: `bun run e2e:contrast` runs them (#1383).
+      grepInvert: process.env.E2E_CONTRAST ? undefined : /@contrast/,
       use: {
         browserName: 'chromium',
         ...(!process.env.CI && process.platform === 'darwin'

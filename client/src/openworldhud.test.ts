@@ -76,9 +76,9 @@ describe('the Open world help (#1252)', () => {
   });
 });
 
-describe('the Ship button of the Open world (#1373)', () => {
+describe('the Hub button of the Open world (#1373)', () => {
   it('is a 44 px button at the bottom right on a touch screen, above the peers arrows, out of the joystick half', () => {
-    expect(html).toMatch(/<button id="openworld-ship" type="button"[^>]*>Ship<\/button>/);
+    expect(html).toMatch(/<button id="openworld-ship" type="button"[^>]*>Hub<\/button>/);
     expect(css).toContain('@media (pointer: coarse) { body[data-openworld] #openworld-ship { display: grid; } }');
     const ship = rule('#openworld-ship');
     expect(ship).toContain('min-width: var(--target)');
@@ -89,8 +89,8 @@ describe('the Ship button of the Open world (#1373)', () => {
     expect(css).toContain('@media (pointer: coarse) and (orientation: portrait) { #openworld-hud { bottom: calc(1.5rem + var(--target)); } }');
   });
 
-  it('names the keys on a keyboard only; a touch screen reads the stick, the tap and the Ship button (#1379)', () => {
-    expect(html).toMatch(/<span class="tap-hint">[^<]*stick[^<]*tap[^<]*twist[^<]*the Ship button to leave\.<\/span>/);
+  it('names the keys on a keyboard only; a touch screen reads the stick, the tap and the Hub button (#1379)', () => {
+    expect(html).toMatch(/<span class="tap-hint">[^<]*stick[^<]*tap[^<]*twist[^<]*the Hub button to leave\.<\/span>/);
     expect(html).not.toMatch(/class="tap-hint">[^<]*\b(arrows|Q E|Esc|click)\b/);
     expect(css).toContain('@media (pointer: coarse) { .keys-hint { display: none; } .tap-hint { display: inline; } }');
     expect(css).toContain('body[data-pad] .tap-hint { display: none; }');

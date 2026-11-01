@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// #1373: from the Open world on a phone, one visible 44 px Ship button leads to the hub, the world saved as with Esc.
+// #1373: from the Open world on a phone, one visible 44 px Hub button leads to the hub, the world saved as with Esc.
 const viewports = [
   { name: 'upright 390 by 844', viewport: { width: 390, height: 844 } },
   { name: 'landscape 844 by 390', viewport: { width: 844, height: 390 } },
@@ -18,7 +18,7 @@ for (const { name, viewport } of viewports) {
   test.describe(name, () => {
     test.use({ viewport, isMobile: true, hasTouch: true });
 
-    test('the Ship button is a 44 px target clear of the plate, the chip and the settings, and a tap leads to the hub', async ({ page }) => {
+    test('the Hub button is a 44 px target clear of the plate, the chip and the settings, and a tap leads to the hub', async ({ page }) => {
       await page.goto('./?bot=off&openworld=7');
       await expect(page.locator('body')).toHaveAttribute('data-openworld', '7');
       const ship = page.locator('#openworld-ship');

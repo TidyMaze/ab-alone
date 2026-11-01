@@ -60,7 +60,7 @@ const VIEWS = [
   ['desktop with Clear board', 1280, 720, true],
 ] as const;
 for (const [name, width, height, clear] of VIEWS) {
-  test(`each target arrow reads 3:1 against the deck on ${name}, task #390`, async ({ page }, testInfo) => {
+  test(`each target arrow reads 3:1 against the deck on ${name}, task #390`, { tag: '@contrast' }, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     if (clear) await page.addInitScript(() => localStorage.setItem('ab-alone.clear-board', 'on'));
     await page.goto('./?bot=off');
