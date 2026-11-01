@@ -10,7 +10,9 @@ import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
 import { endingLine } from './tally';
 import { MARBLES } from './trainer';
-import { drawMinimap, RADIUS as MAP_RADIUS, windowCells } from './openworldminimap';
+import { Discovered } from './openworlddiscovered';
+import { WorldMap } from './openworldmap';
+import { drawMinimap, RADIUS as MAP_RADIUS, windowCells, type MinimapCell, type MinimapData } from './openworldminimap';
 import { enter, heroStep } from './openworldstep';
 import type { PeerHost } from './worldnet';
 import { MAX_REACH, OpenWorldView, type Played, type PropModels, wrapPi } from './openworldview';
@@ -50,6 +52,8 @@ const TURNS = new Map<string, number>([
 ]);
 /** The keys that step the hero. */
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+/** The keys that open and close the map (#1411); Escape closes it too. */
+const MAP_KEYS = new Set(['m', 'M']);
 
 /** The turn of the camera a twist of two fingers makes, from the angle the two fingers made to the new one: the shortest way. */
 export const twistOf = (prev: number, next: number): number => wrapPi(next - prev);
@@ -90,6 +94,11 @@ export class OpenWorldMode {
   private route: Axial[] = [];
   /** The props are read once for the page: every entry reuses them. */
   private modelsOnce?: Promise<PropModels>;
+  /** The cells the hero has discovered (#1411), and the full screen map of them, made when it first opens. */
+  private discovered = new Discovered();
+  private worldMap: WorldMap | null = null;
+  /** The window's size, for the map. */
+  private size: [number, number] = [0, 0];
 
   /** `load` reads a chunk of a seed's world, `models` the low-poly and the detailed props: the first draw does not wait for them.
    * `reduced` tells whether the page asks for reduced motion, which holds the water still. */
@@ -143,6 +152,7 @@ export class OpenWorldMode {
     const flatLairs = this.lairsOf(seed);
     this.lairs = Array.from({ length: flatLairs.length / 2 }, (_, i): Axial => [flatLairs[2 * i]!, flatLairs[2 * i + 1]!]);
     this.beaten = saved ? [...saved.lairs] : [];
+    this.discovered = saved ? Discovered.from(saved.discovered) : new Discovered(); // a save from before: the cells round the hero, by `mark`
     const view = new OpenWorldView(world, this.fight, skins);
     view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
     view.setShadows(!this.lowTier()); // the sun's soft shadow round the hero, on the high tier only (#1364)
@@ -152,6 +162,7 @@ export class OpenWorldMode {
       this.hero.troop = saved.troop;
     }
     this.view = view;
+    this.size = [width, height];
     view.resize(width, height);
     view.turnTo(saved ? restYaw(saved.yaw) : DEFAULT_YAW); // the camera opens at the angle the world was left at, or the default (#1026, #1254)
     view.show(this.hero.at, this.hero.troop);
@@ -214,6 +225,7 @@ export class OpenWorldMode {
     this.held.clear();
     this.freeView();
     document.getElementById('openworld-minimap')?.remove(); // the minimap goes with the world (#1275)
+    this.closeMap(); // and so does the map (#1411)
     this.view = null;
     this.world = null;
     this.dirty = false;
@@ -239,6 +251,7 @@ export class OpenWorldMode {
     delete document.body.dataset.openworldGlide;
     delete document.body.dataset.openworldParticles;
     delete document.body.dataset.openworldMotion;
+    delete document.body.dataset.openworldDiscovered;
   }
 
   /** The New world control (#1021): the world entered is left without its save, which is discarded, and a random world is entered
@@ -329,6 +342,8 @@ export class OpenWorldMode {
 
   /** A new window size: the view follows it, and the zoom it may have been clamped to is published (#976). */
   resize(width: number, height: number): void {
+    this.size = [width, height];
+    if (this.mapShown) this.worldMap!.resize(width, height);
     this.view?.snap();
     this.view?.resize(width, height);
     this.dirty = true;
@@ -337,8 +352,11 @@ export class OpenWorldMode {
 
   /** An arrow key rolls the hero one cell, or on the diagonal while a vertical and a horizontal arrow are both held;
    * opposite arrows held together do nothing. The first arrow down steps at once, then the held arrows step on their own
-   * cadence (`beat`, #1059): the system's key repeat (`repeat`) is ignored. Escape leaves. Reports whether the key was the mode's. */
+   * cadence (`beat`, #1059): the system's key repeat (`repeat`) is ignored. Escape leaves. M opens the map (#1411): while it is open,
+   * M and Escape close it, and the other keys are not the mode's. Reports whether the key was the mode's. */
   key(key: string, repeat = false): boolean {
+    if (this.mapShown) return (key === 'Escape' || MAP_KEYS.has(key)) && (this.toggleMap(), true);
+    if (MAP_KEYS.has(key)) return this.toggleMap(), true;
     if (key === 'Escape') return this.leave(), true;
     this.cancelWalk(); // any key ends a walk to a far cell (#1137)
     if (key === 'r' || key === 'R') return this.turn(DEFAULT_YAW - this.view!.yaw), true; // back to the default angle (#1026)
@@ -435,8 +453,53 @@ export class OpenWorldMode {
     return true;
   }
 
-  /** Zooms the Open world camera by `scale`: more than 1 further out, less than 1 closer (#976). */
+  /** Opens the map of the cells discovered (#1411) over the world, on the hero, or closes it: the HUD's Map button, M, the pad's View.
+   * The hero ends its walk and lets go of the arrows held: it stays while the map is open. Nothing outside a world. */
+  toggleMap(): void {
+    if (!this.active) return;
+    if (this.mapShown) return this.closeMap();
+    this.cancelWalk();
+    this.release();
+    this.worldMap ??= new WorldMap((centre, radius) => this.mapData(windowCells(this.seen, centre, radius)));
+    this.worldMap.open(this.hero!.at, ...this.size);
+    document.getElementById('openworld-map-button')?.setAttribute('aria-expanded', 'true');
+  }
+
+  /** Whether the map is open. */
+  get mapShown(): boolean {
+    return this.worldMap?.shown ?? false;
+  }
+
+  /** The pad's stick pans the open map as a drag of `dx`, `dy` px. */
+  panMap(dx: number, dy: number): void {
+    this.worldMap!.pan(dx, dy);
+  }
+
+  private closeMap(): void {
+    this.worldMap?.close();
+    document.getElementById('openworld-map-button')?.setAttribute('aria-expanded', 'false');
+  }
+
+  /** The terrain of a discovered cell, none for a cell not discovered or off the world: the minimap and the map draw only these. */
+  private readonly seen = (q: number, r: number) => (this.discovered.has(q, r) ? this.world!.tile(q, r)?.terrain : undefined);
+
+  /** What the minimap and the map draw, with the `cells` given: the hero, the troop, the enemies near the hero on discovered cells and the
+   * lairs, which are landmarks seen from afar. */
+  private mapData(cells: MinimapCell[]): MinimapData {
+    const { world, hero } = this;
+    return {
+      cells,
+      hero: hero!.at,
+      troop: hero!.troop,
+      enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS).filter(([q, r]) => this.discovered.has(q, r)),
+      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i) })),
+      yaw: this.view!.yaw,
+    };
+  }
+
+  /** Zooms the Open world camera by `scale`: more than 1 further out, less than 1 closer (#976). While the map is open it zooms the map. */
   zoom(scale: number): void {
+    if (this.mapShown) return this.worldMap!.zoom(scale);
     this.view!.snap();
     this.view!.zoomBy(scale);
     this.dirty = true;
@@ -612,7 +675,7 @@ export class OpenWorldMode {
     if (!this.unsaved) return;
     this.unsaved = false;
     const { at, troop } = this.hero!;
-    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten).then((stored) => {
+    void this.saves.put(this.seed, at, troop, this.fight, this.view!.yaw, this.world!.broken, this.beaten, this.discovered.toJSON()).then((stored) => {
       if (stored) document.body.dataset.openworldSaved = String(++this.writes);
     });
   }
@@ -657,24 +720,20 @@ export class OpenWorldMode {
     return canvas;
   }
 
-  /** Draws the minimap (#1410) from the world as it is: called by `mark`, so on a step, a push and a camera turn, never on a frame. */
+  /** Draws the minimap (#1410) from the world as it is: called by `mark`, so on a step, a push and a camera turn, never on a frame. The
+   * cells not discovered stay dark (#1411). The map, when open, is drawn again too. */
   private drawMap(): void {
+    if (this.mapShown) this.worldMap!.draw();
     const canvas = this.mapCanvas();
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const { world, hero } = this;
-    drawMinimap(ctx, canvas.width, {
-      cells: windowCells((q, r) => world!.tile(q, r)?.terrain, hero!.at),
-      hero: hero!.at,
-      troop: hero!.troop,
-      enemies: this.fight.enemiesAround(world!, hero!.at, MAP_RADIUS),
-      lairs: this.lairs.map((cell, i) => ({ cell, beaten: this.beaten.includes(i) })),
-      yaw: this.view!.yaw,
-    });
+    drawMinimap(ctx, canvas.width, this.mapData(windowCells(this.seen, this.hero!.at)));
   }
 
   private mark(seed: string): void {
     this.anim();
+    this.discovered.reveal(this.hero!.at); // the cells within 10 of the hero (#1411): saved with the step that reached them
+    document.body.dataset.openworldDiscovered = String(this.discovered.count);
     this.drawMap();
     document.body.dataset.openworld = seed;
     const shown = document.getElementById('openworld-seed'); // the HUD's seed, to read or share (#1021)

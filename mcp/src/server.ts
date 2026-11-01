@@ -36,6 +36,7 @@ const SAVE = z.object({
   yaw: z.number(),
   broken: z.array(CELL),
   lairs: z.array(z.int().min(0)),
+  discovered: z.array(z.tuple([z.int(), z.int(), z.string()])).optional(),
 });
 
 export function createServer(
@@ -171,7 +172,7 @@ export function createServer(
     'world_state',
     {
       description:
-        'The Open world state: seed, hero, troop, obstacles broken, enemies beaten (ejected), the enemies in the window as the pushes ' +
+        'The Open world state: seed, hero, troop, obstacles broken, enemies beaten (ejected), cells discovered (within 10 of the hero so far), the enemies in the window as the pushes ' +
         'left them, every boss lair with its distance from the hero and whether it is beaten, ending (the end line) once every lair is ' +
         'beaten, and a short window of cells round the hero (never the whole map). There is no loss state: the hero cannot lose, as in ' +
         `the client. ${WINDOW}`,
@@ -184,7 +185,7 @@ export function createServer(
     'save_world',
     {
       description:
-        "The Open world in the client's save format (hero, troop, fight, broken, lairs beaten): give it to new_world as save to " +
+        "The Open world in the client's save format (hero, troop, fight, broken, lairs beaten, cells discovered): give it to new_world as save to " +
         'resume the world later.',
     },
     () => toolResult(world.save()),

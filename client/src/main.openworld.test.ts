@@ -679,3 +679,30 @@ describe('the public Open world online', () => {
     expect(data().openworldBeaten).toBe('1');
   });
 });
+
+describe('the map of the Open world (#1411)', () => {
+  it('the Map button opens and closes it, and so do M and Escape; Escape with the map shut leaves the world', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    game.openModes();
+    byId('openworld').click();
+    await settle();
+    const button = byId('openworld-map-button');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    button.focus();
+    button.click();
+    expect(document.getElementById('openworld-map')).not.toBeNull();
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).not.toBe(button); // the keys and the pad go back to the world
+    button.click();
+    expect(document.getElementById('openworld-map')).toBeNull();
+    expect(press('m').defaultPrevented).toBe(true);
+    expect(document.getElementById('openworld-map')).not.toBeNull();
+    press('Escape');
+    expect(document.getElementById('openworld-map')).toBeNull();
+    expect(data().openworld).toBe('7');
+    press('m');
+    press('Escape');
+    press('Escape');
+    expect(data().openworld).toBeUndefined();
+  });
+});

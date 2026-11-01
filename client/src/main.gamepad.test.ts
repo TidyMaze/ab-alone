@@ -7,7 +7,7 @@ import { boot, type Game } from './test/harness';
 // The gamepad on main.ts (#1252): it drives the keyboard's paths, the focus walk of the menus and the board's keys.
 
 type Move = { cells: Axial[]; dir: number };
-const A = 0, B = 1, LB = 4, RB = 5, LT = 6, RT = 7, START = 9, R3 = 11, DOWN = 13, LEFT = 14, RIGHT = 15;
+const A = 0, B = 1, LB = 4, RB = 5, LT = 6, RT = 7, VIEW = 8, START = 9, R3 = 11, DOWN = 13, LEFT = 14, RIGHT = 15;
 const canvas = (): HTMLCanvasElement => document.querySelector('canvas')!;
 const rings = (game: Game): Axial[] => game.hook<Axial[]>('__rings');
 const plies = (game: Game): number => game.hook<number>('__plies');
@@ -104,6 +104,28 @@ describe('the gamepad in the Open world', () => {
     pad.hold([], undefined, { [LT]: 1 }); // out: the closest the camera goes is 1
     expect(Number(data().openworldZoom)).toBeGreaterThan(zoom);
     expect(JSON.stringify(game.hook('__view'))).toBe(view);
+    pad.unplug();
+  });
+
+  it('View opens and closes the map; while it is open the stick pans it and the triggers zoom it, the hero and the camera stay (#1411)', async () => {
+    const game = await boot('?bot=off&openworld=7');
+    const pad = plugPad(game);
+    await openWorldOn(game);
+    pad.tap(VIEW);
+    expect(document.getElementById('openworld-map')).not.toBeNull();
+    const zoom = data().openworldZoom;
+    pad.hold([], [1, 0, 0, 0]);
+    pad.hold([]);
+    pad.hold([], undefined, { [RT]: 1 });
+    pad.hold([]);
+    expect(data().openworldAt).toBe('0,0');
+    expect(data().openworldZoom).toBe(zoom);
+    pad.tap(B); // Back closes the map, as Escape does
+    expect(document.getElementById('openworld-map')).toBeNull();
+    expect(data().openworld).toBe('7');
+    pad.tap(VIEW);
+    pad.tap(VIEW);
+    expect(document.getElementById('openworld-map')).toBeNull();
     pad.unplug();
   });
 

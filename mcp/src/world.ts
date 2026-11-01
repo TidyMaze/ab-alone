@@ -2,7 +2,8 @@
 // cell. Every rule is the Rust core's, called in the client's order (`OpenWorldMode.roll` of client/src/openworldmode.ts): the map,
 // the enemies, the lairs and the path (`world_chunk`, `world_enemies`, `world_lairs`, `world_path`), the step (`world_enter`,
 // `world_trail`) and the troop's push after it (`WorldFight`). This holds the hero, the troop, the broken cells, the fight and the lairs
-// beaten, saves them in the client's format (client/src/openworldsave.ts), and turns the engine's codes into words.
+// beaten and the cells discovered, saves them in the client's format (client/src/openworldsave.ts), and turns the engine's codes into words.
+import { decodeDiscovered, Discovered, type DiscoveredSave } from '../../client/src/openworlddiscovered';
 import { endingLine } from '../../client/src/tally';
 import { DIRECTIONS } from './notation';
 import type { ErrorCode, Result } from './game';
@@ -46,7 +47,7 @@ export interface Outcome {
 type Cell = [q: number, r: number];
 export type Direction = (typeof DIRECTIONS)[number];
 
-/** A world as the client saves it (`worldSaves().put` of client/src/openworldsave.ts, record 3), cells as `[q, r]`. */
+/** A world as the client saves it (`worldSaves().put` of client/src/openworldsave.ts, record 4), cells as `[q, r]`. */
 export interface WorldSave {
   record?: number;
   version: number;
@@ -60,6 +61,8 @@ export interface WorldSave {
   broken: Cell[];
   /** The numbers of the lairs beaten. */
   lairs: number[];
+  /** The cells discovered (#1411), a bitset per chunk; a save from before has none, and the cells round the hero are discovered. */
+  discovered?: DiscoveredSave;
   savedAt?: number;
 }
 
@@ -97,6 +100,8 @@ export interface WorldState {
   broken: number;
   /** Enemy marbles the troop has ejected. */
   beaten: number;
+  /** The cells discovered: within 10 cells of every cell the hero stood on, as the client's map shows them (#1411). */
+  discovered: number;
   /** The enemy marbles inside the window. */
   enemies: string[];
   lairs: { boss: string; cell: string; distance: number; beaten: boolean }[];
@@ -142,7 +147,7 @@ const LETTERS = '~sgrPotW';
 const NAMES = ['water', 'sand', 'grass', 'rock', 'peak', 'boulder', 'tree', 'wall'];
 /** The record of the client's save (`RECORD` of client/src/openworldsave.ts) and the crew of its ending line (`MARBLES` of
  * client/src/trainer.ts). */
-const RECORD = 3;
+const RECORD = 4;
 const CREW = 6;
 const BOULDER = 5;
 const TREE = 6;
@@ -171,6 +176,7 @@ interface Play {
   fight: Fight;
   lairs: number[];
   yaw: number;
+  discovered: Discovered;
 }
 
 /** The one Open world of the server. */
@@ -193,16 +199,19 @@ export class OpenWorld {
   newWorld({ seed = 0, save }: NewWorldInput): Result<WorldState> {
     const version = this.rules.world_version();
     if (save && save.version !== version) return fail('bad_save', `the save is of world version ${save.version}, this world is version ${version}: start a new world`);
+    const discovered = decodeDiscovered(save?.discovered ?? []);
+    if (!discovered) return fail('bad_save', 'the discovered cells of the save do not decode: start a new world');
     this.chunks.clear();
     this.groups.clear();
     this.entered = null;
     if (save) {
       const { removed, added, beaten } = save.fight;
       const fight = this.rules.WorldFight.restore(Int32Array.from(removed.flatMap((key) => key.split(',').map(Number))), flat(added), beaten);
-      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw };
+      this.play = { seed: save.seed, hero: save.hero, troop: save.troop, broken: [...save.broken], fight, lairs: [...save.lairs], yaw: save.yaw, discovered: Discovered.from(discovered) };
     } else {
-      this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0 };
+      this.play = { seed, hero: [0, 0], troop: [...DELTAS], broken: [], fight: new this.rules.WorldFight(), lairs: [], yaw: 0, discovered: new Discovered() };
     }
+    this.play.discovered.reveal(this.play.hero); // a save from before the discovery: the cells round the hero, as the client
     this.lairCells = pairs(this.rules.world_lairs(this.play.seed));
     return ok(this.view(RADIUS));
   }
@@ -218,9 +227,10 @@ export class OpenWorld {
     const play = this.play;
     if (!play) return this.none();
     this.back();
-    const { seed, hero, troop, broken, fight, lairs, yaw } = play;
+    const { seed, hero, troop, broken, fight, lairs, yaw, discovered } = play;
     const removed = pairs(fight.removed()).map(([q, r]) => `${q},${r}`);
-    return ok({ record: RECORD, version: this.rules.world_version(), seed, hero, troop, fight: { removed, added: pairs(fight.added()), beaten: fight.beaten() }, yaw, broken: [...broken], lairs: [...lairs], savedAt: Date.now() });
+    const added = pairs(fight.added());
+    return ok({ record: RECORD, version: this.rules.world_version(), seed, hero, troop, fight: { removed, added, beaten: fight.beaten() }, yaw, broken: [...broken], lairs: [...lairs], discovered: discovered.toJSON(), savedAt: Date.now() });
   }
 
   /** Rolls the hero one cell, then the troop pushes. An enemy, a wall, water or a tree beside a tree refuses it; a boulder, or a tree
@@ -301,11 +311,13 @@ export class OpenWorld {
     if (smashed) play.broken.push(to);
     play.troop = pairs(this.rules.world_trail(flat(play.troop), hero[0], hero[1], to[0], to[1]));
     play.hero = to;
+    play.discovered.reveal(to); // the cells within 10 of the hero, as the client's `mark` (#1411)
     const out = fight.troop_push(seed, flat([to, ...play.troop]), this.chunksAround(to, this.rules.WorldFight.push_reach()), flat(play.broken));
     if (!out) return { smashed, push: null };
     const [pushedHero, ...pushedTroop] = pairs(out.troop);
     play.hero = pushedHero!;
     play.troop = pushedTroop;
+    play.discovered.reveal(play.hero);
     const direction = DIRECTIONS[DELTAS.findIndex((d) => same(d, [out.dir[0]!, out.dir[1]!]))]!;
     return { smashed, push: { direction, ejected: pairs(out.ejected).map(text) } };
   }
@@ -362,7 +374,7 @@ export class OpenWorld {
   }
 
   private view(radius: number): WorldState {
-    const { seed, hero, troop, broken, fight, lairs } = this.play!;
+    const { seed, hero, troop, broken, fight, lairs, discovered } = this.play!;
     const size = Math.min(Math.max(radius, 1), 8);
     const enemies = this.enemiesAround(hero, size);
     const rows: Row[] = [];
@@ -378,6 +390,7 @@ export class OpenWorld {
       troop: troop.map(text),
       broken: broken.length,
       beaten: fight.beaten(),
+      discovered: discovered.count,
       enemies: enemies.map(text),
       lairs: this.lairCells.map((cell, k) => ({ boss: this.bossOf(k), cell: text(cell), distance: hex(hero, cell), beaten: lairs.includes(k) })),
       // The client's ending (`OpenWorldMode.showTally`): every lair beaten, counted as the client counts them.

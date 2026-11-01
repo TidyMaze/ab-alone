@@ -74,9 +74,11 @@ describe('the Open world tools', () => {
     await call('new_world', { seed: 3 });
     await call('world_step', { direction: 'E' });
     const save = JSON.parse((await call('save_world')).text);
-    expect(save).toMatchObject({ record: 3, seed: 3, hero: [1, 0], lairs: [] });
+    expect(save).toMatchObject({ record: 4, seed: 3, hero: [1, 0], lairs: [] });
     await call('new_world', { seed: 0 });
-    expect(JSON.parse((await call('new_world', { save })).text)).toMatchObject({ seed: 3, hero: '(1,0)' });
+    // The cells discovered come back too (#1411): the spawn's disc and the 21 cells the step uncovered.
+    expect(JSON.parse((await call('new_world', { save })).text)).toMatchObject({ seed: 3, hero: '(1,0)', discovered: 352 });
+    expect(JSON.parse((await call('new_world', { save: { ...save, discovered: [[0, 0, '!!']] } })).text).code).toBe('bad_save');
     expect((await call('new_world', { save: { ...save, hero: [1] } })).isError).toBe(true);
     const stale = await call('new_world', { save: { ...save, version: save.version + 1 } });
     expect(JSON.parse(stale.text).code).toBe('bad_save');

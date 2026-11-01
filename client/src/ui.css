@@ -829,6 +829,15 @@ body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 /* Held upright the plate spans the width: it stands above the button, not under it. */
 @media (pointer: coarse) and (orientation: portrait) { #openworld-hud { bottom: calc(1.5rem + var(--target)); } }
 #openworld-ship:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
+/* The map (#1411, openworldmap.ts): full screen over the world, its HUD and the minimap. The box takes the drag, the wheel and the pinch;
+   its canvas ignores the pointer, as the touch stick takes a press on a canvas. It covers #chrome (z-index 1); the Map button under the
+   minimap is out of #chrome, over the map, to close it. */
+#openworld-map { position: fixed; inset: 0; z-index: 3; touch-action: none; cursor: grab; }
+#openworld-map canvas { display: block; width: 100%; height: 100%; pointer-events: none; }
+#openworld-map-button { display: none; position: fixed; z-index: 4; top: calc(16px + 2.75rem + 0.5rem + 9rem + 0.5rem); right: 16px; min-width: var(--target); min-height: var(--target); place-items: center; padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; zoom: var(--ui-scale); }
+body[data-openworld] #openworld-map-button { display: grid; }
+#openworld-map-button:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
+#openworld-map-button[aria-expanded="true"], #openworld-map-button:active { border-color: var(--plate-accent); }
 #openworld-ship:active { border-color: var(--plate-accent); }
 /* The New world control (#1021): the confirmation sits under the button, and each button shows its focus. */
 #openworld-hud p { margin: 0 0 0.5rem; }

@@ -106,3 +106,32 @@ describe('the minimap of the Open world (#1410)', () => {
     expect(map).toContain('pointer-events: none');
   });
 });
+
+describe('the map of the Open world (#1411)', () => {
+  it('has a Map button under the minimap, shown only in the world, above the map it opens and closes', () => {
+    expect(html).toMatch(/<button id="openworld-map-button" type="button" aria-expanded="false">Map<\/button>/);
+    const button = rule('#openworld-map-button');
+    expect(button).toContain('display: none');
+    expect(button).toContain('top: calc(16px + 2.75rem + 0.5rem + 9rem + 0.5rem)');
+    expect(button).toContain('right: 16px');
+    expect(button).toContain('min-height: var(--target)');
+    expect(button).toContain('z-index: 4');
+    expect(button).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
+    expect(css).toContain('body[data-openworld] #openworld-map-button { display: grid; }');
+  });
+
+  it('covers the screen over the world and its HUD; the box takes the pointer, its canvas does not (the touch stick takes a press on a canvas)', () => {
+    const map = rule('#openworld-map');
+    expect(map).toContain('position: fixed');
+    expect(map).toContain('inset: 0');
+    expect(map).toContain('z-index: 3');
+    expect(map).toContain('touch-action: none');
+    expect(rule('#openworld-map canvas')).toContain('pointer-events: none');
+  });
+
+  it('is named in the help: M on a keyboard, the Map button on a touch screen, View on a pad', () => {
+    expect(html).toMatch(/<span class="keys-hint">[^<]*M for the map[^<]*<\/span>/);
+    expect(html).toMatch(/<span class="tap-hint">[^<]*the Map button for the map[^<]*<\/span>/);
+    expect(html).toMatch(/<span class="pad-hint">[^<]*View for the map[^<]*<\/span>/);
+  });
+});
