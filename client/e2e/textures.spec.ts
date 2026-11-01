@@ -45,6 +45,7 @@ test('textures are requested and the board still renders', async ({ page }) => {
     '200 grate-normal.ktx2',
     '200 grate-roughness.ktx2',
     '200 kit-arena.glb', // the terrace's marks and pedestal (#1314)
+    '200 kit-ring-hint.glb', // the terrace's hint ring (#1364)
     '200 plate-albedo.ktx2', // the board's plate (#772)
     '200 plate-normal.ktx2',
     '200 plate-roughness.ktx2',

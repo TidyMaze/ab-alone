@@ -115,7 +115,9 @@ for (const { name, viewport } of viewports) {
       await page.locator('#replay').click();
       await expect(page.locator('#replay-bar')).toBeVisible();
       const result = await check(page, 'a review');
-      expect(result.ui.order).toEqual(['First position', 'Previous move (Left)', 'Next move (Right)', 'Last position', 'Live']);
+      // A key is named on a keyboard only (#1379): the phones that touch (width under 600) read the plain labels.
+      const touch = viewport.width < 600;
+      expect(result.ui.order).toEqual(['First position', touch ? 'Previous move' : 'Previous move (Left)', touch ? 'Next move' : 'Next move (Right)', 'Last position', 'Live']);
       await expect(page.locator('#dock > button').first()).toBeHidden();
       if (await page.evaluate(() => matchMedia('(pointer: coarse)').matches)) {
         const slider = await page.locator('#replay-slider').boundingBox();

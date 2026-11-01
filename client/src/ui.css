@@ -144,8 +144,10 @@ body[data-scene='table-zero']::after { display: none; }
    control shows it. The board shows its selection instead. */
 body[data-pad] :focus:not(canvas) { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* The Open world help names the keys, or the pad's buttons while the pad is in use (#1252). */
-.pad-hint, body[data-pad] .keys-hint { display: none; }
+.pad-hint, .tap-hint, body[data-pad] .keys-hint { display: none; }
 body[data-pad] .pad-hint { display: inline; }
+@media (pointer: coarse) { .keys-hint { display: none; } .tap-hint { display: inline; } }
+body[data-pad] .tap-hint { display: none; }
 #settings-box { position: relative; display: flex; flex-direction: column; align-items: flex-end; }
 #hud, #hud-fold, #settings-box, #eval { zoom: var(--ui-scale); } /* the HUD, its fold button, the menu and the score bar grow with the UI scale (#382, #927), the board does not */
 #settings-menu {
@@ -815,6 +817,14 @@ body[data-openworld] #openworld-hud { display: block; }
 body[data-openworld] #openworld-chip:not([hidden]) { display: grid; }
 #openworld-chip:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
 #openworld-chip:active { border-color: var(--plate-accent); }
+/* The Ship button (#1373): the dock is hidden in the Open world and a phone has no Esc, so a touch screen gets a 44 px way out at the
+   bottom right, away from the stick (left half) and the HUD plate (bottom left), above the peers arrows (z-index 2 over their 1). */
+#openworld-ship { display: none; position: fixed; right: 1rem; bottom: 1rem; z-index: 2; min-width: var(--target); min-height: var(--target); place-items: center; padding: 0 1rem; cursor: pointer; color: var(--text); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-button); font: 600 0.875rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; zoom: var(--ui-scale); }
+@media (pointer: coarse) { body[data-openworld] #openworld-ship { display: grid; } }
+/* Held upright the plate spans the width: it stands above the button, not under it. */
+@media (pointer: coarse) and (orientation: portrait) { #openworld-hud { bottom: calc(1.5rem + var(--target)); } }
+#openworld-ship:focus-visible { outline: 2px solid var(--plate-accent); outline-offset: 2px; }
+#openworld-ship:active { border-color: var(--plate-accent); }
 /* The New world control (#1021): the confirmation sits under the button, and each button shows its focus. */
 #openworld-hud p { margin: 0 0 0.5rem; }
 #openworld-hud code { font-size: 0.8125rem; }

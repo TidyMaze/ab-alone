@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CELLS, VANISHED, type Axial } from './board';
 import { frameShape } from './frame';
 import { HUB_CELLS, neighbours, type Spot } from './hub';
@@ -6,6 +6,15 @@ import { arrowCell, bossTitle, bumpLine, HUB_BOARD, hubHtml, hubTargetText, labe
 
 // The hub on screen (docs/specs/game-design.md section 3.5, #521): the board the map is drawn with, the arrow keys and
 // the HUD plate.
+
+describe('the reachability hint on a touch screen (#1379)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('says tap, not click', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    expect(reachabilityText([0, 0], [1, 0])).toBe('Tap to move');
+    expect(reachabilityText([0, 0], [2, 0])).toBe('Out of reach (roll closer)');
+  });
+});
 
 describe('the hub board', () => {
   it('is floor on the 37 map cells and a hole everywhere else, so the frame shrinks to the map', () => {

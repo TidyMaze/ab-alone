@@ -144,6 +144,7 @@ export class OpenWorldMode {
     this.beaten = saved ? [...saved.lairs] : [];
     const view = new OpenWorldView(world, this.fight, skins);
     view.useFlatTops(this.lowTier()); // the low tier draws a ground cell no neighbour lies below as its top alone (#1234)
+    view.setShadows(!this.lowTier()); // the sun's soft shadow round the hero, on the high tier only (#1364)
     this.hero = new Hero(world, this.fight);
     if (saved) {
       this.hero.at = saved.hero;
@@ -445,7 +446,7 @@ export class OpenWorldMode {
     if (!this.view) return false; // the step walked onto a lair and left the mode
     if (this.view!.tick(now)) this.dirty = true; // the marbles of a push in between their cells, drawn every frame (#967)
     this.anim();
-    if (this.peers?.frame(now, this.hero!.at)) this.dirty = true; // the other heroes: sent, received, drawn (#1305)
+    if (this.peers?.frame(now, this.hero!.at, this.hero!.troop)) this.dirty = true; // the other heroes: sent, received, drawn (#1305)
     if (this.view!.offsets(now)) this.dirty = true; // the camera's punch and shake, on top of the follow (#1103)
     const sparks = this.view!.sparkle(now, reduced, this.lowTier()); // the particles of the biome (#1110): they keep the scene live while any drifts
     this.countSparks();

@@ -11,7 +11,7 @@ Best effort by the project's owners. Not reviewed by a lawyer.
 | What | Who sees it | Why |
 |---|---|---|
 | Your IP address | The players you connect to; the STUN servers (Google `stun*.l.google.com`, Cloudflare `stun.cloudflare.com`); the Nostr relays you reach | WebRTC needs it to connect you |
-| A random public key, your public name (up to 16 characters, optional in the Open world), your moves, and in the public Open world your position (a cell, at most 4 times a second) | The players in your room; for a room beacon, the relays | Play and signed move logs |
+| A random public key, your public name (up to 16 characters, optional in the Open world), your moves, and in the public Open world your position and the cells of your troop (at most 4 times a second, as offsets from your hero) | The players in your room; for a room beacon, the relays | Play and signed move logs |
 | In the public Open world, a random signing key (its private part stays in your browser's localStorage, `ab-alone.world-key`, and is never sent) and one signed event per obstacle you break: the cell and your public key | The players in the room, who may keep it and pass it to players who join later | Showing others the obstacles you broke |
 | Room topics and room beacons (ephemeral Nostr events) | The Nostr relays in [docs/specs/multiplayer.md](specs/multiplayer.md), and anyone reading them | Finding other players |
 

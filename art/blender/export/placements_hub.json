@@ -1,0 +1,405 @@
+{
+"units": "1 = one cell spacing at the radius-4 scale; blender xy, three.js x=x z=-y; board top y=0",
+"cell_mesh": "kit_cell_hex",
+"count": 37,
+"cells": [
+{
+"name": "scene_hub_cell_00",
+"x": -1.5,
+"y": -2.59808,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_01",
+"x": -0.5,
+"y": -2.59808,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_02",
+"x": 0.5,
+"y": -2.59808,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_03",
+"x": 1.5,
+"y": -2.59808,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_04",
+"x": -2.0,
+"y": -1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_05",
+"x": -1.0,
+"y": -1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_06",
+"x": 0.0,
+"y": -1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_07",
+"x": 1.0,
+"y": -1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_08",
+"x": 2.0,
+"y": -1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_09",
+"x": -2.5,
+"y": -0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_10",
+"x": -1.5,
+"y": -0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_11",
+"x": -0.5,
+"y": -0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_12",
+"x": 0.5,
+"y": -0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_13",
+"x": 1.5,
+"y": -0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_14",
+"x": 2.5,
+"y": -0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_15",
+"x": -3.0,
+"y": 0.0,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_16",
+"x": -2.0,
+"y": 0.0,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_17",
+"x": -1.0,
+"y": 0.0,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_18",
+"x": 0.0,
+"y": 0.0,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_19",
+"x": 1.0,
+"y": 0.0,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_20",
+"x": 2.0,
+"y": 0.0,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_21",
+"x": 3.0,
+"y": 0.0,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_22",
+"x": -2.5,
+"y": 0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_23",
+"x": -1.5,
+"y": 0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_24",
+"x": -0.5,
+"y": 0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_25",
+"x": 0.5,
+"y": 0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_26",
+"x": 1.5,
+"y": 0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_27",
+"x": 2.5,
+"y": 0.86603,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_28",
+"x": -2.0,
+"y": 1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_29",
+"x": -1.0,
+"y": 1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_30",
+"x": 0.0,
+"y": 1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_31",
+"x": 1.0,
+"y": 1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_32",
+"x": 2.0,
+"y": 1.73205,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_33",
+"x": -1.5,
+"y": 2.59808,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_34",
+"x": -0.5,
+"y": 2.59808,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_35",
+"x": 0.5,
+"y": 2.59808,
+"scale": 1.0
+},
+{
+"name": "scene_hub_cell_36",
+"x": 1.5,
+"y": 2.59808,
+"scale": 1.0
+}
+],
+"props": [
+{
+"name": "scene_hub_pier",
+"mesh": "scene_pier_hub",
+"x": 0.0,
+"y": 0.0
+},
+{
+"name": "scene_hub_prop_antenna",
+"mesh": "kit_prop_hub_antenna",
+"x": 1.5,
+"y": 2.5981
+},
+{
+"name": "scene_hub_prop_arena",
+"mesh": "kit_prop_hub_arena",
+"x": 2.0,
+"y": 1.7321
+},
+{
+"name": "scene_hub_prop_calendar",
+"mesh": "kit_prop_hub_calendar",
+"x": -2.5,
+"y": 0.866
+},
+{
+"name": "scene_hub_prop_crt",
+"mesh": "kit_prop_hub_crt",
+"x": -1.5,
+"y": 2.5981
+},
+{
+"name": "scene_hub_prop_door",
+"mesh": "kit_prop_hub_door",
+"x": 0.0,
+"y": 2.5981
+},
+{
+"name": "scene_hub_prop_dummy",
+"mesh": "kit_prop_hub_dummy",
+"x": 2.5,
+"y": -0.866
+},
+{
+"name": "scene_hub_prop_globe",
+"mesh": "kit_prop_hub_globe",
+"x": -2.5,
+"y": -0.866
+},
+{
+"name": "scene_hub_prop_lift",
+"mesh": "kit_prop_hub_lift",
+"x": -3.0,
+"y": 0.0
+},
+{
+"name": "scene_hub_prop_map",
+"mesh": "kit_prop_hub_map",
+"x": 2.5,
+"y": 0.866
+},
+{
+"name": "scene_hub_prop_podium",
+"mesh": "kit_prop_hub_podium",
+"x": 3.0,
+"y": 0.0
+},
+{
+"name": "scene_hub_prop_robot",
+"mesh": "kit_prop_hub_robot",
+"x": -2.0,
+"y": 1.7321
+},
+{
+"name": "scene_hub_prop_table",
+"mesh": "kit_prop_hub_table",
+"x": 0.0,
+"y": 1.7321
+},
+{
+"name": "scene_hub_ring_antenna",
+"mesh": "kit_ring_hub_antenna",
+"x": 1.5,
+"y": 2.5981
+},
+{
+"name": "scene_hub_ring_arena",
+"mesh": "kit_ring_hub_arena",
+"x": 2.0,
+"y": 1.7321
+},
+{
+"name": "scene_hub_ring_calendar",
+"mesh": "kit_ring_hub_calendar",
+"x": -2.5,
+"y": 0.866
+},
+{
+"name": "scene_hub_ring_crt",
+"mesh": "kit_ring_hub_crt",
+"x": -1.5,
+"y": 2.5981
+},
+{
+"name": "scene_hub_ring_door",
+"mesh": "kit_ring_hub_door",
+"x": 0.0,
+"y": 2.5981
+},
+{
+"name": "scene_hub_ring_dummy",
+"mesh": "kit_ring_hub_dummy",
+"x": 2.5,
+"y": -0.866
+},
+{
+"name": "scene_hub_ring_globe",
+"mesh": "kit_ring_hub_globe",
+"x": -2.5,
+"y": -0.866
+},
+{
+"name": "scene_hub_ring_lift",
+"mesh": "kit_ring_hub_lift",
+"x": -3.0,
+"y": 0.0
+},
+{
+"name": "scene_hub_ring_map",
+"mesh": "kit_ring_hub_map",
+"x": 2.5,
+"y": 0.866
+},
+{
+"name": "scene_hub_ring_podium",
+"mesh": "kit_ring_hub_podium",
+"x": 3.0,
+"y": 0.0
+},
+{
+"name": "scene_hub_ring_robot",
+"mesh": "kit_ring_hub_robot",
+"x": -2.0,
+"y": 1.7321
+},
+{
+"name": "scene_hub_ring_table",
+"mesh": "kit_ring_hub_table",
+"x": 0.0,
+"y": 1.7321
+},
+{
+"name": "scene_hub_terminal_0",
+"mesh": "kit_prop_hub_terminal",
+"x": -1.0,
+"y": -1.7321
+},
+{
+"name": "scene_hub_terminal_1",
+"mesh": "kit_prop_hub_terminal",
+"x": 1.0,
+"y": -1.7321
+},
+{
+"name": "scene_hub_terminal_2",
+"mesh": "kit_prop_hub_terminal",
+"x": 0.0,
+"y": -2.5981
+},
+{
+"name": "scene_row21_lockbar",
+"mesh": "kit_lockbar",
+"x": -3.0,
+"y": -0.1
+}
+]
+}

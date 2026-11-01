@@ -20,6 +20,7 @@ import {
   type Move,
 } from './board';
 import { extendPath, releaseDir } from './drag';
+import { keyTip } from './touchwording';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
 import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consent';
@@ -801,6 +802,7 @@ function applyLook(): void {
   document.body.dataset.tier = tier;
   document.body.dataset.clear = clear ? 'on' : 'off';
   drawProps();
+  sceneRenderer.setShadows(sceneRenderer.terraceOn && tier === 'high'); // a tier change moves the sun's shadow (#1364)
   updateParticles();
   if (reducedMotion()) document.documentElement.dataset.motion = 'reduced'; // ui.css cuts every animation
   else delete document.documentElement.dataset.motion;
@@ -2483,6 +2485,11 @@ for (const step of ['first', 'prev', 'next', 'last'] as const) {
   document.getElementById(`replay-${step}`)!.addEventListener('click', () => stepReplay(step));
 }
 document.getElementById('replay-live')!.addEventListener('click', liveAgain);
+for (const [id, label, key] of [['replay-prev', 'Previous move', 'Left'], ['replay-next', 'Next move', 'Right'], ['replay-live', 'Back to the live game', 'Esc']] as const) {
+  const button = document.getElementById(id)!;
+  button.title = keyTip(label, key); // a key is named on a keyboard only (#1379)
+  if (id !== 'replay-live') button.setAttribute('aria-label', button.title);
+}
 replaySlider.addEventListener('input', () => showPly(Number(replaySlider.value)));
 addEventListener('keydown', (e) => {
   const step = replayKey(e.key, replaying !== null, history.length > 0);
@@ -3445,16 +3452,9 @@ const syncDishes = (): void => {
   terraceDishes?.userData.show((x: number, z: number) => shown.has(`${x.toFixed(2)},${z.toFixed(2)}`));
 };
 const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
-const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last', THREE.Mesh> | null } = { pedestal: null, marks: null };
+const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last' | 'hint', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
 const terraceMarks = (): NonNullable<typeof terraceKit.marks> | null => (sceneRenderer.terraceOn ? terraceKit.marks : null);
-let hintMaterial: THREE.MeshStandardMaterial | null = null;
-/** The kit's selection ring in Glyph Cyan: the vertex colours are bone, the material colour multiplies them. */
-const terraceHintMaterial = (from: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial => {
-  hintMaterial ??= Object.assign(from.clone(), { name: 'terrace_hint_ring' });
-  hintMaterial.color.setRGB(0.3, 0.9, 1.3);
-  return hintMaterial;
-};
 /** A mark of the kit on the cell of a mesh the game made: the kit's geometry and vertex colours, flat on the dish, no rotation. */
 function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
   mesh.geometry = kit.geometry;
@@ -3464,8 +3464,8 @@ function wearKit(mesh: THREE.Mesh, kit: THREE.Mesh, y: number): void {
   mesh.position.y = y - TERRACE_LIFT; // the marbles' group stands 0.11 higher on the terrace
 }
 const terraceFile = (name: string) => meshoptLoader().loadAsync(`${import.meta.env.BASE_URL}assets/pbr/${name}.glb`);
-void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
-  .then(([arena, kit]) => {
+void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('kit-ring-hint')])
+  .then(([arena, kit, hint]) => {
     const drawn = mergeByMaterial(arena.scene); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
     terraceDishes = drawn.getObjectByName('terrace_dishes') as THREE.InstancedMesh | undefined;
@@ -3478,7 +3478,7 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
     terraceKit.pedestal = kit.scene.getObjectByName('kit_pedestal_flat') as THREE.Mesh;
     syncPedestals = instanceMarbles(marbles, terraceKit.pedestal.geometry, scene);
     const named = (name: string): THREE.Mesh => kit.scene.getObjectByName(name) as THREE.Mesh;
-    terraceKit.marks = { target: named('kit_ring_target'), arrow: named('kit_arrow_target'), select: named('kit_ring_select'), last: named('kit_ring_lastmove') };
+    terraceKit.marks = { target: named('kit_ring_target'), arrow: named('kit_arrow_target'), select: named('kit_ring_select'), last: named('kit_ring_lastmove'), hint: hint.scene.getObjectByName('kit_ring_hint') as THREE.Mesh };
     terraceReady = true;
     refresh();
   })
@@ -3502,7 +3502,7 @@ function syncTableZero(): void {
     applyView();
   }
   if (on === sceneRenderer.terraceOn) return;
-  sceneRenderer.setTerrace(on);
+  sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364)
   for (const cells of boardDrawn) cells.visible = !on; // the dishes of the glTF are drawn; the discs stay for picking only
   marbles.position.y = on ? TERRACE_LIFT : 0; // the marbles stand on their pedestals, 0.11 over the board plane
   updateFog();
@@ -3647,9 +3647,9 @@ function refresh(): void {
       const kit = terraceMarks();
       if (kit) {
         wearKit(ring, kit.select, 0.078);
-        // The hint (#301): the glTF has no hint ring, so the selection ring wears a cyan material, a colour apart from the selection's bone.
+        // The hint (#301): the marbles it takes wear the kit's own hint ring, a Bone dashed ring on a black underlay (kit_ring_hint).
         if (hinted.some(([hq, hr]) => hq === q && hr === r)) {
-          ring.material = terraceHintMaterial(kit.select.material as THREE.MeshStandardMaterial);
+          wearKit(ring, kit.hint, 0.091);
           ring.name = 'hint-ring';
         }
       }
@@ -4894,6 +4894,9 @@ shipButton.addEventListener('click', () => {
   enterHub(loadProgress(store).at);
 });
 shipButton.disabled = false; // listener ready (#146)
+// The Open world's own Ship button (#1373): its dock is hidden and a phone has no Esc. Same path as the dock's Ship, which leaves
+// the world (saved, as Esc does) for the hub.
+document.getElementById('openworld-ship')!.addEventListener('click', () => shipButton.click());
 function enterHub(at: HubSpot): void {
   leaveMode();
   roomOf = null;
@@ -6176,6 +6179,7 @@ renderer.setAnimationLoop((now) => {
   if (openWorld.active) {
     const drew = openWorld.frame((scene, camera) => {
       renderer.info.reset();
+      sceneRenderer.setShadows(tier === 'high'); // the Open world's sun casts its soft shadow on the high tier only (#1364)
       renderer.render(scene, camera);
     }, now); // the frame's own time, not the moment its callback runs: the camera moves by even steps (#1333)
     if (fpsOn) {

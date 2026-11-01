@@ -17,6 +17,7 @@ function createMockRenderer(): THREE.WebGPURenderer {
     backend: { isWebGPUBackend: false },
     toneMapping: 0,
     toneMappingExposure: 1,
+    shadowMap: { enabled: false, type: 0 },
     init: async (): Promise<void> => {},
     setPixelRatio: vi.fn(),
     setSize: vi.fn(),
@@ -555,6 +556,20 @@ describe('SceneRenderer (#632)', () => {
     sr.setTerrace(true);
     sr.render();
     expect([room.mock.calls.length, flat.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it('casts the sun shadow on the terrace on the high tier only, and a tier change moves it (#1364)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    expect([sr.renderer.shadowMap.enabled, sr.sun.castShadow]).toEqual([false, false]);
+    sr.setTerrace(true, true);
+    expect([sr.renderer.shadowMap.enabled, sr.sun.castShadow]).toEqual([true, true]);
+    sr.setShadows(false); // the low tier
+    expect([sr.renderer.shadowMap.enabled, sr.sun.castShadow]).toEqual([false, false]);
+    sr.setShadows(false); // asked again: nothing redone
+    expect(sr.sun.castShadow).toBe(false);
+    sr.setTerrace(false);
+    sr.setTerrace(true); // a page on the low tier: no shadow
+    expect(sr.sun.castShadow).toBe(false);
   });
 
   it('lights the turn bar of the side to move on the terrace, none at the end (#1314)', () => {

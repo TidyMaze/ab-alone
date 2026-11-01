@@ -1,0 +1,112 @@
+{
+"kit_prop_bench": {
+"tris": 60,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_hullplate": {
+"tris": 32,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_oresacks": {
+"tris": 80,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_buffer_stop": {
+"tris": 60,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_press_gantry": {
+"tris": 80,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_tuningfork": {
+"tris": 40,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_magnetcrane": {
+"tris": 60,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_reactorstack": {
+"tris": 42,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_confessional": {
+"tris": 40,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_watchlamp": {
+"tris": 48,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_pylon": {
+"tris": 32,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_pylon_core": {
+"tris": 16,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_evacpad": {
+"tris": 64,
+"nm": 0,
+"loose": 0
+},
+"kit_vent_pit": {
+"tris": 16,
+"nm": 0,
+"loose": 0
+},
+"kit_vent_disc": {
+"tris": 46,
+"nm": 0,
+"loose": 0
+},
+"kit_vent_haze": {
+"tris": 16,
+"nm": 0,
+"loose": 0
+},
+"kit_pipdots_1": {
+"tris": 38,
+"nm": 0,
+"loose": 0
+},
+"kit_pipdots_3": {
+"tris": 38,
+"nm": 0,
+"loose": 0
+},
+"kit_stakes_1": {
+"tris": 20,
+"nm": 0,
+"loose": 0
+},
+"kit_stakes_2": {
+"tris": 40,
+"nm": 0,
+"loose": 0
+},
+"kit_stakes_3": {
+"tris": 60,
+"nm": 0,
+"loose": 0
+},
+"kit_prop_mindcore": {
+"tris": 64,
+"nm": 0,
+"loose": 0
+}
+}

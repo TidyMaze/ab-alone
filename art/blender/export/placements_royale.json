@@ -1,0 +1,1268 @@
+{
+"units": "1 = one cell spacing at the radius-4 scale; blender xy, three.js x=x z=-y; board top y=0",
+"cell_mesh": "kit_cell_hex",
+"count": 210,
+"cells": [
+{
+"name": "scene_royale_cell_000",
+"x": -4.0,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_001",
+"x": -3.75,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_002",
+"x": -3.5,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_003",
+"x": -3.25,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_004",
+"x": -3.0,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_005",
+"x": -2.75,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_006",
+"x": -2.5,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_007",
+"x": -2.25,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_008",
+"x": -2.0,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_009",
+"x": -3.75,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_010",
+"x": -3.5,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_011",
+"x": -3.25,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_012",
+"x": -3.0,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_013",
+"x": -2.75,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_014",
+"x": -2.5,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_015",
+"x": -2.25,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_016",
+"x": -2.0,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_017",
+"x": -1.75,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_018",
+"x": -1.5,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_019",
+"x": -3.5,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_020",
+"x": -3.25,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_021",
+"x": -3.0,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_022",
+"x": -2.75,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_023",
+"x": -2.5,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_024",
+"x": -2.25,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_025",
+"x": -2.0,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_026",
+"x": -1.75,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_027",
+"x": -1.5,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_028",
+"x": -1.25,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_029",
+"x": -1.0,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_030",
+"x": -3.25,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_031",
+"x": -3.0,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_032",
+"x": -2.75,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_033",
+"x": -2.5,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_034",
+"x": -2.25,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_035",
+"x": -2.0,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_036",
+"x": -1.75,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_037",
+"x": -1.5,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_038",
+"x": -1.25,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_039",
+"x": -1.0,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_040",
+"x": -0.75,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_041",
+"x": -0.5,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_042",
+"x": -3.0,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_043",
+"x": -2.75,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_044",
+"x": -2.5,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_045",
+"x": -2.25,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_046",
+"x": -2.0,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_047",
+"x": -1.75,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_048",
+"x": -1.5,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_049",
+"x": -1.25,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_050",
+"x": -1.0,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_051",
+"x": -0.75,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_052",
+"x": -0.5,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_053",
+"x": -0.25,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_054",
+"x": 0.0,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_055",
+"x": -2.75,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_056",
+"x": -2.5,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_057",
+"x": -2.25,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_058",
+"x": -2.0,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_059",
+"x": -1.75,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_060",
+"x": -1.5,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_061",
+"x": -1.25,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_062",
+"x": -1.0,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_063",
+"x": -0.75,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_064",
+"x": -0.5,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_065",
+"x": -0.25,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_066",
+"x": 0.0,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_067",
+"x": 0.25,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_068",
+"x": 0.5,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_069",
+"x": -2.5,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_070",
+"x": -2.25,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_071",
+"x": -2.0,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_072",
+"x": -1.75,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_073",
+"x": -1.5,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_074",
+"x": -1.25,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_075",
+"x": -1.0,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_076",
+"x": -0.75,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_077",
+"x": -0.5,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_078",
+"x": -0.25,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_079",
+"x": 0.0,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_080",
+"x": 0.25,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_081",
+"x": 0.5,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_082",
+"x": 0.75,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_083",
+"x": 1.0,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_084",
+"x": -2.25,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_085",
+"x": -2.0,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_086",
+"x": -1.75,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_087",
+"x": -1.5,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_088",
+"x": -1.25,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_089",
+"x": -1.0,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_090",
+"x": -0.75,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_093",
+"x": 0.0,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_094",
+"x": 0.25,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_095",
+"x": 0.5,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_096",
+"x": 0.75,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_097",
+"x": 1.0,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_098",
+"x": 1.25,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_099",
+"x": 1.5,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_100",
+"x": -2.0,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_101",
+"x": -1.75,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_102",
+"x": -1.5,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_103",
+"x": -1.25,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_104",
+"x": -1.0,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_105",
+"x": -0.75,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_106",
+"x": -0.5,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_110",
+"x": 0.5,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_111",
+"x": 0.75,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_112",
+"x": 1.0,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_113",
+"x": 1.25,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_114",
+"x": 1.5,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_115",
+"x": 1.75,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_116",
+"x": 2.0,
+"y": 3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_117",
+"x": -1.5,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_118",
+"x": -1.25,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_119",
+"x": -1.0,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_120",
+"x": -0.75,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_121",
+"x": -0.5,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_122",
+"x": -0.25,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_123",
+"x": 0.0,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_126",
+"x": 0.75,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_127",
+"x": 1.0,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_128",
+"x": 1.25,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_129",
+"x": 1.5,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_130",
+"x": 1.75,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_131",
+"x": 2.0,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_132",
+"x": 2.25,
+"y": 3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_133",
+"x": -1.0,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_134",
+"x": -0.75,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_135",
+"x": -0.5,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_136",
+"x": -0.25,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_137",
+"x": 0.0,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_138",
+"x": 0.25,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_139",
+"x": 0.5,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_140",
+"x": 0.75,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_141",
+"x": 1.0,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_142",
+"x": 1.25,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_143",
+"x": 1.5,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_144",
+"x": 1.75,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_145",
+"x": 2.0,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_146",
+"x": 2.25,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_147",
+"x": 2.5,
+"y": 2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_148",
+"x": -0.5,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_149",
+"x": -0.25,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_150",
+"x": 0.0,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_151",
+"x": 0.25,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_152",
+"x": 0.5,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_153",
+"x": 0.75,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_154",
+"x": 1.0,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_155",
+"x": 1.25,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_156",
+"x": 1.5,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_157",
+"x": 1.75,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_158",
+"x": 2.0,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_159",
+"x": 2.25,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_160",
+"x": 2.5,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_161",
+"x": 2.75,
+"y": 2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_162",
+"x": 0.0,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_163",
+"x": 0.25,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_164",
+"x": 0.5,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_165",
+"x": 0.75,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_166",
+"x": 1.0,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_167",
+"x": 1.25,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_168",
+"x": 1.5,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_169",
+"x": 1.75,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_170",
+"x": 2.0,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_171",
+"x": 2.25,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_172",
+"x": 2.5,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_173",
+"x": 2.75,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_174",
+"x": 3.0,
+"y": 1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_175",
+"x": 0.5,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_176",
+"x": 0.75,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_177",
+"x": 1.0,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_178",
+"x": 1.25,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_179",
+"x": 1.5,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_180",
+"x": 1.75,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_181",
+"x": 2.0,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_182",
+"x": 2.25,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_183",
+"x": 2.5,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_184",
+"x": 2.75,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_185",
+"x": 3.0,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_186",
+"x": 3.25,
+"y": 1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_187",
+"x": 1.0,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_188",
+"x": 1.25,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_189",
+"x": 1.5,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_190",
+"x": 1.75,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_191",
+"x": 2.0,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_192",
+"x": 2.25,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_193",
+"x": 2.5,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_194",
+"x": 2.75,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_195",
+"x": 3.0,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_196",
+"x": 3.25,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_197",
+"x": 3.5,
+"y": 0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_198",
+"x": 1.5,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_199",
+"x": 1.75,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_200",
+"x": 2.0,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_201",
+"x": 2.25,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_202",
+"x": 2.5,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_203",
+"x": 2.75,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_204",
+"x": 3.0,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_205",
+"x": 3.25,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_206",
+"x": 3.5,
+"y": 0.0,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_207",
+"x": 3.75,
+"y": 0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_208",
+"x": 2.0,
+"y": -3.4641,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_209",
+"x": 2.25,
+"y": -3.03109,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_210",
+"x": 2.5,
+"y": -2.59808,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_211",
+"x": 2.75,
+"y": -2.16506,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_212",
+"x": 3.0,
+"y": -1.73205,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_213",
+"x": 3.25,
+"y": -1.29904,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_214",
+"x": 3.5,
+"y": -0.86603,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_215",
+"x": 3.75,
+"y": -0.43301,
+"scale": 0.5
+},
+{
+"name": "scene_royale_cell_216",
+"x": 4.0,
+"y": 0.0,
+"scale": 0.5
+}
+],
+"note": "cells and ring cracks at half spacing (scale 0.5) inside the radius-4 footprint; centre hole of radius 1 (7 cells) is the scene_royale_hole mesh, cracked outer ring objects scene_royale_crack8_*/crack7_* are Sodium emissive"
+}
