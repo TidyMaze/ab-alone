@@ -52,16 +52,19 @@ const GAME_DRAWN = /^scene_(marble|pedestal|ring|arrow|shadow)/;
 /** The turn bars stay meshes of their own: the game lights the one of the side to move. */
 const TURN_BAR = /^scene_turnbar/;
 
-/** The unlit materials of the file: Blender emits their colour from COLOR_0 (sky, lamps, bars) or blends it (haze, shadow). */
-const UNLIT = /^kit_mat_(sky|emissive)$/;
-const BLENDED = /^kit_mat_alpha_/;
-const unlit = new Map<string, THREE.MeshBasicMaterial>();
-/** glTF gives these materials a white emissive factor and a black base: three would draw them white. They become basic materials on the vertex colours. */
-export function terraceMaterial(material: THREE.Material): THREE.Material {
-  const kind = UNLIT.test(material.name) ? 'solid' : BLENDED.test(material.name) ? 'blended' : null;
-  if (!kind) return material;
-  if (!unlit.has(material.name)) unlit.set(material.name, new THREE.MeshBasicMaterial({ name: material.name, vertexColors: true, fog: false, side: THREE.DoubleSide, transparent: kind === 'blended' }));
-  return unlit.get(material.name)!;
+const unlit = new Map<boolean, THREE.MeshBasicMaterial>();
+/**
+ * The unlit materials of the file (sky, lamps, bars, haze, shadow): Blender emits their colour from COLOR_0, glTF gives them a white
+ * emissive factor over a black base, so three would draw them white. The loader also folds them into one material (they differ by
+ * name only), so what tells them apart is the geometry: a mesh with a vertex below full alpha is blended, any other is solid.
+ */
+export function terraceMaterial(material: THREE.Material, geometry: THREE.BufferGeometry): THREE.Material {
+  if ((material as THREE.MeshStandardMaterial).emissive?.getHex() !== 0xffffff) return material;
+  const colour = geometry.attributes.color;
+  let blended = false;
+  for (let i = 0; colour && colour.itemSize === 4 && i < colour.count && !blended; i++) blended = colour.getW(i) < 0.999;
+  if (!unlit.has(blended)) unlit.set(blended, new THREE.MeshBasicMaterial({ name: blended ? 'terrace_blended' : 'terrace_solid', vertexColors: true, fog: false, side: THREE.DoubleSide, transparent: blended }));
+  return unlit.get(blended)!;
 }
 
 /**
@@ -78,7 +81,7 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
     if (TURN_BAR.test(o.name)) return void bars.push(mesh);
     const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
     g.deleteAttribute('uv');
-    const material = terraceMaterial(mesh.material as THREE.Material);
+    const material = terraceMaterial(mesh.material as THREE.Material, mesh.geometry);
     byMaterial.set(material, [...(byMaterial.get(material) ?? []), g]);
   });
   const out = new THREE.Group();
@@ -91,7 +94,7 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
     out.add(merged);
   }
   for (const bar of bars) {
-    bar.material = terraceMaterial(bar.material as THREE.Material);
+    bar.material = terraceMaterial(bar.material as THREE.Material, bar.geometry);
     bar.matrix.copy(bar.matrixWorld).decompose(bar.position, bar.quaternion, bar.scale);
     out.add(bar);
   }

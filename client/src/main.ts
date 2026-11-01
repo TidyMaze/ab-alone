@@ -177,7 +177,7 @@ import { MARBLE_RADIUS, SLIDE_MS, slideAt, slideTracks, type SlideTrack } from '
 import { carryTurns, cellTurn, inHolder, rolledTurn, turnOf, type Quat } from './orient';
 import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
-import { glassSkinById, nextGlassSkin } from './glassskins';
+import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
 import { mergeByMaterial, tableZeroActive } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
@@ -3390,10 +3390,19 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
     refresh();
   })
   .catch(() => undefined);
+// The terrace's own marbles (#1314): near-black with a sharp cool highlight, and warm white with its brightest pixel held at the
+// clamp. They stand in for the default skins only: a skin the player chose is worn as it is.
+const terraceShell = new THREE.MeshStandardMaterial({ color: 0x101317, roughness: 0.22, metalness: 0, envMap: reflections, envMapIntensity: 0.9 });
+const terraceGlass = new THREE.MeshStandardMaterial({ color: 0xd4cdb9, roughness: 0.6, metalness: 0 });
+function terraceMarbles(on: boolean): void {
+  marbleMaterials[1] = on && skin === DEFAULT_SKIN ? terraceShell : shellMaterial(skin);
+  marbleMaterials[2] = on && glass === DEFAULT_GLASS_SKIN ? terraceGlass : glassMaterial(glass);
+}
 const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
   const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
+  terraceMarbles(on);
   if (on === sceneRenderer.terraceOn) return;
   sceneRenderer.setTerrace(on);
   for (const cells of boardDrawn) cells.visible = !on; // the dishes of the glTF are drawn; the discs stay for picking only
@@ -4480,6 +4489,7 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 // Used by the browser checks to read the boss, seed and daily attempt of the running fight.
 (window as unknown as Record<string, unknown>).__fight = () => fight;
 (window as unknown as Record<string, unknown>).__view = () => view;
+(window as unknown as Record<string, unknown>).__terrace = () => sceneRenderer.terrace; // the arena's meshes, for the browser checks of #1314
 // A browser check sets the camera exactly (the Blender views of the terrace, #1314): the view, then the camera and the fog follow.
 (window as unknown as Record<string, unknown>).__setView = (next: Partial<View>) => {
   Object.assign(view, next);

@@ -530,10 +530,11 @@ describe('SceneRenderer (#632)', () => {
     expect([sr.terrace.visible, sr.plate.visible]).toEqual([false, true]);
     sr.setTerrace(true);
     expect([sr.terrace.visible, sr.propsGroup.visible, sr.roomDeck.visible, sr.plate.visible, sr.rim.near.visible, sr.rim.far.visible]).toEqual([true, false, false, false, false, false]);
+    expect(sr.camera.far).toBe(300); // the sky dome of the file is 95 away
     sr.setTerrace(true); // nothing redone
     sr.setTerrace(false);
     expect([sr.terrace.visible, sr.propsGroup.visible, sr.roomDeck.visible, sr.plate.visible]).toEqual([false, true, true, true]);
-    expect(sr.scene.background).toBe(room);
+    expect([sr.scene.background, sr.camera.far]).toEqual([room, 100]);
   });
 
   it('lights the turn bar of the side to move on the terrace, none at the end (#1314)', () => {

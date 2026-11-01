@@ -17,6 +17,8 @@ import { addSun } from './tablezero';
 export const BONE = 0xd8d4c8;
 export const COLORS = { base: 0x0b0d0f, steel: 0x4a5258, cyan: 0x7fd6e8 } as const;
 export const FRAME_LOOK = { plate: 0x1f1f1f, plateTiles: 0x808080, rim: 0x5d5d5d } as const;
+/** AgX, the Blender render's own view transform, at the exposure that lands the dish on #b6ab82 and the gap on #2d3539. */
+const TERRACE_EXPOSURE = 1.4;
 /** The radius of the rounded edges of the board's plate and rim. */
 const FRAME_BEVEL = 0.03;
 
@@ -478,8 +480,12 @@ export class SceneRenderer {
     this.plate.visible = this.rim.near.visible = this.rim.far.visible = !on;
     if (on) this.roomBackground = this.scene.background as THREE.Color | THREE.Texture | null;
     this.scene.background = on ? new THREE.Color(background) : this.roomBackground;
-    // The Blender render keeps the palette's colours; ACES would wash them toward grey (#1314).
-    this.renderer.toneMapping = on ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
+    // The Blender render keeps the palette's colours; ACES washes them toward grey, AgX is the Blender view transform (#1314).
+    this.renderer.toneMapping = on ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = on ? TERRACE_EXPOSURE : 1;
+    // The sky dome of the arena file is 95 away from the board and the camera 6 to 18 from it: the room's far plane at 100 cut its far wall.
+    this.camera.far = on ? 300 : 100;
+    this.camera.updateProjectionMatrix();
   }
 
   /** Where the point `lift` above the cell is drawn: a mark on top of a marble is not under the cell's centre (#1259). */

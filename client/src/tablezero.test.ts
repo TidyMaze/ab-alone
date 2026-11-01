@@ -78,16 +78,23 @@ describe('the arena file is drawn in one mesh per material', () => {
 });
 
 describe('the unlit materials of the arena file', () => {
-  const named = (name: string): THREE.Material => Object.assign(new THREE.MeshStandardMaterial({ emissive: 0xffffff }), { name });
-  it('draw their vertex colours, not the white of their emissive factor', () => {
-    const sky = terraceMaterial(named('kit_mat_sky')) as THREE.MeshBasicMaterial;
+  const lamp = (): THREE.Material => new THREE.MeshStandardMaterial({ emissive: 0xffffff });
+  const colours = (alpha: number[], size = 4): THREE.BufferGeometry => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(alpha.flatMap((a) => (size === 4 ? [1, 1, 1, a] : [1, 1, 1]))), size));
+    return g;
+  };
+  it('draw their vertex colours, not the white of their emissive factor, one material for the solid ones', () => {
+    const sky = terraceMaterial(lamp(), colours([1, 1])) as THREE.MeshBasicMaterial;
     expect([sky.isMeshBasicMaterial, sky.vertexColors, sky.transparent]).toEqual([true, true, false]);
-    expect(terraceMaterial(named('kit_mat_emissive'))).not.toBe(sky);
-    expect(terraceMaterial(named('kit_mat_sky'))).toBe(sky); // one material per name
+    expect(terraceMaterial(lamp(), colours([1], 3))).toBe(sky);
+    expect(terraceMaterial(lamp(), new THREE.BufferGeometry())).toBe(sky);
   });
-  it('blend the haze and the shadow, and leave the lit material as it is', () => {
-    expect(terraceMaterial(named('kit_mat_alpha_haze')).transparent).toBe(true);
-    const lit = named('kit_mat_vertexcolor');
-    expect(terraceMaterial(lit)).toBe(lit);
+  it('blend a mesh with a vertex below full alpha, the haze and the shadow, and leave the lit material as it is', () => {
+    const haze = terraceMaterial(lamp(), colours([1, 0.2]));
+    expect([haze.transparent, haze.name]).toEqual([true, 'terrace_blended']);
+    expect(terraceMaterial(lamp(), colours([0, 0]))).toBe(haze);
+    const lit = new THREE.MeshStandardMaterial();
+    expect(terraceMaterial(lit, colours([0]))).toBe(lit);
   });
 });
