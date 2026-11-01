@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { cellsFor } from './board';
@@ -223,8 +222,11 @@ describe('the boss fights on the terrace (#1374)', () => {
   });
 });
 
+const fs = 'node:fs/promises'; // untyped: the client has no Node types (readme.test.ts)
+const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile(path: URL): Promise<Uint8Array> };
+const file = JSON.parse(new TextDecoder().decode(await readFile(new URL('../../art/blender/export/lights_camera.json', import.meta.url)))) as { camera: { default_pitch_deg: number; default_distance: number } };
+
 describe('the Blender camera of the hub and the royale (#1374)', () => {
-  const file = JSON.parse(readFileSync(new URL('../../art/blender/export/lights_camera.json', import.meta.url), 'utf8')) as { camera: { default_pitch_deg: number; default_distance: number } };
   it('is the camera of lights_camera.json: pitch 50 over the horizon, 13.6 away', () => {
     expect(BLENDER_VIEW.distance).toBe(file.camera.default_distance);
     expect(Math.round(90 - (BLENDER_VIEW.polar * 180) / Math.PI)).toBe(file.camera.default_pitch_deg);

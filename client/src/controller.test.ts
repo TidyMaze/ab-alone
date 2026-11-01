@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
-import { type Spot as HubSpot } from './hub';
+import { roomsOf, type Door, type Spot as HubSpot } from './hub';
+import type { GlyphOptions } from './hubart';
 import { HUB_BOARD } from './hubview';
 import { SceneRenderer } from './scene';
 import { HubController, type ModeController } from './controller';
@@ -158,6 +159,26 @@ describe('ModeController & HubController (#633)', () => {
     expect(sr.marbles.getObjectByName('beaten-seal')).toBeUndefined();
     hub.draw(sr, discs, { setTension: vi.fn() }, ['echo'], new THREE.Mesh());
     expect(sr.marbles.getObjectByName('beaten-seal')).toBeDefined();
+  });
+
+  it('draws the rooms with the glyph it is given, on their cells, at the height the glyph stands (#1374)', () => {
+    const sr = new SceneRenderer({ renderer: createMockRenderer() });
+    const discs = HUB_BOARD.map(() => new THREE.Mesh(new THREE.BufferGeometry()));
+    hub.enter(initialSpot);
+    const seen: string[] = [];
+    const glyphOf = (door: Door, options: GlyphOptions): THREE.Group => {
+      seen.push(`${door.kind} ${options.open} ${options.beaten}`);
+      const glyph = Object.assign(new THREE.Group(), { name: 'kit-glyph' });
+      glyph.position.y = -0.13;
+      return glyph;
+    };
+    hub.draw(sr, discs, { setTension: vi.fn() }, ['echo'], new THREE.Mesh(), undefined, undefined, glyphOf);
+    const glyphs = sr.marbles.children.filter((c) => c.name === 'kit-glyph');
+    expect(glyphs).toHaveLength(roomsOf('mess').length);
+    expect(seen).toContain('boss false true'); // the beaten boss of the deck
+    expect(seen).toContain('lift true false'); // the lift its boss opened
+    expect(glyphs.every((g) => Math.abs(g.position.y + 0.11) < 1e-9)).toBe(true); // 0.02 above where the glyph stands
+    expect(sr.marbles.getObjectByName('door-boss')).toBeUndefined(); // no procedural glyph
   });
 
   it('puts each label plate on the window just south of its cell centre (#1249)', () => {

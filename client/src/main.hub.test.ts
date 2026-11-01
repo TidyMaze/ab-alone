@@ -841,6 +841,46 @@ describe('main.ts, the deck plan (#1249)', () => {
     placed(game, [2, 0]);
   });
 
+  it('frames the deck from the Blender camera, whenever the terrace comes: at the boot on the hub, on a phone, on Reset view (#1374)', async () => {
+    const game = await boot('');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    const blender = (v: View): void => expect(v.polar).toBeCloseTo((40 * Math.PI) / 180);
+    blender(game.hook<View>('__view'));
+    expect(game.hook<View>('__view').distance).toBeGreaterThanOrEqual((13.6 * 3.6) / 4 - 1e-9); // the file's 13.6 for a radius 4 board, a little closer for the deck
+    vi.stubGlobal('innerWidth', 390);
+    vi.stubGlobal('innerHeight', 844);
+    window.dispatchEvent(new Event('resize'));
+    blender(game.hook<View>('__view'));
+    byId('reset-view').click();
+    blender(game.hook<View>('__view'));
+    vi.unstubAllGlobals();
+  });
+
+  it('frames the deck as before in the room, closer still on a phone (#1249)', async () => {
+    const game = await boot('?bot=off&scene=room');
+    shipAt(game, [-1, 1]);
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.6).distance);
+    vi.stubGlobal('innerWidth', 390);
+    vi.stubGlobal('innerHeight', 844);
+    window.dispatchEvent(new Event('resize'));
+    expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(3.4).distance);
+    vi.unstubAllGlobals();
+  });
+
+  it('puts the props of the Blender file on the rooms of the game, in place of its own glyphs, the lift arrow and bar kept (#1374)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off');
+    await vi.waitFor(() => expect(document.body.dataset.scene).toBe('table-zero'));
+    shipAt(game, [1, -1]);
+    const marbleGroup = scene().children.find((c) => c.children.some((k) => k.name === 'door-boss'))!;
+    const boss = marbleGroup.getObjectByName('door-boss')!;
+    expect(boss.children.map((c) => c.name)).toEqual(['scene_hub_prop_door', 'scene_hub_ring_door']); // the file's, no procedural parts
+    expect(boss.position.y).toBeCloseTo(-0.11); // on the board plane: the marbles' group is 0.11 up
+    const lift = marbleGroup.getObjectByName('door-lift')!;
+    expect(lift.children.map((c) => c.name)).toEqual(['scene_hub_prop_lift', '', 'locked-bar']); // the cage, the arrow, the bar of a locked lift
+    expect(marbleGroup.getObjectByName('door-slab')).toBeUndefined();
+  });
+
   it('frames the deck closer than a board, and a game started from it frames its whole board again', async () => {
     const game = await boot('?bot=off');
     expect(game.hook<View>('__view').distance).toBeCloseTo(resetView(4).distance);

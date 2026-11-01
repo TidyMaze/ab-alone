@@ -183,7 +183,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial } from './tablezero';
+import { TERRACE_VIEW, boardPoints, fitTerrace, hubKit, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment, terraceMaterial, type HubKit } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -276,7 +276,8 @@ import { tallyRow, tallySlots } from './tallymarks';
 import { formatScore } from './score';
 import { bestTurns, loadMedals, medalLabel, medalLine, medalRoom, playerTurns, recordMedal, type MedalResult } from './medals';
 import { loadProgress, recordWin, saveProgress } from './progress';
-import { roomAt, type Door, type Spot as HubSpot } from './hub';
+import { HUB_CELLS, roomAt, type Door, type Spot as HubSpot } from './hub';
+import { createKitGlyph, type GlyphOptions } from './hubart';
 import { HubController } from './controller';
 import { labelsHtml, pipsHtml, railHtml } from './hubview';
 import { clearStray } from './modeswitch';
@@ -372,7 +373,13 @@ const activeRadius =(): number => (fight?.id === 'ballast' ? 5 : 4);
 const DUAL_POINTS = DUAL_CELLS.flatMap(([q, r]) => [0, 0.5].map((y) => ({ ...axialTo3D(q, r), y }))); // the cells and their marbles' tops
 // The left HUD panel is folded (#957, #1269): upright, the board then sits at the middle of the window.
 let hudIsFolded = false;
+// The hub and the royale on the terrace are framed from the Blender camera (lights_camera.json), drawn back until their cells and props are on the window (#1374).
+const HUB_POINTS = boardPoints(HUB_CELLS, 1, [0, 0.6]);
+const ROYALE_POINTS = boardPoints(ARENA, ARENA_SCALE, [0, 0.4]);
+const terraceFramed = (): boolean => tableZeroActive({ room: keepRoom, ready: terraceReady });
 const fightView = (): View => {
+  if (hub && terraceFramed()) return fitTerrace(HUB_POINTS, innerWidth < innerHeight ? 3.4 : 3.6, innerWidth, innerHeight, hudIsFolded);
+  if (royale && terraceFramed()) return fitTerrace(ROYALE_POINTS, 4, innerWidth, innerHeight, hudIsFolded);
   if (hub) return resetView(innerWidth < innerHeight ? 3.4 : 3.6); // the hub's deck plan (#1249): its 37 cells and their plates, a little closer than a board, closer still upright
   if (fight?.id === 'pulsar') return fitView(resetView(), sceneRenderer.terraceOn ? PULSAR_BOUNDS.map((p) => (p.z > 0 ? { ...p, z: p.z * PULSAR_DOCK } : p)) : PULSAR_BOUNDS, innerWidth, innerHeight, hudIsFolded);
   if (fight?.id === 'dual') return fitView({ ...resetView(), azimuth: DUAL_AZIMUTH, polar: DUAL_POLAR }, DUAL_POINTS, innerWidth, innerHeight, hudIsFolded);
@@ -1957,7 +1964,7 @@ arena.updateMatrixWorld(true); // picking can run before the first render
 scene.add(arena);
 // The marbles, the board's and the arena's, drawn as one instanced mesh per look, placed before each draw (#885).
 const syncMarbles = [marbles, arenaMarbles].map((group) => instanceMarbles(group, marbleGeometry, scene));
-let syncPedestals: (() => void) | null = null; // made when the arena's kit has loaded (terraceKit)
+let syncPedestals: (() => void)[] = []; // made when the arena's kit has loaded (terraceKit): the 1v1's and the royale's
 const seatLooks = SEATS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: SHELL.roughness, metalness: SHELL.metalness }));
 // Each seat's glyph (#558), flat in the ink on its marbles, never the tint alone: it touches the shell where the shell
 // faces the default view, turned to face it, so it stays inside the marble's outline.
@@ -3462,6 +3469,7 @@ const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, P
 // The terrace (#1314): the arena's glTF from Blender, in place of the room in a 1v1 game. A page whose file is missing or broken
 // keeps the room; so do the hub, Ballast Mind, the Dual Room, the royale and a run, until their own PRs (#1374); `?scene=room` asks for it.
 let terraceReady = false;
+let hubProps: HubKit | null = null; // the props of the hub file, put on the rooms of the game's deck (#1374)
 /** The boards of the terrace (#1374): the arena's own radius 4 slab, and the slabs of the two bosses whose board is another one. */
 const terraceBoards: Record<'arena' | 'ballast' | 'dual' | 'hub' | 'royale', THREE.Group | null> = { arena: null, ballast: null, dual: null, hub: null, royale: null };
 const boardOf = (): keyof typeof terraceBoards => (hub ? 'hub' : royale ? 'royale' : fight?.id === 'ballast' || fight?.id === 'dual' ? fight.id : 'arena');
@@ -3500,7 +3508,9 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
     const drawn = mergeByMaterial(arena.scene, true); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
     terraceBoards.arena = drawn.getObjectByName('terrace_board') as THREE.Group;
+    hubProps = hubKit(hubDeck.scene);
     for (const [name, file] of [['ballast', ballast], ['dual', dual], ['hub', hubDeck], ['royale', royaleSlab]] as const) {
+      if (name === 'royale') file.scene.add(...arena.scene.children.filter((c) => /^scene_post_\d+$/.test(c.name)).map((c) => c.clone())); // its slab stands in the arena's footprint: the arena's six posts frame it (#1374)
       const board = mergeByMaterial(file.scene);
       board.visible = false;
       sceneRenderer.terrace.add(board);
@@ -3519,7 +3529,8 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena'), terraceFile('k
       pmrem.dispose();
     }
     terraceKit.pedestal = kit.scene.getObjectByName('kit_pedestal_flat') as THREE.Mesh;
-    syncPedestals = instanceMarbles(marbles, terraceKit.pedestal.geometry, scene);
+    const pedestals = [marbles, arenaMarbles].map((group) => instanceMarbles(group, terraceKit.pedestal!.geometry, scene)); // the 1v1's and the royale's
+    syncPedestals = pedestals;
     const named = (name: string): THREE.Mesh => kit.scene.getObjectByName(name) as THREE.Mesh;
     terraceKit.marks = { target: named('kit_ring_target'), arrow: named('kit_arrow_target'), select: named('kit_ring_select'), last: named('kit_ring_lastmove'), hint: hint.scene.getObjectByName('kit_ring_hint') as THREE.Mesh };
     terraceReady = true;
@@ -3553,6 +3564,10 @@ function syncTableZero(): void {
   sceneRenderer.setTerrace(on, tier === 'high'); // the sun's shadow on the high tier (#1364); the room never comes back once the terrace is on (#1374)
   for (const cells of [...boardDrawn, ...arenaDrawn]) cells.visible = terraceFailed; // the dishes of the glTF are drawn; the discs stay for picking only
   marbles.position.y = TERRACE_LIFT; // the marbles stand on their pedestals, 0.11 over the board plane
+  if ((hub || royale) && view === fitted) {
+    view = fitted = fightView(); // the file came after the hub or the royale: the Blender camera, as if it had been there (#1374)
+    applyView();
+  }
   updateFog();
 }
 function refresh(): void {
@@ -3563,7 +3578,10 @@ function refresh(): void {
   if (hub || royale) drawDual(null); // no fight, no void (#947)
   if (hub) {
     const { beaten } = loadProgress(store);
-    hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim);
+    const props = sceneRenderer.terraceOn ? hubProps : null;
+    // On the terrace each room is the Blender file's own prop, standing on the board plane (#1374); else the glyph of the room.
+    const glyphOf = props && ((door: Door, options: GlyphOptions) => { const room = createKitGlyph(props, door, options); room.position.y = -TERRACE_LIFT - 0.02; return room; });
+    hub.draw(sceneRenderer, discs, sfx, beaten, marbleMesh(glassOf()), drawFrame, lightRim, glyphOf ?? undefined);
     syncDishes();
     hubLabels.innerHTML = labelsHtml(hub.at, beaten, loadMedals(store)); // a beaten boss's door shows its medal (#1249)
     document.getElementById('hub-rail')!.innerHTML = railHtml(hub.at.deck, beaten);
@@ -5768,6 +5786,8 @@ function startRoyale(file: RoyaleFile): void {
   selected = [];
   reveal = null;
   royale = loadRoyale(file, (seats, seed) => new Royale(seats, seed));
+  view = fitted = fightView(); // the whole arena on the window (#1374)
+  applyView();
   moveModes('pick');
   for (const control of [newGameButton, retryButton, goalButton, hintButton, exportButton, importButton, resultCard]) control.hidden = true;
   holdButton.hidden = false;
@@ -5870,11 +5890,21 @@ function drawRoyale(game: Royale): void {
     if (seat < 0) return;
     const marble = new THREE.Mesh(marbleGeometry, seatLooks[seat]);
     const picked = ringed.some(([sq, sr]) => sq === q && sr === r);
-    marble.position.set(p.x, picked ? 0.5 : 0.36, p.z);
+    const stand = terraceKit.pedestal && sceneRenderer.terraceOn ? terraceKit.pedestal : null;
+    marble.position.set(p.x, (picked ? 0.5 : 0.36) + (stand ? TERRACE_LIFT / ARENA_SCALE : 0), p.z); // on the terrace the marble stands on its pedestal (#1374)
     const glyph = new THREE.Mesh(seatGlyphs[seat], seatInk);
     glyph.position.copy(marble.position).add(glyphLift);
     arenaMarbles.add(marble, glyph);
     arenaAt.set(i, [marble, glyph]);
+    if (stand) {
+      // the kit's flat disc under the marble, as the 1v1's: Blender's royale half size across, its height unscaled by the arena's half scale
+      const pedestal = new THREE.Mesh(stand.geometry, stand.material);
+      pedestal.scale.set(1, 1 / ARENA_SCALE, 1);
+      pedestal.position.set(p.x, 0, p.z);
+      pedestal.userData.terrace = true;
+      arenaMarbles.add(pedestal);
+      arenaAt.get(i)!.push(pedestal);
+    }
     if (!picked) return;
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
     ring.rotation.x = Math.PI / 2;
@@ -5964,10 +5994,11 @@ function animateReveal(now: number): void {
   }
   for (const track of step.tracks) {
     const p = slideAt(track, ms - step.start);
-    const [marble, glyph] = arenaAt.get(cellIndex(...track.cell, ARENA))!;
+    const [marble, glyph, pedestal] = arenaAt.get(cellIndex(...track.cell, ARENA))!;
     marble!.position.x = p.x;
     marble!.position.z = p.z;
     glyph!.position.copy(marble!.position).add(glyphLift);
+    pedestal?.position.set(p.x, 0, p.z); // the disc goes with its marble
   }
 }
 // A marble the reveal ejects or the breach takes: the ejection fall of a normal game, in the arena.
@@ -6308,7 +6339,7 @@ renderer.setAnimationLoop((now) => {
   offerLowTier(!sliding() && !lastMovePlaying); // at a quiet moment: no move animation (the ambient dust and heat pulse always move)
   if (!wanted || !drawDue(now, lastDraw.start, lastDraw.cost, drawAsked, navigator.webdriver)) return;
   for (const sync of syncMarbles) sync();
-  syncPedestals?.();
+  for (const sync of syncPedestals) sync();
   renderer.info.reset();
   sceneRenderer.render();
   draws++;
