@@ -37,6 +37,7 @@ describe('The Overseer helpers (#635, game-design.md section 7.11)', () => {
   it('rolls a core a vent pulls in from the next cell onto that vent, then sinks it, or fades it on the vent (#1241)', () => {
     const vents: [number, number][] = [[-3, -1], [4, -1], [-4, 0], [4, 0], [-4, 1], [3, 1]];
     expect(ventOf([3, 1], vents)).toEqual([3, 1]); // on a vent: that one
+    expect(ventOf([-4, 0], vents)).toEqual([-4, 0]); // even next to another
     expect(ventOf([2, 1], vents)).toEqual([3, 1]);
     expect(ventOf([-3, 0], vents)).toEqual([-3, -1]); // next to three: the first, as the engine pulls
     expect(ventOf([0, 0], vents)).toEqual([0, 0]); // next to none: where it stands

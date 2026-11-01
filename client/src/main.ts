@@ -67,7 +67,7 @@ import {
   trainText,
   type Train,
 } from './railyard';
-import { BUBBLE_SPOT, HAZE_PER_VENT, TAUNTS, burnTrack, burnsPlayer, hazeAt, parseBurns, startsBurningPlayer, tauntIndex, toxinText, ventNote, type Burn } from './overseer';
+import { BUBBLE_SPOT, HAZE_PER_VENT, TAUNTS, burnTrack, burnsPlayer, hazeAt, parseBurns, startsBurningPlayer, tauntIndex, toxinText, ventNote, ventOf, type Burn } from './overseer';
 import { ANGRY_HOLD_MS, FAREWELL, TAUNT_HOLD_MS, angryLine, speechAt, type Speech } from './speech';
 import { blinkAt, drawAnnounce, drawGlyph, parseAnnounce, parseRepulsions, polarityText, repulsionMoves, type Repulsion } from './magnetizer';
 import {
@@ -2483,12 +2483,13 @@ function afterPlay(before: number[], record: number[], live = true): void {
     document.body.dataset.bridge = 'lowering'; // read by the e2e tests
   }
   ejectBy(before, after, mv, held, reduced);
-  // The Overseer's vents (#635): the push slides first, then each marble they burnt sinks into its vent.
+  // The Overseer's vents (#635): the push slides first, then each marble they burnt sinks into its vent, a core they
+  // pulled in from the next cell rolls into it first (#1241).
   delete document.body.dataset.burns;
-  const vented = engine instanceof Encounter && engine.incinerators().length > 0;
-  const burns = vented ? parseBurns((engine as Encounter).removed()) : [];
+  const vents = engine instanceof Encounter ? parseCells(engine.incinerators()) : [];
+  const burns = vents.length > 0 ? parseBurns((engine as Encounter).removed()) : [];
   const won = fight?.id === 'overseer' && engine instanceof Encounter && engine.result() === 1;
-  if (burns.length > 0) whenSettled(() => burn(burns, reduced, history.length, won));
+  if (burns.length > 0) whenSettled(() => burn(burns, vents, reduced, history.length, won));
   // The defeated Overseer (#789): after the last burn its pedestal blows up like the martyr, then it says its farewell.
   if (won && overseerBlown !== engine) {
     overseerBlown = engine;
@@ -2552,11 +2553,11 @@ function drawBlast(elapsedMs: number): void {
   if (then) say(then); // the Overseer's farewell types once its marble is gone (#789)
 }
 
-/** The burns of a ply at `ply`: each marble sinks into its vent, or fades with reduced motion; a burnt core angers the Overseer, unless it is the last one: its farewell has priority (#789). */
-function burn(burns: Burn[], reduced: boolean, ply: number, won: boolean): void {
+/** The burns of a ply at `ply`: each marble sinks into its vent of `vents`, or fades with reduced motion; a burnt core angers the Overseer, unless it is the last one: its farewell has priority (#789). */
+function burn(burns: Burn[], vents: Axial[], reduced: boolean, ply: number, won: boolean): void {
   document.body.dataset.burns = String(burns.length); // read by the e2e tests
   if (!won && burns.some((b) => b.side === CORE_CODE)) say({ text: angryLine(fight!.seed, ply), hold: ANGRY_HOLD_MS, angry: true }); // #741
-  for (const { cell, side } of burns) startEjection(side === CORE_CODE ? coreMesh() : marbleMesh(side), burnTrack(cell, reduced), scene);
+  for (const { cell, side } of burns) startEjection(side === CORE_CODE ? coreMesh() : marbleMesh(side), burnTrack(cell, reduced, ventOf(cell, vents)), scene);
 }
 
 /** The ejection `mv` makes from the board `before` to `after`, if any (see `eject`). */
@@ -2840,7 +2841,7 @@ function fireBelts(carries: Carry[], before: number[], reduced: boolean): void {
     slide = { game: engine, tracks, start: performance.now() };
     document.body.dataset.sliding = '1';
   }
-  if (struck.length > 0) burn(struck, reduced, history.length, false);
+  if (struck.length > 0) burn(struck, [], reduced, history.length, false);
   if (!reduced) for (const { cell } of struck) pressOn(cell);
   document.body.dataset.beltTurns = String(Number(document.body.dataset.beltTurns ?? 0) + 1); // read by the e2e tests
 }

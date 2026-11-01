@@ -190,7 +190,8 @@ function tell(boss: BossLike, armies: number[][]): Tell | null {
   }
   const turns = boss.turns_left();
   if (turns >= 0) {
-    return { kind: 'neurotoxin', cells: [], text: `the boss wins at the end of your turn in ${turns} turns unless you win first` };
+    const text = `the boss wins at the end of your turn in ${turns} turns unless you win first; an empty vent pulls in a core next to it at the end of every ply`;
+    return { kind: 'neurotoxin', cells: [], text };
   }
   const borrowed = boss.ballast_next();
   if (borrowed >= 0) {

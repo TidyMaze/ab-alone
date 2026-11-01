@@ -130,7 +130,7 @@ How the engine's per-boss getters map into the generic shape (the server does th
 | `Encounter.trains()` | `marks` with `kind: "train"` on every cell of the train's line, from its entry, and `value` = player turns left before it passes (The Rail Yard) |
 | `Encounter.polarities()` | `marks` with `kind: "polarity"` and `value` = `1` for +, `-1` for − (The Magnetizer) |
 | `Encounter.incinerators()` | `marks` with `kind: "incinerator"` (The Overseer); its cores are `c` and the Overseer `O` on the board |
-| `Encounter.turns_left()` (`-1` is no clock) | `tell` with `kind: "neurotoxin"` and the player turns left in `text` (The Overseer) |
+| `Encounter.turns_left()` (`-1` is no clock) | `tell` with `kind: "neurotoxin"` and the player turns left in `text`, with the pull of the vents (The Overseer) |
 | `Encounter.ballast_next()` (`-1` is none) | `tell` with `kind: "borrowed"` and the effect The Ballast Mind borrows at the end of this turn in `text` (the Hull's crack, the Pulsar's pulse, the Magnetizer's polarity, the Chaplain's conversion check, the Swarm's wave) |
 | `Encounter.belts()` | `marks` with `kind: "belt"` on every cell of a running belt and `value` = `1` toward +q, `-1` toward -q; `kind: "strike"` on the cell of an announced strike slot; and `tell` with `kind: "belt_reverse"` and the player turns left before the centre belt reverses in `text` (The Assembly Line) |
 | `Encounter.swarm()` | `marks` with `kind: "arrival"` on each cell where a swarm marble lands after the player's move; `tell` with `kind: "arrival"`, those cells, and the boss turns before the evac and a pass in `text` (The Swarm) |
