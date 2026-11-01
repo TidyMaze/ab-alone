@@ -438,7 +438,7 @@ to move with 2 or 4 ejections, a pulse due on the boss reply), same search befor
 
 So the change shows only above the 100 nodes the boss uses: the boss reply is identical at the
 shipped budget. The test `the_phase_reached_in_the_tree_changes_the_best_move` uses a built
-position at 1000 nodes (seed 20709, seed index 668 of the scan). Ladder,
+position at 1000 nodes (seed 5 since #1197, which moved the picks; it was 20709). Ladder,
 `LADDER_X=<x> LADDER_SEEDS=20 cargo run --release --example ladder -- ballast`, run alone, main
 4c1477c before:
 

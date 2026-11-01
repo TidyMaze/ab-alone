@@ -979,7 +979,7 @@ mod tests {
             board.set(q, r, Cell::White);
         }
         let game = Game::from_position(board, Player::Black, [2, 0]).with_win([12, 12]);
-        let mut enc = Encounter::new(game, ballast_boss(), 20709).counting_by_colour();
+        let mut enc = Encounter::new(game, ballast_boss(), 5).counting_by_colour();
         for m in [
             mv(&[(-1, -2), (0, -3)], Direction::NE),
             mv(&[(2, 3)], Direction::NW),
