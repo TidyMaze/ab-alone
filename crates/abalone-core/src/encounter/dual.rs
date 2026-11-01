@@ -3,14 +3,15 @@
 //! north room on `r <= -1`, and the void on the row `r = 0`, off the board, so a marble pushed into
 //! it is ejected as over the rim. A marble pushed off comes back one ply later in the other room,
 //! on the mirror of its cell in P1, on a random empty rim cell of the emptier room in P2; in P3 the
-//! bridge fills the void and ejected marbles are gone. Every ejection counts. Every random pick is
-//! splitmix64 of the fight seed and the ply, so every peer gets the same fight.
+//! bridge fills the void and ejected marbles are gone. Every ejection counts. Until the bridge the
+//! rooms are played in turn by pairs of plies, the south room first (#992, `Dual::turn`). Every
+//! random pick is splitmix64 of the fight seed and the ply, so every peer gets the same fight.
 
 use crate::board::{room, Board, Cell, Dual};
 use crate::encounter::hull::{mix, NEIGHBOURS};
 use crate::encounter::{BossDef, Encounter};
-use crate::game::Game;
-use crate::moves::{Move, Player};
+use crate::game::{Game, GameError};
+use crate::moves::{legal_moves, Move, Player};
 use crate::search::{search_hooked, Weights, DEFAULT_WEIGHTS};
 
 type P = (i32, i32);
@@ -134,7 +135,29 @@ pub(crate) fn carried_dual(before: &Board, mv: &Move, _after: &Board) -> Option<
     let mut dual = before.dual()?;
     dual.ejected = pushed_off(before, mv);
     dual.ejections += u8::from(matches!(dual.ejected, Some((Cell::White, _))));
+    if !dual.bridged {
+        dual.turn = (dual.turn + 1) % 4;
+    }
     Some(dual)
+}
+
+/// The room `player` plays in before the bridge (#992): the room in turn, or the other one when it
+/// has no legal move there. `None` once the bridge is up or outside the Dual Room's fight.
+pub fn dual_room(board: &Board, player: Player) -> Option<usize> {
+    let turn = board.dual()?.room()?;
+    Some(
+        legal_moves(board, player)
+            .first()
+            .map_or(turn, |m| room(m.cells[0])),
+    )
+}
+
+/// Refuses a move of the side to move in the room that does not play this ply.
+pub(crate) fn refuse(board: &Board, player: Player, mv: &Move) -> Result<(), GameError> {
+    match (dual_room(board, player), mv.cells.first()) {
+        (Some(turn), Some(&cell)) if room(cell) != turn => Err(GameError::OtherRoom),
+        _ => Ok(()),
+    }
 }
 
 /// Fills the void with the bridge's empty cells.

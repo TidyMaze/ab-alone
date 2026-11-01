@@ -129,13 +129,20 @@ describe('main.ts The Dual Room (#947, #955)', () => {
     const scene = catchScene();
     const game = await boot('?bot=off', { reducedMotion: true });
     fightDual(game);
-    // A player marble walks to the south room's rim, (1, 2), and the boss pushes it off from there.
+    // A player marble walks to the south room's rim, (1, 2), and the boss pushes it off from there. The rooms are played
+    // in turn (#992): each side steps back and forth in the north room meanwhile.
     const plies = [
       [1, 4, -1, 6, 0, 0, 0, 0],
+      [1, 1, -2, 2, 0, 0, 0, 0],
+      [1, 5, 5, -6, 0, 0, 0, 0],
       [1, 0, 2, -2, 0, 0, 0, 0],
       [1, 2, -1, 5, 0, 0, 0, 0],
+      [1, 0, -3, 2, 0, 0, 0, 0],
+      [1, 4, 5, -5, 0, 0, 0, 0],
       [1, 1, 3, -2, 0, 0, 0, 0],
       [1, 2, 0, 4, 0, 0, 0, 0],
+      [1, 1, -2, 2, 0, 0, 0, 0],
+      [1, 5, 5, -6, 0, 0, 0, 0],
       [1, 0, 2, -2, 0, 0, 0, 0],
       [1, 4, 1, 3, 0, 0, 0, 0],
       [2, 0, -1, 2, 0, 2, 0, 0],

@@ -331,6 +331,7 @@ impl Encounter {
         if self.stalker {
             stalker::refuse(self, mv)?;
         }
+        dual::refuse(self.game.board(), self.game.to_move(), mv)?;
         let told = self.tell();
         let before = self.game.board().clone();
         self.game.play(mv)?;

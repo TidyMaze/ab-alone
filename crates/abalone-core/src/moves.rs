@@ -1,6 +1,6 @@
 //! Move generation and validation: inline, broadside and sumito (docs/specs/rules.md sections 3 to 5).
 
-use crate::board::{Board, Cell, Special};
+use crate::board::{room, Board, Cell, Special};
 
 /// The six hex directions, as axial vectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -96,8 +96,25 @@ pub fn legal_moves(board: &Board, player: Player) -> Vec<Move> {
     legal_moves_for(board, player.cell())
 }
 
-/// Every legal move of the `own` marbles on `board`, any other colour being an opponent.
+/// Every legal move of the `own` marbles on `board`, any other colour being an opponent. On The
+/// Dual Room's board before the bridge, only those of the room in turn, or of the other room when
+/// it has none (#992).
 pub fn legal_moves_for(board: &Board, own: Cell) -> Vec<Move> {
+    let moves = every_move(board, own);
+    let Some(turn) = board.dual().and_then(|d| d.room()) else {
+        return moves;
+    };
+    let (own_room, other): (Vec<Move>, Vec<Move>) =
+        moves.into_iter().partition(|m| room(m.cells[0]) == turn);
+    if own_room.is_empty() {
+        other
+    } else {
+        own_room
+    }
+}
+
+/// Every move of the `own` marbles the board allows, whatever the room.
+fn every_move(board: &Board, own: Cell) -> Vec<Move> {
     let mut moves = Vec::new();
     let radius = board.radius();
     for q in -radius..=radius {

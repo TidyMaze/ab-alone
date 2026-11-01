@@ -1027,6 +1027,18 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   ```
 
   South room: player `(-5..-2, 7)` and `(-4..-1, 6)`, boss `(-1, 1)`, `(0, 1)`, `(-2..0, 2)`.
+- **Turns** (owner, #992): until the bridge, the rooms are **played in turn, by pairs of plies**:
+  you in the **south** room, the boss in the south room, you in the **north** room, the boss in the
+  north room, and so on. The south room starts. A move of that ply lies **wholly inside its room**:
+  its marbles, and a push stays inside it (the void is still an ejection). The engine lists only
+  those moves and refuses a move in the other room (`GameError::OtherRoom`).
+  - **No legal move in its room**: the side to move plays in the other room for that ply; the
+    order then goes on as if it had played in its room.
+  - **Returns**: a return landing in the other room does not change the order.
+  - **After the bridge** (P3): both sides move freely on the joined board; the order stops at the
+    end of the move that raises it.
+  - The order is the plies played modulo 4 (`Dual::turn`), on the board and in the position hash,
+    so it is the same for every peer.
 - **Mirror**: the cell symmetric to `(q, r)` across the void is `(q + r, -r)`, both ways. Each row
   keeps its distance to the void (the facing edge maps to the facing edge, the far side to the far
   side) and its place across the screen.
@@ -1048,20 +1060,23 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
 - **Win and loss** (lead): **every ejection counts**, even when the marble comes back: win at 6,
   lose at 6. A return is not an ejection and credits nothing.
 - **Deterministic, for P2P**: every random pick is splitmix64 of the fight seed and the ply. The
-  bridge, the counted ejections, the marble just ejected and the announced return live on the board
-  and in the position hash. No `Math.random`, no clock.
+  bridge, the counted ejections, the marble just ejected, the announced return and the room in turn
+  live on the board and in the position hash. No `Math.random`, no clock.
 - **Tell**: the announce mark on the landing cell (the colour of the coming marble) during the
-  ply before it lands; the HUD line says where it lands, and that the bridge comes at 5.
+  ply before it lands; the HUD line says where it lands, and that the bridge comes at 5. The room
+  out of turn is dimmed until the bridge, and a click on one of its marbles is refused with the
+  reason ("the south room plays this turn").
 - **Look**: the two rooms under one camera, the void a dark gap, the bridge's 5 cells coming down into
   the gap at P3, the returning marble dropping in on its mark. Reduced motion: no animation, the
   bridge and the marble appear.
 - **Turn it against the boss** (owner design rule): the boss starts near the void, so push its
   marbles into the void; an ejected boss marble lands on the mirror of the cell you push it off
-  from, so pick that cell to drop it into a trap in the other room (onto the rim in front of your
-  line); keep the mirror of your own exposed rim cells covered; in P2 the return goes to the
-  emptier room, so thin out the room you want it out of. The boss search plays the void, the
-  returns of both sides and the bridge (every ply of its tree goes through the hook, seed 0 for
-  the P2 draw).
+  from, at the end of the boss's reply, in the room you play next: pick that cell to drop it onto
+  the rim in front of your line and push it off again before the boss moves there; keep the mirror
+  of your own exposed rim cells covered, a marble of yours the boss ejects lands just before its
+  move in the other room; in P2 the return goes to the emptier room, so thin out the room you want
+  it out of. The boss search plays the void, the returns of both sides, the order of the rooms and
+  the bridge (every ply of its tree goes through the hook, seed 0 for the P2 draw).
 - **The Ballast Mind** (owner rule, section 7.5): not borrowed. A return needs a second room and
   spans two plies (ejected, then back one ply later): it is not a one-shot hook on the Ballast
   board, which has one room.
