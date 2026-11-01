@@ -39,3 +39,7 @@ export function tallyLine({ mode, boss = '' }: { mode: TallyMode; boss?: string 
 
 /** Tally's line once the hero has entered every lair of the Open world (#1175): one line, no speech. `crew` is the crew attached. */
 export const endingLine = (crew: number): string => `Variance noted. Clamp: open. Crew attached: ${crew}.`;
+
+/** Tally's line while some lairs of the Open world are beaten and not all (#1315): the seats on file out of the lairs, and one line of
+ * lore (world.md section 2, what happened). One line, no speech, nothing gated. */
+export const ledgerLine = (filed: number, total: number): string => `Seats on file: ${filed} of ${total}. Slag-glass remembers heat.`;

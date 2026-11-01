@@ -8,7 +8,7 @@ import { FightState } from './openworldfight';
 import { GLIDE_MS, NUDGE_MS, slowBy, stepMs, type Pace } from './openworldglide';
 import type { WorldSave, WorldSaves } from './openworldsave';
 import type { MarbleSkins } from './openworldstripe';
-import { endingLine } from './tally';
+import { endingLine, ledgerLine } from './tally';
 import { MARBLES } from './trainer';
 import { Discovered } from './openworlddiscovered';
 import { WorldMap } from './openworldmap';
@@ -275,13 +275,15 @@ export class OpenWorldMode {
     return this.fight.nearHero(this.world!, this.hero!.at);
   }
 
-  /** Tally's line in the HUD (#1171): the ending once every lair is beaten (#1175), else the page's line (`fresh`: asked for, which
-   * may use it up). */
+  /** Tally's line in the HUD (#1171): the ending once every lair is beaten (#1175), the ledger line of the seats on file while some are
+   * (#1315), else the page's line (`fresh`: asked for, which may use it up). */
   private showTally(fresh: boolean): void {
     const tally = document.getElementById('openworld-tally');
     if (!tally) return;
-    const over = this.lairs.length > 0 && this.beaten.length >= this.lairs.length;
-    tally.textContent = over ? endingLine(MARBLES) : fresh ? this.tally() : '';
+    const [filed, total] = [this.beaten.length, this.lairs.length];
+    if (total > 0 && filed >= total) tally.textContent = endingLine(MARBLES);
+    else if (!fresh) tally.textContent = '';
+    else tally.textContent = filed > 0 ? ledgerLine(filed, total) : this.tally();
   }
 
   /** A test fixture (webdriver pages only, docs/specs/openworld.md section 6): the hero on `hero`, the troop on `troop`, and the

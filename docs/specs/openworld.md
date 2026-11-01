@@ -242,6 +242,8 @@ The Open world has a goal: one landmark lair per boss of the roster (15 today, t
   store, total the roster size. Read when a world opens, so it is right after "Back to the Open world".
 - **Tally's line.** The first time a player opens an Open world the HUD shows "Claim 0412: unworked." (`#openworld-tally`), once: the
   flag `ab-alone.tally0412` is kept next to the medals. Reduced motion changes nothing.
+- **Seats on file (#1315).** While some lairs are beaten and not all, a world that opens shows "Seats on file: N of total. Slag-glass remembers heat."
+  (`ledgerLine` of `client/src/tally.ts`, the lore line of world.md section 2) in `#openworld-tally`, in place of the claim line, which is not asked for.
 - **Ending (#1175).** When every lair of the world is in `lairs` (beaten), the world counts as beaten: whenever it opens, `#openworld-tally`
   shows "Variance noted. Clamp: open. Crew attached: 6." (the crew is the Trainer's `MARBLES`), in place of the claim line. One line, no
   speech, nothing gated, no new save field (a save from before reads as not over). `__openworldFixture` takes `beaten: [n, ...]` to set the lairs beaten.

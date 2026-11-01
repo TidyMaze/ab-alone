@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOSS_IDS, endingLine, tallyLine } from './tally';
+import { BOSS_IDS, endingLine, ledgerLine, tallyLine } from './tally';
 
 describe('tallyLine', () => {
   it('has a non-empty line for every mode', () => {
@@ -41,5 +41,19 @@ describe('tallyLine', () => {
 describe('endingLine (#1175)', () => {
   it('names the open clamp and the crew attached, in one line', () => {
     expect(endingLine(6)).toBe('Variance noted. Clamp: open. Crew attached: 6.');
+  });
+});
+
+describe('ledgerLine (#1315)', () => {
+  it('counts the seats on file out of the lairs, with one line of lore', () => {
+    expect(ledgerLine(3, 15)).toBe('Seats on file: 3 of 15. Slag-glass remembers heat.');
+  });
+
+  it('stays one short line, no newline', () => {
+    for (const filed of [1, 7, 14]) {
+      const line = ledgerLine(filed, 15);
+      expect(line).not.toContain('\n');
+      expect(line.length).toBeLessThanOrEqual(72);
+    }
   });
 });

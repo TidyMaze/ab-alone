@@ -38,3 +38,23 @@ test("Tally's ending line shows once every lair is beaten, #1175", async ({ page
   await expect(page.locator('#openworld-tally')).toHaveText('Variance noted. Clamp: open. Crew attached: 6.');
   await page.screenshot({ path: process.env.LAIR_SHOT ?? 'test-results/ending.png' });
 });
+
+// #1315: Tally's ledger line counts the seats on file while some lairs are beaten, on a phone-width HUD. The hook beats three lairs, then a
+// reload opens the world again (the saved lairs come back on the open).
+test('the ledger line counts the seats on file on a phone, #1315', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('./?bot=off&openworld=7');
+  await page.locator('canvas:not(#openworld-minimap)').waitFor();
+  const count = (await page.evaluate(() => document.body.dataset.openworldLairs))!.split(' ').length;
+  await page.evaluate(() => (window as unknown as { __openworldFixture: (f: object) => void }).__openworldFixture({ hero: [0, 0], troop: [], enemies: [], beaten: [0, 1, 2] }));
+  await page.keyboard.press('Escape'); // leaving the world saves it
+  await expect.poll(() => page.evaluate(() => document.body.dataset.openworldSaved)).toBe('1');
+  await page.reload();
+  await expect(page.locator('body')).toHaveAttribute('data-openworld', '7');
+  await expect(page.locator('#openworld-tally')).toHaveText(`Seats on file: 3 of ${count}. Slag-glass remembers heat.`);
+  const [hud, line] = [await page.locator('#openworld-hud').boundingBox(), await page.locator('#openworld-tally').boundingBox()];
+  expect(hud!.x + hud!.width).toBeLessThanOrEqual(390);
+  expect(hud!.y + hud!.height).toBeLessThanOrEqual(844);
+  expect(line!.height).toBeLessThan(60); // the line wraps to two lines at most
+  await page.screenshot({ path: process.env.LEDGER_SHOT ?? 'test-results/ledger.png' });
+});
