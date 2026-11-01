@@ -122,6 +122,18 @@ describe('main.ts The Pulsar in space (#1146)', () => {
     expect(space!.visible).toBe(false);
     expect(walls(scene())[0]!.layers.isEnabled(0)).toBe(true);
   });
+
+  it('keeps the fight in space after a settings toggle and a late bay load (#1189)', async () => {
+    const scene = catchScene();
+    const game = await boot('?bot=off', { reducedMotion: true });
+    fightPulsar(game);
+    byId('settings').click();
+    byId('setting-clear-board').click(); // drawProps rebuilds the bay's meshes
+    expect(walls(scene())[0]!.layers.isEnabled(0)).toBe(false);
+    game.hook('__mountBay', null); // the bay glb finishing late
+    expect(walls(scene())[0]!.layers.isEnabled(0)).toBe(false);
+    expect((scene().background as THREE.Color).getHex()).toBe(0x000000);
+  });
 });
 
 describe('main.ts The Pulsar (#675)', () => {
