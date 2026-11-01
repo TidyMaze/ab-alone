@@ -1396,8 +1396,8 @@ const freeGeometry = new THREE.OctahedronGeometry(0.16).scale(1, 1.6, 1);
 const fogMaterial = new THREE.MeshBasicMaterial({ color: tonal ? TONAL.veiled : 0x000000, transparent: true, opacity: tonal ? 1 : 0.9, depthWrite: false });
 const veil = Object.assign(new THREE.InstancedMesh(crackGeometry, fogMaterial, 61), { name: 'stalker-fog' }); // one, reused
 const revealed = new Set<number>(); // the hidden marbles a blocked move revealed, until the next move
-// The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the 30th
-// reply is done the evac lights the whole board, one draw call, and lifts the player's marbles (a fade with reduced motion).
+// The Swarm (#1008, game-design.md section 7.14): a ring on each cell where a swarm marble lands next turn; once the evac
+// clock runs out the evac lights the whole board, one draw call, and lifts the player's marbles (a fade with reduced motion).
 const arrivalMaterial = new THREE.MeshBasicMaterial({ color: 0xff7a3d });
 const evacMaterial = new THREE.MeshBasicMaterial({ color: 0xfff1c1, transparent: true, opacity: 0, depthWrite: false });
 const evacGlow = Object.assign(new THREE.InstancedMesh(crackGeometry, evacMaterial, 61), { name: 'swarm-evac' }); // one, reused
@@ -3146,7 +3146,7 @@ function drawHud(extra = ''): void {
       }),
     );
   }
-  // The Swarm's bar holds its 30 turns, one fragment breaks per boss reply (#1008).
+  // The Swarm's bar holds the 40 turns of its evac clock, one fragment breaks per boss reply, two per swarm ejection (#1266).
   const turns = boss && parseSwarm(boss.swarm());
   const health = turns ? { ejected: SWARM_TURNS - turns.left, win: SWARM_TURNS } : { ejected: engine.ejected(1), win: engine.win_ejections(1) };
   drawBossBar(document.getElementById('boss-bar')!, boss ? { name: boss.name(), ...health, steps: Array.from(boss.phase_ejections()), phase: boss.phase() } : null);

@@ -259,29 +259,34 @@ const CASES: Record<string, () => void> = {
   },
 
   swarm() {
-    // The announced wave is the tell and a mark per cell; the turns left until the evac, and a pass, in the text.
+    // The announced wave is the tell and a mark per cell; the turns left on the evac clock, its jump, and a pass, in the text.
     const swarm = newEncounter('swarm', 0);
-    const [left, , q, r] = Array.from(swarm.swarm());
-    expect(left).toBe(30);
+    const [left, , jump, q, r, ...more] = Array.from(swarm.swarm());
+    expect([left, jump, more.length]).toEqual([40, 0, 4]); // 3 marbles a turn
+    const cells = [[q, r], [more[0], more[1]], [more[2], more[3]]].map(([cq, cr]) => `(${cq},${cr})`);
+    const clock = 'the evac comes in 40 turns, 2 sooner per swarm marble you eject';
     expect(bossState('swarm', swarm)).toMatchObject({
       name: 'The Swarm',
       phases: 3,
-      tell: { kind: 'arrival', cells: [`(${q},${r})`], text: `a swarm marble lands on (${q},${r}) after your move; the evac comes in 30 boss turns` },
-      marks: [{ kind: 'arrival', cell: `(${q},${r})` }],
+      tell: { kind: 'arrival', cells, text: `swarm marbles land on ${cells.join(', ')} after your move; ${clock}` },
+      marks: cells.map((cell) => ({ kind: 'arrival', cell })),
     });
     const state = (data: number[]) => bossState('swarm', withData(swarm, { swarm: data })).tell;
-    expect(state([1, 1, 0, -4, 1, -4])).toEqual({
+    expect(state([1, 1, 0, 0, -4, 1, -4])).toEqual({
       kind: 'arrival',
       cells: ['(0,-4)', '(1,-4)'],
-      text: 'swarm marbles land on (0,-4), (1,-4) after your move; the evac comes in 1 boss turn; the swarm passed its last turn',
+      text: 'swarm marbles land on (0,-4), (1,-4) after your move; the evac comes in 1 turn, 2 sooner per swarm marble you eject; the swarm passed its last turn',
     });
-    expect(state([0, 0])).toEqual({ kind: 'arrival', cells: [], text: 'the evac has come' });
-    expect(state([3, 0])!.text).toBe('the evac comes in 3 boss turns'); // a full rim: no arrival
+    expect(state([0, 0, 2])).toEqual({ kind: 'arrival', cells: [], text: 'the evac has come' });
+    expect(state([3, 0, 0])!.text).toBe('the evac comes in 3 turns, 2 sooner per swarm marble you eject'); // a full rim: no arrival
+    expect(state([28, 0, 2, 0, 4])!.text).toBe(
+      'a swarm marble lands on (0,4) after your move; the evac comes in 28 turns, 2 sooner per swarm marble you eject; your ejection brought it 2 turns closer',
+    );
     // MCP plays it: the boss replies, and its first wave landed.
     swarm.play(swarm.legal_moves().slice(0, 8));
     expect(swarm.board()[BOARD_CELLS.findIndex(([cq, cr]) => cq === q && cr === r)]).toBe(2); // White, on its mark
     swarm.play(swarm.boss_move());
-    expect(swarm.swarm()[0]).toBe(29);
+    expect(swarm.swarm()[0]).toBe(39);
   },
 };
 
