@@ -152,6 +152,7 @@ describe('the MCP server', () => {
       'wait_for_opponent_move',
       'new_world',
       'world_state',
+      'save_world',
       'world_step',
       'world_walk',
       'join_world_room',

@@ -24,9 +24,23 @@ const WINDOW =
   'the troop attacks on its own, as in the client: it plays the best legal push against the enemies near the hero, and an enemy ' +
   'pushed into water or off the world is ejected (beaten).';
 
+const CELL = z.tuple([z.int(), z.int()]);
+
+/** A world save in the client's format (client/src/openworldsave.ts), as save_world gives it. */
+const SAVE = z.object({
+  version: z.int(),
+  seed: z.int().min(0).max(4294967295),
+  hero: CELL,
+  troop: z.array(CELL).max(6),
+  fight: z.object({ removed: z.array(z.string().regex(/^-?\d+,-?\d+$/)), added: z.array(CELL), beaten: z.int().min(0) }),
+  yaw: z.number(),
+  broken: z.array(CELL),
+  lairs: z.array(z.int().min(0)),
+});
+
 export function createServer(
   session: Session,
-  world: OpenWorld = new OpenWorld(worldRules(), bossIds),
+  world: OpenWorld = new OpenWorld(worldRules(), bossIds, session),
   worldRoom: WorldRoom = new WorldRoom(world, worldRules(), refusePeers),
 ): McpServer {
   const server = new McpServer({ name: 'ab-alone', version: '0.1.0' });
@@ -141,10 +155,14 @@ export function createServer(
     'new_world',
     {
       description:
-        'Start the Open world of a seed and drop the world in progress: the hero on the spawn (0,0), the troop round it. Same seed, ' +
-        'same world and the same moves give the same result as the client. Returns the world state (see world_state). Walk to a lair ' +
-        `and step onto it, then fight its boss with new_game. ${WINDOW}`,
-      inputSchema: z.strictObject({ seed: z.int().min(0).max(4294967295).optional().describe('Seed of the world, default 0.') }),
+        'Start the Open world of a seed and drop the world in progress: the hero on the spawn (0,0), the troop round it, or resume a ' +
+        'save. Same seed, same world and the same moves give the same result as the client. Returns the world state (see world_state). ' +
+        'Walk to a lair and step onto it, then fight its boss with new_game: a fight won marks the lair beaten when you are back in the ' +
+        `world. ${WINDOW}`,
+      inputSchema: z.strictObject({
+        seed: z.int().min(0).max(4294967295).optional().describe('Seed of the world, default 0.'),
+        save: SAVE.optional().describe('Resume this world, its seed included: the output of save_world, or a save of the client. bad_save when it is of another world version.'),
+      }),
     },
     (input) => toolResult(world.newWorld(input)),
   );
@@ -154,11 +172,22 @@ export function createServer(
     {
       description:
         'The Open world state: seed, hero, troop, obstacles broken, enemies beaten (ejected), the enemies in the window as the pushes ' +
-        'left them, every boss lair with its distance ' +
-        `from the hero, and a short window of cells round the hero (never the whole map). ${WINDOW}`,
+        'left them, every boss lair with its distance from the hero and whether it is beaten, ending (the end line) once every lair is ' +
+        'beaten, and a short window of cells round the hero (never the whole map). There is no loss state: the hero cannot lose, as in ' +
+        `the client. ${WINDOW}`,
       inputSchema: z.strictObject({ radius: z.int().min(1).max(8).optional().describe('Cells of the window out from the hero, default 3.') }),
     },
     (input) => toolResult(world.state(input)),
+  );
+
+  server.registerTool(
+    'save_world',
+    {
+      description:
+        "The Open world in the client's save format (hero, troop, fight, broken, lairs beaten): give it to new_world as save to " +
+        'resume the world later.',
+    },
+    () => toolResult(world.save()),
   );
 
   server.registerTool(
