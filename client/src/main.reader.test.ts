@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { type Axial } from './board';
 import { boot, type Game } from './test/harness';
 
@@ -35,7 +35,7 @@ async function ready(url = '?bot=off'): Promise<Game> {
 
 describe('main.ts, the terminal reader (#512)', () => {
   it('the T key frames the camera on the console screen, and Esc gives the board view back', async () => {
-    const game = await ready();
+    const game = await ready('?bot=off&scene=room'); // the room's screen: the terrace has none (#1369)
     const board = screen(game, 0, 0);
     expect(reader().hidden).toBe(true);
     key('t');
@@ -161,5 +161,31 @@ describe('main.ts, the terminal reader (#512)', () => {
     tap(screen(game, ...next.cells[0]!));
     expect(game.hook<Axial[]>('__rings')).toEqual([next.cells[0]]);
     await game.settle();
+  });
+
+  // #1369: the terrace has no console screen, so its Game modes entry opens the deck's entry in the reader, as a plate.
+  it('the terrace has a Console entry in Game modes that reads the deck entry as a plate, and the room has none, #1369', async () => {
+    const game = await ready();
+    await vi.waitFor(() => expect(data().scene).toBe('table-zero'));
+    const button = document.getElementById('console-entry') as HTMLButtonElement;
+    expect(document.getElementById('mode-menu')!.contains(button)).toBe(true); // an entry of the menu, after Leaderboard
+    expect(button.previousElementSibling?.id).toBe('leaderboard');
+    expect(button.hidden).toBe(false);
+    expect(document.getElementById('mode-menu')!.hidden).toBe(true);
+    (document.getElementById('modes') as HTMLButtonElement).click();
+    expect(document.getElementById('mode-menu')!.hidden).toBe(false);
+    const board = screen(game, 0, 0);
+    button.click();
+    expect(document.getElementById('mode-menu')!.hidden).toBe(true); // the menu closes, as Leaderboard's does
+    expect(reader().hidden).toBe(false);
+    expect(reader().classList.contains('flat')).toBe(true); // the page shows: the room's screen is not there to show it
+    expect(reader().textContent).toContain("Captain's order, pinned above table four");
+    expect(data().reading).toBe('mess-house-rule');
+    expect(screen(game, 0, 0)).toEqual(board); // the camera stays on the board: the room's screen is not framed
+    key('Escape');
+    expect(reader().hidden).toBe(true);
+    await ready('?bot=off&scene=room');
+    expect(data().scene).toBe('room');
+    expect((document.getElementById('console-entry') as HTMLButtonElement).hidden).toBe(true);
   });
 });
