@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import type { PeerNet } from './p2p';
 import { decode, encodeHello, encodePos, PUBLIC_SEED, roomOf } from './worldpeers';
-import { WorldPeersHost } from './worldnet';
+import { WorldPeersHost, type NetStatus } from './worldnet';
 
 class FakeNet implements PeerNet {
   sent: [Uint8Array, string | undefined][] = [];
@@ -11,6 +11,7 @@ class FakeNet implements PeerNet {
   data: (d: Uint8Array, peer: string) => void = () => {};
   join: (peer: string) => void = () => {};
   leave: (peer: string) => void = () => {};
+  fail: (message: string) => void = () => {};
   send(d: Uint8Array, to?: string): void {
     this.sent.push([d, to]);
   }
@@ -23,6 +24,9 @@ class FakeNet implements PeerNet {
   onLeave(cb: (peer: string) => void): void {
     this.leave = cb;
   }
+  onError(cb: (message: string) => void): void {
+    this.fail = cb;
+  }
   close(): void {
     this.closed = true;
   }
@@ -32,6 +36,8 @@ function setup(allowed = true) {
   const nets: FakeNet[] = [];
   const rooms: string[] = [];
   const clock = { now: 0 };
+  const reports: NetStatus[] = [];
+  const me = { name: '' };
   const root = document.createElement('div');
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
@@ -47,10 +53,12 @@ function setup(allowed = true) {
     },
     () => allowed,
     root,
+    (status) => reports.push(status),
+    () => me.name,
     () => clock.now,
   );
   const enter = (seed = PUBLIC_SEED) => host.enter(seed, scene, camera, world as never);
-  return { host, nets, rooms, clock, root, scene, enter };
+  return { host, nets, rooms, clock, root, scene, enter, reports, me };
 }
 
 describe('WorldPeersHost', () => {
@@ -157,11 +165,92 @@ describe('WorldPeersHost', () => {
 
   it('reads the page clock when none is given', () => {
     const net = new FakeNet();
-    const host = new WorldPeersHost(() => net, () => true, document.createElement('div'));
+    const host = new WorldPeersHost(() => net, () => true, document.createElement('div'), () => {}, () => '');
     const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 1000);
     host.enter(PUBLIC_SEED, new THREE.Scene(), camera, { tile: () => undefined });
     net.data(encodeHello(), 'p');
     net.data(encodePos(1, 0, 0), 'p');
     expect(host.frame(performance.now(), [0, 0])).toBe(true);
+  });
+
+  it('sends the public name in its Hello, to a peer that joins and again when the name changes', () => {
+    const { nets, host, me, enter } = setup();
+    me.name = 'Ana';
+    enter();
+    nets[0]!.join('p');
+    expect(decode(nets[0]!.sent[0]![0])).toEqual({ t: 'hello', name: 'Ana' });
+    nets[0]!.sent.length = 0;
+    me.name = 'Anna';
+    host.setName();
+    expect(nets[0]!.sent.map(([d, to]) => [decode(d), to])).toEqual([[{ t: 'hello', name: 'Anna' }, undefined]]);
+    host.leave();
+    nets[0]!.sent.length = 0;
+    host.setName(); // no room: nothing to tell
+    expect(nets[0]!.sent).toEqual([]);
+  });
+
+  it('shows the name of a peer on the screen', () => {
+    const { nets, host, root, enter } = setup();
+    enter();
+    nets[0]!.data(encodeHello('Bob'), 'p');
+    nets[0]!.data(encodePos(200, 0, 0), 'p');
+    host.frame(0, [0, 0]);
+    expect(root.querySelector('.peer-edge')!.textContent).toBe('Bob 200');
+  });
+
+  it('reports the status the player reads: nobody yet, a count, and nothing in a private world', () => {
+    const { nets, host, reports, enter } = setup();
+    enter(7);
+    expect(reports.at(-1)).toEqual({ available: false, hidden: false, text: '' });
+    enter();
+    expect(reports.at(-1)).toEqual({ available: true, hidden: false, text: 'Online: nobody else here yet.' });
+    nets[0]!.data(encodeHello(), 'p');
+    nets[0]!.data(encodePos(1, 0, 0), 'p');
+    host.frame(0, [0, 0]);
+    expect(reports.at(-1)!.text).toBe('Online: 1 other hero here.');
+    nets[0]!.data(encodeHello(), 'q');
+    nets[0]!.data(encodePos(2, 0, 0), 'q');
+    host.frame(200, [0, 0]);
+    expect(reports.at(-1)!.text).toBe('Online: 2 other heroes here.');
+    const count = reports.length;
+    host.frame(400, [0, 0]);
+    expect(reports).toHaveLength(count); // only a change is reported
+    host.leave();
+    expect(reports.at(-1)).toEqual({ available: false, hidden: false, text: '' });
+  });
+
+  it('shows a join error to the player, and clears it when a peer connects', () => {
+    const { nets, host, reports, enter } = setup();
+    enter();
+    nets[0]!.fail('could not connect to peer p after exchanging SDP; configure TURN servers');
+    expect(reports.at(-1)!.text).toBe('Online: a hero was found but the direct connection failed. Your network may block it.');
+    nets[0]!.fail('handshake timed out');
+    expect(reports.at(-1)!.text).toBe('Online: a connection problem, still trying.');
+    nets[0]!.join('p');
+    host.frame(0, [0, 0]);
+    expect(reports.at(-1)!.text).toBe('Online: nobody else here yet.');
+  });
+
+  it('Hide leaves the room and the screen and Show joins again; leaving the world forgets both', () => {
+    const { nets, host, reports, root, enter, rooms } = setup();
+    enter();
+    nets[0]!.data(encodeHello(), 'p');
+    nets[0]!.data(encodePos(200, 0, 0), 'p');
+    host.frame(0, [0, 0]);
+    host.hide();
+    expect(nets[0]!.closed).toBe(true);
+    expect(root.children).toHaveLength(0);
+    expect(reports.at(-1)).toEqual({ available: true, hidden: true, text: 'Hidden: nobody sees you and you see nobody.' });
+    expect(host.frame(10, [0, 0])).toBe(false);
+    host.show();
+    expect(rooms).toHaveLength(2);
+    expect(reports.at(-1)!.hidden).toBe(false);
+    host.show(); // already shown: no second room
+    expect(rooms).toHaveLength(2);
+    host.hide();
+    host.hide(); // twice is harmless
+    host.leave();
+    host.show(); // the world was left: nothing to join
+    expect(rooms).toHaveLength(2);
   });
 });

@@ -2,6 +2,7 @@
 // what it keeps of the others. Pure code, no network. Messages are small and unsigned: a peer lies only about itself, so a
 // position is cosmetic. Everything received is untrusted bytes, checked here before it is used.
 import type { Axial } from './board';
+import { read, write, type Store } from './quality';
 
 /** The seed of the one public world every player lands in by default (lead decision on #1305). New world stays private. */
 export const PUBLIC_SEED = 1305;
@@ -9,11 +10,11 @@ export const PUBLIC_SEED = 1305;
 export const roomOf = (seed: number): string => `ow:${seed}:0`;
 
 /** The version of this wire format, its first byte: a message of another version is dropped. */
-const VERSION = 1;
+const VERSION = 2;
 const HELLO = 1;
 const POS = 2;
 
-export type Message = { t: 'hello' } | { t: 'pos'; q: number; r: number; seq: number };
+export type Message = { t: 'hello'; name: string } | { t: 'pos'; q: number; r: number; seq: number };
 
 /** At most 4 positions a second. */
 export const SEND_MS = 250;
@@ -28,8 +29,34 @@ export const MAX_PEERS = 20;
 /** The table keeps at most this many peers, shown or not. */
 const MAX_TABLE = MAX_PEERS * 4;
 
-/** Hello: version and type, 2 bytes. */
-export const encodeHello = (): Uint8Array => Uint8Array.of(VERSION, HELLO);
+/** The most characters of a public name. */
+export const MAX_NAME = 16;
+
+/** A public name as shown: control and format characters (bidi overrides included) dropped, trimmed, cut at MAX_NAME characters. */
+export const cleanName = (name: string): string => [...name.replace(/[\p{Cc}\p{Cf}]/gu, '').trim()].slice(0, MAX_NAME).join('');
+
+const NAME_KEY = 'ab-alone.public-name';
+/** The player's public name from the store, cleaned: empty (anonymous) when none was chosen. */
+export const readName = (store: Store): string => cleanName(read(store, NAME_KEY) ?? '');
+export const writeName = (store: Store, name: string): void => write(store, NAME_KEY, cleanName(name));
+
+/** Hello: version, type and the public name in UTF-8 (empty when anonymous), 2 bytes and up to 64 more. */
+export function encodeHello(name = ''): Uint8Array {
+  const text = new TextEncoder().encode(cleanName(name));
+  const out = new Uint8Array(2 + text.length);
+  out.set([VERSION, HELLO]);
+  out.set(text, 2);
+  return out;
+}
+
+/** The name of a Hello's tail, cleaned; empty when it is not UTF-8. */
+function nameOf(tail: Uint8Array): string {
+  try {
+    return cleanName(new TextDecoder('utf-8', { fatal: true }).decode(tail));
+  } catch {
+    return '';
+  }
+}
 
 const int16 = (n: number): number => Math.max(-32768, Math.min(32767, Math.trunc(n)));
 
@@ -48,7 +75,7 @@ export function encodePos(q: number, r: number, seq: number): Uint8Array {
 /** The message in bytes received from a peer, or null when it is not one of ours. */
 export function decode(data: unknown): Message | null {
   if (!(data instanceof Uint8Array) || data.length < 2 || data[0] !== VERSION) return null;
-  if (data[1] === HELLO) return data.length === 2 ? { t: 'hello' } : null;
+  if (data[1] === HELLO) return data.length <= 2 + 4 * MAX_NAME ? { t: 'hello', name: nameOf(data.subarray(2)) } : null;
   if (data[1] !== POS || data.length !== 7) return null;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   return { t: 'pos', q: view.getInt16(2), r: view.getInt16(4), seq: data[6]! };
@@ -92,6 +119,7 @@ export class Sender {
 
 interface Entry {
   cell: Axial | null;
+  name: string;
   seq: number;
   /** The time of the last message of any kind, and of the last accepted position (ms). */
   heard: number;
@@ -106,10 +134,13 @@ export class Peers {
     return this.table.size;
   }
 
-  hello(peer: string, now: number): void {
+  /** A Hello from `peer`, with its public name (already cleaned by `decode`). */
+  hello(peer: string, now: number, name = ''): void {
     const known = this.table.get(peer);
-    if (known) known.heard = now;
-    else if (this.table.size < MAX_TABLE) this.table.set(peer, { cell: null, seq: 0, heard: now, posAt: -Infinity });
+    if (known) {
+      known.heard = now;
+      known.name = name;
+    } else if (this.table.size < MAX_TABLE) this.table.set(peer, { cell: null, name, seq: 0, heard: now, posAt: -Infinity });
   }
 
   /** A position from `peer`. False when it is refused: no Hello first, too fast, or not newer than the last (seq mod 256). */
@@ -136,8 +167,8 @@ export class Peers {
   }
 
   /** The peers with a known place: at most MAX_PEERS, the nearest to `from` first when it is given. */
-  cells(from?: Axial): { peer: string; cell: Axial }[] {
-    const known = [...this.table].flatMap(([peer, e]) => (e.cell ? [{ peer, cell: e.cell }] : []));
+  cells(from?: Axial): { peer: string; cell: Axial; name: string }[] {
+    const known = [...this.table].flatMap(([peer, e]) => (e.cell ? [{ peer, cell: e.cell, name: e.name }] : []));
     if (from) known.sort((a, b) => hexDistance(from, a.cell) - hexDistance(from, b.cell));
     return known.slice(0, MAX_PEERS);
   }

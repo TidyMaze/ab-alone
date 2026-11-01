@@ -55,6 +55,12 @@
         <p>Seed <output id="openworld-seed"></output>, shared as <code>?openworld=&lt;seed&gt;</code>.</p>
         <p><output id="openworld-medals"></output></p>
         <p id="openworld-tally"></p>
+        <div id="openworld-online" hidden>
+          <p id="openworld-net" role="status"></p>
+          <label for="openworld-name">Public name, seen by the players online</label>
+          <input id="openworld-name" type="text" maxlength="16" autocomplete="off" spellcheck="false" placeholder="anonymous" />
+          <button id="openworld-hide" type="button" aria-pressed="false">Hide</button>
+        </div>
         <button id="openworld-dungeon" type="button">Dungeon</button>
         <button id="openworld-new" type="button">New world</button>
         <p id="openworld-dungeon-note" role="status"></p>

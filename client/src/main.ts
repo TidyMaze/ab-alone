@@ -163,7 +163,7 @@ import { coopFromHash, creatorFromHash, fingerprint, inviteUrl, newRoomId, roomF
 import { COOP_SIDE, attemptLine, coopTurn, retryText, seatAfter } from './coop';
 import { hookPeers, hookTransport, p2pPeers, p2pTransport } from './p2p';
 import { WorldPeersHost } from './worldnet';
-import { PUBLIC_SEED } from './worldpeers';
+import { cleanName, PUBLIC_SEED, readName, writeName } from './worldpeers';
 import type { Transport } from './transport';
 import { endBanner, royaleBanner } from './endbanner';
 import { tallyLine } from './tally';
@@ -5412,11 +5412,29 @@ document.getElementById('openworld-dungeon')!.addEventListener('click', () => op
 // after the opt-in (consent.ts); Stay solo opens the same world offline. New world and any other seed stay private and offline. An
 // automated page stays offline too unless it asks for the hook transport (?net=hook) or the opt-in dialog (?consent).
 let worldOnline = false;
-openWorld.peers = new WorldPeersHost(
+const netBox = document.getElementById('openworld-online')!;
+const netHide = document.getElementById('openworld-hide') as HTMLButtonElement;
+const netName = document.getElementById('openworld-name') as HTMLInputElement;
+const peersHost = new WorldPeersHost(
   (room) => (new URLSearchParams(location.search).get('net') === 'hook' ? hookPeers() : p2pPeers(room)),
   () => worldOnline,
   document.getElementById('openworld-peers')!,
+  (status) => {
+    // The HUD's online controls: the status line, and Hide or Show. They exist in the public world only.
+    if (netBox.hidden && status.available) netName.value = readName(store); // the field shows the stored name when the controls appear
+    netBox.hidden = !status.available;
+    document.getElementById('openworld-net')!.textContent = status.text;
+    netHide.textContent = status.hidden ? 'Show' : 'Hide';
+    netHide.setAttribute('aria-pressed', String(status.hidden));
+  },
+  () => readName(store),
 );
+openWorld.peers = peersHost;
+netHide.addEventListener('click', () => (netHide.getAttribute('aria-pressed') === 'true' ? peersHost.show() : peersHost.hide()));
+netName.addEventListener('input', () => {
+  writeName(store, cleanName(netName.value)); // the field keeps what was typed, the store and the peers get the clean name
+  peersHost.setName();
+});
 /** Whether this page may take the public world online, asking first when the opt-in is due. */
 async function publicWorldOnline(): Promise<boolean> {
   const query = new URLSearchParams(location.search);
@@ -5455,7 +5473,7 @@ bindNewWorld(document, openWorld.newWorld.bind(openWorld)); // the HUD's New wor
 bindHudFold(document); // the HUD plate folds to its chip after a few steps (#1138)
 bindJoystick(document, openWorld); // the touch stick of the Open world, on the left half of the canvas (#1025)
 addEventListener('keydown', (e) => {
-  if (!openWorld.active || !openWorld.key(e.key, e.repeat)) return; // a key repeat steps nothing: the held arrows walk (#1059)
+  if (!openWorld.active || e.target instanceof HTMLInputElement || !openWorld.key(e.key, e.repeat)) return; // a key typed in the name field is the field's (#1305) // a key repeat steps nothing: the held arrows walk (#1059)
   e.preventDefault(); // no page scroll
   if (openWorld.active) return;
   dirty = CHANGE_DRAWS; // left: the board draws again
