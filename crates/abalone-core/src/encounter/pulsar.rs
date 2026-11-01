@@ -151,21 +151,28 @@ pub fn last_pulse(enc: &Encounter) -> Option<(u8, Board, Vec<P>)> {
     })
 }
 
+/// What the boss search sees after `mover` played from `before` to `after`: on a player ply, the
+/// hook in the phase the tree's credits reach at the start of that ply (`Encounter::phase_after`,
+/// as the encounter takes the phase at the start of the turn) and the ejections the pulse credits,
+/// `[player, boss]`; nothing on a boss ply. Seed 0 for the next pulsar: the true one is unknown.
+fn pulsar_step(enc: &Encounter, before: &Board, mover: Player, after: Board) -> (Board, [u8; 2]) {
+    if mover == Player::White {
+        return (after, [0, 0]);
+    }
+    let out = hook(&after, enc.phase_after(before) as u8, 0);
+    let [black, white] = losses(&after, &out);
+    (out, [white, black])
+}
+
 /// The boss reply: its node-limited search, where every player ply of the tree goes through the
-/// hook (seed 0 for the next pulsar), so it sees the pulses. `None` on the player's turn or when
-/// the game is over.
+/// hook (`pulsar_step`), so it sees the pulses. `None` on the player's turn or when the game is
+/// over.
 pub fn pulsar_move(enc: &Encounter) -> Option<Move> {
     if enc.game().to_move() != Player::White {
         return None;
     }
-    let phase = enc.phase() as u8;
-    let step = |_: &Board, mover: Player, _: &Move, after: Board| {
-        if mover == Player::White {
-            return (after, [0, 0]);
-        }
-        let out = hook(&after, phase, 0);
-        let [black, white] = losses(&after, &out);
-        (out, [white, black])
+    let step = |before: &Board, mover: Player, _: &Move, after: Board| {
+        pulsar_step(enc, before, mover, after)
     };
     search_hooked(
         enc.game(),
@@ -622,6 +629,72 @@ mod tests {
             enc.game().ejected(Player::White),
             1,
             "the pulse ejected for the boss"
+        );
+    }
+
+    #[test]
+    fn the_tree_step_fires_the_p2_force_once_a_third_ejection_is_credited() {
+        // The root: boss to move, 2 ejections for the player (P1), 4 boss marbles, pulsar E due
+        // at the end of the next player turn. The pair on row r = -2 resists force 2, not force 3.
+        let pair = [(3, -2), (4, -2)];
+        let root = board(
+            &[(0, 0)],
+            &[pair[0], pair[1], (-3, 3), (0, -4)],
+            Some((E, 2)),
+        );
+        let enc = fight(root.clone(), Player::White, [2, 0]);
+        assert_eq!(enc.phase(), 0);
+        // The ply that ejects the third marble still pulses at the phase of its start, P1.
+        let mut third = root.clone();
+        third.set(0, -4, Cell::Empty);
+        let (out, credits) = pulsar_step(&enc, &root, Player::Black, third.clone());
+        assert_eq!(out.get(3, -2), Some(Cell::White), "P1: the pair resists");
+        assert_eq!(credits, [0, 0]);
+        // A player ply that starts with the third marble gone pulses at P2: force 3.
+        let (out, credits) = pulsar_step(&enc, &third, Player::Black, third.clone());
+        assert_eq!(out.get(3, -2), Some(Cell::Empty), "P2: the pair is pushed");
+        assert_eq!(out.get(4, -2), Some(Cell::White), "and its head is off");
+        assert_eq!(credits, [1, 0], "an ejection for the player");
+        // A boss ply runs no hook.
+        let (out, credits) = pulsar_step(&enc, &third, Player::White, third.clone());
+        assert_eq!((out, credits), (third, [0, 0]));
+    }
+
+    #[test]
+    fn the_phase_reached_in_the_tree_changes_the_best_move() {
+        // Boss to move at 2 ejections (P1), pulsar W at turn 1: no pulse after the next player
+        // turn, one after the turn after it. The Black pair under (1, -4) can push it off the rim,
+        // the third ejection, so that pulse comes at P2, force 3. 5 of 101 random positions of
+        // this kind (a lone boss marble on the rim with a Black pair behind it) gave two moves.
+        let start = board(
+            &[(1, -3), (1, -2), (4, 0)],
+            &[(-4, 0), (-3, -1), (-1, -2), (1, -4), (1, 2)],
+            Some((1, 1)),
+        );
+        let enc = fight(start, Player::White, [2, 0]);
+        assert_eq!(enc.phase(), 0);
+        // The search before #913: every player ply of the tree pulses at the root phase.
+        let frozen = |_: &Board, mover: Player, _: &Move, after: Board| {
+            if mover == Player::White {
+                return (after, [0, 0]);
+            }
+            let out = hook(&after, 0, 0);
+            let [black, white] = losses(&after, &out);
+            (out, [white, black])
+        };
+        let old = search_hooked(
+            enc.game(),
+            PULSAR_NODE_BUDGET,
+            DEFAULT_WEIGHTS,
+            &|_| true,
+            &frozen,
+        )
+        .unwrap();
+        assert_eq!(old.mv, mv(&[(-4, 0), (-3, -1)], Direction::E));
+        assert_eq!(
+            pulsar_move(&enc),
+            Some(mv(&[(1, -4)], Direction::SW)),
+            "the lone marble leaves the rim"
         );
     }
 

@@ -734,7 +734,8 @@ the tell" habit. Calibration target for the Echo: first win between attempt 3 an
   more facing the charging pulsar, shield your loose marbles behind them, and leave boss marbles
   alone or in pairs on the far rim: the pulse throws them off for you. The boss search sees the
   pulses (every player ply of its tree goes through the hook, with seed 0 for the next pulsar
-  draw) and avoids them the same way. Its budget is the Hull's (3000 nodes).
+  draw, in the phase the ejections of the tree so far reach, #913) and avoids them the same way.
+  Its budget is the Hull's (3000 nodes).
 - **Calibrate**: knobs = forces (2, 3, ∞), rhythm (3 pulses, 2 apart, 2 of rest), phase ejections
   (3, 5), AI depth. Fail if most fights end with no boss marble ejected by a pulse (nobody learns
   the counter).

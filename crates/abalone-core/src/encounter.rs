@@ -290,7 +290,24 @@ impl Encounter {
     /// Current phase, 0 at the start.
     pub fn phase(&self) -> usize {
         let left = marbles(self.game.board(), Cell::White);
+        self.phase_of(left, self.game.ejected(Player::Black))
+    }
+
+    /// The phase once the fight reaches `board` from now, for a ply of the boss search tree: the
+    /// player is credited its ejections now plus the boss marbles missing from `board`, and the
+    /// phase never goes below the current one. Pure. It holds only for a boss whose marbles leave
+    /// the board by ejection alone: no conversion (The Chaplain) and no brood (The Alien).
+    pub fn phase_after(&self, board: &Board) -> usize {
+        let root = marbles(self.game.board(), Cell::White);
+        let left = marbles(board, Cell::White);
         let ejected = self.game.ejected(Player::Black);
+        let now = self.phase_of(root, ejected);
+        let gone = root.saturating_sub(left);
+        self.phase_of(left, ejected + gone).max(now)
+    }
+
+    /// The phase with `left` boss marbles on the board and `ejected` credited to the player.
+    fn phase_of(&self, left: u8, ejected: u8) -> usize {
         let by_marbles = self.boss.phase_marbles.iter().filter(|&&t| left <= t);
         let by_ejections = self.boss.phase_ejections.iter().filter(|&&t| ejected >= t);
         (by_marbles.count() + by_ejections.count()).max(self.phase_reached)
@@ -645,6 +662,42 @@ mod tests {
         enc.play(&mv(&[(2, 0), (3, 0)], E)).unwrap();
         assert_eq!(white_count(&enc), 1);
         assert_eq!(enc.phase(), 1);
+    }
+
+    /// A fight on `white` boss marbles with `ejected` credited to the player, P2 at 3, P3 at 5.
+    fn by_ejections(white: &[P], ejected: u8) -> Encounter {
+        let mut b = trivial_boss();
+        b.phase_marbles = Vec::new();
+        b.phase_ejections = vec![3, 5];
+        let game = position(&[(0, 0)], white, Player::White, [ejected, 0]);
+        Encounter::new(game, b, 0)
+    }
+
+    #[test]
+    fn the_phase_after_a_board_credits_the_boss_marbles_gone_since_the_root() {
+        let three = [(4, 0), (-4, 4), (0, -4)];
+        let one_gone = position(&[(0, 0)], &three[..2], Player::White, [0, 0]);
+        let root = by_ejections(&three, 0);
+        assert_eq!(root.phase_after(root.game().board()), 0, "nothing gone");
+        assert_eq!(root.phase_after(one_gone.board()), 0, "1 of 3");
+        let root = by_ejections(&three, 2);
+        assert_eq!(root.phase(), 0);
+        assert_eq!(root.phase_after(one_gone.board()), 1, "2 + 1: P2 at 3");
+        let root = by_ejections(&three, 4);
+        assert_eq!(root.phase_after(one_gone.board()), 2, "4 + 1: P3 at 5");
+    }
+
+    #[test]
+    fn the_phase_after_a_board_is_never_below_the_root_phase() {
+        let root = by_ejections(&[(4, 0)], 3);
+        assert_eq!(root.phase(), 1);
+        assert_eq!(root.phase_after(root.game().board()), 1);
+        let more = position(&[(0, 0)], &[(4, 0), (-4, 4)], Player::White, [0, 0]);
+        assert_eq!(
+            root.phase_after(more.board()),
+            1,
+            "more boss marbles than the root: no underflow"
+        );
     }
 
     #[test]
