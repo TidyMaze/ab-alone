@@ -88,6 +88,12 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 - **Hero**: one glass marble (#1176: in the skin the player wears on the ship, as the troop; the enemies wear the worn shell skin, and the stripe ring is the only team cue), moved one cell at a time (click a neighbour, or the arrow keys, as
   in the hub, section 3.5 of `game-design.md`). A held arrow keeps walking: the first cell is taken on the
   keydown, then one cell per glide (140 ms) while the arrow is held, whatever the system's key repeat (#1059).
+- **Gamepad** (#1252, `game-design.md` section 2 item 7): the left stick or the D-pad walks the hero as the touch stick does,
+  read in the yaw of the camera, and the walk goes on while it is held. LB and RB turn the camera one step (Q and E), R3 resets it
+  (R), the triggers zoom (the wheel's path, RT in, LT out), B leaves (Esc). The right stick does nothing here. While the focus is
+  on a control (after Start, say) the stick and LB RB walk the focus instead, and the hero stays. A walk onto a lair starts the
+  boss fight, played with the pad (A, B, LB RB, the stick) and left with Back, as with the keyboard. The help and the HUD name
+  the pad's buttons while the pad is in use.
 - **Camera turn** (#1026, #1251, #1254): Q and E turn the camera round the hero by 60 degrees, one step per hex direction, so six
   presses make a full turn. The grid is pointy-top, so at yaw 0 screen up falls between two neighbours (the zigzag of an odd and an
   even row). The camera therefore rests at 30 degrees plus a multiple of 60 (`REST_OFFSET`): at every resting angle screen up runs
