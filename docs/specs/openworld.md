@@ -88,6 +88,11 @@ into a marble (troop or enemy), is refused. Enemies never push, so nothing eject
 - **Hero**: one glass marble (#1176: in the skin the player wears on the ship, as the troop; the enemies wear the worn shell skin, and the stripe ring is the only team cue), moved one cell at a time (click a neighbour, or the arrow keys, as
   in the hub, section 3.5 of `game-design.md`). A held arrow keeps walking: the first cell is taken on the
   keydown, then one cell per glide (140 ms) while the arrow is held, whatever the system's key repeat (#1059).
+- **Camera turn** (#1026, #1251): Q and E turn the camera round the hero by 60 degrees, one step per hex direction, so six
+  presses make a full turn; R goes back to the default angle. A right-button drag or a two-finger twist turns it freely while
+  held, and on release it settles on the nearest multiple of 60 degrees. The yaw is saved with the world; a saved yaw that is
+  not a multiple of 60 degrees (a save from the 30-degree steps) is read back at the nearest one. At every resting yaw each
+  arrow and diagonal still steps to the neighbour the camera shows nearest to it.
 - **Steering** (#1137): a held direction (arrow, stick) is an *intent*, an angle on the ground. Each step takes the cell of
   that direction when the hero can enter it. When it cannot (a rock, a tree, water, a wall, a cliff, an enemy), the hero takes
   the free one of the two neighbours 60 degrees to the side that the intent follows best; if both follow it equally, the lower

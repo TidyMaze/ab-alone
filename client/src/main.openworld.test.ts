@@ -185,18 +185,21 @@ describe('the Open world mode', () => {
     expect(data().openworldAt).toBe('0,0');
     at('pointermove', 5, 340, 300, 2); // 40 px to the right: 20 degrees
     expect(yawOf()).toBe(20);
-    at('pointerup', 5, 340, 300, 2);
-    at('pointermove', 5, 360, 300, 2); // released: no turn
-    expect(yawOf()).toBe(20);
+    at('pointerup', 5, 340, 300, 2); // released: it settles on the nearest multiple of 60 degrees (#1251)
+    expect(yawOf()).toBe(0);
+    at('pointermove', 5, 360, 300, 2); // no turn after the release
+    expect(yawOf()).toBe(0);
     const shown = new MouseEvent('contextmenu', { cancelable: true, bubbles: true });
     canvas.dispatchEvent(shown);
     expect(shown.defaultPrevented).toBe(true);
     at('pointerdown', 6, 600, 300);
     at('pointerdown', 7, 700, 300); // two fingers, a quarter turn of the pair
     at('pointermove', 7, 700, 400); // from 0 to 45 degrees
-    expect(yawOf()).toBe(65);
-    at('pointerup', 6, 600, 300);
+    expect(yawOf()).toBe(45);
+    at('pointerup', 6, 600, 300); // a finger up: it settles on 60 degrees
+    expect(yawOf()).toBe(60);
     at('pointerup', 7, 700, 400);
+    expect(yawOf()).toBe(60);
   });
 
   it('zooms the Open world out with the wheel and with a pinch, #976', async () => {

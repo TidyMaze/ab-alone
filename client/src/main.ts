@@ -3941,6 +3941,7 @@ canvas.addEventListener('pointermove', (e) => {
 function release(e: PointerEvent): void {
   const wasClick = e.type === 'pointerup' && press && !press.drag && pointers.size === 1;
   const dropped = e.type === 'pointerup' && marbleDrag && press!.drag && pointers.size === 1;
+  if (openWorld.active && (e.pointerId === turning || pointers.size === 2)) openWorld.settle(); // a drag or a twist ends on a step (#1251)
   pointers.delete(e.pointerId);
   if (e.pointerId === turning) turning = null;
   if (pointers.size === 0) press = marbleDrag = null;

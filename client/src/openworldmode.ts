@@ -53,7 +53,7 @@ const opposed = (held: ReadonlySet<string>): boolean =>
   (held.has('ArrowUp') && held.has('ArrowDown')) || (held.has('ArrowLeft') && held.has('ArrowRight'));
 
 /** The camera turns by a step of Q or E, and by a px of a right-button drag, in radians (#1026). */
-export const TURN_STEP = Math.PI / 6;
+export const TURN_STEP = Math.PI / 3;
 export const ORBIT_PER_PX = Math.PI / 360;
 const TURNS = new Map<string, number>([
   ['q', TURN_STEP],
@@ -222,7 +222,7 @@ export class OpenWorldMode {
     }
     this.view = view;
     view.resize(width, height);
-    if (saved) view.turnTo(saved.yaw); // the camera opens at the angle the world was left at (#1026)
+    if (saved) view.turnTo(Math.round(saved.yaw / TURN_STEP) * TURN_STEP); // the camera opens at the angle the world was left at (#1026)
     view.show(this.hero.at, this.hero.troop);
     view.setLairs(this.lairs, this.beaten);
     const medals = document.getElementById('openworld-medals'); // the HUD's medal count (#1171)
@@ -391,6 +391,11 @@ export class OpenWorldMode {
     this.dirty = true;
     this.persist();
     this.mark(document.body.dataset.openworld!);
+  }
+
+  /** Settles the camera on the nearest multiple of TURN_STEP (60 degrees): a drag or a twist turns freely while held, and ends here (#1251). */
+  settle(): void {
+    this.turn(Math.round(this.view!.yaw / TURN_STEP) * TURN_STEP - this.view!.yaw);
   }
 
   /** A drag of the right button by `px` pixels to the right turns the camera by ORBIT_PER_PX a px (#1026). */
