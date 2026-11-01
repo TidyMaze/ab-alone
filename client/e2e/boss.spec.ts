@@ -339,7 +339,7 @@ test('start The Chaplain: a converted marble keeps its look, #150', async ({ pag
   const cells = await page.evaluate(() => (window as any).__converted());
   const looks = await page.evaluate(() => (window as any).__convertedLooks());
   expect(looks).toHaveLength(cells.length);
-  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'cracks', 'glyph'] }))));
+  expect(looks).toEqual(expect.arrayContaining(cells.map((cell: [number, number]) => ({ cell, parts: ['wax', 'shell', 'glass', 'cracks', 'glyph', 'glyph-outline'] }))));
   const contrasts = await topContrasts(page, cells, testInfo.outputPath('chaplain-converted.png'));
   for (const c of contrasts) expect(c).toBeGreaterThanOrEqual(3); // its glass half reads (#326, #508)
 });
@@ -453,7 +453,7 @@ for (const [name, accent, stored] of [
     await page.addInitScript((s) => {
       for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v);
     }, stored);
-    await page.goto('./');
+    await page.goto(accent === 'crown' ? './?scene=room' : './'); // the terrace leaves the Hull's crown off (#1374)
     await page.locator('canvas').waitFor();
     await page.locator('#boss-list').getByRole('button', { name, includeHidden: true }).dispatchEvent('click');
     await expect(page.locator('#boss-bar .name')).toContainText(name);

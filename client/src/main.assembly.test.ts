@@ -88,7 +88,7 @@ describe('main.ts The Assembly Line (#744)', () => {
     expect(named(scene(), 'belt-strike')).toHaveLength(0);
     const [counter] = named(scene(), 'belt-counter') as THREE.Sprite[];
     expect(counter!.material.depthTest).toBe(false); // never hidden behind a marble
-    expect(counter!.position.x).toBeGreaterThan(4.5);
+    expect(counter!.position.x).toBeGreaterThan(4); // over the east roller, inside the terrace's rim (#1374); the room's stood past it at 5
     const belt = named(scene(), 'belt')[0]!;
     expect([belt.position.x, belt.position.z, belt.scale.x]).toEqual([0, 0, 10]);
   });
