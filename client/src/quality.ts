@@ -128,10 +128,10 @@ export const readUiScale = (store: Store): UiScale => {
   return (UI_SCALES as readonly number[]).includes(stored) ? (stored as UiScale) : 100;
 };
 export const writeUiScale = (store: Store, scale: UiScale): void => write(store, SCALE_KEY, String(scale));
-// The theme (#317): System unless the player picked Dark or Light. index.html reads the same key before the first paint.
+// The theme (#317, #1184): Dark unless the player picked System or Light. index.html reads the same key before the first paint.
 export const readTheme = (store: Store): Theme => {
   const stored = read(store, THEME_KEY);
-  return stored === 'dark' || stored === 'light' ? stored : 'system';
+  return stored === 'system' || stored === 'light' ? stored : 'dark';
 };
 export const writeTheme = (store: Store, theme: Theme): void => write(store, THEME_KEY, theme);
 // Reduced motion (#379): null until the player presses the toggle, so the system setting decides (motionReduced).

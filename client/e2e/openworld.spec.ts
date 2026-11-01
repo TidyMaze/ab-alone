@@ -634,6 +634,7 @@ test('the Open world HUD plate folds after 3 steps and the chip reopens it, #113
 // #1138: the HUD plate is the dark plate with rivets (four radial gradients), whatever the system theme.
 test('the Open world HUD plate is dark with four rivets, #1138', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
+  await page.addInitScript(() => localStorage.setItem('ab-alone.theme', 'system')); // light really applies (#1184)
   await page.goto('./?bot=off&openworld=7');
   await page.locator('canvas').waitFor();
   await openModes(page);
