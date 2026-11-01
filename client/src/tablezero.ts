@@ -43,17 +43,23 @@ export function addSun(group: THREE.Object3D): [THREE.HemisphereLight, THREE.Dir
 }
 
 /**
- * The 1v1 default scene. The hub, the boss rooms, the battle royale and a roguelite run keep the room until their own PRs, and
+ * The 1v1 and boss scene. The hub, the two boss boards with no slab yet (`needsRoom`), the battle royale and a roguelite run keep the room until their own PRs, and
  * so does `?scene=room` (the fallback), and so does a page whose arena file has not loaded (`ready`).
  */
 export function tableZeroActive(s: { hub: boolean; fight: boolean; royale: boolean; run: boolean; room: boolean; ready: boolean }): boolean {
   return s.ready && !(s.hub || s.fight || s.royale || s.run || s.room);
 }
 
+/** The boss fights whose board has no slab in the arena file yet (Ballast Mind radius 5, the Dual Room): they keep the room, temporarily (#1374). */
+const BOARDS_WITHOUT_SLAB: readonly string[] = ['ballast', 'dual'];
+export const needsRoom = (boss: string | undefined): boolean => boss !== undefined && BOARDS_WITHOUT_SLAB.includes(boss);
+
 /** What the game draws itself, from its own state: marbles, pedestals, rings and arrows are left out of the arena file. */
 const GAME_DRAWN = /^scene_(marble|pedestal|ring|arrow|shadow)/;
 /** The turn bars stay meshes of their own: the game lights the one of the side to move. */
 const TURN_BAR = /^scene_turnbar/;
+/** The dishes: drawn as one instanced mesh, so a cell that vanishes (Hull, Rail Yard) is a hole to the gap and not a dish floating in the air. */
+const DISH = /^scene_cell_\d+$/;
 
 const unlit = new Map<boolean, THREE.MeshBasicMaterial>();
 /**
@@ -79,10 +85,12 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
   root.updateMatrixWorld(true);
   const byMaterial = new Map<THREE.Material, THREE.BufferGeometry[]>();
   const bars: THREE.Mesh[] = [];
+  const dishes: THREE.Mesh[] = [];
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh || GAME_DRAWN.test(o.name)) return;
     if (TURN_BAR.test(o.name)) return void bars.push(mesh);
+    if (DISH.test(o.name)) return void dishes.push(mesh);
     const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
     g.deleteAttribute('uv');
     if (o.name === 'scene_sky_dome') {
@@ -102,6 +110,23 @@ export function mergeByMaterial(root: THREE.Object3D): THREE.Group {
     merged.frustumCulled = false; // the arena is always in view
     merged.renderOrder = blended ? 1 : 0;
     out.add(merged);
+  }
+  if (dishes.length) {
+    const first = dishes[0]!;
+    const material = terraceMaterial(first.material as THREE.Material, first.geometry);
+    const matrices = dishes.map((d) => d.matrixWorld.clone());
+    const mesh = new THREE.InstancedMesh(first.geometry, material, dishes.length);
+    mesh.frustumCulled = false;
+    mesh.name = 'terrace_dishes';
+    const spot = new THREE.Vector3();
+    mesh.userData.show = (shown: (x: number, z: number) => boolean): void => {
+      let n = 0;
+      for (const m of matrices) if (shown(...(spot.setFromMatrixPosition(m).toArray().filter((_, i) => i !== 1) as [number, number]))) mesh.setMatrixAt(n++, m);
+      mesh.count = n;
+      mesh.instanceMatrix.needsUpdate = true;
+    };
+    mesh.userData.show(() => true);
+    out.add(mesh);
   }
   for (const bar of bars) {
     bar.material = terraceMaterial(bar.material as THREE.Material, bar.geometry);

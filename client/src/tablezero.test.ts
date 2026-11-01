@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { PALETTE, SUN, addSun, mergeByMaterial, sunPosition, tableZeroActive, terraceMaterial, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
+import { PALETTE, SUN, addSun, mergeByMaterial, needsRoom, sunPosition, tableZeroActive, terraceMaterial, terraceEnvironment, saturateColours, isDefaultView, TERRACE_VIEW, TERRACE_EXPOSURE, TERRACE_TINT } from './tablezero';
 
 describe('Table Zero is the scene of a 1v1 game only', () => {
   const on = { hub: false, fight: false, royale: false, run: false, room: false, ready: true };
@@ -154,5 +154,33 @@ describe('the terrace camera and its sky', () => {
     const solid = (mergeByMaterial(root).children as THREE.Mesh[]).find((m) => (m.material as THREE.Material).name === 'terrace_solid')!;
     expect((solid.material as THREE.MeshBasicMaterial).color.g).toBeCloseTo(1 / TERRACE_EXPOSURE); // the unlit colour is not tinted
     expect(lit.color.g).toBeCloseTo(TERRACE_TINT.g);
+  });
+});
+
+describe('the boss fights on the terrace (#1374)', () => {
+  it('keeps the room only for the boards without a slab yet: Ballast Mind and the Dual Room', () => {
+    expect(['ballast', 'dual'].map(needsRoom)).toEqual([true, true]);
+    expect(['echo', 'hull', 'swarm', 'stalker', 'pulsar'].map(needsRoom)).toEqual([false, false, false, false, false]);
+    expect(needsRoom(undefined)).toBe(false); // no fight
+  });
+  it('draws the dishes as one instanced mesh that drops the vanished cells', () => {
+    const material = new THREE.MeshStandardMaterial();
+    const root = new THREE.Group();
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geometry.attributes.position!.count * 3).fill(0.5), 3));
+    for (const [i, x] of [0, 2, 4].entries()) {
+      const cell = new THREE.Mesh(geometry, material);
+      cell.name = `scene_cell_0${i}`;
+      cell.position.set(x, 0, 1);
+      root.add(cell);
+    }
+    const dishes = mergeByMaterial(root).getObjectByName('terrace_dishes') as THREE.InstancedMesh;
+    expect(dishes.count).toBe(3);
+    dishes.userData.show((x: number, z: number) => x !== 2 && z === 1);
+    expect(dishes.count).toBe(2);
+    const m = new THREE.Matrix4();
+    dishes.getMatrixAt(1, m);
+    expect(new THREE.Vector3().setFromMatrixPosition(m).x).toBe(4); // compacted: the third cell took the second place
+    expect(mergeByMaterial(new THREE.Group()).getObjectByName('terrace_dishes')).toBeUndefined();
   });
 });

@@ -49,7 +49,7 @@ describe('main.ts boss accents (#507)', () => {
     ['The Ballast Mind', 'ballast', 'wire', 16], // #564
   ])('against %s every shell of the boss side wears its accent, the glass none', async (name, id, accent, shells) => {
     const scene = catchScene();
-    const game = await boot('?bot=off');
+    const game = await boot('?bot=off&scene=room');
     fightBoss(game, name);
     const worn = game.hook<Worn[]>('__accents');
     expect(worn).toHaveLength(shells);

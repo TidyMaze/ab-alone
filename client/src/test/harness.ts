@@ -263,7 +263,18 @@ export async function boot(url = '/', options: BootOptions = {}): Promise<Game> 
           if (missing(url)) throw new Error(`404 ${url}`);
           // The terrace (#1314): the arena as one box, its kit as the pieces the game draws itself.
           const scene = new Group();
-          if (url.endsWith('arena.glb') && !url.endsWith('kit-arena.glb')) scene.add(piece('scene_slab_arena'));
+          if (url.endsWith('arena.glb') && !url.endsWith('kit-arena.glb')) {
+            scene.add(piece('scene_slab_arena'));
+            // its 61 dishes, where the board's cells are (#1374)
+            for (let q = -4, i = 0; q <= 4; q++) {
+              for (let r = -4; r <= 4; r++) {
+                if (Math.abs(q + r) > 4) continue;
+                const cell = piece(`scene_cell_${String(i++).padStart(2, '0')}`);
+                cell.position.set(q + r / 2, 0, (Math.sqrt(3) / 2) * r);
+                scene.add(cell);
+              }
+            }
+          }
           if (url.endsWith('kit-arena.glb')) scene.add(...['kit_pedestal_flat', 'kit_ring_target', 'kit_arrow_target', 'kit_ring_select', 'kit_ring_lastmove'].map(piece));
           return { scene };
         };

@@ -519,7 +519,7 @@ describe('main.ts daily challenge', () => {
 
 describe('main.ts boss tells', () => {
   it('The Hull: a cracked cell wears the decal and its line, ticks down, then is a hole in the frame', async () => {
-    const game = await boot('?nodes=200', { reducedMotion: true, audio: true });
+    const game = await boot('?nodes=200&scene=room', { reducedMotion: true, audio: true });
     gesture();
     fightBoss(game, 'The Hull');
     expect(body().cracks).toBe('0');

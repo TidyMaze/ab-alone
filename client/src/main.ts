@@ -182,7 +182,7 @@ import { flatHudHtml, hudHtml, passNote } from './hud';
 import { DEFAULT_SKIN, nextSkin, skinById, type Extra } from './skins';
 import { DEFAULT_GLASS_SKIN, glassSkinById, nextGlassSkin } from './glassskins';
 import { skinKinds, startOnce } from './skinmaps';
-import { TERRACE_VIEW, isDefaultView, mergeByMaterial, tableZeroActive, terraceEnvironment } from './tablezero';
+import { TERRACE_VIEW, isDefaultView, needsRoom, mergeByMaterial, tableZeroActive, terraceEnvironment } from './tablezero';
 import { MARBLE_LOOK, TONAL, flat, loadsTexture, readLook, tonalMarble } from './look';
 import { readDifficulty, writeDifficulty, nextDifficulty, scaleBudget, DIFFICULTY_PERCENT, type Difficulty } from './difficulty';
 import { DEFAULT_RATING } from './elo';
@@ -3436,8 +3436,14 @@ function sightNote(): string {
 const sightOf = (board: ArrayLike<number>): Set<number> => visibleCells(board, PLAYER, (engine as Encounter).sight());
 
 // The terrace (#1314): the arena's glTF from Blender, in place of the room in a 1v1 game. A page whose file is missing or broken
-// keeps the room; the hub, the boss rooms, the royale and a run keep it too, until their own PRs; `?scene=room` asks for it.
+// keeps the room; so do the hub, Ballast Mind, the Dual Room, the royale and a run, until their own PRs (#1374); `?scene=room` asks for it.
 let terraceReady = false;
+let terraceDishes: THREE.InstancedMesh | undefined; // the glTF's dishes, one instance per cell in play
+/** The dishes of the terrace follow the discs: a vanished cell (Hull's void, a swept Rail Yard line) shows the gap (#1374). */
+const syncDishes = (): void => {
+  const shown = new Set(discs.filter((d) => d.visible).map((d) => `${d.position.x.toFixed(2)},${d.position.z.toFixed(2)}`));
+  terraceDishes?.userData.show((x: number, z: number) => shown.has(`${x.toFixed(2)},${z.toFixed(2)}`));
+};
 const keepRoom = new URLSearchParams(location.search).get('scene') === 'room';
 const terraceKit: { pedestal: THREE.Mesh | null; marks: Record<'target' | 'arrow' | 'select' | 'last', THREE.Mesh> | null } = { pedestal: null, marks: null };
 /** The kit's marks, while the terrace is shown: a legal target and its arrow, the selection ring, the last move's ring (#1314). */
@@ -3462,6 +3468,7 @@ void Promise.all([terraceFile('arena'), terraceFile('kit-arena')])
   .then(([arena, kit]) => {
     const drawn = mergeByMaterial(arena.scene); // 5 draw calls, not 1,489 nodes
     sceneRenderer.terrace.add(drawn);
+    terraceDishes = drawn.getObjectByName('terrace_dishes') as THREE.InstancedMesh | undefined;
     // The black marbles reflect a sky with a window of light and a cool rim, not the room's lamps.
     if (hasReflections(tier, navigator.webdriver)) {
       const pmrem = new THREE.PMREMGenerator(renderer);
@@ -3487,7 +3494,7 @@ function terraceMarbles(on: boolean): void {
 const PHONE_POLAR = (46 * Math.PI) / 180; // pitch 44 on a phone: the horizon enters the top of the frame
 const TERRACE_LIFT = 0.11; // the top of a kit pedestal (kit_pedestal_flat)
 function syncTableZero(): void {
-  const on = tableZeroActive({ hub: hub !== null, fight: fight !== null, royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
+  const on = tableZeroActive({ hub: hub !== null, fight: needsRoom(fight?.id), royale: royale !== null, run: run !== null, room: keepRoom, ready: terraceReady });
   document.body.dataset.scene = on ? 'table-zero' : 'room'; // read by the e2e tests
   terraceMarbles(on);
   if (on && isDefaultView(view, resetView(4))) {
@@ -3569,6 +3576,7 @@ function refresh(): void {
     const [q, r] = BOARD_CELLS[i]!;
     const side = board[i] ?? VANISHED; // ring 5 is off a board of 61 cells (#564)
     disc.visible = side !== VANISHED; // a vanished cell is a hole: no disc, no marble
+    if (i === discs.length - 1) syncDishes();
     if (side === VANISHED) return;
     const p = axialTo3D(q, r);
     const plies = left.get(i) ?? 0;
@@ -4513,7 +4521,8 @@ const accentNames = new Set(Object.values(ACCENTS).map((a) => a.name)); // not t
 (window as unknown as Record<string, unknown>).__frame = () => ({
   radius: frame?.radius,
   holes: frame?.holes.length,
-  drawn: [plate, rim.near, rim.far].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
+  dishes: sceneRenderer.terraceOn ? terraceDishes!.count : undefined, // the terrace draws one dish per cell in play: a hole is one dish fewer (#1374)
+  drawn: sceneRenderer.terraceOn ? terraceDishes!.count > 0 : [plate, rim.near, rim.far].every((m) => m.visible && m.parent === scene && m.geometry.attributes.position!.count > 0),
   lit: { near: rim.near.material.emissive.getHex(), far: rim.far.material.emissive.getHex() }, // #300
 });
 // Used by the browser checks and tests to mount the high-fidelity PBR spaceship bay (#648).

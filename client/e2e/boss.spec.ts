@@ -241,7 +241,7 @@ for (const tier of ['high', 'low']) {
     await expect.poll(plies, { timeout: 30_000 }).toBe(12);
     expect(await tellCues(page)).toEqual(['crack', 'crack']); // then vanished on ply 11: no cue for a gone tell
     await expect(body).toHaveAttribute('data-vanished', '1');
-    expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 4, holes: 1, drawn: true }); // a hole in the frame (#292)
+    expect(await page.evaluate(() => (window as any).__frame())).toMatchObject({ radius: 4, holes: 1, drawn: true, dishes: 60 }); // a hole in the frame (#292), one dish fewer on the terrace (#1374)
     await expect(body).toHaveAttribute('data-cracks', '0');
     await expect(hud).not.toContainText('Cracks:');
     expect(await page.evaluate(() => (window as any).__crackDecals())).toEqual([]);

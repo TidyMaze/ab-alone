@@ -71,7 +71,7 @@ const box = (mesh: Mesh): THREE.Box3 => (mesh.geometry.computeBoundingBox(), mes
 describe('main.ts converted look (#508)', () => {
   it('a converted marble is the ridged shell below, the glass above, under the wax, no core inside the opaque glass (#885)', async () => {
     const scene = catchScene();
-    const game = await boot('?nodes=200', { reducedMotion: true });
+    const game = await boot('?nodes=200&scene=room', { reducedMotion: true });
     const cells = await convertOne(game);
     const looks = game.hook<Look[]>('__convertedLooks');
     expect(looks).toHaveLength(cells.length);
@@ -116,7 +116,7 @@ describe('main.ts converted look (#508)', () => {
 
   it('follows the white skin', async () => {
     const scene = catchScene();
-    const game = await boot('?nodes=200', { reducedMotion: true });
+    const game = await boot('?nodes=200&scene=room', { reducedMotion: true });
     const [cell] = await convertOne(game);
     game.openSettings();
     for (let i = 0; i < 6; i++) byId('setting-glass-skin').click();
