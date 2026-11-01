@@ -22,6 +22,7 @@ import {
 import { extendPath, releaseDir } from './drag';
 import { KEY_DIRS, announce, moveFor, nextGroup } from './keyboard';
 import { gamepad, nextFocus, type PadAction } from './gamepad';
+import { CONSENT_TEXT, PRIVACY_URL, consentNeeded, writeConsent } from './consent';
 import { GUIDE, guideDue, guideStep, writeGuideSeen, type GuideEvent } from './guide';
 import { askBot, askEval, botBudget, engineFor } from './bot';
 import { AUTO_DELAY_MS, autoPlayState } from './autoplay';
@@ -1079,8 +1080,50 @@ guideBox.addEventListener('keydown', (e) => {
     nextFocus(document.activeElement, e.shiftKey ? -1 : 1, guideBox).focus();
   }
 });
-// Where the pad walks the focus: in the guide while it is open.
-const padScope = (): ParentNode => (guideBox.hidden ? document : guideBox);
+// The online opt-in (#1338, consent.ts): every way online asks here first, before any relay or peer is contacted. Accept stores
+// it; Stay solo, Escape or the pad's B keep solo play. One question at a time: a second entry waits on the same answer.
+const consentBox = document.getElementById('consent')!;
+const consentAccept = document.getElementById('consent-accept') as HTMLButtonElement;
+document.getElementById('consent-text')!.textContent = CONSENT_TEXT;
+(document.getElementById('consent-notice') as HTMLAnchorElement).href = PRIVACY_URL;
+let consentAsked: Promise<boolean> | null = null;
+let consentReturn: HTMLElement | null = null;
+function askConsent(): Promise<boolean> {
+  consentAsked ??= new Promise<boolean>((resolve) => {
+    consentReturn = document.activeElement as HTMLElement | null;
+    consentBox.hidden = false;
+    consentAccept.focus();
+    const answer = (yes: boolean): void => {
+      consentBox.hidden = true;
+      consentAsked = null;
+      if (yes) writeConsent(store);
+      consentReturn?.focus();
+      resolve(yes);
+    };
+    consentAccept.onclick = () => answer(true);
+    document.getElementById('consent-stay')!.onclick = () => answer(false);
+    consentBox.onkeydown = (e) => {
+      e.stopPropagation(); // the board and the menus never see it
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        answer(false);
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        nextFocus(document.activeElement, e.shiftKey ? -1 : 1, consentBox).focus();
+      }
+    };
+  });
+  return consentAsked;
+}
+const consentWanted = (): boolean => consentNeeded(store, location.search, navigator.webdriver);
+/** Asks the player to accept online play. Declined, the invite link goes and solo play stays. */
+async function onlineAllowed(): Promise<boolean> {
+  if (await askConsent()) return true;
+  if (location.hash) window.history.replaceState(null, '', location.pathname + location.search);
+  return false;
+}
+// Where the pad walks the focus: in the guide or the opt-in while one is open.
+const padScope = (): ParentNode => (!consentBox.hidden ? consentBox : guideBox.hidden ? document : guideBox);
 if (guideDue(store, location.search, navigator.webdriver)) openGuide(null);
 // The mode menu (#357): Play online, Boss fight with its boss list, and Daily challenge behind one button, opened and
 // closed like the settings menu. Starting a mode closes it (startBoss, Play online).
@@ -4151,7 +4194,7 @@ const pollPad = gamepad((action: PadAction) => {
     case 'back':
       return void padKey('Escape');
     case 'menu':
-      if (!guideBox.hidden) return; // the settings stay shut under the guide
+      if (!guideBox.hidden || !consentBox.hidden) return; // the settings stay shut under the guide
       cog.click();
       return cog.focus();
     case 'prev':
@@ -4961,6 +5004,7 @@ function roomTransport(room: string): Transport {
 /** Joins `room` in seat `side`, a co-op room against the boss and seed of `coop` (#529), a versus room without. A joiner
  * from a link with the creator's fingerprint `creator` takes seat 1 only from that key (#1323). */
 async function goOnline(room: string, side: number, coop?: CoopFight, creator?: string): Promise<void> {
+  if (consentWanted() && !(await onlineAllowed())) return; // Stay solo (#1338): nothing was contacted, the game in progress goes on
   leaveMode();
   stopAnalysis();
   fight = coop ? { id: coop.boss, seed: coop.seed } : null;
@@ -5673,6 +5717,7 @@ function royaleStatus(net: RoyaleNet<Royale>): OnlineStatus {
 // The keys first: from the arena on, every order goes to the room, and the creator's invite link carries their
 // fingerprint. A joiner from a link with one, `creator`, takes seat 1 only from that key (#1323).
 async function goRoyale(room: string, side: number, creator?: string): Promise<void> {
+  if (consentWanted() && !(await onlineAllowed())) return; // Stay solo (#1338)
   const keys = await generateKeys();
   const key = await fingerprint(keys.pub);
   leaveRoyale();

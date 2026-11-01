@@ -6,12 +6,15 @@ import type { ConnectionState, Transport } from './transport';
 
 const APP_ID = 'ab-alone';
 
+/** The relay shortlist (docs/specs/multiplayer.md section 7, #1338), instead of Trystero's defaults (`relayConfig.urls` in trystero 0.26, the issue says `relayUrls`). */
+export const RELAY_URLS = ['wss://relay.piazza.today', 'wss://nos.lol', 'wss://nostr.red5d.dev', 'wss://relay.bitmacro.cloud'];
+
 /**
  * Serverless P2P: Trystero finds the peer through public Nostr relays, moves go over WebRTC.
  * `onJoinError` gets Trystero's join errors, an ICE failure among them, for the diagnostics (#220).
  */
 export function p2pTransport(room: string, onJoinError?: (message: string) => void): Transport {
-  const r = joinRoom({ appId: APP_ID }, room, { onJoinError: (e) => onJoinError?.(e.error) });
+  const r = joinRoom({ appId: APP_ID, relayConfig: { urls: RELAY_URLS } }, room, { onJoinError: (e) => onJoinError?.(e.error) });
   const move = r.makeAction('move');
   let state: ConnectionState = 'connecting';
   let onState: (s: ConnectionState) => void = () => {};

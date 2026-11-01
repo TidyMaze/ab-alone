@@ -15,17 +15,25 @@ const room = vi.hoisted(() => {
   };
 });
 // The callbacks p2pTransport gave the last joinRoom call.
-const joined = vi.hoisted(() => ({ callbacks: undefined as { onJoinError?: (e: { error: string }) => void } | undefined }));
+const joined = vi.hoisted(() => ({ config: undefined as { appId: string; relayConfig?: { urls?: string[] } } | undefined, callbacks: undefined as { onJoinError?: (e: { error: string }) => void } | undefined }));
 vi.mock('trystero/nostr', () => ({
-  joinRoom: (_config: unknown, _room: string, callbacks?: typeof joined.callbacks) => {
+  joinRoom: (config: unknown, _room: string, callbacks?: typeof joined.callbacks) => {
+    joined.config = config as typeof joined.config;
     joined.callbacks = callbacks;
     return room;
   },
 }));
 
-const { hookTransport, p2pTransport } = await import('./p2p');
+const { RELAY_URLS, hookTransport, p2pTransport } = await import('./p2p');
 
 describe('p2pTransport', () => {
+  it('joins on the relay shortlist, never the 29 defaults (#1338)', () => {
+    p2pTransport('r');
+    expect(joined.config?.relayConfig?.urls).toEqual(RELAY_URLS);
+    expect(RELAY_URLS).toEqual(['wss://relay.piazza.today', 'wss://nos.lol', 'wss://nostr.red5d.dev', 'wss://relay.bitmacro.cloud']);
+  });
+
+
   it('stays open while a peer is still connected: a spectator leaving does not close the room, bug #140', () => {
     const t = p2pTransport('r');
     const states: string[] = [];
