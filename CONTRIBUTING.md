@@ -531,6 +531,14 @@ network outage never holds a page load (bug #585). Start a new run to test a cha
   at the end. Every other spec runs with service workers blocked (docs/specs/tech.md section 9.1).
   It answers the Google Fonts requests itself, so it too never waits on the network (bug #649).
 - The manual CI run sets `E2E_SKIP_WASM_BUILD=1` so the dev server skips the wasm rebuild (the `wasm` job built it). Locally, leave it unset.
+- **Measured, nothing to set (#1289).** The default run is the fastest setting found. Full suite, `--project=chromium`, same
+  machine with two other agents building (load 10 to 30, about 26 Chrome processes), wall time of each run in seconds:
+  default 5 workers 298, 331, 335 (median 331); `--workers=4` 315, 299; `--workers=6` 327, 353; `--workers=8` 372, 362.
+  Fewer workers gained 7 % at best, within the noise of the baseline; more workers lost, the specs starve each other for the GPU.
+  Serving a production build (`vite build --mode e2e --base /` then `vite preview`) instead of the dev server ran in 252 and
+  289 s (median 270), but breaks four specs that need the dev server (`lights-panel`, `offline` dev check, `textures`), so it
+  is not used. A shared boot for the slowest tests does not fit: the ten slowest (7 to 10 s each) are ten different
+  scenarios, 8 % of the worker time together. Count a run from `--reporter=json`, not from the list output.
 - Screenshots go to `client/test-results/`, which is git-ignored. Do not commit them.
 - On a Mac, the local Chromium draws on the GPU, still with the WebGL2 backend (WebGPU is turned off). CI runners
   have no GPU and draw with SwiftShader, whose first draw of a page blocks it for seconds (bug #563).
