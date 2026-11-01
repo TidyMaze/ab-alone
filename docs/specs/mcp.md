@@ -74,7 +74,8 @@ A draw against a boss is a loss (rules.md section 10.3).
   "you": "black | white",
   "to_move": "black | white",
   "status": "running | black_won | white_won | draw",
-  "draw_reason": "null | repetition | no_ejection_cap",
+  "draw_reason": "null | repetition | no_ejection_cap | blocked",
+  "passed": "null | black | white",
   "resigned": false,
   "ejected": { "black": 0, "white": 0 },
   "win_ejections": { "black": 6, "white": 6 },
@@ -90,6 +91,7 @@ A draw against a boss is a loss (rules.md section 10.3).
 - `board` is the cells in `Engine.board()` order, one character per cell: row by row from `r = -4` to `r = 4`, `q` ascending inside a row (61 cells). On a radius 5 board (The Ballast Mind), `board` has 91 characters: the 61 of the standard board first, then ring 5 in board order (rows from `r = -5` to `5`, `q` ascending). The Dual Room's board has 169: the same 91, then rings 6 and 7 in turn, each row by row; every cell off its two rooms is `x` (the void's row `r = 0` too, until the bridge's 5 cells turn `.` in P3), and `ascii` shows it with columns `0` to `E` and rows `a` to `o`. `.` empty, `B` Black, `W` White, `x` vanished (`3` in the engine), `c` a core and `O` the Overseer (The Overseer).
 - `last_moves` is the last 6 plies in the notation of section 3.1, oldest first, boss and bot moves included.
 - `resigned` is `true` after `resign`. It is the only field the engine does not own.
+- `passed` is the side whose turn passed after the last ply, as it had marbles but no legal move (`Engine.passed()`, rules.md section 7, #1301), else `null`. `draw_reason` `blocked`: neither side has a legal move.
 
 ### 4.3 Boss state (phase and tell)
 
@@ -203,7 +205,7 @@ Behaviour:
 
 1. Parse the string (section 3.1). On failure: `bad_move`.
 2. Convert to a record and call `play`. The engine rejects an illegal move: `illegal_move`, state unchanged.
-3. If the game is still running and it is the bot's or boss's turn (not after one of The Echo's free moves), play its reply (`Engine.best_move(bot_nodes)` or `Encounter.boss_move()`) and apply it with `play`.
+3. While the game is still running and it is the bot's or boss's turn (not after one of The Echo's free moves), play its reply (`Engine.best_move(bot_nodes)` or `Encounter.boss_move()`) and apply it with `play`. A bot with no legal move has passed, so there is no reply; an agent with no legal move passes too, so the bot replies again (#1301).
 
 Output:
 
@@ -216,7 +218,7 @@ Output:
 }
 ```
 
-`reply` is `null` when the game ended on the agent's move or the move was one of The Echo's free moves. `bonuses` lists the bonus plies The Echo's rule played after the agent's move, in order (`Encounter.last_bonuses()`, #859), empty otherwise: the agent's own bonus is offered in `legal_moves.free`, never played for it (#958). Online, `reply` is always `null`: use `wait_for_opponent_move` (section 7).
+`reply` is `null` when the game ended on the agent's move, the move was one of The Echo's free moves, or the bot had no legal move and passed (`state.passed`). After an agent pass it is the bot's last reply, every reply is in `last_moves`. `bonuses` lists the bonus plies The Echo's rule played after the agent's move, in order (`Encounter.last_bonuses()`, #859), empty otherwise: the agent's own bonus is offered in `legal_moves.free`, never played for it (#958). Online, `reply` is always `null`: use `wait_for_opponent_move` (section 7).
 
 Errors: `no_game`, `game_over`, `not_your_turn`, `bad_move`, `illegal_move`.
 

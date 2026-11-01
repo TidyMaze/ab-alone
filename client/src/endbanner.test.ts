@@ -4,6 +4,7 @@ import { endBanner, ordinal, royaleBanner, type EndMode } from './endbanner';
 const input = (mode: EndMode, side: number, status: number, reason = 0, win = 6, glass = 2) => ({ mode, side, status, reason, win, glass });
 const REPEAT = 1;
 const STALL = 2;
+const BLOCKED = 3;
 
 describe('endBanner', () => {
   it('shows nothing while the game runs', () => {
@@ -57,6 +58,11 @@ describe('endBanner', () => {
     expect(endBanner(input('bot', 1, 3, STALL))!.line).toBe('100 plies, nothing ejected. Tally calls it even.');
     expect(endBanner(input('boss', 1, 3, REPEAT))!.line).toBe('Repeated 3 times: a defeat.');
     expect(endBanner(input('boss', 1, 3, STALL))!.line).toBe('100 plies idle: a defeat.');
+  });
+
+  it('a draw with neither side able to move says so (#1301)', () => {
+    expect(endBanner(input('bot', 1, 3, BLOCKED))).toEqual({ title: 'Draw', line: 'Neither side can move. Tally calls it even.', anim: 'draw' });
+    expect(endBanner(input('boss', 1, 3, BLOCKED))).toEqual({ title: 'Defeat', line: 'No move left: a defeat.', anim: 'loss' });
   });
 });
 

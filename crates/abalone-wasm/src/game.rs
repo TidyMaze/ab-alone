@@ -121,6 +121,11 @@ impl Engine {
     pub fn draw_reason(&self) -> u8 {
         draw_reason_code(self.game.draw_reason())
     }
+
+    /// The side whose turn passed after the last ply, `0` when none. See the module docs.
+    pub fn passed(&self) -> u8 {
+        self.game.passed().map_or(0, side_code)
+    }
 }
 
 impl Default for Engine {
@@ -354,6 +359,24 @@ mod tests {
     fn a_game_is_won_at_6_ejections_for_both_sides() {
         let engine = Engine::new();
         assert_eq!((engine.win_ejections(1), engine.win_ejections(2)), (6, 6));
+    }
+
+    #[test]
+    fn a_side_with_no_legal_move_passes_and_the_bridge_says_which() {
+        use abalone_core::board::Cell;
+        let mut board = Board::empty();
+        for (q, r) in [(3, -4), (3, -3), (4, -2)] {
+            board.set(q, r, Cell::Black);
+        }
+        board.set(4, -4, Cell::White);
+        let mut engine = Engine {
+            game: Game::from_position(board, Player::Black, [0, 0]),
+        };
+        assert_eq!(engine.passed(), 0);
+        // (4,-2) steps NW to (4,-3): White's corner marble is walled in and passes.
+        engine.play(&[1, 4, 4, -2, 0, 0, 0, 0]).unwrap();
+        assert_eq!((engine.to_move(), engine.passed()), (1, 2));
+        assert_eq!(engine.status(), 0);
     }
 
     #[test]

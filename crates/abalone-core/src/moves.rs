@@ -63,7 +63,7 @@ impl Direction {
 }
 
 impl Player {
-    fn cell(self) -> Cell {
+    pub(crate) fn cell(self) -> Cell {
         match self {
             Player::Black => Cell::Black,
             Player::White => Cell::White,

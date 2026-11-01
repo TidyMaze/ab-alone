@@ -1,4 +1,6 @@
+import { createRequire } from 'node:module';
 import { describe, expect, test } from 'vitest';
+import { WALLED_IN } from '../../client/src/test/blockedline';
 import { bossIds, newEncounter, newEngine } from './engine';
 import { BOT_NODES, drawReasonName, Session, sideName, statusName, type EncounterLike, type EngineLike, type Result, type State, type ToolError } from './game';
 import { formatMove, fromRecord, fromRecords, parseMove, toRecord } from './notation';
@@ -31,10 +33,10 @@ const CHEAP = 30;
  * Real engines whose bot replies come from `replies` while it lasts, then from a cheap real search. Records the node
  * budget the session asks for and how many engines were freed.
  */
-function engines(replies: string[] = []) {
+function engines(replies: string[] = [], make: () => EngineLike = newEngine) {
   const spy = { nodes: [] as number[], freed: 0 };
   const factory = (): EngineLike => {
-    const engine = newEngine();
+    const engine = make();
     return new Proxy(engine, {
       get(target, key) {
         if (key === 'best_move') {
@@ -99,7 +101,7 @@ describe('codes of abalone-wasm, as words (docs/specs/mcp.md section 3.3)', () =
   });
 
   test('draw reason', () => {
-    expect([0, 1, 2].map(drawReasonName)).toEqual([null, 'repetition', 'no_ejection_cap']);
+    expect([0, 1, 2, 3].map(drawReasonName)).toEqual([null, 'repetition', 'no_ejection_cap', 'blocked']);
   });
 });
 
@@ -113,6 +115,7 @@ describe('new_game', () => {
       to_move: 'black',
       status: 'running',
       draw_reason: null,
+      passed: null,
       resigned: false,
       ejected: { black: 0, white: 0 },
       win_ejections: { black: 6, white: 6 },
@@ -445,5 +448,24 @@ describe('a boss fight (docs/specs/mcp.md sections 4.3 and 5)', () => {
     const game = session();
     value(game.newGame({ boss: 'echo' }));
     expect(value(game.resign())).toMatchObject({ status: 'white_won', resigned: true, boss: { result: 'lost' } });
+  });
+});
+
+describe('a side with no legal move passes its turn (#1301, rules.md section 7)', () => {
+  test('the bot walled in passes: no reply, the agent is to move again and the state says who passed', () => {
+    const { Engine } = createRequire(import.meta.url)('../engine/abalone_wasm.js') as typeof import('../engine/abalone_wasm');
+    const plies = WALLED_IN.map((r) => formatMove(fromRecord(r)));
+    const agent = plies.filter((_, i) => i % 2 === 0);
+    const bot = plies.filter((_, i) => i % 2 === 1);
+    const game = new Session(engines(bot, () => Engine.trainer(1, 6)).factory, newEncounter, noNetwork);
+    value(game.newGame({}));
+    const before = playAll(game, agent.slice(0, -1));
+    expect(before.state.passed).toBeNull();
+    const last = value(game.playMove({ move: agent.at(-1)! }));
+    expect(last.reply).toBeNull();
+    expect(last.state.to_move).toBe('black');
+    expect(last.state.status).toBe('running');
+    expect(last.state.passed).toBe('white');
+    expect(value(game.legalMoves()).count).toBeGreaterThan(0);
   });
 });

@@ -266,9 +266,11 @@ impl Choir {
             while self.alive() > CYCLE.len() - self.phase() {
                 self.remove_weakest();
             }
-            if self.enc.game.outcome().is_none() && !self.can_move(self.army_in_turn()) {
+            let boss_next = self.enc.game.to_move() == Player::White;
+            if boss_next && self.enc.game.outcome().is_none() && !self.can_move(self.army_in_turn())
+            {
                 // No army can move: the boss passes (rules.md section 7) and the player goes again.
-                self.enc.game.pass();
+                self.enc.game.pass_turn();
             }
         }
         Ok(())
@@ -314,7 +316,10 @@ impl Choir {
         if self.phase() == LAST_PHASE && !self.second_move {
             self.second_move = true;
             self.cycle_pos = mover.index();
-            self.enc.game.pass();
+            // A player with no move has passed already: the boss is to move again.
+            if self.enc.game.to_move() == Player::Black {
+                self.enc.game.pass();
+            }
         } else {
             self.second_move = false;
             self.cycle_pos = (mover.index() + 1) % CYCLE.len();
@@ -504,7 +509,7 @@ mod tests {
     use super::*;
     use crate::board::MAX_RADIUS;
     use crate::game::Outcome;
-    use crate::moves::Direction::{E, W};
+    use crate::moves::Direction::{E, NW, W};
     use crate::moves::{legal_moves, Direction, MoveError};
     use Army::{Alto, Bass, Tenor};
 
@@ -817,10 +822,45 @@ mod tests {
         );
         c.play(&mv(&[(-4, 4)], E)).unwrap();
         assert_eq!(c.game().to_move(), Player::Black, "the boss passed");
+        assert_eq!(c.game().passed(), Some(Player::White));
         assert_eq!(c.result(), None);
         assert_eq!(c.boss_move(), None, "player's turn");
         c.play(&mv(&[(-3, 4)], E)).unwrap();
         assert_eq!(c.game().to_move(), Player::Black);
+    }
+
+    #[test]
+    fn a_boss_whose_only_move_mixes_two_armies_passes() {
+        // Alto in the corner and Tenor next to it can only push together, which no army may do.
+        let mut c = choir_from(
+            &[(3, -3), (4, -3), (2, -4), (2, -3), (-4, 4)],
+            &[(Alto, &[(4, -4)]), (Tenor, &[(3, -4)])],
+            Player::Black,
+            [0, 0],
+            0,
+        );
+        c.play(&mv(&[(-4, 4)], E)).unwrap();
+        assert!(!legal_moves(c.game().board(), Player::White).is_empty());
+        assert_eq!(c.game().to_move(), Player::Black, "the boss passed");
+        assert_eq!(c.game().passed(), Some(Player::White));
+    }
+
+    #[test]
+    fn a_player_walled_in_by_the_first_of_two_moves_passes_once() {
+        // P3: Alto walls the lone Black marble in on the corner, Black passes and Alto plays its
+        // second move.
+        let mut c = choir_from(
+            &[(4, -4)],
+            &[(Alto, &[(3, -4), (3, -3), (4, -2)])],
+            Player::White,
+            [5, 0],
+            0,
+        );
+        assert_eq!(c.phase(), LAST_PHASE);
+        c.play(&mv(&[(4, -2)], NW)).unwrap();
+        assert_eq!(c.game().to_move(), Player::White, "the boss moves again");
+        assert_eq!(c.game().passed(), Some(Player::Black));
+        assert!(c.boss_move().is_some());
     }
 
     #[test]

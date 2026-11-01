@@ -121,6 +121,11 @@ export class Diagnostics {
     else this.log.log('warn', 'refused', { reason });
   }
 
+  /** The side `side` had no legal move after ply `ply`: its turn passed (#1301). */
+  passed(side: number, ply: number): void {
+    this.log.log('info', 'pass', { side, ply });
+  }
+
   botSearch(ms: number, search: { nodes: number } | { boss: string }): void {
     this.log.log('info', 'bot-search', { ms: Math.round(ms), ...search });
   }

@@ -48,7 +48,10 @@
 //!   is `3`, like a vanished cell.
 //! - Side and winner: `1` Black, `2` White.
 //! - Status: `0` running, `1` Black won, `2` White won, `3` draw.
-//! - Draw reason: `0` none, `1` threefold repetition, `2` 100 plies without ejection.
+//! - Draw reason: `0` none, `1` threefold repetition, `2` 100 plies without ejection, `3` neither
+//!   side has a legal move.
+//! - Passed: `0` none, else the side code whose turn passed after the last ply, as it had marbles
+//!   but no legal move (rules.md section 7).
 //! - Result of an encounter: `0` playing, `1` won, `2` lost (a draw is a loss).
 //! - Move: 8 integers `[n, dir, q0, r0, q1, r1, q2, r2]`, `n` in 1..=3 marbles, unused
 //!   coordinates are `0`. `dir`: `0` E, `1` W, `2` NE, `3` SW, `4` NW, `5` SE.
@@ -117,8 +120,8 @@ mod tests {
     fn re_exports_and_submodules_are_accessible() {
         assert_eq!(MOVE_STRIDE, 8);
         assert_eq!(convert::MOVE_STRIDE, 8);
-        assert_eq!(engine_version(), 24);
-        assert_eq!(encounter::engine_version(), 24);
+        assert_eq!(engine_version(), 25);
+        assert_eq!(encounter::engine_version(), 25);
         let engine = Engine::new();
         assert_eq!(engine.to_move(), 1);
         let encounter = Encounter::new("echo", 1).unwrap();

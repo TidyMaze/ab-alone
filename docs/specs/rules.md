@@ -141,7 +141,10 @@ Inline move, direction `d`, group of `n` own marbles. Let the opponent run be th
 
 - Black moves first (**OPEN-3**, see 2.3).
 - **FINAL.** Strict alternation. A move from the side not to move is refused.
-- A side with no legal move is not expected in practice. If it happens, the side passes. **PROPOSAL.**
+- **FINAL (#1301, owner decision).** The side to move has at least one marble but no legal move: its turn passes. The other side moves next, nothing on the board changes, and no ply is added to the move list: the rule decides it, so every peer passes alike and no message carries it. This holds in every mode and for every player (humans, bots, bosses, online peers). The HUD says so ("Black has no move: turn passed").
+- **FINAL (#1301).** When the side to move next has no legal move either, the game ends in a draw (draw reason "blocked"), or under the mode's own draw rule: a PvE draw is a loss for the player (section 9), a Trainer draw a clear. Two passes in a row never happen.
+- A side with no marble left keeps its own rule: it has lost (section 10.3).
+- The search (bots, bosses, the ladder) scores a blocked position as that pass, never as a static leaf.
 
 ## 8. Edge cases
 
@@ -173,6 +176,8 @@ Each case points to its example in section 12.
 | 100th ply with no ejection | Draw | 28 |
 | 99th ply with no ejection | Game goes on | 29 |
 | Ejection | No-ejection counter resets to 0 | 30 |
+| Side to move has marbles but no legal move | Its turn passes (section 7) | (section 7) |
+| Neither side has a legal move | Draw (section 7) | (section 7) |
 
 ## 9. End of game
 
@@ -180,6 +185,7 @@ Each case points to its example in section 12.
 - **FINAL.** Threefold repetition: the same position (board, side to move, mode state) occurs for the third time. The game is a draw. Mode state is part of the position identity (game-design section 5).
 - **FINAL (decided for this spec).** 100 plies in a row with no ejection: the game is a draw. The counter counts plies since the last ejection by either side and resets on each ejection. **OPEN-1**: game-design.md section 5.2 says the 100-ply end is decided by ejections, then centrality, then draw. See section 13.
 - **TUNE.** HUD warning 10 plies before the 100-ply draw.
+- **FINAL (#1301).** Neither side has a legal move: the game is a draw (section 7).
 - **FINAL.** Draw offers do not exist.
 - **FINAL.** Repetition and the 100-ply rule apply in hot-seat, online 1v1 and PvE. In battle royale they do not apply (game-design section 5.3: the breach ends stalling).
 - **FINAL.** PvE: a draw counts as a loss for the player.
@@ -272,6 +278,8 @@ Hooks, from game-design section 7 (starting values):
 - **FINAL (`royale::resolve_round`, #496).** The breach runs at the end of a round, after every order. First the cracked cells go void (`Board::void`) with their marbles, then the ring the table schedules for that round cracks. The cracked cells are in `board().cracks()`, each with 1 round left, for the whole next round: the warning. A void cell is off the board, so a push onto it ejects.
 - A marble on a cracked cell is not safe. It is removed when the ring goes void.
 - Cracks glow and show a countdown.
+
+**Blocked seat (FINAL, #1301).** A seat with marbles but no legal move holds: its turn in the initiative order is skipped, as for any hold. The bots hold by rule, and the player's Hold (or the round timer online) holds for it.
 
 **Elimination.** **FINAL.** At 0 marbles a player is out. Its marbles vanish at once. Eliminated players spectate.
 
