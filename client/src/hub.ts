@@ -7,7 +7,7 @@ import { DECK_NAMES, type Deck } from './deck';
 export type Door =
   | { kind: 'boss'; boss: string }
   | { kind: 'hotseat' | 'bot' | 'online' | 'royale' }
-  | { kind: 'daily' | 'run' | 'together' | 'ranked' | 'world' } // a mode with no table (#1249)
+  | { kind: 'daily' | 'run' | 'together' | 'ranked' | 'world' | 'trainer' } // a mode with no table (#1249)
   | { kind: 'terminal'; lore: string }
   | { kind: 'medals' } // the Medal room of the Mess (#812)
   | { kind: 'lift'; to: Deck };
@@ -53,7 +53,7 @@ const GALLERY: Record<Deck, Door[]> = {
   cargo: [boss('alien'), boss('railyard'), boss('assembly'), boss('swarm'), { kind: 'run' }],
   furnace: [boss('magnetizer'), boss('core'), { kind: 'together' }],
   chapel: [boss('overseer'), boss('stalker')],
-  bridge: [boss('pulsar'), { kind: 'ranked' }],
+  bridge: [boss('pulsar'), { kind: 'ranked' }, { kind: 'trainer' }],
 };
 // Their cells, filled in this order: the north-east shoulder by the boss door, the north corners, then the south-west
 // and south corners. No room is next to them in their row, so the plates never overlap, each keeps a floor cell

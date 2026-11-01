@@ -164,13 +164,14 @@ the five decks (beaten, open, locked, and where the marble is) and boss pips cou
 | Together | Two pink marbles on one plinth | Together, co-op vs a boss (Co-op) |
 | Ranked | A podium of three steps, the first one lime | Ranked, Elo ladder (Ranked) |
 | Open world | An indigo globe of Hollow on a stand | Open world, walk Hollow (World) |
+| Trainer | A target dummy: a post and a tan target disc | Trainer, bot waves (Trainer) |
 
 Room kinds:
 
 | Room | Enters |
 |---|---|
 | Boss | That boss's fight, as the boss menu starts it. Every boss of the roster has one door, on its deck (README "The game", `deck.ts`, #1249). The deck's lore-slot boss of section 7 keeps the east door: the Echo (Mess), the Hull (Cargo), the Choir (Furnace), the Chaplain (Chapel), the Ballast Mind (Bridge). The other bosses stand in the gallery ring: the Dual Room (Mess); the Alien, the Rail Yard, the Assembly Line, the Swarm (Cargo); the Magnetizer, the Unstable Core (Furnace); the Overseer, the Stalker (Chapel); the Pulsar (Bridge). Only the lore-slot boss opens the lift |
-| Mode rooms | A mode with no table of its own, the same as its mode menu entry (#1249): the Daily challenge and the Open world on the Mess, the Rogue-lite run on the Cargo, Fight together on the Furnace (it opens the mode menu on its boss list), Ranked on the Bridge (offline it opens nothing, as the online table). Back to the ship comes back from the daily and a ranked game; a run and the Open world have their own way back |
+| Mode rooms | A mode with no table of its own, the same as its mode menu entry (#1249): the Daily challenge and the Open world on the Mess, the Rogue-lite run on the Cargo, Fight together on the Furnace (it opens the mode menu on its boss list), Ranked and the Trainer on the Bridge (Ranked offline opens nothing, as the online table). Every entry of the mode menu has its room. Back to the ship comes back from the daily and a ranked game; from a run, the Trainer and the Open world, Ship in the mode menu does |
 | Hot-seat, bot, online | A table: the same game as that mode menu entry. Every deck has the three |
 | Terminal | One lore entry of the deck (`lore.ts`), in the reader. Two per deck |
 | Medal room | On the Mess only (0, 2), a gold medal prop (#812, #1249). The reader lists every boss of the roster in roster order with its medal and best turns (`medals.ts`), or Not beaten |

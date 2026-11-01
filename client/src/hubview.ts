@@ -40,6 +40,7 @@ const DOORS: Record<Exclude<Door['kind'], 'lift'>, string> = {
   together: 'Fight together',
   ranked: 'Ranked',
   world: 'Open world',
+  trainer: 'Trainer',
 };
 
 const BOSS_NAMES: Record<string, string> = {
@@ -76,6 +77,7 @@ const DESCRIPTORS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, string> = {
   together: 'Two players, one army, a boss',
   ranked: 'Online 1v1, Elo and tiers',
   world: 'A generated hex world',
+  trainer: 'Waves against the bot, one more each',
 };
 
 /** Reachability hint for a hovered hub cell relative to the marble's position (#628). */
@@ -147,6 +149,7 @@ const LABELS: Record<Exclude<Door['kind'], 'lift' | 'boss'>, [name: string, stat
   together: ['Together', 'co-op vs a boss', 'Co-op'],
   ranked: ['Ranked', 'Elo ladder', 'Ranked'],
   world: ['Open world', 'walk Hollow', 'World'],
+  trainer: ['Trainer', 'bot waves', 'Trainer'],
 };
 
 /** The plate of a room of `deck`: a lift points up or down to its deck, a boss door names its boss, and once it is

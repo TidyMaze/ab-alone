@@ -1,6 +1,6 @@
 // 3D props for the hub room cells (#628, #1249): each room kind is a small prop standing on its cell (a blast door, a
 // CRT, a table with chairs, a robot, an antenna, an arena, a lift cage, and for the modes a calendar, a map table, two
-// marbles, a podium, a globe), ringed in its own contrast-safe colour.
+// marbles, a podium, a globe, a target dummy), ringed in its own contrast-safe colour.
 import * as THREE from 'three';
 import type { Axial } from './board';
 import type { Door } from './hub';
@@ -20,6 +20,7 @@ export const GLYPH_COLORS = {
   together: 0xf783ac, // Pink
   ranked: 0xa9e34b, // Lime
   world: 0x748ffc, // Indigo
+  trainer: 0xd8a47f, // Tan
 } as const;
 
 export interface GlyphOptions {
@@ -203,6 +204,12 @@ export function createDoorGlyph(door: Door, options: GlyphOptions = {}): THREE.G
     case 'world': {
       // A globe of Hollow on its stand, an orbit around it.
       group.add(part(mastGeo, plate, [0, 0.1, 0]), part(globeGeo, accent, [0, 0.33, 0]), part(orbitGeo, plate, [0, 0.33, 0], Math.PI / 2.4));
+      break;
+    }
+
+    case 'trainer': {
+      // A target dummy: a post and a tan target disc facing the camera, its bullseye in plate.
+      group.add(part(mastGeo, plate, [0, 0.15, 0]), part(medalGeo, accent, [0, 0.3, 0.03], Math.PI / 2), part(coreOctaGeo, plate, [0, 0.3, 0.06]));
       break;
     }
 

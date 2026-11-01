@@ -4639,10 +4639,12 @@ function enterRoom(at: HubSpot): void {
   else return enterModeRoom(door);
   roomOf = at;
 }
-// The other mode rooms (#1249) do what their menu entry does, and keep no room for Back to the ship: a run and the Open
-// world have their own way back, and Fight together opens the mode menu on its boss list.
+// The other mode rooms (#1249) do what their menu entry does, and keep no room for Back to the ship: Ship in the mode
+// menu takes the player back from a run, the Trainer and the Open world, and Fight together opens the mode menu on its
+// boss list.
 function enterModeRoom(door: Door | undefined): void {
   if (door?.kind === 'run') runButton.click();
+  else if (door?.kind === 'trainer') trainerButton.click();
   else if (door?.kind === 'world') openWorldButton.click();
   else if (door?.kind === 'together') {
     if (!modesOpen) moveModes('button');

@@ -1042,6 +1042,7 @@ body[data-hint='shown'] #hint { animation: hint-in var(--motion-base) var(--ease
 .hub-label[data-kind='together'] { --k: #f783ac; }
 .hub-label[data-kind='ranked'] { --k: #a9e34b; }
 .hub-label[data-kind='world'] { --k: #748ffc; }
+.hub-label[data-kind='trainer'] { --k: #d8a47f; }
 .hub-label[data-mark='locked'] { border-style: dashed; }
 .hub-label[data-mark='locked'] small { color: #ff8787; }
 .hub-label[data-mark='beaten'] small { color: #ffd43b; }
