@@ -269,7 +269,7 @@ describe('world_visit', () => {
     const { worldRoom, world } = setup();
     value(worldRoom.join({}));
     const [q, r] = reachable(4);
-    world.walk = () => ({ ok: true, value: { steps: 1, state: {} as never } }); // a hero that never gets there
+    world.walk = () => ({ ok: true, value: { steps: 1, pushes: [], state: {} as never } }); // a hero that never gets there
     expect(value(await worldRoom.visit({ q, r }))).toMatchObject({ steps: 40, arrived: false, hero: '(0,0)' });
   });
 
